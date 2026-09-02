@@ -46,6 +46,7 @@
 <li><b>Cost</b>: nodes ~ area/h&sup2;; screening meshes regenerate in seconds - regeneration is the economical common path; patch-local editing stays a deferred design for measured large-mesh pain.</li>
 <li><b>Boundaries</b>: contiguous OPEN vs LAND stretches; IPOBO permutations, .cli rows, gr3 blocks - telapy's bookkeeping seat, the last mile for every mesh.</li>
 </ul>
+<p class="rev"><b>AMENDMENT 2026-09-01</b> (appended; the bullet above stands as written): "oceanmesh - iterative, measured nondeterministic" is superseded. The drift was not DistMesh's relaxation but <code>feature_sizing_function</code>'s skeletonization, which breaks ties through skimage's <code>medial_axis</code> from a generator created fresh per process. Seeding that generator from the recipe's own seed makes the sizing lattice, and the mesh, reproduce: <code>om2d</code> registers <code>deterministic=True</code>, measured as 5 rebuilds from one config returning one mesh on a shoreline-cut coastal domain and a feature-sized harbour domain both. See <code>om2d_driver._seed_library_randomness</code>.</p>
 
 <h2>3. The data model (ruled)</h2>
 <ol>

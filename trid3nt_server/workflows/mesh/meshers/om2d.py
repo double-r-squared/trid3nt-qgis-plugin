@@ -15,10 +15,13 @@ object - the GSHHG land polygons cut to a lon/lat box, or the interior of a
 supplied polygon - and threads ``resolution_m`` as the library's own edge
 defaults. Nothing else: an adapter that grows opinions is the old sin.
 
-DEFAULT RECIPE. The hard-baked, visible list below. It sizes nothing, because
+DEFAULT RECIPE. The hard-baked, visible list below. It sizes no INTERIOR, because
 what a domain should be sized TOWARD is the ask's knowledge; an undeclared ask is
 meshed uniformly at the one size word, cleaned by the library's own passes, and
-bedded from topobathy.
+bedded from topobathy. The RIM is the one exception: no sizing function the
+library has measures the extent's own outline, so an ask that names none comes
+back with the boundary a solver forces its open condition on running an order of
+magnitude past the size word. A declared recipe replaces this list wholesale.
 
 All of the library is the port's own code, running in ``trid3nt-local/mesh:
 latest`` where it is installed; this file composes the ask, shells the box, and
@@ -124,9 +127,11 @@ _OCEANMESH_ON_A_MESH = (
 #: library has measures the SHORELINE - none of them the extent's own rim.
 _OM2D_PRIMITIVES = ("set_obstacle", "set_region_size", "set_rim_size")
 
-#: The ops list an undeclared ask gets. Hard-baked and visible: the library's own
-#: clean chain in the order it is meant to run, then the bed.
+#: The ops list an undeclared ask gets. Hard-baked and visible: the rim at the
+#: size word, the library's own clean chain in the order it is meant to run, then
+#: the bed.
 _DEFAULT_OPS = (
+    mesh_op("set_rim_size"),
     mesh_op("delete_boundary_faces"),
     mesh_op("delete_faces_connected_to_one_face"),
     mesh_op("laplacian2"),

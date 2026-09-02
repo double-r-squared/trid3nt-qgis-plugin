@@ -87,6 +87,15 @@ def test_the_rim_primitive_is_the_driver_def_under_its_own_name():
     assert '"set_rim_size": set_rim_size' in source
 
 
+def test_the_rim_band_is_a_visible_kwarg_with_a_labeled_default():
+    """The tolerance the rim is held to is the ask's word, not a hidden constant."""
+    from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+
+    source = (drivers_dir() / "om2d_driver.py").read_text()
+    assert "tolerance: float = 2.0" in source
+    assert "_RIM_TOLERANCE" not in source
+
+
 def test_the_boxs_own_typed_refusal_reaches_the_caller_with_its_escalation(
         tmp_path, monkeypatch):
     """A domain refusal is only knowable where the library is.
@@ -124,13 +133,26 @@ def test_an_unknown_op_refuses_with_the_nearest_names():
 
 
 def test_the_default_recipe_is_hard_baked_and_visible():
-    """An undeclared ask gets the library's own clean chain, then the bed."""
+    """An undeclared ask gets its rim sized, the clean chain, then the bed.
+
+    The rim is in the list because nothing else sizes it: every sizing function
+    the library has measures the shoreline, so an undeclared ask that named none
+    came back with the boundary a solver forces its open condition on running an
+    order of magnitude past the size word.
+    """
     assert [op.fn for op in get_mesher("om2d").default_ops] == [
-        "delete_boundary_faces", "delete_faces_connected_to_one_face",
-        "laplacian2", "make_mesh_boundaries_traversable", "fix_mesh", "set_bed"]
+        "set_rim_size", "delete_boundary_faces",
+        "delete_faces_connected_to_one_face", "laplacian2",
+        "make_mesh_boundaries_traversable", "fix_mesh", "set_bed"]
     bed = get_mesher("om2d").default_ops[-1]
     assert bed.kwargs["source"] == "fetch_topobathy"
     assert bed.kwargs["interp"] == "nearest"
+
+
+def test_the_default_rim_carries_no_opinion_the_adapter_invented():
+    """The default op states no number: the rim takes the recipe's own size word."""
+    rim = get_mesher("om2d").default_ops[0]
+    assert (rim.fn, rim.kwargs) == ("set_rim_size", {})
 
 
 def test_omitting_ops_takes_the_default_and_declaring_replaces_it_wholesale():

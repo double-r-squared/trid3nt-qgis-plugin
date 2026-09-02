@@ -61,14 +61,6 @@ from shapely.ops import unary_union
 #: finest edge. One edge is the narrowest band a triangle can actually resolve.
 _OBSTACLE_BAND_EDGES = 1.0
 
-#: The band a SIZED rim is expected in, as a factor either side of the ask. A
-#: relaxation places nodes, it does not lay them out: an edge between two nodes it
-#: settled runs a little under and a little over whatever the lattice asked for,
-#: and twice the ask is the spread a triangulation at one size word actually
-#: holds. Reported against every build, asserted by none - a rim NO op sized runs
-#: far past this, and saying so is the point.
-_RIM_TOLERANCE = 2.0
-
 #: The parameters a recipe writes in METRES and the library reads in degrees.
 _METRE_PARAMS = ("min_edge_length", "min_edgelength", "max_edge_length")
 
@@ -267,6 +259,7 @@ class _Build:
         self.rim = np.empty((0, 2), dtype=float)
         self.rim_walk = np.empty(0, dtype=np.int64)
         self.rim_target = None
+        self.rim_tolerance = None
         self.shoreline = None
         self.smoothed = None
         self.domain_rings: list = []
@@ -421,7 +414,7 @@ def set_region_size(build: _Build, geometry: str, edge_length_m: float) -> None:
 
 
 def set_rim_size(build: _Build, edge_length_m: float | None = None,
-                 constrain: bool = True) -> None:
+                 tolerance: float = 2.0, constrain: bool = True) -> None:
     """Size the DOMAIN RIM at a declared edge and lock it into the mesh.
 
     Nothing else sizes the rim. A sizing function measures the SHORELINE - the
@@ -435,6 +428,13 @@ def set_rim_size(build: _Build, edge_length_m: float | None = None,
     locks the resampled rim as mesh nodes, which is what makes the spacing a
     fact rather than a target the relaxation may drift off; the passes that move
     a constrained cut decline themselves, as they do around an obstacle.
+
+    ``tolerance`` is the band the built rim is measured in, as a factor either
+    side of the ask. A relaxation places nodes, it does not lay them out: an edge
+    between two nodes it settled runs a little under and a little over whatever
+    the lattice asked for, and twice the ask is the spread a triangulation at one
+    size word actually holds. Measured and reported against the build, asserted
+    by none: the ask states the band, the report states what it got.
 
     ORDER: after the sizing ops and before the gradation. The rim's edge is
     written onto the lattice the sizing ops built, and a gradation after it is
@@ -463,6 +463,7 @@ def set_rim_size(build: _Build, edge_length_m: float | None = None,
     keep = _thin(points, target)
     points, positions = points[keep], np.asarray(walk, dtype=np.int64)[keep]
     build.rim_target = target
+    build.rim_tolerance = float(tolerance)
     if constrain:
         # Not strictly inside: a rim point IS the boundary, so on a supplied
         # polygon its signed distance is zero and a strict test drops the whole
@@ -478,11 +479,13 @@ def set_rim_size(build: _Build, edge_length_m: float | None = None,
         tree = cKDTree(points)
         _seed(grid, build, lambda flat: tree.query(flat, k=1)[0] <= target,
               target)
-    else:
+    elif not math.isclose(target, build.min_deg):
         # Locked but not SIZED: with no lattice built yet there is nothing to
         # write the rim's edge onto, so the elements behind the rim keep whatever
         # the ask and the ceiling gave them and the transition is a fan of
         # slivers. Declare this op after the sizing ops and before the gradation.
+        # A rim at the size word itself has no step to grade: with no lattice the
+        # whole domain is uniform at exactly that edge.
         build.notes.append(
             "set_rim_size locked the rim at %.0f m but sized no lattice: no "
             "sizing op had built one yet, so the elements behind the rim are "
@@ -711,7 +714,9 @@ def _rim_edges(points, cells, build: _Build) -> dict:
     boundary is part rim and part shoreline, and holding the shoreline to the
     rim's ask would report the land as a rim failure. With no rim op the whole
     boundary is measured, because none of it was sized and all of it is the ask's
-    to answer for.
+    to answer for - and it is measured without a verdict, because the band a rim
+    is held to is a kwarg of the op that sized it and an unsized rim declared
+    none.
     """
     xy = np.asarray(points, dtype=float)
     counts: dict[tuple[int, int], int] = {}
@@ -734,7 +739,7 @@ def _rim_edges(points, cells, build: _Build) -> dict:
         return {}
     asked = (build.min_deg if build.rim_target is None
              else build.rim_target) * build.mpd
-    return {
+    report = {
         "asked_m": round(float(asked), 2),
         "edges": int(lengths.shape[0]),
         "min_m": round(float(lengths.min()), 2),
@@ -743,11 +748,13 @@ def _rim_edges(points, cells, build: _Build) -> dict:
         "over_ask_median": round(float(np.median(lengths)) / asked, 2),
         "over_ask_max": round(float(lengths.max()) / asked, 2),
         "measured": measured,
-        "tolerance": _RIM_TOLERANCE,
-        "within_tolerance": bool(
-            lengths.min() >= asked / _RIM_TOLERANCE
-            and lengths.max() <= asked * _RIM_TOLERANCE),
     }
+    if build.rim_tolerance is not None:
+        report["tolerance"] = build.rim_tolerance
+        report["within_tolerance"] = bool(
+            lengths.min() >= asked / build.rim_tolerance
+            and lengths.max() <= asked * build.rim_tolerance)
+    return report
 
 
 def _run_mesh_ops(ops, points, cells, bed, mpd: float, reports: list,
