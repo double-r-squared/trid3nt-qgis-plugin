@@ -21,7 +21,7 @@ from trid3nt_contracts.execution import LayerURI
 CENTERLINE = {"type": "LineString",
               "coordinates": [[-124.16, 40.50], [-124.12, 40.50],
                               [-124.08, 40.50], [-124.04, 40.50]]}
-BANKS = {"type": "Polygon", "coordinates": [
+WATER = {"type": "Polygon", "coordinates": [
     [[-124.20, 40.4970], [-124.00, 40.4970], [-124.00, 40.5030],
      [-124.20, 40.5030], [-124.20, 40.4970]]]}
 
@@ -29,16 +29,16 @@ BANKS = {"type": "Polygon", "coordinates": [
 #: that covers none of it. NHDArea maps a surface only where the channel is wide
 #: enough to have two banks, so both are real answers about a real river rather
 #: than fetch failures - and the coverage measurement is what tells them apart.
-BANKS_HALF = {"type": "Polygon", "coordinates": [
+WATER_HALF = {"type": "Polygon", "coordinates": [
     [[-124.20, 40.4970], [-124.10, 40.4970], [-124.10, 40.5030],
      [-124.20, 40.5030], [-124.20, 40.4970]]]}
-BANKS_ELSEWHERE = {"type": "Polygon", "coordinates": [
+WATER_ELSEWHERE = {"type": "Polygon", "coordinates": [
     [[-123.50, 40.4970], [-123.40, 40.4970], [-123.40, 40.5030],
      [-123.50, 40.5030], [-123.50, 40.4970]]]}
 #: Mapped water at BOTH ends of the stretch with an unmapped gap in the middle -
 #: half the centreline covered, and both end transects still cut off real
 #: polygon. The shape a partly-mapped reach takes when it can still be sectioned.
-BANKS_GAPPED = {"type": "MultiPolygon", "coordinates": [
+WATER_GAPPED = {"type": "MultiPolygon", "coordinates": [
     [[[-124.20, 40.4970], [-124.13, 40.4970], [-124.13, 40.5030],
       [-124.20, 40.5030], [-124.20, 40.4970]]],
     [[[-124.07, 40.4970], [-124.00, 40.4970], [-124.00, 40.5030],
@@ -60,11 +60,11 @@ def _layer(uri: str, name: str, bbox: list[float] | None) -> LayerURI:
 
 
 def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
-                        banks: dict[str, Any] | None = None) -> None:
+                        water: dict[str, Any] | None = None) -> None:
     """Answer the chain's two fetches from local files, recording what was asked.
 
     The section tool writes its own artifact, so the output directory is pinned to
-    ``tmp_path`` for the whole chain. ``banks`` names WHAT the water fetch returns,
+    ``tmp_path`` for the whole chain. ``water`` names WHAT the water fetch returns,
     so a caller can ask the chain a reach the mapped polygons only partly cover -
     or do not cover at all.
     """
@@ -72,7 +72,7 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
 
     seen = captured if captured is not None else {}
     centerline_uri = _write(tmp_path, "centerline.geojson", CENTERLINE)
-    banks_uri = _write(tmp_path, "banks.geojson", banks or BANKS)
+    water_uri = _write(tmp_path, "water.geojson", water or WATER)
 
     def _navigate(*, seed_point=None, comid=None, direction="DM",
                   distance_km=50.0, **_kw):
@@ -85,8 +85,8 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
         return _layer(centerline_uri, "centerline", list(CENTERLINE_BBOX))
 
     def _water(*, bbox, max_records=200, **_kw):
-        seen["banks_bbox"] = list(bbox)
-        return _layer(banks_uri, "banks", list(bbox))
+        seen["water_bbox"] = list(bbox)
+        return _layer(water_uri, "water", list(bbox))
 
     for name, fn in (("fetch_nhdplus_nldi_navigate", _navigate),
                      ("fetch_nhd_area_water", _water)):

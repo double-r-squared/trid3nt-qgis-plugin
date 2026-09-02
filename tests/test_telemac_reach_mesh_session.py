@@ -72,7 +72,7 @@ def _mesh_record(*, min_edge_m: float | None = None,
             "display_uri": "s3://m/M01/mesh.2dm",
             "topology_uri": topology_uri, "min_edge_m": min_edge_m,
             "node_count": 539, "element_count": 902,
-            "provenance": {"dem_source": "cop-dem-glo-30"}}
+            "provenance": {"bed_source": "cop-dem-glo-30"}}
 
 
 @pytest.fixture()

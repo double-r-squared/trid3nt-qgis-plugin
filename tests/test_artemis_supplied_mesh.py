@@ -54,7 +54,7 @@ def _artifact(**overrides):
         "bbox": (-71.525, 41.338, -71.492, 41.368),
         "probes": {"edge_length_m": {"min": 4.2, "max": 202.1, "mean": 28.1}},
         "provenance": {"mesher": "om2d",
-                       "dem_source": "fetch_topobathy: cudem_nearshore 100%"},
+                       "bed_source": "fetch_topobathy: cudem_nearshore 100%"},
     }
     facts.update(overrides)
     return MeshArtifact(**facts)

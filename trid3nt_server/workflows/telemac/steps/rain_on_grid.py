@@ -457,7 +457,7 @@ async def write_rain_on_grid_deck(
                   # RESULTS FILE statement, so the name is the server's; the
                   # worker copies it and measures the file it names.
                   "result_slf": _RESULT,
-                  "bed_source": str(provenance.get("dem_source") or "staged")}),
+                  "bed_source": str(provenance.get("bed_source") or "staged")}),
         "outputs": [_RESULT, _GEOMETRY_DEST, _BOUNDARY_DEST, "full_listing.log",
                     "telemac_metrics.json", *authored],
         "authored": authored,
@@ -476,7 +476,7 @@ async def write_rain_on_grid_deck(
         "mesh_resolution_asked_m": mesh_resolution_m,
         "domain_name": name,
         "utm_epsg": utm_epsg,
-        "bed_source": str(provenance.get("dem_source") or "staged"),
+        "bed_source": str(provenance.get("bed_source") or "staged"),
         "bed_note": str(provenance.get("bed_fallback_note") or ""),
         "sizing_source": str(provenance.get("sizing_source") or ""),
         "domain_source": str(provenance.get("domain_source") or ""),

@@ -213,7 +213,7 @@ def _mesh_record(art: Any) -> dict[str, Any] | None:
         "crs_authid": art.crs_authid,
         "display_uri": art.display_uri, "slf_uri": art.slf_uri,
         "cli_uri": art.cli_uri, "recipe_uri": art.recipe_uri,
-        "dem_source": str((art.provenance or {}).get("dem_source") or ""),
+        "bed_source": str((art.provenance or {}).get("bed_source") or ""),
         "open_boundary_info": dict(art.open_boundary_info or {}),
         "edge_length_m": _mesh_edge_m(art),
     }
@@ -269,7 +269,8 @@ def _mesh_edge_m(art: Any) -> float | None:
 
 def _supplied_bed_label(mesh: dict[str, Any]) -> str:
     """What painted the bed the SOLVE reads - the supplied mesh's own provenance."""
-    source = str(mesh.get("dem_source") or "source UNRECORDED by the mesh").strip()
+    source = str(mesh.get("bed_source")
+                 or "source UNRECORDED by the mesh").strip()
     return (f"the bed the supplied mesh {mesh['name']!r} carries at its own nodes "
             f"({source})")
 
@@ -357,7 +358,7 @@ def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[Synthetic
             basis="user" if mesh
             else ("fetched" if real else "default_demo"), consequence="physics",
             real_source_if_any=(
-                str(mesh.get("dem_source") or "") or None if mesh
+                str(mesh.get("bed_source") or "") or None if mesh
                 else ("NOAA NGDC Great Lakes lake-datum bathymetry" if real
                       else None)),
             note=deck["bathy_label"]),

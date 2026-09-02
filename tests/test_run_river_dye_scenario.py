@@ -381,7 +381,7 @@ def _install_step_mocks(captured: dict):
                 "display_uri": "s3://cache/mesh/MESH01/mesh.2dm",
                 "topology_uri": "s3://cache/mesh/MESH01/mesh_topology.json",
                 "node_count": 800, "element_count": 1400, "min_edge_m": None,
-                "provenance": {"dem_source": "cop-dem-glo-30"}}
+                "provenance": {"bed_source": "cop-dem-glo-30"}}
 
     def _fake_stage(case, run_tag, **_kw):
         captured["case"] = case
@@ -465,12 +465,12 @@ def _install_step_mocks(captured: dict):
     ]
 
 
-def _run_tool(tmp_path, monkeypatch, captured: dict, overrides=(), banks=None,
+def _run_tool(tmp_path, monkeypatch, captured: dict, overrides=(), water=None,
               **kwargs):
     from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
 
     monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
-    install_reach_chain(monkeypatch, tmp_path, captured, banks=banks)
+    install_reach_chain(monkeypatch, tmp_path, captured, water=water)
     mocks = [*_install_step_mocks(captured), *overrides]
     for m in mocks:
         m.start()
@@ -632,7 +632,7 @@ def test_the_water_is_queried_over_the_centerline_padded_by_a_stated_distance(
     captured: dict = {}
     _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho")
 
-    asked = captured["banks_bbox"]
+    asked = captured["water_bbox"]
     # 3 km of latitude in degrees. The straight test stretch has zero height, so
     # the tool's own degenerate-layer floor (0.001 deg) rides under the pad; the
     # window still reaches the full stated distance on every side.
@@ -650,11 +650,11 @@ def test_a_reach_no_polygon_maps_refuses_as_unmapped_not_as_an_empty_section(
         tmp_path, monkeypatch):
     """The measurement sits between the fetch and the cut, so a reach nothing maps
     fails on its own cause instead of arriving at the section as empty geometry."""
-    from tests.reach_chain import BANKS_ELSEWHERE
+    from tests.reach_chain import WATER_ELSEWHERE
 
     captured: dict = {}
     out = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
-                    banks=BANKS_ELSEWHERE)
+                    water=WATER_ELSEWHERE)
     assert out["status"] == "error"
     assert out["error_code"] == "REACH_WATER_UNMAPPED"
 
@@ -664,11 +664,11 @@ def test_a_partly_mapped_reach_proceeds_and_says_how_much_was_mapped(
     """NO invented threshold: above zero the run proceeds, carrying the MEASURED
     fraction so a reader is never left assuming the flowline-only stretches were
     modelled."""
-    from tests.reach_chain import BANKS_GAPPED
+    from tests.reach_chain import WATER_GAPPED
 
     captured: dict = {}
     peak = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
-                     banks=BANKS_GAPPED)
+                     water=WATER_GAPPED)
     assert isinstance(peak, TelemacDyeLayerURI)
     note = peak.fallback_note or ""
     assert "50.0%" in note
@@ -682,11 +682,11 @@ def test_a_reach_whose_far_END_is_unmapped_refuses_at_the_cut(
     polygon's own bank, and a boundary role cannot be prescribed across an edge
     the cut never made - so the refusal names the geometry rather than arriving
     at the mesher as an empty face."""
-    from tests.reach_chain import BANKS_HALF
+    from tests.reach_chain import WATER_HALF
 
     captured: dict = {}
     out = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
-                    banks=BANKS_HALF)
+                    water=WATER_HALF)
     assert out["status"] == "error"
     assert out["error_code"] == "SECTION_END_FACE_UNMEASURED"
     assert "downstream cut left no transect" in out["error_message"]

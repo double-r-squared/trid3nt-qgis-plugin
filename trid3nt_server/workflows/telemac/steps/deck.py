@@ -637,7 +637,7 @@ async def write_reach_deck(
     # WHICH dataset painted the mesh's nodes. It is the mesher's own record of
     # the bed the geometry file carries - the ONE bed this run has - so the label
     # the metrics report cannot describe a raster the solve never read.
-    bed_source = str((mesh.get("provenance") or {}).get("dem_source") or "staged")
+    bed_source = str((mesh.get("provenance") or {}).get("bed_source") or "staged")
     rain_mm_day = (rain or {}).get("mm_per_day")
     deck: dict[str, Any] = {
         "name": reach["slug"],

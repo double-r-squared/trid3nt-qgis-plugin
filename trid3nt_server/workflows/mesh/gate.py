@@ -6,12 +6,14 @@ three things about the SAME mesh - the editable MDAL layer on the map, the
 numeric probes it is judged on, and the RECIPE with its ops NUMBERED - and then
 hands over one edit surface for every mesher there will ever be.
 
-ONE CARD PATH. The card carries the three agnostic params (the ones every mesher
-means the same thing by), the numbered ops as the program that produced what is
-on screen, and the reset row. Everything an op can say is said through
-``mesh_op``, which is a registered tool rather than a mounted per-mesher one -
-so nothing here knows what any library's functions are, and adding a mesher adds
-no card code.
+ONE CARD PATH. The card carries the agnostic param a rebuild can move
+(``resolution_m``, the one size word every mesher means the same thing by), the
+numbered ops as the program that produced what is on screen, and the reset row.
+The extent and the kind are the ASK rather than a dial - moving either is a
+different mesh, not a revision of this one. Everything an op can say is said
+through ``mesh_op``, which is a registered tool rather than a mounted per-mesher
+one - so nothing here knows what any library's functions are, and adding a
+mesher adds no card code.
 
 A hand-edit made in QGIS re-enters through ``mesh_adopt_layer`` and is HISTORY,
 not program: the mesh is flagged, and a later recipe edit refuses rather than
@@ -355,11 +357,11 @@ _OP_ROW = "op"
 
 async def _apply_gate_revision(session: MeshSession,
                                revised: Mapping[str, Any]) -> None:
-    """One gate reply as a recipe change: the revert, or the params that MOVED.
+    """One gate reply as a recipe change: the revert, or the size word that MOVED.
 
-    The card carries the three agnostic params and the reset; everything an op
-    can say is said through ``mesh_op``, so there is nothing per-mesher to unpack
-    here and no mesher can have a card row this loop does not understand.
+    The card carries ``resolution_m`` and the reset; everything an op can say is
+    said through ``mesh_op``, so there is nothing per-mesher to unpack here and
+    no mesher can have a card row this loop does not understand.
     """
     if _truthy(revised.get(_RESET_ROW)):
         await asyncio.to_thread(session.reset)
@@ -396,12 +398,12 @@ def _as_number(name: str, value: Any) -> float:
 
 def _mesh_param_sheet(session: MeshSession, *, tool_name: str,
                       round_idx: int, max_rounds: int) -> Any:
-    """The gate card: the agnostic params, the numbered recipe, the revert.
+    """The gate card: the size word, the numbered recipe, the revert.
 
-    Generic by construction. The rows a user can MOVE are the params every mesher
-    means the same thing by; the ops are shown numbered because an index is what
-    an alter or a remove targets, and they are read-only here because the one
-    place an op is written is ``mesh_op``.
+    Generic by construction. The row a user can MOVE is the one size word every
+    mesher means the same thing by; the ops are shown numbered because an index
+    is what an alter or a remove targets, and they are read-only here because the
+    one place an op is written is ``mesh_op``.
     """
     from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 

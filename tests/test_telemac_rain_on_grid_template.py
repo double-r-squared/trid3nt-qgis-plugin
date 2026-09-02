@@ -349,7 +349,7 @@ def _accepted_catchment_mesh():
         "topology_uri": "s3://cache/mesh/M1/mesh_topology.json",
         "display_uri": "s3://cache/mesh/M1/mesh.2dm",
         "node_count": 4, "element_count": 2, "min_edge_m": 40.0,
-        "provenance": {"dem_source": "3dep 100%", "sizing_source": "nhdplus_hr",
+        "provenance": {"bed_source": "3dep 100%", "sizing_source": "nhdplus_hr",
                        "domain_source": "supplied polygon domain (1 part(s))"},
     }
 

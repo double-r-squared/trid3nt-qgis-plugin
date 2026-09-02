@@ -219,6 +219,13 @@ class MeshSession:
         provenance = {"mesher": self.mesher.name,
                       "recipe": self.recipe.to_json(),
                       "deterministic": self.mesher.deterministic,
+                      # WHAT ACTUALLY PAINTED THE BED, not what the recipe asked
+                      # for: the ladder rung that served is the only statement a
+                      # reader downstream can tell a coarse global relief from the
+                      # surveyed topobathy by, and the op that painted it is the
+                      # only thing that knows.
+                      **({"bed_source": str(mesh.meta["bed_source"])}
+                         if mesh.meta.get("bed_source") else {}),
                       **({"regen_note": self.regen_note}
                          if self.regen_note else {}),
                       **dict(declared.pop("provenance", None) or {})}
