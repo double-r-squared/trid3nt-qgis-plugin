@@ -91,6 +91,22 @@ class _EmptyAfterOp(Exception):
     """An op took the last element; the empty-mesh refusal states which one."""
 
 
+class _Refusal(Exception):
+    """A typed refusal the HOST re-raises under its own code.
+
+    The refusals this driver owes are about the DOMAIN, and the domain is only
+    knowable where the library is - so the code, the reason and the call that
+    does what the refused ask could not travel back as a document rather than as
+    a return code the host has to guess a meaning for.
+    """
+
+    def __init__(self, code: str, message: str, escalation: dict | None = None
+                 ) -> None:
+        super().__init__(message)
+        self.document = {"code": code, "message": message,
+                         "escalation": escalation}
+
+
 def _seed_library_randomness(seed: int) -> None:
     """Bind the recipe's seed onto the one library call that draws without it.
 
@@ -273,6 +289,19 @@ class _Build:
                 self.shoreline = om.Shoreline(
                     cfg["shoreline_shp"], self.region.bbox, self.min_deg,
                     smooth_shoreline=False)
+            if not (len(self.shoreline.mainland) or len(self.shoreline.inner)):
+                raise _Refusal(
+                    "MESH_SHORELINE_DOES_NOT_DESCRIBE_EXTENT",
+                    "the shoreline carries no land boundary over the extent "
+                    f"{cfg['bbox']}, so there is nothing here to cut water from: "
+                    "the signed distance falls back to the box itself and the "
+                    "whole extent - streets included - meshes as open water. "
+                    "GSHHG L1 describes the boundary between land and OCEAN, so "
+                    "a lake, a reservoir or an inland water body is not in it. "
+                    "Fetch the water body and mesh ITS polygon: build_mesh takes "
+                    "a polygon extent and cuts the same domain from its interior.",
+                    {"tool": "fetch_nhd_waterbodies",
+                     "overrides": {"bbox": list(cfg["bbox"])}})
             self.sdf = om.signed_distance_function(self.shoreline)
             # The RIM on this path is the extent's own box: the shoreline is the
             # land boundary and the sizing ops are what shape it, while the box
@@ -406,6 +435,11 @@ def set_rim_size(build: _Build, edge_length_m: float | None = None,
     locks the resampled rim as mesh nodes, which is what makes the spacing a
     fact rather than a target the relaxation may drift off; the passes that move
     a constrained cut decline themselves, as they do around an obstacle.
+
+    ORDER: after the sizing ops and before the gradation. The rim's edge is
+    written onto the lattice the sizing ops built, and a gradation after it is
+    what turns the step from the rim into the interior into a slope instead of a
+    fan of slivers.
     """
     if not build.domain_rings:
         raise ValueError(
@@ -430,7 +464,11 @@ def set_rim_size(build: _Build, edge_length_m: float | None = None,
     points, positions = points[keep], np.asarray(walk, dtype=np.int64)[keep]
     build.rim_target = target
     if constrain:
-        wet = build.sdf.eval(points) < 0.0
+        # Not strictly inside: a rim point IS the boundary, so on a supplied
+        # polygon its signed distance is zero and a strict test drops the whole
+        # outline. Half an edge outside is the band a node can be pulled back
+        # from; anything past it is the land a shoreline cut out of the rim.
+        wet = build.sdf.eval(points) < 0.5 * target
         build.rim, build.rim_walk = points[wet], positions[wet]
     else:
         build.rim = np.empty((0, 2), dtype=float)
@@ -440,6 +478,15 @@ def set_rim_size(build: _Build, edge_length_m: float | None = None,
         tree = cKDTree(points)
         _seed(grid, build, lambda flat: tree.query(flat, k=1)[0] <= target,
               target)
+    else:
+        # Locked but not SIZED: with no lattice built yet there is nothing to
+        # write the rim's edge onto, so the elements behind the rim keep whatever
+        # the ask and the ceiling gave them and the transition is a fan of
+        # slivers. Declare this op after the sizing ops and before the gradation.
+        build.notes.append(
+            "set_rim_size locked the rim at %.0f m but sized no lattice: no "
+            "sizing op had built one yet, so the elements behind the rim are "
+            "not graded into it" % (target * build.mpd))
     build.active.append("rim(edge_length=%.0fm,constrained=%d)"
                         % (target * build.mpd, int(build.rim.shape[0])))
 
@@ -937,7 +984,14 @@ _OPS = {"build": op_build, "post": op_post}
 def main() -> int:
     op = sys.argv[1]
     cfg = json.load(open(sys.argv[2]))
-    return _OPS[op](cfg, sys.argv[3].rstrip("/"))
+    out = sys.argv[3].rstrip("/")
+    try:
+        return _OPS[op](cfg, out)
+    except _Refusal as refusal:
+        json.dump(refusal.document, open(out + "/om2d_refusal.json", "w"),
+                  indent=2)
+        print("OM2D_REFUSED", json.dumps(refusal.document))
+        return 3
 
 
 if __name__ == "__main__":

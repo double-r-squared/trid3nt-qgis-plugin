@@ -87,6 +87,35 @@ def test_the_rim_primitive_is_the_driver_def_under_its_own_name():
     assert '"set_rim_size": set_rim_size' in source
 
 
+def test_the_boxs_own_typed_refusal_reaches_the_caller_with_its_escalation(
+        tmp_path, monkeypatch):
+    """A domain refusal is only knowable where the library is.
+
+    The lake case: GSHHG L1 describes the boundary between land and OCEAN, so
+    over an inland water body the shoreline carries nothing and the whole extent
+    - streets included - would mesh as open water. The driver writes the code,
+    the reason and the call that DOES the ask; the host re-raises it typed.
+    """
+    import subprocess
+
+    document = {"code": "MESH_SHORELINE_DOES_NOT_DESCRIBE_EXTENT",
+                "message": "the shoreline carries no land boundary over ...",
+                "escalation": {"tool": "fetch_nhd_waterbodies",
+                               "overrides": {"bbox": list(_AOI)}}}
+
+    def fake_run(argv, **kw):
+        (tmp_path / "om2d_refusal.json").write_text(json.dumps(document))
+        return subprocess.CompletedProcess(argv, 3, "OM2D_REFUSED", "")
+
+    monkeypatch.setattr(OM2D.subprocess, "run", fake_run)
+    monkeypatch.setenv("TRID3NT_GSHHG_SHP", str(tmp_path / "gshhg.shp"))
+    (tmp_path / "gshhg.shp").write_bytes(b"")
+    with pytest.raises(MeshToolError) as excinfo:
+        OM2D._run_op(tmp_path, "build", "om2d_config.json", "om2d_mesh.npz")
+    assert excinfo.value.error_code == "MESH_SHORELINE_DOES_NOT_DESCRIBE_EXTENT"
+    assert excinfo.value.escalation["tool"] == "fetch_nhd_waterbodies"
+
+
 def test_an_unknown_op_refuses_with_the_nearest_names():
     with pytest.raises(MeshToolError) as excinfo:
         _recipe(ops=[mesh_op("feature_sizing_funtcion")])

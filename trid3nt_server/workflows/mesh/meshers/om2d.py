@@ -58,6 +58,9 @@ __all__ = ["OM2D", "build"]
 #: The GPL-isolated OceanMesh2D image and the driver mounted into it.
 _MESH_IMAGE_DEFAULT = "trid3nt-local/mesh:latest"
 _INCONTAINER_SCRIPT = "om2d_driver.py"
+#: What the driver writes when it refuses in its own words: code, reason, and the
+#: call that DOES what the refused ask could not.
+_REFUSAL_FILE = "om2d_refusal.json"
 _CONTAINER_TIMEOUT_S = 2400
 
 #: DistMesh seeds its initial point cloud from numpy's global generator, which
@@ -468,10 +471,27 @@ def _run_op(rundir: Path, op: str, config_name: str, produces: str, *,
     cp = subprocess.run(argv, capture_output=True, text=True,
                         timeout=_CONTAINER_TIMEOUT_S)
     if cp.returncode != 0 or not (rundir / produces).exists():
+        _refusal(rundir)
         raise MeshToolError(
             "MESH_BUILD_FAILED",
             f"the om2d mesher {op} failed (rc={cp.returncode}):\n"
             f"{cp.stdout[-2000:]}\n{cp.stderr[-2000:]}")
+
+
+def _refusal(rundir: Path) -> None:
+    """Re-raise the driver's own typed refusal, when it wrote one.
+
+    The refusals about the DOMAIN are only knowable where the library is; the
+    driver writes the code, the reason and the escalation as a document so they
+    reach a caller as a typed refusal rather than as a return code wrapped in a
+    stack trace.
+    """
+    document = rundir / _REFUSAL_FILE
+    if not document.exists():
+        return
+    read = json.loads(document.read_text())
+    raise MeshToolError(str(read["code"]), str(read["message"]),
+                        escalation=read.get("escalation"))
 
 
 def _stats(rundir: Path) -> dict[str, Any]:
