@@ -11,7 +11,7 @@ from __future__ import annotations
 __all__ = [
     "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError",
-    "ReachBanksUnmapped",
+    "ReachWaterUnmapped",
     "ReachMeshUncovered",
     "TelemacReleaseOutsideDomainError",
 ]
@@ -34,7 +34,7 @@ class TelemacDyeScenarioInputError(TelemacDyeScenarioError):
         super().__init__("TELEMAC_DYE_SCENARIO_INPUT_INVALID", message)
 
 
-class ReachBanksUnmapped(TelemacDyeScenarioError):
+class ReachWaterUnmapped(TelemacDyeScenarioError):
     """No mapped water polygon covers this reach, so it has NO DOMAIN. TERMINAL.
 
     A reach domain is the real mapped water polygon or nothing: a line has no
@@ -46,7 +46,7 @@ class ReachBanksUnmapped(TelemacDyeScenarioError):
 
     def __init__(self) -> None:
         super().__init__(
-            "REACH_BANKS_UNMAPPED",
+            "REACH_WATER_UNMAPPED",
             "No mapped water polygon covers this reach, so there is no domain to "
             "mesh. NHDArea maps water surfaces wide enough to have two banks; a "
             "narrow creek is a flowline only, and a flowline is a centreline "

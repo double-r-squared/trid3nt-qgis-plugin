@@ -1,4 +1,4 @@
-"""The reach front of every TELEMAC river plan: geocode, seed, banks, mesh size.
+"""The reach front of every TELEMAC river plan: geocode, seed, water, mesh size.
 
 Three declared steps and one declared Data producer:
 
@@ -12,10 +12,10 @@ Three declared steps and one declared Data producer:
   the carrier-discharge lookup queries. The template's ``DATA.centerline`` reads
   it, so the river the section cuts, the mesh holds and the canvas shows is the
   river every downstream reader means.
-* ``measure_bank_coverage`` - how much of that centerline the fetched water
+* ``measure_water_coverage`` - how much of that centerline the fetched water
   polygons map, measured before the cut.
 * ``measure_mesh_coverage`` - how much of it the ACCEPTED mesh holds, measured
-  after the build. A distinct question with a distinct name: banks coverage is
+  after the build. A distinct question with a distinct name: water coverage is
   about what is mapped, mesh coverage about what is triangulated.
 
 The CFL timestep law lives here too: it is coupled to the edge the accepted mesh
@@ -34,7 +34,7 @@ from trid3nt_server.workflows.lib import Step, journal_note, user_input
 from trid3nt_server.workflows.shared.layer_fields import layer_field
 
 from .errors import (
-    ReachBanksUnmapped,
+    ReachWaterUnmapped,
     ReachMeshUncovered,
     TelemacDyeScenarioError,
 )
@@ -52,7 +52,7 @@ __all__ = [
     "estimate_telemac_solve_seconds",
     "fetch_reach_flowline",
     "geocode_reach",
-    "measure_bank_coverage",
+    "measure_water_coverage",
     "measure_mesh_coverage",
     "reach_seed",
     "slug",
@@ -382,12 +382,12 @@ def _read_vector_features(uri: str) -> list[dict[str, Any]]:
     return list(json.loads(gdf.to_json())["features"])
 
 
-async def measure_bank_coverage(*, banks: Any, centerline: Any) -> Any:
-    """MEASURE how much of the reach the fetched water polygons map -> the banks.
+async def measure_water_coverage(*, water: Any, centerline: Any) -> Any:
+    """MEASURE how much of the reach the fetched water polygons map -> the water.
 
-    The gate between the banks fetch and the section cut, so an unmapped reach
+    The gate between the water fetch and the section cut, so an unmapped reach
     fails on its own cause instead of arriving at the cut as an empty section. A
-    pass-through: it hands back the banks it measured, which is what puts it in
+    pass-through: it hands back the water it measured, which is what puts it in
     the chain rather than beside it.
 
     NO threshold. Zero coverage is the terminal refusal - none of this reach is
@@ -396,17 +396,17 @@ async def measure_bank_coverage(*, banks: Any, centerline: Any) -> Any:
     maps only as flowlines are exactly the ones a reader would otherwise assume
     were modelled.
     """
-    fraction = await asyncio.to_thread(_covered_fraction, banks, centerline)
+    fraction = await asyncio.to_thread(_covered_fraction, water, centerline)
     if fraction <= 0.0:
-        raise ReachBanksUnmapped()
+        raise ReachWaterUnmapped()
     journal_note(
-        f"reach banks: {fraction:.1%} of the modelled centreline is covered by "
+        f"reach water: {fraction:.1%} of the modelled centreline is covered by "
         "mapped water polygons; any stretch NHD maps only as a flowline carries "
         "no surveyed width and is not in the domain this run solved over.")
-    return banks
+    return water
 
 
-def _covered_fraction(banks: Any, centerline: Any) -> float:
+def _covered_fraction(water: Any, centerline: Any) -> float:
     """Fraction of the centreline's LENGTH that lies inside the water polygons.
 
     Measured in metres on the reach's own UTM zone: a fraction of a degree-space
@@ -432,7 +432,7 @@ def _covered_fraction(banks: Any, centerline: Any) -> float:
             "polygon-mapped cannot be measured.")
     line = unary_union(lines)
     polys = [shape(f["geometry"]).buffer(0) for f in
-             _read_vector_features(str(source_uri(banks)))
+             _read_vector_features(str(source_uri(water)))
              if (f.get("geometry") or {}).get("type") in ("Polygon", "MultiPolygon")]
     if not polys:
         return 0.0

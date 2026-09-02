@@ -32,7 +32,7 @@ from .open_water import (
     staged_bed_inputs,
 )
 from .errors import (
-    ReachBanksUnmapped,
+    ReachWaterUnmapped,
     ReachMeshUncovered,
     TelemacDyeScenarioError,
     TelemacDyeScenarioInputError,
@@ -115,7 +115,7 @@ __all__ = [
     "case_section",
     "staged_bed_inputs", "solves_on_real_bed", "fetch_domain_bed",
     "great_lake_for", "real_lake_bathy_label",
-    "ReachBanksUnmapped", "ReachMeshUncovered", "TelemacDyeScenarioError",
+    "ReachWaterUnmapped", "ReachMeshUncovered", "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError",
     "TelemacReleaseOutsideDomainError", "WaqtelO2", "WriteDeck",
     "arm_sediment_modules", "classify_substance", "compute_class",

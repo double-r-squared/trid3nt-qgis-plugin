@@ -54,8 +54,8 @@ class ContainedRelease:
 def domain_polygon_of(artifact: Any) -> Any:
     """The polygon the accepted mesh was cut from, or a typed refusal.
 
-    The mesh records the spec it was built from, so the domain a containment test
-    has to be against is the mesh's own statement of it rather than a second
+    The mesh records the RECIPE it was built from, so the domain a containment
+    test has to be against is the mesh's own statement of it rather than a second
     resolution of the same question.
 
     There is ONE path. A mesh cut from a bbox is four numbers and no polygon, and
@@ -63,8 +63,8 @@ def domain_polygon_of(artifact: Any) -> Any:
     reach templates declare a polygon domain, so a mesh without one is a mesh this
     run was never meant to solve on and says so here.
     """
-    spec = ((getattr(artifact, "provenance", None) or {}).get("spec") or {})
-    extent = spec.get("extent")
+    recipe = ((getattr(artifact, "provenance", None) or {}).get("recipe") or {})
+    extent = recipe.get("extent")
     if isinstance(extent, (tuple, list)) or extent is None:
         raise TelemacDyeScenarioError(
             "TELEMAC_DYE_SCENARIO_ERROR",
@@ -145,17 +145,17 @@ def contain_release_point(*, point: tuple[float, float], domain: Any,
     from shapely.ops import nearest_points, transform as _transform, unary_union
     from pyproj import Transformer
 
-    from trid3nt_server.workflows.mesh.meshers.om2d import read_geometry
+    from trid3nt_server.workflows.mesh.inputs import op_geometry
     from trid3nt_server.tools.processing._geometry_common import utm_epsg_for
 
     lon, lat = float(point[0]), float(point[1])
-    polygons = _geometries(read_geometry(domain), ("Polygon", "MultiPolygon"))
+    polygons = _geometries(op_geometry(domain), ("Polygon", "MultiPolygon"))
     if not polygons:
         raise TelemacDyeScenarioError(
             "TELEMAC_DYE_SCENARIO_ERROR",
             f"the domain {domain!r} carries no polygon, so there is no shape a "
             "release point could be inside of.")
-    lines = _geometries(read_geometry(flowline), ("LineString", "MultiLineString"))
+    lines = _geometries(op_geometry(flowline), ("LineString", "MultiLineString"))
     if not lines:
         raise TelemacDyeScenarioError(
             "TELEMAC_DYE_SCENARIO_ERROR",
