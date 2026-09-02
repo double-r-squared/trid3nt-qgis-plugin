@@ -199,7 +199,9 @@ def build_hydrograph_chart(*, result: Any, params: Any) -> dict[str, Any] | None
     the solver's own outflow across the outlet boundary, never a fitted curve, and
     it arrives outflow-positive from the one reader that states the convention.
     ``None`` when the run measured no series, which is the honest "there is no
-    hydrograph to draw".
+    hydrograph to draw". A series of ZEROS is not that case: the solver measured
+    the outlet and the answer was nothing left through it, so the chart is drawn
+    and the caption says the flat line is a measurement.
     """
     times = getattr(result, "outlet_hydrograph_t_s", None)
     flows = getattr(result, "outlet_hydrograph_q_m3s", None)
@@ -215,6 +217,10 @@ def build_hydrograph_chart(*, result: Any, params: Any) -> dict[str, Any] | None
     area = getattr(result, "catchment_area_km2", None)
     coefficient = getattr(result, "runoff_coefficient", None)
     intensity = getattr(result, "rain_intensity_mm_per_hr", None)
+    lead = ("No outflow series was measured over this window" if peak is None
+            else f"Peak outflow {float(peak):.3g} m3/s" if float(peak) > 0.0
+            else "MEASURED ZERO outflow: every sample the solver printed at the "
+                 "outlet was 0 m3/s, so the storm infiltrated")
     return build_chart_payload(
         vega_lite_spec={
             "mark": {"type": "line", "point": True},
@@ -228,8 +234,7 @@ def build_hydrograph_chart(*, result: Any, params: Any) -> dict[str, Any] | None
         },
         title=f"Outlet hydrograph - {where}",
         caption=(
-            (f"Peak outflow {float(peak):.3g} m3/s" if peak is not None
-             else "No outflow reached the outlet over this window")
+            lead
             + (f" from a {float(area):.3g} km2 catchment" if area is not None else "")
             + (f", {float(intensity):g} mm/h storm" if intensity else "")
             + (f", runoff coefficient {float(coefficient):.3g}"

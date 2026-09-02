@@ -582,19 +582,24 @@ def _read_listing(run_id: str) -> str:
         return ""
 
 
-def _rainfall_volume_m3(deck: Mapping[str, Any]) -> float | None:
-    """What FELL on the catchment, in cubic metres, or ``None`` when unmeasured.
+def _rain_applied(deck: Mapping[str, Any]) -> tuple[float | None, float | None]:
+    """What FELL on the catchment: ``(depth_mm, volume_m3)``, either ``None`` when
+    unmeasured.
 
     Gross depth times the meshed area - the same area the runoff left through -
-    so the coefficient is a ratio of two figures measured on one domain.
+    so the coefficient is a ratio of two figures measured on one domain. The DEPTH
+    travels beside the volume because a dry run is narrated in both: millimetres
+    are what a reader checks a storm against, cubic metres what the outflow is
+    compared to.
     """
     rain, area_km2 = deck["rain"], float(deck.get("area_km2") or 0.0)
     total_mm = (deck.get("hyetograph_total_mm") if rain["kind"] == "hyetograph"
                 else float(rain["intensity_mm_per_hr"])
                 * float(rain.get("rain_duration_s") or rain["duration_s"]) / _HOUR_S)
     if not area_km2 or total_mm is None:
-        return None
-    return round(float(total_mm) * 1.0e-3 * area_km2 * 1.0e6, 3)
+        return (None if total_mm is None else round(float(total_mm), 4)), None
+    return (round(float(total_mm), 4),
+            round(float(total_mm) * 1.0e-3 * area_km2 * 1.0e6, 3))
 
 
 def _provenance(deck: Mapping[str, Any]) -> list[SyntheticInput]:
@@ -659,8 +664,48 @@ def _provenance(deck: Mapping[str, Any]) -> list[SyntheticInput]:
     return rows
 
 
+def _dryness_note(scalars: Mapping[str, Any], *, rain_mm: float | None) -> str:
+    """The measured DRYNESS in the run's own numbers, or ``""`` when it ran off.
+
+    A correct solve over a catchment that shed no water is a FINDING - the storm
+    infiltrated - and stating it takes the three figures a reader would otherwise
+    go looking for: how deep the water got, how much rain the domain took, how
+    much left the outlet. So the sentence carries them rather than announcing an
+    absence.
+
+    The DEPTH FIELD is what decides, on the same wet floor the raster is masked
+    at: a catchment that never held a centimetre anywhere is the dry answer even
+    when the solver's own balance passed a trace of water across the outlet, and
+    hanging the finding on an exactly-zero outflow instead would hide it behind
+    a rounding.
+    """
+    from trid3nt_server.workflows.telemac.postprocess_telemac import (
+        TELEMAC_WSE_WET_DEPTH_M,
+    )
+
+    depth = float(scalars.get("max_depth_peak_m") or 0.0)
+    if depth > TELEMAC_WSE_WET_DEPTH_M:
+        return ""
+    runoff, rain_m3 = scalars.get("runoff_volume_m3"), scalars.get(
+        "rainfall_volume_m3")
+    applied = (f"{float(rain_mm):.4g} mm of rain" if rain_mm is not None
+               else "the storm")
+    over = (f" ({float(rain_m3):.4g} m3 over the meshed catchment)"
+            if rain_m3 is not None else "")
+    outflow = (f"{float(runoff):.4g} m3" if runoff is not None
+               else "a volume the solver listing could not be read for")
+    return (
+        f" MEASURED DRY: the peak water depth was {depth:.4g} m - nowhere did the "
+        f"water clear the {TELEMAC_WSE_WET_DEPTH_M} m wet floor - and {applied}"
+        f"{over} left {outflow} through the outlet. The storm infiltrated, and "
+        "that is this run's answer rather than a missing result: a wetter "
+        "antecedent condition, a larger storm or a lower curve number is what "
+        "moves it.")
+
+
 def _honesty_note(deck: Mapping[str, Any], metrics: Mapping[str, Any],
-                  product_note: str | None, truncated: bool = False) -> str:
+                  product_note: str | None, truncated: bool = False,
+                  dryness: str = "") -> str:
     """What the RUN was, prefixed by what the LAYER is.
 
     The applicability envelope is part of the sentence, not a footnote: rain-on-
@@ -670,7 +715,7 @@ def _honesty_note(deck: Mapping[str, Any], metrics: Mapping[str, Any],
     A hydrograph still rising at the last sample gets its own sentence, because
     every number the run reports about the storm is then a floor rather than a
     measurement, and that is not a caveat a reader should have to derive from a
-    time series.
+    time series. A run that stayed dry gets one for the same reason.
     """
     rain = deck["rain"]
     spacing = metrics.get("mesh_size_m") or deck["mesh_size_m"]
@@ -692,7 +737,7 @@ def _honesty_note(deck: Mapping[str, Any], metrics: Mapping[str, Any],
         "plays from the native rain-on-grid SELAFIN. Single-storm events only: "
         "infiltrated water is permanently lost, so there is no subsurface return "
         "flow and no inter-peak baseflow. Not a calibrated rainfall-runoff model."
-        + truncation)
+        + truncation + dryness)
 
 
 async def publish_rain_on_grid_products(*, deck: dict[str, Any],
@@ -726,11 +771,6 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
             mesh_frame_note="rain-on-grid peak water depth (UTM mesh frame)")
     finally:
         Path(slf_path).unlink(missing_ok=True)
-    if not layers:
-        raise RainOnGridError(
-            "the postprocess produced no depth layer: no node in the catchment was "
-            "ever wet, so the storm generated no ponded water to map.",
-            error_code="TELEMAC_ROG_NO_LAYER")
     raw = layers[0]
 
     listing = await asyncio.to_thread(_read_listing, run_id)
@@ -740,7 +780,7 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
     # integral computed over its output fields.
     hydrograph = await asyncio.to_thread(
         outlet_hydrograph, listing, boundary=deck["outlet_boundary"])
-    rainfall = _rainfall_volume_m3(deck)
+    rain_mm, rainfall = _rain_applied(deck)
     runoff = hydrograph.get("runoff_volume_m3")
     scalars: dict[str, Any] = {
         "catchment_area_km2": round(float(deck.get("area_km2") or 0.0), 4),
@@ -783,7 +823,8 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
             "bbox": tuple(deck["lonlat_bounds"]),
             "fallback_note": _honesty_note(
                 deck, metrics, raw.fallback_note,
-                truncated=bool(scalars["peak_is_window_truncated"])),
+                truncated=bool(scalars["peak_is_window_truncated"]),
+                dryness=_dryness_note(scalars, rain_mm=rain_mm)),
             "synthetic_inputs": _provenance(deck),
             # The run prefix travels WITH the layer so the skeleton writes this
             # run's own chart spec and answer metrics under it.
@@ -799,11 +840,14 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
         peak_quantity="flood_depth", mesh_basename=deck["result_basename"],
         mesh_epsg=utm_epsg, reach_name=name)
 
+    # The NOTE rides the log line: it is where a dry run states its finding, and
+    # the layer envelope the wire carries has no field for it.
     logger.info("rog complete run_id=%s catchment=%s area=%.4g km2 outlet_boundary=%d "
-                "peak_q=%s peak_depth=%s continuity=%s uri=%s", run_id, name,
+                "peak_q=%s peak_depth=%s continuity=%s uri=%s note=%s", run_id, name,
                 float(deck.get("area_km2") or 0.0), deck["outlet_boundary"],
                 published.peak_discharge_m3s, published.max_depth_peak_m,
-                published.continuity_rel_error, published.uri)
+                published.continuity_rel_error, published.uri,
+                published.fallback_note)
     return published
 
 

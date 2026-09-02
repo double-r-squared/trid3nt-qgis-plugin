@@ -130,7 +130,8 @@ class PostprocessTelemacError(RuntimeError):
     a typed error frame:
 
     - ``TELEMAC_OUTPUT_READ_FAILED`` -- could not parse the SELAFIN.
-    - ``TELEMAC_OUTPUT_EMPTY`` -- no DYE variable / no time steps / no wet nodes.
+    - ``TELEMAC_OUTPUT_EMPTY`` -- no DYE variable / no time steps / no wet node
+      on a free-surface read (a wholly dry DEPTH field is a result, not empty).
     - ``TELEMAC_DEPENDENCY_MISSING`` -- numpy / scipy / rasterio not importable.
     - ``TELEMAC_COG_WRITE_FAILED`` -- rasterio could not write the COG.
     - ``TELEMAC_CRS_TAG_MISMATCH`` -- the COG CRS tag did not round-trip.
@@ -949,7 +950,10 @@ def postprocess_telemac_wse(
     result, so a never-wetted node inside the domain keeps its own zero and the
     map renders it DRY. Only cells outside the meshed domain are nodata. A field
     punched full of holes wherever the storm produced no runoff reads as a broken
-    raster rather than as an answer.
+    raster rather than as an answer - and a field that is zero EVERYWHERE is that
+    same result at full extent, so it completes with the dryness stated rather
+    than refusing. ``TELEMAC_OUTPUT_EMPTY`` is what output that is truly empty
+    raises: no depth variable, no time steps.
 
     Unlike the dye path this writes the COG **in the MESH's OWN CRS**
     (``mesh_epsg``), with NO reprojection to EPSG:4326: obs high-water marks for a
@@ -1062,22 +1066,26 @@ def postprocess_telemac_wse(
         warnings.simplefilter("ignore", category=RuntimeWarning)
         node_peak = np.nanmax(masked, axis=0) if masked.shape[0] else np.full(x.size, np.nan)
     ever_wet = np.isfinite(node_peak)
-    if not ever_wet.any():
+    if is_depth:
+        # DRY IS A RESULT, and a WHOLLY dry field is the same result at full
+        # extent. A DEPTH is zero where the storm generated no runoff, and that
+        # is an answer: rendered as NODATA it punches holes through the map and
+        # reads as a broken raster, and refused outright it reads as a failed
+        # run. So a node inside the domain that never went wet keeps its own
+        # zero depth - all of them, if that is what the solve measured - and only
+        # the cells OUTSIDE the meshed domain, the ones the rasterizer's clip
+        # distance never reaches, stay nodata. An ELEVATION has no such floor (a
+        # dry node would report its bed as a water surface), so the never-wet
+        # refusal below is the free-surface path's alone. Truly empty output - no
+        # variable, no frames - is refused above, on both paths.
+        node_peak = np.where(ever_wet, node_peak, 0.0)
+    elif not ever_wet.any():
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_EMPTY",
             message=f"no wet node in {slf.name}: WATER DEPTH never exceeded "
             f"{TELEMAC_WSE_WET_DEPTH_M} m anywhere (dry solve?)",
             details={"slf": str(slf), "wet_depth_m": TELEMAC_WSE_WET_DEPTH_M},
         )
-    if is_depth:
-        # DRY IS A RESULT. A DEPTH field is zero where the storm generated no
-        # runoff, and that is an answer: rendered as NODATA it punches holes
-        # through the map and reads as a broken raster. So a node inside the
-        # domain that never went wet keeps its own zero depth, and only the cells
-        # OUTSIDE the meshed domain - the ones the rasterizer's clip distance
-        # never reaches - stay nodata. An ELEVATION has no such floor (a dry node
-        # would report its bed as a water surface), so this is the depth path's.
-        node_peak = np.where(ever_wet, node_peak, 0.0)
     finite = np.isfinite(node_peak)
 
     # honest scalar metrics over the wet field.
@@ -1208,11 +1216,21 @@ def postprocess_telemac_wse(
         cog_io.safe_unlink(cog)
 
     label_txt = "Max water depth" if is_depth else "Max water-surface elevation"
+    # A FLAT field has no range of its own, and a degenerate vmin==vmax ramp
+    # paints every cell the MIDDLE colour - a catchment that measured zero water
+    # everywhere renders as a full basin of it, which is the opposite of the
+    # answer. The ramp is therefore floored at one wet threshold above its
+    # minimum, so a measured zero sits at the BOTTOM of the scale and reads dry.
+    legend_min = round(min(wse_min, wse_max), 4)
+    legend_max = round(wse_max, 4)
+    flat = legend_max <= legend_min
+    if flat:
+        legend_max = round(legend_min + TELEMAC_WSE_WET_DEPTH_M, 4)
     legend = LegendKey(
         kind="continuous",
         colormap="viridis" if is_depth else "blues",
-        vmin=round(min(wse_min, wse_max), 4),
-        vmax=round(wse_max, 4),
+        vmin=legend_min,
+        vmax=legend_max,
         units="m",
         label=f"{label_txt} (m{f', {vertical_datum}' if vertical_datum else ''})",
     )
@@ -1222,6 +1240,19 @@ def postprocess_telemac_wse(
     ]
     if wet_note:
         honesty_bits.append(wet_note)
+    if is_depth and not ever_wet.any():
+        honesty_bits.append(
+            f"MEASURED DRY: no node exceeded {TELEMAC_WSE_WET_DEPTH_M} m at any "
+            f"of the {int(times.size)} output frames, so the peak-depth field is "
+            "zero across the whole domain - what the solve measured, not a "
+            "missing result"
+        )
+    if flat:
+        honesty_bits.append(
+            f"the colour ramp spans {legend_min:g} to {legend_max:g} m because the "
+            "field is FLAT and a ramp with no range paints every cell its middle "
+            "colour; every cell here sits at the bottom of the scale"
+        )
     if mesh_frame_note:
         honesty_bits.append(mesh_frame_note)
     if times.size <= 3 and not is_depth:

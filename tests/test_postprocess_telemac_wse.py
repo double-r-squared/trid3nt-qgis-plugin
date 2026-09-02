@@ -158,18 +158,83 @@ def test_a_free_surface_field_keeps_a_never_wet_node_nodata(tmp_path, telemac_re
     assert metrics["wse_min_m"] > 0.0
 
 
+def _everywhere_dry(telemac_result):
+    """A CORRECT solve over a catchment that shed nothing: real frames, a real
+    depth variable, and zero water at every node of every one of them."""
+    return telemac_result(
+        varnames=VARS, x=[0.0, 100.0, 0.0], y=[0.0, 0.0, 100.0],
+        ikle=[[0, 1, 2]], times=[0.0, 600.0], data={
+            "VELOCITY U": [np.zeros(3), np.zeros(3)],
+            "WATER DEPTH": [np.zeros(3), np.zeros(3)],       # everywhere dry
+            "FREE SURFACE": [np.array([5.0, 6.0, 7.0])] * 2,
+            "BOTTOM": [np.array([5.0, 6.0, 7.0])] * 2,
+        })
+
+
 def test_wse_empty_dry_solve_raises(tmp_path, telemac_result):
+    """An ELEVATION read of a dry solve has nothing to report but bed: every
+    node's free surface IS its terrain, so the refusal stands on this path."""
     slf = tmp_path / "dry.slf"
-    telemac_result(varnames=VARS, x=[0.0, 100.0, 0.0], y=[0.0, 0.0, 100.0],
-                   ikle=[[0, 1, 2]], times=[0.0], data={
-                       "VELOCITY U": [np.zeros(3)],
-                       "WATER DEPTH": [np.zeros(3)],       # everywhere dry
-                       "FREE SURFACE": [np.array([5.0, 6.0, 7.0])],
-                       "BOTTOM": [np.array([5.0, 6.0, 7.0])],
-                   })
+    _everywhere_dry(telemac_result)
     with pytest.raises(P.PostprocessTelemacError) as ei:
         P.postprocess_telemac_wse(
             slf, run_id="TESTWSE0000000000000000DD", mesh_epsg=32632,
             _output_dir=str(tmp_path),
+        )
+    assert ei.value.error_code == "TELEMAC_OUTPUT_EMPTY"
+
+
+def test_a_wholly_dry_depth_field_completes_stating_the_dryness(
+        tmp_path, telemac_result):
+    """DRY IS A VALID ANSWER: the solve reached its end and measured no water, so
+    the depth field is zero at full extent and the layer says so in numbers. A
+    refusal here would report a correct run as a broken one."""
+    slf = tmp_path / "dry.slf"
+    _everywhere_dry(telemac_result)
+    layers, metrics = P.postprocess_telemac_wse(
+        slf, run_id="TESTWSE0000000000000DRY1", mesh_epsg=32632,
+        quantity="depth", _output_dir=str(tmp_path),
+    )
+    assert metrics["n_wet_nodes"] == 0
+    assert metrics["wse_max_m"] == 0.0
+    assert metrics["wse_min_m"] == 0.0
+    assert metrics["wse_p99_m"] == 0.0
+    assert metrics["n_frames"] == 2
+    assert "MEASURED DRY" in metrics["honesty_label"]
+    assert layers[0].quantity == "water_depth"
+    assert layers[0].wse_max_m == 0.0
+    # A ramp with no range paints every cell its MIDDLE colour, which renders a
+    # dry catchment as a full basin of water. The floor keeps zero at the bottom.
+    assert layers[0].legend.vmin == 0.0
+    assert layers[0].legend.vmax == pytest.approx(P.TELEMAC_WSE_WET_DEPTH_M)
+    assert "colour ramp spans" in metrics["honesty_label"]
+
+
+def test_a_depth_read_with_no_variable_or_no_frames_still_refuses(
+        tmp_path, telemac_result):
+    """TRULY empty output is still empty: no depth variable and no time steps are
+    failures of the run, not measurements of a dry one."""
+    slf = tmp_path / "empty.slf"
+    telemac_result(varnames=["VELOCITY U", "BOTTOM"], x=[0.0, 100.0, 0.0],
+                   y=[0.0, 0.0, 100.0], ikle=[[0, 1, 2]], times=[0.0], data={
+                       "VELOCITY U": [np.zeros(3)],
+                       "BOTTOM": [np.array([5.0, 6.0, 7.0])],
+                   })
+    with pytest.raises(P.PostprocessTelemacError) as ei:
+        P.postprocess_telemac_wse(
+            slf, run_id="TESTWSE0000000000000DRY2", mesh_epsg=32632,
+            quantity="depth", _output_dir=str(tmp_path),
+        )
+    assert ei.value.error_code == "TELEMAC_OUTPUT_EMPTY"
+
+    noframes = tmp_path / "noframes.slf"
+    empty = np.zeros((0, 3))
+    telemac_result(varnames=VARS, x=[0.0, 100.0, 0.0], y=[0.0, 0.0, 100.0],
+                   ikle=[[0, 1, 2]], times=[],
+                   data={name: [empty] for name in VARS})
+    with pytest.raises(P.PostprocessTelemacError) as ei:
+        P.postprocess_telemac_wse(
+            noframes, run_id="TESTWSE0000000000000DRY3", mesh_epsg=32632,
+            quantity="depth", _output_dir=str(tmp_path),
         )
     assert ei.value.error_code == "TELEMAC_OUTPUT_EMPTY"

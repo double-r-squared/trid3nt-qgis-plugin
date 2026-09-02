@@ -216,6 +216,56 @@ def test_hydrograph_chart_line_spec_with_a_series():
     assert "5" in payload["caption"] and "2 km2" in payload["caption"]
 
 
+def test_a_series_of_measured_zeros_is_drawn_and_labelled_a_measurement():
+    """DRY IS A VALID ANSWER: the solver measured the outlet and nothing left
+    through it. A flat line the caption calls a measurement is the answer; a
+    suppressed chart would read as a run that produced nothing."""
+    from types import SimpleNamespace
+
+    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+        build_hydrograph_chart,
+    )
+
+    result = SimpleNamespace(
+        outlet_hydrograph_t_s=[0.0, 3600.0], outlet_hydrograph_q_m3s=[0.0, 0.0],
+        peak_discharge_m3s=0.0, catchment_area_km2=30.5, runoff_coefficient=0.0,
+        rain_intensity_mm_per_hr=6.53, name="watershed")
+    payload = build_hydrograph_chart(result=result, params={"location": None})
+    assert payload is not None
+    assert payload["vega_lite_spec"]["data"]["values"] == [
+        {"t_h": 0.0, "q_m3s": 0.0}, {"t_h": 1.0, "q_m3s": 0.0}]
+    assert "MEASURED ZERO outflow" in payload["caption"]
+
+
+# ===========================================================================
+# The dryness statement: what a correct-but-dry run says instead of refusing.
+# ===========================================================================
+def test_a_dry_run_states_its_dryness_in_its_own_numbers():
+    from trid3nt_server.workflows.telemac.steps.rain_on_grid import _dryness_note
+
+    note = _dryness_note({"max_depth_peak_m": 0.0, "runoff_volume_m3": 9.328,
+                          "rainfall_volume_m3": 703398.434}, rain_mm=25.0)
+    assert "MEASURED DRY" in note
+    # The three figures a reader would otherwise go looking for.
+    assert "peak water depth was 0 m" in note
+    assert "25 mm of rain" in note
+    assert "7.034e+05 m3 over the meshed catchment" in note
+    assert "9.328 m3 through the outlet" in note
+
+
+def test_the_depth_field_decides_the_dryness_not_a_trace_of_outflow():
+    """A catchment that never held a centimetre is the dry answer even when the
+    solver's own balance passed a trickle across the outlet; a run that stood in
+    water is not dry however little left."""
+    from trid3nt_server.workflows.telemac.steps.rain_on_grid import _dryness_note
+
+    assert _dryness_note({"max_depth_peak_m": 0.42, "runoff_volume_m3": 9100.0,
+                          "rainfall_volume_m3": 3.4e6}, rain_mm=156.7) == ""
+    assert "MEASURED DRY" in _dryness_note(
+        {"max_depth_peak_m": 0.004, "runoff_volume_m3": 12.0,
+         "rainfall_volume_m3": 3.4e6}, rain_mm=156.7)
+
+
 # ===========================================================================
 # resolve_rain_event: the two rungs.
 # ===========================================================================
@@ -460,10 +510,9 @@ def test_a_mesh_whose_boundary_took_no_outlet_role_refuses(rog_deck, monkeypatch
 
 
 def test_the_rainfall_volume_is_the_gross_depth_over_the_meshed_area(rog_deck):
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import (
-        _rainfall_volume_m3,
-    )
+    from trid3nt_server.workflows.telemac.steps.rain_on_grid import _rain_applied
 
     deck = asyncio.run(rog_deck(rain=_DESIGN_STORM))
-    # 25 mm/h over 6 h = 150 mm over 2.5 km2.
-    assert _rainfall_volume_m3(deck) == pytest.approx(0.15 * 2.5e6)
+    # 25 mm/h over 6 h = 150 mm over 2.5 km2. The depth travels beside the
+    # volume: a dry run is narrated in millimetres as well as cubic metres.
+    assert _rain_applied(deck) == (pytest.approx(150.0), pytest.approx(0.15 * 2.5e6))
