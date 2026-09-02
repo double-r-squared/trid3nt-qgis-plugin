@@ -258,6 +258,12 @@ package SolveSeam {
         The frame count the worker recorded, beside the file it measured it on,
         so the packet can open that file and disagree. One reader is never the
         only reader of a number a delivery rests on.
+
+        The disagreement is only worth having between INDEPENDENT readers, so
+        the packet's own count is header arithmetic over a range read rather
+        than the engine's reader over a full download. That independence is the
+        exception NoSecondParserOfTheFormat's scope carves out: a cross-check
+        sharing the reader it checks would only agree with itself.
         */
         item result_slf : FileName;
         item ntimestep : Integer;
@@ -621,6 +627,14 @@ package SolveSeam {
         result the engine reads without complaint, and it handed every consumer
         a variable name with the record's unit still glued on.
 
+        SCOPE: the FIELD DATA a delivery renders. One reader of the format's
+        fields - the engine's own, inside the image that wrote them - and no
+        second parser of fields anywhere. The packet's frame count is outside
+        that scope and stays hand-rolled header arithmetic by design: it is the
+        independent reader FrameCountCrossCheck exists to disagree with the
+        worker's number, and converting it would make the cross-check agree
+        with itself.
+
         forbid: trid3nt_server.workflows.telemac.result_reader -> struct
         forbid: trid3nt_server.workflows.telemac.postprocess_telemac -> struct
         forbid: trid3nt_server.workflows.telemac.steps.run_reads -> struct
@@ -671,7 +685,7 @@ package SolveSeam {
     satisfy requirement WorkersNeverImportServer by workerEntrypoint;
     satisfy requirement WorkersNeverImportServer by telapyChild;
     verify requirement WorkersNeverImportServer by
-        "tests/test_model_conformance.py::test_the_solve_seam_model_conforms";
+        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement NoSecondParserOfTheFormat by resultReader;
     satisfy requirement NoSecondParserOfTheFormat by resultPostprocess;
@@ -679,10 +693,10 @@ package SolveSeam {
     verify requirement NoSecondParserOfTheFormat by
         "tests/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format";
     verify requirement NoSecondParserOfTheFormat by
-        "tests/test_model_conformance.py::test_the_solve_seam_model_conforms";
+        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement ReadersNeverImportTheWorker by runReader;
     satisfy requirement ReadersNeverImportTheWorker by diagnosticsReader;
     verify requirement ReadersNeverImportTheWorker by
-        "tests/test_model_conformance.py::test_the_solve_seam_model_conforms";
+        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 }

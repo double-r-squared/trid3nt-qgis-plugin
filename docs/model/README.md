@@ -36,7 +36,12 @@ the code's cannot be checked against it.
 
 ## Files
 
+One `.sysml` per SEAM, and beside each one the view derived from it. A seam
+added here is checked and its view gated by being written: the suite reads the
+directory rather than a list somebody maintains.
+
 | file | what it is |
 | --- | --- |
 | `solve-seam.sysml` | The TELEMAC solve seam: the blocks from deck author to the readers, the manifest / echo / completion / topology / accepted-mesh contracts by their real key names, and the standing laws with their satisfying block and verifying test. |
-| `solve-seam-view.md` | GENERATED. The flow graph, the item tables and the requirement-to-test allocation, derived from `solve-seam.sysml` by `python scripts/model_check.py --view`. The suite fails while it is stale; never hand-edit it. |
+| `mesh-seam.sysml` | The mesh seam: the router, the recipe, the op tool, the session and its gate, the two mesher adapters and the GPL-isolated box behind one of them, the shared primitives, the artifact record and the topology writer - with the recipe laws, the box's isolation and the removal doctrine as requirements. |
+| `<seam>-view.md` | GENERATED. The flow graph, the item tables and the requirement-to-test allocation, derived from `<seam>.sysml` by `python scripts/model_check.py --model docs/model/<seam>.sysml --view`. The suite fails while one is stale; never hand-edit them. |

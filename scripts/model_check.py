@@ -46,7 +46,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 DEFAULT_MODEL = REPO_ROOT / "docs" / "model" / "solve-seam.sysml"
-DEFAULT_VIEW = REPO_ROOT / "docs" / "model" / "solve-seam-view.md"
+
+#: ``--view`` with no path: the view belongs beside the model it is derived from,
+#: one per seam. A fixed default would write one seam's view over another's.
+_BESIDE_THE_MODEL = Path("-")
 
 
 # --------------------------------------------------------------------------- #
@@ -710,9 +713,13 @@ def main(argv: list[str] | None = None) -> int:
         description="Check a SysML v2 textual model against the tree.")
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
     parser.add_argument("--root", type=Path, default=REPO_ROOT)
-    parser.add_argument("--view", type=Path, nargs="?", const=DEFAULT_VIEW,
-                        help="Write the derived view to this path and exit.")
+    parser.add_argument("--view", type=Path, nargs="?", const=_BESIDE_THE_MODEL,
+                        help="Write the derived view to this path and exit; with "
+                             "no path, beside the model as <stem>-view.md.")
     args = parser.parse_args(argv)
+    # The view names the model it came from, so the name a relative invocation
+    # writes has to be the name an absolute one writes.
+    args.model = args.model.resolve()
 
     try:
         model = parse_model(args.model)
@@ -721,8 +728,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.view is not None:
-        args.view.write_text(render_view(model, args.model), encoding="utf-8")
-        print(f"view -> {args.view}")
+        view = (args.model.with_name(f"{args.model.stem}-view.md")
+                if args.view == _BESIDE_THE_MODEL else args.view)
+        view.write_text(render_view(model, args.model), encoding="utf-8")
+        print(f"view -> {view}")
         return 0
 
     findings = check(model, args.root)
