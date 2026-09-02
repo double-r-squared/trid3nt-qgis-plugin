@@ -1,0 +1,158 @@
+schema_version: v1
+name: fetch_bluetopo
+# The heavy raster fetch gets the canonical fetch-resolution confirm card, the
+# same gate its sibling coastal composite declares.
+confirm_gate: fetch_resolution
+source_class: bluetopo
+shape: raster-cog
+supports_global_query: false
+error_prefix: BLUETOPO
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: COVERAGE_GAP
+endpoints:
+  data:
+    url: https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/
+auth:
+  mode: none
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  target_crs:
+    type: str
+    default: EPSG:32616
+  timeout_s:
+    type: float
+    default: 120.0
+  min_pixel_m:
+    type: float
+    schema_optional: true
+ingest:
+  access: library_delegate
+  delegate:
+    library: bluetopo_tile_scheme
+    timeout_s: 600.0
+hooks:
+  delegate: bluetopo.read
+  delegate_validate: bluetopo.validate
+  envelope: bluetopo.envelope
+normalize:
+  crs: EPSG:32616
+  units: meters
+  datum: NAVD88
+  quantity: elevation
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style_preset: continuous_dem
+  emit_bbox: true
+  display_name: NOAA BlueTopo bathymetry (NAVD88)
+  result_model: BlueTopoResult
+  provenance: true
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 400.0
+  floor_mb: 0.5
+# The tile scheme's own Resolution tiers, read live from the published
+# GeoPackage: 2 m, 4 m, 8 m and 16 m, finer cells in shallower and more
+# navigationally relevant water. The gate card quotes this beside a consuming
+# solver's declared range.
+resolution_declarations:
+- param: min_pixel_m
+  unit: m
+  min_value: 2
+  native_hint: BlueTopo multi-resolution UTM tiles - 2 m / 4 m / 8 m / 16 m tiers, finer in shallow water
+  constraint_source: data
+  rationale: the published tile scheme's own Resolution tiers; min_pixel_m only COARSENS the merge, it never invents a finer cell than the tile it read
+caveats:
+- NOAA BlueTopo is BATHYMETRY ONLY - there is no land in it. An AOI spanning a shoreline is
+  partially covered by construction; ``coverage_fraction`` reports the measured share and a land
+  DEM is a separate row, never a fill this tool paints.
+- BlueTopo is on NAVD88, an orthometric datum, and is explicitly NOT on a navigational or tidal
+  datum, which is what lets it merge with a NAVD88 land DEM with no VDatum step. A tile that does
+  not state NAVD88 in its vertical CRS or its VERTICALDATUMWKT tag raises BLUETOPO_DATUM_MISMATCH
+  rather than merging a bed whose datum is unknown.
+- Coverage concentrates on navigationally significant US waters, so a minor tidal creek or an
+  undeveloped bay may have none. The published tile scheme is the coverage truth and a tile row it
+  defines but has not delivered is not data; no intersecting delivered tile raises
+  BLUETOPO_COVERAGE_GAP rather than returning a surface built from something else.
+- The product is not for navigation. It carries a per-cell uncertainty band and a contributor
+  raster attribute table; this tool reads the ELEVATION band only.
+docstring: |-
+  Fetch the NOAA BlueTopo bathymetric surface (the measured sea floor) for a bbox.
+
+  **What it does:**
+      Resolves the AOI against NOAA's published BlueTopo tile scheme, reads
+      every DELIVERED tile whose footprint intersects it, gates each one on
+      its stated NAVD88 vertical datum, and reprojects them onto one shared
+      grid (coarsest tier first so the finest tier wins where tiers overlap).
+      Output is a single-band float32 Cloud-Optimized GeoTIFF, NAVD88 metres,
+      **positive-up** (the sea floor is NEGATIVE) - byte-format identical to
+      ``fetch_dem`` and ``fetch_topobathy`` so a terrain ingestion consumes it
+      unchanged.
+
+      BlueTopo is NOAA's National Bathymetric Source: a compiled best-available
+      gridded surface for navigationally significant US waters, built from
+      survey BAGs and multibeam. It is the source with the best provenance on
+      the bed ladder - per-cell uncertainty and per-cell contributor attribution
+      travel with the product.
+
+  **When to use:**
+      - The bed under COASTAL, ESTUARINE or NAVIGABLE water, where the question
+        needs a measured channel bottom rather than a surface DEM's water top.
+      - A hydraulic model whose land terrain is already NAVD88: BlueTopo joins
+        it with no vertical transformation.
+      - User asks for "bathymetry", "how deep is the channel", "the sea floor",
+        "BlueTopo", or "the national bathymetric source".
+
+  **When NOT to use:**
+      - Land elevation - there is none in this product. Use ``fetch_dem``.
+      - A seamless land-plus-sea surface in one raster - use
+        ``fetch_topobathy``, which merges a coastal topo-bathy composite with
+        the 3DEP land DEM.
+      - Outside US waters, or over a small inland stream: BlueTopo covers
+        navigationally significant US water and refuses elsewhere.
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, inside the
+          US envelope.
+      target_crs: output CRS (default ``EPSG:32616``). The NAVD88 vertical is
+          preserved; only the horizontal grid is reprojected.
+      timeout_s: tile-scheme listing / download budget in seconds (default 120).
+      min_pixel_m: OPTIONAL output-resolution FLOOR in metres. The merge is no
+          finer than this even where a 2 m tile is available, which keeps a
+          small AOI from producing a needlessly heavy grid. It only COARSENS:
+          it never invents a cell finer than the tile that was read.
+
+  **Returns:**
+      A ``BlueTopoResult`` (a ``LayerURI`` subclass) pointing at the merged COG
+      in the cache bucket. ``layer_type="raster"``, ``role="input"``,
+      ``style_preset="continuous_dem"``, ``units="meters"``. Provenance fields:
+      ``vertical_datum`` (the datum read off the tiles that painted),
+      ``tile_count``, ``resolution_tiers``, and ``coverage_fraction`` - the
+      share of the AOI the tile scheme covers, which is BELOW 1.0 for any AOI
+      that includes land, by construction.
+
+  **Errors:**
+      - ``BLUETOPO_INPUT_INVALID``: bad bbox / outside the US envelope / too
+        many tiles for one request (retryable=False).
+      - ``BLUETOPO_COVERAGE_GAP``: no delivered tile intersects the AOI
+        (retryable=False). BlueTopo has nothing here; the honest answer is to
+        supply a bed or take a declared alternative rung.
+      - ``BLUETOPO_DATUM_MISMATCH``: a tile does not state NAVD88
+        (retryable=False).
+      - ``BLUETOPO_UPSTREAM_ERROR``: tile-scheme listing / tile read / merge
+        failure (retryable=True).
+
+  **Cross-tool dependencies:**
+      - The PRIMARY rung of the coastal/estuary bed ladder, above the
+        ``fetch_topobathy`` CUDEM composite.
+      - Upstream source: the ``noaa-ocs-nationalbathymetry-pds`` public S3
+        bucket (anonymous read) and its published tile-scheme GeoPackage.
+
+  Cache: ``ttl_class="static-30d"``, ``source_class="bluetopo"``.
+  Tier-1 free. No API key. ``supports_global_query=False``.

@@ -1,0 +1,9 @@
+fetch_bluetopo:
+- give me the NOAA BlueTopo bathymetry for this harbor so the channel depth is real
+- pull the national bathymetric source gridded bed for the bay, NAVD88 not a chart datum
+- i need surveyed sea-floor depths under this estuary for the hydraulic model bed
+- what does the compiled multibeam bathymetry say the bottom elevation is across this inlet
+- fetch the best available bathymetric surface for the navigable water in this AOI
+- the DEM stops at the waterline, get me the measured bed below it on an orthometric datum
+- bathymetry tiles with per-cell uncertainty for the ship channel approach
+- BlueTopo tiles covering this sound so the mesh bed is measured rather than assumed

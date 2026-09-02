@@ -98,11 +98,13 @@ def test_envelope_is_strict_no_op_for_priors():
     storm_tracks + goes_satellite, ADR 0111 -- the twin layer_id/name + the mode /
     scan provenance via the channel; nwm_streamflow, ADR 0112 -- the twin
     layer_id/name + the reference-time / reach-count / NLDI-sample provenance via the
-    channel); every other spec leaves both unset (no-op)."""
+    channel; bluetopo, the bathymetry seam -- the vertical datum, tile count,
+    resolution tiers and measured coverage via the channel); every other spec
+    leaves both unset (no-op)."""
     envelope_folds = {
         "fetch_high_water_marks", "fetch_fault_sources",
         "fetch_landcover", "fetch_flood_extent_observation",
-        "fetch_dem", "fetch_topobathy",
+        "fetch_dem", "fetch_topobathy", "fetch_bluetopo",
         "fetch_storm_tracks", "fetch_goes_satellite",
         "fetch_noaa_nwm_streamflow",
     }

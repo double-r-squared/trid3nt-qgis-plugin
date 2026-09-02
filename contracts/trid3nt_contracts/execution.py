@@ -41,6 +41,7 @@ __all__ = [
     "LandcoverResult",
     "DemLayerURI",
     "TopobathyResult",
+    "BlueTopoResult",
     "StormTracksLayerURI",
     "GOESSatelliteLayerURI",
     "NWMStreamflowLayerURI",
@@ -473,6 +474,36 @@ class TopobathyResult(LayerURI):
     rung_coverage: dict[str, float] | None = None
 
 
+class BlueTopoResult(LayerURI):
+    """A NOAA BlueTopo bathymetric surface ``LayerURI`` plus its fetch-time provenance.
+
+    The ``fetch_bluetopo`` result model. Every field reports what the tile scheme
+    said and what actually painted, never what was asked for.
+
+    - ``vertical_datum`` -- the datum read off the tiles that painted, verbatim.
+      BlueTopo publishes NAVD88 (an orthometric datum, NOT a navigational or tidal
+      one), so the surface merges with a NAVD88 land DEM without a VDatum step. It
+      is stated here rather than assumed by a reader because a bed whose datum
+      nobody carried is a bed nobody can merge.
+    - ``tile_count`` -- number of BlueTopo tiles that painted the merge.
+    - ``resolution_tiers`` -- the tile-scheme ``Resolution`` labels of those tiles
+      (BlueTopo is a multi-resolution scheme; a merge may span tiers).
+    - ``coverage_fraction`` -- the share of the requested AOI the selected tile
+      footprints cover, measured against the tile scheme's own geometry. BlueTopo
+      is bathymetry ONLY and concentrates on navigationally significant water, so
+      a shore-spanning AOI is partially covered BY CONSTRUCTION: this number is
+      the honest report of that, not a failure.
+    - ``rung_coverage`` -- the MEASURED share of the AOI each fallback-ladder rung's
+      source painted, keyed by rung name (the walker reconciles against it).
+    """
+
+    vertical_datum: str = "NAVD88"
+    tile_count: int = 0
+    resolution_tiers: list[str] = Field(default_factory=list)
+    coverage_fraction: float = 0.0
+    rung_coverage: dict[str, float] | None = None
+
+
 class StormTracksLayerURI(LayerURI):
     """The hurricane / tropical-cyclone track ``LayerURI`` plus its fetch-time mode provenance.
 
@@ -581,6 +612,7 @@ LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
     "LandcoverResult": LandcoverResult,
     "DemLayerURI": DemLayerURI,
     "TopobathyResult": TopobathyResult,
+    "BlueTopoResult": BlueTopoResult,
     "StormTracksLayerURI": StormTracksLayerURI,
     "GOESSatelliteLayerURI": GOESSatelliteLayerURI,
     "NWMStreamflowLayerURI": NWMStreamflowLayerURI,

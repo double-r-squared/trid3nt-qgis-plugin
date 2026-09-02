@@ -322,6 +322,14 @@ from . import dem_3dep  # noqa: E402,F401
 # provenance fields replayed from the channel). The TopobathyError twins' stable
 # home; consumer #1 of the fetch-time provenance channel.
 from . import topobathy  # noqa: E402,F401
+# fetch_bluetopo: the NOAA National Bathymetric Source library-delegate hooks --
+# validate (US envelope + finiteness), read (the published tile scheme's AOI
+# intersect -> per-tile NAVD88 gate -> warp merge, reusing the coastal
+# compositor, plus the datum / tile / tier / coverage provenance RECORD),
+# envelope (layer identity + that provenance replayed from the channel). The
+# BlueTopoError twins' stable home, and the primary rung of the coastal bed
+# ladder above the CUDEM composite.
+from . import bluetopo  # noqa: E402,F401
 # fetch_storm_tracks fold: the hurricane/TC-track library-delegate hooks --
 # validate (historical bbox-required + shape), resolve (storm_name canon + season
 # window pre-cache-key), read (IBTrACS historical OR NHC active + the binary
