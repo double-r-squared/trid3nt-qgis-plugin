@@ -114,11 +114,12 @@ _OCEANMESH_ON_A_MESH = (
 )
 
 #: om2d's OWN pre-generation primitives, under their real driver ``def`` names.
-#: Both impose state on the DOMAIN the library triangulates, which the library
-#: has no single word for: ``om.Difference`` subtracts a shape but says nothing
-#: about locking its outline in, and a sizing lattice has no function that writes
-#: a target edge inside a drawn polygon.
-_OM2D_PRIMITIVES = ("set_obstacle", "set_region_size")
+#: All three impose state on the DOMAIN the library triangulates, which the
+#: library has no single word for: ``om.Difference`` subtracts a shape but says
+#: nothing about locking its outline in, a sizing lattice has no function that
+#: writes a target edge inside a drawn polygon, and every sizing function the
+#: library has measures the SHORELINE - none of them the extent's own rim.
+_OM2D_PRIMITIVES = ("set_obstacle", "set_region_size", "set_rim_size")
 
 #: The ops list an undeclared ask gets. Hard-baked and visible: the library's own
 #: clean chain in the order it is meant to run, then the bed.
@@ -196,6 +197,8 @@ def _read_built(rundir: Path, domain: "_Domain", resolution_m: float,
                             float(lonlat[:, 0].max()), float(lonlat[:, 1].max())),
             "domain_source": domain.source,
             "probes": {
+                **({"rim_edge_length_m": dict(stats["rim_edge_length_m"])}
+                   if stats.get("rim_edge_length_m") else {}),
                 **_conformal_probe(points, pfix, int(utm_epsg)),
                 **({"degenerate_elements_repaired": repaired} if repaired else {}),
                 **({"clean_notes": list(stats["clean_notes"])}
@@ -602,12 +605,16 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
     info: dict[str, Any] = {"source": domain.source}
     probes: dict[str, Any] = {
         "boundary_loops_measured": len(boundary_contours(mesh.cells))}
+    runs = {role: int(count) for role, count
+            in dict(mesh.meta.get("boundary_role_runs") or {}).items()}
     if sections:
         roles["open"] = [node for section in sections for node in section["nodes"]]
+        runs["open"] = runs.get("open", 0) + len(sections)
         info.update({
             "open_boundary_sections": len(sections),
             "open_node_count": len(roles["open"]),
             "section_node_counts": [len(s["nodes"]) for s in sections],
+            "section_rim": [s.get("rim") for s in sections],
             "section_mean_bed_m": [s["mean_bed_m"] for s in sections],
             "section_centroid": [s["centroid"] for s in sections],
             "identified_by": "oceanmesh.identify_ocean_boundary_sections",
@@ -616,6 +623,11 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
         probes["open_node_count"] = len(roles["open"])
     if roles:
         info["roles"] = {role: len(nodes) for role, nodes in roles.items()}
+    if runs:
+        # How many SECTIONS each role landed as, which is the number the solver's
+        # own liquid-boundary numbering has to agree with.
+        info["role_sections"] = runs
+        probes["boundary_role_sections"] = runs
 
     files: dict[str, str] = {}
     pair = write_telemac_pair(

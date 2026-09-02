@@ -72,10 +72,19 @@ def test_the_shared_primitives_ride_along_for_this_mesher_too():
         assert callable(fn), "a primitive binds against its REAL signature"
 
 
-def test_the_mesher_owns_the_two_domain_primitives_the_library_has_no_word_for():
-    for primitive in ("set_obstacle", "set_region_size"):
+def test_the_mesher_owns_the_domain_primitives_the_library_has_no_word_for():
+    for primitive in ("set_obstacle", "set_region_size", "set_rim_size"):
         space, _ = resolve_op(OM2D.OM2D, primitive)
         assert (space.origin, space.phase) == ("om2d", PRE)
+
+
+def test_the_rim_primitive_is_the_driver_def_under_its_own_name():
+    """No alias: the op name IS the ``def`` the box calls, and the box knows it."""
+    from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+
+    source = (drivers_dir() / "om2d_driver.py").read_text()
+    assert "def set_rim_size(build: _Build, edge_length_m" in source
+    assert '"set_rim_size": set_rim_size' in source
 
 
 def test_an_unknown_op_refuses_with_the_nearest_names():

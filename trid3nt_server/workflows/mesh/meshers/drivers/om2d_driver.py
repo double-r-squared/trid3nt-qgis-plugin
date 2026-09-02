@@ -42,6 +42,7 @@ polygon's own densified boundary. Both paths triangulate through the authentic
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import inspect
 import json
@@ -59,6 +60,14 @@ from shapely.ops import unary_union
 #: How wide the finest-edge band around an obstacle outline is, in units of that
 #: finest edge. One edge is the narrowest band a triangle can actually resolve.
 _OBSTACLE_BAND_EDGES = 1.0
+
+#: The band a SIZED rim is expected in, as a factor either side of the ask. A
+#: relaxation places nodes, it does not lay them out: an edge between two nodes it
+#: settled runs a little under and a little over whatever the lattice asked for,
+#: and twice the ask is the spread a triangulation at one size word actually
+#: holds. Reported against every build, asserted by none - a rim NO op sized runs
+#: far past this, and saying so is the point.
+_RIM_TOLERANCE = 2.0
 
 #: The parameters a recipe writes in METRES and the library reads in degrees.
 _METRE_PARAMS = ("min_edge_length", "min_edgelength", "max_edge_length")
@@ -148,12 +157,13 @@ def _resample(coords, step: float) -> list[tuple[float, float]]:
 
 
 def _thin(points: np.ndarray, spacing: float) -> np.ndarray:
-    """Keep points no closer together than ``spacing``, in input order."""
-    kept: list[np.ndarray] = []
-    for point in points:
-        if not kept or np.min(np.hypot(*(np.asarray(kept) - point).T)) >= spacing:
-            kept.append(point)
-    return np.asarray(kept, dtype=float)
+    """The INDICES of points no closer together than ``spacing``, in input order."""
+    kept: list[int] = []
+    for index, point in enumerate(points):
+        if not kept or np.min(
+                np.hypot(*(np.asarray(points)[kept] - point).T)) >= spacing:
+            kept.append(index)
+    return np.asarray(kept, dtype=np.int64)
 
 
 class _Holes(om.Domain):
@@ -169,10 +179,14 @@ class _Holes(om.Domain):
         for geom in geoms:
             for ring in _outline_coords(geom):
                 pts.extend(_resample(ring, step))
-        # Two constrained points closer than the finest edge would be locked into a
-        # zero-length edge, so the outline is thinned to the spacing the mesh can
-        # actually hold (a closed ring's repeated first vertex goes with them).
-        self.outline = _thin(np.asarray(pts, dtype=float), 0.5 * step)
+        # Thinned to HALF the finest edge, not to it: a breakline is followed
+        # exactly, and locking its vertices no closer than the finest edge cost
+        # measured conformal accuracy (an outline vertex 33 m from the nearest
+        # node at a 20 m ask, against 23 m at half). The edges along a punched
+        # outline therefore run under the size word by design - they are the cut
+        # the author asked for, not the rim the ask sizes.
+        raw = np.asarray(pts, dtype=float)
+        self.outline = raw[_thin(raw, 0.5 * step)]
         self.tree = cKDTree(self.outline)
         super().__init__(bbox, self.signed)
 
@@ -234,11 +248,17 @@ class _Build:
         self.sizing: list = []
         self.holes = None
         self.hole_geoms: list = []
+        self.rim = np.empty((0, 2), dtype=float)
+        self.rim_walk = np.empty(0, dtype=np.int64)
+        self.rim_target = None
         self.shoreline = None
         self.smoothed = None
+        self.domain_rings: list = []
         if cfg.get("domain_geojson"):
-            self.sdf = _PolygonDomain(_load_geoms(cfg["domain_geojson"]),
-                                      self.min_deg, self.bbox)
+            geoms = _load_geoms(cfg["domain_geojson"])
+            self.sdf = _PolygonDomain(geoms, self.min_deg, self.bbox)
+            self.domain_rings = [ring for geom in geoms
+                                 for ring in _outline_coords(geom)]
             self.active.append("polygon_sdf(interior)")
         else:
             self.smoothed = True
@@ -254,6 +274,11 @@ class _Build:
                     cfg["shoreline_shp"], self.region.bbox, self.min_deg,
                     smooth_shoreline=False)
             self.sdf = om.signed_distance_function(self.shoreline)
+            # The RIM on this path is the extent's own box: the shoreline is the
+            # land boundary and the sizing ops are what shape it, while the box
+            # edges are where the water simply continues past the ask.
+            self.domain_rings = [[(xmin, ymin), (xmax, ymin), (xmax, ymax),
+                                  (xmin, ymax), (xmin, ymin)]]
             self.active.append("shoreline_sdf(GSHHG)")
 
     # -- the environment a pre op's unstated parameters are filled from ---- #
@@ -310,12 +335,17 @@ class _Build:
         """The outline vertices DistMesh locks, inside the domain only.
 
         A constrained vertex outside the domain would pin a node the domain
-        excludes, so only the outline inside it is locked.
+        excludes, so only the outline inside it is locked. Two outlines can be
+        locked - an obstacle punched out of the water, and the domain's own rim
+        when a recipe sized it - and they lock the same way.
         """
-        if self.holes is None:
-            return np.empty((0, 2), dtype=float)
-        outline = self.holes.outline
-        return outline[self.sdf.eval(outline) < 0.0]
+        locked = [self.rim]
+        if self.holes is not None:
+            outline = self.holes.outline
+            locked.append(outline[self.sdf.eval(outline) < 0.0])
+        stacked = np.vstack(locked) if any(a.shape[0] for a in locked) \
+            else np.empty((0, 2), dtype=float)
+        return stacked
 
 
 # --------------------------------------------------------------------------- #
@@ -361,6 +391,59 @@ def set_region_size(build: _Build, geometry: str, edge_length_m: float) -> None:
     build.active.append("region(edge_length=%.0fm)" % float(edge_length_m))
 
 
+def set_rim_size(build: _Build, edge_length_m: float | None = None,
+                 constrain: bool = True) -> None:
+    """Size the DOMAIN RIM at a declared edge and lock it into the mesh.
+
+    Nothing else sizes the rim. A sizing function measures the SHORELINE - the
+    feature width, the distance to a line, the wavelength over a depth - and the
+    extent's own box is none of those, so the lattice there falls to the coarsest
+    edge and the rim comes back an order of magnitude past the ask. That is the
+    boundary a solver forces its open condition on, so its spacing is the ask's
+    to state.
+
+    ``edge_length_m`` defaults to the recipe's own size word. ``constrain``
+    locks the resampled rim as mesh nodes, which is what makes the spacing a
+    fact rather than a target the relaxation may drift off; the passes that move
+    a constrained cut decline themselves, as they do around an obstacle.
+    """
+    if not build.domain_rings:
+        raise ValueError(
+            "set_rim_size sizes the domain's own outline and this domain states "
+            "none; it is the extent's box or a supplied polygon's rings")
+    target = (build.min_deg if edge_length_m is None
+              else float(edge_length_m) / build.mpd)
+    ring: list[tuple[float, float]] = []
+    # A WALK POSITION per outline point, with a gap between rings so no two
+    # points of different rings ever read as neighbours. It is what lets the
+    # measurement tell a rim EDGE from a chord across the land the domain cut
+    # out of the rim, whose two ends are both rim points and are not neighbours.
+    walk: list[int] = []
+    cursor = 0
+    for coords in build.domain_rings:
+        piece = _resample(list(coords), target)
+        ring.extend(piece)
+        walk.extend(range(cursor, cursor + len(piece)))
+        cursor += len(piece) + 2
+    points = np.asarray(ring, dtype=float)
+    keep = _thin(points, target)
+    points, positions = points[keep], np.asarray(walk, dtype=np.int64)[keep]
+    build.rim_target = target
+    if constrain:
+        wet = build.sdf.eval(points) < 0.0
+        build.rim, build.rim_walk = points[wet], positions[wet]
+    else:
+        build.rim = np.empty((0, 2), dtype=float)
+        build.rim_walk = np.empty(0, dtype=np.int64)
+    grid = build.combined()
+    if grid is not None and hasattr(grid, "create_grid"):
+        tree = cKDTree(points)
+        _seed(grid, build, lambda flat: tree.query(flat, k=1)[0] <= target,
+              target)
+    build.active.append("rim(edge_length=%.0fm,constrained=%d)"
+                        % (target * build.mpd, int(build.rim.shape[0])))
+
+
 def _seed(grid, build: _Build, inside, target: float) -> None:
     """Write ``target`` into a sizing lattice wherever ``inside`` says, in place."""
     xg, yg = grid.create_grid()
@@ -374,7 +457,9 @@ def _seed(grid, build: _Build, inside, target: float) -> None:
     grid.build_interpolant()
 
 
-_PRIMITIVES = {"set_obstacle": set_obstacle, "set_region_size": set_region_size}
+_PRIMITIVES = {"set_obstacle": set_obstacle,
+               "set_region_size": set_region_size,
+               "set_rim_size": set_rim_size}
 
 
 # --------------------------------------------------------------------------- #
@@ -542,6 +627,7 @@ def op_build(cfg: dict, out: str) -> int:
         ((tri[:, 2] - tri[:, 1]) ** 2).sum(1),
         ((tri[:, 0] - tri[:, 2]) ** 2).sum(1)])) * build.mpd
     stats = {
+        "rim_edge_length_m": _rim_edges(points, cells, build),
         "engine": "oceanmesh(CHLNDDEV OceanMesh2D port) v%s"
                   % getattr(om, "__version__", "?"),
         "sizing_functions": build.active,
@@ -564,6 +650,57 @@ def op_build(cfg: dict, out: str) -> int:
     json.dump(stats, open(out + "/om2d_stats.json", "w"), indent=2)
     print("OM2D_OK", json.dumps(stats)[:4000])
     return 0
+
+
+def _rim_edges(points, cells, build: _Build) -> dict:
+    """The RIM's edge lengths against the ask, in metres.
+
+    The rim is where a solver forces its open condition, and every sizing
+    function the library has measures the SHORELINE rather than the extent, so
+    how far the rim ran from the ask is a number every build reports rather than
+    a question a reader has to go and measure.
+
+    WHICH edges: the ones on the outline a rim op sized, when one did - a domain
+    boundary is part rim and part shoreline, and holding the shoreline to the
+    rim's ask would report the land as a rim failure. With no rim op the whole
+    boundary is measured, because none of it was sized and all of it is the ask's
+    to answer for.
+    """
+    xy = np.asarray(points, dtype=float)
+    counts: dict[tuple[int, int], int] = {}
+    for cell in cells:
+        for a, b in ((cell[0], cell[1]), (cell[1], cell[2]), (cell[2], cell[0])):
+            key = (int(a), int(b)) if a < b else (int(b), int(a))
+            counts[key] = counts.get(key, 0) + 1
+    edges = [(a, b) for (a, b), n in counts.items() if n == 1]
+    measured = "every boundary edge (no rim op sized this domain)"
+    if build.rim.shape[0]:
+        _, nearest = cKDTree(xy).query(build.rim, k=1)
+        at = {int(node): int(position)
+              for node, position in zip(nearest, build.rim_walk)}
+        edges = [(a, b) for a, b in edges
+                 if a in at and b in at and abs(at[a] - at[b]) == 1]
+        measured = "the boundary edges on the outline the rim op sized"
+    lengths = np.array([float(np.hypot(*(xy[b] - xy[a]))) * build.mpd
+                        for a, b in edges])
+    if lengths.size == 0:
+        return {}
+    asked = (build.min_deg if build.rim_target is None
+             else build.rim_target) * build.mpd
+    return {
+        "asked_m": round(float(asked), 2),
+        "edges": int(lengths.shape[0]),
+        "min_m": round(float(lengths.min()), 2),
+        "median_m": round(float(np.median(lengths)), 2),
+        "max_m": round(float(lengths.max()), 2),
+        "over_ask_median": round(float(np.median(lengths)) / asked, 2),
+        "over_ask_max": round(float(lengths.max()) / asked, 2),
+        "measured": measured,
+        "tolerance": _RIM_TOLERANCE,
+        "within_tolerance": bool(
+            lengths.min() >= asked / _RIM_TOLERANCE
+            and lengths.max() <= asked * _RIM_TOLERANCE),
+    }
 
 
 def _run_mesh_ops(ops, points, cells, bed, mpd: float, reports: list,
@@ -625,17 +762,25 @@ def _measurement(name: str, result, points, cells, bed) -> object:
 
 def _over_components(fn, kwargs: dict, points, cells, bed, mpd: float,
                      report: dict, env_extra: dict) -> list[dict]:
-    """Call a boundary-walk op once per connected piece -> the sections it found.
+    """Call a boundary-walk op once per boundary WALK -> the sections it found.
 
     Its own precondition, honoured rather than compensated for: the walk it
-    indexes into traces ONE closed boundary, and a domain a shoreline cut can
-    come back as two water bodies in one array. Each piece is therefore offered
-    its own identification, on its own arrays, and the runs come back in the
-    whole mesh's numbering.
+    indexes into traces ONE closed contour, and a domain has as many as its
+    topology gives it - a shoreline cut can come back as two water bodies in one
+    array, and an obstacle punched out of one of them adds a rim around the hole.
+    The library starts its walk at whichever boundary edge sorts first, so on a
+    holed domain WHICH rim it traced was an accident of node numbering and every
+    other rim was invisible to it.
+
+    Each connected piece is therefore decomposed into its contours and offered one
+    identification PER CONTOUR, each walked from a declared start node; the runs
+    come back in the whole mesh's numbering. Contours are offered outer rim first
+    (by enclosed area), which is the order a reader checks them in.
     """
     out: list[dict] = []
     pieces = _components(cells, points.shape[0])
     report["components"] = len(pieces)
+    report["contours"] = 0
     for mask in pieces:
         kept = np.unique(cells[mask])
         remap = np.full(points.shape[0], -1, dtype=np.int64)
@@ -646,9 +791,68 @@ def _over_components(fn, kwargs: dict, points, cells, bed, mpd: float,
         env = {**dict.fromkeys(_POINT_PARAMS, sub_points),
                **dict.fromkeys(_CELL_PARAMS, sub_cells),
                "topobathymetry": sub_bed, **env_extra}
-        ends = fn(**_bind(fn, kwargs, env, mpd, report))
-        out += _sections(ends, sub_points, sub_cells, sub_bed, kept)
+        for rim, first in enumerate(_contour_starts(sub_cells, sub_points)):
+            report["contours"] += 1
+            with _walk_from(first):
+                ends = fn(**_bind(fn, kwargs, env, mpd, report))
+                out += [{**s, "rim": rim}
+                        for s in _sections(ends, sub_points, sub_cells, sub_bed,
+                                           kept, first)]
     return out
+
+
+@contextlib.contextmanager
+def _walk_from(first: int):
+    """Run the block with the library's boundary walk started at ``first``.
+
+    ``get_winded_boundary_edges`` takes the start vertex as ``vFirst`` and returns
+    the ONE contour it walks from there; ``identify_ocean_boundary_sections`` calls
+    it without one, so the start - and with it the contour - falls to whichever
+    boundary edge the library's unique-row sort put first. The parameter is bound
+    on the module the caller reaches it through, because the caller exposes no way
+    to pass it; the walk itself is the library's own.
+    """
+    import oceanmesh.boundary as boundary
+
+    original = boundary.get_winded_boundary_edges
+    boundary.get_winded_boundary_edges = functools.partial(
+        original, vFirst=int(first))
+    try:
+        yield
+    finally:
+        boundary.get_winded_boundary_edges = original
+
+
+def _contour_starts(cells, points) -> list[int]:
+    """One start node per boundary contour, outer rim first.
+
+    The decomposition is the library's own walk asked repeatedly: from the lowest
+    unvisited boundary node it returns exactly the contour that node lies on, so
+    walking every contour once covers the whole boundary and the choice of start
+    is a stated rule rather than a sort artifact. The order is by ENCLOSED AREA -
+    the rim around a hole encloses less than the domain rim, however many nodes
+    either of them happens to carry.
+    """
+    from oceanmesh.edges import get_boundary_edges, get_winded_boundary_edges
+
+    remaining = set(int(n) for n in np.unique(get_boundary_edges(cells)))
+    found: list[tuple[float, int]] = []
+    while remaining:
+        first = min(remaining)
+        walk = _walk_nodes(get_winded_boundary_edges(cells, vFirst=first))
+        remaining -= set(walk)
+        xy = np.asarray(points, dtype=float)[walk]
+        area = 0.5 * abs(float(np.sum(
+            xy[:, 0] * np.roll(xy[:, 1], -1) - np.roll(xy[:, 0], -1) * xy[:, 1])))
+        found.append((area, first))
+    return [first for _area, first in sorted(found, reverse=True)]
+
+
+def _walk_nodes(winded) -> list[int]:
+    """The nodes of one winded edge walk, in walk order, each once."""
+    flat = np.asarray(winded).flatten()
+    first_seen = np.unique(flat, return_index=True)[1]
+    return [int(flat[i]) for i in sorted(first_seen)]
 
 
 def _components(cells: np.ndarray, npoin: int) -> list[np.ndarray]:
@@ -668,19 +872,19 @@ def _components(cells: np.ndarray, npoin: int) -> list[np.ndarray]:
     return [label == k for k in range(count)]
 
 
-def _sections(ends, points, cells, bed, node_ids) -> list[dict]:
+def _sections(ends, points, cells, bed, node_ids, first: int) -> list[dict]:
     """Section ENDPOINTS as the runs of nodes between them, in walk order.
 
     ``identify_ocean_boundary_sections`` returns the first and last node of each
     section; the winding walk it indexes into is what turns those endpoints back
-    into a run, so the walk is rebuilt with the same library call. ``node_ids``
-    maps this piece's numbering back onto the whole mesh's.
+    into a run, so the walk is rebuilt with the same library call FROM THE SAME
+    START - a walk from anywhere else is a different contour, or the same one cut
+    at a different place. ``node_ids`` maps this piece's numbering back onto the
+    whole mesh's.
     """
     from oceanmesh.edges import get_winded_boundary_edges
 
-    winded = get_winded_boundary_edges(cells).flatten()
-    first_seen = np.unique(winded, return_index=True)[1]
-    walk = [int(winded[i]) for i in sorted(first_seen)]
+    walk = _walk_nodes(get_winded_boundary_edges(cells, vFirst=int(first)))
     at = {node: index for index, node in enumerate(walk)}
     out: list[dict] = []
     for start, stop in ends:
