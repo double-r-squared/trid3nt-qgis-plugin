@@ -129,7 +129,7 @@ A refusal that offers the banned thing is worse than no refusal.
 **Sketch.**
 
 ```python
-raise ReachBanksUnmapped(          # terminal, not retryable
+raise ReachWaterUnmapped(          # terminal, not retryable
     "No mapped water polygon covers this reach. Draw the reach polygon, "
     "name a case layer that holds it, or pick a reach with NHDArea coverage.")
 ```

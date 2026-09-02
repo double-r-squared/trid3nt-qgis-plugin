@@ -74,7 +74,9 @@ PHYSICS = Physics("tracer", substance=P.substance, release=P.release_coords)
 FORCING = Forcing(carrier=Ref("carrier_discharge"), rain=DATA.rain)
 MESH    = tool.build_mesh(mesher="om2d", kind="unstructured_tri",
                           extent=Ref("reach_polygon"),
-                          refine={"edge_length": P.mesh_resolution_m})
+                          resolution_m=P.mesh_resolution_m,
+                          ops=[mesh_op("laplacian2"),
+                               mesh_op("set_bed", source=DATA.dem)])
 
 
 def plan(ops):
@@ -497,9 +499,11 @@ the contract and the code do not drift:
   gate that sits mid-sequence does not exist and both cohort templates gate at
   the front;
 * the mesh is no longer a facade operation at all. A template declares
-  `MESH = tool.build_mesh(...)` beside DATA and PARAMS, the router checks every
-  field against the chosen mesher's own declarations, and `author` reads the deck
-  keywords off it. One mesher's build feeds several engines, so the ask stands
+  `MESH = tool.build_mesh(...)` beside DATA and PARAMS - three mesher-agnostic
+  params plus the ordered `ops` program that produces the mesh, each op named
+  verbatim after the library function or the shared primitive it calls - the
+  router validates every op against the chosen mesher's own namespaces, and
+  `author` reads the one agnostic size word off it. One mesher's build feeds several engines, so the ask stands
   outside any one engine's facade; the corridor mesher still runs inside the
   TELEMAC deck writer and the worker, and the deck ask is unchanged by the move;
 * the placement rule settled where the corridor fields live twice. Wave 2b moved
@@ -567,10 +571,10 @@ nothing else:
 Every operation takes its shaping values as SLOTS, so a template names
 what it means (`ops.acquire_domain(location=p.location, bbox=p.bbox,
 rivers=d.rivers, ...)`) rather than matching a positional `(p, d)`
-convention. `mesh` is the template's frozen `tool.build_mesh(...)`
-declaration; the facade translates its declared fields into the deck
-keywords its writers know them by, and a field the chosen mesher declares
-but no deck reads shapes the mesh and reaches no writer.
+convention. `mesh` is the template's frozen `tool.build_mesh(...)` RECIPE;
+the facade translates its agnostic params into the deck keywords its
+writers know them by, and an OP is a call on a mesh library that shapes the
+mesh and means nothing to a deck.
 
 The four are MUST-FILL: `register_workflow` refuses a facade that leaves
 one unrealized, with a typed authoring error at import. A hole that

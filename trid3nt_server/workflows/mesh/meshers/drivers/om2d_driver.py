@@ -415,6 +415,12 @@ def _as_library_value(name: str, value, mpd: float, env: dict):
     if name in _METRE_PARAMS and isinstance(value, (int, float)):
         return float(value) / mpd
     if name in _DEM_PARAMS and isinstance(value, str):
+        if env.get("region") is None:
+            raise ValueError(
+                "a staged raster becomes one of the library's own DEM objects "
+                "over the domain's REGION, and the ops that run after generation "
+                "are handed a mesh rather than a domain; declare %r on a sizing "
+                "op instead" % name)
         return om.DEM(value, bbox=env["region"])
     return value
 
