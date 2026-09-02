@@ -18,12 +18,14 @@ One end-to-end run that exercises the whole mesh front against a real harbour:
      against nothing. The comparison is a numbers file beside the packet.
 
 WHY POINT JUDITH AND NOT MARQUETTE. The rematch was ruled on the Marquette
-harbour, and the ``om2d`` mesher cannot cut a domain there: it takes its water
-from the GSHHG L1 land polygons, which describe the boundary between land and
-OCEAN. Lake Superior is not in them, so the whole Marquette AOI reads as land and
-the sizing function has no shoreline to measure from. Point Judith is the same
-question - a real surveyed breakwater sheltering a real harbour over real
-surveyed bathymetry - on water GSHHG actually describes.
+harbour, whose water this mesher's DEFAULT domain source cannot cut: it takes its
+water from the GSHHG L1 land polygons, which describe the boundary between land
+and OCEAN, and Lake Superior is not in them. A lake domain is meshed from the
+water body's own polygon instead (``scripts/drive_lake_domain_mesh.py``), which
+is a different domain source rather than a different question. Point Judith puts
+the question - a real surveyed breakwater sheltering a real harbour over real
+surveyed bathymetry - on water GSHHG describes, so the flagship compares the
+adaptive mesh against the uniform grid rather than against a domain change.
 
 Env (MinIO + the agent daemon): set -a; source .env.local; set +a; make agent
 Usage:
