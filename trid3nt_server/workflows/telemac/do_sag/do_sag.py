@@ -30,7 +30,7 @@ from trid3nt_server.workflows.lib import (
     user_input,
 )
 from trid3nt_server.workflows.mesh.step import MeshStep
-from trid3nt_server.workflows.mesh.tool import tool
+from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.do_sag.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
@@ -55,7 +55,7 @@ class DATA:
     rivers = tool(f"{_STEPS}.reach.fetch_reach_flowline", prefetched=None)
     # THE REACH, narrowed by CHAINING tools rather than by a mesher that grew a
     # corridor of its own. The navigated mainstem names the stretch, its two ends
-    # name where the stretch stops, and the cut through the MAPPED banks is the
+    # name where the stretch stops, and the cut through the MAPPED water is the
     # domain - so the two end faces are the transects the inflow and the outflow
     # are prescribed on, measured off real geometry rather than a ribbon.
     centerline = tool("fetch_nhdplus_nldi_navigate",
@@ -63,7 +63,7 @@ class DATA:
                       direction="DM",
                       distance_km=P.reach_length_km)
     ends = tool("endpoints", line=centerline)
-    # The QUERY WINDOW the banks are asked for: the centerline's own extent grown
+    # The QUERY WINDOW the water is asked for: the centerline's own extent grown
     # by a stated distance, because the water that belongs to this reach reaches
     # past the line - a far channel behind a mid-river island is three km off it
     # and is still the same river. The pad widens the QUESTION, never the meshed
@@ -71,19 +71,23 @@ class DATA:
     # only the stretch between the reach's two ends.
     window = tool("compute_layer_bounds", layer_uri=centerline, pad_m=3000.0,
                   fit_map=False)
-    banks = tool("fetch_nhd_area_water", bbox=Ref("window.bbox"))
+    water = tool("fetch_nhd_area_water", bbox=Ref("window.bbox"))
     # HOW MUCH of the reach the returned polygons actually map, measured before
     # the cut so an unmapped reach refuses on its own cause instead of arriving
     # at the section as an empty geometry.
-    mapped_banks = tool(f"{_STEPS}.reach.measure_bank_coverage",
-                        banks=banks, centerline=centerline)
-    reach_polygon = tool("section", polygon=mapped_banks,
+    mapped_water = tool(f"{_STEPS}.reach.measure_water_coverage",
+                        water=water, centerline=centerline)
+    reach_polygon = tool("section", polygon=mapped_water,
                          between=Ref("ends.between"))
-    # THE BED, declared here rather than left to the mesher's coastal default:
-    # a river reach solves on land terrain, not on a topobathy tile. GLO-30 is
-    # asked for on its OWN 1-arcsecond lattice, so the raster the nodes are
-    # sampled from carries the source pixels rather than a resample of them.
-    bed = tool("fetch_copernicus_dem", bbox=Ref("window.bbox"), px_per_deg=3600.0,
+    # THE SUBSTITUTION, declared where a reader can see it. A bed is TOPOBATHY -
+    # the channel bottom - and no topobathy survey covers an inland reach, so
+    # this row is a surface DEM and the recipe below says so by painting the bed
+    # from it BY NAME. The consequence travels with it: a surface measures the
+    # water top, so the modelled channel is shallower than the real one and the
+    # journal names this row as what the bed came from. GLO-30 is asked for on
+    # its OWN 1-arcsecond lattice, so the raster the nodes are sampled from
+    # carries the source pixels rather than a resample of them.
+    dem = tool("fetch_copernicus_dem", bbox=Ref("window.bbox"), px_per_deg=3600.0,
                purpose="river bed elevation")
 
 
@@ -103,25 +107,31 @@ PHYSICS = Physics("waqtel_o2",
 
 FORCING = Forcing(carrier=Ref("reviewed_discharge"))
 
-#: The MESH ASK, frozen at declaration and building nothing at import. The extent
-#: is the CHAIN's product - the stretch of mapped banks the section cut between the
-#: centerline's two ends - so the mesher triangulates a domain other tools measured
-#: rather than growing a corridor of its own. Every field is checked at the router
-#: against what the ``om2d`` mesher declares. The two end transects the section cut
-#: are the faces the inflow and the outflow are prescribed across, so the roles are
-#: declared HERE, on the ask, and travel whole into the accepted topology.
+#: The MESH RECIPE, frozen at declaration and building nothing at import. Three
+#: agnostic params and the ordered program that produces the mesh. The extent is
+#: the CHAIN's product - the stretch of mapped water the section cut between the
+#: centerline's two ends - so the mesher triangulates a domain other tools
+#: measured rather than growing a corridor of its own. The ops are oceanmesh's
+#: own clean passes under its own names, then the two things we impose: the bed,
+#: painted from the substitution this template declared above and named in the
+#: journal, and the roles, prescribed across the two end transects the section
+#: cut.
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
     extent=Ref("reach_polygon"),
-    refine={"resolution_m": P.mesh_resolution_m},
-    # The centerline is read head-to-tail from the point the navigate was
-    # walked downstream FROM, so the bed slopes the way the river runs
-    # rather than the way the flowline rows happened to merge.
-    bed={"raster": DATA.bed, "downstream_along": DATA.centerline,
-         "downstream_from": [Ref("seed.lon"), Ref("seed.lat")]},
-    boundaries={"inflow": Ref("reach_polygon.face_start"),
-                "outflow": Ref("reach_polygon.face_end")},
+    resolution_m=P.mesh_resolution_m,
+    ops=[
+        mesh_op("delete_boundary_faces"),
+        mesh_op("delete_faces_connected_to_one_face"),
+        mesh_op("laplacian2"),
+        mesh_op("make_mesh_boundaries_traversable"),
+        mesh_op("fix_mesh", delete_unused=True),
+        mesh_op("set_bed", source=DATA.dem, interp="nearest"),
+        mesh_op("set_boundary_roles",
+                inflow=Ref("reach_polygon.face_start"),
+                outflow=Ref("reach_polygon.face_end")),
+    ],
 )
 
 

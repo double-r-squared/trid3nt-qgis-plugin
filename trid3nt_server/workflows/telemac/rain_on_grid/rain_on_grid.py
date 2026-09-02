@@ -42,7 +42,7 @@ from trid3nt_server.workflows.lib import (
     user_input,
 )
 from trid3nt_server.workflows.mesh.step import MeshStep
-from trid3nt_server.workflows.mesh.tool import tool
+from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.telemac.rain_on_grid.declarations import (
     DOC,
     NLCD_NATIVE_RESOLUTION_M,
@@ -72,8 +72,8 @@ class DATA:
     # slopes. A pinned source never switches, so a 3DEP outage surfaces the
     # fetcher's own typed error naming copernicus and the substitution is the
     # user's to make - which is what a cross-dataset swap has to be.
-    bed_dem = tool("fetch_dem", bbox=Ref("aoi.bbox"), source="3dep",
-                   resolution_m=P.bed_dem_resolution_m, purpose="mesh bed")
+    dem = tool("fetch_dem", bbox=Ref("aoi.bbox"), source="3dep",
+               resolution_m=P.bed_dem_resolution_m, purpose="mesh bed")
     rivers = tool("fetch_river_geometry", bbox=Ref("aoi.bbox"),
                   source=P.river_source, purpose="river geometry")
     landcover = tool("fetch_landcover", bbox=Ref("aoi.bbox"),
@@ -93,12 +93,7 @@ class DATA:
     # clicked outlet may move to reach the channel is a fact about the D8 grid,
     # which is where it is declared.
     basin = tool("delineate_watershed", pour_point=P.pour_point,
-                 bbox=Ref("aoi.bbox"), dem_uri=Ref("bed_dem.uri"))
-    # The basin and the channel network inside it, joined into ONE document. The
-    # mesher receives a domain and its sizing source as a single acquisition,
-    # which is what keeps a chain from handing over a river network for a basin
-    # it does not describe.
-    sized = tool("combine", polygon=basin, lines=rivers)
+                 bbox=Ref("aoi.bbox"), dem_uri=Ref("dem.uri"))
 
 
 # -- the binding blocks --------------------------------------------------- #
@@ -113,32 +108,45 @@ PHYSICS = Physics("rainfall_runoff",
 
 FORCING = Forcing(rain=DATA.rain)
 
-#: The MESH ASK, frozen at declaration and building nothing at import. The extent
-#: is the CHAIN's product - the delineated basin carrying the channel network
-#: inside it - so the mesher triangulates a domain another tool measured rather
-#: than delineating one itself. Every field is checked at the router against what
-#: the ``om2d`` mesher declares. The deck reads the finest edge only to record
-#: what was ASKED for; what the mesh was BUILT at comes back on the mesh step.
+#: The MESH RECIPE, frozen at declaration and building nothing at import. The
+#: extent is the CHAIN's product - the delineated basin - so the mesher
+#: triangulates a domain another tool measured rather than delineating one
+#: itself, and the channel network the mesh is refined TOWARD is named by the
+#: sizing op rather than folded into the domain. The deck reads the finest edge
+#: only to record what was ASKED for; what the mesh was BUILT at comes back on
+#: the mesh step.
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
-    extent=Ref("sized"),
-    refine={"max_el": P.mesh_max_edge_m,
-            "resolution_m": P.mesh_min_edge_m,
-            "gradation": P.mesh_grade},
-    # ONE GROUND. The basin above was delineated on the pit-filled surface of
-    # this same DEM, so the bed the nodes are painted from is conditioned by the
-    # same chain: an unfilled sink under an overland solve ponds to its rim and
-    # sets the published peak depth from a terrain artifact the routing does not
-    # believe in.
-    bed={"raster": Ref("bed_dem.uri"), "condition": "pit_fill"},
-    # THE OUTLET, declared where every other boundary role is: the delineation's
-    # own accumulation-SNAPPED pour point, which is the point on the basin's
-    # boundary the terrain drains through. Every boundary node within the mesh's
-    # own mean boundary edge of it carries the free-exit role, and the hydrograph
-    # is the flux across exactly those nodes.
-    boundaries={"outflow": {"type": "Point",
-                            "coordinates": Ref("basin.snapped_pour_point")}},
+    extent=Ref("basin"),
+    resolution_m=P.mesh_min_edge_m,
+    ops=[
+        # Fine along the channel network, coarsening away from it, then held to
+        # a gradation - oceanmesh's own sizing functions under its own names.
+        mesh_op("distance_sizing_from_line_function", line_file=DATA.rivers,
+                rate=P.mesh_grade, max_edge_length=P.mesh_max_edge_m),
+        mesh_op("enforce_mesh_gradation", gradation=P.mesh_grade),
+        mesh_op("delete_boundary_faces"),
+        mesh_op("delete_faces_connected_to_one_face"),
+        mesh_op("laplacian2"),
+        mesh_op("make_mesh_boundaries_traversable"),
+        mesh_op("fix_mesh", delete_unused=True),
+        # ONE GROUND. The basin above was delineated on the pit-filled surface of
+        # this same DEM, so the bed the nodes are painted from is conditioned by
+        # the same chain: an unfilled sink under an overland solve ponds to its
+        # rim and sets the published peak depth from a terrain artifact the
+        # routing does not believe in. A bare-earth DEM is the correct class for
+        # an OVERLAND domain - there is no channel bottom under a hillslope.
+        mesh_op("set_bed", source=DATA.dem, condition="pit_fill"),
+        # THE OUTLET: the delineation's own accumulation-SNAPPED pour point,
+        # which is the point on the basin's boundary the terrain drains through.
+        # Every boundary node within the mesh's own mean boundary edge of it
+        # carries the free-exit role, and the hydrograph is the flux across
+        # exactly those nodes.
+        mesh_op("set_boundary_roles",
+                outflow={"type": "Point",
+                         "coordinates": Ref("basin.snapped_pour_point")}),
+    ],
 )
 
 

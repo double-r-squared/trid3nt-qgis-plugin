@@ -113,9 +113,10 @@ PHYSICS = Physics("harbor_agitation",
                   bathy_source=P.bathy_source,
                   bed=DATA.bed)
 
-#: The MESH ASK, frozen at declaration and building nothing at import. An
-#: open-water deck runs on a uniform lattice over the acquired AOI, and the router
-#: checks every field against what the ``reg_grid`` mesher declares.
+#: The MESH RECIPE, frozen at declaration and building nothing at import. An
+#: open-water deck runs on a uniform lattice over the acquired AOI, so the recipe
+#: is the three agnostic params and the mesher's own near-empty default program:
+#: a lattice at one size word, with no bed of its own (the solver stages that).
 MESH = tool.build_mesh(
     mesher="reg_grid",
     kind="structured_grid",

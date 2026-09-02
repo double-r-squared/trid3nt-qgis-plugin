@@ -178,18 +178,11 @@ _PROCESSES: dict[str, _Process] = {
         extra_fields={"infiltration": Ref("infiltration")}),
 }
 
-#: Mesh SPEC fields a TELEMAC deck writer reads, under the name that writer knows
-#: each by. The mesher's vocabulary is its library's and the deck's is TELEMAC's,
-#: so the two are stated apart rather than forced to agree. A declared field
-#: ABSENT from this table shapes the mesh and no deck: the deck records what the
-#: mesh ask asked FOR, and the mesher answers for what it built.
-_MESH_DECK_FIELDS: Mapping[str, str] = {
-    "resolution_m": "mesh_resolution_m",
-    "min_edge_length_m": "mesh_resolution_m",
-}
-
-#: The ``refine`` knobs a deck reads, by the same rule.
-_MESH_DECK_REFINE: Mapping[str, str] = {
+#: Recipe params a TELEMAC deck writer reads, under the name that writer knows
+#: each by. Only the AGNOSTIC params can appear here: an op is a call on a mesh
+#: library and means nothing to a deck. The deck records what the mesh ask asked
+#: FOR, and the mesher answers for what it built.
+_MESH_DECK_PARAMS: Mapping[str, str] = {
     "resolution_m": "mesh_resolution_m",
 }
 
@@ -267,9 +260,9 @@ class TelemacWorkflow(Workflow):
 
     def author(self, *, mesh: Any, physics: Physics, forcing: Forcing) -> Step:
         """Serialize the mesh ask + physics + forcing into the process's deck."""
-        if not _is_mesh_declaration(mesh):
+        if not _is_mesh_recipe(mesh):
             raise PlanValidationError(
-                "author needs the template's MESH declaration (tool.build_mesh(...)), "
+                "author needs the template's MESH recipe (tool.build_mesh(...)), "
                 f"got {type(mesh).__name__}.")
         if not isinstance(physics, Physics):
             raise PlanValidationError(
@@ -321,34 +314,28 @@ class TelemacWorkflow(Workflow):
         return found
 
 
-def _is_mesh_declaration(value: Any) -> bool:
-    """Is ``value`` a frozen ``tool.build_mesh`` ask?
+def _is_mesh_recipe(value: Any) -> bool:
+    """Is ``value`` a frozen ``tool.build_mesh`` recipe?
 
     Imported where it is asked rather than at module scope: the mesh tool registers
     itself into the tool registry, which imports the templates that import this
     facade, and a module-level import would close that circle.
     """
-    from trid3nt_server.workflows.mesh.tool import MeshDeclaration
+    from trid3nt_server.workflows.mesh.tool import MeshRecipe
 
-    return isinstance(value, MeshDeclaration)
+    return isinstance(value, MeshRecipe)
 
 
 def mesh_deck_fields(mesh: Any) -> dict[str, Any]:
-    """The declared mesh ask, as the deck keywords a TELEMAC writer reads.
+    """The declared mesh recipe, as the deck keywords a TELEMAC writer reads.
 
-    A field the template did not declare is ABSENT rather than ``None``: passing
+    A param the template did not declare is ABSENT rather than ``None``: passing
     None would override the deck writer's own default with nothing, and "the
     template did not ask" is what absence means.
     """
-    fields: dict[str, Any] = {}
-    for name, value in mesh.spec.fields.items():
-        if name == "refine":
-            fields.update({_MESH_DECK_REFINE[knob]: knob_value
-                           for knob, knob_value in dict(value or {}).items()
-                           if knob in _MESH_DECK_REFINE and knob_value is not None})
-        elif name in _MESH_DECK_FIELDS and value is not None:
-            fields[_MESH_DECK_FIELDS[name]] = value
-    return fields
+    return {deck: getattr(mesh, name)
+            for name, deck in _MESH_DECK_PARAMS.items()
+            if getattr(mesh, name, None) is not None}
 
 
 def _translate(values: Mapping[str, Any], table: Mapping[str, str]) -> dict[str, Any]:
