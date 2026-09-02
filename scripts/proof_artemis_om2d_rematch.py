@@ -59,12 +59,15 @@ PROOF_VARIANT = "refined"
 #: shelf to the south for the swell to arrive over.
 AOI = (-71.525, 41.338, -71.492, 41.368)
 
-#: The mesh ask. The finest edge sits at the shore and around the structure, the
-#: coarsest offshore; the gradation limits how fast one becomes the other.
-REFINE = {"max_el": 25.0, "resolution_m": 8.0, "gradation": 0.2}
+#: The one size word. The finest edge sits at the shore and around the structure;
+#: the coarsest defaults to ten times it and the gradation op limits how fast one
+#: becomes the other.
+RESOLUTION_M = 8.0
+GRADATION = 0.2
 
-#: What the bed is sampled from. CUDEM's 1/9 arc-second nearshore collection
-#: covers this harbour, which is the resolution a 130 m wave needs.
+#: What the bed is painted from. CUDEM's 1/9 arc-second nearshore collection
+#: covers this harbour, which is the resolution a 130 m wave needs - and it is
+#: TOPOBATHY, the class a bed is defined over, so no substitution is declared.
 BED = "fetch_topobathy"
 
 #: The BARRIER WIDTH the mapped centerline is given, in metres. OpenStreetMap
@@ -73,15 +76,14 @@ BED = "fetch_topobathy"
 #: choice, in the range a Harbor-of-Refuge mound occupies at the waterline.
 BARRIER_WIDTH_M = 20.0
 
-#: Which boundary opens, and how deep a node must be for the mesher's library to
-#: read it as ocean. The side is NAMED rather than left to the seaward pick: this
-#: AOI's boundary reaches -18 m on the south and the west shelf both, so a pick by
-#: depth alone can land on the wrong one.
-OPEN_SIDE = "south"
+#: How deep a node must be for the mesher's library to read it as ocean. EVERY
+#: stretch that reaches it opens: this AOI's boundary reaches -18 m on the south
+#: and on the west shelf both, and a domain with two mouths forced at one of them
+#: is a harbour the swell can only enter through half of.
 OPEN_DEPTH_THRESHOLD_M = -12.0
 
 #: The incident sea state, PRESCRIBED. 90 deg is the trig convention's +Y, so the
-#: swell propagates north - in through the designated south boundary and at the
+#: swell propagates north - in over the open shelf boundary and at the
 #: breakwaters.
 FORCING: dict[str, Any] = {
     "wave_mode": "diffraction",
@@ -135,16 +137,32 @@ def author_mesh(work_dir: Path) -> tuple[Any, str, str]:
     mesh against the geometry it was supposed to follow.
     """
     from trid3nt_server.workflows.mesh.session import MeshSession
-    from trid3nt_server.workflows.mesh.tool import tool
+    from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 
     footprint, structure_uri = barrier_footprint(AOI, work_dir)
-    declaration = (
-        tool.build_mesh(mesher="om2d", kind="unstructured_tri", aoi=AOI,
-                        refine=REFINE, bed=BED)
-        .edit("add_obstacle", footprint)
-        .edit("set_boundary", side=OPEN_SIDE, type="open",
-              depth_threshold=OPEN_DEPTH_THRESHOLD_M))
-    session = MeshSession(declaration, case_id=None,
+    recipe = tool.build_mesh(
+        mesher="om2d", kind="unstructured_tri", extent=AOI,
+        resolution_m=RESOLUTION_M,
+        ops=[
+            # The breakwater is punched out of the water with its outline locked
+            # in, THEN the shoreline sizing is built over the domain that leaves,
+            # so the band around the cut is graded rather than a discontinuity.
+            mesh_op("set_obstacle", geometry=footprint),
+            mesh_op("feature_sizing_function"),
+            mesh_op("enforce_mesh_gradation", gradation=GRADATION),
+            mesh_op("delete_boundary_faces"),
+            mesh_op("delete_faces_connected_to_one_face"),
+            mesh_op("laplacian2"),
+            mesh_op("make_mesh_boundaries_traversable"),
+            mesh_op("fix_mesh", delete_unused=True),
+            mesh_op("set_bed", source=BED),
+            # Every stretch the library reads as ocean at this depth is open: the
+            # harbour has more than one mouth, and picking one of them would
+            # number a multi-mouth domain as single-mouth.
+            mesh_op("identify_ocean_boundary_sections",
+                    depth_threshold=OPEN_DEPTH_THRESHOLD_M),
+        ])
+    session = MeshSession(recipe, case_id=None,
                           name="Point Judith Harbor of Refuge")
     artifact = session.accept()
     print(json.dumps({

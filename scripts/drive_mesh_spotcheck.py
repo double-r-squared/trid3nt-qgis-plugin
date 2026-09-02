@@ -8,11 +8,9 @@ judged on: the probes measured on the accepted topology, the emitted MDAL
 display layer, the MeshArtifact's engine-compat facts, and the journaled
 recipe. NATE loads the printed display layer uri in QGIS as the visual pass.
 
-The edge-length lever routes to whichever field the CHOSEN mesher actually
-declares (``resolution_m`` | ``min_edge_length_m`` | ``refine``), read off the
-mesher's own field registry at call time rather than assumed by mesher name.
-A mesher with no edge-sizing field (``telapy_mesh``, which adopts an existing
-geometry) gets no override.
+The edge-length lever is ``resolution_m``, the ONE agnostic size word every
+mesher reads. Everything else about a build is an OP: pass ``--op`` to declare
+the program, or omit it for the mesher's own hard-baked default list.
 
 Env (MinIO): set -a; source .env.local; set +a
 Usage:
@@ -25,6 +23,16 @@ Usage:
     venvs/agent/bin/python scripts/drive_mesh_spotcheck.py \\
         --mesher om2d --bbox -87.39234 46.52812 -87.36788 46.55021 \\
         --edge-length-m 300
+
+    # the same coast, sized by distance to shore and held to a gradation: the
+    # RECIPE, declared op by op under the library's own names
+    venvs/agent/bin/python scripts/drive_mesh_spotcheck.py \\
+        --mesher om2d --bbox -87.39234 46.52812 -87.36788 46.55021 \\
+        --edge-length-m 300 \\
+        --op feature_sizing_function \\
+        --op 'enforce_mesh_gradation:{"gradation": 0.2}' \\
+        --op delete_boundary_faces --op 'fix_mesh:{"delete_unused": true}' \\
+        --op 'set_bed:{"source": "fetch_topobathy"}'
 """
 from __future__ import annotations
 
@@ -38,43 +46,31 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from _env_guard import require_local_endpoint  # noqa: E402
 
-#: A small named place, not a reach descriptor: the AOI meshers (reg_grid,
-#: om2d, watershed, coastal_edge) resolve ``location`` through the
+#: A small named place, not a reach descriptor: both meshers resolve
+#: ``location`` through the
 #: raw ``geocode_location`` bbox, and a "<feature> near <place>" query answers
 #: with the feature's FULL extent (a river name geocodes to the whole state) --
 #: a real town geocodes tight, which is what a coarse spot check needs.
 DEFAULT_LOCATION = "Scotia, California"
-#: Coarse cell/triangle edge (m): fast to build, not a resolution study.
+#: Coarse cell/triangle edge (m): fast to build, not a resolution study. It is
+#: the ONE agnostic size word, so it reaches every mesher under the same name.
 DEFAULT_EDGE_LENGTH_M = 250.0
 
 
-def _edge_lever(mesher: str, edge_length_m: float) -> dict:
-    """The edge-length override, routed to whichever field THIS mesher declares.
-
-    Read off the mesher's OWN field registry rather than guessed by name.
-    """
-    from trid3nt_server.workflows.mesh.meshers import get_mesher
-
-    declared = get_mesher(mesher).fields
-    if "resolution_m" in declared:
-        return {"resolution_m": edge_length_m}
-    if "min_edge_length_m" in declared:
-        return {"min_edge_length_m": edge_length_m}
-    if "refine" in declared:
-        return {"refine": {"resolution_m": edge_length_m,
-                           "max_el": edge_length_m * 4.0}}
-    return {}
-
-
-def _parse_field(raw: str) -> tuple[str, object]:
-    """``NAME=VALUE`` -> ``(NAME, value)``, VALUE JSON-parsed when possible."""
-    name, sep, value = raw.partition("=")
+def _parse_op(raw: str) -> dict:
+    """``fn`` or ``fn:{"kwarg": value}`` -> one recipe entry off the command line."""
+    name, sep, kwargs = raw.partition(":")
     if not sep:
-        raise argparse.ArgumentTypeError(f"--field wants NAME=VALUE; got {raw!r}")
+        return {"fn": name}
     try:
-        return name, json.loads(value)
-    except json.JSONDecodeError:
-        return name, value
+        parsed = json.loads(kwargs)
+    except json.JSONDecodeError as exc:
+        raise argparse.ArgumentTypeError(
+            f"--op wants fn or fn:<json object>; {kwargs!r} is not JSON") from exc
+    if not isinstance(parsed, dict):
+        raise argparse.ArgumentTypeError(
+            f"--op kwargs are a JSON object; got {parsed!r}")
+    return {"fn": name, **parsed}
 
 
 def _s3_client():
@@ -97,9 +93,9 @@ async def _drive(ns: argparse.Namespace) -> dict:
             call["bbox"] = tuple(ns.bbox)
         elif ns.location:
             call["location"] = ns.location
-        call.update(_edge_lever(ns.mesher, ns.edge_length_m))
-        for name, value in ns.field or []:
-            call[name] = value
+        call["resolution_m"] = ns.edge_length_m
+        if ns.op:
+            call["ops"] = list(ns.op)
 
         print(f"build_mesh({json.dumps(call, default=str)})")
         fn = TOOL_REGISTRY["build_mesh"].fn
@@ -148,15 +144,13 @@ def main() -> int:
     ap.add_argument("--bbox", type=float, nargs=4, default=None,
                     metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"))
     ap.add_argument("--edge-length-m", type=float, default=DEFAULT_EDGE_LENGTH_M,
-                    help="coarse cell/triangle edge (m); routed to whichever "
-                         "field the chosen mesher declares (see --field to "
-                         "override the levers this does not reach, e.g. a "
-                         "mesher's own max edge or gradation)")
-    ap.add_argument("--field", action="append", type=_parse_field, default=[],
-                    metavar="NAME=VALUE",
-                    help="extra mesher-declared field override (repeatable); "
-                         "VALUE is JSON-parsed when possible, else kept as a "
-                         "string. Applied AFTER --edge-length-m, so it wins.")
+                    help="the ONE agnostic size word (m): the finest cell or "
+                         "triangle edge every mesher reads under this name")
+    ap.add_argument("--op", action="append", type=_parse_op, default=[],
+                    metavar='FN[:{"kwarg": value}]',
+                    help="one recipe op, by the function's own name "
+                         "(repeatable, order meaningful). Declaring any of them "
+                         "replaces the mesher's default list wholesale.")
     ns = ap.parse_args()
     if not ns.location and not ns.bbox:
         ns.location = DEFAULT_LOCATION
