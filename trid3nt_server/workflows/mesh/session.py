@@ -329,6 +329,11 @@ class MeshSession:
         A mesher whose library does not reproduce itself says so on the first
         line, so a replay is read as an equivalent rebuild rather than as a
         promise of the same mesh.
+
+        The line for the mesh STANDING NOW also names what actually painted its
+        bed - the ladder rung that served, not the row the recipe asked for. It
+        is the same datum the accepted artifact's provenance carries, under the
+        same name: a substitution is legible in either record alone.
         """
         head: dict[str, Any] = {"recipe": self.declared.to_json()}
         if not self.mesher.deterministic:
@@ -336,6 +341,9 @@ class MeshSession:
         lines = [head]
         for event in self._events:
             lines.append({**event, "recipe": self.recipe.to_json()})
+        source = (self._mesh.meta.get("bed_source") if self._mesh else None)
+        if source:
+            lines[-1]["bed_source"] = str(source)
         return lines
 
     def _journal(self) -> None:

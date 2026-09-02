@@ -147,6 +147,15 @@ on, and were interrogated before this document was written.
 
 ## Deviations - REPORTED, NOT FIXED
 
+> **RESOLVED 2026-09-02** - `docs/IDEAS.md` "RUNG-3 CLOSE RESOLUTIONS". D-1, D-3,
+> D-4 and D-6 are ruled and landed: the deck's outflow stage is the MEASURED bed
+> at the accepted mesh's declared boundary roles, the stale prose carries a dated
+> correction, the measured substitution rung joins the JSONL journal beside the
+> artifact provenance, and the rim-note conditioning is ratified. D-2's errata
+> (`line` -> `line_file`) is applied to the spec; D-5 stands as written. The
+> findings below are the record as MEASURED at the 2026-09-01 close and are not
+> rewritten.
+
 ### D-1 (BLOCKING) - the chopped `fit_downstream_bed` left its consumer standing
 
 `trid3nt_server/workflows/telemac/steps/deck.py:187 _fitted_bed` reads

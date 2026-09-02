@@ -24,7 +24,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.reach_chain import install_reach_chain
+from tests.reach_chain import MESH_ROLES, install_reach_chain
 from trid3nt_contracts.telemac_contracts import (
     TELEMAC_DYE_STYLE_PRESET,
     TelemacDyeLayerURI,
@@ -363,25 +363,33 @@ def _install_step_mocks(captured: dict):
         """
         from trid3nt_server.workflows.mesh.artifact import MeshArtifact
 
+        from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
+
         captured["mesh_ask"] = dict(mesh)
         artifact = MeshArtifact(
             mesh_id="MESH01", name="reach", mode="om2d",
             display_uri="s3://cache/mesh/MESH01/mesh.2dm",
             slf_uri="s3://cache/mesh/MESH01/river.slf",
+            cli_uri="s3://cache/mesh/MESH01/river.cli",
+            topology_uri="s3://cache/mesh/MESH01/mesh_topology.json",
+            recipe_uri="s3://cache/mesh/MESH01/mesh_recipe.jsonl",
             crs_authid="EPSG:32611", has_bathymetry=True, utm_epsg=32611,
             node_count=800, element_count=1400,
             bbox=(-114.4, 42.5, -114.2, 42.7),
-            probes={"bed_fit": {"bed_top_m": 900.0, "bed_drop_m": 3.0}},
             # The polygon the mesh was CUT from, which is what a supplied release
-            # point is tested against - the chain's own sectioned water.
-            provenance={"recipe": {"extent": dict(mesh).get("extent")}})
-        return {"artifact": artifact, "mesh_id": "MESH01",
-                "slf_uri": "s3://cache/mesh/MESH01/river.slf",
-                "cli_uri": "s3://cache/mesh/MESH01/river.cli",
-                "display_uri": "s3://cache/mesh/MESH01/mesh.2dm",
-                "topology_uri": "s3://cache/mesh/MESH01/mesh_topology.json",
-                "node_count": 800, "element_count": 1400, "min_edge_m": None,
-                "provenance": {"bed_source": "cop-dem-glo-30"}}
+            # point is tested against - the chain's own sectioned water - beside
+            # the row that painted its bed.
+            provenance={"recipe": {"extent": dict(mesh).get("extent")},
+                        "bed_source": "cop-dem-glo-30"})
+        return {"artifact": artifact, "mesh_id": artifact.mesh_id,
+                "slf_uri": artifact.slf_uri, "cli_uri": artifact.cli_uri,
+                "topology_uri": artifact.topology_uri,
+                "display_uri": artifact.display_uri,
+                "recipe_uri": artifact.recipe_uri,
+                "node_count": artifact.node_count,
+                "element_count": artifact.element_count,
+                "min_edge_m": measured_min_edge_m(artifact),
+                "provenance": dict(artifact.provenance)}
 
     def _fake_stage(case, run_tag, **_kw):
         captured["case"] = case
@@ -435,7 +443,7 @@ def _install_step_mocks(captured: dict):
         patch.object(reach_steps, "_meshed_fraction", lambda mesh, centerline: 1.0),
         patch.object(deck_steps, "write_reach_deck", _capture_deck),
         patch.object(deck_steps, "read_topology",
-                     lambda _uri: {"roles": {"inflow": [1], "outflow": [2]},
+                     lambda _uri: {"roles": dict(MESH_ROLES),
                                    "liquid_boundary_order": ["outflow", "inflow"]}),
         patch.object(deck_steps, "read_centerline_utm",
                      lambda _src, _epsg, **_kw: __import__("numpy").array(

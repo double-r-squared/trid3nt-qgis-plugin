@@ -184,22 +184,38 @@ def _mesh_field(mesh: Mapping[str, Any], name: str) -> str:
     return str(uri)
 
 
-def _fitted_bed(mesh: Mapping[str, Any]) -> dict[str, Any]:
-    """The downstream bed the mesh was BUILT with, which the outflow stage reads.
+def _role_bed(roles: Mapping[str, Any], node_bed: Any) -> dict[str, Any]:
+    """The bed the accepted mesh CARRIES at its two declared reach roles.
 
-    Measured on the mesh, never restated here: the stage the deck prescribes has
-    to be the one the geometry file carries, and a second derivation of it could
-    disagree with the bed the solve starts from.
+    The stage the deck prescribes is the ground the solve starts from, so both
+    numbers are medians of the painted bed over the nodes each role names - the
+    reach's top, and the fall from there to its outflow. Read off the artifact
+    itself: a profile derived beside the mesh could disagree with the bed the
+    geometry file holds.
     """
-    probes = getattr((mesh or {}).get("artifact"), "probes", None) or {}
-    fit = probes.get("bed_fit") or {}
-    if not fit:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_MESH_BED_UNFITTED",
-            "the accepted mesh carries no fitted downstream bed, so the outflow "
-            "stage has no ground to be measured from; the reach mesh ask declares "
-            "its bed with a downstream_along channel.")
-    return dict(fit)
+    import numpy as np
+
+    bed = None if node_bed is None else np.asarray(node_bed, dtype=float)
+    medians: dict[str, float] = {}
+    for role in ("inflow", "outflow"):
+        nodes = [int(n) for n in ((roles or {}).get(role) or ())]
+        if bed is None or not nodes or max(nodes) >= bed.shape[0]:
+            raise TelemacDyeScenarioError(
+                "TELEMAC_MESH_BED_UNMEASURED",
+                f"the outflow stage is the median painted bed over the {role!r} "
+                f"role's own nodes, and the accepted mesh carries "
+                f"{0 if bed is None else bed.shape[0]} bed values under roles "
+                f"{sorted(roles or {})}; a reach mesh recipe paints its bed with "
+                "set_bed and names its faces with set_boundary_roles.")
+        median = float(np.nanmedian(bed[nodes]))
+        if not np.isfinite(median):
+            raise TelemacDyeScenarioError(
+                "TELEMAC_MESH_BED_UNMEASURED",
+                f"every node the {role!r} role names carries an unpainted bed, so "
+                "the outflow stage has no ground to be measured from.")
+        medians[role] = median
+    return {"bed_top_m": medians["inflow"],
+            "bed_drop_m": medians["inflow"] - medians["outflow"]}
 
 
 def _continuation_start_s(uri: str) -> float:
@@ -258,9 +274,10 @@ def _to_utm_point(lonlat: tuple[float, float],
 def _mesh_nodes(mesh: Mapping[str, Any]) -> tuple[Any, Any]:
     """The accepted mesh's node coordinates and bed, read off its display face.
 
-    Only a NESTOR design grade needs them - the grade a maintenance dredge digs
-    back TO is the channel that is there - so the parse happens on that path
-    rather than on every reach run.
+    The ``.2dm`` is the one readable record of the node numbering the geometry
+    file carries, so the bed read here is the bed the solve starts from - which
+    is what the outflow stage is measured over, and what a NESTOR design grade
+    digs back to.
     """
     points, _cells, z, _lonlat = read_accepted_mesh_nodes(
         _mesh_field(mesh, "display_uri"))
@@ -691,16 +708,16 @@ async def write_reach_deck(
            if continue_from else {}),
     }
 
-    node_xy, node_bed = (await asyncio.to_thread(_mesh_nodes, mesh)
-                         if class_block.get("dredging") else (None, None))
+    topology = await asyncio.to_thread(
+        read_topology, _mesh_field(mesh, "topology_uri"))
+    node_xy, node_bed = await asyncio.to_thread(_mesh_nodes, mesh)
     rundir = _authoring_dir(run_tag)
     written = await asyncio.to_thread(
         author.author_reach_deck, rundir, deck=deck,
         geometry=_GEOMETRY_DEST, boundary=_BOUNDARY_DEST, results=_RESULT,
         restart=None if coupled_with else _RESTART, cas_name=_STEERING,
-        liquid_boundary_order=read_topology(
-            _mesh_field(mesh, "topology_uri"))["liquid_boundary_order"],
-        bed=_fitted_bed(mesh),
+        liquid_boundary_order=topology["liquid_boundary_order"],
+        bed=_role_bed(topology["roles"], node_bed),
         source_utm=_to_utm_point(release_lonlat, utm_epsg),
         centerline_utm=centerline_utm,
         reach_polygon_utm=(await asyncio.to_thread(_to_utm, reach_polygon, utm_epsg)

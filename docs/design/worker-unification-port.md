@@ -163,6 +163,14 @@ stated band and lays a clean plane - and reports `measured_slope` beside
 `enforced_slope`, so a bed that was overruled says so instead of presenting the
 overrule as the DEM.
 
+> **CORRECTION 2026-09-02 (rung-3 recipe wave).** `fit_downstream_bed` is
+> DELETED and nothing fits a bed any more: a bed is topobathy, and this plane
+> was scar tissue over a surface DEM standing in for one (mesh-recipe spec
+> rev 2, sections 5 and 8). The paragraph above records what was live when it
+> was written. The outflow stage the deck prescribes is now the MEASURED bed at
+> the mesh's declared boundary roles - `steps/deck.py::_role_bed`, the median
+> painted bed over the inflow role's nodes and the fall to the outflow role's.
+
 **`steps/author.py` (~700 lines).** The `.cas` writers, harvested from the
 attic'd worker payloads as the answer key: the TELEMAC-2D reach deck with its
 sources pulse, WAQTEL decay (process 17) and the oxygen sag (process 2), GAIA in
@@ -270,6 +278,11 @@ applies at that one seam: the sampled surface is laid down as a monotone
 downstream plane along the declared centerline, held inside a stated slope band,
 and the measured-vs-enforced slope rides in the probes. The duplicate
 `resolve_reach_river` bed staging is gone (see DELETION_LEDGER).
+
+> **CORRECTION 2026-09-02 (rung-3 recipe wave).** The `bed=` ask died with the
+> `MESH` params: a bed is an OP now (`mesh_op("set_bed", source=...)`), it
+> paints the sampled surface onto the nodes and nothing lays a plane over it.
+> See the correction above.
 
 `downstream_from` is the navigate SEED - the chain's own fact about which end of
 the flowline is upstream - and it is what makes the reading deterministic. The

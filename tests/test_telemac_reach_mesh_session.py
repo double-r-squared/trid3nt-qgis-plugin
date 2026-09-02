@@ -14,9 +14,10 @@ What is pinned here:
   2. The dt SEAM HAS A READER - a mesh artifact measured finer than the ask
      tightens the deck's timestep, and one measured at the ask leaves it alone.
   3. The CASE the worker is handed - which engine, which authored deck, which
-     results are the success convention, and the facts the server echoes - and
-     the refusals a mesh record missing its topology or its fitted bed raises
-     rather than letting the worker mesh one of its own.
+     results are the success convention, and the facts the server echoes - the
+     outflow stage MEASURED on the accepted mesh at its declared roles, and the
+     refusals a mesh record missing its topology or its bed raises rather than
+     letting the worker mesh one of its own.
 """
 
 from __future__ import annotations
@@ -48,31 +49,46 @@ _CENTERLINE = {"type": "LineString",
 _SHEET = {"reach_length_km": 6.0, "sim_duration_s": 3600.0}
 
 
-#: What the mesher measured when it laid the sampled DEM down as a downstream
-#: plane. The deck reads the outflow stage off it.
-_BED_FIT = {"bed_top_m": 12.0, "bed_drop_m": 1.8, "measured_slope": 2.0e-4,
-            "enforced_slope": 3.0e-4, "reach_len_m": 6000.0}
+#: The BOUNDARY the stood-in mesh declares, and the bed it carries at it. The
+#: four nodes below are the stood-in triangulation's own: the two western ones
+#: are the inflow cap, the two eastern ones the outflow cap, and the deck's
+#: outflow stage is the median bed over each.
+_ROLES = {"inflow": [0, 3], "outflow": [1, 2]}
+_NODE_BED = [12.0, 10.2, 10.2, 12.0]
 
 
 def _mesh_record(*, min_edge_m: float | None = None,
-                 topology_uri: str | None = "s3://m/M01/mesh_topology.json",
-                 bed_fit: dict | None = _BED_FIT) -> dict:
-    """A mesh step's result, with the probes an artifact would carry."""
-    probes = {"edge_length_m": {"min": float(min_edge_m or 14.0), "max": 40.0,
-                                "mean": 20.0},
-              **({"bed_fit": dict(bed_fit)} if bed_fit else {})}
+                 topology_uri: str | None = "s3://m/M01/mesh_topology.json") -> dict:
+    """A mesh step's result, composed the way the mesh step composes a real one.
+
+    Every derived field is READ off the artifact through the product's own
+    readers, so this stand-in cannot report a measured edge its probes never
+    held, or a provenance its artifact does not carry. A fixture free to invent
+    a key is how a deck went on reading a probe no build had written.
+    """
+    from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
+
+    probes = ({"edge_length_m": {"min": float(min_edge_m), "max": 40.0,
+                                 "mean": 20.0}}
+              if min_edge_m is not None else {})
     artifact = MeshArtifact(
         mesh_id="M01", name="Eel River reach", mode="om2d",
         display_uri="s3://m/M01/mesh.2dm", slf_uri="s3://m/M01/river.slf",
+        cli_uri="s3://m/M01/river.cli", topology_uri=topology_uri,
+        recipe_uri="s3://m/M01/mesh_recipe.jsonl",
         crs_authid="EPSG:32610", has_bathymetry=True, utm_epsg=32610,
         node_count=539, element_count=902,
-        bbox=(-124.2, 40.4, -124.0, 40.6), probes=probes)
-    return {"artifact": artifact, "mesh_id": "M01",
-            "slf_uri": "s3://m/M01/river.slf", "cli_uri": "s3://m/M01/river.cli",
-            "display_uri": "s3://m/M01/mesh.2dm",
-            "topology_uri": topology_uri, "min_edge_m": min_edge_m,
-            "node_count": 539, "element_count": 902,
-            "provenance": {"bed_source": "cop-dem-glo-30"}}
+        bbox=(-124.2, 40.4, -124.0, 40.6), probes=probes,
+        provenance={"bed_source": "cop-dem-glo-30"})
+    return {"artifact": artifact, "mesh_id": artifact.mesh_id,
+            "slf_uri": artifact.slf_uri, "cli_uri": artifact.cli_uri,
+            "topology_uri": artifact.topology_uri,
+            "display_uri": artifact.display_uri,
+            "recipe_uri": artifact.recipe_uri,
+            "node_count": artifact.node_count,
+            "element_count": artifact.element_count,
+            "min_edge_m": measured_min_edge_m(artifact),
+            "provenance": dict(artifact.provenance)}
 
 
 @pytest.fixture()
@@ -93,22 +109,26 @@ def writer(monkeypatch, tmp_path):
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(rel_mod, "publish_release_point", _publish)
     monkeypatch.setattr(deck_mod, "read_topology",
-                        lambda _uri: {"roles": {"inflow": [1], "outflow": [2]},
+                        lambda _uri: {"roles": dict(_ROLES),
                                       "liquid_boundary_order": ["outflow", "inflow"]})
     monkeypatch.setattr(deck_mod, "read_centerline_utm",
                         lambda _src, _epsg, **_kw:
                             np.array([[0.0, 0.0], [6000.0, 0.0]]))
-    # The derived release is settled against the ACCEPTED MESH's own cells, so a
-    # stood-in mesh needs a stood-in topology: two triangles spanning the whole
-    # stood-in centerline, which is a mesh that holds every station on it.
+    # The derived release is settled against the ACCEPTED MESH's own cells, and
+    # the outflow stage is measured over the bed those same nodes carry: two
+    # triangles spanning the whole stood-in centerline, painted downstream, which
+    # is a mesh that holds every station on it and states its own ground. The
+    # deck reads the display face through its own binding and the release
+    # containment reads it through the module's, so the stand-in stands at both.
     from trid3nt_server.workflows.mesh.shared import nodes as nodes_mod
 
-    monkeypatch.setattr(
-        nodes_mod, "read_accepted_mesh_nodes",
-        lambda _uri, utm_epsg=None: (
-            np.array([[-10.0, -50.0], [6010.0, -50.0], [6010.0, 50.0],
-                      [-10.0, 50.0]]),
-            np.array([[0, 1, 2], [0, 2, 3]]), None, None))
+    def _accepted_nodes(_uri, utm_epsg=None):
+        return (np.array([[-10.0, -50.0], [6010.0, -50.0], [6010.0, 50.0],
+                          [-10.0, 50.0]]),
+                np.array([[0, 1, 2], [0, 2, 3]]), np.array(_NODE_BED), None)
+
+    monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes", _accepted_nodes)
+    monkeypatch.setattr(deck_mod, "read_accepted_mesh_nodes", _accepted_nodes)
     monkeypatch.setattr(
         deck_mod, "_stage_authored",
         lambda _rundir, run_tag, names: [
@@ -287,10 +307,64 @@ async def test_a_mesh_record_with_no_topology_refuses_rather_than_remeshing(writ
 
 
 @pytest.mark.asyncio
-async def test_a_mesh_with_no_fitted_bed_refuses_rather_than_inventing_a_stage(
-        writer):
+async def test_the_outflow_stage_is_the_bed_MEASURED_at_the_declared_roles(
+        writer, tmp_path):
+    """The stage stands on the ground the geometry file carries.
+
+    The outflow cap's median bed is 10.2 m and the deck floods it to the initial
+    depth, so a stage read from anything else - a plane fitted beside the mesh,
+    a number restated from the ask - would put the water somewhere the solve's
+    own bathymetry does not agree with. The deck states both medians so the
+    number can be checked against the mesh.
+    """
+    out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
+                       carrier_discharge=_CARRIER, substance="dye", **_SHEET)
+    cas = (tmp_path / f"telemac-{out['run_tag']}" / "t2d_river.cas").read_text()
+    elevations = next(ln for ln in cas.splitlines()
+                      if ln.startswith("PRESCRIBED ELEVATIONS"))
+    assert elevations.split("=")[1].strip() == "12.200;0.0"
+    assert "/  Measured bed: inflow 12.000 m, outflow 10.200 m" in cas
+    assert ("/  outflow stage = 12.200 m (that bed + the initial depth)") in cas
+
+
+@pytest.mark.asyncio
+async def test_a_mesh_with_no_painted_bed_refuses_rather_than_inventing_a_stage(
+        writer, monkeypatch):
+    """A bedless mesh has no ground for a stage to be measured from."""
+    monkeypatch.setattr(deck_mod, "read_accepted_mesh_nodes",
+                        lambda _uri, utm_epsg=None: (None, None, None, None))
     with pytest.raises(TelemacDyeScenarioError) as excinfo:
-        await writer(reach=_REACH, seed=_SEED,
-                     mesh=_mesh_record(min_edge_m=8.0, bed_fit=None),
+        await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
                      carrier_discharge=_CARRIER, substance="dye", **_SHEET)
-    assert excinfo.value.error_code == "TELEMAC_MESH_BED_UNFITTED"
+    assert excinfo.value.error_code == "TELEMAC_MESH_BED_UNMEASURED"
+
+
+@pytest.mark.asyncio
+async def test_the_stood_in_mesh_record_is_shaped_like_a_real_builds(monkeypatch):
+    """The fixture is measured against the ONE writer of a real mesh record.
+
+    A fixture free to invent a key is not a smaller version of the product - it
+    is a second product with its own shape, and the suite stays green while the
+    live template dies. That is how the deck went on reading a probe no build
+    had written once its writer was deleted, so the stand-in's keys are read off
+    the mesh step's own return rather than typed out beside it.
+    """
+    from trid3nt_server.workflows.mesh import gate as gate_mod
+    from trid3nt_server.workflows.mesh import session as session_mod
+    from trid3nt_server.workflows.mesh import step as mesh_step
+
+    record = _mesh_record(min_edge_m=8.0)
+
+    async def _accepted(_session, **_kw):
+        return record["artifact"]
+
+    monkeypatch.setattr(session_mod, "MeshSession", lambda *a, **k: None)
+    monkeypatch.setattr(gate_mod, "gate_mesh_build", _accepted)
+    real = await mesh_step.build_declared_mesh(
+        mesh={"mesher": "reg_grid", "kind": None, "extent": None,
+              "resolution_m": 100.0, "ops": []})
+    assert set(record) == set(real)
+    # The record's provenance IS the artifact's. A stand-in that fills one and
+    # leaves the other empty is a mesh no build could have produced, and the
+    # deck's bed_source would be read from a record nothing wrote.
+    assert record["provenance"] == dict(record["artifact"].provenance)

@@ -430,6 +430,28 @@ def test_the_substitution_the_fetch_narrated_rides_under_one_name(tmp_path):
     assert 'mesh.meta.get("bed_fallback_note")' in inspect.getsource(S.MeshSession)
 
 
+def test_the_journal_names_the_rung_that_ACTUALLY_painted_the_bed(tmp_path):
+    """One datum, one name, in BOTH records.
+
+    The accepted artifact's provenance names the rung that served. A reader with
+    only the journal beside the mesh files would otherwise see the row the recipe
+    ASKED for and no sign of the substitution that answered it, so the line for
+    the mesh standing now carries the same measured statement.
+    """
+    from trid3nt_server.workflows.mesh.recipe import build_recipe
+    from trid3nt_server.workflows.mesh.session import MeshSession
+
+    session = MeshSession(
+        build_recipe(mesher="reg_grid", extent=(-75.80, 36.10, -75.70, 36.20),
+                     resolution_m=100.0, ops=()),
+        workdir=tmp_path)
+    assert "bed_source" not in session.recipe_lines()[-1]
+    painted = "fetch_topobathy: cudem_nearshore 89%, etopo_bathy_base 11%"
+    session._mesh = Mesh(points=None, cells=None, crs_authid="EPSG:4326",
+                         meta={"bed_source": painted})
+    assert session.recipe_lines()[-1]["bed_source"] == painted
+
+
 def test_the_bed_is_fetched_past_the_extent_the_mesh_has_nodes_on():
     grown = P._grown((-75.80, 36.10, -75.70, 36.20))
     assert grown[0] < -75.80 and grown[1] < 36.10

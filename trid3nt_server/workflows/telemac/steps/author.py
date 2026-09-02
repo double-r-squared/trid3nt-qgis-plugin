@@ -333,9 +333,11 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     the settled release point, in the mesh's own metres.
 
     ``liquid_boundary_order`` is the MEASURED order the pair writer reported, and
-    the PRESCRIBED lists are written in it. ``bed`` is the fitted-bed record the
-    outflow stage is read from. ``restart`` is the perfect-restart record this
-    run writes for whatever run continues it.
+    the PRESCRIBED lists are written in it. ``bed`` is the bed MEASURED on the
+    accepted mesh at its declared roles - the reach's top and the fall to its
+    outflow - which the outflow stage is read from and which the deck states.
+    ``restart`` is the perfect-restart record this run writes for whatever run
+    continues it.
     """
     _consume(deck)
     P = _Sheet(deck)
@@ -344,8 +346,16 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     is_do_sag = substance == "do_sag"
     written: dict[str, Any] = {}
 
-    outflow_stage = float(bed["bed_top_m"]) - float(bed["bed_drop_m"]) \
-        + float(P.init_depth_m)
+    bed_top = float(bed["bed_top_m"])
+    bed_out = bed_top - float(bed["bed_drop_m"])
+    outflow_stage = bed_out + float(P.init_depth_m)
+    # The prescribed stage is a number a reader has to be able to check against
+    # the geometry file, so the deck states the two medians it was measured from
+    # rather than only the result.
+    bed_line = (f"/  Measured bed: inflow {bed_top:.3f} m, "
+                f"outflow {bed_out:.3f} m\n"
+                f"/  outflow stage = {outflow_stage:.3f} m "
+                "(that bed + the initial depth)\n")
     flowrates, elevations, tracers = [], [], []
     for role in liquid_boundary_order:
         if role == "inflow":
@@ -442,7 +452,7 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     cas = f"""/-------------------------------------------------------------------/
 /  TELEMAC-2D REACH  -  {P.name}
 {release_line}/  Measured liquid-boundary order: {list(liquid_boundary_order)}
-/-------------------------------------------------------------------/
+{bed_line}/-------------------------------------------------------------------/
 GEOMETRY FILE                   = {os.path.basename(geometry)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(boundary)}
 RESULTS FILE                    = {os.path.basename(results)}

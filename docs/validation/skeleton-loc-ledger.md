@@ -933,6 +933,13 @@ Measured by the rule at the head of this file: product `.py` under
 | 2026-09-01 | rung-3 stage commits (`67c49017`..`b495dab6`, 7 commits) | the whole product tree - the recipe machinery, the two-origin namespaces, the driver's op interpreter and the shared primitives IN, against `MeshField`/`_FIELDS`, the `DeclaredEdit` chain, `refine={}`/`bed=`/`boundaries=`, `fit_downstream_bed`, `MeshSpec`/`MeshDeclaration` OUT | 141,031 | 141,519 | +488 | +10,159 |
 | 2026-09-01 | rung-3 close, fold (a) | `mesh/meshers/om2d.py` (+5 - `set_rim_size` joins the visible default ops list, and the DEFAULT RECIPE paragraph says why the rim is the one thing an undeclared ask sizes) | 706 | 711 | +5 | +10,164 |
 | 2026-09-01 | rung-3 close, fold (b) | `mesh/meshers/drivers/om2d_driver.py` (+7 - the `tolerance` kwarg with its labeled default, `_Build.rim_tolerance`, the verdict conditioned on a DECLARED band, the ungraded-rim note conditioned on a real step; `_RIM_TOLERANCE` and its six-line comment deleted) | 998 | 1,005 | +7 | +10,171 |
+| 2026-09-02 | rung-3 close, the measured bed bridge | `telemac/steps/deck.py` + `telemac/steps/author.py` + `mesh/session.py` (+35 - `_role_bed` reads the median painted bed over each declared role off the accepted artifact and the deck STATES both medians, against the deleted `_fitted_bed`/`bed_fit` reader; the measured substitution rung joins the JSONL journal beside the artifact provenance) | 2,757 | 2,792 | +35 | +10,206 |
+
+RULED 2026-09-02 (rung-3 close resolutions): the ungraded-rim note's
+CONDITIONING - surfaced as D-6 in `mesh-recipe-conformance.md` - is RATIFIED as
+landed and stays. A note must be true, and an unconditional one is false on a
+uniform domain: with no sizing lattice the whole domain already stands at the
+rim's own edge and there is no step to grade into.
 
 **Honest verdict: the generalization GREW the tree, +500 net.** It absorbed a
 per-mesher field table, a named-action edit chain, a spec-vs-declaration
