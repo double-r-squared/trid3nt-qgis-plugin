@@ -466,6 +466,30 @@ def test_every_mesher_gets_the_same_card(tmp_path):
         "resolution_m", "op[0]", "op[1]", "reset"]
 
 
+def test_no_mesher_has_card_code_of_its_own():
+    """The sweep guard, as source rather than as intent.
+
+    Two files carry a mesh gate card: the one that ASSEMBLES it and the one the
+    dock RENDERS it with. Neither may name a mesher - a card that knows one
+    library's name is the first branch, and the second is the per-mesher card
+    path this loop exists to not have.
+    """
+    import pathlib
+
+    from trid3nt_server.workflows.mesh.meshers import registered_meshers
+
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    offenders = {
+        f"{path.name}: {name}"
+        for path in (pathlib.Path(mesh_gate.__file__), repo / "plugin/ui/gate.py")
+        for name in registered_meshers()
+        if name in path.read_text()
+    }
+    assert not offenders, (
+        "a mesh gate card names a mesher, so it is no longer ONE card path for "
+        f"every mesher: {sorted(offenders)}")
+
+
 def test_the_ops_are_numbered_on_the_card_because_an_index_is_what_targets_one(
         tmp_path):
     session = MeshSession(
