@@ -167,9 +167,13 @@ overrule as the DEM.
 > DELETED and nothing fits a bed any more: a bed is topobathy, and this plane
 > was scar tissue over a surface DEM standing in for one (mesh-recipe spec
 > rev 2, sections 5 and 8). The paragraph above records what was live when it
-> was written. The outflow stage the deck prescribes is now the MEASURED bed at
-> the mesh's declared boundary roles - `steps/deck.py::_role_bed`, the median
-> painted bed over the inflow role's nodes and the fall to the outflow role's.
+> was written. What the deck prescribes at the outflow is now DERIVED from the
+> reach the accepted mesh measures - `steps/deck.py::_measured_reach` reads the
+> median painted bed at each declared role, the transect the outflow face cuts
+> and the length the mesh was built along, and
+> `steps/author.py::_normal_depth_stage` solves the uniform-flow depth that
+> section conveys the deck's own discharge at, under the deck's own roughness
+> (signed bathymetry methodology M4).
 
 **`steps/author.py` (~700 lines).** The `.cas` writers, harvested from the
 attic'd worker payloads as the answer key: the TELEMAC-2D reach deck with its

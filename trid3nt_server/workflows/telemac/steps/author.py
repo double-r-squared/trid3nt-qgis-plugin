@@ -104,6 +104,9 @@ _FILE_COMMENT = "#"
 #: find them, rather than in a config object inside the container.
 _DEFAULTS: dict[str, Any] = {
     "name": "reach",
+    # The CONSTANT DEPTH a fresh run starts from, and nothing else. The level the
+    # run is ANCHORED at is the outflow stage, which the measured section and the
+    # measured slope derive as a normal depth rather than reading it off here.
     "init_depth_m": 2.0,
     "inflow_q_m3s": 50.0,
     "substance_class": "tracer",
@@ -186,6 +189,13 @@ _DEFAULTS: dict[str, Any] = {
 
 #: How many solver steps between written frames when the sheet states no cadence.
 _DEFAULT_GRAPHIC_PERIOD = 200
+
+#: The bed roughness a reach is solved at when the sheet states none, as the
+#: Strickler coefficient the deck's default LAW OF BOTTOM FRICTION reads. It is
+#: named rather than written twice: the outflow stage is a normal depth AT this
+#: roughness, and a stage derived at one number under a deck written at another
+#: would be a level the run never sits at.
+_STRICKLER_DEFAULT = 33.0
 
 #: What the deck carries for the RECORD rather than for a steering keyword: the
 #: seed the reach was navigated from, where the source ended up, which dataset
@@ -313,6 +323,145 @@ def _write_deck(rundir: Path | str, basename: str,
 
 
 # --------------------------------------------------------------------------- #
+# The outflow stage: a normal depth over the measured section.
+# --------------------------------------------------------------------------- #
+#: The friction laws a uniform-flow depth reads under, as the exponent each puts
+#: on the hydraulic radius and whether its coefficient is a RECIPROCAL
+#: conveyance. Strickler and Manning are one law through reciprocal coefficients;
+#: Chezy is its own, with the radius under a square root. A law outside these
+#: states a coefficient no conveyance here can read, and the stage refuses rather
+#: than being derived under a law nobody wrote.
+_CONVEYANCE: dict[int, tuple[str, float, bool]] = {
+    2: ("Chezy", 0.5, False),
+    3: ("Strickler", 2.0 / 3.0, False),
+    4: ("Manning", 2.0 / 3.0, True),
+}
+#: The bracket the stage is found inside, as depths above the section's lowest
+#: painted node: where the search starts, the floor it never returns, and the
+#: depth past which a section carrying this discharge is not a river reach.
+_STAGE_SEED_M = 0.1
+_STAGE_FLOOR_M = 1.0e-3
+_STAGE_CEILING_M = 1000.0
+
+
+def _wetted(section: Sequence[tuple[float, float]],
+            stage: float) -> tuple[float, float]:
+    """Wetted area and perimeter of the measured section at a water elevation.
+
+    Each panel between two surveyed points is a trapezoid, cut at the waterline
+    where only one of its ends is under water. The two END points are the
+    section's walls: above the higher of them the section rises vertically rather
+    than spreading into ground the mesh does not hold, so a stage is defined
+    everywhere and a flat face is a rectangle rather than a division by zero.
+    """
+    area = perimeter = 0.0
+    for (o1, z1), (o2, z2) in zip(section, section[1:]):
+        d1, d2 = stage - z1, stage - z2
+        if d1 <= 0.0 and d2 <= 0.0:
+            continue
+        run = o2 - o1
+        if d1 > 0.0 and d2 > 0.0:
+            area += 0.5 * (d1 + d2) * run
+            perimeter += math.hypot(run, z2 - z1)
+            continue
+        wet = run * (d1 / (d1 - d2) if d1 > 0.0 else d2 / (d2 - d1))
+        depth = d1 if d1 > 0.0 else d2
+        area += 0.5 * depth * wet
+        perimeter += math.hypot(wet, depth)
+    return area, perimeter + sum(max(stage - section[end][1], 0.0)
+                                 for end in (0, -1))
+
+
+def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
+    """The outflow stage as NORMAL DEPTH -> the elevation and what derived it.
+
+    The downstream cap of a reach holds a water level, and the level a reach
+    that is not backed up from below actually sits at is the depth at which the
+    channel conveys the flow it is carrying. That is a COMPUTATION over measured
+    data: the friction slope is the fall the accepted mesh carries between its
+    two role faces over the length of the line it was built on, the channel is
+    the section that mesh's outflow face cuts, the roughness is the coefficient
+    THIS deck writes, and the discharge is the one it prescribes upstream. It
+    imports no gauge, no rating curve and no datum of its own, which is why it is
+    the community default wherever the bed came from a surface rather than a
+    survey.
+
+    It is not a measured boundary and never claims to be. Uniform flow is a
+    fiction near a structure, a confluence or a tidal cap, and the honest use of
+    it is a reach whose outlet is far enough downstream of the interest to be
+    numerically convenient rather than physically load-bearing.
+
+    Every input it cannot measure REFUSES by name: a reach with no fall has no
+    uniform-flow depth at all, and defaulting past that would put a made-up level
+    on the one boundary the run's water surface is anchored to.
+    """
+    from scipy.optimize import brentq
+
+    section = [(float(o), float(z))
+               for o, z in (bed.get("outflow_section") or ())]
+    if len(section) < 2:
+        raise DeckAuthorError(
+            "TELEMAC_OUTFLOW_SECTION_UNMEASURED",
+            f"the outflow stage is a normal depth over the channel the outflow "
+            f"face cuts, and the measured reach carries {len(section)} point(s) "
+            "of that section.")
+    length = float(bed.get("reach_length_m") or 0.0)
+    drop = float(bed["bed_drop_m"])
+    slope = drop / length if length > 0.0 else 0.0
+    if slope <= 0.0:
+        raise DeckAuthorError(
+            "TELEMAC_OUTFLOW_SLOPE_UNMEASURED",
+            f"the friction slope is the measured fall {drop:.3f} m over the "
+            f"measured reach length {length:.1f} m, which is {slope:.6g}; a reach "
+            "that does not fall downstream has no uniform-flow depth, so its "
+            "outflow level has to come from a gauge or a rating curve rather "
+            "than from the reach itself.")
+    law = 3 if P.friction_law is None else int(P.friction_law)
+    if law not in _CONVEYANCE:
+        raise DeckAuthorError(
+            "TELEMAC_OUTFLOW_FRICTION_UNREADABLE",
+            f"the deck is written under bottom-friction law {law}, whose "
+            f"coefficient is not a conveyance {sorted(_CONVEYANCE)} reads, so the "
+            "outflow stage cannot be a normal depth under the roughness this run "
+            "is actually solved at.")
+    law_name, exponent, reciprocal = _CONVEYANCE[law]
+    coefficient = (_STRICKLER_DEFAULT if P.friction_coefficient is None
+                   else float(P.friction_coefficient))
+    discharge_q = float(P.inflow_q_m3s)
+    if coefficient <= 0.0 or discharge_q <= 0.0:
+        raise DeckAuthorError(
+            "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE",
+            f"a normal depth needs a positive roughness and a positive "
+            f"discharge; this deck states {law_name} {coefficient:g} and "
+            f"{discharge_q:g} m3/s.")
+    conveyance = 1.0 / coefficient if reciprocal else coefficient
+    root_slope = math.sqrt(slope)
+
+    def discharge(stage: float) -> float:
+        area, perimeter = _wetted(section, stage)
+        if area <= 0.0 or perimeter <= 0.0:
+            return 0.0
+        return conveyance * area * (area / perimeter) ** exponent * root_slope
+
+    thalweg = min(z for _offset, z in section)
+    top = thalweg + _STAGE_SEED_M
+    while discharge(top) < discharge_q:
+        top = thalweg + 2.0 * (top - thalweg)
+        if top - thalweg > _STAGE_CEILING_M:
+            raise DeckAuthorError(
+                "TELEMAC_OUTFLOW_STAGE_UNCONVEYABLE",
+                f"the measured outflow section conveys {discharge_q:g} m3/s only "
+                f"more than {_STAGE_CEILING_M:g} m above its own bed at slope "
+                f"{slope:.6g}; the discharge and the channel this run states "
+                "describe different rivers.")
+    stage = float(brentq(lambda s: discharge(s) - discharge_q,
+                         thalweg + _STAGE_FLOOR_M, top, xtol=1.0e-4))
+    return {"stage_m": stage, "depth_m": stage - thalweg, "slope": slope,
+            "drop_m": drop, "length_m": length, "law": law_name,
+            "coefficient": coefficient, "q_m3s": discharge_q}
+
+
+# --------------------------------------------------------------------------- #
 # The TELEMAC-2D reach deck and the files it names.
 # --------------------------------------------------------------------------- #
 def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
@@ -333,9 +482,10 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     the settled release point, in the mesh's own metres.
 
     ``liquid_boundary_order`` is the MEASURED order the pair writer reported, and
-    the PRESCRIBED lists are written in it. ``bed`` is the bed MEASURED on the
-    accepted mesh at its declared roles - the reach's top and the fall to its
-    outflow - which the outflow stage is read from and which the deck states.
+    the PRESCRIBED lists are written in it. ``bed`` is the reach MEASURED on the
+    accepted mesh - the bed at its declared roles, the section its outflow face
+    cuts, and the length it was built over - which the outflow stage is derived
+    from as a normal depth and which the deck states alongside the result.
     ``restart`` is the perfect-restart record this run writes for whatever run
     continues it.
     """
@@ -348,14 +498,19 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
 
     bed_top = float(bed["bed_top_m"])
     bed_out = bed_top - float(bed["bed_drop_m"])
-    outflow_stage = bed_out + float(P.init_depth_m)
+    normal = _normal_depth_stage(P, bed)
+    outflow_stage = normal["stage_m"]
     # The prescribed stage is a number a reader has to be able to check against
-    # the geometry file, so the deck states the two medians it was measured from
+    # the geometry file, so the deck states every input it was derived from
     # rather than only the result.
     bed_line = (f"/  Measured bed: inflow {bed_top:.3f} m, "
                 f"outflow {bed_out:.3f} m\n"
-                f"/  outflow stage = {outflow_stage:.3f} m "
-                "(that bed + the initial depth)\n")
+                f"/  Friction slope {normal['slope']:.6f} = "
+                f"{normal['drop_m']:.3f} m over {normal['length_m']:.0f} m\n"
+                f"/  outflow stage = {outflow_stage:.3f} m: normal depth "
+                f"{normal['depth_m']:.3f} m over the\n"
+                f"/  measured outflow section for {normal['q_m3s']:g} m3/s at "
+                f"{normal['law']} {normal['coefficient']:g}\n")
     flowrates, elevations, tracers = [], [], []
     for role in liquid_boundary_order:
         if role == "inflow":
@@ -385,9 +540,10 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
         + f"VALUES OF THE TRACERS AT THE SOURCES = {source_tracers}\n"
     )
 
+    # The roughness the stage above was derived AT, written back out as the
+    # roughness the run is solved at. One number, stated once.
     friction_law = 3 if P.friction_law is None else int(P.friction_law)
-    friction_coef = ("33." if P.friction_coefficient is None
-                     else _cas_real(P.friction_coefficient))
+    friction_coef = _cas_real(normal["coefficient"])
     velocity_diff = ("1.E-1" if P.velocity_diffusivity is None
                      else _cas_real(P.velocity_diffusivity))
     tracer_diff = ("1.E-1" if P.tracer_diffusivity is None

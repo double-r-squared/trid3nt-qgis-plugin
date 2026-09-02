@@ -20,7 +20,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts import new_ulid
 
@@ -184,26 +184,68 @@ def _mesh_field(mesh: Mapping[str, Any], name: str) -> str:
     return str(uri)
 
 
-def _role_bed(roles: Mapping[str, Any], node_bed: Any) -> dict[str, Any]:
-    """The bed the accepted mesh CARRIES at its two declared reach roles.
+def _face_section(nodes: Sequence[int], node_xy: Any,
+                  bed: Any) -> list[list[float]]:
+    """The channel the outflow face cuts, as ``(offset, bed)`` pairs.
 
-    The stage the deck prescribes is the ground the solve starts from, so both
-    numbers are medians of the painted bed over the nodes each role names - the
-    reach's top, and the fall from there to its outflow. Read off the artifact
-    itself: a profile derived beside the mesh could disagree with the bed the
-    geometry file holds.
+    A role is a contiguous RUN of the boundary walk, so the nodes arrive in the
+    order they lie along the face and the offset is the running chord distance
+    between them. That makes the section a real transect of the painted bed
+    rather than a scatter that has to be re-ordered by a rule of its own.
+
+    A node the bed left unpainted drops out of the section and takes no offset
+    with it: the survey has a hole in it, and closing the hole by shifting the
+    nodes past it would narrow a channel nobody re-measured.
+    """
+    import numpy as np
+
+    xy = None if node_xy is None else np.asarray(node_xy, dtype=float)
+    if xy is None or len(nodes) < 2 or max(nodes) >= xy.shape[0]:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_MESH_SECTION_UNMEASURED",
+            f"the outflow stage is a normal depth over the channel the outflow "
+            f"face cuts, and that face names {len(nodes)} node(s) against "
+            f"{0 if xy is None else xy.shape[0]} mesh coordinates; a reach mesh "
+            "recipe names its faces with set_boundary_roles.")
+    points = xy[list(nodes)]
+    steps = np.hypot(*(points[1:] - points[:-1]).T)
+    offsets = np.concatenate([[0.0], np.cumsum(steps)])
+    section = [[round(float(o), 3), round(float(z), 3)]
+               for o, z in zip(offsets, bed[list(nodes)]) if np.isfinite(z)]
+    if len(section) < 2:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_MESH_SECTION_UNMEASURED",
+            f"the outflow face carries {len(section)} painted node(s), which is "
+            "no section to derive a normal depth over.")
+    return section
+
+
+def _measured_reach(roles: Mapping[str, Any], node_xy: Any, node_bed: Any,
+                    centerline_utm: Any) -> dict[str, Any]:
+    """What the accepted mesh says about the reach the outflow stage rests on.
+
+    Three measurements, every one off the artifact itself: the bed at the two
+    declared roles, the SECTION the outflow face cuts through that bed, and the
+    length of the line the mesh was built over. A profile derived beside the mesh
+    could disagree with the bed the geometry file holds, and a stage derived from
+    it would be prescribed against ground the solver never sees.
+
+    The two bed numbers are medians over the nodes each role names - the reach's
+    top, and the fall from there to its outflow. That fall over that length is
+    the friction slope the normal depth is computed at.
     """
     import numpy as np
 
     bed = None if node_bed is None else np.asarray(node_bed, dtype=float)
     medians: dict[str, float] = {}
+    role_nodes: dict[str, list[int]] = {}
     for role in ("inflow", "outflow"):
         nodes = [int(n) for n in ((roles or {}).get(role) or ())]
         if bed is None or not nodes or max(nodes) >= bed.shape[0]:
             raise TelemacDyeScenarioError(
                 "TELEMAC_MESH_BED_UNMEASURED",
-                f"the outflow stage is the median painted bed over the {role!r} "
-                f"role's own nodes, and the accepted mesh carries "
+                f"the outflow stage is derived over the painted bed at the "
+                f"{role!r} role's own nodes, and the accepted mesh carries "
                 f"{0 if bed is None else bed.shape[0]} bed values under roles "
                 f"{sorted(roles or {})}; a reach mesh recipe paints its bed with "
                 "set_bed and names its faces with set_boundary_roles.")
@@ -214,8 +256,14 @@ def _role_bed(roles: Mapping[str, Any], node_bed: Any) -> dict[str, Any]:
                 f"every node the {role!r} role names carries an unpainted bed, so "
                 "the outflow stage has no ground to be measured from.")
         medians[role] = median
+        role_nodes[role] = nodes
+    line = np.asarray(centerline_utm, dtype=float)
+    length = (float(np.hypot(*(line[1:] - line[:-1]).T).sum())
+              if line.ndim == 2 and len(line) > 1 else 0.0)
     return {"bed_top_m": medians["inflow"],
-            "bed_drop_m": medians["inflow"] - medians["outflow"]}
+            "bed_drop_m": medians["inflow"] - medians["outflow"],
+            "reach_length_m": round(length, 3),
+            "outflow_section": _face_section(role_nodes["outflow"], node_xy, bed)}
 
 
 def _continuation_start_s(uri: str) -> float:
@@ -717,7 +765,7 @@ async def write_reach_deck(
         geometry=_GEOMETRY_DEST, boundary=_BOUNDARY_DEST, results=_RESULT,
         restart=None if coupled_with else _RESTART, cas_name=_STEERING,
         liquid_boundary_order=topology["liquid_boundary_order"],
-        bed=_role_bed(topology["roles"], node_bed),
+        bed=_measured_reach(topology["roles"], node_xy, node_bed, centerline_utm),
         source_utm=_to_utm_point(release_lonlat, utm_epsg),
         centerline_utm=centerline_utm,
         reach_polygon_utm=(await asyncio.to_thread(_to_utm, reach_polygon, utm_epsg)

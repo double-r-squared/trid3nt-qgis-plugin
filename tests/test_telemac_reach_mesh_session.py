@@ -15,9 +15,10 @@ What is pinned here:
      tightens the deck's timestep, and one measured at the ask leaves it alone.
   3. The CASE the worker is handed - which engine, which authored deck, which
      results are the success convention, and the facts the server echoes - the
-     outflow stage MEASURED on the accepted mesh at its declared roles, and the
-     refusals a mesh record missing its topology or its bed raises rather than
-     letting the worker mesh one of its own.
+     outflow stage DERIVED as a normal depth over the reach the accepted mesh
+     measures at its declared roles, and the refusals a mesh record missing its
+     topology or its bed raises rather than letting the worker mesh one of its
+     own.
 """
 
 from __future__ import annotations
@@ -307,24 +308,28 @@ async def test_a_mesh_record_with_no_topology_refuses_rather_than_remeshing(writ
 
 
 @pytest.mark.asyncio
-async def test_the_outflow_stage_is_the_bed_MEASURED_at_the_declared_roles(
+async def test_the_outflow_stage_is_a_normal_depth_over_the_MEASURED_reach(
         writer, tmp_path):
-    """The stage stands on the ground the geometry file carries.
+    """The stage stands on the ground the geometry file carries, at the depth
+    that ground conveys this run's own flow at.
 
-    The outflow cap's median bed is 10.2 m and the deck floods it to the initial
-    depth, so a stage read from anything else - a plane fitted beside the mesh,
-    a number restated from the ask - would put the water somewhere the solve's
-    own bathymetry does not agree with. The deck states both medians so the
-    number can be checked against the mesh.
+    Everything in it is measured off the accepted mesh: the outflow cap's median
+    bed is 10.2 m, its face cuts 100 m of that bed, and the reach falls 1.8 m
+    over the 6 km the mesh was built along. A stage read from anything else - a
+    plane fitted beside the mesh, a declared depth restated from the ask - would
+    put the water somewhere the solve's own bathymetry does not agree with, so
+    the deck states every input and the number can be checked against the mesh.
     """
     out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
                        carrier_discharge=_CARRIER, substance="dye", **_SHEET)
     cas = (tmp_path / f"telemac-{out['run_tag']}" / "t2d_river.cas").read_text()
     elevations = next(ln for ln in cas.splitlines()
                       if ln.startswith("PRESCRIBED ELEVATIONS"))
-    assert elevations.split("=")[1].strip() == "12.200;0.0"
+    assert elevations.split("=")[1].strip() == "10.593;0.0"
     assert "/  Measured bed: inflow 12.000 m, outflow 10.200 m" in cas
-    assert ("/  outflow stage = 12.200 m (that bed + the initial depth)") in cas
+    assert "/  Friction slope 0.000300 = 1.800 m over 6000 m" in cas
+    assert "/  outflow stage = 10.593 m: normal depth 0.393 m over the" in cas
+    assert "/  measured outflow section for 12 m3/s at Strickler 33" in cas
 
 
 @pytest.mark.asyncio

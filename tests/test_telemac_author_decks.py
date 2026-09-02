@@ -14,7 +14,12 @@ import pytest
 
 from trid3nt_server.workflows.telemac.steps import author as A
 
-_BED = {"bed_top_m": 100.0, "bed_drop_m": 3.0}
+#: The reach as the accepted mesh measures it: a bed falling 3 m over the 1000 m
+#: the centerline runs, and an outflow face cutting a 40 m trapezoid with 3 m
+#: banks - whose lowest point is the 97 m that fall leaves the outflow at.
+_BED = {"bed_top_m": 100.0, "bed_drop_m": 3.0, "reach_length_m": 1000.0,
+        "outflow_section": [[0.0, 100.0], [10.0, 97.0],
+                            [50.0, 97.0], [60.0, 100.0]]}
 _ORDER = ("outflow", "inflow")
 _SOURCE = (500.0, 0.0)
 #: A straight centerline in metres - enough for a channel box and a profile fence.
@@ -58,7 +63,7 @@ def test_the_prescribed_lists_follow_the_measured_order(tmp_path):
     """
     cas = _author(tmp_path)
     assert "PRESCRIBED FLOWRATES            = 0.0;50.0" in cas
-    assert "PRESCRIBED ELEVATIONS           = 99.000;0.0" in cas
+    assert "PRESCRIBED ELEVATIONS           = 97.792;0.0" in cas
 
 
 def test_every_deck_line_is_inside_the_parser_limit(tmp_path):

@@ -360,6 +360,18 @@ package SolveSeam {
         port topologyIn : TopologyIn;
     }
 
+    part deckStatements : DeckAuthor {
+        doc /*
+        The steering files themselves - every keyword the run is solved under.
+        It is a second block rather than part of the composer because a number
+        the deck DERIVES has to be derived beside the literals it must agree
+        with: the outflow stage is a normal depth at the roughness the very
+        next statement writes.
+
+        code: trid3nt_server/workflows/telemac/steps/author.py
+        */
+    }
+
     part manifestStager : ManifestStager {
         doc /*
         code: trid3nt_server/workflows/telemac/steps/open_water.py
@@ -642,9 +654,69 @@ package SolveSeam {
         */
     }
 
+    requirement def OutflowStageIsNormalDepth {
+        doc /*
+        SIGNED DECISION - the reach deck's outflow stage is the NORMAL DEPTH for
+        the discharge the same deck prescribes (bathymetry methodology M4,
+        signed 2026-09-02), replacing the outflow bed plus a declared 2 m. Under
+        the HAPPY PATH FIRST, SYNTHETIC DEFERRED amendment this is the whole of
+        the Producer stage: it produces no bathymetry, it computes a level over
+        bathymetry already measured, which is why it stands while the synthetic
+        producer does not.
+
+        The four inputs are the run's own. The friction slope is the fall the
+        accepted mesh carries between its two role faces, over the length of the
+        line that mesh was built on. The channel is the transect the outflow face
+        cuts through the painted bed, read in boundary-walk order so the face is
+        a section rather than a scatter. The roughness is the coefficient this
+        deck goes on to write, under the law it goes on to write. The discharge
+        is the one it prescribes upstream. Nothing external enters - no gauge, no
+        rating curve, no second vertical datum - which is what makes the stage
+        internally consistent with whatever bed the ladder delivered, and is the
+        published reason it is the community default when the bed came off a
+        surface rather than a survey.
+
+        The value it replaced was not a property of the reach: 2 m was the same
+        number on a mountain creek and a coastal plain river, on the one boundary
+        the run's entire water surface is anchored to. ``init_depth_m`` keeps its
+        other role, the constant depth a fresh run starts from, and moving it no
+        longer moves the boundary.
+
+        Uniform flow is a numerically convenient fiction rather than a measured
+        boundary, so every input it cannot measure REFUSES by name: a reach with
+        no measured fall, an outflow face with no painted section, a friction law
+        whose coefficient no conveyance reads, a discharge or roughness that is
+        not positive. Defaulting past any of them would put an underived level
+        back on that boundary with nothing saying so.
+        */
+    }
+
     // ----------------------------------------------------------------- //
     // Allocations
     // ----------------------------------------------------------------- //
+
+    satisfy requirement OutflowStageIsNormalDepth by deckStatements;
+    satisfy requirement OutflowStageIsNormalDepth by deckAuthor;
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_decks_discharge";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_the_friction_slope_is_the_measured_fall_over_the_measured_length";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_the_outflow_face_is_measured_as_a_transect_of_the_painted_bed";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_the_reach_length_is_walked_along_the_line_the_mesh_was_built_over";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_a_bigger_discharge_stands_higher_in_the_same_channel";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_strickler_and_its_reciprocal_manning_derive_the_same_stage";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_an_input_the_stage_cannot_be_derived_from_refuses_by_name";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_the_deck_states_the_stage_and_every_input_it_was_derived_from";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_the_initial_depth_is_no_longer_the_level_the_run_is_anchored_at";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_the_stage_is_derived_at_the_roughness_the_deck_goes_on_to_write";
 
     satisfy requirement MetricsAlways by workerEntrypoint;
     verify requirement MetricsAlways by
