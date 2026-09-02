@@ -6,15 +6,17 @@ pattern - reads the wrong way round if the walk starts at the wrong end. Nothing
 in a solved result says which end it started from: a plume that advected upstream
 looks exactly like a plume that advected downstream on a reversed picture.
 
-So the invariant is pinned from three independent directions:
+So the invariant is pinned from two independent directions:
 
   * chainage 0 is UPSTREAM, at the seed the flowline was navigated downstream
     from, whatever order the source document's vertices happened to arrive in;
-  * the BED agrees - fitted along that same normalized centerline, it FALLS as
-    chainage rises, so the water that leaves the release goes the way the
-    fraction counts;
   * the walk DISCRIMINATES - 0.1 lands near the inflow and 0.9 near the outflow,
     rather than both landing near the middle of a line nobody oriented.
+
+The third direction was the BED: a monotone plane fitted along the same line,
+which fell as chainage rose. That fit was scar tissue over a surface DEM standing
+in for topobathy and is chopped; a bed is now painted from the class it is
+defined over and the reading of the line is what both remaining pins rest on.
 """
 
 from __future__ import annotations
@@ -25,10 +27,7 @@ import json
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.mesh.shared.nodes import (
-    fit_downstream_bed,
-    read_centerline_utm,
-)
+from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
 from trid3nt_server.workflows.telemac.steps.deck import _settle_release
 
 #: A west-to-east flowline near Twin Falls, Idaho. The seed is its WEST end: the
@@ -94,39 +93,7 @@ def test_fraction_zero_is_the_upstream_end_and_one_is_the_downstream_end(monkeyp
 
 
 # --------------------------------------------------------------------------- #
-# 2. The bed cross-check: it falls the way the fraction counts.
-# --------------------------------------------------------------------------- #
-def test_the_bed_fitted_on_that_centerline_falls_with_chainage():
-    """The release walk and the bed fit read the SAME line the SAME way.
-
-    If the two disagreed, a run would release its plume at the low end of a bed
-    that slopes toward it - a source the flow carries out of the domain the way
-    it came in, reported as a downstream study.
-    """
-    line = read_centerline_utm(_line(_COORDS), _UTM_EPSG, start_lonlat=_SEED)
-    # Nodes strung along the centerline, sampling a DEM that drops eastward with
-    # enough noise to run locally uphill - which is the case the fit exists for.
-    nodes = np.array([line[0] + (line[-1] - line[0]) * t
-                      for t in np.linspace(0.0, 1.0, 41)])
-    span = float(np.hypot(*(line[-1] - line[0])))
-    chainage = np.linspace(0.0, span, nodes.shape[0])
-    sampled = 100.0 - 0.002 * chainage + np.tile([0.0, 0.6], 21)[:41]
-
-    bed, stats = fit_downstream_bed(nodes, line, sampled,
-                                    min_slope=1e-4, max_slope=1e-2)
-    assert stats["measured_slope"] > 0.0  # positive = downhill
-    assert stats["enforced_slope"] == pytest.approx(stats["measured_slope"],
-                                                    abs=1e-4)
-    assert stats["bed_drop_m"] > 0.0
-    # Monotone: every step downstream is a step down.
-    assert np.all(np.diff(bed) < 0.0)
-    # And the release walk agrees: the 0.1 station stands above the 0.9 one.
-    near, far = int(0.1 * (bed.size - 1)), int(0.9 * (bed.size - 1))
-    assert bed[near] > bed[far]
-
-
-# --------------------------------------------------------------------------- #
-# 3. Discrimination: the two fractions are not the same place.
+# 2. Discrimination: the two fractions are not the same place.
 # --------------------------------------------------------------------------- #
 def test_a_tenth_lands_near_the_inflow_and_nine_tenths_near_the_outflow(monkeypatch):
     """A walk that ignored its argument would put both at the same station."""

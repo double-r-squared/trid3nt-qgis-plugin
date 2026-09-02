@@ -4,10 +4,10 @@ No object store, no live session, no container: the reg_grid mesher builds in
 process, a fake emitter stands in for the map, and a background driver answers
 the gate card on the shared pending-confirmation spine.
 
-Pins what the gate promises: agent tools GENERATED one per registered edit
-action and mounted only while the session is open, AUTO building inline with no
-card at all, and restart truncating the chain back to the DECLARED prefix
-through the gate.
+Pins what the gate promises: the three loop tools mounted only while a session is
+open, ONE generic card path for every mesher, AUTO building inline with no card
+at all, ``mesh_op`` as the whole runtime edit surface, and reset putting the
+recipe back to the declaration through the gate.
 
 ASCII only.
 """
@@ -24,9 +24,9 @@ from trid3nt_server.gates import pending
 from trid3nt_server.tools import MOUNTED_TOOLS, TOOL_REGISTRY, mount_tool
 from trid3nt_server.workflows.mesh import gate as mesh_gate
 from trid3nt_server.workflows.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.mesh.meshers import MeshToolError, get_mesher
+from trid3nt_server.workflows.mesh.meshers import MeshToolError
 from trid3nt_server.workflows.mesh.session import MeshSession
-from trid3nt_server.workflows.mesh.tool import tool
+from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 
 _AOI = (-83.50, 35.00, -83.40, 35.09)
 
@@ -50,16 +50,15 @@ class _FakeEmitter:
         self.commands.append((name, payload))
 
 
-def _declaration(*, declared_resolution_m: float | None = None):
-    declaration = tool.build_mesh(mesher="reg_grid", kind="structured_grid",
-                                  extent=_AOI, resolution_m=400.0)
-    if declared_resolution_m is not None:
-        declaration = declaration.edit("set_resolution", declared_resolution_m)
-    return declaration
+def _recipe(**over):
+    ask = {"mesher": "reg_grid", "kind": "structured_grid", "extent": _AOI,
+           "resolution_m": 400.0}
+    ask.update(over)
+    return tool.build_mesh(**ask)
 
 
 def _session(tmp_path, **over) -> MeshSession:
-    return MeshSession(_declaration(**over), workdir=tmp_path)
+    return MeshSession(_recipe(**over), workdir=tmp_path)
 
 
 async def _drive(script, *, seen=None, appear_timeout=5.0) -> None:
@@ -96,18 +95,17 @@ def _closed_gates(monkeypatch):
 # --------------------------------------------------------------------------- #
 # Mount / unmount lifecycle.
 # --------------------------------------------------------------------------- #
-def test_no_mesh_tool_is_mounted_before_a_gate_opens():
+def test_no_gate_tool_is_mounted_before_a_gate_opens():
     assert not MOUNTED_TOOLS
     assert "mesh_accept" not in TOOL_REGISTRY
-    assert "mesh_edit_set_resolution" not in TOOL_REGISTRY
+    assert "mesh_reset" not in TOOL_REGISTRY
 
 
-def test_gate_mounts_one_tool_per_registered_action(tmp_path):
-    actions = set(get_mesher("reg_grid").actions)
+def test_the_gate_mounts_the_three_loop_tools_and_no_per_mesher_ones(tmp_path):
+    """Every mesher gets the SAME gate: nothing here knows what a library does."""
     gate = mesh_gate.open_mesh_gate(_session(tmp_path))
 
-    expected = {mesh_gate.edit_tool_name(a) for a in actions} | {
-        mesh_gate.ACCEPT_TOOL, mesh_gate.RESTART_TOOL}
+    expected = {mesh_gate.ACCEPT_TOOL, mesh_gate.RESET_TOOL, mesh_gate.ADOPT_TOOL}
     assert set(gate.tools) == expected
     assert expected <= set(MOUNTED_TOOLS)
     for name in expected:
@@ -120,15 +118,13 @@ def test_gate_mounts_one_tool_per_registered_action(tmp_path):
         assert name not in MOUNTED_TOOLS
 
 
-def test_generated_tool_signature_names_the_actions_declared_inputs(tmp_path):
-    import inspect
-
-    mesh_gate.open_mesh_gate(_session(tmp_path))
-    fn = TOOL_REGISTRY[mesh_gate.edit_tool_name("set_resolution")].fn
-    params = inspect.signature(fn).parameters
-    assert list(params) == list(
-        get_mesher("reg_grid").actions["set_resolution"].inputs)
-    assert "resolution_m" in (fn.__doc__ or "")
+def test_mesh_op_is_registered_rather_than_mounted_per_mesher():
+    """ONE atomic tool: it is in the catalog whether or not a gate is open, and
+    it says so when nothing is under construction."""
+    assert "mesh_op" in TOOL_REGISTRY
+    with pytest.raises(MeshToolError) as excinfo:
+        asyncio.run(TOOL_REGISTRY["mesh_op"].fn(fn="laplacian2"))
+    assert excinfo.value.error_code == "MESH_NO_ACTIVE_SESSION"
 
 
 def test_a_mounted_tool_refuses_once_its_gate_is_closed(tmp_path):
@@ -172,24 +168,99 @@ def test_mounted_tools_ride_the_retrieval_floor(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# The agent lane: a mounted tool edits, re-presents, accepts.
+# The agent lane: mesh_op edits the RECIPE, regenerates, re-presents.
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_edit_tool_rebuilds_and_re_presents(tmp_path, monkeypatch):
+async def test_mesh_op_appends_regenerates_and_re_presents(tmp_path, monkeypatch):
     fake = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)
     gate = mesh_gate.open_mesh_gate(_session(tmp_path))
-    before = (await mesh_gate.present_mesh(gate))["probes"]["node_count"]
+    await mesh_gate.present_mesh(gate)
 
-    out = await TOOL_REGISTRY[
-        mesh_gate.edit_tool_name("set_resolution")].fn(resolution_m=800.0)
+    out = await TOOL_REGISTRY["mesh_op"].fn(fn="set_boundary_roles")
 
-    assert out["probes"]["node_count"] < before
-    assert out["probes"]["edits_applied"] == ["set_resolution"]
-    assert out["recipe"][-1] == {"edit": "set_resolution", "resolution_m": 800.0}
+    assert out["ops"] == ["0: mesh_op('set_boundary_roles')"]
+    assert out["recipe"]["ops"] == [{"op": "set_boundary_roles"}]
     # The presentation is a MESH layer on the map, not a picture of one.
     assert fake.layers and fake.layers[-1].layer_type == "mesh"
     assert fake.layers[-1].style_preset == "mesh_wireframe"
+    mesh_gate.close_mesh_gate(gate)
+
+
+@pytest.mark.asyncio
+async def test_mesh_op_alters_and_removes_by_index(tmp_path, monkeypatch):
+    monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
+    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
+
+    await TOOL_REGISTRY["mesh_op"].fn(fn="set_boundary_roles")
+    await TOOL_REGISTRY["mesh_op"].fn(fn="set_boundary_roles", at=0)
+    out = await TOOL_REGISTRY["mesh_op"].fn(at=0, remove=True)
+
+    assert out["ops"] == []
+    assert gate.session.recipe.ops == ()
+    mesh_gate.close_mesh_gate(gate)
+
+
+@pytest.mark.asyncio
+async def test_mesh_op_refuses_an_unknown_name_with_the_nearest_matches(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
+    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
+
+    with pytest.raises(MeshToolError) as excinfo:
+        await TOOL_REGISTRY["mesh_op"].fn(fn="set_bedd")
+
+    assert excinfo.value.error_code == "MESH_OP_UNKNOWN"
+    assert "set_bed" in str(excinfo.value)
+    assert gate.session.recipe.ops == ()
+    mesh_gate.close_mesh_gate(gate)
+
+
+@pytest.mark.asyncio
+async def test_removing_without_an_index_names_the_numbered_recipe(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
+    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
+    await TOOL_REGISTRY["mesh_op"].fn(fn="set_boundary_roles")
+
+    with pytest.raises(MeshToolError) as excinfo:
+        await TOOL_REGISTRY["mesh_op"].fn(remove=True)
+
+    assert excinfo.value.error_code == "MESH_OP_INDEX"
+    assert "0: mesh_op('set_boundary_roles')" in str(excinfo.value)
+    mesh_gate.close_mesh_gate(gate)
+
+
+def test_mesh_op_surfaces_in_top8():
+    """The runtime refinement loop must be reachable from its own phrasings."""
+    from pathlib import Path
+
+    import yaml
+
+    import trid3nt_server.tools as t
+    from trid3nt_server.tools.search.search_tools import search_tools as dd
+    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
+
+    dd._get_index()
+    corpus_path = (Path(t.__file__).resolve().parents[1] / "workflows" / "mesh"
+                   / "corpus.yaml")
+    queries = (yaml.safe_load(corpus_path.read_text()) or {})["mesh_op"]
+    assert queries
+    assert any("mesh_op" in retrieve_visible_tools(q, None, 8) for q in queries), (
+        "mesh_op surfaces in NO top-8 for any of its corpus queries")
+
+
+@pytest.mark.asyncio
+async def test_reset_tool_puts_the_recipe_back_and_re_presents(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
+    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
+    await TOOL_REGISTRY["mesh_op"].fn(fn="set_boundary_roles")
+
+    out = await TOOL_REGISTRY[mesh_gate.RESET_TOOL].fn()
+
+    assert out["ops"] == []
+    assert gate.session.recipe == gate.session.declared
     mesh_gate.close_mesh_gate(gate)
 
 
@@ -206,6 +277,27 @@ async def test_accept_tool_freezes_the_mesh_and_unmounts(tmp_path, monkeypatch):
     assert isinstance(gate.accepted, MeshArtifact)
     assert not MOUNTED_TOOLS
     assert all(name not in TOOL_REGISTRY for name in names)
+
+
+@pytest.mark.asyncio
+async def test_adopting_a_hand_edited_layer_flags_the_mesh(tmp_path, monkeypatch):
+    import numpy as np
+
+    from trid3nt_server.emission.mesh_display import write_2dm
+    from trid3nt_server.workflows.mesh.meshers import Mesh
+
+    monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
+    edited = tmp_path / "edited.2dm"
+    edited.write_text(write_2dm(Mesh(
+        points=np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]),
+        cells=np.array([[0, 1, 2], [1, 3, 2]]), crs_authid="EPSG:4326")))
+    gate = mesh_gate.open_mesh_gate(_session(tmp_path))
+
+    out = await TOOL_REGISTRY[mesh_gate.ADOPT_TOOL].fn(layer=str(edited))
+
+    assert out["probes"]["element_count"] == 2
+    assert "regen" in out["regen_note"]
+    mesh_gate.close_mesh_gate(gate)
 
 
 # --------------------------------------------------------------------------- #
@@ -270,7 +362,7 @@ async def test_gate_presents_probes_then_accepts(tmp_path, monkeypatch):
     _mtype, envelope = fake.sent[0]
     assert envelope.options == ["proceed", "cancel", "narrow_scope"]
     assert "nodes" in envelope.recommendation
-    assert "set_resolution" in envelope.recommendation
+    assert "mesh_op" in envelope.recommendation
     assert envelope.tool_args["mesh_id"]
     assert fake.layers  # the editable mesh layer went to the map
     # The session closed behind the accept.
@@ -294,14 +386,14 @@ async def test_gate_cancel_refuses_the_run(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_gate_restart_truncates_to_the_declared_prefix(
+async def test_gate_reset_puts_the_recipe_back_to_the_declaration(
         tmp_path, monkeypatch):
     fake = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)
-    session = _session(tmp_path, declared_resolution_m=250.0)
+    session = _session(tmp_path)
     driver = asyncio.create_task(_drive([
-        ("narrow_scope", {"edit": "set_resolution", "resolution_m": 900.0}),
-        ("narrow_scope", {"restart": True}),
+        ("narrow_scope", {"resolution_m": 900.0}),
+        ("narrow_scope", {"reset": True}),
         ("proceed", None),
     ]))
 
@@ -309,17 +401,15 @@ async def test_gate_restart_truncates_to_the_declared_prefix(
         session, tool_name="telemac_river_dye", input_mode="user_gated")
 
     await driver
-    # The DECLARED edit survives the truncation; the gate-time one does not.
-    assert [e.action for e in session.chain] == ["set_resolution"]
-    assert session.chain[0].inputs["resolution_m"] == 250.0
-    assert art.provenance["edits"] == ["set_resolution"]
+    assert session.recipe == session.declared
+    assert art.provenance["recipe"]["resolution_m"] == 400.0
     assert len(fake.sent) == 3
 
 
 @pytest.mark.asyncio
 async def test_gate_refuses_a_revision_it_cannot_read(tmp_path, monkeypatch):
     monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
-    driver = asyncio.create_task(_drive([("narrow_scope", {"resolution_m": 900.0})]))
+    driver = asyncio.create_task(_drive([("narrow_scope", {"gradation": 0.2})]))
 
     with pytest.raises(MeshToolError) as excinfo:
         await mesh_gate.gate_mesh_build(
@@ -328,14 +418,14 @@ async def test_gate_refuses_a_revision_it_cannot_read(tmp_path, monkeypatch):
 
     await driver
     assert excinfo.value.error_code == "MESH_GATE_REVISION_UNREADABLE"
-    assert "set_resolution" in str(excinfo.value)
+    assert "mesh_op" in str(excinfo.value)
     assert not MOUNTED_TOOLS
 
 
 @pytest.mark.asyncio
 async def test_gate_stops_asking_after_its_rounds(tmp_path, monkeypatch):
     monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
-    driver = asyncio.create_task(_drive([("narrow_scope", {"restart": True})] * 2))
+    driver = asyncio.create_task(_drive([("narrow_scope", {"reset": True})] * 2))
 
     with pytest.raises(MeshToolError) as excinfo:
         await mesh_gate.gate_mesh_build(
@@ -347,47 +437,59 @@ async def test_gate_stops_asking_after_its_rounds(tmp_path, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# The revision channel the SHIPPED card can actually reach.
+# ONE card path: the agnostic params, the numbered recipe, the revert.
 # --------------------------------------------------------------------------- #
-@pytest.mark.asyncio
-async def test_the_card_carries_one_row_per_numeric_knob_plus_the_truncation(
-        tmp_path, monkeypatch):
-    """The gate's edit surface has to be a channel the client renders.
+def _card_rows(session) -> list[str]:
+    """The gate card's row names for ``session``, built without a mesh.
 
-    A card the user can only proceed or cancel on makes the loop's third answer
-    unreachable, and the model cannot stand in for it - it is blocked on the
-    gate's own future while the card is open, so its mounted edit tools are no
-    fallback. The param sheet is that channel: one editable row per numeric edit
-    knob, named for the action it turns, plus the truncation row.
+    The sheet is assembled from the RECIPE, so a mesher that only builds inside a
+    container still answers what its card would carry.
     """
-    fake = _FakeEmitter()
-    monkeypatch.setattr(pe, "current_emitter", lambda: fake)
-    driver = asyncio.create_task(_drive([("proceed", None)]))
+    sheet = mesh_gate._mesh_param_sheet(session, tool_name="build_mesh",
+                                        round_idx=1, max_rounds=3)
+    return [row.name for row in sheet.rows]
 
-    await mesh_gate.gate_mesh_build(
-        _session(tmp_path), tool_name="telemac_river_dye",
-        input_mode="user_gated")
 
-    await driver
-    _mtype, envelope = fake.sent[0]
-    names = [row.name for row in envelope.param_sheet.rows]
-    assert "set_resolution.resolution_m" in names
-    assert "restart" in names
-    # An action taking a geometry or a layer is not a knob a grid can carry, so
-    # it stays on the mounted tools and off the card.
-    assert not [n for n in names if n.startswith(("set_extent", "apply_layer"))]
-    assert all(row.editable for row in envelope.param_sheet.rows)
+def test_every_mesher_gets_the_same_card(tmp_path):
+    """GENERALITY: a lattice and a triangulation render through one path, and
+    nothing on the card is a name any particular library knows."""
+    lattice = MeshSession(_recipe(), workdir=tmp_path / "grid")
+    assert _card_rows(lattice) == ["resolution_m", "reset"]
+
+    triangulated = MeshSession(
+        tool.build_mesh(mesher="om2d", kind="unstructured_tri", extent=_AOI,
+                        resolution_m=60.0,
+                        ops=[mesh_op("laplacian2"),
+                             mesh_op("set_bed", source="fetch_topobathy")]),
+        workdir=tmp_path / "tri")
+    assert _card_rows(triangulated) == [
+        "resolution_m", "op[0]", "op[1]", "reset"]
+
+
+def test_the_ops_are_numbered_on_the_card_because_an_index_is_what_targets_one(
+        tmp_path):
+    session = MeshSession(
+        tool.build_mesh(mesher="om2d", kind="unstructured_tri", extent=_AOI,
+                        resolution_m=60.0,
+                        ops=[mesh_op("enforce_mesh_gradation", gradation=0.2)]),
+        workdir=tmp_path)
+    sheet = mesh_gate._mesh_param_sheet(session, tool_name="build_mesh",
+                                        round_idx=1, max_rounds=3)
+    row = next(r for r in sheet.rows if r.name == "op[0]")
+    assert "enforce_mesh_gradation" in row.value
+    assert row.user_lever is False
+    assert "mesh_op" in row.desc
 
 
 @pytest.mark.asyncio
-async def test_a_knob_edited_on_the_card_rebuilds_the_mesh(tmp_path, monkeypatch):
-    """The client sends row name -> text; the loop turns that into the edit."""
+async def test_the_one_size_word_is_the_row_a_card_can_move(tmp_path, monkeypatch):
+    """The client sends row name -> text; the loop turns that into a rebuild."""
     fake = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)
     session = _session(tmp_path)
     coarse = session.probes()["node_count"]
     driver = asyncio.create_task(_drive([
-        ("narrow_scope", {"set_resolution.resolution_m": "900"}),
+        ("narrow_scope", {"resolution_m": "900"}),
         ("proceed", None),
     ]))
 
@@ -395,20 +497,28 @@ async def test_a_knob_edited_on_the_card_rebuilds_the_mesh(tmp_path, monkeypatch
         session, tool_name="telemac_river_dye", input_mode="user_gated")
 
     await driver
-    assert [e.action for e in session.chain] == ["set_resolution"]
-    assert session.chain[0].inputs["resolution_m"] == 900.0
+    assert session.recipe.resolution_m == 900.0
     assert art.node_count != coarse
 
 
 @pytest.mark.asyncio
-async def test_the_truncation_row_answers_yes_the_way_the_card_sends_it(
+async def test_a_row_that_is_not_a_number_refuses_naming_the_row(tmp_path):
+    session = _session(tmp_path)
+    with pytest.raises(MeshToolError) as excinfo:
+        await mesh_gate._apply_gate_revision(session, {"resolution_m": "coarse"})
+    assert excinfo.value.error_code == "MESH_GATE_REVISION_UNREADABLE"
+    assert "resolution_m" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_the_revert_row_answers_yes_the_way_the_card_sends_it(
         tmp_path, monkeypatch):
     fake = _FakeEmitter()
     monkeypatch.setattr(pe, "current_emitter", lambda: fake)
-    session = _session(tmp_path, declared_resolution_m=250.0)
+    session = _session(tmp_path)
     driver = asyncio.create_task(_drive([
-        ("narrow_scope", {"set_resolution.resolution_m": "900"}),
-        ("narrow_scope", {"restart": "yes"}),
+        ("narrow_scope", {"resolution_m": "900"}),
+        ("narrow_scope", {"reset": "yes"}),
         ("proceed", None),
     ]))
 
@@ -416,85 +526,7 @@ async def test_the_truncation_row_answers_yes_the_way_the_card_sends_it(
         session, tool_name="telemac_river_dye", input_mode="user_gated")
 
     await driver
-    assert [e.action for e in session.chain] == ["set_resolution"]
-    assert session.chain[0].inputs["resolution_m"] == 250.0
-
-
-@pytest.mark.asyncio
-async def test_a_knob_the_action_never_declared_refuses_by_name(
-        tmp_path, monkeypatch):
-    monkeypatch.setattr(pe, "current_emitter", lambda: _FakeEmitter())
-    driver = asyncio.create_task(
-        _drive([("narrow_scope", {"set_resolution.edge_length_m": "900"})]))
-
-    with pytest.raises(MeshToolError) as excinfo:
-        await mesh_gate.gate_mesh_build(
-            _session(tmp_path), tool_name="telemac_river_dye",
-            input_mode="user_gated")
-
-    await driver
-    assert excinfo.value.error_code == "MESH_GATE_REVISION_UNREADABLE"
-    assert "edge_length_m" in str(excinfo.value)
-
-
-def _card_rows(session) -> list[str]:
-    """The gate card's row names for ``session``, built without a mesh.
-
-    The sheet is assembled from the mesher's REGISTRY, so a mesher that only
-    builds inside a container still answers what its card would carry.
-    """
-    sheet = mesh_gate._mesh_param_sheet(session, tool_name="build_mesh",
-                                        round_idx=1, max_rounds=3)
-    return [row.name for row in sheet.rows]
-
-
-def test_a_vocabulary_knob_gets_a_row_and_names_its_roster(tmp_path):
-    """A card that skipped every action mixing a shape with a word was restart-only.
-
-    The library wrappers declare the open-boundary designation as a side and a
-    type - two words off a roster - beside a drawn region, and skipping a whole
-    action over the drawn input left their gate with nothing to answer on.
-    """
-    declaration = tool.build_mesh(mesher="om2d", kind="unstructured_tri",
-                                  extent=_AOI, refine={"edge_length": 400.0})
-    session = MeshSession(declaration, workdir=tmp_path)
-
-    names = _card_rows(session)
-
-    assert "set_boundary.side" in names
-    assert "set_boundary.type" in names
-    # The number beside a drawn region is a knob too; the region itself is not.
-    assert "refine_region.edge_length" in names
-    assert not [n for n in names if n.endswith((".geometry", ".layer"))]
-    sheet = mesh_gate._mesh_param_sheet(session, tool_name="build_mesh",
-                                        round_idx=1, max_rounds=3)
-    side = next(r for r in sheet.rows if r.name == "set_boundary.side")
-    for choice in get_mesher("om2d").actions["set_boundary"].inputs["side"].choices:
-        assert choice in side.desc
-
-
-def test_a_mesher_with_no_vocabulary_knob_keeps_the_card_it_had(tmp_path):
-    """A lattice's knobs are numbers; per-input rows change nothing for it."""
-    declaration = tool.build_mesh(mesher="reg_grid", kind="structured_grid",
-                                  extent=_AOI, resolution_m=400.0)
-    session = MeshSession(declaration, workdir=tmp_path)
-
-    assert _card_rows(session) == ["set_resolution.resolution_m", "restart"]
-
-
-@pytest.mark.asyncio
-async def test_a_word_off_the_declared_roster_refuses_by_name(tmp_path):
-    """The roster is the declaration's; typing past it is refused, not passed on."""
-    declaration = tool.build_mesh(mesher="om2d", kind="unstructured_tri",
-                                  extent=_AOI)
-    session = MeshSession(declaration, workdir=tmp_path)
-
-    with pytest.raises(MeshToolError) as excinfo:
-        await mesh_gate._apply_gate_revision(
-            session, {"set_boundary.side": "sideways"})
-
-    assert excinfo.value.error_code == "MESH_GATE_REVISION_UNREADABLE"
-    assert "seaward" in str(excinfo.value)
+    assert session.recipe.resolution_m == 400.0
 
 
 @pytest.mark.asyncio
@@ -527,11 +559,10 @@ async def test_the_shipped_client_parses_the_card_and_its_reply_routes_home(
     assert sheet is not None, "the shipped client renders no card for this envelope"
 
     typed = {row.name: row.display() for row in sheet.rows}
-    typed["set_resolution.resolution_m"] = "900"
+    typed["resolution_m"] = "900"
     revised = client_gate.resolve_param_sheet_edits(sheet.rows, typed)
-    assert revised == {"set_resolution.resolution_m": "900"}
+    assert revised == {"resolution_m": "900"}
 
     replayed = _session(tmp_path / "replay")
     await mesh_gate._apply_gate_revision(replayed, revised)
-    assert [e.action for e in replayed.chain] == ["set_resolution"]
-    assert replayed.chain[0].inputs["resolution_m"] == 900.0
+    assert replayed.recipe.resolution_m == 900.0

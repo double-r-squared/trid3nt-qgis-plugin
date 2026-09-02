@@ -120,8 +120,9 @@ def _os_environ() -> dict:
 
 #: How many tools the registry holds. Pinned so a tool that leaves is noticed
 #: rather than absorbed; the arms never shrink it, only the declarable POOL.
-#: +1 as telemac_rain_on_grid unparked onto the declared-outlet mechanism.
-_REGISTRY_SIZE = 166
+#: +1 as telemac_rain_on_grid unparked onto the declared-outlet mechanism;
+#: +1 as mesh_op landed as the runtime face of the mesh recipe.
+_REGISTRY_SIZE = 167
 
 
 # --------------------------------------------------------------------------- #

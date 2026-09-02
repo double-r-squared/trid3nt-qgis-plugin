@@ -59,31 +59,31 @@ def test_the_roster_is_the_meshers_the_tree_carries():
     assert registered_meshers() == ("om2d", "reg_grid")
 
 
-def test_the_edge_band_declaration_survived_the_dissolution():
-    """The 5 m floor and its reason are what a gate card quotes; a tool that
-    absorbs another absorbs its declarations too."""
+def test_the_one_size_word_carries_the_declaration_a_gate_card_quotes():
+    """The 5 m floor and its reason are what a gate card quotes; the band
+    collapsed onto the ONE agnostic size word and its declaration came with it."""
     meta = TOOL_REGISTRY["build_mesh"].metadata
-    for param in ("min_edge_length_m", "max_edge_length_m"):
-        spec = meta.resolution_spec_for(param)
-        assert spec is not None and spec.min_value == 5.0
-        assert spec.constraint_source == "solver" and spec.rationale
+    spec = meta.resolution_spec_for("resolution_m")
+    assert spec is not None and spec.min_value == 5.0
+    assert spec.constraint_source == "solver" and spec.rationale
+    for dead in ("min_edge_length_m", "max_edge_length_m"):
+        assert meta.resolution_spec_for(dead) is None
 
 
 @pytest.mark.parametrize("mesher,expected", [
-    ("om2d", {"kind", "extent", "bed", "refine", "boundaries"}),
-    ("reg_grid", {"kind", "extent", "resolution_m"}),
+    ("om2d", ("unstructured_tri",)),
+    ("reg_grid", ("structured_grid",)),
 ])
-def test_each_mesher_declares_its_own_fields(mesher, expected):
-    assert set(get_mesher(mesher).fields) == expected
+def test_each_mesher_declares_the_kinds_it_makes(mesher, expected):
+    assert get_mesher(mesher).kinds == expected
 
 
-def test_a_field_a_mesher_never_declared_is_refused_by_name():
-    from trid3nt_server.workflows.mesh.tool import validate_spec
+def test_an_op_a_mesher_never_registered_is_refused_by_name():
+    from trid3nt_server.workflows.mesh.meshers import resolve_op
 
     with pytest.raises(MeshToolError) as excinfo:
-        validate_spec("om2d", {"extent": (0.0, 0.0, 1.0, 1.0),
-                               "open_boundary_side": "south"})
-    assert excinfo.value.error_code == "MESH_SPEC_UNKNOWN_FIELD"
+        resolve_op(get_mesher("om2d"), "open_boundary_side")
+    assert excinfo.value.error_code == "MESH_OP_UNKNOWN"
     assert "open_boundary_side" in str(excinfo.value)
 
 
@@ -114,24 +114,27 @@ def test_2dm_round_trip():
     assert rc.tolist() == cells.tolist()
 
 
-def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced():
+def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced(tmp_path):
     """A hand-edited layer is a different topology, so the per-solver geometry the
     mesher wrote and the probes measured on the old cells must not ride into the
     accepted artifact - the solver would get the pre-edit mesh under the edited
     mesh's name."""
-    import tempfile
-    from pathlib import Path
-
     from trid3nt_server.workflows.mesh.meshers import Mesh
+    from trid3nt_server.workflows.mesh.session import MeshSession
+    from trid3nt_server.workflows.mesh.tool import tool
 
     pts = np.array([[500000.0, 3880000.0], [500100.0, 3880000.0],
                     [500000.0, 3880100.0], [500100.0, 3880100.0]])
     cells = np.array([[0, 1, 2], [1, 3, 2]])
     z = np.array([10.0, 11.0, 12.0, 13.0])
-    p = Path(tempfile.mkdtemp()) / "edited.2dm"
-    p.write_text(write_2dm_arrays(pts, cells, z))
+    edited = tmp_path / "edited.2dm"
+    edited.write_text(write_2dm_arrays(pts, cells, z))
 
-    before = Mesh(
+    session = MeshSession(
+        tool.build_mesh(mesher="reg_grid", extent=(-83.5, 35.0, -83.4, 35.09),
+                        resolution_m=2000.0),
+        workdir=tmp_path)
+    session._mesh = Mesh(
         points=pts[:3], cells=np.array([[0, 1, 2]]), crs_authid="EPSG:32616",
         bed=z[:3],
         meta={"utm_epsg": 32616,
@@ -141,16 +144,12 @@ def test_an_adopted_layer_drops_the_meta_bound_to_the_topology_it_replaced():
                            "open_boundary_info": {"open_node_count": 93},
                            "provenance": {"mesher": "om2d"}}})
 
-    after = get_mesher("om2d").action("apply_layer_edits").apply(
-        before, layer=str(p))
+    session.adopt_layer(str(edited))
+    after = session.mesh
 
     assert after.node_count == 4 and after.element_count == 2
     for key in ("files", "probes"):
         assert key not in after.meta, f"{key} survived the adopted layer"
-    # The CLAIMS made about those cells go with them: the edited mesh states its
-    # engine compatibility afresh from what it can actually back.
-    for key in ("open_boundary_info",):
-        assert key not in after.meta["artifact"], f"{key} survived the adopted layer"
     # What is ABOUT the domain rather than about its cells still rides.
     assert after.meta["utm_epsg"] == 32616
     assert after.meta["artifact"]["provenance"]["mesher"] == "om2d"

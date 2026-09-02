@@ -1,8 +1,9 @@
-"""The accepted topology a geometry file cannot state, and the bed fitted onto it.
+"""The accepted topology a geometry file cannot state, and the bed painted onto it.
 
 Offline: no container, no object store. The pair WRITER is proved through the
 image by the mesh drivers; what is pinned here is the record the server keeps
-beside the geometry and the fit the solve is handed.
+beside the geometry, the contiguous-run matcher ``set_boundary_roles`` IS, and
+the node assignment ``set_bed`` composes.
 """
 
 from __future__ import annotations
@@ -13,9 +14,10 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.mesh import topology as T
+from trid3nt_server.workflows.mesh.meshers import Mesh, MeshToolError
+from trid3nt_server.workflows.mesh.shared import primitives as P
 from trid3nt_server.workflows.mesh.shared.nodes import (
     MeshNodeError,
-    fit_downstream_bed,
     read_centerline_utm,
 )
 
@@ -46,17 +48,82 @@ def test_an_empty_role_is_not_a_role(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# Matching the DECLARED roles onto the mesh the mesher actually built.
+# ``set_boundary_roles``: the op, on a mesh.
+# --------------------------------------------------------------------------- #
+def _lattice_mesh():
+    """A 3x3 lon/lat node lattice, two triangles per square, one boundary loop.
+
+    In lon/lat because a declared FACE is what the chain measured - a section's
+    end transect, in the coordinates every other tool speaks - and the op is what
+    projects both onto the metres a tolerance is a length in.
+    """
+    xy = np.array([[x, y] for y in (36.12, 36.13, 36.14)
+                   for x in (-75.78, -75.77, -75.76)])
+    cells = []
+    for row in range(2):
+        for col in range(2):
+            a = row * 3 + col
+            cells += [[a, a + 1, a + 4], [a, a + 4, a + 3]]
+    return Mesh(points=xy, cells=np.asarray(cells, dtype=np.int64),
+                crs_authid="EPSG:4326")
+
+
+def test_the_op_writes_the_declared_runs_onto_the_mesh_it_was_handed():
+    mesh = _lattice_mesh()
+    west = {"type": "LineString",
+            "coordinates": [[-75.78, 36.12], [-75.78, 36.14]]}
+    roled = P.set_boundary_roles(mesh, inflow=west)
+    nodes = roled.meta["boundary_roles"]["inflow"]
+    assert set(nodes) == {0, 3, 6}
+    assert roled.bed is None and roled.points is mesh.points
+
+
+def test_a_face_the_mesh_never_reaches_refuses_rather_than_going_unprescribed():
+    mesh = _lattice_mesh()
+    far = {"type": "LineString", "coordinates": [[-70.0, 36.12], [-70.0, 36.14]]}
+    with pytest.raises(MeshToolError) as excinfo:
+        P.set_boundary_roles(mesh, inflow=far)
+    assert excinfo.value.error_code == "MESH_BOUNDARY_ROLE_UNMATCHED"
+
+
+def test_a_role_declared_as_two_ends_is_read_as_the_transect_between_them():
+    mesh = _lattice_mesh()
+    roled = P.set_boundary_roles(
+        mesh, outflow=[(-75.76, 36.12), (-75.76, 36.14)])
+    assert set(roled.meta["boundary_roles"]["outflow"]) == {2, 5, 8}
+
+
+def test_a_role_named_by_one_point_is_not_a_face():
+    mesh = _lattice_mesh()
+    with pytest.raises(MeshToolError) as excinfo:
+        P.set_boundary_roles(mesh, outflow=[(-75.76, 36.12)])
+    assert excinfo.value.error_code == "MESH_BOUNDARY_ROLE_INVALID"
+
+
+def test_declaring_no_roles_imposes_nothing():
+    mesh = _lattice_mesh()
+    assert P.set_boundary_roles(mesh) is mesh
+
+
+def test_a_mesh_whose_cells_the_engine_realizes_has_no_walk_to_name_a_run_of():
+    bare = Mesh(points=None, cells=None, crs_authid="EPSG:32617")
+    with pytest.raises(MeshToolError) as excinfo:
+        P.set_boundary_roles(bare, inflow=[(-75.78, 36.12), (-75.78, 36.14)])
+    assert excinfo.value.error_code == "MESH_ROLES_UNSEGMENTABLE"
+
+
+# --------------------------------------------------------------------------- #
+# The contiguous-run matcher the op IS: a role is a RUN of one contour.
 # --------------------------------------------------------------------------- #
 #: A 200 m x 40 m strip of boundary nodes: the two 40 m end caps are the
-#: transects a section cut, and the two long sides are the banks between them.
+#: transects a section cut, and the two long sides are the water between them.
 _STRIP = np.array(
     [[0.0, 0.0], [0.0, 20.0], [0.0, 40.0],          # 0,1,2  west cap
-     [100.0, 0.0], [100.0, 40.0],                   # 3,4    banks
+     [100.0, 0.0], [100.0, 40.0],                   # 3,4    sides
      [200.0, 0.0], [200.0, 20.0], [200.0, 40.0]])   # 5,6,7  east cap
 #: The strip's boundary walked as ONE closed contour, which is the shape a role
-#: is resolved against: up the west cap, along the north bank, down the east cap,
-#: back along the south bank.
+#: is resolved against: up the west cap, along the north side, down the east cap,
+#: back along the south side.
 _STRIP_CONTOUR = [[0, 1, 2, 4, 7, 6, 5, 3]]
 _WEST_FACE = {"type": "LineString", "coordinates": [[0.0, 0.0], [0.0, 40.0]]}
 _EAST_FACE = {"type": "LineString", "coordinates": [[200.0, 0.0], [200.0, 40.0]]}
@@ -102,8 +169,8 @@ def _forced_contiguous(labels: str, role: str) -> list[int]:
 
 
 def test_both_transect_faces_land_their_own_role():
-    """Each end cap is one role, whole; the banks between them are neither."""
-    roles = T.match_boundary_roles(
+    """Each end cap is one role, whole; the sides between them are neither."""
+    roles = P._runs(
         _STRIP, _STRIP_CONTOUR, _shapes(inflow=_WEST_FACE, outflow=_EAST_FACE),
         tolerance_m=20.0)
     assert roles == {"inflow": [0, 1, 2], "outflow": [5, 6, 7]}
@@ -111,9 +178,9 @@ def test_both_transect_faces_land_their_own_role():
 
 def test_a_face_that_ends_nowhere_near_the_boundary_carries_no_role():
     """A face and a mesh that describe different domains match nothing."""
-    roles = T.match_boundary_roles(
-        _STRIP, [[3, 4]], _shapes(inflow=_WEST_FACE, outflow=_EAST_FACE),
-        tolerance_m=20.0)
+    roles = P._runs(_STRIP, [[3, 4]],
+                    _shapes(inflow=_WEST_FACE, outflow=_EAST_FACE),
+                    tolerance_m=20.0)
     assert roles == {}
 
 
@@ -124,10 +191,10 @@ def test_a_cut_corner_does_not_cost_the_face_its_role():
     still lands whole."""
     chamfered = np.array(
         [[8.0, 0.0], [0.0, 12.0], [0.0, 28.0], [8.0, 40.0],   # 0..3 west cap
-         [100.0, 40.0],                                       # 4    north bank
+         [100.0, 40.0],                                       # 4    north side
          [192.0, 40.0], [200.0, 28.0], [200.0, 12.0],         # 5..7 east cap
-         [192.0, 0.0], [100.0, 0.0]])                         # 8,9  south bank
-    roles = T.match_boundary_roles(
+         [192.0, 0.0], [100.0, 0.0]])                         # 8,9  south side
+    roles = P._runs(
         chamfered, [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]],
         _shapes(inflow=_WEST_FACE, outflow=_EAST_FACE), tolerance_m=20.0)
     # each run is walked from the face's own first end, so a role's list may run
@@ -138,14 +205,13 @@ def test_a_cut_corner_does_not_cost_the_face_its_role():
 def test_a_mesh_with_no_declared_boundaries_carries_no_roles():
     """Nothing is inferred: an undeclared boundary is entirely solid wall, which
     is what makes a deck against it refuse rather than solve on a guess."""
-    assert T.match_boundary_roles(_STRIP, _STRIP_CONTOUR, {},
-                                  tolerance_m=20.0) == {}
+    assert P._runs(_STRIP, _STRIP_CONTOUR, {}, tolerance_m=20.0) == {}
 
 
 def test_a_scattered_candidate_boundary_resolves_into_two_contiguous_runs():
     """The holes the measured scatter left are INSIDE the declared stretch."""
     points = _ring_on_a_circle(len(_SCATTER))
-    roles = T.match_boundary_roles(
+    roles = P._runs(
         points, [list(range(len(_SCATTER)))],
         _shapes(inflow=_face_across(points, 15, 3),
                 outflow=_face_across(points, 7, 11)),
@@ -160,9 +226,8 @@ def test_a_scattered_candidate_boundary_resolves_into_two_contiguous_runs():
 def test_a_run_that_wraps_the_contours_origin_stays_one_run():
     """A contour has no first node; a stretch across position zero is not two."""
     points = _ring_on_a_circle(len(_SCATTER))
-    roles = T.match_boundary_roles(
-        points, [list(range(len(_SCATTER)))],
-        _shapes(inflow=_face_across(points, 15, 3)), tolerance_m=1.0)
+    roles = P._runs(points, [list(range(len(_SCATTER)))],
+                    _shapes(inflow=_face_across(points, 15, 3)), tolerance_m=1.0)
     assert roles["inflow"][0] == 15 and roles["inflow"][-1] == 3
     assert 0 in roles["inflow"]
 
@@ -170,7 +235,7 @@ def test_a_run_that_wraps_the_contours_origin_stays_one_run():
 def test_the_matcher_reproduces_the_probes_forced_contiguous_result():
     """The hand-closed runs that produced two liquid boundaries, CONSTRUCTED."""
     points = _ring_on_a_circle(len(_SCATTER))
-    roles = T.match_boundary_roles(
+    roles = P._runs(
         points, [list(range(len(_SCATTER)))],
         _shapes(inflow=_face_across(points, 15, 3),
                 outflow=_face_across(points, 7, 11)),
@@ -186,73 +251,148 @@ def test_a_point_declared_role_is_the_run_it_stands_within():
     points = _ring_on_a_circle(12, radius=100.0)
     outlet = {"type": "Point", "coordinates": list(points[0])}
     spacing = float(np.hypot(*(points[1] - points[0])))
-    roles = T.match_boundary_roles(points, [list(range(12))],
-                                   _shapes(outflow=outlet),
-                                   tolerance_m=spacing * 1.2)
+    roles = P._runs(points, [list(range(12))], _shapes(outflow=outlet),
+                    tolerance_m=spacing * 1.2)
     assert roles == {"outflow": [11, 0, 1]}
 
 
 # --------------------------------------------------------------------------- #
-# The fitted bed.
+# ``set_bed``: the CORRECT DATA CLASS, and the substitution said out loud.
 # --------------------------------------------------------------------------- #
-_CENTERLINE = np.array([[0.0, 0.0], [1000.0, 0.0]])
+def _bed_raster(tmp_path, value=-18.0):
+    import rasterio
+    from rasterio.transform import from_origin
+
+    path = tmp_path / "topobathy.tif"
+    with rasterio.open(path, "w", driver="GTiff", height=20, width=20, count=1,
+                       dtype="float32", crs="EPSG:4326",
+                       transform=from_origin(-75.80, 36.20, 0.01, 0.01)) as dst:
+        dst.write(np.full((20, 20), value, dtype="float32"), 1)
+    return path
 
 
-def _nodes(n: int = 21) -> np.ndarray:
-    xs = np.linspace(0.0, 1000.0, n)
-    return np.column_stack([xs, np.zeros(n)])
+def _lonlat_mesh():
+    xy = np.array([[-75.78, 36.12], [-75.74, 36.12],
+                   [-75.78, 36.16], [-75.74, 36.16]])
+    return Mesh(points=xy, cells=np.array([[0, 1, 2], [1, 3, 2]], dtype=np.int64),
+                crs_authid="EPSG:4326")
 
 
-def test_the_fitted_bed_runs_downhill_even_when_the_dem_does_not():
-    """A surface DEM along a thalweg runs uphill between nodes; a solve on that
-    ponds. The fit is monotone, and the clamp that made it so is reported."""
-    points = _nodes()
-    # Alternating +/- 2 m about a flat 100 m: the raw surface runs UPHILL between
-    # every other pair of nodes and carries no downstream trend at all.
-    noisy = 100.0 + 2.0 * np.cos(np.arange(points.shape[0]) * np.pi)
-    bed, stats = fit_downstream_bed(points, _CENTERLINE, noisy,
-                                    min_slope=3.0e-4, max_slope=6.0e-3)
-    assert np.all(np.diff(bed) < 0.0)
-    assert stats["enforced_slope"] == pytest.approx(3.0e-4)
-    assert stats["measured_slope"] < stats["enforced_slope"]
-    assert stats["reach_len_m"] == pytest.approx(1000.0)
-    assert stats["bed_drop_m"] == pytest.approx(0.3)
+def test_the_bed_is_painted_at_the_nodes_and_the_row_it_came_from_is_named(tmp_path):
+    raster = _bed_raster(tmp_path)
+    bedded = P.set_bed(_lonlat_mesh(), source=str(raster))
+    assert bedded.bed.tolist() == [-18.0] * 4
+    assert str(raster) in bedded.meta["bed_source"]
+    row = [r for r in bedded.meta["synthetic_inputs"] if r["param"] == "mesh_bed"]
+    assert row and str(raster) in row[0]["value"]
+    assert row[0]["consequence"] == "physics"
 
 
-def test_a_steep_dem_is_held_under_the_ceiling():
-    points = _nodes()
-    steep = 100.0 - 0.02 * points[:, 0]
-    _, stats = fit_downstream_bed(points, _CENTERLINE, steep,
-                                  min_slope=3.0e-4, max_slope=6.0e-3)
-    assert stats["measured_slope"] == pytest.approx(0.02)
-    assert stats["enforced_slope"] == pytest.approx(6.0e-3)
+def test_the_interpolation_is_a_visible_default_off_a_declared_roster(tmp_path):
+    raster = _bed_raster(tmp_path)
+    import inspect
+
+    assert inspect.signature(P.set_bed).parameters["interp"].default == "nearest"
+    assert P.set_bed(_lonlat_mesh(), source=str(raster),
+                     interp="bilinear").bed == pytest.approx([-18.0] * 4)
+    with pytest.raises(MeshToolError) as excinfo:
+        P.set_bed(_lonlat_mesh(), source=str(raster), interp="kriging")
+    assert excinfo.value.error_code == "MESH_OP_BAD_VALUE"
 
 
-def test_holes_shrink_the_support_but_are_counted():
-    points = _nodes()
-    sampled = 100.0 - 0.001 * points[:, 0]
-    sampled[::4] = np.nan
-    _, stats = fit_downstream_bed(points, _CENTERLINE, sampled,
-                                  min_slope=3.0e-4, max_slope=6.0e-3)
-    assert stats["n_dem_nan"] == 6
-    assert stats["enforced_slope"] == pytest.approx(0.001, rel=1e-3)
+def test_a_conditioning_this_primitive_does_not_perform_refuses(tmp_path):
+    raster = _bed_raster(tmp_path)
+    with pytest.raises(MeshToolError) as excinfo:
+        P.set_bed(_lonlat_mesh(), source=str(raster), condition="smooth")
+    assert excinfo.value.error_code == "MESH_OP_BAD_VALUE"
 
 
-def test_a_raster_that_reaches_none_of_the_mesh_refuses():
-    points = _nodes()
-    with pytest.raises(MeshNodeError) as excinfo:
-        fit_downstream_bed(points, _CENTERLINE, np.full(points.shape[0], np.nan),
-                           min_slope=3.0e-4, max_slope=6.0e-3)
-    assert excinfo.value.error_code == "MESH_BED_UNSAMPLED"
+def test_a_declared_pit_fill_runs_the_delineators_own_chain_and_says_so(
+        monkeypatch, tmp_path):
+    """An overland run's bed must carry the same sinks its routing does, or the
+    deepest water in the run is a pit the delineation already filled."""
+    raster = _bed_raster(tmp_path)
+    seen: dict = {}
+
+    def _fake_condition(src, dst):
+        seen["src"] = src
+        import shutil
+
+        shutil.copyfile(src, dst)
+        return dst
+
+    monkeypatch.setattr(
+        "trid3nt_server.tools.processing._hydrology_common.write_conditioned_dem",
+        _fake_condition)
+    bedded = P.set_bed(_lonlat_mesh(), source=str(raster), condition="pit_fill")
+    assert seen["src"] == str(raster)
+    assert "pit-filled" in bedded.meta["bed_source"]
 
 
-def test_a_node_off_the_line_takes_the_distance_of_its_nearest_point():
-    """Along-channel distance is measured on the centerline, not as the crow flies."""
-    bend = np.array([[0.0, 0.0], [500.0, 0.0], [500.0, 500.0]])
-    points = np.array([[500.0, 250.0], [10.0, 80.0]])
-    _, stats = fit_downstream_bed(points, bend, np.array([10.0, 12.0]),
-                                  min_slope=1.0e-4, max_slope=1.0)
-    assert stats["reach_len_m"] == pytest.approx(750.0)
+def test_a_source_naming_nothing_refuses_rather_than_leaving_a_bedless_mesh():
+    with pytest.raises(MeshToolError) as excinfo:
+        P.set_bed(_lonlat_mesh(), source="")
+    assert excinfo.value.error_code == "MESH_BED_UNRESOLVED"
+
+
+def test_the_bed_is_fetched_past_the_extent_the_mesh_has_nodes_on():
+    grown = P._grown((-75.80, 36.10, -75.70, 36.20))
+    assert grown[0] < -75.80 and grown[1] < 36.10
+    assert grown[2] > -75.70 and grown[3] > 36.20
+
+
+# --------------------------------------------------------------------------- #
+# The bed's provenance, in whichever shape the fetch answered.
+# --------------------------------------------------------------------------- #
+class _Row:
+    def __init__(self, rung, coverage):
+        self.rung = rung
+        self.coverage = coverage
+
+
+class _Layer:
+    def __init__(self, rows, note=None):
+        self.uri = "s3://bucket/bed.tif"
+        self.fallbacks = rows
+        self.fallback_note = note
+
+
+_ROWS_TYPED = [_Row("cudem_nearshore", 0.89), _Row("etopo_bathy_base", 0.11),
+               _Row("unused_rung", 0.0)]
+_ROWS_DICT = [{"rung": "cudem_nearshore", "coverage": 0.89},
+              {"rung": "etopo_bathy_base", "coverage": 0.11},
+              {"rung": "unused_rung", "coverage": 0.0}]
+
+
+def test_the_activation_rows_read_the_same_from_a_layer_and_from_a_dict():
+    from trid3nt_server.workflows.mesh.meshers import (
+        fetch_activation_rows,
+        fetch_fallback_note,
+    )
+
+    typed = fetch_activation_rows(_Layer(_ROWS_TYPED, "swapped"))
+    mapping = fetch_activation_rows(
+        {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
+         "fallback_note": "swapped"})
+    assert typed == mapping == [("cudem_nearshore", 0.89),
+                                ("etopo_bathy_base", 0.11)]
+    assert fetch_fallback_note({"fallback_note": "swapped"}) == "swapped"
+    assert fetch_fallback_note({"fallback_note": None}) is None
+
+
+def test_a_dict_shaped_fetch_is_not_reported_as_unmeasured():
+    """A fetcher may answer with the layer as a mapping; reading only attributes
+    calls a MEASURED provenance unmeasured."""
+    as_dict = {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
+               "fallback_note": None}
+    assert P._provenance("fetch_topobathy", as_dict) == (
+        "fetch_topobathy: cudem_nearshore 89%, etopo_bathy_base 11%")
+    assert "UNMEASURED" not in P._provenance("fetch_topobathy", as_dict)
+
+
+def test_a_fetch_that_measured_nothing_still_says_so():
+    empty = {"uri": "s3://b/x.tif", "fallbacks": [], "fallback_note": None}
+    assert "UNMEASURED" in P._provenance("fetch_topobathy", empty)
 
 
 # --------------------------------------------------------------------------- #
@@ -269,24 +409,15 @@ def _flowline_collection(order):
         for i in order]}
 
 
-def test_a_shuffled_flowline_normalizes_to_the_same_chainage():
+def test_a_shuffled_flowline_normalizes_to_the_same_line():
     """The rows arrive in whatever order the navigate listed them; the reading is
-    one head-to-tail line either way, so the bed the fit lays down is the same."""
+    one head-to-tail line either way."""
     head = (-83.40, 35.00)
     straight = read_centerline_utm(_flowline_collection([0, 1, 2]), 32617,
                                    start_lonlat=head)
     shuffled = read_centerline_utm(_flowline_collection([2, 0, 1]), 32617,
                                    start_lonlat=head)
     assert np.allclose(straight, shuffled)
-
-    points = straight[:, :]
-    sampled = 100.0 - 0.002 * np.arange(points.shape[0], dtype=float)
-    stats_a = fit_downstream_bed(points, straight, sampled,
-                                 min_slope=3.0e-4, max_slope=6.0e-3)[1]
-    stats_b = fit_downstream_bed(points, shuffled, sampled,
-                                 min_slope=3.0e-4, max_slope=6.0e-3)[1]
-    assert stats_a["reach_len_m"] == pytest.approx(stats_b["reach_len_m"])
-    assert stats_a["bed_drop_m"] == pytest.approx(stats_b["bed_drop_m"])
 
 
 def test_the_declared_head_decides_the_direction_not_the_merge():

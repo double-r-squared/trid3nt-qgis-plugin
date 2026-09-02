@@ -150,7 +150,7 @@ async def stub_mesh_step(**kwargs):
         node_count=7, element_count=6,
         bbox=(-124.1, 40.4, -124.0, 40.5), utm_epsg=32610,
         probes={"min_edge_m": 40.5, "edge_length_m": {"min": 40.5, "max": 400.0}},
-        provenance={"spec": {"extent": {"type": "Polygon", "coordinates": [
+        provenance={"recipe": {"extent": {"type": "Polygon", "coordinates": [
             [[-124.1, 40.4], [-124.0, 40.4], [-124.0, 40.5], [-124.1, 40.4]]]}}},
     )
     return {"uri": "s3://b/mesh.slf", "artifact": art, "mesh_id": art.mesh_id,

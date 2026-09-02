@@ -1,10 +1,10 @@
 """Offline tests for the mesh router, the mesh session and the reg_grid mesher.
 
 The PURE surfaces, with no container, no object store and no live session: the
-router's typed refusals against a mesher's declared fields, the explicit /
-discovered / declared resolution order, the laziness of a declared ask, the
-recipe journal's replay determinism, restart truncation, and the hand-edit
-record that honestly refuses to replay.
+router's typed refusals, the explicit / discovered / declared resolution order,
+the laziness of a declared recipe, the journal's replay determinism, the reset
+back to the declaration, and the hand-edit record that honestly refuses to
+replay.
 
 ASCII only.
 """
@@ -30,11 +30,11 @@ from trid3nt_server.workflows.mesh.session import (
 )
 from trid3nt_server.workflows.lib import Accepts, AcceptsDeclarationError
 from trid3nt_server.workflows.mesh.tool import (
-    MeshDeclaration,
+    MeshRecipe,
     accepts_for,
+    mesh_op,
     resolve_mesh,
     tool,
-    validate_spec,
 )
 from trid3nt_server.workflows.telemac.do_sag.declarations import ACCEPTS as _DO_SAG
 from trid3nt_server.workflows.telemac.river_dye.declarations import (
@@ -58,11 +58,11 @@ _GRID = Accepts(mesh=("structured_grid",))
 _AGITATION = "artemis_harbor_agitation"
 
 
-def _declaration(**over):
-    fields = {"mesher": "reg_grid", "kind": "structured_grid",
-              "extent": _AOI, "resolution_m": 400.0}
-    fields.update(over)
-    return tool.build_mesh(**fields)
+def _recipe(**over):
+    ask = {"mesher": "reg_grid", "kind": "structured_grid",
+           "extent": _AOI, "resolution_m": 400.0}
+    ask.update(over)
+    return tool.build_mesh(**ask)
 
 
 def _artifact(**over) -> MeshArtifact:
@@ -72,9 +72,9 @@ def _artifact(**over) -> MeshArtifact:
         slf_uri="s3://cache/mesh/01MESH/mesh.slf", utm_epsg=32617,
         crs_authid="EPSG:32617", has_bathymetry=True, node_count=4956,
         element_count=9727, bbox=_AOI,
-        # A built mesh records the ask it came from, and the KIND on that record
-        # is what the resolution door checks a run's declaration against.
-        provenance={"spec": {"mesher": "reg_grid", "kind": "structured_grid"}})
+        # A built mesh records the RECIPE it came from, and the KIND on that
+        # record is what the resolution door checks a run's declaration against.
+        provenance={"recipe": {"mesher": "reg_grid", "kind": "structured_grid"}})
     base.update(over)
     return MeshArtifact(**base)
 
@@ -90,12 +90,12 @@ def test_build_mesh_registered():
     assert rt.metadata.tier == "general"
 
 
-def test_reg_grid_registered_with_its_declarations():
+def test_reg_grid_conforms_with_a_near_empty_default_recipe():
+    """Same surface as every mesher, and the smallest possible registration."""
     mesher = get_mesher("reg_grid")
-    assert set(mesher.fields) == {"kind", "extent", "resolution_m"}
-    assert set(mesher.actions) == {"set_resolution", "set_extent",
-                                   "apply_layer_edits"}
-    assert mesher.actions["apply_layer_edits"].replayable is False
+    assert mesher.kinds == ("structured_grid",)
+    assert mesher.default_ops == ()
+    assert mesher.namespaces == ()
 
 
 def test_build_mesh_surfaces_in_top8():
@@ -120,58 +120,48 @@ def test_build_mesh_surfaces_in_top8():
 # --------------------------------------------------------------------------- #
 # Router validation: every refusal names what was wrong.
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize(
-    "fields, code",
-    [
-        ({"mesher": "no_such_mesher"}, "MESH_UNKNOWN_MESHER"),
-        ({"mesher": "reg_grid", "extent": _AOI}, "MESH_SPEC_MISSING_FIELD"),
-        ({"mesher": "reg_grid", "extent": _AOI, "resolution_m": "coarse"},
-         "MESH_SPEC_BAD_TYPE"),
-        ({"mesher": "reg_grid", "kind": "unstructured_tri", "extent": _AOI,
-          "resolution_m": 400.0}, "MESH_SPEC_BAD_VALUE"),
-        ({"mesher": "reg_grid", "extent": _AOI, "resolution_m": 400.0,
-          "refine": {"edge_length": 10}}, "MESH_SPEC_UNKNOWN_FIELD"),
-    ],
-)
-def test_router_refuses_a_spec_the_mesher_never_declared(fields, code):
+def test_an_unknown_mesher_refuses_naming_the_roster():
     with pytest.raises(MeshToolError) as excinfo:
-        tool.build_mesh(**fields)
-    assert excinfo.value.error_code == code
+        tool.build_mesh(mesher="no_such_mesher")
+    assert excinfo.value.error_code == "MESH_UNKNOWN_MESHER"
+    assert "reg_grid" in str(excinfo.value)
 
 
-def test_router_refusal_names_the_declared_fields():
+def test_a_kind_the_mesher_does_not_make_refuses_by_name():
+    with pytest.raises(MeshToolError) as excinfo:
+        tool.build_mesh(mesher="reg_grid", kind="unstructured_tri", extent=_AOI,
+                        resolution_m=400.0)
+    assert excinfo.value.error_code == "MESH_KIND_UNSUPPORTED"
+    assert "structured_grid" in str(excinfo.value)
+
+
+def test_the_kind_defaults_to_the_one_this_mesher_makes():
+    assert _recipe(kind=None).kind == "structured_grid"
+
+
+def test_engine_vocabulary_is_not_a_param_of_the_generalization():
+    """``bed=`` and ``boundaries=`` died as params; they are ops."""
+    for word in ("bed", "boundaries", "refine"):
+        with pytest.raises(TypeError):
+            tool.build_mesh(mesher="reg_grid", extent=_AOI, resolution_m=400.0,
+                            **{word: {}})
+
+
+def test_ops_that_are_not_recipe_entries_refuse():
     with pytest.raises(MeshToolError) as excinfo:
         tool.build_mesh(mesher="reg_grid", extent=_AOI, resolution_m=400.0,
-                        resolution_meters=400.0)
-    message = str(excinfo.value)
-    assert "resolution_meters" in message and "resolution_m" in message
-
-
-def test_router_refuses_an_unregistered_edit_action():
-    with pytest.raises(MeshToolError) as excinfo:
-        _declaration().edit("refine_region", geometry="poly")
-    assert excinfo.value.error_code == "MESH_UNKNOWN_ACTION"
-
-
-def test_router_refuses_an_input_the_action_never_declared():
-    with pytest.raises(MeshToolError) as excinfo:
-        _declaration().edit("set_resolution", resolution_km=0.25)
-    assert excinfo.value.error_code == "MESH_EDIT_UNKNOWN_INPUT"
-
-
-def test_declared_defaults_fill_in():
-    spec = validate_spec("reg_grid", {"extent": _AOI, "resolution_m": 400.0})
-    assert spec.kind == "structured_grid"
+                        ops=["set_bed"])
+    assert excinfo.value.error_code == "MESH_OPS_MALFORMED"
 
 
 def test_late_bound_reads_pass_declaration_and_refuse_serialization():
     from trid3nt_server.workflows.lib.plan import ParamRef
 
-    declaration = tool.build_mesh(mesher="reg_grid", extent=_AOI,
-                                  resolution_m=ParamRef("mesh_resolution_m"))
+    recipe = tool.build_mesh(mesher="reg_grid", extent=_AOI,
+                             resolution_m=ParamRef("mesh_resolution_m"))
     with pytest.raises(MeshToolError) as excinfo:
-        declaration.spec.to_json()
-    assert excinfo.value.error_code == "MESH_SPEC_UNBOUND"
+        recipe.to_json()
+    assert excinfo.value.error_code == "MESH_RECIPE_UNBOUND"
 
 
 # --------------------------------------------------------------------------- #
@@ -180,8 +170,7 @@ def test_late_bound_reads_pass_declaration_and_refuse_serialization():
 def test_explicit_mesh_wins_over_a_discovered_one():
     stash_mesh_artifact("case-explicit", _artifact(name="discovered"))
     supplied = _artifact(mesh_id="01OTHER", name="supplied")
-    resolution = resolve_mesh(_declaration(), explicit=supplied,
-                              accepts=_GRID,
+    resolution = resolve_mesh(_recipe(), explicit=supplied, accepts=_GRID,
                               case_id="case-explicit")
     assert resolution.source == "explicit"
     assert resolution.artifact is supplied
@@ -189,8 +178,7 @@ def test_explicit_mesh_wins_over_a_discovered_one():
 
 def test_explicit_mesh_no_solve_could_be_staged_on_refuses():
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(_declaration(), explicit=_artifact(slf_uri=None),
-                     accepts=_GRID)
+        resolve_mesh(_recipe(), explicit=_artifact(slf_uri=None), accepts=_GRID)
     assert excinfo.value.error_code == "MESH_NOT_SOLVABLE"
     assert "no SELAFIN geometry" in str(excinfo.value)
 
@@ -198,7 +186,7 @@ def test_explicit_mesh_no_solve_could_be_staged_on_refuses():
 def test_explicit_mesh_with_no_readable_record_refuses():
     reader = _FailingReader()
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(_declaration(), explicit="s3://cache/mesh/unknown/mesh.2dm",
+        resolve_mesh(_recipe(), explicit="s3://cache/mesh/unknown/mesh.2dm",
                      s3_client=reader)
     assert excinfo.value.error_code == "MESH_EXPLICIT_UNREADABLE"
     assert "no readable mesh artifact record" in str(excinfo.value)
@@ -207,7 +195,7 @@ def test_explicit_mesh_with_no_readable_record_refuses():
 def test_explicit_mesh_uri_with_no_reader_names_the_missing_reader():
     """The caller's missing reader is not the supplied mesh's fault."""
     with pytest.raises(MeshToolError) as excinfo:
-        resolve_mesh(_declaration(), explicit="s3://cache/mesh/unknown/mesh.2dm")
+        resolve_mesh(_recipe(), explicit="s3://cache/mesh/unknown/mesh.2dm")
     assert excinfo.value.error_code == "MESH_EXPLICIT_UNREADABLE"
     assert "no object-store reader was supplied" in str(excinfo.value)
 
@@ -222,25 +210,23 @@ class _FailingReader:
 def test_case_discovery_beats_the_declared_default():
     art = _artifact()
     stash_mesh_artifact("case-discovery", art)
-    resolution = resolve_mesh(_declaration(), accepts=_GRID,
-                              case_id="case-discovery")
+    resolution = resolve_mesh(_recipe(), accepts=_GRID, case_id="case-discovery")
     assert resolution.source == "discovered"
     assert resolution.artifact is art
 
 
 def test_case_discovery_skips_a_mesh_no_solve_could_be_staged_on():
     stash_mesh_artifact("case-skip", _artifact(slf_uri=None))
-    resolution = resolve_mesh(_declaration(), accepts=_GRID,
-                              case_id="case-skip")
+    resolution = resolve_mesh(_recipe(), accepts=_GRID, case_id="case-skip")
     assert resolution.source == "declared"
-    assert resolution.declaration is not None
+    assert resolution.recipe is not None
 
 
 def test_declared_default_when_the_case_holds_nothing():
-    declaration = _declaration()
-    resolution = resolve_mesh(declaration, case_id="case-empty")
+    recipe = _recipe()
+    resolution = resolve_mesh(recipe, case_id="case-empty")
     assert resolution.source == "declared"
-    assert resolution.declaration is declaration
+    assert resolution.recipe is recipe
 
 
 def test_nothing_supplied_declared_or_discovered_refuses():
@@ -260,7 +246,7 @@ def test_nothing_supplied_declared_or_discovered_refuses():
 def _tri_artifact(**over) -> MeshArtifact:
     return _artifact(
         mode="om2d", name="Point Judith Harbor of Refuge",
-        provenance={"spec": {"mesher": "om2d", "kind": "unstructured_tri"}},
+        provenance={"recipe": {"mesher": "om2d", "kind": "unstructured_tri"}},
         **over)
 
 
@@ -341,121 +327,117 @@ def test_case_discovery_offers_only_members_of_the_mesh_row():
     """The same membership test, in the arm where a non-member is simply not a
     candidate: the run builds its declared mesh instead."""
     stash_mesh_artifact("case-wrong-kind", _artifact())
-    resolution = resolve_mesh(_declaration(), accepts=_RIVER_DYE,
+    resolution = resolve_mesh(_recipe(), accepts=_RIVER_DYE,
                               case_id="case-wrong-kind")
     assert resolution.source == "declared"
 
 
 def test_case_discovery_offers_nothing_without_a_mesh_row():
     stash_mesh_artifact("case-no-set", _artifact())
-    resolution = resolve_mesh(_declaration(), case_id="case-no-set")
+    resolution = resolve_mesh(_recipe(), case_id="case-no-set")
     assert resolution.source == "declared"
 
 
 # --------------------------------------------------------------------------- #
-# Laziness: a declared ask builds NOTHING.
+# Laziness: a declared recipe builds NOTHING.
 # --------------------------------------------------------------------------- #
-def test_a_declaration_builds_nothing(tmp_path):
+def test_a_recipe_builds_nothing(tmp_path):
     """A degenerate extent declares fine and only fails when a build is demanded."""
-    declaration = tool.build_mesh(mesher="reg_grid", extent=(0.0, 0.0, 0.0, 0.0),
-                                  resolution_m=100.0).edit("set_resolution", 50.0)
-    assert isinstance(declaration, MeshDeclaration)
-    assert len(declaration.edits) == 1
+    recipe = tool.build_mesh(mesher="reg_grid", extent=(0.0, 0.0, 0.0, 0.0),
+                             resolution_m=100.0)
+    assert isinstance(recipe, MeshRecipe)
     with pytest.raises(ValueError):
-        MeshSession(declaration, workdir=tmp_path).probes()
+        MeshSession(recipe, workdir=tmp_path).probes()
 
 
-def test_building_an_unbound_declaration_refuses_by_name(tmp_path):
+def test_building_an_unbound_recipe_refuses_by_name(tmp_path):
     """A placeholder must not reach the mesh library as a value it cannot read."""
     from trid3nt_server.workflows.lib.plan import ParamRef
 
-    declaration = tool.build_mesh(mesher="reg_grid", extent=_AOI,
-                                  resolution_m=ParamRef("mesh_resolution_m"))
+    recipe = tool.build_mesh(mesher="reg_grid", extent=_AOI,
+                             resolution_m=ParamRef("mesh_resolution_m"))
     with pytest.raises(MeshToolError) as excinfo:
-        MeshSession(declaration, workdir=tmp_path).probes()
-    assert excinfo.value.error_code == "MESH_SPEC_UNBOUND"
-    assert "reg_grid.resolution_m" in str(excinfo.value)
+        MeshSession(recipe, workdir=tmp_path).probes()
+    assert excinfo.value.error_code == "MESH_RECIPE_UNBOUND"
+    assert "resolution_m" in str(excinfo.value)
 
 
-def test_an_unbound_declared_edit_input_refuses_at_build(tmp_path):
+def test_an_unbound_op_kwarg_refuses_at_build(tmp_path):
     from trid3nt_server.workflows.lib.plan import ParamRef
 
-    declaration = _declaration().edit("set_resolution", ParamRef("cell_size_m"))
+    recipe = _recipe(ops=[mesh_op("set_bed", source=ParamRef("bed_uri"))])
     with pytest.raises(MeshToolError) as excinfo:
-        MeshSession(declaration, workdir=tmp_path).probes()
-    assert excinfo.value.error_code == "MESH_SPEC_UNBOUND"
-    assert "set_resolution.resolution_m" in str(excinfo.value)
+        MeshSession(recipe, workdir=tmp_path).probes()
+    assert excinfo.value.error_code == "MESH_RECIPE_UNBOUND"
+    assert "ops[0].source" in str(excinfo.value)
 
 
-def test_an_unbound_session_edit_input_refuses(tmp_path):
-    from trid3nt_server.workflows.lib.plan import ParamRef
-
-    session = MeshSession(_declaration(), workdir=tmp_path)
-    with pytest.raises(MeshToolError) as excinfo:
-        session.edit("set_resolution", ParamRef("cell_size_m"))
-    assert excinfo.value.error_code == "MESH_SPEC_UNBOUND"
-    assert session.chain == ()
-
-
-def test_edit_chaining_returns_a_new_frozen_declaration():
-    first = _declaration()
-    second = first.edit("set_resolution", 200.0)
-    third = second.edit("set_extent", extent=_AOI)
-    assert first.edits == ()
-    assert [e.action for e in third.edits] == ["set_resolution", "set_extent"]
+def test_editing_a_recipe_returns_a_new_frozen_one():
+    first = _recipe()
+    second = first.appending(mesh_op("set_bed", source="fetch_topobathy"))
+    third = second.appending(mesh_op("set_boundary_roles", outflow=[[0, 0], [1, 1]]))
+    assert first.ops == ()
+    assert [op.fn for op in third.ops] == ["set_bed", "set_boundary_roles"]
     with pytest.raises(dataclasses.FrozenInstanceError):
-        first.spec = second.spec
+        first.resolution_m = 10.0
 
 
-def test_positional_edit_values_bind_to_the_declared_input():
-    declaration = _declaration().edit("set_resolution", 250.0)
-    assert dict(declaration.edits[0].inputs) == {"resolution_m": 250.0}
+def test_ops_are_altered_and_removed_by_index():
+    recipe = _recipe(ops=[mesh_op("set_bed", source="a"),
+                          mesh_op("set_bed", source="b")])
+    altered = recipe.altering(1, mesh_op("set_bed", source="c"))
+    assert [op.kwargs["source"] for op in altered.ops] == ["a", "c"]
+    assert [op.kwargs["source"] for op in altered.without(0).ops] == ["c"]
+    with pytest.raises(MeshToolError) as excinfo:
+        recipe.without(5)
+    assert excinfo.value.error_code == "MESH_OP_INDEX"
 
 
 # --------------------------------------------------------------------------- #
 # The recipe IS the record.
 # --------------------------------------------------------------------------- #
-def test_recipe_journals_the_spec_then_one_line_per_edit(tmp_path):
-    session = MeshSession(_declaration().edit("set_resolution", 250.0),
-                          workdir=tmp_path)
-    session.edit("set_extent", extent=(-83.50, 35.00, -83.45, 35.05))
+def test_the_journal_records_the_declaration_then_one_line_per_edit(tmp_path):
+    session = MeshSession(_recipe(), workdir=tmp_path)
+    session.set_params(resolution_m=250.0)
+    # A roles op with no roles imposes nothing, so what this pins is the JOURNAL
+    # rather than any mesher's world-reads.
+    session.append_op(mesh_op("set_boundary_roles"))
+    session.remove_op(0)
     lines = [json.loads(ln) for ln in
              session.recipe_path.read_text().splitlines() if ln.strip()]
-    assert lines[0]["spec"]["mesher"] == "reg_grid"
-    assert [ln["edit"] for ln in lines[1:]] == ["set_resolution", "set_extent"]
-    assert lines[1]["resolution_m"] == 250.0
+    assert lines[0]["recipe"]["mesher"] == "reg_grid"
+    assert lines[0]["recipe"]["resolution_m"] == 400.0
+    assert [ln["event"] for ln in lines[1:]] == ["params", "append", "remove"]
+    assert lines[-1]["recipe"]["ops"] == []
+    assert lines[-1]["recipe"]["resolution_m"] == 250.0
 
 
-def test_recipe_replays_to_an_identical_mesh(tmp_path):
-    session = MeshSession(_declaration().edit("set_resolution", 250.0),
-                          workdir=tmp_path)
-    session.edit("set_extent", extent=(-83.50, 35.00, -83.45, 35.05))
+def test_the_journal_replays_to_an_identical_mesh(tmp_path):
+    session = MeshSession(_recipe(), workdir=tmp_path)
+    session.set_params(resolution_m=250.0)
     replayed = replay_recipe(session.recipe_path)
     assert mesh_digest(replayed) == mesh_digest(session.mesh)
 
 
-def test_the_same_spec_builds_the_same_mesh_twice(tmp_path):
-    one = MeshSession(_declaration(), workdir=tmp_path / "one")
-    two = MeshSession(_declaration(), workdir=tmp_path / "two")
+def test_the_same_recipe_builds_the_same_mesh_twice(tmp_path):
+    one = MeshSession(_recipe(), workdir=tmp_path / "one")
+    two = MeshSession(_recipe(), workdir=tmp_path / "two")
     assert mesh_digest(one.mesh) == mesh_digest(two.mesh)
 
 
-def test_restart_truncates_to_the_declared_prefix(tmp_path):
-    session = MeshSession(_declaration().edit("set_resolution", 250.0),
-                          workdir=tmp_path)
-    session.edit("set_extent", extent=(-83.50, 35.00, -83.45, 35.05))
-    narrowed = session.probes()["node_count"]
+def test_reset_puts_the_recipe_back_to_the_declaration(tmp_path):
+    session = MeshSession(_recipe(), workdir=tmp_path)
+    coarse = session.probes()["node_count"]
+    session.set_params(resolution_m=150.0)
+    assert session.probes()["node_count"] != coarse
 
-    probes = session.restart()
-    assert probes["edits_applied"] == ["set_resolution"]
-    assert probes["node_count"] != narrowed
-    lines = [json.loads(ln) for ln in
-             session.recipe_path.read_text().splitlines() if ln.strip()]
-    assert [ln["edit"] for ln in lines[1:]] == ["set_resolution"]
+    probes = session.reset()
+    assert probes["node_count"] == coarse
+    assert session.recipe == session.declared
     assert mesh_digest(replay_recipe(session.recipe_path)) == mesh_digest(session.mesh)
 
 
-def test_a_hand_edit_is_recorded_hashed_and_refuses_to_replay(tmp_path):
+def test_a_hand_edit_is_recorded_flagged_and_refuses_to_replay(tmp_path):
     import numpy as np
 
     from trid3nt_server.workflows.mesh.meshers import Mesh
@@ -465,14 +447,15 @@ def test_a_hand_edit_is_recorded_hashed_and_refuses_to_replay(tmp_path):
         points=np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]),
         cells=np.array([[0, 1, 2], [1, 3, 2]]), crs_authid="EPSG:4326")))
 
-    session = MeshSession(_declaration(), workdir=tmp_path)
-    session.edit("apply_layer_edits", layer=str(edited))
+    session = MeshSession(_recipe(), workdir=tmp_path)
+    session.adopt_layer(str(edited))
     assert session.mesh.element_count == 2
+    assert session.regen_note is not None
 
     line = [json.loads(ln) for ln in
             session.recipe_path.read_text().splitlines() if ln.strip()][-1]
-    assert line["edit"] == "apply_layer_edits"
-    assert line["layer"].startswith("sha256:")
+    assert line["event"] == "adopt"
+    assert line["digest"].startswith("sha256:")
     assert line["source"] == str(edited)
     assert line["replayable"] is False
 
@@ -481,11 +464,32 @@ def test_a_hand_edit_is_recorded_hashed_and_refuses_to_replay(tmp_path):
     assert excinfo.value.error_code == "MESH_RECIPE_NOT_REPLAYABLE"
 
 
+def test_a_recipe_edit_after_a_hand_edit_refuses_rather_than_discarding_it(tmp_path):
+    import numpy as np
+
+    from trid3nt_server.workflows.mesh.meshers import Mesh
+
+    edited = tmp_path / "edited.2dm"
+    edited.write_text(write_2dm(Mesh(
+        points=np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]),
+        cells=np.array([[0, 1, 2], [1, 3, 2]]), crs_authid="EPSG:4326")))
+    session = MeshSession(_recipe(), workdir=tmp_path)
+    session.adopt_layer(str(edited))
+
+    with pytest.raises(MeshToolError) as excinfo:
+        session.set_params(resolution_m=200.0)
+    assert excinfo.value.error_code == "MESH_REGEN_WOULD_DISCARD_HAND_EDIT"
+    # The one structured revert still gets out of it.
+    session.reset()
+    assert session.regen_note is None
+    assert session.mesh.element_count > 2
+
+
 # --------------------------------------------------------------------------- #
-# Accept: the artifact a case discovers, and the recipe beside it.
+# Accept: the artifact a case discovers, and the recipe frozen onto it.
 # --------------------------------------------------------------------------- #
-def test_accept_records_the_artifact_with_its_recipe(tmp_path):
-    session = MeshSession(_declaration(), workdir=tmp_path, case_id="case-accept",
+def test_accept_freezes_the_recipe_as_the_artifacts_provenance(tmp_path):
+    session = MeshSession(_recipe(), workdir=tmp_path, case_id="case-accept",
                           name="Coweeta lattice")
     art = session.accept()
     assert art.node_count == session.mesh.node_count
@@ -495,7 +499,8 @@ def test_accept_records_the_artifact_with_its_recipe(tmp_path):
     assert art.unsolvable_reason() is not None
     assert art.utm_epsg is None
     assert art.recipe_uri == str(session.recipe_path)
-    assert art.provenance["spec"]["mesher"] == "reg_grid"
+    assert art.provenance["recipe"] == session.recipe.to_json()
+    assert art.provenance["recipe"]["kind"] == "structured_grid"
 
     from trid3nt_server.workflows.mesh.artifact import stashed_mesh_artifacts
 
@@ -504,13 +509,13 @@ def test_accept_records_the_artifact_with_its_recipe(tmp_path):
 
 def test_a_geometry_less_mesh_says_why_no_solve_can_be_staged_on_it(tmp_path):
     """The readiness question is the ARTIFACT's, answered off the facts it carries."""
-    art = MeshSession(_declaration(), workdir=tmp_path).accept()
+    art = MeshSession(_recipe(), workdir=tmp_path).accept()
     reason = art.unsolvable_reason()
     assert reason is not None and "SELAFIN" in reason
 
 
 def test_snapshot_is_the_display_face(tmp_path):
-    session = MeshSession(_declaration(), workdir=tmp_path, name="lattice")
+    session = MeshSession(_recipe(), workdir=tmp_path, name="lattice")
     layer = session.snapshot()
     assert layer.layer_type == "mesh"
     assert layer.style_preset == "mesh_wireframe"
@@ -519,20 +524,21 @@ def test_snapshot_is_the_display_face(tmp_path):
     assert (tmp_path / "mesh.2dm").read_text().startswith("MESH2D")
 
 
-def test_probes_measure_the_lattice(tmp_path):
-    probes = MeshSession(_declaration(), workdir=tmp_path).probes()
+def test_probes_measure_the_lattice_and_number_the_recipe(tmp_path):
+    probes = MeshSession(_recipe(), workdir=tmp_path).probes()
     assert probes["nodes_per_cell"] == 4
     assert probes["boundary_loops"] == 1
     assert probes["min_angle_deg"] == pytest.approx(90.0, abs=1e-6)
     assert probes["edge_length_m"]["mean"] == pytest.approx(400.0, rel=0.05)
     assert len(probes["edge_length_m"]["histogram"]["counts"]) == 10
+    assert probes["ops"] == []
 
 
 # --------------------------------------------------------------------------- #
 # The measured edge travels with the artifact, and the timestep reads it.
 # --------------------------------------------------------------------------- #
 def test_the_accepted_artifact_carries_what_was_measured_on_it(tmp_path):
-    session = MeshSession(_declaration(), workdir=tmp_path)
+    session = MeshSession(_recipe(), workdir=tmp_path)
     art = session.accept()
     assert art.probes["node_count"] == art.node_count
     assert art.probes["edge_length_m"]["min"] > 0.0
@@ -541,7 +547,7 @@ def test_the_accepted_artifact_carries_what_was_measured_on_it(tmp_path):
 def test_the_measured_minimum_edge_is_read_off_the_artifact(tmp_path):
     from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
 
-    art = MeshSession(_declaration(), workdir=tmp_path).accept()
+    art = MeshSession(_recipe(), workdir=tmp_path).accept()
     assert measured_min_edge_m(art) == pytest.approx(
         art.probes["edge_length_m"]["min"])
 
@@ -583,225 +589,81 @@ def test_the_timestep_falls_back_to_the_ask_when_no_mesh_exists_yet():
 
 
 # --------------------------------------------------------------------------- #
-# The router refuses what a mesher never declared - including an extent.
+# The router's own door: bbox / location resolve into the ONE extent param.
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_a_mesher_that_takes_no_extent_refuses_one_by_name(monkeypatch):
-    """A mesher that ADOPTS a geometry is reached by no AOI, so it declines one.
-
-    Dropping it silently read as a lever that shaped the mesh - the user names an
-    extent, gets a mesh of whatever file was handed over, and nothing says the
-    two never met. Stood up for the test rather than borrowed from the roster:
-    every mesher the tree carries cuts its domain from an extent, and the refusal
-    is about what a mesher DECLARES, not about which ones are registered.
-    """
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.mesh import meshers as mesher_registry
-    from trid3nt_server.workflows.mesh.meshers import (
-        MeshField,
-        Mesher,
-        MeshToolError,
-    )
-
-    monkeypatch.setitem(
-        mesher_registry._MESHERS, "adopts_a_geometry",
-        Mesher(name="adopts_a_geometry", build=lambda spec: None,
-               fields={"geometry": MeshField(
-                   "geometry", types=(str,), required=True,
-                   doc="the mesh file this mesher adopts")}))
-    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
-    fn = TOOL_REGISTRY["build_mesh"].fn
-    for spatial in ({"bbox": (-75.8, 36.1, -75.7, 36.2)}, {"location": "Norfolk"}):
-        with pytest.raises(MeshToolError) as excinfo:
-            await fn(mesher="adopts_a_geometry", geometry="/tmp/nowhere.slf",
-                     **spatial)
-        assert excinfo.value.error_code == "MESH_SPEC_UNKNOWN_FIELD"
-        assert next(iter(spatial)) in str(excinfo.value)
-
-
-@pytest.mark.asyncio
-async def test_a_mesher_that_declares_an_extent_still_takes_one(monkeypatch):
-    """The refusal is about what THIS mesher declares, not about extents."""
-    from trid3nt_server.tools import TOOL_REGISTRY
+async def test_a_bbox_at_the_door_becomes_the_recipes_extent(monkeypatch):
     from trid3nt_server.workflows.mesh.meshers import MeshToolError
 
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
     seen: dict = {}
 
-    def _accept(self, action, *values, **inputs):  # noqa: ANN001
-        seen.update(self.spec.fields)
+    def _accept(self):
+        seen["recipe"] = self.recipe
         raise MeshToolError("MESH_BUILD_FAILED", "stopped after validation")
 
-    monkeypatch.setattr(MeshSession, "accept",
-                        lambda self: _accept(self, None))
+    monkeypatch.setattr(MeshSession, "accept", _accept)
     with pytest.raises(MeshToolError):
         await TOOL_REGISTRY["build_mesh"].fn(
             mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), resolution_m=200.0)
-    assert seen["extent"] == (-75.8, 36.1, -75.7, 36.2)
+    assert seen["recipe"].extent == (-75.8, 36.1, -75.7, 36.2)
+    assert seen["recipe"].resolution_m == 200.0
 
 
-# --------------------------------------------------------------------------- #
-# A registered action's inputs are its generated tool's parameters.
-# --------------------------------------------------------------------------- #
-def test_an_optional_input_before_a_required_one_refuses_at_registration():
-    """The generated tool is a REAL signature in declaration order, and Python
-    has no required parameter after one that defaults - so the source would not
-    compile, at whatever later moment a gate first opened over this mesher."""
-    from trid3nt_server.workflows.mesh.meshers import (
-        EditAction,
-        MeshField,
-        MeshToolError,
-        register_mesher,
-    )
+@pytest.mark.asyncio
+async def test_wire_ops_become_recipe_entries(monkeypatch):
+    """The ops list off the wire is the same ordered program a template writes."""
+    from trid3nt_server.workflows.mesh.meshers import MeshToolError
 
-    action = EditAction(
-        name="misdeclared", apply=lambda mesh, **_kw: mesh,
-        inputs={"tolerance_m": MeshField("tolerance_m", types=(int, float)),
-                "geometry": MeshField("geometry", types=(str,), required=True)})
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
+    seen: dict = {}
+
+    def _accept(self):
+        seen["recipe"] = self.recipe
+        raise MeshToolError("MESH_BUILD_FAILED", "stopped after validation")
+
+    monkeypatch.setattr(MeshSession, "accept", _accept)
+    with pytest.raises(MeshToolError):
+        await TOOL_REGISTRY["build_mesh"].fn(
+            mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), resolution_m=200.0,
+            ops=[{"fn": "set_bed", "source": "fetch_topobathy",
+                  "interp": "bilinear"}])
+    ops = seen["recipe"].ops
+    assert [op.fn for op in ops] == ["set_bed"]
+    assert dict(ops[0].kwargs) == {"source": "fetch_topobathy",
+                                   "interp": "bilinear"}
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_wire_op_refuses_naming_what_each_mesher_answers_to(
+        monkeypatch):
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
     with pytest.raises(MeshToolError) as excinfo:
-        register_mesher("mesher_with_a_misdeclared_action", lambda spec: None,
-                        actions=(action,))
-    assert excinfo.value.error_code == "MESH_ACTION_INPUT_ORDER"
-    assert "geometry" in str(excinfo.value) and "tolerance_m" in str(excinfo.value)
+        await TOOL_REGISTRY["build_mesh"].fn(
+            mesher="reg_grid", bbox=(-75.8, 36.1, -75.7, 36.2), ops=["set_bed"])
+    assert excinfo.value.error_code == "MESH_OPS_MALFORMED"
+    assert "set_bed" in str(excinfo.value)
 
 
-def test_every_registered_action_compiles_into_a_real_signature():
-    """The guard's own premise, checked against the whole roster."""
-    import inspect
-
-    from trid3nt_server.workflows.mesh.gate import _edit_tool
-    from trid3nt_server.workflows.mesh.meshers import registered_meshers
-
-    for name in registered_meshers():
-        for action in get_mesher(name).actions.values():
-            _metadata, fn = _edit_tool("MESH01", action)
-            assert list(inspect.signature(fn).parameters) == list(action.inputs)
-
-
-# --------------------------------------------------------------------------- #
-# The containment rule: a crop is an edit, a move is a rerun.
-# --------------------------------------------------------------------------- #
-def _coverage(session) -> tuple:
-    from trid3nt_server.workflows.mesh.meshers import staged_coverage
-
-    return staged_coverage(session.mesh)
-
-
-def test_an_extent_inside_the_staged_coverage_crops_as_a_journaled_edit(tmp_path):
-    """Within coverage the box narrows and the recipe carries the crop."""
-    session = MeshSession(_declaration(), workdir=tmp_path)
-    before = session.probes()["node_count"]
-    crop = (-83.48, 35.02, -83.44, 35.06)
-
-    session.edit("set_extent", extent=crop)
-
-    assert session.probes()["node_count"] < before
-    lines = [json.loads(ln) for ln in
-             session.recipe_path.read_text().splitlines() if ln.strip()]
-    assert [ln["edit"] for ln in lines[1:]] == ["set_extent"]
-    assert lines[1]["extent"] == list(crop)
-    assert mesh_digest(replay_recipe(session.recipe_path)) == mesh_digest(session.mesh)
-
-
-def test_the_staged_coverage_is_what_the_mesh_states_it_was_built_over(tmp_path):
-    session = MeshSession(_declaration(), workdir=tmp_path)
-    coverage = _coverage(session)
-    assert coverage[0] <= _AOI[0] and coverage[1] <= _AOI[1]
-    assert coverage[2] >= _AOI[2] and coverage[3] >= _AOI[3]
-
-
-@pytest.mark.parametrize("extent, why", [
-    ((-84.00, 35.00, -83.90, 35.09), "moved clear of the coverage"),
-    ((-83.55, 35.00, -83.40, 35.09), "wider on one side"),
-    ((-83.50, 35.00, -83.40, 35.20), "taller on one side"),
-    ((-83.52, 34.98, -83.38, 35.11), "larger on every side"),
-])
-def test_an_extent_outside_the_staged_coverage_refuses_as_an_edit(tmp_path, extent,
-                                                                  why):
-    """Containment is BINARY: partial coverage would mesh unfetched ground."""
-    session = MeshSession(_declaration(), workdir=tmp_path / why.replace(" ", "_"))
+def test_a_lattice_refuses_a_polygon_domain_and_names_the_mesher_that_takes_one():
+    """A regular grid IS an origin plus counts; masking it to a polygon is not."""
+    recipe = tool.build_mesh(mesher="reg_grid",
+                             extent={"type": "Polygon", "coordinates": []},
+                             resolution_m=400.0)
     with pytest.raises(MeshToolError) as excinfo:
-        session.edit("set_extent", extent=extent)
-    assert excinfo.value.error_code == "MESH_EXTENT_OUTSIDE_COVERAGE"
-    assert session.chain == ()
-
-
-def test_the_refusal_names_the_one_rerun_path_and_the_new_box(tmp_path):
-    """The answer to a moved extent is the rerun primitive, never a second one."""
-    from trid3nt_server.workflows.mesh.meshers import RESTAGE_TOOL
-
-    session = MeshSession(_declaration(), workdir=tmp_path)
-    moved = (-84.00, 35.00, -83.90, 35.09)
-    with pytest.raises(MeshToolError) as excinfo:
-        session.edit("set_extent", extent=moved)
-
-    assert RESTAGE_TOOL == "rerun_workflow"
-    assert TOOL_REGISTRY[RESTAGE_TOOL] is not None
-    message = str(excinfo.value)
-    assert f"{RESTAGE_TOOL}(run_id=" in message
-    assert str(list(moved)) in message
-    assert excinfo.value.escalation == {"tool": RESTAGE_TOOL,
-                                        "overrides": {"bbox": list(moved)}}
-
-
-@pytest.mark.parametrize("extent, code", [
-    ((-83.50, 35.00, -83.40), "MESH_EXTENT_MALFORMED"),
-    ((-83.40, 35.00, -83.50, 35.09), "MESH_EXTENT_MALFORMED"),
-    ((-83.50, 35.09, -83.40, 35.00), "MESH_EXTENT_MALFORMED"),
-])
-def test_an_extent_that_is_not_a_box_refuses_before_containment(tmp_path, extent,
-                                                                code):
-    session = MeshSession(_declaration(), workdir=tmp_path / str(len(extent)))
-    with pytest.raises(MeshToolError) as excinfo:
-        session.edit("set_extent", extent=extent)
-    assert excinfo.value.error_code == code
-
-
-def test_a_crop_keeps_the_coverage_its_inputs_were_staged_over(tmp_path):
-    """A crop stages nothing, so it narrows the mesh and not the coverage.
-
-    Judging the second extent change against the first crop would refuse a box the
-    staged inputs already cover, and would make undoing a crop a restage.
-    """
-    session = MeshSession(_declaration(), workdir=tmp_path)
-    staged = _coverage(session)
-    session.edit("set_extent", extent=(-83.48, 35.02, -83.44, 35.06))
-    assert _coverage(session) == staged
-
-    wider = (-83.49, 35.01, -83.42, 35.07)
-    session.edit("set_extent", extent=wider)
-    assert tuple(round(v, 6) for v in session.mesh.meta["extent"]) == wider
-    assert _coverage(session) == staged
-
-
-def test_a_resolution_change_keeps_the_coverage_too(tmp_path):
-    """Every re-derivation carries it: a finer lattice restages nothing either."""
-    session = MeshSession(_declaration(), workdir=tmp_path)
-    staged = _coverage(session)
-    session.edit("set_extent", extent=(-83.48, 35.02, -83.44, 35.06))
-    session.edit("set_resolution", resolution_m=400.0)
-    assert _coverage(session) == staged
-
-
-def test_a_mesh_that_states_no_coverage_refuses_the_crop_rather_than_guessing():
-    """Containment is judged against staged coverage; no coverage, no judgement."""
-    from trid3nt_server.workflows.mesh.meshers import Mesh, contained_extent
-
-    bare = Mesh(points=None, cells=None, crs_authid="EPSG:4326", bed=None, meta={})
-    with pytest.raises(MeshToolError) as excinfo:
-        contained_extent(bare, (-83.49, 35.01, -83.45, 35.05), edit="set_extent")
-    assert excinfo.value.error_code == "MESH_COVERAGE_UNKNOWN"
+        get_mesher("reg_grid").build(recipe)
+    assert excinfo.value.error_code == "MESH_POLYGON_DOMAIN_UNSUPPORTED"
+    assert excinfo.value.escalation["overrides"]["mesher"] == "om2d"
 
 
 @pytest.mark.asyncio
 async def test_the_escalated_bbox_is_the_box_the_rerun_actually_models(monkeypatch):
-    """The named override reaches the domain verbatim, place name notwithstanding.
+    """A named override reaches the domain verbatim, place name notwithstanding.
 
-    The refusal above sends the caller to ``rerun_workflow`` with the new box under
-    ``bbox``. A rerun seats overrides on the parent's own sheet, so the box arrives
-    at the acquisition step beside the place name the parent ran with - and an
-    escalation that named a value the step then dropped would be a dead end
-    dressed as a corrective.
+    A rerun seats overrides on the parent's own sheet, so the box arrives at the
+    acquisition step beside the place name the parent ran with - and an escalation
+    that named a value the step then dropped would be a dead end dressed as a
+    corrective.
     """
     from trid3nt_server.workflows.shared.aoi import acquire_aoi
 

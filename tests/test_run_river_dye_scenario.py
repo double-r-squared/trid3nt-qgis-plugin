@@ -295,14 +295,14 @@ def test_the_declared_data_is_the_chain_in_class_body_order():
     rows = data_rows(DATA)
     # CLASS-BODY ORDER is the declaration's own, and the chain reads down it.
     assert [d.name for d in rows] == ["rivers", "centerline", "ends", "window",
-                                      "banks", "mapped_banks", "reach_polygon",
-                                      "bed", "rain"]
+                                      "water", "mapped_water", "reach_polygon",
+                                      "dem", "rain"]
     by_name = {d.name: d for d in rows}
     # Row-to-row dataflow written as a plain identifier binds as the same
     # late-bound ref an out-of-body DATA.<row> yields.
     assert by_name["ends"].producer.kwargs["line"] == DataRef("centerline")
     assert by_name["reach_polygon"].producer.kwargs["polygon"] == DataRef(
-        "mapped_banks")
+        "mapped_water")
     assert DATA.rivers == DataRef("rivers")
     # None of these is superseded by a supplied artifact.
     assert all(d.producer.supplied_uri is None for d in rows)
@@ -373,8 +373,8 @@ def _install_step_mocks(captured: dict):
             bbox=(-114.4, 42.5, -114.2, 42.7),
             probes={"bed_fit": {"bed_top_m": 900.0, "bed_drop_m": 3.0}},
             # The polygon the mesh was CUT from, which is what a supplied release
-            # point is tested against - the chain's own sectioned banks.
-            provenance={"spec": {"extent": dict(mesh["fields"]).get("extent")}})
+            # point is tested against - the chain's own sectioned water.
+            provenance={"recipe": {"extent": dict(mesh).get("extent")}})
         return {"artifact": artifact, "mesh_id": "MESH01",
                 "slf_uri": "s3://cache/mesh/MESH01/river.slf",
                 "cli_uri": "s3://cache/mesh/MESH01/river.cli",
@@ -621,8 +621,8 @@ def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
     assert out["error_code"] == "TELEMAC_DYE_RUN_FAILED"
 
 
-# --- the banks WINDOW, and the coverage it is judged by ---------------------- #
-def test_the_banks_are_queried_over_the_centerline_padded_by_a_stated_distance(
+# --- the water WINDOW, and the coverage it is judged by --------------------- #
+def test_the_water_is_queried_over_the_centerline_padded_by_a_stated_distance(
         tmp_path, monkeypatch):
     """The query window has to reach a far channel behind a mid-river island, so
     it is the centerline's extent grown by a DISTANCE - three kilometres, written
@@ -656,7 +656,7 @@ def test_a_reach_no_polygon_maps_refuses_as_unmapped_not_as_an_empty_section(
     out = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
                     banks=BANKS_ELSEWHERE)
     assert out["status"] == "error"
-    assert out["error_code"] == "REACH_BANKS_UNMAPPED"
+    assert out["error_code"] == "REACH_WATER_UNMAPPED"
 
 
 def test_a_partly_mapped_reach_proceeds_and_says_how_much_was_mapped(
@@ -695,10 +695,10 @@ def test_a_reach_whose_far_END_is_unmapped_refuses_at_the_cut(
 def test_an_unmapped_reach_refuses_terminally_naming_the_three_supply_paths():
     """A reach nothing maps has no domain, and no rung to retry with: the refusal
     names the three ways a domain is SUPPLIED and offers no retry args."""
-    from trid3nt_server.workflows.telemac.steps.errors import ReachBanksUnmapped
+    from trid3nt_server.workflows.telemac.steps.errors import ReachWaterUnmapped
 
-    exc = ReachBanksUnmapped()
-    assert exc.error_code == "REACH_BANKS_UNMAPPED"
+    exc = ReachWaterUnmapped()
+    assert exc.error_code == "REACH_WATER_UNMAPPED"
     assert getattr(exc, "retryable", False) is False
     assert not hasattr(exc, "suggestions")
     for path in ("Draw or supply the reach polygon", "name a case layer",

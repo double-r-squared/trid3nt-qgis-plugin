@@ -48,7 +48,7 @@ class _Artifact:
     """The one thing the pre-flight reads off an accepted mesh."""
 
     def __init__(self, extent):
-        self.provenance = {"spec": {"mesher": "om2d", "extent": extent}}
+        self.provenance = {"recipe": {"mesher": "om2d", "extent": extent}}
 
 
 def test_a_point_on_the_flowline_inside_the_domain_is_honored_unmoved():

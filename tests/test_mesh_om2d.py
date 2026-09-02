@@ -1,12 +1,13 @@
 """Offline tests for the library-wrapping mesher ``om2d``.
 
 It builds in a container, so what runs here is everything AROUND that boundary:
-the declaration it exposes, the typed refusals, the config the box is handed,
-the neutral mesh assembled from what it returns, the measured conformal offset,
-and the determinism a recipe records. The container call and the two world-reads
-(the bed fetch, the object store) are the only things stubbed - the composition
-itself is the real code. The POLYGON-domain half of the same mesher is covered
-in ``test_mesh_polygon_domain.py``.
+the three registrations it makes, the typed refusals, the CONFIG the box is
+handed - which is the recipe's ops list travelling as data - the neutral mesh
+assembled from what comes back, the measured conformal offset, and the
+determinism a recipe records. The container call and the two world-reads (the bed
+fetch, the object store) are the only things stubbed; the composition itself is
+the real code. The POLYGON-domain half of the same mesher is covered in
+``test_mesh_polygon_domain.py``.
 """
 
 from __future__ import annotations
@@ -18,14 +19,17 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.mesh.meshers import (
+    POST,
+    PRE,
     Mesh,
     MeshToolError,
-    checked_refine,
     get_mesher,
+    op_names,
     registered_meshers,
+    resolve_op,
 )
 from trid3nt_server.workflows.mesh.meshers import om2d as OM2D
-from trid3nt_server.workflows.mesh.tool import validate_spec
+from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 
 _AOI = (-75.80, 36.10, -75.70, 36.20)
 
@@ -35,75 +39,76 @@ _POINTS = np.array([[-75.78, 36.12], [-75.74, 36.12],
 _CELLS = np.array([[0, 1, 2], [1, 3, 2]], dtype=np.int64)
 
 
+def _recipe(**over):
+    ask = {"mesher": "om2d", "extent": _AOI, "resolution_m": 60.0, "ops": []}
+    ask.update(over)
+    return tool.build_mesh(**ask)
+
+
 # --------------------------------------------------------------------------- #
-# Declarations.
+# What a mesher IS: namespaces, a role adapter, a default recipe.
 # --------------------------------------------------------------------------- #
 def test_the_roster_is_the_two_meshers_and_nothing_else():
     assert registered_meshers() == ("om2d", "reg_grid")
 
 
-def test_the_wrapper_declares_its_spec_signature():
-    assert set(get_mesher("om2d").fields) == {"kind", "extent", "refine", "bed",
-                                              "boundaries"}
+def test_the_wrapper_registers_the_librarys_own_names_tagged_by_phase():
+    """The op vocabulary is VERBATIM and its phase is DERIVED from where it sits."""
+    for sizing in ("feature_sizing_function", "wavelength_sizing_function",
+                   "enforce_mesh_gradation", "distance_sizing_from_line_function"):
+        space, fn = resolve_op(OM2D.OM2D, sizing)
+        assert (space.origin, space.phase) == ("oceanmesh", PRE)
+        assert fn is None, "the library lives in the image, not in this process"
+    for on_a_mesh in ("delete_boundary_faces", "laplacian2", "fix_mesh",
+                      "identify_ocean_boundary_sections"):
+        space, _ = resolve_op(OM2D.OM2D, on_a_mesh)
+        assert (space.origin, space.phase) == ("oceanmesh", POST)
 
 
-def test_the_wrapper_registers_its_edit_vocabulary():
-    assert set(get_mesher("om2d").actions) == {
-        "add_obstacle", "refine_region", "set_boundary", "apply_layer_edits"}
+def test_the_shared_primitives_ride_along_for_this_mesher_too():
+    for primitive in ("set_bed", "set_boundary_roles"):
+        space, fn = resolve_op(OM2D.OM2D, primitive)
+        assert (space.origin, space.phase) == ("primitives", POST)
+        assert callable(fn), "a primitive binds against its REAL signature"
 
 
-def test_om2d_declines_the_edge_band_the_other_meshers_take():
-    """om2d sizes inside its refine block, so the shared band is refused BY NAME
-    rather than accepted and ignored."""
+def test_the_mesher_owns_the_two_domain_primitives_the_library_has_no_word_for():
+    for primitive in ("set_obstacle", "set_region_size"):
+        space, _ = resolve_op(OM2D.OM2D, primitive)
+        assert (space.origin, space.phase) == ("om2d", PRE)
+
+
+def test_an_unknown_op_refuses_with_the_nearest_names():
     with pytest.raises(MeshToolError) as excinfo:
-        validate_spec("om2d", {"extent": _AOI, "min_edge_length_m": 40.0})
-    assert excinfo.value.error_code == "MESH_SPEC_UNKNOWN_FIELD"
-    assert "refine" in str(excinfo.value)
+        _recipe(ops=[mesh_op("feature_sizing_funtcion")])
+    assert excinfo.value.error_code == "MESH_OP_UNKNOWN"
+    assert "feature_sizing_function" in str(excinfo.value)
 
 
-def test_a_refine_knob_no_mesher_declared_is_refused_by_name():
-    with pytest.raises(MeshToolError) as excinfo:
-        checked_refine("mesher 'om2d'", {"gradiation": 0.2},
-                       OM2D._REFINE_KNOBS)
-    assert excinfo.value.error_code == "MESH_SPEC_UNKNOWN_KNOB"
-    assert "gradiation" in str(excinfo.value)
-    assert "gradation" in str(excinfo.value)
+def test_the_default_recipe_is_hard_baked_and_visible():
+    """An undeclared ask gets the library's own clean chain, then the bed."""
+    assert [op.fn for op in get_mesher("om2d").default_ops] == [
+        "delete_boundary_faces", "delete_faces_connected_to_one_face",
+        "laplacian2", "make_mesh_boundaries_traversable", "fix_mesh", "set_bed"]
+    bed = get_mesher("om2d").default_ops[-1]
+    assert bed.kwargs["source"] == "fetch_topobathy"
+    assert bed.kwargs["interp"] == "nearest"
 
 
-def test_a_refine_knob_holding_a_late_bound_read_refuses_at_the_build_seam():
-    """The field check only sees a mapping, so an unbound P.<name> INSIDE it would
-    otherwise reach the mesh library as a placeholder."""
-    from trid3nt_server.workflows.lib.plan import ParamRef
-
-    with pytest.raises(MeshToolError) as excinfo:
-        checked_refine("mesher 'om2d'", {"max_el": ParamRef("edge")},
-                       OM2D._REFINE_KNOBS)
-    assert excinfo.value.error_code == "MESH_SPEC_UNBOUND"
+def test_omitting_ops_takes_the_default_and_declaring_replaces_it_wholesale():
+    assert [op.fn for op in tool.build_mesh(mesher="om2d", extent=_AOI).ops] == \
+        [op.fn for op in get_mesher("om2d").default_ops]
+    assert _recipe(ops=[mesh_op("laplacian2")]).ops[0].fn == "laplacian2"
+    assert len(_recipe(ops=[mesh_op("laplacian2")]).ops) == 1
 
 
-def test_refine_defaults_fill_in_and_coerce():
-    got = checked_refine("mesher 'om2d'", {"max_el": 300},
-                         OM2D._REFINE_KNOBS)
-    assert got == {"max_el": 300.0, "resolution_m": 40.0, "gradation": 0.15}
-
-
-def test_a_refine_knob_that_is_not_a_number_refuses():
-    with pytest.raises(MeshToolError) as excinfo:
-        checked_refine("mesher 'om2d'", {"gradation": "smooth"},
-                       OM2D._REFINE_KNOBS)
-    assert excinfo.value.error_code == "MESH_SPEC_BAD_TYPE"
-
-
-def test_the_boundary_side_vocabulary_carries_seaward_and_the_compass():
-    action = get_mesher("om2d").action("set_boundary")
-    assert set(action.inputs["side"].choices) == {
-        "north", "south", "east", "west", "seaward"}
-    assert set(action.inputs["type"].choices) == {"open", "land"}
-
-
-def test_the_geometry_input_is_hashed_so_the_recipe_records_its_source():
-    for action in ("add_obstacle", "refine_region"):
-        assert get_mesher("om2d").action(action).inputs["geometry"].hashed
+def test_engine_vocabulary_is_not_in_the_op_namespace_either():
+    """``bed`` and ``boundaries`` were our words; the primitives use SET verbs."""
+    names = op_names(get_mesher("om2d"))
+    assert "set_bed" in names and "set_boundary_roles" in names
+    assert "bed" not in names and "boundaries" not in names
+    assert "match_boundary_roles" not in names
+    assert "fit_downstream_bed" not in names
 
 
 # --------------------------------------------------------------------------- #
@@ -121,14 +126,11 @@ def test_the_mesher_registers_the_determinism_it_was_measured_at():
     assert get_mesher(mesher).deterministic is measured, evidence
 
 
-def test_the_recipe_carries_the_determinism_a_replay_should_not_assume(tmp_path):
+def test_the_journal_carries_the_determinism_a_replay_should_not_assume(tmp_path):
     from trid3nt_server.workflows.mesh.session import MeshSession
-    from trid3nt_server.workflows.mesh.tool import tool
 
-    declaration = tool.build_mesh(mesher="om2d", extent=_AOI)
-    session = MeshSession(declaration, workdir=tmp_path)
-    spec_line = session.recipe_lines()[0]
-    assert spec_line["determinism"] is False
+    head = MeshSession(_recipe(), workdir=tmp_path).recipe_lines()[0]
+    assert head["determinism"] is False
 
     lattice = tool.build_mesh(mesher="reg_grid", extent=_AOI, resolution_m=100.0)
     assert "determinism" not in MeshSession(
@@ -136,27 +138,37 @@ def test_the_recipe_carries_the_determinism_a_replay_should_not_assume(tmp_path)
 
 
 # --------------------------------------------------------------------------- #
-# The config the box is handed, and the mesh assembled from what it returns.
+# The config the box is handed IS the recipe's ops, travelling as data.
 # --------------------------------------------------------------------------- #
-def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None):
-    """Answer the container call with a known mesh, and record the config sent."""
-    sent: dict[str, object] = {}
+def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None,
+               points=None, cells=None, results=None):
+    """Answer the container calls with a known mesh, and record what was sent."""
+    sent: dict[str, object] = {"configs": []}
 
-    def fake_bed(bed, aoi, rundir):
-        Path(rundir, "bed.tif").write_bytes(b"tif")
-        return Path(rundir, "bed.tif"), "fetch_topobathy: cudem_nearshore 100%", None
-
-    def fake_run(rundir, shoreline_dir):
-        sent["config"] = json.loads(Path(rundir, "om2d_config.json").read_text())
+    def fake_run_op(rundir, op, config_name, produces, *, shoreline_dir=None):
+        config = json.loads(Path(rundir, config_name).read_text())
+        sent["configs"].append((op, config))
         sent["shoreline_dir"] = str(shoreline_dir)
-        np.savez(Path(rundir, "om2d_mesh.npz"), points=_POINTS, cells=_CELLS,
-                 pfix=(np.empty((0, 2)) if pfix is None else np.asarray(pfix)))
-        Path(rundir, "om2d_stats.json").write_text(json.dumps(
-            stats or {"engine": "oceanmesh(test)",
-                      "sizing_functions": ["feature_sizing(distance_to_shore)"]}))
+        if op == "build":
+            sent["config"] = config
+            np.savez(Path(rundir, "om2d_mesh.npz"),
+                     points=(_POINTS if points is None else points),
+                     cells=(_CELLS if cells is None else cells),
+                     pfix=(np.empty((0, 2)) if pfix is None else np.asarray(pfix)))
+            Path(rundir, "om2d_stats.json").write_text(json.dumps(
+                stats or {"engine": "oceanmesh(test)",
+                          "sizing_functions": ["feature_sizing_function"]}))
+            return
+        npz = np.load(Path(rundir, config["mesh_npz"].replace("/data/", "")
+                           if config["mesh_npz"].startswith("/data/")
+                           else config["mesh_npz"]))
+        np.savez(Path(rundir, config["out_stem"] + ".npz"),
+                 points=npz["points"], cells=npz["cells"])
+        Path(rundir, config["out_stem"] + ".json").write_text(json.dumps(
+            {"ops": [], "results": results or {}, "clean_notes": []}))
 
     def fake_pair(rundir, **kw):
-        sent["pair"] = dict(kw)
+        sent["pair"] = {k: v for k, v in kw.items() if k in ("roles", "title")}
         Path(rundir, "mesh.slf").write_bytes(b"slf")
         Path(rundir, "mesh.cli").write_text("2 2 2\n")
         return {"geo_slf": Path(rundir, "mesh.slf"), "cli": Path(rundir, "mesh.cli"),
@@ -168,95 +180,175 @@ def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None):
     shoreline.write_bytes(b"shp")
     monkeypatch.setenv("TRID3NT_GSHHG_SHP", str(shoreline))
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    monkeypatch.setattr(OM2D, "_bed_raster", fake_bed)
-    monkeypatch.setattr(OM2D, "_run_container", fake_run)
+    monkeypatch.setattr(OM2D, "_run_op", fake_run_op)
     monkeypatch.setattr(
         "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
         fake_pair)
-    monkeypatch.setattr(
-        "trid3nt_server.workflows.mesh.shared.nodes.sample_raster_at_nodes",
-        lambda path, pts: np.full(np.asarray(pts).shape[0], -4.0))
     return sent
 
 
-def test_the_box_is_handed_the_declared_refine_band_and_the_mounted_shoreline(
+def test_the_recipes_ops_reach_the_box_verbatim_in_declared_order(
         monkeypatch, tmp_path):
+    """CODE AS DATA: the names travel as written and the phases split them."""
     sent = _stub_om2d(monkeypatch, tmp_path)
-    mesh = OM2D.build({"extent": _AOI,
-                       "refine": {"resolution_m": 60.0, "max_el": 800.0,
-                                  "gradation": 0.22}})
+    mesh = OM2D.build(_recipe(ops=[
+        mesh_op("feature_sizing_function", r=5),
+        mesh_op("enforce_mesh_gradation", gradation=0.22),
+        mesh_op("delete_boundary_faces"),
+        mesh_op("fix_mesh", delete_unused=True)]))
     config = sent["config"]
-    assert config["min_edge_length_m"] == 60.0
-    assert config["max_edge_length_m"] == 800.0
-    assert config["gradation"] == 0.22
-    assert config["shoreline_shp"] == "/shoreline/GSHHS_i_L1.shp"
-    assert config["dem_path"] == "/data/bed.tif"
-    assert config["obstacles"] == [] and config["refine_regions"] == []
+    assert [entry["fn"] for entry in config["pre_ops"]] == [
+        "feature_sizing_function", "enforce_mesh_gradation"]
+    assert config["pre_ops"][0]["kwargs"] == {"r": 5}
+    assert config["pre_ops"][1]["kwargs"] == {"gradation": 0.22}
+    assert [entry["fn"] for entry in config["post_ops"]] == [
+        "delete_boundary_faces", "fix_mesh"]
+    assert config["post_ops"][1]["kwargs"] == {"delete_unused": True}
     assert mesh.node_count == 4 and mesh.element_count == 2
     assert mesh.crs_authid.startswith("EPSG:326")
-    assert mesh.has_bed
 
 
-def test_a_resolution_coarser_than_the_max_el_refuses(monkeypatch, tmp_path):
-    _stub_om2d(monkeypatch, tmp_path)
-    with pytest.raises(MeshToolError) as excinfo:
-        OM2D.build({"extent": _AOI,
-                    "refine": {"resolution_m": 900.0, "max_el": 100.0}})
-    assert excinfo.value.error_code == "MESH_SPEC_BAD_VALUE"
+def test_the_one_size_word_threads_as_the_librarys_own_edge_defaults(
+        monkeypatch, tmp_path):
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    OM2D.build(_recipe(resolution_m=60.0))
+    assert sent["config"]["min_edge_length_m"] == 60.0
+    assert sent["config"]["max_edge_length_m"] == 600.0
+    assert sent["config"]["seed"] == OM2D._SEED
+
+
+def test_the_mounted_shoreline_is_the_declared_dataset(monkeypatch, tmp_path):
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    OM2D.build(_recipe())
+    assert sent["config"]["shoreline_shp"] == "/shoreline/GSHHS_i_L1.shp"
+    assert sent["config"]["domain_geojson"] is None
+    assert sent["shoreline_dir"].endswith("shoreline")
 
 
 def test_no_shoreline_dataset_refuses_by_naming_the_variable(monkeypatch, tmp_path):
     monkeypatch.setenv("TRID3NT_GSHHG_SHP", str(tmp_path / "missing.shp"))
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     with pytest.raises(MeshToolError) as excinfo:
-        OM2D.build({"extent": _AOI})
+        OM2D.build(_recipe())
     assert excinfo.value.error_code == "MESH_SHORELINE_UNAVAILABLE"
     assert "TRID3NT_GSHHG_SHP" in str(excinfo.value)
 
 
-def test_an_obstacle_edit_rebuilds_with_the_geometry_staged_for_the_box(
+def test_a_recipe_with_no_extent_refuses_before_anything_is_staged():
+    with pytest.raises(MeshToolError) as excinfo:
+        OM2D.build(_recipe(extent=None))
+    assert excinfo.value.error_code == "MESH_EXTENT_MISSING"
+
+
+def test_a_projected_extent_is_named_for_what_it_is(monkeypatch, tmp_path):
+    _stub_om2d(monkeypatch, tmp_path)
+    with pytest.raises(MeshToolError) as excinfo:
+        OM2D.build(_recipe(extent=(430000.0, 3990000.0, 440000.0, 4000000.0)))
+    assert excinfo.value.error_code == "MESH_DOMAIN_NOT_LONLAT"
+    assert "projected" in str(excinfo.value)
+
+
+def test_a_data_valued_op_kwarg_is_staged_into_the_box_as_a_path(
         monkeypatch, tmp_path):
+    """The ONE typed conversion: a layer becomes geometry, written where the box
+    can read it, and the op names the path the CONTAINER sees."""
     sent = _stub_om2d(monkeypatch, tmp_path)
-    mesh = OM2D.build({"extent": _AOI})
-    obstacle = tmp_path / "breakwater.geojson"
-    obstacle.write_text(json.dumps({
-        "type": "Polygon",
-        "coordinates": [[[-75.77, 36.13], [-75.75, 36.13], [-75.75, 36.15],
-                         [-75.77, 36.15], [-75.77, 36.13]]]}))
-
-    edited = get_mesher("om2d").action("add_obstacle").apply(
-        mesh, geometry=str(obstacle))
-    config = sent["config"]
-    assert len(config["obstacles"]) == 1
-    assert config["obstacles"][0]["constrain"] is True
-    assert edited.meta["probes"]["obstacles"] == 1
-    # The rebuild state carries the obstacle so a second edit stacks on it.
-    assert edited.meta["build"]["obstacles"] == [str(obstacle)]
+    lines = tmp_path / "channels.geojson"
+    lines.write_text(json.dumps({"type": "LineString",
+                                 "coordinates": [[-75.78, 36.12], [-75.74, 36.16]]}))
+    OM2D.build(_recipe(ops=[
+        mesh_op("distance_sizing_from_line_function", line_file=str(lines),
+                rate=0.05)]))
+    entry = sent["config"]["pre_ops"][0]
+    assert entry["kwargs"]["line_file"].startswith("/data/op0_line_file")
+    assert entry["kwargs"]["rate"] == 0.05
 
 
-def test_a_region_edit_carries_its_own_target_edge(monkeypatch, tmp_path):
+# --------------------------------------------------------------------------- #
+# The ops after the first primitive run over the mesh the host already holds.
+# --------------------------------------------------------------------------- #
+def _no_fetch_bed(monkeypatch, value=-4.0):
+    """set_bed, with the world-read answered and the node assignment real."""
+    import dataclasses
+
+    def fake_set_bed(mesh, source, interp="nearest", condition=None):
+        return dataclasses.replace(
+            mesh, bed=np.full(mesh.node_count, value),
+            meta={**dict(mesh.meta), "bed_source": f"{source} (stubbed)"})
+
+    monkeypatch.setattr(
+        "trid3nt_server.workflows.mesh.shared.primitives.set_bed", fake_set_bed)
+
+
+def test_a_library_op_after_the_bed_runs_in_its_own_call_over_the_current_mesh(
+        monkeypatch, tmp_path):
+    sections = [{"nodes": [1, 3], "node_count": 2, "mean_bed_m": -30.0,
+                 "min_bed_m": -31.0, "centroid": [-75.74, 36.14]}]
+    sent = _stub_om2d(monkeypatch, tmp_path,
+                      results={"identify_ocean_boundary_sections": sections})
+    _no_fetch_bed(monkeypatch)
+    mesh = OM2D.build(_recipe(ops=[
+        mesh_op("delete_boundary_faces"),
+        mesh_op("set_bed", source="fetch_topobathy"),
+        mesh_op("identify_ocean_boundary_sections", depth_threshold=-10.0)]))
+
+    ops = [op for op, _cfg in sent["configs"]]
+    assert ops == ["build", "post"]
+    build_config = sent["configs"][0][1]
+    tail_config = sent["configs"][1][1]
+    assert [e["fn"] for e in build_config["post_ops"]] == ["delete_boundary_faces"]
+    assert [e["fn"] for e in tail_config["ops"]] == [
+        "identify_ocean_boundary_sections"]
+    assert tail_config["ops"][0]["kwargs"] == {"depth_threshold": -10.0}
+    assert mesh.meta["artifact"]["open_boundary_info"]["open_boundary_sections"] == 1
+    assert sent["pair"]["roles"] == {"open": [1, 3]}
+
+
+def test_a_recipe_that_never_asks_opens_no_boundary(monkeypatch, tmp_path):
+    """An inland domain has no open boundary, which is an answer not an omission."""
     sent = _stub_om2d(monkeypatch, tmp_path)
-    mesh = OM2D.build({"extent": _AOI})
-    region = tmp_path / "harbor.geojson"
-    region.write_text(json.dumps({
-        "type": "Polygon",
-        "coordinates": [[[-75.77, 36.13], [-75.75, 36.13], [-75.75, 36.15],
-                         [-75.77, 36.15], [-75.77, 36.13]]]}))
-
-    edited = get_mesher("om2d").action("refine_region").apply(
-        mesh, geometry=str(region), edge_length=10.0)
-    assert sent["config"]["refine_regions"][0]["edge_length_m"] == 10.0
-    assert edited.meta["probes"]["refine_regions"] == 1
+    _no_fetch_bed(monkeypatch)
+    mesh = OM2D.build(_recipe(ops=[mesh_op("set_bed", source="fetch_topobathy")]))
+    assert "open_boundary_sections" not in \
+        mesh.meta["artifact"]["open_boundary_info"]
+    assert sent["pair"]["roles"] == {}
 
 
+def test_an_op_that_renumbers_after_a_primitive_refuses_by_name(
+        monkeypatch, tmp_path):
+    """A bed painted before a renumbering would belong to nodes that are gone."""
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    _no_fetch_bed(monkeypatch)
+    real = OM2D._run_op
+
+    def shrinking(rundir, op, config_name, produces, *, shoreline_dir=None):
+        real(rundir, op, config_name, produces, shoreline_dir=shoreline_dir)
+        if op != "post":
+            return
+        config = json.loads(Path(rundir, config_name).read_text())
+        np.savez(Path(rundir, config["out_stem"] + ".npz"),
+                 points=_POINTS[:3], cells=np.array([[0, 1, 2]], dtype=np.int64))
+
+    monkeypatch.setattr(OM2D, "_run_op", shrinking)
+    with pytest.raises(MeshToolError) as excinfo:
+        OM2D.build(_recipe(ops=[
+            mesh_op("set_bed", source="fetch_topobathy"),
+            mesh_op("laplacian2")]))
+    assert excinfo.value.error_code == "MESH_OP_RENUMBERED_AFTER_BED"
+    assert "laplacian2" in str(excinfo.value)
+    assert sent["configs"][0][0] == "build"
+
+
+# --------------------------------------------------------------------------- #
+# What the mesher measured about its own build.
+# --------------------------------------------------------------------------- #
 def test_the_conformal_offset_is_measured_from_the_points_the_box_locked(
         monkeypatch, tmp_path):
-    """The claim a constrained breakline makes is a NUMBER, and it is computed from
-    the mesh that came back rather than assumed from the ask."""
-    # One locked vertex sits exactly on a node; one sits a whole cell away.
+    """The claim a constrained outline makes is a NUMBER, computed from the mesh
+    that came back rather than assumed from the ask."""
     _stub_om2d(monkeypatch, tmp_path,
                pfix=np.array([[-75.78, 36.12], [-75.74, 36.16]]))
-    mesh = OM2D.build({"extent": _AOI})
+    mesh = OM2D.build(_recipe())
     offset = mesh.meta["probes"]["breakline_offset_m"]
     assert mesh.meta["probes"]["constrained_points"] == 2
     assert offset["max"] < 1.0
@@ -266,17 +358,17 @@ def test_the_conformal_offset_is_measured_from_the_points_the_box_locked(
 def test_a_build_that_constrains_nothing_claims_no_conformality(
         monkeypatch, tmp_path):
     _stub_om2d(monkeypatch, tmp_path)
-    mesh = OM2D.build({"extent": _AOI})
+    mesh = OM2D.build(_recipe())
     assert "breakline_offset_m" not in mesh.meta["probes"]
 
 
 def test_the_cleanup_note_the_box_reported_reaches_the_probes(
         monkeypatch, tmp_path):
-    note = ("delete_boundary_faces reverted: it moved the constrained cut 396.7 m")
+    note = "delete_boundary_faces reverted: it moved the constrained cut 396.7 m"
     _stub_om2d(monkeypatch, tmp_path, pfix=np.array([[-75.78, 36.12]]),
                stats={"engine": "oceanmesh(test)", "sizing_functions": [],
                       "clean_notes": [note]})
-    mesh = OM2D.build({"extent": _AOI})
+    mesh = OM2D.build(_recipe())
     assert mesh.meta["probes"]["clean_notes"] == [note]
 
 
@@ -284,315 +376,19 @@ def test_the_sizing_claim_is_copied_from_the_box_never_composed_here(
         monkeypatch, tmp_path):
     _stub_om2d(monkeypatch, tmp_path,
                stats={"engine": "oceanmesh(test)", "sizing_functions": []})
-    mesh = OM2D.build({"extent": _AOI})
+    mesh = OM2D.build(_recipe())
     claim = mesh.meta["artifact"]["provenance"]["sizing_source"]
     assert "unreported by the mesher" in claim
     assert "wavelength" not in claim
 
 
-def test_a_bed_naming_neither_a_fetcher_nor_a_raster_refuses(tmp_path):
-    with pytest.raises(MeshToolError) as excinfo:
-        OM2D._bed_raster("fetch_nothing_like_this", _AOI, tmp_path)
-    assert excinfo.value.error_code == "MESH_BED_UNRESOLVED"
-
-
-def test_a_declared_pit_fill_runs_the_delineators_own_chain_and_says_so(
+def test_a_library_op_records_the_note_that_its_kwargs_bound_elsewhere(
         monkeypatch, tmp_path):
-    """An overland run's bed must carry the same sinks its routing does, or the
-    deepest water in the run is a pit the delineation already filled."""
-    raw = tmp_path / "source.tif"
-    raw.write_bytes(b"not-a-real-raster")
-    seen: dict = {}
-
-    def _fake_condition(src, dst):
-        seen["src"] = src
-        Path(dst).write_bytes(b"conditioned")
-        return dst
-
-    monkeypatch.setattr(
-        "trid3nt_server.tools.processing._hydrology_common.write_conditioned_dem",
-        _fake_condition)
-    dst, provenance, _note = OM2D._bed_raster(
-        {"raster": str(raw), "condition": "pit_fill"}, _AOI, tmp_path)
-    assert dst.read_bytes() == b"conditioned"
-    assert Path(seen["src"]).read_bytes() == b"not-a-real-raster"
-    assert "pit-filled" in provenance
-
-
-def test_a_bed_conditioning_this_mesher_does_not_perform_refuses(tmp_path):
-    raw = tmp_path / "source.tif"
-    raw.write_bytes(b"x")
-    with pytest.raises(MeshToolError) as excinfo:
-        OM2D._bed_raster({"raster": str(raw), "condition": "smooth"}, _AOI, tmp_path)
-    assert excinfo.value.error_code == "MESH_SPEC_BAD_VALUE"
-
-
-# --------------------------------------------------------------------------- #
-# The bed's provenance, in whichever shape the fetch answered.
-# --------------------------------------------------------------------------- #
-class _Row:
-    def __init__(self, rung, coverage):
-        self.rung = rung
-        self.coverage = coverage
-
-
-class _Layer:
-    def __init__(self, rows, note=None):
-        self.uri = "s3://bucket/bed.tif"
-        self.fallbacks = rows
-        self.fallback_note = note
-
-
-_ROWS_TYPED = [_Row("cudem_nearshore", 0.89), _Row("etopo_bathy_base", 0.11),
-               _Row("unused_rung", 0.0)]
-_ROWS_DICT = [{"rung": "cudem_nearshore", "coverage": 0.89},
-              {"rung": "etopo_bathy_base", "coverage": 0.11},
-              {"rung": "unused_rung", "coverage": 0.0}]
-
-
-def test_the_activation_rows_read_the_same_from_a_layer_and_from_a_dict():
-    from trid3nt_server.workflows.mesh.meshers import (
-        fetch_activation_rows,
-        fetch_fallback_note,
-    )
-
-    typed = fetch_activation_rows(_Layer(_ROWS_TYPED, "swapped"))
-    mapping = fetch_activation_rows(
-        {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
-         "fallback_note": "swapped"})
-    assert typed == mapping == [("cudem_nearshore", 0.89),
-                                ("etopo_bathy_base", 0.11)]
-    assert fetch_fallback_note({"fallback_note": "swapped"}) == "swapped"
-    assert fetch_fallback_note({"fallback_note": None}) is None
-
-
-def test_a_dict_shaped_fetch_is_not_reported_as_unmeasured():
-    """A fetcher may answer with the layer as a mapping; reading only attributes
-    calls a MEASURED provenance unmeasured."""
-    as_dict = {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
-               "fallback_note": None}
-    assert OM2D._bed_provenance("fetch_topobathy", as_dict) == (
-        "fetch_topobathy: cudem_nearshore 89%, etopo_bathy_base 11%")
-    assert "UNMEASURED" not in OM2D._bed_provenance("fetch_topobathy", as_dict)
-
-
-def test_a_fetch_that_measured_nothing_still_says_so():
-    empty = {"uri": "s3://b/x.tif", "fallbacks": [], "fallback_note": None}
-    assert "UNMEASURED" in OM2D._bed_provenance("fetch_topobathy", empty)
-
-
-# --------------------------------------------------------------------------- #
-# The boundary blocks: one segment per identified section, land in between.
-# --------------------------------------------------------------------------- #
-#: A 3x3 lattice, two triangles per square - one loop of 8 boundary nodes.
-def _square_mesh():
-    xy = np.array([[x, y] for y in (0.0, 1.0, 2.0) for x in (0.0, 1.0, 2.0)])
-    cells = []
-    for row in range(2):
-        for col in range(2):
-            a = row * 3 + col
-            cells += [[a, a + 1, a + 4], [a, a + 4, a + 3]]
-    return xy, np.asarray(cells, dtype=np.int64)
-
-
-def test_contiguous_runs_splits_a_loop_at_the_open_stretches():
-    formats = OM2D._sandbox_formats()
-    runs = formats._contiguous_runs([0, 1, 2, 3, 4, 5], {1, 2})
-    assert runs == [[3, 4, 5, 0]]
-    assert formats._contiguous_runs([0, 1, 2, 3, 4, 5], {1, 4}) == [
-        [2, 3], [5, 0]]
-    assert formats._contiguous_runs([0, 1, 2], set()) == [[0, 1, 2]]
-
-
-def test_fort14_writes_one_open_block_per_section():
-    points, cells = _square_mesh()
-    text = OM2D._sandbox_formats().write_fort14(
-        points, cells, depths=5.0, open_sections=[[0, 1], [7, 8]])
-    assert "2 = Number of open boundaries" in text
-    assert "4 = Total number of open boundary nodes" in text
-    assert "2 = Number of nodes for open boundary 1" in text
-    assert "2 = Number of nodes for open boundary 2" in text
-
-
-# --------------------------------------------------------------------------- #
-# The open boundary: contiguous sections oceanmesh identified, selected here.
-# --------------------------------------------------------------------------- #
-def _section(nodes, mean_bed, centroid):
-    return {"nodes": list(nodes), "node_count": len(nodes),
-            "mean_bed_m": mean_bed, "min_bed_m": mean_bed,
-            "centroid": list(centroid)}
-
-
-def _sections_report(sections):
-    return {"library": "oceanmesh.identify_ocean_boundary_sections v(test)",
-            "depth_threshold_m": -10.0, "min_nodes_threshold": 10,
-            "components": 1, "walk_node_counts": [4],
-            "boundary_bed_min_m": -8.4, "boundary_bed_max_m": 0.3,
-            "sections": sections}
-
-
-def _stub_sections(monkeypatch, sections):
-    report = _sections_report(sections)
-    monkeypatch.setattr(
-        OM2D, "_identify_sections",
-        lambda rundir, lonlat, cells, bed, threshold, min_nodes: report)
-    return report
-
-
-def test_seaward_takes_the_deepest_identified_section(monkeypatch, tmp_path):
-    _stub_sections(monkeypatch, [
-        _section([0, 1], -3.0, (-75.78, 36.12)),
-        _section([2, 3], -30.0, (-75.74, 36.16))])
-    chosen, _ = OM2D._open_sections(
-        tmp_path, _POINTS, _CELLS, np.full(4, -5.0), {"side": "seaward"})
-    assert [s["nodes"] for s in chosen] == [[2, 3]]
-
-
-def test_a_compass_name_takes_the_section_furthest_that_way(monkeypatch, tmp_path):
-    _stub_sections(monkeypatch, [
-        _section([0, 2], -30.0, (-75.79, 36.14)),
-        _section([1, 3], -3.0, (-75.71, 36.14))])
-    chosen, evidence = OM2D._open_sections(
-        tmp_path, _POINTS, _CELLS, np.full(4, -5.0), {"side": "east"})
-    # The east section is the SHALLOWER one, so the compass name overrode the bed.
-    assert [s["nodes"] for s in chosen] == [[1, 3]]
-    assert len(evidence["sections"]) == 2
-
-
-def test_every_offered_section_rides_in_the_evidence(monkeypatch, tmp_path):
-    """A section the choice left out has to be visible, not silently dropped."""
-    _stub_sections(monkeypatch, [
-        _section([0, 2], -30.0, (-75.79, 36.14)),
-        _section([1, 3], -3.0, (-75.71, 36.14))])
-    _, _, probes = _emit_with(monkeypatch, tmp_path, {"side": "east"})
-    assert probes["open_boundary_sections"] == 1
-
-
-def test_no_identified_section_refuses_and_states_the_measured_bed_range(
-        monkeypatch, tmp_path):
-    _stub_sections(monkeypatch, [])
-    with pytest.raises(MeshToolError) as excinfo:
-        OM2D._open_sections(tmp_path, _POINTS, _CELLS, np.full(4, -5.0),
-                            {"side": "east", "depth_threshold": -50.0})
-    assert excinfo.value.error_code == "MESH_OPEN_BOUNDARY_UNIDENTIFIED"
-    assert "-8.4" in str(excinfo.value) and "0.3" in str(excinfo.value)
-
-
-def test_an_open_boundary_without_a_bed_refuses(tmp_path):
-    with pytest.raises(MeshToolError) as excinfo:
-        OM2D._open_sections(tmp_path, _POINTS, _CELLS, None, {"side": "east"})
-    assert excinfo.value.error_code == "MESH_OPEN_BOUNDARY_UNMEASURABLE"
-
-
-def _emit_with(monkeypatch, tmp_path, boundary, boundaries=None,
-               points_m=None):
-    """Run the format fan-out with the container calls answered."""
-    written: dict[str, object] = {}
-
-    def fake_pair(rundir, **kw):
-        written["roles"] = {r: list(n) for r, n in kw["roles"].items()}
-        Path(rundir, "mesh.slf").write_bytes(b"slf")
-        Path(rundir, "mesh.cli").write_text("2 2 2\n")
-        return {"geo_slf": Path(rundir, "mesh.slf"), "cli": Path(rundir, "mesh.cli"),
-                "stats": {"nptfr": 4, "n_liquid_boundaries": 1,
-                          "liquid_boundary_roles": ["open"]}}
-
-    monkeypatch.setattr(
-        "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
-        fake_pair)
-    files, info, probes = OM2D._emit_formats(
-        tmp_path, lonlat=_POINTS, cells=_CELLS,
-        points_m=_POINTS if points_m is None else points_m,
-        bed_up=np.full(4, -5.0), boundary=boundary,
-        boundaries=boundaries or {}, utm_epsg=32618,
-        domain_source="GSHHG land polygons (GSHHS_i_L1.shp)")
-    info["_written_roles"] = written.get("roles")
-    return files, info, probes
-
-
-def _utm_points():
-    from pyproj import Transformer
-
-    tr = Transformer.from_crs(4326, 32618, always_xy=True)
-    x, y = tr.transform(_POINTS[:, 0], _POINTS[:, 1])
-    return np.column_stack([x, y])
-
-
-#: The two end transects a ``section`` cut, as it hands them over: the two ends
-#: of each cut, in lon/lat.
-_WEST_FACE = [[-75.78, 36.12], [-75.78, 36.16]]
-_EAST_FACE = [[-75.74, 36.12], [-75.74, 36.16]]
-
-
-def test_the_declared_roles_reach_the_cli_and_the_topology_bundle(
-        monkeypatch, tmp_path):
-    """Both transect faces land their own role, and the bundle records them
-    beside the order the pair writer MEASURED off the .cli it just wrote."""
-    monkeypatch.setattr(OM2D, "_stats", lambda _rundir: {})
-    _, info, probes = _emit_with(
-        monkeypatch, tmp_path, None,
-        boundaries={"inflow": _WEST_FACE, "outflow": _EAST_FACE},
-        points_m=_utm_points())
-    assert info["_written_roles"] == {"inflow": [0, 2], "outflow": [1, 3]}
-    assert info["roles"] == {"inflow": 2, "outflow": 2}
-    bundle = json.loads((tmp_path / "mesh_topology.json").read_text())
-    assert bundle["roles"] == {"inflow": [0, 2], "outflow": [1, 3]}
-    assert bundle["liquid_boundary_order"] == ["open"]  # what the writer reported
-    assert probes["liquid_boundary_roles"] == ["open"]
-
-
-def test_a_face_the_mesh_never_reaches_refuses_rather_than_going_unprescribed(
-        monkeypatch, tmp_path):
-    far = [[-70.0, 36.12], [-70.0, 36.16]]
-    with pytest.raises(MeshToolError) as excinfo:
-        _emit_with(monkeypatch, tmp_path, None,
-                   boundaries={"inflow": _WEST_FACE, "outflow": far},
-                   points_m=_utm_points())
-    assert excinfo.value.error_code == "MESH_BOUNDARY_ROLE_UNMATCHED"
-
-
-def test_an_undeclared_boundary_authors_no_liquid_boundary_and_no_bundle(
-        monkeypatch, tmp_path):
-    """No declaration and no gate designation is a fully SOLID boundary: nothing
-    is inferred, so a deck against it refuses instead of solving on a guess."""
-    files, info, _ = _emit_with(monkeypatch, tmp_path, None,
-                                points_m=_utm_points())
-    assert info["_written_roles"] == {}
-    assert "roles" not in info
-    assert "topology_uri" not in files
-    assert not (tmp_path / "mesh_topology.json").exists()
-
-
-def test_the_cli_is_handed_exactly_the_section_nodes(monkeypatch, tmp_path):
-    _stub_sections(monkeypatch, [_section([1, 3], -30.0, (-75.74, 36.14))])
-    _, info, _ = _emit_with(monkeypatch, tmp_path, {"side": "east"})
-    assert info["_written_roles"] == {"open": [1, 3]}
-    assert info["open_node_count"] == 2
-    assert info["open_boundary_sections"] == 1
-
-
-def test_no_fort14_is_written_because_no_engine_reads_one(monkeypatch, tmp_path):
-    """SWAN is the only unstructured-mesh consumer this repo could have, and its
-    worker is regular-grid only - so an ADCIRC fort.14 was a file the build wrote
-    and nothing opened. The shared writer stays; the build stops calling it."""
-    _stub_sections(monkeypatch, [_section([1, 3], -30.0, (-75.74, 36.14))])
-    files, _, _ = _emit_with(monkeypatch, tmp_path, {"side": "east"})
-    assert "fort14_uri" not in files
-    assert not (tmp_path / "fort.14").exists()
-    # the writer itself is untouched and still writes what it always did
-    assert callable(OM2D._sandbox_formats().write_fort14)
-
-
-def test_a_land_designation_opens_nothing_and_identifies_nothing(
-        monkeypatch, tmp_path):
-    def refuse(*args, **kwargs):
-        raise AssertionError("a land designation must not identify ocean sections")
-
-    monkeypatch.setattr(OM2D, "_identify_sections", refuse)
-    _, info, _ = _emit_with(monkeypatch, tmp_path,
-                            {"side": "east", "type": "land"})
-    assert info["designation"] == "land"
-    assert info["_written_roles"] == {}
+    """A function this process cannot import has no signature here to bind."""
+    _stub_om2d(monkeypatch, tmp_path)
+    mesh = OM2D.build(_recipe(ops=[mesh_op("laplacian2")]))
+    notes = mesh.meta["artifact"]["provenance"]["op_notes"]
+    assert any("laplacian2" in note and "cannot import" in note for note in notes)
 
 
 # --------------------------------------------------------------------------- #
@@ -630,40 +426,16 @@ def test_the_om2d_box_is_shelled_with_a_named_op(monkeypatch, tmp_path):
         return _Done()
 
     monkeypatch.setattr(OM2D.subprocess, "run", fake_run)
-    OM2D._run_op(tmp_path, "ocean_boundary", "cfg.json", "made.json")
+    OM2D._run_op(tmp_path, "post", "cfg.json", "made.json")
     argv = seen["argv"]
-    assert argv[-4:] == ["/drivers/om2d_driver.py", "ocean_boundary",
+    assert argv[-4:] == ["/drivers/om2d_driver.py", "post",
                          "/data/cfg.json", "/data"]
     assert f"{drivers_dir()}:/drivers:ro" in argv
+    assert "--network" in argv and argv[argv.index("--network") + 1] == "none"
 
 
 # --------------------------------------------------------------------------- #
-# Geometry sources: one reader, three shapes of source.
-# --------------------------------------------------------------------------- #
-def test_a_geojson_file_and_inline_geojson_read_the_same(tmp_path):
-    doc = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
-    path = tmp_path / "g.geojson"
-    path.write_text(json.dumps(doc))
-    assert OM2D.read_geometry(str(path)) == doc
-    assert OM2D.read_geometry(json.dumps(doc)) == doc
-
-
-def test_an_unreadable_geometry_source_refuses(tmp_path):
-    with pytest.raises(MeshToolError) as excinfo:
-        OM2D.read_geometry(str(tmp_path / "nope.geojson"))
-    assert excinfo.value.error_code == "MESH_GEOMETRY_UNREADABLE"
-
-
-
-def test_an_om2d_edit_on_a_mesh_with_no_build_state_refuses():
-    adopted = Mesh(points=_POINTS, cells=_CELLS, crs_authid="EPSG:4326")
-    with pytest.raises(MeshToolError) as excinfo:
-        get_mesher("om2d").action("set_boundary").apply(adopted, side="east")
-    assert excinfo.value.error_code == "MESH_EDIT_UNSUPPORTED"
-
-
-# --------------------------------------------------------------------------- #
-# What a mesh must survive to be SOLVABLE, and what its bed must not read.
+# What a mesh must survive to be SOLVABLE.
 # --------------------------------------------------------------------------- #
 def test_two_nodes_a_fraction_of_a_metre_apart_are_fused_into_one():
     """A pair the geometry file would write as one point IS one point.
@@ -696,26 +468,9 @@ def test_a_mesh_carrying_a_collapsed_element_reports_the_repair(
     pinched = np.array([[-75.78, 36.12], [-75.74, 36.12], [-75.78, 36.16],
                         [-75.780000005, 36.120000005]])
     cells = np.array([[0, 1, 2], [0, 3, 1]], dtype=np.int64)
-    sent = _stub_om2d(monkeypatch, tmp_path)
-    monkeypatch.setattr(OM2D, "_run_container", _npz_writer(pinched, cells, sent))
-    mesh = OM2D.build({"extent": _AOI})
+    _stub_om2d(monkeypatch, tmp_path, points=pinched, cells=cells)
+    mesh = OM2D.build(_recipe())
     assert mesh.meta["probes"]["degenerate_elements_repaired"] >= 1
-
-
-def _npz_writer(points, cells, sent):
-    def fake_run(rundir, shoreline_dir):
-        sent["config"] = json.loads(Path(rundir, "om2d_config.json").read_text())
-        np.savez(Path(rundir, "om2d_mesh.npz"), points=points, cells=cells,
-                 pfix=np.empty((0, 2)))
-        Path(rundir, "om2d_stats.json").write_text(json.dumps(
-            {"engine": "oceanmesh(test)", "sizing_functions": []}))
-    return fake_run
-
-
-def test_the_bed_is_fetched_past_the_aoi_the_mesh_has_nodes_on():
-    grown = OM2D._bed_bbox((-75.80, 36.10, -75.70, 36.20))
-    assert grown[0] < -75.80 and grown[1] < 36.10
-    assert grown[2] > -75.70 and grown[3] > 36.20
 
 
 def test_a_node_on_the_rasters_rim_reads_a_whole_cell_not_its_edge(tmp_path):
@@ -723,9 +478,9 @@ def test_a_node_on_the_rasters_rim_reads_a_whole_cell_not_its_edge(tmp_path):
 
     The corner coordinate indexes one row and one column past the grid fetched for
     that AOI, and a sample past the grid comes back as the untagged zero: an
-    18 m deep boundary reading as sea level, which every consumer - the
-    ocean-boundary identification most of all - takes at face value. A rim deeper
-    than the one partial cell is the bed FETCH's margin to cover, not this clamp's.
+    18 m deep boundary reading as sea level, which every consumer takes at face
+    value. A rim deeper than the one partial cell is the bed FETCH's margin to
+    cover, not this clamp's.
     """
     import rasterio
     from rasterio.transform import from_origin
@@ -744,16 +499,65 @@ def test_a_node_on_the_rasters_rim_reads_a_whole_cell_not_its_edge(tmp_path):
     corners = np.array([[-75.80, 36.10], [-75.70, 36.10],
                         [-75.70, 36.20], [-75.80, 36.20]])
     assert sample_raster_at_nodes(str(path), corners).tolist() == [-18.0] * 4
+    # The labelled default is nearest; bilinear reads BETWEEN cell centres, so it
+    # lands on the same whole cell to float precision rather than exactly.
+    assert sample_raster_at_nodes(
+        str(path), corners, interp="bilinear") == pytest.approx([-18.0] * 4)
 
 
 # --------------------------------------------------------------------------- #
-# Inside the driver: the clean chain, exercised with oceanmesh stubbed out.
+# The boundary blocks the shared TIN writer builds from the runs it is handed.
+# --------------------------------------------------------------------------- #
+def _square_mesh():
+    """A 3x3 lattice, two triangles per square - one loop of 8 boundary nodes."""
+    xy = np.array([[x, y] for y in (0.0, 1.0, 2.0) for x in (0.0, 1.0, 2.0)])
+    cells = []
+    for row in range(2):
+        for col in range(2):
+            a = row * 3 + col
+            cells += [[a, a + 1, a + 4], [a, a + 4, a + 3]]
+    return xy, np.asarray(cells, dtype=np.int64)
+
+
+def test_contiguous_runs_splits_a_loop_at_the_open_stretches():
+    from trid3nt_server.workflows.mesh.shared.nodes import tin_formats
+
+    formats = tin_formats()
+    assert formats._contiguous_runs([0, 1, 2, 3, 4, 5], {1, 2}) == [[3, 4, 5, 0]]
+    assert formats._contiguous_runs([0, 1, 2, 3, 4, 5], {1, 4}) == [[2, 3], [5, 0]]
+    assert formats._contiguous_runs([0, 1, 2], set()) == [[0, 1, 2]]
+
+
+def test_fort14_writes_one_open_block_per_section():
+    from trid3nt_server.workflows.mesh.shared.nodes import tin_formats
+
+    points, cells = _square_mesh()
+    text = tin_formats().write_fort14(
+        points, cells, depths=5.0, open_sections=[[0, 1], [7, 8]])
+    assert "2 = Number of open boundaries" in text
+    assert "4 = Total number of open boundary nodes" in text
+
+
+def test_no_fort14_is_written_because_no_engine_reads_one(monkeypatch, tmp_path):
+    """SWAN is the only unstructured-mesh consumer this repo could have, and its
+    worker is regular-grid only - so an ADCIRC fort.14 was a file the build wrote
+    and nothing opened. The shared writer stays; the build stops calling it."""
+    from trid3nt_server.workflows.mesh.shared.nodes import tin_formats
+
+    _stub_om2d(monkeypatch, tmp_path)
+    mesh = OM2D.build(_recipe())
+    assert "fort14_uri" not in mesh.meta["files"]
+    assert callable(tin_formats().write_fort14)
+
+
+# --------------------------------------------------------------------------- #
+# Inside the driver: the verbatim call, exercised with oceanmesh stubbed out.
 # --------------------------------------------------------------------------- #
 def _driver():
     """The in-container driver, imported here with its library stubbed.
 
-    ``oceanmesh`` lives only in the mesh image; everything the clean chain does
-    with what the library hands back is ours and belongs under the offline suite.
+    ``oceanmesh`` lives only in the mesh image; the binding, the unit conversion
+    and the result adoption are ours and belong under the offline suite.
     """
     import importlib.util
     import sys
@@ -778,24 +582,103 @@ def _driver():
     return module
 
 
-def test_a_clean_pass_handing_back_float_connectivity_is_retyped():
-    """The library returns float faces and the next pass indexes with them."""
+def test_the_environment_fills_what_the_recipe_left_unstated():
     driver = _driver()
 
-    def floaty(points, cells):
-        return np.asarray(points, dtype=float), np.asarray(cells, dtype=float)
+    def sized(shoreline, signed_distance_function, r=3, min_edge_length=None):
+        return (shoreline, signed_distance_function, r, min_edge_length)
 
-    _, cells = driver._pass(floaty, _POINTS, _CELLS)
-    assert cells.dtype == np.int64
-    assert cells.tolist() == _CELLS.tolist()
+    env = {"shoreline": "SHORE", "signed_distance_function": "SDF",
+           "min_edge_length": 0.001}
+    bound = driver._bind(sized, {"r": 5}, env, 111_320.0, {})
+    assert bound == {"shoreline": "SHORE", "signed_distance_function": "SDF",
+                     "r": 5, "min_edge_length": 0.001}
 
 
-def test_a_pass_that_removes_the_last_element_stops_the_chain_by_name():
+def test_a_required_parameter_the_domain_cannot_supply_refuses_by_name():
     driver = _driver()
 
-    def empties(points, cells):
-        return points[:0], cells[:0]
+    def sized(shoreline, r=3):
+        return shoreline
 
-    with pytest.raises(driver._EmptyAfterClean) as excinfo:
-        driver._pass(empties, _POINTS, _CELLS)
-    assert "empties" in str(excinfo.value)
+    with pytest.raises(ValueError) as excinfo:
+        driver._bind(sized, {}, {"bbox": (0, 1, 0, 1)}, 111_320.0, {})
+    assert "'shoreline'" in str(excinfo.value)
+    assert "bbox" in str(excinfo.value)
+
+
+def test_an_edge_length_a_recipe_states_in_metres_reaches_the_library_in_degrees():
+    driver = _driver()
+
+    def sized(min_edge_length, max_edge_length=None):
+        return None
+
+    report: dict = {}
+    bound = driver._bind(sized, {"min_edge_length": 111.32}, {}, 111_320.0, report)
+    assert bound["min_edge_length"] == pytest.approx(0.001)
+    # A default threaded rather than written is SAID OUT LOUD, in metres.
+    assert "threaded_m" not in report
+    threaded = driver._bind(sized, {}, {"min_edge_length": 0.002,
+                                        "max_edge_length": 0.02}, 111_320.0, report)
+    assert threaded["min_edge_length"] == 0.002
+    assert report["threaded_m"]["min_edge_length"] == pytest.approx(222.64)
+
+
+def test_a_triangulation_replaces_the_mesh_and_a_measurement_is_recorded():
+    driver = _driver()
+
+    assert driver._is_mesh((_POINTS, _CELLS))
+    assert not driver._is_mesh([(0, 3), (5, 9)])
+    assert not driver._is_mesh(None)
+
+
+def test_an_op_that_removes_the_last_element_stops_the_chain_by_name():
+    driver = _driver()
+
+    def empties(vertices, entities):
+        return vertices[:0], entities[:0]
+
+    driver._PRIMITIVES["empties"] = empties
+    try:
+        with pytest.raises(driver._EmptyAfterOp) as excinfo:
+            driver._run_mesh_ops([{"fn": "empties", "kwargs": {}}],
+                                 _POINTS, _CELLS, None, 111_320.0, [], {},
+                                 notes=[])
+        assert "empties" in str(excinfo.value)
+    finally:
+        driver._PRIMITIVES.pop("empties")
+
+
+def test_an_op_that_stops_inside_the_library_is_refused_not_half_applied():
+    driver = _driver()
+
+    def explodes(vertices, entities):
+        raise RuntimeError("GEOS side-location conflict")
+
+    driver._PRIMITIVES["explodes"] = explodes
+    try:
+        with pytest.raises(ValueError) as excinfo:
+            driver._run_mesh_ops([{"fn": "explodes", "kwargs": {}}],
+                                 _POINTS, _CELLS, None, 111_320.0, [], {},
+                                 notes=[])
+        assert "partially processed" in str(excinfo.value)
+        assert "GEOS side-location conflict" in str(excinfo.value)
+    finally:
+        driver._PRIMITIVES.pop("explodes")
+
+
+def test_a_name_the_library_does_not_have_refuses_in_the_box_too():
+    driver = _driver()
+
+    with pytest.raises(ValueError) as excinfo:
+        driver._resolve("no_such_oceanmesh_function")
+    assert "no_such_oceanmesh_function" in str(excinfo.value)
+
+
+def test_a_mesh_that_carries_no_build_state_still_takes_a_primitive():
+    """An adopted topology has no om2d build behind it, and a primitive is written
+    against the MESH rather than against a rebuild state, so it still applies."""
+    from trid3nt_server.workflows.mesh.shared.primitives import set_boundary_roles
+
+    adopted = Mesh(points=_POINTS, cells=_CELLS, crs_authid="EPSG:4326")
+    assert set_boundary_roles(adopted) is adopted

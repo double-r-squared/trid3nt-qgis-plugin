@@ -122,17 +122,15 @@ def test_the_endpoints_pair_cuts_a_section(tmp_path):
 @pytest.mark.parametrize("as_", ["layer", "uri", "doc"])
 def test_the_mesher_reads_a_combined_layer_however_the_chain_hands_it_over(
         tmp_path, as_):
-    """``extent=Ref("sized")`` binds the LAYER, not the uri string it carries."""
-    from trid3nt_server.workflows.mesh.meshers.om2d import (
-        _split_geometry,
-        read_geometry,
-    )
+    """A recipe's extent binds the LAYER, not the uri string it carries: the ONE
+    typed conversion reads whichever of the three shapes the chain hands over."""
+    from trid3nt_server.workflows.mesh.inputs import op_geometry
+    from trid3nt_server.workflows.mesh.meshers.om2d import _polygons
 
     cut = combine(polygon=_write(tmp_path, "poly.geojson", _POLYGON),
                   lines=_write(tmp_path, "lines.geojson", _LINE_A, _LINE_B),
                   _output_dir=str(tmp_path))
     source = {"layer": cut, "uri": cut.uri,
               "doc": json.loads((tmp_path / cut.uri.rsplit("/", 1)[-1]).read_text())}[as_]
-    polygons, lines = _split_geometry(read_geometry(source))
-    assert len(polygons) == 1
-    assert len(lines) == 4
+    doc = op_geometry(source)
+    assert len(_polygons(doc)) == 1

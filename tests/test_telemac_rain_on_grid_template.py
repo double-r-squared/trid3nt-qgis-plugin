@@ -42,13 +42,16 @@ def test_registered_on_the_model_surface():
     assert "mesh_min_edge_m" in specs
 
 
-def test_the_outlet_boundary_is_declared_on_the_mesh_ask():
+def test_the_outlet_boundary_is_declared_as_an_op_on_the_mesh_recipe():
     """The one liquid boundary a catchment has is DECLARED where every other
-    boundary role is - on the mesh ask, at the delineation's snapped outlet -
-    rather than resolved by a server step between the mesh and the deck."""
+    boundary role is - as a ``set_boundary_roles`` op on the recipe, at the
+    delineation's snapped outlet - rather than resolved by a server step between
+    the mesh and the deck."""
     from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import MESH
 
-    roles = MESH.spec.fields["boundaries"]
+    op = [o for o in MESH.ops if o.fn == "set_boundary_roles"]
+    assert len(op) == 1
+    roles = dict(op[0].kwargs)
     assert set(roles) == {"outflow"}
     assert roles["outflow"]["type"] == "Point"
     assert roles["outflow"]["coordinates"].path == "basin.snapped_pour_point"

@@ -232,12 +232,12 @@ def _telemac():
                            plan=lambda o: ())
 
 
-def _reach_mesh(**fields):
-    """The MESH declaration a reach template writes, with test values for its ask."""
+def _reach_mesh(**params):
+    """The MESH recipe a reach template writes, with test values for its ask."""
     from trid3nt_server.workflows.mesh.tool import tool
 
-    fields.setdefault("extent", Ref("reach_polygon"))
-    return tool.build_mesh(mesher="om2d", kind="unstructured_tri", **fields)
+    params.setdefault("extent", Ref("reach_polygon"))
+    return tool.build_mesh(mesher="om2d", kind="unstructured_tri", **params)
 
 
 def test_an_unknown_physics_member_is_refused_while_the_plan_is_built():
@@ -258,10 +258,11 @@ def test_an_unknown_physics_PROCESS_is_refused_rather_than_authored():
     assert "magnetohydrodynamics" in str(ei.value)
 
 
-def test_the_mesh_declaration_reaches_the_deck_under_the_engine_s_own_names():
-    """The mesher's vocabulary is its library's; the deck's is TELEMAC's."""
+def test_the_mesh_recipe_reaches_the_deck_under_the_engine_s_own_names():
+    """The mesher's vocabulary is its library's; the deck's is TELEMAC's, and the
+    ONE agnostic size word is the only thing that crosses between them."""
     ops = _telemac()
-    mesh = _reach_mesh(refine={"resolution_m": 100.0})
+    mesh = _reach_mesh(resolution_m=100.0)
     deck = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
                       forcing=Forcing(carrier=Ref("carrier_discharge"), rain=None))
     assert deck.name == "deck" and deck.stage == "author"
@@ -484,21 +485,24 @@ def test_a_slot_that_declares_no_shape_still_reaches_the_wire_as_a_string():
 
 
 # --- a mesh declaration is a binding block, so it is frozen DEEP ------------- #
-def test_a_mesh_declaration_is_frozen_all_the_way_down():
+def test_a_mesh_recipe_is_frozen_all_the_way_down():
     """A template writes MESH at module level and every run reads that same object,
     so a mutable container inside one is a channel from one run to the next: a step
-    that edits the declared mapping changes what the NEXT run declares."""
-    refine = {"edge_length": 100.0}
-    mesh = _reach_mesh(refine=refine)
+    that edits a declared op's kwargs changes what the NEXT run declares."""
+    import dataclasses
 
-    assert isinstance(mesh.spec.fields, MappingProxyType)
-    assert isinstance(mesh.spec.fields["refine"], MappingProxyType)
+    from trid3nt_server.workflows.mesh.tool import mesh_op
+
+    kwargs = {"gradation": 0.15}
+    mesh = _reach_mesh(ops=[mesh_op("enforce_mesh_gradation", **kwargs)])
+
+    assert isinstance(mesh.ops[0].kwargs, MappingProxyType)
     with pytest.raises(TypeError):
-        mesh.spec.fields["refine"]["edge_length"] = 99.0
-    with pytest.raises(TypeError):
-        mesh.spec.fields["kind"] = "structured_grid"
-    refine["edge_length"] = 99.0                 # the caller's dict is not the ask's
-    assert mesh.spec.fields["refine"]["edge_length"] == 100.0
+        mesh.ops[0].kwargs["gradation"] = 0.99
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        mesh.kind = "structured_grid"
+    kwargs["gradation"] = 0.99                   # the caller's dict is not the ask's
+    assert mesh.ops[0].kwargs["gradation"] == 0.15
 
 
 # --- every TELEMAC template declares its mesh through the one tool ----------- #
@@ -523,14 +527,13 @@ def _template(module_path: str):
 
 
 @pytest.mark.parametrize("name,module_path,mesher", _TEMPLATES)
-def test_a_template_declares_its_mesh_as_a_frozen_tool_ask(name, module_path, mesher):
+def test_a_template_declares_its_mesh_as_a_frozen_recipe(name, module_path, mesher):
     """The ask is a value, not a build: importing a template meshes nothing."""
-    from trid3nt_server.workflows.mesh.tool import MeshDeclaration
+    from trid3nt_server.workflows.mesh.tool import MeshRecipe
 
     mesh = _template(module_path).MESH
-    assert isinstance(mesh, MeshDeclaration)
-    assert mesh.spec.mesher == mesher
-    assert mesh.edits == ()
+    assert isinstance(mesh, MeshRecipe)
+    assert mesh.mesher == mesher
 
 
 @pytest.mark.parametrize("name,module_path,mesher", _TEMPLATES)
@@ -562,17 +565,15 @@ def test_the_reach_templates_carry_the_reach_shape_into_the_deck():
     assert deck.kwargs["reach"] == Ref("reach")
 
 
-def test_the_catchment_mesh_step_reads_the_declared_band():
-    """Every knob the mesher declares reaches the step that builds one.
+def test_the_catchment_mesh_step_carries_the_whole_recipe():
+    """Every op the template declared reaches the step that builds the mesh.
 
-    The band and the gradation shape the catchment; a knob the declaration carries
-    and the step drops would read as a lever that did nothing. The declaration
-    travels WHOLE, so the step carries the mesher, the fields the router checked
-    and the declared edit chain rather than a restated subset - and the ONE mesh
-    step carries nothing else, because everything else about the build is in the
-    declaration. The extent is the CHAIN's product - the delineated basin carrying
-    its channel network - so the mesher triangulates a domain another tool
-    measured."""
+    The RECIPE travels WHOLE, so the step carries the mesher, the three agnostic
+    params and every op in declared order rather than a restated subset - and the
+    ONE mesh step carries nothing else, because everything else about the build
+    is in the recipe. The extent is the CHAIN's product - the delineated basin -
+    so the mesher triangulates a domain another tool measured, and the channel
+    network it is refined TOWARD is named by a sizing op."""
     module = _template("trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid")
     workflow = module.telemac_rain_on_grid.workflow
     mesh_step = [n for n in workflow.plan_decl(workflow)
@@ -580,11 +581,12 @@ def test_the_catchment_mesh_step_reads_the_declared_band():
     assert set(mesh_step.kwargs) == {"mesh", "name"}
     ask = mesh_step.kwargs["mesh"]
     assert ask["mesher"] == "om2d"
-    assert set(ask) == {"mesher", "fields", "edits"}
-    assert set(ask["fields"]) == {"kind", "extent", "refine", "bed", "boundaries"}
-    assert ask["fields"]["extent"] == Ref("sized")
-    assert set(ask["fields"]["refine"]) == {"max_el", "resolution_m",
-                                            "gradation"}
-    # The catchment's one liquid boundary is DECLARED on the ask, at the
+    assert set(ask) == {"mesher", "kind", "extent", "resolution_m", "ops"}
+    assert ask["extent"] == Ref("basin")
+    names = [entry["op"] for entry in ask["ops"]]
+    assert names[0] == "distance_sizing_from_line_function"
+    assert "enforce_mesh_gradation" in names
+    # The catchment's one liquid boundary is DECLARED as an op, at the
     # delineation's snapped outlet, exactly as the reach family declares its two.
-    assert set(ask["fields"]["boundaries"]) == {"outflow"}
+    roles = [entry for entry in ask["ops"] if entry["op"] == "set_boundary_roles"]
+    assert len(roles) == 1 and set(roles[0]["kwargs"]) == {"outflow"}
