@@ -353,10 +353,10 @@ def section(
     area". The polygon it returns is a DOMAIN: hand it to
     ``build_mesh(mesher='om2d', extent=<this uri>)`` to triangulate its interior,
     or to ``clip_raster_to_polygon``. The classic chain for a river reach is
-    ``fetch_nhd_area_water`` (the mapped banks) -> ``section(..., between=[
+    ``fetch_nhd_area_water`` (the mapped water) -> ``section(..., between=[
     upstream, downstream])``. Do NOT use for: a drainage basin
     (``delineate_watershed``); widening a line into a polygon - a line has no
-    banks, so a reach whose banks nothing maps has no domain here.
+    banks, so a reach nothing maps water for has no domain here.
 
     A ``between`` cut is square to the line joining the two points, so the two
     end faces are the transects an inflow and an outflow are prescribed on.

@@ -136,11 +136,12 @@ def combine(
 
     Use this when: a domain is a polygon PLUS the channel network the mesh should
     refine toward, or a polygon plus the points a tool has to read alongside it.
-    The classic chain is ``delineate_watershed`` (the basin) -> ``combine(polygon=
-    <basin>, lines=<river network>)`` -> ``build_mesh(mesher='om2d', extent=<this
-    uri>)``, which triangulates the basin interior and sizes it toward the
-    channels. Do NOT use for: merging two polygons into their union (nothing is
-    dissolved here), or clipping one layer by another (``section``).
+    A mesh sizes itself toward a channel network by NAMING it in its recipe
+    (``mesh_op('distance_sizing_from_line_function', line_file=<the lines>)``),
+    so use this for the readers that want the two in ONE document rather than to
+    hand a mesher a domain and its sizing source folded together. Do NOT use
+    for: merging two polygons into their union (nothing is dissolved here), or
+    clipping one layer by another (``section``).
 
     Nothing is inferred: the document holds exactly the geometries the sources
     held, in EPSG:4326, and a source that maps nothing is refused by name rather
