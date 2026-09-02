@@ -636,7 +636,6 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
                 "open_boundary_info": info}
     return dataclasses.replace(mesh, meta={
         **dict(mesh.meta), "files": files, "artifact": artifact,
-        "fallback_note": mesh.meta.get("fallback_note"),
         "probes": {**dict(mesh.meta.get("probes") or {}), **probes}})
 
 

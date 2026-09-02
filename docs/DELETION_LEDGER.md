@@ -2936,3 +2936,49 @@ both are dead-by-dead-name rather than dead-string, both carry a live test
 surface, and keying a template into the reuse guard is a correctness decision
 (a false short-circuit hands the user a stale answer). They go as their own cull
 with NATE's read, not inside a description sweep.
+
+
+## The bed's implicit ladder rung, and the ETOPO base laid under the primary (rung-3 pre-step)
+
+DELETED from `workflows/mesh/shared/primitives.py`: the `_BED_FALLBACK =
+("etopo_bathy_base",)` tuple and the `fallback=` kwarg `set_bed` passed with it.
+DELETED from `fetchers/_router/hooks/topobathy.py::_select_and_merge`: the
+`or not cudem_vsicurl` half of the ETOPO-base condition, and the zero-CUDEM
+exemption in `_assert_nearshore_coverage`.
+
+**Why they died.** Together they made a cross-dataset substitution that nobody
+declared and no gate saw. `set_bed` permitted the ETOPO rung on the author's
+behalf, so a recipe reading `set_bed(source=DATA.topobathy)` could come back
+painted from a 450 m EGM2008/MSL global relief with nothing in the recipe saying
+so; and the fetch never even needed the permission, because a zero-CUDEM AOI was
+exempted from the coverage gap and `_select_and_merge` laid the ETOPO column
+down ITSELF. The evidence is the fetch's own note, measured over the Marquette
+AOI before the change:
+
+    Fallback ladder (fetch_topobathy): etopo_bathy_base [cross_dataset].
+    GATE-UNSEEN: etopo_bathy_base was laid under this result by fetch_topobathy
+    itself rather than by descending the ladder, so the fallback loudness gate
+    never saw it -- the substitution is reported here, not approved.
+
+**What replaces them.** Nothing. A coast the nearshore composite does not reach
+is a 0% coverage gap like any other: the primary refuses, and the coarser bed
+is laid only when the caller permitted the declared `etopo_bathy_base` rung
+(or set `force_bathy_base`), which is what puts it in front of the loudness gate.
+Whether ETOPO belongs in that ladder at all is the bathymetry charter's question.
+
+**Residue, stated.** With the ETOPO base off the primary, a refusal that reaches
+the caller after a PERMITTED rung also gapped surfaces the primary's message,
+which still advises permitting the rung. The activation rows carry the rung's own
+short paint, so the record is complete; the sentence is over-helpful. CONDITION
+to close: a walker pass that lets a terminal refusal name the alternatives that
+were tried and gapped.
+
+## `mesh.meta["fallback_note"]` - RENAMED to `bed_fallback_note`
+
+`set_bed` is the only thing that writes it and the bed is the only thing it
+describes, but it travelled under a generic name and stopped at the mesh layer,
+so `steps/rain_on_grid.py:480` read `provenance["bed_fallback_note"]` - a key
+nothing wrote - and every rain-on-grid deck reported the default bed note
+whatever the fetch had narrated. The datum now carries one name from the op
+through `accept()`'s provenance to that reader. `om2d._emitted`'s re-carry of the
+same key onto meta it was already in went with it.

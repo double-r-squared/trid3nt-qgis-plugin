@@ -335,6 +335,34 @@ def test_a_source_naming_nothing_refuses_rather_than_leaving_a_bedless_mesh():
     assert excinfo.value.error_code == "MESH_BED_UNRESOLVED"
 
 
+def test_the_bed_op_permits_no_ladder_rung_on_the_authors_behalf(tmp_path):
+    """Which substitutions a bed tolerates is the DATA row's declaration.
+
+    A rung this op permitted would be a cross-dataset bed nobody wrote down, and
+    the fetch would descend to it without the recipe ever saying so.
+    """
+    import inspect
+
+    source = inspect.getsource(P._bed_raster)
+    assert "fallback=" not in source
+    assert 'TOOL_REGISTRY[name].fn(bbox=bbox, target_crs="EPSG:4326")' in source
+
+
+def test_the_substitution_the_fetch_narrated_rides_under_one_name(tmp_path):
+    """One datum, one name: the note the bed's fetch attached is what the deck
+    reads as ``bed_fallback_note``, all the way from the op to the provenance."""
+    raster = _bed_raster(tmp_path)
+    bedded = P.set_bed(_lonlat_mesh(), source=str(raster))
+    assert "bed_fallback_note" not in bedded.meta  # a direct raster substitutes nothing
+
+    import inspect
+
+    from trid3nt_server.workflows.mesh import session as S
+
+    assert "bed_fallback_note" in inspect.getsource(S.MeshSession.accept)
+    assert 'mesh.meta.get("bed_fallback_note")' in inspect.getsource(S.MeshSession)
+
+
 def test_the_bed_is_fetched_past_the_extent_the_mesh_has_nodes_on():
     grown = P._grown((-75.80, 36.10, -75.70, 36.20))
     assert grown[0] < -75.80 and grown[1] < 36.10

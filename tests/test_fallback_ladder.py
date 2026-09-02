@@ -644,9 +644,18 @@ def test_skip_land_gap_does_not_cite_the_land_fill_the_caller_disabled(
     assert "skip_land" in text and "NODATA" in text
 
 
-def test_zero_cudem_tiles_is_not_a_coverage_gap(monkeypatch) -> None:
+def test_zero_cudem_tiles_is_the_same_gap_at_zero_percent(monkeypatch) -> None:
+    """A coast the nearshore composite does not reach is a 0% gap, not a pass.
+
+    The coarser global bed that could stand in is a cross-dataset substitution, so
+    it descends the ladder past the loudness gate rather than being laid under the
+    primary where nothing would see it.
+    """
     monkeypatch.setattr(tb, "_select_cudem_tiles", lambda *_a, **_k: [])
-    tb.validate_topobathy(None, {"bbox": list(_EXHIBIT_BBOX)})
+    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
+        tb.validate_topobathy(None, {"bbox": list(_EXHIBIT_BBOX)})
+    assert ei.value.covered_fraction == 0.0
+    assert "NO NOAA NCEI CUDEM" in str(ei.value)
 
 
 def test_unreachable_tile_index_never_claims_a_gap(monkeypatch) -> None:
@@ -1010,17 +1019,20 @@ def test_a_half_reaching_etopo_base_refuses_rather_than_claiming_a_bed_everywher
 ) -> None:
     """The ETOPO leg painted ~48% of the AOI. Stamping etopo/1.0 and a 'REAL
     below-waterline bed everywhere' warning over a half-NaN raster is the exact
-    lie the coverage gate exists to prevent."""
+    lie the coverage gate exists to prevent.
+
+    The primary refuses on its own 0% paint and the PERMITTED rung is then tried
+    and gaps in turn, so the record carries the short paint the rung measured
+    rather than a bed everywhere."""
     _patch_total_cudem_loss_with_half_an_etopo(monkeypatch, tmp_path)
     with pytest.raises(tb.TopobathyCoverageGapError) as ei:
         TOOL_REGISTRY["fetch_topobathy"].fn(
             bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
         )
     exc = ei.value
-    assert "painted by nothing" in str(exc)
-    # ... and it does not advertise a remedy that was already tried and failed.
-    assert "force_bathy_base=true" not in str(exc)
-    assert "no param that makes this request honest" in str(exc)
+    assert "0 of the 4" in str(exc)
+    rows = {r.rung: r for r in exc.fallback_activation.records}
+    assert "leaving 50% painted by nothing" in (rows["etopo_bathy_base"].note or "")
 
 
 def test_a_half_reaching_etopo_base_refuses_under_force_bathy_base_too(
@@ -1037,9 +1049,9 @@ def test_a_half_reaching_etopo_base_refuses_under_force_bathy_base_too(
 def test_a_partial_bed_with_no_cudem_gap_is_still_a_gap(
     monkeypatch, tmp_path, fake_s3
 ) -> None:
-    """CUDEM never intersected this AOI (no CUDEM gap to have), and the ETOPO base
-    that auto-engaged reaches half of it. The old code returned SUCCESS with
-    bathymetry_present=True over a 50%-NaN raster."""
+    """CUDEM never intersected this AOI, and the PERMITTED ETOPO rung reaches half
+    of it. The old code returned SUCCESS with bathymetry_present=True over a
+    50%-NaN raster."""
     etopo = str(tmp_path / "etopo-half.tif")
     land = str(tmp_path / "land.tif")
     _synth_raster(etopo, (-85.55, 29.70, -85.475, 29.85), -30.0)
@@ -1056,9 +1068,13 @@ def test_a_partial_bed_with_no_cudem_gap_is_still_a_gap(
         ),
     )
     with pytest.raises(tb.TopobathyCoverageGapError) as ei:
-        TOOL_REGISTRY["fetch_topobathy"].fn(bbox=list(_EXHIBIT_BBOX))
-    assert "PAINTS a real below-waterline bed over only" in str(ei.value)
-    assert ei.value.covered_fraction < 0.6
+        TOOL_REGISTRY["fetch_topobathy"].fn(
+            bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",)
+        )
+    rows = {r.rung: r for r in ei.value.fallback_activation.records}
+    assert "PAINTS a real below-waterline bed over only" in (
+        rows["etopo_bathy_base"].note or "")
+    assert rows["etopo_bathy_base"].coverage < 0.6
 
 
 # --------------------------------------------------------------------------- #
@@ -1268,12 +1284,8 @@ def test_an_exempted_envelope_carries_no_numeric_shares(
     assert res.rung_coverage is None
 
 
-def test_a_rung_the_gate_never_saw_says_so_on_the_row(
-    monkeypatch, tmp_path, fake_s3
-) -> None:
-    """The capability auto-engages its ETOPO base when CUDEM does not intersect at
-    all -- no gap, no walk, no gate. The row is stamped because the data served,
-    and it says the gate never saw it rather than implying approval."""
+def _patch_zero_cudem_with_a_whole_etopo(monkeypatch, tmp_path) -> None:
+    """No CUDEM tile intersects; the ETOPO base covers the whole AOI."""
     etopo = str(tmp_path / "etopo.tif")
     land = str(tmp_path / "land.tif")
     _synth_raster(etopo, _EXHIBIT_BBOX, -30.0)
@@ -1289,12 +1301,51 @@ def test_a_rung_the_gate_never_saw_says_so_on_the_row(
             c, b, **kw,
         ),
     )
-    # NO fallback= is declared: the caller permitted nothing.
-    res = TOOL_REGISTRY["fetch_topobathy"].fn(bbox=list(_EXHIBIT_BBOX))
+
+
+def test_a_coast_cudem_omits_refuses_when_the_caller_permitted_nothing(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """The coarser global bed is never laid under the primary where the gate
+    cannot see it: an undeclared call gets the refusal and the remedy."""
+    _patch_zero_cudem_with_a_whole_etopo(monkeypatch, tmp_path)
+    with pytest.raises(tb.TopobathyCoverageGapError) as ei:
+        TOOL_REGISTRY["fetch_topobathy"].fn(bbox=list(_EXHIBIT_BBOX))
+    assert "0% of the AOI has a nearshore bathymetry source" in str(ei.value)
+    assert "etopo_bathy_base" in str(ei.value)
+
+
+def test_the_same_coast_serves_the_rung_the_gate_was_asked_about(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    """Permitted, the substitution walks the ladder: the gate is asked, the row
+    is a walked one, and nothing on the envelope says GATE-UNSEEN."""
+    _patch_zero_cudem_with_a_whole_etopo(monkeypatch, tmp_path)
+    asked: list[str] = []
+    res = TOOL_REGISTRY["fetch_topobathy"].fn(
+        bbox=list(_EXHIBIT_BBOX), fallback=("etopo_bathy_base",),
+        fallback_gate="auto",
+    )
     rows = {r.rung: r for r in (res.fallbacks or [])}
     assert rows["etopo_bathy_base"].coverage == pytest.approx(1.0)
-    assert "the fallback gate never saw this rung" in (rows["etopo_bathy_base"].note or "")
-    assert "GATE-UNSEEN" in (res.fallback_note or "")
+    assert "never saw this rung" not in (rows["etopo_bathy_base"].note or "")
+    assert "GATE-UNSEEN" not in (res.fallback_note or "")
+    assert asked == []  # auto applies the labeled default without a card
+
+
+def test_the_walker_still_stamps_a_rung_a_capability_lays_down_itself() -> None:
+    """The detector stays: a capability that paints a degradation rung the walk
+    never descended to has that row appended and marked, because the loudness gate
+    never had the chance to ask about it."""
+    from trid3nt_server.fallbacks.walker import Activation, RungRecord, _reconcile_to_paint
+
+    ladder = _ladder(_rung("coarse", "cross_dataset"))
+    activation = Activation(capability=ladder.capability)
+    activation.records = [RungRecord("primary", "primary", 0.4, "the primary")]
+    _reconcile_to_paint(ladder, activation, {"primary": 0.4, "coarse": 0.6})
+    rows = {r.rung: r for r in activation.records}
+    assert activation.ungated == ["coarse"]
+    assert "the fallback gate never saw this rung" in (rows["coarse"].note or "")
 
 
 def test_emit_seam_carries_activation_rows_onto_a_reemitted_layer() -> None:

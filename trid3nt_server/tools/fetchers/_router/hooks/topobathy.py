@@ -1330,9 +1330,13 @@ def _select_and_merge(
         datum_offsets.append(offset)
     cudem_vsicurl = gated_paths
 
-    # 2b) GLOBAL ETOPO 2022 base / fallback.
+    # 2b) GLOBAL ETOPO 2022 base -- laid ONLY when the request permitted it. It is
+    # a cross-dataset substitution (another model, another datum, ~450 m), so it
+    # runs when the declared ladder rung that supplies force_bathy_base has been
+    # through the loudness gate, never because this leg found nothing else: a
+    # source this function lays down itself reaches the caller GATE-UNSEEN.
     etopo_vsicurl: list[str] = []
-    if force_bathy_base or not cudem_vsicurl:
+    if force_bathy_base:
         try:
             etopo_urls = _select_etopo_tiles(bbox)
             etopo_vsicurl = [f"/vsicurl/{u}" for u in etopo_urls]
@@ -1646,10 +1650,12 @@ def _assert_nearshore_coverage(
 
     The uncovered water would otherwise be painted by the 3DEP land leg's flat
     ~0 m ocean fill -- a rectangle of fake land a wave or surge solver excludes
-    from its computational grid. Exempt: a request that already lays the global
-    ETOPO column down (its bathy base spans the AOI), a request pulling the NCEI
-    regional fine legs (whose footprints this check does not model), and the
-    zero-CUDEM AOI (no nearshore composite exists to have a gap in). An exemption
+    from its computational grid. A ZERO-CUDEM AOI is the same gap at 0%: the
+    nearshore composite this tool is FOR does not reach it at all, and the coarser
+    global bed that could stand in is a cross-dataset substitution the fallback
+    gate has to see. Exempt: a request that already lays the global ETOPO column
+    down (its bathy base spans the AOI), and a request pulling the NCEI regional
+    fine legs (whose footprints this check does not model). An exemption
     only DEFERS the question: ``_select_and_merge`` measures what every leg
     actually painted and refuses there when the exempted source did not reach the
     hole, so the two gates permit exactly the same requests.
@@ -1674,7 +1680,16 @@ def _assert_nearshore_coverage(
         )
         return
     if not tiles:
-        return
+        note = (
+            f"NO NOAA NCEI CUDEM 1/9\" nearshore tile intersects AOI {bbox}: the "
+            "hosted collection does not reach this coast, so 0% of the AOI has a "
+            "nearshore bathymetry source"
+        )
+        raise TopobathyCoverageGapError(
+            _coverage_gap_message(note, skip_land=bool(params.get("skip_land"))),
+            covered_fraction=0.0,
+            gap_note=note,
+        )
     fraction = cudem_coverage_fraction(bbox, tiles)
     if fraction is None or fraction >= _COVERAGE_COMPLETE:
         return

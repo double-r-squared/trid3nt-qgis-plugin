@@ -196,7 +196,7 @@ class MeshSession:
             style_preset="mesh_wireframe", role="primary",
             bbox=_lonlat_bbox(mesh), crs_authid=mesh.crs_authid,
             synthetic_inputs=_synthetic_inputs(mesh),
-            fallback_note=mesh.meta.get("fallback_note"))
+            fallback_note=mesh.meta.get("bed_fallback_note"))
 
     def accept(self) -> MeshArtifact:
         """Freeze the current mesh as a case artifact -> the :class:`MeshArtifact`.
@@ -226,6 +226,11 @@ class MeshSession:
                       # only thing that knows.
                       **({"bed_source": str(mesh.meta["bed_source"])}
                          if mesh.meta.get("bed_source") else {}),
+                      # The substitution the bed's own fetch narrated, under the
+                      # name every consumer of this provenance reads it by.
+                      **({"bed_fallback_note":
+                          str(mesh.meta["bed_fallback_note"])}
+                         if mesh.meta.get("bed_fallback_note") else {}),
                       **({"regen_note": self.regen_note}
                          if self.regen_note else {}),
                       **dict(declared.pop("provenance", None) or {})}

@@ -95,12 +95,13 @@ resolution_declarations:
 caveats:
 - Coastal merged topo-bathymetry (NOAA NCEI CUDEM 1/9" + USGS 3DEP land via the sibling fetch_dem, NAVD88 m, positive-up)
   built as one EPSG:32616 UTM composite -- CUDEM wins the nearshore, 3DEP fills the land.
-- 'CUDEM''s hosted 1/9" collection omits parts of the US coast (e.g. the Pacific). NO CUDEM tile over the AOI: the
-  tool lays the GLOBAL ETOPO 2022 15" bed down (real nearshore bed, ~450 m, EGM2008/MSL not NAVD88) with an honest
-  fallback_warning. PARTIAL CUDEM cover: the tool REFUSES with TOPOBATHY_COVERAGE_GAP instead of letting the 3DEP
-  land leg paint flat 0 m ocean over the uncovered water; force_bathy_base=true (or a composer permitting the etopo_bathy_base
-  ladder rung) proceeds on the coarser ETOPO bed, labeled. Only if bathy AND land are both unavailable does it raise.
-  A LABELED land_absent degrade names a failed 3DEP land leg rather than silently dropping it.'
+- 'CUDEM''s hosted 1/9" collection omits parts of the US coast (e.g. the Pacific) and the Great Lakes entirely.
+  NO CUDEM tile over the AOI, or only PARTIAL cover: the tool REFUSES with TOPOBATHY_COVERAGE_GAP rather than let
+  the 3DEP land leg paint flat 0 m ocean over the uncovered water. The GLOBAL ETOPO 2022 15" bed (a real nearshore
+  bed, ~450 m, EGM2008/MSL not NAVD88) is a CROSS-DATASET substitution: it is laid only when the caller permitted
+  the etopo_bathy_base ladder rung (fallback=("etopo_bathy_base",)) or set force_bathy_base=true, never under the
+  primary where the fallback loudness gate would not see it. Only if bathy AND land are both unavailable does it
+  raise. A LABELED land_absent degrade names a failed 3DEP land leg rather than silently dropping it.'
 - A CUDEM tile whose vertical datum is not NAVD88 (and no documented navd88_offset_m) raises TOPOBATHY_DATUM_MISMATCH
   -- never a silent cross-datum merge (Invariant 7).
 docstring: |-
@@ -186,12 +187,15 @@ docstring: |-
   **Fallback (declared ladder -- CUDEM -> ETOPO-global, then REFUSE):**
       CUDEM's hosted 1/9" collection only covers part of the US coast (it
       omits, e.g., the entire US Pacific / West coast).
-      - NO CUDEM tile intersects the AOI: the tool lays the GLOBAL NOAA ETOPO
-        2022 15 arc-second topo-bathy down so the AOI still gets a REAL
-        nearshore bed. Coarser (~450 m) and EGM2008/MSL-referenced (not
-        NAVD88): ``bathymetry_present`` stays True and the result carries a
-        ``GLOBAL-FALLBACK BATHYMETRY`` ``fallback_warning`` naming the source
-        + datum -- never a silent relabel.
+      - NO CUDEM tile intersects the AOI: the tool REFUSES with
+        ``TOPOBATHY_COVERAGE_GAP`` at 0% coverage. The coarser global bed is a
+        CROSS-DATASET substitution, so it is never laid under the primary where
+        the fallback loudness gate cannot see it. Permit the
+        ``etopo_bathy_base`` rung and the GLOBAL NOAA ETOPO 2022 15 arc-second
+        topo-bathy is laid over the whole AOI instead: coarser (~450 m) and
+        EGM2008/MSL-referenced (not NAVD88), ``bathymetry_present`` True, and
+        the result carries a ``GLOBAL-FALLBACK BATHYMETRY``
+        ``fallback_warning`` naming the source + datum.
       - CUDEM covers only PART of the AOI: the tool REFUSES with
         ``TOPOBATHY_COVERAGE_GAP`` rather than let the 3DEP land leg paint
         flat 0 m ocean over the uncovered water (a fake landmass a wave /

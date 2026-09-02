@@ -43,10 +43,6 @@ _INTERPOLATIONS = ("nearest", "bilinear")
 #: the run is then a terrain artifact.
 _PIT_FILL = "pit_fill"
 
-#: The bathymetry rungs a fetched bed tolerates: where CUDEM stops mid-AOI the
-#: global ETOPO relief is a REAL bed - coarse, on another vertical datum, labeled.
-_BED_FALLBACK = ("etopo_bathy_base",)
-
 #: How far past the mesh's own extent the bed is fetched, as a fraction of each
 #: span. The mesh has nodes ON the extent's corners and a raster's rim rows carry
 #: the warp's fill, so the grid has to reach past where the domain ends.
@@ -58,11 +54,12 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
     """Paint every node's elevation from a TOPOBATHY source -> the mesh, bedded.
 
     ``source`` is the data the bed IS: a registered raster fetcher's name (asked
-    for over this mesh's own extent, with the coarse global relief as its
-    labeled fallback), an object-store uri, or the layer a chained row produced.
-    A domain the topobathy ladder does not cover REFUSES there, in the fetcher's
-    own words - a DEM is not quietly put in its place, because a DEM measures the
-    water surface and a solve on one runs over the top of the channel.
+    for over this mesh's own extent, on its PRIMARY source and nothing else), an
+    object-store uri, or the layer a chained row produced. A domain the primary
+    does not cover REFUSES there, in the fetcher's own words - neither a DEM nor a
+    coarser global relief is quietly put in its place. A substitution is a DATA
+    row's declaration: fetch the bed yourself with the rung permitted and hand
+    THAT layer over, and the fallback gate sees the ask it is there to see.
 
     ``interp`` says how the surface is read between cell centres and is a visible
     default (``nearest``). ``condition`` names the one conditioning a source is
@@ -88,7 +85,7 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
     return _with_meta(
         dataclasses.replace(mesh, bed=bed),
         bed_source=provenance,
-        fallback_note=note,
+        bed_fallback_note=note,
         synthetic_inputs=[
             *(mesh.meta.get("synthetic_inputs") or []),
             {"param": "mesh_bed", "value": provenance, "basis": "fetched",
@@ -175,8 +172,10 @@ def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
             "MESH_BED_UNRESOLVED",
             "set_bed was given no source, so the mesh has no elevation to carry.")
     if name in TOOL_REGISTRY:
-        layer = TOOL_REGISTRY[name].fn(
-            bbox=bbox, target_crs="EPSG:4326", fallback=_BED_FALLBACK)
+        # No ladder rung is permitted from here. Which substitutions a bed
+        # tolerates is the DATA row's declaration, and a rung this op permitted on
+        # the author's behalf would be a cross-dataset bed nobody wrote down.
+        layer = TOOL_REGISTRY[name].fn(bbox=bbox, target_crs="EPSG:4326")
         return (op_raster(layer), _provenance(name, layer),
                 fetch_fallback_note(layer))
     return op_raster(source), f"bed raster supplied directly: {name}", None
