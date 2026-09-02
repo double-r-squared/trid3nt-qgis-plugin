@@ -242,12 +242,29 @@ def test_end_to_end_with_bathy(monkeypatch, tmp_path, fake_s3) -> None:
     assert res.cudem_tile_count == 1
 
 
-def test_end_to_end_fallback_to_land_only(monkeypatch, tmp_path, fake_s3) -> None:
+def test_a_zero_cudem_aoi_refuses_before_it_degrades(monkeypatch, tmp_path,
+                                                     fake_s3) -> None:
+    """A coast the nearshore composite does not reach is a 0% coverage gap.
+
+    The coarser global bed that could stand in is a cross-dataset substitution,
+    so the ladder - not this leg - is where it is permitted."""
     land_path = str(tmp_path / "land.tif")
     _write_synth_raster(land_path, bbox=_SMOKE_BBOX, nx=30, ny=30, fill=15.0, nodata=-9999.0)
     _patch_delegate_sources(monkeypatch, cudem_tiles=[], land_path=land_path)
 
-    res = _fetch_topobathy(bbox=_SMOKE_BBOX)
+    with pytest.raises(tb.TopobathyCoverageGapError) as excinfo:
+        _fetch_topobathy(bbox=_SMOKE_BBOX)
+    assert excinfo.value.covered_fraction == 0.0
+
+
+def test_the_permitted_rung_with_no_global_bed_degrades_to_land_only(
+    monkeypatch, tmp_path, fake_s3
+) -> None:
+    land_path = str(tmp_path / "land.tif")
+    _write_synth_raster(land_path, bbox=_SMOKE_BBOX, nx=30, ny=30, fill=15.0, nodata=-9999.0)
+    _patch_delegate_sources(monkeypatch, cudem_tiles=[], land_path=land_path)
+
+    res = _fetch_topobathy(bbox=_SMOKE_BBOX, fallback=("etopo_bathy_base",))
     assert res.bathymetry_present is False
     assert res.cudem_tile_count == 0
     assert res.fallback_warning is not None and "BATHYMETRY ABSENT" in res.fallback_warning
@@ -269,7 +286,7 @@ def test_end_to_end_etopo_global_fallback(monkeypatch, tmp_path, fake_s3) -> Non
     _write_synth_raster(land_path, bbox=_SMOKE_BBOX, nx=30, ny=30, fill=20.0, nodata=-9999.0)
     _patch_delegate_sources(monkeypatch, cudem_tiles=[], land_path=land_path, etopo_tiles=[etopo_path])
 
-    res = _fetch_topobathy(bbox=_SMOKE_BBOX)
+    res = _fetch_topobathy(bbox=_SMOKE_BBOX, fallback=("etopo_bathy_base",))
     assert res.bathymetry_present is True
     assert res.cudem_tile_count == 0
     assert "GLOBAL-FALLBACK BATHYMETRY" in res.fallback_warning
@@ -320,12 +337,12 @@ def test_cache_hit_replays_provenance_identically(monkeypatch, tmp_path, fake_s3
 
     monkeypatch.setattr(tb, "_composite_sources_to_array", _count)
 
-    r1 = _fetch_topobathy(bbox=_SMOKE_BBOX)
+    r1 = _fetch_topobathy(bbox=_SMOKE_BBOX, fallback=("etopo_bathy_base",))
     assert merges["n"] == 1  # fresh fetch ran the merge once
     fields = (r1.bathymetry_present, r1.fallback_warning, r1.cudem_tile_count, r1.regional_tile_count)
     assert fields[0] is False and "BATHYMETRY ABSENT" in fields[1]
 
-    r2 = _fetch_topobathy(bbox=_SMOKE_BBOX)
+    r2 = _fetch_topobathy(bbox=_SMOKE_BBOX, fallback=("etopo_bathy_base",))
     assert merges["n"] == 1, "cache hit must NOT re-run the merge"
     assert (r2.bathymetry_present, r2.fallback_warning, r2.cudem_tile_count, r2.regional_tile_count) == fields
 
@@ -417,19 +434,19 @@ def test_deep_rung_restores_deep_column_under_land_fill(monkeypatch, tmp_path: A
     assert prov["bathymetry_present"] is True
 
 
-def test_auto_etopo_base_is_masked_from_the_land_fill_too(
+def test_the_permitted_etopo_base_is_masked_from_the_land_fill_over_no_cudem(
     monkeypatch, tmp_path: Any
 ) -> None:
-    """An ETOPO base that AUTO-engaged (no CUDEM for this AOI) gets the same land-leg
-    mask as a forced one. Without it the 3DEP 0 m ocean fill -- higher precedence --
-    clobbers the ETOPO column back to land-only while the result still claims a
-    below-waterline bed."""
+    """The rung's ETOPO base gets the land-leg mask over a zero-CUDEM AOI too.
+    Without it the 3DEP 0 m ocean fill -- higher precedence -- clobbers the ETOPO
+    column back to land-only while the result still claims a below-waterline
+    bed."""
     etopo_path, land_path = _deep_rung_rasters(tmp_path)
     _patch_delegate_sources(monkeypatch, cudem_tiles=[], land_path=land_path,
                             etopo_tiles=[etopo_path])
     arr, _tf, _crs, prov = tb._select_and_merge(
         _SMOKE_BBOX, 10, TARGET_CRS, None, 30.0,
-        force_bathy_base=False, include_regional_fine=False, min_pixel_m=None,
+        force_bathy_base=True, include_regional_fine=False, min_pixel_m=None,
         skip_cudem=False, skip_land=False,
     )
     a = arr[np.isfinite(arr)]
