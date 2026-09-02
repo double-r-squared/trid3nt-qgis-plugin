@@ -91,6 +91,15 @@ package MeshSeam {
         */
     }
 
+    part def ShippedDriver {
+        doc /*
+        A script this server ships INTO an image and executes there. It carries
+        the library's own call and nothing of ours, and the purity law is written
+        over the DIRECTORY they share - so every driver binds a block here or the
+        law is unenforced for the ones that do not.
+        */
+    }
+
     part def SharedPrimitives {
         doc /*
         What we impose on a mesh that no library does: the bed, and which
@@ -462,6 +471,33 @@ package MeshSeam {
         port refusalOut : RefusalOut;
     }
 
+    part selafinCliDriver : ShippedDriver {
+        doc /*
+        The TELEMAC geometry pair, written by telapy's own Hermes and Conlim
+        inside the engine image.
+
+        code: trid3nt_server/workflows/mesh/meshers/drivers/selafin_cli_driver.py
+        */
+    }
+
+    part telemacCasDriver : ShippedDriver {
+        doc /*
+        The steering file read and written by the library's own TelemacCas
+        against the module dictionary, inside the engine image.
+
+        code: trid3nt_server/workflows/mesh/meshers/drivers/telemac_cas_driver.py
+        */
+    }
+
+    part telemacResultDriver : ShippedDriver {
+        doc /*
+        The solved result read through the engine's own TelemacFile, inside the
+        engine image, over a result directory mounted read-only.
+
+        code: trid3nt_server/workflows/mesh/meshers/drivers/telemac_result_driver.py
+        */
+    }
+
     part sharedPrimitives : SharedPrimitives {
         doc /*
         code: trid3nt_server/workflows/mesh/shared/primitives.py
@@ -639,6 +675,11 @@ package MeshSeam {
         be running our defaults, our fetches and our opinions inside a box whose
         whole point is that it holds only the library.
 
+        The rule is written over the DIRECTORY every shipped driver lives in, so
+        it holds for the engine drivers beside the mesh box for the same reason:
+        each one is executed inside an image where nothing of this server exists
+        to import.
+
         forbid: trid3nt_server.workflows.mesh.meshers.drivers -> trid3nt_server
         forbid: trid3nt_server.workflows.mesh.meshers.drivers -> trid3nt_contracts
         */
@@ -736,6 +777,9 @@ package MeshSeam {
         "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement TheBoxNeverImportsTheServer by om2dBox;
+    satisfy requirement TheBoxNeverImportsTheServer by selafinCliDriver;
+    satisfy requirement TheBoxNeverImportsTheServer by telemacCasDriver;
+    satisfy requirement TheBoxNeverImportsTheServer by telemacResultDriver;
     verify requirement TheBoxNeverImportsTheServer by
         "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
     verify requirement TheBoxNeverImportsTheServer by

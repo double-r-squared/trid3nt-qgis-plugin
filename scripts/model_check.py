@@ -608,16 +608,28 @@ def scoped_import_edges(model: Model, root: Path) -> list[tuple[str, str]]:
             if isinstance(node, ast.Import):
                 edges.update((importer, alias.name) for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
-                edges.add((importer, _imported_module(importer, node)))
+                edges.update(_imported_modules(importer, node))
     return sorted(edges)
 
 
-def _imported_module(importer: str, node: ast.ImportFrom) -> str:
-    """The dotted module an ``from ... import`` names, relative form resolved."""
-    if not node.level:
-        return node.module or ""
-    base = importer.split(".")[:-node.level]
-    return ".".join(base + ([node.module] if node.module else []))
+def _imported_modules(importer: str,
+                      node: ast.ImportFrom) -> set[tuple[str, str]]:
+    """Every module a ``from ... import`` names - the package AND each name.
+
+    ``from pkg import submodule`` is an import OF the submodule. Recording only
+    ``pkg`` leaves a dependency rule evadable by spelling: the same edge the
+    rule forbids passes it under the parent's name. The imported names are
+    therefore carried as full dotted paths beside the package, which costs a
+    rule nothing (a forbidden prefix matches on a dot boundary, so an imported
+    FUNCTION only matches a rule that already names the module it lives in).
+    """
+    module = node.module or ""
+    if node.level:
+        base = importer.split(".")[:-node.level]
+        module = ".".join(base + ([node.module] if node.module else []))
+    named = {alias.name for alias in node.names} - {"*"}
+    return {(importer, module)} | {
+        (importer, f"{module}.{name}" if module else name) for name in named}
 
 
 def _dependency_findings(edges: list[tuple[str, str]],

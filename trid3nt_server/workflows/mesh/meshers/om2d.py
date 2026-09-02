@@ -158,6 +158,7 @@ def build(recipe: Any) -> Mesh:
     # bed painted on the host cannot survive a renumbering it never saw.
     split = next((i for i, op in enumerate(post)
                   if op.origin == "primitives"), len(post))
+    notes: list[str] = []
     config = {
         "bbox": list(domain.bbox),
         "shoreline_shp": (f"/shoreline/{domain.shoreline.name}"
@@ -168,8 +169,9 @@ def build(recipe: Any) -> Mesh:
         "max_edge_length_m": _MAX_EL_FACTOR * resolution_m,
         "seed": _SEED,
         "max_iter": _MAX_ITER,
-        "pre_ops": [_staged(op, rundir, index) for index, op in enumerate(pre)],
-        "post_ops": [_staged(op, rundir, len(pre) + i)
+        "pre_ops": [_staged(op, rundir, index, resolution_m, notes)
+                    for index, op in enumerate(pre)],
+        "post_ops": [_staged(op, rundir, len(pre) + i, resolution_m, notes)
                      for i, op in enumerate(post[:split])],
     }
     (rundir / "om2d_config.json").write_text(json.dumps(config))
@@ -178,8 +180,8 @@ def build(recipe: Any) -> Mesh:
             else domain.shoreline.parent)
 
     mesh, stats = _read_built(rundir, domain, resolution_m, ops)
-    mesh = _apply_tail(mesh, post[split:], rundir, resolution_m)
-    return _emitted(mesh, rundir, domain, stats)
+    mesh = _apply_tail(mesh, post[split:], rundir, resolution_m, notes)
+    return _emitted(mesh, rundir, domain, stats, notes)
 
 
 def _read_built(rundir: Path, domain: "_Domain", resolution_m: float,
@@ -235,7 +237,7 @@ def _read_built(rundir: Path, domain: "_Domain", resolution_m: float,
 
 
 def _apply_tail(mesh: Mesh, tail: list[BoundOp], rundir: Path,
-                resolution_m: float) -> Mesh:
+                resolution_m: float, notes: list[str]) -> Mesh:
     """The ops declared after the first primitive, in their declared order.
 
     OUR primitives run here, on the host, against the real callable. A LIBRARY op
@@ -252,7 +254,7 @@ def _apply_tail(mesh: Mesh, tail: list[BoundOp], rundir: Path,
             mesh = op.fn(mesh, **_bound_inputs(op))
             continue
         before = (mesh.node_count, mesh.element_count)
-        mesh, result = _run_tail_op(mesh, op, rundir, index, resolution_m)
+        mesh, result = _run_tail_op(mesh, op, rundir, index, resolution_m, notes)
         if (mesh.node_count, mesh.element_count) != before:
             raise MeshToolError(
                 "MESH_OP_RENUMBERED_AFTER_BED",
@@ -267,7 +269,7 @@ def _apply_tail(mesh: Mesh, tail: list[BoundOp], rundir: Path,
 
 
 def _run_tail_op(mesh: Mesh, op: BoundOp, rundir: Path, index: int,
-                 resolution_m: float) -> tuple[Mesh, Any]:
+                 resolution_m: float, notes: list[str]) -> tuple[Mesh, Any]:
     """One library op over the mesh as it now stands -> the mesh and its result."""
     import dataclasses
 
@@ -286,7 +288,7 @@ def _run_tail_op(mesh: Mesh, op: BoundOp, rundir: Path, index: int,
         "out_stem": stem,
         "min_edge_length_m": resolution_m,
         "max_edge_length_m": _MAX_EL_FACTOR * resolution_m,
-        "ops": [_staged(op, rundir, index)]}))
+        "ops": [_staged(op, rundir, index, resolution_m, notes)]}))
     _run_op(rundir, "post", config_name, f"{stem}.json")
     report = json.loads((rundir / f"{stem}.json").read_text())
     out = np.load(rundir / f"{stem}.npz")
@@ -310,12 +312,15 @@ def _bound_inputs(op: BoundOp) -> dict[str, Any]:
     return {name: op_input(value) for name, value in op.kwargs.items()}
 
 
-def _staged(op: BoundOp, rundir: Path, index: int) -> dict[str, Any]:
+def _staged(op: BoundOp, rundir: Path, index: int, resolution_m: float,
+            notes: list[str]) -> dict[str, Any]:
     """One op as the container reads it: its name and its kwargs as /data paths.
 
     Code-as-data. The name travels verbatim and the driver calls it verbatim; a
     kwarg that is a raster or a layer is converted once, written into the mounted
-    rundir, and named by the path the container sees.
+    rundir, and named by the path the container sees. A LINE layer is measured
+    against the declared edge on the way through, because that is the one thing
+    the conversion knows and the library does not.
     """
     from trid3nt_server.workflows.mesh.inputs import op_input
 
@@ -328,11 +333,100 @@ def _staged(op: BoundOp, rundir: Path, index: int) -> dict[str, Any]:
             kwargs[name] = f"/data/{local.name}"
         elif isinstance(converted, Mapping) and "type" in converted:
             local = rundir / f"op{index}_{name}.geojson"
-            local.write_text(json.dumps(converted))
+            local.write_text(json.dumps(
+                _resampleable_lines(converted, resolution_m, op.name, notes)))
             kwargs[name] = f"/data/{local.name}"
         else:
             kwargs[name] = converted
     return {"fn": op.name, "kwargs": kwargs}
+
+
+def _resampleable_lines(doc: Mapping[str, Any], resolution_m: float,
+                        op_name: str, notes: list[str]) -> Mapping[str, Any]:
+    """A staged LINE layer with the lines one declared edge cannot walk removed.
+
+    A sizing function walks each line at the min edge, so a line shorter than one
+    edge is not a coarse input - it is a resample the library dies inside rather
+    than refuses. What is below the resolution is measured here, dropped, and
+    journaled by count and threshold; a layer with nothing left is a typed
+    refusal naming the resolution, because a sizing op with no line sizes nothing.
+
+    Geodesic length on the WGS84 ellipsoid, per PART: a multi-line whose parts
+    are individually below the edge crashes the same walk a short single line
+    does. Only line geometries are measured; the polygon a domain or an obstacle
+    arrives as passes through untouched.
+    """
+    entries = _geojson_geometries(doc)
+    if not any(_is_line(geometry) for _holder, geometry in entries):
+        return doc
+
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
+    features: list[dict[str, Any]] = []
+    total = dropped = 0
+    for holder, geometry in entries:
+        if _is_line(geometry):
+            walks = _line_parts(geometry)
+            kept = [walk for walk in walks
+                    if _walk_length_m(geod, walk) >= resolution_m]
+            total += len(walks)
+            dropped += len(walks) - len(kept)
+            if not kept:
+                continue
+            geometry = ({"type": "LineString", "coordinates": kept[0]}
+                        if len(kept) == 1
+                        else {"type": "MultiLineString", "coordinates": kept})
+        features.append({
+            "type": "Feature", "geometry": dict(geometry),
+            "properties": dict((holder or {}).get("properties") or {})})
+    if not dropped:
+        return doc
+    if dropped == total:
+        raise MeshToolError(
+            "MESH_SIZING_LINES_BELOW_RESOLUTION",
+            f"every one of the {total} lines handed to {op_name!r} measures "
+            f"shorter than the declared {resolution_m:g} m edge, so there is "
+            "nothing this op can size: a line shorter than one edge cannot be "
+            "walked at that edge. Declare a finer resolution_m, or supply lines "
+            "longer than one edge.")
+    notes.append(
+        f"{op_name}: {dropped} of {total} lines measured shorter than the "
+        f"declared {resolution_m:g} m edge, were below sizing resolution and "
+        "were not used")
+    return {"type": "FeatureCollection", "features": features}
+
+
+def _geojson_geometries(doc: Mapping[str, Any]
+                        ) -> list[tuple[Mapping[str, Any] | None, Mapping[str, Any]]]:
+    """Every geometry of a GeoJSON document, each with the feature carrying it."""
+    kind = str(doc.get("type") or "")
+    if kind == "FeatureCollection":
+        return [(feature, (feature or {}).get("geometry") or {})
+                for feature in doc.get("features") or ()]
+    if kind == "Feature":
+        return [(doc, doc.get("geometry") or {})]
+    return [(None, doc)]
+
+
+def _is_line(geometry: Mapping[str, Any]) -> bool:
+    return str(geometry.get("type") or "").endswith("LineString")
+
+
+def _line_parts(geometry: Mapping[str, Any]) -> list[list[list[float]]]:
+    """The one or many coordinate walks a line geometry carries."""
+    coords = list(geometry.get("coordinates") or ())
+    if str(geometry.get("type")) == "MultiLineString":
+        return [list(part) for part in coords]
+    return [coords]
+
+
+def _walk_length_m(geod: Any, walk: list[list[float]]) -> float:
+    """One coordinate walk's geodesic length in metres; a walk of one is zero."""
+    if len(walk) < 2:
+        return 0.0
+    return float(geod.line_length([point[0] for point in walk],
+                                  [point[1] for point in walk]))
 
 
 # --------------------------------------------------------------------------- #
@@ -611,12 +705,15 @@ def _conformal_probe(points_m: Any, pfix: Any, utm_epsg: int) -> dict[str, Any]:
 # Emit: the per-solver geometry, written from what the ops left on the mesh.
 # --------------------------------------------------------------------------- #
 def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
-             stats: Mapping[str, Any]) -> Mesh:
+             stats: Mapping[str, Any], notes: list[str]) -> Mesh:
     """Write the per-solver geometry from ONE boundary segmentation -> the mesh.
 
     TELEMAC's SELAFIN and its ``.cli`` are written together by telapy, because a
     boundary-conditions file is only valid against the geometry whose boundary
     numbering it was written from. Only formats an engine READS are written.
+
+    The staging notes join the journal here rather than at the read: an op staged
+    after the mesh came back has no provenance to write into yet.
     """
     import dataclasses
 
@@ -671,6 +768,10 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
             rundir, roles=roles, liquid_boundary_order=lb_order))
     artifact = {**dict(mesh.meta.get("artifact") or {}),
                 "open_boundary_info": info}
+    if notes:
+        provenance = dict(artifact.get("provenance") or {})
+        provenance["op_notes"] = list(provenance.get("op_notes") or ()) + notes
+        artifact["provenance"] = provenance
     return dataclasses.replace(mesh, meta={
         **dict(mesh.meta), "files": files, "artifact": artifact,
         "probes": {**dict(mesh.meta.get("probes") or {}), **probes}})

@@ -638,6 +638,7 @@ package SolveSeam {
         forbid: trid3nt_server.workflows.telemac.result_reader -> struct
         forbid: trid3nt_server.workflows.telemac.postprocess_telemac -> struct
         forbid: trid3nt_server.workflows.telemac.steps.run_reads -> struct
+        forbid: trid3nt_server.workflows.telemac.steps.deck -> struct
         */
     }
 
@@ -690,6 +691,7 @@ package SolveSeam {
     satisfy requirement NoSecondParserOfTheFormat by resultReader;
     satisfy requirement NoSecondParserOfTheFormat by resultPostprocess;
     satisfy requirement NoSecondParserOfTheFormat by runReader;
+    satisfy requirement NoSecondParserOfTheFormat by deckAuthor;
     verify requirement NoSecondParserOfTheFormat by
         "tests/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format";
     verify requirement NoSecondParserOfTheFormat by

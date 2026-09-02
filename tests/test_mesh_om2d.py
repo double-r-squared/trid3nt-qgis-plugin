@@ -342,6 +342,61 @@ def test_a_data_valued_op_kwarg_is_staged_into_the_box_as_a_path(
     assert entry["kwargs"]["rate"] == 0.05
 
 
+def _line(lon_span: float) -> dict:
+    """One west-east line of a stated span in degrees, inside the AOI."""
+    return {"type": "LineString",
+            "coordinates": [[-75.78, 36.12], [-75.78 + lon_span, 36.12]]}
+
+
+def _staged_lines(sent, tmp_path) -> list:
+    """The line geometries the box was actually handed."""
+    name = Path(sent["config"]["pre_ops"][0]["kwargs"]["line_file"]).name
+    staged, = tmp_path.rglob(name)
+    return [feature["geometry"] for feature in json.loads(staged.read_text())
+            ["features"]]
+
+
+def test_a_line_shorter_than_the_declared_edge_drops_with_a_measured_note(
+        monkeypatch, tmp_path):
+    """A line shorter than one edge cannot be walked at that edge.
+
+    The library dies inside the resample rather than refusing, so the length is
+    measured at the conversion - the one place that knows both the layer and the
+    declared edge - and what it drops it says, by count and by threshold.
+    """
+    sent = _stub_om2d(monkeypatch, tmp_path)
+    lines = tmp_path / "channels.geojson"
+    # ~0.001 deg of longitude at 36 N is ~90 m: one line well over the 60 m edge,
+    # one well under it.
+    lines.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"name": "long"},
+         "geometry": _line(0.010)},
+        {"type": "Feature", "properties": {"name": "short"},
+         "geometry": _line(0.0002)}]}))
+    mesh = OM2D.build(_recipe(resolution_m=60.0, ops=[
+        mesh_op("distance_sizing_from_line_function", line_file=str(lines))]))
+
+    assert _staged_lines(sent, tmp_path) == [_line(0.010)]
+    note, = [n for n in mesh.meta["artifact"]["provenance"]["op_notes"]
+             if "sizing resolution" in n]
+    assert "1 of 2 lines" in note and "60 m edge" in note
+
+
+def test_a_line_layer_entirely_below_the_edge_refuses_by_naming_the_resolution(
+        monkeypatch, tmp_path):
+    """Zero surviving lines is not a quieter sizing op - it is no sizing op."""
+    _stub_om2d(monkeypatch, tmp_path)
+    lines = tmp_path / "channels.geojson"
+    lines.write_text(json.dumps({"type": "MultiLineString", "coordinates": [
+        _line(0.0002)["coordinates"], _line(0.0003)["coordinates"]]}))
+    with pytest.raises(MeshToolError) as excinfo:
+        OM2D.build(_recipe(resolution_m=60.0, ops=[
+            mesh_op("distance_sizing_from_line_function", line_file=str(lines))]))
+    assert excinfo.value.error_code == "MESH_SIZING_LINES_BELOW_RESOLUTION"
+    assert "60 m edge" in str(excinfo.value)
+    assert "2 lines" in str(excinfo.value)
+
+
 # --------------------------------------------------------------------------- #
 # The ops after the first primitive run over the mesh the host already holds.
 # --------------------------------------------------------------------------- #

@@ -43,5 +43,5 @@ directory rather than a list somebody maintains.
 | file | what it is |
 | --- | --- |
 | `solve-seam.sysml` | The TELEMAC solve seam: the blocks from deck author to the readers, the manifest / echo / completion / topology / accepted-mesh contracts by their real key names, and the standing laws with their satisfying block and verifying test. |
-| `mesh-seam.sysml` | The mesh seam: the router, the recipe, the op tool, the session and its gate, the two mesher adapters and the GPL-isolated box behind one of them, the shared primitives, the artifact record and the topology writer - with the recipe laws, the box's isolation and the removal doctrine as requirements. |
+| `mesh-seam.sysml` | The mesh seam: the router, the recipe, the op tool, the session and its gate, the two mesher adapters and the GPL-isolated box behind one of them, the shared primitives, the artifact record and the topology writer - plus every other shipped driver, which binds here because the purity law is written over the directory they share - with the recipe laws, the box's isolation and the removal doctrine as requirements. |
 | `<seam>-view.md` | GENERATED. The flow graph, the item tables and the requirement-to-test allocation, derived from `<seam>.sysml` by `python scripts/model_check.py --model docs/model/<seam>.sysml --view`. The suite fails while one is stale; never hand-edit them. |
