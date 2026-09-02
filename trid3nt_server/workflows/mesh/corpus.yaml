@@ -32,3 +32,30 @@ build_mesh:
 - refine the mesh inside the region I drew, leave the rest alone
 - mark the seaward edge as the open boundary so a tide can be forced there
 - classify which side of the domain is open water and which is a wall
+
+# mesh_op routing phrasings: the runtime face of the word a recipe is written in.
+# Question class = "change how this mesh was built and rebuild it", never
+# place-based.
+mesh_op:
+- make the mesh finer along the channel and rebuild it
+- refine the mesh near the river network, leave the rest coarse
+- size the mesh by water depth so the shelf is coarser than the shore
+- tighten the resolution along this line and show me the mesh again
+- add a sizing step to the mesh recipe and regenerate
+- change how the mesh I just built was sized
+- smooth the mesh, it has slivers along the boundary
+- clean up the mesh elements connected to only one face
+- limit how fast the element size may grow across the domain
+- paint the bed onto the mesh nodes from this raster
+- set the bed elevations on the mesh from topobathy
+- mark which stretch of the boundary is the inflow and which the outflow
+- designate the seaward edge as the open boundary so a tide can be forced there
+- identify the ocean boundary sections on this mesh from its depths
+- undo the last change to the mesh recipe
+- remove the third step from the mesh recipe and rebuild
+- change the gradation I set on the mesh to something gentler
+- what steps built this mesh, and can I edit one of them
+- add a second refinement corridor along the other tributary
+- call oceanmesh's own sizing function on the mesh I am building
+- edit the mesh program rather than the mesh itself
+- rebuild the mesh with one more step in its recipe

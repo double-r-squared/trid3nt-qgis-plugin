@@ -1,0 +1,131 @@
+<title>The Mesh Recipe</title>
+<style>
+  :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4;
+          --kw: #0000cc; --str: #a31515; --com: #008000; --num: #098658; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  }
+  :root[data-theme="dark"] { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  body { background: var(--bg); color: var(--fg); font-family: serif; line-height: 1.4; margin: 0 auto; max-width: 60em; padding: 1.5em 1em 4em; }
+  h1 { font-size: 1.6em; border-bottom: 1px solid var(--line); padding-bottom: .2em; }
+  h2 { font-size: 1.25em; border-bottom: 1px solid var(--line); padding-bottom: .15em; margin-top: 1.8em; }
+  code, pre { font-family: monospace; font-size: .95em; }
+  code { background: var(--code-bg); padding: 0 .25em; }
+  pre:not(.mermaid) { background: var(--code-bg); border: 1px solid var(--line); border-left: 4px solid var(--line); padding: .6em .8em; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  .k { color: var(--kw); font-weight: bold; } .s { color: var(--str); } .c { color: var(--com); font-style: italic; } .n { color: var(--num); }
+  table { border-collapse: collapse; margin: .8em 0; }
+  th, td { border: 1px solid var(--line); padding: .3em .6em; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .scroll { overflow-x: auto; }
+  .rev { font-size: .85em; }
+  p { max-width: 72ch; }
+</style>
+
+<h1>The Mesh Recipe</h1>
+<p class="rev">rev 2 &middot; 2026-09-01 &middot; the rung-3 spec, SETTLED SHAPE (rewritten fresh; supersedes rev 1's pre/post subtypes and role params). Parent: <code>domain-and-mesh</code> (FROZEN rev 19) - where they disagree, this spec supersedes on the surfaces it names. Rulings basis: <code>docs/IDEAS.md</code> 2026-09-01 "RUNG-3 SHAPE RULED THROUGH DISCUSSION" + "RUNG-3 SHAPE SETTLED, SECOND PASS". The PARAMS pass (door words, aoi unification) is PARKED separately and is not this spec's scope. Format per <code>docs/decisions/0320-spec-format.md</code>.</p>
+
+<h2>1. The principle</h2>
+<p>A mesh is defined by exactly one object: its RECIPE - the current program that produces it. Present tense, editable, executable.</p>
+<pre><code>mesh state = recipe + staged inputs
+recipe     = three agnostic params + one ordered ops list</code></pre>
+<p>There is no record, no history object, no edit-op chain: the journal (append-only by law, already existing) captures edit events as audit; undo is editing the recipe back; the one structured revert is reset-to-declaration. Same recipe + same staged inputs = same mesh. Every change regenerates wholesale (measured cheap); nothing is patched incrementally. <code>accept()</code> freezes the recipe onto the artifact as its provenance.</p>
+
+<h2>2. The surface</h2>
+<p><code>build_mesh</code> takes the mesher, the element kind, and exactly THREE mesher-agnostic parameters - <code>extent</code> (the domain), <code>resolution_m</code> (the size word), <code>kind</code> - plus the program. Nothing else. Engine vocabulary (bed, boundaries) is NEVER a parameter of the generalization: those are ops.</p>
+<pre><code><span class="k">MESH</span> = tool.build_mesh(
+    mesher=<span class="s">"om2d"</span>, kind=<span class="s">"unstructured_tri"</span>,
+    extent=reach, resolution_m=P.mesh_resolution_m,
+    ops=[
+        <span class="c"># oceanmesh's own functions - verbatim names, explicit data args</span>
+        mesh_op(<span class="s">"feature_sizing_function"</span>),
+        mesh_op(<span class="s">"distance_sizing_from_linestring_function"</span>, line=DATA.centerline, rate=<span class="n">0.05</span>),
+        mesh_op(<span class="s">"enforce_mesh_gradation"</span>, gradation=<span class="n">0.15</span>),
+        mesh_op(<span class="s">"delete_boundary_faces"</span>),
+        <span class="c"># our registered primitives - verbatim def names, SET verbs</span>
+        mesh_op(<span class="s">"set_bed"</span>, source=DATA.topobathy, interp=<span class="s">"nearest"</span>),
+        mesh_op(<span class="s">"set_boundary_roles"</span>, inflow=reach.face_start, outflow=reach.face_end),
+    ],
+)</code></pre>
+<p>ONE flat ordered list - no pre/post subtypes. The op vocabulary has TWO ORIGINS, both verbatim: the wrapped library's functions under the library's names, and our registered primitives under their real <code>def</code> names - never aliases (an alias is a word that implies). State-imposing primitives use the <code>set</code> verb: <code>set_bed</code>, <code>set_boundary_roles</code>. Phase (before or after generation) is DERIVED from the namespace registration; declared relative order is preserved within each derived phase; a name present in both origins refuses loudly. Omitting <code>ops</code> takes the mesher's hard-baked, VISIBLE default list; declaring replaces it wholesale. <code>resolution_m</code> keeps the one documented default-threading rule (default <code>min_edge_length</code>, <code>max_el</code> defaulting 10x) - overridable per entry, a changed default said out loud.</p>
+
+<h2>3. mesh_op - one callable, two contexts, three doors</h2>
+<pre><code>mesh_op(<span class="s">"distance_sizing_from_linestring_function"</span>, line=..., rate=<span class="n">0.08</span>)</code></pre>
+<table>
+<tr><th>question</th><th>answer</th></tr>
+<tr><td>in a declaration</td><td>a frozen recipe entry (builds nothing at import) - the same dual behavior as <code>tool(...)</code> rows</td></tr>
+<tr><td>at runtime (<code>!run</code>, the model, a gate card)</td><td>appends the entry to the active session's recipe, regenerates wholesale, re-presents; explicit <code>mesh=</code> for named sessions</td></tr>
+<tr><td>phase?</td><td>derived from the registration - the caller never says it</td></tr>
+<tr><td>unknown function?</td><td>typed refusal naming nearest matches in the combined namespace</td></tr>
+<tr><td>alter / remove an entry?</td><td>targeted by index; the gate numbers them</td></tr>
+<tr><td>registration</td><td>ONE atomic tool in the mesh area; owes a retrieval corpus before acceptance</td></tr>
+</table>
+<p>The LLM-refinement loop is this tool and nothing more: "tighten resolution along the channel" is the model appending an op. The recipe is the conversation's accumulating artifact; the user building their own mesh authors a recipe entry-by-entry through whichever door they like.</p>
+
+<h2>4. Validation: the signature is the schema</h2>
+<p><code>MeshField</code> dies. Generic validation for every mesher and every origin: (a) the name exists in the registered namespace; (b) the kwargs bind to the real callable's signature (<code>inspect.signature(...).bind_partial</code>); (c) a data-valued kwarg (a DATA row, a layer handle) passes through the one typed conversion layer - explicit kinds (raster -&gt; array, layer -&gt; geometry), kept small and visible, never guessed. A function without an introspectable signature passes through with a journaled note; the library's own error surfaces verbatim on failure (the upstream-errors law).</p>
+
+<h2>5. The correct-data-class law</h2>
+<p>An op takes the data class it is DEFINED OVER; acquiring that class is the DATA row's problem (ladders, supply paths, honest refusals) - the op assumes its input is good and carries no class-policing branches. <code>set_bed(source=DATA.topobathy)</code> - never a silent DEM proxy: a standard DEM measures the water surface, not the channel bottom, and every shim that ever compensated for that substitution (the deleted <code>fit_downstream_bed</code>) was scar tissue over the wrong input. A substitution is legitimate only as the AUTHOR'S visible declared choice (<code>set_bed(source=DATA.dem)</code> written in the recipe), and the journal names the source row painted from - transparency by record, not by machinery.</p>
+<p>Companion NO-NAME-DRIFT law: fetched rows carry the DATASET's name (<code>topobathy</code>, <code>water</code> = <code>fetch_nhd_area_water</code>); derived rows carry what they ARE (<code>window</code>, <code>reach</code>). One datum, one name, everywhere - name drift is implementation drift with a delay. Renames owed by this spec: <code>banks</code> -&gt; <code>water</code>; <code>measure_bank_coverage</code> -&gt; <code>measure_water_coverage</code>.</p>
+<p>CHARTERED (paper-first, its own item, not this wave): bathymetry research - <code>fetch_topobathy</code> coverage per water-body class, surveyed cross-sections as a supply path, synthetic-channel methods only ever as a declared PRODUCER row, never a shim.</p>
+
+<h2>6. The lifecycle</h2>
+<div class="scroll">
+<pre class="mermaid">
+flowchart LR
+    D["declaration<br/>(a recipe literal)"] --> R["THE RECIPE<br/>3 agnostic params + ops[]"]
+    G["gate edits"] --> R
+    M["mesh_op at runtime<br/>(!run / model / cards)"] --> R
+    R -->|"regen wholesale<br/>on every change"| X["execute: stage extent -> derived-phase ops<br/>-> generate -> remaining ops -> emit"]
+    X --> A["MeshArtifact<br/>recipe frozen as provenance"]
+    A --> J["journal: edit events, coverage,<br/>wetted fraction, bed source row"]
+</pre>
+</div>
+<p>Hand-edits at the gate (dragging nodes) are the one operation that is genuinely history rather than program: they flag the artifact "regen breaks this" instead of being pretended into the recipe.</p>
+
+<h2>7. What a mesher IS</h2>
+<table>
+<tr><th>registration</th><th>content</th></tr>
+<tr><td>namespace</td><td>the library module(s) whose function names ops may use, tagged by phase; the SHARED primitives namespace (set_bed, set_boundary_roles, ...) rides along for every mesher</td></tr>
+<tr><td>role adapter</td><td>how extent becomes this library's domain object; how resolution_m/max_el thread as its defaults. Nothing else - an adapter that grows opinions is the old sin</td></tr>
+<tr><td>default recipe</td><td>the hard-baked visible ops list an undeclared ask gets</td></tr>
+</table>
+<p>Everything else - validation, recipe machinery, mesh_op, the gate's generic cards, regen, the artifact - is shared. reg_grid CONFORMS: same surface, near-empty default recipe. A new mesher is three registrations and the router never grows.</p>
+
+<h2>8. What dissolves</h2>
+<table>
+<tr><th>dies</th><th>why</th></tr>
+<tr><td><code>MeshField</code> + per-mesher <code>_FIELDS</code></td><td>the signature is the schema (&sect;4)</td></tr>
+<tr><td><code>refine={}</code> vocabulary; <code>bed=</code>/<code>boundaries=</code> params</td><td>our invented words and engine vocabulary inside the generalization; resolution_m survives as the one agnostic size word, the rest became ops</td></tr>
+<tr><td>the <code>DeclaredEdit</code> action list</td><td>an edit is a recipe diff; one generic gate card path for every mesher</td></tr>
+<tr><td><code>fit_downstream_bed</code></td><td>scar tissue over the wrong data class; its condition met by design (&sect;5)</td></tr>
+<tr><td>the snapshot cache</td><td>state is the recipe, regen is cheap; the wave measures then chops or keeps with the measurement stated</td></tr>
+<tr><td>recipe-vs-declaration duality</td><td>one object; the declaration is a recipe literal</td></tr>
+</table>
+
+<h2>9. Comparison to the current model</h2>
+<table>
+<tr><th></th><th>current</th><th>this spec</th></tr>
+<tr><td>declaration</td><td>roles + <code>refine={}</code> + <code>bed=</code>/<code>boundaries=</code>, MeshField-validated per mesher</td><td>3 agnostic params + ops of verbatim calls, signature-validated generically</td></tr>
+<tr><td>the mesh-defining object</td><td>spec value + separate edit-op chain</td><td>THE RECIPE - one shape, present tense</td></tr>
+<tr><td>an edit</td><td>a named DeclaredEdit action, per-action plumbing</td><td>a recipe diff (append / alter-by-index / role edit)</td></tr>
+<tr><td>ad hoc / LLM refinement</td><td>no direct surface</td><td><code>mesh_op</code> - one tool, three doors</td></tr>
+<tr><td>bed</td><td>silent DEM proxy + a synthetic slope fit</td><td><code>set_bed(source=topobathy)</code>; substitution only as a declared choice</td></tr>
+<tr><td>new mesher</td><td>_FIELDS table + translation + edit wiring</td><td>namespace + role adapter + default recipe</td></tr>
+</table>
+
+<h2>10. Acceptance (the rung-3 wave's bar)</h2>
+<table>
+<tr><th>gate</th><th>test</th></tr>
+<tr><td>the four fragilities</td><td>each fixed and RE-MEASURED: deterministic contour selection on holed domains; multi-section open boundaries; rim sizing honored within declared tolerance; a lake-capable domain (Marquette BUILDS)</td></tr>
+<tr><td>recipe determinism</td><td>same recipe + same staged inputs -&gt; identical mesh, proven twice</td></tr>
+<tr><td>mesh_op live</td><td>an ad hoc <code>!run mesh_op</code> appends + regens + re-presents; unknown fn refuses with nearest names; TWO distance-sizing entries on two lines measurably refine both corridors (order + duplicates work)</td></tr>
+<tr><td>correct data class</td><td><code>set_bed</code> paints from topobathy on a covered domain; an uncovered domain's topobathy row refuses honestly; the explicit DEM substitution runs AND the journal names the source row</td></tr>
+<tr><td>generality</td><td>reg_grid conforms; the gate renders om2d and reg_grid recipes through ONE card path (grep: zero per-mesher card code)</td></tr>
+<tr><td>dissolution</td><td>MeshField, refine vocabulary, DeclaredEdit, fit_downstream_bed, bed=/boundaries= params: zero live spellings; renames landed (water, measure_water_coverage); snapshot cache measured then decided</td></tr>
+<tr><td>library-first grep</td><td>no reimplemented sizing/clean math; every op call reaches its real callable verbatim</td></tr>
+<tr><td>suite + conformance</td><td>five slices at the standing zero; fresh-eyes clause walk of THIS spec at close; deviations reported, never fixed</td></tr>
+</table>

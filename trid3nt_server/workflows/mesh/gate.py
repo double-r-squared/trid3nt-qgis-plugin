@@ -1,17 +1,21 @@
-"""The mesh gate loop: a built mesh presented for edit, restart or accept.
+"""The mesh gate loop: a built mesh presented for edit, reset or accept.
 
 A mesh is expensive to get wrong and cheap to look at, so in USER-GATED mode the
 build stops at a gate instead of going straight to a solver. The gate presents
 three things about the SAME mesh - the editable MDAL layer on the map, the
-numeric probes the mesh is judged on, and the wireframe the layer renders as -
-and then hands over the edit surface: one agent tool per action the building
-mesher REGISTERED, mounted for exactly as long as the session is open and
-removed again on accept. Nothing here knows what an action does; the mesher's
-registry is what says which tools exist.
+numeric probes it is judged on, and the RECIPE with its ops NUMBERED - and then
+hands over one edit surface for every mesher there will ever be.
 
-A hand-edit made in QGIS re-enters through the same surface as
-``edit("apply_layer_edits", layer)``, so a mesh the user reshaped by hand and a
-mesh the agent refined by name are one chain and one recipe.
+ONE CARD PATH. The card carries the three agnostic params (the ones every mesher
+means the same thing by), the numbered ops as the program that produced what is
+on screen, and the reset row. Everything an op can say is said through
+``mesh_op``, which is a registered tool rather than a mounted per-mesher one -
+so nothing here knows what any library's functions are, and adding a mesher adds
+no card code.
+
+A hand-edit made in QGIS re-enters through ``mesh_adopt_layer`` and is HISTORY,
+not program: the mesh is flagged, and a later recipe edit refuses rather than
+throwing the hand-edit away.
 
 AUTO mode builds inline: no presentation, no mounted tools, no pause.
 """
@@ -30,17 +34,18 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.gates.input_review import resolve_input_gate_mode
 from trid3nt_server.tools import mount_tool, unmount_tool
 from trid3nt_server.workflows.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.mesh.meshers import EditAction, MeshField, MeshToolError
+from trid3nt_server.workflows.mesh.meshers import MeshToolError
 from trid3nt_server.workflows.mesh.session import MeshSession
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.gate")
 
 __all__ = [
     "ACCEPT_TOOL",
-    "RESTART_TOOL",
+    "ADOPT_TOOL",
+    "RESET_TOOL",
     "MeshGate",
+    "active_mesh_session",
     "close_mesh_gate",
-    "edit_tool_name",
     "gate_mesh_build",
     "open_mesh_gate",
     "open_mesh_gates",
@@ -48,21 +53,17 @@ __all__ = [
     "render_probe_lines",
 ]
 
-#: The two loop actions that are not a mesher's to register: every open session
-#: can be frozen or truncated regardless of which library built it.
+#: The loop actions that are not a recipe edit: every open session can be frozen,
+#: put back to its declaration, or handed a mesh somebody reshaped by hand.
 ACCEPT_TOOL = "mesh_accept"
-RESTART_TOOL = "mesh_restart"
+RESET_TOOL = "mesh_reset"
+ADOPT_TOOL = "mesh_adopt_layer"
 
 #: Gate wait cap (seconds), mirroring the input-review / precondition-gate TTL.
 _TTL_SECONDS = 300
 
 #: How many times the gate re-presents before it stops asking.
 _MAX_ROUNDS = 3
-
-
-def edit_tool_name(action: str) -> str:
-    """The mounted tool name for one registered edit action."""
-    return f"mesh_edit_{action}"
 
 
 @dataclass
@@ -89,12 +90,29 @@ def open_mesh_gates() -> tuple[MeshGate, ...]:
     return tuple(_OPEN.values())
 
 
+def active_mesh_session(mesh_id: str | None = None) -> MeshSession:
+    """The session a runtime recipe edit acts on, or a typed refusal.
+
+    ONE mesh is under construction at a time, so an unnamed edit means the one on
+    screen; ``mesh_id`` names another when more than one is somehow open.
+    """
+    if mesh_id:
+        return _gate_for(str(mesh_id)).session
+    gates = open_mesh_gates()
+    if not gates:
+        raise MeshToolError(
+            "MESH_NO_ACTIVE_SESSION",
+            "no mesh is open at the gate, so there is no recipe to edit; build "
+            "one with build_mesh(input_mode='user_gated') first.")
+    return gates[-1].session
+
+
 def _gate_for(mesh_id: str) -> MeshGate:
     gate = _OPEN.get(mesh_id)
     if gate is None:
         raise MeshToolError(
             "MESH_SESSION_CLOSED",
-            f"the mesh session {mesh_id!r} is closed, so its edit tools no longer "
+            f"the mesh session {mesh_id!r} is closed, so its gate tools no longer "
             "act on anything; build a mesh to open a new session.")
     return gate
 
@@ -116,10 +134,8 @@ def open_mesh_gate(session: MeshSession) -> MeshGate:
     _OPEN[gate.mesh_id] = gate
     mounted: list[str] = []
     try:
-        for action in session.mesher.actions.values():
-            mounted.append(mount_tool(*_edit_tool(gate.mesh_id, action)))
-        mounted.append(mount_tool(*_accept_tool(gate.mesh_id)))
-        mounted.append(mount_tool(*_restart_tool(gate.mesh_id)))
+        for build in (_accept_tool, _reset_tool, _adopt_tool):
+            mounted.append(mount_tool(*build(gate.mesh_id)))
     except Exception:
         for name in mounted:
             unmount_tool(name)
@@ -144,66 +160,11 @@ def close_mesh_gate(gate: "MeshGate | str") -> None:
 
 
 # --------------------------------------------------------------------------- #
-# The generated tools.
+# The loop tools.
 # --------------------------------------------------------------------------- #
-#: What a declared input's accepted types become on a generated signature. The
-#: model reads a schema, so a field that takes several numeric types is one
-#: number to it.
-_ANNOTATIONS: tuple[tuple[type, str], ...] = (
-    (bool, "bool"), (str, "str"), (float, "float"), (int, "float"),
-    (dict, "dict"), (list, "list"), (tuple, "list"),
-)
-
-
-def _annotation(declared: MeshField) -> str:
-    for kind, name in _ANNOTATIONS:
-        if kind in declared.types:
-            return name
-    return "str"
-
-
-def _input_line(declared: MeshField) -> str:
-    choices = (f" one of {list(declared.choices)}." if declared.choices else "")
-    return (f"        {declared.name}: {declared.doc or 'no description'}."
-            f"{choices}")
-
-
 def _metadata(name: str) -> AtomicToolMetadata:
     return AtomicToolMetadata(
         name=name, ttl_class="live-no-cache", cacheable=False, tier="general")
-
-
-def _edit_tool(mesh_id: str, action: EditAction) -> tuple[AtomicToolMetadata, Any]:
-    """One registered edit action as a mounted agent tool."""
-    name = edit_tool_name(action.name)
-    params = []
-    for field_name, declared in action.inputs.items():
-        annotation = _annotation(declared)
-        params.append(f"{field_name}: {annotation}" if declared.required
-                      else f"{field_name}: {annotation} | None = None")
-
-    async def apply(**inputs: Any) -> dict[str, Any]:
-        gate = _gate_for(mesh_id)
-        supplied = {k: v for k, v in inputs.items() if v is not None}
-        await asyncio.to_thread(gate.session.edit, action.name, **supplied)
-        return await present_mesh(gate)
-
-    fn = _compiled(name, params, tuple(action.inputs), apply)
-    replay = ("" if action.replayable else
-              " This edit is NOT replayable: its change lives in the layer's "
-              "bytes, so the recipe records the layer's digest and refuses to "
-              "rebuild from it.")
-    fn.__doc__ = (
-        f"{action.doc or f'Apply the {action.name} edit.'} Edits the mesh "
-        f"currently open at the mesh gate -> the rebuilt mesh's probes.\n\n"
-        "    The mesh is rebuilt and re-presented on the map; the returned "
-        "probes (node/element count, edge lengths, min angle, boundary "
-        "segments) are what the edit actually produced. Call "
-        f"{ACCEPT_TOOL} when the mesh is right, or {RESTART_TOOL} to "
-        f"throw the gate-time edits away.{replay}\n\n"
-        "    Params:\n"
-        + "\n".join(_input_line(d) for d in action.inputs.values()))
-    return _metadata(name), fn
 
 
 def _accept_tool(mesh_id: str) -> tuple[AtomicToolMetadata, Any]:
@@ -219,50 +180,55 @@ def _accept_tool(mesh_id: str) -> tuple[AtomicToolMetadata, Any]:
         "FREEZE THE MESH under construction as this case's mesh artifact -> the "
         "solver-ready mesh record.\n\n"
         "    Call this when the presented mesh is the domain to model on. The "
-        "session closes and its edit tools go away, so make every edit first. "
-        "The accepted mesh stays in the case for any template that asks for one."
+        "recipe that produced it is frozen onto the artifact as its provenance. "
+        "The session closes and its gate tools go away, so make every edit "
+        "first. The accepted mesh stays in the case for any template that asks "
+        "for one."
     )
     return _metadata(ACCEPT_TOOL), accept
 
-def _restart_tool(mesh_id: str) -> tuple[AtomicToolMetadata, Any]:
-    async def restart() -> dict[str, Any]:
+
+def _reset_tool(mesh_id: str) -> tuple[AtomicToolMetadata, Any]:
+    async def reset() -> dict[str, Any]:
         gate = _gate_for(mesh_id)
-        await asyncio.to_thread(gate.session.restart)
+        await asyncio.to_thread(gate.session.reset)
         return await present_mesh(gate)
 
-    restart.__name__ = RESTART_TOOL
-    restart.__doc__ = (
-        "THROW AWAY the gate-time mesh edits -> the mesh as it was declared, "
-        "re-presented with its probes.\n\n"
-        "    Truncates the edit chain back to the declared prefix and rebuilds. "
-        "The declared edits the template asked for survive; everything added at "
-        "this gate does not."
+    reset.__name__ = RESET_TOOL
+    reset.__doc__ = (
+        "PUT THE RECIPE BACK to the way it was declared -> the mesh rebuilt from "
+        "it, re-presented with its probes.\n\n"
+        "    The one structured revert. Every op appended, altered or removed at "
+        "this gate goes; the recipe the template declared survives. To undo one "
+        "change rather than all of them, edit the recipe back with mesh_op."
     )
-    return _metadata(RESTART_TOOL), restart
+    return _metadata(RESET_TOOL), reset
 
 
-def _compiled(name: str, params: list[str], input_names: tuple[str, ...],
-              apply: Any) -> Any:
-    """A named async function with a REAL signature over ``params``.
+def _adopt_tool(mesh_id: str) -> tuple[AtomicToolMetadata, Any]:
+    async def mesh_adopt_layer(layer: str) -> dict[str, Any]:
+        gate = _gate_for(mesh_id)
+        await asyncio.to_thread(gate.session.adopt_layer, layer)
+        return await present_mesh(gate)
 
-    The model is handed a schema built from the signature, so a generated tool
-    that took ``**kwargs`` would advertise no arguments at all.
-    """
-    call = ", ".join(f"{n}={n}" for n in input_names)
-    source = (f"async def {name}({', '.join(params)}):\n"
-              f"    return await _apply({call})\n")
-    namespace: dict[str, Any] = {"_apply": apply}
-    exec(compile(source, f"<mesh-edit:{name}>", "exec"), namespace)  # noqa: S102
-    fn = namespace[name]
-    fn.__module__ = __name__
-    return fn
+    mesh_adopt_layer.__doc__ = (
+        "ADOPT A HAND-EDITED mesh layer as the mesh under construction -> its "
+        "probes.\n\n"
+        "    For a mesh reshaped by hand in QGIS - nodes dragged, elements "
+        "deleted. The change lives in the layer's bytes rather than in the "
+        "recipe, so the mesh is FLAGGED: it can be accepted, but any later "
+        "recipe edit refuses rather than regenerating the hand-edit away.\n\n"
+        "    Params:\n"
+        "        layer: path to the edited .2dm mesh layer."
+    )
+    return _metadata(ADOPT_TOOL), mesh_adopt_layer
 
 
 # --------------------------------------------------------------------------- #
 # Presentation.
 # --------------------------------------------------------------------------- #
 async def present_mesh(gate: MeshGate) -> dict[str, Any]:
-    """Put the mesh on the map and read it -> the layer, the probes, the actions.
+    """Put the mesh on the map and read it -> the layer, the probes, the recipe.
 
     The display face is an MDAL mesh layer, which is what makes it editable in
     QGIS rather than a picture of a mesh; the wireframe style is how it renders.
@@ -285,8 +251,10 @@ async def present_mesh(gate: MeshGate) -> dict[str, Any]:
         "layer_id": layer.layer_id,
         "display_uri": layer.uri,
         "probes": session.probes(),
-        "edit_tools": list(gate.tools),
-        "recipe": session.recipe_lines(),
+        "gate_tools": list(gate.tools),
+        "recipe": session.recipe.to_json(),
+        "ops": session.recipe.numbered(),
+        **({"regen_note": session.regen_note} if session.regen_note else {}),
     }
 
 
@@ -310,7 +278,7 @@ def render_probe_lines(probes: Mapping[str, Any]) -> list[str]:
     lines = [f"{probes.get('node_count', 0)} nodes / "
              f"{probes.get('element_count', 0)} elements, "
              f"{probes.get('crs_authid', '?')}",
-             ("bed sampled" if probes.get("has_bed") else "NO bed sampled")]
+             ("bed painted" if probes.get("has_bed") else "NO bed painted")]
     edges = probes.get("edge_length_m") or {}
     if edges:
         lines.append(f"edge length {edges.get('min', 0.0):.1f} - "
@@ -336,8 +304,8 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
     """Build the demanded mesh under the gate -> the accepted :class:`MeshArtifact`.
 
     AUTO (or a headless run with no session to present on) builds inline. Under
-    USER-GATED the mesh is presented and the run waits: approve it, truncate the
-    gate-time edits, or apply one more named edit and look again.
+    USER-GATED the mesh is presented and the run waits: approve it, put the
+    recipe back to its declaration, or change a param and look again.
     """
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
@@ -376,34 +344,36 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
         close_mesh_gate(gate)
 
 
+#: The row every open gate offers beside the params: the revert to the recipe as
+#: it was declared, which is a loop action rather than a recipe param.
+_RESET_ROW = "reset"
+
+#: What the ops rows are named by: their INDEX, which is what an alter or a
+#: remove targets.
+_OP_ROW = "op"
+
+
 async def _apply_gate_revision(session: MeshSession,
                                revised: Mapping[str, Any]) -> None:
-    """One gate reply as a chain change: a truncation or the named edits it asks for.
+    """One gate reply as a recipe change: the revert, or the params that MOVED.
 
-    Two spellings reach here and both are the same ask. A caller that already
-    knows the registry names one action outright; the card the user answers on
-    renders one editor per knob and sends back the knobs that MOVED, keyed
-    ``<action>.<input>``, so the reply is unpacked into the actions those knobs
-    belong to.
+    The card carries the three agnostic params and the reset; everything an op
+    can say is said through ``mesh_op``, so there is nothing per-mesher to unpack
+    here and no mesher can have a card row this loop does not understand.
     """
-    if _truthy(revised.get("restart")):
-        await asyncio.to_thread(session.restart)
+    if _truthy(revised.get(_RESET_ROW)):
+        await asyncio.to_thread(session.reset)
         return
-    action = revised.get("edit")
-    if action:
-        inputs = {k: v for k, v in revised.items() if k not in ("edit", "restart")}
-        await asyncio.to_thread(session.edit, str(action), **inputs)
-        return
-    edits = _sheet_edits(session, revised)
-    if not edits:
+    params = {name: _as_number(name, revised[name])
+              for name in ("resolution_m",) if revised.get(name) not in (None, "")}
+    if not params:
         raise MeshToolError(
             "MESH_GATE_REVISION_UNREADABLE",
-            f"a mesh gate revision names either {{'restart': true}}, "
-            f"{{'edit': '<action>', ...inputs}} or the card's own "
-            f"'<action>.<input>' knobs; got {sorted(revised)}. The registered "
-            f"actions are {sorted(session.mesher.actions)}.")
-    for name, inputs in edits.items():
-        await asyncio.to_thread(session.edit, name, **inputs)
+            f"a mesh gate revision names either {{'{_RESET_ROW}': true}} or one "
+            f"of the recipe's agnostic params ('resolution_m'); got "
+            f"{sorted(revised)}. Every other change is an op - append, alter or "
+            "remove one with mesh_op.")
+    await asyncio.to_thread(session.set_params, **params)
 
 
 def _truthy(value: Any) -> bool:
@@ -413,150 +383,52 @@ def _truthy(value: Any) -> bool:
     return bool(value)
 
 
-def _sheet_edits(session: MeshSession,
-                 revised: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
-    """The card's moved knobs, regrouped into ``{action: {input: value}}``."""
-    edits: dict[str, dict[str, Any]] = {}
-    for key, value in revised.items():
-        action, _, field_name = str(key).partition(_KNOB_SEPARATOR)
-        if not field_name or action not in session.mesher.actions:
-            continue
-        declared = session.mesher.actions[action].inputs.get(field_name)
-        if declared is None:
-            raise MeshToolError(
-                "MESH_GATE_REVISION_UNREADABLE",
-                f"the gate reply names {key!r}, and the {action!r} action declares "
-                f"no input {field_name!r} "
-                f"({sorted(session.mesher.actions[action].inputs)}).")
-        edits.setdefault(action, {})[field_name] = _as_declared(key, declared, value)
-    return edits
-
-
-def _as_declared(key: str, declared: MeshField, value: Any) -> Any:
-    """A card row's text as the type its action declared, checked against it.
-
-    A row rendered with no current value has nothing for the client to infer a
-    type from, so it sends what the editor holds; the declaration is what says the
-    knob is a number, and what says which words a vocabulary knob answers to. A
-    value off that roster is refused here, where the reply names the row the user
-    typed in, rather than deeper down where it names only the field.
-    """
-    if _is_numeric(declared) and isinstance(value, str):
-        try:
-            value = float(value)
-        except ValueError:
-            raise MeshToolError(
-                "MESH_GATE_REVISION_UNREADABLE",
-                f"the gate reply set {key!r} to {value!r}, and "
-                f"{declared.name!r} takes a number.") from None
-    if declared.choices and value not in declared.choices:
+def _as_number(name: str, value: Any) -> float:
+    """A card row's text as the number the recipe param is, checked against it."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
         raise MeshToolError(
             "MESH_GATE_REVISION_UNREADABLE",
-            f"the gate reply set {key!r} to {value!r}, and {declared.name!r} "
-            f"takes one of {[c for c in declared.choices]}.")
-    return value
-
-
-#: What joins an action to one of its inputs in a card row's name. A row name is
-#: the key the edit rides back under, so it has to say which action the knob turns.
-_KNOB_SEPARATOR = "."
-
-#: The row every open gate offers beside the knobs: the truncation back to the
-#: declared chain, which is a loop action rather than any mesher's edit.
-_RESTART_ROW = "restart"
-
-
-def _knob_rows(session: MeshSession) -> list[Any]:
-    """One editable row per edit INPUT a property grid can carry.
-
-    Per input, not per action: an action that mixes a drawn geometry with a number
-    still offers the number, because dropping the whole action over the one input a
-    grid cannot hold leaves a mesher whose every action mixes them - and the card
-    with nothing on it but the truncation.
-
-    What a grid cannot hold is a value the user draws or edits somewhere else: a
-    geometry, a layer, an extent. Those stay on the mounted tools, and only they
-    are skipped.
-    """
-    from trid3nt_contracts.payload_warning import ParamSheetRow
-
-    rows: list[Any] = []
-    for action in session.mesher.actions.values():
-        for declared in action.inputs.values():
-            if not _renderable(declared):
-                continue
-            rows.append(ParamSheetRow(
-                name=f"{action.name}{_KNOB_SEPARATOR}{declared.name}",
-                value=None, door="gate", basis="user",
-                desc=_knob_desc(action, declared)[:512],
-                source_badge=f"{action.name} - leave blank to keep this mesh",
-                user_lever=True,
-                note=(action.doc or "")[:512] or None))
-    return rows
-
-
-def _knob_desc(action: EditAction, declared: MeshField) -> str:
-    """The row label: what the input means, what it may become, what it needs.
-
-    A vocabulary knob's roster is not carried anywhere else on a row, so it is
-    spelled out here or the user is typing into an editor with no visible answers.
-    An action that also demands a drawn input names the tool that carries it, so a
-    row that cannot be submitted alone says so on the card rather than refusing
-    after the user has already answered.
-    """
-    text = declared.doc or action.doc or declared.name
-    if declared.choices:
-        text = f"{text} - one of {', '.join(str(c) for c in declared.choices)}"
-    drawn = [f.name for f in action.inputs.values()
-             if f.required and not _renderable(f)]
-    if drawn:
-        text = (f"{text} - this edit also takes {', '.join(drawn)}, which only "
-                f"{edit_tool_name(action.name)} can carry")
-    return text
-
-
-def _renderable(declared: MeshField) -> bool:
-    """Can a property-grid row carry this input's value?
-
-    A number can, and so can a word off a declared roster. Everything else is a
-    file or a shape the user produces elsewhere, and an editor over it would take
-    text no action could use.
-    """
-    if declared.hashed:
-        return False
-    return _is_numeric(declared) or _is_vocabulary(declared)
-
-
-def _is_numeric(declared: MeshField) -> bool:
-    return bool(declared.types) and all(
-        kind in (int, float) for kind in declared.types)
-
-
-def _is_vocabulary(declared: MeshField) -> bool:
-    return bool(declared.choices) and all(
-        isinstance(choice, str) for choice in declared.choices)
+            f"the gate reply set {name!r} to {value!r}, and it takes a number."
+        ) from None
 
 
 def _mesh_param_sheet(session: MeshSession, *, tool_name: str,
                       round_idx: int, max_rounds: int) -> Any:
-    """The gate card's edit surface: the knobs a grid can carry, plus the truncation.
+    """The gate card: the agnostic params, the numbered recipe, the revert.
 
-    The card the shipped client renders for a sheet is the one gate surface that
-    carries values back, so every revision the loop can act on is offered as a row
-    here; a mesher registering no such knob still gets the truncation row, and the
-    mounted edit tools remain the surface for everything a row cannot say.
+    Generic by construction. The rows a user can MOVE are the params every mesher
+    means the same thing by; the ops are shown numbered because an index is what
+    an alter or a remove targets, and they are read-only here because the one
+    place an op is written is ``mesh_op``.
     """
     from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
-    rows = _knob_rows(session)
+    recipe = session.recipe
+    rows = [ParamSheetRow(
+        name="resolution_m",
+        value=(None if recipe.resolution_m is None
+               else str(recipe.resolution_m)),
+        door="gate", basis="user",
+        desc="the finest cell or triangle edge, in metres - the one size word "
+             "every mesher reads. Leave blank to keep this mesh",
+        source_badge=f"{recipe.mesher} recipe", user_lever=True)]
+    for index, line in enumerate(recipe.numbered()):
+        rows.append(ParamSheetRow(
+            name=f"{_OP_ROW}[{index}]", value=line.split(": ", 1)[-1][:512],
+            door="gate", basis="user",
+            desc="one step of the program that produced this mesh; append, alter "
+                 f"or remove it by index with mesh_op"[:512],
+            source_badge="recipe op", user_lever=False))
     rows.append(ParamSheetRow(
-        name=_RESTART_ROW, value="no", door="gate", basis="user",
-        desc="type yes to throw away the gate-time edits and rebuild the mesh "
-             "as it was declared",
+        name=_RESET_ROW, value="no", door="gate", basis="user",
+        desc="type yes to put the recipe back to the way it was declared and "
+             "rebuild",
         source_badge="loop action", user_lever=True))
     return ParamSheet(
         workflow=tool_name,
-        title=(f"Review the {session.mesher.name} mesh "
+        title=(f"Review the {recipe.mesher} mesh "
                f"(round {round_idx}/{max_rounds})")[:200],
         rows=rows)
 
@@ -572,12 +444,12 @@ async def _ask_mesh_gate(emitter: Any, *, tool_name: str, gate: MeshGate,
     session = gate.session
     warning_id = new_ulid()
     body = "; ".join(render_probe_lines(presentation.get("probes") or {}))
-    actions = ", ".join(sorted(session.mesher.actions))
     recommendation = (
         f"The {session.mesher.name} mesh is on the map as an editable mesh "
-        f"layer (round {round_idx}/{max_rounds}): {body}. Submit unchanged to "
-        f"solve on it, cancel to stop, or edit a row to refine it. Registered "
-        f"actions: {actions}."
+        f"layer (round {round_idx}/{max_rounds}): {body}. Its recipe has "
+        f"{len(session.recipe.ops)} op(s), numbered on the card. Submit "
+        f"unchanged to solve on it, cancel to stop, or change a row to rebuild "
+        f"it; refine it further with mesh_op."
     )[:512]
     envelope = PayloadWarningEnvelopePayload(
         warning_id=warning_id, tool_name=tool_name,

@@ -1,23 +1,21 @@
 """``build_mesh`` - the one mesh router.
 
-A mesh ask is a SPEC (which mesher, which kind, and that mesher's own fields)
-plus an ordered chain of named edits. Declared in a template the ask is a frozen
-value that builds NOTHING at import; called standalone it builds now and stashes
-the artifact in the case. Both go through the same validation, which is the point
-of a single router: every field is checked against the registering mesher's
-declaration and anything else is refused by name.
+A mesh ask is a RECIPE: which mesher, which kind, the domain, the one size word,
+and the ordered ops list that is the program. Declared in a template the ask is a
+frozen value that builds NOTHING at import; called standalone it builds now and
+stashes the artifact in the case. Both go through the same validation, which is
+the point of a single router: every op is checked against the registering
+mesher's namespaces and anything else is refused by name.
 
 Resolution order when a run needs a mesh: an explicit mesh argument wins, then a
-compatible mesh already authored in the case, then the declared spec's default
-build.
+compatible mesh already authored in the case, then the declared recipe's build.
 """
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
-from typing import Any, Mapping
-from types import MappingProxyType
+from dataclasses import dataclass
+from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
@@ -25,263 +23,62 @@ from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
 from trid3nt_server.workflows.lib.accepts import Accepts
 from trid3nt_server.workflows.lib.data import tool
-from trid3nt_server.workflows.lib.slots import deep_freeze
 from trid3nt_server.workflows.mesh.artifact import (
     MeshArtifact,
     find_case_mesh_artifacts,
     read_mesh_artifact_sidecar,
 )
-from trid3nt_server.workflows.mesh.kinds import MeshKind
 from trid3nt_server.workflows.mesh.meshers import (
     EDGE_RESOLUTION_SPECS,
+    MeshOp,
     MeshToolError,
     get_mesher,
-    is_late_bound,
-    nearest_names,
+    mesh_op,
+    op_names,
+    registered_meshers,
+)
+from trid3nt_server.workflows.mesh.recipe import (
+    MeshRecipe,
+    build_recipe,
+    jsonable,
+    recipe_from_plan_value,
+    recipe_plan_value,
 )
 # Importing a mesher REGISTERS it; the roster is this block and nothing else.
 from trid3nt_server.workflows.mesh.meshers import om2d as _om2d  # noqa: F401,E402
 from trid3nt_server.workflows.mesh.meshers import reg_grid as _reg_grid  # noqa: F401,E402
 
 __all__ = [
-    "DeclaredEdit",
-    "MeshKind",
+    "MeshOp",
+    "MeshRecipe",
+    "MeshResolution",
+    "MeshTool",
+    "MeshToolError",
     "accepts_for",
-    "bind_edit_inputs",
+    "build_mesh",
+    "build_recipe",
     "jsonable",
     "kind_accepted",
     "mesh_kind",
-    "MeshDeclaration",
-    "MeshResolution",
-    "MeshSpec",
-    "MeshTool",
-    "MeshToolError",
-    "build_mesh",
-    "declaration_from_plan_value",
-    "declaration_plan_value",
+    "mesh_op",
+    "recipe_from_plan_value",
+    "recipe_plan_value",
     "resolve_mesh",
     "supplied_mesh_artifact",
     "tool",
-    "validate_edit",
-    "validate_spec",
 ]
-
-
-def jsonable(value: Any) -> Any:
-    """A spec/edit value as JSON, or a refusal naming what cannot be recorded."""
-    if is_late_bound(value):
-        raise MeshToolError(
-            "MESH_SPEC_UNBOUND",
-            f"{value!r} is a late-bound read, not a value: the recipe records what "
-            "a run actually built with, so bind the declaration first.")
-    if value is None or isinstance(value, (str, bool, int, float)):
-        return value
-    if getattr(value, "uri", None):
-        # A declared data row arrives as the layer its producer returned, and the
-        # meshers read it through the same unwrap: the recipe records the ADDRESS
-        # they read, which is what a replay can re-read.
-        from trid3nt_server.tools.processing._geometry_common import source_uri
-
-        return jsonable(source_uri(value))
-    if isinstance(value, Mapping):
-        return {str(k): jsonable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
-        return [jsonable(v) for v in value]
-    item = getattr(value, "item", None)
-    if callable(item):
-        return jsonable(item())
-    raise MeshToolError(
-        "MESH_SPEC_UNSERIALIZABLE",
-        f"a {type(value).__name__} cannot be recorded in a mesh recipe ({value!r}); "
-        "declare the ask as numbers, strings, sequences or mappings.")
-
-
-@dataclass(frozen=True)
-class MeshSpec:
-    """WHICH mesher, and the fields that mesher declared - validated, frozen."""
-
-    mesher: str
-    fields: Mapping[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "fields", MappingProxyType(dict(self.fields)))
-
-    @property
-    def kind(self) -> Any:
-        return self.fields.get("kind")
-
-    def to_json(self) -> dict[str, Any]:
-        return {"mesher": self.mesher,
-                **{k: jsonable(v) for k, v in self.fields.items()}}
-
-    @classmethod
-    def from_json(cls, doc: Mapping[str, Any]) -> "MeshSpec":
-        fields = {k: v for k, v in dict(doc).items() if k != "mesher"}
-        return validate_spec(str(doc["mesher"]), fields)
-
-
-@dataclass(frozen=True)
-class DeclaredEdit:
-    """One named edit and its inputs, in the position the chain puts it."""
-
-    action: str
-    inputs: Mapping[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "inputs", MappingProxyType(dict(self.inputs)))
-
-
-@dataclass(frozen=True)
-class MeshDeclaration:
-    """A frozen mesh ask: the spec plus the DECLARED edits that prefix its recipe.
-
-    A template holds one of these at module scope, so it is deep-frozen and builds
-    nothing until a session opens over it.
-    """
-
-    spec: MeshSpec
-    edits: tuple[DeclaredEdit, ...] = ()
-
-    def edit(self, action: str, *values: Any, **inputs: Any) -> "MeshDeclaration":
-        """Append a DECLARED edit -> a new declaration. Builds nothing.
-
-        Positional values bind to the action's declared inputs in declaration
-        order, so a one-input action reads as ``.edit("add_obstacle", DATA.walls)``.
-        """
-        bound = validate_edit(self.spec.mesher, action, bind_edit_inputs(
-            self.spec.mesher, action, values, inputs))
-        return MeshDeclaration(
-            self.spec, self.edits + (DeclaredEdit(str(action), bound),))
-
-
-def bind_edit_inputs(mesher: str, action: str, values: tuple[Any, ...],
-                     inputs: Mapping[str, Any]) -> dict[str, Any]:
-    """Bind positional edit values onto the action's declared input names."""
-    declared = list(get_mesher(mesher).action(action).inputs)
-    if len(values) > len(declared):
-        raise MeshToolError(
-            "MESH_EDIT_TOO_MANY_INPUTS",
-            f"edit {action!r} on mesher {mesher!r} declares {len(declared)} inputs "
-            f"({declared}); {len(values)} positional values were passed.")
-    bound = dict(zip(declared, values))
-    for name in bound:
-        if name in inputs:
-            raise MeshToolError(
-                "MESH_EDIT_DUPLICATE_INPUT",
-                f"edit {action!r}: {name!r} was given both positionally and by name.")
-    bound.update(inputs)
-    return bound
-
-
-def validate_spec(mesher: str, fields: Mapping[str, Any]) -> MeshSpec:
-    """Check a spec against the registering mesher's declared fields -> a MeshSpec.
-
-    Refuses loudly and by name: an unknown mesher, a field the mesher never
-    declared, a missing required field, a wrong type, a value outside a declared
-    vocabulary. Late-bound reads pass the type and vocabulary checks - their value
-    is not decided until the interpreter binds them.
-    """
-    registered = get_mesher(mesher)
-    where = f"mesher {registered.name!r}"
-    unknown = [k for k in fields if k not in registered.fields]
-    if unknown:
-        raise MeshToolError(
-            "MESH_SPEC_UNKNOWN_FIELD",
-            f"{where} declares no field {unknown[0]!r} "
-            f"({nearest_names(unknown[0], registered.fields)}). Unknown fields: "
-            f"{sorted(unknown)}.")
-    resolved: dict[str, Any] = {}
-    for name, declared in registered.fields.items():
-        value = declared.check(fields.get(name), where=where)
-        if value is not None:
-            resolved[name] = deep_freeze(value)
-    return MeshSpec(mesher=registered.name, fields=resolved)
-
-
-def validate_edit(mesher: str, action: str,
-                  inputs: Mapping[str, Any]) -> Mapping[str, Any]:
-    """Check one edit against the mesher's action registry -> its resolved inputs."""
-    registered = get_mesher(mesher)
-    act = registered.action(action)
-    where = f"edit {act.name!r} on mesher {registered.name!r}"
-    unknown = [k for k in inputs if k not in act.inputs]
-    if unknown:
-        raise MeshToolError(
-            "MESH_EDIT_UNKNOWN_INPUT",
-            f"{where} declares no input {unknown[0]!r} "
-            f"({nearest_names(unknown[0], act.inputs)}). Unknown inputs: "
-            f"{sorted(unknown)}.")
-    resolved: dict[str, Any] = {}
-    for name, declared in act.inputs.items():
-        value = declared.check(inputs.get(name), where=where)
-        if value is not None:
-            resolved[name] = deep_freeze(value)
-    return MappingProxyType(resolved)
 
 
 class MeshTool:
     """The mesh ask's validation face, reached as ``tool.build_mesh(...)``."""
 
     @staticmethod
-    def build_mesh(*, mesher: str, kind: MeshKind | None = None,
-                   **fields: Any) -> MeshDeclaration:
-        """Declare a mesh ask -> a frozen :class:`MeshDeclaration`. Builds nothing."""
-        if kind is not None:
-            fields = {"kind": kind, **fields}
-        return MeshDeclaration(validate_spec(mesher, fields))
-
-
-
-def declaration_plan_value(declaration: MeshDeclaration) -> dict[str, Any]:
-    """A declaration as the plain mapping a plan step carries in its kwargs.
-
-    Mappings and sequences are what the interpreter walks to substitute late-bound
-    reads, so the declaration travels as one: the mesher, every field the router
-    checked, and the DECLARED edit chain in its order. What the step's runner
-    receives is therefore the whole ask with its values bound, and it rebuilds that
-    ask rather than restating parts of it - a knob or an edit the template declared
-    cannot go missing between the declaration and the mesh.
-    """
-    if not isinstance(declaration, MeshDeclaration):
-        raise MeshToolError(
-            "MESH_DECLARATION_EXPECTED",
-            f"a mesh step carries the template's MESH declaration "
-            f"(tool.build_mesh(...)), got {type(declaration).__name__}.")
-    return {"mesher": declaration.spec.mesher,
-            "fields": _thaw(declaration.spec.fields),
-            "edits": [{"action": edit.action, "inputs": _thaw(edit.inputs)}
-                      for edit in declaration.edits]}
-
-
-def _thaw(value: Any) -> Any:
-    """A frozen declaration value as the plain containers a step's kwargs carry.
-
-    A declaration is deep-frozen, and a read-only proxy is not the ``dict`` a
-    mesher's own field check accepts, so the mapping a step hands back to the
-    router is a plain one. Late-bound reads pass through untouched - binding them
-    is the interpreter's job, not this one's.
-    """
-    if isinstance(value, Mapping):
-        return {str(k): _thaw(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return type(value)(_thaw(v) for v in value)
-    return value
-
-
-def declaration_from_plan_value(value: Mapping[str, Any],
-                                **overrides: Any) -> MeshDeclaration:
-    """Rebuild the declaration a step was handed, with named fields replaced.
-
-    ``overrides`` are for the fields a step RESOLVES rather than the template -
-    a domain the plan navigated, an input a producer fetched. Everything else,
-    including the edit chain that prefixes the recipe, comes back exactly as it
-    was declared.
-    """
-    fields = {**dict(value["fields"]), **overrides}
-    declaration = MeshTool.build_mesh(mesher=str(value["mesher"]), **fields)
-    for edit in value.get("edits") or ():
-        declaration = declaration.edit(str(edit["action"]), **dict(edit["inputs"]))
-    return declaration
+    def build_mesh(*, mesher: str, kind: Any = None, extent: Any = None,
+                   resolution_m: Any = None,
+                   ops: Any = None) -> MeshRecipe:
+        """Declare a mesh ask -> a frozen :class:`MeshRecipe`. Builds nothing."""
+        return build_recipe(mesher=mesher, kind=kind, extent=extent,
+                            resolution_m=resolution_m, ops=ops)
 
 
 @dataclass(frozen=True)
@@ -291,18 +88,18 @@ class MeshResolution:
     source: str
     reason: str
     artifact: MeshArtifact | None = None
-    declaration: MeshDeclaration | None = None
+    recipe: MeshRecipe | None = None
 
 
 def resolve_mesh(
-    declaration: MeshDeclaration | None = None, *,
+    recipe: MeshRecipe | None = None, *,
     explicit: Any = None,
     accepts: Accepts | None = None,
     case_id: str | None = None,
     loaded_mesh_uris: list[str] | None = None,
     s3_client: Any = None,
 ) -> MeshResolution:
-    """Pick the mesh a run should use: explicit first, then the case, then the spec.
+    """Pick the mesh a run should use: explicit first, then the case, then the recipe.
 
     An explicit mesh NEVER falls through: if it cannot be read, if its kind is not
     a member of the ``mesh`` row of the template's declared ``accepts``, or if the
@@ -314,7 +111,7 @@ def resolve_mesh(
     rather than several steps later by a deck that assumed a shape the mesh does
     not have. A template with no mesh row accepts no supplied mesh at all.
 
-    ``declaration`` is the DEFAULT BUILD, and the build path is untouched by
+    ``recipe`` is the DEFAULT BUILD, and the build path is untouched by
     ``accepts``: a run with nothing supplied and nothing to adopt builds the kind
     it declared.
     """
@@ -352,14 +149,13 @@ def resolve_mesh(
             "discovered", f"mesh {art.name!r} already authored in this case",
             artifact=art)
 
-    if declaration is None:
+    if recipe is None:
         raise MeshToolError(
             "MESH_UNRESOLVED",
             "no mesh was supplied, none compatible was found in this case, and no "
             "mesh was declared, so there is nothing to build or adopt.")
     return MeshResolution(
-        "declared", f"the declared {declaration.spec.mesher!r} build",
-        declaration=declaration)
+        "declared", f"the declared {recipe.mesher!r} build", recipe=recipe)
 
 
 def accepts_for(tool_name: str) -> Accepts | None:
@@ -404,7 +200,8 @@ def mesh_kind(art: MeshArtifact) -> Any:
     ``None`` for a mesh whose record does not state one, which is not the same as
     a kind that fails to match: nothing here can decide what an unstated shape is.
     """
-    return ((getattr(art, "provenance", None) or {}).get("spec") or {}).get("kind")
+    provenance = getattr(art, "provenance", None) or {}
+    return (provenance.get("recipe") or {}).get("kind")
 
 
 def kind_accepted(art: MeshArtifact, accepts: Accepts | None) -> bool:
@@ -469,13 +266,13 @@ _METADATA = AtomicToolMetadata(
 )
 async def build_mesh(
     mesher: str = "reg_grid",
-    kind: MeshKind | None = None,
+    kind: str | None = None,
     location: str | None = None,
     bbox: tuple[float, float, float, float] | list[float] | str | None = None,
-    min_edge_length_m: float | None = None,
-    max_edge_length_m: float | None = None,
+    extent: Any = None,
+    resolution_m: float | None = None,
+    ops: list[dict] | None = None,
     input_mode: str | None = None,
-    **fields: Any,
 ) -> Any:
     """BUILD A COMPUTATIONAL MESH for a domain -> a mesh layer + a solver-ready mesh artifact.
 
@@ -485,47 +282,44 @@ async def build_mesh(
     EXPLICIT act and lives HERE: a model template that finds this mesh in the case
     ASKS before consuming it, and never invents one behind your back.
 
-    ``mesher`` names the mesh library that builds it and ``kind`` the shape of
-    mesh it makes; every other argument is a field that mesher DECLARES, checked
-    at the router - a field the chosen mesher does not declare is refused by name
-    rather than ignored. The roster:
+    A mesh is defined by its RECIPE and nothing else: the mesher, the kind, the
+    domain, the one size word, and an ORDERED ops list. ``ops`` entries are
+    ``{"fn": <name>, ...kwargs}`` calling the mesh library's OWN functions under
+    their own names, plus the shared primitives ``set_bed`` and
+    ``set_boundary_roles``. Omit ``ops`` for the mesher's hard-baked default list.
+    Refine an already-built mesh by appending one more entry with ``mesh_op``.
 
-    * ``om2d`` - OceanMesh2D: the GSHHG shoreline cuts the water domain, sized by
-      distance to shore and by wavelength over the fetched bed. Obstacles punch
-      out of it with their outlines constrained in, regions refine, and a named
-      side becomes the open boundary. It also meshes the interior of a POLYGON
-      handed to ``extent`` - a basin from ``delineate_watershed``, a river reach
-      from ``section``, any narrowed domain another tool produced.
+    The roster:
+
+    * ``om2d`` - OceanMesh2D: the GSHHG shoreline cuts the water domain from a
+      lon/lat box, or the interior of a POLYGON handed to ``extent`` is meshed as
+      it stands - a basin from ``delineate_watershed``, a river reach from
+      ``section``, any narrowed domain another tool produced. Its ops are
+      oceanmesh's own sizing functions (``feature_sizing_function``,
+      ``distance_sizing_from_line_function``, ``wavelength_sizing_function``,
+      ``enforce_mesh_gradation``) and its own clean passes.
     * ``reg_grid`` - the uniform lattice a structured deck runs on.
 
     ``input_mode="user_gated"`` stops at the MESH GATE instead of finishing: the
-    mesh lands on the map as an editable mesh layer, its probes come back, and
-    one tool per edit action the chosen mesher registers is mounted for as long
-    as the session stays open - refine it, hand-edit the layer in QGIS and feed
-    it back, then ``mesh_accept`` (or ``mesh_restart`` to drop the edits). AUTO
-    (the default) builds and accepts inline.
-
-    Edge levers: ``min_edge_length_m`` / ``max_edge_length_m`` bound the cell or
-    triangle size, ``grade`` limits how fast the two may transition. Both edges
-    are declared >= 5 m; a finer ask is quoted the floor and the AOI-dependent
-    <= 8-sides-per-cell acceptance rather than silently snapped. ``om2d`` takes
-    the same band inside its ``refine`` block instead. US-only.
+    mesh lands on the map as an editable mesh layer, its probes come back, and the
+    recipe is presented with its ops NUMBERED so one can be appended, altered or
+    removed - then ``mesh_accept`` (or ``mesh_reset`` to go back to the recipe as
+    declared). AUTO (the default) builds and accepts inline.
 
     Params:
         mesher: which mesh library builds it (om2d | reg_grid).
         kind: the mesh shape that mesher makes (unstructured_tri |
             structured_grid).
         location: place naming the domain (geocoded). Supply this OR ``bbox``.
-        bbox: AOI ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. To mesh
-            a POLYGON instead of a box, pass it as ``extent`` (a layer uri or
-            GeoJSON) rather than as ``bbox``.
-        min_edge_length_m: finest cell/triangle edge (m). Declined by name by a
-            mesher that sizes another way.
-        max_edge_length_m: coarsest edge (m).
+        bbox: AOI ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+        extent: a POLYGON to mesh the interior of (a layer uri or GeoJSON),
+            instead of ``bbox``.
+        resolution_m: the finest cell or triangle edge, in metres. The coarsest
+            background edge defaults to 10x it unless an op states its own.
+        ops: the ordered program, ``[{"fn": name, ...kwargs}, ...]``. Omit for
+            the mesher's default list.
         input_mode: ``user_gated`` to review + edit the mesh at the gate before
             it is accepted; ``auto`` (default) builds and accepts inline.
-        fields: the chosen mesher's own remaining declared fields (grade,
-            open_boundary_side, resolution_m, refine, bed, crs_authid).
     """
     import asyncio
 
@@ -542,41 +336,20 @@ async def build_mesh(
             "MESH_STAGING_UNAVAILABLE",
             "TRID3NT_CACHE_BUCKET must be set to stage a built mesh into the case.")
 
-    # The edge band is on the SIGNATURE because it is the granularity lever three
-    # of the meshers share and the one whose floor the tool declares; a mesher that
-    # does not size by an edge band refuses it by name at the router.
-    for name, value in (("min_edge_length_m", min_edge_length_m),
-                        ("max_edge_length_m", max_edge_length_m)):
-        if value is not None:
-            fields = {name: float(value), **fields}
-
-    declared = get_mesher(mesher).fields
-    if "extent" not in declared:
-        # A mesher that takes no extent is handed an existing geometry, so an
-        # extent would reach nothing. Refused BY NAME, the same as any other field
-        # this mesher never declared - a dropped extent reads as a lever that
-        # shaped a mesh it never touched.
-        spatial = [name for name, value in
-                   (("location", location), ("bbox", bbox)) if value is not None]
-        if spatial:
-            raise MeshToolError(
-                "MESH_SPEC_UNKNOWN_FIELD",
-                f"mesher {mesher!r} declares no field {spatial[0]!r}: it adopts the "
-                f"geometry it is given rather than cutting one from an extent "
-                f"({nearest_names(spatial[0], declared)}). Named extents: "
-                f"{sorted(spatial)}.")
-    if "extent" in declared and "extent" not in fields:
+    if extent is None:
         extent = coerce_bbox_value(bbox) if bbox is not None else None
         if extent is None and location:
             geo = await asyncio.to_thread(
                 TOOL_REGISTRY["geocode_location"].fn, query=location)
             extent = coerce_bbox_value(getattr(geo, "bbox", None) or geo["bbox"])
-        if extent is not None:
-            fields = {"extent": tuple(float(v) for v in extent), **fields}
+        if isinstance(extent, (tuple, list)):
+            extent = tuple(float(v) for v in extent)
 
-    declaration = MeshTool.build_mesh(mesher=mesher, kind=kind, **fields)
+    recipe = MeshTool.build_mesh(
+        mesher=mesher, kind=kind, extent=extent, resolution_m=resolution_m,
+        ops=None if ops is None else [_wire_op(entry) for entry in ops])
     name = location or f"{mesher} mesh"
-    session = MeshSession(declaration, case_id=current_turn_case(), name=name)
+    session = MeshSession(recipe, case_id=current_turn_case(), name=name)
     if (resolve_input_gate_mode(input_mode) == "user_gated"
             and current_emitter() is not None):
         # The mesh stops at the gate: presented, editable, and NOT yet the
@@ -586,3 +359,15 @@ async def build_mesh(
     return session.snapshot()
 
 
+def _wire_op(entry: Any) -> MeshOp:
+    """One ops entry off the wire, in the one shape a recipe entry has."""
+    if isinstance(entry, MeshOp):
+        return entry
+    if not isinstance(entry, dict) or not entry.get("fn"):
+        raise MeshToolError(
+            "MESH_OPS_MALFORMED",
+            f"an ops entry is {{'fn': <name>, ...kwargs}}; got {entry!r}. The "
+            f"names each mesher answers to: "
+            f"{ {m: list(op_names(get_mesher(m))) for m in registered_meshers()} }.")
+    return MeshOp(fn=str(entry["fn"]),
+                  kwargs={k: v for k, v in entry.items() if k != "fn"})

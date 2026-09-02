@@ -646,14 +646,18 @@ from trid3nt_server.workflows.telemac.agitation.agitation import artemis_harbor_
 # idealized closed basin. Physics proven through the baked telemac3d binary; the 3D
 # refinement tier that unblocks the AED2 lake-ecology + dune-migration STOPs.
 from trid3nt_server.workflows.telemac.stratified_flow.stratified_flow import telemac3d_stratified_flow as _telemac3d_stratified_flow  # noqa: E402,F401 - TELEMAC-3D stratified front (engine=telemac, tier=template)
-# build_mesh: the one mesh router. A parametric spec plus a per-mesher registry of
-# named edit actions wrapping the official mesh libraries; declared in a template it
-# is a frozen lazy ask, called standalone it builds now and stashes the artifact in
-# the case. Importing it registers every mesher behind it - the catchment, the
-# coastal water edge, the river corridor, the HEC-RAS graded cell mesh and the
-# regular grid - and emits an MDAL display layer plus the durable mesh artifact a
-# model template discovers through the precondition gate.
+# build_mesh: the one mesh router. A RECIPE - three mesher-agnostic params plus an
+# ordered list of verbatim calls on the wrapped mesh library and on the shared
+# primitives; declared in a template it is a frozen lazy ask, called standalone it
+# builds now and stashes the artifact in the case. Importing it registers every
+# mesher behind it - OceanMesh2D and the regular lattice - and emits an MDAL
+# display layer plus the durable mesh artifact a model template discovers through
+# the precondition gate.
 from trid3nt_server.workflows.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
+# mesh_op: the runtime face of the word a recipe is written in - append, alter or
+# remove one call on the recipe of the mesh open at the gate, then regenerate. The
+# whole of the mesh-refinement loop.
+from trid3nt_server.workflows.mesh.op_tool import mesh_op as _mesh_op  # noqa: E402,F401 - mesh domain primitive (tier=general)
 
 
 # COPY-ME authoring template (docs/authoring/writing-a-tool.md). Importing the

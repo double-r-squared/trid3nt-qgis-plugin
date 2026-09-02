@@ -1,11 +1,11 @@
 """The declared MESH step: a template's ``tool.build_mesh`` ask, built under the gate.
 
-One step for every template, because a mesh is a mesh: the declaration travels
-WHOLE - its mesher, its kind, every field the router checked and the edits the
-template declared on it - as the plain mapping the interpreter binds late-bound
-reads inside, a session opens over it, and what comes back is the ACCEPTED
-topology. Nothing about the ask is restated here, so a knob or a declared edit
-cannot go missing between the template and the mesh.
+One step for every template, because a mesh is a mesh: the RECIPE travels WHOLE -
+its mesher, its kind, its extent, its size word and every op in declared order -
+as the plain mapping the interpreter binds late-bound reads inside, a session
+opens over it, and what comes back is the ACCEPTED topology. Nothing about the
+ask is restated here, so a param or an op cannot go missing between the template
+and the mesh.
 
 Restated and not repeated: a per-domain wrapper around this would be a second
 place a mesh gets built, and the mesh a human approved and the mesh a solver ran
@@ -18,7 +18,7 @@ import logging
 from typing import Any
 
 from trid3nt_server.workflows.lib import Step
-from trid3nt_server.workflows.mesh.tool import declaration_plan_value
+from trid3nt_server.workflows.mesh.tool import recipe_plan_value
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.step")
 
@@ -41,21 +41,21 @@ class MeshStep:
 
         ``name`` is what the session is PRESENTED as and nothing more - which
         place the mesh at the gate belongs to is a step result rather than
-        anything a frozen declaration can name.
+        anything a frozen recipe can name.
         """
         return Step(runner=_RUNNER, stage="mesh",
-                    kwargs={"mesh": declaration_plan_value(mesh), "name": name})
+                    kwargs={"mesh": recipe_plan_value(mesh), "name": name})
 
 
 async def build_declared_mesh(*, mesh: dict[str, Any],
                               name: Any = None) -> dict[str, Any]:
     """The mesh a solve runs on -> the accepted mesh's record.
 
-    The declaration is rebuilt exactly as the template declared it and a session
-    opens over it: the mesh is built, its declared edits prefixing the recipe,
-    then presented at the mesh gate with its probes and its editable layer,
-    edited or restarted if the user says so, and accepted. A ``restart``
-    therefore truncates to the declared chain rather than past it.
+    The recipe is rebuilt exactly as the template declared it and a session opens
+    over it: the mesh is built from the whole program, then presented at the mesh
+    gate with its probes, its numbered ops and its editable layer, edited or
+    reset if the user says so, and accepted. A ``reset`` therefore goes back to
+    the declaration rather than past it.
     """
     import asyncio
 
@@ -63,12 +63,12 @@ async def build_declared_mesh(*, mesh: dict[str, Any],
     from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
     from trid3nt_server.workflows.mesh.gate import gate_mesh_build
     from trid3nt_server.workflows.mesh.session import MeshSession
-    from trid3nt_server.workflows.mesh.tool import declaration_from_plan_value
+    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
 
-    declaration = declaration_from_plan_value(mesh)
+    recipe = recipe_from_plan_value(mesh)
     session = await asyncio.to_thread(
-        MeshSession, declaration, case_id=current_turn_case(),
-        name=_session_name(name, declaration.spec.mesher))
+        MeshSession, recipe, case_id=current_turn_case(),
+        name=_session_name(name, recipe.mesher))
     art = await gate_mesh_build(session, tool_name=MeshStep.GATE_LABEL)
     logger.info("mesh accepted: %s -> %d nodes / %d elements, min edge %s m",
                 art.mesh_id, art.node_count, art.element_count,

@@ -1,14 +1,18 @@
-"""``MeshSession`` - the mesh under construction, and the recipe that IS its record.
+"""``MeshSession`` - the mesh under construction, and the recipe that IS its state.
 
-A mesh is its spec plus an ordered chain of named edits, so the session keeps that
-chain and journals it to ``mesh_recipe.jsonl`` beside the mesh files: the spec on
-the first line, then one line per applied edit. Replaying the journal rebuilds the
-mesh. An edit whose change lives in a hand-edited layer rather than in its inputs
-is recorded with the layer's digest and ``replayable: false``, so a replay refuses
-instead of quietly producing a different mesh.
+The session holds ONE recipe. Every change - appending an op, altering one by
+index, removing one, resetting to the declaration - swaps that recipe and
+regenerates the mesh WHOLESALE; nothing is patched incrementally, because a mesh
+patched from a program that no longer describes it is a mesh nobody can rebuild.
 
-The build is LAZY - nothing runs until a probe, a snapshot or an accept demands
-the mesh - and ``restart`` truncates the chain back to the DECLARED prefix.
+The journal beside the mesh files (``mesh_recipe.jsonl``) is append-only and is
+AUDIT, not state: the recipe as declared on the first line, then one line per
+edit event carrying the recipe that event produced. Undo is editing the recipe
+back; the one structured revert is :meth:`reset`.
+
+A hand-edit is the one operation that is genuinely history rather than program:
+the nodes were dragged, and no recipe produces that. It is ADOPTED and the mesh
+is flagged - regen would break it - rather than pretended into the recipe.
 """
 
 from __future__ import annotations
@@ -35,19 +39,12 @@ from trid3nt_server.workflows.mesh.artifact import (
 from trid3nt_server.workflows.mesh.meshers import (
     Mesh,
     Mesher,
+    MeshOp,
     MeshToolError,
     get_mesher,
     input_digest,
-    is_late_bound,
 )
-from trid3nt_server.workflows.mesh.tool import (
-    DeclaredEdit,
-    MeshDeclaration,
-    MeshSpec,
-    jsonable,
-    bind_edit_inputs,
-    validate_edit,
-)
+from trid3nt_server.workflows.mesh.recipe import MeshRecipe
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.session")
 
@@ -55,33 +52,28 @@ __all__ = ["MeshSession", "mesh_digest", "replay_recipe"]
 
 
 class MeshSession:
-    """A mesh being built: edit, probe, snapshot, restart, accept."""
+    """A mesh being built: edit the recipe, probe, reset, accept."""
 
-    def __init__(self, declaration: MeshDeclaration, *,
+    def __init__(self, recipe: MeshRecipe, *,
                  workdir: str | os.PathLike[str] | None = None,
                  case_id: str | None = None, name: str | None = None) -> None:
-        self.declaration = declaration
-        self.mesher: Mesher = get_mesher(declaration.spec.mesher)
+        self.declared = recipe
+        self.recipe = recipe
+        self.mesher: Mesher = get_mesher(recipe.mesher)
         self.mesh_id = new_ulid()
         self.case_id = case_id
-        self.name = name or f"{declaration.spec.mesher} mesh"
+        self.name = name or f"{recipe.mesher} mesh"
         self.workdir = Path(workdir) if workdir is not None else (
             Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"mesh-{self.mesh_id}")
         self.workdir.mkdir(parents=True, exist_ok=True)
-        self._declared: tuple[DeclaredEdit, ...] = tuple(declaration.edits)
-        self._chain: list[DeclaredEdit] = list(self._declared)
         self._mesh: Mesh | None = None
         self._display: tuple[Path, str] | None = None
+        self._events: list[dict[str, Any]] = []
+        #: Why this mesh cannot be regenerated from its recipe, once a hand-edit
+        #: has replaced the topology the recipe produces.
+        self.regen_note: str | None = None
 
     # -- the mesh ---------------------------------------------------------- #
-    @property
-    def spec(self) -> MeshSpec:
-        return self.declaration.spec
-
-    @property
-    def chain(self) -> tuple[DeclaredEdit, ...]:
-        return tuple(self._chain)
-
     @property
     def mesh(self) -> Mesh:
         self._ensure_built()
@@ -94,42 +86,103 @@ class MeshSession:
 
     def _ensure_built(self) -> None:
         if self._mesh is None:
-            self._mesh = _build_chain(self.mesher, self.spec, self._chain)
+            self._mesh = _build(self.mesher, self.recipe)
             self._journal()
 
-    # -- the loop ---------------------------------------------------------- #
-    def edit(self, action: str, *values: Any, **inputs: Any) -> dict[str, Any]:
-        """Apply one registered edit -> the rebuilt mesh's probes.
-
-        Positional values bind to the action's declared inputs in declaration
-        order, the same as on a declared edit.
-        """
-        self._ensure_built()
-        act = self.mesher.action(action)
-        bound = validate_edit(self.mesher.name, act.name,
-                              bind_edit_inputs(self.mesher.name, act.name,
-                                               values, inputs))
-        _refuse_unbound(self.spec, (DeclaredEdit(act.name, bound),))
-        self._mesh = act.apply(self._mesh, **dict(bound))
-        self._chain.append(DeclaredEdit(act.name, bound))
+    def _regenerate(self, event: dict[str, Any]) -> dict[str, Any]:
+        """Swap the recipe and rebuild the whole mesh -> the new probes."""
+        if self.regen_note is not None:
+            raise MeshToolError(
+                "MESH_REGEN_WOULD_DISCARD_HAND_EDIT", self.regen_note)
+        self._mesh = None
         self._display = None
+        self._events.append(event)
+        self._ensure_built()
+        return self.probes()
+
+    # -- editing the recipe ------------------------------------------------ #
+    def append_op(self, op: MeshOp) -> dict[str, Any]:
+        """Add one op to the end of the recipe and regenerate -> the probes."""
+        self.recipe = self.recipe.appending(op)
+        return self._regenerate({"event": "append", "op": repr(op)})
+
+    def alter_op(self, index: int, op: MeshOp) -> dict[str, Any]:
+        """Replace the op at ``index`` and regenerate -> the probes."""
+        self.recipe = self.recipe.altering(int(index), op)
+        return self._regenerate(
+            {"event": "alter", "index": int(index), "op": repr(op)})
+
+    def remove_op(self, index: int) -> dict[str, Any]:
+        """Drop the op at ``index`` and regenerate -> the probes."""
+        dropped = repr(self.recipe.ops[int(index)]) if 0 <= int(index) < len(
+            self.recipe.ops) else None
+        self.recipe = self.recipe.without(int(index))
+        return self._regenerate(
+            {"event": "remove", "index": int(index), "op": dropped})
+
+    def set_params(self, **params: Any) -> dict[str, Any]:
+        """Replace the recipe's agnostic params and regenerate -> the probes."""
+        self.recipe = self.recipe.with_params(**params)
+        return self._regenerate({"event": "params", **{
+            k: str(v) for k, v in params.items()}})
+
+    def reset(self) -> dict[str, Any]:
+        """Put the recipe back to the DECLARATION and rebuild -> the probes.
+
+        The one structured revert. What the template declared survives;
+        everything appended, altered or removed at this gate does not.
+        """
+        self.recipe = self.declared
+        self.regen_note = None
+        return self._regenerate({"event": "reset"})
+
+    def adopt_layer(self, layer: str) -> dict[str, Any]:
+        """Adopt a hand-edited ``.2dm`` as this mesh -> the probes.
+
+        HISTORY, not program. The change lives in the layer's bytes, so the
+        recipe cannot produce it: the mesh is flagged instead, and any later
+        recipe edit refuses rather than silently throwing the hand-edit away.
+        """
+        import dataclasses
+
+        from trid3nt_server.workflows.mesh.shared.nodes import read_2dm_mesh
+
+        mesh = self.mesh
+        if not mesh.has_cells:
+            raise MeshToolError(
+                "MESH_ADOPT_NOT_STAGEABLE",
+                "this mesh states no cells of its own - the engine realizes them "
+                "- so an adopted layer cannot be reconciled with what a solve "
+                "would be staged from.")
+        points, cells, z = read_2dm_mesh(str(layer))
+        # A .2dm always carries a node z column, so the edited layer cannot say
+        # whether a bed was ever painted; the mesh it replaces is what knows. The
+        # per-solver files and the probes described the cells the edit replaced,
+        # so they are dropped rather than carried onto a different topology.
+        carried = {k: v for k, v in mesh.meta.items()
+                   if k not in ("files", "probes", "lonlat")}
+        self._mesh = dataclasses.replace(
+            mesh, points=points, cells=cells,
+            bed=(z if mesh.has_bed else None), meta=carried)
+        self._display = None
+        self.regen_note = (
+            f"this mesh was hand-edited at the gate (layer digest "
+            f"{input_digest(layer)}); its topology is not what the recipe "
+            "produces, so regenerating would discard the edit. Accept it, or "
+            "reset to the declared recipe and start again.")
+        self._events.append({"event": "adopt", "source": str(layer),
+                             "digest": input_digest(layer),
+                             "replayable": False})
         self._journal()
         return self.probes()
 
-    def restart(self) -> dict[str, Any]:
-        """Truncate the chain back to the DECLARED prefix and rebuild -> probes."""
-        self._chain = list(self._declared)
-        self._mesh = None
-        self._display = None
-        self._ensure_built()
-        return self.probes()
-
+    # -- the loop ---------------------------------------------------------- #
     def probes(self) -> dict[str, Any]:
         """The numeric facts a human or an agent judges the mesh on."""
-        return _probes(self.mesh, [e.action for e in self._chain])
+        return _probes(self.mesh, self.recipe)
 
     def snapshot(self) -> LayerURI:
-        """The mesh's DISPLAY face for the current chain, as a map layer.
+        """The mesh's DISPLAY face for the current recipe, as a map layer.
 
         A node/cell mesh is an MDAL ``.2dm``; a mesh whose cells the engine
         re-realizes carries the display face its own mesher wrote, and the row
@@ -148,10 +201,9 @@ class MeshSession:
     def accept(self) -> MeshArtifact:
         """Freeze the current mesh as a case artifact -> the :class:`MeshArtifact`.
 
-        The facts only the MESHER knows - what painted its bed, which side it
-        opened - ride in on the mesh's own ``meta`` and are recorded here, so the
-        artifact states what was built rather than what this file could infer about
-        it.
+        The RECIPE is frozen onto the artifact as its provenance: what a rebuild
+        would run, beside the facts only the MESHER knows - what painted its bed,
+        which stretch it opened - which ride in on the mesh's own ``meta``.
         """
         mesh = self.mesh
         declared = dict(mesh.meta.get("artifact") or {})
@@ -165,8 +217,10 @@ class MeshSession:
         has_bed = mesh.has_bed
         declared.pop("engine_compat", None)
         provenance = {"mesher": self.mesher.name,
-                      "spec": self.spec.to_json(),
-                      "edits": [e.action for e in self._chain],
+                      "recipe": self.recipe.to_json(),
+                      "deterministic": self.mesher.deterministic,
+                      **({"regen_note": self.regen_note}
+                         if self.regen_note else {}),
                       **dict(declared.pop("provenance", None) or {})}
         art = MeshArtifact(
             mesh_id=self.mesh_id, name=self.name, mode=self.mesher.name,
@@ -248,18 +302,21 @@ class MeshSession:
         _s3_client().put_object(Bucket=bucket, Key=key, Body=local.read_bytes())
         return f"s3://{bucket}/{key}"
 
-    # -- the recipe -------------------------------------------------------- #
+    # -- the journal ------------------------------------------------------- #
     def recipe_lines(self) -> list[dict[str, Any]]:
-        """The recipe as records: the spec, then one per edit in chain order.
+        """The journal as records: the declaration, then one per edit event.
 
-        A mesher whose library does not reproduce itself says so on the spec line,
-        so a replay of this recipe is read as an equivalent rebuild rather than as
-        a promise of the same mesh.
+        A mesher whose library does not reproduce itself says so on the first
+        line, so a replay is read as an equivalent rebuild rather than as a
+        promise of the same mesh.
         """
-        spec: dict[str, Any] = {"spec": self.spec.to_json()}
+        head: dict[str, Any] = {"recipe": self.declared.to_json()}
         if not self.mesher.deterministic:
-            spec["determinism"] = False
-        return [spec, *(_edit_line(self.mesher, e) for e in self._chain)]
+            head["determinism"] = False
+        lines = [head]
+        for event in self._events:
+            lines.append({**event, "recipe": self.recipe.to_json()})
+        return lines
 
     def _journal(self) -> None:
         self.recipe_path.write_text(
@@ -273,98 +330,49 @@ def _s3_client() -> Any:
 
 
 # --------------------------------------------------------------------------- #
-# Recipe replay.
+# Building and replaying.
 # --------------------------------------------------------------------------- #
-def _edit_line(mesher: Mesher, edit: DeclaredEdit) -> dict[str, Any]:
-    act = mesher.action(edit.action)
-    line: dict[str, Any] = {"edit": act.name}
-    for name, declared in act.inputs.items():
-        if name not in edit.inputs:
-            continue
-        value = edit.inputs[name]
-        if declared.hashed:
-            line[name] = input_digest(value)
-            if isinstance(value, str):
-                line["source"] = value
-        else:
-            line[name] = jsonable(value)
-    if not act.replayable:
-        line["replayable"] = False
-    return line
-
-
-def _refuse_unbound(spec: MeshSpec, chain: Sequence[DeclaredEdit]) -> None:
-    """Refuse to build a declaration the interpreter has not bound yet.
-
-    A declared field holds ``P.<name>`` / ``D.<name>`` / ``Ref(...)`` until a
-    resolved sheet binds it, and a mesh library handed a placeholder fails deep
-    inside itself on the shape of the value rather than on what is actually
-    wrong.
-    """
-    unbound = [f"{spec.mesher}.{name}" for name, value in spec.fields.items()
-               if is_late_bound(value)]
-    unbound += [f"{edit.action}.{name}" for edit in chain
-                for name, value in edit.inputs.items() if is_late_bound(value)]
+def _build(mesher: Mesher, recipe: MeshRecipe) -> Mesh:
+    """The whole mesh, from the whole recipe. There is no incremental path."""
+    unbound = recipe.unbound
     if unbound:
         raise MeshToolError(
-            "MESH_SPEC_UNBOUND",
+            "MESH_RECIPE_UNBOUND",
             f"{sorted(unbound)} are late-bound reads rather than values, so this "
             "mesh cannot be built: bind the declaration against a resolved sheet "
             "before demanding the mesh.")
+    return mesher.build(recipe)
 
 
-def _build_chain(mesher: Mesher, spec: MeshSpec,
-                 chain: Sequence[DeclaredEdit]) -> Mesh:
-    _refuse_unbound(spec, chain)
-    mesh = mesher.build(dict(spec.fields))
-    for edit in chain:
-        act = mesher.action(edit.action)
-        mesh = act.apply(mesh, **dict(edit.inputs))
-    return mesh
+def replay_recipe(source: str | os.PathLike[str] | Sequence[Mapping[str, Any]]
+                  ) -> Mesh:
+    """Rebuild a mesh from its journal -> the :class:`Mesh` its recipe describes.
 
-
-def replay_recipe(source: str | os.PathLike[str] | Sequence[Mapping[str, Any]]) -> Mesh:
-    """Rebuild a mesh from its recipe -> the :class:`Mesh` the recipe describes.
-
-    A recorded hand-edit REFUSES: its change is in the layer's bytes, not in the
-    recipe, so replaying it would return a different mesh under the same record.
+    The LAST recipe the journal records is the one that produced the mesh, which
+    is what a replay runs. A recorded hand-edit REFUSES: its change is in the
+    layer's bytes, not in the recipe, so replaying would return a different mesh
+    under the same record.
     """
     if isinstance(source, (str, os.PathLike)):
         lines = [json.loads(ln) for ln in
                  Path(source).read_text().splitlines() if ln.strip()]
     else:
         lines = [dict(ln) for ln in source]
-    if not lines or "spec" not in lines[0]:
+    if not lines or "recipe" not in lines[0]:
         raise MeshToolError(
             "MESH_RECIPE_MALFORMED",
-            "a mesh recipe starts with its spec line; this one does not.")
-    spec = MeshSpec.from_json(lines[0]["spec"])
-    mesher = get_mesher(spec.mesher)
-    mesh = mesher.build(dict(spec.fields))
-    for line in lines[1:]:
-        act = mesher.action(line["edit"])
-        if not act.replayable or line.get("replayable") is False:
-            raise MeshToolError(
-                "MESH_RECIPE_NOT_REPLAYABLE",
-                f"edit {act.name!r} carries its change in an input this recipe can "
-                f"only digest ({line.get(next(iter(act.inputs), ''), '')}); the mesh "
-                "it produced cannot be rebuilt from the record. Rebuild from the "
-                "prefix before it, or keep the accepted mesh.")
-        inputs: dict[str, Any] = {}
-        for name, declared in act.inputs.items():
-            if declared.hashed:
-                source_ref = line.get("source")
-                if source_ref is None:
-                    raise MeshToolError(
-                        "MESH_RECIPE_MISSING_SOURCE",
-                        f"edit {act.name!r} hashes {name!r} but the recipe records "
-                        "no source to re-read it from.")
-                inputs[name] = source_ref
-            elif name in line:
-                inputs[name] = line[name]
-        bound = validate_edit(mesher.name, act.name, inputs)
-        mesh = act.apply(mesh, **dict(bound))
-    return mesh
+            "a mesh journal starts with the recipe it was declared from; this "
+            "one does not.")
+    adopted = [ln for ln in lines if ln.get("event") == "adopt"]
+    if adopted:
+        raise MeshToolError(
+            "MESH_RECIPE_NOT_REPLAYABLE",
+            f"this mesh was hand-edited at the gate ({adopted[-1].get('source')}, "
+            f"digest {adopted[-1].get('digest')}); the topology it carries is not "
+            "what its recipe produces, so it cannot be rebuilt from the record. "
+            "Keep the accepted mesh, or rebuild from the recipe and edit again.")
+    recipe = MeshRecipe.from_json(lines[-1]["recipe"])
+    return _build(get_mesher(recipe.mesher), recipe)
 
 
 # --------------------------------------------------------------------------- #
@@ -478,7 +486,7 @@ def _synthetic_inputs(mesh: Mesh) -> list[Any]:
             for row in (mesh.meta.get("synthetic_inputs") or [])]
 
 
-def _probes(mesh: Mesh, chain: Sequence[str]) -> dict[str, Any]:
+def _probes(mesh: Mesh, recipe: MeshRecipe) -> dict[str, Any]:
     if not mesh.has_cells:
         # The cells are the engine's to realize from the staged authoring inputs,
         # so every edge-derived probe would be a statement about a topology this
@@ -491,7 +499,7 @@ def _probes(mesh: Mesh, chain: Sequence[str]) -> dict[str, Any]:
             "has_bed": mesh.has_bed,
             "cells_realized_by_engine": True,
             **dict(mesh.meta.get("probes") or {}),
-            "edits_applied": list(chain),
+            "ops": recipe.numbered(),
         }
     pts = np.asarray(mesh.points, dtype=float)
     cells = np.asarray(mesh.cells, dtype=np.int64)
@@ -522,5 +530,5 @@ def _probes(mesh: Mesh, chain: Sequence[str]) -> dict[str, Any]:
         # the mapped water the domain covered, which boundary it opened. Nothing
         # here can be recomputed from nodes and cells alone.
         **dict(mesh.meta.get("probes") or {}),
-        "edits_applied": list(chain),
+        "ops": recipe.numbered(),
     }
