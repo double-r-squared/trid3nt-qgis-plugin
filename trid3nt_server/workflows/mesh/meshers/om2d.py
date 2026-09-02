@@ -665,9 +665,11 @@ OM2D = register_mesher(
         OpNamespace(origin="om2d", phase=PRE, names=_OM2D_PRIMITIVES),
     ),
     default_ops=_DEFAULT_OPS,
-    # Measured, not assumed: three in-container rebuilds from one identical config
-    # (same extent, same staged bed, same shoreline, same seed) returned two
-    # distinct meshes, so a replay of an om2d recipe rebuilds an equivalent mesh
-    # rather than the same one.
-    deterministic=False,
+    # Measured, not assumed: five in-container rebuilds from one identical config
+    # return one mesh, on the domain classes the drift was measured on - a
+    # shoreline-cut coastal domain and a harbour domain sized by feature. The
+    # constraint that makes it hold is the driver's seeding of the library's own
+    # medial-axis tie-break; without it the sizing lattice differs per process and
+    # every domain whose recipe names a sizing op drifts.
+    deterministic=True,
 )

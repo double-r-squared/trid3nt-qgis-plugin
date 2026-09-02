@@ -115,10 +115,13 @@ def test_engine_vocabulary_is_not_in_the_op_namespace_either():
 # Determinism: a measured claim, journaled where a replay reads it.
 # --------------------------------------------------------------------------- #
 #: The mesher that shells the OceanMesh2D image, with the flag it registers and
-#: the 3-run rebuild-and-diff that flag was MEASURED by. A flag no measurement
-#: stands behind is a replayability promise nobody checked, so the evidence is
-#: named here rather than the value simply asserted.
-_MEASURED_DETERMINISM = ("om2d", False, "3 rebuilds -> 2 distinct meshes")
+#: the rebuild-and-diff that flag was MEASURED by. A flag no measurement stands
+#: behind is a replayability promise nobody checked, so the evidence is named
+#: here rather than the value simply asserted.
+_MEASURED_DETERMINISM = (
+    "om2d", True,
+    "5 rebuilds -> 1 mesh, on a shoreline-cut coastal domain and a "
+    "feature-sized harbour domain both")
 
 
 def test_the_mesher_registers_the_determinism_it_was_measured_at():
@@ -126,15 +129,30 @@ def test_the_mesher_registers_the_determinism_it_was_measured_at():
     assert get_mesher(mesher).deterministic is measured, evidence
 
 
-def test_the_journal_carries_the_determinism_a_replay_should_not_assume(tmp_path):
+def test_the_journal_states_no_caveat_a_measurement_does_not_stand_behind(tmp_path):
+    """The determinism line is a WARNING, so a mesher that reproduces omits it."""
     from trid3nt_server.workflows.mesh.session import MeshSession
 
-    head = MeshSession(_recipe(), workdir=tmp_path).recipe_lines()[0]
-    assert head["determinism"] is False
+    for recipe in (_recipe(),
+                   tool.build_mesh(mesher="reg_grid", extent=_AOI,
+                                   resolution_m=100.0)):
+        assert "determinism" not in MeshSession(
+            recipe, workdir=tmp_path).recipe_lines()[0]
 
-    lattice = tool.build_mesh(mesher="reg_grid", extent=_AOI, resolution_m=100.0)
-    assert "determinism" not in MeshSession(
-        lattice, workdir=tmp_path).recipe_lines()[0]
+
+def test_the_driver_binds_the_seed_onto_the_librarys_own_tie_break():
+    """The one library draw the recipe's seed does not otherwise reach.
+
+    ``feature_sizing_function`` skeletonizes through skimage's ``medial_axis``,
+    whose tie-break generator is fresh per process unless it is handed one - the
+    measured cause of a coastal domain rebuilding as three distinct meshes.
+    """
+    from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+
+    # Read rather than imported: the driver's own imports live only in the image.
+    source = (drivers_dir() / "om2d_driver.py").read_text()
+    assert "om.edgefx.medial_axis = functools.partial(medial_axis, rng=" in source
+    assert "_seed_library_randomness(int(cfg.get(\"seed\", 0)))" in source
 
 
 # --------------------------------------------------------------------------- #

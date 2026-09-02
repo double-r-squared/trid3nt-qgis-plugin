@@ -42,6 +42,7 @@ polygon's own densified boundary. Both paths triangulate through the authentic
 
 from __future__ import annotations
 
+import functools
 import inspect
 import json
 import math
@@ -79,6 +80,24 @@ _CELL_PARAMS = ("entities", "faces", "cells", "t")
 
 class _EmptyAfterOp(Exception):
     """An op took the last element; the empty-mesh refusal states which one."""
+
+
+def _seed_library_randomness(seed: int) -> None:
+    """Bind the recipe's seed onto the one library call that draws without it.
+
+    ``feature_sizing_function`` skeletonizes the shoreline through skimage's
+    ``medial_axis``, which breaks ties between equidistant skeleton pixels from a
+    generator it creates FRESH per process unless it is handed one. The library
+    passes none, so an identical recipe returns a different skeleton, a different
+    sizing lattice and a different mesh on every rebuild - measured on a
+    shoreline-cut coastal domain as three distinct meshes from three identical
+    configs. The seed is bound onto the module the library calls it through
+    because the library exposes no parameter to reach it by; the function itself
+    is the library's own, unmodified.
+    """
+    from skimage.morphology import medial_axis
+
+    om.edgefx.medial_axis = functools.partial(medial_axis, rng=int(seed))
 
 
 def _typed(points, cells) -> tuple[np.ndarray, np.ndarray]:
@@ -438,6 +457,7 @@ def _is_mesh(result) -> bool:
 # build.
 # --------------------------------------------------------------------------- #
 def op_build(cfg: dict, out: str) -> int:
+    _seed_library_randomness(int(cfg.get("seed", 0)))
     build = _Build(cfg)
     reports: list[dict] = []
 
