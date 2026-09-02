@@ -80,6 +80,16 @@ _MARQUETTE_BBOX = [-87.392, 46.528, -87.368, 46.550]
 #: rather than a guessed one.
 _COWEETA_POUR_POINT = [-83.40402, 35.05746]
 
+#: The canary's design storm, CITED: the 10-year / 24-hour point precipitation
+#: depth at the Coweeta pour point is 6.17 in = 156.7 mm - NOAA Atlas 14 Volume 2
+#: Version 3 (Ohio River Basin), Precipitation Frequency Data Server
+#: (https://hdsc.nws.noaa.gov/pfds/), grid point 35.0583 N 83.4000 W, read
+#: 2026-09-02 through ``lookup_precip_return_period``. A REAL design depth for
+#: this catchment rather than a round number a reader cannot look up: the storm
+#: the acceptance hydrograph is measured against has to have a source.
+_COWEETA_ATLAS14_10YR_24H_MM = 156.7
+_COWEETA_STORM_HR = 24.0
+
 #: The OUTER BREAKWATER of Marquette Lower Harbor, as surveyed in OpenStreetMap
 #: (``man_made=breakwater``), handed to the structure slot the way a drawn one is:
 #: a polyline of (lon, lat) vertices. It runs roughly north-south across the
@@ -192,16 +202,23 @@ CANARIES: dict[str, LiveRun] = {
         cleanup_case=True,
     ),
     # Coweeta Creek, NC - a small gauged headwater catchment with a documented
-    # pour point, so the delineation has a real outlet to snap to. A short
-    # design storm: this canary proves the whole delineate -> mesh -> infiltrate
-    # -> solve chain rather than studying a flood.
+    # pour point, so the delineation has a real outlet to snap to. The storm is
+    # the CITED Atlas 14 10-yr / 24-h depth above, spread as a constant rate over
+    # its own duration, watched six hours past the rain so the recession limb is
+    # inside the window. AMC II is the BASELINE of the antecedent-moisture pair:
+    # a normal-condition catchment under a design storm a reader can look up, and
+    # the AMC III run of the same storm is what shows the infiltration machinery
+    # responds. The cadence is stated because the default writes every ten
+    # minutes, which over a thirty-hour window is a hundred and eighty frames.
     "telemac_rain_on_grid": LiveRun(
         tool="telemac_rain_on_grid",
         args={
             "pour_point": _COWEETA_POUR_POINT,
-            "design_storm_mm_per_hr": 25.0,
-            "storm_duration_hr": 1.0,
-            "sim_duration_hr": 2.0,
+            "design_storm_mm_per_hr": round(
+                _COWEETA_ATLAS14_10YR_24H_MM / _COWEETA_STORM_HR, 2),
+            "storm_duration_hr": _COWEETA_STORM_HR,
+            "sim_duration_hr": _COWEETA_STORM_HR + 6.0,
+            "output_interval_min": 30.0,
             "antecedent_moisture": "normal",
             "compute_class": "medium",
             # user_gated, not auto, for the same reason the four open-water
@@ -326,13 +343,12 @@ CANARIES.update({
     # held fixed and only the horizontal moves.
     "telemac3d_stratified_flow_refined": _refined("telemac3d_stratified_flow",
                                                   target_resolution_m=1000.0),
-    # The lever this one moves is the WINDOW, not the mesh. A catchment answers
-    # AFTER the rain stops: the coarse canary's 2 h around a 1 h storm closes
-    # while the outflow is still rising, so its peak, volume and coefficient are
-    # lower bounds on a hydrograph that has no crest inside the run. 6 h is past
-    # the storm and past the response, so the refined run measures a peak.
+    # The MESH, as everywhere else here: the coarse canary's window already
+    # closes six hours past its storm, so the answer is no longer bounded by how
+    # long the run watched. 40 -> 25 m in the channel band is where a peak depth
+    # and a crest magnitude live.
     "telemac_rain_on_grid_refined": _refined("telemac_rain_on_grid",
-                                             sim_duration_hr=6.0),
+                                             mesh_min_edge_m=25.0),
 })
 
 

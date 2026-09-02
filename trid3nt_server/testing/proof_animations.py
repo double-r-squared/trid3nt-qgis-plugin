@@ -271,14 +271,15 @@ def suffixed(animation: ProofAnimation, declared: int) -> str:
 #: deliberately small canary from the flagship it stands in for.
 PACKET_NOTES: dict[tuple[str, str], tuple[str, ...]] = {
     ("telemac_rain_on_grid", "coarse"): (
-        "THIN TEST. This canary is a 1-hour design storm on a 30 km2 catchment: "
-        "it proves the delineate -> mesh -> infiltrate -> solve chain and the "
-        "two animations' plumbing, and it is NOT a study of the hydrology. The "
-        "depths are millimetre-scale and the velocities are sub-mm/s, which is "
-        "why the depth animation needs a log ramp to separate the drainage "
-        "network from the hillslope at all. The refined, longer flagship run at "
-        "the family's close is the real show; read this packet as a mechanism "
-        "check, not as a result.",
+        "SCREENING RUN, not a calibrated study. The storm is the NOAA Atlas 14 "
+        "10-year / 24-hour depth at the pour point spread as a CONSTANT rate - a "
+        "real design depth, but a rectangular hyetograph, so the crest arrives "
+        "when the rain stops rather than when the basin's own intensity peak "
+        "passes. The catchment is UNGAUGED here: no observed hydrograph has been "
+        "paired against this outlet, so the peak and the runoff coefficient are "
+        "the model's answer under the declared curve numbers, not a verified "
+        "one. The peak DEPTH is a single-node maximum that a terrain pit can set "
+        "on its own - read it beside the p99, which is the sheet.",
     ),
 }
 

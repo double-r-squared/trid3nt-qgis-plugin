@@ -224,7 +224,12 @@ async def drive(run: LiveRun) -> RunEvidence:
     args = {"restart_clean": True, **dict(run.args)}
     session_id = new_ulid()
     ev = RunEvidence(tool=run.tool, args=dict(args), session_id=session_id)
-    async with wsc.connect(WS_URL, max_size=64 * 1024 * 1024) as ws:
+    # ``ping_timeout=None``: the run's own ``timeout_s`` is the deadline, and a
+    # keepalive that closes the socket after twenty seconds is a second, shorter
+    # one that fires while the daemon is inside a synchronous mesh build - a live
+    # run killed for being slow, with the turn still running on the far side.
+    async with wsc.connect(WS_URL, max_size=64 * 1024 * 1024,
+                           ping_timeout=None) as ws:
         await handshake(ws, session_id)
         ev.case_id = await create_case(ws, session_id, run.case_title)
         await ws.send(mk("dev-tool-invoke", session_id,
