@@ -7,22 +7,29 @@ and the allocation of each law to the block that satisfies it and the test that
 verifies it.
 
 A model nobody can check rots, so nothing here is prose alone.
-`scripts/model_check.py` reads these files and validates three rules against the
+`scripts/model_check.py` reads these files and validates four rules against the
 live code, and `tests/test_model_conformance.py` runs it in the offline suite:
 
-1. every declared interface item is written by one of the interface's source
-   blocks and read by one of its target blocks - resolved structurally over the
-   modules those blocks are bound to, so a key mentioned only in a comment
-   counts as neither;
+1. every non-optional item of every interface USAGE is named by the module at
+   that hop's writer end and by the module at its consumer end - resolved
+   structurally, so a key mentioned only in a comment counts as neither.
+   Per usage, not per definition: evidence pooled across the hops that share a
+   contract leaves a severance in one module invisible while a sibling hop
+   keeps supplying the item;
 2. every `verify` names a test that exists;
-3. every `forbid:` dependency rule holds against the measured import graph in
-   `docs/validation/code-graph/graph.json`.
+3. every `forbid:` dependency rule holds against the import edges of the modeled
+   modules, computed at check time;
+4. every tree module that calls a modeled contract's `constructor:` is bound to
+   a usage of that contract - an author nobody modeled is a writer no severance
+   check covers.
 
 The notation is SysML v2 TEXTUAL, restricted to the subset the checker reads:
 `part def`, `part`, `port def`, `port`, `interface def` / `item`, `interface`
-(connect), `requirement def`, `satisfy`, `verify`. Two doc-line conventions
+(connect), `requirement def`, `satisfy`, `verify`. Four doc-line conventions
 carry what that subset has no place for - `code:` binds a block to the module it
-IS, and `forbid:` states a dependency rule.
+IS, `forbid:` states a dependency rule, `constructor:` names a function that
+builds a contract, and `pass-through:` marks the end of a hop that forwards the
+contract verbatim, which therefore owes no item evidence and supplies none.
 
 Item names are the tree's own key names. A model whose vocabulary drifts from
 the code's cannot be checked against it.

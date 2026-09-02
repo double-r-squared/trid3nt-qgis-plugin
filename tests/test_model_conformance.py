@@ -27,12 +27,12 @@ def _run(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_the_solve_seam_model_conforms():
-    """Every modeled item is written and read, every law has a live verifier.
+    """Every hop's two ends name what it carries, every law has a live verifier.
 
     This test IS the verification the two dependency requirements name: the
-    forbid rules are checked here against the measured import graph, so a
-    worker that reached into the server package fails the suite rather than a
-    review.
+    forbid rules are checked here against import edges the checker computes for
+    the modeled modules, so a worker that reached into the server package fails
+    the suite rather than a review.
     """
     done = _run()
     assert done.returncode == 0, done.stdout + done.stderr

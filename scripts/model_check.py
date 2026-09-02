@@ -3,24 +3,32 @@
 
 A model nobody can check rots. This reads the project's own subset of SysML v2
 textual notation - part def, part, port def, port, interface def / item,
-interface (connect), requirement def, satisfy, verify - and validates THREE
+interface (connect), requirement def, satisfy, verify - and validates FOUR
 project conformance rules against the live code:
 
-  (a) every declared interface item is WRITTEN by at least one of the interface's
-      source blocks and READ by at least one of its target blocks, resolved by
-      searching the modules those blocks are bound to;
+  (a) every non-optional item of every interface USAGE is named by the module at
+      the hop's writer end and by the module at its consumer end. Per usage, not
+      per definition: evidence pooled across hops leaves a single-module
+      severance invisible, because a sibling hop keeps supplying the item;
   (b) every ``verify`` names a test that exists, resolved by parsing the named
       test file rather than importing it;
-  (c) every ``forbid:`` dependency rule holds against the measured import graph.
+  (c) every ``forbid:`` dependency rule holds against the import edges of the
+      modeled modules, computed here at check time;
+  (d) every tree module that calls a modeled contract's constructor is bound to
+      a usage of that contract - an author nobody modeled is a writer no
+      severance check covers.
 
 SCOPE: this checker validates THIS PROJECT'S conformance rules against the tree.
 It is not a SysML implementation - it resolves no inheritance, types no feature
 and evaluates no expression. An item's type word is recorded for the view and
 never interpreted.
 
-Two doc-line conventions carry what the notation has no place for. A part usage
+Four doc-line conventions carry what the notation has no place for. A part usage
 names the module it IS with ``code: <repo-relative path>``; a requirement def
-states a dependency rule with ``forbid: <importer prefix> -> <imported prefix>``.
+states a dependency rule with ``forbid: <importer prefix> -> <imported prefix>``;
+an interface def names a function that builds it with ``constructor: <name>``; an
+interface usage exempts a verbatim-forwarding end with
+``pass-through: <part usage>``, which neither owes nor supplies item evidence.
 
 Output is deterministic and sorted. Every finding names the model element and
 the code location, and the exit status is 1 when any finding stands.
@@ -30,18 +38,15 @@ from __future__ import annotations
 
 import argparse
 import ast
-import json
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 DEFAULT_MODEL = REPO_ROOT / "docs" / "model" / "solve-seam.sysml"
 DEFAULT_VIEW = REPO_ROOT / "docs" / "model" / "solve-seam-view.md"
-DEFAULT_GRAPH = REPO_ROOT / "docs" / "validation" / "code-graph" / "graph.json"
 
 
 # --------------------------------------------------------------------------- #
@@ -51,9 +56,10 @@ DEFAULT_GRAPH = REPO_ROOT / "docs" / "validation" / "code-graph" / "graph.json"
 #: One ``doc /* ... */`` block. Captured whole: the conformance doc-lines are
 #: read out of the body, and the rest is prose the view carries.
 _DOC = re.compile(r"doc\s*/\*(.*?)\*/", re.DOTALL)
-#: A ``key: value`` line inside a doc body. The two keys are the model's own
+#: A ``key: value`` line inside a doc body. These keys are the model's own
 #: binding vocabulary; anything else in a doc body is prose.
-_DOCLINE = re.compile(r"^\s*(code|forbid)\s*:\s*(\S.*?)\s*$", re.MULTILINE)
+_DOCLINE = re.compile(
+    r"^\s*(code|forbid|constructor|pass-through)\s*:\s*(\S.*?)\s*$", re.MULTILINE)
 _FORBID = re.compile(r"^(\S+)\s*->\s*(\S+)$")
 
 _NAME = r"[A-Za-z_][A-Za-z0-9_]*"
@@ -70,7 +76,7 @@ _ITEM = re.compile(
 _PORT_USE = re.compile(rf"^\s*port\s+({_NAME})\s*:\s*({_NAME})\s*;", re.MULTILINE)
 _IFACE_USE = re.compile(
     rf"^\s*interface\s+({_NAME})\s*:\s*({_NAME})\s*"
-    rf"connect\s+({_NAME})\.({_NAME})\s+to\s+({_NAME})\.({_NAME})\s*;",
+    rf"connect\s+({_NAME})\.({_NAME})\s+to\s+({_NAME})\.({_NAME})\s*(\{{|;)",
     re.MULTILINE)
 _SATISFY = re.compile(
     rf"^\s*satisfy\s+requirement\s+({_NAME})\s+by\s+({_NAME})\s*;", re.MULTILINE)
@@ -104,6 +110,9 @@ class InterfaceDef:
     name: str
     doc: str
     items: list[Item] = field(default_factory=list)
+    #: Functions that BUILD this contract. A tree module calling one of them is
+    #: an author of the contract and must be bound to a usage of it.
+    constructors: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -123,6 +132,9 @@ class InterfaceUsage:
     src_port: str
     dst_part: str
     dst_port: str
+    #: Ends that forward this contract verbatim. Such an end neither owes item
+    #: evidence nor supplies any: a conduit names no key it carries.
+    pass_through: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -222,8 +234,10 @@ def parse_model(path: Path) -> Model:
         body = _body(text, match.start())
         items = [Item(name, type_word, bool(mult))
                  for name, type_word, mult in _ITEM.findall(_strip_docs(body))]
+        doc = _doc_of(body)
         interface_defs[match.group(1)] = InterfaceDef(
-            match.group(1), _doc_of(body).strip(), items)
+            match.group(1), doc.strip(), items,
+            [v for k, v in _DOCLINE.findall(doc) if k == "constructor"])
 
     requirement_defs: dict[str, RequirementDef] = {}
     for match in _REQ_DEF.finditer(scan):
@@ -250,6 +264,14 @@ def parse_model(path: Path) -> Model:
             match.group(1), match.group(2), _prose(doc), code,
             dict(_PORT_USE.findall(_strip_docs(body))))
 
+    interfaces: list[InterfaceUsage] = []
+    for match in _IFACE_USE.finditer(scan):
+        marks: list[str] = []
+        if match.group(7) == "{":
+            doc = _doc_of(_body(text, match.end() - 1))
+            marks = [v for k, v in _DOCLINE.findall(doc) if k == "pass-through"]
+        interfaces.append(InterfaceUsage(*match.groups()[:6], frozenset(marks)))
+
     return Model(
         package=package.group(1),
         part_defs=[m.group(1) for m in _PART_DEF.finditer(scan)],
@@ -257,7 +279,7 @@ def parse_model(path: Path) -> Model:
         interface_defs=interface_defs,
         requirement_defs=requirement_defs,
         parts=parts,
-        interfaces=[InterfaceUsage(*m) for m in _IFACE_USE.findall(scan)],
+        interfaces=interfaces,
         satisfies=_SATISFY.findall(scan),
         verifies=[(r, re.sub(r"\s+", "", t)) for r, t in _VERIFY.findall(scan)],
     )
@@ -317,6 +339,11 @@ def _structure_findings(model: Model) -> list[Finding]:
                     "MODEL_UNRESOLVED", use.name, "docs/model",
                     f"connects {part_name}.{port_name}, which that part has no "
                     "port for"))
+        for marked in sorted(use.pass_through):
+            if marked not in (use.src_part, use.dst_part):
+                out.append(Finding(
+                    "MODEL_UNRESOLVED", use.name, "docs/model",
+                    f"marks {marked!r} pass-through, which is neither end of it"))
     for req, part_name in model.satisfies:
         if req not in model.requirement_defs:
             out.append(Finding("MODEL_UNRESOLVED", f"satisfy {req}", "docs/model",
@@ -398,60 +425,133 @@ def code_names(path: Path) -> frozenset[str]:
 
 
 def _interface_findings(model: Model, root: Path) -> list[Finding]:
-    """Rule (a): every declared item is written somewhere and read somewhere."""
-    sources: dict[str, set[str]] = {}
-    targets: dict[str, set[str]] = {}
-    for use in model.interfaces:
-        src, dst = model.parts.get(use.src_part), model.parts.get(use.dst_part)
-        if src is None or dst is None:
-            continue
-        sources.setdefault(use.def_name, set()).add(use.src_part)
-        # A hop whose two ends are the SAME module carries no evidence: a
-        # module reading back what it wrote satisfies any key it happens to
-        # mention, which is how a severed interface passes a check.
-        if src.code != dst.code:
-            targets.setdefault(use.def_name, set()).add(use.dst_part)
+    """Rule (a): every hop's two ends name every non-optional item it carries.
 
+    Per USAGE. Pooling evidence across the hops that share an interface
+    definition lets one module drop a key while a sibling hop keeps supplying
+    it - which is the severed interface this check exists to catch.
+    """
     cache: dict[str, frozenset[str]] = {}
 
-    def read(part_name: str) -> tuple[str, frozenset[str]]:
+    def named_by(part_name: str) -> tuple[str, frozenset[str]]:
         path = model.parts[part_name].code or ""
         if path not in cache:
             cache[path] = code_names(root / path)
         return path, cache[path]
 
     out: list[Finding] = []
+
     for def_name in sorted(model.interface_defs):
-        spec = model.interface_defs[def_name]
-        writers = sorted(sources.get(def_name, set()))
-        readers = sorted(targets.get(def_name, set()))
-        if not writers or not readers:
+        if not any(use.def_name == def_name for use in model.interfaces):
             out.append(Finding(
                 "INTERFACE_UNCONNECTED", def_name, "docs/model",
-                f"has {len(writers)} writer(s) and {len(readers)} consumer(s); "
-                "an interface nothing connects describes nothing"))
+                "no usage connects it, so it describes nothing"))
+
+    for use in sorted(model.interfaces, key=lambda u: u.name):
+        spec = model.interface_defs.get(use.def_name)
+        src, dst = model.parts.get(use.src_part), model.parts.get(use.dst_part)
+        if spec is None or src is None or dst is None:
             continue
-        for missing_path in sorted(p for p in writers + readers
-                                   if not (root / (model.parts[p].code or "")).is_file()):
-            out.append(Finding(
-                "BLOCK_CODE_MISSING", missing_path,
-                model.parts[missing_path].code or "<unbound>",
-                "the module this block is bound to is not in the tree"))
-        for item in spec.items:
-            written = [p for p in writers if item.name in read(p)[1]]
-            consumed = [p for p in readers if item.name in read(p)[1]]
-            if not written:
-                out.append(Finding(
-                    "ITEM_NO_WRITER", f"{def_name}.{item.name}",
-                    ", ".join(read(p)[0] for p in writers),
-                    "no source block of this interface names it"))
-            if not consumed:
-                out.append(Finding(
-                    "ITEM_NO_CONSUMER", f"{def_name}.{item.name}",
-                    ", ".join(read(p)[0] for p in readers),
-                    "no target block of this interface names it, so nothing "
-                    "reads what this side writes"))
+        ends = [("ITEM_NO_WRITER", use.src_part,
+                 "the writer end of this hop does not name it")]
+        # A hop whose two ends are the SAME module carries no consumer
+        # evidence: a module reading back what it wrote satisfies any key it
+        # happens to mention, which is how a severed interface passes a check.
+        if src.code != dst.code:
+            ends.append(("ITEM_NO_CONSUMER", use.dst_part,
+                         "the consumer end of this hop does not name it, so "
+                         "nothing reads what the writer states"))
+        for code, part_name, message in ends:
+            # A verbatim-forwarding end carries the contract without naming any
+            # of it. It owes no evidence and supplies none.
+            if part_name in use.pass_through:
+                continue
+            path, names = named_by(part_name)
+            for item in spec.items:
+                if item.optional or item.name in names:
+                    continue
+                out.append(Finding(code, f"{use.name}.{item.name}", path,
+                                   message))
+
+    for part_name in sorted(model.parts):
+        path = model.parts[part_name].code
+        if path is not None and not (root / path).is_file():
+            out.append(Finding("BLOCK_CODE_MISSING", part_name, path,
+                               "the module this block is bound to is not in "
+                               "the tree"))
     return out
+
+
+def _author_findings(model: Model, root: Path) -> list[Finding]:
+    """Rule (d): every tree module that builds a modeled contract is modeled.
+
+    Scoped to the top-level trees the model's own blocks live in, and to product
+    modules: a test calls a contract's constructor to exercise it, not to author
+    a live case.
+    """
+    constructors: dict[str, str] = {}
+    for def_name in sorted(model.interface_defs):
+        for name in model.interface_defs[def_name].constructors:
+            constructors[name] = def_name
+    if not constructors:
+        return []
+
+    bound: dict[str, set[str]] = {}
+    for use in model.interfaces:
+        for part_name in (use.src_part, use.dst_part):
+            part = model.parts.get(part_name)
+            if part is not None and part.code:
+                bound.setdefault(part.code, set()).add(use.def_name)
+
+    out: list[Finding] = []
+    for path in _product_modules(model, root):
+        rel = path.relative_to(root).as_posix()
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if not any(name in text for name in constructors):
+                continue
+            tree = ast.parse(text)
+        except (OSError, SyntaxError):
+            continue
+        for name in sorted(_called_names(tree) & set(constructors)):
+            def_name = constructors[name]
+            if def_name in bound.get(rel, set()):
+                continue
+            out.append(Finding(
+                "UNMODELED_AUTHOR", def_name, rel,
+                f"calls {name}(), so it authors this contract, but no usage of "
+                "it binds this module - its severances are unchecked"))
+    return out
+
+
+def _product_modules(model: Model, root: Path) -> list[Path]:
+    """Every product module under the trees the model's own blocks live in."""
+    roots = sorted({(part.code or "").split("/")[0]
+                    for part in model.parts.values() if part.code})
+    found: list[Path] = []
+    for name in roots:
+        for path in sorted((root / name).rglob("*.py")):
+            parts = path.relative_to(root).parts
+            if any(p in ("tests", "__pycache__") for p in parts):
+                continue
+            if path.name.startswith("test_"):
+                continue
+            found.append(path)
+    return found
+
+
+def _called_names(tree: ast.AST) -> set[str]:
+    """Every function name CALLED, plain or attribute."""
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Name):
+            names.add(func.id)
+        elif isinstance(func, ast.Attribute):
+            names.add(func.attr)
+    return names
 
 
 def _test_names(path: Path) -> set[str]:
@@ -484,20 +584,46 @@ def _verify_findings(model: Model, root: Path) -> list[Finding]:
     return out
 
 
-def _dependency_findings(model: Model, graph_path: Path) -> list[Finding]:
-    """Rule (c): every forbid rule holds against the measured import graph."""
-    if not graph_path.is_file():
-        return [Finding("GRAPH_MISSING", "forbid rules", str(graph_path),
-                        "the measured import graph is not in the tree, so no "
-                        "dependency rule can be checked")]
-    graph = json.loads(graph_path.read_text(encoding="utf-8"))
-    edges: list[dict[str, Any]] = graph.get("edges") or []
+def scoped_import_edges(model: Model, root: Path) -> list[tuple[str, str]]:
+    """The import edges of the modeled modules, computed here.
+
+    Fresh at check time and scoped to the blocks the model binds. A committed
+    graph is an instrument's product: reading one makes the dependency rules
+    decorative the moment the instrument was last run before the code moved.
+    """
+    edges: set[tuple[str, str]] = set()
+    for part in model.parts.values():
+        if not part.code:
+            continue
+        path = root / part.code
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        importer = re.sub(r"\.py$", "", part.code).replace("/", ".")
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                edges.update((importer, alias.name) for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                edges.add((importer, _imported_module(importer, node)))
+    return sorted(edges)
+
+
+def _imported_module(importer: str, node: ast.ImportFrom) -> str:
+    """The dotted module an ``from ... import`` names, relative form resolved."""
+    if not node.level:
+        return node.module or ""
+    base = importer.split(".")[:-node.level]
+    return ".".join(base + ([node.module] if node.module else []))
+
+
+def _dependency_findings(edges: list[tuple[str, str]],
+                         model: Model) -> list[Finding]:
+    """Rule (c): every forbid rule holds against the modeled modules' imports."""
     out: list[Finding] = []
     for name in sorted(model.requirement_defs):
         for importer_prefix, imported_prefix in model.requirement_defs[name].forbids:
-            for edge in edges:
-                importer, imported = str(edge.get("importer") or ""), str(
-                    edge.get("imported") or "")
+            for importer, imported in edges:
                 if _under(importer, importer_prefix) and _under(imported,
                                                                 imported_prefix):
                     out.append(Finding(
@@ -510,11 +636,12 @@ def _under(module: str, prefix: str) -> bool:
     return module == prefix or module.startswith(prefix + ".")
 
 
-def check(model: Model, root: Path, graph_path: Path) -> list[Finding]:
+def check(model: Model, root: Path) -> list[Finding]:
     return sorted(_structure_findings(model)
                   + _interface_findings(model, root)
+                  + _author_findings(model, root)
                   + _verify_findings(model, root)
-                  + _dependency_findings(model, graph_path))
+                  + _dependency_findings(scoped_import_edges(model, root), model))
 
 
 # --------------------------------------------------------------------------- #
@@ -543,7 +670,12 @@ def render_view(model: Model, source: Path) -> str:
         part = model.parts[name]
         lines.append(f'    {name}["{part.type_name}<br/>{part.code}"]')
     for use in sorted(model.interfaces, key=lambda u: u.name):
-        lines.append(f"    {use.src_part} -- \"{use.def_name}\" --> {use.dst_part}")
+        # The pass-through marks ride on the edge: an end that owes no item
+        # evidence is exactly what a reader of this picture needs told.
+        mark = (f" ({', '.join(sorted(use.pass_through))} pass through)"
+                if use.pass_through else "")
+        lines.append(
+            f"    {use.src_part} -- \"{use.def_name}{mark}\" --> {use.dst_part}")
     lines += ["```", "", "## Interface items", ""]
     for def_name in sorted(model.interface_defs):
         spec = model.interface_defs[def_name]
@@ -578,7 +710,6 @@ def main(argv: list[str] | None = None) -> int:
         description="Check a SysML v2 textual model against the tree.")
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
     parser.add_argument("--root", type=Path, default=REPO_ROOT)
-    parser.add_argument("--graph", type=Path, default=DEFAULT_GRAPH)
     parser.add_argument("--view", type=Path, nargs="?", const=DEFAULT_VIEW,
                         help="Write the derived view to this path and exit.")
     args = parser.parse_args(argv)
@@ -594,11 +725,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"view -> {args.view}")
         return 0
 
-    findings = check(model, args.root, args.graph)
+    findings = check(model, args.root)
     for finding in findings:
         print(finding.render())
     print(f"checked {len(model.parts)} blocks, "
-          f"{len(model.interface_defs)} interfaces, "
+          f"{len(model.interfaces)} interface usages, "
           f"{sum(len(i.items) for i in model.interface_defs.values())} items, "
           f"{len(model.requirement_defs)} requirements, "
           f"{len(set(model.verifies))} verifications: {len(findings)} finding(s)")

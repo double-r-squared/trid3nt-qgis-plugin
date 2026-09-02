@@ -2983,3 +2983,13 @@ nothing wrote - and every rain-on-grid deck reported the default bed note
 whatever the fetch had narrated. The datum now carries one name from the op
 through `accept()`'s provenance to that reader. `om2d._emitted`'s re-carry of the
 same key onto meta it was already in went with it.
+
+## `model_check.py`'s read of `docs/validation/code-graph/graph.json` - DELETED
+
+The dependency rules read the committed atlas graph, which is an instrument's
+PRODUCT, not a live input: it states what the imports were the last time
+`scripts/code_graph.py` was run, so a violation landed after that run passed the
+rule and the rule read as decorative. The checker now computes its own import
+edges for the modeled modules at check time - a dozen `ast.parse` calls, scoped
+to exactly the blocks the model binds. `scripts/code_graph.py` and its
+`graph.json` are untouched; the atlas keeps its own product for its own readers.

@@ -12,6 +12,7 @@ flowchart LR
     manifestStager["ManifestStager<br/>trid3nt_server/workflows/telemac/steps/open_water.py"]
     meshAcceptance["MeshAcceptance<br/>trid3nt_server/workflows/mesh/step.py"]
     packetAssembler["PacketAssembler<br/>scripts/assemble_proof_packet.py"]
+    rainDeckAuthor["DeckAuthor<br/>trid3nt_server/workflows/telemac/steps/rain_on_grid.py"]
     runReader["RunReader<br/>trid3nt_server/workflows/telemac/steps/run_reads.py"]
     solveStep["SolveStep<br/>trid3nt_server/workflows/telemac/steps/solve.py"]
     supervisor["Supervisor<br/>trid3nt_server/workflows/solver/solver.py"]
@@ -20,17 +21,20 @@ flowchart LR
     workerEntrypoint["WorkerEntrypoint<br/>workers/telemac/entrypoint.py"]
     deckAuthor -- "ManifestCaseSection" --> manifestStager
     manifestStager -- "ManifestCaseSection" --> workerEntrypoint
-    solveStep -- "WorkerCompletionRecord" --> packetAssembler
-    solveStep -- "WorkerCompletionRecord" --> diagnosticsReader
-    launcherArm -- "WorkerCompletionRecord" --> supervisor
-    supervisor -- "WorkerCompletionRecord" --> solveStep
-    workerEntrypoint -- "CaseEcho" --> launcherArm
-    deckAuthor -- "CaseEcho" --> workerEntrypoint
+    supervisor -- "FrameCountCrossCheck (supervisor pass through)" --> packetAssembler
+    supervisor -- "FoldedRunPhysics (supervisor pass through)" --> diagnosticsReader
+    launcherArm -- "FoldedRunPhysics (supervisor pass through)" --> supervisor
+    supervisor -- "RunTerminalSignal" --> solveStep
+    workerEntrypoint -- "CaseEcho (workerEntrypoint pass through)" --> launcherArm
+    deckAuthor -- "CaseEcho (workerEntrypoint pass through)" --> workerEntrypoint
+    launcherArm -- "FrameCountCrossCheck (supervisor pass through)" --> supervisor
     workerEntrypoint -- "SolverListing" --> diagnosticsReader
-    workerEntrypoint -- "SolverListing" --> runReader
     telapyChild -- "SolverListing" --> workerEntrypoint
     meshAcceptance -- "AcceptedMeshRecord" --> deckAuthor
-    workerEntrypoint -- "WorkerCompletionRecord" --> launcherArm
+    workerEntrypoint -- "WorkerRunReport" --> launcherArm
+    rainDeckAuthor -- "ManifestCaseSection" --> manifestStager
+    rainDeckAuthor -- "CaseEcho (workerEntrypoint pass through)" --> workerEntrypoint
+    topologyWriter -- "TopologyBundle" --> rainDeckAuthor
     topologyWriter -- "TopologyBundle" --> deckAuthor
 ```
 
@@ -67,6 +71,25 @@ What the SERVER already knows and the container cannot learn from the files it i
 | `bed_source` | String | required |
 | `result_slf` | FileName | required |
 
+### `FoldedRunPhysics`
+
+The declared metrics subset the launcher arm folds into the run's completion, so the diagnostics face carries the physics without a second object read. The failure path adds the listing excerpt, which is the only listing a reader has when the run died before its listing file was uploaded. It is optional because a run that reached a correct end carries no tail.
+
+| item | type | required |
+| --- | --- | --- |
+| `correct_end` | Boolean | required |
+| `wall_s` | Real | required |
+| `listing_tail` | String | optional |
+
+### `FrameCountCrossCheck`
+
+The frame count the worker recorded, beside the file it measured it on, so the packet can open that file and disagree. One reader is never the only reader of a number a delivery rests on.
+
+| item | type | required |
+| --- | --- | --- |
+| `result_slf` | FileName | required |
+| `ntimestep` | Integer | required |
+
 ### `ManifestCaseSection`
 
 The CASE a worker runs: which engine, which deck it reads, and which files must exist for the run to have happened. The section key is what the entrypoint dispatches on, and the strict gate refuses any key outside this list.
@@ -81,6 +104,15 @@ The CASE a worker runs: which engine, which deck it reads, and which files must 
 | `user_fortran` | DirName | optional |
 | `coupling` | String | optional |
 | `continue_from` | FileName | optional |
+
+### `RunTerminalSignal`
+
+The terminal object the poller is waiting on. The supervisor writes it whatever the container did, and it is the run's identity and verdict - never its physics.
+
+| item | type | required |
+| --- | --- | --- |
+| `run_id` | String | required |
+| `status` | String | required |
 
 ### `SolverListing`
 
@@ -99,13 +131,12 @@ The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid boundary r
 | `roles` | RoleMap | required |
 | `liquid_boundary_order` | StringList | required |
 
-### `WorkerCompletionRecord`
+### `WorkerRunReport`
 
-The run's only report, written whatever the child did. The launcher arm folds the declared subset of it into the run's completion object, so a reader carries the physics without a second object read. The failure path adds the listing excerpt, which is the only listing a reader has when the run died before its listing file was uploaded. It is optional because a run that reached a correct end carries no tail.
+The run's only report, written whatever the child did. Success is not the worker's word for it: the launcher's classifier reads the CORRECT-END flag and the exit code together, so the report states what happened and the server states what it means.
 
 | item | type | required |
 | --- | --- | --- |
-| `status` | String | required |
 | `correct_end` | Boolean | required |
 | `run_id` | String | required |
 | `module` | String | required |
@@ -113,15 +144,13 @@ The run's only report, written whatever the child did. The launcher arm folds th
 | `wall_s` | Real | required |
 | `error` | String | optional |
 | `error_code` | String | optional |
-| `ntimestep` | Integer | optional |
-| `listing_tail` | String | optional |
 
 ## Requirements
 
 | requirement | satisfied by | verified by |
 | --- | --- | --- |
 | **CorrectEndIsTheSuccessConvention** | `workerEntrypoint`, `launcherArm` | `workers/telemac/test_entrypoint.py::test_a_clean_exit_that_wrote_no_result_is_not_a_solve`<br/>`tests/test_run_telemac_chain.py::test_classify_exit_clean_exit_but_no_correct_end_is_error` |
-| **EchoDoctrine** | `deckAuthor`, `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding`<br/>`workers/telemac/test_entrypoint.py::test_the_frame_count_is_measured_off_the_file_the_echo_names`<br/>`workers/telemac/test_entrypoint.py::test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero` |
+| **EchoDoctrine** | `deckAuthor`, `rainDeckAuthor`, `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding`<br/>`workers/telemac/test_entrypoint.py::test_the_frame_count_is_measured_off_the_file_the_echo_names`<br/>`workers/telemac/test_entrypoint.py::test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero` |
 | **EmptyResultsRefuses** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_case_declaring_no_results_refuses` |
 | **MetricsAlways** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_child_that_dies_still_leaves_the_metrics_written` |
 | **ReadersNeverImportTheWorker** | `runReader`, `diagnosticsReader` | `tests/test_model_conformance.py::test_the_solve_seam_model_conforms` |

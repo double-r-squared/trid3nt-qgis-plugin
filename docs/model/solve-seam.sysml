@@ -7,15 +7,26 @@
 // tree - never general SysML semantics. Item types are recorded and never
 // resolved; there is no inheritance and no expression language.
 //
-// Two doc-line conventions carry the code binding, because the model is only
+// Four doc-line conventions carry the code binding, because the model is only
 // worth having if it can be checked against the code it describes:
 //
 //   code:   <repo-relative path>          on a part usage - the module the
 //                                         block IS
 //   forbid: <importer.prefix> -> <imported.prefix>
 //                                         on a requirement def - a dependency
-//                                         rule read against the measured
-//                                         import graph
+//                                         rule read against the modeled
+//                                         modules' own imports
+//   constructor: <function name>          on an interface def - a function that
+//                                         builds this contract, so a caller
+//                                         nobody modeled is a finding
+//   pass-through: <part usage>            on an interface usage - that end
+//                                         forwards the contract VERBATIM, so
+//                                         it owes no item evidence and
+//                                         supplies none
+//
+// Evidence is per interface USAGE: each hop's writer end and consumer end must
+// name every non-optional item the hop carries. Pooling evidence across the
+// hops that share a definition leaves a single-module severance invisible.
 //
 // Every name below is the tree's own: item names are the literal keys the
 // code writes and reads, and every verify names a test that exists.
@@ -88,7 +99,9 @@ package SolveSeam {
     part def RunReader {
         doc /*
         What a solved run's own files say, read on the server rather than
-        recomputed in the container.
+        recomputed in the container. It is handed listing TEXT by whichever step
+        downloaded the file, so it is no end of the listing seam; it stands here
+        for the law that forbids it importing the worker.
         */
     }
 
@@ -150,6 +163,9 @@ package SolveSeam {
         files must exist for the run to have happened. The section key is what
         the entrypoint dispatches on, and the strict gate refuses any key
         outside this list.
+
+        constructor: case_section
+        constructor: stage_telemac_manifest
         */
         item module : String;
         item steering : FileName;
@@ -177,17 +193,13 @@ package SolveSeam {
         item result_slf : FileName;
     }
 
-    interface def WorkerCompletionRecord {
+    interface def WorkerRunReport {
         doc /*
-        The run's only report, written whatever the child did. The launcher
-        arm folds the declared subset of it into the run's completion object,
-        so a reader carries the physics without a second object read.
-
-        The failure path adds the listing excerpt, which is the only listing a
-        reader has when the run died before its listing file was uploaded. It
-        is optional because a run that reached a correct end carries no tail.
+        The run's only report, written whatever the child did. Success is not
+        the worker's word for it: the launcher's classifier reads the
+        CORRECT-END flag and the exit code together, so the report states what
+        happened and the server states what it means.
         */
-        item status : String;
         item correct_end : Boolean;
         item run_id : String;
         item module : String;
@@ -195,8 +207,41 @@ package SolveSeam {
         item wall_s : Real;
         item error : String [0..1];
         item error_code : String [0..1];
-        item ntimestep : Integer [0..1];
+    }
+
+    interface def RunTerminalSignal {
+        doc /*
+        The terminal object the poller is waiting on. The supervisor writes it
+        whatever the container did, and it is the run's identity and verdict -
+        never its physics.
+        */
+        item run_id : String;
+        item status : String;
+    }
+
+    interface def FoldedRunPhysics {
+        doc /*
+        The declared metrics subset the launcher arm folds into the run's
+        completion, so the diagnostics face carries the physics without a
+        second object read.
+
+        The failure path adds the listing excerpt, which is the only listing a
+        reader has when the run died before its listing file was uploaded. It
+        is optional because a run that reached a correct end carries no tail.
+        */
+        item correct_end : Boolean;
+        item wall_s : Real;
         item listing_tail : String [0..1];
+    }
+
+    interface def FrameCountCrossCheck {
+        doc /*
+        The frame count the worker recorded, beside the file it measured it on,
+        so the packet can open that file and disagree. One reader is never the
+        only reader of a number a delivery rests on.
+        */
+        item result_slf : FileName;
+        item ntimestep : Integer;
     }
 
     interface def SolverListing {
@@ -250,6 +295,19 @@ package SolveSeam {
         port meshIn : MeshIn;
     }
 
+    part rainDeckAuthor : DeckAuthor {
+        doc /*
+        The rain-on-grid leg authors its own deck against the same contracts:
+        a second author of the case and the echo, modeled so a severance in it
+        fires like a severance in the open-water author's.
+
+        code: trid3nt_server/workflows/telemac/steps/rain_on_grid.py
+        */
+        port caseOut : CaseOut;
+        port echoOut : EchoOut;
+        port topologyIn : TopologyIn;
+    }
+
     part manifestStager : ManifestStager {
         doc /*
         code: trid3nt_server/workflows/telemac/steps/open_water.py
@@ -263,7 +321,6 @@ package SolveSeam {
         code: trid3nt_server/workflows/telemac/steps/solve.py
         */
         port completionIn : CompletionIn;
-        port metricsOut : MetricsOut;
     }
 
     part launcherArm : LauncherArm {
@@ -304,7 +361,6 @@ package SolveSeam {
         doc /*
         code: trid3nt_server/workflows/telemac/steps/run_reads.py
         */
-        port listingIn : ListingIn;
     }
 
     part diagnosticsReader : DiagnosticsReader {
@@ -346,38 +402,75 @@ package SolveSeam {
     interface topologyRead : TopologyBundle
         connect topologyWriter.topologyOut to deckAuthor.topologyIn;
 
+    interface rainTopologyRead : TopologyBundle
+        connect topologyWriter.topologyOut to rainDeckAuthor.topologyIn;
+
     interface caseAuthored : ManifestCaseSection
         connect deckAuthor.caseOut to manifestStager.caseIn;
+
+    interface rainCaseAuthored : ManifestCaseSection
+        connect rainDeckAuthor.caseOut to manifestStager.caseIn;
 
     interface caseStaged : ManifestCaseSection
         connect manifestStager.caseOut to workerEntrypoint.caseIn;
 
     interface echoStaged : CaseEcho
-        connect deckAuthor.echoOut to workerEntrypoint.echoIn;
+        connect deckAuthor.echoOut to workerEntrypoint.echoIn {
+        doc /*
+        pass-through: workerEntrypoint
+        */
+    }
+
+    interface rainEchoStaged : CaseEcho
+        connect rainDeckAuthor.echoOut to workerEntrypoint.echoIn {
+        doc /*
+        pass-through: workerEntrypoint
+        */
+    }
 
     interface echoReturned : CaseEcho
-        connect workerEntrypoint.echoOut to launcherArm.metricsIn;
+        connect workerEntrypoint.echoOut to launcherArm.metricsIn {
+        doc /*
+        pass-through: workerEntrypoint
+        */
+    }
 
-    interface metricsWritten : WorkerCompletionRecord
+    interface metricsWritten : WorkerRunReport
         connect workerEntrypoint.metricsOut to launcherArm.metricsIn;
 
-    interface completionFolded : WorkerCompletionRecord
-        connect launcherArm.completionOut to supervisor.completionIn;
+    interface completionFolded : FoldedRunPhysics
+        connect launcherArm.completionOut to supervisor.completionIn {
+        doc /*
+        pass-through: supervisor
+        */
+    }
 
-    interface completionPolled : WorkerCompletionRecord
+    interface frameCountFolded : FrameCountCrossCheck
+        connect launcherArm.completionOut to supervisor.completionIn {
+        doc /*
+        pass-through: supervisor
+        */
+    }
+
+    interface completionPolled : RunTerminalSignal
         connect supervisor.completionOut to solveStep.completionIn;
 
-    interface completionDiagnosed : WorkerCompletionRecord
-        connect solveStep.metricsOut to diagnosticsReader.completionIn;
+    interface completionDiagnosed : FoldedRunPhysics
+        connect supervisor.completionOut to diagnosticsReader.completionIn {
+        doc /*
+        pass-through: supervisor
+        */
+    }
 
-    interface completionCrossChecked : WorkerCompletionRecord
-        connect solveStep.metricsOut to packetAssembler.completionIn;
+    interface completionCrossChecked : FrameCountCrossCheck
+        connect supervisor.completionOut to packetAssembler.completionIn {
+        doc /*
+        pass-through: supervisor
+        */
+    }
 
     interface listingTeed : SolverListing
         connect telapyChild.listingOut to workerEntrypoint.listingOut;
-
-    interface listingRead : SolverListing
-        connect workerEntrypoint.listingOut to runReader.listingIn;
 
     interface listingDiagnosed : SolverListing
         connect workerEntrypoint.listingOut to diagnosticsReader.listingIn;
@@ -467,6 +560,7 @@ package SolveSeam {
         "workers/telemac/test_entrypoint.py::test_a_child_that_dies_still_leaves_the_metrics_written";
 
     satisfy requirement EchoDoctrine by deckAuthor;
+    satisfy requirement EchoDoctrine by rainDeckAuthor;
     satisfy requirement EchoDoctrine by workerEntrypoint;
     verify requirement EchoDoctrine by
         "workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding";
