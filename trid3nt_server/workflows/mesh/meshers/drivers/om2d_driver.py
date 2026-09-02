@@ -66,6 +66,11 @@ _METRE_PARAMS = ("min_edge_length", "min_edgelength", "max_edge_length")
 #: objects before the call. The container half of the typed conversion layer.
 _DEM_PARAMS = ("dem",)
 
+#: The ops whose own precondition is ONE closed boundary walk, so the driver
+#: offers each connected piece of the mesh its own call rather than handing the
+#: function a domain a shoreline cut into two water bodies.
+_PER_COMPONENT = ("identify_ocean_boundary_sections",)
+
 #: What the mesh arrays answer to across the library's own clean passes: the same
 #: two arrays under the names each function happens to give them.
 _POINT_PARAMS = ("vertices", "points", "p")
@@ -551,13 +556,17 @@ def _run_mesh_ops(ops, points, cells, bed, mpd: float, reports: list,
         name = str(entry["fn"])
         fn = _resolve(name)
         report = {"op": name}
-        env = {**dict.fromkeys(_POINT_PARAMS, points),
-               **dict.fromkeys(_CELL_PARAMS, cells),
-               "topobathymetry": bed, **env_extra}
         held = (points, cells)
-        bound = _bind(fn, dict(entry.get("kwargs") or {}), env, mpd, report)
+        kwargs = dict(entry.get("kwargs") or {})
         try:
-            result = fn(**bound)
+            if name in _PER_COMPONENT:
+                result = _over_components(fn, kwargs, points, cells, bed, mpd,
+                                          report, env_extra)
+            else:
+                env = {**dict.fromkeys(_POINT_PARAMS, points),
+                       **dict.fromkeys(_CELL_PARAMS, cells),
+                       "topobathymetry": bed, **env_extra}
+                result = fn(**_bind(fn, kwargs, env, mpd, report))
         except Exception as exc:  # noqa: BLE001 -- re-raised as a typed refusal
             raise ValueError(
                 "the op %r stopped inside the library, so the mesh is left "
@@ -582,10 +591,38 @@ def _run_mesh_ops(ops, points, cells, bed, mpd: float, reports: list,
 
 def _measurement(name: str, result, points, cells, bed) -> object:
     """One measuring op's result, as the neutral record the host reads back."""
-    if name == "identify_ocean_boundary_sections":
-        return _sections(result, points, cells, bed)
+    if name in _PER_COMPONENT:
+        return result
     return result if isinstance(result, (int, float, str, bool, type(None))) \
         else np.asarray(result).tolist()
+
+
+def _over_components(fn, kwargs: dict, points, cells, bed, mpd: float,
+                     report: dict, env_extra: dict) -> list[dict]:
+    """Call a boundary-walk op once per connected piece -> the sections it found.
+
+    Its own precondition, honoured rather than compensated for: the walk it
+    indexes into traces ONE closed boundary, and a domain a shoreline cut can
+    come back as two water bodies in one array. Each piece is therefore offered
+    its own identification, on its own arrays, and the runs come back in the
+    whole mesh's numbering.
+    """
+    out: list[dict] = []
+    pieces = _components(cells, points.shape[0])
+    report["components"] = len(pieces)
+    for mask in pieces:
+        kept = np.unique(cells[mask])
+        remap = np.full(points.shape[0], -1, dtype=np.int64)
+        remap[kept] = np.arange(kept.shape[0])
+        sub_cells = remap[cells[mask]]
+        sub_points = points[kept]
+        sub_bed = None if bed is None else np.asarray(bed)[kept]
+        env = {**dict.fromkeys(_POINT_PARAMS, sub_points),
+               **dict.fromkeys(_CELL_PARAMS, sub_cells),
+               "topobathymetry": sub_bed, **env_extra}
+        ends = fn(**_bind(fn, kwargs, env, mpd, report))
+        out += _sections(ends, sub_points, sub_cells, sub_bed, kept)
+    return out
 
 
 def _components(cells: np.ndarray, npoin: int) -> list[np.ndarray]:
@@ -605,12 +642,13 @@ def _components(cells: np.ndarray, npoin: int) -> list[np.ndarray]:
     return [label == k for k in range(count)]
 
 
-def _sections(ends, points, cells, bed) -> list[dict]:
+def _sections(ends, points, cells, bed, node_ids) -> list[dict]:
     """Section ENDPOINTS as the runs of nodes between them, in walk order.
 
     ``identify_ocean_boundary_sections`` returns the first and last node of each
     section; the winding walk it indexes into is what turns those endpoints back
-    into a run, so the walk is rebuilt with the same library call.
+    into a run, so the walk is rebuilt with the same library call. ``node_ids``
+    maps this piece's numbering back onto the whole mesh's.
     """
     from oceanmesh.edges import get_winded_boundary_edges
 
@@ -623,14 +661,14 @@ def _sections(ends, points, cells, bed) -> list[dict]:
         i, j = at.get(int(start)), at.get(int(stop))
         if i is None or j is None:
             continue
-        nodes = walk[i:j + 1] if i <= j else walk[i:] + walk[:j + 1]
+        run = walk[i:j + 1] if i <= j else walk[i:] + walk[:j + 1]
         out.append({
-            "nodes": nodes,
-            "node_count": len(nodes),
-            "mean_bed_m": round(float(np.asarray(bed)[nodes].mean()), 3),
-            "min_bed_m": round(float(np.asarray(bed)[nodes].min()), 3),
-            "centroid": [round(float(points[nodes, 0].mean()), 6),
-                         round(float(points[nodes, 1].mean()), 6)],
+            "nodes": [int(node_ids[n]) for n in run],
+            "node_count": len(run),
+            "mean_bed_m": round(float(np.asarray(bed)[run].mean()), 3),
+            "min_bed_m": round(float(np.asarray(bed)[run].min()), 3),
+            "centroid": [round(float(points[run, 0].mean()), 6),
+                         round(float(points[run, 1].mean()), 6)],
         })
     return out
 

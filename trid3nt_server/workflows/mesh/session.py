@@ -243,6 +243,14 @@ class MeshSession:
 
     # -- files ------------------------------------------------------------- #
     def _display_face(self) -> tuple[Path, str]:
+        """The ``.2dm`` this mesh renders as, written and staged ONCE per build.
+
+        Not a cache of STATE - the recipe is that, and it regenerates wholesale.
+        This memoizes a WRITE: the display face is asked for by every present, by
+        the snapshot and twice more by accept, and each miss is a file write plus
+        an object-store put. It is dropped on every regeneration and on an
+        adopted layer, so it can never answer for a mesh that no longer exists.
+        """
         if self._display is None:
             declared = mesh_display_path(self.mesh)
             local = Path(declared) if declared else self.workdir / "mesh.2dm"
