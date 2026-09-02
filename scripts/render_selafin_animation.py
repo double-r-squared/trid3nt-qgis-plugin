@@ -57,7 +57,7 @@ sys.path.insert(0, str(REPO / "scripts" / "sandbox" / "oceanmesh"))
 
 import merc_render as MR  # noqa: E402
 
-from trid3nt_server.workflows.telemac.postprocess_telemac import (  # noqa: E402
+from trid3nt_server.workflows.telemac.result_reader import (  # noqa: E402
     read_selafin,
 )
 

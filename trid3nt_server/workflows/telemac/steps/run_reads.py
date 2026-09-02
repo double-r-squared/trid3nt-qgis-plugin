@@ -97,7 +97,7 @@ def surface_d50_spread(gaia_slf: str | Path) -> dict[str, Any]:
     """
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
+    from trid3nt_server.workflows.telemac.result_reader import read_selafin
 
     slf = read_selafin(str(gaia_slf))
     picked = next((v for v in slf["varnames"]
@@ -346,7 +346,7 @@ def wetted_fraction(slf_path: str | Path, *, wet_tol_m: float = _WET_TOL_M
     """
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
+    from trid3nt_server.workflows.telemac.result_reader import read_selafin
 
     mesh = read_selafin(slf_path)
     # SELAFIN pads a variable name to 32 chars with its unit trailing ('WATER

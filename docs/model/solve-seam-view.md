@@ -13,6 +13,8 @@ flowchart LR
     meshAcceptance["MeshAcceptance<br/>trid3nt_server/workflows/mesh/step.py"]
     packetAssembler["PacketAssembler<br/>scripts/assemble_proof_packet.py"]
     rainDeckAuthor["DeckAuthor<br/>trid3nt_server/workflows/telemac/steps/rain_on_grid.py"]
+    resultPostprocess["ResultPostprocess<br/>trid3nt_server/workflows/telemac/postprocess_telemac.py"]
+    resultReader["ResultReader<br/>trid3nt_server/workflows/telemac/result_reader.py"]
     runReader["RunReader<br/>trid3nt_server/workflows/telemac/steps/run_reads.py"]
     solveStep["SolveStep<br/>trid3nt_server/workflows/telemac/steps/solve.py"]
     supervisor["Supervisor<br/>trid3nt_server/workflows/solver/solver.py"]
@@ -27,6 +29,7 @@ flowchart LR
     supervisor -- "RunTerminalSignal" --> solveStep
     workerEntrypoint -- "CaseEcho (workerEntrypoint pass through)" --> launcherArm
     deckAuthor -- "CaseEcho (workerEntrypoint pass through)" --> workerEntrypoint
+    resultReader -- "SolvedResultFields" --> resultPostprocess
     launcherArm -- "FrameCountCrossCheck (supervisor pass through)" --> supervisor
     workerEntrypoint -- "SolverListing" --> diagnosticsReader
     telapyChild -- "SolverListing" --> workerEntrypoint
@@ -114,6 +117,23 @@ The terminal object the poller is waiting on. The supervisor writes it whatever 
 | `run_id` | String | required |
 | `status` | String | required |
 
+### `SolvedResultFields`
+
+What the engine's reader says a solved result holds: the mesh it was computed on, the instants it was written at, and one field per variable shaped (frames, nodes). The variable names are the engine's OWN names, with no unit glued to them - the record stores the two together and splitting them is the format knowledge that stays on the engine's side. The origins are REPORTED and not applied, and this hop does not require them: the coordinates stay as the file stores them, and every postprocess adds the origin it recovered from the domain bbox, so applying the header's would double the offset on all of them.
+
+| item | type | required |
+| --- | --- | --- |
+| `varnames` | StringList | required |
+| `npoin` | Integer | required |
+| `nelem` | Integer | required |
+| `x` | RealArray | required |
+| `y` | RealArray | required |
+| `ikle` | IntTable | required |
+| `x_origin` | Integer | optional |
+| `y_origin` | Integer | optional |
+| `times` | RealArray | required |
+| `data` | FieldMap | required |
+
 ### `SolverListing`
 
 The solver's own listing, teed off the child's stdout. It is the run's evidence: every closure a run narrates is parsed out of it rather than recomputed from the fields.
@@ -153,6 +173,7 @@ The run's only report, written whatever the child did. Success is not the worker
 | **EchoDoctrine** | `deckAuthor`, `rainDeckAuthor`, `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding`<br/>`workers/telemac/test_entrypoint.py::test_the_frame_count_is_measured_off_the_file_the_echo_names`<br/>`workers/telemac/test_entrypoint.py::test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero` |
 | **EmptyResultsRefuses** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_case_declaring_no_results_refuses` |
 | **MetricsAlways** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_child_that_dies_still_leaves_the_metrics_written` |
+| **NoSecondParserOfTheFormat** | `resultReader`, `resultPostprocess`, `runReader` | `tests/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format`<br/>`tests/test_model_conformance.py::test_the_solve_seam_model_conforms` |
 | **ReadersNeverImportTheWorker** | `runReader`, `diagnosticsReader` | `tests/test_model_conformance.py::test_the_solve_seam_model_conforms` |
 | **SolveTimeoutTypesNotHangs** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_the_solve_bound_defaults_to_a_day_and_the_knob_states_it`<br/>`workers/telemac/test_entrypoint.py::test_a_child_that_outruns_the_bound_is_killed_and_still_reports` |
 | **StrictGateRefusesUnknownFields** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_the_gate_refuses_an_unknown_key_and_names_the_parser`<br/>`workers/telemac/test_entrypoint.py::test_a_case_with_an_unknown_field_refuses` |
@@ -164,6 +185,7 @@ The run's only report, written whatever the child did. Success is not the worker
 - **EchoDoctrine** - Server-known facts are stated by the deck, copied by the worker VERBATIM, and never re-derived in the container. Worker-measured facts are the worker's own: the frame count is measured off the file the echo names, and an unmeasurable result is the ABSENCE of the key rather than a zero.
 - **EmptyResultsRefuses** - A case declaring no results collapses the success convention back to the exit code alone, which is the convention this seam retired. It refuses instead.
 - **MetricsAlways** - The run report is written whatever the child does. A Fortran STOP kills the process it runs in, and the report is the only channel the server has for reading what went wrong, so the write outlives the solve.
+- **NoSecondParserOfTheFormat** - A result file's byte layout is the engine's to know. The parser this side used to carry was wrong about it twice: it refused a truncated result the engine reads without complaint, and it handed every consumer a variable name with the record's unit still glued on.
 - **ReadersNeverImportTheWorker** - What a solved run says is read from the artifacts the supervisor uploaded. A reader importing worker code is a second computation of the same quantity, running outside the image that produced it.
 - **SolveTimeoutTypesNotHangs** - A wedged solver is a typed report, not a container that never exits. The bound is stated by an environment knob, and an expiry names that knob in the error it writes.
 - **StrictGateRefusesUnknownFields** - A dropped key silently no-ops the knob the caller meant to set. The gate refuses instead, and names the parser stamp so a stale image reads as a drifted version rather than as a knob that did nothing.

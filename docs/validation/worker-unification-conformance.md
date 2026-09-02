@@ -89,7 +89,7 @@ carried finding 12.
 | TELEMAC geometry + boundary files | telapy (HermesFile, Conlim numliq, get_ipobo) | `mesh/shared/selafin_cli.py` (84) shells `trid3nt-local/telemac:latest` and `meshers/drivers/selafin_cli_driver.py:152` calls `telapy.api.hermes`. The numliq order is MEASURED, not assumed. | CONFORMS |
 | deck authoring | **telapy `TelemacCas` + the dico, library-validated** | `steps/author.py` hand-writes keyword text and `Path(...).write_text("\n".join(lines))` (`:208, :495, :1103, :1318`). `TelemacCas` appears NOWHERE in `trid3nt_server/`. | **DEVIATION - see finding N-1** |
 | the solve | telapy runners | `_solve_in_process` over `telapy.api.{t2d,t3d,wac,art}` | CONFORMS (with D-2) |
-| results reading | **telapy `TelemacFile` / `data_manip`** | `postprocess_telemac.py` (2,681) hand-rolls a SELAFIN reader on `import struct` (`:36, :158-211`); `steps/run_reads.py:87` reads through it. | **DEVIATION - see finding N-2** |
+| results reading | telapy `TelemacFile` / `data_manip` | `telemac/result_reader.py` (110) shells `trid3nt-local/telemac:latest` and `meshers/drivers/telemac_result_driver.py` calls `data_manip.extraction.telemac_file.TelemacFile`. `postprocess_telemac.py`, `steps/run_reads.py` and `steps/deck.py` read through it and import no `struct`. | CONFORMS (N-2 CLOSED) |
 | display + styling | MDAL/QGIS + the emission seam (FROZEN) | untouched | CONFORMS |
 
 Library-first grep over every module the wave ADDED - `steps/author.py`,
@@ -265,13 +265,26 @@ cause is real and not laziness: telapy is image-only on this machine
 driver-in-image pattern for the geometry pair (`mesh/shared/selafin_cli.py`, 84
 lines) without extending it to the deck.
 
-**N-2. The results reader is a hand-rolled `struct` SELAFIN parser.** Spec
-section 1 names telapy `TelemacFile` / `data_manip` for results reading.
-`postprocess_telemac.py` is 2,681 lines around `struct.unpack(">i", ...)`
-(`:158-211`) and `steps/run_reads.py:87` is a new consumer of it. It is the
-largest single library-first debt in the kept tree and the 4th largest module in
-`trid3nt_server/`. Elegance-review P6 killed the 88-line struct WRITER on exactly
-this argument; the reader was not in scope and survived.
+**N-2. The results reader is a hand-rolled `struct` SELAFIN parser. CLOSED
+2026-09-02.** Spec section 1 names telapy `TelemacFile` / `data_manip` for
+results reading. `postprocess_telemac.py` carried 113 lines of big-endian Fortran
+record parsing around `struct.unpack(">i", ...)`, and `steps/run_reads.py` was a
+new consumer of it. Elegance-review P6 killed the 88-line struct WRITER on
+exactly this argument; the reader was not in scope then and survived.
+
+It is now `result_reader.read_selafin`, an in-image driver on the pattern the
+wave built for the geometry pair: `TelemacFile` inside
+`trid3nt-local/telemac:latest`, `--network none`, the result directory mounted
+read-only. Equivalence was measured against the parser it replaced over 156 real
+result files in the tree (2D, 3D, GAIA, TOMAWAC, ARTEMIS, coastal, rain-on-grid):
+155 agree bit-for-bit on coordinates, element table, instants and every field,
+and the 156th is a truncated `gaia_river.slf` the struct parser refuses with
+`EOFError` and the engine reads without complaint. Two behaviour deltas, both
+corrections: variable names arrive without the record's unit glued on
+(`"WATER DEPTH"`, not `"WATER DEPTH     M"`), and `title`, which no reader in the
+tree consumed, is gone. Cost: ~1.2 s of container startup per read, ~2.0 s on a
+97 MB / 78-frame result. Nothing loops a read - each postprocess reads its result
+once and works in memory - so no batching was needed.
 
 **N-3. The two dark fronts are 2,078 lines nothing can reach.**
 `wave_field/` (413) + `coastal_tidal_surge/` (529) + `steps/wave.py` (271) +
@@ -318,7 +331,7 @@ Ordered by lines, all reported rather than taken:
 
 | candidate | LOC | why it is removable, and what makes it a judgment |
 |---|---|---|
-| `postprocess_telemac.py`'s struct parser (N-2) | up to 2,681 | replaced by `TelemacFile` behind an in-image driver, the pattern the wave already built for geometry |
+| ~~`postprocess_telemac.py`'s struct parser (N-2)~~ | 113 | TAKEN 2026-09-02: `TelemacFile` behind an in-image driver, the pattern the wave already built for geometry. The 2,681 was the module, not the parser - the rasterizers and the eight per-deliverable postprocessors are arithmetic over the fields and stay. |
 | the two dark fronts + their tests + their solver rows (N-3) | 2,078 | rung 4 rebuilds them fresh and never reads them; the attic is not a restoration source either way |
 | `artemis_build.py` + `telemac3d_build.py` + `_staged_bed.py` (D-1) | 2,192 | dies at rung 4 by ruling; the wave correctly did not touch it |
 | `steps/author.py`'s hand-written keyword emission (N-1) | part of 1,321 | a `TelemacCas` writer is a sheet-to-keywords mapping plus the library |

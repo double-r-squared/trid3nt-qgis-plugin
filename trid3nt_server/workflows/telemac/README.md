@@ -10,7 +10,8 @@ everything else it uses is the facade's or the step family's.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The package door. |
-| `postprocess_telemac.py` | Reads a solved SELAFIN into the map products: the peak field, the rasterized grids, the animated frames. |
+| `postprocess_telemac.py` | Turns a solved result's fields into the map products: the peak field, the rasterized grids, the animated frames. |
+| `result_reader.py` | `read_selafin` - a solved result's mesh and per-variable frames, read by the engine's own `TelemacFile` inside the TELEMAC image. |
 | `release_layer.py` | The reach's release point published as a context layer on the canvas. |
 | `release_point.py` | Where a release is allowed to be - inside the domain, on the river - the refusal when a supplied point is not, and where a derived one is settled inside the accepted mesh. |
 | `results_mesh_seam.py` | Writes the results-mesh `outputs.json` and publishes it through the one emission seam. |

@@ -2,14 +2,11 @@
 
 Covers the free-surface / depth variable pickers, the WET-MASK discipline (dry
 terrain must NOT leak into the water-surface raster), the mesh-CRS COG write +
-quantity tag, and the returned contract scalars. Uses a synthetic big-endian
-SELAFIN this test writes (mirrors test_postprocess_telemac.py) -- no docker /
-TELEMAC / S3 / case data.
+quantity tag, and the returned contract scalars. The fields come from the
+``telemac_result`` fixture -- no docker / TELEMAC / S3 / case data.
 """
 
 from __future__ import annotations
-
-import struct
 
 import numpy as np
 import pytest
@@ -17,37 +14,10 @@ import pytest
 from trid3nt_server.workflows.telemac import postprocess_telemac as P
 
 
-def _rec(payload: bytes) -> bytes:
-    n = struct.pack(">i", len(payload))
-    return n + payload + n
+VARS = ["VELOCITY U", "WATER DEPTH", "FREE SURFACE", "BOTTOM"]
 
 
-def _write_synthetic_selafin(path, varnames, x, y, ikle, times, data):
-    npoin = len(x)
-    nelem = len(ikle)
-    ndp = len(ikle[0])
-    title = b"MALPASSET WSE TEST".ljust(72) + b"SERAFIN "
-    with open(path, "wb") as fh:
-        fh.write(_rec(title))
-        fh.write(_rec(struct.pack(">2i", len(varnames), 0)))
-        for v in varnames:
-            fh.write(_rec(v.encode("latin-1").ljust(32)))
-        fh.write(_rec(struct.pack(">10i", *([0] * 10))))
-        fh.write(_rec(struct.pack(">4i", nelem, npoin, ndp, 1)))
-        fh.write(_rec(np.asarray(ikle, dtype=">i4").tobytes()))
-        fh.write(_rec(np.arange(1, npoin + 1, dtype=">i4").tobytes()))
-        fh.write(_rec(np.asarray(x, dtype=">f4").tobytes()))
-        fh.write(_rec(np.asarray(y, dtype=">f4").tobytes()))
-        for ti, t in enumerate(times):
-            fh.write(_rec(struct.pack(">f", float(t))))
-            for v in varnames:
-                fh.write(_rec(np.asarray(data[v][ti], dtype=">f4").tobytes()))
-
-
-VARS = ["VELOCITY U      M/S", "WATER DEPTH     M", "FREE SURFACE    M", "BOTTOM          M"]
-
-
-def _malpasset_like_slf(path):
+def _malpasset_like(telemac_result):
     """7 nodes: 5 wet (peak FS <= 12), 1 node dry-with-HIGH-terrain at f0 (FS=25),
     1 far node never wet (FS=30). If the wet mask works, wse_max == 12 (the dry
     FS=25/30 terrain values are excluded); if it leaks, wse_max would be 25 or 30.
@@ -55,7 +25,7 @@ def _malpasset_like_slf(path):
     # x, y in local metres (mesh frame).
     x = [5000.0, 5100.0, 5000.0, 5100.0, 5050.0, 5050.0, 7000.0]
     y = [4000.0, 4000.0, 4100.0, 4100.0, 4050.0, 3950.0, 4000.0]
-    ikle = [[1, 2, 5], [2, 4, 5], [3, 4, 5], [1, 3, 5], [1, 5, 6], [2, 5, 6]]
+    ikle = [[0, 1, 4], [1, 3, 4], [2, 3, 4], [0, 2, 4], [0, 4, 5], [1, 4, 5]]
     times = [0.0, 60.0]
     depth = {
         # node:            n1    n2    n3    n4    n5    n6    n7(far)
@@ -67,28 +37,27 @@ def _malpasset_like_slf(path):
         1: np.array([12.0, 11.0, 9.0, 8.0, 11.0, 10.5, 30.0]),
     }
     bottom = np.array([25.0, 8.0, 8.0, 9.0, 9.0, 9.0, 30.0])
-    data = {
-        "VELOCITY U      M/S": [np.zeros(7), np.zeros(7)],
-        "WATER DEPTH     M": [depth[0], depth[1]],
-        "FREE SURFACE    M": [fs[0], fs[1]],
-        "BOTTOM          M": [bottom, bottom],
-    }
-    _write_synthetic_selafin(path, VARS, x, y, ikle, times, data)
+    return telemac_result(varnames=VARS, x=x, y=y, ikle=ikle, times=times, data={
+        "VELOCITY U": [np.zeros(7), np.zeros(7)],
+        "WATER DEPTH": [depth[0], depth[1]],
+        "FREE SURFACE": [fs[0], fs[1]],
+        "BOTTOM": [bottom, bottom],
+    })
 
 
 def test_pick_named_var():
-    assert P._pick_named_var(VARS, P._WSE_VAR_KEYS, "S") == "FREE SURFACE    M"
-    assert P._pick_named_var(VARS, P._DEPTH_VAR_KEYS, "H") == "WATER DEPTH     M"
+    assert P._pick_named_var(VARS, P._WSE_VAR_KEYS, "S") == "FREE SURFACE"
+    assert P._pick_named_var(VARS, P._DEPTH_VAR_KEYS, "H") == "WATER DEPTH"
     # French deck names.
-    fr = ["SURFACE LIBRE   M", "HAUTEUR D'EAU   M"]
-    assert P._pick_named_var(fr, P._WSE_VAR_KEYS, "S") == "SURFACE LIBRE   M"
-    assert P._pick_named_var(fr, P._DEPTH_VAR_KEYS, "H") == "HAUTEUR D'EAU   M"
+    fr = ["SURFACE LIBRE", "HAUTEUR D'EAU"]
+    assert P._pick_named_var(fr, P._WSE_VAR_KEYS, "S") == "SURFACE LIBRE"
+    assert P._pick_named_var(fr, P._DEPTH_VAR_KEYS, "H") == "HAUTEUR D'EAU"
     assert P._pick_named_var(["VELOCITY U", "BOTTOM"], P._WSE_VAR_KEYS, "S") is None
 
 
-def test_wse_wet_mask_excludes_dry_terrain(tmp_path):
+def test_wse_wet_mask_excludes_dry_terrain(tmp_path, telemac_result):
     slf = tmp_path / "wse.slf"
-    _malpasset_like_slf(slf)
+    _malpasset_like(telemac_result)
     layers, metrics = P.postprocess_telemac_wse(
         slf,
         run_id="TESTWSE0000000000000000AA",
@@ -110,11 +79,11 @@ def test_wse_wet_mask_excludes_dry_terrain(tmp_path):
     assert wse.n_frames == 2
 
 
-def test_wse_cog_crs_and_quantity_tag(tmp_path):
+def test_wse_cog_crs_and_quantity_tag(tmp_path, telemac_result):
     import rasterio
 
     slf = tmp_path / "wse.slf"
-    _malpasset_like_slf(slf)
+    _malpasset_like(telemac_result)
     layers, _ = P.postprocess_telemac_wse(
         slf, run_id="TESTWSE0000000000000000BB", mesh_epsg=32632,
         vertical_datum="NGF", _output_dir=str(tmp_path),
@@ -130,9 +99,9 @@ def test_wse_cog_crs_and_quantity_tag(tmp_path):
         assert abs(src.bounds.left) > 360
 
 
-def test_wse_depth_mode(tmp_path):
+def test_wse_depth_mode(tmp_path, telemac_result):
     slf = tmp_path / "wse.slf"
-    _malpasset_like_slf(slf)
+    _malpasset_like(telemac_result)
     layers, metrics = P.postprocess_telemac_wse(
         slf, run_id="TESTWSE0000000000000000CC", mesh_epsg=32632,
         quantity="depth", _output_dir=str(tmp_path),
@@ -143,11 +112,12 @@ def test_wse_depth_mode(tmp_path):
     assert metrics["wse_max_m"] == pytest.approx(4.0)
 
 
-def test_a_depth_field_renders_dry_ground_dry_and_nodata_only_off_the_domain(tmp_path):
+def test_a_depth_field_renders_dry_ground_dry_and_nodata_only_off_the_domain(
+        tmp_path, telemac_result):
     """n7 never went wet. As NODATA it punches a hole through the map and reads
     as a broken raster; its own zero depth is the run's answer for that node."""
     slf = tmp_path / "wse.slf"
-    _malpasset_like_slf(slf)
+    _malpasset_like(telemac_result)
     _layers, metrics = P.postprocess_telemac_wse(
         slf, run_id="TESTWSE0000000000000000EE", mesh_epsg=32632,
         quantity="depth", _output_dir=str(tmp_path),
@@ -158,10 +128,11 @@ def test_a_depth_field_renders_dry_ground_dry_and_nodata_only_off_the_domain(tmp
     assert "dry renders DRY" in metrics["honesty_label"]
 
 
-def test_the_p99_depth_is_measured_beside_the_maximum_over_the_wet_nodes(tmp_path):
+def test_the_p99_depth_is_measured_beside_the_maximum_over_the_wet_nodes(
+        tmp_path, telemac_result):
     """One pit ponding to its rim sets the maximum; the percentile is the field."""
     slf = tmp_path / "wse.slf"
-    _malpasset_like_slf(slf)
+    _malpasset_like(telemac_result)
     _layers, metrics = P.postprocess_telemac_wse(
         slf, run_id="TESTWSE0000000000000000FF", mesh_epsg=32632,
         quantity="depth", _output_dir=str(tmp_path),
@@ -172,11 +143,11 @@ def test_the_p99_depth_is_measured_beside_the_maximum_over_the_wet_nodes(tmp_pat
     assert metrics["wse_p99_m"] < metrics["wse_max_m"]
 
 
-def test_a_free_surface_field_keeps_a_never_wet_node_nodata(tmp_path):
+def test_a_free_surface_field_keeps_a_never_wet_node_nodata(tmp_path, telemac_result):
     """An ELEVATION has no dry floor: a dry node's free surface IS its bed, so
     filling it in would paint terrain as a water surface."""
     slf = tmp_path / "wse.slf"
-    _malpasset_like_slf(slf)
+    _malpasset_like(telemac_result)
     _layers, metrics = P.postprocess_telemac_wse(
         slf, run_id="TESTWSE00000000000000000G", mesh_epsg=32632,
         _output_dir=str(tmp_path),
@@ -187,19 +158,15 @@ def test_a_free_surface_field_keeps_a_never_wet_node_nodata(tmp_path):
     assert metrics["wse_min_m"] > 0.0
 
 
-def test_wse_empty_dry_solve_raises(tmp_path):
+def test_wse_empty_dry_solve_raises(tmp_path, telemac_result):
     slf = tmp_path / "dry.slf"
-    x = [0.0, 100.0, 0.0]
-    y = [0.0, 0.0, 100.0]
-    ikle = [[1, 2, 3]]
-    times = [0.0]
-    data = {
-        "VELOCITY U      M/S": [np.zeros(3)],
-        "WATER DEPTH     M": [np.zeros(3)],          # everywhere dry
-        "FREE SURFACE    M": [np.array([5.0, 6.0, 7.0])],
-        "BOTTOM          M": [np.array([5.0, 6.0, 7.0])],
-    }
-    _write_synthetic_selafin(slf, VARS, x, y, ikle, times, data)
+    telemac_result(varnames=VARS, x=[0.0, 100.0, 0.0], y=[0.0, 0.0, 100.0],
+                   ikle=[[0, 1, 2]], times=[0.0], data={
+                       "VELOCITY U": [np.zeros(3)],
+                       "WATER DEPTH": [np.zeros(3)],       # everywhere dry
+                       "FREE SURFACE": [np.array([5.0, 6.0, 7.0])],
+                       "BOTTOM": [np.array([5.0, 6.0, 7.0])],
+                   })
     with pytest.raises(P.PostprocessTelemacError) as ei:
         P.postprocess_telemac_wse(
             slf, run_id="TESTWSE0000000000000000DD", mesh_epsg=32632,

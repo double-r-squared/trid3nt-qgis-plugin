@@ -267,7 +267,7 @@ def _load_mesh(layer: dict) -> dict:
     from matplotlib.tri import Triangulation
     from pyproj import Transformer
 
-    from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
+    from trid3nt_server.workflows.telemac.result_reader import read_selafin
 
     uri = str(layer.get("uri") or "")
     path = _download(uri) if uri.startswith("s3://") else uri

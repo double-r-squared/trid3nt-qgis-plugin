@@ -220,7 +220,7 @@ def test_the_engines_own_volume_closure_is_the_last_one_it_printed():
 # --------------------------------------------------------------------------- #
 #: The depth variable name a solved TELEMAC-2D result actually carries: SELAFIN
 #: pads the name to 32 chars and trails the unit. Read off a real r2d_river.slf.
-_DEPTH_VAR = "WATER DEPTH     M"
+_DEPTH_VAR = "WATER DEPTH"
 
 
 def _selafin(monkeypatch, depths):
@@ -236,14 +236,14 @@ def _selafin(monkeypatch, depths):
     """
     import numpy as np
 
-    from trid3nt_server.workflows.telemac import postprocess_telemac as P
+    from trid3nt_server.workflows.telemac import result_reader as reader
 
     mesh = {"x": np.array([0.0, 10.0, 0.0, 20.0, 50.0, 20.0]),
             "y": np.array([0.0, 0.0, 10.0, 0.0, 0.0, 10.0]),
             "ikle": np.array([[0, 1, 2], [3, 4, 5]]),
             "varnames": [_DEPTH_VAR],
             "data": {_DEPTH_VAR: np.array([[0.0] * 6, list(depths)])}}
-    monkeypatch.setattr(P, "read_selafin", lambda _path: mesh)
+    monkeypatch.setattr(reader, "read_selafin", lambda _path: mesh)
 
 
 def test_the_wetted_fraction_is_area_weighted_off_the_final_frame(monkeypatch):
@@ -270,12 +270,12 @@ def test_a_film_thinner_than_the_tolerance_is_not_conveyance(monkeypatch):
 def test_a_result_with_no_depth_measures_nothing(monkeypatch):
     import numpy as np
 
-    from trid3nt_server.workflows.telemac import postprocess_telemac as P
+    from trid3nt_server.workflows.telemac import result_reader as reader
 
-    monkeypatch.setattr(P, "read_selafin", lambda _path: {
+    monkeypatch.setattr(reader, "read_selafin", lambda _path: {
         "x": np.zeros(3), "y": np.zeros(3), "ikle": np.array([[0, 1, 2]]),
-        "varnames": ["DYE             MG/L"],
-        "data": {"DYE             MG/L": np.zeros((1, 3))}})
+        "varnames": ["DYE"],
+        "data": {"DYE": np.zeros((1, 3))}})
     assert R.wetted_fraction("ignored.slf") == {}
 
 
@@ -306,13 +306,13 @@ def test_an_unmeasurable_result_costs_the_run_nothing(monkeypatch):
     import asyncio
 
     from trid3nt_server.workflows.lib.journal import bind_notes, drain_notes
-    from trid3nt_server.workflows.telemac import postprocess_telemac as P
+    from trid3nt_server.workflows.telemac import result_reader as reader
     from trid3nt_server.workflows.telemac.steps import products as PR
 
     def _boom(_path):
         raise RuntimeError("not a SELAFIN")
 
-    monkeypatch.setattr(P, "read_selafin", _boom)
+    monkeypatch.setattr(reader, "read_selafin", _boom)
     token = bind_notes()
     try:
         asyncio.run(PR._journal_wetted_fraction("ignored.slf"))

@@ -1,14 +1,12 @@
 """Unit tests for postprocess_telemac's pure pieces (no docker / TELEMAC / S3).
 
-Covers the hand-rolled SELAFIN reader (round-tripped against a synthetic
-big-endian single-precision SELAFIN this test writes), the DYE-variable picker,
-the adaptive grid sizing, and the channel-clipped scatter rasterization. The
-live COG-write + upload path is exercised by the through-the-seam dev proof.
+Covers the DYE-variable picker, the adaptive grid sizing, and the channel-clipped
+scatter rasterization. The result read itself belongs to the engine's own library
+inside the image (``tests/test_telemac_result_reader.py``), and the live COG-write
++ upload path is exercised by the through-the-seam dev proof.
 """
 
 from __future__ import annotations
-
-import struct
 
 import numpy as np
 import pytest
@@ -16,69 +14,10 @@ import pytest
 from trid3nt_server.workflows.telemac import postprocess_telemac as P
 
 
-def _rec(payload: bytes) -> bytes:
-    """Wrap a payload as one big-endian Fortran sequential-unformatted record."""
-    n = struct.pack(">i", len(payload))
-    return n + payload + n
-
-
-def _write_synthetic_selafin(path, varnames, x, y, ikle, times, data):
-    """Write a minimal single-precision big-endian SELAFIN the reader parses."""
-    npoin = len(x)
-    nelem = len(ikle)
-    ndp = len(ikle[0])
-    title = b"SYNTHETIC TEST".ljust(72) + b"SERAFIN "  # [72:80] precision tag
-    with open(path, "wb") as fh:
-        fh.write(_rec(title))
-        fh.write(_rec(struct.pack(">2i", len(varnames), 0)))
-        for v in varnames:
-            fh.write(_rec(v.encode("latin-1").ljust(32)))
-        iparam = [0] * 10  # iparam[9]==0 -> no date record
-        fh.write(_rec(struct.pack(">10i", *iparam)))
-        fh.write(_rec(struct.pack(">4i", nelem, npoin, ndp, 1)))
-        fh.write(_rec(np.asarray(ikle, dtype=">i4").tobytes()))
-        fh.write(_rec(np.arange(1, npoin + 1, dtype=">i4").tobytes()))
-        fh.write(_rec(np.asarray(x, dtype=">f4").tobytes()))
-        fh.write(_rec(np.asarray(y, dtype=">f4").tobytes()))
-        for ti, t in enumerate(times):
-            fh.write(_rec(struct.pack(">f", float(t))))
-            for v in varnames:
-                fh.write(_rec(np.asarray(data[v][ti], dtype=">f4").tobytes()))
-
-
-def test_read_selafin_roundtrip(tmp_path):
-    path = tmp_path / "synthetic.slf"
-    varnames = ["VELOCITY U      M/S", "DYE             MG/L"]
-    x = [0.0, 100.0, 0.0, 100.0]
-    y = [0.0, 0.0, 100.0, 100.0]
-    ikle = [[1, 2, 3], [2, 4, 3]]
-    times = [0.0, 60.0]
-    data = {
-        "VELOCITY U      M/S": [np.full(4, 1.0), np.full(4, 1.5)],
-        "DYE             MG/L": [np.array([0.0, 10.0, 0.0, 5.0]), np.array([0.0, 3.0, 0.0, 40.0])],
-    }
-    _write_synthetic_selafin(path, varnames, x, y, ikle, times, data)
-
-    mesh = P.read_selafin(path)
-    assert mesh["npoin"] == 4
-    assert mesh["nelem"] == 2
-    # IKLE returned 0-based (SELAFIN stores it 1-based) so a mesh-faithful render
-    # can triangulate real elements, not an unconstrained Delaunay of the nodes.
-    assert mesh["ikle"].shape == (2, 3)
-    assert np.array_equal(mesh["ikle"], np.array([[0, 1, 2], [1, 3, 2]]))
-    assert [v.strip() for v in mesh["varnames"]] == ["VELOCITY U      M/S", "DYE             MG/L"]
-    assert np.allclose(mesh["x"], x)
-    assert np.allclose(mesh["y"], y)
-    assert np.allclose(mesh["times"], times)
-    dye = mesh["data"]["DYE             MG/L"]
-    assert dye.shape == (2, 4)
-    assert dye[1].max() == pytest.approx(40.0)
-
-
 def test_pick_dye_var():
-    assert P._pick_dye_var(["VELOCITY U      M/S", "DYE             MG/L"]) == "DYE             MG/L"
+    assert P._pick_dye_var(["VELOCITY U", "DYE"]) == "DYE"
     # a T-prefixed tracer when no explicit DYE
-    assert P._pick_dye_var(["WATER DEPTH     M", "T1              "]) == "T1              "
+    assert P._pick_dye_var(["WATER DEPTH", "T1"]) == "T1"
     assert P._pick_dye_var(["VELOCITY U", "WATER DEPTH"]) is None
 
 

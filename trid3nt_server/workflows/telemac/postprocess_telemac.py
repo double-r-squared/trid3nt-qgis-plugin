@@ -25,10 +25,10 @@ arithmetic from the SELAFIN tracer field -- no LLM anywhere. The COG carries an
 "idealized bed plane + prescribed-dispersion" label so a demo release is never
 read as a calibrated site study.
 
-SELAFIN reading is HAND-ROLLED in pure numpy (mirroring ``postprocess_geoclaw``'s
-hand-rolled ``fort.q`` reader): the agent venv has NO TELEMAC/pytel install, so
-this module never imports ``data_manip`` -- it parses the big-endian Fortran
-records itself, validated against a real solved ``r2d_river.slf``.
+The result file is read by ``result_reader.read_selafin``, which runs the
+engine's own ``TelemacFile`` inside the TELEMAC image. Nothing here knows the
+file's byte layout; this module works from the mesh and the per-variable frames
+that reader returns.
 """
 
 from __future__ import annotations
@@ -36,7 +36,6 @@ from __future__ import annotations
 import logging
 import math
 import os
-import struct
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -65,6 +64,7 @@ from trid3nt_contracts.execution import LegendKey
 from trid3nt_server.workflows.shared import cog_io
 from trid3nt_server.workflows.shared.cog_io import CogIoError
 from trid3nt_server.workflows.shared.cog_io import RUNS_BUCKET_DEFAULT
+from trid3nt_server.workflows.telemac.result_reader import read_selafin
 
 __all__ = [
     "PostprocessTelemacError",
@@ -77,7 +77,6 @@ __all__ = [
     "postprocess_telemac3d",
     "postprocess_coastal",
     "peak_layer_id",
-    "read_selafin",
     "TELEMAC_WAVE_STYLE_PRESET",
     "TELEMAC_AGITATION_STYLE_PRESET",
     "TELEMAC_DYE_STYLE_PRESET",
@@ -150,118 +149,6 @@ class PostprocessTelemacError(RuntimeError):
         super().__init__(message or error_code)
         self.error_code = error_code
         self.details: dict[str, Any] = dict(details or {})
-
-
-# --------------------------------------------------------------------------- #
-# Hand-rolled SELAFIN reader (pure numpy -- NO TELEMAC import).
-# --------------------------------------------------------------------------- #
-def _read_record(fh) -> bytes:
-    """Read one Fortran sequential-unformatted record (big-endian 4-byte markers)."""
-    head = fh.read(4)
-    if len(head) < 4:
-        raise EOFError("unexpected EOF reading record length")
-    (n,) = struct.unpack(">i", head)
-    payload = fh.read(n)
-    if len(payload) < n:
-        raise EOFError("unexpected EOF reading record payload")
-    tail = fh.read(4)
-    if len(tail) < 4:
-        raise EOFError("unexpected EOF reading record trailer")
-    (m,) = struct.unpack(">i", tail)
-    if m != n:
-        raise ValueError(f"record markers disagree ({n} != {m})")
-    return payload
-
-
-def read_selafin(path: str | Path) -> dict[str, Any]:
-    """Parse a SELAFIN (SERAFIN) file into mesh + per-variable time series.
-
-    Big-endian Fortran sequential-unformatted (opentelemac's SELAFIN/SERAFIN).
-    Detects single (``SERAFIN``) vs double (``SERAFIND``) precision from the
-    title trailer. Returns::
-
-        {"title": str, "varnames": [str], "npoin": int, "nelem": int,
-         "x": ndarray(npoin), "y": ndarray(npoin), "ikle": ndarray(nelem, ndp),
-         "times": ndarray(nframes),
-         "data": {varname: ndarray(nframes, npoin)}}
-
-    The raster path uses only the variable NAMES + node coords + per-frame values
-    (scattered-node interpolation), but the REAL element connectivity ``ikle``
-    (0-based triangles) is returned so mesh-faithful renders can triangulate the
-    channel along its true elements rather than an unconstrained Delaunay of the
-    node cloud (which bridges river bends into a spurious fan). IPOBO is consumed
-    for cursor alignment. Pure numpy; validated against a real solved ``r2d_river.slf``.
-    """
-    import numpy as np
-
-    with open(path, "rb") as fh:
-        title_rec = _read_record(fh)
-        title = title_rec[:72].decode("latin-1", "replace").strip()
-        precision_tag = title_rec[72:80].decode("latin-1", "replace")
-        double = "SERAFIND" in precision_tag.upper() or "SELAFIND" in precision_tag.upper()
-        fdtype = ">f8" if double else ">f4"
-        fsize = 8 if double else 4
-
-        nbv1, nbv2 = struct.unpack(">2i", _read_record(fh))
-        varnames: list[str] = []
-        for _ in range(nbv1):
-            varnames.append(_read_record(fh)[:32].decode("latin-1", "replace").strip())
-        for _ in range(nbv2):
-            _read_record(fh)  # secondary (clandestine) vars -- skip
-
-        iparam = struct.unpack(">10i", _read_record(fh))
-        if iparam[9] == 1:  # IPARAM(10)==1 -> a date record follows
-            _read_record(fh)
-
-        nelem, npoin, ndp, _ = struct.unpack(">4i", _read_record(fh))
-        # IKLE (nelem*ndp int32): the element connectivity, 1-based in SELAFIN.
-        # Return it 0-based so a mesh-faithful render triangulates real elements.
-        ikle = (np.frombuffer(_read_record(fh), dtype=">i4").astype("int64")
-                .reshape(nelem, ndp) - 1)
-        _read_record(fh)  # IPOBO (npoin int32)    -- consumed, not used here
-        x = np.frombuffer(_read_record(fh), dtype=fdtype).astype("float64")
-        y = np.frombuffer(_read_record(fh), dtype=fdtype).astype("float64")
-        if x.size != npoin or y.size != npoin:
-            raise ValueError(f"coord record size mismatch (npoin={npoin}, x={x.size})")
-
-        times: list[float] = []
-        data: dict[str, list] = {v: [] for v in varnames}
-        while True:
-            try:
-                trec = _read_record(fh)
-            except EOFError:
-                break
-            t = np.frombuffer(trec, dtype=fdtype)
-            if t.size < 1:
-                break
-            times.append(float(t[0]))
-            for v in varnames:
-                buf = _read_record(fh)
-                arr = np.frombuffer(buf, dtype=fdtype).astype("float64")
-                if arr.size != npoin:
-                    raise ValueError(
-                        f"variable {v!r} frame size {arr.size} != npoin {npoin}"
-                    )
-                data[v].append(arr)
-
-    return {
-        "title": title,
-        "varnames": varnames,
-        "npoin": int(npoin),
-        "nelem": int(nelem),
-        "x": x,
-        "y": y,
-        # The header's X-ORIGIN / Y-ORIGIN (IPARAM(3)/(4)), REPORTED and not
-        # applied. ``x``/``y`` stay exactly as the file stores them because every
-        # postprocessor adds the origin it recovers from the domain bbox, and
-        # applying it here would double the offset on all of them. A reader that
-        # wants absolute coordinates - the diagnostic sheet, or MDAL - adds these.
-        "x_origin": int(iparam[2]),
-        "y_origin": int(iparam[3]),
-        "ikle": ikle,
-        "times": np.asarray(times, dtype="float64"),
-        "data": {v: (np.vstack(a) if a else np.empty((0, npoin))) for v, a in data.items()},
-    }
 
 
 def _pick_dye_var(varnames: list[str], *, prefer_sediment: bool = False) -> str | None:

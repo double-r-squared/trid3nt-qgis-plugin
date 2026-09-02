@@ -105,6 +105,23 @@ package SolveSeam {
         */
     }
 
+    part def ResultReader {
+        doc /*
+        A solved result's fields, read by the engine's own library inside the
+        image that wrote them. It parses nothing: the byte layout is the
+        engine's to know, and a second implementation of it on this side is a
+        second thing to be wrong about it.
+        */
+    }
+
+    part def ResultPostprocess {
+        doc /*
+        The map products a solved result carries: the peak field, the rasters,
+        the scalars each deliverable narrates from. It works from the fields the
+        reader states and never opens the file itself.
+        */
+    }
+
     part def DiagnosticsReader {
         doc /*
         The engine-agnostic diagnostics face: reads the folded completion
@@ -152,6 +169,8 @@ package SolveSeam {
     port def TopologyIn;
     port def MeshOut;
     port def MeshIn;
+    port def FieldsOut;
+    port def FieldsIn;
 
     // ----------------------------------------------------------------- //
     // Interfaces - the seam contracts, by their real key names
@@ -242,6 +261,33 @@ package SolveSeam {
         */
         item result_slf : FileName;
         item ntimestep : Integer;
+    }
+
+    interface def SolvedResultFields {
+        doc /*
+        What the engine's reader says a solved result holds: the mesh it was
+        computed on, the instants it was written at, and one field per variable
+        shaped (frames, nodes).
+
+        The variable names are the engine's OWN names, with no unit glued to
+        them - the record stores the two together and splitting them is the
+        format knowledge that stays on the engine's side.
+
+        The origins are REPORTED and not applied, and this hop does not require
+        them: the coordinates stay as the file stores them, and every
+        postprocess adds the origin it recovered from the domain bbox, so
+        applying the header's would double the offset on all of them.
+        */
+        item varnames : StringList;
+        item npoin : Integer;
+        item nelem : Integer;
+        item x : RealArray;
+        item y : RealArray;
+        item ikle : IntTable;
+        item x_origin : Integer [0..1];
+        item y_origin : Integer [0..1];
+        item times : RealArray;
+        item data : FieldMap;
     }
 
     interface def SolverListing {
@@ -363,6 +409,20 @@ package SolveSeam {
         */
     }
 
+    part resultReader : ResultReader {
+        doc /*
+        code: trid3nt_server/workflows/telemac/result_reader.py
+        */
+        port fieldsOut : FieldsOut;
+    }
+
+    part resultPostprocess : ResultPostprocess {
+        doc /*
+        code: trid3nt_server/workflows/telemac/postprocess_telemac.py
+        */
+        port fieldsIn : FieldsIn;
+    }
+
     part diagnosticsReader : DiagnosticsReader {
         doc /*
         code: trid3nt_server/workflows/solver/diagnostics/telemac.py
@@ -469,6 +529,9 @@ package SolveSeam {
         */
     }
 
+    interface fieldsRead : SolvedResultFields
+        connect resultReader.fieldsOut to resultPostprocess.fieldsIn;
+
     interface listingTeed : SolverListing
         connect telapyChild.listingOut to workerEntrypoint.listingOut;
 
@@ -551,6 +614,19 @@ package SolveSeam {
         */
     }
 
+    requirement def NoSecondParserOfTheFormat {
+        doc /*
+        A result file's byte layout is the engine's to know. The parser this
+        side used to carry was wrong about it twice: it refused a truncated
+        result the engine reads without complaint, and it handed every consumer
+        a variable name with the record's unit still glued on.
+
+        forbid: trid3nt_server.workflows.telemac.result_reader -> struct
+        forbid: trid3nt_server.workflows.telemac.postprocess_telemac -> struct
+        forbid: trid3nt_server.workflows.telemac.steps.run_reads -> struct
+        */
+    }
+
     // ----------------------------------------------------------------- //
     // Allocations
     // ----------------------------------------------------------------- //
@@ -595,6 +671,14 @@ package SolveSeam {
     satisfy requirement WorkersNeverImportServer by workerEntrypoint;
     satisfy requirement WorkersNeverImportServer by telapyChild;
     verify requirement WorkersNeverImportServer by
+        "tests/test_model_conformance.py::test_the_solve_seam_model_conforms";
+
+    satisfy requirement NoSecondParserOfTheFormat by resultReader;
+    satisfy requirement NoSecondParserOfTheFormat by resultPostprocess;
+    satisfy requirement NoSecondParserOfTheFormat by runReader;
+    verify requirement NoSecondParserOfTheFormat by
+        "tests/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format";
+    verify requirement NoSecondParserOfTheFormat by
         "tests/test_model_conformance.py::test_the_solve_seam_model_conforms";
 
     satisfy requirement ReadersNeverImportTheWorker by runReader;

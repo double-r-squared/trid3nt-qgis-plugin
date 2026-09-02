@@ -2993,3 +2993,39 @@ rule and the rule read as decorative. The checker now computes its own import
 edges for the modeled modules at check time - a dozen `ast.parse` calls, scoped
 to exactly the blocks the model binds. `scripts/code_graph.py` and its
 `graph.json` are untouched; the atlas keeps its own product for its own readers.
+
+## `postprocess_telemac.read_selafin` + `_read_record` and their tests - DELETED
+
+The struct SELAFIN parser: 113 lines of big-endian Fortran sequential-
+unformatted record reading (`struct.unpack(">i", ...)`, the precision tag off
+the title trailer, IKLE 1-based to 0-based, the frame loop) reimplementing a
+format nobody on this side owns. Replaced by
+`telemac/result_reader.read_selafin` (110), which shells
+`meshers/drivers/telemac_result_driver.py` (70) inside
+`trid3nt-local/telemac:latest` with `--network none` and the result directory
+mounted read-only, and reads through the engine's own
+`data_manip.extraction.telemac_file.TelemacFile`.
+
+Equivalence measured before the swap over 156 real result files in the tree (2D,
+3D, GAIA, TOMAWAC, ARTEMIS, coastal, rain-on-grid): 155 agree bit-for-bit on
+coordinates, element table, instants and every field. The 156th is a truncated
+`gaia_river.slf` the struct parser refuses with `EOFError` and the engine reads
+without complaint - the parser's second known error, after gluing the record's
+unit onto every variable name it returned.
+
+Two returned keys went with it. `title` had no reader anywhere in the tree.
+`varnames` lost the unit half (`"WATER DEPTH"`, not `"WATER DEPTH     M"`); every
+consumer already matched by `.strip().upper()` substring, so all of them read
+unchanged, and the unit is one `res.varunits` line away in the driver when a
+consumer needs it - the g/l-to-mg/L sediment rescale in `postprocess_telemac`
+being the obvious candidate, left as the hardcoded rule it was.
+
+The tests that spelled the format out die with it: `_rec` +
+`_write_synthetic_selafin` + `test_read_selafin_roundtrip`
+(`tests/test_postprocess_telemac.py`), `_rec` + `_write_synthetic_selafin`
+(`tests/test_postprocess_telemac_wse.py`), `_rec` + `_write_local_frame_selafin`
+(`tests/test_postprocess_artemis_georef.py`) - ~120 lines of byte-format
+knowledge in the suite. The postprocess tests they served now state their fields
+through the `telemac_result` conftest fixture, on the `_offline_cas_parse`
+precedent: the container round trip is stubbed and the arithmetic runs for real.
+reopen: never (a second parser of a format we do not own is the defect).

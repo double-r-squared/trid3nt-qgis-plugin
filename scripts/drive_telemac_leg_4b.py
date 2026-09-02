@@ -44,7 +44,7 @@ from scripts.seed_showcase_cases import (
     mk,
     new_ulid,
 )
-from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
+from trid3nt_server.workflows.telemac.result_reader import read_selafin
 
 
 def _s3():

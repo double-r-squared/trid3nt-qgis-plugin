@@ -230,7 +230,7 @@ def _continuation_start_s(uri: str) -> float:
     import tempfile
 
     from trid3nt_server.workflows.solver.solver import _download_object
-    from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin
+    from trid3nt_server.workflows.telemac.result_reader import read_selafin
 
     with tempfile.TemporaryDirectory(prefix="telemac-continue-") as tmp:
         path = Path(tmp) / _PREVIOUS_DEST

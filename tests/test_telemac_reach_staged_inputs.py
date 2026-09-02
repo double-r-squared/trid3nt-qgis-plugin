@@ -176,17 +176,17 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
     asked for, so a server that derived the instant would author the extended
     scenario over the wrong stretch of clock.
     """
-    import trid3nt_server.workflows.telemac.postprocess_telemac as post
+    import trid3nt_server.workflows.telemac.result_reader as reader
     from trid3nt_server.workflows.telemac.steps.deck import _continuation_start_s
     from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
 
     previous = tmp_path / "restart_river.slf"
     previous.write_bytes(b"selafin")
-    monkeypatch.setattr(post, "read_selafin",
+    monkeypatch.setattr(reader, "read_selafin",
                         lambda path: {"times": [0.0, 104.2, 600.192]})
     assert _continuation_start_s(str(previous)) == 600.192
 
-    monkeypatch.setattr(post, "read_selafin", lambda path: {"times": []})
+    monkeypatch.setattr(reader, "read_selafin", lambda path: {"times": []})
     with pytest.raises(TelemacDyeScenarioError) as exc:
         _continuation_start_s(str(previous))
     assert exc.value.error_code == "TELEMAC_CONTINUATION_UNREADABLE"

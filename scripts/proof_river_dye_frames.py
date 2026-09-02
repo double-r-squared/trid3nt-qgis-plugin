@@ -41,7 +41,7 @@ sys.path.insert(0, str(REPO / "scripts" / "sandbox" / "oceanmesh"))
 
 import merc_render as MR  # noqa: E402
 
-from trid3nt_server.workflows.telemac.postprocess_telemac import read_selafin  # noqa: E402
+from trid3nt_server.workflows.telemac.result_reader import read_selafin  # noqa: E402
 
 #: The tracer variable the dye run writes. Matched loosely because SELAFIN pads
 #: its variable names to 32 characters.
