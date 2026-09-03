@@ -30,6 +30,10 @@ an interface def names a function that builds it with ``constructor: <name>``; a
 interface usage exempts a verbatim-forwarding end with
 ``pass-through: <part usage>``, which neither owes nor supplies item evidence.
 
+The file's FIRST line places the seam in the system of systems -
+``// plane: <plane> | system: <system>`` - and the view carries it, so no one
+seam's picture can be read as the whole.
+
 Output is deterministic and sorted. Every finding names the model element and
 the code location, and the exit status is 1 when any finding stands.
 """
@@ -64,6 +68,12 @@ _DOC = re.compile(r"doc\s*/\*(.*?)\*/", re.DOTALL)
 _DOCLINE = re.compile(
     r"^\s*(code|forbid|constructor|pass-through)\s*:\s*(\S.*?)\s*$", re.MULTILINE)
 _FORBID = re.compile(r"^(\S+)\s*->\s*(\S+)$")
+#: The seam's PLACE in the system of systems, on the file's FIRST line:
+#: ``// plane: <plane> | system: <system>``. Required, not conventional - a seam
+#: nobody placed is a seam the index cannot list under anything, and the view
+#: would then present one seam as if it were the whole.
+_PLANE_HEADER = re.compile(
+    r"^//\s*plane:\s*([^|\n]+?)\s*\|\s*system:\s*(\S[^\n]*?)\s*$")
 
 _NAME = r"[A-Za-z_][A-Za-z0-9_]*"
 _MULT = r"(?:\[\s*\d+\s*\.\.\s*[\d*]+\s*\])"
@@ -150,6 +160,9 @@ class RequirementDef:
 @dataclass
 class Model:
     package: str
+    #: Where this seam sits in the system of systems, from the file header.
+    plane: str
+    system: str
     part_defs: list[str]
     port_defs: list[str]
     interface_defs: dict[str, InterfaceDef]
@@ -228,6 +241,12 @@ def parse_model(path: Path) -> Model:
     scan = _strip_docs(text)
     _reject_unknown_notation(scan)
 
+    header = _PLANE_HEADER.match(text.partition("\n")[0])
+    if header is None:
+        raise ModelParseError(
+            "the first line must place the seam in the system of systems as "
+            "'// plane: <plane> | system: <system>'")
+
     package = _PACKAGE.search(scan)
     if package is None:
         raise ModelParseError("the model declares no package")
@@ -277,6 +296,8 @@ def parse_model(path: Path) -> Model:
 
     return Model(
         package=package.group(1),
+        plane=header.group(1),
+        system=header.group(2),
         part_defs=[m.group(1) for m in _PART_DEF.finditer(scan)],
         port_defs=[m.group(1) for m in _PORT_DEF.finditer(scan)],
         interface_defs=interface_defs,
@@ -675,6 +696,12 @@ def render_view(model: Model, source: Path) -> str:
         f"GENERATED from `{source.relative_to(REPO_ROOT).as_posix()}` by "
         "`scripts/model_check.py --view`. Never hand-edited: regenerate it, and "
         "`tests/test_model_conformance.py` fails while it is stale.",
+        "",
+        # A view drawn without its place reads as the whole system. It is one
+        # seam of one system of one plane, and it says so before its first box.
+        f"Plane: **{model.plane}**. System: **{model.system}**. One seam of the "
+        "system of systems indexed by [`README.md`](README.md) - never the "
+        "whole picture.",
         "",
         "## Blocks and flows",
         "",

@@ -1,3 +1,5 @@
+// plane: workflow | system: assembler -> solver -> products
+//
 // The TELEMAC solve seam as a checkable model.
 //
 // SysML v2 TEXTUAL notation, restricted to the subset the project checker

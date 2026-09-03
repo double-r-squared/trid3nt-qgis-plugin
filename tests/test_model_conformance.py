@@ -51,7 +51,7 @@ _IMPORT_FORMS = {
     "relative": "from .sub import leaf",
 }
 
-_FORBID_MODEL = """
+_FORBID_MODEL = """// plane: workflow | system: solver
 package FiveForms {
     part def Importer {
         doc /* the one module the rule is written about */
@@ -102,6 +102,20 @@ def test_every_import_form_fires_against_the_rule_that_forbids_it(form, tmp_path
     assert done.returncode == 1, done.stdout + done.stderr
     assert "DEPENDENCY_VIOLATION" in done.stdout
     assert "pkg.importer -> pkg.sub.leaf" in done.stdout
+
+
+def test_a_seam_that_states_no_plane_refuses(tmp_path):
+    """A seam nobody placed cannot be indexed, and its view reads as the whole.
+
+    The header is the only thing that keeps one seam's picture from being taken
+    for the system of systems, so a model without one is a parse failure rather
+    than a seam quietly missing from the index.
+    """
+    model = _five_forms_tree(tmp_path, "import pkg.sub.leafy")
+    model.write_text(_FORBID_MODEL.partition("\n")[2], encoding="utf-8")
+    done = _run("--model", str(model), "--root", str(tmp_path))
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "MODEL_PARSE" in done.stdout and "plane:" in done.stdout
 
 
 def test_a_neighbouring_module_is_not_read_as_the_forbidden_one(tmp_path):

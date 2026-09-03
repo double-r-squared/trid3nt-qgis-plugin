@@ -1,3 +1,5 @@
+// plane: workflow | system: mesher
+//
 // The mesh seam as a checkable model.
 //
 // SysML v2 TEXTUAL notation, restricted to the subset the project checker
