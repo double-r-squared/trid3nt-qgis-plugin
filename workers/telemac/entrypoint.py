@@ -8,7 +8,8 @@ staged, and the supervisor uploads everything it wrote.
 
 A manifest names exactly one runnable section:
 
-  * ``case`` - the authored run. The deck is a record and the server wrote it, so
+  * ``case`` - the authored run. A steering file is a record and the server
+    wrote it, so
     what reaches the worker is which engine, which steering file, and which
     result files must exist for the run to have happened.
   * ``agitation`` / ``stratified`` - the two builders that still author their own
@@ -23,7 +24,8 @@ launcher behind the same seam - see ``_LAUNCHER_COUPLINGS``.
 
 The telapy child drives the engine's OWN per-step call in a loop, so a run has a
 point between steps; a case that names ``continue_from`` picks up from a previous
-run's results through the engine's own restart, which the deck states and this
+run's results through the engine's own restart, which the steering file states
+and this
 worker only stages. Neither is available behind the launcher deviation.
 
 Success is a clean child exit AND every declared result file on disk: a solver
@@ -67,7 +69,7 @@ _LISTING_TAIL_CHARS = 4000
 #: Bump on a manifest-contract change. The stamp is named in the strict-gate
 #: refusal, so a stale image surfaces as a drifted version rather than as a knob
 #: that silently did nothing.
-_PARSER_VERSION = "telemac-unified-1"
+_PARSER_VERSION = "telemac-unified-2"
 
 #: Wall-clock bound on ONE solve, and the environment knob that states it. A
 #: wedged Fortran process holds the run directory forever and the supervisor sees
@@ -165,7 +167,7 @@ def _listing_tail(data_dir: Path) -> dict[str, str]:
 def _measure_ntimestep(data_dir: Path, result_slf: str) -> dict[str, Any]:
     """How many records the result the server named actually carries.
 
-    MEASURED off the file this run wrote, never derived from the deck: a count
+    MEASURED off the file this run wrote, never derived from the steering: a count
     computed from DURATION over the graphic period is an assertion about a file
     nobody opened, and it is exactly the assertion that stays right while the
     solve stops short. Unmeasurable is reported as the absence of the key rather
@@ -198,11 +200,11 @@ def _on_step(study: Any, step: int, steps: int) -> None:
 
 
 def _step_count(study: Any) -> int:
-    """How many steps the study's own deck says this run takes.
+    """How many steps the study's own steering file says this run takes.
 
     The count is the model's, read the way the engine reads it: a finite-volume
     run advances its whole time loop inside one call, so it counts as one step
-    and a module whose deck has no equation keyword counts its steps plainly.
+    and a module whose steering has no equation keyword counts its steps plainly.
     """
     steps = int(study.get("MODEL.NTIMESTEPS"))
     try:
@@ -307,7 +309,7 @@ def _run_child(data_dir: Path, argv: list[str]) -> int:
 
 
 def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]:
-    """Run the deck the server authored, and check it produced what it promised.
+    """Run what the server authored, and check it produced what it promised.
 
     ``server_facts`` is copied into the metrics VERBATIM: the utm zone, the
     extent, the node and element counts and the name of the result file are facts
@@ -325,7 +327,7 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
     if not (data_dir / steering).exists():
         raise CaseError(
             "TELEMAC_CASE_STEERING_MISSING",
-            f"case.steering {steering!r} is not in the run directory; the deck "
+            f"case.steering {steering!r} is not in the run directory; the file "
             "the run is supposed to be was never staged.")
     results = [str(r) for r in (case.get("results") or [])]
     if not results:

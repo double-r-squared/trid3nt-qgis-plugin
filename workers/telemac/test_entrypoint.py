@@ -27,7 +27,7 @@ def _write_manifest(tmp_path: Path, body) -> list[str]:
 
 
 def _case(tmp_path: Path, **over) -> dict:
-    (tmp_path / "t2d.cas").write_text("/ deck\n", encoding="utf-8")
+    (tmp_path / "t2d.cas").write_text("/ steering\n", encoding="utf-8")
     case = {"module": "telemac2d", "steering": "t2d.cas",
             "results": ["r2d.slf"],
             "server_facts": {"utm_epsg": 32612, "npoin": 4211, "nelem": 8080,
@@ -42,7 +42,10 @@ def _case(tmp_path: Path, **over) -> dict:
 
 
 def test_the_parser_stamp_is_the_unified_one():
-    assert E._PARSER_VERSION == "telemac-unified-1"
+    """Bumped when the case contract moved: `echo` became `server_facts` and
+    `family` stopped travelling, so a stale image reads as a drifted version
+    rather than as a manifest whose keys silently did nothing."""
+    assert E._PARSER_VERSION == "telemac-unified-2"
 
 
 def test_the_four_engines_a_case_may_name_come_from_telapy():
@@ -78,7 +81,7 @@ def test_a_coupled_case_runs_the_modules_own_launcher(coupling):
         "telemac2d.py", "t2d.cas"]
 
 
-def test_the_launcher_reads_the_user_fortran_off_the_deck_not_the_argv():
+def test_the_launcher_reads_the_user_fortran_off_the_case_not_the_argv():
     """The steering file names it; a second channel could name a second thing."""
     assert E._solve_argv("telemac2d", "t2d.cas", "user_fortran", "waqtel") == [
         "telemac2d.py", "t2d.cas"]
@@ -192,7 +195,7 @@ def test_the_hook_ships_doing_nothing(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# Continuation: the deck restarts, the worker only stages
+# Continuation: the steering file restarts, the worker only stages
 # --------------------------------------------------------------------------- #
 
 
@@ -300,7 +303,7 @@ def test_a_case_naming_an_engine_the_image_has_no_class_for_refuses(tmp_path):
     assert _metrics(tmp_path)["error_code"] == "TELEMAC_CASE_MODULE_UNKNOWN"
 
 
-def test_a_case_whose_deck_was_never_staged_refuses(tmp_path):
+def test_a_case_whose_steering_was_never_staged_refuses(tmp_path):
     rc = E.main(_write_manifest(tmp_path, _case(tmp_path, steering="absent.cas")))
     assert rc == 5
     assert _metrics(tmp_path)["error_code"] == "TELEMAC_CASE_STEERING_MISSING"
