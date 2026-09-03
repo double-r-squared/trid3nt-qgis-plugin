@@ -662,6 +662,14 @@ OPTION FOR THE TREATMENT OF TIDAL FLATS = 1
 TREATMENT OF NEGATIVE DEPTHS            = 2
 H CLIPPING     : NO
 /
+/  The engine accounts for its own water volume and prints one flux per liquid
+/  boundary. That is the only honest check that the level prescribed at a
+/  boundary reached it: a server-side integration of the depth and velocity
+/  fields reads near zero at a prescribed-depth face, where the boundary values
+/  are clamped after the flux was computed.
+MASS-BALANCE                    = YES
+INFORMATION ABOUT SOLVER        = YES
+/
 NUMBER OF TRACERS               = 1
 NAMES OF TRACERS                = 'DYE             MG/L'
 INITIAL VALUES OF TRACERS       = {initial_tracers}
