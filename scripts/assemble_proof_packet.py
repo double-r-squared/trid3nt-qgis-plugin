@@ -389,7 +389,7 @@ def published_scale(evidence: dict, animation: ProofAnimation) -> dict:
     quantity = animation.quantity
     preset = styles.resolve_style_preset(quantity)[0] if quantity else None
     ranges: list[tuple[float, float]] = []
-    names: list[str] = []
+    published_by: list[dict] = []
     for layer in evidence.get("layers") or []:
         legend = layer.get("legend")
         if layer.get("style_preset") != preset or not isinstance(legend, dict):
@@ -400,11 +400,18 @@ def published_scale(evidence: dict, animation: ProofAnimation) -> dict:
         if lo is None or hi is None:
             continue
         ranges.append((float(lo), float(hi)))
-        names.append(str(layer.get("name")))
+        published_by.append({"layer": str(layer.get("name")),
+                             "range": [float(lo), float(hi)]})
     found = styles.shared_range(ranges)
     return {"quantity": quantity, "preset": preset,
             "published_range": list(found) if found else None,
-            "published_by": names}
+            # SEVERAL published layers of one quantity may each carry their own
+            # band-read range, and then the shared range is their span rather
+            # than any one panel's. The packet states which, because a reader
+            # comparing two panels of the same field has to know whether the
+            # colours mean the same value on both.
+            "published_panels_agree": len({tuple(r) for r in ranges}) <= 1,
+            "published_by": published_by}
 
 
 def _field_label(animation: ProofAnimation) -> str:

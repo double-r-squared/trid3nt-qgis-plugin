@@ -234,9 +234,10 @@ PROOF_ANIMATIONS: dict[str, tuple[ProofAnimation, ...]] = {
                           "(Berkhoff) solver: it solves a boundary-value problem "
                           "for a single monochromatic sea state and returns ONE "
                           "field, the steady agitation coefficient Kd. The run "
-                          "has no simulation clock at all, which is why the run "
-                          "records no ntimestep - there is no time evolution to "
-                          "animate, and the single field IS the whole answer.",
+                          "has no simulation clock at all, which is why its "
+                          "result carries ONE record - there is no time "
+                          "evolution to animate, and the single field IS the "
+                          "whole answer.",
             variable="WAVE HEIGHT", units="m", still="peak",
             reason="the steady wave height field, rendered as the run's one "
                    "still."),

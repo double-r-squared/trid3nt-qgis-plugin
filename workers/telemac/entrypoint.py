@@ -369,9 +369,6 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
         "module": module,
         "correct_end": code == 0 and not missing,
     }
-    if not missing:
-        metrics.update(_measure_ntimestep(
-            data_dir, str(server_facts.get("result_slf") or "")))
     if code != 0:
         metrics["error_code"] = "TELEMAC_SOLVE_FAILED"
         metrics["error"] = f"{module} exited with code {code}"
@@ -493,7 +490,16 @@ def main(argv: list[str] | None = None) -> int:
         return 5 if error_code else 1
 
     ok = bool(metrics.get("correct_end"))
+    # THE FRAME COUNT, for whichever leg ran. Every dispatch names the file it
+    # wrote its results to, so the count is measured off that name HERE rather
+    # than inside one leg: a delivered animation is checked against the run's
+    # own metrics, and a leg that measured nothing leaves the reader of the file
+    # as the only reader of it. A run that did not reach a correct end wrote no
+    # result to count.
     payload = {**metrics,
+               **(_measure_ntimestep(data_dir,
+                                     str(metrics.get("result_slf") or ""))
+                  if ok else {}),
                "status": "ok" if ok else "error",
                "correct_end": ok,
                "run_id": run_id,
