@@ -588,6 +588,7 @@ def test_the_catchment_mesh_step_carries_the_whole_recipe():
     assert names[0] == "distance_sizing_from_line_function"
     assert "enforce_mesh_gradation" in names
     # The catchment's one liquid boundary is DECLARED as an op, at the
-    # delineation's snapped outlet, exactly as the reach family declares its two.
+    # delineation's snapped outlet, exactly as the reach family declares its two -
+    # and it is the FREE EXIT, the role whose quad prescribes nothing.
     roles = [entry for entry in ask["ops"] if entry["op"] == "set_boundary_roles"]
-    assert len(roles) == 1 and set(roles[0]["kwargs"]) == {"outflow"}
+    assert len(roles) == 1 and set(roles[0]["kwargs"]) == {"free_exit"}

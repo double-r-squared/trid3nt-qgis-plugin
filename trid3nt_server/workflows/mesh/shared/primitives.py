@@ -98,9 +98,11 @@ def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
     """Which CONTIGUOUS runs of the boundary carry which role -> the mesh, roled.
 
     ``roles`` is ``{role: face}`` or ``{role: [face, ...]}`` - ``inflow``,
-    ``outflow``, ``open`` - each face a geometry the chain measured (a section's
-    end transect) or the two ends of one. Every boundary node on the run a face
-    names takes that role; the rest are solid wall.
+    ``outflow``, ``open``, ``free_exit`` - each face a geometry the chain measured
+    (a section's end transect) or the two ends of one. Every boundary node on the
+    run a face names takes that role; the rest are solid wall. The role decides
+    the TELEMAC code quad the pair writer stamps on those nodes, which is where
+    the vocabulary is defined and where an unknown name refuses.
 
     A role is a RUN, not a node set: a TELEMAC liquid boundary is numbered by
     walking the boundary, so a scatter of nodes that happen to sit near a face is

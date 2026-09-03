@@ -3408,3 +3408,26 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   modeled-or-not-yet-modeled (a stated absence, never an omission);
   planes get modeled as their seams are touched, never
   speculatively.
+
+- F1/F6 INTERIM RULED (NATE 2026-09-03, "just do the fix"): (1) F1 -
+  a fresh reach run initializes at the DERIVED OUTLET STAGE
+  (constant initial elevation = the normal-depth stage; the 2.0 m
+  blanket dies); SPIN-UP IS PARKED as refined-runs behavior for a
+  later pass - candidates recorded: steady-inflow settle (reach) and
+  rain-then-drain drainage initialization (catchment - NATE's
+  technique, a real practice); the journal states which start every
+  run used. (2) F6 - the rain_on_grid outlet role's CODES become the
+  TRUE FREE EXIT the recipe comment always claimed (making code
+  match the declared intent - the prescribed-zero suction cap was
+  accidental); the derived stage-discharge rating curve stays the
+  recorded calibration-era upgrade.
+  LANDED 2026-09-03. F1: the reach deck writes INITIAL CONDITIONS =
+  'CONSTANT ELEVATION' at the derived normal-depth stage, the deck
+  comment and the run journal both state it, and `init_depth_m` is
+  gone (ledger). F6: the boundary contract's table
+  gains a FREE_EXIT row (KSORT,KSORT,KSORT,KSORT, verified against
+  bord.f and telemac2d.dico in the image: bord.f overrides HBOR only
+  under LIHBOR=KENT and UBOR only under LIUBOR=KENT), the catchment
+  outlet carries that role instead of `outflow`, and
+  TELEMAC_BOUNDARY_PRESCRIBES_NOTHING now refuses only where the role
+  is NOT the declared free exit.

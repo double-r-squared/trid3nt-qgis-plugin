@@ -17,6 +17,7 @@ import sys
 
 import pytest
 
+from trid3nt_server.workflows.mesh import topology as T
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 from trid3nt_server.workflows.telemac.authoring import author as A
 
@@ -99,8 +100,7 @@ _BED = {"bed_top_m": 100.0, "bed_drop_m": 3.0, "reach_length_m": 1000.0,
 def _cas(tmp_path, numbered) -> str:
     A.author_reach(
         tmp_path, sheet={"name": "reach", "inflow_q_m3s": 50.0,
-                         "init_depth_m": 2.0, "duration_s": 600.0,
-                         "time_step_s": 1.0},
+                         "duration_s": 600.0, "time_step_s": 1.0},
         geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
         steering="t2d_river.cas",
         liquid_boundary_order=[role for role, _ in numbered],
@@ -138,10 +138,27 @@ def test_flipping_the_strategy_moves_the_quad_and_the_keyword_together(tmp_path)
 
 def test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing(
         tmp_path):
-    """A free-exit quad reads neither list, so a value written at its number
-    would be a number the engine never looks at - which is exactly the silence
-    this contract exists to end."""
-    free_exit = {**D._ROLE_CODES, "outflow": (D.KSORT,) * 4}
+    """An OUTFLOW is the role that means a prescribed level, so an all-KSORT quad
+    under that name is the two files describing different boundaries: a value
+    written at its number would be a number the engine never looks at, which is
+    exactly the silence this contract exists to end."""
+    mislabelled = {**D._ROLE_CODES, "outflow": (D.KSORT,) * 4}
     with pytest.raises(A.SteeringAuthorError) as exc:
-        _cas(tmp_path, _numbered(free_exit))
+        _cas(tmp_path, _numbered(mislabelled))
     assert exc.value.error_code == "TELEMAC_BOUNDARY_PRESCRIBES_NOTHING"
+
+
+def test_the_free_exit_role_prescribes_nothing_as_a_stated_choice(tmp_path):
+    """The same ``"nothing"``, under the role that DECLARES it. A free exit is a
+    boundary condition - the water leaves at the level and velocity the interior
+    brings to it - so the file writes a placeholder the engine never reads and
+    says which number carries it, instead of refusing."""
+    assert D._prescribes(D._ROLE_CODES[D.FREE_EXIT_ROLE]) == "nothing"
+    assert D._ROLE_CODES[D.FREE_EXIT_ROLE] == (D.KSORT,) * 4
+    assert D.FREE_EXIT_ROLE == T.FREE_EXIT_ROLE
+    cas = _cas(tmp_path, [("inflow", "flowrate"),
+                          (D.FREE_EXIT_ROLE, "nothing")])
+    assert "PRESCRIBED FLOWRATES            = 50.0;0.0" in cas
+    assert "PRESCRIBED ELEVATIONS           = 0.0;0.0" in cas
+    assert "/  Measured liquid boundaries: 1 inflow=flowrate, " \
+           "2 free_exit=nothing" in cas

@@ -104,10 +104,6 @@ _FILE_COMMENT = "#"
 #: find them, rather than in a config object inside the container.
 _DEFAULTS: dict[str, Any] = {
     "name": "reach",
-    # The CONSTANT DEPTH a fresh run starts from, and nothing else. The level the
-    # run is ANCHORED at is the outflow stage, which the measured section and the
-    # measured slope derive as a normal depth rather than reading it off here.
-    "init_depth_m": 2.0,
     "inflow_q_m3s": 50.0,
     "substance_class": "tracer",
     "erodible_bed": False,
@@ -487,13 +483,22 @@ def author_reach(rundir: Path | str, *, sheet: Mapping[str, Any],
     value comes from ``liquid_boundary_prescribes`` - what the ``.cli`` quad on
     that boundary makes the engine read - never from the role name, so the
     steering file cannot state a level where the code file states a free exit.
+    A quad that prescribes NOTHING is legal under the free-exit role and refuses
+    under any other: the first is a face declared to state no condition, the
+    second is two files describing different boundaries.
     ``bed`` is the reach MEASURED on the
     accepted mesh - the bed at its declared roles, the section its outflow face
     cuts, and the length it was built over - which the outflow stage is derived
     from as a normal depth and which the file states alongside the result.
+    That same stage is the level the run STARTS at, so a fresh reach opens near
+    the equilibrium its own downstream boundary holds it to instead of draining
+    a blanket depth into it over the first minutes of the horizon.
     ``restart`` is the perfect-restart record this run writes for whatever run
     continues it.
     """
+    from trid3nt_server.workflows.lib import journal_note
+    from trid3nt_server.workflows.mesh.topology import FREE_EXIT_ROLE
+
     _consume(sheet)
     P = _Sheet(sheet)
     rundir = Path(rundir)
@@ -515,17 +520,35 @@ def author_reach(rundir: Path | str, *, sheet: Mapping[str, Any],
                 f"/  outflow stage = {outflow_stage:.3f} m: normal depth "
                 f"{normal['depth_m']:.3f} m over the\n"
                 f"/  measured outflow section for {normal['q_m3s']:g} m3/s at "
-                f"{normal['law']} {normal['coefficient']:g}\n")
+                f"{normal['law']} {normal['coefficient']:g}\n"
+                f"/  initial condition = constant elevation at that same "
+                f"{outflow_stage:.3f} m\n")
+    journal_note(
+        f"reach initial condition: constant elevation {outflow_stage:.3f} m - "
+        f"the derived normal-depth outflow stage ({normal['depth_m']:.3f} m over "
+        f"the measured outflow section for {normal['q_m3s']:g} m3/s at "
+        f"{normal['law']} {normal['coefficient']:g}), so the run starts at the "
+        "level its own downstream boundary holds it to.")
     flowrates, elevations, tracers = [], [], []
     for number, (role, prescribes) in enumerate(
             zip(liquid_boundary_order, liquid_boundary_prescribes), start=1):
+        if prescribes == "nothing" and role == FREE_EXIT_ROLE:
+            # A STATED choice, not a disagreement: the free-exit role's quad
+            # prescribes nothing by design, so both lists carry a placeholder the
+            # engine never reads and the water leaves at the level it arrives at.
+            flowrates.append("0.0")
+            elevations.append("0.0")
+            tracers += _clean_river_tracers(P) if is_do_sag else ["0.0"]
+            continue
         if prescribes not in ("flowrate", "elevation"):
             raise SteeringAuthorError(
                 "TELEMAC_BOUNDARY_PRESCRIBES_NOTHING",
                 f"liquid boundary {number} ({role!r}) carries a .cli code quad "
                 f"that prescribes {prescribes!r}, so nothing this file writes at "
                 "that number would be read; the boundary file and the steering "
-                "file would describe different boundaries.")
+                "file would describe different boundaries. A face that is meant "
+                f"to state no condition carries the {FREE_EXIT_ROLE!r} role, "
+                "which says so.")
         flowrates.append(f"{P.inflow_q_m3s}" if prescribes == "flowrate" else "0.0")
         elevations.append(f"{outflow_stage:.3f}" if prescribes == "elevation"
                           else "0.0")
@@ -635,8 +658,8 @@ LISTING PRINTOUT PERIOD         = 500
 DURATION                        = {P.duration_s}
 TIME STEP                       = {P.time_step_s}
 /
-INITIAL CONDITIONS              = 'CONSTANT DEPTH'
-INITIAL DEPTH                   = {float(P.init_depth_m):.3f}
+INITIAL CONDITIONS              = 'CONSTANT ELEVATION'
+INITIAL ELEVATION               = {outflow_stage:.3f}
 /
 PRESCRIBED FLOWRATES            = {';'.join(flowrates)}
 PRESCRIBED ELEVATIONS           = {';'.join(elevations)}
@@ -1516,9 +1539,11 @@ def _author_rain_on_grid_steering(
         the hyetograph's own dry tail, so no rain window is stated.
 
     Both share the distributed Manning, the dry start and ONE outlet at the
-    pour point. It writes no value at that boundary's number, so it states
-    what that boundary's own ``.cli`` quad prescribes rather than naming a
-    condition nobody measured. There are NO tracers: the outlet hydrograph is the
+    pour point - a TRUE FREE EXIT, whose code quad prescribes nothing, so the
+    runoff leaves at whatever level and velocity the hillslopes bring to the
+    face. It writes no value at that boundary's number, and states what that
+    boundary's own ``.cli`` quad prescribes rather than naming a condition
+    nobody measured. There are NO tracers: the outlet hydrograph is the
     product.
     """
     _consume(sheet)
@@ -1571,7 +1596,8 @@ def _author_rain_on_grid_steering(
 /  Rain-fed catchment on a delineated watershed TIN (UTM metres).
 /  Rain = {rain_mm_per_day:g} mm/day, {rain_path}.
 /  Distributed Manning; outlet at the pour point is liquid boundary
-/  {outlet_boundary}, whose boundary-file code prescribes {outlet_prescribes}.
+/  {outlet_boundary}: outlet=free exit, measured off its own boundary-file
+/  code quad, which prescribes {outlet_prescribes}.
 /-------------------------------------------------------------------/
 GEOMETRY FILE                   = {os.path.basename(geometry)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(boundary)}
@@ -1643,8 +1669,8 @@ def author_rain_on_grid(rundir: Path | str, *, sheet: Mapping[str, Any],
     both channels. Given none, the storm is the constant design rate the steering
     file states itself.
 
-    The outlet is the mesh's own declared one, and this file writes NO value at
-    its number - the free exit is solved on its ``.cli`` code alone, and the
+    The outlet is the mesh's own declared free exit, and this file writes NO
+    value at its number - the exit is solved on its ``.cli`` code alone, and the
     steering file states which code that is.
     """
     rundir = Path(rundir)

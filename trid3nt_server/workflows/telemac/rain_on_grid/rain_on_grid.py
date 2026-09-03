@@ -142,11 +142,13 @@ MESH = tool.build_mesh(
         # THE OUTLET: the delineation's own accumulation-SNAPPED pour point,
         # which is the point on the basin's boundary the terrain drains through.
         # Every boundary node within the mesh's own mean boundary edge of it
-        # carries the free-exit role, and the hydrograph is the flux across
-        # exactly those nodes.
+        # carries the FREE-EXIT role - the code quad that prescribes nothing, so
+        # the runoff leaves at the level and velocity the hillslopes bring to the
+        # face rather than against a stage no gauge measured - and the hydrograph
+        # is the flux across exactly those nodes.
         mesh_op("set_boundary_roles",
-                outflow={"type": "Point",
-                         "coordinates": Ref("basin.snapped_pour_point")}),
+                free_exit={"type": "Point",
+                           "coordinates": Ref("basin.snapped_pour_point")}),
     ],
 )
 

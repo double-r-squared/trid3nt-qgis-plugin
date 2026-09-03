@@ -175,8 +175,7 @@ def test_an_input_the_stage_cannot_be_derived_from_refuses_by_name(reach, sheet,
 def _cas(tmp_path, **sheet) -> str:
     A.author_reach(
         tmp_path, sheet={"name": "reach", "inflow_q_m3s": 50.0,
-                         "init_depth_m": 2.0, "duration_s": 600.0,
-                         "time_step_s": 1.0, **sheet},
+                         "duration_s": 600.0, "time_step_s": 1.0, **sheet},
         geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
         steering="t2d_river.cas", liquid_boundary_order=("inflow", "outflow"),
         liquid_boundary_prescribes=("flowrate", "elevation"),
@@ -194,12 +193,39 @@ def test_the_run_states_the_stage_and_every_input_it_was_derived_from(tmp_path):
     assert "PRESCRIBED ELEVATIONS           = 0.0;97.792" in cas
 
 
-def test_the_initial_depth_is_no_longer_the_level_the_run_is_anchored_at(tmp_path):
-    """It survives as the constant depth a fresh run starts from, and moving it
-    no longer moves the outflow boundary."""
-    shallow = _cas(tmp_path, init_depth_m=0.5)
-    assert "INITIAL DEPTH                   = 0.500" in shallow
-    assert "PRESCRIBED ELEVATIONS           = 0.0;97.792" in shallow
+def test_the_run_starts_at_the_stage_its_own_outflow_boundary_holds_it_to(tmp_path):
+    """The initial free surface IS the derived stage, so a fresh reach opens near
+    the equilibrium it is anchored at instead of draining a blanket depth into
+    that boundary over the first minutes of the horizon. No constant depth is
+    written at all - there is no second number left to disagree."""
+    cas = _cas(tmp_path)
+    assert "INITIAL CONDITIONS              = 'CONSTANT ELEVATION'" in cas
+    assert "INITIAL ELEVATION               = 97.792" in cas
+    assert "PRESCRIBED ELEVATIONS           = 0.0;97.792" in cas
+    assert "INITIAL DEPTH" not in cas
+    assert "/  initial condition = constant elevation at that same 97.792 m" in cas
+
+
+def test_a_different_friction_slope_moves_the_start_and_the_boundary_together(
+        tmp_path):
+    """ONE number. A flatter reach conveys the same discharge deeper, and the
+    level the run starts at rises with the level it is held to - because they are
+    the same derivation read once."""
+    steep = _cas(tmp_path)
+    (tmp_path / "flat").mkdir()
+    A.author_reach(
+        tmp_path / "flat",
+        sheet={"name": "reach", "inflow_q_m3s": 50.0, "duration_s": 600.0,
+               "time_step_s": 1.0},
+        geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
+        steering="t2d_river.cas", liquid_boundary_order=("inflow", "outflow"),
+        liquid_boundary_prescribes=("flowrate", "elevation"),
+        bed={**_REACH, "bed_top_m": 97.75, "bed_drop_m": 0.75},
+        source_utm=(500.0, 0.0))
+    cas = (tmp_path / "flat" / "t2d_river.cas").read_text()
+    assert "INITIAL ELEVATION               = 97.792" in steep
+    assert "INITIAL ELEVATION               = 98.192" in cas
+    assert "PRESCRIBED ELEVATIONS           = 0.0;98.192" in cas
 
 
 def test_the_stage_is_derived_at_the_roughness_the_run_goes_on_to_write(tmp_path):

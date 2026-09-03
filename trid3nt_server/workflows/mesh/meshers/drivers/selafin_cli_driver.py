@@ -49,7 +49,13 @@ KENT, KSORT, KLOG = 5, 4, 2
 #: an outflow and an open sea boundary make the SAME statement to the solver - a
 #: prescribed water level, free velocity - and are named apart because the
 #: measured liquid-boundary order is what a steering author reads to decide which
-#: boundary carries a flowrate and which a level.
+#: boundary carries a flowrate and which a level. A FREE EXIT prescribes nothing
+#: at all: ``bord.f`` overrides the depth only under ``LIHBOR = KENT`` and the
+#: velocity only under ``LIUBOR = KENT``, so an all-``KSORT`` quad leaves the
+#: water leaving at whatever level and velocity the interior brings to the face.
+#: That is a STATED choice - the condition a rain-fed catchment drains through,
+#: where any prescribed level would be a cap nobody measured - and not the
+#: absence of one.
 #:
 #: THIS IS THE ONE AUTHORING DECISION for the pair. The quad lands in the
 #: ``.cli`` and :func:`_prescribes` derives the steering keyword from the same
@@ -59,7 +65,13 @@ _ROLE_CODES = {
     "inflow": (KSORT, KENT, KENT, KENT),
     "outflow": (KENT, KSORT, KSORT, KSORT),
     "open": (KENT, KSORT, KSORT, KSORT),
+    "free_exit": (KSORT, KSORT, KSORT, KSORT),
 }
+
+#: The role whose quad prescribes NOTHING by design. A steering author reads it
+#: to tell a face that states no condition from a face whose two files disagree,
+#: which are the same string in :func:`_prescribes` and opposite intentions.
+FREE_EXIT_ROLE = "free_exit"
 
 
 def _prescribes(codes) -> str:
@@ -70,6 +82,10 @@ def _prescribes(codes) -> str:
     any other code is a number the engine never looks at. Reading the quad
     rather than the role name is what leaves the steering file unable to disagree
     with it.
+
+    ``"nothing"`` is what a FREE EXIT reads as, and it is an answer rather than a
+    gap: the steering file writes no value at that number because the face has no
+    condition to state.
     """
     lihbor, liubor = int(codes[0]), int(codes[1])
     if lihbor == KENT:

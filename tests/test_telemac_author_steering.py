@@ -32,7 +32,7 @@ _REACH_POLYGON = [(-50.0, -30.0), (1050.0, -30.0), (1050.0, 30.0), (-50.0, 30.0)
 
 
 def _author(tmp_path, *, restart=None, **sheet) -> str:
-    base = {"name": "reach", "inflow_q_m3s": 50.0, "init_depth_m": 2.0,
+    base = {"name": "reach", "inflow_q_m3s": 50.0,
             "duration_s": 3600.0, "time_step_s": 1.0}
     A.author_reach(
         tmp_path, sheet={**base, **sheet}, geometry="mesh.slf",

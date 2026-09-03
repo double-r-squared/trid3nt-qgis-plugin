@@ -52,9 +52,9 @@ def test_the_outlet_boundary_is_declared_as_an_op_on_the_mesh_recipe():
     op = [o for o in MESH.ops if o.fn == "set_boundary_roles"]
     assert len(op) == 1
     roles = dict(op[0].kwargs)
-    assert set(roles) == {"outflow"}
-    assert roles["outflow"]["type"] == "Point"
-    assert roles["outflow"]["coordinates"].path == "basin.snapped_pour_point"
+    assert set(roles) == {"free_exit"}
+    assert roles["free_exit"]["type"] == "Point"
+    assert roles["free_exit"]["coordinates"].path == "basin.snapped_pour_point"
 
 
 def test_docstring_carries_the_godara_envelope():
@@ -415,8 +415,8 @@ def rog_run(monkeypatch, tmp_path):
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(asm_mod, "read_topology", lambda _uri: {
-        "roles": {"outflow": [1, 3]}, "liquid_boundary_order": ["outflow"],
-        "liquid_boundary_prescribes": ["elevation"]})
+        "roles": {"free_exit": [1, 3]}, "liquid_boundary_order": ["free_exit"],
+        "liquid_boundary_prescribes": ["nothing"]})
     monkeypatch.setattr(asm_mod, "mesh_nodes", lambda _mesh: (
         np.array([[0.0, 0.0], [20.0, 0.0], [0.0, 10.0], [20.0, 10.0]]),
         np.array([[0, 1, 2], [1, 3, 2]]), np.zeros(4),
@@ -467,6 +467,12 @@ def test_a_constant_storm_authors_a_case_and_stages_no_fortran(rog_run, tmp_path
     assert "RESULTS FILE                    = r2d_rog.slf" in cas
     assert "FORMATTED DATA FILE 2           = rog_cn_map.dat" in cas
     assert "FORTRAN FILE" not in cas
+    # The outlet is the TRUE free exit, and the deck says so off the quad it was
+    # measured from - no value at that number, and none for the engine to read.
+    assert "/  1: outlet=free exit, measured off its own boundary-file" in cas
+    assert "/  code quad, which prescribes nothing." in cas
+    assert "PRESCRIBED ELEVATIONS" not in cas
+    assert "PRESCRIBED FLOWRATES" not in cas
     # every file the steering file names was authored beside it
     assert set(run["authored"]) == {"t2d_rog.cas", "rog_cn_map.dat",
                                      "rog_friction.tbl", "rog_zones.dat"}

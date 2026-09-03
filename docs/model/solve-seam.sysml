@@ -665,9 +665,15 @@ package SolveSeam {
 
         The value it replaced was not a property of the reach: 2 m was the same
         number on a mountain creek and a coastal plain river, on the one boundary
-        the run's entire water surface is anchored to. ``init_depth_m`` keeps its
-        other role, the constant depth a fresh run starts from, and moving it no
-        longer moves the boundary.
+        the run's entire water surface is anchored to. The SAME derived stage is
+        now also the level a fresh run STARTS at - INITIAL CONDITIONS = CONSTANT
+        ELEVATION at that number - so the initial free surface and the prescribed
+        outflow agree by construction and the reach opens near the equilibrium it
+        is held to. ``init_depth_m`` had no role left once that followed: a
+        blanket 2 m start drained into the derived boundary over the first
+        minutes of every horizon, which was a transient the run had to spend
+        before it was answering the question it was asked. Spin-up as REFINED-run
+        behaviour is a separate, later choice; this is the fresh-run start.
 
         Uniform flow is a numerically convenient fiction rather than a measured
         boundary, so every input it cannot measure REFUSES by name: a reach with
@@ -692,9 +698,18 @@ package SolveSeam {
         ONE decision therefore owns both. The role-to-quad table in the pair
         writer is that decision; the quad lands in the boundary file and the
         steering keyword is derived from the SAME quad, carried to the author on
-        the topology bundle. Flipping the table moves both files together, and
-        a boundary whose quad prescribes nothing refuses rather than being
-        written into a list it does not read.
+        the topology bundle. Flipping the table moves both files together.
+
+        The table's FREE-EXIT row is the case where prescribing nothing is the
+        answer: an all-KSORT quad leaves bord.f overriding neither the depth nor
+        the velocity, so the water leaves at whatever the interior brings to the
+        face. That is what a rain-fed catchment's outlet is, and it is a STATED
+        role rather than the absence of one - the steering file writes no value
+        there and says which number it is declining to write at. A quad that
+        prescribes nothing under ANY OTHER role still refuses: the same
+        ``"nothing"`` then means the two files were decided apart, and a value
+        written into a list the engine does not read is the silence this contract
+        exists to end.
 
         The number a value is written AT is the other half of the same contract,
         and it is measured by the engine's own rule (bief/front2.f): each contour
@@ -728,6 +743,8 @@ package SolveSeam {
     verify requirement BoundaryCodesMatchTheSteering by
         "tests/test_telemac_boundary_contract.py::test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing";
     verify requirement BoundaryCodesMatchTheSteering by
+        "tests/test_telemac_boundary_contract.py::test_the_free_exit_role_prescribes_nothing_as_a_stated_choice";
+    verify requirement BoundaryCodesMatchTheSteering by
         "tests/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses";
 
     satisfy requirement OutflowStageIsNormalDepth by steeringStatements;
@@ -749,7 +766,9 @@ package SolveSeam {
     verify requirement OutflowStageIsNormalDepth by
         "tests/test_telemac_outflow_stage.py::test_the_run_states_the_stage_and_every_input_it_was_derived_from";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_initial_depth_is_no_longer_the_level_the_run_is_anchored_at";
+        "tests/test_telemac_outflow_stage.py::test_the_run_starts_at_the_stage_its_own_outflow_boundary_holds_it_to";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_a_different_friction_slope_moves_the_start_and_the_boundary_together";
     verify requirement OutflowStageIsNormalDepth by
         "tests/test_telemac_outflow_stage.py::test_the_stage_is_derived_at_the_roughness_the_run_goes_on_to_write";
 

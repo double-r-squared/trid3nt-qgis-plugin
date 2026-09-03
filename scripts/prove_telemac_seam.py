@@ -60,7 +60,6 @@ def main() -> int:
             "distance_km": 3.0,
             "mesh_size_m": 16.0,
             "inflow_q_m3s": 250.0,
-            "init_depth_m": 2.5,
             "dye_conc_mgl": 100.0,
             "duration_s": 1200.0,
             "time_step_s": 1.0,

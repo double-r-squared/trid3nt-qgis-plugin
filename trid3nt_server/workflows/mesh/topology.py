@@ -24,10 +24,19 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-__all__ = ["TOPOLOGY_FILENAME", "write_topology", "read_topology"]
+__all__ = ["FREE_EXIT_ROLE", "TOPOLOGY_FILENAME", "write_topology",
+           "read_topology"]
 
 #: Basename the bundle is written and staged under.
 TOPOLOGY_FILENAME: str = "mesh_topology.json"
+
+#: The role whose ``.cli`` quad prescribes NOTHING - the water leaves at whatever
+#: level and velocity the interior brings to the face. A steering author reads
+#: this name to tell a boundary that states no condition BY DESIGN from one whose
+#: two files disagree; both read ``"nothing"`` and only one of them is a run.
+#: The quad itself is the pair writer's table, which is the one decision; this
+#: side of the mount carries the name that indexes it.
+FREE_EXIT_ROLE: str = "free_exit"
 
 
 def write_topology(rundir: Path | str, *, roles: Mapping[str, Sequence[int]],
