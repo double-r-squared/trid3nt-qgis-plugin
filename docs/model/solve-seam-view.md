@@ -89,7 +89,6 @@ The CASE a worker runs: which engine, which deck it reads, and which files must 
 | `module` | String | required |
 | `steering` | FileName | required |
 | `results` | FileNameList | required |
-| `family` | String | required |
 | `server_facts` | ServerFactsMap | required |
 | `user_fortran` | DirName | optional |
 | `coupling` | String | optional |
@@ -162,7 +161,6 @@ The run's only report, written whatever the child did. Success is not the worker
 | `correct_end` | Boolean | required |
 | `run_id` | String | required |
 | `module` | String | required |
-| `family` | String | required |
 | `wall_s` | Real | required |
 | `error` | String | optional |
 | `error_code` | String | optional |

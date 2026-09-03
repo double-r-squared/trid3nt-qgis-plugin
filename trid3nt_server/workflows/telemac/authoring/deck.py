@@ -64,10 +64,8 @@ _RESTART = "restart_river.slf"
 #: record is staged under one name and the deck names that.
 _PREVIOUS_DEST = "previous.slf"
 
-#: Which telapy engine class runs a reach, and the identity its row carries in a
-#: run listing.
+#: Which telapy engine class runs a reach.
 _MODULE = "telemac2d"
-_FAMILY = "reach"
 
 #: The bed-load transport laws GAIA can run with suspension off. Anything else
 #: (Engelund-Hansen total load etc.) falls back to the default rather than
@@ -785,7 +783,7 @@ async def write_reach_deck(
         "deck": deck,
         "run_tag": run_tag,
         "case": case_section(
-            module=_MODULE, steering=_STEERING, results=results, family=_FAMILY,
+            module=_MODULE, steering=_STEERING, results=results,
             # The engine compiles the DIRECTORY the steering file names, so the
             # manifest channel carries the same directory the author wrote into.
             user_fortran=_user_fortran_dir(written),

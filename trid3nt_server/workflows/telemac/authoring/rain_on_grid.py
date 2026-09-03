@@ -70,10 +70,10 @@ _FRICTION_LAWS = "rog_friction.tbl"
 _ZONES_FILE = "rog_zones.dat"
 _HYETOGRAPH = "rog_hyeto.txt"
 
-#: Which telapy engine class runs a catchment, and the identity its row carries
-#: in a run listing.
+#: Which telapy engine class runs a catchment, and how a dispatched solve names
+#: itself in the log line that supervises it.
 _MODULE = "telemac2d"
-_FAMILY = "rain_on_grid"
+_LABEL = "rain_on_grid"
 
 #: The mesh boundary ROLE the outlet carries. TELEMAC prescribes a water level
 #: with a free velocity there, which is the free exit a rain-fed catchment drains
@@ -449,7 +449,7 @@ async def write_rain_on_grid_deck(
         "run_tag": run_tag,
         "rundir": str(rundir),
         "case": case_section(
-            module=_MODULE, steering=_STEERING, results=[_RESULT], family=_FAMILY,
+            module=_MODULE, steering=_STEERING, results=[_RESULT],
             # The engine reaches RAINDEF=3 only through the user Fortran the
             # image bakes, so the run that needs it names it on both channels.
             user_fortran=author.RAINDEF3_USER_FORTRAN if time_varying else None,
@@ -547,7 +547,7 @@ async def solve_rain_on_grid(*, deck: dict[str, Any],
 
     run_result, batch_run_id = await dispatch_and_wait(
         solver=_solver_name(), manifest_uri=manifest_uri,
-        compute_class=compute_class, label=_FAMILY, timeout_s=_SOLVE_TIMEOUT_S,
+        compute_class=compute_class, label=_LABEL, timeout_s=_SOLVE_TIMEOUT_S,
         grid_resolution_m=deck.get("mesh_size_m"),
         active_cell_count=deck["catchment"].get("element_count"))
     if run_result is None or run_result.status != "complete":

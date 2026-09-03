@@ -449,7 +449,6 @@ def test_a_constant_storm_authors_a_case_and_stages_no_fortran(rog_deck, tmp_pat
     assert case["module"] == "telemac2d"
     assert case["steering"] == "t2d_rog.cas"
     assert case["results"] == ["r2d_rog.slf"]
-    assert case["family"] == "rain_on_grid"
     # a constant-rain run compiles nothing, so the key is ABSENT: the worker's
     # strict gate reads a present key as a directory it must compile.
     assert "user_fortran" not in case

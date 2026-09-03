@@ -189,7 +189,6 @@ package SolveSeam {
         item module : String;
         item steering : FileName;
         item results : FileNameList;
-        item family : String;
         item server_facts : ServerFactsMap;
         item user_fortran : DirName [0..1];
         item coupling : String [0..1];
@@ -222,7 +221,6 @@ package SolveSeam {
         item correct_end : Boolean;
         item run_id : String;
         item module : String;
-        item family : String;
         item wall_s : Real;
         item error : String [0..1];
         item error_code : String [0..1];

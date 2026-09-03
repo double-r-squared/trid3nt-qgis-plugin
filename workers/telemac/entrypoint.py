@@ -87,7 +87,7 @@ _MODULES: dict[str, tuple[str, str]] = {
 
 #: The keys a ``case`` section carries.
 _CASE_FIELDS = frozenset((
-    "module", "steering", "user_fortran", "results", "family", "server_facts",
+    "module", "steering", "user_fortran", "results", "server_facts",
     "coupling", "continue_from"))
 
 #: The couplings telapy's API arm cannot drive, so their cases go through the
@@ -364,7 +364,6 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
     metrics: dict[str, Any] = {
         **server_facts,
         "module": module,
-        "family": str(case.get("family") or module),
         "correct_end": code == 0 and not missing,
     }
     if not missing:
@@ -391,7 +390,7 @@ def _solve_agitation(data_dir: Path, body: Any,
         if clean.get(key) is not None:
             clean[key] = tuple(float(v) for v in clean[key])
     clean["workdir"] = str(data_dir)
-    return {"module": "artemis", "family": "agitation",
+    return {"module": "artemis",
             **A.solve(A.ArtemisConfig(**clean), str(data_dir), run_id=run_id)}
 
 
@@ -406,7 +405,7 @@ def _solve_stratified(data_dir: Path, body: Any,
     if clean.get("bbox") is not None:
         clean["bbox"] = tuple(float(v) for v in clean["bbox"])
     clean["workdir"] = str(data_dir)
-    return {"module": "telemac3d", "family": "stratified",
+    return {"module": "telemac3d",
             **T.solve(T.Telemac3dConfig(**clean), str(data_dir),
                       run_id=run_id)}
 
@@ -484,7 +483,7 @@ def main(argv: list[str] | None = None) -> int:
         LOG.exception("telemac %s dispatch failed", section)
         _write_metrics(data_dir, {
             "status": "error", "correct_end": False, "run_id": run_id,
-            "family": section, "wall_s": round(time.time() - started, 2),
+            "wall_s": round(time.time() - started, 2),
             **({"error_code": error_code} if error_code else {}),
             "error": f"{type(exc).__name__}: {exc}",
             **_listing_tail(data_dir)})
@@ -499,8 +498,8 @@ def main(argv: list[str] | None = None) -> int:
     if not ok:
         payload.update(_listing_tail(data_dir))
     _write_metrics(data_dir, payload)
-    LOG.info("trid3nt-telemac worker done family=%s status=%s wall_s=%s",
-             payload.get("family"), payload["status"], payload["wall_s"])
+    LOG.info("trid3nt-telemac worker done section=%s status=%s wall_s=%s",
+             section, payload["status"], payload["wall_s"])
     return 0 if ok else 1
 
 

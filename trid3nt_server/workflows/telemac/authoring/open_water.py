@@ -214,19 +214,19 @@ def staged_bed_inputs(bed: Mapping[str, Any] | None, *, real: bool,
     return [{"gs_uri": str(uri), "dest": STAGED_BED_DEST}]
 
 
-def case_section(*, module: str, steering: str, results: list[str], family: str,
+def case_section(*, module: str, steering: str, results: list[str],
                  server_facts: Mapping[str, Any], user_fortran: str | None = None,
                  coupling: str | None = None,
                  continue_from: str | None = None) -> dict[str, Any]:
     """The CASE a worker runs: which engine, which deck, what it must produce.
 
     ``module`` names the engine binary, ``steering`` the authored deck it reads,
-    ``results`` every file that must exist for the run to have succeeded, and
-    ``family`` the run's identity in a listing. ``coupling`` names the module the
-    deck couples the solve with, because which runner can drive a coupled case is
-    not the same question for every module and the worker decides on this word.
-    ``continue_from`` is the staged name of the previous run's results the deck
-    restarts from, present only on a continued run.
+    and ``results`` every file that must exist for the run to have succeeded.
+    ``coupling`` names the module the deck couples the solve with, because which
+    runner can drive a coupled case is not the same question for every module and
+    the worker decides on this word. ``continue_from`` is the staged name of the
+    previous run's results the deck restarts from, present only on a continued
+    run.
 
     ``server_facts`` is what the SERVER already knows and the worker cannot learn
     from the files it is handed - the UTM zone, the bbox, the node and element
@@ -238,8 +238,7 @@ def case_section(*, module: str, steering: str, results: list[str], family: str,
             **({"user_fortran": user_fortran} if user_fortran else {}),
             **({"coupling": coupling} if coupling else {}),
             **({"continue_from": continue_from} if continue_from else {}),
-            "results": list(results), "family": family,
-            "server_facts": dict(server_facts)}
+            "results": list(results), "server_facts": dict(server_facts)}
 
 
 def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],

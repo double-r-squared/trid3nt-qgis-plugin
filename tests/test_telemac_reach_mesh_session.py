@@ -254,7 +254,6 @@ async def test_the_case_names_the_engine_the_authored_deck_and_the_results(write
     assert out["case"]["module"] == "telemac2d"
     assert out["case"]["steering"] == "t2d_river.cas"
     assert out["case"]["results"] == ["r2d_river.slf", "restart_river.slf"]
-    assert out["case"]["family"] == "reach"
     assert out["mesh_id"] == "M01"
 
 

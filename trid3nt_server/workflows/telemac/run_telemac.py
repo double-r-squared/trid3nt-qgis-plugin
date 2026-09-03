@@ -47,7 +47,7 @@ _COMPLETION_METRIC_KEYS: frozenset[str] = frozenset((
     # every leg. ``bbox`` is the ONE spelling of the solved domain's lon/lat
     # extent: the server measures it and states it, and a second name for it was
     # a second answer a reader had to pick between.
-    "correct_end", "error_code", "module", "family", "result_slf",
+    "correct_end", "error_code", "module", "result_slf",
     "npoin", "nelem", "ntimestep",
     # the failure path's evidence. The worker writes it only when the run did
     # not reach a correct end, and it is the only listing a reader has when the

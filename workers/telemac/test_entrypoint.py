@@ -29,7 +29,7 @@ def _write_manifest(tmp_path: Path, body) -> list[str]:
 def _case(tmp_path: Path, **over) -> dict:
     (tmp_path / "t2d.cas").write_text("/ deck\n", encoding="utf-8")
     case = {"module": "telemac2d", "steering": "t2d.cas",
-            "results": ["r2d.slf"], "family": "river_dye",
+            "results": ["r2d.slf"],
             "server_facts": {"utm_epsg": 32612, "npoin": 4211, "nelem": 8080,
                              "result_slf": "r2d.slf"}}
     case.update(over)
@@ -359,7 +359,7 @@ def test_a_clean_child_that_wrote_its_results_is_the_run_succeeding(tmp_path,
     assert rc == 0
     metrics = _metrics(tmp_path)
     assert metrics["status"] == "ok" and metrics["correct_end"] is True
-    assert metrics["module"] == "telemac2d" and metrics["family"] == "river_dye"
+    assert metrics["module"] == "telemac2d"
     assert metrics["run_id"] == "RUN123" and isinstance(metrics["wall_s"], float)
     # the server facts are the SERVER's measurement, copied not re-derived
     assert metrics["utm_epsg"] == 32612 and metrics["npoin"] == 4211

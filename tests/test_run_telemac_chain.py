@@ -80,7 +80,7 @@ def test_classify_exit_ok_folds_metrics(tmp_path):
         tmp_path,
         status="ok", correct_end=True, n_frames=19, module="telemac2d",
         result_slf="r2d_river.slf", npoin=812, nelem=1440, reach_name="snake",
-        family="reach", wall_s=42.0,
+        wall_s=42.0,
     )
     status, code, err, extra = T._classify(T.TELEMAC_SOLVER_NAME)(tmp_path, 0)
     assert status == "ok" and code == 0 and err is None
