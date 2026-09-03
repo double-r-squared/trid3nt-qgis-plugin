@@ -197,8 +197,11 @@ class ResolvedStyle:
         how = {
             FIXED: "fixed domain scale",
             FROM_DATA: f"scaled to this run ({_percentile_phrase(self.scale)})",
-            SHARED: f"one range shared across the compared set "
-                    f"({_percentile_phrase(self.scale)})",
+            # A shared range was HANDED IN, so the preset's clip did not produce
+            # it and naming those percentiles here would describe a read nobody
+            # made. What the legend can honestly say is where the range came
+            # from: the set, not this raster.
+            SHARED: "one range shared across the compared set",
             FALLBACK: "declared fallback range (the run's own values were unreadable)",
         }.get(self.source, self.source)
         return f"{how}: {lo:g} to {hi:g}{units}"
