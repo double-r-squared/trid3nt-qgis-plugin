@@ -30,8 +30,8 @@ def _case(tmp_path: Path, **over) -> dict:
     (tmp_path / "t2d.cas").write_text("/ deck\n", encoding="utf-8")
     case = {"module": "telemac2d", "steering": "t2d.cas",
             "results": ["r2d.slf"], "family": "river_dye",
-            "echo": {"utm_epsg": 32612, "npoin": 4211, "nelem": 8080,
-                     "result_slf": "r2d.slf"}}
+            "server_facts": {"utm_epsg": 32612, "npoin": 4211, "nelem": 8080,
+                             "result_slf": "r2d.slf"}}
     case.update(over)
     return {"case": case, "run_id": "RUN123"}
 
@@ -361,7 +361,7 @@ def test_a_clean_child_that_wrote_its_results_is_the_run_succeeding(tmp_path,
     assert metrics["status"] == "ok" and metrics["correct_end"] is True
     assert metrics["module"] == "telemac2d" and metrics["family"] == "river_dye"
     assert metrics["run_id"] == "RUN123" and isinstance(metrics["wall_s"], float)
-    # the echo is the SERVER's measurement, copied rather than re-derived
+    # the server facts are the SERVER's measurement, copied not re-derived
     assert metrics["utm_epsg"] == 32612 and metrics["npoin"] == 4211
     assert metrics["result_slf"] == "r2d.slf"
     assert "listing_tail" not in metrics
@@ -387,7 +387,7 @@ def test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero(tmp_path,
     assert "ntimestep" not in metrics
 
 
-def test_the_frame_count_is_measured_off_the_file_the_echo_names(tmp_path,
+def test_the_frame_count_is_measured_off_the_file_the_facts_name(tmp_path,
                                                                  monkeypatch):
     """result_slf is the SERVER's name; the count is the CONTAINER's measurement."""
     seen = {}
@@ -403,7 +403,7 @@ def test_the_frame_count_is_measured_off_the_file_the_echo_names(tmp_path,
     monkeypatch.setattr(E, "_run_child", _child)
     monkeypatch.setattr(E, "_measure_ntimestep", _measure)
     case = _case(tmp_path)
-    case["case"]["echo"]["result_slf"] = "r2d.slf"
+    case["case"]["server_facts"]["result_slf"] = "r2d.slf"
     assert E.main(_write_manifest(tmp_path, case)) == 0
     assert seen["asked"] == "r2d.slf"
     assert _metrics(tmp_path)["ntimestep"] == 31

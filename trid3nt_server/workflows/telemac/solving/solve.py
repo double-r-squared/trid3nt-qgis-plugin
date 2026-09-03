@@ -70,7 +70,7 @@ def read_run_metrics(run_id: str) -> dict[str, Any]:
 def download_result_selafin(run_id: str) -> str:
     """Download ``r2d_river.slf`` to a local path the postprocess can read.
 
-    The UTM zone is NOT re-read here: it is the server's own measurement, echoed
+    The UTM zone is NOT re-read here: it is the server's own measurement, carried
     through the worker's metrics and already on the solve result. Reading it a
     second time from the same file was a second answer that could disagree with
     the first.

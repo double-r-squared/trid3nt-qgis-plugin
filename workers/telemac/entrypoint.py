@@ -87,7 +87,7 @@ _MODULES: dict[str, tuple[str, str]] = {
 
 #: The keys a ``case`` section carries.
 _CASE_FIELDS = frozenset((
-    "module", "steering", "user_fortran", "results", "family", "echo",
+    "module", "steering", "user_fortran", "results", "family", "server_facts",
     "coupling", "continue_from"))
 
 #: The couplings telapy's API arm cannot drive, so their cases go through the
@@ -309,11 +309,11 @@ def _run_child(data_dir: Path, argv: list[str]) -> int:
 def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]:
     """Run the deck the server authored, and check it produced what it promised.
 
-    ``echo`` is copied into the metrics VERBATIM: the utm zone, the extent, the
-    node and element counts and the name of the result file are facts the server
-    already holds, and a fact re-derived in the container is a second answer that
-    can disagree with the first. What the container adds is what only it can
-    know - the frame count of the file the solve just wrote.
+    ``server_facts`` is copied into the metrics VERBATIM: the utm zone, the
+    extent, the node and element counts and the name of the result file are facts
+    the server already holds, and a fact re-derived in the container is a second
+    answer that can disagree with the first. What the container adds is what only
+    it can know - the frame count of the file the solve just wrote.
     """
     case = _strict_section("case", body, _CASE_FIELDS)
     module = str(case.get("module") or "")
@@ -360,16 +360,16 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
 
     code = _run_child(data_dir, argv)
     missing = [r for r in results if not (data_dir / r).exists()]
-    echo = dict(case.get("echo") or {})
+    server_facts = dict(case.get("server_facts") or {})
     metrics: dict[str, Any] = {
-        **echo,
+        **server_facts,
         "module": module,
         "family": str(case.get("family") or module),
         "correct_end": code == 0 and not missing,
     }
     if not missing:
-        metrics.update(_measure_ntimestep(data_dir,
-                                          str(echo.get("result_slf") or "")))
+        metrics.update(_measure_ntimestep(
+            data_dir, str(server_facts.get("result_slf") or "")))
     if code != 0:
         metrics["error_code"] = "TELEMAC_SOLVE_FAILED"
         metrics["error"] = f"{module} exited with code {code}"

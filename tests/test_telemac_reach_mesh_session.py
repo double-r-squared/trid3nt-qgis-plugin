@@ -14,7 +14,7 @@ What is pinned here:
   2. The dt SEAM HAS A READER - a mesh artifact measured finer than the ask
      tightens the deck's timestep, and one measured at the ask leaves it alone.
   3. The CASE the worker is handed - which engine, which authored deck, which
-     results are the success convention, and the facts the server echoes - the
+     results are the success convention, and the facts the server states - the
      outflow stage DERIVED as a normal depth over the reach the accepted mesh
      measures at its declared roles, and the refusals a mesh record missing its
      topology or its bed raises rather than letting the worker mesh one of its
@@ -259,7 +259,7 @@ async def test_the_case_names_the_engine_the_authored_deck_and_the_results(write
 
 
 @pytest.mark.asyncio
-async def test_the_echo_carries_what_only_the_server_measured(writer):
+async def test_the_server_facts_carry_what_only_the_server_measured(writer):
     """A fact re-derived in the container is a second answer that can disagree
     with the first, so the worker copies these into its metrics verbatim.
 
@@ -269,11 +269,11 @@ async def test_the_echo_carries_what_only_the_server_measured(writer):
     """
     out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
                        carrier_discharge=_CARRIER, substance="dye", **_SHEET)
-    assert out["case"]["echo"] == {
+    assert out["case"]["server_facts"] == {
         "utm_epsg": 32610, "bbox": [-124.2, 40.4, -124.0, 40.6],
         "npoin": 539, "nelem": 902, "mesh_size_m": 8.0,
         "result_slf": "r2d_river.slf", "bed_source": "cop-dem-glo-30"}
-    assert out["case"]["echo"]["result_slf"] in out["case"]["results"]
+    assert out["case"]["server_facts"]["result_slf"] in out["case"]["results"]
 
 
 @pytest.mark.asyncio

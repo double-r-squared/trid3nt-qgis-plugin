@@ -157,8 +157,8 @@ package SolveSeam {
 
     port def CaseOut;
     port def CaseIn;
-    port def EchoOut;
-    port def EchoIn;
+    port def ServerFactsOut;
+    port def ServerFactsIn;
     port def MetricsOut;
     port def MetricsIn;
     port def CompletionOut;
@@ -190,13 +190,13 @@ package SolveSeam {
         item steering : FileName;
         item results : FileNameList;
         item family : String;
-        item echo : EchoMap;
+        item server_facts : ServerFactsMap;
         item user_fortran : DirName [0..1];
         item coupling : String [0..1];
         item continue_from : FileName [0..1];
     }
 
-    interface def CaseEcho {
+    interface def ServerFacts {
         doc /*
         What the SERVER already knows and the container cannot learn from the
         files it is handed. The worker copies it into its report VERBATIM: a
@@ -344,7 +344,7 @@ package SolveSeam {
         code: trid3nt_server/workflows/telemac/authoring/deck.py
         */
         port caseOut : CaseOut;
-        port echoOut : EchoOut;
+        port serverFactsOut : ServerFactsOut;
         port topologyIn : TopologyIn;
         port meshIn : MeshIn;
     }
@@ -352,13 +352,13 @@ package SolveSeam {
     part rainDeckAuthor : DeckAuthor {
         doc /*
         The rain-on-grid leg authors its own deck against the same contracts:
-        a second author of the case and the echo, modeled so a severance in it
-        fires like a severance in the open-water author's.
+        a second author of the case and the server facts, modeled so a
+        severance in it fires like a severance in the open-water author's.
 
         code: trid3nt_server/workflows/telemac/authoring/rain_on_grid.py
         */
         port caseOut : CaseOut;
-        port echoOut : EchoOut;
+        port serverFactsOut : ServerFactsOut;
         port topologyIn : TopologyIn;
     }
 
@@ -410,8 +410,8 @@ package SolveSeam {
         code: workers/telemac/entrypoint.py
         */
         port caseIn : CaseIn;
-        port echoIn : EchoIn;
-        port echoOut : EchoOut;
+        port serverFactsIn : ServerFactsIn;
+        port serverFactsOut : ServerFactsOut;
         port metricsOut : MetricsOut;
         port listingOut : ListingOut;
     }
@@ -494,22 +494,22 @@ package SolveSeam {
     interface caseStaged : ManifestCaseSection
         connect manifestStager.caseOut to workerEntrypoint.caseIn;
 
-    interface echoStaged : CaseEcho
-        connect deckAuthor.echoOut to workerEntrypoint.echoIn {
+    interface serverFactsStaged : ServerFacts
+        connect deckAuthor.serverFactsOut to workerEntrypoint.serverFactsIn {
         doc /*
         pass-through: workerEntrypoint
         */
     }
 
-    interface rainEchoStaged : CaseEcho
-        connect rainDeckAuthor.echoOut to workerEntrypoint.echoIn {
+    interface rainServerFactsStaged : ServerFacts
+        connect rainDeckAuthor.serverFactsOut to workerEntrypoint.serverFactsIn {
         doc /*
         pass-through: workerEntrypoint
         */
     }
 
-    interface echoReturned : CaseEcho
-        connect workerEntrypoint.echoOut to launcherArm.metricsIn {
+    interface serverFactsReturned : ServerFacts
+        connect workerEntrypoint.serverFactsOut to launcherArm.metricsIn {
         doc /*
         pass-through: workerEntrypoint
         */
@@ -571,12 +571,12 @@ package SolveSeam {
         */
     }
 
-    requirement def EchoDoctrine {
+    requirement def ServerFactsDoctrine {
         doc /*
         Server-known facts are stated by the deck, copied by the worker
         VERBATIM, and never re-derived in the container. Worker-measured facts
         are the worker's own: the frame count is measured off the file the
-        echo names, and an unmeasurable result is the ABSENCE of the key
+        server facts name, and an unmeasurable result is the ABSENCE of the key
         rather than a zero.
         */
     }
@@ -772,14 +772,14 @@ package SolveSeam {
     verify requirement MetricsAlways by
         "workers/telemac/test_entrypoint.py::test_a_child_that_dies_still_leaves_the_metrics_written";
 
-    satisfy requirement EchoDoctrine by deckAuthor;
-    satisfy requirement EchoDoctrine by rainDeckAuthor;
-    satisfy requirement EchoDoctrine by workerEntrypoint;
-    verify requirement EchoDoctrine by
+    satisfy requirement ServerFactsDoctrine by deckAuthor;
+    satisfy requirement ServerFactsDoctrine by rainDeckAuthor;
+    satisfy requirement ServerFactsDoctrine by workerEntrypoint;
+    verify requirement ServerFactsDoctrine by
         "workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding";
-    verify requirement EchoDoctrine by
-        "workers/telemac/test_entrypoint.py::test_the_frame_count_is_measured_off_the_file_the_echo_names";
-    verify requirement EchoDoctrine by
+    verify requirement ServerFactsDoctrine by
+        "workers/telemac/test_entrypoint.py::test_the_frame_count_is_measured_off_the_file_the_facts_name";
+    verify requirement ServerFactsDoctrine by
         "workers/telemac/test_entrypoint.py::test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero";
 
     satisfy requirement SolveTimeoutTypesNotHangs by workerEntrypoint;

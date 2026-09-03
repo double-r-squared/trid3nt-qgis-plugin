@@ -215,7 +215,7 @@ def staged_bed_inputs(bed: Mapping[str, Any] | None, *, real: bool,
 
 
 def case_section(*, module: str, steering: str, results: list[str], family: str,
-                 echo: Mapping[str, Any], user_fortran: str | None = None,
+                 server_facts: Mapping[str, Any], user_fortran: str | None = None,
                  coupling: str | None = None,
                  continue_from: str | None = None) -> dict[str, Any]:
     """The CASE a worker runs: which engine, which deck, what it must produce.
@@ -228,17 +228,18 @@ def case_section(*, module: str, steering: str, results: list[str], family: str,
     ``continue_from`` is the staged name of the previous run's results the deck
     restarts from, present only on a continued run.
 
-    ``echo`` is what the SERVER already knows and the worker cannot learn from
-    the files it is handed - the UTM zone, the bbox, the node and element counts,
-    the edge the mesh was measured at, which dataset the bed came from. The
-    worker copies it into its metrics VERBATIM: a fact re-derived in the
+    ``server_facts`` is what the SERVER already knows and the worker cannot learn
+    from the files it is handed - the UTM zone, the bbox, the node and element
+    counts, the edge the mesh was measured at, which dataset the bed came from.
+    The worker copies it into its metrics VERBATIM: a fact re-derived in the
     container is a second answer that can disagree with the first.
     """
     return {"module": module, "steering": steering,
             **({"user_fortran": user_fortran} if user_fortran else {}),
             **({"coupling": coupling} if coupling else {}),
             **({"continue_from": continue_from} if continue_from else {}),
-            "results": list(results), "family": family, "echo": dict(echo)}
+            "results": list(results), "family": family,
+            "server_facts": dict(server_facts)}
 
 
 def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
@@ -403,15 +404,15 @@ def solved_domain_bbox(deck: Mapping[str, Any],
     add that exact corner back before reprojecting. "That exact corner" is the
     point: the deck rounds the AOI to 4 decimals on its way into the manifest, so
     the ORIGINAL AOI is a few metres away from the one the worker meshed and
-    offsets the whole field by that much. The worker's own echo in
+    offsets the whole field by that much. The worker's own report in
     ``telemac_metrics.json`` is the ground truth; the manifest's rounded bbox is
     what it was handed and is the fallback. The unrounded AOI is neither.
 
     An IDEALIZED domain has no geographic footprint and reports no bbox at all.
     """
-    echoed = (metrics or {}).get("bbox")
+    reported = (metrics or {}).get("bbox")
     staged = (deck.get("config") or {}).get("bbox")
-    for candidate in (echoed, staged):
+    for candidate in (reported, staged):
         if candidate is None:
             continue
         values = tuple(candidate)

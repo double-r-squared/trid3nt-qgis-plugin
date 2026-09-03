@@ -793,17 +793,18 @@ async def write_reach_deck(
             continue_from=_PREVIOUS_DEST if continue_from else None,
             # What the SERVER measured and the container cannot learn from the
             # files it is handed. The worker copies it into its metrics verbatim.
-            echo={"utm_epsg": utm_epsg,
-                  "bbox": [round(float(v), 6)
-                           for v in (getattr(artifact, "bbox", None) or ())],
-                  "npoin": int(mesh.get("node_count") or 0),
-                  "nelem": int(mesh.get("element_count") or 0),
-                  "mesh_size_m": mesh_size_m,
-                  # WHICH file carries the time series. The author wrote the
-                  # RESULTS FILE statement, so the name is the server's; the
-                  # worker copies it and measures the file it names.
-                  "result_slf": _RESULT,
-                  "bed_source": bed_source}),
+            server_facts={
+                "utm_epsg": utm_epsg,
+                "bbox": [round(float(v), 6)
+                         for v in (getattr(artifact, "bbox", None) or ())],
+                "npoin": int(mesh.get("node_count") or 0),
+                "nelem": int(mesh.get("element_count") or 0),
+                "mesh_size_m": mesh_size_m,
+                # WHICH file carries the time series. The author wrote the
+                # RESULTS FILE statement, so the name is the server's; the
+                # worker copies it and measures the file it names.
+                "result_slf": _RESULT,
+                "bed_source": bed_source}),
         "outputs": outputs,
         "inputs": [
             {"gs_uri": _mesh_field(mesh, "slf_uri"), "dest": _GEOMETRY_DEST},

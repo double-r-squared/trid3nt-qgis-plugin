@@ -28,8 +28,6 @@ flowchart LR
     supervisor -- "FoldedRunPhysics (supervisor pass through)" --> diagnosticsReader
     launcherArm -- "FoldedRunPhysics (supervisor pass through)" --> supervisor
     supervisor -- "RunTerminalSignal" --> solveStep
-    workerEntrypoint -- "CaseEcho (workerEntrypoint pass through)" --> launcherArm
-    deckAuthor -- "CaseEcho (workerEntrypoint pass through)" --> workerEntrypoint
     resultReader -- "SolvedResultFields" --> resultPostprocess
     launcherArm -- "FrameCountCrossCheck (supervisor pass through)" --> supervisor
     workerEntrypoint -- "SolverListing" --> diagnosticsReader
@@ -37,8 +35,10 @@ flowchart LR
     meshAcceptance -- "AcceptedMeshRecord" --> deckAuthor
     workerEntrypoint -- "WorkerRunReport" --> launcherArm
     rainDeckAuthor -- "ManifestCaseSection" --> manifestStager
-    rainDeckAuthor -- "CaseEcho (workerEntrypoint pass through)" --> workerEntrypoint
+    rainDeckAuthor -- "ServerFacts (workerEntrypoint pass through)" --> workerEntrypoint
     topologyWriter -- "TopologyBundle" --> rainDeckAuthor
+    workerEntrypoint -- "ServerFacts (workerEntrypoint pass through)" --> launcherArm
+    deckAuthor -- "ServerFacts (workerEntrypoint pass through)" --> workerEntrypoint
     topologyWriter -- "TopologyBundle" --> deckAuthor
 ```
 
@@ -60,20 +60,6 @@ The recipe-frozen artifact's fields the deck consumes. The granularity the deck 
 | `element_count` | Integer | required |
 | `min_edge_m` | Real | required |
 | `provenance` | Map | required |
-
-### `CaseEcho`
-
-What the SERVER already knows and the container cannot learn from the files it is handed. The worker copies it into its report VERBATIM: a fact re-derived in the container is a second answer free to disagree with the first.
-
-| item | type | required |
-| --- | --- | --- |
-| `utm_epsg` | Integer | required |
-| `bbox` | RealList | required |
-| `npoin` | Integer | required |
-| `nelem` | Integer | required |
-| `mesh_size_m` | Real | required |
-| `bed_source` | String | required |
-| `result_slf` | FileName | required |
 
 ### `FoldedRunPhysics`
 
@@ -104,7 +90,7 @@ The CASE a worker runs: which engine, which deck it reads, and which files must 
 | `steering` | FileName | required |
 | `results` | FileNameList | required |
 | `family` | String | required |
-| `echo` | EchoMap | required |
+| `server_facts` | ServerFactsMap | required |
 | `user_fortran` | DirName | optional |
 | `coupling` | String | optional |
 | `continue_from` | FileName | optional |
@@ -117,6 +103,20 @@ The terminal object the poller is waiting on. The supervisor writes it whatever 
 | --- | --- | --- |
 | `run_id` | String | required |
 | `status` | String | required |
+
+### `ServerFacts`
+
+What the SERVER already knows and the container cannot learn from the files it is handed. The worker copies it into its report VERBATIM: a fact re-derived in the container is a second answer free to disagree with the first.
+
+| item | type | required |
+| --- | --- | --- |
+| `utm_epsg` | Integer | required |
+| `bbox` | RealList | required |
+| `npoin` | Integer | required |
+| `nelem` | Integer | required |
+| `mesh_size_m` | Real | required |
+| `bed_source` | String | required |
+| `result_slf` | FileName | required |
 
 ### `SolvedResultFields`
 
@@ -173,12 +173,12 @@ The run's only report, written whatever the child did. Success is not the worker
 | --- | --- | --- |
 | **BoundaryCodesMatchTheSteering** | `topologyWriter`, `deckAuthor`, `deckStatements` | `tests/test_telemac_boundary_contract.py::test_flipping_the_strategy_moves_the_quad_and_the_keyword_together`<br/>`tests/test_telemac_boundary_contract.py::test_the_engine_numbers_from_its_own_south_west_corner_not_from_row_order`<br/>`tests/test_telemac_boundary_contract.py::test_a_liquid_run_that_straddles_the_first_row_is_ONE_boundary`<br/>`tests/test_telemac_boundary_contract.py::test_the_deck_prescribes_at_the_number_whose_quad_reads_it`<br/>`tests/test_telemac_boundary_contract.py::test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing`<br/>`tests/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses` |
 | **CorrectEndIsTheSuccessConvention** | `workerEntrypoint`, `launcherArm` | `workers/telemac/test_entrypoint.py::test_a_clean_exit_that_wrote_no_result_is_not_a_solve`<br/>`tests/test_run_telemac_chain.py::test_classify_exit_clean_exit_but_no_correct_end_is_error` |
-| **EchoDoctrine** | `deckAuthor`, `rainDeckAuthor`, `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding`<br/>`workers/telemac/test_entrypoint.py::test_the_frame_count_is_measured_off_the_file_the_echo_names`<br/>`workers/telemac/test_entrypoint.py::test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero` |
 | **EmptyResultsRefuses** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_case_declaring_no_results_refuses` |
 | **MetricsAlways** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_child_that_dies_still_leaves_the_metrics_written` |
 | **NoSecondParserOfTheFormat** | `resultReader`, `resultPostprocess`, `runReader`, `deckAuthor` | `tests/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format`<br/>`tests/test_model_conformance.py::test_the_model_conforms_to_the_tree` |
 | **OutflowStageIsNormalDepth** | `deckStatements`, `deckAuthor` | `tests/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_decks_discharge`<br/>`tests/test_telemac_outflow_stage.py::test_the_friction_slope_is_the_measured_fall_over_the_measured_length`<br/>`tests/test_telemac_outflow_stage.py::test_the_outflow_face_is_measured_as_a_transect_of_the_painted_bed`<br/>`tests/test_telemac_outflow_stage.py::test_the_reach_length_is_walked_along_the_line_the_mesh_was_built_over`<br/>`tests/test_telemac_outflow_stage.py::test_a_bigger_discharge_stands_higher_in_the_same_channel`<br/>`tests/test_telemac_outflow_stage.py::test_strickler_and_its_reciprocal_manning_derive_the_same_stage`<br/>`tests/test_telemac_outflow_stage.py::test_an_input_the_stage_cannot_be_derived_from_refuses_by_name`<br/>`tests/test_telemac_outflow_stage.py::test_the_deck_states_the_stage_and_every_input_it_was_derived_from`<br/>`tests/test_telemac_outflow_stage.py::test_the_initial_depth_is_no_longer_the_level_the_run_is_anchored_at`<br/>`tests/test_telemac_outflow_stage.py::test_the_stage_is_derived_at_the_roughness_the_deck_goes_on_to_write` |
 | **ReadersNeverImportTheWorker** | `runReader`, `diagnosticsReader` | `tests/test_model_conformance.py::test_the_model_conforms_to_the_tree` |
+| **ServerFactsDoctrine** | `deckAuthor`, `rainDeckAuthor`, `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding`<br/>`workers/telemac/test_entrypoint.py::test_the_frame_count_is_measured_off_the_file_the_facts_name`<br/>`workers/telemac/test_entrypoint.py::test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero` |
 | **SolveTimeoutTypesNotHangs** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_the_solve_bound_defaults_to_a_day_and_the_knob_states_it`<br/>`workers/telemac/test_entrypoint.py::test_a_child_that_outruns_the_bound_is_killed_and_still_reports` |
 | **StrictGateRefusesUnknownFields** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_the_gate_refuses_an_unknown_key_and_names_the_parser`<br/>`workers/telemac/test_entrypoint.py::test_a_case_with_an_unknown_field_refuses` |
 | **WorkersNeverImportServer** | `workerEntrypoint`, `telapyChild` | `tests/test_model_conformance.py::test_the_model_conforms_to_the_tree` |
@@ -187,12 +187,12 @@ The run's only report, written whatever the child did. Success is not the worker
 
 - **BoundaryCodesMatchTheSteering** - A TELEMAC boundary states itself TWICE - as a (LIHBOR, LIUBOR, LIVBOR, LITBOR) quad on every node of its face in the boundary file, and as a value at its own number in PRESCRIBED FLOWRATES or PRESCRIBED ELEVATIONS in the steering file - and the engine reads the second only where the first says to. bord.f consumes an elevation under LIHBOR = KENT and a flowrate under LIUBOR = KENT, and nowhere else, so two files decided apart disagree in SILENCE: the number is written, never read, and the face runs on what its code alone means. ONE decision therefore owns both. The role-to-quad table in the pair writer is that decision; the quad lands in the boundary file and the steering keyword is derived from the SAME quad, carried to the author on the topology bundle. Flipping the table moves both files together, and a boundary whose quad prescribes nothing refuses rather than being written into a list it does not read. The number a value is written AT is the other half of the same contract, and it is measured by the engine's own rule (bief/front2.f): each contour is walked from the south-westernmost boundary point, a segment is solid when either end is, and the run straddling that start folds back into one boundary. Numbering from file-row order agreed only by luck. On a reach whose inflow face holds the domain's south-west corner the two disagreed, and the deck then stated its level at the inflow's number and its flowrate at the outflow's: the inflow supplied nothing, the outflow was clamped to elevation zero, and the run drained its initial condition while both prescribed numbers sat unread. That run reported CORRECT END OF RUN, which is why this is a modeled contract and not a comment.
 - **CorrectEndIsTheSuccessConvention** - Success is a clean child exit AND every declared result file on disk. A solver that returns zero without writing its result has not solved anything, and the exit code alone never decides it - on either side of the seam.
-- **EchoDoctrine** - Server-known facts are stated by the deck, copied by the worker VERBATIM, and never re-derived in the container. Worker-measured facts are the worker's own: the frame count is measured off the file the echo names, and an unmeasurable result is the ABSENCE of the key rather than a zero.
 - **EmptyResultsRefuses** - A case declaring no results collapses the success convention back to the exit code alone, which is the convention this seam retired. It refuses instead.
 - **MetricsAlways** - The run report is written whatever the child does. A Fortran STOP kills the process it runs in, and the report is the only channel the server has for reading what went wrong, so the write outlives the solve.
 - **NoSecondParserOfTheFormat** - A result file's byte layout is the engine's to know. The parser this side used to carry was wrong about it twice: it refused a truncated result the engine reads without complaint, and it handed every consumer a variable name with the record's unit still glued on. SCOPE: the FIELD DATA a delivery renders. One reader of the format's fields - the engine's own, inside the image that wrote them - and no second parser of fields anywhere. The packet's frame count is outside that scope and stays hand-rolled header arithmetic by design: it is the independent reader FrameCountCrossCheck exists to disagree with the worker's number, and converting it would make the cross-check agree with itself.
 - **OutflowStageIsNormalDepth** - SIGNED DECISION - the reach deck's outflow stage is the NORMAL DEPTH for the discharge the same deck prescribes (bathymetry methodology M4, signed 2026-09-02), replacing the outflow bed plus a declared 2 m. Under the HAPPY PATH FIRST, SYNTHETIC DEFERRED amendment this is the whole of the Producer stage: it produces no bathymetry, it computes a level over bathymetry already measured, which is why it stands while the synthetic producer does not. The four inputs are the run's own. The friction slope is the fall the accepted mesh carries between its two role faces, over the length of the line that mesh was built on. The channel is the transect the outflow face cuts through the painted bed, read in boundary-walk order so the face is a section rather than a scatter. The roughness is the coefficient this deck goes on to write, under the law it goes on to write. The discharge is the one it prescribes upstream. Nothing external enters - no gauge, no rating curve, no second vertical datum - which is what makes the stage internally consistent with whatever bed the ladder delivered, and is the published reason it is the community default when the bed came off a surface rather than a survey. The value it replaced was not a property of the reach: 2 m was the same number on a mountain creek and a coastal plain river, on the one boundary the run's entire water surface is anchored to. ``init_depth_m`` keeps its other role, the constant depth a fresh run starts from, and moving it no longer moves the boundary. Uniform flow is a numerically convenient fiction rather than a measured boundary, so every input it cannot measure REFUSES by name: a reach with no measured fall, an outflow face with no painted section, a friction law whose coefficient no conveyance reads, a discharge or roughness that is not positive. Defaulting past any of them would put an underived level back on that boundary with nothing saying so.
 - **ReadersNeverImportTheWorker** - What a solved run says is read from the artifacts the supervisor uploaded. A reader importing worker code is a second computation of the same quantity, running outside the image that produced it.
+- **ServerFactsDoctrine** - Server-known facts are stated by the deck, copied by the worker VERBATIM, and never re-derived in the container. Worker-measured facts are the worker's own: the frame count is measured off the file the server facts name, and an unmeasurable result is the ABSENCE of the key rather than a zero.
 - **SolveTimeoutTypesNotHangs** - A wedged solver is a typed report, not a container that never exits. The bound is stated by an environment knob, and an expiry names that knob in the error it writes.
 - **StrictGateRefusesUnknownFields** - A dropped key silently no-ops the knob the caller meant to set. The gate refuses instead, and names the parser stamp so a stale image reads as a drifted version rather than as a knob that did nothing.
 - **WorkersNeverImportServer** - The container is the engine room: a worker that reaches into the server package has an opinion, a default or a fetch in it.

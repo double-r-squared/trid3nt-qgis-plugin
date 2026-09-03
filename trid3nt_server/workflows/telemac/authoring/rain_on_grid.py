@@ -453,17 +453,18 @@ async def write_rain_on_grid_deck(
             # The engine reaches RAINDEF=3 only through the user Fortran the
             # image bakes, so the run that needs it names it on both channels.
             user_fortran=author.RAINDEF3_USER_FORTRAN if time_varying else None,
-            echo={"utm_epsg": utm_epsg,
-                  "bbox": [round(float(v), 6)
-                           for v in (getattr(artifact, "bbox", None) or ())],
-                  "npoin": int(catchment.get("node_count") or 0),
-                  "nelem": int(catchment.get("element_count") or 0),
-                  "mesh_size_m": mesh_size_m,
-                  # WHICH file carries the time series. The author wrote the
-                  # RESULTS FILE statement, so the name is the server's; the
-                  # worker copies it and measures the file it names.
-                  "result_slf": _RESULT,
-                  "bed_source": str(provenance.get("bed_source") or "staged")}),
+            server_facts={
+                "utm_epsg": utm_epsg,
+                "bbox": [round(float(v), 6)
+                         for v in (getattr(artifact, "bbox", None) or ())],
+                "npoin": int(catchment.get("node_count") or 0),
+                "nelem": int(catchment.get("element_count") or 0),
+                "mesh_size_m": mesh_size_m,
+                # WHICH file carries the time series. The author wrote the
+                # RESULTS FILE statement, so the name is the server's; the
+                # worker copies it and measures the file it names.
+                "result_slf": _RESULT,
+                "bed_source": str(provenance.get("bed_source") or "staged")}),
         "outputs": [_RESULT, _GEOMETRY_DEST, _BOUNDARY_DEST, "full_listing.log",
                     "telemac_metrics.json", *authored],
         "authored": authored,

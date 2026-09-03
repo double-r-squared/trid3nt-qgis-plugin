@@ -45,7 +45,7 @@ _METRICS_FILENAME: str = "telemac_metrics.json"
 #: per-leg list only duplicated that filtering in a second place.
 _COMPLETION_METRIC_KEYS: frozenset[str] = frozenset((
     # every leg. ``bbox`` is the ONE spelling of the solved domain's lon/lat
-    # extent: the server measures it and echoes it, and a second name for it was
+    # extent: the server measures it and states it, and a second name for it was
     # a second answer a reader had to pick between.
     "correct_end", "error_code", "module", "family", "result_slf",
     "npoin", "nelem", "ntimestep",

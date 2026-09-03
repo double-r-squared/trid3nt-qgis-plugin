@@ -453,8 +453,9 @@ def test_a_constant_storm_authors_a_case_and_stages_no_fortran(rog_deck, tmp_pat
     # a constant-rain run compiles nothing, so the key is ABSENT: the worker's
     # strict gate reads a present key as a directory it must compile.
     assert "user_fortran" not in case
-    assert case["echo"]["utm_epsg"] == 32617
-    assert case["echo"]["npoin"] == 4 and case["echo"]["nelem"] == 2
+    assert case["server_facts"]["utm_epsg"] == 32617
+    assert (case["server_facts"]["npoin"] == 4
+            and case["server_facts"]["nelem"] == 2)
 
     cas = (tmp_path / f"telemac-{deck['run_tag']}" / "t2d_rog.cas").read_text()
     assert "GEOMETRY FILE                   = rog.slf" in cas

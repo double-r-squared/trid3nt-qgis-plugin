@@ -131,10 +131,10 @@ def test_no_row_without_an_ask_or_without_a_built_spacing():
 # The mesh origin: the corner the WORKER built from, not the one the user typed.
 # --------------------------------------------------------------------------- #
 
-def test_solved_domain_bbox_prefers_the_worker_echo():
+def test_solved_domain_bbox_prefers_the_workers_own_report():
     deck = {"config": {"bbox": [-85.0234, 29.6911, -84.9012, 29.8044]}}
-    echoed = [-85.02341, 29.69107, -84.90118, 29.80442]
-    assert solved_domain_bbox(deck, {"bbox": echoed}) == tuple(echoed)
+    reported = [-85.02341, 29.69107, -84.90118, 29.80442]
+    assert solved_domain_bbox(deck, {"bbox": reported}) == tuple(reported)
 
 
 def test_solved_domain_bbox_falls_back_to_the_staged_rounded_bbox():

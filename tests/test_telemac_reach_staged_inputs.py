@@ -29,7 +29,8 @@ class _FakeS3:
 
 _CASE = {"module": "telemac2d", "steering": "t2d_river.cas",
          "results": ["r2d_river.slf"], "family": "reach",
-         "echo": {"utm_epsg": 32610, "npoin": 812, "bed_source": "3dep"}}
+         "server_facts": {"utm_epsg": 32610, "npoin": 812,
+                          "bed_source": "3dep"}}
 
 _SOLVE_INPUTS = [
     {"gs_uri": "s3://cache/mesh/M1/mesh.slf", "dest": "river.slf"},
@@ -134,23 +135,23 @@ def test_the_case_section_names_the_engine_the_deck_and_the_results():
     case = case_section(
         module="telemac2d", steering="t2d_river.cas",
         results=["r2d_river.slf", "full_listing.log"], family="river_dye",
-        echo={"utm_epsg": 32610, "npoin": 812, "bed_source": "3dep"})
+        server_facts={"utm_epsg": 32610, "npoin": 812, "bed_source": "3dep"})
     assert case["module"] == "telemac2d"
     assert case["steering"] == "t2d_river.cas"
     assert case["results"] == ["r2d_river.slf", "full_listing.log"]
     assert case["family"] == "river_dye"
-    assert case["echo"]["utm_epsg"] == 32610
+    assert case["server_facts"]["utm_epsg"] == 32610
     # no user fortran was asked for, so the key is ABSENT rather than null: the
     # worker's strict gate reads a present key as a file it must compile.
     assert "user_fortran" not in case
     assert "user_fortran" in case_section(
         module="telemac2d", steering="t2d_river.cas", results=[],
-        family="river_dye", echo={}, user_fortran="user_fortran")
+        family="river_dye", server_facts={}, user_fortran="user_fortran")
     # the coupling reads the same way: an uncoupled case names none, and the
     # worker's runner choice turns on the word being there.
     assert "coupling" not in case
     assert case_section(module="telemac2d", steering="t2d_river.cas",
-                        results=[], family="river_dye", echo={},
+                        results=[], family="river_dye", server_facts={},
                         coupling="waqtel")["coupling"] == "waqtel"
 
 
@@ -159,10 +160,10 @@ def test_a_continued_case_names_the_staged_file_it_restarts_from():
     from trid3nt_server.workflows.telemac.authoring.open_water import case_section
 
     fresh = case_section(module="telemac2d", steering="t2d_river.cas",
-                         results=[], family="river_dye", echo={})
+                         results=[], family="river_dye", server_facts={})
     assert "continue_from" not in fresh
     assert case_section(module="telemac2d", steering="t2d_river.cas", results=[],
-                        family="river_dye", echo={},
+                        family="river_dye", server_facts={},
                         continue_from="previous.slf")["continue_from"] == \
         "previous.slf"
 
