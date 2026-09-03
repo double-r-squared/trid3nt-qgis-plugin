@@ -76,7 +76,7 @@ class DATA:
     #: most mesh-dependent question this fleet asks, so the mesh it runs on is the
     #: caller's to author: hand this slot a mesh ``build_mesh`` built - adaptive
     #: sizing, the breakwater cut in conformally, a seaward boundary designated -
-    #: and it IS the domain. Unfilled, the deck asks for the uniform grid the
+    #: and it IS the domain. Unfilled, the run asks for the uniform grid the
     #: worker lays over the AOI, which is a labeled fallback and not a stance.
     mesh = Data.supplied(geometry="mesh").optional()
     #: The BED, as declared reference data. Sampling it inside the solver
@@ -114,7 +114,7 @@ PHYSICS = Physics("harbor_agitation",
                   bed=DATA.bed)
 
 #: The MESH RECIPE, frozen at declaration and building nothing at import. An
-#: open-water deck runs on a uniform lattice over the acquired AOI, so the recipe
+#: open-water run solves on a uniform lattice over the acquired AOI, so the recipe
 #: is the three agnostic params and the mesher's own near-empty default program:
 #: a lattice at one size word, with no bed of its own (the solver stages that).
 MESH = tool.build_mesh(

@@ -117,9 +117,9 @@ def _record_digests(snap: Any) -> dict[str, dict[str, Any]]:
     return out
 
 
-def _deck_inputs(snap: Any) -> list[dict[str, Any]]:
-    """The files the deck STAGED for the solver, digested off the object store."""
-    rec = next((r for r in snap.records if r.node == "deck"), None)
+def _staged_inputs(snap: Any) -> list[dict[str, Any]]:
+    """The files the authoring STAGED for the solver, digested off the store."""
+    rec = next((r for r in snap.records if r.node == "run"), None)
     rows = []
     for entry in ((rec.result if isinstance(rec.result, dict) else {})
                   .get("inputs") or []) if rec else []:
@@ -215,18 +215,19 @@ async def main() -> int:
     log.info("REUSE byte-identical over %s; re-executed and moved: %s",
              identical, moved)
 
-    # The deck STAGES the solver's input files. It re-executes here, so this is a
-    # separate question from the ledger reuse: is the terrain the child solves on
-    # the same object? It is content-addressed, so it is.
-    parent_inputs, child_inputs = _deck_inputs(snap), _deck_inputs(child_snap)
-    evidence["deck_inputs"] = {"parent": parent_inputs, "child": child_inputs}
+    # The AUTHORING stages the solver's input files. It re-executes here, so this
+    # is a separate question from the ledger reuse: is the terrain the child solves
+    # on the same object? It is content-addressed, so it is.
+    parent_inputs = _staged_inputs(snap)
+    child_inputs = _staged_inputs(child_snap)
+    evidence["staged_inputs"] = {"parent": parent_inputs, "child": child_inputs}
     by_dest = {r["dest"]: r for r in parent_inputs}
-    evidence["deck_input_parity"] = [
+    evidence["staged_input_parity"] = [
         {"dest": r["dest"],
          "same_object": by_dest.get(r["dest"], {}).get("uri") == r["uri"],
          "same_bytes": by_dest.get(r["dest"], {}).get("sha256") == r["sha256"]}
         for r in child_inputs]
-    log.info("DECK INPUT PARITY %s", evidence["deck_input_parity"])
+    log.info("STAGED INPUT PARITY %s", evidence["staged_input_parity"])
 
     lines = journal.read_records()
     child_line = next((ln for ln in reversed(lines) if ln["run_id"] == child_id), None)
@@ -265,7 +266,7 @@ async def main() -> int:
     log.info("WHAT-IF fan off %s: %s", parent_id, evidence["whatif_fan"])
 
     # -- (a) failure recovery: refuse on a bad value, then fix it ------------ #
-    # A compute class the dispatcher does not serve refuses TYPED at the deck -
+    # A compute class the dispatcher does not serve refuses TYPED at the author -
     # after the geocode, the reach navigation and the discharge have succeeded.
     bad = dict(PARENT_ARGS, compute_class="enormous", restart_clean=True)
     failed = await do_sag(**bad)

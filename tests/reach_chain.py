@@ -48,7 +48,7 @@ CENTERLINE_BBOX = [-124.16, 40.50, -124.04, 40.50]
 
 #: The BOUNDARY the stood-in accepted mesh declares, and the bed it carries
 #: there. Its four nodes are the two western ones (the inflow cap) and the two
-#: eastern ones (the outflow cap); the deck's outflow stage is the median bed
+#: eastern ones (the outflow cap); the run's outflow stage is the median bed
 #: over each, so the reach falls 3 m from top to bottom.
 MESH_ROLES = {"inflow": [0, 3], "outflow": [1, 2]}
 MESH_NODE_BED = [900.0, 897.0, 897.0, 900.0]
@@ -115,15 +115,15 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
 
     # The ACCEPTED MESH a derived release is settled inside. The mesh session is
     # stood in for by these tests, so its display face is a uri nothing wrote;
-    # what the deck needs from it is a triangulation to test containment against
+    # what the assembler needs from it is a triangulation to test containment against
     # and the bed its declared roles stand on, and here that is one that holds the
     # whole stretch - so a chain test measures the chain rather than a stand-in
-    # mesh's extent. The deck reads the display face through its own binding and
-    # the release containment through the module's, so it stands in at both.
+    # mesh's extent. The assembler reads the display face through its own binding
+    # and the release containment through the module's, so it stands in at both.
     import numpy as np
 
     from trid3nt_server.workflows.mesh.shared import nodes as nodes_mod
-    from trid3nt_server.workflows.telemac.authoring import deck as deck_mod
+    from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
 
     span = 1.0e7
 
@@ -133,4 +133,4 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
                 np.array([[0, 1, 2], [0, 2, 3]]), np.array(MESH_NODE_BED), None)
 
     monkeypatch.setattr(nodes_mod, "read_accepted_mesh_nodes", _accepted_nodes)
-    monkeypatch.setattr(deck_mod, "read_accepted_mesh_nodes", _accepted_nodes)
+    monkeypatch.setattr(asm_mod, "read_accepted_mesh_nodes", _accepted_nodes)

@@ -6,23 +6,22 @@ GENERATED from `docs/model/solve-seam.sysml` by `scripts/model_check.py --view`.
 
 ```mermaid
 flowchart LR
-    deckAuthor["DeckAuthor<br/>trid3nt_server/workflows/telemac/authoring/deck.py"]
-    deckStatements["DeckAuthor<br/>trid3nt_server/workflows/telemac/authoring/author.py"]
+    assembler["Assembler<br/>trid3nt_server/workflows/telemac/authoring/assembler.py"]
     diagnosticsReader["DiagnosticsReader<br/>trid3nt_server/workflows/solver/diagnostics/telemac.py"]
     launcherArm["LauncherArm<br/>trid3nt_server/workflows/telemac/run_telemac.py"]
     manifestStager["ManifestStager<br/>trid3nt_server/workflows/telemac/authoring/open_water.py"]
     meshAcceptance["MeshAcceptance<br/>trid3nt_server/workflows/mesh/step.py"]
     packetAssembler["PacketAssembler<br/>scripts/assemble_proof_packet.py"]
-    rainDeckAuthor["DeckAuthor<br/>trid3nt_server/workflows/telemac/authoring/rain_on_grid.py"]
     resultPostprocess["ResultPostprocess<br/>trid3nt_server/workflows/telemac/products/postprocess_telemac.py"]
     resultReader["ResultReader<br/>trid3nt_server/workflows/telemac/result_reader.py"]
     runReader["RunReader<br/>trid3nt_server/workflows/telemac/products/run_reads.py"]
     solveStep["SolveStep<br/>trid3nt_server/workflows/telemac/solving/solve.py"]
+    steeringStatements["SteeringAuthor<br/>trid3nt_server/workflows/telemac/authoring/author.py"]
     supervisor["Supervisor<br/>trid3nt_server/workflows/solver/solver.py"]
     telapyChild["TelapyChild<br/>workers/telemac/entrypoint.py"]
     topologyWriter["TopologyWriter<br/>trid3nt_server/workflows/mesh/topology.py"]
     workerEntrypoint["WorkerEntrypoint<br/>workers/telemac/entrypoint.py"]
-    deckAuthor -- "ManifestCaseSection" --> manifestStager
+    assembler -- "ManifestCaseSection" --> manifestStager
     manifestStager -- "ManifestCaseSection" --> workerEntrypoint
     supervisor -- "FrameCountCrossCheck (supervisor pass through)" --> packetAssembler
     supervisor -- "FoldedRunPhysics (supervisor pass through)" --> diagnosticsReader
@@ -32,14 +31,11 @@ flowchart LR
     launcherArm -- "FrameCountCrossCheck (supervisor pass through)" --> supervisor
     workerEntrypoint -- "SolverListing" --> diagnosticsReader
     telapyChild -- "SolverListing" --> workerEntrypoint
-    meshAcceptance -- "AcceptedMeshRecord" --> deckAuthor
+    meshAcceptance -- "AcceptedMeshRecord" --> assembler
     workerEntrypoint -- "WorkerRunReport" --> launcherArm
-    rainDeckAuthor -- "ManifestCaseSection" --> manifestStager
-    rainDeckAuthor -- "ServerFacts (workerEntrypoint pass through)" --> workerEntrypoint
-    topologyWriter -- "TopologyBundle" --> rainDeckAuthor
     workerEntrypoint -- "ServerFacts (workerEntrypoint pass through)" --> launcherArm
-    deckAuthor -- "ServerFacts (workerEntrypoint pass through)" --> workerEntrypoint
-    topologyWriter -- "TopologyBundle" --> deckAuthor
+    assembler -- "ServerFacts (workerEntrypoint pass through)" --> workerEntrypoint
+    topologyWriter -- "TopologyBundle" --> assembler
 ```
 
 ## Interface items
@@ -169,14 +165,14 @@ The run's only report, written whatever the child did. Success is not the worker
 
 | requirement | satisfied by | verified by |
 | --- | --- | --- |
-| **BoundaryCodesMatchTheSteering** | `topologyWriter`, `deckAuthor`, `deckStatements` | `tests/test_telemac_boundary_contract.py::test_flipping_the_strategy_moves_the_quad_and_the_keyword_together`<br/>`tests/test_telemac_boundary_contract.py::test_the_engine_numbers_from_its_own_south_west_corner_not_from_row_order`<br/>`tests/test_telemac_boundary_contract.py::test_a_liquid_run_that_straddles_the_first_row_is_ONE_boundary`<br/>`tests/test_telemac_boundary_contract.py::test_the_deck_prescribes_at_the_number_whose_quad_reads_it`<br/>`tests/test_telemac_boundary_contract.py::test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing`<br/>`tests/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses` |
+| **BoundaryCodesMatchTheSteering** | `topologyWriter`, `assembler`, `steeringStatements` | `tests/test_telemac_boundary_contract.py::test_flipping_the_strategy_moves_the_quad_and_the_keyword_together`<br/>`tests/test_telemac_boundary_contract.py::test_the_engine_numbers_from_its_own_south_west_corner_not_from_row_order`<br/>`tests/test_telemac_boundary_contract.py::test_a_liquid_run_that_straddles_the_first_row_is_ONE_boundary`<br/>`tests/test_telemac_boundary_contract.py::test_the_run_prescribes_at_the_number_whose_quad_reads_it`<br/>`tests/test_telemac_boundary_contract.py::test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing`<br/>`tests/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses` |
 | **CorrectEndIsTheSuccessConvention** | `workerEntrypoint`, `launcherArm` | `workers/telemac/test_entrypoint.py::test_a_clean_exit_that_wrote_no_result_is_not_a_solve`<br/>`tests/test_run_telemac_chain.py::test_classify_exit_clean_exit_but_no_correct_end_is_error` |
 | **EmptyResultsRefuses** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_case_declaring_no_results_refuses` |
 | **MetricsAlways** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_child_that_dies_still_leaves_the_metrics_written` |
-| **NoSecondParserOfTheFormat** | `resultReader`, `resultPostprocess`, `runReader`, `deckAuthor` | `tests/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format`<br/>`tests/test_model_conformance.py::test_the_model_conforms_to_the_tree` |
-| **OutflowStageIsNormalDepth** | `deckStatements`, `deckAuthor` | `tests/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_decks_discharge`<br/>`tests/test_telemac_outflow_stage.py::test_the_friction_slope_is_the_measured_fall_over_the_measured_length`<br/>`tests/test_telemac_outflow_stage.py::test_the_outflow_face_is_measured_as_a_transect_of_the_painted_bed`<br/>`tests/test_telemac_outflow_stage.py::test_the_reach_length_is_walked_along_the_line_the_mesh_was_built_over`<br/>`tests/test_telemac_outflow_stage.py::test_a_bigger_discharge_stands_higher_in_the_same_channel`<br/>`tests/test_telemac_outflow_stage.py::test_strickler_and_its_reciprocal_manning_derive_the_same_stage`<br/>`tests/test_telemac_outflow_stage.py::test_an_input_the_stage_cannot_be_derived_from_refuses_by_name`<br/>`tests/test_telemac_outflow_stage.py::test_the_deck_states_the_stage_and_every_input_it_was_derived_from`<br/>`tests/test_telemac_outflow_stage.py::test_the_initial_depth_is_no_longer_the_level_the_run_is_anchored_at`<br/>`tests/test_telemac_outflow_stage.py::test_the_stage_is_derived_at_the_roughness_the_deck_goes_on_to_write` |
+| **NoSecondParserOfTheFormat** | `resultReader`, `resultPostprocess`, `runReader`, `assembler` | `tests/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format`<br/>`tests/test_model_conformance.py::test_the_model_conforms_to_the_tree` |
+| **OutflowStageIsNormalDepth** | `steeringStatements`, `assembler` | `tests/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge`<br/>`tests/test_telemac_outflow_stage.py::test_the_friction_slope_is_the_measured_fall_over_the_measured_length`<br/>`tests/test_telemac_outflow_stage.py::test_the_outflow_face_is_measured_as_a_transect_of_the_painted_bed`<br/>`tests/test_telemac_outflow_stage.py::test_the_reach_length_is_walked_along_the_line_the_mesh_was_built_over`<br/>`tests/test_telemac_outflow_stage.py::test_a_bigger_discharge_stands_higher_in_the_same_channel`<br/>`tests/test_telemac_outflow_stage.py::test_strickler_and_its_reciprocal_manning_derive_the_same_stage`<br/>`tests/test_telemac_outflow_stage.py::test_an_input_the_stage_cannot_be_derived_from_refuses_by_name`<br/>`tests/test_telemac_outflow_stage.py::test_the_run_states_the_stage_and_every_input_it_was_derived_from`<br/>`tests/test_telemac_outflow_stage.py::test_the_initial_depth_is_no_longer_the_level_the_run_is_anchored_at`<br/>`tests/test_telemac_outflow_stage.py::test_the_stage_is_derived_at_the_roughness_the_run_goes_on_to_write` |
 | **ReadersNeverImportTheWorker** | `runReader`, `diagnosticsReader` | `tests/test_model_conformance.py::test_the_model_conforms_to_the_tree` |
-| **ServerFactsDoctrine** | `deckAuthor`, `rainDeckAuthor`, `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding`<br/>`workers/telemac/test_entrypoint.py::test_the_frame_count_is_measured_off_the_file_the_facts_name`<br/>`workers/telemac/test_entrypoint.py::test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero` |
+| **ServerFactsDoctrine** | `assembler`, `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding`<br/>`workers/telemac/test_entrypoint.py::test_the_frame_count_is_measured_off_the_file_the_facts_name`<br/>`workers/telemac/test_entrypoint.py::test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero` |
 | **SolveTimeoutTypesNotHangs** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_the_solve_bound_defaults_to_a_day_and_the_knob_states_it`<br/>`workers/telemac/test_entrypoint.py::test_a_child_that_outruns_the_bound_is_killed_and_still_reports` |
 | **StrictGateRefusesUnknownFields** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_the_gate_refuses_an_unknown_key_and_names_the_parser`<br/>`workers/telemac/test_entrypoint.py::test_a_case_with_an_unknown_field_refuses` |
 | **WorkersNeverImportServer** | `workerEntrypoint`, `telapyChild` | `tests/test_model_conformance.py::test_the_model_conforms_to_the_tree` |

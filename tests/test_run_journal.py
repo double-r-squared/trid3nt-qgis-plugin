@@ -47,7 +47,7 @@ def _record(**overrides):
                                     real_source="national_water_model")],
         result=SimpleNamespace(mesh_size_m=30.0),
         wall_seconds=91.4, origin="session",
-        executed=["aoi", "deck", "solve"], replayed=[], notes=[],
+        executed=["aoi", "run", "solve"], replayed=[], notes=[],
     )
     base.update(overrides)
     return journal.build_record(**base)
@@ -60,7 +60,7 @@ def test_a_run_record_carries_the_run_its_template_and_where_it_came_from():
     assert rec["template"] == "telemac_do_sag" and rec["engine"] == "telemac2d"
     assert rec["origin"] == "session"
     assert rec["recorded_at"].endswith("+00:00")
-    assert rec["executed"] == ["aoi", "deck", "solve"] and rec["replayed"] == []
+    assert rec["executed"] == ["aoi", "run", "solve"] and rec["replayed"] == []
 
 
 def test_a_sheet_row_carries_its_door_and_its_basis_not_just_the_number():

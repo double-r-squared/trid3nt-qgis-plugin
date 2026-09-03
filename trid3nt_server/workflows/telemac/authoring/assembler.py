@@ -1,17 +1,21 @@
-"""The DECK step: params + forcing -> the run's own record of what it solves.
+"""The approved sheet + the accepted mesh -> the run directory the box receives.
 
-One serialization hook for the TELEMAC reach family. Everything the deck writes
-is either a declared param, a produced artifact, or a class the substance module
-resolved - so what the solver reads is exactly what the approved sheet said.
+ONE flow for every TELEMAC simulation the server authors. The sheet is
+serialized into the engine's own steering files, every field those files name is
+written beside them, the whole directory is uploaded, and the manifest that says
+which engine reads which file is written last. What travels to the worker is
+therefore the mesh, the authored steering files and the files they name; nothing
+the container receives is a knob it has to interpret.
 
-The sheet is SERIALIZED HERE, into the engine's own steering files, against the
-liquid-boundary order the accepted mesh measured. What travels to the worker is
-therefore the mesh, the authored decks and the files they name: which engine to
-run, which deck it reads and which results must exist for the run to have
-happened. Nothing the container receives is a knob it has to interpret.
+What differs between families is DATA, not a branch: :data:`_RECIPES` keys each
+family to its engine class, the names its run directory holds its files under,
+and the writer that fills it. The two entry points below prepare their own sheet
+- a reach settles a release point and classifies a substance, a catchment
+summons an infiltration surface and a storm - and hand it to the same
+:func:`_assemble`, which is where every run becomes a staged one.
 
 Every optional block is threaded ONLY when it was asked for, so a run that does
-not use a module leaves the deck byte-identical to the historical one.
+not use a module leaves the steering file byte-identical to the historical one.
 """
 
 from __future__ import annotations
@@ -19,8 +23,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts import new_ulid
 
@@ -32,7 +38,13 @@ from trid3nt_server.workflows.mesh.shared.nodes import (
 from trid3nt_server.workflows.mesh.topology import read_topology
 
 from . import author
-from ..helpers.errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
+from .open_water import OpenWaterError, case_section, stage_telemac_manifest
+from ..helpers.catchment import mesh_nodes
+from ..helpers.errors import (
+    RainOnGridError,
+    TelemacDyeScenarioError,
+    TelemacDyeScenarioInputError,
+)
 from ..helpers.reach import MESH_H_FLOOR_M, coerce_lonlat_point, suggest_time_step_s
 from ..helpers.substance import (
     arm_sediment_modules,
@@ -42,65 +54,52 @@ from ..helpers.substance import (
     sanitize_substance,
 )
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.deck")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.assembler")
 
-__all__ = ["WriteDeck", "stage_manifest", "write_reach_deck"]
+__all__ = ["Assemble", "assemble_rain_on_grid", "assemble_reach"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
-#: The names the run directory holds the reach's files under. They are the
+#: The names the run directory holds a REACH's files under. They are the
 #: ``.cas``'s own GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, so the
 #: steering file reads as the record of the run it is.
-_GEOMETRY_DEST = "river.slf"
-_BOUNDARY_DEST = "river.cli"
-_STEERING = "t2d_river.cas"
-_RESULT = "r2d_river.slf"
+_REACH_GEOMETRY = "river.slf"
+_REACH_BOUNDARY = "river.cli"
+_REACH_STEERING = "t2d_river.cas"
+_REACH_RESULT = "r2d_river.slf"
 #: The engine's perfect-restart record - the full state at the last time step in
 #: double precision - which is what a continuation reads. The graphic results
 #: file is a picture of the run; this is the run's last instant.
 _RESTART = "restart_river.slf"
 #: What a continued run's PREVIOUS COMPUTATION FILE is called in the run
 #: directory. The engine reads a file, not a URI, so the previous run's restart
-#: record is staged under one name and the deck names that.
+#: record is staged under one name and the steering file names that.
 _PREVIOUS_DEST = "previous.slf"
 
-#: Which telapy engine class runs a reach.
-_MODULE = "telemac2d"
+#: The same four names for a CATCHMENT.
+_ROG_GEOMETRY = "rog.slf"
+_ROG_BOUNDARY = "rog.cli"
+_ROG_STEERING = "t2d_rog.cas"
+_ROG_RESULT = "r2d_rog.slf"
+
+#: The mesh boundary ROLE a catchment's outlet carries. TELEMAC prescribes a
+#: water level with a free velocity there, which is the free exit a rain-fed
+#: catchment drains through; the hydrograph is the flux across the nodes that
+#: took it.
+_OUTLET_ROLE = "outflow"
 
 #: The bed-load transport laws GAIA can run with suspension off. Anything else
 #: (Engelund-Hansen total load etc.) falls back to the default rather than
 #: wedging the solve.
 _BEDLOAD_FORMULAE = (1, 2, 7)
-#: The friction laws the deck interprets ``friction_coefficient`` under:
+#: The friction laws the steering file interprets ``friction_coefficient`` under:
 #: 2 = Chezy, 3 = Strickler, 4 = Manning.
 _FRICTION_LAWS = (2, 3, 4)
 _DREDGE_MODES = ("scheduled", "criterion")
 
-
-def stage_manifest(case: Mapping[str, Any], run_tag: str, *,
-                   outputs: list[str],
-                   inputs: list[dict[str, str]] | None = None) -> str:
-    """Write the worker manifest for an authored case -> its ``s3://`` URI.
-
-    ``inputs`` is what the launcher stages into the run directory before the
-    container starts, ``{gs_uri, dest}`` per entry: the accepted mesh and the
-    decks this step authored. The document itself is written by the ONE manifest
-    writer, under the ``case`` key the worker dispatches on.
-    """
-    from .open_water import OpenWaterError, stage_telemac_manifest
-
-    try:
-        return stage_telemac_manifest(
-            section="case", config=case, run_tag=run_tag, outputs=outputs,
-            inputs=inputs, prefix="telemac")
-    except OpenWaterError as exc:
-        raise TelemacDyeScenarioError("TELEMAC_DYE_STAGING_FAILED",
-                                      str(exc)) from exc
-
-
-#: Which TELEMAC module the class's deck COUPLES the solve with. The author
-#: writes the ``COUPLING WITH`` line off this same class, and the word rides in
-#: the manifest because the worker's runner choice turns on it.
+#: Which TELEMAC module the class COUPLES the solve with. The author writes the
+#: ``COUPLING WITH`` line off this same class, and the word rides in the manifest
+#: because the worker's runner choice turns on it.
 _CLASS_COUPLING = {"decay": "waqtel", "do_sag": "waqtel", "sediment": "gaia"}
 
 #: How far down its own reach a DO-sag outfall sits. The reach was navigated
@@ -109,6 +108,167 @@ _CLASS_COUPLING = {"decay": "waqtel", "do_sag": "waqtel", "sediment": "gaia"}
 _DO_SAG_OUTFALL_FRAC = 0.02
 
 
+@dataclass(frozen=True, slots=True)
+class _Recipe:
+    """One family's run directory: which engine, which files, where it stages.
+
+    The per-family AUTHOR is the only code :func:`_assemble` does not hold, and
+    it is a value here rather than a branch there: adding a family is a row plus
+    a writer, never a fork in the flow.
+    """
+
+    #: The telapy engine class the worker dispatches this run to.
+    module: str
+    #: The GEOMETRY FILE, BOUNDARY CONDITIONS FILE and RESULTS FILE the steering
+    #: file names, under the names the run directory holds them by.
+    geometry: str
+    boundary: str
+    result: str
+    #: The steering file itself.
+    steering: str
+    #: Where the manifest and the authored files are staged in the cache bucket.
+    prefix: str
+    #: ``(rundir, sheet, geometry, boundary, results, steering, ...) -> report``.
+    author: Callable[..., Mapping[str, Any]]
+
+
+_RECIPES: dict[str, _Recipe] = {
+    "reach": _Recipe(
+        module="telemac2d", geometry=_REACH_GEOMETRY, boundary=_REACH_BOUNDARY,
+        result=_REACH_RESULT, steering=_REACH_STEERING, prefix="telemac",
+        author=author.author_reach),
+    "rain_on_grid": _Recipe(
+        module="telemac2d", geometry=_ROG_GEOMETRY, boundary=_ROG_BOUNDARY,
+        result=_ROG_RESULT, steering=_ROG_STEERING, prefix="telemac_rog",
+        author=author.author_rain_on_grid),
+}
+
+
+# --------------------------------------------------------------------------- #
+# The one flow.
+# --------------------------------------------------------------------------- #
+def _run_directory(run_tag: str) -> Path:
+    rundir = Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"telemac-{run_tag}"
+    rundir.mkdir(parents=True, exist_ok=True)
+    return rundir
+
+
+def _cache_bucket() -> str:
+    bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
+    if not bucket:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_STAGING_FAILED",
+            "TRID3NT_CACHE_BUCKET must be set to stage an authored run.")
+    return bucket
+
+
+def _upload_authored(rundir: Path, run_tag: str, names: Sequence[str],
+                     prefix: str) -> list[dict[str, str]]:
+    """Upload every file this authoring wrote -> the manifest rows staging them."""
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
+
+    bucket = _cache_bucket()
+    s3 = _get_s3_client()
+    rows: list[dict[str, str]] = []
+    for name in names:
+        key = f"{prefix}/{run_tag}/{name}"
+        s3.put_object(Bucket=bucket, Key=key, Body=(rundir / name).read_bytes())
+        rows.append({"gs_uri": f"s3://{bucket}/{key}", "dest": name})
+    return rows
+
+
+def _write_manifest(case: Mapping[str, Any], run_tag: str, *, outputs: list[str],
+                    inputs: list[dict[str, str]], prefix: str) -> str:
+    """Write the worker manifest for an authored case -> its ``s3://`` URI.
+
+    The document itself is written by the ONE manifest writer, under the ``case``
+    key the worker dispatches on.
+    """
+    try:
+        return stage_telemac_manifest(
+            section="case", config=case, run_tag=run_tag, outputs=outputs,
+            inputs=inputs, prefix=prefix)
+    except OpenWaterError as exc:
+        raise TelemacDyeScenarioError("TELEMAC_STAGING_FAILED", str(exc)) from exc
+
+
+async def _assemble(family: str, *, sheet: Mapping[str, Any],
+                    server_facts: Mapping[str, Any], results: list[str],
+                    outputs: list[str], mesh_inputs: list[dict[str, str]],
+                    author_kwargs: Mapping[str, Any],
+                    coupling: str | None = None,
+                    continue_from: str | None = None) -> dict[str, Any]:
+    """Sheet in, staged run directory out. The flow every family runs.
+
+    Mint the run's tag, let the family's own writer fill a directory under it,
+    upload everything it wrote beside the mesh the solve runs on, and write the
+    manifest that names the case last - so a manifest exists only for a run whose
+    every file is already where the launcher will look for it.
+
+    ``coupling`` and ``continue_from`` are the two facts a steering file cannot
+    state to the WORKER: which module's launcher can drive the case, and which
+    staged file it restarts from. Both are absent on a run that has neither.
+    """
+    recipe = _RECIPES[family]
+    run_tag = new_ulid()
+    rundir = _run_directory(run_tag)
+    written = await asyncio.to_thread(partial(
+        recipe.author, rundir, sheet=sheet, geometry=recipe.geometry,
+        boundary=recipe.boundary, results=recipe.result,
+        steering=recipe.steering, **dict(author_kwargs)))
+    # Every file the author wrote, under its path INSIDE the run directory: the
+    # oil module's user fortran is a directory the engine compiles, so the walk
+    # is recursive and the manifest dest carries the same relative path.
+    authored = sorted(str(p.relative_to(rundir))
+                      for p in rundir.rglob("*") if p.is_file())
+    inputs = [*mesh_inputs,
+              *await asyncio.to_thread(_upload_authored, rundir, run_tag,
+                                       authored, recipe.prefix)]
+    case = case_section(
+        module=recipe.module, steering=recipe.steering, results=results,
+        # The engine compiles the DIRECTORY the steering file names, so the
+        # manifest channel carries the same directory the author wrote into.
+        user_fortran=written.get("user_fortran"),
+        coupling=coupling, continue_from=continue_from,
+        server_facts=server_facts)
+    manifest_uri = await asyncio.to_thread(
+        _write_manifest, case, run_tag, outputs=outputs, inputs=inputs,
+        prefix=recipe.prefix)
+    logger.info("telemac %s staged run_tag=%s steering=%s results=%s authored=%s "
+                "-> %s", family, run_tag, recipe.steering, results, authored,
+                manifest_uri)
+    return {"run_tag": run_tag, "rundir": str(rundir), "sheet": dict(sheet),
+            "case": case, "manifest_uri": manifest_uri, "authored": authored,
+            "written": dict(written), "outputs": outputs, "inputs": inputs,
+            "result_basename": recipe.result}
+
+
+def _mesh_field(mesh: Mapping[str, Any], name: str, *,
+                missing: Callable[[str], Exception]) -> str:
+    """One field of the ACCEPTED mesh's record, or the refusal that names it.
+
+    A mesh record missing any of them refuses: falling through would solve on a
+    mesh nobody accepted, under the accepted mesh's name.
+    """
+    uri = (mesh or {}).get(name)
+    if not uri:
+        raise missing(
+            f"the mesh for this run carries no {name}, so the accepted mesh "
+            f"cannot be staged (mesh record: {sorted((mesh or {}))}).")
+    return str(uri)
+
+
+def _reach_mesh_missing(message: str) -> Exception:
+    return TelemacDyeScenarioError("TELEMAC_MESH_NOT_ACCEPTED", message)
+
+
+def _catchment_mesh_missing(message: str) -> Exception:
+    return RainOnGridError(message, error_code="TELEMAC_ROG_MESH_NOT_ACCEPTED")
+
+
+# --------------------------------------------------------------------------- #
+# The reach: what a spill, a scour or a sag is solved as.
+# --------------------------------------------------------------------------- #
 def _class_files(substance_class: str, *,
                  dredging: bool) -> tuple[list[str], list[str]]:
     """What a class MUST produce, and everything the supervisor brings back.
@@ -119,8 +279,8 @@ def _class_files(substance_class: str, *,
     open, so it also names the inputs the run was handed, which is how a solved
     run stays readable from its own prefix.
     """
-    results = [_RESULT]
-    outputs = [_RESULT, _GEOMETRY_DEST, _BOUNDARY_DEST, _STEERING,
+    results = [_REACH_RESULT]
+    outputs = [_REACH_RESULT, _REACH_GEOMETRY, _REACH_BOUNDARY, _REACH_STEERING,
                "full_listing.log", "telemac_metrics.json"]
     if substance_class not in _CLASS_COUPLING:
         # Every run on the stepped arm leaves the state a continuation reads,
@@ -147,39 +307,6 @@ def _class_files(substance_class: str, *,
         # the WAQTEL steering file: the forcing this run actually applied.
         outputs.append(author.WAQTEL_FILENAME)
     return results, outputs
-
-
-def _user_fortran_dir(written: Mapping[str, Any]) -> str | None:
-    """The user-Fortran DIRECTORY the author reported, or ``None`` when it wrote none.
-
-    A class whose deck compiles user Fortran states it twice by construction -
-    the steering file's own keyword and the manifest field the runner reads - so
-    both are taken from the ONE report the author hands back rather than from a
-    second opinion here.
-    """
-    fortran = (written or {}).get("fortran")
-    return str(Path(str(fortran)).parent) if fortran else None
-
-
-def _authoring_dir(run_tag: str) -> Path:
-    rundir = Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"telemac-{run_tag}"
-    rundir.mkdir(parents=True, exist_ok=True)
-    return rundir
-
-
-def _mesh_field(mesh: Mapping[str, Any], name: str) -> str:
-    """One field of the ACCEPTED mesh's record, or the refusal that names it.
-
-    A mesh record missing any of them refuses: falling through would solve on a
-    mesh nobody accepted, under the accepted mesh's name.
-    """
-    uri = (mesh or {}).get(name)
-    if not uri:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_MESH_NOT_ACCEPTED",
-            f"the mesh for this run carries no {name}, so the accepted mesh "
-            f"cannot be staged (mesh record: {sorted((mesh or {}))}).")
-    return str(uri)
 
 
 def _face_section(nodes: Sequence[int], node_xy: Any,
@@ -326,27 +453,8 @@ def _mesh_nodes(mesh: Mapping[str, Any]) -> tuple[Any, Any]:
     digs back to.
     """
     points, _cells, z, _lonlat = read_accepted_mesh_nodes(
-        _mesh_field(mesh, "display_uri"))
+        _mesh_field(mesh, "display_uri", missing=_reach_mesh_missing))
     return points, z
-
-
-def _stage_authored(rundir: Path, run_tag: str,
-                    names: list[str]) -> list[dict[str, str]]:
-    """Upload every deck this step authored -> the manifest rows staging them."""
-    from trid3nt_server.workflows.solver.solver import _get_s3_client
-
-    bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
-    if not bucket:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_STAGING_FAILED",
-            "TRID3NT_CACHE_BUCKET must be set to stage the authored reach decks.")
-    s3 = _get_s3_client()
-    rows: list[dict[str, str]] = []
-    for name in names:
-        key = f"telemac/{run_tag}/{name}"
-        s3.put_object(Bucket=bucket, Key=key, Body=(rundir / name).read_bytes())
-        rows.append({"gs_uri": f"s3://{bucket}/{key}", "dest": name})
-    return rows
 
 
 def _resolved_physics(friction_coefficient: float | None, friction_law: Any,
@@ -354,8 +462,8 @@ def _resolved_physics(friction_coefficient: float | None, friction_law: Any,
                       tracer_diffusivity: float | None) -> dict[str, Any]:
     """Only the constitutive overrides the user actually set, range-checked.
 
-    Anything unset is ABSENT from the deck, so the author's own default table
-    stands and the deck emits the historical literal.
+    Anything unset is ABSENT from the sheet, so the author's own default table
+    stands and the steering file emits the historical literal.
     """
     from trid3nt_server.workflows.shared.physics_registry import (
         PhysicsRegistryError,
@@ -403,7 +511,7 @@ def _sediment_block(substance: str, payload: Any, *, erodible: bool,
         "grain_size_um": sed_grain_um, "sediment_density": 2650.0,
         "erodible_bed": bool(erodible),
     }
-    # The erodible-bed tuning rides ONLY when armed AND set; unset lets the deck
+    # The erodible-bed tuning rides ONLY when armed AND set; unset lets the
     # author's own defaults apply, which keeps a non-erodible run byte-identical.
     if erodible and bed_thickness_m is not None:
         block["bed_thickness_m"] = float(bed_thickness_m)
@@ -444,7 +552,7 @@ def _substance_block(substance: str, *, erodible_bed: bool | None,
                      dredge_dig_depth_m: float | None,
                      dredge_bank_offset_m: float,
                      ) -> tuple[str, Any, bool, dict[str, Any]]:
-    """The class, its payload, whether the bed is erodible, and the deck block."""
+    """The class, its payload, whether the bed is erodible, and the sheet block."""
     substance_class, payload = classify_substance(substance)
     erodible, gradation, dredge = arm_sediment_modules(
         substance, erodible_bed=erodible_bed,
@@ -452,8 +560,8 @@ def _substance_block(substance: str, *, erodible_bed: bool | None,
 
     # SINGLE SOURCE OF TRUTH: an armed erodible bed IS a GAIA morphodynamics run,
     # so it MUST route through the sediment class. Otherwise the flag and the
-    # class gate diverge - erodible_bed reads True while the deck couples nothing,
-    # and the run only LOOKS morphodynamic.
+    # class gate diverge - erodible_bed reads True while nothing is coupled, and
+    # the run only LOOKS morphodynamic.
     if erodible and substance_class != "sediment":
         logger.info("telemac: erodible bed armed but classify(%r)=%s - forcing the "
                     "sediment class (GAIA morphodynamics)", substance, substance_class)
@@ -550,7 +658,7 @@ async def _settle_release(
     return (contained.lon, contained.lat), contained.note
 
 
-async def write_reach_deck(
+async def assemble_reach(
     *,
     reach: dict[str, Any],
     seed: dict[str, Any],
@@ -594,7 +702,7 @@ async def write_reach_deck(
     do_sag_config: dict[str, Any] | None = None,
     continue_from: str | None = None,
 ) -> dict[str, Any]:
-    """Serialize the approved sheet into the run's deck + the run meta.
+    """Serialize the approved sheet into the reach's staged run + the run meta.
 
     The MESH is the accepted one: its geometry and its boundary roles are staged
     for the solve, so the run is solved on the triangulation that was presented
@@ -603,28 +711,29 @@ async def write_reach_deck(
 
     The CENTERLINE is the chain's own declared row - the line the section was cut
     between, the mesh was built over and the canvas shows. There is exactly one,
-    so the release the deck carries, the marker on the map and the domain the
+    so the release the run carries, the marker on the map and the domain the
     solver integrates cannot describe three different rivers.
 
     The RELEASE POINT is settled against that centerline BEFORE anything is
     staged: a supplied point outside the domain polygon refuses while the user can
     still move it, one inside it is put on the flowline, and an unplaced one walks
     ``spill_fraction`` along the same line. Only then does the marker go on the
-    canvas - at the point the deck actually carries - saying out loud whether the
-    user placed it or the pipeline derived it.
+    canvas - at the point the steering file actually carries - saying out loud
+    whether the user placed it or the pipeline derived it.
 
     ``continue_from`` is a previous run's RESTART record. It is staged like any
-    other input and the deck names it as the engine's PREVIOUS COMPUTATION FILE,
-    so a continued run is an ordinary run whose initial state came out of another
-    one - there is no resident solver anywhere for it to re-enter. The scenario
-    it solves is the SAME one, re-authored over the extended horizon on the same
-    absolute clock, which is why the instant that file stands at is read here.
+    other input and the steering file names it as the engine's PREVIOUS
+    COMPUTATION FILE, so a continued run is an ordinary run whose initial state
+    came out of another one - there is no resident solver anywhere for it to
+    re-enter. The scenario it solves is the SAME one, re-authored over the
+    extended horizon on the same absolute clock, which is why the instant that
+    file stands at is read here.
     """
     substance = sanitize_substance(substance)
     release_pair = coerce_lonlat_point(release_coords)
     seed_lon, seed_lat = float(seed["lon"]), float(seed["lat"])
 
-    # The granularity the deck records is the one the ACCEPTED mesh was built at,
+    # The granularity the sheet records is the one the ACCEPTED mesh was built at,
     # measured on its own cells; the asked edge stands only until a mesh exists to
     # measure. Nothing here re-derives an edge from a channel width nobody surveyed.
     measured = mesh.get("min_edge_m")
@@ -649,15 +758,15 @@ async def write_reach_deck(
         dredge_crit_depth_m=dredge_crit_depth_m, dredge_dig_depth_m=dredge_dig_depth_m,
         dredge_bank_offset_m=dredge_bank_offset_m)
 
-    # The class the DECK states - the one the author branches on, and the one a
+    # The class the SHEET states - the one the author branches on, and the one a
     # continuation is refused on. Reading it off the substance word would name a
     # run "tracer" that the author wrote a WAQTEL coupling into.
-    deck_class = ("do_sag" if do_sag_config
-                  else str(class_block.get("substance_class") or "tracer"))
-    coupled_with = _CLASS_COUPLING.get(deck_class)
+    run_class = ("do_sag" if do_sag_config
+                 else str(class_block.get("substance_class") or "tracer"))
+    coupled_with = _CLASS_COUPLING.get(run_class)
     if continue_from and coupled_with:
         raise TelemacDyeScenarioInputError(
-            f"a {deck_class} reach couples the solve with {coupled_with.upper()}, "
+            f"a {run_class} reach couples the solve with {coupled_with.upper()}, "
             "which runs the module's own launcher rather than the stepped arm; "
             "continuing one has never been run and this refuses rather than "
             "report it as a run that was. Drop continue_from, or run the "
@@ -666,7 +775,6 @@ async def write_reach_deck(
     from trid3nt_server.workflows.telemac.release_layer import publish_release_point
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
-    run_tag = new_ulid()
     artifact = mesh.get("artifact")
     utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
     # The centerline is read head-to-tail from the seed the navigate was walked
@@ -680,7 +788,7 @@ async def write_reach_deck(
     # source is placed just inside that top rather than on it: a source node
     # sitting on the prescribed-flowrate face would compete with the boundary
     # condition for the same node.
-    if deck_class == "do_sag":
+    if run_class == "do_sag":
         spill_fraction = _DO_SAG_OUTFALL_FRAC
     release_lonlat, release_note = await _settle_release(
         release_pair, mesh=mesh, centerline=centerline, centerline_utm=centerline_utm,
@@ -702,7 +810,7 @@ async def write_reach_deck(
     # the metrics report cannot describe a raster the solve never read.
     bed_source = str((mesh.get("provenance") or {}).get("bed_source") or "staged")
     rain_mm_day = (rain or {}).get("mm_per_day")
-    deck: dict[str, Any] = {
+    sheet: dict[str, Any] = {
         "name": reach["slug"],
         # The seed the one centerline was navigated from - the manifest's record
         # of which stretch this run meshed.
@@ -713,7 +821,7 @@ async def write_reach_deck(
         **class_block,
         **_do_sag_block(do_sag_config),
         # Wind rides ONLY when a positive speed was asked for; absent otherwise, so
-        # the deck author emits no wind block.
+        # the author emits no wind block.
         **({"wind_speed_mps": float(wind_speed_mps),
             "wind_dir_from_deg": float(wind_direction_deg)}
            if wind_speed_mps and float(wind_speed_mps) > 0.0 else {}),
@@ -743,7 +851,7 @@ async def write_reach_deck(
         "source_q_m3s": float(source_q_m3s),
         "inflow_q_m3s": float(carrier_discharge["m3s"]),
         "duration_s": float(sim_duration_s),
-        # WHERE this run picks up from, and WHEN. The deck records the staged
+        # WHERE this run picks up from, and WHEN. The sheet records the staged
         # NAME because the engine reads a file: the URI it was staged from is
         # the ask, and the ask is the run's inputs list. The instant comes off
         # that file, and every forcing series is written over the horizon it
@@ -755,61 +863,49 @@ async def write_reach_deck(
     }
 
     topology = await asyncio.to_thread(
-        read_topology, _mesh_field(mesh, "topology_uri"))
+        read_topology, _mesh_field(mesh, "topology_uri",
+                                   missing=_reach_mesh_missing))
     node_xy, node_bed = await asyncio.to_thread(_mesh_nodes, mesh)
-    rundir = _authoring_dir(run_tag)
-    written = await asyncio.to_thread(
-        author.author_reach_deck, rundir, deck=deck,
-        geometry=_GEOMETRY_DEST, boundary=_BOUNDARY_DEST, results=_RESULT,
-        restart=None if coupled_with else _RESTART, cas_name=_STEERING,
-        liquid_boundary_order=topology["liquid_boundary_order"],
-        liquid_boundary_prescribes=topology["liquid_boundary_prescribes"],
-        bed=_measured_reach(topology["roles"], node_xy, node_bed, centerline_utm),
-        source_utm=_to_utm_point(release_lonlat, utm_epsg),
-        centerline_utm=centerline_utm,
-        reach_polygon_utm=(await asyncio.to_thread(_to_utm, reach_polygon, utm_epsg)
-                           if class_block.get("dredging") else None),
-        node_xy=node_xy, node_bed=node_bed)
-    from .open_water import case_section
-
-    results, outputs = _class_files(deck_class,
+    results, outputs = _class_files(run_class,
                                     dredging=bool(class_block.get("dredging")))
-    # Every file the author wrote, under its path INSIDE the run directory: the
-    # oil module's user fortran is a directory the engine compiles, so the walk
-    # is recursive and the manifest dest carries the same relative path.
-    authored = sorted(str(p.relative_to(rundir))
-                      for p in rundir.rglob("*") if p.is_file())
-    return {
-        "deck": deck,
-        "run_tag": run_tag,
-        "case": case_section(
-            module=_MODULE, steering=_STEERING, results=results,
-            # The engine compiles the DIRECTORY the steering file names, so the
-            # manifest channel carries the same directory the author wrote into.
-            user_fortran=_user_fortran_dir(written),
-            coupling=coupled_with,
-            continue_from=_PREVIOUS_DEST if continue_from else None,
-            # What the SERVER measured and the container cannot learn from the
-            # files it is handed. The worker copies it into its metrics verbatim.
-            server_facts={
-                "utm_epsg": utm_epsg,
-                "bbox": [round(float(v), 6)
-                         for v in (getattr(artifact, "bbox", None) or ())],
-                "npoin": int(mesh.get("node_count") or 0),
-                "nelem": int(mesh.get("element_count") or 0),
-                "mesh_size_m": mesh_size_m,
-                # WHICH file carries the time series. The author wrote the
-                # RESULTS FILE statement, so the name is the server's; the
-                # worker copies it and measures the file it names.
-                "result_slf": _RESULT,
-                "bed_source": bed_source}),
-        "outputs": outputs,
-        "inputs": [
-            {"gs_uri": _mesh_field(mesh, "slf_uri"), "dest": _GEOMETRY_DEST},
-            {"gs_uri": _mesh_field(mesh, "cli_uri"), "dest": _BOUNDARY_DEST},
+    staged = await _assemble(
+        "reach", sheet=sheet,
+        server_facts={
+            "utm_epsg": utm_epsg,
+            "bbox": [round(float(v), 6)
+                     for v in (getattr(artifact, "bbox", None) or ())],
+            "npoin": int(mesh.get("node_count") or 0),
+            "nelem": int(mesh.get("element_count") or 0),
+            "mesh_size_m": mesh_size_m,
+            # WHICH file carries the time series. The author wrote the RESULTS
+            # FILE statement, so the name is the server's; the worker copies it
+            # and measures the file it names.
+            "result_slf": _REACH_RESULT,
+            "bed_source": bed_source},
+        results=results, outputs=outputs,
+        mesh_inputs=[
+            {"gs_uri": _mesh_field(mesh, "slf_uri", missing=_reach_mesh_missing),
+             "dest": _REACH_GEOMETRY},
+            {"gs_uri": _mesh_field(mesh, "cli_uri", missing=_reach_mesh_missing),
+             "dest": _REACH_BOUNDARY},
             *([{"gs_uri": str(continue_from), "dest": _PREVIOUS_DEST}]
-              if continue_from else []),
-            *await asyncio.to_thread(_stage_authored, rundir, run_tag, authored)],
+              if continue_from else [])],
+        coupling=coupled_with,
+        continue_from=_PREVIOUS_DEST if continue_from else None,
+        author_kwargs={
+            "restart": None if coupled_with else _RESTART,
+            "liquid_boundary_order": topology["liquid_boundary_order"],
+            "liquid_boundary_prescribes": topology["liquid_boundary_prescribes"],
+            "bed": _measured_reach(topology["roles"], node_xy, node_bed,
+                                   centerline_utm),
+            "source_utm": _to_utm_point(release_lonlat, utm_epsg),
+            "centerline_utm": centerline_utm,
+            "reach_polygon_utm": (
+                await asyncio.to_thread(_to_utm, reach_polygon, utm_epsg)
+                if class_block.get("dredging") else None),
+            "node_xy": node_xy, "node_bed": node_bed})
+    return {
+        **staged,
         "mesh_id": mesh.get("mesh_id"),
         "substance": substance,
         "substance_class": substance_class,
@@ -822,7 +918,7 @@ async def write_reach_deck(
         "time_step_s": time_step_s,
         "seed_source": seed.get("source"),
         # The pre-flight's record of what it did to a supplied release point.
-        # It rides the run META rather than the deck: the worker is handed the
+        # It rides the run META rather than the sheet: the worker is handed the
         # settled coordinates and no account of how they were settled.
         "release_note": release_note,
         "discharge_note": carrier_discharge.get("note"),
@@ -832,11 +928,157 @@ async def write_reach_deck(
     }
 
 
-class WriteDeck:
-    """Per-engine deck serialization. One hook per engine, one shared skeleton."""
+# --------------------------------------------------------------------------- #
+# The catchment: what a storm over a basin is solved as.
+# --------------------------------------------------------------------------- #
+def _outlet_boundary(mesh: Mapping[str, Any]) -> tuple[int, str]:
+    """The declared OUTLET as ``(number, what its own .cli quad prescribes)``.
+
+    The solver numbers its liquid boundaries by walking the geometry, the accepted
+    topology recorded that numbering when the ``.cli`` was written, and the solver
+    prints one flux per number in its own volume balance. So the number is what
+    turns "the outlet" into the series the hydrograph reads.
+
+    The prescription rides with it because this run writes NO value at that
+    number: the outlet is solved on its code alone, and the steering file states
+    which code that is rather than claiming a boundary condition nobody measured.
+    """
+    topology = read_topology(_mesh_field(mesh, "topology_uri",
+                                         missing=_catchment_mesh_missing))
+    order = list(topology["liquid_boundary_order"])
+    if _OUTLET_ROLE not in topology["roles"] or _OUTLET_ROLE not in order:
+        raise RainOnGridError(
+            f"no boundary node of the catchment mesh took the {_OUTLET_ROLE!r} "
+            "role, so the basin has no outlet to drain through and no hydrograph "
+            "to measure. Move the pour point onto the basin's own outlet, or mesh "
+            "it finer so a boundary node reaches it.",
+            error_code="TELEMAC_ROG_NO_OUTLET_NODES")
+    number = order.index(_OUTLET_ROLE) + 1
+    return number, str(topology["liquid_boundary_prescribes"][number - 1])
+
+
+async def assemble_rain_on_grid(
+    *,
+    catchment: dict[str, Any],
+    infiltration: dict[str, Any],
+    rain: dict[str, Any],
+    mesh_resolution_m: float | None = None,
+    time_step_s: float,
+    output_interval_min: float | None = None,
+) -> dict[str, Any]:
+    """Serialize the approved sheet into the catchment's staged run + the run meta.
+
+    ``catchment`` is the ACCEPTED mesh: its geometry, its boundary conditions and
+    the outlet role its pour point matched are what the solve runs on, so the
+    steering file is authored against the triangulation that was presented rather
+    than an equivalent rebuild.
+
+    The output CADENCE rides the sheet in MINUTES and converts to a count of
+    solver steps at the author, beside the keyword it is written into.
+    """
+    from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
+        select_runoff_path,
+    )
+
+    decision = (select_runoff_path(hyetograph_mm=rain["series"])
+                if rain["kind"] == "hyetograph"
+                else select_runoff_path(
+                    constant_intensity_mm_per_hr=rain["intensity_mm_per_hr"]))
+
+    artifact = catchment.get("artifact")
+    utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
+    probes = dict(getattr(artifact, "probes", None) or {})
+    provenance = dict(catchment.get("provenance") or {})
+    outlet_boundary, outlet_prescribes = _outlet_boundary(catchment)
+    mesh_size_m = float(catchment.get("min_edge_m") or mesh_resolution_m or 0.0)
+    name = str(getattr(artifact, "name", None) or "watershed")
+    bed_source = str(provenance.get("bed_source") or "staged")
+
+    sheet: dict[str, Any] = {
+        "name": name,
+        "amc_condition": int(infiltration["amc_condition"]),
+        "duration_s": float(rain["duration_s"]),
+        "time_step_s": float(time_step_s),
+        **({"output_interval_min": float(output_interval_min)}
+           if output_interval_min is not None else {}),
+        **({"rain_duration_s": float(rain["rain_duration_s"])}
+           if rain.get("rain_duration_s") is not None else {}),
+    }
+
+    points_utm, _cells, _bed, _lonlat = await asyncio.to_thread(
+        mesh_nodes, catchment)
+    staged = await _assemble(
+        "rain_on_grid", sheet=sheet,
+        server_facts={
+            "utm_epsg": utm_epsg,
+            "bbox": [round(float(v), 6)
+                     for v in (getattr(artifact, "bbox", None) or ())],
+            "npoin": int(catchment.get("node_count") or 0),
+            "nelem": int(catchment.get("element_count") or 0),
+            "mesh_size_m": mesh_size_m,
+            # WHICH file carries the time series. The author wrote the RESULTS
+            # FILE statement, so the name is the server's; the worker copies it
+            # and measures the file it names.
+            "result_slf": _ROG_RESULT,
+            "bed_source": bed_source},
+        results=[_ROG_RESULT],
+        # What a reader may later open: what the ENGINE writes, plus every file
+        # this authoring hands it. The hyetograph is the one that is conditional,
+        # and the same condition decides whether it is written at all.
+        outputs=[_ROG_RESULT, _ROG_GEOMETRY, _ROG_BOUNDARY, "full_listing.log",
+                 "telemac_metrics.json", _ROG_STEERING, author.ROG_CN_MAP,
+                 author.ROG_FRICTION_LAWS, author.ROG_ZONES,
+                 *([author.ROG_HYETOGRAPH] if decision.time_varying else [])],
+        mesh_inputs=[
+            {"gs_uri": _mesh_field(catchment, "slf_uri",
+                                   missing=_catchment_mesh_missing),
+             "dest": _ROG_GEOMETRY},
+            {"gs_uri": _mesh_field(catchment, "cli_uri",
+                                   missing=_catchment_mesh_missing),
+             "dest": _ROG_BOUNDARY}],
+        author_kwargs={
+            "node_xy": points_utm,
+            "node_cn2": infiltration["node_cn2"],
+            "node_manning": infiltration["node_manning"],
+            "rain_mm_per_day": float(rain["intensity_mm_per_hr"]) * 24.0,
+            "outlet_boundary": outlet_boundary,
+            "outlet_prescribes": outlet_prescribes,
+            "hyetograph_blocks": (rain["blocks"] if decision.time_varying
+                                  else None)})
+    return {
+        **staged,
+        "catchment": catchment,
+        "infiltration": infiltration,
+        "rain": rain,
+        "outlet_boundary": outlet_boundary,
+        "runoff_path": decision.path,
+        "runoff_reason": decision.reason,
+        "hyetograph_total_mm": staged["written"].get("hyetograph_total_mm"),
+        "mesh_size_m": mesh_size_m,
+        "mesh_max_edge_m": float((probes.get("edge_length_m") or {}).get("max") or 0.0),
+        "area_km2": float(probes.get("area_km2") or 0.0),
+        "lonlat_bounds": [float(v) for v in (getattr(artifact, "bbox", None) or ())],
+        "mesh_resolution_asked_m": mesh_resolution_m,
+        "domain_name": name,
+        "utm_epsg": utm_epsg,
+        "bed_source": bed_source,
+        "bed_note": str(provenance.get("bed_fallback_note") or ""),
+        "sizing_source": str(provenance.get("sizing_source") or ""),
+        "domain_source": str(provenance.get("domain_source") or ""),
+    }
+
+
+class Assemble:
+    """The staged run, as the facade binds it. One entry per family."""
 
     @staticmethod
-    def telemac(**kwargs: Any) -> Step:
-        """The TELEMAC-2D reach deck."""
-        return Step(runner=f"{_AUTHORING}.deck.write_reach_deck", stage="author",
+    def reach(**kwargs: Any) -> Step:
+        """A spill, a scour or a sag in a river reach."""
+        return Step(runner=f"{_AUTHORING}.assembler.assemble_reach", stage="author",
                     kwargs=kwargs)
+
+    @staticmethod
+    def rain_on_grid(**kwargs: Any) -> Step:
+        """A storm over a delineated catchment."""
+        return Step(runner=f"{_AUTHORING}.assembler.assemble_rain_on_grid",
+                    stage="author", kwargs=kwargs)

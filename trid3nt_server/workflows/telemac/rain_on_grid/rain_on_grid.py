@@ -6,7 +6,7 @@ ANSWER fields and the chart function. The declared params and the model-facing
 prose are one file over in ``declarations.py``. Everything else - normalizing the
 wire args, resolving the doors, walking the plan, persisting the products - is the
 skeleton (``workflows/lib/workflow.py``); the catchment mechanism is the TELEMAC
-facade's rain-on-grid front (``workflows/telemac/authoring/rain_on_grid.py``) over the
+facade's one assembler (``workflows/telemac/authoring/assembler.py``) over the
 chained delineation and the one mesh step. See
 ``docs/design/declarative-workflows.md``.
 
@@ -50,14 +50,14 @@ from trid3nt_server.workflows.telemac.rain_on_grid.declarations import (
     PARAMS as P,
     POUR_POINT_BUFFER_DEG,
 )
-from trid3nt_server.workflows.telemac.authoring.rain_on_grid import Infiltration
+from trid3nt_server.workflows.telemac.helpers.infiltration import Infiltration
 from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "build_hydrograph_chart", "plan",
            "telemac_rain_on_grid"]
 
-_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
+_HELPERS = "trid3nt_server.workflows.telemac.helpers"
 
 _CODE = "TELEMAC_ROG_PARAMS_INVALID"
 
@@ -81,7 +81,7 @@ class DATA:
                      dataset=P.landcover_dataset,
                      resolution_m=NLCD_NATIVE_RESOLUTION_M,
                      purpose="land cover")
-    rain = tool(f"{_AUTHORING}.rain_on_grid.resolve_rain_event",
+    rain = tool(f"{_HELPERS}.forcing.resolve_rain_event",
                 window=P.rain_window,
                 intensity_mm_per_hr=P.design_storm_mm_per_hr,
                 storm_duration_hr=P.storm_duration_hr,
@@ -113,7 +113,7 @@ FORCING = Forcing(rain=DATA.rain)
 #: extent is the CHAIN's product - the delineated basin - so the mesher
 #: triangulates a domain another tool measured rather than delineating one
 #: itself, and the channel network the mesh is refined TOWARD is named by the
-#: sizing op rather than folded into the domain. The deck reads the finest edge
+#: sizing op rather than folded into the domain. The sheet reads the finest edge
 #: only to record what was ASKED for; what the mesh was BUILT at comes back on
 #: the mesh step.
 MESH = tool.build_mesh(

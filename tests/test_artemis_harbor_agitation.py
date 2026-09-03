@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 
-#: What the declared bed producer hands the deck writer: the staged raster's URI.
+#: What the declared bed producer hands the run writer: the staged raster's URI.
 #: A domain solved on real bathymetry refuses without one, because the worker
 #: holds no fetcher of its own any more.
 _STAGED_BED = {"uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/test.tif",
@@ -74,7 +74,7 @@ def test_the_unspoken_mode_resolves_to_the_declared_default():
     assert (row.door, row.basis) == ("question", "default_demo")
 
 # ===========================================================================
-# The DECLARATION: the plan value, the deck, and the structure.
+# The DECLARATION: the plan value, the run, and the structure.
 # ===========================================================================
 def _sheet(**overrides):
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -96,81 +96,81 @@ def test_the_declared_plan_is_the_open_water_sequence():
     workflow, _sheet_unused = _sheet()
     plan = workflow.plan
     assert [step.label for step in plan.declared()] == [
-        "form", "aoi", "deck", "solve", "agitation"]
+        "form", "aoi", "run", "solve", "agitation"]
     validate_plan(plan, workflow.params, workflow.data)
 
 
 def test_a_supplied_structure_is_meshed_whatever_form_it_arrived_in():
-    """A drawn line and a fetched layer must be the same barrier by deck time.
+    """A drawn line and a fetched layer must be the same barrier by run time.
 
     Both routes go through the one supplied-geometry reader, which is the
     no-double-middleware law at our own front door: the solve cannot tell, and
     must not be able to tell, whether the caller sketched the breakwater or
     fetched the surveyed one.
     """
-    from trid3nt_server.workflows.telemac.authoring.agitation import write_agitation_deck
+    from trid3nt_server.workflows.telemac.authoring.agitation import write_agitation_case
 
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
     drawn = [[-87.39, 46.53], [-87.37, 46.54]]
-    deck = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
+    run = asyncio.run(write_agitation_case(bed=_STAGED_BED, 
         aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes",
         structure=drawn, mesh_resolution_m=30.0))
-    assert deck["config"]["breakwater_polylines"] == [
+    assert run["config"]["breakwater_polylines"] == [
         [[-87.39, 46.53], [-87.37, 46.54]]]
 
-    # the draw gate's reply shape reaches the same deck
-    sketched = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
+    # the draw gate's reply shape reaches the same run
+    sketched = asyncio.run(write_agitation_case(bed=_STAGED_BED, 
         aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes",
         structure={"type": "Feature",
                    "geometry": {"type": "LineString", "coordinates": drawn}},
         mesh_resolution_m=30.0))
     assert (sketched["config"]["breakwater_polylines"]
-            == deck["config"]["breakwater_polylines"])
+            == run["config"]["breakwater_polylines"])
 
 
 def test_an_unfilled_structure_slot_asks_for_nothing():
     """Absence is an ANSWER, not a reason to go looking.
 
     The step interprets the slot and nothing else: an unfilled slot puts no
-    structure on the deck, so nothing downstream can read a request that was
+    structure on the run, so nothing downstream can read a request that was
     never made.
     """
     from trid3nt_server.workflows.telemac.authoring.agitation import (
-        write_agitation_deck,
+        write_agitation_case,
     )
 
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
-    deck = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
+    run = asyncio.run(write_agitation_case(bed=_STAGED_BED, 
         aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes"))
-    assert deck["breakwater_polylines"] is None
-    assert "breakwater_polylines" not in deck["config"]
+    assert run["breakwater_polylines"] is None
+    assert "breakwater_polylines" not in run["config"]
 
 
 def test_the_structure_row_reports_the_solve_not_the_request():
-    """The deck says what was ASKED for; only the solve knows what was MESHED.
+    """The run says what was ASKED for; only the solve knows what was MESHED.
 
-    The real-bathymetry builder meshes a schematic barrier when the deck names
+    The real-bathymetry builder meshes a schematic barrier when the run names
     none, so reading the request back would report open water on a domain that
     carries a barrier. Three answers, and none of them may read alike: meshed
     nothing, meshed something nobody asked for, and did not say.
     """
     from trid3nt_server.workflows.telemac.authoring.agitation import (
         _structure_row,
-        write_agitation_deck,
+        write_agitation_case,
     )
 
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
-    deck = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
+    run = asyncio.run(write_agitation_case(bed=_STAGED_BED, 
         aoi=aoi, wave_mode="diffraction", bathy_source="noaa_greatlakes"))
 
-    confirmed = _structure_row(deck, {"structure_present": False, "bw_label": ""})
+    confirmed = _structure_row(run, {"structure_present": False, "bw_label": ""})
     assert confirmed.value is None and "OPEN WATER" in confirmed.note
 
     meshed = _structure_row(
-        deck, {"structure_present": True,
+        run, {"structure_present": True,
                "bw_label": "schematic demo breakwater (labeled)"})
     assert meshed.value == "not_supplied_but_meshed"
     assert "did NOT run open water" in meshed.note
@@ -178,7 +178,7 @@ def test_the_structure_row_reports_the_solve_not_the_request():
     assert "OPEN WATER" not in meshed.note, (
         "a domain carrying an unrequested barrier must never read as open water")
 
-    silent = _structure_row(deck, {})
+    silent = _structure_row(run, {})
     assert silent.value is None and "UNMEASURED" in silent.note
     assert "OPEN WATER" not in silent.note, (
         "an unmeasured structure is not the same fact as no structure")
@@ -204,15 +204,15 @@ def test_only_diffraction_gets_a_real_harbour():
     A real-bathymetry request for either falls back to the labeled analytic
     domain rather than fabricating a harbour outline around the geocode.
     """
-    from trid3nt_server.workflows.telemac.authoring.agitation import write_agitation_deck
+    from trid3nt_server.workflows.telemac.authoring.agitation import write_agitation_case
 
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
-    deck = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
+    run = asyncio.run(write_agitation_case(bed=_STAGED_BED, 
         aoi=aoi, wave_mode="resonance", bathy_source="noaa_greatlakes"))
-    assert deck["real_bathymetry"] is False
-    assert "bbox" not in deck["config"]
-    assert "seiche ladder" in deck["bathy_label"]
+    assert run["real_bathymetry"] is False
+    assert "bbox" not in run["config"]
+    assert "seiche ladder" in run["bathy_label"]
 
 
 def test_the_agitation_chart_plots_the_workers_own_transect():

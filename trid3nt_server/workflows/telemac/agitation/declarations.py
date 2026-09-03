@@ -13,7 +13,7 @@ __all__ = ["ACCEPTS", "DEFAULT_IDEALIZED_RES_M", "DEFAULT_REAL_RES_M", "DOC",
            "PARAMS"]
 
 #: What an agitation run can be HANDED. ARTEMIS reads either mesh shape: the
-#: default build is the uniform lattice the open-water deck lays over the AOI, and
+#: default build is the uniform lattice the open-water run lays over the AOI, and
 #: the BYO path - an adaptive triangulation with the breakwater cut in conformally
 #: and a seaward boundary designated - is the proven one. Nothing is released into
 #: a harbour agitation field, so there is no release row to write.

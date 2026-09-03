@@ -1,9 +1,9 @@
-"""The reach's manifest is a CASE: an engine, a deck, and what must come back.
+"""The reach's manifest is a CASE: an engine, a file, and what must come back.
 
 The worker used to be handed the reach's raw geometry and asked to mesh it. Now
-the server authors the deck against the accepted mesh and stages both, so what
-the manifest carries is the ``case`` the worker dispatches on - which engine,
-which steering file, which results are the success convention - plus the
+the server authors the steering file against the accepted mesh and stages both,
+so what the manifest carries is the ``case`` the worker dispatches on - which
+engine, which steering file, which results are the success convention - plus the
 ``inputs`` the launcher walks into the run directory.
 
 What is pinned here is that contract: the section key the worker reads, the
@@ -16,7 +16,10 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring.deck import _class_files, stage_manifest
+from trid3nt_server.workflows.telemac.authoring.assembler import (
+    _class_files,
+    _write_manifest,
+)
 
 
 class _FakeS3:
@@ -46,8 +49,8 @@ def _stage(monkeypatch, case: dict, *, outputs: list[str] | None = None,
     fake = _FakeS3()
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: fake)
     monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache")
-    stage_manifest(case, "RUNTAG", outputs=outputs or ["r2d_river.slf"],
-                   inputs=inputs)
+    _write_manifest(case, "RUNTAG", outputs=outputs or ["r2d_river.slf"],
+                    inputs=inputs or [], prefix="telemac")
     assert fake.put is not None
     return json.loads(fake.put["Body"])
 
@@ -65,7 +68,7 @@ def test_an_unstaged_manifest_carries_an_empty_inputs_list(monkeypatch):
     assert _stage(monkeypatch, _CASE)["inputs"] == []
 
 
-def test_stage_manifest_requires_cache_bucket(monkeypatch):
+def test_writing_the_manifest_requires_a_cache_bucket(monkeypatch):
     import trid3nt_server.workflows.solver.solver as solver_mod
 
     from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
@@ -73,7 +76,8 @@ def test_stage_manifest_requires_cache_bucket(monkeypatch):
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
     monkeypatch.delenv("TRID3NT_CACHE_BUCKET", raising=False)
     with pytest.raises(TelemacDyeScenarioError):
-        stage_manifest(_CASE, "RUNTAG", outputs=["r2d_river.slf"])
+        _write_manifest(_CASE, "RUNTAG", outputs=["r2d_river.slf"], inputs=[],
+                        prefix="telemac")
 
 
 # --------------------------------------------------------------------------- #
@@ -129,7 +133,7 @@ def test_no_reach_run_declares_a_bed_cog_output():
 # --------------------------------------------------------------------------- #
 # ONE manifest writer, and the CASE section it carries.
 # --------------------------------------------------------------------------- #
-def test_the_case_section_names_the_engine_the_deck_and_the_results():
+def test_the_case_section_names_the_engine_the_file_and_the_results():
     from trid3nt_server.workflows.telemac.authoring.open_water import case_section
 
     case = case_section(
@@ -182,7 +186,9 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
     scenario over the wrong stretch of clock.
     """
     import trid3nt_server.workflows.telemac.result_reader as reader
-    from trid3nt_server.workflows.telemac.authoring.deck import _continuation_start_s
+    from trid3nt_server.workflows.telemac.authoring.assembler import (
+        _continuation_start_s,
+    )
     from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
     previous = tmp_path / "restart_river.slf"
@@ -198,7 +204,7 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
 
 
 def test_the_classes_that_couple_state_which_module_they_couple_with():
-    from trid3nt_server.workflows.telemac.authoring.deck import _CLASS_COUPLING
+    from trid3nt_server.workflows.telemac.authoring.assembler import _CLASS_COUPLING
 
     assert _CLASS_COUPLING == {"decay": "waqtel", "do_sag": "waqtel",
                                "sediment": "gaia"}
@@ -215,13 +221,13 @@ def test_a_coupled_reach_refuses_to_be_continued_and_says_why(substance, coupled
     """
     import asyncio
 
-    from trid3nt_server.workflows.telemac.authoring.deck import write_reach_deck
+    from trid3nt_server.workflows.telemac.authoring.assembler import assemble_reach
     from trid3nt_server.workflows.telemac.helpers.errors import (
         TelemacDyeScenarioInputError,
     )
 
     with pytest.raises(TelemacDyeScenarioInputError) as exc:
-        asyncio.run(write_reach_deck(
+        asyncio.run(assemble_reach(
             reach={"slug": "r", "name": "R"}, seed={"lon": -124.0, "lat": 40.0},
             mesh={"min_edge_m": 14.0, "element_count": 10, "artifact": None},
             centerline=None, carrier_discharge={"m3s": 50.0},

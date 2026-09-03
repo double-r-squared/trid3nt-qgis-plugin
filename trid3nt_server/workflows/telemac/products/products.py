@@ -49,41 +49,41 @@ __all__ = ["Products", "publish_do_products", "publish_dye_products"]
 
 _PRODUCTS = "trid3nt_server.workflows.telemac.products"
 
-def _release_provenance(deck: dict[str, Any]) -> SyntheticInput:
+def _release_provenance(run: dict[str, Any]) -> SyntheticInput:
     """Where the source entered the water, as the layer's own record.
 
     The downstream distance is measured from here, so the row states the point
-    the deck was authored with: the supplied one, which the pre-flight
+    the run was authored with: the supplied one, which the pre-flight
     containment test already accepted into the domain and put on the flowline,
     or the ``spill_fraction`` walk along the modeled centerline. A point outside
     the domain never reaches this step - the pre-flight refuses it - so the row
     can never read "user" over a relocated release.
     """
-    reach = deck["deck"]
-    lon, lat = reach.get("release_lon"), reach.get("release_lat")
+    sheet = run["sheet"]
+    lon, lat = sheet.get("release_lon"), sheet.get("release_lat")
     if lon is None or lat is None:
         return SyntheticInput(
-            param="release_point", value=f"spill_fraction {reach.get('spill_frac')}",
+            param="release_point", value=f"spill_fraction {sheet.get('spill_frac')}",
             basis="derived", consequence="scenario",
             real_source_if_any="NHDPlus flowline centerline",
             note="no release point was supplied; the source sits at spill_fraction "
                  "along the modeled reach")
     return SyntheticInput(
         param="release_point", value=f"({lon}, {lat})", basis="user",
-        consequence="scenario", note=deck.get("release_note"))
+        consequence="scenario", note=run.get("release_note"))
 
 
-def _rain_provenance(deck: dict[str, Any]) -> list[SyntheticInput]:
+def _rain_provenance(run: dict[str, Any]) -> list[SyntheticInput]:
     """The on-mesh rain/evaporation forcing, with its DECLARED temporal transform.
 
     Empty when no forcing was asked for - a run with no rain has no rain row.
     The note carries the cadence/units stamp the ``Data("rain")`` declaration
     produced, so a reader can tell an as-reported rate from a moved one.
     """
-    value = deck.get("rain_mm_per_day")
+    value = run.get("rain_mm_per_day")
     if value is None:
         return []
-    rung = deck.get("rain_rung")
+    rung = run.get("rain_rung")
     fetched = rung == "gridmet_domain_mean"
     return [SyntheticInput(
         param="rain_or_evap_mm_per_day", value=round(float(value), 2),
@@ -91,21 +91,21 @@ def _rain_provenance(deck: dict[str, Any]) -> list[SyntheticInput]:
         consequence="physics",
         real_source_if_any=("fetch_gridmet (University of Idaho gridMET daily "
                             "precipitation)" if fetched else None),
-        note=deck.get("rain_note"))]
+        note=run.get("rain_note"))]
 
 
 def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
-                deck: dict[str, Any]) -> list[SyntheticInput]:
+                run: dict[str, Any]) -> list[SyntheticInput]:
     """The physically dominant inputs, as rows the layer carries.
 
     The carrier discharge that governs dilution (real NWM streamflow or
     user-supplied), the on-mesh rain/evaporation forcing when one was asked for,
-    the bank geometry the reach was cut from, and the release point the deck was
+    the bank geometry the reach was cut from, and the release point the run was
     authored with.
     """
     return [
-        _release_provenance(deck),
-        *_rain_provenance(deck),
+        _release_provenance(run),
+        *_rain_provenance(run),
         SyntheticInput(
             param="discharge_m3s", value=round(float(discharge["m3s"]), 1),
             units="m3/s", basis=discharge.get("basis") or "fetched",
@@ -210,7 +210,7 @@ def _listing_text(run_id: str) -> str:
 
 async def _fold_sediment_products(peak: TelemacDyeLayerURI, *, run_id: str,
                                   utm_epsg: int, reach_name: str,
-                                  deck: dict[str, Any],
+                                  run: dict[str, Any],
                                   erodible: bool, emitter: Any) -> TelemacDyeLayerURI:
     """Fold GAIA's own mass-balance scalars onto the peak + emit the deposition map.
 
@@ -231,7 +231,7 @@ async def _fold_sediment_products(peak: TelemacDyeLayerURI, *, run_id: str,
     gaia_path = await asyncio.to_thread(_download_artifact, run_id, "gaia_river.slf")
     listing = await asyncio.to_thread(_listing_text, run_id)
     stats = await asyncio.to_thread(
-        sediment_scalars, listing_text=listing, deck=deck["deck"],
+        sediment_scalars, listing_text=listing, sheet=run["sheet"],
         gaia_slf=gaia_path)
     net = stats.get("sediment_net_bed_mass_kg")
     peak = peak.model_copy(update={
@@ -375,7 +375,7 @@ async def _journal_wetted_fraction(slf_path: str) -> None:
         "reach at this discharge - a measured heuristic, not a verdict.")
 
 
-async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
+async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
                                carrier_discharge: dict[str, Any]) -> TelemacDyeLayerURI:
     """Postprocess the solved reach into its published layers + narration scalars."""
     from trid3nt_server.emission.pipeline_emitter import current_emitter
@@ -388,8 +388,8 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
 
     emitter = current_emitter()
     run_id, utm_epsg = solve["run_id"], int(solve["utm_epsg"])
-    reach_name, substance = deck["reach_name"], deck["substance"]
-    substance_class = deck["substance_class"]
+    reach_name, substance = run["reach_name"], run["substance"]
+    substance_class = run["substance_class"]
     product = _substance_product(substance_class)
     slf_path = await asyncio.to_thread(download_result_selafin, run_id)
 
@@ -409,12 +409,12 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
     raw_peak = layers[0]
 
     mesh_meta = {
-        "mesh_size_m": deck["mesh_size_m"],
-        "mesh_resolution_label": deck["mesh_resolution_label"],
+        "mesh_size_m": run["mesh_size_m"],
+        "mesh_resolution_label": run["mesh_resolution_label"],
     }
     peak = await asyncio.to_thread(
-        _publish_peak_layer, raw_peak, run_id, deck["location_name"], mesh_meta,
-        substance, substance_class, _provenance(solve, carrier_discharge, deck))
+        _publish_peak_layer, raw_peak, run_id, run["location_name"], mesh_meta,
+        substance, substance_class, _provenance(solve, carrier_discharge, run))
 
     # EMIT-ON-SOLVE: outputs.json carries the peak entry (the whole-run record)
     # plus the SELAFIN mesh entry, and the seam owns publication of the temporal
@@ -433,7 +433,7 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
         try:
             peak = await _fold_sediment_products(
                 peak, run_id=run_id, utm_epsg=utm_epsg, reach_name=reach_name,
-                deck=deck, erodible=bool(deck.get("erodible_bed")), emitter=emitter)
+                run=run, erodible=bool(run.get("erodible_bed")), emitter=emitter)
         except Exception as exc:  # noqa: BLE001 - a bonus map never voids the run
             logger.warning("sediment deposition unexpected failure (%s)", exc)
     elif substance_class == "oil":
@@ -466,7 +466,7 @@ def _do_sag_provenance(carrier_discharge: dict[str, Any] | None) -> list[Synthet
         note=carrier_discharge.get("note") or "carrier discharge governs dilution")]
 
 
-async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
+async def publish_do_products(*, run: dict[str, Any], solve: dict[str, Any],
                               do_sag_config: dict[str, Any],
                               carrier_discharge: dict[str, Any] | None = None) -> Any:
     """Postprocess a WAQTEL O2 solve into the DISSOLVED-O2 field COG + the sag curve.
@@ -482,14 +482,14 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
 
     emitter = current_emitter()
     run_id, utm_epsg = solve["run_id"], int(solve["utm_epsg"])
-    reach_name = deck["reach_name"]
+    reach_name = run["reach_name"]
     slf_path = await asyncio.to_thread(download_result_selafin, run_id)
     try:
         layers, _metrics = await asyncio.to_thread(
             postprocess_telemac_do, slf_path, run_id=run_id, utm_epsg=utm_epsg,
             reach_name=reach_name,
             # Read, never re-defaulted: these were the THIRD copy of four
-            # declared do_sag defaults (declarations.py, deck.py, here).
+            # declared do_sag defaults (declarations.py, the assembler, here).
             saturation_mgl=float(do_sag_config["saturation_mgl"]),
             upstream_do_mgl=float(do_sag_config["upstream_do_mgl"]),
             standard_mgl=float(do_sag_config["standard_mgl"]),
@@ -501,8 +501,8 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
 
     raw = layers[0]
     mesh_meta = {
-        "mesh_size_m": deck["mesh_size_m"],
-        "mesh_resolution_label": deck["mesh_resolution_label"],
+        "mesh_size_m": run["mesh_size_m"],
+        "mesh_resolution_label": run["mesh_resolution_label"],
         # The run prefix travels WITH the layer: the caller writes this run's own
         # chart spec + metrics there once the chart has been built.
         "run_id": run_id,
@@ -543,16 +543,16 @@ class Products:
     """Postprocess + publish steps, one constructor per deliverable family."""
 
     @staticmethod
-    def dye(*, deck: Any, solve: Any, carrier_discharge: Any) -> Step:
+    def dye(*, run: Any, solve: Any, carrier_discharge: Any) -> Step:
         """The dye/oil/sediment deliverables: peak COG, results mesh, class extras."""
         return Step(runner=f"{_PRODUCTS}.products.publish_dye_products", stage="publish",
-                    kwargs={"deck": deck, "solve": solve,
+                    kwargs={"run": run, "solve": solve,
                             "carrier_discharge": carrier_discharge})
 
     @staticmethod
-    def dissolved_oxygen(*, deck: Any, solve: Any, process: Any,
+    def dissolved_oxygen(*, run: Any, solve: Any, process: Any,
                          carrier_discharge: Any) -> Step:
         """The WAQTEL O2 deliverables: dissolved-O2 field COG + the along-reach sag."""
         return Step(runner=f"{_PRODUCTS}.products.publish_do_products", stage="publish",
-                    kwargs={"deck": deck, "solve": solve, "do_sag_config": process,
+                    kwargs={"run": run, "solve": solve, "do_sag_config": process,
                             "carrier_discharge": carrier_discharge})

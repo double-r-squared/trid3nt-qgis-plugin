@@ -11,8 +11,8 @@ These pin:
      release-point / reach-seed decoupling, the contaminant promotion.
   3. Declared bounds + the non-numeric refusal replacing the old inline clamps.
   4. The plan: its shape, its gate placement, and that it validates.
-  5. The chain geocode -> seed -> carrier discharge -> deck -> solve -> products,
-     with the manifest's deck overrides carrying the resolved sheet.
+  5. The chain geocode -> seed -> carrier discharge -> run -> solve -> products,
+     with the manifest's case section carrying what the sheet resolved to.
   6. The erodible-bed / GAIA single gate (an armed bed is always sediment).
 """
 
@@ -278,7 +278,7 @@ def test_the_plan_validates_and_gates_before_the_solve():
     steps = list(pl.declared())
     assert [s.label for s in steps][2:] == [
         "reach", "seed", "carrier_discharge", "mesh", "measure_mesh_coverage",
-        "deck", "solve", "plume"]
+        "run", "solve", "plume"]
     # Both gates precede every step, so nothing consumes a value the review can
     # still revise.
     assert all(isinstance(s, Gate) for s in steps[:2])
@@ -333,7 +333,7 @@ def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.telemac.helpers import reach as reach_mod
     from trid3nt_server.workflows.telemac.helpers import forcing as forcing_mod
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
-    from trid3nt_server.workflows.telemac.authoring import deck as deck_mod
+    from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
 
     def _fake_registry_fn(name):
         if name == "geocode_location":
@@ -359,7 +359,7 @@ def _install_step_mocks(captured: dict):
         """The mesh session stands in: this chain test is about the chain.
 
         The artifact reports the edge the ask named, so the mesh contributes
-        nothing to the timestep and this chain's deck is the historical one.
+        nothing to the timestep and this chain's steering file is the historical one.
         """
         from trid3nt_server.workflows.mesh.artifact import MeshArtifact
 
@@ -396,17 +396,17 @@ def _install_step_mocks(captured: dict):
         captured["run_tag"] = run_tag
         return f"s3://cache/telemac/{run_tag}/manifest.json"
 
-    _write_deck = deck_mod.write_reach_deck
+    _assemble_reach = asm_mod.assemble_reach
 
-    async def _capture_deck(**kw):
+    async def _capture_run(**kw):
         """The real author, with the SHEET it serialized kept for inspection.
 
-        The sheet stopped travelling to the worker when the deck flipped, so the
-        assertions below read it where it is written rather than off a manifest
-        that no longer carries it.
+        The sheet stopped travelling to the worker when the authoring flipped, so
+        the assertions below read it where it is written rather than off a
+        manifest that no longer carries it.
         """
-        out = await _write_deck(**kw)
-        captured["reach"] = out["deck"]
+        out = await _assemble_reach(**kw)
+        captured["reach"] = out["sheet"]
         return out
 
     async def _capture_marker(_emitter, *, lon, lat, user_supplied, **_kw):
@@ -441,26 +441,26 @@ def _install_step_mocks(captured: dict):
         # The mesh session stands in, so its display face is a uri nothing wrote:
         # what the mesh holds of the reach is measured in its own test module.
         patch.object(reach_mod, "_meshed_fraction", lambda mesh, centerline: 1.0),
-        patch.object(deck_mod, "write_reach_deck", _capture_deck),
-        patch.object(deck_mod, "read_topology",
+        patch.object(asm_mod, "assemble_reach", _capture_run),
+        patch.object(asm_mod, "read_topology",
                      lambda _uri: {
                          "roles": dict(MESH_ROLES),
                          "liquid_boundary_order": ["outflow", "inflow"],
                          "liquid_boundary_prescribes": ["elevation",
                                                         "flowrate"]}),
-        patch.object(deck_mod, "read_centerline_utm",
+        patch.object(asm_mod, "read_centerline_utm",
                      lambda _src, _epsg, **_kw: __import__("numpy").array(
                          [[0.0, 0.0], [6000.0, 0.0]])),
-        patch.object(deck_mod, "_stage_authored",
-                     lambda _rundir, run_tag, names: [
-                         {"gs_uri": f"s3://cache/telemac/{run_tag}/{n}", "dest": n}
+        patch.object(asm_mod, "_upload_authored",
+                     lambda _rundir, run_tag, names, prefix: [
+                         {"gs_uri": f"s3://cache/{prefix}/{run_tag}/{n}", "dest": n}
                          for n in names]),
+        patch.object(asm_mod, "_write_manifest", _fake_stage),
         patch.object(mesh_step, "build_declared_mesh", _fake_mesh),
         patch.object(forcing_mod, "_nwm_nearest_streamflow",
                      lambda lon, lat, valid_time=None: {
                          "m3s": 312.0, "reference_time": "2026-01-01T12:00:00+00:00",
                          "product": "analysis_assim", "layer": None}),
-        patch.object(solve_mod, "stage_manifest", _fake_stage),
         patch.object(solve_mod, "read_run_metrics",
                      lambda rid: {"utm_epsg": 32611}),
         patch.object(prod_mod, "download_result_selafin",
@@ -563,16 +563,16 @@ def _real_centerline_read() -> dict:
     about where a release derived along the DECLARED reach actually lands.
     """
     from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
-    from trid3nt_server.workflows.telemac.authoring import deck as deck_mod
+    from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
 
-    return {"overrides": [patch.object(deck_mod, "read_centerline_utm",
+    return {"overrides": [patch.object(asm_mod, "read_centerline_utm",
                                        read_centerline_utm)]}
 
 
 def test_the_reach_is_navigated_EXACTLY_ONCE(tmp_path, monkeypatch):
     """ONE centerline acquisition. A second navigate resolved beside the declared
     row walked a different seed for a different distance, so the line the section
-    was cut between and the line the deck read described different rivers - and a
+    was cut between and the line the author read described different rivers - and a
     release derived along the second one landed outside the meshed domain."""
     captured: dict = {}
     _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
@@ -590,7 +590,7 @@ def test_a_supplied_seed_point_is_the_one_the_centerline_is_navigated_from(
               release_coords=[-124.10, 40.50], **_real_centerline_read())
     assert captured["navigates"][0]["seed_point"] == [-124.10, 40.50]
     assert captured["reach"]["seed_lon"] == pytest.approx(-124.10)
-    # the supplied point was settled against THAT centerline, and the deck says so
+    # the supplied point was settled against THAT centerline, and the sheet says so
     assert captured["reach"]["release_lon"] == pytest.approx(-124.10)
     assert captured["release_marker"]["user_supplied"] is True
 
@@ -610,7 +610,7 @@ def test_a_derived_release_sits_on_the_DECLARED_centerline(tmp_path, monkeypatch
     assert marker["user_supplied"] is False
     line = LineString(CENTERLINE["coordinates"])
     assert line.distance(Point(marker["lon"], marker["lat"])) < 1e-4
-    # ... and the deck states the FRACTION rather than a coordinate, because a
+    # ... and the sheet states the FRACTION rather than a coordinate, because a
     # release row that reads "user" over a derived point is the dishonest one.
     assert captured["reach"]["spill_frac"] == 0.5
     assert "release_lon" not in captured["reach"]
@@ -618,7 +618,6 @@ def test_a_derived_release_sits_on_the_DECLARED_centerline(tmp_path, monkeypatch
 
 def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
-    from trid3nt_server.workflows.telemac.authoring import deck as deck_mod
     from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
     async def _boom(**_kw):
@@ -720,8 +719,8 @@ def test_an_unmapped_reach_refuses_terminally_naming_the_three_supply_paths():
 # ===========================================================================
 # (6) The erodible-bed / GAIA single gate: an armed bed is ALWAYS sediment.
 #     The old false green: substance='scour' fell through classify to 'tracer'
-#     while the scour hint independently armed erodible_bed=True, so the deck
-#     coupled no GAIA and the run only LOOKED morphodynamic.
+#     while the scour hint independently armed erodible_bed=True, so nothing
+#     coupled GAIA and the run only LOOKED morphodynamic.
 # ===========================================================================
 @pytest.mark.parametrize("s", [
     "scour", "bed scour below the weir", "erosion", "bed erosion",
@@ -788,7 +787,7 @@ def test_an_armed_erodible_bed_forces_sediment_over_any_tracer(
     assert reach["erodible_bed"] is True
 
 
-def test_the_deck_never_stages_an_erodible_tracer(tmp_path, monkeypatch):
+def test_no_run_stages_an_erodible_tracer(tmp_path, monkeypatch):
     """The honesty-floor invariant, over a matrix: an armed bed is never tracer."""
     for subst in ("dye", "scour", "oil", "sewage", "sand"):
         captured: dict = {}

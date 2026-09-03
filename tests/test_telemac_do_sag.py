@@ -1,7 +1,7 @@
 """WAQTEL O2 dissolved-oxygen sag (telemac_do_sag) - offline V&V + tool tests.
 
 No solve, no network. The live V&V (the 12 km straight-channel WAQTEL O2 solve
-through the LANDED worker author_deck, trid3nt-local/telemac:latest, 2026-08-07)
+through the LANDED worker authoring, trid3nt-local/telemac:latest, 2026-08-07)
 is captured as a committed profile fixture; this test re-checks it against the
 Streeter-Phelps 1925 closed form deterministically (the 0163/0167 committed-V&V
 pattern), so a regression in the O2 machinery is caught without re-solving.
@@ -224,7 +224,7 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
     )
     from trid3nt_server.workflows.telemac.products import products as products_mod
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
-    from trid3nt_server.workflows.telemac.authoring import deck as deck_mod
+    from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
 
     def _step(name, ret):
         async def _inner(**kwargs):
@@ -253,8 +253,8 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
                         lambda mesh, centerline: 1.0)
     if tmp_path is not None:
         install_reach_chain(monkeypatch, tmp_path, seen)
-    monkeypatch.setattr(deck_mod, "write_reach_deck",
-                        _step("deck", {"deck": {"name": "eel"}, "run_tag": "T"}))
+    monkeypatch.setattr(asm_mod, "assemble_reach",
+                        _step("run", {"sheet": {"name": "eel"}, "run_tag": "T"}))
     monkeypatch.setattr(solve_mod, "solve_reach", _step("solve", {"run_id": "R"}))
     monkeypatch.setattr(products_mod, "publish_do_products", _step("products", layer))
     monkeypatch.setattr(gate_mod, "gate_input_review", review)
@@ -264,7 +264,7 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
 async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
                                                                     tmp_path):
     """The migrated plan itself, not a stand-in: geocode -> flowline -> seed ->
-    discharge -> waqtel -> review -> corridor mesh -> deck -> solve -> DO
+    discharge -> waqtel -> review -> corridor mesh -> run -> solve -> DO
     products, with the
     outfall riding as the reach SEED (it pins which water body is meshed), never
     as a dye release point."""
@@ -300,18 +300,18 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
 
     assert not isinstance(out, dict), out
     assert order == ["geocode", "rivers", "seed", "discharge", "review", "mesh",
-                     "deck", "solve", "products"]
+                     "run", "solve", "products"]
     # the outfall pins the MESHED water body, so it rides as the reach seed the
     # ONE centerline is navigated from - never as a dye release point
     assert seen["seed"]["supplied"] == (-124.11, 40.51)
-    assert "release_coords" not in seen["deck"]
+    assert "release_coords" not in seen["run"]
     # DO cannot ride in above its own saturation - the one coupled clamp
-    assert seen["deck"]["do_sag_config"]["upstream_do_mgl"] == pytest.approx(9.022)
-    assert seen["deck"]["do_sag_config"]["k2_formula"] == 0
+    assert seen["run"]["do_sag_config"]["upstream_do_mgl"] == pytest.approx(9.022)
+    assert seen["run"]["do_sag_config"]["k2_formula"] == 0
     assert seen["review"]["mode"] == "user_gated"
-    assert seen["solve"]["deck"] is seen["products"]["deck"]
-    # the REVIEWED discharge is what the deck and the products both read
-    assert seen["deck"]["carrier_discharge"] is seen["products"]["carrier_discharge"]
+    assert seen["solve"]["run"] is seen["products"]["run"]
+    # the REVIEWED discharge is what the author and the products both read
+    assert seen["run"]["carrier_discharge"] is seen["products"]["carrier_discharge"]
 
 
 @pytest.mark.asyncio
@@ -344,7 +344,7 @@ async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch, tmp_path
 
 
 # --- mesh granularity: the MEASURED edge, never a re-derived one ------------- #
-def test_the_deck_records_the_edge_the_accepted_mesh_was_measured_at():
+def test_the_run_records_the_edge_the_accepted_mesh_was_measured_at():
     """DS-3: the granularity a run is judged on is the built mesh's own minimum
     edge, not the number that was asked for and not one re-derived from a channel
     width nobody surveyed."""

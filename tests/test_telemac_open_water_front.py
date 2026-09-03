@@ -23,15 +23,15 @@ from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
     PostprocessTelemacError,
     _local_mesh_origin,
 )
-from trid3nt_server.workflows.telemac.authoring.agitation import write_agitation_deck
+from trid3nt_server.workflows.telemac.authoring.agitation import write_agitation_case
 from trid3nt_server.workflows.telemac.authoring.open_water import (
     OpenWaterError,
     mesh_sizing_provenance,
     solved_domain_bbox,
 )
-from trid3nt_server.workflows.telemac.authoring.stratified import write_stratified_deck
+from trid3nt_server.workflows.telemac.authoring.stratified import write_stratified_case
 
-#: What the declared bed producer hands the deck writer: the staged raster's URI.
+#: What the declared bed producer hands the run writer: the staged raster's URI.
 #: A domain solved on real bathymetry refuses without one, because the worker
 #: holds no fetcher of its own any more.
 _STAGED_BED = {"uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/test.tif",
@@ -50,38 +50,38 @@ _MARQUETTE = {"name": "Marquette Lower Harbor", "slug": "marquette",
     ("resonance", False), ("shoal", False), ("diffraction", True)])
 
 def test_agitation_deck_requires_utm_only_on_the_real_harbour(wave_mode, expected):
-    deck = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
+    run = asyncio.run(write_agitation_case(bed=_STAGED_BED, 
         aoi=_MARQUETTE, wave_mode=wave_mode, bathy_source="noaa_greatlakes",
         mesh_resolution_m=12.0))
-    assert deck["requires_utm"] is expected
-    assert deck["real_bathymetry"] is expected
+    assert run["requires_utm"] is expected
+    assert run["real_bathymetry"] is expected
 
 
 def test_agitation_idealized_bathy_source_never_requires_utm():
-    deck = asyncio.run(write_agitation_deck(bed=_STAGED_BED, 
+    run = asyncio.run(write_agitation_case(bed=_STAGED_BED, 
         aoi=_MARQUETTE, wave_mode="diffraction", bathy_source="idealized",
         mesh_resolution_m=12.0))
-    assert deck["requires_utm"] is False
+    assert run["requires_utm"] is False
 
 
 @pytest.mark.parametrize("flow_mode,expected", [
     ("salt_wedge", False), ("stratification", True)])
 def test_stratified_deck_requires_utm_only_on_the_real_lake(flow_mode, expected):
-    deck = asyncio.run(write_stratified_deck(bed=_STAGED_BED, 
+    run = asyncio.run(write_stratified_case(bed=_STAGED_BED, 
         aoi=_MARQUETTE, flow_mode=flow_mode, bathy_source="noaa_greatlakes"))
-    assert deck["requires_utm"] is expected
+    assert run["requires_utm"] is expected
 
 
 def test_salt_wedge_deck_authors_an_idealized_lock_exchange_offline():
-    """The salt-wedge deck constructs and authors with no network and no zone."""
-    deck = asyncio.run(write_stratified_deck(bed=_STAGED_BED, 
+    """The salt-wedge run constructs and authors with no network and no zone."""
+    run = asyncio.run(write_stratified_case(bed=_STAGED_BED, 
         aoi=_MARQUETTE, flow_mode="salt_wedge", bathy_source="noaa_greatlakes",
         mesh_resolution_m=250.0))
-    assert deck["config"]["flow_mode"] == "salt_wedge"
-    assert deck["config"]["bathy_source"] == "idealized"
-    assert "bbox" not in deck["config"]
-    assert deck["requires_utm"] is False
-    assert "lock-exchange" in deck["bathy_label"]
+    assert run["config"]["flow_mode"] == "salt_wedge"
+    assert run["config"]["bathy_source"] == "idealized"
+    assert "bbox" not in run["config"]
+    assert run["requires_utm"] is False
+    assert "lock-exchange" in run["bathy_label"]
 
 
 # --------------------------------------------------------------------------- #
@@ -132,16 +132,16 @@ def test_no_row_without_an_ask_or_without_a_built_spacing():
 # --------------------------------------------------------------------------- #
 
 def test_solved_domain_bbox_prefers_the_workers_own_report():
-    deck = {"config": {"bbox": [-85.0234, 29.6911, -84.9012, 29.8044]}}
+    run = {"config": {"bbox": [-85.0234, 29.6911, -84.9012, 29.8044]}}
     reported = [-85.02341, 29.69107, -84.90118, 29.80442]
-    assert solved_domain_bbox(deck, {"bbox": reported}) == tuple(reported)
+    assert solved_domain_bbox(run, {"bbox": reported}) == tuple(reported)
 
 
 def test_solved_domain_bbox_falls_back_to_the_staged_rounded_bbox():
     """The manifest's bbox is what the worker was handed - never the raw AOI."""
     staged = [-85.0234, 29.6911, -84.9012, 29.8044]
-    deck = {"config": {"bbox": staged}}
-    assert solved_domain_bbox(deck, {}) == tuple(staged)
+    run = {"config": {"bbox": staged}}
+    assert solved_domain_bbox(run, {}) == tuple(staged)
 
 
 def test_solved_domain_bbox_is_none_for_a_geography_free_domain():

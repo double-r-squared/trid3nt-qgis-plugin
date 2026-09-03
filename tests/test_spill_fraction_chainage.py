@@ -28,7 +28,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
-from trid3nt_server.workflows.telemac.authoring.deck import _settle_release
+from trid3nt_server.workflows.telemac.authoring.assembler import _settle_release
 
 #: A west-to-east flowline near Twin Falls, Idaho. The seed is its WEST end: the
 #: navigate was walked downstream from there, so that is chainage 0.

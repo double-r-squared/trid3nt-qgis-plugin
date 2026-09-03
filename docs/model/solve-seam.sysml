@@ -45,11 +45,19 @@ package SolveSeam {
     // Blocks
     // ----------------------------------------------------------------- //
 
-    part def DeckAuthor {
+    part def Assembler {
         doc /*
-        Serializes the approved sheet into the engine's own steering files and
-        states what the server measured that the container cannot learn from
-        the files it is handed.
+        ONE flow for every simulation the server authors: the approved sheet
+        into the engine's own steering files, every field they name written
+        beside them, the whole run directory staged, and the manifest written
+        last. It also states what the server measured that the container
+        cannot learn from the files it is handed.
+        */
+    }
+
+    part def SteeringAuthor {
+        doc /*
+        The steering files themselves - every keyword the run is solved under.
         */
     }
 
@@ -337,9 +345,13 @@ package SolveSeam {
     // Block usages, bound to the modules they are
     // ----------------------------------------------------------------- //
 
-    part deckAuthor : DeckAuthor {
+    part assembler : Assembler {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/deck.py
+        Both authored families - a reach and a catchment - are prepared by
+        their own entry point and staged by the same flow, so there is ONE
+        writer of the case and ONE writer of the server facts.
+
+        code: trid3nt_server/workflows/telemac/authoring/assembler.py
         */
         port caseOut : CaseOut;
         port serverFactsOut : ServerFactsOut;
@@ -347,26 +359,12 @@ package SolveSeam {
         port meshIn : MeshIn;
     }
 
-    part rainDeckAuthor : DeckAuthor {
+    part steeringStatements : SteeringAuthor {
         doc /*
-        The rain-on-grid leg authors its own deck against the same contracts:
-        a second author of the case and the server facts, modeled so a
-        severance in it fires like a severance in the open-water author's.
-
-        code: trid3nt_server/workflows/telemac/authoring/rain_on_grid.py
-        */
-        port caseOut : CaseOut;
-        port serverFactsOut : ServerFactsOut;
-        port topologyIn : TopologyIn;
-    }
-
-    part deckStatements : DeckAuthor {
-        doc /*
-        The steering files themselves - every keyword the run is solved under.
-        It is a second block rather than part of the composer because a number
-        the deck DERIVES has to be derived beside the literals it must agree
-        with: the outflow stage is a normal depth at the roughness the very
-        next statement writes.
+        It is a second block rather than part of the assembler because a number
+        the steering file DERIVES has to be derived beside the literals it must
+        agree with: the outflow stage is a normal depth at the roughness the
+        very next statement writes.
 
         code: trid3nt_server/workflows/telemac/authoring/author.py
         */
@@ -475,32 +473,19 @@ package SolveSeam {
     // ----------------------------------------------------------------- //
 
     interface meshAccepted : AcceptedMeshRecord
-        connect meshAcceptance.meshOut to deckAuthor.meshIn;
+        connect meshAcceptance.meshOut to assembler.meshIn;
 
     interface topologyRead : TopologyBundle
-        connect topologyWriter.topologyOut to deckAuthor.topologyIn;
-
-    interface rainTopologyRead : TopologyBundle
-        connect topologyWriter.topologyOut to rainDeckAuthor.topologyIn;
+        connect topologyWriter.topologyOut to assembler.topologyIn;
 
     interface caseAuthored : ManifestCaseSection
-        connect deckAuthor.caseOut to manifestStager.caseIn;
-
-    interface rainCaseAuthored : ManifestCaseSection
-        connect rainDeckAuthor.caseOut to manifestStager.caseIn;
+        connect assembler.caseOut to manifestStager.caseIn;
 
     interface caseStaged : ManifestCaseSection
         connect manifestStager.caseOut to workerEntrypoint.caseIn;
 
     interface serverFactsStaged : ServerFacts
-        connect deckAuthor.serverFactsOut to workerEntrypoint.serverFactsIn {
-        doc /*
-        pass-through: workerEntrypoint
-        */
-    }
-
-    interface rainServerFactsStaged : ServerFacts
-        connect rainDeckAuthor.serverFactsOut to workerEntrypoint.serverFactsIn {
+        connect assembler.serverFactsOut to workerEntrypoint.serverFactsIn {
         doc /*
         pass-through: workerEntrypoint
         */
@@ -627,7 +612,7 @@ package SolveSeam {
         uploaded. A reader importing worker code is a second computation of
         the same quantity, running outside the image that produced it.
 
-        forbid: trid3nt_server.workflows.telemac.steps.run_reads -> workers
+        forbid: trid3nt_server.workflows.telemac.products.run_reads -> workers
         forbid: trid3nt_server.workflows.solver.diagnostics -> workers
         */
     }
@@ -648,9 +633,9 @@ package SolveSeam {
         with itself.
 
         forbid: trid3nt_server.workflows.telemac.result_reader -> struct
-        forbid: trid3nt_server.workflows.telemac.postprocess_telemac -> struct
-        forbid: trid3nt_server.workflows.telemac.steps.run_reads -> struct
-        forbid: trid3nt_server.workflows.telemac.steps.deck -> struct
+        forbid: trid3nt_server.workflows.telemac.products.postprocess_telemac -> struct
+        forbid: trid3nt_server.workflows.telemac.products.run_reads -> struct
+        forbid: trid3nt_server.workflows.telemac.authoring.assembler -> struct
         */
     }
 
@@ -728,8 +713,8 @@ package SolveSeam {
     // ----------------------------------------------------------------- //
 
     satisfy requirement BoundaryCodesMatchTheSteering by topologyWriter;
-    satisfy requirement BoundaryCodesMatchTheSteering by deckAuthor;
-    satisfy requirement BoundaryCodesMatchTheSteering by deckStatements;
+    satisfy requirement BoundaryCodesMatchTheSteering by assembler;
+    satisfy requirement BoundaryCodesMatchTheSteering by steeringStatements;
     verify requirement BoundaryCodesMatchTheSteering by
         "tests/test_telemac_boundary_contract.py::test_flipping_the_strategy_moves_the_quad_and_the_keyword_together";
     verify requirement BoundaryCodesMatchTheSteering by
@@ -737,16 +722,16 @@ package SolveSeam {
     verify requirement BoundaryCodesMatchTheSteering by
         "tests/test_telemac_boundary_contract.py::test_a_liquid_run_that_straddles_the_first_row_is_ONE_boundary";
     verify requirement BoundaryCodesMatchTheSteering by
-        "tests/test_telemac_boundary_contract.py::test_the_deck_prescribes_at_the_number_whose_quad_reads_it";
+        "tests/test_telemac_boundary_contract.py::test_the_run_prescribes_at_the_number_whose_quad_reads_it";
     verify requirement BoundaryCodesMatchTheSteering by
         "tests/test_telemac_boundary_contract.py::test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing";
     verify requirement BoundaryCodesMatchTheSteering by
         "tests/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses";
 
-    satisfy requirement OutflowStageIsNormalDepth by deckStatements;
-    satisfy requirement OutflowStageIsNormalDepth by deckAuthor;
+    satisfy requirement OutflowStageIsNormalDepth by steeringStatements;
+    satisfy requirement OutflowStageIsNormalDepth by assembler;
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_decks_discharge";
+        "tests/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge";
     verify requirement OutflowStageIsNormalDepth by
         "tests/test_telemac_outflow_stage.py::test_the_friction_slope_is_the_measured_fall_over_the_measured_length";
     verify requirement OutflowStageIsNormalDepth by
@@ -760,18 +745,17 @@ package SolveSeam {
     verify requirement OutflowStageIsNormalDepth by
         "tests/test_telemac_outflow_stage.py::test_an_input_the_stage_cannot_be_derived_from_refuses_by_name";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_deck_states_the_stage_and_every_input_it_was_derived_from";
+        "tests/test_telemac_outflow_stage.py::test_the_run_states_the_stage_and_every_input_it_was_derived_from";
     verify requirement OutflowStageIsNormalDepth by
         "tests/test_telemac_outflow_stage.py::test_the_initial_depth_is_no_longer_the_level_the_run_is_anchored_at";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_stage_is_derived_at_the_roughness_the_deck_goes_on_to_write";
+        "tests/test_telemac_outflow_stage.py::test_the_stage_is_derived_at_the_roughness_the_run_goes_on_to_write";
 
     satisfy requirement MetricsAlways by workerEntrypoint;
     verify requirement MetricsAlways by
         "workers/telemac/test_entrypoint.py::test_a_child_that_dies_still_leaves_the_metrics_written";
 
-    satisfy requirement ServerFactsDoctrine by deckAuthor;
-    satisfy requirement ServerFactsDoctrine by rainDeckAuthor;
+    satisfy requirement ServerFactsDoctrine by assembler;
     satisfy requirement ServerFactsDoctrine by workerEntrypoint;
     verify requirement ServerFactsDoctrine by
         "workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding";
@@ -811,7 +795,7 @@ package SolveSeam {
     satisfy requirement NoSecondParserOfTheFormat by resultReader;
     satisfy requirement NoSecondParserOfTheFormat by resultPostprocess;
     satisfy requirement NoSecondParserOfTheFormat by runReader;
-    satisfy requirement NoSecondParserOfTheFormat by deckAuthor;
+    satisfy requirement NoSecondParserOfTheFormat by assembler;
     verify requirement NoSecondParserOfTheFormat by
         "tests/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format";
     verify requirement NoSecondParserOfTheFormat by

@@ -9,7 +9,7 @@ Offline. Nothing here solves; these pin the contract in
      params (``wire=False`` and every CONSTANT-door param stay off it, aliases and
      controls join it) and renders the docstring from that same narrowed set;
   4. a chart builder is the FUNCTION - a dotted string is refused, no fallback;
-  5. the slot/signature check runs BOTH ways: a member the deck writer does not
+  5. the slot/signature check runs BOTH ways: a member the author does not
      accept, and a required member no slot covers, are both refused while the
      plan value is being BUILT;
   6. the facade's four are MUST-FILL - a hole refuses at registration, so a
@@ -244,9 +244,9 @@ def test_an_unknown_physics_member_is_refused_while_the_plan_is_built():
     ops = _telemac()
     mesh = _reach_mesh()
     with pytest.raises(PlanValidationError) as ei:
-        ops.author(mesh=mesh, physics=Physics("tracer", not_a_deck_field=1.0),
+        ops.author(mesh=mesh, physics=Physics("tracer", not_an_author_field=1.0),
                    forcing=Forcing(carrier=Ref("carrier_discharge")))
-    assert "not_a_deck_field" in str(ei.value)
+    assert "not_an_author_field" in str(ei.value)
 
 
 def test_an_unknown_physics_PROCESS_is_refused_rather_than_authored():
@@ -258,16 +258,17 @@ def test_an_unknown_physics_PROCESS_is_refused_rather_than_authored():
     assert "magnetohydrodynamics" in str(ei.value)
 
 
-def test_the_mesh_recipe_reaches_the_deck_under_the_engine_s_own_names():
-    """The mesher's vocabulary is its library's; the deck's is TELEMAC's, and the
+def test_the_mesh_recipe_reaches_the_author_under_the_engine_s_own_names():
+    """The mesher's vocabulary is its library's; the author's is TELEMAC's, and the
     ONE agnostic size word is the only thing that crosses between them."""
     ops = _telemac()
     mesh = _reach_mesh(resolution_m=100.0)
-    deck = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
-                      forcing=Forcing(carrier=Ref("carrier_discharge"), rain=None))
-    assert deck.name == "deck" and deck.stage == "author"
-    assert deck.kwargs["mesh_resolution_m"] == 100.0
-    assert deck.kwargs["carrier_discharge"] == Ref("carrier_discharge")
+    authored = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
+                          forcing=Forcing(carrier=Ref("carrier_discharge"),
+                                          rain=None))
+    assert authored.name == "run" and authored.stage == "author"
+    assert authored.kwargs["mesh_resolution_m"] == 100.0
+    assert authored.kwargs["carrier_discharge"] == Ref("carrier_discharge")
 
 
 def test_the_plan_reads_a_data_name_off_the_templates_own_body():
@@ -308,13 +309,13 @@ def test_an_undeclared_data_name_refuses_at_registration_saying_it_is_a_data_nam
     assert "Declared Data: ['terrain']" in message
 
 
-# --- (5b) a REQUIRED deck field no slot covers is refused at construction ---- #
-def test_a_required_deck_field_no_slot_covers_refuses_at_plan_construction():
+# --- (5b) a REQUIRED author field no slot covers is refused at construction -- #
+def test_a_required_author_field_no_slot_covers_refuses_at_plan_construction():
     """The mirror of the unknown-member check, and the more expensive half.
 
     A Forcing with no ``carrier`` leaves ``carrier_discharge`` unfilled. Without
     this the plan builds, the geocode + flowline + discharge fetches all run, and
-    only then does write_reach_deck die on a TypeError - minutes and three network
+    only then does assemble_reach die on a TypeError - minutes and three network
     round-trips after the declaration that was already wrong.
     """
     ops = _telemac()
@@ -331,9 +332,9 @@ def test_the_covered_declaration_still_authors():
     """The guard refuses a HOLE, not every plan: the cohort shape still passes."""
     ops = _telemac()
     mesh = _reach_mesh()
-    deck = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
-                      forcing=Forcing(carrier=Ref("carrier_discharge")))
-    assert deck.kwargs["carrier_discharge"] == Ref("carrier_discharge")
+    authored = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
+                          forcing=Forcing(carrier=Ref("carrier_discharge")))
+    assert authored.kwargs["carrier_discharge"] == Ref("carrier_discharge")
 
 
 # --- (6) the EngineOps four are must-fill at REGISTRATION ------------------- #
@@ -537,11 +538,11 @@ def test_a_template_declares_its_mesh_as_a_frozen_recipe(name, module_path, mesh
 
 
 @pytest.mark.parametrize("name,module_path,mesher", _TEMPLATES)
-def test_the_deck_the_template_authors_reads_the_declared_mesh_fields(
+def test_the_run_the_template_authors_reads_the_declared_mesh_fields(
         name, module_path, mesher):
-    """Every deck ask carries the sizing the template declared, under the deck's
-    own name for it - which is the whole of what the mesh declaration owes the
-    author step."""
+    """Every author ask carries the sizing the template declared, under the
+    author's own name for it - which is the whole of what the mesh declaration
+    owes the author step."""
     module = _template(module_path)
     workflow = getattr(module, name).workflow
     author = [n for n in workflow.plan_decl(workflow)
@@ -550,19 +551,19 @@ def test_the_deck_the_template_authors_reads_the_declared_mesh_fields(
     assert "mesh_resolution_m" in author[0].kwargs
 
 
-def test_the_reach_templates_carry_the_reach_shape_into_the_deck():
+def test_the_reach_templates_carry_the_reach_shape_into_the_author():
     """The stretch still reaches the reach writer, off the physics block.
 
     It rides the physics block rather than the mesh ask: the mesher is handed a
-    polygon the chain measured, while the deck still states the stretch it wrote
+    polygon the chain measured, while the sheet still states the stretch it asked
     for."""
     module = _template("trid3nt_server.workflows.telemac.river_dye.river_dye")
     workflow = module.telemac_river_dye.workflow
-    deck = [n for n in workflow.plan_decl(workflow)
-            if getattr(n, "stage", "") == "author"][0]
+    authored = [n for n in workflow.plan_decl(workflow)
+                if getattr(n, "stage", "") == "author"][0]
     for field in ("reach_length_km", "mesh_resolution_m"):
-        assert field in deck.kwargs
-    assert deck.kwargs["reach"] == Ref("reach")
+        assert field in authored.kwargs
+    assert authored.kwargs["reach"] == Ref("reach")
 
 
 def test_the_catchment_mesh_step_carries_the_whole_recipe():

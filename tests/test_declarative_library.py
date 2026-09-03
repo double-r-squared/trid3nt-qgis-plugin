@@ -1215,7 +1215,7 @@ async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping()
     """The ledger must not flatten a step's artifact into the fields it printed.
 
     A mesh step returns the MeshArtifact beside the values read off it. Serialized
-    as plain JSON the object becomes a dict, and the second attempt hands the deck
+    as plain JSON the object becomes a dict, and the second attempt hands the step
     a mapping: the granularity read crashes on the missing ``probes`` and the
     containment read finds no ``provenance``, so a run that never declared a bbox
     is refused for having been cut from one.
@@ -1225,7 +1225,7 @@ async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping()
 
     plan = Plan("mesh_replay_w", None, (
         Step(runner=f"{_HERE}.stub_mesh_step").named("mesh"),
-        Step(runner=f"{_HERE}.stub_second").named("deck"),
+        Step(runner=f"{_HERE}.stub_second").named("run"),
     ))
     parent = await _run(plan, _params(), {"base": 11.0})
     await _seed_ledger("mesh_replay_w", {"base": 11.0},
@@ -2375,7 +2375,7 @@ class _StubFacade(Workflow):
         return (Step(runner=f"{_HERE}.stub_step").named("aoi"),)
 
     def author(self, *, mesh, physics, forcing):
-        return Step(runner=f"{_HERE}.stub_step").named("deck")
+        return Step(runner=f"{_HERE}.stub_step").named("run")
 
     def solve(self, **slots):
         return Step(runner=f"{_HERE}.stub_step").named("solve")

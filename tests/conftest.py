@@ -227,21 +227,21 @@ def _offline_cas_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     The parse is a docker round trip into the box where the engine's own
     dictionaries live, so a suite that must run offline cannot pay for it - the
     same treatment ``write_telemac_pair`` gets. What the suite proves instead is
-    the WIRING (the author hands the parser every deck it wrote, under the module
+    the WIRING (the author hands the parser every file it wrote, under the module
     whose dictionary reads it) and the REFUSAL shape; the parser itself is proved
-    against real decks in the image it runs in.
+    against real steering files in the image it runs in.
     """
-    def _parsed(rundir, decks):
+    def _parsed(rundir, steering):
         from pathlib import Path
 
         return {name: {"module": module, "ok": True, "keywords": 0}
-                for name, module in decks.items()
+                for name, module in steering.items()
                 if (Path(rundir) / name).is_file()}
 
     # Only the AUTHOR's binding: the gate's own module keeps its real function so
     # its tests exercise it with the container boundary stubbed one level lower.
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.authoring.author.validate_authored_decks",
+        "trid3nt_server.workflows.telemac.authoring.author.validate_authored_steering",
         _parsed)
 
 

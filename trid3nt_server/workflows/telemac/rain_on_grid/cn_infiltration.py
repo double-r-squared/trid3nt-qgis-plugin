@@ -12,7 +12,7 @@ is used the class-to-CN table is bypassed and CN2 is sampled straight from it.
 Two consumers, one module:
 
   * NATIVE runoff path -- TELEMAC v9.0.0 carries the SCS-CN runoff model
-    natively (``runoff_scs_cn.f``, Ligier 2016; deck keyword
+    natively (``runoff_scs_cn.f``, Ligier 2016; steering keyword
     ``RAINFALL-RUNOFF MODEL = 1`` + ``ANTECEDENT MOISTURE CONDITIONS`` +
     ``OPTION FOR INITIAL ABSTRACTION RATIO``). The engine reads a per-node CN2
     field from FORMATTED DATA FILE 2. This module builds that CN field
@@ -33,7 +33,7 @@ Two consumers, one module:
     ``RAINFALL-RUNOFF MODEL = 0`` (no double-counting infiltration).
 
 Every function is pure and unit-testable offline; nothing here touches the
-mesh, the deck, or the network.
+mesh, the steering file, or the network.
 """
 
 from __future__ import annotations

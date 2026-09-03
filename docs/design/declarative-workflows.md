@@ -402,8 +402,8 @@ waits per the hybrid rule).
   is the rule surface (reference fetchers simply lack .supplied()).
 - STRATEGY: doors and fallback ladders - interchangeable resolution
   policies.
-- TEMPLATE METHOD: per-engine step families (WriteDeck.telemac /
-  .swmm / .modflow) share the skeleton, override one serialization
+- TEMPLATE METHOD: per-engine step families (Assemble.reach /
+  .rain_on_grid) share the skeleton, override one serialization
   hook each - the generalization checkpoint made structural.
 - MEMENTO: the step ledger (completed steps + resolved params +
   artifact URIs) - powers the work a DERIVED rerun inherits from its
@@ -489,11 +489,11 @@ the contract and the code do not drift:
 * slots are unpacked by the facade at PLAN-CONSTRUCTION time, so `Step.kwargs`
   stays the plain mapping the interpreter already binds, and the declaration is
   checked against the deck writer's real signature there and then - in BOTH
-  directions: an unknown member is refused, and so is a required deck field no
+  directions: an unknown member is refused, and so is a required author field no
   slot covers (the second is the expensive one, because without it the plan
   builds and the failure lands after the fetches);
 * a step carries the `stage` its STEP-FAMILY CONSTRUCTOR stamps (`Geocode.reach`,
-  `WriteDeck.telemac`, `Solve.telemac`, `Products.*` each name their own), so
+  `Assemble.reach`, `Solve.telemac`, `Products.*` each name their own), so
   `plan.describe()` reads as the universal sequence. The facade ASSEMBLES the
   sequence; it does not label it. The ORDER is not enforced yet, because the mesh
   gate that sits mid-sequence does not exist and both cohort templates gate at

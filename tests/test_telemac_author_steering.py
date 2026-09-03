@@ -1,6 +1,6 @@
-"""The authored TELEMAC decks, read back as text (offline; no solve, no network).
+"""The authored TELEMAC steering files, read back as text (offline; no solve).
 
-These are the assertions the worker's own deck tests made, repointed at the
+These are the assertions the worker's own tests made, repointed at the
 server author. What they pin is the grammar the compiled parsers demand and the
 per-class wiring an in-image solve exposed - a guessed format crashes DAMOCLES or
 NESTOR's Fortran readers, and the failure names the wrong line.
@@ -31,13 +31,13 @@ _CENTERLINE = [(x, 0.0) for x in range(0, 1100, 100)]
 _REACH_POLYGON = [(-50.0, -30.0), (1050.0, -30.0), (1050.0, 30.0), (-50.0, 30.0)]
 
 
-def _author(tmp_path, *, restart=None, **deck) -> str:
+def _author(tmp_path, *, restart=None, **sheet) -> str:
     base = {"name": "reach", "inflow_q_m3s": 50.0, "init_depth_m": 2.0,
             "duration_s": 3600.0, "time_step_s": 1.0}
-    A.author_reach_deck(
-        tmp_path, deck={**base, **deck}, geometry="mesh.slf",
+    A.author_reach(
+        tmp_path, sheet={**base, **sheet}, geometry="mesh.slf",
         boundary="mesh.cli", results="r2d.slf", restart=restart,
-        cas_name="t2d_river.cas",
+        steering="t2d_river.cas",
         liquid_boundary_order=_ORDER, liquid_boundary_prescribes=_PRESCRIBES,
         bed=_BED, source_utm=_SOURCE,
         centerline_utm=_CENTERLINE, reach_polygon_utm=_REACH_POLYGON)
@@ -45,9 +45,9 @@ def _author(tmp_path, *, restart=None, **deck) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# The plain tracer deck: what every run writes, and what none of them add.
+# The plain tracer run: what every run writes, and what none of them add.
 # --------------------------------------------------------------------------- #
-def test_the_plain_deck_couples_nothing_and_writes_no_steering(tmp_path):
+def test_the_plain_run_couples_nothing_and_writes_no_module_steering(tmp_path):
     cas = _author(tmp_path)
     assert "COUPLING WITH" not in cas
     assert "WATER QUALITY PROCESS" not in cas
@@ -61,7 +61,7 @@ def test_the_prescribed_lists_follow_the_measured_order(tmp_path):
     """The walk numbers the outflow FIRST here, so the flowrate must be second.
 
     This is the whole reason the order is measured: written inflow-first, the
-    deck would put the discharge on the downstream cap and drive the reach
+    file would put the discharge on the downstream cap and drive the reach
     backwards, and nothing in the run would say so.
     """
     cas = _author(tmp_path)
@@ -69,7 +69,7 @@ def test_the_prescribed_lists_follow_the_measured_order(tmp_path):
     assert "PRESCRIBED ELEVATIONS           = 97.792;0.0" in cas
 
 
-def test_every_deck_line_is_inside_the_parser_limit(tmp_path):
+def test_every_authored_line_is_inside_the_parser_limit(tmp_path):
     cas = _author(tmp_path, name="longview_cowlitz_county_washington_98632_us")
     assert all(len(line) <= 72 for line in cas.splitlines())
 
@@ -136,7 +136,7 @@ def test_rain_states_a_clean_concentration_for_every_tracer(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# Continuation: the engine's own restart, authored into the deck.
+# Continuation: the engine's own restart, authored into the steering file.
 # --------------------------------------------------------------------------- #
 def test_a_run_that_starts_fresh_names_no_previous_computation(tmp_path):
     assert "PREVIOUS COMPUTATION FILE" not in _author(tmp_path)
@@ -146,7 +146,7 @@ def test_a_continued_run_names_the_previous_computation_file(tmp_path):
     """The file alone IS the continuation from release 9.0 - no arming boolean.
 
     The removed keyword is not merely redundant: DAMOCLES refuses a word its
-    dictionary does not carry, so writing it would fail the deck it was meant to
+    dictionary does not carry, so writing it would fail the file it was meant to
     continue.
     """
     cas = _author(tmp_path, continue_from="previous.slf")
@@ -154,7 +154,7 @@ def test_a_continued_run_names_the_previous_computation_file(tmp_path):
     assert "COMPUTATION CONTINUED" not in cas
 
 
-def test_the_deck_names_a_file_rather_than_wherever_it_came_from():
+def test_the_run_names_a_file_rather_than_wherever_it_came_from():
     """The engine opens a name in its own run directory, never a URI."""
     assert A.continuation_block("s3://runs/01J/restart_river.slf") == (
         "PREVIOUS COMPUTATION FILE       = restart_river.slf\n"
@@ -179,7 +179,7 @@ def test_a_run_writes_the_restart_record_only_when_it_is_asked_to(tmp_path):
     cas = _author(tmp_path, restart="restart_river.slf")
     assert "RESTART FILE                    = restart_river.slf" in cas
     # The format keyword already defaults to the double precision a perfect
-    # restart needs, so the deck states the file and nothing more.
+    # restart needs, so the file states it and nothing more.
     assert "RESTART FILE FORMAT" not in cas
 
 
@@ -340,7 +340,7 @@ def test_the_scheduled_action_digs_a_volume_over_a_window(tmp_path):
     _author(tmp_path, substance_class="sediment", erodible_bed=True,
             dredging=True, dredge_mode="scheduled", dredge_volume_m3=4000.0)
     act = (tmp_path / "nestor.act").read_text()
-    assert "RESTART = F" in act  # a Fortran logical, never the deck's YES/NO
+    assert "RESTART = F" in act  # a Fortran logical, never the .cas YES/NO
     assert "ActionType      = Dig_by_time" in act
     assert "FieldDig        = 101_channel" in act
     assert "DigVolume       = 4000" in act
@@ -378,14 +378,14 @@ def test_every_surface_reference_profile_carries_seven_reals(tmp_path):
     assert any(ln.startswith("END") for ln in lines)
 
 
-def _dredge(tmp_path, **deck):
-    polygon = deck.pop("polygon", _REACH_POLYGON)
-    return A.author_reach_deck(
-        tmp_path, deck={"name": "reach", "duration_s": 3600.0,
+def _dredge(tmp_path, **sheet):
+    polygon = sheet.pop("polygon", _REACH_POLYGON)
+    return A.author_reach(
+        tmp_path, sheet={"name": "reach", "duration_s": 3600.0,
                         "substance_class": "sediment", "erodible_bed": True,
-                        "dredging": True, **deck},
+                        "dredging": True, **sheet},
         geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
-        cas_name="t2d_river.cas", liquid_boundary_order=_ORDER,
+        steering="t2d_river.cas", liquid_boundary_order=_ORDER,
         liquid_boundary_prescribes=_PRESCRIBES, bed=_BED,
         source_utm=_SOURCE, centerline_utm=_CENTERLINE,
         reach_polygon_utm=polygon)
@@ -407,7 +407,7 @@ def test_the_dig_field_auto_fills_from_the_water_held_back_from_its_banks(tmp_pa
 
 def test_a_setback_wider_than_the_channel_excludes_the_stretch_itself(tmp_path):
     """Too narrow is not a rule: the shrunken polygon simply vanishes there."""
-    with pytest.raises(A.DeckAuthorError) as excinfo:
+    with pytest.raises(A.SteeringAuthorError) as excinfo:
         _dredge(tmp_path, dredge_bank_offset_m=40.0)
     assert excinfo.value.error_code == "TELEMAC_DREDGE_ZONE_TOO_NARROW"
     message = str(excinfo.value)
@@ -422,14 +422,14 @@ def test_a_supplied_polygon_wins_and_is_validated_inside_the_water(tmp_path):
 
 def test_a_supplied_polygon_on_dry_land_refuses(tmp_path):
     outside = [(400.0, 200.0), (600.0, 200.0), (600.0, 260.0), (400.0, 260.0)]
-    with pytest.raises(A.DeckAuthorError) as excinfo:
+    with pytest.raises(A.SteeringAuthorError) as excinfo:
         _dredge(tmp_path, dredge_zone_utm=outside)
     assert excinfo.value.error_code == "TELEMAC_DREDGE_ZONE_OUTSIDE_WATER"
 
 
 def test_a_dredge_run_with_no_reach_polygon_refuses(tmp_path):
     """The field is cut out of mapped water; with none there is nothing to cut."""
-    with pytest.raises(A.DeckAuthorError) as excinfo:
+    with pytest.raises(A.SteeringAuthorError) as excinfo:
         _dredge(tmp_path, polygon=None)
     assert excinfo.value.error_code == "TELEMAC_DREDGE_ZONE_UNMAPPED"
 
@@ -453,23 +453,23 @@ def test_oil_names_its_steering_and_moves_the_release_into_the_fortran(tmp_path)
 
 
 # --------------------------------------------------------------------------- #
-# Rain on grid: three paths, and the deck says which.
+# Rain on grid: two paths, and the steering file says which.
 # --------------------------------------------------------------------------- #
-def _rog(tmp_path, *, deck_extra=None, **kwargs) -> str:
-    A.author_rog_deck(
-        tmp_path, deck={"name": "creek", "duration_s": 7200.0,
-                        "time_step_s": 2.0, "output_interval_min": 3.0,
-                        **(deck_extra or {})},
+def _rog(tmp_path, *, sheet_extra=None, **kwargs) -> str:
+    A._author_rain_on_grid_steering(
+        tmp_path, sheet={"name": "creek", "duration_s": 7200.0,
+                         "time_step_s": 2.0, "output_interval_min": 3.0,
+                         **(sheet_extra or {})},
         geometry="rog.slf", boundary="rog.cli", results="r2d_rog.slf",
-        cas_name="t2d_rog.cas", cn_map="rog_cn_map.dat",
+        steering="t2d_rog.cas", cn_map="rog_cn_map.dat",
         friction_laws="rog_friction.tbl", zones_file="rog_zones.dat",
         rain_mm_per_day=48.0, outlet_boundary=1,
         outlet_prescribes="elevation", **kwargs)
     return (tmp_path / "t2d_rog.cas").read_text()
 
 
-def test_the_native_path_runs_the_engines_own_infiltration(tmp_path):
-    cas = _rog(tmp_path, runoff_path="native")
+def test_the_constant_path_runs_the_engines_own_infiltration(tmp_path):
+    cas = _rog(tmp_path)
     assert "RAINFALL-RUNOFF MODEL           = 1" in cas
     assert "ANTECEDENT MOISTURE CONDITIONS  = 2" in cas
     assert "FORMATTED DATA FILE 2           = rog_cn_map.dat" in cas
@@ -479,16 +479,9 @@ def test_the_native_path_runs_the_engines_own_infiltration(tmp_path):
     assert "INITIAL CONDITIONS              = 'ZERO ELEVATION'" in cas
 
 
-def test_the_preprocessed_path_takes_no_second_abstraction(tmp_path):
-    cas = _rog(tmp_path, runoff_path="preprocessing")
-    assert "RAINFALL-RUNOFF MODEL           = 0" in cas
-    assert "ANTECEDENT MOISTURE CONDITIONS" not in cas
-    assert "FORMATTED DATA FILE 2" not in cas
-
-
 def test_the_time_varying_path_names_the_image_baked_raindef3_fortran(tmp_path):
     """RAINDEF is a compile-time PARAMETER; the baked patch is the only door."""
-    cas = _rog(tmp_path, runoff_path="native", hyetograph_file="rog_hyeto.txt")
+    cas = _rog(tmp_path, hyetograph_file="rog_hyeto.txt")
     assert "FORMATTED DATA FILE 1           = rog_hyeto.txt" in cas
     # QUOTED: an absolute path starting with '/' reads as a COMMENT to
     # damocles, which erases the keyword and swallows the line after it.
@@ -501,16 +494,16 @@ def test_the_time_varying_path_names_the_image_baked_raindef3_fortran(tmp_path):
 
 
 def test_a_constant_rain_run_stages_no_fortran_at_all(tmp_path):
-    assert "FORTRAN FILE" not in _rog(tmp_path, runoff_path="native")
+    assert "FORTRAN FILE" not in _rog(tmp_path)
 
 
 def test_a_rain_window_shorter_than_the_run_lets_the_catchment_drain(tmp_path):
-    A.author_rog_deck(
-        tmp_path, deck={"name": "creek", "duration_s": 7200.0,
-                        "rain_duration_s": 1800.0},
+    A._author_rain_on_grid_steering(
+        tmp_path, sheet={"name": "creek", "duration_s": 7200.0,
+                         "rain_duration_s": 1800.0},
         geometry="rog.slf", boundary="rog.cli", results="r2d_rog.slf",
-        cas_name="t2d_rog.cas", cn_map="cn.dat", friction_laws="f.tbl",
-        zones_file="z.dat", rain_mm_per_day=48.0, runoff_path="native",
+        steering="t2d_rog.cas", cn_map="cn.dat", friction_laws="f.tbl",
+        zones_file="z.dat", rain_mm_per_day=48.0,
         outlet_boundary=1, outlet_prescribes="elevation")
     cas = (tmp_path / "t2d_rog.cas").read_text()
     assert "DURATION OF RAIN OR EVAPORATION IN HOURS = 0.5" in cas
@@ -529,7 +522,7 @@ def test_the_friction_pair_zones_the_distinct_manning_values(tmp_path):
 
 
 def test_the_curve_number_scatter_must_cover_every_node(tmp_path):
-    with pytest.raises(A.DeckAuthorError) as excinfo:
+    with pytest.raises(A.SteeringAuthorError) as excinfo:
         A.write_cn_map(tmp_path, "cn.dat", x=[0.0, 1.0], y=[0.0, 1.0],
                        cn2=[70.0])
     assert excinfo.value.error_code == "TELEMAC_ROG_CN_LENGTH_MISMATCH"
@@ -551,19 +544,19 @@ def test_the_hyetograph_appends_a_dry_tail_past_the_last_instant(tmp_path):
     ([], "TELEMAC_ROG_HYETO_EMPTY"),
 ])
 def test_a_hyetograph_that_is_not_one_refuses(tmp_path, blocks, code):
-    with pytest.raises(A.DeckAuthorError) as excinfo:
+    with pytest.raises(A.SteeringAuthorError) as excinfo:
         A.write_hyetograph_file(tmp_path, "hyeto.txt", blocks=blocks,
                                 duration_s=3600.0)
     assert excinfo.value.error_code == code
 
 
 # --------------------------------------------------------------------------- #
-# The output cadence, and the deck key that reaches no writer.
+# The output cadence, and the sheet key that reaches no writer.
 # --------------------------------------------------------------------------- #
-def test_the_cadence_converts_at_the_author_off_the_decks_own_time_step(tmp_path):
-    """Minutes between frames -> a count of solver steps, using THIS deck's dt.
+def test_the_cadence_converts_at_the_author_off_the_runs_own_time_step(tmp_path):
+    """Minutes between frames -> a count of solver steps, using THIS run's dt.
 
-    The conversion belongs beside the keyword because the deck's own time step is
+    The conversion belongs beside the keyword because the run's own time step is
     the only thing that turns one into the other; a step that converted upstream
     would have to be handed the dt it does not own.
     """
@@ -574,7 +567,7 @@ def test_the_cadence_converts_at_the_author_off_the_decks_own_time_step(tmp_path
     assert "GRAPHIC PRINTOUT PERIOD         = 600" in cas
 
 
-def test_no_cadence_leaves_the_decks_own_default_period(tmp_path):
+def test_no_cadence_leaves_the_authors_own_default_period(tmp_path):
     cas = _author(tmp_path, time_step_s=2.0)
     assert (f"GRAPHIC PRINTOUT PERIOD         = {A._DEFAULT_GRAPHIC_PERIOD}"
             in cas)
@@ -590,17 +583,17 @@ def test_a_cadence_finer_than_the_step_still_writes_every_step(tmp_path):
     ("reach", {"outupt_interval_min": 5.0}),
     ("rog", {"soil_store": True}),
 ])
-def test_a_deck_key_no_writer_reads_refuses_by_name(tmp_path, author, extra):
+def test_a_sheet_key_no_writer_reads_refuses_by_name(tmp_path, author, extra):
     """An unconsumed key is a knob that reads as applied and is not.
 
     Every one of these would otherwise be dropped in silence: a keyword the
     author stopped emitting, a typo one character off a real name, and a knob
     whose whole implementation left the tree.
     """
-    with pytest.raises(A.DeckAuthorError) as excinfo:
+    with pytest.raises(A.SteeringAuthorError) as excinfo:
         if author == "reach":
             _author(tmp_path, **extra)
         else:
-            _rog(tmp_path, runoff_path="native", deck_extra=extra)
-    assert excinfo.value.error_code == "TELEMAC_DECK_KEY_UNCONSUMED"
+            _rog(tmp_path, sheet_extra=extra)
+    assert excinfo.value.error_code == "TELEMAC_SHEET_KEY_UNCONSUMED"
     assert next(iter(extra)) in str(excinfo.value)

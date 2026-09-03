@@ -48,7 +48,7 @@ OIL_SUBSTANCE_PRESETS: dict[str, str] = {
     "oil": "light_crude",
 }
 
-#: First-order DECAY class: the deck couples WAQTEL with WATER QUALITY PROCESS =
+#: First-order DECAY class: the run couples WAQTEL with WATER QUALITY PROCESS =
 #: 17, whose nametrac branch applies a decay SINK to the existing dye tracer - no
 #: new tracer, no postprocess or contract change. ``law``: 1 = T90 bacterial
 #: die-off (coef = T90 hours), 2 = first-order (k in h^-1), 3 = first-order (k in
@@ -73,7 +73,7 @@ DECAY_SUBSTANCE_PRESETS: dict[str, dict[str, float]] = {
     "half-life": {"law": 2, "coef": 0.35},
 }
 
-#: GAIA SEDIMENT class: the deck couples GAIA, which appends one suspended class
+#: GAIA SEDIMENT class: the run couples GAIA, which appends one suspended class
 #: as a second tracer and writes gaia_river.slf CUMUL BED EVOL. ``grain_size`` is
 #: the default d50 in microns for the type - a demo default the ``grain_size_um``
 #: param overrides, never a measured site value (no bed-composition fetcher
@@ -125,7 +125,7 @@ GRADATION_PRESETS: dict[str, list[list[float]]] = {
     "fine_coarse_sand": [[120.0, 0.5], [800.0, 0.5]],
 }
 
-#: The label the deck author reads. Sanitized to alnum + separators because it
+#: The label the author reads. Sanitized to alnum + separators because it
 #: travels onto the manifest and into layer narration.
 _SUBSTANCE_MAX_CHARS = 24
 
@@ -151,8 +151,8 @@ def resolve_gradation(spec: list | str | None) -> list[list[float]] | None:
 
     Accepts a :data:`GRADATION_PRESETS` key, an explicit list of pairs (or
     ``{'d50_um','fraction'}`` dicts), or None. A surviving list of >= 2 classes is
-    what arms the multi-class deck; a 1-class list collapses to None (nothing to
-    sort). Mirrors the worker's own normalization so the tool and the deck author
+    what arms the multi-class run; a 1-class list collapses to None (nothing to
+    sort). Mirrors the worker's own normalization so the tool and the author
     agree on what counts as a usable gradation.
     """
     if spec is None:
@@ -263,7 +263,7 @@ def resolve_decay_law(payload: Any, half_life_hours: float | None,
 
 def resolve_grain(payload: Any, sediment_type: str | None,
                   grain_size_um: float | None) -> tuple[str, float]:
-    """The sediment type + d50 (microns) the deck carries, params overriding presets."""
+    """The sediment type + d50 (microns) the sheet carries, params overriding presets."""
     sed_type, sed_grain_um = "sand", 200.0
     if isinstance(payload, dict):
         sed_grain_um = float(payload.get("grain_size", 200.0))

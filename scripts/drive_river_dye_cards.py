@@ -10,7 +10,7 @@ release point, so this run exercises both:
     edited value reached the physics;
   * the DRAW card is answered with a real point, and the run has to AGREE with
     it - either the solver puts the source there (``--case honored``, which the
-    driver verifies against the deck the solver actually wrote), or the run
+    driver verifies against the steering file the solver actually read), or the run
     REFUSES typed rather than quietly releasing somewhere else
     (``--case refused``, a point off the meshed reach).
 
@@ -101,7 +101,7 @@ def _run(case: str, timeout: float):
 
 
 def _where_the_source_went(run_id: str) -> dict:
-    """The source coordinate the SOLVER wrote, off the run's own TELEMAC deck.
+    """The source coordinate the SOLVER read, off the run's own steering file.
 
     ``ABSCISSAE/ORDINATES OF SOURCES`` in ``t2d_river.cas`` is the point the
     solve released from, in the run's UTM zone. Reading it back is what makes
@@ -260,9 +260,9 @@ def main() -> int:
     ev.require_layer(name_contains="release", role="context")
     ev.require_layer(layer_type="mesh")
     rec = report["release_reconciliation"]
-    # The deck's own SOURCE coordinates against the drawn point: the pre-flight
-    # settled the release before the run, so where the solver put the source is
-    # the only reconciliation left to make.
+    # The steering file's own SOURCE coordinates against the drawn point: the
+    # pre-flight settled the release before the run, so where the solver put the
+    # source is the only reconciliation left to make.
     assert rec["drawn_to_source_m"] < 25.0, rec  # the marker IS where it released
     return 0
 

@@ -69,7 +69,7 @@ RUN = LiveRun(
 
 #: PLUMBING SMOKE, and nothing more. Every param is supplied so no card is left
 #: to answer, and the reach and the window are cut to the smallest thing that
-#: still exercises geocode -> flowline -> section -> mesh -> WAQTEL deck -> solve
+#: still exercises geocode -> flowline -> section -> mesh -> WAQTEL run -> solve
 #: -> products. A DO sag needs k1 * travel time of order one to exist at all, and
 #: 600 s over half a kilometre is four orders short of that: this run's sag
 #: numbers are NOT a physics answer and are not read as one. The physics lives in

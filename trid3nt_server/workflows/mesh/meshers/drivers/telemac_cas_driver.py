@@ -6,12 +6,12 @@ authoring directory and shells it; nothing here imports trid3nt code.
 
   python telemac_cas_driver.py /data/config.json /data
 
-Config key: ``decks`` - ``{steering basename: module}``, where the module names
-the dictionary the deck is read against (``telemac2d``, ``gaia``, ``waqtel``,
-...). Emits ``/data/telemac_cas_stats.json``: one row per deck carrying the
-keyword count it parsed, or the parse error and the keyword it names.
+Config key: ``steering`` - ``{basename: module}``, where the module names the
+dictionary the file is read against (``telemac2d``, ``gaia``, ``waqtel``, ...).
+Emits ``/data/telemac_cas_stats.json``: one row per file carrying the keyword
+count it parsed, or the parse error and the keyword it names.
 
-The parse runs with the file existence check OFF. A deck is validated at
+The parse runs with the file existence check OFF. A steering file is validated at
 AUTHORING time, before anything is staged, so the geometry and boundary files it
 names are legitimately not beside it yet; what is being checked is the grammar
 and the vocabulary, which is the half that a run cannot recover from.
@@ -27,10 +27,10 @@ sys.path.insert(0, "/opt/conda/opentelemac/scripts/python3")
 from execution.telemac_cas import TelemacCas, get_dico  # noqa: E402
 
 
-def parse_decks(cfg: dict) -> dict:
-    """Every deck the config names, read against its own dictionary."""
+def parse_steering(cfg: dict) -> dict:
+    """Every steering file the config names, read against its own dictionary."""
     rows = {}
-    for basename, module in dict(cfg.get("decks") or {}).items():
+    for basename, module in dict(cfg.get("steering") or {}).items():
         try:
             cas = TelemacCas(cfg["data_dir"] + "/" + basename, get_dico(module),
                              access="r", check_files=False)
@@ -46,7 +46,7 @@ def main() -> int:
     cfg = json.load(open(sys.argv[1]))
     out = sys.argv[2].rstrip("/")
     cfg["data_dir"] = out
-    rows = parse_decks(cfg)
+    rows = parse_steering(cfg)
     json.dump(rows, open(out + "/telemac_cas_stats.json", "w"), indent=2)
     print("TELEMAC_CAS_OK", json.dumps(rows))
     return 0

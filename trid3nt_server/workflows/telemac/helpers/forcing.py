@@ -1,7 +1,7 @@
-"""Declared forcing DATA for a TELEMAC reach: net rain/evaporation, carrier discharge.
+"""Declared forcing DATA: the rain that falls, and the flow that carries.
 
-Both are ``Data`` producers rather than steps: they are artifacts fetched for the
-current domain, and the plan Refs them into the deck.
+Three producers rather than steps: they are artifacts fetched for the current
+domain, and the plan Refs them into the sheet.
 
 Neither ever invents a number. The rain producer walks a DECLARED LADDER (a real
 gridMET storm total supersedes a user rate) and a gridMET failure REFUSES typed -
@@ -24,14 +24,21 @@ from typing import Any
 
 from trid3nt_server.workflows.lib import RATE, Step, TemporalSpec, transform_value
 
-from .errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
+from .errors import (
+    RainOnGridError,
+    TelemacDyeScenarioError,
+    TelemacDyeScenarioInputError,
+)
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.helpers.forcing")
 
 __all__ = ["CarrierDischarge", "ReviewResolvedInputs", "coerce_event_time",
            "event_time",
-           "resolve_carrier_discharge", "resolve_rain_forcing",
-           "review_resolved_inputs"]
+           "resolve_carrier_discharge", "resolve_rain_event",
+           "resolve_rain_forcing", "review_resolved_inputs"]
+
+#: Seconds in an hour, spelled once so no expression below spells it again.
+_HOUR_S = 3600.0
 
 _HELPERS = "trid3nt_server.workflows.telemac.helpers"
 
@@ -50,7 +57,7 @@ _NET_RAIN_MIN_MM_DAY, _NET_RAIN_MAX_MM_DAY = -50.0, 2000.0
 #: rungs are daily-cadence rates: gridMET's aggregate is a daily field the router
 #: time-reduces over the window, and a user rate is stated per day. TELEMAC's
 #: single RAIN OR EVAPORATION keyword reads mm/day, so a declaration that asked
-#: for anything else would be asking the deck for a number it cannot carry.
+#: for anything else would be asking the run for a number it cannot carry.
 _RAIN_NATIVE_INTERVAL, _RAIN_UNITS = "1D", "mm/day"
 
 
@@ -137,12 +144,12 @@ async def resolve_rain_forcing(*, rainfall_mm_per_day: float | None,
                                evaporation_mm_per_day: float | None,
                                gridmet_window: str | None,
                                temporal: TemporalSpec | None = None) -> dict[str, Any]:
-    """The SIGNED net rain-or-evaporation rate (mm/day) the deck carries.
+    """The SIGNED net rain-or-evaporation rate (mm/day) the sheet carries.
 
     A dated gridMET window is the storm total for that window; without one, an
     explicit user rate. Evaporation is then subtracted (TELEMAC's single signed
     RAIN OR EVAPORATION keyword). A ``None`` rate means no forcing was asked for,
-    and the deck stays byte-identical.
+    and the steering file stays byte-identical.
 
     ``temporal`` is the declaration's own ``.resample()`` / ``.normalize()``,
     checked against the cadence and units this producer actually delivers; the
@@ -474,4 +481,78 @@ def _nwm_nearest_streamflow(seed_lon: float, seed_lat: float,
         "reference_time": getattr(layer, "reference_time", None),
         "product": getattr(layer, "product", None) or "analysis_assim",
         "layer": layer,
+    }
+
+
+def _rain_window_bbox() -> tuple[float, float, float, float]:
+    """The extent the hyetograph is fetched over: the bound domain's own."""
+    from trid3nt_server.workflows.lib import current_domain
+
+    domain = current_domain()
+    if domain is None or domain.bbox is None:
+        raise RainOnGridError(
+            "the rain hyetograph cannot be fetched: no domain is bound. "
+            "Resolve the AOI first.",
+            error_code="TELEMAC_ROG_DOMAIN_UNBOUND")
+    return tuple(float(v) for v in domain.bbox)  # type: ignore[return-value]
+
+
+def resolve_rain_event(*, window: str | None, intensity_mm_per_hr: float,
+                       storm_duration_hr: float,
+                       sim_duration_hr: float | None) -> dict[str, Any]:
+    """The storm, as either a real hourly hyetograph or a constant design rate.
+
+    A BRANCH ON THE ASK, not a fallback ladder: a dated ``window`` fetches the
+    hourly AORC accumulation over the catchment and the run is driven by the REAL
+    intensity structure, which is what resolves the hydrograph SHAPE. With no
+    window the storm is a constant design rate over a declared duration - a
+    hypothetical, and the returned ``note`` labels it as one.
+
+    AORC rather than MRMS despite the argument's history: MRMS only covers
+    ~2020-10 onward, and a replication window that predates it would silently
+    return nothing.
+    """
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    if not window:
+        return {
+            "kind": "design_storm", "blocks": None, "series": None,
+            "intensity_mm_per_hr": float(intensity_mm_per_hr),
+            "duration_s": float(sim_duration_hr if sim_duration_hr
+                                else storm_duration_hr) * _HOUR_S,
+            # How long it RAINS, as distinct from how long the run watches: a
+            # window shorter than the run is what lets the recession limb appear.
+            "rain_duration_s": float(storm_duration_hr) * _HOUR_S,
+            "duration_basis": "user" if sim_duration_hr else "storm",
+            "note": (f"a CONSTANT design storm of {float(intensity_mm_per_hr):g} mm/h "
+                     f"over {float(storm_duration_hr):g} h - a hypothetical "
+                     "event, not a record."),
+        }
+    bbox = _rain_window_bbox()
+    sep = "/" if "/" in window else (".." if ".." in window else None)
+    if not sep:
+        raise RainOnGridError(
+            f"the rain window must be 'start/end' dates; got {window!r}.",
+            error_code="TELEMAC_ROG_BAD_WINDOW")
+    start, end = [s.strip() for s in window.split(sep, 1)]
+    payload = TOOL_REGISTRY["fetch_aorc_precip"].fn(
+        bbox=[float(v) for v in bbox], start_date=start, end_date=end)
+    payload = payload if isinstance(payload, dict) else getattr(payload, "__dict__", {})
+    mm = [max(0.0, float(v)) for v in payload["precip_mm"]]
+    if len(mm) < 2:
+        raise RainOnGridError(
+            f"AORC returned {len(mm)} hourly steps for {window!r}; a hyetograph "
+            "needs at least two. Widen the window or run the design storm.",
+            error_code="TELEMAC_ROG_EMPTY_HYETO")
+    blocks = [[float((i + 1) * _HOUR_S), round(mm[i], 5)] for i in range(len(mm))]
+    asked_s = float(sim_duration_hr or 0.0) * _HOUR_S
+    span_s = float(len(mm) * _HOUR_S)
+    return {
+        "kind": "hyetograph", "blocks": blocks, "series": mm,
+        "intensity_mm_per_hr": float(intensity_mm_per_hr),
+        "duration_s": max(asked_s, span_s),
+        "duration_basis": "user" if asked_s > span_s else "hyetograph",
+        "window": window, "total_mm": round(sum(mm), 3),
+        "note": (f"the REAL hourly AORC hyetograph over {window} - {len(mm)} steps, "
+                 f"{sum(mm):.3g} mm total."),
     }

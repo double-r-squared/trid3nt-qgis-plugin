@@ -24,7 +24,7 @@ _READERS = (
     "trid3nt_server/workflows/telemac/result_reader.py",
     "trid3nt_server/workflows/telemac/products/postprocess_telemac.py",
     "trid3nt_server/workflows/telemac/products/run_reads.py",
-    "trid3nt_server/workflows/telemac/authoring/deck.py",
+    "trid3nt_server/workflows/telemac/authoring/assembler.py",
 )
 
 _REPO = Path(__file__).resolve().parents[1]

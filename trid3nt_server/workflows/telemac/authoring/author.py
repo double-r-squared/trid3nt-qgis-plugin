@@ -1,4 +1,4 @@
-"""The AUTHOR step: the accepted mesh + the approved sheet -> TELEMAC's own decks.
+"""The accepted mesh + the approved sheet -> TELEMAC's own steering files.
 
 A ``.cas`` is a RECORD of the run - which boundary carries the flowrate, what the
 friction law is, which module is coupled - and a record has one author. That
@@ -17,16 +17,16 @@ module is called:
     the user could still move it.
 
 Every optional block is emitted ONLY when it was asked for, so a run that uses no
-module writes the deck it always wrote. Every line respects DAMOCLES's hard
+module writes the steering file it always wrote. Every line respects DAMOCLES's
 72-character limit: one long line derails the parser onto a later, valid line and
 the error names the wrong keyword.
 
-Which is why nothing here is trusted on inspection: every deck this module writes
-is read back by the ENGINE'S OWN parser, against the engine's own dictionary,
-before it is staged - see ``cas_validate``. And the sheet is read the same way in
-the other direction: every key the deck carries is one a writer below consumes or
-a record row names, or the authoring refuses by name rather than solving a run as
-though the key had never been set.
+Which is why nothing here is trusted on inspection: every steering file this
+module writes is read back by the ENGINE'S OWN parser, against the engine's own
+dictionary, before it is staged - see ``cas_validate``. And the sheet is read the
+same way in the other direction: every key it carries is one a writer below
+consumes or a record row names, or the authoring refuses by name rather than
+solving a run as though the key had never been set.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from .cas_validate import validate_authored_decks
+from .cas_validate import validate_authored_steering
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.author")
 
@@ -50,16 +50,16 @@ __all__ = [
     "RAINDEF3_USER_FORTRAN",
     "SOURCES_FILENAME",
     "WAQTEL_FILENAME",
-    "author_reach_deck",
-    "author_rog_deck",
+    "author_rain_on_grid",
+    "author_reach",
     "continuation_block",
     "normalize_gradation",
     "restart_block",
     "write_cn_map",
     "write_friction_files",
-    "write_gaia_deck",
+    "write_gaia_steering",
     "write_hyetograph_file",
-    "write_nestor_decks",
+    "write_nestor_inputs",
     "write_oil_inputs",
     "write_sources_outfall",
     "write_sources_pulse",
@@ -75,7 +75,7 @@ SOURCES_FILENAME = "river_sources.txt"
 #: patch is made ONCE at build time and the run STAGES it; a constant-rain run
 #: names nothing here and stages nothing.
 RAINDEF3_USER_FORTRAN = "/opt/trid3nt/user_fortran/raindef3"
-#: The WAQTEL steering file - its own DAMOCLES-parsed deck, named in the t2d cas.
+#: The WAQTEL steering file - DAMOCLES-parsed on its own, named in the t2d cas.
 WAQTEL_FILENAME = "t2d_river.waqtel"
 #: The GAIA steering file and the result SELAFIN carrying CUMUL BED EVOL.
 GAIA_STEERING_FILENAME = "gaia_river.cas"
@@ -83,7 +83,7 @@ GAIA_RESULT_FILENAME = "gaia_river.slf"
 NESTOR_ACTION_FILENAME = "nestor.act"
 NESTOR_POLYGON_FILENAME = "nestor.pol"
 NESTOR_SURFACE_REF_FILENAME = "nestor.ref"
-#: The time origin stamped into the t2d deck so NESTOR's absolute action dates
+#: The time origin stamped into the t2d steering file so NESTOR's action dates
 #: map to sim seconds through DateStringToSeconds (seconds since MARDAT/MARTIM).
 NESTOR_TIME_ORIGIN = (2024, 1, 1, 0, 0, 0)
 #: NESTOR matches a polygon NAME to an action's FieldDig/FieldDump on the first
@@ -99,7 +99,7 @@ _CAS_LINE_LIMIT = 72
 #: a space is markdown, and nothing here is ever read as markdown.
 _FILE_COMMENT = "#"
 
-#: What the deck leaves unsaid. These are the values the run is solved at when
+#: What the sheet leaves unsaid. These are the values the run is solved at when
 #: the sheet states none - the physics defaults, in the one place a reader can
 #: find them, rather than in a config object inside the container.
 _DEFAULTS: dict[str, Any] = {
@@ -119,7 +119,7 @@ _DEFAULTS: dict[str, Any] = {
     "duration_s": 3600.0,
     "time_step_s": 1.0,
     # A run that starts from a previous one's state names the file it starts
-    # from; absent, the deck states its own initial conditions and starts there.
+    # from; absent, the file states its own initial conditions and starts there.
     "continue_from": None,
     # WHERE ON THE SCENARIO'S OWN CLOCK this run begins. A fresh run starts at
     # zero and a continued one starts where the leg it continues stopped, so
@@ -128,7 +128,7 @@ _DEFAULTS: dict[str, Any] = {
     "start_time_s": 0.0,
     # The output CADENCE, in minutes between written frames. It converts to the
     # engine's own GRAPHIC PRINTOUT PERIOD - a count of steps - here, because the
-    # only thing that turns minutes into steps is the time step this same deck
+    # only thing that turns minutes into steps is the time step this same sheet
     # runs at. Absent, the run writes on :data:`_DEFAULT_GRAPHIC_PERIOD`.
     "output_interval_min": None,
     "friction_law": None,
@@ -191,13 +191,13 @@ _DEFAULTS: dict[str, Any] = {
 _DEFAULT_GRAPHIC_PERIOD = 200
 
 #: The bed roughness a reach is solved at when the sheet states none, as the
-#: Strickler coefficient the deck's default LAW OF BOTTOM FRICTION reads. It is
+#: Strickler coefficient the default LAW OF BOTTOM FRICTION reads. It is
 #: named rather than written twice: the outflow stage is a normal depth AT this
-#: roughness, and a stage derived at one number under a deck written at another
+#: roughness, and a stage derived at one number under a file written at another
 #: would be a level the run never sits at.
 _STRICKLER_DEFAULT = 33.0
 
-#: What the deck carries for the RECORD rather than for a steering keyword: the
+#: What the sheet carries for the RECORD rather than for a steering keyword: the
 #: seed the reach was navigated from, where the source ended up, which dataset
 #: painted the bed, the granularity the mesh was measured at, the regulatory
 #: standard the narration compares against. None of it reaches a ``.cas``, and
@@ -208,35 +208,35 @@ _RECORD_ONLY: frozenset[str] = frozenset((
     "mesh_size_m", "release_lon", "release_lat", "do_standard_mgl"))
 
 
-class DeckAuthorError(RuntimeError):
-    """A deck could not be authored; carries an open-set ``error_code``."""
+class SteeringAuthorError(RuntimeError):
+    """A steering file could not be authored; carries an open-set ``error_code``."""
 
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
         self.error_code = error_code
 
 
-def _consume(deck: Mapping[str, Any]) -> None:
-    """Every key the deck carries is one this author reads, or the run refuses.
+def _consume(sheet: Mapping[str, Any]) -> None:
+    """Every key the sheet carries is one this author reads, or the run refuses.
 
-    A deck key the author never reaches is the worst kind of silence: the sheet
+    A sheet key the author never reaches is the worst kind of silence: the sheet
     says the run was configured and the steering file it produced says otherwise,
     and nothing between them disagrees out loud. Naming the key is the whole
     point of the refusal - a typo, a knob whose writer left, and a step that
     renamed its output all arrive here as the same unread key.
     """
-    unknown = sorted(set(deck or {}) - set(_DEFAULTS) - _RECORD_ONLY)
+    unknown = sorted(set(sheet or {}) - set(_DEFAULTS) - _RECORD_ONLY)
     if unknown:
-        raise DeckAuthorError(
-            "TELEMAC_DECK_KEY_UNCONSUMED",
-            f"the deck carries {unknown}, which no author writer reads and no "
+        raise SteeringAuthorError(
+            "TELEMAC_SHEET_KEY_UNCONSUMED",
+            f"the sheet carries {unknown}, which no author writer reads and no "
             "record row names, so the run would be solved as though they had "
             "never been set. Either the caller has a typo or the writer that "
             "consumed them left.")
 
 
 def _graphic_period(P: _Sheet) -> int:
-    """The GRAPHIC PRINTOUT PERIOD in solver steps, off the deck's own dt."""
+    """The GRAPHIC PRINTOUT PERIOD in solver steps, off the sheet's own dt."""
     minutes = getattr(P, "output_interval_min", None)
     if minutes is None:
         return _DEFAULT_GRAPHIC_PERIOD
@@ -244,19 +244,19 @@ def _graphic_period(P: _Sheet) -> int:
 
 
 class _Sheet:
-    """Attribute view over the deck mapping, falling through to the defaults.
+    """Attribute view over the sheet mapping, falling through to the defaults.
 
     The writers below read the sheet by name. Reading through one view keeps the
-    deck a plain serializable mapping - the thing the run record IS - while the
+    sheet a plain serializable mapping - the thing the run record IS - while the
     writers stay readable as the keyword statements they produce.
     """
 
-    def __init__(self, deck: Mapping[str, Any]) -> None:
-        self._deck = dict(deck or {})
+    def __init__(self, sheet: Mapping[str, Any]) -> None:
+        self._sheet = dict(sheet or {})
 
     def __getattr__(self, name: str) -> Any:
-        if name in self._deck:
-            return self._deck[name]
+        if name in self._sheet:
+            return self._sheet[name]
         if name in _DEFAULTS:
             return _DEFAULTS[name]
         raise AttributeError(name)
@@ -281,7 +281,7 @@ def continuation_block(previous: Any) -> str:
     Re-entry is the ENGINE'S: naming a previous computation file IS the
     continuation from release 9.0 - the boolean that used to arm it left the
     dictionary - and the engine then reads that file's last record as the initial
-    state, so the deck's own initial-condition statements go unread. A continued
+    state, so the file's own initial-condition statements go unread. A continued
     run advances its own DURATION from where the previous one stopped.
 
     The file named is a RESTART FILE, which the engine writes in double
@@ -310,9 +310,9 @@ def restart_block(restart: Any) -> str:
     return f"RESTART FILE                    = {os.path.basename(str(restart))}\n"
 
 
-def _write_deck(rundir: Path | str, basename: str,
-                lines: Sequence[str]) -> str:
-    """Write a DAMOCLES-parsed deck, every line inside the character limit.
+def _write_steering(rundir: Path | str, basename: str,
+                    lines: Sequence[str]) -> str:
+    """Write a DAMOCLES-parsed file, every line inside the character limit.
 
     One over-long line does not fail where it is: the parser runs on and blames a
     later, valid keyword, so the clamp is applied to the whole file rather than
@@ -381,7 +381,7 @@ def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
     data: the friction slope is the fall the accepted mesh carries between its
     two role faces over the length of the line it was built on, the channel is
     the section that mesh's outflow face cuts, the roughness is the coefficient
-    THIS deck writes, and the discharge is the one it prescribes upstream. It
+    THIS file writes, and the discharge is the one it prescribes upstream. It
     imports no gauge, no rating curve and no datum of its own, which is why it is
     the community default wherever the bed came from a surface rather than a
     survey.
@@ -400,7 +400,7 @@ def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
     section = [(float(o), float(z))
                for o, z in (bed.get("outflow_section") or ())]
     if len(section) < 2:
-        raise DeckAuthorError(
+        raise SteeringAuthorError(
             "TELEMAC_OUTFLOW_SECTION_UNMEASURED",
             f"the outflow stage is a normal depth over the channel the outflow "
             f"face cuts, and the measured reach carries {len(section)} point(s) "
@@ -409,7 +409,7 @@ def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
     drop = float(bed["bed_drop_m"])
     slope = drop / length if length > 0.0 else 0.0
     if slope <= 0.0:
-        raise DeckAuthorError(
+        raise SteeringAuthorError(
             "TELEMAC_OUTFLOW_SLOPE_UNMEASURED",
             f"the friction slope is the measured fall {drop:.3f} m over the "
             f"measured reach length {length:.1f} m, which is {slope:.6g}; a reach "
@@ -418,9 +418,9 @@ def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
             "than from the reach itself.")
     law = 3 if P.friction_law is None else int(P.friction_law)
     if law not in _CONVEYANCE:
-        raise DeckAuthorError(
+        raise SteeringAuthorError(
             "TELEMAC_OUTFLOW_FRICTION_UNREADABLE",
-            f"the deck is written under bottom-friction law {law}, whose "
+            f"the steering file is written under bottom-friction law {law}, whose "
             f"coefficient is not a conveyance {sorted(_CONVEYANCE)} reads, so the "
             "outflow stage cannot be a normal depth under the roughness this run "
             "is actually solved at.")
@@ -429,10 +429,10 @@ def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
                    else float(P.friction_coefficient))
     discharge_q = float(P.inflow_q_m3s)
     if coefficient <= 0.0 or discharge_q <= 0.0:
-        raise DeckAuthorError(
+        raise SteeringAuthorError(
             "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE",
             f"a normal depth needs a positive roughness and a positive "
-            f"discharge; this deck states {law_name} {coefficient:g} and "
+            f"discharge; this file states {law_name} {coefficient:g} and "
             f"{discharge_q:g} m3/s.")
     conveyance = 1.0 / coefficient if reciprocal else coefficient
     root_slope = math.sqrt(slope)
@@ -448,7 +448,7 @@ def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
     while discharge(top) < discharge_q:
         top = thalweg + 2.0 * (top - thalweg)
         if top - thalweg > _STAGE_CEILING_M:
-            raise DeckAuthorError(
+            raise SteeringAuthorError(
                 "TELEMAC_OUTFLOW_STAGE_UNCONVEYABLE",
                 f"the measured outflow section conveys {discharge_q:g} m3/s only "
                 f"more than {_STAGE_CEILING_M:g} m above its own bed at slope "
@@ -462,18 +462,18 @@ def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# The TELEMAC-2D reach deck and the files it names.
+# The TELEMAC-2D reach steering file and the files it names.
 # --------------------------------------------------------------------------- #
-def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
-                      geometry: str, boundary: str, results: str,
-                      cas_name: str, liquid_boundary_order: Sequence[str],
-                      liquid_boundary_prescribes: Sequence[str],
-                      bed: Mapping[str, Any], source_utm: tuple[float, float],
-                      restart: str | None = None,
-                      centerline_utm: Any = None,
-                      reach_polygon_utm: Any = None,
-                      node_xy: Any = None, node_bed: Any = None
-                      ) -> dict[str, Any]:
+def author_reach(rundir: Path | str, *, sheet: Mapping[str, Any],
+                 geometry: str, boundary: str, results: str, steering: str,
+                 liquid_boundary_order: Sequence[str],
+                 liquid_boundary_prescribes: Sequence[str],
+                 bed: Mapping[str, Any], source_utm: tuple[float, float],
+                 restart: str | None = None,
+                 centerline_utm: Any = None,
+                 reach_polygon_utm: Any = None,
+                 node_xy: Any = None, node_bed: Any = None
+                 ) -> dict[str, Any]:
     """Write the reach ``.cas`` and every file it names -> what was written.
 
     Clean flow drives the reach - a flowrate in at the inflow, a stage at the
@@ -490,12 +490,12 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     ``bed`` is the reach MEASURED on the
     accepted mesh - the bed at its declared roles, the section its outflow face
     cuts, and the length it was built over - which the outflow stage is derived
-    from as a normal depth and which the deck states alongside the result.
+    from as a normal depth and which the file states alongside the result.
     ``restart`` is the perfect-restart record this run writes for whatever run
     continues it.
     """
-    _consume(deck)
-    P = _Sheet(deck)
+    _consume(sheet)
+    P = _Sheet(sheet)
     rundir = Path(rundir)
     substance = str(getattr(P, "substance_class", "tracer")).lower()
     is_do_sag = substance == "do_sag"
@@ -506,7 +506,7 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     normal = _normal_depth_stage(P, bed)
     outflow_stage = normal["stage_m"]
     # The prescribed stage is a number a reader has to be able to check against
-    # the geometry file, so the deck states every input it was derived from
+    # the geometry file, so the file states every input it was derived from
     # rather than only the result.
     bed_line = (f"/  Measured bed: inflow {bed_top:.3f} m, "
                 f"outflow {bed_out:.3f} m\n"
@@ -520,25 +520,25 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     for number, (role, prescribes) in enumerate(
             zip(liquid_boundary_order, liquid_boundary_prescribes), start=1):
         if prescribes not in ("flowrate", "elevation"):
-            raise DeckAuthorError(
+            raise SteeringAuthorError(
                 "TELEMAC_BOUNDARY_PRESCRIBES_NOTHING",
                 f"liquid boundary {number} ({role!r}) carries a .cli code quad "
-                f"that prescribes {prescribes!r}, so nothing this deck writes at "
+                f"that prescribes {prescribes!r}, so nothing this file writes at "
                 "that number would be read; the boundary file and the steering "
                 "file would describe different boundaries.")
         flowrates.append(f"{P.inflow_q_m3s}" if prescribes == "flowrate" else "0.0")
         elevations.append(f"{outflow_stage:.3f}" if prescribes == "elevation"
                           else "0.0")
         tracers += _clean_river_tracers(P) if is_do_sag else ["0.0"]
-    # Each number, its role and what its own .cli quad prescribes: the deck's
+    # Each number, its role and what its own .cli quad prescribes: the run's
     # record of the agreement, checkable against the boundary file beside it.
     boundary_line = ", ".join(
         f"{n} {role}={what}" for n, (role, what) in enumerate(
             zip(liquid_boundary_order, liquid_boundary_prescribes), start=1))
 
     sx, sy = float(source_utm[0]), float(source_utm[1])
-    written["sources"] = (write_sources_outfall(rundir, deck=deck) if is_do_sag
-                          else write_sources_pulse(rundir, deck=deck))
+    written["sources"] = (write_sources_outfall(rundir, sheet=sheet) if is_do_sag
+                          else write_sources_pulse(rundir, sheet=sheet))
     sources_file_line = f"SOURCES FILE                    = {SOURCES_FILENAME}\n"
     # The tracer array at the source is sized to the module's tracer count: four
     # when WAQTEL O2 has appended DISSOLVED O2, ORGANIC LOAD and NH4 LOAD behind
@@ -605,7 +605,7 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
         graphic_variables = "'U,V,H,S,B,T1,T2,T3,T4'"
         initial_tracers = f"0.;{float(P.do_sag_upstream_do_mgl):g};0.;0."
     elif substance == "sediment" and not bool(P.erodible_bed):
-        # GAIA's suspended class arrives as a SECOND t2d tracer: the deck must
+        # GAIA's suspended class arrives as a SECOND t2d tracer: the file must
         # output it, and PRESCRIBED TRACERS VALUES must cover both tracers on
         # every liquid boundary or the solver refuses for want of values.
         graphic_variables = "'U,V,H,S,B,T1,T2'"
@@ -683,7 +683,7 @@ COEFFICIENT FOR DIFFUSION OF TRACERS     = {tracer_diff}
         # presence activates it. Floats released in shallow margins or against a
         # wall are dropped from the drogues tracker, so the release the module
         # gets is the clearance-snapped point the caller settled.
-        written.update(write_oil_inputs(rundir, deck=deck, x=sx, y=sy))
+        written.update(write_oil_inputs(rundir, sheet=sheet, x=sx, y=sy))
         cas += (
             "/\n"
             "FORTRAN FILE                    = user_fortran\n"
@@ -697,28 +697,28 @@ COEFFICIENT FOR DIFFUSION OF TRACERS     = {tracer_diff}
         # Process 17's nametrac branch applies a decay SINK to every existing user
         # tracer, so it rides on the unchanged dye: zero new tracers, and the law
         # and its coefficient live in the steering file.
-        written["waqtel"] = write_waqtel_decay(rundir, deck=deck)
+        written["waqtel"] = write_waqtel_decay(rundir, sheet=sheet)
         cas += ("/\n"
                 "COUPLING WITH                   = 'WAQTEL'\n"
                 f"WAQTEL STEERING FILE            = {WAQTEL_FILENAME}\n"
                 "WATER QUALITY PROCESS           = 17\n")
 
     if is_do_sag:
-        written["waqtel"] = write_waqtel_o2(rundir, deck=deck)
+        written["waqtel"] = write_waqtel_o2(rundir, sheet=sheet)
         cas += ("/\n"
                 "COUPLING WITH                   = 'WAQTEL'\n"
                 f"WAQTEL STEERING FILE            = {WAQTEL_FILENAME}\n"
                 "WATER QUALITY PROCESS           = 2\n")
 
     if substance == "sediment":
-        written["gaia"] = write_gaia_deck(rundir, deck=deck, geometry=geometry,
+        written["gaia"] = write_gaia_steering(rundir, sheet=sheet, geometry=geometry,
                                           boundary=boundary)
         cas += ("/\n"
                 "COUPLING WITH                   = 'GAIA'\n"
                 f"GAIA STEERING FILE              = {GAIA_STEERING_FILENAME}\n")
         if bool(P.dredging):
-            written["nestor"] = write_nestor_decks(
-                rundir, deck=deck, centerline_utm=centerline_utm,
+            written["nestor"] = write_nestor_inputs(
+                rundir, sheet=sheet, centerline_utm=centerline_utm,
                 reach_polygon_utm=reach_polygon_utm,
                 node_xy=node_xy, node_bed=node_bed)
             year, month, day, hour, minute, second = NESTOR_TIME_ORIGIN
@@ -735,21 +735,21 @@ COEFFICIENT FOR DIFFUSION OF TRACERS     = {tracer_diff}
             lines.append(f"TITLE : '{str(P.name)[:40]} REACH'"[:_CAS_LINE_LIMIT])
         else:
             lines.append(line)
-    Path(rundir, cas_name).write_text("\n".join(lines) + "\n", encoding="utf-8")
-    written["cas"] = cas_name
-    # Every DAMOCLES-parsed deck this authoring wrote, each against its own
+    Path(rundir, steering).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    written["steering"] = steering
+    # Every DAMOCLES-parsed file this authoring wrote, each against its own
     # module's dictionary. The NESTOR and oil inputs are read by their modules'
     # own Fortran readers, not by DAMOCLES, and carry no dictionary to check.
-    validate_authored_decks(rundir, {cas_name: "telemac2d",
-                                     WAQTEL_FILENAME: "waqtel",
-                                     GAIA_STEERING_FILENAME: "gaia"})
-    logger.info("reach deck authored: %s substance=%s lb_order=%s -> %s",
-                cas_name, substance, list(liquid_boundary_order), sorted(written))
+    validate_authored_steering(rundir, {steering: "telemac2d",
+                                        WAQTEL_FILENAME: "waqtel",
+                                        GAIA_STEERING_FILENAME: "gaia"})
+    logger.info("reach steering authored: %s substance=%s lb_order=%s -> %s",
+                steering, substance, list(liquid_boundary_order), sorted(written))
     return written
 
 
 def write_sources_pulse(rundir: Path | str, *,
-                        deck: Mapping[str, Any]) -> str:
+                        sheet: Mapping[str, Any]) -> str:
     """The SOURCES FILE: a finite pulse, then the point source stops.
 
     Columns are TELEMAC-2D's own source names - ``T`` (s), ``Q(1)`` (m3/s carrier
@@ -765,12 +765,12 @@ def write_sources_pulse(rundir: Path | str, *,
     stated duration has already elapsed continues as zero, which is what a finite
     release means, rather than being re-released into a second experiment.
     """
-    P = _Sheet(deck)
+    P = _Sheet(sheet)
     window = float(P.pulse_window_s)
     discharge = float(P.source_q_m3s)
     concentration = float(P.dye_conc_mgl)
     end = max(float(P.start_time_s) + float(P.duration_s) + 100.0, window + 100.0)
-    return _write_deck(rundir, SOURCES_FILENAME, [
+    return _write_steering(rundir, SOURCES_FILENAME, [
         "#", "T Q(1) TR(1,1)", "s m3/s mg/l",
         f"0.0 {discharge:.3f} {concentration:.3f}",
         f"{window:.3f} {discharge:.3f} {concentration:.3f}",
@@ -801,7 +801,7 @@ def _effluent_tracers(P: Any) -> list[str]:
             f"{float(P.do_sag_effluent_bod_mgl):g}", "0.0"]
 
 
-def write_sources_outfall(rundir: Path | str, *, deck: Mapping[str, Any]) -> str:
+def write_sources_outfall(rundir: Path | str, *, sheet: Mapping[str, Any]) -> str:
     """The OUTFALL time series: a CONTINUOUS discharge of organic load.
 
     Columns ``T``, ``Q(1)`` and ``TR(1,1..4)`` - the names TELEMAC's own sources
@@ -811,25 +811,25 @@ def write_sources_outfall(rundir: Path | str, *, deck: Mapping[str, Any]) -> str
     runs past where this run stops so the time interpolation never reads off the
     end.
     """
-    P = _Sheet(deck)
+    P = _Sheet(sheet)
     q = float(P.do_sag_effluent_q_m3s)
     tr = " ".join(_effluent_tracers(P))
     end = float(P.start_time_s) + float(P.duration_s) + 100.0
-    return _write_deck(rundir, SOURCES_FILENAME, [
+    return _write_steering(rundir, SOURCES_FILENAME, [
         "#", "T Q(1) TR(1,1) TR(1,2) TR(1,3) TR(1,4)", "s m3/s mg/l mg/l mg/l mg/l",
         f"0.0 {q:.4f} {tr}", f"{end:.3f} {q:.4f} {tr}"])
 
 
-def write_waqtel_decay(rundir: Path | str, *, deck: Mapping[str, Any]) -> str:
+def write_waqtel_decay(rundir: Path | str, *, sheet: Mapping[str, Any]) -> str:
     """The WAQTEL steering for first-order tracer DEGRADATION (process 17).
 
     Two keys, sized to the one user tracer: the law (1 = T90 die-off in hours,
     2 = first-order k per hour, 3 = per day) and its coefficient.
     """
-    P = _Sheet(deck)
+    P = _Sheet(sheet)
     law = int(getattr(P, "decay_law", 1))
     coef = float(getattr(P, "decay_coef", 2.0))
-    return _write_deck(rundir, WAQTEL_FILENAME, [
+    return _write_steering(rundir, WAQTEL_FILENAME, [
         "/------------------------------------------------------------------/",
         "/  WAQTEL steering - first-order tracer DEGRADATION (process 17)",
         f"/  law={law} (1=T90 h, 2=k h^-1, 3=k d^-1)  coef={coef:g}  ntrac=1",
@@ -838,7 +838,7 @@ def write_waqtel_decay(rundir: Path | str, *, deck: Mapping[str, Any]) -> str:
         f"COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION = {coef:g}"])
 
 
-def write_waqtel_o2(rundir: Path | str, *, deck: Mapping[str, Any]) -> str:
+def write_waqtel_o2(rundir: Path | str, *, sheet: Mapping[str, Any]) -> str:
     """The WAQTEL steering for the O2 module (process 2) - the sag kinetics.
 
     The eutrophication and benthic oxygen sources are zeroed and nitrification is
@@ -847,13 +847,13 @@ def write_waqtel_o2(rundir: Path | str, *, deck: Mapping[str, Any]) -> str:
     coefficient rather than computing one from the modeled velocity and depth,
     and a zero formula for CS uses the constant saturation given.
     """
-    P = _Sheet(deck)
+    P = _Sheet(sheet)
     k1 = float(getattr(P, "do_k1_per_day", 0.3))
     k2 = float(getattr(P, "do_k2_per_day", 0.9))
     formk2 = int(getattr(P, "do_k2_formula", 0))
     saturation = float(getattr(P, "do_sat_mgl", 9.0))
     temperature = float(getattr(P, "do_water_temp_c", 20.0))
-    return _write_deck(rundir, WAQTEL_FILENAME, [
+    return _write_steering(rundir, WAQTEL_FILENAME, [
         "/------------------------------------------------------------------/",
         "/  WAQTEL O2 steering - dissolved-oxygen sag (process 2)",
         f"/  k1={k1:g} k2={k2:g} (FORMK2={formk2}) Cs={saturation:g} "
@@ -904,7 +904,7 @@ def normalize_gradation(raw: Any) -> list[tuple[float, float]]:
     return [(micron, fraction / total) for micron, fraction in out]
 
 
-def write_gaia_deck(rundir: Path | str, *, deck: Mapping[str, Any],
+def write_gaia_steering(rundir: Path | str, *, sheet: Mapping[str, Any],
                     geometry: str, boundary: str) -> str:
     """The GAIA steering, in one of the three shapes the sheet selects.
 
@@ -924,7 +924,7 @@ def write_gaia_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     one. Cohesive sediment is approximated as very fine non-cohesive - the
     Krone/Partheniades path is not emitted.
     """
-    P = _Sheet(deck)
+    P = _Sheet(sheet)
     concentration = max(float(getattr(P, "dye_conc_mgl", 100.0)) / 1000.0, 0.0)
     d50_m = max(float(getattr(P, "grain_size_um", 200.0)), 1.0) * 1.0e-6
     density = float(getattr(P, "sediment_density", 2650.0))
@@ -1019,7 +1019,7 @@ def write_gaia_deck(rundir: Path | str, *, deck: Mapping[str, Any],
         lines = (lines[:-1] + nestor + [lines[-1]]
                  if lines and lines[-1].startswith("MASS-BALANCE")
                  else lines + nestor)
-    return _write_deck(rundir, GAIA_STEERING_FILENAME, lines)
+    return _write_steering(rundir, GAIA_STEERING_FILENAME, lines)
 
 
 # --------------------------------------------------------------------------- #
@@ -1071,7 +1071,7 @@ def _reach_water(reach_polygon_utm: Any) -> Any:
     from shapely.ops import unary_union
 
     if reach_polygon_utm is None:
-        raise DeckAuthorError(
+        raise SteeringAuthorError(
             "TELEMAC_DREDGE_ZONE_UNMAPPED",
             "a dredge field is cut out of the reach's own mapped water and no "
             "reach polygon was handed to the author, so there is nothing to cut "
@@ -1101,7 +1101,7 @@ def _dredge_field(water: Any, box: Any, offset_m: float, length_m: float, *,
     if field is None:
         wetted = _at_station(box.intersection(water), station)
         measured = 0.0 if wetted is None else wetted.area / max(float(length_m), 1e-6)
-        raise DeckAuthorError(
+        raise SteeringAuthorError(
             "TELEMAC_DREDGE_ZONE_TOO_NARROW",
             f"the {what} field is empty: at this station the reach's mapped water "
             f"measures about {measured:.1f} m across, and a {float(offset_m):g} m "
@@ -1138,11 +1138,11 @@ def _supplied_field(corners: Any, water: Any, *, what: str
     polygon = Polygon([(float(x), float(y)) for x, y in corners]).buffer(0)
     if not water.contains(polygon):
         outside = polygon.difference(water).area / max(polygon.area, 1e-9)
-        raise DeckAuthorError(
+        raise SteeringAuthorError(
             "TELEMAC_DREDGE_ZONE_OUTSIDE_WATER",
             f"the supplied {what} polygon lies {outside:.0%} outside the reach's "
-            "mapped water; a dig or a dump on dry land is not a run this deck "
-            "can author.")
+            "mapped water; a dig or a dump on dry land is not a run this "
+            "author can write.")
     return _ring(polygon)
 
 
@@ -1285,7 +1285,7 @@ def _write_nestor_surface_ref(rundir: Path | str, centerline: Any, *,
     return _write_lines(rundir, NESTOR_SURFACE_REF_FILENAME, lines + ["END"])
 
 
-def write_nestor_decks(rundir: Path | str, *, deck: Mapping[str, Any],
+def write_nestor_inputs(rundir: Path | str, *, sheet: Mapping[str, Any],
                        centerline_utm: Any, reach_polygon_utm: Any,
                        node_xy: Any = None, node_bed: Any = None
                        ) -> dict[str, Any]:
@@ -1293,11 +1293,11 @@ def write_nestor_decks(rundir: Path | str, *, deck: Mapping[str, Any],
 
     The design grade is the mean bed over the dig field when the sheet states
     none - the grade a maintenance dredge digs back TO is the channel that is
-    there, not a number invented for the deck.
+    there, not a number invented for the steering file.
     """
     from trid3nt_server.workflows.lib import journal_note
 
-    P = _Sheet(deck)
+    P = _Sheet(sheet)
     dig, dump, measured = _dredge_zones(P, centerline_utm, reach_polygon_utm)
     _write_nestor_polygons(rundir, dig, dump)
     _write_nestor_action(rundir, P, dump is not None)
@@ -1365,13 +1365,13 @@ OIL_PRESETS: dict[str, dict[str, Any]] = {
         rho=960.0, eta=5.0e-4, voldev=30.0, tamb=288.0, etal=1),
 }
 
-#: The oil user-fortran template ships beside this module: the deck names a
+#: The oil user-fortran template ships beside this module: the steering file names a
 #: FORTRAN FILE and the release coordinates are compiled INTO it, so the file is
 #: per-run and the run directory is where it is written.
 _OIL_TEMPLATE_DIR = Path(__file__).resolve().parent / "oil_templates"
 
 
-def write_oil_inputs(rundir: Path | str, *, deck: Mapping[str, Any],
+def write_oil_inputs(rundir: Path | str, *, sheet: Mapping[str, Any],
                      x: float, y: float) -> dict[str, str]:
     """The oil steering file and the per-run ``oil_flot.f`` -> what was written.
 
@@ -1379,7 +1379,7 @@ def write_oil_inputs(rundir: Path | str, *, deck: Mapping[str, Any],
     the coordinates are rewritten to this run's, because a release the flow never
     reaches produces a clean run and an empty slick.
     """
-    P = _Sheet(deck)
+    P = _Sheet(sheet)
     preset_name = str(getattr(P, "oil_preset", "light_crude"))
     preset = OIL_PRESETS.get(preset_name, OIL_PRESETS["light_crude"])
     lines = [f"{preset_name.upper()} - trid3nt oil preset",
@@ -1403,11 +1403,14 @@ def write_oil_inputs(rundir: Path | str, *, deck: Mapping[str, Any],
     fortran = Path(rundir, "user_fortran")
     fortran.mkdir(parents=True, exist_ok=True)
     (fortran / "oil_flot.f").write_text(template, encoding="utf-8")
-    return {"steering": "oil_spill.txt", "fortran": "user_fortran/oil_flot.f"}
+    # The engine compiles the DIRECTORY its FORTRAN FILE statement names, so the
+    # report states the directory: the manifest channel and the steering keyword
+    # are then the same word rather than two derivations of it.
+    return {"oil_steering": "oil_spill.txt", "user_fortran": "user_fortran"}
 
 
 # --------------------------------------------------------------------------- #
-# The rain-on-grid deck and the distributed fields it names.
+# The rain-on-grid steering file and the distributed fields it names.
 # --------------------------------------------------------------------------- #
 def write_cn_map(rundir: Path | str, basename: str, *, x: Any, y: Any,
                  cn2: Any) -> str:
@@ -1421,7 +1424,7 @@ def write_cn_map(rundir: Path | str, basename: str, *, x: Any, y: Any,
     ys = np.asarray(y, dtype=float)
     values = np.clip(np.asarray(cn2, dtype=float), 1.0, 100.0)
     if values.shape[0] != xs.shape[0]:
-        raise DeckAuthorError(
+        raise SteeringAuthorError(
             "TELEMAC_ROG_CN_LENGTH_MISMATCH",
             f"the curve-number field has {values.shape[0]} values and the mesh "
             f"has {xs.shape[0]} nodes.")
@@ -1469,19 +1472,19 @@ def write_hyetograph_file(rundir: Path | str, basename: str, *, blocks: Any,
     for t_end, millimetres in blocks:
         t_end, millimetres = float(t_end), float(millimetres)
         if t_end <= previous:
-            raise DeckAuthorError(
+            raise SteeringAuthorError(
                 "TELEMAC_ROG_HYETO_NONMONOTONE",
                 f"hyetograph times must strictly increase; got t_end={t_end} "
                 f"after {previous}.")
         if millimetres < 0.0:
-            raise DeckAuthorError(
+            raise SteeringAuthorError(
                 "TELEMAC_ROG_HYETO_NEGATIVE",
                 f"hyetograph interval rainfall must be >= 0; got {millimetres} mm.")
         rows.append((t_end, millimetres))
         total += millimetres
         previous = t_end
     if not rows:
-        raise DeckAuthorError("TELEMAC_ROG_HYETO_EMPTY",
+        raise SteeringAuthorError("TELEMAC_ROG_HYETO_EMPTY",
                               "the hyetograph has no intervals.")
     tail = float(duration_s) + 3600.0
     if rows[-1][0] < tail:
@@ -1493,34 +1496,33 @@ def write_hyetograph_file(rundir: Path | str, basename: str, *, blocks: Any,
     return {"n_blocks": len(rows), "hyetograph_total_mm": round(total, 4)}
 
 
-def author_rog_deck(rundir: Path | str, *, deck: Mapping[str, Any],
-                    geometry: str, boundary: str, results: str, cas_name: str,
-                    cn_map: str, friction_laws: str, zones_file: str,
-                    rain_mm_per_day: float, runoff_path: str,
-                    outlet_boundary: int, outlet_prescribes: str,
-                    hyetograph_file: str | None = None) -> str:
+def _author_rain_on_grid_steering(
+        rundir: Path | str, *, sheet: Mapping[str, Any],
+        geometry: str, boundary: str, results: str, steering: str,
+        cn_map: str, friction_laws: str, zones_file: str,
+        rain_mm_per_day: float,
+        outlet_boundary: int, outlet_prescribes: str,
+        hyetograph_file: str | None = None) -> str:
     """Write the rain-on-grid ``.cas`` -> the basename written.
 
-    Three rain paths, and the deck says which one it is:
+    Two rain paths, and the steering file says which one it is:
 
-      * CONSTANT NATIVE - a design-storm rate with the engine's own SCS-CN
+      * CONSTANT - a design-storm rate with the engine's own SCS-CN
         infiltration, optionally stopping before the run ends so the catchment
         drains and the recession limb appears;
-      * TIME-VARYING NATIVE - the same infiltration applied per timestep to a
-        real gross hyetograph read from a data file, which needs the RAINDEF=3
-        user fortran the image bakes to turn that branch on. The recession comes
-        from the hyetograph's own dry tail, so no rain window is stated;
-      * PRE-PROCESSED - the excess was computed before the run, so the engine's
-        infiltration is off and the abstraction is not taken twice.
+      * TIME-VARYING - the same infiltration applied per timestep to a real
+        gross hyetograph read from a data file, which needs the RAINDEF=3 user
+        fortran the image bakes to turn that branch on. The recession comes from
+        the hyetograph's own dry tail, so no rain window is stated.
 
-    All three share the distributed Manning, the dry start and ONE outlet at the
-    pour point. This deck writes no value at that boundary's number, so the deck
-    states what its own ``.cli`` quad prescribes rather than naming a boundary
+    Both share the distributed Manning, the dry start and ONE outlet at the
+    pour point. It writes no value at that boundary's number, so it states
+    what that boundary's own ``.cli`` quad prescribes rather than naming a
     condition nobody measured. There are NO tracers: the outlet hydrograph is the
     product.
     """
-    _consume(deck)
-    P = _Sheet(deck)
+    _consume(sheet)
+    P = _Sheet(sheet)
     amc = int(getattr(P, "amc_condition", 2) or 2)
     abstraction = int(getattr(P, "initial_abstraction_option", 1) or 1)
     duration_s = float(getattr(P, "duration_s", 3600.0))
@@ -1537,6 +1539,8 @@ def author_rog_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     rain_line = ("RAIN OR EVAPORATION             = YES\n"
                  "RAIN OR EVAPORATION IN MM PER DAY = "
                  f"{_cas_real(rain_mm_per_day)}\n")
+    rain_path = ("a time-varying gross hyetograph read per timestep"
+                 if hyetograph_file is not None else "a constant design rate")
 
     if hyetograph_file is not None:
         # The rate keyword stays because rain must be enabled, and is ignored:
@@ -1554,21 +1558,18 @@ def author_rog_deck(rundir: Path | str, *, deck: Mapping[str, Any],
             # the line after it - the parser then reports the next keyword's name
             # as this one's missing file.
             f"FORTRAN FILE                    = '{RAINDEF3_USER_FORTRAN}'\n")
-    elif str(runoff_path).lower() == "native":
+    else:
         runoff_block = (
             f"{rain_line}{window_line}"
             "RAINFALL-RUNOFF MODEL           = 1\n"
             f"ANTECEDENT MOISTURE CONDITIONS  = {amc}\n"
             f"OPTION FOR INITIAL ABSTRACTION RATIO = {abstraction}\n"
             f"FORMATTED DATA FILE 2           = {os.path.basename(cn_map)}\n")
-    else:
-        runoff_block = (f"{rain_line}{window_line}"
-                        "RAINFALL-RUNOFF MODEL           = 0\n")
 
     cas = f"""/-------------------------------------------------------------------/
 /  TELEMAC-2D  RAIN-ON-GRID  -  {name}
 /  Rain-fed catchment on a delineated watershed TIN (UTM metres).
-/  Runoff path: {runoff_path}. Rain = {rain_mm_per_day:g} mm/day.
+/  Rain = {rain_mm_per_day:g} mm/day, {rain_path}.
 /  Distributed Manning; outlet at the pour point is liquid boundary
 /  {outlet_boundary}, whose boundary-file code prescribes {outlet_prescribes}.
 /-------------------------------------------------------------------/
@@ -1612,8 +1613,57 @@ INFORMATION ABOUT SOLVER        = YES
 /
 NUMBER OF TRACERS               = 0
 """
-    Path(rundir, cas_name).write_text(cas, encoding="utf-8")
-    validate_authored_decks(rundir, {cas_name: "telemac2d"})
-    logger.info("rain-on-grid deck authored: %s path=%s rain=%g mm/day",
-                cas_name, runoff_path, rain_mm_per_day)
-    return cas_name
+    Path(rundir, steering).write_text(cas, encoding="utf-8")
+    validate_authored_steering(rundir, {steering: "telemac2d"})
+    logger.info("rain-on-grid steering authored: %s %s rain=%g mm/day",
+                steering, rain_path, rain_mm_per_day)
+    return steering
+
+
+#: What the rain-on-grid run directory calls the fields the steering file names.
+#: They are that file's own FORMATTED DATA FILE / FRICTION DATA / ZONES
+#: statements, so the directory reads as the record of the run it is.
+ROG_CN_MAP = "rog_cn_map.dat"
+ROG_FRICTION_LAWS = "rog_friction.tbl"
+ROG_ZONES = "rog_zones.dat"
+ROG_HYETOGRAPH = "rog_hyeto.txt"
+
+
+def author_rain_on_grid(rundir: Path | str, *, sheet: Mapping[str, Any],
+                        geometry: str, boundary: str, results: str,
+                        steering: str, node_xy: Any, node_cn2: Any,
+                        node_manning: Any, rain_mm_per_day: float,
+                        outlet_boundary: int, outlet_prescribes: str,
+                        hyetograph_blocks: Any = None) -> dict[str, Any]:
+    """Write the rain-on-grid ``.cas`` and every field it names -> what was written.
+
+    A hyetograph is what decides the rain path: given blocks, the gross storm is
+    read per timestep out of a data file and the engine reaches that branch only
+    through the user Fortran the image bakes, so the run names that directory on
+    both channels. Given none, the storm is the constant design rate the steering
+    file states itself.
+
+    The outlet is the mesh's own declared one, and this file writes NO value at
+    its number - the free exit is solved on its ``.cli`` code alone, and the
+    steering file states which code that is.
+    """
+    rundir = Path(rundir)
+    write_cn_map(rundir, ROG_CN_MAP, x=node_xy[:, 0], y=node_xy[:, 1],
+                 cn2=node_cn2)
+    written = write_friction_files(
+        rundir, laws_basename=ROG_FRICTION_LAWS, zones_basename=ROG_ZONES,
+        manning_per_node=node_manning)
+    hyetograph = None
+    if hyetograph_blocks is not None:
+        written.update(write_hyetograph_file(
+            rundir, ROG_HYETOGRAPH, blocks=hyetograph_blocks,
+            duration_s=float(_Sheet(sheet).duration_s)))
+        hyetograph = ROG_HYETOGRAPH
+        written["user_fortran"] = RAINDEF3_USER_FORTRAN
+    written["steering"] = _author_rain_on_grid_steering(
+        rundir, sheet=sheet, geometry=geometry, boundary=boundary,
+        results=results, steering=steering, cn_map=ROG_CN_MAP,
+        friction_laws=ROG_FRICTION_LAWS, zones_file=ROG_ZONES,
+        rain_mm_per_day=rain_mm_per_day, hyetograph_file=hyetograph,
+        outlet_boundary=outlet_boundary, outlet_prescribes=outlet_prescribes)
+    return written

@@ -16,7 +16,7 @@ structure itself:
   * ``stratification``    - a warm surface layer over a cold bottom either keeps
                             its thermocline (calm) or is mixed away (wind). The
                             metric is the top-to-bottom difference that SURVIVES.
-                            The deck has NO surface heat exchange, so heat is
+                            The run has NO surface heat exchange, so heat is
                             CONSERVED: a falling surface temperature is the warm
                             layer MIXING DOWNWARD, never the lake cooling.
   * ``wind_circulation``  - a steady wind drives surface water downwind and a
@@ -94,7 +94,7 @@ PHYSICS = Physics("stratified_3d",
                   bed=DATA.bed)
 
 #: The MESH RECIPE, frozen at declaration and building nothing at import. An
-#: open-water deck runs on a uniform lattice over the acquired AOI, so the recipe
+#: open-water run solves on a uniform lattice over the acquired AOI, so the recipe
 #: is the three agnostic params and the mesher's own near-empty default program:
 #: a lattice at one size word, with no bed of its own (the solver stages that).
 MESH = tool.build_mesh(
@@ -141,7 +141,7 @@ def build_profile_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     of the surface alone carries no depth at all. ``None`` when the run measured no
     profile, which is the honest "there is nothing to plot".
 
-    The stratification deck exchanges NO heat with the atmosphere, so the two lines
+    The stratification run exchanges NO heat with the atmosphere, so the two lines
     enclose the same heat: the caption must read the change as REDISTRIBUTION
     (mixing), never as the lake losing heat.
     """
@@ -182,7 +182,7 @@ def build_profile_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
              f"{units}. " if metric is not None else "")
             + "The two lines are the PRESCRIBED initial column and the solved final "
               "one; their separation is what a depth-averaged model cannot show. "
-            + ("There is no heat exchange in this deck - heat is CONSERVED, so the "
+            + ("There is no heat exchange in this run - heat is CONSERVED, so the "
                "surface falling and the depths rising is the warm layer MIXING "
                "DOWNWARD, not the lake cooling. "
                if getattr(result, "flow_mode", None) == "stratification" else "")

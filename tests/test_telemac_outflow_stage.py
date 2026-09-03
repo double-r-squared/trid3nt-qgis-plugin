@@ -1,4 +1,4 @@
-"""The reach deck's outflow stage: a normal depth over the measured channel.
+"""The reach's outflow stage: a normal depth over the measured channel.
 
 The downstream cap of a reach used to be held at the outflow bed plus a declared
 2 m. That number was not a property of the reach - it was the same on a mountain
@@ -7,7 +7,7 @@ surface is anchored to.
 
 What replaces it is a COMPUTATION over data the accepted mesh already carries:
 the fall between the two role faces over the length the mesh was built on is the
-friction slope, the outflow face's own transect is the channel, the deck's own
+friction slope, the outflow face's own transect is the channel, the run's own
 roughness and its own prescribed discharge close the uniform-flow equation. No
 gauge, no rating curve, no second datum. What cannot be measured refuses by name
 rather than falling back to a level nobody derived.
@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.telemac.authoring import author as A
-from trid3nt_server.workflows.telemac.authoring import deck as D
+from trid3nt_server.workflows.telemac.authoring import assembler as D
 from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
 #: A trapezoid: 40 m bed at 97 m, banks rising 3 m over 10 m either side.
@@ -32,8 +32,8 @@ _REACH = {"bed_top_m": 100.0, "bed_drop_m": 3.0, "reach_length_m": 1000.0,
           "outflow_section": _SECTION}
 
 
-def _stage(**deck):
-    return A._normal_depth_stage(A._Sheet({"inflow_q_m3s": 50.0, **deck}), _REACH)
+def _stage(**sheet):
+    return A._normal_depth_stage(A._Sheet({"inflow_q_m3s": 50.0, **sheet}), _REACH)
 
 
 # --------------------------------------------------------------------------- #
@@ -86,12 +86,12 @@ def test_an_outflow_face_with_no_section_left_refuses_by_name():
 # --------------------------------------------------------------------------- #
 # The derivation: uniform flow over that channel.
 # --------------------------------------------------------------------------- #
-def test_the_stage_is_the_depth_at_which_the_section_conveys_the_decks_discharge():
+def test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge():
     """Manning's equation read back over the section the stage was solved on.
 
     The assertion is the physics, not the number: whatever depth came out, the
-    channel at that depth must convey exactly the discharge the deck prescribes
-    upstream at the roughness the deck writes.
+    channel at that depth must convey exactly the discharge the run prescribes
+    upstream at the roughness the run writes.
     """
     derived = _stage()
     area, perimeter = A._wetted([tuple(p) for p in _SECTION], derived["stage_m"])
@@ -119,7 +119,7 @@ def test_a_flatter_reach_stands_higher_for_the_same_flow():
 
 
 def test_strickler_and_its_reciprocal_manning_derive_the_same_stage():
-    """One law through two coefficients. A stage that moved when the deck merely
+    """One law through two coefficients. A stage that moved when the sheet merely
     restated its roughness would mean the conveyance read the number wrong."""
     strickler = _stage(friction_law=3, friction_coefficient=33.0)
     manning = _stage(friction_law=4, friction_coefficient=1.0 / 33.0)
@@ -127,7 +127,7 @@ def test_strickler_and_its_reciprocal_manning_derive_the_same_stage():
     assert manning["law"] == "Manning" and strickler["law"] == "Strickler"
 
 
-def test_a_chezy_deck_derives_under_chezys_own_conveyance():
+def test_a_chezy_run_derives_under_chezys_own_conveyance():
     derived = _stage(friction_law=2, friction_coefficient=60.0)
     area, perimeter = A._wetted([tuple(p) for p in _SECTION], derived["stage_m"])
     assert (60.0 * area * math.sqrt(area / perimeter * derived["slope"])
@@ -150,7 +150,7 @@ def test_the_section_closes_vertically_at_its_own_end_points():
 # What it refuses rather than defaulting past.
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize(
-    ("reach", "deck", "code"),
+    ("reach", "sheet", "code"),
     [
         ({"bed_drop_m": 0.0}, {}, "TELEMAC_OUTFLOW_SLOPE_UNMEASURED"),
         ({"bed_drop_m": -2.0}, {}, "TELEMAC_OUTFLOW_SLOPE_UNMEASURED"),
@@ -162,29 +162,29 @@ def test_the_section_closes_vertically_at_its_own_end_points():
         ({}, {"friction_coefficient": 0.0}, "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE"),
     ],
 )
-def test_an_input_the_stage_cannot_be_derived_from_refuses_by_name(reach, deck, code):
-    with pytest.raises(A.DeckAuthorError) as exc:
-        A._normal_depth_stage(A._Sheet({"inflow_q_m3s": 50.0, **deck}),
+def test_an_input_the_stage_cannot_be_derived_from_refuses_by_name(reach, sheet, code):
+    with pytest.raises(A.SteeringAuthorError) as exc:
+        A._normal_depth_stage(A._Sheet({"inflow_q_m3s": 50.0, **sheet}),
                               dict(_REACH, **reach))
     assert exc.value.error_code == code
 
 
 # --------------------------------------------------------------------------- #
-# What the deck says about it.
+# What the steering file says about it.
 # --------------------------------------------------------------------------- #
-def _cas(tmp_path, **deck) -> str:
-    A.author_reach_deck(
-        tmp_path, deck={"name": "reach", "inflow_q_m3s": 50.0,
-                        "init_depth_m": 2.0, "duration_s": 600.0,
-                        "time_step_s": 1.0, **deck},
+def _cas(tmp_path, **sheet) -> str:
+    A.author_reach(
+        tmp_path, sheet={"name": "reach", "inflow_q_m3s": 50.0,
+                         "init_depth_m": 2.0, "duration_s": 600.0,
+                         "time_step_s": 1.0, **sheet},
         geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
-        cas_name="t2d_river.cas", liquid_boundary_order=("inflow", "outflow"),
+        steering="t2d_river.cas", liquid_boundary_order=("inflow", "outflow"),
         liquid_boundary_prescribes=("flowrate", "elevation"),
         bed=_REACH, source_utm=(500.0, 0.0))
     return (tmp_path / "t2d_river.cas").read_text()
 
 
-def test_the_deck_states_the_stage_and_every_input_it_was_derived_from(tmp_path):
+def test_the_run_states_the_stage_and_every_input_it_was_derived_from(tmp_path):
     """A prescribed level a reader cannot check against the geometry file is a
     number to be taken on faith."""
     cas = _cas(tmp_path)
@@ -202,7 +202,7 @@ def test_the_initial_depth_is_no_longer_the_level_the_run_is_anchored_at(tmp_pat
     assert "PRESCRIBED ELEVATIONS           = 0.0;97.792" in shallow
 
 
-def test_the_stage_is_derived_at_the_roughness_the_deck_goes_on_to_write(tmp_path):
+def test_the_stage_is_derived_at_the_roughness_the_run_goes_on_to_write(tmp_path):
     cas = _cas(tmp_path, friction_law=4, friction_coefficient=0.05)
     assert "LAW OF BOTTOM FRICTION          = 4" in cas
     assert "FRICTION COEFFICIENT            = 0.05" in cas

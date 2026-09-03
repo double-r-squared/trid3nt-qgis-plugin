@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 
-#: What the declared bed producer hands the deck writer: the staged raster's URI.
+#: What the declared bed producer hands the run writer: the staged raster's URI.
 #: A domain solved on real bathymetry refuses without one, because the worker
 #: holds no fetcher of its own any more.
 _STAGED_BED = {"uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/test.tif",
@@ -73,7 +73,7 @@ def test_mode_classification_from_prompt():
                   )["flow_mode"] == "wind_circulation"
 
 # ===========================================================================
-# The DECLARATION: the plan value, the deck, and the georeference.
+# The DECLARATION: the plan value, the run, and the georeference.
 # ===========================================================================
 def _sheet(**overrides):
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -96,38 +96,38 @@ def test_the_declared_plan_is_the_open_water_sequence():
     workflow, _sheet_unused = _sheet()
     plan = workflow.plan
     assert [step.label for step in plan.declared()] == [
-        "form", "aoi", "deck", "solve", "column"]
+        "form", "aoi", "run", "solve", "column"]
     validate_plan(plan, workflow.params, workflow.data)
 
 
 def test_the_3d_deck_carries_both_layer_files():
-    from trid3nt_server.workflows.telemac.authoring.stratified import write_stratified_deck
+    from trid3nt_server.workflows.telemac.authoring.stratified import write_stratified_case
 
-    deck = asyncio.run(write_stratified_deck(bed=_STAGED_BED, 
+    run = asyncio.run(write_stratified_case(bed=_STAGED_BED, 
         aoi={"slug": "aoi", "name": "aoi", "lon": -87.1, "lat": 46.95,
              "bbox": (-87.60, 46.70, -86.60, 47.20)},
         flow_mode="stratification", nplan=13, mesh_resolution_m=3000.0,
         sim_duration_hours=1.0, bathy_source="noaa_greatlakes"))
-    assert deck["section"] == "stratified" and deck["prefix"] == "telemac3d"
-    assert deck["solver"] == "telemac3d_strat"
-    assert deck["result_basename"] == "t3d_surface.slf"
-    assert deck["bottom_basename"] == "t3d_bottom.slf"
-    assert deck["real_bathymetry"] is True
-    assert deck["config"]["nplan"] == 13
+    assert run["section"] == "stratified" and run["prefix"] == "telemac3d"
+    assert run["solver"] == "telemac3d_strat"
+    assert run["result_basename"] == "t3d_surface.slf"
+    assert run["bottom_basename"] == "t3d_bottom.slf"
+    assert run["real_bathymetry"] is True
+    assert run["config"]["nplan"] == 13
 
 
 def test_a_salt_wedge_never_takes_the_real_bathymetry_path():
     """A real estuary would need a tidal liquid boundary; the wedge is the
     ANALYTIC lock-exchange V&V, and asking for real bathymetry cannot conjure one."""
-    from trid3nt_server.workflows.telemac.authoring.stratified import write_stratified_deck
+    from trid3nt_server.workflows.telemac.authoring.stratified import write_stratified_case
 
-    deck = asyncio.run(write_stratified_deck(bed=_STAGED_BED, 
+    run = asyncio.run(write_stratified_case(bed=_STAGED_BED, 
         aoi={"slug": "aoi", "name": "aoi", "lon": -87.1, "lat": 46.95,
              "bbox": (-87.60, 46.70, -86.60, 47.20)},
         flow_mode="salt_wedge", bathy_source="noaa_greatlakes"))
-    assert deck["real_bathymetry"] is False
-    assert "bbox" not in deck["config"]
-    assert "lock-exchange" in deck["bathy_label"]
+    assert run["real_bathymetry"] is False
+    assert "bbox" not in run["config"]
+    assert "lock-exchange" in run["bathy_label"]
 
 
 def test_the_3d_layers_are_georeferenced_from_the_aoi_corner():

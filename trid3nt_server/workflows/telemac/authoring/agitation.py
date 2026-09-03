@@ -1,4 +1,4 @@
-"""The ARTEMIS deck and deliverable: a swell at the mouth, an agitation field in.
+"""The ARTEMIS run and deliverable: a swell at the mouth, an agitation field in.
 
 One serialization hook and one publisher for ARTEMIS, the phase-RESOLVING elliptic
 mild-slope (Berkhoff) solver: diffraction behind a breakwater, harbour resonance,
@@ -19,7 +19,7 @@ THE MESH IS A SLOT TOO. A mesh supplied on the invocation is taken as it stands:
 its geometry, its bed and its designated liquid boundary are staged into the run
 directory and the worker solves on them rather than laying its own grid over the
 AOI. Nothing here has an opinion about a supplied mesh beyond refusing one an
-ARTEMIS solve cannot read. Unfilled, the deck asks for the uniform grid it always
+ARTEMIS solve cannot read. Unfilled, the run asks for the uniform grid it always
 did, which is a labeled fallback and not a stance.
 """
 
@@ -56,7 +56,7 @@ from .open_water import (
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.agitation")
 
-__all__ = ["Agitation", "publish_agitation_products", "write_agitation_deck"]
+__all__ = ["Agitation", "publish_agitation_products", "write_agitation_case"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
@@ -88,7 +88,7 @@ _OUTPUTS = [
 _REAL_BATHY_MODES = ("diffraction",)
 
 
-async def write_agitation_deck(
+async def write_agitation_case(
     *,
     aoi: dict[str, Any],
     wave_mode: str = "diffraction",
@@ -156,7 +156,7 @@ async def write_agitation_deck(
             for line in polylines]
     inputs = staged_bed_inputs(bed, real=real, section=_SECTION)
     if mesh is not None:
-        # The supplied mesh IS the domain, so the deck stops asking for a grid and
+        # The supplied mesh IS the domain, so the run stops asking for a grid and
         # the bed raster stops being staged: the worker reads the bed off the mesh
         # it was handed, and an input nothing opens is not staged at all.
         config.pop("target_resolution_m")
@@ -166,7 +166,7 @@ async def write_agitation_deck(
         inputs = [{"gs_uri": mesh.slf_uri, "dest": _STAGED_MESH_SLF},
                   {"gs_uri": mesh.cli_uri, "dest": _STAGED_MESH_CLI}]
         resolution = _mesh_edge_m(mesh) or resolution
-    # The deck travels through the ledger as JSON, so what it carries about the
+    # The run travels through the ledger as JSON, so what it carries about the
     # mesh is a record and not the artifact object: a resumed run rehydrates a
     # dict, and a dict is what every reader below reads.
     mesh_record = _mesh_record(mesh)
@@ -204,7 +204,7 @@ async def write_agitation_deck(
 
 
 def _mesh_record(art: Any) -> dict[str, Any] | None:
-    """The facts about a supplied mesh the deck carries, as plain JSON."""
+    """The facts about a supplied mesh the run carries, as plain JSON."""
     if art is None:
         return None
     return {
@@ -288,10 +288,10 @@ def _bathy_label(real: bool, wave_mode: str, lake: str | None) -> str:
             "real bathymetry for this AOI)")
 
 
-def _structure_row(deck: dict[str, Any], metrics: dict[str, Any]) -> SyntheticInput:
-    """WHAT was meshed as the barrier, read off the SOLVE and not off the deck.
+def _structure_row(run: dict[str, Any], metrics: dict[str, Any]) -> SyntheticInput:
+    """WHAT was meshed as the barrier, read off the SOLVE and not off the run.
 
-    The deck says what was ASKED for; only the worker knows what it meshed, and
+    The run says what was ASKED for; only the worker knows what it meshed, and
     it echoes that as ``bw_label`` / ``structure_present``. This row must report
     the echo, because a run whose domain carries a barrier the caller never
     supplied is exactly the answer a sheltering question must never quietly
@@ -301,7 +301,7 @@ def _structure_row(deck: dict[str, Any], metrics: dict[str, Any]) -> SyntheticIn
     A solve that echoes nothing gets a row that says so. An unmeasured structure
     is not the same fact as no structure, and the two must not read alike.
     """
-    lines = deck.get("breakwater_polylines")
+    lines = run.get("breakwater_polylines")
     echoed = str(metrics.get("bw_label") or "").strip()
     present = metrics.get("structure_present")
 
@@ -340,37 +340,37 @@ def _structure_row(deck: dict[str, Any], metrics: dict[str, Any]) -> SyntheticIn
              "(fetch_osm_breakwaters) or a drawn line to model one.")
 
 
-def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[SyntheticInput]:
+def _provenance(run: dict[str, Any], metrics: dict[str, Any]) -> list[SyntheticInput]:
     """The physically dominant inputs, as rows the layer carries."""
-    real = bool(deck["real_bathymetry"])
-    mesh = deck.get("supplied_mesh")
+    real = bool(run["real_bathymetry"])
+    mesh = run.get("supplied_mesh")
     rows = [
         SyntheticInput(
-            param="wave_period_s", value=round(deck["wave_period_s"], 1), units="s",
+            param="wave_period_s", value=round(run["wave_period_s"], 1), units="s",
             basis="default_demo", consequence="physics",
             note="prescribed monochromatic incident wave period"),
         SyntheticInput(
-            param="wave_height_m", value=round(deck["wave_height_m"], 2), units="m",
+            param="wave_height_m", value=round(run["wave_height_m"], 2), units="m",
             basis="default_demo", consequence="physics",
             note="prescribed incident wave height H0 at the open boundary"),
         SyntheticInput(
-            param="bathy_source", value=deck["config"]["bathy_source"],
+            param="bathy_source", value=run["config"]["bathy_source"],
             basis="user" if mesh
             else ("fetched" if real else "default_demo"), consequence="physics",
             real_source_if_any=(
                 str(mesh.get("bed_source") or "") or None if mesh
                 else ("NOAA NGDC Great Lakes lake-datum bathymetry" if real
                       else None)),
-            note=deck["bathy_label"]),
+            note=run["bathy_label"]),
     ]
-    if deck["wave_mode"] == "diffraction":
-        rows.append(_structure_row(deck, metrics))
+    if run["wave_mode"] == "diffraction":
+        rows.append(_structure_row(run, metrics))
     if mesh:
         # A supplied mesh moved the whole discretization, so the resolution ask is
         # not what was solved on and the ask-vs-built row would compare two
         # different things. What was solved on is the mesh, and it says so.
         return rows + [_supplied_mesh_row(mesh, metrics)]
-    return rows + mesh_sizing_provenance(deck.get("mesh_resolution_asked_m"), metrics)
+    return rows + mesh_sizing_provenance(run.get("mesh_resolution_asked_m"), metrics)
 
 
 def _supplied_mesh_row(mesh: dict[str, Any],
@@ -437,22 +437,22 @@ def _curve_rows(metrics: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _honesty_note(deck: dict[str, Any]) -> str:
-    mesh = deck.get("supplied_mesh")
+def _honesty_note(run: dict[str, Any]) -> str:
+    mesh = run.get("supplied_mesh")
     domain = (f"the SUPPLIED unstructured mesh {mesh['name']!r} (mean element "
-              f"edge {deck['mesh_size_m']:g} m) carrying {deck['bathy_label']}"
+              f"edge {run['mesh_size_m']:g} m) carrying {run['bathy_label']}"
               if mesh
-              else f"a {deck['mesh_size_m']:g} m grid of {deck['bathy_label']}")
+              else f"a {run['mesh_size_m']:g} m grid of {run['bathy_label']}")
     return (
         "Phase-RESOLVING agitation SCREENING: ARTEMIS elliptic mild-slope "
         f"(Berkhoff) over {domain}, "
-        f"driven by a PRESCRIBED monochromatic {deck['wave_period_s']:g} s / "
-        f"{deck['wave_height_m']:g} m incident wave - a labeled demo forcing, not an "
+        f"driven by a PRESCRIBED monochromatic {run['wave_period_s']:g} s / "
+        f"{run['wave_height_m']:g} m incident wave - a labeled demo forcing, not an "
         "observed sea state. The raster is the steady-state agitation coefficient "
         "Kd = Hs/H0. Not a calibrated hindcast.")
 
 
-async def publish_agitation_products(*, deck: dict[str, Any],
+async def publish_agitation_products(*, run: dict[str, Any],
                                      solve: dict[str, Any]) -> ArtemisAgitationLayerURI:
     """Postprocess the solved harbour into its published layer + scalars."""
     from trid3nt_server.emission.pipeline_emitter import current_emitter
@@ -461,21 +461,21 @@ async def publish_agitation_products(*, deck: dict[str, Any],
     emitter = current_emitter()
     run_id = solve["run_id"]
     metrics = dict(solve.get("metrics") or {})
-    reach = deck["domain_slug"]
+    reach = run["domain_slug"]
     utm_epsg = solve["utm_epsg"]
 
     slf_path = await asyncio.to_thread(
-        download_open_water_result, run_id, deck["result_basename"],
-        error_code=deck["output_missing_code"])
+        download_open_water_result, run_id, run["result_basename"],
+        error_code=run["output_missing_code"])
     try:
         layers, _pmetrics = await asyncio.to_thread(
             postprocess_artemis, slf_path, run_id=run_id, utm_epsg=utm_epsg,
             # The worker meshes in a LOCAL UTM frame, so the postprocess needs the
             # SW corner to add the origin back before UTM -> 4326. The idealized
             # analytic domain records no bbox and has none to add.
-            request_bbox=solved_domain_bbox(deck, metrics),
-            incident_hs_m=float(deck["wave_height_m"]), reach_name=reach,
-            wave_mode=deck["wave_mode"])
+            request_bbox=solved_domain_bbox(run, metrics),
+            incident_hs_m=float(run["wave_height_m"]), reach_name=reach,
+            wave_mode=run["wave_mode"])
     finally:
         Path(slf_path).unlink(missing_ok=True)
     if not layers:
@@ -491,20 +491,20 @@ async def publish_agitation_products(*, deck: dict[str, Any],
             "resonant_period_s": metrics.get("resonant_period_s"),
             "response_at_resonance": metrics.get("response_at_resonance"),
             "response_off_resonance": metrics.get("response_off_resonance"),
-            "wave_period_s": metrics.get("wave_period_s") or deck["wave_period_s"],
-            "mesh_size_m": metrics.get("dx_m") or deck["mesh_size_m"],
+            "wave_period_s": metrics.get("wave_period_s") or run["wave_period_s"],
+            "mesh_size_m": metrics.get("dx_m") or run["mesh_size_m"],
             "mesh_resolution_label": (
-                f"supplied {(deck.get('supplied_mesh') or {}).get('mesher')} mesh, "
+                f"supplied {(run.get('supplied_mesh') or {}).get('mesher')} mesh, "
                 f"{metrics.get('npoin')} nodes at a "
                 f"{metrics.get('mesh_edge_median_m')} m median edge "
                 f"({metrics.get('mesh_edge_min_m')}-"
                 f"{metrics.get('mesh_edge_max_m')} m)"
-                if deck.get("supplied_mesh")
+                if run.get("supplied_mesh")
                 else mesh_resolution_label(
-                    "real NOAA lake bathy" if deck["real_bathymetry"]
-                    else "idealized analytic", deck, metrics)),
-            "fallback_note": _honesty_note(deck),
-            "synthetic_inputs": _provenance(deck, metrics),
+                    "real NOAA lake bathy" if run["real_bathymetry"]
+                    else "idealized analytic", run, metrics)),
+            "fallback_note": _honesty_note(run),
+            "synthetic_inputs": _provenance(run, metrics),
             "run_id": run_id,
             # The curve the WORKER measured across the field. The chart plots
             # this, so the chart and the narrated scalars are one measurement.
@@ -516,7 +516,7 @@ async def publish_agitation_products(*, deck: dict[str, Any],
     # second copy of somebody else's layer is the double-emission the input
     # guard exists to catch.
     logger.info("telemac artemis complete run_id=%s domain=%s mode=%s kd_max=%.3g "
-                "sheltered=%s exposed=%s uri=%s", run_id, reach, deck["wave_mode"],
+                "sheltered=%s exposed=%s uri=%s", run_id, reach, run["wave_mode"],
                 published.kd_max, published.kd_sheltered, published.kd_exposed,
                 published.uri)
     return published
@@ -526,11 +526,11 @@ class Agitation:
     """The ARTEMIS author + read steps, as the facade binds them."""
 
     @staticmethod
-    def deck(**kwargs: Any) -> Step:
-        return Step(runner=f"{_AUTHORING}.agitation.write_agitation_deck", stage="author",
+    def case(**kwargs: Any) -> Step:
+        return Step(runner=f"{_AUTHORING}.agitation.write_agitation_case", stage="author",
                     kwargs=kwargs)
 
     @staticmethod
-    def products(*, deck: Any, solve: Any) -> Step:
+    def products(*, run: Any, solve: Any) -> Step:
         return Step(runner=f"{_AUTHORING}.agitation.publish_agitation_products",
-                    stage="publish", kwargs={"deck": deck, "solve": solve})
+                    stage="publish", kwargs={"run": run, "solve": solve})

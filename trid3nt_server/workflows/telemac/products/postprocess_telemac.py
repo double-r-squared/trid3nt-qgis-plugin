@@ -180,10 +180,10 @@ def _pick_dye_var(varnames: list[str], *, prefer_sediment: bool = False) -> str 
     return None
 
 
-#: TELEMAC-2D free-surface variable names (English + French decks). The Malpasset
-#: reference deck emits ``FREE SURFACE    M``; a French deck emits ``SURFACE
-#: LIBRE``/``COTE DE LA SURFACE LIBRE``. Never guessed -- verified by parsing the
-#: bundled ``f2d_malpasset-small.slf`` header.
+#: TELEMAC-2D free-surface variable names (English + French steering). The
+#: Malpasset reference case emits ``FREE SURFACE    M``; a French one emits
+#: ``SURFACE LIBRE``/``COTE DE LA SURFACE LIBRE``. Never guessed -- verified by
+#: parsing the bundled ``f2d_malpasset-small.slf`` header.
 _WSE_VAR_KEYS: tuple[str, ...] = ("FREE SURFACE", "SURFACE LIBRE", "WATER SURFACE",
                                   "COTE DE LA SURFACE", "COTE DE L'EAU")
 #: Water-depth variable names (English + French) used to build the wet mask.
@@ -191,8 +191,8 @@ _DEPTH_VAR_KEYS: tuple[str, ...] = ("WATER DEPTH", "HAUTEUR D'EAU", "HAUTEUR D E
 #: Static bed-elevation variable names (English + French). Read to reproduce the
 #: worker's own ``bed > initial water line`` discrimination on the raster.
 _BED_VAR_KEYS: tuple[str, ...] = ("BOTTOM", "FOND")
-#: Depth-averaged velocity component names (English + French). The reach decks
-#: emit ``VELOCITY U``/``VELOCITY V``; a French deck emits ``VITESSE U``/``V``.
+#: Depth-averaged velocity component names (English + French). The reach runs
+#: emit ``VELOCITY U``/``VELOCITY V``; a French one emits ``VITESSE U``/``V``.
 _U_VAR_KEYS: tuple[str, ...] = ("VELOCITY U", "VITESSE U")
 _V_VAR_KEYS: tuple[str, ...] = ("VELOCITY V", "VITESSE V")
 
@@ -201,7 +201,7 @@ def _pick_named_var(varnames: list[str], keys: tuple[str, ...], letter: str) -> 
     """First variable whose (upper, trimmed) name contains any of ``keys``.
 
     Falls back to an EXACT single-letter mnemonic match (``S`` free surface / ``H``
-    water depth) for a terse deck. Returns ``None`` when nothing matches (the
+    water depth) for a terse run. Returns ``None`` when nothing matches (the
     caller decides if that is fatal) -- never guesses a wrong field."""
     for v in varnames:
         u = v.strip().upper()
@@ -2384,9 +2384,9 @@ def postprocess_telemac3d(
         "calibrated site study."
     )
     if flow_mode == "stratification":
-        # the deck has no THERMIC / no met forcing, so nothing can remove heat
+        # the run has no THERMIC / no met forcing, so nothing can remove heat
         honesty += (
-            " The deck carries NO surface heat exchange: heat is CONSERVED, so a "
+            " The run carries NO surface heat exchange: heat is CONSERVED, so a "
             "falling surface temperature is the warm layer MIXING DOWNWARD, not "
             "the lake cooling."
         )

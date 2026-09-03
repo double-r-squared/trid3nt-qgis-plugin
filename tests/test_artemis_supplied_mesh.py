@@ -1,6 +1,6 @@
 """Offline tests for the ARTEMIS supplied-mesh path, both sides of the manifest.
 
-AGENT SIDE: what the deck does when the template's ``mesh`` slot is filled - which
+AGENT SIDE: what the run does when the template's ``mesh`` slot is filled - which
 files it stages, what it stops asking the worker for, and what the layer then says
 the solve read. The refusals matter as much as the happy path: a run told to solve
 on a mesh and quietly handed a grid answers a different question than the one asked.
@@ -71,7 +71,7 @@ def _resolves_to(monkeypatch, artifact, seen=None):
 
 
 def _deck(**kwargs):
-    return asyncio.run(AG.write_agitation_deck(
+    return asyncio.run(AG.write_agitation_case(
         aoi=_AOI, wave_mode="diffraction", wave_period_s=12.0,
         wave_direction_deg=90.0, wave_height_m=2.0, reflection_coef=0.5,
         bathy_source="noaa_greatlakes", bed={"uri": "s3://cache/bed.tif"},
@@ -115,47 +115,47 @@ def test_a_mesh_with_no_boundary_file_refuses_by_naming_what_is_missing(monkeypa
 
 
 # --------------------------------------------------------------------------- #
-# The deck a supplied mesh writes.
+# The run a supplied mesh writes.
 # --------------------------------------------------------------------------- #
 def test_the_deck_stages_the_pair_and_stops_asking_for_a_grid(monkeypatch):
     _resolves_to(monkeypatch, _artifact())
-    deck = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
+    run = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
 
-    assert deck["config"]["supplied_mesh_slf"] == "supplied_mesh.slf"
-    assert deck["config"]["supplied_mesh_cli"] == "supplied_mesh.cli"
-    assert "target_resolution_m" not in deck["config"]
-    assert deck["config"]["bathy_source"] == "supplied_mesh"
-    assert deck["inputs"] == [
+    assert run["config"]["supplied_mesh_slf"] == "supplied_mesh.slf"
+    assert run["config"]["supplied_mesh_cli"] == "supplied_mesh.cli"
+    assert "target_resolution_m" not in run["config"]
+    assert run["config"]["bathy_source"] == "supplied_mesh"
+    assert run["inputs"] == [
         {"gs_uri": "s3://cache/mesh/01TESTMESH/mesh.slf",
          "dest": "supplied_mesh.slf"},
         {"gs_uri": "s3://cache/mesh/01TESTMESH/mesh.cli",
          "dest": "supplied_mesh.cli"}]
     # The bed raster is not staged: the worker reads the bed off the mesh, and an
     # input nothing opens is not staged at all.
-    assert all("bed" not in row["dest"] for row in deck["inputs"])
-    assert deck["mesh_size_m"] == pytest.approx(28.1)
+    assert all("bed" not in row["dest"] for row in run["inputs"])
+    assert run["mesh_size_m"] == pytest.approx(28.1)
 
 
 def test_the_bed_the_layer_names_is_the_one_the_mesh_carries(monkeypatch):
     _resolves_to(monkeypatch, _artifact())
-    deck = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
-    assert "cudem_nearshore" in deck["bathy_label"]
-    assert "Great Lakes" not in deck["bathy_label"]
+    run = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
+    assert "cudem_nearshore" in run["bathy_label"]
+    assert "Great Lakes" not in run["bathy_label"]
 
 
 def test_an_unfilled_slot_leaves_the_grid_deck_exactly_as_it_was(monkeypatch):
-    deck = _deck(supplied_mesh=None, mesh_resolution_m=40.0)
-    assert deck["config"]["target_resolution_m"] == 40.0
-    assert "supplied_mesh_slf" not in deck["config"]
-    assert deck["supplied_mesh"] is None
-    assert deck["inputs"] == [{"gs_uri": "s3://cache/bed.tif",
+    run = _deck(supplied_mesh=None, mesh_resolution_m=40.0)
+    assert run["config"]["target_resolution_m"] == 40.0
+    assert "supplied_mesh_slf" not in run["config"]
+    assert run["supplied_mesh"] is None
+    assert run["inputs"] == [{"gs_uri": "s3://cache/bed.tif",
                                "dest": "bed_source.tif"}]
 
 
 def test_the_mesh_row_reports_the_solves_own_echo_not_the_ask(monkeypatch):
     _resolves_to(monkeypatch, _artifact())
-    deck = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
-    rows = AG._provenance(deck, {
+    run = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
+    rows = AG._provenance(run, {
         "mesh_source": "supplied", "npoin": 13110, "nelem": 25424,
         "mesh_edge_min_m": 4.2, "mesh_edge_median_m": 29.5,
         "mesh_edge_max_m": 202.1, "mesh_boundary_nodes": 796,
@@ -170,8 +170,8 @@ def test_the_mesh_row_reports_the_solves_own_echo_not_the_ask(monkeypatch):
 
 def test_a_solve_that_echoes_no_mesh_source_says_it_is_unmeasured(monkeypatch):
     _resolves_to(monkeypatch, _artifact())
-    deck = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
-    rows = AG._provenance(deck, {"structure_present": True, "bw_label": "x"})
+    run = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
+    rows = AG._provenance(run, {"structure_present": True, "bw_label": "x"})
     mesh_row = [r for r in rows if r.param == "mesh_domain"][0]
     assert "UNMEASURED" in mesh_row.note
 

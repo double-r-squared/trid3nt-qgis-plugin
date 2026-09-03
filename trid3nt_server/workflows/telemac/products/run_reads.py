@@ -1,6 +1,7 @@
 """What a solved run's OWN files say, read on the server.
 
-The worker is the engine room: it runs a deck and writes what the engine wrote.
+The worker is the engine room: it runs a steering file and writes what the
+engine wrote.
 Everything a reader has to derive from those files - the sediment closure GAIA
 prints into its listing, the floating slick a drogues track describes - is read
 HERE, from the artifacts the supervisor uploaded, so the numbers a run narrates
@@ -117,11 +118,11 @@ def surface_d50_spread(gaia_slf: str | Path) -> dict[str, Any]:
                 round(float(microns.max() - microns.min()), 1)}
 
 
-def sediment_scalars(*, listing_text: str, deck: Mapping[str, Any],
+def sediment_scalars(*, listing_text: str, sheet: Mapping[str, Any],
                      gaia_slf: str | Path | None = None) -> dict[str, Any]:
     """Every sediment number a GAIA run reports, off its own listing and result.
 
-    The INJECTED mass is the deck's own pulse - discharge x concentration x
+    The INJECTED mass is the sheet's own pulse - discharge x concentration x
     window - so the deposit fraction compares what settled against what was put
     in rather than against an assumed load. The fraction is clamped into [0, 1]:
     a net bed gain larger than the injection is measurement noise on a
@@ -129,9 +130,9 @@ def sediment_scalars(*, listing_text: str, deck: Mapping[str, Any],
     """
     stats = gaia_mass_balance(listing_text)
     injected = round(
-        float(deck.get("source_q_m3s", 8.0))
-        * max(float(deck.get("dye_conc_mgl", 100.0)) * _MGL_TO_KGM3, 0.0)
-        * float(deck.get("pulse_window_s", 300.0)), 3)
+        float(sheet.get("source_q_m3s", 8.0))
+        * max(float(sheet.get("dye_conc_mgl", 100.0)) * _MGL_TO_KGM3, 0.0)
+        * float(sheet.get("pulse_window_s", 300.0)), 3)
     stats["sediment_injected_kg"] = injected
     net = stats.get("sediment_net_bed_mass_kg")
     if net is not None and injected > 0.0:
@@ -139,10 +140,10 @@ def sediment_scalars(*, listing_text: str, deck: Mapping[str, Any],
             min(max(float(net) / injected, 0.0), 1.0), 4)
     from ..authoring.author import normalize_gradation
 
-    classes = normalize_gradation(deck.get("sediment_gradation") or ())
+    classes = normalize_gradation(sheet.get("sediment_gradation") or ())
     # A SORTED bed needs a mixture to sort: a single class is uniform by
     # construction, so the spread is only meaningful - and only reported - when
-    # the deck declared two classes or more.
+    # the sheet declared two classes or more.
     if len(classes) >= 2:
         stats["sediment_n_classes"] = len(classes)
         if gaia_slf is not None:

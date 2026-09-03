@@ -2,7 +2,7 @@
 
 These are the derivations the worker used to perform in-container and no longer
 does: GAIA's closure out of the solver listing, the injected mass and deposit
-fraction off the deck's own pulse, and the floating slick out of the raw drogues
+fraction off the sheet's own pulse, and the floating slick out of the raw drogues
 track. What they pin is the FORMAT the engine writes, which a guess would read
 silently wrong.
 """
@@ -30,8 +30,8 @@ CORRECT END OF RUN
  CUMULATED DEPOSITION           =     999.0000  ( KG )
 """
 
-#: The deck's own pulse: 8 m3/s x 100 mg/L x 300 s = 240 kg injected.
-_DECK = {"source_q_m3s": 8.0, "dye_conc_mgl": 100.0, "pulse_window_s": 300.0}
+#: The sheet's own pulse: 8 m3/s x 100 mg/L x 300 s = 240 kg injected.
+_SHEET = {"source_q_m3s": 8.0, "dye_conc_mgl": 100.0, "pulse_window_s": 300.0}
 
 
 def test_the_closure_is_read_from_the_final_block_only():
@@ -54,13 +54,13 @@ def test_a_residual_that_rounds_to_negative_zero_reads_as_zero():
     listing = _LISTING.replace("60.00000", "-0.1E-12")
     net = R.gaia_mass_balance(listing)["sediment_net_bed_mass_kg"]
     assert net == 0.0 and math.copysign(1.0, net) == 1.0
-    stats = R.sediment_scalars(listing_text=listing, deck=_DECK)
+    stats = R.sediment_scalars(listing_text=listing, sheet=_SHEET)
     fraction = stats["sediment_deposit_fraction"]
     assert fraction == 0.0 and math.copysign(1.0, fraction) == 1.0
 
 
-def test_the_deposit_fraction_compares_the_net_bed_against_the_deck_pulse():
-    stats = R.sediment_scalars(listing_text=_LISTING, deck=_DECK)
+def test_the_deposit_fraction_compares_the_net_bed_against_the_sheet_pulse():
+    stats = R.sediment_scalars(listing_text=_LISTING, sheet=_SHEET)
     assert stats["sediment_injected_kg"] == 240.0
     assert stats["sediment_deposit_fraction"] == 0.25
 
@@ -68,16 +68,16 @@ def test_the_deposit_fraction_compares_the_net_bed_against_the_deck_pulse():
 def test_a_net_gain_past_the_injection_clamps_rather_than_reading_over_one():
     listing = _LISTING.replace("60.00000", "600.0000")
     assert R.sediment_scalars(listing_text=listing,
-                              deck=_DECK)["sediment_deposit_fraction"] == 1.0
+                              sheet=_SHEET)["sediment_deposit_fraction"] == 1.0
 
 
 def test_a_single_class_bed_reports_no_sorting_at_all():
     """Sorting is structurally impossible on one class, so no spread is claimed."""
-    stats = R.sediment_scalars(listing_text=_LISTING, deck=_DECK)
+    stats = R.sediment_scalars(listing_text=_LISTING, sheet=_SHEET)
     assert "sediment_n_classes" not in stats
     graded = R.sediment_scalars(
         listing_text=_LISTING,
-        deck={**_DECK, "sediment_gradation": [[50.0, 0.4], [400.0, 0.6]]})
+        sheet={**_SHEET, "sediment_gradation": [[50.0, 0.4], [400.0, 0.6]]})
     assert graded["sediment_n_classes"] == 2
 
 

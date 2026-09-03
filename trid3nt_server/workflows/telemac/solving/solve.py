@@ -22,17 +22,18 @@ from typing import Any
 
 from trid3nt_server.workflows.lib import Step
 
-from ..authoring.deck import stage_manifest
-from ..helpers.errors import TelemacDyeScenarioError
+from ..helpers.errors import RainOnGridError, TelemacDyeScenarioError
 from ..helpers.reach import MESH_NODE_CAP, estimate_telemac_solve_seconds
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.solving.solve")
 
 __all__ = [
     "Solve",
+    "SolveRainOnGrid",
     "compute_class",
     "download_result_selafin",
     "read_run_metrics",
+    "solve_rain_on_grid",
     "solve_reach",
 ]
 
@@ -43,6 +44,13 @@ _SOLVING = "trid3nt_server.workflows.telemac.solving"
 #: the publish leg was lost to the timeout.
 _MIN_WAIT_S = 1800.0
 _WAIT_HEADROOM = 1.5
+
+#: Wall-clock ceiling on one rain-on-grid solve. A real catchment is tens of
+#: thousands of elements over hours of simulated time at a 3 s step, which is an
+#: HOURS-class solve. The number is a bound on the wait, not an estimate of the
+#: run: it exists so a wedged container becomes a typed failure instead of a
+#: daemon that never returns.
+_ROG_TIMEOUT_S = 86400.0
 
 
 def read_run_metrics(run_id: str) -> dict[str, Any]:
@@ -96,13 +104,14 @@ def download_result_selafin(run_id: str) -> str:
     return slf_path
 
 
-async def solve_reach(*, deck: dict[str, Any],
+async def solve_reach(*, run: dict[str, Any],
                       compute_class: str = "medium") -> dict[str, Any]:
     """Run the staged reach through the TELEMAC worker and return the run handle.
 
-    The returned ``uri`` is the result SELAFIN under the run prefix: it is what a
-    ledger replay probes, so a resumed rerun can only skip the solve while the
-    solved artifact is still there.
+    The manifest was written by the assembler, so what happens here is dispatch
+    and supervision alone. The returned ``uri`` is the result SELAFIN under the
+    run prefix: it is what a ledger replay probes, so a resumed rerun can only
+    skip the solve while the solved artifact is still there.
     """
     from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
@@ -118,15 +127,10 @@ async def solve_reach(*, deck: dict[str, Any],
     from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
     from trid3nt_server.workflows.telemac.run_telemac import TELEMAC_SOLVER_NAME
 
-    reach = deck["deck"]
-    run_tag = deck["run_tag"]
-    manifest_uri = await asyncio.to_thread(stage_manifest, deck["case"], run_tag,
-                                           outputs=deck["outputs"],
-                                           inputs=deck.get("inputs"))
-    logger.info("telemac staged case run_tag=%s module=%s steering=%s results=%s "
-                "reach=%s inputs=%s -> %s", run_tag, deck["case"]["module"],
-                deck["case"]["steering"], deck["case"]["results"], reach["name"],
-                [row["dest"] for row in (deck.get("inputs") or [])], manifest_uri)
+    sheet = run["sheet"]
+    manifest_uri = run["manifest_uri"]
+    logger.info("telemac dispatching run_tag=%s reach=%s -> %s",
+                run["run_tag"], sheet["name"], manifest_uri)
 
     emitter = current_emitter()
     handle = run_solver(solver=TELEMAC_SOLVER_NAME, model_setup_uri=manifest_uri,
@@ -144,8 +148,8 @@ async def solve_reach(*, deck: dict[str, Any],
         grid_resolution_m=None, active_cell_count=None, vcpus=None, eta_seconds=None))
 
     wait_s = max(_MIN_WAIT_S, estimate_telemac_solve_seconds(
-        MESH_NODE_CAP, float(reach["duration_s"]),
-        float(reach["time_step_s"])) * _WAIT_HEADROOM)
+        MESH_NODE_CAP, float(sheet["duration_s"]),
+        float(sheet["time_step_s"])) * _WAIT_HEADROOM)
     run_result = None
     try:
         run_result = await wait_for_completion(handle, timeout_s=wait_s)
@@ -186,7 +190,8 @@ async def solve_reach(*, deck: dict[str, Any],
     # which the replay probe has just confirmed is still there.
     return {
         "run_id": batch_run_id,
-        "uri": f"s3://{_get_runs_bucket()}/{batch_run_id}/r2d_river.slf",
+        "uri": (f"s3://{_get_runs_bucket()}/{batch_run_id}/"
+                f"{run['result_basename']}"),
         "utm_epsg": int(metrics["utm_epsg"]),
         "metrics": metrics,
     }
@@ -228,12 +233,65 @@ def compute_class() -> Any:
     return _coerce
 
 
+async def solve_rain_on_grid(*, run: dict[str, Any],
+                             compute_class: str = "medium") -> dict[str, Any]:
+    """Dispatch the staged catchment to the worker and wait.
+
+    The returned ``uri`` is the result SELAFIN under the run prefix - what a
+    ledger replay probes, so a resumed rerun can only skip the solve while the
+    solved artifact is still there. The UTM zone comes from the ASSEMBLER rather
+    than from the worker's metrics: this mesh is projected agent-side, so the zone
+    is a fact the template already knows and the worker never learns.
+    """
+    from trid3nt_server.workflows.solver.solver import _get_runs_bucket
+
+    from ..authoring.open_water import dispatch_and_wait
+
+    logger.info("rog dispatching run_tag=%s catchment=%s -> %s",
+                run["run_tag"], run["domain_name"], run["manifest_uri"])
+    run_result, batch_run_id = await dispatch_and_wait(
+        solver=_telemac_solver_name(), manifest_uri=run["manifest_uri"],
+        compute_class=compute_class, label="rain_on_grid",
+        timeout_s=_ROG_TIMEOUT_S, grid_resolution_m=run.get("mesh_size_m"),
+        active_cell_count=run["catchment"].get("element_count"))
+    if run_result is None or run_result.status != "complete":
+        raise RainOnGridError(
+            "the rain-on-grid solve did not complete "
+            f"(status={getattr(run_result, 'status', None)}, "
+            f"error_code={getattr(run_result, 'error_code', None)}): "
+            f"{getattr(run_result, 'error_message', '') or ''}",
+            error_code="TELEMAC_ROG_RUN_FAILED")
+    metrics = await asyncio.to_thread(read_run_metrics, batch_run_id)
+    return {
+        "run_id": batch_run_id,
+        "uri": (f"s3://{_get_runs_bucket()}/{batch_run_id}/"
+                f"{run['result_basename']}"),
+        "utm_epsg": int(run["utm_epsg"]), "metrics": metrics,
+    }
+
+
+def _telemac_solver_name() -> str:
+    from trid3nt_server.workflows.telemac.run_telemac import TELEMAC_SOLVER_NAME
+
+    return TELEMAC_SOLVER_NAME
+
+
 class Solve:
     """Solver dispatch steps. The plan's consequential node."""
 
     @staticmethod
-    def telemac(*, deck: Any, compute_class: Any) -> Step:
+    def telemac(*, run: Any, compute_class: Any) -> Step:
         """Dispatch the staged reach to the TELEMAC worker and wait for the result."""
         return Step(runner=f"{_SOLVING}.solve.solve_reach", stage="solve",
-                    kwargs={"deck": deck, "compute_class": compute_class},
+                    kwargs={"run": run, "compute_class": compute_class},
+                    consequential=True)
+
+
+class SolveRainOnGrid:
+    """The rain-on-grid solve step. The plan's consequential node."""
+
+    @staticmethod
+    def telemac(*, run: Any, compute_class: Any) -> Step:
+        return Step(runner=f"{_SOLVING}.solve.solve_rain_on_grid", stage="solve",
+                    kwargs={"run": run, "compute_class": compute_class},
                     consequential=True)

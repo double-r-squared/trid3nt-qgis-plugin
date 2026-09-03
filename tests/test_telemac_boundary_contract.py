@@ -62,13 +62,13 @@ def test_the_engine_numbers_from_its_own_south_west_corner_not_from_row_order():
     """Row order would number the outflow first: it is the first liquid run met
     walking the file from its first solid row. The engine starts at the domain's
     south-west corner, which sits on the inflow, so the inflow is boundary 1 -
-    and a deck written to the row-order answer prescribes both values into codes
+    and a file written to the row-order answer prescribes both values into codes
     that never read them."""
     assert [role for role, _ in _numbered()] == ["inflow", "outflow"]
 
 
 def test_a_liquid_run_that_straddles_the_first_row_is_ONE_boundary():
-    """Ranks 11, 0, 1 are one face. Counted as two, the deck would state a value
+    """Ranks 11, 0, 1 are one face. Counted as two, the run would state a value
     for a boundary the engine does not have and drop one it does."""
     x, y, bnodes, codes, lengths = _domain()
     runs = D._liquid_boundaries(x, y, bnodes, codes, lengths)
@@ -97,19 +97,19 @@ _BED = {"bed_top_m": 100.0, "bed_drop_m": 3.0, "reach_length_m": 1000.0,
 
 
 def _cas(tmp_path, numbered) -> str:
-    A.author_reach_deck(
-        tmp_path, deck={"name": "reach", "inflow_q_m3s": 50.0,
-                        "init_depth_m": 2.0, "duration_s": 600.0,
-                        "time_step_s": 1.0},
+    A.author_reach(
+        tmp_path, sheet={"name": "reach", "inflow_q_m3s": 50.0,
+                         "init_depth_m": 2.0, "duration_s": 600.0,
+                         "time_step_s": 1.0},
         geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
-        cas_name="t2d_river.cas",
+        steering="t2d_river.cas",
         liquid_boundary_order=[role for role, _ in numbered],
         liquid_boundary_prescribes=[what for _, what in numbered],
         bed=_BED, source_utm=(500.0, 0.0))
     return (tmp_path / "t2d_river.cas").read_text()
 
 
-def test_the_deck_prescribes_at_the_number_whose_quad_reads_it(tmp_path):
+def test_the_run_prescribes_at_the_number_whose_quad_reads_it(tmp_path):
     """End to end over the domain above: the engine calls the inflow 1 and the
     outflow 2, so the discharge is first and the level second - each one landing
     on the code that consumes it."""
@@ -142,6 +142,6 @@ def test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing(
     would be a number the engine never looks at - which is exactly the silence
     this contract exists to end."""
     free_exit = {**D._ROLE_CODES, "outflow": (D.KSORT,) * 4}
-    with pytest.raises(A.DeckAuthorError) as exc:
+    with pytest.raises(A.SteeringAuthorError) as exc:
         _cas(tmp_path, _numbered(free_exit))
     assert exc.value.error_code == "TELEMAC_BOUNDARY_PRESCRIBES_NOTHING"

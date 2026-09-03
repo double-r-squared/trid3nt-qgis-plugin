@@ -1,9 +1,9 @@
 # `workflows/telemac/` - the TELEMAC engine
 
 One facade, four shared trees, one package per template. The shared trees are
-named for what they produce - `authoring/` the deck the box receives, `solving/`
-the dispatched run, `products/` the answer that run is read into, `helpers/`
-what a declaration summons on the way. A template package is the recipe
+named for what they produce - `authoring/` the run directory the box receives,
+`solving/` the dispatched run, `products/` the answer that run is read into,
+`helpers/` what a declaration summons on the way. A template package is the recipe
 (`<name>.py`), its declarations (`declarations.py`), its routing phrasings
 (`corpus.yaml`) and whatever one bespoke coercion its wire needs; everything
 else it uses is the facade's or the shared trees'.
@@ -25,10 +25,10 @@ else it uses is the facade's or the shared trees'.
 
 | folder | what it is |
 | --- | --- |
-| `authoring/` | Everything the box receives: the deck writers, the fronts that stage them, the DAMOCLES parse that gates them. See its own README. |
+| `authoring/` | Everything the box receives: the ONE assembler, the steering-file writers it summons, the DAMOCLES parse that gates them. See its own README. |
 | `solving/` | The run, dispatched: stage the manifest, hand it to the solve seam, wait, surface the gates. See its own README. |
-| `products/` | What a solved run is answered with: the postprocessors, the reach deliverables, the run's own files read on the server. See its own README. |
-| `helpers/` | What a declaration summons: the reach front, the declared forcing, the substance class, the WAQTEL relations, the typed failures. See its own README. |
+| `products/` | What a solved run is answered with: the postprocessors, the reach and catchment deliverables, the run's own files read on the server. See its own README. |
+| `helpers/` | What a declaration summons: the reach front, the catchment, the infiltration surface, the declared forcing, the substance class, the WAQTEL relations, the typed failures. See its own README. |
 | `agitation/` | `artemis_harbor_agitation` - a swell at the harbour mouth to the agitation field inside it (ARTEMIS). |
 | `do_sag/` | `telemac_do_sag` - an outfall's BOD load to the dissolved-oxygen sag downstream (TELEMAC-2D + WAQTEL). |
 | `rain_on_grid/` | `telemac_rain_on_grid` - a storm over a catchment to the outlet hydrograph; `cn_infiltration.py` is its SCS curve-number infiltration. |

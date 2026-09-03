@@ -98,7 +98,7 @@ class DATA:
 # process-lifetime constants and the plan is a pure assembly of them.
 
 #: The reach's own extent rides HERE rather than on the mesh ask: the mesher is
-#: handed a measured polygon, while the deck still states the stretch it wrote for.
+#: handed a measured polygon, while the sheet still states the stretch it asked for.
 PHYSICS = Physics("waqtel_o2",
                   reach_length_km=P.reach_length_km,
                   do_sag_config=Ref("waqtel"),

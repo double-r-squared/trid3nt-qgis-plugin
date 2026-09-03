@@ -108,7 +108,7 @@ class PARAMS:
     output_interval_min = Param(
         door=doors.USER, optional=True, bounds=(0.1, 1440.0),
         units="min", consequence="numerical",
-        desc="Result-writing cadence; unset keeps the deck's own graphic period")
+        desc="Result-writing cadence; unset keeps the steering file's own period")
     discharge_m3s = Param(
         door=doors.USER, optional=True, units="m^3/s",
         bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,

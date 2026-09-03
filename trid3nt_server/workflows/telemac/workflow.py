@@ -2,16 +2,17 @@
 
 Four operations, and nothing else. Behind them sit the four shared trees -
 ``authoring/``, ``solving/``, ``products/``, ``helpers/`` - carrying the reach
-front (geocode, flowline, seed, corridor deck, reach solve, per-deliverable
-readers) and the open-water front (an AOI, a regular grid over it, one worker
-section, one result SELAFIN). The facade is what stays still while those move.
+front (geocode, flowline, seed, the assembled run, the reach solve, the
+per-deliverable readers) and the open-water front (an AOI, a regular grid over
+it, one worker section, one result SELAFIN). The facade is what stays still while
+those move.
 
 The MESH is not one of the four: a template declares its mesh ask as a
 ``tool.build_mesh`` block beside PHYSICS and FORCING, and ``author`` reads the
-fields the deck writers know by their own names.
+fields the authors know by their own names.
 
 WHAT VARIES BETWEEN TEMPLATES is the declared PHYSICS PROCESS, and one table
-(:data:`_PROCESSES`) says what each process means end to end - which deck writer
+(:data:`_PROCESSES`) says what each process means end to end - which author
 serializes it, which solve dispatches it, which reader publishes it. A process
 the facade does not know REFUSES at plan construction rather than solving into a
 reader that cannot describe the result.
@@ -38,26 +39,26 @@ from trid3nt_server.workflows.lib import (
 from trid3nt_server.workflows.shared.aoi import AcquireAoi
 from trid3nt_server.workflows.telemac.authoring.agitation import (
     Agitation,
-    write_agitation_deck,
+    write_agitation_case,
 )
-from trid3nt_server.workflows.telemac.authoring.deck import WriteDeck, write_reach_deck
+from trid3nt_server.workflows.telemac.authoring.assembler import (
+    Assemble,
+    assemble_rain_on_grid,
+    assemble_reach,
+)
 from trid3nt_server.workflows.telemac.authoring.open_water import SolveOpenWater
-from trid3nt_server.workflows.telemac.authoring.rain_on_grid import (
-    AcquireCatchment,
-    RainOnGrid,
-    SolveRainOnGrid,
-    write_rain_on_grid_deck,
-)
 from trid3nt_server.workflows.telemac.authoring.stratified import (
     Stratified,
-    write_stratified_deck,
+    write_stratified_case,
 )
+from trid3nt_server.workflows.telemac.helpers.catchment import AcquireCatchment
 from trid3nt_server.workflows.telemac.helpers.forcing import CarrierDischarge
 from trid3nt_server.workflows.telemac.helpers.reach import Geocode, ReachSeed
 from trid3nt_server.workflows.telemac.products.products import Products
-from trid3nt_server.workflows.telemac.solving.solve import Solve
+from trid3nt_server.workflows.telemac.products.rain_on_grid import RainOnGridProducts
+from trid3nt_server.workflows.telemac.solving.solve import Solve, SolveRainOnGrid
 
-__all__ = ["TelemacWorkflow", "mesh_deck_fields"]
+__all__ = ["TelemacWorkflow", "mesh_sheet_fields"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,78 +66,79 @@ class _Process:
     """One declared physics process, end to end.
 
     The facade routes on ``Physics.process``, and this is what it routes TO: the
-    deck step that serializes it, the writer whose real signature the slots are
+    author step that serializes it, the writer whose real signature the slots are
     checked against in both directions, the solve that dispatches it, and the
     reader that turns the solved file into the question's deliverable. Adding a
     TELEMAC domain is a row here plus its two runners - never a branch in the four
     operations.
     """
 
-    #: What the deck writer calls the acquired domain (``reach`` / ``aoi`` /
+    #: What the author calls the acquired domain (``reach`` / ``aoi`` /
     #: ``catchment``).
     domain_kw: str
     #: The plan value that domain keyword takes. It is the PROCESS's, not the
-    #: template's: a reach deck reads the acquired reach, an open-water deck its
-    #: AOI, a rain deck the built catchment mesh, and no template chooses otherwise.
+    #: template's: a reach reads the acquired reach, an open-water domain its AOI,
+    #: a catchment the built mesh, and no template chooses otherwise.
     domain_ref: Any
-    deck: Callable[..., Step]
+    author: Callable[..., Step]
     writer: Callable[..., Any]
     solve: Callable[..., Step]
     read: Callable[..., Step]
-    #: Forcing slot member -> the deck writer's own keyword for it.
+    #: Forcing slot member -> the author's own keyword for it.
     forcing_fields: Mapping[str, str]
-    #: Extra plan-value deck fields this process's writer always takes.
+    #: Extra plan-value fields this process's writer always takes.
     extra_fields: Mapping[str, Any] = None  # type: ignore[assignment]
 
 
 def _reach_solve(*, compute_class: Any) -> Step:
-    return Solve.telemac(deck=Ref("deck"), compute_class=compute_class)
+    return Solve.telemac(run=Ref("run"), compute_class=compute_class)
 
 
 def _open_water_solve(*, compute_class: Any) -> Step:
-    return SolveOpenWater.telemac(deck=Ref("deck"), compute_class=compute_class)
+    return SolveOpenWater.telemac(run=Ref("run"), compute_class=compute_class)
 
 
 def _rain_on_grid_solve(*, compute_class: Any) -> Step:
-    return SolveRainOnGrid.telemac(deck=Ref("deck"), compute_class=compute_class)
+    return SolveRainOnGrid.telemac(run=Ref("run"), compute_class=compute_class)
 
 
 def _read_rain_on_grid(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
-    return RainOnGrid.products(deck=Ref("deck"), solve=solve).named("flood_depth")
+    return RainOnGridProducts.flood_depth(
+        run=Ref("run"), solve=solve).named("flood_depth")
 
 
 def _read_dye(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
-    return Products.dye(deck=Ref("deck"), solve=solve,
+    return Products.dye(run=Ref("run"), solve=solve,
                         carrier_discharge=forcing.values.get("carrier")).named("plume")
 
 
 def _read_dissolved_oxygen(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
     return Products.dissolved_oxygen(
-        deck=Ref("deck"), solve=solve,
+        run=Ref("run"), solve=solve,
         process=physics.values.get("do_sag_config"),
         carrier_discharge=forcing.values.get("carrier")).named("do_field")
 
 
 def _read_agitation(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
-    return Agitation.products(deck=Ref("deck"), solve=solve).named("agitation")
+    return Agitation.products(run=Ref("run"), solve=solve).named("agitation")
 
 
 def _read_stratified(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
-    return Stratified.products(deck=Ref("deck"), solve=solve).named("column")
+    return Stratified.products(run=Ref("run"), solve=solve).named("column")
 
 
-#: Plan-value deck fields every reach writer takes: the seed the one centerline
-#: was navigated from, that CENTERLINE itself, the ACCEPTED mesh the solve runs
-#: on, and the mapped water the reach was cut from - which a dredge field is cut
-#: out of. All four are chain products rather than sheet values, so none can be
-#: declared. The centerline is named here so the deck reads the SAME line the
+#: Plan-value fields every reach author takes: the seed the one centerline was
+#: navigated from, that CENTERLINE itself, the ACCEPTED mesh the solve runs on,
+#: and the mapped water the reach was cut from - which a dredge field is cut out
+#: of. All four are chain products rather than sheet values, so none can be
+#: declared. The centerline is named here so the run reads the SAME line the
 #: section was cut between and the mesh was built over.
 _REACH_EXTRA: Mapping[str, Any] = {"seed": Ref("seed"), "mesh": Ref("mesh"),
                                    "centerline": Ref("centerline"),
                                    "reach_polygon": Ref("reach_polygon")}
 
-#: The agitation deck always reads the run's MESH slot: the domain a phase-
-#: resolving solve runs on is the caller's to author, and a deck that read the
+#: The agitation author always reads the run's MESH slot: the domain a phase-
+#: resolving solve runs on is the caller's to author, and an author that read the
 #: slot only sometimes would answer the grid question on the runs that filled it.
 _AGITATION_EXTRA: Mapping[str, Any] = {"supplied_mesh": DataRef("mesh")}
 
@@ -147,44 +149,44 @@ _RAIN_FORCING: Mapping[str, str] = {"rain": "rain"}
 _PROCESSES: dict[str, _Process] = {
     "tracer": _Process(
         domain_kw="reach", domain_ref=Ref("reach"),
-        deck=WriteDeck.telemac, writer=write_reach_deck,
+        author=Assemble.reach, writer=assemble_reach,
         solve=_reach_solve, read=_read_dye, forcing_fields=_REACH_FORCING,
         extra_fields=_REACH_EXTRA),
     "morphodynamics": _Process(
         domain_kw="reach", domain_ref=Ref("reach"),
-        deck=WriteDeck.telemac, writer=write_reach_deck,
+        author=Assemble.reach, writer=assemble_reach,
         solve=_reach_solve, read=_read_dye, forcing_fields=_REACH_FORCING,
         extra_fields=_REACH_EXTRA),
     "waqtel_o2": _Process(
         domain_kw="reach", domain_ref=Ref("reach"),
-        deck=WriteDeck.telemac, writer=write_reach_deck,
+        author=Assemble.reach, writer=assemble_reach,
         solve=_reach_solve, read=_read_dissolved_oxygen,
         forcing_fields=_REACH_FORCING, extra_fields=_REACH_EXTRA),
     "harbor_agitation": _Process(
         domain_kw="aoi", domain_ref=Ref("aoi"),
-        deck=Agitation.deck, writer=write_agitation_deck,
+        author=Agitation.case, writer=write_agitation_case,
         solve=_open_water_solve, read=_read_agitation, forcing_fields={},
         extra_fields=_AGITATION_EXTRA),
     "stratified_3d": _Process(
         domain_kw="aoi", domain_ref=Ref("aoi"),
-        deck=Stratified.deck, writer=write_stratified_deck,
+        author=Stratified.case, writer=write_stratified_case,
         solve=_open_water_solve, read=_read_stratified, forcing_fields={}),
     "rainfall_runoff": _Process(
         domain_kw="catchment", domain_ref=Ref("mesh"),
-        deck=RainOnGrid.deck, writer=write_rain_on_grid_deck,
+        author=Assemble.rain_on_grid, writer=assemble_rain_on_grid,
         solve=_rain_on_grid_solve, read=_read_rain_on_grid,
         forcing_fields=_RAIN_FORCING,
         # The infiltration SURFACE is a mesh-node field, so it is a step result the
-        # deck reads rather than a value the sheet carries - the same shape as the
-        # reach family's mid-reach seed.
+        # author reads rather than a value the sheet carries - the same shape as
+        # the reach family's mid-reach seed.
         extra_fields={"infiltration": Ref("infiltration")}),
 }
 
-#: Recipe params a TELEMAC deck writer reads, under the name that writer knows
-#: each by. Only the AGNOSTIC params can appear here: an op is a call on a mesh
-#: library and means nothing to a deck. The deck records what the mesh ask asked
+#: Recipe params a TELEMAC author reads, under the name that writer knows each
+#: by. Only the AGNOSTIC params can appear here: an op is a call on a mesh library
+#: and means nothing to a steering file. The sheet records what the mesh ask asked
 #: FOR, and the mesher answers for what it built.
-_MESH_DECK_PARAMS: Mapping[str, str] = {
+_MESH_SHEET_PARAMS: Mapping[str, str] = {
     "resolution_m": "mesh_resolution_m",
 }
 
@@ -261,7 +263,7 @@ class TelemacWorkflow(Workflow):
     # -- 2. author --------------------------------------------------------- #
 
     def author(self, *, mesh: Any, physics: Physics, forcing: Forcing) -> Step:
-        """Serialize the mesh ask + physics + forcing into the process's deck."""
+        """Serialize the mesh ask + physics + forcing into the process's run."""
         if not _is_mesh_recipe(mesh):
             raise PlanValidationError(
                 "author needs the template's MESH recipe (tool.build_mesh(...)), "
@@ -275,20 +277,20 @@ class TelemacWorkflow(Workflow):
         process = self._process(physics)
         fields: dict[str, Any] = {process.domain_kw: process.domain_ref}
         fields.update(dict(process.extra_fields or {}))
-        fields.update(mesh_deck_fields(mesh))
+        fields.update(mesh_sheet_fields(mesh))
         fields.update(_translate(forcing.values, process.forcing_fields))
         fields.update(physics.values)
-        _refuse_uncovered_deck_fields(fields, process.writer, physics.process)
-        return process.deck(**fields).named("deck")
+        _refuse_uncovered_fields(fields, process.writer, physics.process)
+        return process.author(**fields).named("run")
 
     # -- 3. solve ---------------------------------------------------------- #
 
     def solve(self, *, compute_class: Any, physics: Physics) -> Step:
-        """Dispatch the staged deck to the worker the declared process runs on.
+        """Dispatch the staged run to the worker the declared process runs on.
 
         ``physics`` is the process SELECTOR and is required: it must never default,
-        because a template that forgot to name its physics would otherwise
-        dispatch an agitation or stratified deck to the wrong solver silently. A missing
+        because a template that forgot to name its physics would otherwise dispatch
+        an agitation or stratified run to the wrong solver silently. A missing
         selector must raise, not fall back.
         """
         if physics is None:
@@ -328,29 +330,29 @@ def _is_mesh_recipe(value: Any) -> bool:
     return isinstance(value, MeshRecipe)
 
 
-def mesh_deck_fields(mesh: Any) -> dict[str, Any]:
-    """The declared mesh recipe, as the deck keywords a TELEMAC writer reads.
+def mesh_sheet_fields(mesh: Any) -> dict[str, Any]:
+    """The declared mesh recipe, as the keywords a TELEMAC author reads.
 
     A param the template did not declare is ABSENT rather than ``None``: passing
-    None would override the deck writer's own default with nothing, and "the
-    template did not ask" is what absence means.
+    None would override the author's own default with nothing, and "the template
+    did not ask" is what absence means.
     """
-    return {deck: getattr(mesh, name)
-            for name, deck in _MESH_DECK_PARAMS.items()
+    return {field: getattr(mesh, name)
+            for name, field in _MESH_SHEET_PARAMS.items()
             if getattr(mesh, name, None) is not None}
 
 
 def _translate(values: Mapping[str, Any], table: Mapping[str, str]) -> dict[str, Any]:
-    """Rename slot members onto the deck's own keyword names."""
+    """Rename slot members onto the author's own keyword names."""
     return {table.get(k, k): v for k, v in values.items()}
 
 
-def _refuse_uncovered_deck_fields(fields: Mapping[str, Any], writer: Callable[..., Any],
-                                  process: str) -> None:
-    """The slots and the deck writer's signature must AGREE, in both directions.
+def _refuse_uncovered_fields(fields: Mapping[str, Any], writer: Callable[..., Any],
+                             process: str) -> None:
+    """The slots and the author's signature must AGREE, in both directions.
 
     The signature check has to run both ways or it only catches half the disease.
-    An UNKNOWN key vanishes - the deck is written without it and the run answers a
+    An UNKNOWN key vanishes - the run is authored without it and answers a
     different question than the template declared. A MISSING required key is the
     mirror image and costs more: the plan builds, the acquire stage geocodes and
     fetches, and only then does the writer die on a TypeError, several minutes and

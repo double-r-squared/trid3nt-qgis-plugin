@@ -91,7 +91,7 @@ class DATA:
     # carries the source pixels rather than a resample of them.
     dem = tool("fetch_copernicus_dem", bbox=Ref("window.bbox"), px_per_deg=3600.0,
                purpose="river bed elevation")
-    # The cadence and units the deck receives, stated rather than assumed: the
+    # The cadence and units the sheet receives, stated rather than assumed: the
     # producer answers in daily rates, so this asks for no interpolation - and a
     # sub-daily target would refuse here instead of manufacturing a storm shape
     # gridMET never reported.
@@ -109,7 +109,7 @@ class DATA:
 # process-lifetime constants and the plan is a pure assembly of them.
 
 #: The reach's own extent rides HERE rather than on the mesh ask: the mesher is
-#: handed a measured polygon, while the deck still states the stretch it wrote for.
+#: handed a measured polygon, while the sheet still states the stretch it asked for.
 PHYSICS = Physics(
     "tracer",
     reach_length_km=P.reach_length_km,

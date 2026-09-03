@@ -1,14 +1,14 @@
 """The OPEN-WATER front of the TELEMAC AOI templates: stage, solve, read, surface.
 
-The reach family (``helpers/reach.py`` + ``authoring/deck.py`` + ``solving/solve.py``)
-meshes a corridor along a flowline. The other TELEMAC domains - a lake fetch, a
-harbour basin - are the same shape instead: a regular grid over an AOI, real
-topobathy at the nodes, one worker section in the manifest, one result SELAFIN,
-one peak field.
+The reach family (``helpers/reach.py`` + ``authoring/assembler.py`` +
+``solving/solve.py``) meshes a corridor along a flowline. The other TELEMAC
+domains - a lake fetch, a harbour basin - are the same shape instead: a regular
+grid over an AOI, real topobathy at the nodes, one worker section in the
+manifest, one result SELAFIN, one peak field.
 
 This module is the ONE copy of that. What varies between the domains - which
 manifest section, which solver, which result file, which outputs the supervisor
-uploads - is DATA the deck writer returns, not code paths here: a deck says what
+uploads - is DATA the author returns, not code paths here: a run says what
 solves it.
 
 Everything past the primary layer is best-effort by contract, exactly as in the
@@ -108,8 +108,8 @@ def solves_on_real_bed(bathy_source: Any, *,
                        real_bed_modes: tuple[str, ...] | None = None) -> bool:
     """Whether this domain is solved on FETCHED bed data rather than an authored one.
 
-    The producer and the deck writer both have to answer this, and they have to
-    agree: a producer that fetched where the deck went idealized stages a raster
+    The producer and the author both have to answer this, and they have to
+    agree: a producer that fetched where the author went idealized stages a raster
     nothing reads, and the reverse builds a real domain with no bed. One
     definition, two readers.
 
@@ -146,10 +146,10 @@ async def fetch_domain_bed(*, bathy_source: Any = "auto",
 
     ``px_per_deg`` is the SAMPLE LATTICE the builder's nodes are read against, so
     it is the builder's fact and travels from the template, not a default here.
-    The bbox is the BOUND DOMAIN's, rounded exactly as the deck rounds it: the
-    raster a node is sampled from has to be the one the deck describes, and a bbox
+    The bbox is the BOUND DOMAIN's, rounded exactly as the author rounds it: the
+    raster a node is sampled from has to be the one the run describes, and a bbox
     that disagreed by a rounding step would sample a grid offset from the mesh.
-    The lake gate reads the domain's CENTRE, while the deck reads the AOI's own
+    The lake gate reads the domain's CENTRE, while the author reads the AOI's own
     point; for a drawn or passed extent those are the same point, and for a
     geocoded place they differ by the AOI's 4-decimal rounding. A disagreement is
     therefore possible only within metres of a lake's edge, and it surfaces as the
@@ -218,14 +218,16 @@ def case_section(*, module: str, steering: str, results: list[str],
                  server_facts: Mapping[str, Any], user_fortran: str | None = None,
                  coupling: str | None = None,
                  continue_from: str | None = None) -> dict[str, Any]:
-    """The CASE a worker runs: which engine, which deck, what it must produce.
+    """The CASE a worker runs: which engine, which file, what it must produce.
 
-    ``module`` names the engine binary, ``steering`` the authored deck it reads,
+    ``module`` names the engine binary, ``steering`` the authored file it reads,
     and ``results`` every file that must exist for the run to have succeeded.
-    ``coupling`` names the module the deck couples the solve with, because which
+    ``coupling`` names the module the steering file couples the solve with, because
+    which
     runner can drive a coupled case is not the same question for every module and
     the worker decides on this word. ``continue_from`` is the staged name of the
-    previous run's results the deck restarts from, present only on a continued
+    previous run's results the steering file restarts from, present only on a
+    continued
     run.
 
     ``server_facts`` is what the SERVER already knows and the worker cannot learn
@@ -337,16 +339,16 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, compute_class: st
     return run_result, (getattr(run_result, "run_id", None) or run_id)
 
 
-async def solve_open_water(*, deck: dict[str, Any],
+async def solve_open_water(*, run: dict[str, Any],
                            compute_class: str = "medium") -> dict[str, Any]:
-    """Stage the deck's manifest, dispatch it, wait, and return the run handle.
+    """Stage the run's manifest, dispatch it, wait, and return the run handle.
 
-    The deck carries its own solver, section, outputs and result file, so this is
+    The run carries its own solver, section, outputs and result file, so this is
     the ONE dispatch for every open-water TELEMAC domain. The returned ``uri`` is
     the result SELAFIN under the run prefix - what a ledger replay probes, so a
     resumed rerun can only skip the solve while the solved artifact is still there.
 
-    ``deck["requires_utm"]`` says whether a missing ``utm_epsg`` is a FAILURE.
+    ``run["requires_utm"]`` says whether a missing ``utm_epsg`` is a FAILURE.
     A domain built over real geography is ungeoreferenceable without the worker's
     zone, so its absence is a typed refusal. An IDEALIZED domain - the Berkhoff
     shoal, the lock-exchange channel - has no geographic footprint at all and
@@ -356,52 +358,52 @@ async def solve_open_water(*, deck: dict[str, Any],
     """
     from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
-    solver, section = deck["solver"], deck["section"]
-    run_tag = deck["run_tag"]
+    solver, section = run["solver"], run["section"]
+    run_tag = run["run_tag"]
     manifest_uri = await asyncio.to_thread(
-        stage_telemac_manifest, section=section, config=deck["config"],
-        run_tag=run_tag, outputs=deck["outputs"], inputs=deck.get("inputs"),
-        prefix=deck.get("prefix"))
+        stage_telemac_manifest, section=section, config=run["config"],
+        run_tag=run_tag, outputs=run["outputs"], inputs=run.get("inputs"),
+        prefix=run.get("prefix"))
     logger.info("telemac %s staged manifest run_tag=%s name=%s -> %s",
-                section, run_tag, deck["config"].get("name"), manifest_uri)
+                section, run_tag, run["config"].get("name"), manifest_uri)
 
     run_result, batch_run_id = await dispatch_and_wait(
         solver=solver, manifest_uri=manifest_uri, compute_class=compute_class,
         label=section, timeout_s=_SOLVE_TIMEOUT_S,
-        grid_resolution_m=deck.get("mesh_size_m"))
+        grid_resolution_m=run.get("mesh_size_m"))
     if run_result is None or run_result.status != "complete":
         raise OpenWaterError(
             f"the TELEMAC {section} solve did not complete "
             f"(status={getattr(run_result, 'status', None)}, "
             f"error_code={getattr(run_result, 'error_code', None)}): "
             f"{getattr(run_result, 'error_message', '') or ''}",
-            error_code=deck.get("run_failed_code") or "TELEMAC_OPEN_WATER_FAILED")
+            error_code=run.get("run_failed_code") or "TELEMAC_OPEN_WATER_FAILED")
 
     metrics = await asyncio.to_thread(read_run_metrics, batch_run_id)
     utm_epsg = metrics.get("utm_epsg")
-    if utm_epsg is None and deck.get("requires_utm", True):
+    if utm_epsg is None and run.get("requires_utm", True):
         # A SELAFIN carries no CRS of its own, so a domain built over real
         # geography cannot be georeferenced at all without the worker's UTM zone -
         # a typed refusal, never a guessed zone.
         raise OpenWaterError(
             f"TELEMAC {section} run {batch_run_id} produced no utm_epsg; "
             "the result cannot be georeferenced.",
-            error_code=deck.get("output_missing_code") or "TELEMAC_OUTPUT_MISSING")
+            error_code=run.get("output_missing_code") or "TELEMAC_OUTPUT_MISSING")
     return {
         "run_id": batch_run_id,
-        "uri": f"s3://{_get_runs_bucket()}/{batch_run_id}/{deck['result_basename']}",
+        "uri": f"s3://{_get_runs_bucket()}/{batch_run_id}/{run['result_basename']}",
         "utm_epsg": int(utm_epsg) if utm_epsg is not None else None,
         "metrics": metrics,
     }
 
 
-def solved_domain_bbox(deck: Mapping[str, Any],
+def solved_domain_bbox(run: Mapping[str, Any],
                        metrics: Mapping[str, Any]) -> tuple[float, ...] | None:
     """The 4326 bbox the WORKER laid its local mesh frame over. ``None`` if none.
 
     The open-water builds put node 0 at the AOI's SW corner, so the reader has to
     add that exact corner back before reprojecting. "That exact corner" is the
-    point: the deck rounds the AOI to 4 decimals on its way into the manifest, so
+    point: the author rounds the AOI to 4 decimals on its way into the manifest, so
     the ORIGINAL AOI is a few metres away from the one the worker meshed and
     offsets the whole field by that much. The worker's own report in
     ``telemac_metrics.json`` is the ground truth; the manifest's rounded bbox is
@@ -410,7 +412,7 @@ def solved_domain_bbox(deck: Mapping[str, Any],
     An IDEALIZED domain has no geographic footprint and reports no bbox at all.
     """
     reported = (metrics or {}).get("bbox")
-    staged = (deck.get("config") or {}).get("bbox")
+    staged = (run.get("config") or {}).get("bbox")
     for candidate in (reported, staged):
         if candidate is None:
             continue
@@ -455,7 +457,7 @@ def download_open_water_result(run_id: str, basename: str,
 _DX_REPORT_TOL_M = 0.05
 
 
-def mesh_resolution_label(bed: str, deck: Mapping[str, Any],
+def mesh_resolution_label(bed: str, run: Mapping[str, Any],
                          metrics: Mapping[str, Any], *, suffix: str = "") -> str:
     """What grid the run was SOLVED on, in one sentence, for the layer to carry.
 
@@ -464,11 +466,11 @@ def mesh_resolution_label(bed: str, deck: Mapping[str, Any],
     differs per template); ``suffix`` carries an extra fact a domain has and the
     others do not, such as TELEMAC-3D's sigma-plane count.
 
-    The spacing is the one the WORKER reports, falling back to the one the deck
+    The spacing is the one the WORKER reports, falling back to the one the run
     asked for - never the other way round, or a run the node budget coarsened
     would advertise the spacing it did not use.
     """
-    return (f"{bed} grid {metrics.get('dx_m', deck['mesh_size_m']):g} m{suffix}"
+    return (f"{bed} grid {metrics.get('dx_m', run['mesh_size_m']):g} m{suffix}"
             + (" (coarsened under node budget)" if metrics.get("coarsened") else ""))
 
 
@@ -517,8 +519,8 @@ class SolveOpenWater:
     """The open-water solve step. The plan's consequential node."""
 
     @staticmethod
-    def telemac(*, deck: Any, compute_class: Any) -> Step:
-        """Dispatch a staged open-water deck to its own TELEMAC worker."""
+    def telemac(*, run: Any, compute_class: Any) -> Step:
+        """Dispatch a staged open-water run to its own TELEMAC worker."""
         return Step(runner=f"{_AUTHORING}.open_water.solve_open_water", stage="solve",
-                    kwargs={"deck": deck, "compute_class": compute_class},
+                    kwargs={"run": run, "compute_class": compute_class},
                     consequential=True)

@@ -40,7 +40,7 @@ def WaqtelO2(*, effluent_bod_mgl: Any, effluent_q_m3s: Any,  # noqa: N802
              k2_per_day: Any, do_standard_mgl: Any) -> Step:
     """The declared WAQTEL O2 process block - resolved ONCE, read twice.
 
-    The deck writer and the postprocess both need the same numbers, and the
+    The author and the postprocess both need the same numbers, and the
     saturation clamp below must not be applied twice or to only one of them, so
     the block is a step whose result they both ``Ref``.
     """
@@ -62,7 +62,7 @@ def waqtel_o2_process(*, effluent_bod_mgl: float, effluent_q_m3s: float,
                       do_saturation_mgl: float, water_temp_c: float,
                       k1_per_day: float, k2_per_day: float,
                       do_standard_mgl: float) -> dict[str, Any]:
-    """The WAQTEL O2 configuration the deck and the postprocess share.
+    """The WAQTEL O2 configuration the author and the postprocess share.
 
     The effluent trio is the OUTFALL itself - the discharge that enters the water
     at the release point carrying its own organic load and its own oxygen. The

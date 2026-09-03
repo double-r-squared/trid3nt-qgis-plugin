@@ -13,7 +13,7 @@ __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 
 #: What a reach run can be HANDED. TELEMAC-2D solves on triangles, so a
 #: triangulation is the whole of what a reach corridor can be handed as a mesh; a
-#: lattice is refused at the door rather than trusted into a deck that assumes
+#: lattice is refused at the door rather than trusted into a run that assumes
 #: edges. The release enters the water at a POINT - the one release geometry this
 #: plume pipeline has been run against.
 ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
@@ -205,7 +205,7 @@ class PARAMS:
     friction_coefficient = Param(
         door=doors.USER, optional=True, bounds=(10.0, 90.0),
         user_lever=True, consequence="numerical",
-        desc="Bed roughness under friction_law; unset keeps the deck's own value")
+        desc="Bed roughness under friction_law; unset keeps the author's own value")
     friction_law = Param(
         door=doors.USER, optional=True, consequence="numerical",
         type=int,
@@ -232,7 +232,7 @@ class PARAMS:
     output_interval_min = Param(
         door=doors.USER, optional=True, bounds=(0.1, 1440.0),
         units="min", consequence="numerical",
-        desc="Result-writing cadence; unset keeps the deck's own graphic period")
+        desc="Result-writing cadence; unset keeps the steering file's own period")
     compute_class = Param(
         door=doors.CONSTANT, default="medium",
         consequence="numerical", desc="Solve sizing class")

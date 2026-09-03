@@ -1,4 +1,4 @@
-"""Typed failures of the TELEMAC reach pipeline.
+"""Typed failures of the TELEMAC pipelines.
 
 Each carries an open-set ``error_code`` the emitter renders as a typed error
 frame. The RETRYABLE one is a GATE, not a failure: it carries ``.suggestions``
@@ -8,7 +8,10 @@ corrected args, so it must PROPAGATE rather than flatten into an envelope.
 
 from __future__ import annotations
 
+from trid3nt_server.workflows.lib import DeclarativeError
+
 __all__ = [
+    "RainOnGridError",
     "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError",
     "ReachWaterUnmapped",
@@ -111,3 +114,9 @@ class TelemacReleaseOutsideDomainError(TelemacDyeScenarioError):
             "the point - so the release falls inside it.",
             "Or omit release_coords to release at spill_fraction along the reach.",
         ]
+
+
+class RainOnGridError(DeclarativeError):
+    """A rain-on-grid catchment could not be acquired, staged, solved or read."""
+
+    error_code = "TELEMAC_ROG_FAILED"

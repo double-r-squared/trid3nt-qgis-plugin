@@ -1,4 +1,4 @@
-"""The TELEMAC-3D deck and deliverable: a water column in, its structure out.
+"""The TELEMAC-3D run and deliverable: a water column in, its structure out.
 
 One serialization hook and one publisher for TELEMAC-3D, the three-dimensional
 (hydrostatic or non-hydrostatic) Navier-Stokes solver with active-tracer
@@ -44,7 +44,7 @@ from .open_water import (
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.stratified")
 
-__all__ = ["Stratified", "publish_stratified_products", "write_stratified_deck"]
+__all__ = ["Stratified", "publish_stratified_products", "write_stratified_case"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
@@ -67,7 +67,7 @@ _OUTPUTS = [
 _REAL_BED_MODES = ("stratification", "wind_circulation")
 
 
-async def write_stratified_deck(
+async def write_stratified_case(
     *,
     aoi: dict[str, Any],
     flow_mode: str = "stratification",
@@ -159,60 +159,60 @@ def _bathy_label(real: bool, flow_mode: str, lake: str | None) -> str:
             "geography-free verification physics)")
 
 
-def _provenance(deck: dict[str, Any], metrics: dict[str, Any]) -> list[SyntheticInput]:
+def _provenance(run: dict[str, Any], metrics: dict[str, Any]) -> list[SyntheticInput]:
     """The physically dominant inputs, as rows the layer carries.
 
     The wind is what decides the STRATIFICATION answer - calm keeps the
     thermocline, wind mixes it away - so a run that reports a surviving
     temperature difference has to say which of the two it was forced with.
     """
-    real = bool(deck["real_bathymetry"])
-    calm = float(deck["wind_speed_mps"]) <= 0.0
+    real = bool(run["real_bathymetry"])
+    calm = float(run["wind_speed_mps"]) <= 0.0
     rows = [
         SyntheticInput(
-            param="wind_speed_mps", value=round(deck["wind_speed_mps"], 1),
+            param="wind_speed_mps", value=round(run["wind_speed_mps"], 1),
             units="m/s", basis="default_demo", consequence="physics",
             note=("calm - the thermocline persists and no wind circulation is driven"
                   if calm else "prescribed steady wind, which mixes the column and "
                                "drives the gyre")),
         SyntheticInput(
-            param="bathy_source", value=deck["config"]["bathy_source"],
+            param="bathy_source", value=run["config"]["bathy_source"],
             basis="fetched" if real else "default_demo", consequence="physics",
             real_source_if_any=("NOAA NGDC Great Lakes lake-datum bathymetry"
                                 if real else None),
-            note=deck["bathy_label"]),
+            note=run["bathy_label"]),
         SyntheticInput(
-            param="nplan", value=int(deck["nplan"]), basis="default_demo",
+            param="nplan", value=int(run["nplan"]), basis="default_demo",
             consequence="numerical",
             note="vertical sigma levels - the 3D degree of freedom a 2D model has none of"),
     ]
-    if deck["flow_mode"] == "stratification":
+    if run["flow_mode"] == "stratification":
         rows.append(SyntheticInput(
             param="thermocline",
-            value=f"{deck['warm_temp_c']:g}C/{deck['cold_temp_c']:g}C", units="C",
+            value=f"{run['warm_temp_c']:g}C/{run['cold_temp_c']:g}C", units="C",
             basis="default_demo", consequence="physics",
             note=(f"prescribed warm epilimnion over cold hypolimnion, thermocline at "
-                  f"{deck['thermocline_depth_m']:g} m (no met-forcing fetcher exists). "
+                  f"{run['thermocline_depth_m']:g} m (no met-forcing fetcher exists). "
                   "No heat exchange: the column can only REDISTRIBUTE its heat, "
                   "never lose it")))
-    return rows + mesh_sizing_provenance(deck.get("mesh_resolution_asked_m"), metrics)
+    return rows + mesh_sizing_provenance(run.get("mesh_resolution_asked_m"), metrics)
 
 
-def _honesty_note(deck: dict[str, Any]) -> str:
+def _honesty_note(run: dict[str, Any]) -> str:
     return (
         "3D structure SCREENING: TELEMAC-3D "
-        f"({'non-hydrostatic' if deck['config']['non_hydrostatic'] else 'hydrostatic'}) "
-        f"over {deck['nplan']} sigma planes on a {deck['mesh_size_m']:g} m horizontal "
-        f"grid of {deck['bathy_label']}, driven by a PRESCRIBED column and a "
-        f"{deck['wind_speed_mps']:g} m/s wind - labeled demo forcing, not observed "
+        f"({'non-hydrostatic' if run['config']['non_hydrostatic'] else 'hydrostatic'}) "
+        f"over {run['nplan']} sigma planes on a {run['mesh_size_m']:g} m horizontal "
+        f"grid of {run['bathy_label']}, driven by a PRESCRIBED column and a "
+        f"{run['wind_speed_mps']:g} m/s wind - labeled demo forcing, not observed "
         "conditions. The pair of rasters is the SURFACE and BOTTOM field; their "
         "contrast is what a depth-averaged model cannot show. Not a calibrated study."
-        + (" The deck exchanges NO heat with the atmosphere: heat is CONSERVED, so a "
+        + (" The run exchanges NO heat with the atmosphere: heat is CONSERVED, so a "
            "falling surface temperature is downward MIXING, not the lake cooling."
-           if deck["flow_mode"] == "stratification" else ""))
+           if run["flow_mode"] == "stratification" else ""))
 
 
-async def publish_stratified_products(*, deck: dict[str, Any],
+async def publish_stratified_products(*, run: dict[str, Any],
                                       solve: dict[str, Any]) -> Telemac3dLayerURI:
     """Postprocess the solved column into its surface + bottom layers and scalars.
 
@@ -227,20 +227,20 @@ async def publish_stratified_products(*, deck: dict[str, Any],
     emitter = current_emitter()
     run_id = solve["run_id"]
     metrics = dict(solve.get("metrics") or {})
-    reach = deck["domain_slug"]
+    reach = run["domain_slug"]
     utm_epsg = solve["utm_epsg"]
 
     surface = await asyncio.to_thread(
-        download_open_water_result, run_id, deck["result_basename"],
-        error_code=deck["output_missing_code"])
+        download_open_water_result, run_id, run["result_basename"],
+        error_code=run["output_missing_code"])
     bottom = await asyncio.to_thread(
-        download_open_water_result, run_id, deck["bottom_basename"],
-        error_code=deck["output_missing_code"])
+        download_open_water_result, run_id, run["bottom_basename"],
+        error_code=run["output_missing_code"])
     try:
         layers, _pmetrics = await asyncio.to_thread(
             postprocess_telemac3d, surface, bottom, run_id=run_id,
             utm_epsg=utm_epsg, worker_metrics=metrics, reach_name=reach,
-            flow_mode=deck["flow_mode"])
+            flow_mode=run["flow_mode"])
     finally:
         for path in (surface, bottom):
             Path(path).unlink(missing_ok=True)
@@ -250,10 +250,10 @@ async def publish_stratified_products(*, deck: dict[str, Any],
 
     update = {
         "mesh_resolution_label": mesh_resolution_label(
-            "real NOAA lake bathy" if deck["real_bathymetry"] else "idealized",
-            deck, metrics, suffix=f", {deck['nplan']} sigma planes"),
-        "fallback_note": _honesty_note(deck),
-        "synthetic_inputs": _provenance(deck, metrics),
+            "real NOAA lake bathy" if run["real_bathymetry"] else "idealized",
+            run, metrics, suffix=f", {run['nplan']} sigma planes"),
+        "fallback_note": _honesty_note(run),
+        "synthetic_inputs": _provenance(run, metrics),
         "run_id": run_id,
         # The vertical profile the WORKER measured, initial and final, so the chart
         # shows what the column DID rather than a resampling of the surface map.
@@ -267,7 +267,7 @@ async def publish_stratified_products(*, deck: dict[str, Any],
     if len(layers) > 1 and emitter is not None:
         bottom_pub = await publish_product_layer(
             layers[1], style_preset=TELEMAC3D_STRATIFICATION_STYLE_PRESET,
-            update={"fallback_note": _honesty_note(deck)})
+            update={"fallback_note": _honesty_note(run)})
         try:
             from trid3nt_server.emission.layer_uri_emit import publish_input_layer
 
@@ -281,7 +281,7 @@ async def publish_stratified_products(*, deck: dict[str, Any],
         layers[0], style_preset=TELEMAC3D_STRATIFICATION_STYLE_PRESET, update=update)
     logger.info("telemac3d complete run_id=%s domain=%s mode=%s metric=%.4g "
                 "surface_mean=%s bottom_mean=%s uri=%s", run_id, reach,
-                deck["flow_mode"], published.stratification_metric,
+                run["flow_mode"], published.stratification_metric,
                 metrics.get("surface_value_mean"), metrics.get("bottom_value_mean"),
                 published.uri)
     return published
@@ -291,11 +291,11 @@ class Stratified:
     """The TELEMAC-3D author + read steps, as the facade binds them."""
 
     @staticmethod
-    def deck(**kwargs: Any) -> Step:
-        return Step(runner=f"{_AUTHORING}.stratified.write_stratified_deck",
+    def case(**kwargs: Any) -> Step:
+        return Step(runner=f"{_AUTHORING}.stratified.write_stratified_case",
                     stage="author", kwargs=kwargs)
 
     @staticmethod
-    def products(*, deck: Any, solve: Any) -> Step:
+    def products(*, run: Any, solve: Any) -> Step:
         return Step(runner=f"{_AUTHORING}.stratified.publish_stratified_products",
-                    stage="publish", kwargs={"deck": deck, "solve": solve})
+                    stage="publish", kwargs={"run": run, "solve": solve})
