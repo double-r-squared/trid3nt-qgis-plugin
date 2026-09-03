@@ -663,6 +663,36 @@ def _save_layer_panels(renderable: list[tuple[dict, dict]], out_path: Path, *,
     return saved
 
 
+#: Web mercator's own latitude limit. A basemap has no ground past it, so an
+#: extent that crosses it is not an extent a panel can be drawn over.
+_MERCATOR_LAT_LIMIT = 85.05112878
+
+
+def _refuse_ungeoreferenced(renderable: list[tuple[dict, dict]]) -> None:
+    """A layer whose lon/lat extent is not ON EARTH stops the sheet, by name.
+
+    Local metres written into a 4326 raster produce bounds like a latitude of
+    670, and the zoom picker has no zoom that covers them: it falls back to a
+    fixed one and the mosaic asks for a grid of tiles no machine can allocate.
+    The failure that reaches a reader is then a MemoryError, which says nothing
+    about the georeferencing defect that caused it - so the defect is named here
+    instead, with the numbers.
+    """
+    bad = []
+    for layer, payload in renderable:
+        lon0, lat0, lon1, lat1 = (float(v) for v in payload["bbox_ll"])
+        if (abs(lat0) > _MERCATOR_LAT_LIMIT or abs(lat1) > _MERCATOR_LAT_LIMIT
+                or abs(lon0) > 180.0 or abs(lon1) > 180.0):
+            bad.append(f"{layer.get('name')!r} spans "
+                       f"({lon0:g}, {lat0:g}, {lon1:g}, {lat1:g})")
+    if bad:
+        raise RenderProofError(
+            "layer extents are not lon/lat on Earth, so no panel can be drawn "
+            f"over ground: {'; '.join(bad)}. A raster stamped EPSG:4326 over "
+            "local metres carries its solver's own coordinates as degrees - it "
+            "is the georeferencing that is wrong, not the render.")
+
+
 def render_sheet(layers: list[dict], out_path: Path, *, title: str,
                  max_tiles: int, composite_only: bool = False) -> dict:
     renderable, skipped = [], []
@@ -675,6 +705,7 @@ def render_sheet(layers: list[dict], out_path: Path, *, title: str,
     if not renderable:
         raise RenderProofError(
             f"no renderable layer among {len(layers)}: {skipped}")
+    _refuse_ungeoreferenced(renderable)
 
     bbox_ll, strays = _canvas_bbox(renderable)
     mosaic, extent = _basemap(bbox_ll, max_tiles)

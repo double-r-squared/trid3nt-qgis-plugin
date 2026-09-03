@@ -391,7 +391,14 @@ def published_scale(evidence: dict, animation: ProofAnimation) -> dict:
     ranges: list[tuple[float, float]] = []
     published_by: list[dict] = []
     preset_scaled: list[str] = []
+    #: Every preset the run's rasters were painted under. An animation whose
+    #: declared quantity resolves to NONE of them is not "a field nobody
+    #: published" - it is the same field published under a different preset, and
+    #: so a second scale for one quantity that no range comparison can catch.
+    seen: list[str] = []
     for layer in evidence.get("layers") or []:
+        if layer.get("layer_type") == "raster" and layer.get("style_preset"):
+            seen.append(str(layer["style_preset"]))
         if layer.get("style_preset") != preset:
             continue
         legend = layer.get("legend")
@@ -418,7 +425,8 @@ def published_scale(evidence: dict, animation: ProofAnimation) -> dict:
             # colours mean the same value on both.
             "published_panels_agree": len({tuple(r) for r in ranges}) <= 1,
             "published_by": published_by,
-            "preset_scaled_panels": preset_scaled}
+            "preset_scaled_panels": preset_scaled,
+            "run_raster_presets": sorted(set(seen))}
 
 
 def _field_label(animation: ProofAnimation) -> str:
@@ -453,8 +461,15 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
     report: dict[str, Any] = {}
 
     layers = _sibling("render_all_layers_proof")
-    report["sheet"] = layers.render_from_evidence(
-        evidence_path, out_path=directory / f"{stem}.png", title=title)
+    try:
+        report["sheet"] = layers.render_from_evidence(
+            evidence_path, out_path=directory / f"{stem}.png", title=title)
+    except layers.RenderProofError as exc:
+        # A sheet that cannot be drawn is a REFUSED packet naming why, not a
+        # traceback out of the assembler: the reason is the finding, and a
+        # reader has to be handed it rather than a stack.
+        report["sheet"] = {}
+        report["sheet_error"] = str(exc)
 
     charts = _sibling("render_run_chart_proof")
     try:
@@ -507,24 +522,30 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
                     "on - the mask cannot be the scalar's mask if the number is "
                     "not the run's own")
                 continue
-        report["animations"][animation.name] = _sibling(
-            "render_selafin_animation").render_run(
-            run_id=run_id, slf=str(completion.get("result_slf")),
-            var=animation.variable, stem=stem, out_dir=directory,
-            units=animation.units, quantity=animation.quantity, bucket=bucket,
-            plane=animation.plane, mask_var=animation.mask_var,
-            mask_min=animation.mask_threshold, still=animation.still,
-            origin_bbox=origin, initial_water_level=initial_wl,
-            derived=animation.derived, transform=animation.transform,
-            vectors=animation.vectors, vector_density=animation.vector_density,
-            vector_grid_n=animation.vector_grid_n,
-            arrow_size=animation.arrow_size, vector_lw=animation.vector_lw,
-            still_vectors=animation.still_vectors,
-            shared_range=(tuple(scale["published_range"])
-                          if scale["published_range"] else None),
-            name_infix=suffixed(animation, len(declared)),
-            title=f"{stem} - {_field_label(animation)} - run {run_id}")
-        rendered = report["animations"][animation.name]
+        try:
+            rendered = _sibling("render_selafin_animation").render_run(
+                run_id=run_id, slf=str(completion.get("result_slf")),
+                var=animation.variable, stem=stem, out_dir=directory,
+                units=animation.units, quantity=animation.quantity,
+                bucket=bucket, plane=animation.plane,
+                mask_var=animation.mask_var,
+                mask_min=animation.mask_threshold, still=animation.still,
+                origin_bbox=origin, initial_water_level=initial_wl,
+                derived=animation.derived, transform=animation.transform,
+                vectors=animation.vectors,
+                vector_density=animation.vector_density,
+                vector_grid_n=animation.vector_grid_n,
+                arrow_size=animation.arrow_size, vector_lw=animation.vector_lw,
+                still_vectors=animation.still_vectors,
+                shared_range=(tuple(scale["published_range"])
+                              if scale["published_range"] else None),
+                name_infix=suffixed(animation, len(declared)),
+                title=f"{stem} - {_field_label(animation)} - run {run_id}")
+        except SystemExit as exc:  # the renderer's own refusal IS the finding
+            report.setdefault("animation_errors", []).append(
+                f"{animation.name}: {exc}")
+            continue
+        report["animations"][animation.name] = rendered
         scale["rendered_range"] = [rendered.get("vmin"), rendered.get("vmax")]
         scale["transform"] = rendered.get("transform")
         scale["agrees"] = _scales_agree(scale)
@@ -721,6 +742,8 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
             frames=frames, s3=s3)
         if render_report.get("animation_error"):
             missing.append(f"animation: {render_report['animation_error']}")
+        if render_report.get("sheet_error"):
+            missing.append(f"panels: {render_report['sheet_error']}")
         if render_report.get("chart_error"):
             missing.append(f"chart: {render_report['chart_error']}")
         for note in render_report.get("animation_errors") or []:
