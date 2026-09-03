@@ -31,14 +31,14 @@ from .open_water import (
     stage_telemac_manifest,
     staged_bed_inputs,
 )
-from .errors import (
+from ..helpers.errors import (
     ReachWaterUnmapped,
     ReachMeshUncovered,
     TelemacDyeScenarioError,
     TelemacDyeScenarioInputError,
     TelemacReleaseOutsideDomainError,
 )
-from .forcing import (
+from ..helpers.forcing import (
     CarrierDischarge,
     ReviewResolvedInputs,
     coerce_event_time,
@@ -62,7 +62,7 @@ from .rain_on_grid import (
     solve_rain_on_grid,
     write_rain_on_grid_deck,
 )
-from .reach import (
+from ..helpers.reach import (
     DEFAULT_RIVER_AOI_HALF_DEG,
     Geocode,
     MESH_H_FLOOR_M,
@@ -83,7 +83,7 @@ from .stratified import (
     publish_stratified_products,
     write_stratified_deck,
 )
-from .substance import (
+from ..helpers.substance import (
     GRADATION_PRESETS,
     SCOUR_KEYWORDS,
     arm_sediment_modules,
@@ -92,7 +92,7 @@ from .substance import (
     sanitize_substance,
     substance_class,
 )
-from .water_quality import (
+from ..helpers.water_quality import (
     WaqtelO2,
     do_saturation_mgl,
     upstream_do_mgl,

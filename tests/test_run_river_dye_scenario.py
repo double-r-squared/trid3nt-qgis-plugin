@@ -330,8 +330,8 @@ def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.shared import run_products as products_mod
     from trid3nt_server.workflows.telemac.steps import products as prod_steps
     from trid3nt_server.workflows.mesh import step as mesh_step
-    from trid3nt_server.workflows.telemac.steps import reach as reach_steps
-    from trid3nt_server.workflows.telemac.steps import forcing as forcing_steps
+    from trid3nt_server.workflows.telemac.helpers import reach as reach_mod
+    from trid3nt_server.workflows.telemac.helpers import forcing as forcing_mod
     from trid3nt_server.workflows.telemac.steps import solve as solve_steps
     from trid3nt_server.workflows.telemac.steps import deck as deck_steps
 
@@ -436,11 +436,11 @@ def _install_step_mocks(captured: dict):
                                            **mesh_meta})
 
     return [
-        patch.object(reach_steps, "registry_fn", _fake_registry_fn),
-        patch.object(reach_steps, "river_seed_from_geometry", _fake_seed),
+        patch.object(reach_mod, "registry_fn", _fake_registry_fn),
+        patch.object(reach_mod, "river_seed_from_geometry", _fake_seed),
         # The mesh session stands in, so its display face is a uri nothing wrote:
         # what the mesh holds of the reach is measured in its own test module.
-        patch.object(reach_steps, "_meshed_fraction", lambda mesh, centerline: 1.0),
+        patch.object(reach_mod, "_meshed_fraction", lambda mesh, centerline: 1.0),
         patch.object(deck_steps, "write_reach_deck", _capture_deck),
         patch.object(deck_steps, "read_topology",
                      lambda _uri: {
@@ -456,7 +456,7 @@ def _install_step_mocks(captured: dict):
                          {"gs_uri": f"s3://cache/telemac/{run_tag}/{n}", "dest": n}
                          for n in names]),
         patch.object(mesh_step, "build_declared_mesh", _fake_mesh),
-        patch.object(forcing_steps, "_nwm_nearest_streamflow",
+        patch.object(forcing_mod, "_nwm_nearest_streamflow",
                      lambda lon, lat, valid_time=None: {
                          "m3s": 312.0, "reference_time": "2026-01-01T12:00:00+00:00",
                          "product": "analysis_assim", "layer": None}),
@@ -543,12 +543,12 @@ def test_a_prefetched_flowline_is_reused_instead_of_refetched(tmp_path, monkeypa
 def test_the_seed_falls_back_to_the_centroid_when_extraction_misses(
         tmp_path, monkeypatch):
     """The worker NLDI-snaps the centroid, so the degrade is honest, not a dead end."""
-    from trid3nt_server.workflows.telemac.steps import reach as reach_steps
+    from trid3nt_server.workflows.telemac.helpers import reach as reach_mod
 
     captured: dict = {}
     peak = _run_tool(
         tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
-        overrides=[patch.object(reach_steps, "river_seed_from_geometry",
+        overrides=[patch.object(reach_mod, "river_seed_from_geometry",
                                 lambda uri: None)])
     assert isinstance(peak, TelemacDyeLayerURI)
     reach = captured["reach"]
@@ -619,7 +619,7 @@ def test_a_derived_release_sits_on_the_DECLARED_centerline(tmp_path, monkeypatch
 def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
     from trid3nt_server.workflows.telemac.steps import solve as solve_steps
     from trid3nt_server.workflows.telemac.steps import deck as deck_steps
-    from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
+    from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
     async def _boom(**_kw):
         raise TelemacDyeScenarioError("TELEMAC_DYE_RUN_FAILED",
@@ -706,7 +706,7 @@ def test_a_reach_whose_far_END_is_unmapped_refuses_at_the_cut(
 def test_an_unmapped_reach_refuses_terminally_naming_the_three_supply_paths():
     """A reach nothing maps has no domain, and no rung to retry with: the refusal
     names the three ways a domain is SUPPLIED and offers no retry args."""
-    from trid3nt_server.workflows.telemac.steps.errors import ReachWaterUnmapped
+    from trid3nt_server.workflows.telemac.helpers.errors import ReachWaterUnmapped
 
     exc = ReachWaterUnmapped()
     assert exc.error_code == "REACH_WATER_UNMAPPED"
@@ -730,7 +730,7 @@ def test_an_unmapped_reach_refuses_terminally_naming_the_three_supply_paths():
     "morphological change",
 ])
 def test_scour_phrasing_classifies_as_sediment(s):
-    from trid3nt_server.workflows.telemac.steps import classify_substance
+    from trid3nt_server.workflows.telemac.helpers.substance import classify_substance
 
     cls, payload = classify_substance(s)
     assert cls == "sediment", (s, cls)
@@ -738,7 +738,7 @@ def test_scour_phrasing_classifies_as_sediment(s):
 
 
 def test_sediment_and_tracer_regression_unchanged():
-    from trid3nt_server.workflows.telemac.steps import classify_substance
+    from trid3nt_server.workflows.telemac.helpers.substance import classify_substance
 
     assert classify_substance("dye") == ("tracer", None)
     assert classify_substance("water") == ("tracer", None)
@@ -750,7 +750,7 @@ def test_sediment_and_tracer_regression_unchanged():
 
 
 def test_scour_phrasing_arms_the_erodible_bed_without_an_explicit_knob():
-    from trid3nt_server.workflows.telemac.steps import arm_sediment_modules
+    from trid3nt_server.workflows.telemac.helpers.substance import arm_sediment_modules
 
     erodible, gradation, dredging = arm_sediment_modules(
         "scour below the weir", erodible_bed=None, sediment_gradation=None,

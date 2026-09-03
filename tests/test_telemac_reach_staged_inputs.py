@@ -67,7 +67,7 @@ def test_an_unstaged_manifest_carries_an_empty_inputs_list(monkeypatch):
 def test_stage_manifest_requires_cache_bucket(monkeypatch):
     import trid3nt_server.workflows.solver.solver as solver_mod
 
-    from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
+    from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
     monkeypatch.delenv("TRID3NT_CACHE_BUCKET", raising=False)
@@ -178,7 +178,7 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
     """
     import trid3nt_server.workflows.telemac.result_reader as reader
     from trid3nt_server.workflows.telemac.steps.deck import _continuation_start_s
-    from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
+    from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
     previous = tmp_path / "restart_river.slf"
     previous.write_bytes(b"selafin")
@@ -211,7 +211,7 @@ def test_a_coupled_reach_refuses_to_be_continued_and_says_why(substance, coupled
     import asyncio
 
     from trid3nt_server.workflows.telemac.steps.deck import write_reach_deck
-    from trid3nt_server.workflows.telemac.steps.errors import (
+    from trid3nt_server.workflows.telemac.helpers.errors import (
         TelemacDyeScenarioInputError,
     )
 

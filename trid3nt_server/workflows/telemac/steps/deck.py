@@ -32,9 +32,9 @@ from trid3nt_server.workflows.mesh.shared.nodes import (
 from trid3nt_server.workflows.mesh.topology import read_topology
 
 from . import author
-from .errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
-from .reach import MESH_H_FLOOR_M, coerce_lonlat_point, suggest_time_step_s
-from .substance import (
+from ..helpers.errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
+from ..helpers.reach import MESH_H_FLOOR_M, coerce_lonlat_point, suggest_time_step_s
+from ..helpers.substance import (
     arm_sediment_modules,
     classify_substance,
     resolve_decay_law,

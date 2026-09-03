@@ -17,7 +17,7 @@ __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 #: the sag pipeline has been run against.
 ACCEPTS = Accepts(mesh=("unstructured_tri",), release=("point",))
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_HELPERS = "trid3nt_server.workflows.telemac.helpers"
 
 
 class PARAMS:
@@ -80,12 +80,12 @@ class PARAMS:
 
     do_saturation_mgl = Param(
         door=doors.DERIVED,
-        resolve=f"{_STEPS}.water_quality.do_saturation_mgl",
+        resolve=f"{_HELPERS}.water_quality.do_saturation_mgl",
         user_lever=True, bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
         desc="DO saturation Cs; derived from water temperature unless supplied")
     upstream_do_mgl = Param(
         door=doors.DERIVED,
-        resolve=f"{_STEPS}.water_quality.upstream_do_mgl",
+        resolve=f"{_HELPERS}.water_quality.upstream_do_mgl",
         user_lever=True, bounds=(0.0, 20.0), units="mg/L", consequence="scenario",
         desc="DO carried in at the top of the reach; derived as saturation unless supplied")
 

@@ -85,7 +85,7 @@ def test_an_unknown_rung_refuses_rather_than_substituting() -> None:
     'xlarge' got a medium solve with no provenance row saying so and nothing on
     any surface a reader looks at.
     """
-    from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
+    from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
     from trid3nt_server.workflows.telemac.steps.solve import compute_class
 
     coerce = compute_class()
@@ -112,7 +112,7 @@ def test_question_class_coercions_abstain_without_a_signal() -> None:
     so abstaining changes the row's PROVENANCE, never its value.
     """
     from trid3nt_server.workflows.telemac.agitation.agitation_mode import agitation_mode
-    from trid3nt_server.workflows.telemac.steps.substance import substance_class
+    from trid3nt_server.workflows.telemac.helpers.substance import substance_class
     from trid3nt_server.workflows.telemac.stratified_flow.flow_mode import flow_mode
 
     bare = {"location": "Lake Michigan"}

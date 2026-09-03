@@ -12,7 +12,7 @@ import inspect
 import pytest
 
 from trid3nt_server.workflows.telemac.river_dye import river_dye as M
-from trid3nt_server.workflows.telemac.steps import forcing as F
+from trid3nt_server.workflows.telemac.helpers import forcing as F
 
 
 def _net(rain=None, evap=None, window=None):

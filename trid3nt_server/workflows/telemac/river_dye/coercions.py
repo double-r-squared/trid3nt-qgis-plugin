@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from trid3nt_server.workflows.lib import user_input
-from trid3nt_server.workflows.telemac.steps import TelemacDyeScenarioError
+from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
 __all__ = ["release_points"]
 

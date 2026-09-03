@@ -27,7 +27,7 @@ import pytest
 
 from trid3nt_server.workflows.mesh.artifact import MeshArtifact
 from trid3nt_server.workflows.telemac.steps import deck as deck_mod
-from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
+from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
 _REACH = {"name": "Eel River", "slug": "eel", "lon": -124.1, "lat": 40.5,
           "bbox": (-124.2, 40.4, -124.0, 40.6)}

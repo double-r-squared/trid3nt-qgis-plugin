@@ -571,7 +571,7 @@ def test_the_timestep_follows_the_measured_edge_not_the_requested_one():
     CFL-safe step has to come off the mesh; reading the ask would hand the solver
     a step the mesh it runs on cannot carry.
     """
-    from trid3nt_server.workflows.telemac.steps.reach import suggest_time_step_s
+    from trid3nt_server.workflows.telemac.helpers.reach import suggest_time_step_s
 
     requested = suggest_time_step_s(40.0)
     refined = suggest_time_step_s(
@@ -582,7 +582,7 @@ def test_the_timestep_follows_the_measured_edge_not_the_requested_one():
 
 def test_the_timestep_falls_back_to_the_ask_when_no_mesh_exists_yet():
     """An estimate made before any mesh exists has only the ask to go on."""
-    from trid3nt_server.workflows.telemac.steps.reach import suggest_time_step_s
+    from trid3nt_server.workflows.telemac.helpers.reach import suggest_time_step_s
 
     assert suggest_time_step_s(10.0) == suggest_time_step_s(10.0, mesh=None)
     assert suggest_time_step_s(10.0, mesh=_artifact()) == 0.5

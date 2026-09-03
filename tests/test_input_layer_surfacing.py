@@ -335,7 +335,7 @@ _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
     "telemac/release_layer.py": (1, "the seam-side release/outfall point publisher - a resolved PARAM (drawn or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for all telemac legs"),
     "telemac/results_mesh_seam.py": (1, "the seam-side SELAFIN mesh publisher - framework emission, one home for all telemac legs"),
-    "telemac/steps/forcing.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam (ADR 0309)"),
+    "telemac/helpers/forcing.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam (ADR 0309)"),
     "telemac/steps/products.py": (3, "deposition + oil-slick + DO-field results"),
     "telemac/steps/stratified.py": (1, "the TELEMAC-3D BOTTOM companion layer - the surface layer rides the dispatch seam, so only its pair-mate is emitted here"),
 }

@@ -24,7 +24,7 @@ import pytest
 
 from trid3nt_server.workflows.telemac.steps import author as A
 from trid3nt_server.workflows.telemac.steps import deck as D
-from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
+from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
 #: A trapezoid: 40 m bed at 97 m, banks rising 3 m over 10 m either side.
 _SECTION = [[0.0, 100.0], [10.0, 97.0], [50.0, 97.0], [60.0, 100.0]]

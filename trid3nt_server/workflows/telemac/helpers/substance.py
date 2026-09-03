@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.substance")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.helpers.substance")
 
 __all__ = [
     "DECAY_SUBSTANCE_PRESETS",

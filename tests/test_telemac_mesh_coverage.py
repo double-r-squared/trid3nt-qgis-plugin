@@ -10,8 +10,8 @@ from types import SimpleNamespace
 import pytest
 
 from trid3nt_server.workflows.lib import journal
-from trid3nt_server.workflows.telemac.steps.errors import ReachMeshUncovered
-from trid3nt_server.workflows.telemac.steps.reach import measure_mesh_coverage
+from trid3nt_server.workflows.telemac.helpers.errors import ReachMeshUncovered
+from trid3nt_server.workflows.telemac.helpers.reach import measure_mesh_coverage
 
 #: A UTM zone and an origin inside it, so the metres the mesh is written in and
 #: the lon/lat the centreline is written in describe the same ground.
@@ -98,7 +98,7 @@ async def test_a_fully_meshed_reach_measures_one_hundred_percent(tmp_path):
 async def test_a_mesh_with_no_projected_zone_cannot_be_measured(tmp_path):
     """The measure is metres-on-the-mesh's-own-zone; without one it refuses rather
     than reading a coverage that depends on latitude."""
-    from trid3nt_server.workflows.telemac.steps.errors import TelemacDyeScenarioError
+    from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
     mesh = _mesh(tmp_path) | {"artifact": SimpleNamespace(utm_epsg=None)}
     with pytest.raises(TelemacDyeScenarioError, match="cannot be measured"):

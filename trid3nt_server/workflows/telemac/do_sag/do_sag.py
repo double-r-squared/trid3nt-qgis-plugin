@@ -45,14 +45,14 @@ from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "build_sag_chart", "plan", "telemac_do_sag"]
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_HELPERS = "trid3nt_server.workflows.telemac.helpers"
 
 
 #: The reach's data, one row per artifact, in the order the chain reads them. The
 #: carrier discharge is a STEP rather than a row: it reads the resolved mid-reach
 #: seed, which is a step result and not something a producer declaration can name.
 class DATA:
-    rivers = tool(f"{_STEPS}.reach.fetch_reach_flowline", prefetched=None)
+    rivers = tool(f"{_HELPERS}.reach.fetch_reach_flowline", prefetched=None)
     # THE REACH, narrowed by CHAINING tools rather than by a mesher that grew a
     # corridor of its own. The navigated mainstem names the stretch, its two ends
     # name where the stretch stops, and the cut through the MAPPED water is the
@@ -75,7 +75,7 @@ class DATA:
     # HOW MUCH of the reach the returned polygons actually map, measured before
     # the cut so an unmapped reach refuses on its own cause instead of arriving
     # at the section as an empty geometry.
-    mapped_water = tool(f"{_STEPS}.reach.measure_water_coverage",
+    mapped_water = tool(f"{_HELPERS}.reach.measure_water_coverage",
                         water=water, centerline=centerline)
     reach_polygon = tool("section", polygon=mapped_water,
                          between=Ref("ends.between"))

@@ -26,14 +26,14 @@ from trid3nt_server.workflows.lib import RATE, Step, TemporalSpec, transform_val
 
 from .errors import TelemacDyeScenarioError, TelemacDyeScenarioInputError
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.forcing")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.helpers.forcing")
 
 __all__ = ["CarrierDischarge", "ReviewResolvedInputs", "coerce_event_time",
            "event_time",
            "resolve_carrier_discharge", "resolve_rain_forcing",
            "review_resolved_inputs"]
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_HELPERS = "trid3nt_server.workflows.telemac.helpers"
 
 #: Half-width (deg) of the NWM query box centred on the reach seed. NWM is a
 #: ~2.7M-reach point layer; a small box keeps it to a handful of reaches so the
@@ -309,7 +309,7 @@ async def resolve_carrier_discharge(*, seed: dict[str, Any],
 def CarrierDischarge(*, seed: Any, explicit: Any, event_time: Any = None) -> Step:  # noqa: N802
     """The reach's carrier discharge. A STEP, not Data: it reads the resolved seed,
     which is a step result rather than a declaration a producer could name."""
-    return Step(runner=f"{_STEPS}.forcing.resolve_carrier_discharge", stage="acquire",
+    return Step(runner=f"{_HELPERS}.forcing.resolve_carrier_discharge", stage="acquire",
                 kwargs={"seed": seed, "explicit": explicit, "event_time": event_time})
 
 
@@ -323,7 +323,7 @@ def ReviewResolvedInputs(*, carrier_discharge: Any,  # noqa: N802
     refuses it, because a second card's edits would land on a sheet this review
     never reads.
     """
-    return Step(runner=f"{_STEPS}.forcing.review_resolved_inputs", stage="gates",
+    return Step(runner=f"{_HELPERS}.forcing.review_resolved_inputs", stage="gates",
                 self_gating=True,
                 kwargs={"discharge": carrier_discharge,
                         "workflow": workflow, "input_mode": input_mode})

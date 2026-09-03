@@ -39,7 +39,7 @@ from .errors import (
     TelemacDyeScenarioError,
 )
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.reach")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.helpers.reach")
 
 __all__ = [
     "DEFAULT_RIVER_AOI_HALF_DEG",
@@ -59,7 +59,7 @@ __all__ = [
     "suggest_time_step_s",
 ]
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_HELPERS = "trid3nt_server.workflows.telemac.helpers"
 
 #: Half-width (deg) of the bbox fetched around the geocoded centroid to locate a
 #: river reach + pick the seed. ~0.06 deg (~6 km) reliably catches the main stem
@@ -540,18 +540,18 @@ class Geocode:
     @staticmethod
     def reach(location: Any, bbox: Any) -> Step:
         """Place/AOI -> the reach centre. Refines the domain for everything after it."""
-        return Step(runner=f"{_STEPS}.reach.geocode_reach", stage="acquire",
+        return Step(runner=f"{_HELPERS}.reach.geocode_reach", stage="acquire",
                     kwargs={"location": location, "bbox": bbox}).overrides_domain()
 
 
 def ReachSeed(*, reach: Any, rivers: Any,  # noqa: N802 - a value constructor
               supplied: Any = None) -> Step:
     """The point the reach's one centerline is navigated from."""
-    return Step(runner=f"{_STEPS}.reach.reach_seed", stage="acquire",
+    return Step(runner=f"{_HELPERS}.reach.reach_seed", stage="acquire",
                 kwargs={"reach": reach, "rivers": rivers, "supplied": supplied})
 
 
 def MeshCoverage(*, mesh: Any, centerline: Any) -> Step:  # noqa: N802 - a value constructor
     """How much of the reach the accepted mesh holds, measured after the build."""
-    return Step(runner=f"{_STEPS}.reach.measure_mesh_coverage", stage="mesh",
+    return Step(runner=f"{_HELPERS}.reach.measure_mesh_coverage", stage="mesh",
                 kwargs={"mesh": mesh, "centerline": centerline})

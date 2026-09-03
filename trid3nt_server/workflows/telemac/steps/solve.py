@@ -23,8 +23,8 @@ from typing import Any
 from trid3nt_server.workflows.lib import Step
 
 from .deck import stage_manifest
-from .errors import TelemacDyeScenarioError
-from .reach import MESH_NODE_CAP, estimate_telemac_solve_seconds
+from ..helpers.errors import TelemacDyeScenarioError
+from ..helpers.reach import MESH_NODE_CAP, estimate_telemac_solve_seconds
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.solve")
 

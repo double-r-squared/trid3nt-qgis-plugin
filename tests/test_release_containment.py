@@ -22,7 +22,7 @@ from trid3nt_server.workflows.telemac.release_point import (
     contain_release_point,
     domain_polygon_of,
 )
-from trid3nt_server.workflows.telemac.steps.errors import (
+from trid3nt_server.workflows.telemac.helpers.errors import (
     TelemacDyeScenarioError,
     TelemacReleaseOutsideDomainError,
 )

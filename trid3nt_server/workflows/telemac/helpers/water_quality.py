@@ -1,4 +1,4 @@
-"""WAQTEL water-quality steps: the documented relations and the O2 process block.
+"""WAQTEL water quality: the documented relations and the O2 process block.
 
 Engine tier: the WAQTEL block is how TELEMAC is told what chemistry to run. The
 two derivations above it are literature relations any dissolved-oxygen question
@@ -15,9 +15,9 @@ from trid3nt_server.workflows.lib import Step
 
 __all__ = ["WaqtelO2", "do_saturation_mgl", "upstream_do_mgl", "waqtel_o2_process"]
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.water_quality")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.helpers.water_quality")
 
-_RUNNER = "trid3nt_server.workflows.telemac.steps.water_quality.waqtel_o2_process"
+_RUNNER = "trid3nt_server.workflows.telemac.helpers.water_quality.waqtel_o2_process"
 
 
 def do_saturation_mgl(params: Any) -> float:

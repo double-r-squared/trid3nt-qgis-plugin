@@ -24,6 +24,7 @@ everything else it uses is the facade's or the step family's.
 | folder | what it is |
 | --- | --- |
 | `steps/` | The shared step families every TELEMAC template declares. See below. |
+| `helpers/` | What a declaration summons: the reach front, the declared forcing, the substance class, the WAQTEL relations, the typed failures. See its own README. |
 | `agitation/` | `artemis_harbor_agitation` - a swell at the harbour mouth to the agitation field inside it (ARTEMIS). |
 | `do_sag/` | `telemac_do_sag` - an outfall's BOD load to the dissolved-oxygen sag downstream (TELEMAC-2D + WAQTEL). |
 | `rain_on_grid/` | `telemac_rain_on_grid` - a storm over a catchment to the outlet hydrograph; `cn_infiltration.py` is its SCS curve-number infiltration. |
@@ -39,15 +40,10 @@ everything else it uses is the facade's or the step family's.
 | `author.py` | The AUTHOR step: the accepted mesh plus the approved sheet to TELEMAC's own decks. |
 | `cas_validate.py` | Every authored steering file, parsed by the engine's own reader against its own dictionary before anything is staged. |
 | `deck.py` | The DECK step: params and forcing to the run's own record of what it solves, staged for the box. |
-| `errors.py` | The reach pipeline's typed failures, each with the code the envelope carries. |
-| `forcing.py` | Declared forcing DATA: net rain and evaporation, and the carrier discharge resolved at the reach. |
 | `oil_templates/` | The user-fortran source an oil-class run compiles into its deck. |
 | `open_water.py` | The open-water front of the AOI templates: stage, solve, read, surface. |
 | `products.py` | The PRODUCTS step: a solved reach to the map layers, the scalars and the chart spec. |
 | `rain_on_grid.py` | The rain-on-grid front: a catchment in, an outlet hydrograph out. |
-| `reach.py` | The reach front of every river plan: geocode, seed, flowline, banks coverage, mesh coverage, the CFL timestep law. |
 | `run_reads.py` | What a solved run's own files say, read on the server. |
 | `solve.py` | The SOLVE step: stage the manifest, dispatch the worker, wait, surface the gates. |
 | `stratified.py` | The TELEMAC-3D deck writer and its deliverable. |
-| `substance.py` | What was spilled: the substance CLASS and the modules that class arms. |
-| `water_quality.py` | The WAQTEL steps: the documented relations and the O2 process block. |

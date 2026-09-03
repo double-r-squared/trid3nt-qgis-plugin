@@ -47,7 +47,7 @@ from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "build_dye_chart", "plan", "telemac_river_dye"]
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_HELPERS = "trid3nt_server.workflows.telemac.helpers"
 
 
 #: The reach pipeline's data, one row per artifact, in the order the chain reads
@@ -55,7 +55,7 @@ _STEPS = "trid3nt_server.workflows.telemac.steps"
 #: mid-reach seed, which is a step result and not something a producer declaration
 #: can name.
 class DATA:
-    rivers = tool(f"{_STEPS}.reach.fetch_reach_flowline",
+    rivers = tool(f"{_HELPERS}.reach.fetch_reach_flowline",
                   prefetched=P.river_geometry_uri)
     # THE REACH, narrowed by CHAINING tools rather than by a mesher that grew a
     # corridor of its own. The navigated mainstem names the stretch, its two ends
@@ -79,7 +79,7 @@ class DATA:
     # HOW MUCH of the reach the returned polygons actually map, measured before
     # the cut so an unmapped reach refuses on its own cause instead of arriving
     # at the section as an empty geometry.
-    mapped_water = tool(f"{_STEPS}.reach.measure_water_coverage",
+    mapped_water = tool(f"{_HELPERS}.reach.measure_water_coverage",
                         water=water, centerline=centerline)
     reach_polygon = tool("section", polygon=mapped_water,
                          between=Ref("ends.between"))
@@ -97,7 +97,7 @@ class DATA:
     # producer answers in daily rates, so this asks for no interpolation - and a
     # sub-daily target would refuse here instead of manufacturing a storm shape
     # gridMET never reported.
-    rain = tool(f"{_STEPS}.forcing.resolve_rain_forcing",
+    rain = tool(f"{_HELPERS}.forcing.resolve_rain_forcing",
                 rainfall_mm_per_day=P.rainfall_mm_per_day,
                 evaporation_mm_per_day=P.evaporation_mm_per_day,
                 gridmet_window=P.rainfall_gridmet_window

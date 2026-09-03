@@ -40,7 +40,7 @@ from trid3nt_contracts.telemac_contracts import (
 from trid3nt_server.workflows.lib import Step
 from trid3nt_server.emission.publish import PublishLayerError, publish_layer
 
-from .errors import TelemacDyeScenarioError
+from ..helpers.errors import TelemacDyeScenarioError
 from .solve import download_result_selafin
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.products")
@@ -435,7 +435,7 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
         except Exception as exc:  # noqa: BLE001 - a bonus map never voids the run
             logger.warning("sediment deposition unexpected failure (%s)", exc)
     elif substance_class == "oil":
-        from .substance import classify_substance
+        from ..helpers.substance import classify_substance
 
         await _emit_oil_slick(peak, run_id=run_id, reach_name=reach_name,
                               oil_preset=classify_substance(substance)[1],

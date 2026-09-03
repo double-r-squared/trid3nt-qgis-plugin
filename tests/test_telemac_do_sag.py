@@ -78,7 +78,7 @@ def _workflow():
 
 
 def test_do_saturation_temperature_relation():
-    from trid3nt_server.workflows.telemac.steps.water_quality import do_saturation_mgl
+    from trid3nt_server.workflows.telemac.helpers.water_quality import do_saturation_mgl
 
     def sat(t):
         return do_saturation_mgl(SimpleNamespace(water_temp_c=t))
@@ -218,11 +218,13 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
     """Patch the shared step family at the modules the plan's runners resolve to."""
     from trid3nt_server.gates import input_review as gate_mod
     from trid3nt_server.workflows.mesh import step as mesh_step_mod
+    from trid3nt_server.workflows.telemac.helpers import (
+        forcing as forcing_mod,
+        reach as reach_mod,
+    )
     from trid3nt_server.workflows.telemac.steps import (
         deck as deck_mod,
-        forcing as forcing_mod,
         products as products_mod,
-        reach as reach_mod,
         solve as solve_mod,
     )
 
@@ -348,7 +350,7 @@ def test_the_deck_records_the_edge_the_accepted_mesh_was_measured_at():
     """DS-3: the granularity a run is judged on is the built mesh's own minimum
     edge, not the number that was asked for and not one re-derived from a channel
     width nobody surveyed."""
-    from trid3nt_server.workflows.telemac.steps.reach import suggest_time_step_s
+    from trid3nt_server.workflows.telemac.helpers.reach import suggest_time_step_s
 
     # The measured edge drives the CFL step; the asked edge only stands in until
     # a mesh exists to measure.
