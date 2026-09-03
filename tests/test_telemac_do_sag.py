@@ -215,7 +215,7 @@ def test_do_layer_contract_fields():
 
 # --- the REAL composition, driven through the declared plan ------------------ #
 def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=None):
-    """Patch the shared step family at the modules the plan's runners resolve to."""
+    """Patch the shared trees at the modules the plan's runners resolve to."""
     from trid3nt_server.gates import input_review as gate_mod
     from trid3nt_server.workflows.mesh import step as mesh_step_mod
     from trid3nt_server.workflows.telemac.helpers import (
@@ -224,7 +224,7 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
     )
     from trid3nt_server.workflows.telemac.products import products as products_mod
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
-    from trid3nt_server.workflows.telemac.steps import deck as deck_mod
+    from trid3nt_server.workflows.telemac.authoring import deck as deck_mod
 
     def _step(name, ret):
         async def _inner(**kwargs):

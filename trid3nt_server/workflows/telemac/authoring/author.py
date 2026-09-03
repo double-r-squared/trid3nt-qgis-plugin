@@ -41,7 +41,7 @@ from typing import Any, Mapping, Sequence
 
 from .cas_validate import validate_authored_decks
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.author")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.author")
 
 __all__ = [
     "GAIA_RESULT_FILENAME",

@@ -23,13 +23,13 @@ from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
     PostprocessTelemacError,
     _local_mesh_origin,
 )
-from trid3nt_server.workflows.telemac.steps.agitation import write_agitation_deck
-from trid3nt_server.workflows.telemac.steps.open_water import (
+from trid3nt_server.workflows.telemac.authoring.agitation import write_agitation_deck
+from trid3nt_server.workflows.telemac.authoring.open_water import (
     OpenWaterError,
     mesh_sizing_provenance,
     solved_domain_bbox,
 )
-from trid3nt_server.workflows.telemac.steps.stratified import write_stratified_deck
+from trid3nt_server.workflows.telemac.authoring.stratified import write_stratified_deck
 
 #: What the declared bed producer hands the deck writer: the staged raster's URI.
 #: A domain solved on real bathymetry refuses without one, because the worker
@@ -201,7 +201,7 @@ def test_each_agitation_mode_publishes_the_curve_it_actually_measured():
     resonance or shoal run published a raster with no curve and the chart builder
     correctly refused to invent one.
     """
-    from trid3nt_server.workflows.telemac.steps.agitation import _curve_rows
+    from trid3nt_server.workflows.telemac.authoring.agitation import _curve_rows
 
     diffraction = _curve_rows({"chart_kind": "diffraction_transect",
                                "chart_s_m": [0.0, 10.0], "chart_kd": [1.0, 0.4]})
@@ -223,7 +223,7 @@ def test_each_agitation_mode_publishes_the_curve_it_actually_measured():
 
 def test_a_mode_that_measured_nothing_carries_no_curve():
     """No curve is an honest empty, never a fabricated one."""
-    from trid3nt_server.workflows.telemac.steps.agitation import _curve_rows
+    from trid3nt_server.workflows.telemac.authoring.agitation import _curve_rows
 
     rows = _curve_rows({"chart_kind": "resonance_sweep"})
     assert rows["agitation_curve_m"] is None
@@ -233,7 +233,7 @@ def test_a_mode_that_measured_nothing_carries_no_curve():
 def test_every_agitation_curve_kind_names_both_of_its_axes():
     """A resonance run plots amplification against PERIOD, not Kd against metres."""
     from trid3nt_server.workflows.telemac.agitation.agitation import _CURVE_AXIS
-    from trid3nt_server.workflows.telemac.steps.agitation import _CURVE_KEYS
+    from trid3nt_server.workflows.telemac.authoring.agitation import _CURVE_KEYS
 
     assert set(_CURVE_AXIS) == set(_CURVE_KEYS)
     for kind, (x_title, y_title) in _CURVE_AXIS.items():

@@ -22,8 +22,8 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.mesh.artifact import MeshArtifact
-from trid3nt_server.workflows.telemac.steps import agitation as AG
-from trid3nt_server.workflows.telemac.steps.open_water import OpenWaterError
+from trid3nt_server.workflows.telemac.authoring import agitation as AG
+from trid3nt_server.workflows.telemac.authoring.open_water import OpenWaterError
 
 _REPO = Path(__file__).resolve().parents[1]
 

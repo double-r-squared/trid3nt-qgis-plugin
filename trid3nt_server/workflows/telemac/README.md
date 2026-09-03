@@ -1,9 +1,12 @@
 # `workflows/telemac/` - the TELEMAC engine
 
-One facade, one shared step family, one package per template. A template package
-is the recipe (`<name>.py`), its declarations (`declarations.py`), its routing
-phrasings (`corpus.yaml`) and whatever one bespoke coercion its wire needs;
-everything else it uses is the facade's or the step family's.
+One facade, four shared trees, one package per template. The shared trees are
+named for what they produce - `authoring/` the deck the box receives, `solving/`
+the dispatched run, `products/` the answer that run is read into, `helpers/`
+what a declaration summons on the way. A template package is the recipe
+(`<name>.py`), its declarations (`declarations.py`), its routing phrasings
+(`corpus.yaml`) and whatever one bespoke coercion its wire needs; everything
+else it uses is the facade's or the shared trees'.
 
 ## Files
 
@@ -22,7 +25,7 @@ everything else it uses is the facade's or the step family's.
 
 | folder | what it is |
 | --- | --- |
-| `steps/` | The shared step families every TELEMAC template declares. See below. |
+| `authoring/` | Everything the box receives: the deck writers, the fronts that stage them, the DAMOCLES parse that gates them. See its own README. |
 | `solving/` | The run, dispatched: stage the manifest, hand it to the solve seam, wait, surface the gates. See its own README. |
 | `products/` | What a solved run is answered with: the postprocessors, the reach deliverables, the run's own files read on the server. See its own README. |
 | `helpers/` | What a declaration summons: the reach front, the declared forcing, the substance class, the WAQTEL relations, the typed failures. See its own README. |
@@ -31,17 +34,3 @@ everything else it uses is the facade's or the step family's.
 | `rain_on_grid/` | `telemac_rain_on_grid` - a storm over a catchment to the outlet hydrograph; `cn_infiltration.py` is its SCS curve-number infiltration. |
 | `river_dye/` | `telemac_river_dye` - a spill in a reach to the downstream plume, or a flood to bed scour and deposition (TELEMAC-2D, GAIA, NESTOR); `coercions.py` is its wire policy for which point seeds the reach. |
 | `stratified_flow/` | `telemac3d_stratified_flow` - a water column to its vertical structure (TELEMAC-3D). |
-
-## `steps/` - the shared step families
-
-| file | what it is |
-| --- | --- |
-| `__init__.py` | The step family's public surface: the step constructors, the runners and the typed errors a template imports. |
-| `agitation.py` | The ARTEMIS deck writer and its deliverable. |
-| `author.py` | The AUTHOR step: the accepted mesh plus the approved sheet to TELEMAC's own decks. |
-| `cas_validate.py` | Every authored steering file, parsed by the engine's own reader against its own dictionary before anything is staged. |
-| `deck.py` | The DECK step: params and forcing to the run's own record of what it solves, staged for the box. |
-| `oil_templates/` | The user-fortran source an oil-class run compiles into its deck. |
-| `open_water.py` | The open-water front of the AOI templates: stage, solve, read, surface. |
-| `rain_on_grid.py` | The rain-on-grid front: a catchment in, an outlet hydrograph out. |
-| `stratified.py` | The TELEMAC-3D deck writer and its deliverable. |

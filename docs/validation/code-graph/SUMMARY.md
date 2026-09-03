@@ -10,19 +10,19 @@ venvs/agent/bin/python scripts/code_graph.py
 
 | metric | value |
 |---|---|
-| modules scanned | 1065 |
-| total loc | 319516 |
-| reachable from roots | 480 (167562 loc) |
-| test-only-reachable | 11 |
+| modules scanned | 1085 |
+| total loc | 324143 |
+| reachable from roots | 491 (169566 loc) |
+| test-only-reachable | 12 |
 | script-only-reachable | 2 |
 | orphans (product) | 2 |
-| package markers excluded from orphans | 115 |
-| orphans (scripts/ entry modules) | 63 |
-| test modules | 395 |
-| import edges | 3319 |
-| dynamic (string-resolved) edges | 178 |
-| reference call-site edges | 13387 |
-| unattributed call sites | 70490 |
+| package markers excluded from orphans | 116 |
+| orphans (scripts/ entry modules) | 64 |
+| test modules | 401 |
+| import edges | 3378 |
+| dynamic (string-resolved) edges | 184 |
+| reference call-site edges | 13563 |
+| unattributed call sites | 71513 |
 | dead symbols (conf >= 80) | 10 |
 | unused callables (conf 60 tier) | 43 |
 | vulture findings muted by whitelist | 24 |
@@ -31,7 +31,7 @@ venvs/agent/bin/python scripts/code_graph.py
 
 - Known-culled modules from this arc still present: **0** (all confirmed gone)
 - grimp modules with no file in the scanned universe: 0
-- Call sites the import table could not attribute: 70490 (builtins, locals, methods on non-imported objects -- counted, not guessed).
+- Call sites the import table could not attribute: 71513 (builtins, locals, methods on non-imported objects -- counted, not guessed).
 - Out of scope, so its imports anchor nothing: `experiments/`, `third_party/`, `docs/proof/**/*.py`.
 
 ## False-positive classes handled
@@ -56,8 +56,9 @@ venvs/agent/bin/python scripts/code_graph.py
 | module | loc | path |
 |---|---|---|
 | `scripts.render_selafin_animation` | 882 | scripts/render_selafin_animation.py |
+| `scripts.model_check` | 761 | scripts/model_check.py |
+| `trid3nt_server.testing.live_run` | 526 | trid3nt_server/testing/live_run.py |
 | `trid3nt_contracts.output_quantities` | 458 | contracts/trid3nt_contracts/output_quantities.py |
-| `trid3nt_server.testing.live_run` | 433 | trid3nt_server/testing/live_run.py |
 | `trid3nt_server.tools.fetchers._router.stratified` | 328 | trid3nt_server/tools/fetchers/_router/stratified.py |
 | `trid3nt_server.workflows.shared.tide_series` | 276 | trid3nt_server/workflows/shared/tide_series.py |
 | `scripts.harvest_living_atlas` | 224 | scripts/harvest_living_atlas.py |
@@ -88,8 +89,8 @@ venvs/agent/bin/python scripts/code_graph.py
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | contracts | . | . | . | . | 61 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | plugin | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| scripts | . | 2 | . | . | 9 | 1 | 1 | 2 | . | . | 6 | . | . | 2 | 1 | . | . | . | . | . | 15 | 39 | 32 | 3 |
-| tests | . | 3 | 3 | . | 270 | 1 | . | 82 | 4 | 10 | 88 | 3 | 36 | 13 | 31 | 1 | 5 | 11 | 101 | 10 | 1 | 562 | 215 | 2 |
+| scripts | . | 2 | . | . | 9 | 1 | 1 | 2 | . | . | 6 | . | . | 2 | 1 | . | . | . | . | . | 15 | 41 | 34 | 3 |
+| tests | . | 3 | 4 | . | 271 | 1 | . | 82 | 4 | 10 | 89 | 4 | 36 | 14 | 31 | 1 | 5 | 11 | 101 | 10 | 1 | 569 | 231 | 2 |
 | trid3nt_contracts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . |
@@ -107,6 +108,6 @@ venvs/agent/bin/python scripts/code_graph.py
 | trid3nt_server.server | . | . | . | . | 29 | 1 | . | 9 | 2 | 4 | 11 | . | 14 | 2 | 2 | 1 | . | 2 | . | 2 | . | 17 | 1 | . |
 | trid3nt_server.telemetry | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | 1 | . | . | . | 1 | . | . | . | . | . |
 | trid3nt_server.testing | . | . | . | . | 2 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . |
-| trid3nt_server.tools | . | . | . | . | 183 | . | . | . | . | . | 18 | 2 | 2 | 1 | . | . | 1 | . | . | 2 | . | . | 21 | . |
-| trid3nt_server.workflows | . | . | . | . | 49 | . | . | . | . | . | 29 | . | 7 | . | 3 | . | . | . | . | 1 | . | 36 | . | . |
+| trid3nt_server.tools | . | . | . | . | 183 | . | . | . | . | . | 18 | 3 | 2 | 1 | . | . | 1 | . | . | 2 | . | . | 22 | . |
+| trid3nt_server.workflows | . | . | . | . | 51 | . | . | . | . | . | 29 | . | 7 | . | 3 | . | . | . | . | 1 | . | 38 | . | . |
 | workers | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |

@@ -28,7 +28,7 @@ from typing import Mapping
 
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.cas_validate")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.cas_validate")
 
 __all__ = ["CasParseError", "validate_authored_decks"]
 

@@ -18,7 +18,7 @@ import sys
 import pytest
 
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
-from trid3nt_server.workflows.telemac.steps import author as A
+from trid3nt_server.workflows.telemac.authoring import author as A
 
 sys.path.insert(0, str(drivers_dir()))
 import selafin_cli_driver as D  # noqa: E402

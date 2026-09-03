@@ -241,7 +241,7 @@ def _offline_cas_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     # Only the AUTHOR's binding: the gate's own module keeps its real function so
     # its tests exercise it with the container boundary stubbed one level lower.
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.steps.author.validate_authored_decks",
+        "trid3nt_server.workflows.telemac.authoring.author.validate_authored_decks",
         _parsed)
 
 

@@ -5,7 +5,7 @@ the chart function. The declared params and the model-facing prose are one file
 over in ``declarations.py``. Everything else - normalizing the wire args,
 resolving the doors, walking the plan, persisting the products - is the skeleton
 (``workflows/lib/workflow.py``); the 3D mechanism is the TELEMAC facade's
-open-water front (``steps/open_water.py`` + ``steps/stratified.py``). See
+open-water front (``authoring/open_water.py`` + ``authoring/stratified.py``). See
 ``docs/design/declarative-workflows.md``.
 
 THE QUESTION: what a depth-averaged model cannot see. TELEMAC-3D solves the
@@ -41,7 +41,7 @@ from trid3nt_server.workflows.lib import (
 )
 from trid3nt_server.workflows.mesh.tool import tool
 from trid3nt_server.workflows.shared.aoi import location_or_bbox
-from trid3nt_server.workflows.telemac.steps import compute_class
+from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.stratified_flow.declarations import (
     DOC,
     PARAMS,
@@ -57,7 +57,7 @@ __all__ = ["ANSWER", "DATA", "PARAMS", "build_profile_chart", "plan",
 #: squared off asymmetrically (~0.35 deg of longitude, ~0.25 of latitude).
 _BASIN_HALF_DEG = (0.35, 0.25)
 
-_TSTEPS = "trid3nt_server.workflows.telemac.steps"
+_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 
 #: The BED, as declared reference data. Sampling it inside the solver
@@ -69,7 +69,7 @@ _TSTEPS = "trid3nt_server.workflows.telemac.steps"
 #: ``px_per_deg`` is THIS builder's sample lattice - the grid its nodes are read
 #: against - so it travels from the template rather than being a router default.
 class DATA:
-    bed = tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
+    bed = tool(f"{_AUTHORING}.open_water.fetch_domain_bed",
                bathy_source=P.bathy_source,
                mode=P.flow_mode,
                real_bed_modes=("stratification", "wind_circulation"),

@@ -8,7 +8,7 @@ from both a test and a script is reported as test-only.
 Unreachable, not imported by any test, not imported by any script.
 These are the corpses with nothing holding them up.
 
-Excluded: 115 unreachable docstring-only `__init__.py` package
+Excluded: 116 unreachable docstring-only `__init__.py` package
 markers (directories the runtime walks for data, not modules to import).
 
 | module | loc | path | evidence |
@@ -24,8 +24,9 @@ thing keeping the module alive; deleting both is one move.
 | module | loc | path | evidence |
 |---|---|---|---|
 | `scripts.render_selafin_animation` | 882 | scripts/render_selafin_animation.py | imported only by tests.test_animation_legend_stability |
+| `scripts.model_check` | 761 | scripts/model_check.py | imported only by tests.test_model_conformance |
+| `trid3nt_server.testing.live_run` | 526 | trid3nt_server/testing/live_run.py | imported only by scripts.proof_artemis_om2d_rematch, tests.test_live_run_harness, trid3nt_server.testing, trid3nt_server.testing.canaries |
 | `trid3nt_contracts.output_quantities` | 458 | contracts/trid3nt_contracts/output_quantities.py | imported only by contracts.tests.test_engine_run_args_mixin |
-| `trid3nt_server.testing.live_run` | 433 | trid3nt_server/testing/live_run.py | imported only by scripts.proof_artemis_om2d_rematch, tests.test_live_run_harness, trid3nt_server.testing, trid3nt_server.testing.canaries |
 | `trid3nt_server.tools.fetchers._router.stratified` | 328 | trid3nt_server/tools/fetchers/_router/stratified.py | imported only by tests.test_catalog_surfacing, tests.test_fallback_sweep_guard |
 | `trid3nt_server.workflows.shared.tide_series` | 276 | trid3nt_server/workflows/shared/tide_series.py | imported only by tests.test_tide_series_datum |
 | `scripts.harvest_living_atlas` | 224 | scripts/harvest_living_atlas.py | imported only by tests.test_living_atlas |
@@ -42,8 +43,8 @@ code that survives only because a proof driver imports it.
 
 | module | loc | path | evidence |
 |---|---|---|---|
-| `trid3nt_server.testing.canaries` | 464 | trid3nt_server/testing/canaries.py | imported only by scripts.proof_artemis_om2d_rematch |
-| `trid3nt_server.testing.proof_animations` | 288 | trid3nt_server/testing/proof_animations.py | imported only by scripts.assemble_proof_packet, trid3nt_server.testing.canaries |
+| `trid3nt_server.testing.canaries` | 480 | trid3nt_server/testing/canaries.py | imported only by scripts.proof_artemis_om2d_rematch |
+| `trid3nt_server.testing.proof_animations` | 289 | trid3nt_server/testing/proof_animations.py | imported only by scripts.assemble_proof_packet, trid3nt_server.testing.canaries |
 
 ## scripts/ entry modules with no importer
 
@@ -62,7 +63,7 @@ review (a driver for a deleted seam is dead), not as a defect.
 | `scripts.sandbox.oceanmesh.water_edge` | 538 | scripts/sandbox/oceanmesh/water_edge.py |
 | `scripts.tool_sweep` | 391 | scripts/tool_sweep.py |
 | `scripts.sandbox.oceanmesh.build_coastal_mesh` | 384 | scripts/sandbox/oceanmesh/build_coastal_mesh.py |
-| `scripts.proof_artemis_om2d_rematch` | 363 | scripts/proof_artemis_om2d_rematch.py |
+| `scripts.proof_artemis_om2d_rematch` | 383 | scripts/proof_artemis_om2d_rematch.py |
 | `scripts.sandbox.oceanmesh.build_watershed_mesh` | 358 | scripts/sandbox/oceanmesh/build_watershed_mesh.py |
 | `scripts.sandbox.oceanmesh.schism_gr3` | 335 | scripts/sandbox/oceanmesh/schism_gr3.py |
 | `scripts.proof_rerun_with_overrides` | 326 | scripts/proof_rerun_with_overrides.py |
@@ -85,8 +86,9 @@ review (a driver for a deleted seam is dead), not as a defect.
 | `scripts.replay_canary_evidence` | 182 | scripts/replay_canary_evidence.py |
 | `scripts.proof_telemac_rain` | 178 | scripts/proof_telemac_rain.py |
 | `scripts.proof_artemis_real_breakwater` | 177 | scripts/proof_artemis_real_breakwater.py |
-| `scripts.drive_mesh_spotcheck` | 173 | scripts/drive_mesh_spotcheck.py |
+| `scripts.drive_mesh_spotcheck` | 171 | scripts/drive_mesh_spotcheck.py |
 | `scripts.backfill_run_journal` | 166 | scripts/backfill_run_journal.py |
+| `scripts.drive_lake_domain_mesh` | 163 | scripts/drive_lake_domain_mesh.py |
 | `scripts.render_fidelity_proof_generic` | 163 | scripts/render_fidelity_proof_generic.py |
 | `scripts.sandbox.telemac.rog_render_proofs` | 163 | scripts/sandbox/telemac/rog_render_proofs.py |
 | `scripts.drive_do_sag_cards` | 162 | scripts/drive_do_sag_cards.py |

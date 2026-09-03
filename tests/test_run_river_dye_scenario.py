@@ -333,7 +333,7 @@ def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.telemac.helpers import reach as reach_mod
     from trid3nt_server.workflows.telemac.helpers import forcing as forcing_mod
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
-    from trid3nt_server.workflows.telemac.steps import deck as deck_steps
+    from trid3nt_server.workflows.telemac.authoring import deck as deck_mod
 
     def _fake_registry_fn(name):
         if name == "geocode_location":
@@ -396,7 +396,7 @@ def _install_step_mocks(captured: dict):
         captured["run_tag"] = run_tag
         return f"s3://cache/telemac/{run_tag}/manifest.json"
 
-    _write_deck = deck_steps.write_reach_deck
+    _write_deck = deck_mod.write_reach_deck
 
     async def _capture_deck(**kw):
         """The real author, with the SHEET it serialized kept for inspection.
@@ -441,17 +441,17 @@ def _install_step_mocks(captured: dict):
         # The mesh session stands in, so its display face is a uri nothing wrote:
         # what the mesh holds of the reach is measured in its own test module.
         patch.object(reach_mod, "_meshed_fraction", lambda mesh, centerline: 1.0),
-        patch.object(deck_steps, "write_reach_deck", _capture_deck),
-        patch.object(deck_steps, "read_topology",
+        patch.object(deck_mod, "write_reach_deck", _capture_deck),
+        patch.object(deck_mod, "read_topology",
                      lambda _uri: {
                          "roles": dict(MESH_ROLES),
                          "liquid_boundary_order": ["outflow", "inflow"],
                          "liquid_boundary_prescribes": ["elevation",
                                                         "flowrate"]}),
-        patch.object(deck_steps, "read_centerline_utm",
+        patch.object(deck_mod, "read_centerline_utm",
                      lambda _src, _epsg, **_kw: __import__("numpy").array(
                          [[0.0, 0.0], [6000.0, 0.0]])),
-        patch.object(deck_steps, "_stage_authored",
+        patch.object(deck_mod, "_stage_authored",
                      lambda _rundir, run_tag, names: [
                          {"gs_uri": f"s3://cache/telemac/{run_tag}/{n}", "dest": n}
                          for n in names]),
@@ -563,9 +563,9 @@ def _real_centerline_read() -> dict:
     about where a release derived along the DECLARED reach actually lands.
     """
     from trid3nt_server.workflows.mesh.shared.nodes import read_centerline_utm
-    from trid3nt_server.workflows.telemac.steps import deck as deck_steps
+    from trid3nt_server.workflows.telemac.authoring import deck as deck_mod
 
-    return {"overrides": [patch.object(deck_steps, "read_centerline_utm",
+    return {"overrides": [patch.object(deck_mod, "read_centerline_utm",
                                        read_centerline_utm)]}
 
 
@@ -618,7 +618,7 @@ def test_a_derived_release_sits_on_the_DECLARED_centerline(tmp_path, monkeypatch
 
 def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
-    from trid3nt_server.workflows.telemac.steps import deck as deck_steps
+    from trid3nt_server.workflows.telemac.authoring import deck as deck_mod
     from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
     async def _boom(**_kw):

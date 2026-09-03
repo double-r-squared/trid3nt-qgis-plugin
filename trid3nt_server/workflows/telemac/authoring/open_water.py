@@ -1,6 +1,6 @@
 """The OPEN-WATER front of the TELEMAC AOI templates: stage, solve, read, surface.
 
-The reach family (``steps/reach.py`` + ``steps/deck.py`` + ``steps/solve.py``)
+The reach family (``helpers/reach.py`` + ``authoring/deck.py`` + ``solving/solve.py``)
 meshes a corridor along a flowline. The other TELEMAC domains - a lake fetch, a
 harbour basin - are the same shape instead: a regular grid over an AOI, real
 topobathy at the nodes, one worker section in the manifest, one result SELAFIN,
@@ -29,7 +29,7 @@ from trid3nt_server.workflows.lib import DeclarativeError, Step
 
 from ..solving.solve import read_run_metrics
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.open_water")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.open_water")
 
 __all__ = [
     "mesh_resolution_label",
@@ -51,7 +51,7 @@ __all__ = [
     "stage_telemac_manifest",
 ]
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 #: Wall-clock ceiling on one open-water solve. These domains are a few thousand
 #: grid nodes over hours of simulated time - the reach family's node-budget
@@ -519,6 +519,6 @@ class SolveOpenWater:
     @staticmethod
     def telemac(*, deck: Any, compute_class: Any) -> Step:
         """Dispatch a staged open-water deck to its own TELEMAC worker."""
-        return Step(runner=f"{_STEPS}.open_water.solve_open_water", stage="solve",
+        return Step(runner=f"{_AUTHORING}.open_water.solve_open_water", stage="solve",
                     kwargs={"deck": deck, "compute_class": compute_class},
                     consequential=True)

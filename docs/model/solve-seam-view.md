@@ -6,14 +6,14 @@ GENERATED from `docs/model/solve-seam.sysml` by `scripts/model_check.py --view`.
 
 ```mermaid
 flowchart LR
-    deckAuthor["DeckAuthor<br/>trid3nt_server/workflows/telemac/steps/deck.py"]
-    deckStatements["DeckAuthor<br/>trid3nt_server/workflows/telemac/steps/author.py"]
+    deckAuthor["DeckAuthor<br/>trid3nt_server/workflows/telemac/authoring/deck.py"]
+    deckStatements["DeckAuthor<br/>trid3nt_server/workflows/telemac/authoring/author.py"]
     diagnosticsReader["DiagnosticsReader<br/>trid3nt_server/workflows/solver/diagnostics/telemac.py"]
     launcherArm["LauncherArm<br/>trid3nt_server/workflows/telemac/run_telemac.py"]
-    manifestStager["ManifestStager<br/>trid3nt_server/workflows/telemac/steps/open_water.py"]
+    manifestStager["ManifestStager<br/>trid3nt_server/workflows/telemac/authoring/open_water.py"]
     meshAcceptance["MeshAcceptance<br/>trid3nt_server/workflows/mesh/step.py"]
     packetAssembler["PacketAssembler<br/>scripts/assemble_proof_packet.py"]
-    rainDeckAuthor["DeckAuthor<br/>trid3nt_server/workflows/telemac/steps/rain_on_grid.py"]
+    rainDeckAuthor["DeckAuthor<br/>trid3nt_server/workflows/telemac/authoring/rain_on_grid.py"]
     resultPostprocess["ResultPostprocess<br/>trid3nt_server/workflows/telemac/products/postprocess_telemac.py"]
     resultReader["ResultReader<br/>trid3nt_server/workflows/telemac/result_reader.py"]
     runReader["RunReader<br/>trid3nt_server/workflows/telemac/products/run_reads.py"]

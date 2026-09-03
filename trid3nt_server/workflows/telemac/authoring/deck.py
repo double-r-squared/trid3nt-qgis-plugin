@@ -42,11 +42,11 @@ from ..helpers.substance import (
     sanitize_substance,
 )
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.deck")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.deck")
 
 __all__ = ["WriteDeck", "stage_manifest", "write_reach_deck"]
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 #: The names the run directory holds the reach's files under. They are the
 #: ``.cas``'s own GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements, so the
@@ -839,5 +839,5 @@ class WriteDeck:
     @staticmethod
     def telemac(**kwargs: Any) -> Step:
         """The TELEMAC-2D reach deck."""
-        return Step(runner=f"{_STEPS}.deck.write_reach_deck", stage="author",
+        return Step(runner=f"{_AUTHORING}.deck.write_reach_deck", stage="author",
                     kwargs=kwargs)

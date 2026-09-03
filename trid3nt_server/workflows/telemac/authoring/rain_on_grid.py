@@ -37,7 +37,7 @@ from trid3nt_server.workflows.shared.aoi import aoi_slug
 from trid3nt_server.workflows.shared.layer_fields import layer_field
 from trid3nt_server.workflows.shared.publish_product_layer import publish_product_layer
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.rain_on_grid")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.rain_on_grid")
 
 __all__ = [
     "AcquireCatchment",
@@ -55,7 +55,7 @@ __all__ = [
     "write_rain_on_grid_deck",
 ]
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 #: The names the run directory holds the catchment's files under. They are the
 #: ``.cas``'s own GEOMETRY / BOUNDARY CONDITIONS / RESULTS / data-file statements,
@@ -171,7 +171,7 @@ def AcquireCatchment(*, location: Any, bbox: Any, pour_point: Any,  # noqa: N802
                      half_deg: float, default_name: str = "watershed",
                      code_prefix: str = "TELEMAC_ROG") -> Step:
     """Outlet + AOI -> the modelled world. Refines the domain for everything after."""
-    return Step(runner=f"{_STEPS}.rain_on_grid.acquire_catchment", stage="acquire",
+    return Step(runner=f"{_AUTHORING}.rain_on_grid.acquire_catchment", stage="acquire",
                 kwargs={"location": location, "bbox": bbox, "pour_point": pour_point,
                         "half_deg": half_deg, "default_name": default_name,
                         "code_prefix": code_prefix}).overrides_domain()
@@ -867,7 +867,7 @@ class Infiltration:
     def fields(*, mesh: Any, landcover: Any, curve_number: Any,
                      steep_slope_correction: Any, antecedent_moisture: Any) -> Step:
         """Per-node curve numbers and Manning n - the infiltration surface."""
-        return Step(runner=f"{_STEPS}.rain_on_grid.node_infiltration_fields",
+        return Step(runner=f"{_AUTHORING}.rain_on_grid.node_infiltration_fields",
                     stage="prep",
                     kwargs={"mesh": mesh, "landcover": landcover,
                             "curve_number": curve_number,
@@ -880,7 +880,7 @@ class SolveRainOnGrid:
 
     @staticmethod
     def telemac(*, deck: Any, compute_class: Any) -> Step:
-        return Step(runner=f"{_STEPS}.rain_on_grid.solve_rain_on_grid", stage="solve",
+        return Step(runner=f"{_AUTHORING}.rain_on_grid.solve_rain_on_grid", stage="solve",
                     kwargs={"deck": deck, "compute_class": compute_class},
                     consequential=True)
 
@@ -890,10 +890,10 @@ class RainOnGrid:
 
     @staticmethod
     def deck(**kwargs: Any) -> Step:
-        return Step(runner=f"{_STEPS}.rain_on_grid.write_rain_on_grid_deck",
+        return Step(runner=f"{_AUTHORING}.rain_on_grid.write_rain_on_grid_deck",
                     stage="author", kwargs=kwargs)
 
     @staticmethod
     def products(*, deck: Any, solve: Any) -> Step:
-        return Step(runner=f"{_STEPS}.rain_on_grid.publish_rain_on_grid_products",
+        return Step(runner=f"{_AUTHORING}.rain_on_grid.publish_rain_on_grid_products",
                     stage="publish", kwargs={"deck": deck, "solve": solve})

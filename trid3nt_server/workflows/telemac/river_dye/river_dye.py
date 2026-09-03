@@ -37,12 +37,10 @@ from trid3nt_server.workflows.telemac.river_dye.coercions import release_points
 from trid3nt_server.workflows.telemac.river_dye.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.steps import (
-    MeshCoverage,
-    compute_class,
-    event_time,
-    substance_class,
-)
+from trid3nt_server.workflows.telemac.helpers.forcing import event_time
+from trid3nt_server.workflows.telemac.helpers.reach import MeshCoverage
+from trid3nt_server.workflows.telemac.helpers.substance import substance_class
+from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "build_dye_chart", "plan", "telemac_river_dye"]

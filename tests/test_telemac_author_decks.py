@@ -12,7 +12,7 @@ import re
 
 import pytest
 
-from trid3nt_server.workflows.telemac.steps import author as A
+from trid3nt_server.workflows.telemac.authoring import author as A
 
 #: The reach as the accepted mesh measures it: a bed falling 3 m over the 1000 m
 #: the centerline runs, and an outflow face cutting a 40 m trapezoid with 3 m

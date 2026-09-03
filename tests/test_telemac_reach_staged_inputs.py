@@ -16,7 +16,7 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.telemac.steps.deck import _class_files, stage_manifest
+from trid3nt_server.workflows.telemac.authoring.deck import _class_files, stage_manifest
 
 
 class _FakeS3:
@@ -129,7 +129,7 @@ def test_no_reach_run_declares_a_bed_cog_output():
 # ONE manifest writer, and the CASE section it carries.
 # --------------------------------------------------------------------------- #
 def test_the_case_section_names_the_engine_the_deck_and_the_results():
-    from trid3nt_server.workflows.telemac.steps import case_section
+    from trid3nt_server.workflows.telemac.authoring.open_water import case_section
 
     case = case_section(
         module="telemac2d", steering="t2d_river.cas",
@@ -156,7 +156,7 @@ def test_the_case_section_names_the_engine_the_deck_and_the_results():
 
 def test_a_continued_case_names_the_staged_file_it_restarts_from():
     """Absent on a fresh run, so a present key is always a real continuation."""
-    from trid3nt_server.workflows.telemac.steps import case_section
+    from trid3nt_server.workflows.telemac.authoring.open_water import case_section
 
     fresh = case_section(module="telemac2d", steering="t2d_river.cas",
                          results=[], family="river_dye", echo={})
@@ -177,7 +177,7 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
     scenario over the wrong stretch of clock.
     """
     import trid3nt_server.workflows.telemac.result_reader as reader
-    from trid3nt_server.workflows.telemac.steps.deck import _continuation_start_s
+    from trid3nt_server.workflows.telemac.authoring.deck import _continuation_start_s
     from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
     previous = tmp_path / "restart_river.slf"
@@ -193,7 +193,7 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
 
 
 def test_the_classes_that_couple_state_which_module_they_couple_with():
-    from trid3nt_server.workflows.telemac.steps.deck import _CLASS_COUPLING
+    from trid3nt_server.workflows.telemac.authoring.deck import _CLASS_COUPLING
 
     assert _CLASS_COUPLING == {"decay": "waqtel", "do_sag": "waqtel",
                                "sediment": "gaia"}
@@ -210,7 +210,7 @@ def test_a_coupled_reach_refuses_to_be_continued_and_says_why(substance, coupled
     """
     import asyncio
 
-    from trid3nt_server.workflows.telemac.steps.deck import write_reach_deck
+    from trid3nt_server.workflows.telemac.authoring.deck import write_reach_deck
     from trid3nt_server.workflows.telemac.helpers.errors import (
         TelemacDyeScenarioInputError,
     )
@@ -227,7 +227,7 @@ def test_a_coupled_reach_refuses_to_be_continued_and_says_why(substance, coupled
 
 def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
     import trid3nt_server.workflows.solver.solver as solver_mod
-    from trid3nt_server.workflows.telemac.steps import stage_telemac_manifest
+    from trid3nt_server.workflows.telemac.authoring.open_water import stage_telemac_manifest
 
     fake = _FakeS3()
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: fake)

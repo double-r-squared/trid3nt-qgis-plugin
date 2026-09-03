@@ -3,7 +3,7 @@
 One serialization hook and one publisher for TELEMAC-3D, the three-dimensional
 (hydrostatic or non-hydrostatic) Navier-Stokes solver with active-tracer
 baroclinic density coupling over sigma layers. Staging, dispatching and reading
-the run are the shared open-water front (``steps/open_water.py``); what lives here
+the run are the shared open-water front (``authoring/open_water.py``); what lives here
 is only what is 3D about a 3D run.
 
 TWO LAYERS, ONE ANSWER. The deliverable is a PAIR - the surface field and the
@@ -42,11 +42,11 @@ from .open_water import (
     staged_bed_inputs,
 )
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.stratified")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.stratified")
 
 __all__ = ["Stratified", "publish_stratified_products", "write_stratified_deck"]
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 _SECTION = "stratified"
 _PREFIX = "telemac3d"
@@ -292,10 +292,10 @@ class Stratified:
 
     @staticmethod
     def deck(**kwargs: Any) -> Step:
-        return Step(runner=f"{_STEPS}.stratified.write_stratified_deck",
+        return Step(runner=f"{_AUTHORING}.stratified.write_stratified_deck",
                     stage="author", kwargs=kwargs)
 
     @staticmethod
     def products(*, deck: Any, solve: Any) -> Step:
-        return Step(runner=f"{_STEPS}.stratified.publish_stratified_products",
+        return Step(runner=f"{_AUTHORING}.stratified.publish_stratified_products",
                     stage="publish", kwargs={"deck": deck, "solve": solve})

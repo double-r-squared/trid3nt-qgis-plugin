@@ -105,7 +105,7 @@ def test_a_real_domain_with_no_staged_bed_refuses():
     Left unchecked it would surface as whatever the builder does with an absent
     file, several minutes later, wearing the solver's name.
     """
-    from trid3nt_server.workflows.telemac.steps.open_water import (
+    from trid3nt_server.workflows.telemac.authoring.open_water import (
         OpenWaterError,
         staged_bed_inputs,
     )
@@ -118,13 +118,13 @@ def test_a_real_domain_with_no_staged_bed_refuses():
 
 def test_an_idealized_domain_stages_nothing():
     """A Berkhoff shoal samples nothing, so it must not demand a raster."""
-    from trid3nt_server.workflows.telemac.steps.open_water import staged_bed_inputs
+    from trid3nt_server.workflows.telemac.authoring.open_water import staged_bed_inputs
 
     assert staged_bed_inputs(None, real=False, section="agitation") == []
 
 
 def test_a_staged_bed_becomes_one_manifest_input_row():
-    from trid3nt_server.workflows.telemac.steps.open_water import (
+    from trid3nt_server.workflows.telemac.authoring.open_water import (
         STAGED_BED_DEST,
         staged_bed_inputs,
     )
@@ -143,7 +143,7 @@ def test_a_staged_bed_becomes_one_manifest_input_row():
                                            ("shoal", False)])
 def test_only_a_real_geography_mode_takes_the_fetched_bed(mode, expected):
     """A verification domain's bed is authored by the physics, whatever is asked."""
-    from trid3nt_server.workflows.telemac.steps.open_water import solves_on_real_bed
+    from trid3nt_server.workflows.telemac.authoring.open_water import solves_on_real_bed
 
     assert solves_on_real_bed("noaa_greatlakes",
                               lon=-87.38, lat=46.54, mode=mode,
@@ -151,7 +151,7 @@ def test_only_a_real_geography_mode_takes_the_fetched_bed(mode, expected):
 
 
 def test_an_auto_lake_bed_is_real_only_inside_the_covered_lakes():
-    from trid3nt_server.workflows.telemac.steps.open_water import solves_on_real_bed
+    from trid3nt_server.workflows.telemac.authoring.open_water import solves_on_real_bed
 
     assert solves_on_real_bed("auto",
                               lon=-87.1, lat=46.95) is True      # Superior

@@ -3,7 +3,7 @@
 One serialization hook and one publisher for ARTEMIS, the phase-RESOLVING elliptic
 mild-slope (Berkhoff) solver: diffraction behind a breakwater, harbour resonance,
 refraction over a shoal. Staging, dispatching and reading the run are the shared
-open-water front (``steps/open_water.py``); what lives here is only what is
+open-water front (``authoring/open_water.py``); what lives here is only what is
 AGITATION about an agitation run.
 
 THE STRUCTURE IS A SLOT. The sheltering question is meaningless without the thing
@@ -54,11 +54,11 @@ from .open_water import (
     staged_bed_inputs,
 )
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.agitation")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.agitation")
 
 __all__ = ["Agitation", "publish_agitation_products", "write_agitation_deck"]
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 _SECTION = "agitation"
 _PREFIX = "artemis"
@@ -527,10 +527,10 @@ class Agitation:
 
     @staticmethod
     def deck(**kwargs: Any) -> Step:
-        return Step(runner=f"{_STEPS}.agitation.write_agitation_deck", stage="author",
+        return Step(runner=f"{_AUTHORING}.agitation.write_agitation_deck", stage="author",
                     kwargs=kwargs)
 
     @staticmethod
     def products(*, deck: Any, solve: Any) -> Step:
-        return Step(runner=f"{_STEPS}.agitation.publish_agitation_products",
+        return Step(runner=f"{_AUTHORING}.agitation.publish_agitation_products",
                     stage="publish", kwargs={"deck": deck, "solve": solve})

@@ -341,7 +341,7 @@ package SolveSeam {
 
     part deckAuthor : DeckAuthor {
         doc /*
-        code: trid3nt_server/workflows/telemac/steps/deck.py
+        code: trid3nt_server/workflows/telemac/authoring/deck.py
         */
         port caseOut : CaseOut;
         port echoOut : EchoOut;
@@ -355,7 +355,7 @@ package SolveSeam {
         a second author of the case and the echo, modeled so a severance in it
         fires like a severance in the open-water author's.
 
-        code: trid3nt_server/workflows/telemac/steps/rain_on_grid.py
+        code: trid3nt_server/workflows/telemac/authoring/rain_on_grid.py
         */
         port caseOut : CaseOut;
         port echoOut : EchoOut;
@@ -370,13 +370,13 @@ package SolveSeam {
         with: the outflow stage is a normal depth at the roughness the very
         next statement writes.
 
-        code: trid3nt_server/workflows/telemac/steps/author.py
+        code: trid3nt_server/workflows/telemac/authoring/author.py
         */
     }
 
     part manifestStager : ManifestStager {
         doc /*
-        code: trid3nt_server/workflows/telemac/steps/open_water.py
+        code: trid3nt_server/workflows/telemac/authoring/open_water.py
         */
         port caseIn : CaseIn;
         port caseOut : CaseOut;

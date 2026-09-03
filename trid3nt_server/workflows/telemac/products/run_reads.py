@@ -137,7 +137,7 @@ def sediment_scalars(*, listing_text: str, deck: Mapping[str, Any],
     if net is not None and injected > 0.0:
         stats["sediment_deposit_fraction"] = round(
             min(max(float(net) / injected, 0.0), 1.0), 4)
-    from ..steps.author import normalize_gradation
+    from ..authoring.author import normalize_gradation
 
     classes = normalize_gradation(deck.get("sediment_gradation") or ())
     # A SORTED bed needs a mixture to sort: a single class is uniform by

@@ -13,8 +13,8 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.telemac.steps import author as A
-from trid3nt_server.workflows.telemac.steps import cas_validate as V
+from trid3nt_server.workflows.telemac.authoring import author as A
+from trid3nt_server.workflows.telemac.authoring import cas_validate as V
 
 _BED = {"bed_top_m": 100.0, "bed_drop_m": 3.0, "reach_length_m": 1000.0,
         "outflow_section": [[0.0, 100.0], [10.0, 97.0],

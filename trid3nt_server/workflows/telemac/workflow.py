@@ -1,10 +1,10 @@
 """``TelemacWorkflow`` - the TELEMAC engine facade.
 
-Four operations, and nothing else. Behind them sit the TELEMAC step families
-(``workflows/telemac/steps``): the reach front (geocode, flowline, seed, corridor
-deck, reach solve, per-deliverable readers) and the open-water front (an AOI, a
-regular grid over it, one worker section, one result SELAFIN). The facade is what
-stays still while those move.
+Four operations, and nothing else. Behind them sit the four shared trees -
+``authoring/``, ``solving/``, ``products/``, ``helpers/`` - carrying the reach
+front (geocode, flowline, seed, corridor deck, reach solve, per-deliverable
+readers) and the open-water front (an AOI, a regular grid over it, one worker
+section, one result SELAFIN). The facade is what stays still while those move.
 
 The MESH is not one of the four: a template declares its mesh ask as a
 ``tool.build_mesh`` block beside PHYSICS and FORCING, and ``author`` reads the
@@ -36,24 +36,26 @@ from trid3nt_server.workflows.lib import (
     Workflow,
 )
 from trid3nt_server.workflows.shared.aoi import AcquireAoi
-from trid3nt_server.workflows.telemac.steps import (
-    AcquireCatchment,
+from trid3nt_server.workflows.telemac.authoring.agitation import (
     Agitation,
-    CarrierDischarge,
-    Geocode,
-    Products,
-    RainOnGrid,
-    ReachSeed,
-    Solve,
-    SolveOpenWater,
-    SolveRainOnGrid,
-    Stratified,
-    WriteDeck,
     write_agitation_deck,
+)
+from trid3nt_server.workflows.telemac.authoring.deck import WriteDeck, write_reach_deck
+from trid3nt_server.workflows.telemac.authoring.open_water import SolveOpenWater
+from trid3nt_server.workflows.telemac.authoring.rain_on_grid import (
+    AcquireCatchment,
+    RainOnGrid,
+    SolveRainOnGrid,
     write_rain_on_grid_deck,
-    write_reach_deck,
+)
+from trid3nt_server.workflows.telemac.authoring.stratified import (
+    Stratified,
     write_stratified_deck,
 )
+from trid3nt_server.workflows.telemac.helpers.forcing import CarrierDischarge
+from trid3nt_server.workflows.telemac.helpers.reach import Geocode, ReachSeed
+from trid3nt_server.workflows.telemac.products.products import Products
+from trid3nt_server.workflows.telemac.solving.solve import Solve
 
 __all__ = ["TelemacWorkflow", "mesh_deck_fields"]
 

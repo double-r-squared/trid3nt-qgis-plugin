@@ -241,7 +241,7 @@ def test_a_series_of_measured_zeros_is_drawn_and_labelled_a_measurement():
 # The dryness statement: what a correct-but-dry run says instead of refusing.
 # ===========================================================================
 def test_a_dry_run_states_its_dryness_in_its_own_numbers():
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import _dryness_note
+    from trid3nt_server.workflows.telemac.authoring.rain_on_grid import _dryness_note
 
     note = _dryness_note({"max_depth_peak_m": 0.0, "runoff_volume_m3": 9.328,
                           "rainfall_volume_m3": 703398.434}, rain_mm=25.0)
@@ -257,7 +257,7 @@ def test_the_depth_field_decides_the_dryness_not_a_trace_of_outflow():
     """A catchment that never held a centimetre is the dry answer even when the
     solver's own balance passed a trickle across the outlet; a run that stood in
     water is not dry however little left."""
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import _dryness_note
+    from trid3nt_server.workflows.telemac.authoring.rain_on_grid import _dryness_note
 
     assert _dryness_note({"max_depth_peak_m": 0.42, "runoff_volume_m3": 9100.0,
                           "rainfall_volume_m3": 3.4e6}, rain_mm=156.7) == ""
@@ -270,7 +270,7 @@ def test_the_depth_field_decides_the_dryness_not_a_trace_of_outflow():
 # resolve_rain_event: the two rungs.
 # ===========================================================================
 def test_resolve_rain_event_design_storm_rung_no_window():
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.authoring.rain_on_grid import (
         resolve_rain_event,
     )
 
@@ -291,7 +291,7 @@ def test_resolve_rain_event_design_storm_rung_no_window():
 
 def test_resolve_rain_event_malformed_window_refuses():
     from trid3nt_server.workflows.lib.domain import Domain, bind_domain, reset_domain
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.authoring.rain_on_grid import (
         RainOnGridError, resolve_rain_event,
     )
 
@@ -310,7 +310,7 @@ def test_resolve_rain_event_hyetograph_rung_builds_hourly_blocks(monkeypatch):
     surviving equivalent of the deleted ``_fetch_hyetograph_blocks``."""
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.lib.domain import Domain, bind_domain, reset_domain
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import resolve_rain_event
+    from trid3nt_server.workflows.telemac.authoring.rain_on_grid import resolve_rain_event
 
     monkeypatch.setitem(
         TOOL_REGISTRY, "fetch_aorc_precip",
@@ -336,7 +336,7 @@ def test_resolve_rain_event_hyetograph_rung_builds_hourly_blocks(monkeypatch):
 # ``_aoi_from_pour_point`` / ``model_telemac_rain_on_grid`` dispatch tests.
 # ===========================================================================
 def test_aoi_from_pour_point_buffers_the_outlet():
-    from trid3nt_server.workflows.telemac.steps import catchment_aoi
+    from trid3nt_server.workflows.telemac.authoring.rain_on_grid import catchment_aoi
     from trid3nt_server.workflows.telemac.rain_on_grid.declarations import (
         POUR_POINT_BUFFER_DEG,
     )
@@ -358,8 +358,8 @@ async def test_a_supplied_pour_point_derives_the_aoi_from_it_not_a_geocoded_bbox
     ``acquire_catchment`` (the catchment shape's own acquire step) never even
     reaches for a geocoder - the catchment shape's docstring names this: the
     basin's shape is the terrain's answer, never the geocoder's bbox."""
-    from trid3nt_server.workflows.telemac.steps import catchment_aoi
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import acquire_catchment
+    from trid3nt_server.workflows.telemac.authoring.rain_on_grid import catchment_aoi
+    from trid3nt_server.workflows.telemac.authoring.rain_on_grid import acquire_catchment
 
     pp = (-83.40402, 35.05746)
     out = await acquire_catchment(location="Otto, North Carolina", bbox=None,
@@ -372,7 +372,7 @@ async def test_a_supplied_pour_point_derives_the_aoi_from_it_not_a_geocoded_bbox
 async def test_acquire_catchment_never_invents_a_pour_point():
     """Unreachable through the declared plan (the DrawGate refuses first); stated
     here anyway because a missing outlet must never fall back to a centroid."""
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.authoring.rain_on_grid import (
         RainOnGridError, acquire_catchment,
     )
 
@@ -414,7 +414,7 @@ def rog_deck(monkeypatch, tmp_path):
     import numpy as np
 
     from trid3nt_server.workflows.mesh import topology as topo_mod
-    from trid3nt_server.workflows.telemac.steps import rain_on_grid as rog_mod
+    from trid3nt_server.workflows.telemac.authoring import rain_on_grid as rog_mod
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(topo_mod, "read_topology", lambda _uri: {
@@ -477,7 +477,7 @@ def test_the_outputs_are_exactly_what_the_run_writes_and_was_handed(rog_deck):
 
 def test_a_time_varying_storm_names_the_baked_fortran_on_both_channels(
         rog_deck, tmp_path):
-    from trid3nt_server.workflows.telemac.steps.author import RAINDEF3_USER_FORTRAN
+    from trid3nt_server.workflows.telemac.authoring.author import RAINDEF3_USER_FORTRAN
 
     deck = asyncio.run(rog_deck(rain={
         "kind": "hyetograph", "intensity_mm_per_hr": 25.0, "duration_s": 10800.0,
@@ -501,7 +501,7 @@ def test_the_hydrograph_reads_the_declared_outlets_own_boundary_number(rog_deck)
 
 def test_a_mesh_whose_boundary_took_no_outlet_role_refuses(rog_deck, monkeypatch):
     from trid3nt_server.workflows.mesh import topology as topo_mod
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import RainOnGridError
+    from trid3nt_server.workflows.telemac.authoring.rain_on_grid import RainOnGridError
 
     monkeypatch.setattr(topo_mod, "read_topology", lambda _uri: {
         "roles": {"inflow": [0]}, "liquid_boundary_order": ["inflow"],
@@ -512,7 +512,7 @@ def test_a_mesh_whose_boundary_took_no_outlet_role_refuses(rog_deck, monkeypatch
 
 
 def test_the_rainfall_volume_is_the_gross_depth_over_the_meshed_area(rog_deck):
-    from trid3nt_server.workflows.telemac.steps.rain_on_grid import _rain_applied
+    from trid3nt_server.workflows.telemac.authoring.rain_on_grid import _rain_applied
 
     deck = asyncio.run(rog_deck(rain=_DESIGN_STORM))
     # 25 mm/h over 6 h = 150 mm over 2.5 km2. The depth travels beside the

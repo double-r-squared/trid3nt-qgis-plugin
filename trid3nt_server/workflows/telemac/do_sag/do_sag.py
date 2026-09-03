@@ -35,12 +35,12 @@ from trid3nt_server.workflows.shared.aoi import location_or_bbox
 from trid3nt_server.workflows.telemac.do_sag.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.steps import (
-    MeshCoverage,
+from trid3nt_server.workflows.telemac.helpers.forcing import (
     ReviewResolvedInputs,
-    WaqtelO2,
     event_time,
 )
+from trid3nt_server.workflows.telemac.helpers.reach import MeshCoverage
+from trid3nt_server.workflows.telemac.helpers.water_quality import WaqtelO2
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "build_sag_chart", "plan", "telemac_do_sag"]

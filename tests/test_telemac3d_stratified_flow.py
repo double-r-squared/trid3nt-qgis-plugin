@@ -101,7 +101,7 @@ def test_the_declared_plan_is_the_open_water_sequence():
 
 
 def test_the_3d_deck_carries_both_layer_files():
-    from trid3nt_server.workflows.telemac.steps.stratified import write_stratified_deck
+    from trid3nt_server.workflows.telemac.authoring.stratified import write_stratified_deck
 
     deck = asyncio.run(write_stratified_deck(bed=_STAGED_BED, 
         aoi={"slug": "aoi", "name": "aoi", "lon": -87.1, "lat": 46.95,
@@ -119,7 +119,7 @@ def test_the_3d_deck_carries_both_layer_files():
 def test_a_salt_wedge_never_takes_the_real_bathymetry_path():
     """A real estuary would need a tidal liquid boundary; the wedge is the
     ANALYTIC lock-exchange V&V, and asking for real bathymetry cannot conjure one."""
-    from trid3nt_server.workflows.telemac.steps.stratified import write_stratified_deck
+    from trid3nt_server.workflows.telemac.authoring.stratified import write_stratified_deck
 
     deck = asyncio.run(write_stratified_deck(bed=_STAGED_BED, 
         aoi={"slug": "aoi", "name": "aoi", "lon": -87.1, "lat": 46.95,

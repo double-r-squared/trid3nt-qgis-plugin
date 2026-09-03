@@ -108,7 +108,7 @@ def test_a_supplied_structure_is_meshed_whatever_form_it_arrived_in():
     must not be able to tell, whether the caller sketched the breakwater or
     fetched the surveyed one.
     """
-    from trid3nt_server.workflows.telemac.steps.agitation import write_agitation_deck
+    from trid3nt_server.workflows.telemac.authoring.agitation import write_agitation_deck
 
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}
@@ -136,7 +136,7 @@ def test_an_unfilled_structure_slot_asks_for_nothing():
     structure on the deck, so nothing downstream can read a request that was
     never made.
     """
-    from trid3nt_server.workflows.telemac.steps.agitation import (
+    from trid3nt_server.workflows.telemac.authoring.agitation import (
         write_agitation_deck,
     )
 
@@ -156,7 +156,7 @@ def test_the_structure_row_reports_the_solve_not_the_request():
     carries a barrier. Three answers, and none of them may read alike: meshed
     nothing, meshed something nobody asked for, and did not say.
     """
-    from trid3nt_server.workflows.telemac.steps.agitation import (
+    from trid3nt_server.workflows.telemac.authoring.agitation import (
         _structure_row,
         write_agitation_deck,
     )
@@ -188,7 +188,7 @@ def test_the_step_module_makes_no_network_call_of_its_own():
     """The breakwater-class guard: a step INTERPRETS declarations, it never fetches."""
     import inspect
 
-    from trid3nt_server.workflows.telemac.steps import agitation as mod
+    from trid3nt_server.workflows.telemac.authoring import agitation as mod
 
     source = inspect.getsource(mod)
     for primitive in ("urllib", "urlopen", "requests.get", "requests.post", "httpx",
@@ -204,7 +204,7 @@ def test_only_diffraction_gets_a_real_harbour():
     A real-bathymetry request for either falls back to the labeled analytic
     domain rather than fabricating a harbour outline around the geocode.
     """
-    from trid3nt_server.workflows.telemac.steps.agitation import write_agitation_deck
+    from trid3nt_server.workflows.telemac.authoring.agitation import write_agitation_deck
 
     aoi = {"slug": "aoi", "name": "aoi", "lon": -87.38, "lat": 46.54,
            "bbox": (-87.392, 46.528, -87.368, 46.550)}

@@ -5,7 +5,7 @@ the chart function. The declared params and the model-facing prose are one file
 over in ``declarations.py``. Everything else - normalizing the wire args,
 resolving the doors, walking the plan, persisting the products - is the skeleton
 (``workflows/lib/workflow.py``); the agitation mechanism is the TELEMAC facade's
-open-water front (``steps/open_water.py`` + ``steps/agitation.py``). See
+open-water front (``authoring/open_water.py`` + ``authoring/agitation.py``). See
 ``docs/design/declarative-workflows.md``.
 
 THE QUESTION: how much does swell amplify inside a harbour, and does the
@@ -43,7 +43,7 @@ from trid3nt_server.workflows.telemac.agitation.agitation_mode import agitation_
 from trid3nt_server.workflows.telemac.agitation.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
-from trid3nt_server.workflows.telemac.steps import compute_class
+from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "artemis_harbor_agitation",
@@ -53,7 +53,7 @@ __all__ = ["ANSWER", "DATA", "PARAMS", "artemis_harbor_agitation",
 #: open-water box the sheltering question lives in.
 _HARBOR_HALF_DEG = 0.06
 
-_TSTEPS = "trid3nt_server.workflows.telemac.steps"
+_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 
 #: The thing that SHELTERS, as a CONTEXT SLOT - the exemplar of the shape.
@@ -87,7 +87,7 @@ class DATA:
     #: directory, and the builder reads a file.
     #: ``px_per_deg`` is THIS builder's sample lattice - the grid its nodes are read
     #: against - so it travels from the template rather than being a router default.
-    bed = tool(f"{_TSTEPS}.open_water.fetch_domain_bed",
+    bed = tool(f"{_AUTHORING}.open_water.fetch_domain_bed",
                bathy_source=P.bathy_source,
                mode=P.wave_mode,
                real_bed_modes=("diffraction",),

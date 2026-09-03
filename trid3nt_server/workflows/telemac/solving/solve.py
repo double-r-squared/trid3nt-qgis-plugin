@@ -22,7 +22,7 @@ from typing import Any
 
 from trid3nt_server.workflows.lib import Step
 
-from ..steps.deck import stage_manifest
+from ..authoring.deck import stage_manifest
 from ..helpers.errors import TelemacDyeScenarioError
 from ..helpers.reach import MESH_NODE_CAP, estimate_telemac_solve_seconds
 

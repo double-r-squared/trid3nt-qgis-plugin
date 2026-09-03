@@ -307,7 +307,7 @@ def _dynamic_strings(tree: ast.AST) -> tuple[set[str], set[str]]:
     seams (``workflows/lib/resolver._load``, ``fallbacks/walker``, the
     payload-warning estimator lookup), and bare ``<name>.py`` filenames for the
     ship-and-exec drivers. Module-level string constants are resolved so
-    f-strings like ``f"{_STEPS}.water_quality.x"`` land."""
+    f-strings like ``f"{_HELPERS}.water_quality.x"`` land."""
     consts: dict[str, str] = {}
     for node in getattr(tree, "body", []):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
@@ -563,8 +563,8 @@ KNOWN_CULLED: tuple[str, ...] = (
     "trid3nt_server.workflows.shared.publish_quantities",
     "trid3nt_server.workflows.telemac.coastal_tidal_surge",
     "trid3nt_server.workflows.telemac.wave_field",
-    "trid3nt_server.workflows.telemac.steps.coastal",
-    "trid3nt_server.workflows.telemac.steps.wave",
+    "trid3nt_server.workflows.telemac.authoring.coastal",
+    "trid3nt_server.workflows.telemac.authoring.wave",
     "trid3nt_server.tools.meta.passthroughs",
     "trid3nt_server.tools.search.qgis_discovery",
     "trid3nt_server.tools.resolution_declared",

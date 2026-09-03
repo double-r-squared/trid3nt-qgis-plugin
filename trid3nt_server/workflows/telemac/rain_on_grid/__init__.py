@@ -5,6 +5,6 @@
 rainfall-excess transform, the steep-slope correction, the antecedent-moisture
 conversions and the land-cover CN/Manning table. The catchment MESHING lives in
 the chained delineation plus the one mesh step and the TELEMAC mechanism
-in the family steps (``workflows/telemac/steps/rain_on_grid.py``), because neither
+in the shared front (``workflows/telemac/authoring/rain_on_grid.py``), because neither
 is a fact about this question.
 """
