@@ -665,15 +665,25 @@ package SolveSeam {
 
         The value it replaced was not a property of the reach: 2 m was the same
         number on a mountain creek and a coastal plain river, on the one boundary
-        the run's entire water surface is anchored to. The SAME derived stage is
-        now also the level a fresh run STARTS at - INITIAL CONDITIONS = CONSTANT
-        ELEVATION at that number - so the initial free surface and the prescribed
-        outflow agree by construction and the reach opens near the equilibrium it
-        is held to. ``init_depth_m`` had no role left once that followed: a
-        blanket 2 m start drained into the derived boundary over the first
-        minutes of every horizon, which was a transient the run had to spend
-        before it was answering the question it was asked. Spin-up as REFINED-run
-        behaviour is a separate, later choice; this is the fresh-run start.
+        the run's entire water surface is anchored to. The SAME derivation is
+        now also what a fresh run STARTS from: the normal DEPTH, laid
+        bed-parallel, which is the uniform-flow surface the outflow stage is the
+        downstream end of - so the initial free surface and the prescribed
+        outflow agree by construction and the reach opens at its own equilibrium.
+        ``init_depth_m`` had no role left once that followed: a blanket 2 m start
+        drained into the derived boundary over the first minutes of every
+        horizon, which was a transient the run had to spend before it was
+        answering the question it was asked.
+
+        Bed-parallel, and NOT a constant elevation at the stage. The stage is
+        derived only where the reach falls - the derivation refuses a reach that
+        does not - so a horizontal surface at the outlet's level leaves every
+        node above it dry, the prescribed-flowrate face among them, and the
+        engine refuses a discharge it has no water to impose (DEBIMP: PROBLEM ON
+        BOUNDARY NUMBER). Measured on the flagship coarse reach: 14 of 907 nodes
+        wet, exit code 2. The two statements carry the same number and only one
+        of them is a river. Spin-up as REFINED-run behaviour is a separate, later
+        choice; this is the fresh-run start.
 
         Uniform flow is a numerically convenient fiction rather than a measured
         boundary, so every input it cannot measure REFUSES by name: a reach with
@@ -766,7 +776,9 @@ package SolveSeam {
     verify requirement OutflowStageIsNormalDepth by
         "tests/test_telemac_outflow_stage.py::test_the_run_states_the_stage_and_every_input_it_was_derived_from";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_run_starts_at_the_stage_its_own_outflow_boundary_holds_it_to";
+        "tests/test_telemac_outflow_stage.py::test_the_run_starts_at_the_depth_its_own_outflow_stage_is_derived_as";
+    verify requirement OutflowStageIsNormalDepth by
+        "tests/test_telemac_outflow_stage.py::test_the_start_is_bed_parallel_rather_than_level_with_the_outlet";
     verify requirement OutflowStageIsNormalDepth by
         "tests/test_telemac_outflow_stage.py::test_a_different_friction_slope_moves_the_start_and_the_boundary_together";
     verify requirement OutflowStageIsNormalDepth by

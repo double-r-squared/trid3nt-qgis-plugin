@@ -490,9 +490,16 @@ def author_reach(rundir: Path | str, *, sheet: Mapping[str, Any],
     accepted mesh - the bed at its declared roles, the section its outflow face
     cuts, and the length it was built over - which the outflow stage is derived
     from as a normal depth and which the file states alongside the result.
-    That same stage is the level the run STARTS at, so a fresh reach opens near
-    the equilibrium its own downstream boundary holds it to instead of draining
-    a blanket depth into it over the first minutes of the horizon.
+    That same derivation is what the run STARTS from: the normal depth is laid
+    bed-parallel, so the initial surface IS the uniform flow the outflow stage is
+    the downstream end of, and a fresh reach opens at its own equilibrium instead
+    of draining a blanket depth into that boundary over the first minutes of the
+    horizon. Bed-parallel and not a constant ELEVATION at the stage: the stage is
+    derived only where the reach FALLS - it refuses a reach that does not - so a
+    horizontal surface at the outlet's level leaves every node upstream of it dry,
+    the flowrate face among them, and the engine refuses a discharge it has no
+    water to impose (``DEBIMP: PROBLEM ON BOUNDARY NUMBER``). The two statements
+    carry the same number; only one of them is a river.
     ``restart`` is the perfect-restart record this run writes for whatever run
     continues it.
     """
@@ -521,14 +528,18 @@ def author_reach(rundir: Path | str, *, sheet: Mapping[str, Any],
                 f"{normal['depth_m']:.3f} m over the\n"
                 f"/  measured outflow section for {normal['q_m3s']:g} m3/s at "
                 f"{normal['law']} {normal['coefficient']:g}\n"
-                f"/  initial condition = constant elevation at that same "
-                f"{outflow_stage:.3f} m\n")
+                f"/  initial condition = that SAME normal depth "
+                f"{normal['depth_m']:.3f} m, bed-parallel,\n"
+                f"/  so the start surface is the uniform flow the outflow stage "
+                f"is the end of\n")
     journal_note(
-        f"reach initial condition: constant elevation {outflow_stage:.3f} m - "
-        f"the derived normal-depth outflow stage ({normal['depth_m']:.3f} m over "
-        f"the measured outflow section for {normal['q_m3s']:g} m3/s at "
-        f"{normal['law']} {normal['coefficient']:g}), so the run starts at the "
-        "level its own downstream boundary holds it to.")
+        f"reach initial condition: constant depth {normal['depth_m']:.3f} m - the "
+        f"SAME normal depth the outflow stage {outflow_stage:.3f} m is derived as "
+        f"({normal['q_m3s']:g} m3/s over the measured outflow section at "
+        f"{normal['law']} {normal['coefficient']:g}). Bed-parallel at the friction "
+        f"slope {normal['slope']:.6f}, which IS the uniform-flow surface, so the "
+        "run opens at the equilibrium its own downstream boundary holds it to "
+        "rather than draining a blanket depth into it.")
     flowrates, elevations, tracers = [], [], []
     for number, (role, prescribes) in enumerate(
             zip(liquid_boundary_order, liquid_boundary_prescribes), start=1):
@@ -658,8 +669,8 @@ LISTING PRINTOUT PERIOD         = 500
 DURATION                        = {P.duration_s}
 TIME STEP                       = {P.time_step_s}
 /
-INITIAL CONDITIONS              = 'CONSTANT ELEVATION'
-INITIAL ELEVATION               = {outflow_stage:.3f}
+INITIAL CONDITIONS              = 'CONSTANT DEPTH'
+INITIAL DEPTH                   = {normal['depth_m']:.3f}
 /
 PRESCRIBED FLOWRATES            = {';'.join(flowrates)}
 PRESCRIBED ELEVATIONS           = {';'.join(elevations)}

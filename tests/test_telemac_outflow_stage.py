@@ -193,24 +193,34 @@ def test_the_run_states_the_stage_and_every_input_it_was_derived_from(tmp_path):
     assert "PRESCRIBED ELEVATIONS           = 0.0;97.792" in cas
 
 
-def test_the_run_starts_at_the_stage_its_own_outflow_boundary_holds_it_to(tmp_path):
-    """The initial free surface IS the derived stage, so a fresh reach opens near
-    the equilibrium it is anchored at instead of draining a blanket depth into
-    that boundary over the first minutes of the horizon. No constant depth is
-    written at all - there is no second number left to disagree."""
+def test_the_run_starts_at_the_depth_its_own_outflow_stage_is_derived_as(tmp_path):
+    """The initial surface is that SAME normal depth, laid bed-parallel - the
+    uniform flow the outflow stage is the downstream end of - so a fresh reach
+    opens at its own equilibrium instead of draining a blanket depth into that
+    boundary. The 2 m blanket is gone: nothing here is a declared depth."""
     cas = _cas(tmp_path)
-    assert "INITIAL CONDITIONS              = 'CONSTANT ELEVATION'" in cas
-    assert "INITIAL ELEVATION               = 97.792" in cas
+    assert "INITIAL CONDITIONS              = 'CONSTANT DEPTH'" in cas
+    assert "INITIAL DEPTH                   = 0.792" in cas
     assert "PRESCRIBED ELEVATIONS           = 0.0;97.792" in cas
-    assert "INITIAL DEPTH" not in cas
-    assert "/  initial condition = constant elevation at that same 97.792 m" in cas
+    assert "/  initial condition = that SAME normal depth 0.792 m, bed-parallel," \
+        in cas
+
+
+def test_the_start_is_bed_parallel_rather_than_level_with_the_outlet(tmp_path):
+    """A constant ELEVATION at the outlet stage would dry every node above it,
+    the flowrate face among them, and the stage is derived ONLY on a reach that
+    falls - so the horizontal reading of it is refused by its own precondition.
+    A depth is stated instead, and the surface slopes with the bed."""
+    cas = _cas(tmp_path)
+    assert "INITIAL CONDITIONS              = 'CONSTANT ELEVATION'" not in cas
+    assert "INITIAL ELEVATION" not in cas
 
 
 def test_a_different_friction_slope_moves_the_start_and_the_boundary_together(
         tmp_path):
-    """ONE number. A flatter reach conveys the same discharge deeper, and the
-    level the run starts at rises with the level it is held to - because they are
-    the same derivation read once."""
+    """ONE derivation. A flatter reach conveys the same discharge deeper, and the
+    depth the run starts at rises with the level it is held to - because the
+    normal depth is read once and written at both ends."""
     steep = _cas(tmp_path)
     (tmp_path / "flat").mkdir()
     A.author_reach(
@@ -223,8 +233,8 @@ def test_a_different_friction_slope_moves_the_start_and_the_boundary_together(
         bed={**_REACH, "bed_top_m": 97.75, "bed_drop_m": 0.75},
         source_utm=(500.0, 0.0))
     cas = (tmp_path / "flat" / "t2d_river.cas").read_text()
-    assert "INITIAL ELEVATION               = 97.792" in steep
-    assert "INITIAL ELEVATION               = 98.192" in cas
+    assert "INITIAL DEPTH                   = 0.792" in steep
+    assert "INITIAL DEPTH                   = 1.192" in cas
     assert "PRESCRIBED ELEVATIONS           = 0.0;98.192" in cas
 
 

@@ -3421,10 +3421,26 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   match the declared intent - the prescribed-zero suction cap was
   accidental); the derived stage-discharge rating curve stays the
   recorded calibration-era upgrade.
-  LANDED 2026-09-03. F1: the reach deck writes INITIAL CONDITIONS =
-  'CONSTANT ELEVATION' at the derived normal-depth stage, the deck
+  LANDED 2026-09-03. F1: the reach deck writes INITIAL DEPTH = the
+  DERIVED NORMAL DEPTH the outflow stage is computed as, the deck
   comment and the run journal both state it, and `init_depth_m` is
-  gone (ledger). F6: the boundary contract's table
+  gone (ledger). DEVIATION FROM THE LETTER, REPORTED FOR NATE, not
+  taken silently: the ruling said constant ELEVATION at the stage, and
+  the engine refuses that on any reach the derivation accepts. The
+  stage is derived only where the reach FALLS - `_normal_depth_stage`
+  refuses a reach with no fall by name - so a HORIZONTAL surface at
+  the outlet's level dries every node above it. Measured live on the
+  flagship coarse reach (Eel, 1 km, 907 nodes): elevation 13.159 m
+  against a bed 13.000-44.952 m leaves 14 nodes wet (1.5%), the
+  prescribed-flowrate inflow face among the dry ones, and TELEMAC
+  stops with `DEBIMP: PROBLEM ON BOUNDARY NUMBER 1 / GIVE A POSITIVE
+  DEPTH IN THE INITIAL CONDITIONS`, exit code 2 (run
+  01M1MS3CRNNZNZAE6ZAB3WEV25, refusal packet kept). The bed-parallel
+  reading carries the SAME derived number, satisfies every stated
+  intent (the 2.0 blanket dies, the slope moves the start, the deck
+  and journal state it), and is the uniform-flow surface the stage is
+  the downstream end of. If NATE wants the horizontal reading it needs
+  a different boundary strategy upstream, not a different keyword. F6: the boundary contract's table
   gains a FREE_EXIT row (KSORT,KSORT,KSORT,KSORT, verified against
   bord.f and telemac2d.dico in the image: bord.f overrides HBOR only
   under LIHBOR=KENT and UBOR only under LIUBOR=KENT), the catchment
