@@ -710,16 +710,30 @@ package SolveSeam {
         steering keyword is derived from the SAME quad, carried to the author on
         the topology bundle. Flipping the table moves both files together.
 
-        The table's FREE-EXIT row is the case where prescribing nothing is the
-        answer: an all-KSORT quad leaves bord.f overriding neither the depth nor
-        the velocity, so the water leaves at whatever the interior brings to the
-        face. That is what a rain-fed catchment's outlet is, and it is a STATED
-        role rather than the absence of one - the steering file writes no value
-        there and says which number it is declining to write at. A quad that
-        prescribes nothing under ANY OTHER role still refuses: the same
-        ``"nothing"`` then means the two files were decided apart, and a value
-        written into a list the engine does not read is the silence this contract
-        exists to end.
+        The table's FREE-EXIT row is the case where prescribing nothing is a
+        stated answer rather than a gap: an all-KSORT quad leaves bord.f
+        overriding neither the depth nor the velocity, so the water leaves at
+        whatever the interior brings to the face. The steering file then writes
+        no value there and says which number it is declining to write at. A quad
+        that prescribes nothing under ANY OTHER role still refuses: the same
+        word then means the two files were decided apart, and a value written
+        into a list the engine does not read is the silence this contract exists
+        to end.
+
+        The row is vocabulary, not a recommendation, and it has no live caller.
+        A free exit is well-posed only while the normal velocity LEAVES:
+        propin_telemac2d.f refuses a free velocity whose normal component enters
+        (ILL-POSED PROBLEM, ENTERING FREE VELOCITY), and a rain-fed catchment
+        outlet reverses. Measured on the Coweeta design storm: 14 such warnings,
+        +29,425 m3/s injected through the outlet in one printout, a domain taken
+        from 1.90e6 to 1.50e7 m3 against a 4.41e6 m3 storm, 68.63 m depths and a
+        runoff volume of zero - with CORRECT END OF RUN and continuity at 1e-15,
+        because the engine conserved exactly what it wrongly did. The catchment
+        outlet therefore keeps the prescribed-level quad, and the recipe that
+        paints it names the zero-depth clamp that quad becomes when no value is
+        written at its number. Which fact a subcritical outlet takes from
+        outside - a derived stage, a stage-discharge curve - is a physics
+        decision this model records as owed rather than as taken.
 
         The number a value is written AT is the other half of the same contract,
         and it is measured by the engine's own rule (bief/front2.f): each contour

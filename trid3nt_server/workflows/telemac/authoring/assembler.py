@@ -35,7 +35,7 @@ from trid3nt_server.workflows.mesh.shared.nodes import (
     read_accepted_mesh_nodes,
     read_centerline_utm,
 )
-from trid3nt_server.workflows.mesh.topology import FREE_EXIT_ROLE, read_topology
+from trid3nt_server.workflows.mesh.topology import read_topology
 
 from . import author
 from .open_water import OpenWaterError, case_section, stage_telemac_manifest
@@ -82,12 +82,14 @@ _ROG_BOUNDARY = "rog.cli"
 _ROG_STEERING = "t2d_rog.cas"
 _ROG_RESULT = "r2d_rog.slf"
 
-#: The mesh boundary ROLE a catchment's outlet carries: the TRUE free exit, whose
-#: code quad prescribes nothing at all, so the runoff leaves at whatever level and
-#: velocity the hillslopes bring to the face. Any prescribed level there would be
-#: a cap nobody measured on the one boundary the whole basin drains through. The
-#: hydrograph is the flux across the nodes that took the role.
-_OUTLET_ROLE = FREE_EXIT_ROLE
+#: The mesh boundary ROLE a catchment's outlet carries. The quad prescribes a
+#: LEVEL, and this run writes no value at its number, so the level is the boundary
+#: file's own zero - a zero-depth clamp, measured holding the outlet nodes at
+#: 0.0000 m for every frame of a design storm. The recipe that paints it says so
+#: out loud and names why the free exit is not the swap: an all-KSORT quad is
+#: ill-posed the moment flow enters, and the engine refuses it by name. The
+#: hydrograph is the flux across the nodes that took the role either way.
+_OUTLET_ROLE = "outflow"
 
 #: The bed-load transport laws GAIA can run with suspension off. Anything else
 #: (Engelund-Hansen total load etc.) falls back to the default rather than
@@ -943,8 +945,6 @@ def _outlet_boundary(mesh: Mapping[str, Any]) -> tuple[int, str]:
     The prescription rides with it because this run writes NO value at that
     number: the outlet is solved on its code alone, and the steering file states
     which code that is rather than claiming a boundary condition nobody measured.
-    On a free exit that reads ``"nothing"``, which is the whole point - it is the
-    measured record that the face prescribes nothing, not a gap in the record.
     """
     topology = read_topology(_mesh_field(mesh, "topology_uri",
                                          missing=_catchment_mesh_missing))

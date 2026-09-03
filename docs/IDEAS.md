@@ -3440,10 +3440,42 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   intent (the 2.0 blanket dies, the slope moves the start, the deck
   and journal state it), and is the uniform-flow surface the stage is
   the downstream end of. If NATE wants the horizontal reading it needs
-  a different boundary strategy upstream, not a different keyword. F6: the boundary contract's table
-  gains a FREE_EXIT row (KSORT,KSORT,KSORT,KSORT, verified against
-  bord.f and telemac2d.dico in the image: bord.f overrides HBOR only
-  under LIHBOR=KENT and UBOR only under LIUBOR=KENT), the catchment
-  outlet carries that role instead of `outflow`, and
+  a different boundary strategy upstream, not a different keyword.
+
+  F6 - CONTRACT HALF LANDED, THE OUTLET SWAP HELD, DECISION OWED. The
+  role table gains a FREE_EXIT row (KSORT,KSORT,KSORT,KSORT, verified
+  in-image against declarations_telemac.f and bord.f: bord.f overrides
+  HBOR only under LIHBOR=KENT and UBOR only under LIUBOR=KENT, so an
+  all-KSORT quad prescribes nothing), and
   TELEMAC_BOUNDARY_PRESCRIBES_NOTHING now refuses only where the role
-  is NOT the declared free exit.
+  is NOT that declared free exit.
+
+  NATE'S DIAGNOSIS CONFIRMED, MEASURED: the catchment outlet's quad is
+  LIHBOR=KENT with no PRESCRIBED ELEVATIONS, so bord.f falls through
+  to the `.cli`'s own zero and the outlet is a hard zero-DEPTH
+  Dirichlet. Run 01M1JQX1MBXVW5RH02EGG8J5NQ (Coweeta, 6.53 mm/h over
+  24 h): all three outlet nodes hold 0.0000 m in every frame. The
+  suction cap is real.
+
+  THE RULED FIX IS ILL-POSED AND WAS NOT SHIPPED. Driven live with
+  the free-exit quad (run 01M1MSH26T9XVV616FTDEZ773H - same mesh, same
+  storm, `.cli` outlet rows 4 4 4 4): TELEMAC printed "ILL-POSED
+  PROBLEM, ENTERING FREE VELOCITY" 14 times - propin_telemac2d.f
+  lines 190-211 refuse a free velocity the moment its normal component
+  ENTERS, which is exactly an all-KSORT quad - then injected +29,425
+  m3/s through the outlet in one printout, taking the domain from
+  1.90e6 to 1.50e7 m3 (the whole storm is 4.41e6 m3). The answer:
+  peak discharge 41.4 -> 1819.5 m3/s (the gross rain rate is 51
+  m3/s), max depth 9.95 -> 68.63 m, runoff volume 1,555,637 -> 0 m3,
+  runoff coefficient 0.353 -> 0.0. CORRECT END OF RUN and continuity
+  -8e-15 throughout: the engine conserved exactly what it wrongly did,
+  which is why this needed a packet and not a status.
+
+  SO the outlet role is REVERTED to `outflow`, and the recipe comment
+  now tells the truth in the other direction: it names the zero-depth
+  clamp out loud and names why the free exit is not the swap. A
+  subcritical outlet needs ONE fact from outside, and which fact is
+  physics and is NATE's - a derived stage at the outlet section (the
+  reach's own normal-depth machinery, already built) or the
+  STAGE-DISCHARGE Q(Z) curve this same ruling defers to the
+  calibration era. Nothing was invented here.

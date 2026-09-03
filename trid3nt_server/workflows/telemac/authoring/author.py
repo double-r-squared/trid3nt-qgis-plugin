@@ -1550,12 +1550,12 @@ def _author_rain_on_grid_steering(
         the hyetograph's own dry tail, so no rain window is stated.
 
     Both share the distributed Manning, the dry start and ONE outlet at the
-    pour point - a TRUE FREE EXIT, whose code quad prescribes nothing, so the
-    runoff leaves at whatever level and velocity the hillslopes bring to the
-    face. It writes no value at that boundary's number, and states what that
-    boundary's own ``.cli`` quad prescribes rather than naming a condition
-    nobody measured. There are NO tracers: the outlet hydrograph is the
-    product.
+    pour point. It writes no value at that boundary's number and states what
+    that boundary's own ``.cli`` quad prescribes rather than naming a condition
+    nobody measured - which on a quad that prescribes a LEVEL means the level
+    the engine reads is the boundary file's own zero, and the deck says so
+    rather than reading as an outlet nobody capped. There are NO tracers: the
+    outlet hydrograph is the product.
     """
     _consume(sheet)
     P = _Sheet(sheet)
@@ -1607,8 +1607,9 @@ def _author_rain_on_grid_steering(
 /  Rain-fed catchment on a delineated watershed TIN (UTM metres).
 /  Rain = {rain_mm_per_day:g} mm/day, {rain_path}.
 /  Distributed Manning; outlet at the pour point is liquid boundary
-/  {outlet_boundary}: outlet=free exit, measured off its own boundary-file
-/  code quad, which prescribes {outlet_prescribes}.
+/  {outlet_boundary}, measured off its own boundary-file code quad, which
+/  prescribes {outlet_prescribes}. This file writes no value there, so a
+/  prescribed level is the boundary file's own zero.
 /-------------------------------------------------------------------/
 GEOMETRY FILE                   = {os.path.basename(geometry)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(boundary)}
@@ -1680,9 +1681,9 @@ def author_rain_on_grid(rundir: Path | str, *, sheet: Mapping[str, Any],
     both channels. Given none, the storm is the constant design rate the steering
     file states itself.
 
-    The outlet is the mesh's own declared free exit, and this file writes NO
-    value at its number - the exit is solved on its ``.cli`` code alone, and the
-    steering file states which code that is.
+    The outlet is the mesh's own declared one, and this file writes NO value at
+    its number - it is solved on its ``.cli`` code alone, and the steering file
+    states which code that is.
     """
     rundir = Path(rundir)
     write_cn_map(rundir, ROG_CN_MAP, x=node_xy[:, 0], y=node_xy[:, 1],

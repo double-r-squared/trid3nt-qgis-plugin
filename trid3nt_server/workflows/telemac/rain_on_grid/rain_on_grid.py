@@ -142,13 +142,27 @@ MESH = tool.build_mesh(
         # THE OUTLET: the delineation's own accumulation-SNAPPED pour point,
         # which is the point on the basin's boundary the terrain drains through.
         # Every boundary node within the mesh's own mean boundary edge of it
-        # carries the FREE-EXIT role - the code quad that prescribes nothing, so
-        # the runoff leaves at the level and velocity the hillslopes bring to the
-        # face rather than against a stage no gauge measured - and the hydrograph
-        # is the flux across exactly those nodes.
+        # takes the role, and the hydrograph is the flux across exactly those
+        # nodes.
+        #
+        # WHAT THIS ROLE ACTUALLY IMPOSES, stated because it is not what a reader
+        # expects: the quad prescribes a water LEVEL, and the steering file writes
+        # no value at that number, so the level the engine reads is the boundary
+        # file's own zero - a hard zero-DEPTH Dirichlet on the one face the basin
+        # drains through. Measured: the outlet nodes hold 0.0000 m for every frame
+        # of a 30 h design storm. It is a numerical drain, not a measured outlet.
+        #
+        # The all-KSORT free exit is NOT the cure and is not used here. It is
+        # well-posed only while the normal velocity leaves: propin_telemac2d.f
+        # refuses an entering velocity under a free one by name, and on this
+        # catchment it did - "ILL-POSED PROBLEM, ENTERING FREE VELOCITY" 14 times,
+        # +29,425 m3/s injected through the outlet in one printout, 68.6 m depths,
+        # and a runoff volume of zero. A subcritical outlet needs ONE fact from
+        # outside; which fact is a physics decision (a derived stage, a Q(Z)
+        # rating), and none is invented here.
         mesh_op("set_boundary_roles",
-                free_exit={"type": "Point",
-                           "coordinates": Ref("basin.snapped_pour_point")}),
+                outflow={"type": "Point",
+                         "coordinates": Ref("basin.snapped_pour_point")}),
     ],
 )
 
