@@ -282,6 +282,50 @@ PACKET_NOTES: dict[tuple[str, str], tuple[str, ...]] = {
         "one. The peak DEPTH is a single-node maximum that a terrain pit can set "
         "on its own - read it beside the p99, which is the sheet.",
     ),
+    # THE COARSE LANE'S OWN CAVEAT, per template. A coarse packet that passes
+    # every mechanical check still shows a run sized to prove the plumbing, and
+    # each of these limits is already written into the run's own declaration -
+    # so the packet carries it rather than leaving a reader to find it there.
+    ("telemac_do_sag", "coarse"): (
+        "PLUMBING SMOKE, and nothing more. A DO sag is a TRAVEL-TIME answer - it "
+        "needs k1 times travel time of order one to exist at all - and 600 s over "
+        "half a kilometre is four orders short of that. This run's sag numbers "
+        "are NOT a physics answer and must not be read as one; what it proves is "
+        "that geocode -> flowline -> section -> mesh -> WAQTEL run -> solve -> "
+        "products still runs end to end. The physics lives in the refined "
+        "declaration (4 km / 48 h).",
+    ),
+    ("telemac_river_dye", "coarse"): (
+        "PLUMBING PIN, not a concentration study. A concentration peak lives "
+        "inside one element, so the coarse mesh measures dye_cmax_mgl LOW - the "
+        "template declares that scalar peak-class for exactly this reason. The "
+        "plume's REACH is a front location and travels with the front, so it is "
+        "the scalar this run can be read on. The refined declaration (10 m) is "
+        "what carries a concentration answer.",
+    ),
+    ("artemis_harbor_agitation", "coarse"): (
+        "UNDER-RESOLVED BY DESIGN. An 8 s swell in ten metres of water is about a "
+        "78 m wave, and 30 m node spacing resolves it on roughly two nodes - "
+        "enough to prove the diffraction plumbing, not enough to trust a fringe "
+        "pattern or a peak Kd. The refined declaration (20 m, the builder's own "
+        "floor) is what gets delivered. The peak-frame still paints WAVE HEIGHT, "
+        "which this run publishes no raster of, so its legend is read off the "
+        "frames alone rather than shared with a panel.",
+    ),
+    ("artemis_harbor_resonance_idealized", "coarse"): (
+        "AN ANALYTIC BASIN, NOT A PLACE. The domain is the idealized harbour "
+        "geometry; the bbox only puts the basin's label on the map, and no "
+        "bathymetry of Marquette enters this run. Its answer is the pair of "
+        "responses - at the basin's own resonant period and off it - which is "
+        "what a regression moves.",
+    ),
+    ("telemac3d_stratified_flow", "coarse"): (
+        "3000 m HORIZONTAL over a one-hour window. The question is whether a calm "
+        "column KEEPS its thermocline, and the surviving top-to-bottom difference "
+        "is the number this run answers with; the horizontal field at this "
+        "spacing resolves no lake circulation. The refined declaration (1000 m at "
+        "the same 13 planes) is the one the horizontal is read from.",
+    ),
 }
 
 
