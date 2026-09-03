@@ -263,6 +263,49 @@ def test_an_absent_carrier_discharge_leaves_a_derived_provenance_row():
     assert "National Water Model" in (row.note or "")
 
 
+def _peak_layer(**overrides: Any) -> TelemacDyeLayerURI:
+    from trid3nt_contracts.common import SyntheticInput
+
+    return TelemacDyeLayerURI(
+        layer_id="L", name="Peak dye concentration (reach)", layer_type="raster",
+        uri="s3://runs/x.tif", style_preset=TELEMAC_DYE_STYLE_PRESET,
+        dye_cmax_mgl=4.9, dye_peak_time_s=200.0,
+        dye_curve_time_s=[0.0, 100.0, 200.0, 300.0],
+        dye_curve_cmax_mgl=[0.0, 1.2, 4.9, 2.1],
+        synthetic_inputs=[SyntheticInput(
+            param="mesh_bed", value="Copernicus GLO-30", basis="fetched",
+            consequence="physics")],
+        **overrides)
+
+
+def test_the_dye_chart_is_the_run_s_own_history_not_two_points():
+    """Every frame the solver wrote is a point; the peak is one of them."""
+    from trid3nt_server.workflows.telemac.river_dye.river_dye import build_dye_chart
+
+    payload = build_dye_chart(result=_peak_layer(), params={"location": "the reach"})
+    values = payload["vega_lite_spec"]["data"]["values"]
+    assert [v["t_s"] for v in values] == [0.0, 100.0, 200.0, 300.0]
+    assert max(v["dye_mgl"] for v in values) == 4.9
+
+
+def test_the_dye_chart_caption_names_the_bed_the_run_actually_read():
+    from trid3nt_server.workflows.telemac.river_dye.river_dye import build_dye_chart
+
+    payload = build_dye_chart(result=_peak_layer(), params={"location": "the reach"})
+    assert "Copernicus GLO-30" in payload["caption"]
+    assert "idealized" not in payload["caption"].lower()
+
+
+def test_a_run_with_no_persisted_history_draws_no_chart():
+    """No curve is the honest answer; two invented points are not."""
+    from trid3nt_server.workflows.telemac.river_dye.river_dye import build_dye_chart
+
+    bare = _peak_layer()
+    bare.dye_curve_time_s = None
+    bare.dye_curve_cmax_mgl = None
+    assert build_dye_chart(result=bare, params={"location": "the reach"}) is None
+
+
 # ===========================================================================
 # (4) The plan value.
 # ===========================================================================

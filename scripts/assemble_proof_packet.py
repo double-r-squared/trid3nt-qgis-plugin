@@ -35,6 +35,11 @@ WHAT IT VERIFIES, MECHANICALLY
   * THE GIF'S LEGEND DOES NOT. The colorbar strip must be BYTE-IDENTICAL across
     frames: a legend that shifts while the numbers behind it did not is a
     per-frame rescale, and the reader watching the ramp is watching the renderer.
+  * ONE SCALE PER QUANTITY. The animation and its still are painted on the range
+    the PUBLISHED raster of the same quantity carries, and the packet reports the
+    pair. A GIF on its own percentile stretch beside a panel on another is two
+    legends for one field, and the value the narrow one saturates is usually the
+    run's own headline number.
   * THE PANELS ARE ALL THERE. Panel count == published (frame-collapsed) layer
     count + 1 for the canvas view, every file nonzero, and each one carries the
     RUN ID - burned into its caption and stamped into its PNG text chunk, so an
@@ -368,6 +373,40 @@ def _declaration_row(animation: ProofAnimation, declared: int) -> dict:
             "declared_in": "trid3nt_server/testing/proof_animations.py"}
 
 
+def published_scale(evidence: dict, animation: ProofAnimation) -> dict:
+    """ONE range per quantity: the PUBLISHED raster's, for this animation to adopt.
+
+    A percentile read over the frames and a percentile read over a peak envelope
+    are two reads of two different distributions, so a packet that lets each
+    renderer pick its own ships two scales for one quantity and the reader is left
+    to notice. The published layer is the product a reader also meets on the map,
+    so its range is the one the GIF and its still are held to. A quantity with no
+    published raster of its own has nothing to agree with, and the row says that
+    rather than inventing an agreement.
+    """
+    from trid3nt_server.emission import styles
+
+    quantity = animation.quantity
+    preset = styles.resolve_style_preset(quantity)[0] if quantity else None
+    ranges: list[tuple[float, float]] = []
+    names: list[str] = []
+    for layer in evidence.get("layers") or []:
+        legend = layer.get("legend")
+        if layer.get("style_preset") != preset or not isinstance(legend, dict):
+            continue
+        if legend.get("kind") != "continuous":
+            continue
+        lo, hi = legend.get("vmin"), legend.get("vmax")
+        if lo is None or hi is None:
+            continue
+        ranges.append((float(lo), float(hi)))
+        names.append(str(layer.get("name")))
+    found = styles.shared_range(ranges)
+    return {"quantity": quantity, "preset": preset,
+            "published_range": list(found) if found else None,
+            "published_by": names}
+
+
 def _field_label(animation: ProofAnimation) -> str:
     """The one-line description of what an animation paints."""
     bits = [str(animation.variable)]
@@ -440,7 +479,10 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
     # both - one rendered and one forgotten is the same delivery gap the whole
     # script exists to close, just at a finer grain.
     report["animations"] = {}
+    report["scales"] = {}
     for animation in declared:
+        scale = published_scale(evidence, animation)
+        report["scales"][animation.name] = scale
         initial_wl = None
         if animation.dry_land_only:
             initial_wl = completion.get("init_wl_m", metrics.get("init_wl_m"))
@@ -464,9 +506,32 @@ def _render(directory: Path, stem: str, evidence_path: Path, evidence: dict,
             vector_grid_n=animation.vector_grid_n,
             arrow_size=animation.arrow_size, vector_lw=animation.vector_lw,
             still_vectors=animation.still_vectors,
+            shared_range=(tuple(scale["published_range"])
+                          if scale["published_range"] else None),
             name_infix=suffixed(animation, len(declared)),
             title=f"{stem} - {_field_label(animation)} - run {run_id}")
+        rendered = report["animations"][animation.name]
+        scale["rendered_range"] = [rendered.get("vmin"), rendered.get("vmax")]
+        scale["transform"] = rendered.get("transform")
+        scale["agrees"] = _scales_agree(scale)
     return report
+
+
+def _scales_agree(scale: dict) -> bool | None:
+    """Did the animation land on the published range? ``None`` = nothing to compare.
+
+    A LOG ramp cannot start at the published floor - the norm needs a strictly
+    positive one - so agreement there is on the TOP of the range, which is the end
+    a reader reads a peak off.
+    """
+    published, rendered = scale.get("published_range"), scale.get("rendered_range")
+    if not published or rendered is None or rendered[1] is None:
+        return None
+    if scale.get("transform") == "log":
+        return abs(float(rendered[1]) - float(published[1])) <= 1e-6 * max(
+            1.0, abs(float(published[1])))
+    return all(abs(float(a) - float(b)) <= 1e-6 * max(1.0, abs(float(b)))
+               for a, b in zip(rendered, published))
 
 
 def _rendered_paths(report: dict) -> set[Path]:
@@ -646,6 +711,17 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
             missing.append(f"chart: {render_report['chart_error']}")
         for note in render_report.get("animation_errors") or []:
             missing.append(f"animation: {note}")
+        # ONE SCALE PER QUANTITY. A packet whose GIF and whose panel of the same
+        # field carry different ranges asks the reader to reconcile two legends,
+        # and the peak one of them saturates is the run's own headline number.
+        for name, scale in (render_report.get("scales") or {}).items():
+            if scale.get("agrees") is False:
+                missing.append(
+                    f"animation {name}: the frames were painted on "
+                    f"{scale['rendered_range']} while the published "
+                    f"{scale['quantity']} raster carries "
+                    f"{scale['published_range']} - one quantity, two scales in "
+                    "one packet")
         # WHERE the frames landed, against where the run was asked about. A LOCAL
         # mesh rendered without its origin lands at the UTM false origin and every
         # other number in the render report stays healthy while it does.
@@ -860,6 +936,7 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
         "time_stepped": measured,
         "animation_declarations": [_declaration_row(a, len(declared))
                                    for a in declared],
+        "quantity_scales": render_report.get("scales") or {},
         "notes": list(packet_notes(tool, variant)),
         "published_layers": [layer.get("name") for layer in layers],
         "verdict": "REFUSED" if missing else "PASS",

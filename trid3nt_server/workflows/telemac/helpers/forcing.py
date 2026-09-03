@@ -261,6 +261,21 @@ def _fmt_cycle(reference_time: str | None) -> str:
         return str(reference_time)
 
 
+def _fmt_discharge(value: float) -> str:
+    """A discharge for a NOTE, at a precision that cannot misstate it.
+
+    The decimals follow the magnitude: a fixed whole-number format prints a
+    2.2 m3/s carrier as "2", and the note is the only place a reader meets the
+    number that governs dilution.
+    """
+    magnitude = abs(float(value))
+    if magnitude >= 100.0:
+        return f"{float(value):.0f}"
+    if magnitude >= 1.0:
+        return f"{float(value):.1f}"
+    return f"{float(value):.3f}"
+
+
 async def resolve_carrier_discharge(*, seed: dict[str, Any],
                                     explicit: float | None,
                                     event_time: str | None = None) -> dict[str, Any]:
@@ -281,7 +296,8 @@ async def resolve_carrier_discharge(*, seed: dict[str, Any],
     if explicit is not None:
         return {"m3s": float(explicit), "basis": "user", "real_source": None,
                 "reference_time": None, "product": None,
-                "note": f"carrier discharge {float(explicit):.0f} m3/s (user-supplied)"}
+                "note": f"carrier discharge {_fmt_discharge(explicit)} m3/s "
+                        "(user-supplied)"}
 
     found = await asyncio.to_thread(_nwm_nearest_streamflow, seed_lon, seed_lat, event_time)
     if found is None:
@@ -308,8 +324,8 @@ async def resolve_carrier_discharge(*, seed: dict[str, Any],
         "m3s": round(found["m3s"], 1), "basis": "fetched",
         "real_source": "fetch_noaa_nwm_streamflow (NOAA National Water Model)",
         "reference_time": reference_time, "product": product,
-        "note": (f"carrier discharge {found['m3s']:.0f} m3/s (NOAA National "
-                 f"Water Model, nearest reach to the seed, {cycle_txt})"),
+        "note": (f"carrier discharge {_fmt_discharge(found['m3s'])} m3/s (NOAA "
+                 f"National Water Model, nearest reach to the seed, {cycle_txt})"),
     }
 
 
@@ -368,7 +384,8 @@ async def review_resolved_inputs(*, discharge: dict[str, Any],
         # the reference_time/product it carried would misdescribe this row.
         return {**discharge, "m3s": revised, "basis": "user", "real_source": None,
                 "reference_time": None, "product": None,
-                "note": f"carrier discharge {revised:.0f} m3/s (revised at review)"}
+                "note": f"carrier discharge {_fmt_discharge(revised)} m3/s "
+                        "(revised at review)"}
     return discharge
 
 

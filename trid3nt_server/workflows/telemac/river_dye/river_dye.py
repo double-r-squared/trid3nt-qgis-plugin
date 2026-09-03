@@ -196,16 +196,27 @@ ANSWER = ("dye_cmax_mgl", "dye_peak_time_s", "plume_reach_m", "active_frames",
           "deposit_fraction", "sediment_surface_d50_range_um", "mesh_size_m")
 
 
-def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
-    """The plume's rise-to-peak chart SPEC: honest tracer scalars, never a fitted curve.
+def _bed_of(result: Any) -> str:
+    """The bed the run's mesh was painted from, off the layer's own provenance."""
+    for row in getattr(result, "synthetic_inputs", None) or ():
+        if getattr(row, "param", None) == "mesh_bed" and row.value:
+            return str(row.value)
+    return "unrecorded bed"
 
-    Two points, both measured off the postprocessed field - zero concentration at
-    release, then the peak at its arrival time. ``None`` when the run measured no
-    peak, which is the honest "there was no curve to draw".
+
+def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
+    """The plume's concentration HISTORY: one point per frame the solver wrote.
+
+    Every point is the reach maximum at that output time, measured off the
+    postprocessed field, so the curve is the arrival, the peak and the flush-out
+    as the run produced them. ``None`` when the run persisted no history, which
+    is the honest "there was no curve to draw".
     """
+    times = getattr(result, "dye_curve_time_s", None)
+    values = getattr(result, "dye_curve_cmax_mgl", None)
     cmax = getattr(result, "dye_cmax_mgl", None)
     peak_t = getattr(result, "dye_peak_time_s", None)
-    if cmax is None or peak_t is None:
+    if not times or not values or cmax is None or peak_t is None:
         return None
     from trid3nt_server.emission.styles import preset_units
     from trid3nt_server.tools.processing.charts_common import build_chart_payload
@@ -218,17 +229,19 @@ def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     return build_chart_payload(
         vega_lite_spec={
             "mark": {"type": "line", "point": True},
-            "data": {"values": [{"t_s": 0.0, "dye_mgl": 0.0},
-                                {"t_s": float(peak_t), "dye_mgl": float(cmax)}]},
+            "data": {"values": [{"t_s": float(t), "dye_mgl": float(c)}
+                                for t, c in zip(times, values)]},
             "encoding": {
                 "x": {"field": "t_s", "type": "quantitative", "title": "Time (s)"},
                 "y": {"field": "dye_mgl", "type": "quantitative",
                       "title": f"{str(substance).capitalize()} concentration ({units})"},
             },
         },
-        title=f"Peak {substance} concentration - {where}",
-        caption=(f"Reach peak {substance} concentration {float(cmax):.3g} {units}, "
-                 f"arriving {float(peak_t):.0f} s after release (idealized-bed demo)."),
+        title=f"Reach maximum {substance} concentration - {where}",
+        caption=(f"The highest {substance} concentration anywhere in the reach at "
+                 f"each of {len(times)} output times; peaks at {float(cmax):.3g} "
+                 f"{units}, {float(peak_t):.0f} s after release. Bed: "
+                 f"{_bed_of(result)}."),
     )
 
 

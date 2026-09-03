@@ -94,18 +94,35 @@ def _rain_provenance(run: dict[str, Any]) -> list[SyntheticInput]:
         note=run.get("rain_note"))]
 
 
+def _bed_provenance(run: dict[str, Any]) -> SyntheticInput:
+    """WHICH bed the reach's nodes carry, as the layer's own record.
+
+    The mesher's label travels on the sheet the worker was handed, so the row
+    names the dataset the solve actually read rather than the class of run it
+    was: a GLO-30 bed and the 3DEP one the ladder fell to are different physics
+    and the layer has to be able to say which it got.
+    """
+    source = str(run["sheet"].get("bed_source") or "staged")
+    return SyntheticInput(
+        param="mesh_bed", value=source, basis="fetched", consequence="physics",
+        real_source_if_any=source,
+        note="the elevation every node of the reach carries; the solver reads it "
+             "as the channel's bathymetry")
+
+
 def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
                 run: dict[str, Any]) -> list[SyntheticInput]:
     """The physically dominant inputs, as rows the layer carries.
 
     The carrier discharge that governs dilution (real NWM streamflow or
     user-supplied), the on-mesh rain/evaporation forcing when one was asked for,
-    the bank geometry the reach was cut from, and the release point the run was
-    authored with.
+    the bed the mesh was painted from, the bank geometry the reach was cut from,
+    and the release point the run was authored with.
     """
     return [
         _release_provenance(run),
         *_rain_provenance(run),
+        _bed_provenance(run),
         SyntheticInput(
             param="discharge_m3s", value=round(float(discharge["m3s"]), 1),
             units="m3/s", basis=discharge.get("basis") or "fetched",

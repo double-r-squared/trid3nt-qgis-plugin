@@ -146,7 +146,8 @@ def _matplotlib_colormap(name: str | None) -> str:
 
 
 def resolve_animation_style(values, *, preset: str | None = None,
-                            transform: str | None = None) -> AnimationScale:
+                            transform: str | None = None,
+                            shared: tuple[float, float] | None = None) -> AnimationScale:
     """THE scale for an animation, resolved over EVERY frame at once.
 
     The scope of a data-policy rescale is the RUN, never the frame: resolving here,
@@ -155,14 +156,21 @@ def resolve_animation_style(values, *, preset: str | None = None,
     what makes this GIF and the published raster of the same quantity agree on the
     ramp, the range and the sentence the legend says about them.
 
+    ``shared`` is that agreement made literal: the range the PUBLISHED raster of
+    this same quantity carries. A percentile read over the frames and a percentile
+    read over a peak envelope are two reads of two different distributions, so
+    without it the GIF and the panel beside it end up on two scales for one
+    quantity - which is a reader's problem, not a renderer's detail.
+
     Falls back to a plain p2-p98 over the same whole array when the server package
     is not importable, so the script still runs standalone.
     """
     finite = _finite(values)
     if _STYLES is None:
-        found = _percentile_range(finite, _DEFAULT_CLIP)
+        found = shared or _percentile_range(finite, _DEFAULT_CLIP)
         lo, hi = _widen(found or (0.0, 1.0))
-        how = "scaled to this run (p2-p98)" if found else "empty field"
+        how = ("the published raster's own range" if shared else
+               "scaled to this run (p2-p98)" if found else "empty field")
         return AnimationScale(lo, hi, "viridis", f"{how}: {lo:g} to {hi:g}", None,
                               transform or "linear")
     # The TRANSFORM rides in as a scale OVERRIDE, which is the contract's own
@@ -177,7 +185,7 @@ def resolve_animation_style(values, *, preset: str | None = None,
         override = ScaleSpec(transform=transform)
     resolved = _STYLES.resolve_style(
         preset, read_range=lambda scale: _percentile_range(finite, scale.clip),
-        override=override)
+        override=override, shared=shared)
     lo, hi = _widen(resolved.range or (0.0, 1.0))
     return AnimationScale(lo, hi, _matplotlib_colormap(resolved.colormap),
                           resolved.legend_note(), resolved.preset,
@@ -444,7 +452,8 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
                   vectors: str | None = None, vector_density: float = 1.4,
                   vector_grid_n: int = 200, arrow_size: float = 0.7,
                   vector_lw: tuple[float, float] = (0.35, 1.1),
-                  still_vectors: str | None = None) -> dict:
+                  still_vectors: str | None = None,
+                  shared_range: tuple[float, float] | None = None) -> dict:
     """The plotting seam: a triangulation plus a ``(time, node)`` field -> GIF + still.
 
     THE COLOUR SCALE IS RESOLVED ONCE, HERE, BEFORE THE FIRST FRAME IS DRAWN, and
@@ -467,7 +476,8 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
     rather than this function guessing them from the grid.
     """
     values = np.asarray(values, dtype="float64")
-    scale = resolve_animation_style(values, preset=preset, transform=transform)
+    scale = resolve_animation_style(values, preset=preset, transform=transform,
+                                    shared=shared_range)
     # WHICH frame the still shows. "peak" is right for a field that BUILDS (a
     # rising tide, an arriving plume); "final" for one that DECAYS toward its
     # answer (a cooling column, a settling sea), where the peak frame is the
@@ -640,7 +650,8 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
            vectors: str | None = None, vector_density: float = 1.4,
            vector_grid_n: int = 200, arrow_size: float = 0.7,
            vector_lw: tuple[float, float] = (0.35, 1.1),
-           still_vectors: str | None = None) -> dict:
+           still_vectors: str | None = None,
+           shared_range: tuple[float, float] | None = None) -> dict:
     """The GIF over every frame, plus the PEAK frame as a still. One read, two products."""
     from pyproj import Transformer
 
@@ -730,7 +741,8 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
                                       and len(components) >= 2 else None),
                            vectors=vectors, vector_density=vector_density,
                            vector_grid_n=vector_grid_n, arrow_size=arrow_size,
-                           vector_lw=vector_lw, still_vectors=still_vectors)
+                           vector_lw=vector_lw, still_vectors=still_vectors,
+                           shared_range=shared_range)
     # WHERE the frames actually landed. A LOCAL mesh rendered with no origin lands
     # at the UTM false origin, thousands of km from the water, and every other
     # number in this report stays perfectly healthy while it does - so the extent
@@ -767,13 +779,18 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
                vector_density: float = 1.4, vector_grid_n: int = 200,
                arrow_size: float = 0.7,
                vector_lw: tuple[float, float] = (0.35, 1.1),
-               still_vectors: str | None = None) -> dict:
+               still_vectors: str | None = None,
+               shared_range: tuple[float, float] | None = None) -> dict:
     """One run's SELAFIN -> its GIF + still, straight off the object store.
 
     The importable seam under ``main``: the packet assembler renders through this
     rather than shelling out, so the delivered animation and a hand-rendered one
     are the same code. Returns the render report plus the two paths - ``animation``
     is ``None`` for a single-frame (steady) result, which has nothing to animate.
+
+    ``shared_range`` is the range the PUBLISHED raster of this quantity carries.
+    Passed, it IS the scale, so one quantity has one legend across everything a
+    reader is handed; unset, the range is read off these frames alone.
     """
     bucket = bucket or os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
     out_dir = Path(out_dir)
@@ -805,7 +822,8 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
                         derived=derived, transform=transform, vectors=vectors,
                         vector_density=vector_density,
                         vector_grid_n=vector_grid_n, arrow_size=arrow_size,
-                        vector_lw=vector_lw, still_vectors=still_vectors)
+                        vector_lw=vector_lw, still_vectors=still_vectors,
+                        shared_range=shared_range)
     finally:
         Path(local).unlink(missing_ok=True)
     return {**result, "run_id": run_id, "origin_bbox": origin,

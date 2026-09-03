@@ -489,6 +489,11 @@ def postprocess_telemac(
     peak_i = int(np.argmax(per_frame_cmax))
     dye_cmax = float(per_frame_cmax.max())
     dye_peak_time_s = float(times[peak_i]) if times.size else None
+    # THE CONCENTRATION HISTORY, one point per frame the solver wrote: the
+    # reach maximum at each output time. Unfloored, because the arrival and the
+    # flush-out are the parts of the curve the detection floor would cut off.
+    curve_t = [float(t) for t in times[:per_frame_cmax.size]]
+    curve_c = [float(c) for c in per_frame_cmax[:len(curve_t)]]
     # OPEN-23: detection floor relative to THIS run's peak (+ a tiny absolute
     # floor for genuinely-empty solves), so a dilute-but-real plume is not
     # false-flagged as OUTPUT_EMPTY.
@@ -611,6 +616,8 @@ def postprocess_telemac(
         dye_peak_time_s=dye_peak_time_s,
         plume_reach_m=plume_reach_m,
         active_frames=active_frames,
+        dye_curve_time_s=curve_t,
+        dye_curve_cmax_mgl=curve_c,
     )
 
     metrics: dict[str, Any] = {

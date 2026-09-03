@@ -221,6 +221,11 @@ class TelemacDyeLayerURI(LayerURI):
         active_frames: OPTIONAL number of output frames in which the plume was
             present in-reach (>= 0) -- how long the dye lingered before it passed.
             ``None`` when unavailable.
+        dye_curve_time_s / dye_curve_cmax_mgl: OPTIONAL equal-length arrays of the
+            reach's concentration HISTORY - at each output time, the highest
+            concentration anywhere in the reach. The dock chart plots the arrival,
+            the peak and the flush-out; ``dye_cmax_mgl`` is this curve's maximum
+            and ``dye_peak_time_s`` the time it occurs at.
         mesh_size_m: OPTIONAL target gmsh edge length (m, > 0) the mesh was built
             at -- the GRANULARITY the solve actually used (BK-3c). The agent cites
             this so mesh resolution is a visible, narratable lever, never hidden.
@@ -239,6 +244,8 @@ class TelemacDyeLayerURI(LayerURI):
     dye_peak_time_s: float | None = Field(default=None, ge=0.0)
     plume_reach_m: float | None = Field(default=None, ge=0.0)
     active_frames: int | None = Field(default=None, ge=0)
+    dye_curve_time_s: list[float] | None = Field(default=None)
+    dye_curve_cmax_mgl: list[float] | None = Field(default=None)
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_node_estimate: int | None = Field(default=None, ge=0)
     mesh_resolution_label: str | None = Field(default=None)
