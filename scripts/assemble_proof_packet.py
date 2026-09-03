@@ -55,6 +55,7 @@ Env (MinIO): set -a; source .env.local; set +a
 Usage:
   assemble_proof_packet.py --template artemis_harbor_agitation --variant refined
   assemble_proof_packet.py --template artemis_harbor_agitation --variant coarse --check
+  assemble_proof_packet.py --template telemac_river_dye --variant coarse --out-dir DIR
 """
 from __future__ import annotations
 
@@ -553,14 +554,27 @@ def _code_staleness(completion: dict, tool: str) -> dict | None:
 
 
 def assemble(template: str, variant: str, *, run_id: str | None = None,
-             check: bool = False, bucket: str | None = None) -> dict:
-    """Assemble and VERIFY one template+variant proof packet. Writes packet.json."""
+             check: bool = False, bucket: str | None = None,
+             out_dir: str | Path | None = None) -> dict:
+    """Assemble and VERIFY one template+variant proof packet. Writes packet.json.
+
+    The DECLARATION is always read from the template's own proof folder, because
+    that is where the evidence a packet reports on lives. ``out_dir`` names where
+    the renders and ``packet.json`` land: unset it is that same folder, and a lane
+    that must not write into the frozen proof tree - an acceptance drive, a verify
+    pass - names a scratch directory instead and still owes the whole checklist.
+    """
     if variant not in VARIANTS:
         raise PacketError(f"{variant!r} is not a proof variant; the four are "
                           f"{list(VARIANTS)}")
-    directory = Path(proof_dir(template, variant, create=not check))
+    directory = Path(proof_dir(template, variant, create=not check and not out_dir))
     if not directory.is_dir():
         raise PacketError(f"no proof directory at {directory}")
+    if out_dir:
+        out = Path(out_dir)
+        out.mkdir(parents=True, exist_ok=True)
+    else:
+        out = directory
     stem = stem_for(template, variant)
     evidence_path = find_evidence(directory, stem)
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
@@ -581,11 +595,11 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
     # ------------------------------------------------------------------ #
     s3 = _s3()
     completion = _read_json(s3, bucket, f"{run_id}/completion.json")
-    # Both keys are the RUN'S OWN: the server names the result file on the
-    # manifest echo and the worker copies it verbatim, then measures the frame
-    # count off the file it just wrote. This reads them; it does not reconstruct
-    # either, because a packet that guesses which file to open cannot report that
-    # the run and its metrics disagree.
+    # Both keys are the RUN'S OWN: the server names the result file in the
+    # manifest's server facts and the worker copies it verbatim, then measures
+    # the frame count off the file it just wrote. This reads them; it does not
+    # reconstruct either, because a packet that guesses which file to open cannot
+    # report that the run and its metrics disagree.
     result_slf = str(completion.get("result_slf") or "")
     recorded = completion.get("ntimestep")
     measured: dict[str, Any] = {"recorded_ntimestep": recorded}
@@ -623,7 +637,7 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
     render_report: dict[str, Any] = {}
     if not check:
         render_report = _render(
-            directory, stem, evidence_path, evidence, template=template,
+            out, stem, evidence_path, evidence, template=template,
             variant=variant, run_id=run_id, bucket=bucket, declared=declared,
             frames=frames, s3=s3)
         if render_report.get("animation_error"):
@@ -656,7 +670,7 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
     # 3. Walk the checklist over what is on disk now.
     # ------------------------------------------------------------------ #
     layers = _collapsed_layers(evidence)
-    groups = _panel_groups(directory)
+    groups = _panel_groups(out)
     # The NEWEST generation wins, not the one whose base matches the stem: a
     # folder that accumulated two panel sets under two naming conventions is
     # exactly the situation this script exists for, and picking by name would
@@ -710,10 +724,10 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
     order += 1
     # The sheet that goes with the panels is the one the panel base was cut from
     # (``<base>_canvas_layers.png``), which is why the base is resolved first.
-    candidates = [directory / f"{base}_canvas_layers.png",
-                  directory / f"{base}.png"] if base else []
-    candidates.append(directory / f"{stem}.png")
-    sheet = next((p for p in candidates if p.exists()), directory / f"{stem}.png")
+    candidates = [out / f"{base}_canvas_layers.png",
+                  out / f"{base}.png"] if base else []
+    candidates.append(out / f"{stem}.png")
+    sheet = next((p for p in candidates if p.exists()), out / f"{stem}.png")
     caption = (f"Contact sheet - every emitted layer, {expected_panels} panels in "
                f"emission order, run {run_id}")
     if sheet in fresh:
@@ -724,8 +738,8 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
 
     for name in _chart_names(evidence):
         order += 1
-        path = directory / (f"{stem}_chart.png" if name is None
-                            else f"{stem}_chart_{name}.png")
+        path = out / (f"{stem}_chart.png" if name is None
+                      else f"{stem}_chart_{name}.png")
         caption = (f"Chart {name or '(unnamed)'} - the run's persisted spec through "
                    f"the plugin chart dock's own renderer, run {run_id}")
         if path in fresh:
@@ -743,7 +757,7 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
         field = (_field_label(animation) if animation.variable
                  else "(undeclared)")
         still = animation.still
-        gif = directory / f"{stem}_animation{infix}.gif"
+        gif = out / f"{stem}_animation{infix}.gif"
         order += 1
         if frames > 1:
             # The GIF's run id is BURNED into every frame by the renderer and
@@ -814,7 +828,7 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
                        f"run {run_id}")
 
         order += 1
-        path = directory / f"{stem}{infix}_{still}_frame.png"
+        path = out / f"{stem}{infix}_{still}_frame.png"
         if path in fresh:
             stamp_png(path, caption=caption, **stamp)
         deliverables.append(_item(order, "still", caption, path=path,
@@ -839,7 +853,7 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
                 "in order",
         "code_staleness": staleness_warning,
         "template": template, "variant": variant, "tool": tool, "run_id": run_id,
-        "stem": stem, "directory": str(directory), "panel_base": base,
+        "stem": stem, "directory": str(out), "panel_base": base,
         "mode": "check" if check else "render",
         "assembled_at": _dt.datetime.now().isoformat(timespec="seconds"),
         "assembler": "scripts/assemble_proof_packet.py",
@@ -854,7 +868,7 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
     }
     if render_report:
         packet["render"] = render_report
-    (directory / "packet.json").write_text(
+    (out / "packet.json").write_text(
         json.dumps(packet, indent=2, default=str) + "\n", encoding="utf-8")
     return packet
 
@@ -871,11 +885,15 @@ def main(argv: list[str] | None = None) -> int:
                     help="audit an existing variant directory against the "
                          "checklist WITHOUT rendering anything")
     ap.add_argument("--bucket", default=None)
+    ap.add_argument("--out-dir", dest="out_dir", default=None,
+                    help="write the renders and packet.json HERE instead of into "
+                         "the template's proof folder (the declaration is still "
+                         "read from that folder)")
     ns = ap.parse_args(argv)
 
     try:
         packet = assemble(ns.template, ns.variant, run_id=ns.run, check=ns.check,
-                          bucket=ns.bucket)
+                          bucket=ns.bucket, out_dir=ns.out_dir)
     except PacketError as exc:
         print(f"NO PACKET: {exc}", file=sys.stderr)
         return 2

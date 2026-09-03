@@ -393,7 +393,7 @@ def _answer(ev: RunEvidence) -> dict[str, Any]:
     }
 
 
-def assemble_packet(name: str) -> dict:
+def assemble_packet(name: str, out_dir: str | None = None) -> dict:
     """The canary's DELIVERY PACKET - the checklist, assembled and verified.
 
     A canary that finished is not a canary that can be handed to anybody: the
@@ -402,6 +402,11 @@ def assemble_packet(name: str) -> dict:
     this. ``scripts/assemble_proof_packet.py`` answers it mechanically and writes
     ``packet.json`` beside the renders, so every canary close either produces the
     ordered list of what to send or fails loudly saying what is missing.
+
+    ``out_dir`` names where those renders land. Unset, it is the template's own
+    proof folder; named, the checklist is assembled somewhere the frozen proof
+    tree is not written to, which is how an acceptance drive owes a full packet
+    without editing delivered evidence.
 
     Imported BY PATH because proof RENDERING stays out of the product tree by
     ruling - the declaration lives here, the renderers do not.
@@ -415,7 +420,7 @@ def assemble_packet(name: str) -> dict:
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("assemble_proof_packet", module)
     spec.loader.exec_module(module)
-    return module.assemble(template, variant)
+    return module.assemble(template, variant, out_dir=out_dir)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -437,6 +442,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--packet", dest="packet", action="store_true", default=True,
                     help="assemble + verify the delivery packet (default on)")
     ap.add_argument("--no-packet", dest="packet", action="store_false")
+    ap.add_argument("--packet-dir", default=None,
+                    help="assemble the packet HERE rather than in the template's "
+                         "proof folder - the lane that owes the whole checklist "
+                         "without writing into the frozen proof tree")
     ns = ap.parse_args(argv)
 
     ev = run(ns.name, timeout_s=ns.timeout)
@@ -450,22 +459,24 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001 - the reason IS the report
         print(f"CANARY FAILED: {exc}", file=sys.stderr)
         return 1
-    if not ns.packet or ns.out:
+    if not ns.packet or (ns.out and not ns.packet_dir):
         # An evidence file written somewhere other than the canonical proof path
         # has no variant folder to assemble into, so the packet step is skipped
         # rather than pointed at a directory it does not own.
         return 0
-    if split_variant(ns.name)[1] == _SILENT_PIN_VARIANT:
+    if split_variant(ns.name)[1] == _SILENT_PIN_VARIANT and not ns.packet_dir:
         # The coarse variant is the SILENT-PIN lane: it carries its evidence JSON
-        # and nothing else. Assembling a packet here would write the delivery
-        # artifacts the flagship folder owns into a folder that must not hold them.
+        # and nothing else. Assembling a packet into the proof folder would write
+        # the delivery artifacts the flagship folder owns into a folder that must
+        # not hold them. A named packet directory is outside that folder, so the
+        # checklist is owed there rather than skipped.
         return 0
     try:
-        packet = assemble_packet(ns.name)
+        packet = assemble_packet(ns.name, out_dir=ns.packet_dir)
     except Exception as exc:  # noqa: BLE001 - the reason IS the report
         print(f"PACKET FAILED: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps({"packet": f"{os.path.dirname(out)}/packet.json",
+    print(json.dumps({"packet": f"{packet['directory']}/packet.json",
                       "verdict": packet["verdict"],
                       "deliverables": len(packet["deliverables"]),
                       "missing": packet["missing"]}, indent=2))
