@@ -9,7 +9,7 @@ Pins the three worker-side halves of the "cold edge" fix:
   * the initial condition is a TANH of thickness DELTA >= 2*dz, not a step;
   * a bathymetry-clamped (land) node is NaN in the emitted layer product.
 
-No telemac binary, no network: deck text, plane arithmetic, array masking.
+No telemac binary, no network: steering text, plane arithmetic, array masking.
 """
 import os
 import sys
@@ -86,7 +86,7 @@ def test_the_refusal_names_an_nplan_that_actually_works():
     assert v["vertical_dz_surface_m"] <= 4.0 + 1e-6
 
 
-def test_the_deck_carries_the_dico_verified_stretching_keywords(tmp_path):
+def test_the_steering_carries_the_dico_verified_stretching_keywords(tmp_path):
     v = T.plan_vertical_grid(nplan=13, max_depth_m=402.0, thermocline_depth_m=8.0)
     cas = tmp_path / "t3d.cas"
     T.write_cas(str(cas), "g.slf", "b.cli", "r3.slf", "r2.slf", "ic.f",
@@ -100,7 +100,7 @@ def test_the_deck_carries_the_dico_verified_stretching_keywords(tmp_path):
     assert f"MESH STRETCHING COEFFICIENTS : {dl:.4f};{du:.4f}" in text
 
 
-def test_a_uniform_deck_never_emits_the_stretching_keyword(tmp_path):
+def test_a_uniform_grid_never_emits_the_stretching_keyword(tmp_path):
     cas = tmp_path / "t3d.cas"
     T.write_cas(str(cas), "g.slf", "b.cli", "r3.slf", "r2.slf", None,
                 title="X", nplan=13, dt=20.0, nit=10, graprd=1, transf=1)

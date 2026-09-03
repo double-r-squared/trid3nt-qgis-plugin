@@ -373,8 +373,8 @@ package MeshSeam {
     interface def TopologyBundle {
         doc /*
         The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid
-        boundary refuses, because a deck cannot be authored against a boundary
-        with no role on it.
+        boundary refuses, because a steering file cannot be authored against a
+        boundary with no role on it.
 
         constructor: write_topology
         */

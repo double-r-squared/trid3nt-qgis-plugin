@@ -1,7 +1,7 @@
 """RERUN-WITH-OVERRIDES: the skeleton's recalibration interface. Offline.
 
 The setter family's capability, reproduced as skeleton machinery. What
-``set_telemac_parameters`` did for one deck and one engine - copy the parent,
+``set_telemac_parameters`` did for one run and one engine - copy the parent,
 change named values, leave the parent byte-identical, refuse the law-inversion
 that makes a coefficient mean something else - the primitive does for any
 declared workflow, through the plan rather than through a text editor.
@@ -86,8 +86,8 @@ def test_a_mesh_override_cuts_later_than_a_physics_one():
     mesh, _ = reuse_plan(wf.plan, wf.data, ("mesh_resolution_m",))
     assert mesh > physics
     # the edge length is the MESH's ask, so the cut lands on the mesh step: the
-    # mesh is rebuilt and the deck follows it, rather than the deck alone being
-    # re-authored around a mesh nobody re-cut.
+    # mesh is rebuilt and the steering file follows it, rather than the steering
+    # file alone being re-authored around a mesh nobody re-cut.
     assert [n.label for n in _nodes(wf)][mesh] == "mesh"
 
 

@@ -43,8 +43,8 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
     The stats carry what the driver MEASURED - the boundary node count, the
     liquid-boundary numbering AND the role of each numbered liquid boundary,
     whether the IPOBO it wrote is the permutation TELEMAC requires - so a caller
-    reports the numbering rather than asserting it, and a deck is authored once
-    against the order the solver will use.
+    reports the numbering rather than asserting it, and a steering file is
+    authored once against the order the solver will use.
     """
     import numpy as np
 

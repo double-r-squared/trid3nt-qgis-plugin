@@ -340,9 +340,9 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
     coupling = str(case.get("coupling") or "").lower()
     previous = str(case.get("continue_from") or "")
     if previous:
-        # A continuation is the ENGINE'S restart: the deck names this file and
-        # reads its last record as the initial state, so the only thing to check
-        # here is that the file the deck names arrived.
+        # A continuation is the ENGINE'S restart: the steering file names this
+        # file and reads its last record as the initial state, so the only thing
+        # to check here is that the file it names arrived.
         if coupling in _LAUNCHER_COUPLINGS:
             raise CaseError(
                 "TELEMAC_CASE_NOT_CONTINUABLE",
@@ -354,7 +354,8 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
             raise CaseError(
                 "TELEMAC_CASE_PREVIOUS_MISSING",
                 f"case.continue_from {previous!r} is not in the run directory; "
-                "the deck continues from a file that was never staged.")
+                "the steering file continues from a file that was never "
+                "staged.")
     argv = _solve_argv(module, steering, case.get("user_fortran"), coupling)
     LOG.info("telemac case module=%s steering=%s coupling=%s continue_from=%s "
              "results=%s via %s", module, steering, coupling or "none",

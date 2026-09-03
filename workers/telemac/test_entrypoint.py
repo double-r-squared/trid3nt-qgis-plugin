@@ -42,9 +42,9 @@ def _case(tmp_path: Path, **over) -> dict:
 
 
 def test_the_parser_stamp_is_the_unified_one():
-    """Bumped when the case contract moved: `echo` became `server_facts` and
-    `family` stopped travelling, so a stale image reads as a drifted version
-    rather than as a manifest whose keys silently did nothing."""
+    """The stamp travels with the case contract, so an image built against an
+    older one reads as a drifted version rather than as a manifest whose keys
+    silently did nothing."""
     assert E._PARSER_VERSION == "telemac-unified-2"
 
 

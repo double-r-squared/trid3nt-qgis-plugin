@@ -233,7 +233,7 @@ PROOF_ANIMATIONS: dict[str, tuple[ProofAnimation, ...]] = {
             exempt_reason="ARTEMIS is the phase-resolving elliptic mild-slope "
                           "(Berkhoff) solver: it solves a boundary-value problem "
                           "for a single monochromatic sea state and returns ONE "
-                          "field, the steady agitation coefficient Kd. The deck "
+                          "field, the steady agitation coefficient Kd. The run "
                           "has no simulation clock at all, which is why the run "
                           "records no ntimestep - there is no time evolution to "
                           "animate, and the single field IS the whole answer.",

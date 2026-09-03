@@ -36,7 +36,7 @@
 package SolveSeam {
 
     doc /*
-    One authored deck goes out as a manifest, one container solves it, and one
+    One authored run goes out as a manifest, one container solves it, and one
     run report comes back. Every regression this seam has produced was a
     severed interface - a key one side wrote that the other side stopped
     reading - so the interfaces are the model and the blocks exist to give
@@ -188,9 +188,9 @@ package SolveSeam {
 
     interface def ManifestCaseSection {
         doc /*
-        The CASE a worker runs: which engine, which deck it reads, and which
-        files must exist for the run to have happened. The section key is what
-        the entrypoint dispatches on, and the strict gate refuses any key
+        The CASE a worker runs: which engine, which steering file it reads, and
+        which files must exist for the run to have happened. The section key is
+        what the entrypoint dispatches on, and the strict gate refuses any key
         outside this list.
 
         constructor: case_section
@@ -316,9 +316,9 @@ package SolveSeam {
     interface def TopologyBundle {
         doc /*
         The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid
-        boundary refuses, because a deck cannot be authored against a boundary
-        with no role on it, and one stating no prescription per boundary refuses
-        too: it was numbered before the numbering was the engine's own.
+        boundary refuses, because a steering file cannot be authored against a
+        boundary with no role on it, and one stating no prescription per boundary
+        refuses too: it was numbered before the numbering was the engine's own.
         */
         item roles : RoleMap;
         item liquid_boundary_order : StringList;
@@ -327,9 +327,9 @@ package SolveSeam {
 
     interface def AcceptedMeshRecord {
         doc /*
-        The recipe-frozen artifact's fields the deck consumes. The granularity
-        the deck records is the one the ACCEPTED mesh was built at, measured
-        on its own cells - never the edge that was asked for.
+        The recipe-frozen artifact's fields the authoring consumes. The
+        granularity the run records is the one the ACCEPTED mesh was built at,
+        measured on its own cells - never the edge that was asked for.
         */
         item artifact : MeshArtifact;
         item mesh_id : String;
@@ -558,7 +558,7 @@ package SolveSeam {
 
     requirement def ServerFactsDoctrine {
         doc /*
-        Server-known facts are stated by the deck, copied by the worker
+        Server-known facts are stated by the server, copied by the worker
         VERBATIM, and never re-derived in the container. Worker-measured facts
         are the worker's own: the frame count is measured off the file the
         server facts name, and an unmeasurable result is the ABSENCE of the key
@@ -643,8 +643,8 @@ package SolveSeam {
 
     requirement def OutflowStageIsNormalDepth {
         doc /*
-        SIGNED DECISION - the reach deck's outflow stage is the NORMAL DEPTH for
-        the discharge the same deck prescribes (bathymetry methodology M4,
+        SIGNED DECISION - the reach run's outflow stage is the NORMAL DEPTH for
+        the discharge the same run prescribes (bathymetry methodology M4,
         signed 2026-09-02), replacing the outflow bed plus a declared 2 m. Under
         the HAPPY PATH FIRST, SYNTHETIC DEFERRED amendment this is the whole of
         the Producer stage: it produces no bathymetry, it computes a level over
@@ -656,7 +656,7 @@ package SolveSeam {
         line that mesh was built on. The channel is the transect the outflow face
         cuts through the painted bed, read in boundary-walk order so the face is
         a section rather than a scatter. The roughness is the coefficient this
-        deck goes on to write, under the law it goes on to write. The discharge
+        run goes on to write, under the law it goes on to write. The discharge
         is the one it prescribes upstream. Nothing external enters - no gauge, no
         rating curve, no second vertical datum - which is what makes the stage
         internally consistent with whatever bed the ladder delivered, and is the
@@ -702,7 +702,7 @@ package SolveSeam {
         when either end is, and the run straddling that start folds back into one
         boundary. Numbering from file-row order agreed only by luck. On a reach
         whose inflow face holds the domain's south-west corner the two disagreed,
-        and the deck then stated its level at the inflow's number and its
+        and the run then stated its level at the inflow's number and its
         flowrate at the outflow's: the inflow supplied nothing, the outflow was
         clamped to elevation zero, and the run drained its initial condition
         while both prescribed numbers sat unread. That run reported CORRECT END

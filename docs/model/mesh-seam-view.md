@@ -205,7 +205,7 @@ One entry of the ops list: a function NAME and its kwargs. The name is VERBATIM 
 
 ### `TopologyBundle`
 
-The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid boundary refuses, because a deck cannot be authored against a boundary with no role on it.
+The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid boundary refuses, because a steering file cannot be authored against a boundary with no role on it.
 
 | item | type | required |
 | --- | --- | --- |

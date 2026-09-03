@@ -48,7 +48,7 @@ def _malpasset_like(telemac_result):
 def test_pick_named_var():
     assert P._pick_named_var(VARS, P._WSE_VAR_KEYS, "S") == "FREE SURFACE"
     assert P._pick_named_var(VARS, P._DEPTH_VAR_KEYS, "H") == "WATER DEPTH"
-    # French deck names.
+    # French steering names.
     fr = ["SURFACE LIBRE", "HAUTEUR D'EAU"]
     assert P._pick_named_var(fr, P._WSE_VAR_KEYS, "S") == "SURFACE LIBRE"
     assert P._pick_named_var(fr, P._DEPTH_VAR_KEYS, "H") == "HAUTEUR D'EAU"

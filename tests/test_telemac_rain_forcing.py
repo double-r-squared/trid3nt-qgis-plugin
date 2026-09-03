@@ -107,7 +107,7 @@ def test_a_sub_daily_target_refuses_rather_than_manufacturing_a_storm_shape():
                         TemporalSpec(resample=ResampleSpec(to="1h")))
 
 
-def test_a_unit_target_the_deck_cannot_carry_refuses():
+def test_a_unit_target_the_steering_cannot_carry_refuses():
     from trid3nt_server.workflows.lib import TemporalSpec, UnitsSpec
 
     with pytest.raises(F.TelemacDyeScenarioInputError):

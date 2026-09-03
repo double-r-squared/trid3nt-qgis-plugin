@@ -69,9 +69,9 @@ class EngineOps:
     """The engine facade: four operations, and nothing else.
 
     The facade's value is STABILITY - the interface never changes while the
-    mechanisms behind it (deck writers, result readers) evolve freely. Facades are
-    named by engine only; a domain qualifier in the name would weld a domain
-    assumption into the engine, and domain shape arrives through
+    mechanisms behind it (steering writers, result readers) evolve freely.
+    Facades are named by engine only; a domain qualifier in the name would weld a
+    domain assumption into the engine, and domain shape arrives through
     ``acquire_domain``'s slots instead.
 
     Meshing is NOT one of the four: a mesh ask is a declaration block
@@ -96,7 +96,9 @@ class EngineOps:
         raise NotImplementedError(f"{type(self).__name__} realizes no acquire_domain.")
 
     def author(self, *, mesh: Any, physics: Any, forcing: Any) -> Step:
-        """Serialize the mesh ask + physics + forcing into the engine's own deck."""
+        """Serialize the mesh ask + physics + forcing into the engine's own
+        steering files.
+        """
         raise NotImplementedError(f"{type(self).__name__} realizes no author.")
 
     def solve(self, **slots: Any) -> Step:
@@ -276,9 +278,10 @@ class Workflow(EngineOps):
                               supplied: Mapping[str, Any]) -> dict[str, Any]:
         """The failure envelope, plus a handle on the work the attempt DID finish.
 
-        A run that dies at the deck has already geocoded, fetched and meshed. The
-        step ledger keeps that for a retry of the SAME invocation - but the retry
-        a failure actually wants is the same question with the bad value
+        A run that dies at the authoring has already geocoded, fetched and
+        meshed. The step ledger keeps that for a retry of the SAME invocation -
+        but the retry a failure actually wants is the same question with the bad
+        value
         CORRECTED, which is a different invocation and would replay nothing. So
         the attempt is recorded like a completed run, under an id the envelope
         names, and the caller re-runs it through the one primitive instead of

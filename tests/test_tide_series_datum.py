@@ -97,5 +97,6 @@ def test_an_unnamed_station_cannot_be_reconciled():
 
 
 def test_the_bed_datum_is_declared_not_assumed():
-    """The bed datum is a named constant the deck and the layer both carry."""
+    """The bed datum is a named constant the steering file and the layer both
+    carry."""
     assert BED_DATUM == "NAVD88"

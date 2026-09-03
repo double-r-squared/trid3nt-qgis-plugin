@@ -128,7 +128,7 @@ def test_a_mesh_with_no_domain_polygon_refuses_rather_than_waving_the_point_thro
     """There is ONE containment path and it always has a polygon.
 
     Four numbers are not a shape a point can be inside of. Answering "no domain"
-    let a supplied point ride into the deck untested with a note about it, which
+    let a supplied point ride into the run untested with a note about it, which
     is a release inside a shape nobody mapped - so the read refuses instead.
     """
     with pytest.raises(TelemacDyeScenarioError) as excinfo:

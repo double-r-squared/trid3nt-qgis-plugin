@@ -70,7 +70,7 @@ def _resolves_to(monkeypatch, artifact, seen=None):
         "trid3nt_server.workflows.mesh.tool.supplied_mesh_artifact", _supplied)
 
 
-def _deck(**kwargs):
+def _run(**kwargs):
     return asyncio.run(AG.write_agitation_case(
         aoi=_AOI, wave_mode="diffraction", wave_period_s=12.0,
         wave_direction_deg=90.0, wave_height_m=2.0, reflection_coef=0.5,
@@ -117,9 +117,9 @@ def test_a_mesh_with_no_boundary_file_refuses_by_naming_what_is_missing(monkeypa
 # --------------------------------------------------------------------------- #
 # The run a supplied mesh writes.
 # --------------------------------------------------------------------------- #
-def test_the_deck_stages_the_pair_and_stops_asking_for_a_grid(monkeypatch):
+def test_the_run_stages_the_pair_and_stops_asking_for_a_grid(monkeypatch):
     _resolves_to(monkeypatch, _artifact())
-    run = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
+    run = _run(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
 
     assert run["config"]["supplied_mesh_slf"] == "supplied_mesh.slf"
     assert run["config"]["supplied_mesh_cli"] == "supplied_mesh.cli"
@@ -138,13 +138,13 @@ def test_the_deck_stages_the_pair_and_stops_asking_for_a_grid(monkeypatch):
 
 def test_the_bed_the_layer_names_is_the_one_the_mesh_carries(monkeypatch):
     _resolves_to(monkeypatch, _artifact())
-    run = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
+    run = _run(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
     assert "cudem_nearshore" in run["bathy_label"]
     assert "Great Lakes" not in run["bathy_label"]
 
 
-def test_an_unfilled_slot_leaves_the_grid_deck_exactly_as_it_was(monkeypatch):
-    run = _deck(supplied_mesh=None, mesh_resolution_m=40.0)
+def test_an_unfilled_slot_leaves_the_grid_run_exactly_as_it_was(monkeypatch):
+    run = _run(supplied_mesh=None, mesh_resolution_m=40.0)
     assert run["config"]["target_resolution_m"] == 40.0
     assert "supplied_mesh_slf" not in run["config"]
     assert run["supplied_mesh"] is None
@@ -154,7 +154,7 @@ def test_an_unfilled_slot_leaves_the_grid_deck_exactly_as_it_was(monkeypatch):
 
 def test_the_mesh_row_reports_the_solves_own_echo_not_the_ask(monkeypatch):
     _resolves_to(monkeypatch, _artifact())
-    run = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
+    run = _run(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
     rows = AG._provenance(run, {
         "mesh_source": "supplied", "npoin": 13110, "nelem": 25424,
         "mesh_edge_min_m": 4.2, "mesh_edge_median_m": 29.5,
@@ -170,7 +170,7 @@ def test_the_mesh_row_reports_the_solves_own_echo_not_the_ask(monkeypatch):
 
 def test_a_solve_that_echoes_no_mesh_source_says_it_is_unmeasured(monkeypatch):
     _resolves_to(monkeypatch, _artifact())
-    run = _deck(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
+    run = _run(supplied_mesh="s3://cache/mesh/01TESTMESH/mesh.2dm")
     rows = AG._provenance(run, {"structure_present": True, "bw_label": "x"})
     mesh_row = [r for r in rows if r.param == "mesh_domain"][0]
     assert "UNMEASURED" in mesh_row.note

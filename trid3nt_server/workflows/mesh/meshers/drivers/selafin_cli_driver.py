@@ -12,17 +12,18 @@ Config keys: ``mesh_npz`` (``x``, ``y`` npoin; ``ikle`` (nelem,3) 0-based;
 named is a wall). Emits the two files plus ``/data/selafin_cli_stats.json``.
 
 The stats carry the MEASURED liquid-boundary order: TELEMAC numbers its liquid
-boundaries by walking the contours, and a deck states PRESCRIBED FLOWRATES and
-PRESCRIBED ELEVATIONS in that numbering. The numbering is measured HERE, by the
-engine's own rule (``bief/front2.f``, ported in :func:`_liquid_boundaries`),
-which is what lets a deck be authored ONCE against the order the solver will
-actually use instead of being probed for by a throwaway solve.
+boundaries by walking the contours, and a steering file states PRESCRIBED
+FLOWRATES and PRESCRIBED ELEVATIONS in that numbering. The numbering is measured
+HERE, by the engine's own rule (``bief/front2.f``, ported in
+:func:`_liquid_boundaries`), which is what lets a steering file be authored ONCE
+against the order the solver will actually use instead of being probed for by a
+throwaway solve.
 
 The stats also carry what each numbered boundary PRESCRIBES, read off the code
 quad this file just wrote for it. That is the cross-file contract: one table
-decides the ``.cli`` quad, and the steering keyword the deck writes at that
-boundary's number is derived from the same quad, so a face cannot be a free exit
-in one file and a prescribed level in the other.
+decides the ``.cli`` quad, and the steering keyword written at that boundary's
+number is derived from the same quad, so a face cannot be a free exit in one file
+and a prescribed level in the other.
 
 The IPOBO written into the geometry and the contours the ``.cli`` is numbered
 from come from ONE walk of ONE connectivity, which is what makes the two files
@@ -47,7 +48,7 @@ KENT, KSORT, KLOG = 5, 4, 2
 #: states it. An inflow prescribes velocity and tracer and leaves the depth free;
 #: an outflow and an open sea boundary make the SAME statement to the solver - a
 #: prescribed water level, free velocity - and are named apart because the
-#: measured liquid-boundary order is what a deck author reads to decide which
+#: measured liquid-boundary order is what a steering author reads to decide which
 #: boundary carries a flowrate and which a level.
 #:
 #: THIS IS THE ONE AUTHORING DECISION for the pair. The quad lands in the
@@ -66,8 +67,9 @@ def _prescribes(codes) -> str:
 
     ``bord.f`` consumes PRESCRIBED ELEVATIONS only where ``LIHBOR`` is ``KENT``
     and the prescribed flowrate only where ``LIUBOR`` is; a value written against
-    any other code is a number the engine never looks at. Reading the quad rather
-    than the role name is what leaves the deck unable to disagree with the file.
+    any other code is a number the engine never looks at. Reading the quad
+    rather than the role name is what leaves the steering file unable to disagree
+    with it.
     """
     lihbor, liubor = int(codes[0]), int(codes[1])
     if lihbor == KENT:
@@ -195,9 +197,10 @@ def _liquid_boundaries(x, y, bnodes, codes, contour_lengths) -> list:
 
     Numbering from row order instead agrees only by luck. On a reach whose inflow
     face happens to hold the domain's south-west corner the two disagree, and the
-    deck then states its level at the inflow's number and its flowrate at the
-    outflow's - each into a code that never reads it, so the inflow supplies
-    nothing and the outflow is clamped to elevation zero and drains the domain.
+    steering file then states its level at the inflow's number and its flowrate
+    at the outflow's - each into a code that never reads it, so the inflow
+    supplies nothing and the outflow is clamped to elevation zero and drains the
+    domain.
     """
     kp1 = _successors(contour_lengths)
     quads = [(int(quad[0]), int(quad[1])) for quad in codes]
@@ -279,7 +282,8 @@ def _joined(values) -> str:
 
     A boundary whose rows disagree is reported joined rather than resolved: it
     means one contiguous liquid stretch was asked to be two things, and picking
-    one here would author a deck against a face the file does not describe.
+    one here would author a steering file against a face the file does not
+    describe.
     """
     return "+".join(sorted(set(values))) if values else "wall"
 
@@ -341,7 +345,8 @@ def write_pair(cfg: dict) -> dict:
                 _joined([role_of.get(int(bnodes[k]), "wall") for k in here])
                 for here in rows],
             # What each numbered boundary PRESCRIBES, read off the quad written
-            # for it - the half of the cross-file contract the deck author reads.
+            # for it - the half of the cross-file contract the steering
+            # author reads.
             "liquid_boundary_prescribes": [
                 _joined([_prescribes(codes[k]) for k in here]) for here in rows],
             "n_contours": len(contours),

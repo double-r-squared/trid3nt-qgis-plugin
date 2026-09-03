@@ -111,7 +111,7 @@ class RunEvidence:
     turn_complete: bool = False
     charts: int = 0
     #: The chart payloads that crossed the wire. For a template whose product IS
-    #: the chart (a schematic deck publishes no raster, so there is no run prefix
+    #: the chart (a schematic run publishes no raster, so there is no run prefix
     #: to read back), this is the run's own persisted product and the only honest
     #: thing an assertion can cite.
     chart_payloads: list[dict[str, Any]] = field(default_factory=list)

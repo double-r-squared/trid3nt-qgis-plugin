@@ -287,7 +287,7 @@ def test_the_bed_spec_is_registered_and_declares_a_fixed_service():
 
 
 # --------------------------------------------------------------------------- #
-# ARTEMIS: the deck is the only authority on a structure
+# ARTEMIS: the steering file is the only authority on a structure
 # --------------------------------------------------------------------------- #
 
 
@@ -295,7 +295,7 @@ def test_the_artemis_worker_holds_no_schematic_breakwater():
     """The branch that meshed a barrier nobody asked for is GONE from the source.
 
     Asserted on the text because the branch's whole failure mode was being
-    unreachable from any deck a caller can write: no test could reach it either,
+    unreachable from any run a caller can write: no test could reach it either,
     which is how it survived so long.
     """
     source = (Path(__file__).resolve().parents[1]

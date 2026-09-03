@@ -100,7 +100,7 @@ def test_the_declared_plan_is_the_open_water_sequence():
     validate_plan(plan, workflow.params, workflow.data)
 
 
-def test_the_3d_deck_carries_both_layer_files():
+def test_the_3d_run_carries_both_layer_files():
     from trid3nt_server.workflows.telemac.authoring.stratified import write_stratified_case
 
     run = asyncio.run(write_stratified_case(bed=_STAGED_BED, 

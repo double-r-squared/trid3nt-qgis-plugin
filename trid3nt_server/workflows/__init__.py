@@ -2,7 +2,7 @@
 
 Workflows are orchestrator-style Python functions composing the atomic tools
 under ``trid3nt_server/tools/`` into deterministic chains. They are LLM-free and
-stable-signature: the same inputs build the same deck.
+stable-signature: the same inputs author the same run.
 
 A workflow is not itself an atomic tool -- it carries no ``AtomicToolMetadata``,
 and the cache shim (``tools/cache.py``) mediates only atomic-tool calls, so a

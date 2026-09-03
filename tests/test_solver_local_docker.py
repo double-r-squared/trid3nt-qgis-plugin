@@ -230,23 +230,23 @@ def local_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def _seed_manifest(
     s3: FakeS3Client,
     *,
-    bucket: str = "deck-bucket",
-    base_key: str = "cache/static-30d/telemac_setup/TESTDECK/",
+    bucket: str = "setup-bucket",
+    base_key: str = "cache/static-30d/telemac_setup/TESTRUN/",
     scheme: str = "s3",
     outputs: list[str] | None = None,
 ) -> str:
-    """Seed a worker-contract manifest + its deck inputs into the fake store.
+    """Seed a worker-contract manifest + its authored inputs into the fake store.
 
     The input entries use the LEGACY field name ``gs_uri`` — the values carry
     ``{scheme}://`` URIs and must be resolved by scheme (kickoff §1).
     """
-    deck = {
-        "t2d_river.cas": b"[fake telemac deck]",
+    authored = {
+        "t2d_river.cas": b"[fake telemac steering]",
         "gis/bed.tif": b"FAKE_DEM_TIF",
     }
     inputs = []
-    for rel, payload in deck.items():
-        key = f"{base_key}deck/{rel}"
+    for rel, payload in authored.items():
+        key = f"{base_key}staged/{rel}"
         s3.objects[(bucket, key)] = payload
         inputs.append({"gs_uri": f"{scheme}://{bucket}/{key}", "dest": rel})
     manifest = {
@@ -322,7 +322,7 @@ def test_local_run_solver_stages_manifest_and_launches_docker(
 
     # Inputs staged into the rundir — including the gis/ subdirectory entry.
     rundir = local_env / handle.run_id
-    assert (rundir / "t2d_river.cas").read_bytes() == b"[fake telemac deck]"
+    assert (rundir / "t2d_river.cas").read_bytes() == b"[fake telemac steering]"
     assert (rundir / "gis" / "bed.tif").read_bytes() == b"FAKE_DEM_TIF"
 
     # Let the detached shim + supervisor finish (also guards thread leak),
@@ -346,21 +346,21 @@ def test_local_manifest_gs_uri_field_with_gs_scheme_rejected(
 ) -> None:
     """GCP decommissioned: a legacy ``gs://`` value in the ``gs_uri`` field is
     no longer resolvable (the GCS staging fallback is removed) — staging the
-    deck fails with a typed ``SolverDispatchError`` (unsupported scheme)."""
+    run fails with a typed ``SolverDispatchError`` (unsupported scheme)."""
     s3 = FakeS3Client()
     set_s3_client(s3)
     manifest = {
         "inputs": [
-            {"gs_uri": "gs://legacy-gcs-bucket/deck/t2d.cas", "dest": "t2d.cas"}
+            {"gs_uri": "gs://legacy-gcs-bucket/staged/t2d.cas", "dest": "t2d.cas"}
         ],
         "telemac_args": [],
         "outputs": ["*.slf"],
     }
-    s3.objects[("deck-bucket", "mixed/manifest.json")] = json.dumps(manifest).encode()
+    s3.objects[("setup-bucket", "mixed/manifest.json")] = json.dumps(manifest).encode()
 
     with pytest.raises(SolverDispatchError):
         run_solver(
-            solver=_SOLVER, model_setup_uri="s3://deck-bucket/mixed/manifest.json"
+            solver=_SOLVER, model_setup_uri="s3://setup-bucket/mixed/manifest.json"
         )
 
 
@@ -369,15 +369,15 @@ def test_local_manifest_dest_traversal_rejected(
 ) -> None:
     s3 = FakeS3Client()
     set_s3_client(s3)
-    s3.objects[("deck-bucket", "evil/x")] = b"x"
+    s3.objects[("setup-bucket", "evil/x")] = b"x"
     manifest = {
-        "inputs": [{"gs_uri": "s3://deck-bucket/evil/x", "dest": "../../escape.txt"}],
+        "inputs": [{"gs_uri": "s3://setup-bucket/evil/x", "dest": "../../escape.txt"}],
         "telemac_args": [],
         "outputs": [],
     }
-    s3.objects[("deck-bucket", "evil/manifest.json")] = json.dumps(manifest).encode()
+    s3.objects[("setup-bucket", "evil/manifest.json")] = json.dumps(manifest).encode()
     with pytest.raises(SolverDispatchError) as exc_info:
-        run_solver(solver=_SOLVER, model_setup_uri="s3://deck-bucket/evil/manifest.json")
+        run_solver(solver=_SOLVER, model_setup_uri="s3://setup-bucket/evil/manifest.json")
     assert "escape" in str(exc_info.value)
 
 

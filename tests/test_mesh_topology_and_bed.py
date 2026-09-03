@@ -34,8 +34,8 @@ def test_the_bundle_round_trips_the_roles_and_the_measured_order(tmp_path):
 
 
 def test_a_bundle_that_states_no_prescription_per_boundary_refuses(tmp_path):
-    """It was numbered by the superseded row-order rule, and a deck authored
-    against it prescribes into codes that never read it."""
+    """It was numbered by the superseded row-order rule, and a steering file
+    authored against it prescribes into codes that never read it."""
     path = tmp_path / T.TOPOLOGY_FILENAME
     path.write_text(json.dumps({"roles": {"outflow": [7]},
                                 "liquid_boundary_order": ["outflow"]}))
@@ -44,7 +44,7 @@ def test_a_bundle_that_states_no_prescription_per_boundary_refuses(tmp_path):
 
 
 def test_a_bundle_with_no_roles_on_its_boundary_refuses(tmp_path):
-    """A mesh nobody classified is a mesh no reach deck can be authored against."""
+    """A mesh nobody classified is a mesh no reach run can be authored against."""
     path = tmp_path / T.TOPOLOGY_FILENAME
     path.write_text(json.dumps({"roles": {}, "liquid_boundary_order": []}))
     with pytest.raises(ValueError, match="no roles"):
@@ -220,7 +220,7 @@ def test_a_cut_corner_does_not_cost_the_face_its_role():
 
 def test_a_mesh_with_no_declared_boundaries_carries_no_roles():
     """Nothing is inferred: an undeclared boundary is entirely solid wall, which
-    is what makes a deck against it refuse rather than solve on a guess."""
+    is what makes a run against it refuse rather than solve on a guess."""
     assert P._runs(_STRIP, _STRIP_CONTOUR, {}, tolerance_m=20.0) == {}
 
 
@@ -429,8 +429,9 @@ def test_the_bed_op_permits_no_ladder_rung_on_the_authors_behalf(tmp_path):
 
 
 def test_the_substitution_the_fetch_narrated_rides_under_one_name(tmp_path):
-    """One datum, one name: the note the bed's fetch attached is what the deck
-    reads as ``bed_fallback_note``, all the way from the op to the provenance."""
+    """One datum, one name: the note the bed's fetch attached is what the
+    authoring reads as ``bed_fallback_note``, all the way from the op to the
+    provenance."""
     raster = _bed_raster(tmp_path)
     bedded = P.set_bed(_lonlat_mesh(), source=str(raster))
     assert "bed_fallback_note" not in bedded.meta  # a direct raster substitutes nothing

@@ -4,7 +4,7 @@ NATE-shaped design (2026-08-21/23 discussion). V1 LANDED (ADR 0303) -
 do_sag MIGRATED. WAVE 2 LANDED (ADR 0304) - the FORM and DRAW cards, on
 the existing spines, plugin 0.3.17. WAVE 3 LANDED (ADR 0305) -
 telemac_river_dye MIGRATED (3,469 -> 671 lines over a shared
-`workflows/telemac/steps/` family), the form card's first live proof,
+`workflows/telemac/` family), the form card's first live proof,
 and the live-run harness (`trid3nt_server/testing/`). WAVE 4 LANDED
 (ADR 0306) - the GENERALIZATION CHECKPOINT PASSED:
 `modflow_regional_water_budget` and `swmm_aquifer_baseflow_to_node`

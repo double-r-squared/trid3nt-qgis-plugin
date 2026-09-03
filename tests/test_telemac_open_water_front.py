@@ -49,7 +49,7 @@ _MARQUETTE = {"name": "Marquette Lower Harbor", "slug": "marquette",
 @pytest.mark.parametrize("wave_mode,expected", [
     ("resonance", False), ("shoal", False), ("diffraction", True)])
 
-def test_agitation_deck_requires_utm_only_on_the_real_harbour(wave_mode, expected):
+def test_agitation_authoring_requires_utm_only_on_the_real_harbour(wave_mode, expected):
     run = asyncio.run(write_agitation_case(bed=_STAGED_BED, 
         aoi=_MARQUETTE, wave_mode=wave_mode, bathy_source="noaa_greatlakes",
         mesh_resolution_m=12.0))
@@ -66,13 +66,13 @@ def test_agitation_idealized_bathy_source_never_requires_utm():
 
 @pytest.mark.parametrize("flow_mode,expected", [
     ("salt_wedge", False), ("stratification", True)])
-def test_stratified_deck_requires_utm_only_on_the_real_lake(flow_mode, expected):
+def test_stratified_authoring_requires_utm_only_on_the_real_lake(flow_mode, expected):
     run = asyncio.run(write_stratified_case(bed=_STAGED_BED, 
         aoi=_MARQUETTE, flow_mode=flow_mode, bathy_source="noaa_greatlakes"))
     assert run["requires_utm"] is expected
 
 
-def test_salt_wedge_deck_authors_an_idealized_lock_exchange_offline():
+def test_salt_wedge_authors_an_idealized_lock_exchange_offline():
     """The salt-wedge run constructs and authors with no network and no zone."""
     run = asyncio.run(write_stratified_case(bed=_STAGED_BED, 
         aoi=_MARQUETTE, flow_mode="salt_wedge", bathy_source="noaa_greatlakes",

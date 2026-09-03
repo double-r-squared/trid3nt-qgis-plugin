@@ -19,7 +19,7 @@ discriminating 3D-vs-2D or stratified-vs-mixed pair:
                            discriminating metric is the persisting top-to-bottom
                            temperature difference (the lake-turnover question,
                            the stratified 3D column the AED2 STOP needs).
-                           The deck carries NO surface heat exchange (no THERMIC,
+                           The run carries NO surface heat exchange (no THERMIC,
                            no met forcing): heat is CONSERVED and the only thing
                            that can change the column is REDISTRIBUTION. A falling
                            surface temperature is the warm layer MIXING DOWNWARD,
@@ -51,7 +51,7 @@ Two bathymetry paths (stratification / wind_circulation):
     (a real estuary needs a tidal liquid boundary - out of the closed-basin
     archetype), labeled as such.
 
-ALL EIGHT deck gotchas  are baked here (see write_cas / the
+ALL EIGHT steering gotchas  are baked here (see write_cas / the
 CONDI3D fortran authors): mandatory scalar ``INITIAL VALUES OF TRACERS`` beside
 the USER_CONDI3D_TRAC override, TEMPERATURE/SALINIT name-prefix indexing,
 density-law selection, CONDI3D 3D-coord (bed-referenced Z) semantics, the 2D
@@ -718,8 +718,9 @@ def _solve_stratification(cfg: Telemac3dConfig, data_dir, run_id, mesh, meta):
     nplan = int(cfg.nplan)
     dtherm = float(cfg.thermocline_depth_m)
     twarm, tcold = float(cfg.warm_temp_c), float(cfg.cold_temp_c)
-    # the vertical grid is planned BEFORE the deck is authored: an unresolvable
-    # thermocline refuses here rather than solving an IC the grid cannot hold.
+    # the vertical grid is planned BEFORE the steering file is authored: an
+    # unresolvable thermocline refuses here rather than solving an IC the grid
+    # cannot hold.
     vgrid = plan_vertical_grid(nplan, float(-np.nanmin(mesh["Z"])), dtherm)
     write_slf(mesh, geo)
     write_cli(mesh, cli)
@@ -769,7 +770,7 @@ def _solve_stratification(cfg: Telemac3dConfig, data_dir, run_id, mesh, meta):
         "stratification_metric": round(abs(dT_final), 4),
         "stratification_dt": round(dT_final, 4),
         "stratification_dt_init": round(dT_init, 4),
-        # depth-weighted column mean: with no heat exchange in the deck this is
+        # depth-weighted column mean: with no heat exchange in the run this is
         # CONSERVED, so the drift is the numerical error bar on "the warm layer
         # mixed down" - and the refutation of any "the lake cooled" reading.
         "column_heat_mean_init_c": round(heat_init, 4),
@@ -779,7 +780,7 @@ def _solve_stratification(cfg: Telemac3dConfig, data_dir, run_id, mesh, meta):
         "surface_value_mean": round(float(np.nanmean(surf)), 3),
         "bottom_value_mean": round(float(np.nanmean(bot)), 3),
         "wind_speed_mps": float(cfg.wind_speed_mps) if wind_on else 0.0,
-        # the plane positions the deck actually used - a zoomed sigma is NOT evenly
+        # the plane positions the run actually used - a zoomed sigma is NOT evenly
         # spaced, so plotting the column against linspace would misplace every point
         "chart_sigma": (np.round(vgrid["vertical_sigma_planes"], 4).tolist()
                         if len(vgrid["vertical_sigma_planes"]) == len(col_fin)

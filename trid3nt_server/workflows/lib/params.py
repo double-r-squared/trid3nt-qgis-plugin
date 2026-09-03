@@ -152,7 +152,7 @@ class Param(Row):
                 and not isinstance(self.default, bool):
             # The wire-type inference ends in `str`, and a NUMBER advertised to the
             # model as a string is a schema that lies: the model sends "12", the
-            # deck writer multiplies a string, and nothing refused on the way. The
+            # writer multiplies a string, and nothing refused on the way. The
             # two honest declarations are bounds (which also clamp) or an explicit
             # type; guessing between them is not this class's call.
             raise PlanValidationError(

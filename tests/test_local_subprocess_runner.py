@@ -97,10 +97,10 @@ def _seed_engine_manifest(
     s3: FakeS3Client,
     solver: str,
     *,
-    bucket: str = "deck-bucket",
+    bucket: str = "setup-bucket",
     args_key: str = "build_spec",
 ) -> str:
-    """Seed a minimal manifest for a pip-only engine (no deck files, just build_spec)."""
+    """Seed a minimal manifest for a pip-only engine (no staged inputs, just build_spec)."""
     manifest = {
         "inputs": [],
         args_key: {"solver": solver, "test": True},
@@ -150,8 +150,8 @@ def test_launch_writes_manifest_to_rundir(
         "build_spec": {"solver": "landlab", "test": True},
         "outputs": [],
     }
-    s3.objects[("deck-bucket", "test/manifest.json")] = json.dumps(manifest).encode()
-    model_setup_uri = "s3://deck-bucket/test/manifest.json"
+    s3.objects[("setup-bucket", "test/manifest.json")] = json.dumps(manifest).encode()
+    model_setup_uri = "s3://setup-bucket/test/manifest.json"
 
     # Use a dummy spec whose build_argv captures the rundir so we can check it.
     captured_rundir: list[Path] = []
@@ -214,7 +214,7 @@ def test_subprocess_runner_exit0_produces_ok_completion(
         "build_spec": {"solver": "landlab", "test": True},
         "outputs": [],
     }
-    s3.objects[("deck-bucket", "test/landlab.json")] = json.dumps(manifest).encode()
+    s3.objects[("setup-bucket", "test/landlab.json")] = json.dumps(manifest).encode()
 
     def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
         # A subprocess that exits cleanly with no output.
@@ -239,7 +239,7 @@ def test_subprocess_runner_exit0_produces_ok_completion(
     )
 
     handle = launch_local_solver(
-        spec, "s3://deck-bucket/test/landlab.json", compute_class="standard"
+        spec, "s3://setup-bucket/test/landlab.json", compute_class="standard"
     )
 
     completion = _wait_completion(s3, handle.run_id)

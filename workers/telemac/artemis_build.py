@@ -35,7 +35,7 @@ Two bathymetry paths:
     thin solid barrier; the diffraction-sheltering pair over real bathymetry IS
     the proof-norm-#9 discriminating signature.
 
-ALL EIGHT deck gotchas  are baked here (see write_cli / write_cas
+ALL EIGHT steering gotchas  are baked here (see write_cli / write_cas
 build_mesh): the .cli column re-map (col1 LIHBOR / col4 HB / col5 TETAP tangent /
 col7 RP), TETAP is the BOUNDARY TANGENT not the wave direction, the incident
 direction lives only in DIRECTION OF WAVE PROPAGATION, the all-incident outer
@@ -720,10 +720,10 @@ def _solve_diffraction_real(cfg: ArtemisConfig, data_dir: str, run_id):
             "Pick an OPEN-WATER harbour approach AOI (few interior land nodes) "
             "inside a Great Lake.")
 
-    # Structure geometry as LOCAL-frame UTM segments. The DECK is the only
-    # authority: a polyline set, or one segment, or NOTHING. An unnamed structure
-    # means the harbour approach is open water, and the incident heading is always
-    # the declared one.
+    # Structure geometry as LOCAL-frame UTM segments. The STEERING FILE is the
+    # only authority: a polyline set, or one segment, or NOTHING. An unnamed
+    # structure means the harbour approach is open water, and the incident
+    # heading is always the declared one.
     real_struct = bool(cfg.breakwater_polylines)
     wdir = float(cfg.wave_dir_deg)
     if real_struct:

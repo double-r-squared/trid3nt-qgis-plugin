@@ -30,11 +30,11 @@ __all__ = ["ENGINE_PATHS", "code_identity", "engine_paths", "resolve_engine",
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 #: What each engine's ANSWER depends on, as repo-relative paths. The worker holds
-#: the solver and its glue; the workflow package holds the deck, the dispatch and
-#: the products. A commit outside both can still change a run - the fetcher
-#: router is under everything - but "the engine moved" is the question a reader of
-#: an engine's packet is actually asking, and widening it to the whole tree would
-#: make every packet stale on every commit and so tell them nothing.
+#: the solver and its glue; the workflow package holds the authoring, the
+#: dispatch and the products. A commit outside both can still change a run - the
+#: fetcher router is under everything - but "the engine moved" is the question a
+#: reader of an engine's packet is actually asking, and widening it to the whole
+#: tree would make every packet stale on every commit and so tell them nothing.
 ENGINE_PATHS: dict[str, tuple[str, ...]] = {
     "telemac": ("workers/telemac/", "trid3nt_server/workflows/telemac/"),
 }

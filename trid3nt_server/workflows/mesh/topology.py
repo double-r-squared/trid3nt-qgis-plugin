@@ -3,14 +3,14 @@
 A SELAFIN says which nodes lie on a boundary; it never says which stretch of that
 boundary is the inflow and which the outflow, and it never says which numbered
 liquid boundary TELEMAC will call each stretch. Both are the MESHER's answers,
-measured when the ``.cli`` was written from this geometry's own IPOBO, and a deck
-author reads them here to state PRESCRIBED FLOWRATES and PRESCRIBED ELEVATIONS in
-the order the solver will use.
+measured when the ``.cli`` was written from this geometry's own IPOBO, and the
+steering author reads them here to state PRESCRIBED FLOWRATES and PRESCRIBED
+ELEVATIONS in the order the solver will use.
 
 The third answer is what each numbered boundary PRESCRIBES, read off the code
-quad the ``.cli`` carries on it. The deck writes its lists from that rather than
-from a role-to-keyword table of its own, so the steering file cannot state a
-level at a boundary whose code never reads one.
+quad the ``.cli`` carries on it. The steering file writes its lists from that
+rather than from a role-to-keyword table of its own, so it cannot state a level
+at a boundary whose code never reads one.
 
 The bundle rides beside the mesh objects and its uri lands on
 ``MeshArtifact.topology_uri``. It carries no geometry: the nodes, cells and bed
@@ -48,14 +48,15 @@ def read_topology(uri: str) -> dict[str, Any]:
     """Read a topology bundle from an ``s3://`` uri or a local path.
 
     A bundle that names no liquid boundary REFUSES: a mesh whose boundary carries
-    no role is a mesh no reach deck can be authored against, and returning empty
-    sets would put the refusal downstream where the cause is no longer visible.
+    no role is a mesh no reach steering file can be authored against, and
+    returning empty sets would put the refusal downstream where the cause is no
+    longer visible.
 
     A bundle that states no PRESCRIPTION per boundary refuses for the same
     reason. It was numbered by the superseded row-order rule, which disagrees
     with the engine's own numbering on any domain whose south-west corner falls
-    on a liquid face, and a deck authored against it prescribes into codes that
-    never read it. There is no repair short of rebuilding the mesh.
+    on a liquid face, and a steering file authored against it prescribes into
+    codes that never read it. There is no repair short of rebuilding the mesh.
     """
     if uri.startswith("s3://"):
         from trid3nt_server.tools.cache import read_object_bytes_s3
@@ -70,13 +71,13 @@ def read_topology(uri: str) -> dict[str, Any]:
     if not roles or not order:
         raise ValueError(
             f"the topology bundle at {uri} names {sorted(roles)} roles across "
-            f"{len(order)} liquid boundaries; a deck cannot be authored against "
-            "a boundary with no roles on it")
+            f"{len(order)} liquid boundaries; a steering file cannot be "
+            "authored against a boundary with no roles on it")
     if len(prescribes) != len(order):
         raise ValueError(
             f"the topology bundle at {uri} states what {len(prescribes)} of its "
             f"{len(order)} liquid boundaries prescribe; it was numbered before "
             "the boundary numbering was measured by the engine's own rule, so "
-            "rebuild the mesh rather than author a deck against it")
+            "rebuild the mesh rather than author a steering file against it")
     return {"roles": roles, "liquid_boundary_order": order,
             "liquid_boundary_prescribes": prescribes}
