@@ -1,0 +1,332 @@
+{
+  "what": "the delivery checklist for one template+variant, assembled and verified mechanically; send exactly what `deliverables` lists, in order",
+  "code_staleness": {
+    "kind": "working_tree_dirty",
+    "code_sha": "94cf53f0bed2276ae3cff638223994ea3310b4f8",
+    "message": "the tree is at this run's commit but carries uncommitted changes, so what produced these numbers is not fully recorded anywhere"
+  },
+  "template": "telemac3d_stratified_flow",
+  "variant": "coarse",
+  "tool": "telemac3d_stratified_flow",
+  "run_id": "01M1MSYCTZKSZ70C4CCF1S299G",
+  "stem": "telemac3d_stratified_flow",
+  "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse",
+  "panel_base": "telemac3d_stratified_flow",
+  "mode": "render",
+  "assembled_at": "2026-09-03T16:35:30",
+  "assembler": "scripts/assemble_proof_packet.py",
+  "time_stepped": {
+    "recorded_ntimestep": 11,
+    "frames": 11,
+    "slf": "res3d_t3d.slf",
+    "source": "s3://trid3nt-runs/01M1MSYCTZKSZ70C4CCF1S299G/res3d_t3d.slf",
+    "method": "SELAFIN header + file length",
+    "npoin": 6422,
+    "nelem": 10800,
+    "nbv1": 5,
+    "varnames": [
+      "ELEVATION Z     M",
+      "VELOCITY U      M/S",
+      "VELOCITY V      M/S",
+      "VELOCITY W      M/S",
+      "TEMPERATURE"
+    ],
+    "bytes": 1750116,
+    "header_bytes": 336704,
+    "frame_bytes": 128492
+  },
+  "animation_declarations": [
+    {
+      "name": "default",
+      "variable": "TEMPERATURE",
+      "units": "degC",
+      "quantity": "temperature",
+      "mask_var": null,
+      "mask_threshold": 0.0,
+      "dry_land_only": false,
+      "derived": [],
+      "transform": null,
+      "vectors": null,
+      "still_vectors": null,
+      "vector_density": 1.4,
+      "vector_grid_n": 200,
+      "arrow_size": 0.7,
+      "vector_lw": [
+        0.35,
+        1.1
+      ],
+      "still": "final",
+      "plane": "surface",
+      "suffix": "",
+      "reason": "the thermocline question is answered by the temperature field, and the surface plane is the half that the wind (or its absence) acts on. It SETTLES toward its answer, so the still is final.",
+      "exempt_reason": null,
+      "declared_in": "trid3nt_server/testing/proof_animations.py"
+    }
+  ],
+  "quantity_scales": {
+    "default": {
+      "quantity": "temperature",
+      "preset": "continuous_temperature_c",
+      "published_range": null,
+      "published_panels_agree": true,
+      "published_by": [],
+      "preset_scaled_panels": [],
+      "run_raster_presets": [
+        "continuous_dem",
+        "continuous_stratified_flow"
+      ],
+      "rendered_range": [
+        0.0,
+        40.0
+      ],
+      "transform": "linear",
+      "agrees": null
+    }
+  },
+  "notes": [
+    "3000 m HORIZONTAL over a one-hour window. The question is whether a calm column KEEPS its thermocline, and the surviving top-to-bottom difference is the number this run answers with; the horizontal field at this spacing resolves no lake circulation. The refined declaration (1000 m at the same 13 planes) is the one the horizontal is read from."
+  ],
+  "published_layers": [
+    "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+    "Bottom temperature (aoi)",
+    "Surface temperature (aoi)"
+  ],
+  "verdict": "PASS",
+  "missing": [],
+  "deliverables": [
+    {
+      "order": 1,
+      "kind": "panel",
+      "caption": "1. Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m) - context/raster, run 01M1MSYCTZKSZ70C4CCF1S299G",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_panel_01_input-telemac-open-water-bed-elevation-at-mesh-nodes-ncei-dem-mosaic-ncei-dem-all-is-a-multi-resolution-mosaic-1-9-3-m-to-24-700-m-depending-on-the-contributing-dem-1800-px-deg-is-62-m.png",
+      "layer": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+      "bytes": 555847,
+      "mtime": "2026-09-03T16:35:29",
+      "run_id_stamp": "01M1MSYCTZKSZ70C4CCF1S299G",
+      "verdict": "present"
+    },
+    {
+      "order": 2,
+      "kind": "panel",
+      "caption": "2. Bottom temperature (aoi) - input/raster, run 01M1MSYCTZKSZ70C4CCF1S299G",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_panel_02_bottom-temperature-aoi.png",
+      "layer": "Bottom temperature (aoi)",
+      "bytes": 194188,
+      "mtime": "2026-09-03T16:35:29",
+      "run_id_stamp": "01M1MSYCTZKSZ70C4CCF1S299G",
+      "verdict": "present"
+    },
+    {
+      "order": 3,
+      "kind": "panel",
+      "caption": "3. Surface temperature (aoi) - primary/raster, run 01M1MSYCTZKSZ70C4CCF1S299G",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_panel_03_surface-temperature-aoi.png",
+      "layer": "Surface temperature (aoi)",
+      "bytes": 587416,
+      "mtime": "2026-09-03T16:35:29",
+      "run_id_stamp": "01M1MSYCTZKSZ70C4CCF1S299G",
+      "verdict": "present"
+    },
+    {
+      "order": 4,
+      "kind": "canvas_view",
+      "caption": "4. CANVAS VIEW - all 3 layers stacked in emission order, run 01M1MSYCTZKSZ70C4CCF1S299G",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_panel_04_canvas-view.png",
+      "bytes": 650523,
+      "mtime": "2026-09-03T16:35:29",
+      "run_id_stamp": "01M1MSYCTZKSZ70C4CCF1S299G",
+      "verdict": "present"
+    },
+    {
+      "order": 5,
+      "kind": "contact_sheet",
+      "caption": "Contact sheet - every emitted layer, 4 panels in emission order, run 01M1MSYCTZKSZ70C4CCF1S299G",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow.png",
+      "bytes": 801664,
+      "mtime": "2026-09-03T16:35:30",
+      "run_id_stamp": "01M1MSYCTZKSZ70C4CCF1S299G",
+      "verdict": "present"
+    },
+    {
+      "order": 6,
+      "kind": "chart",
+      "caption": "Chart vertical_profile - the run's persisted spec through the plugin chart dock's own renderer, run 01M1MSYCTZKSZ70C4CCF1S299G",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_chart_vertical_profile.png",
+      "chart": "vertical_profile",
+      "bytes": 53248,
+      "mtime": "2026-09-03T16:35:30",
+      "run_id_stamp": "01M1MSYCTZKSZ70C4CCF1S299G",
+      "verdict": "present"
+    },
+    {
+      "order": 7,
+      "kind": "animation",
+      "caption": "Animation [default] - TEMPERATURE (degC), 11 frames on one run-scoped colour scale with a static legend, run 01M1MSYCTZKSZ70C4CCF1S299G",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_animation.gif",
+      "animation": "default",
+      "declared_field": "TEMPERATURE (degC)",
+      "declared_reason": "the thermocline question is answered by the temperature field, and the surface plane is the half that the wind (or its absence) acts on. It SETTLES toward its answer, so the still is final.",
+      "bytes": 893005,
+      "mtime": "2026-09-03T16:35:28",
+      "verdict": "present",
+      "gif_checks": {
+        "frames": 11,
+        "size": [
+          1300,
+          872
+        ],
+        "distinct_frames": 11,
+        "legend_x_frac": 0.875,
+        "legend_ramp_colours": 51,
+        "legend_covers_a_ramp": true,
+        "legend_drift_frames": [],
+        "field_moves": true
+      }
+    },
+    {
+      "order": 8,
+      "kind": "still",
+      "caption": "FINAL frame [default] - TEMPERATURE (degC), the animation's own figure at its final step, same colours and extent, run 01M1MSYCTZKSZ70C4CCF1S299G",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_final_frame.png",
+      "animation": "default",
+      "bytes": 489009,
+      "mtime": "2026-09-03T16:35:30",
+      "run_id_stamp": "01M1MSYCTZKSZ70C4CCF1S299G",
+      "verdict": "present"
+    },
+    {
+      "order": 9,
+      "kind": "evidence",
+      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M1MSYCTZKSZ70C4CCF1S299G",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_canary_evidence.json",
+      "bytes": 18036,
+      "mtime": "2026-09-03T16:34:47",
+      "verdict": "present"
+    }
+  ],
+  "render": {
+    "sheet": {
+      "sheet": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow.png",
+      "bytes": 801421,
+      "panels": 4,
+      "layers": [
+        "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+        "Bottom temperature (aoi)",
+        "Surface temperature (aoi)"
+      ],
+      "not_rendered": [],
+      "off_canvas": [],
+      "panel_pngs": [
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_panel_01_input-telemac-open-water-bed-elevation-at-mesh-nodes-ncei-dem-mosaic-ncei-dem-all-is-a-multi-resolution-mosaic-1-9-3-m-to-24-700-m-depending-on-the-contributing-dem-1800-px-deg-is-62-m.png",
+          "layer": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
+          "framed_on_layer": false
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_panel_02_bottom-temperature-aoi.png",
+          "layer": "Bottom temperature (aoi)",
+          "framed_on_layer": false
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_panel_03_surface-temperature-aoi.png",
+          "layer": "Surface temperature (aoi)",
+          "framed_on_layer": false
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_panel_04_canvas-view.png",
+          "layer": "CANVAS VIEW"
+        }
+      ]
+    },
+    "charts": [
+      {
+        "chart": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_chart_vertical_profile.png",
+        "name": "vertical_profile",
+        "title": "Surface temperature (aoi)",
+        "render_summary": {
+          "views": 1,
+          "lines": 1,
+          "series": 2,
+          "rules": 0,
+          "bars": 0,
+          "points": 26,
+          "skipped": 0,
+          "x_log": false,
+          "y_log": false,
+          "legend_labels": [
+            "final",
+            "initial"
+          ]
+        },
+        "bytes": 52974
+      }
+    ],
+    "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
+    "animations": {
+      "default": {
+        "frames": 11,
+        "animated": true,
+        "variable": "TEMPERATURE",
+        "plane": "surface plane of 13",
+        "peak_frame": 10,
+        "peak_time_s": 3600.0,
+        "peak_value": 23.598447799682617,
+        "dry_frames": [],
+        "vmin": 0.0,
+        "vmax": 40.0,
+        "style_preset": "continuous_temperature_c",
+        "legend_note": "fixed domain scale: 0 to 40 C",
+        "transform": "linear",
+        "colormap": "inferno",
+        "vectors": null,
+        "still_vectors": null,
+        "vector_density": null,
+        "arrow_size": null,
+        "vector_lw": null,
+        "vector_grid": null,
+        "still_vector_grid": null,
+        "bbox_ll": [
+          -87.60560366378678,
+          46.699999999999996,
+          -86.59999999687385,
+          47.20069822910712
+        ],
+        "local_origin_m": [
+          454130.0084720558,
+          5172001.871532832
+        ],
+        "run_id": "01M1MSYCTZKSZ70C4CCF1S299G",
+        "origin_bbox": [
+          -87.6,
+          46.7,
+          -86.6,
+          47.2
+        ],
+        "animation": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_animation.gif",
+        "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac3d_stratified_flow/coarse/telemac3d_stratified_flow_final_frame.png",
+        "animation_bytes": 893005,
+        "peak_bytes": 488716
+      }
+    },
+    "scales": {
+      "default": {
+        "quantity": "temperature",
+        "preset": "continuous_temperature_c",
+        "published_range": null,
+        "published_panels_agree": true,
+        "published_by": [],
+        "preset_scaled_panels": [],
+        "run_raster_presets": [
+          "continuous_dem",
+          "continuous_stratified_flow"
+        ],
+        "rendered_range": [
+          0.0,
+          40.0
+        ],
+        "transform": "linear",
+        "agrees": null
+      }
+    }
+  }
+}

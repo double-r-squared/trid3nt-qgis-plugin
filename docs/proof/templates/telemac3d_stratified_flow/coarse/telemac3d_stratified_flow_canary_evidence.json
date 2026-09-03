@@ -1,6 +1,7 @@
 {
   "tool": "telemac3d_stratified_flow",
   "args": {
+    "restart_clean": true,
     "bbox": [
       -87.6,
       46.7,
@@ -18,11 +19,10 @@
     "sim_duration_hours": 1.0,
     "bathy_source": "noaa_greatlakes",
     "compute_class": "medium",
-    "input_mode": "user_gated",
-    "restart_clean": true
+    "input_mode": "user_gated"
   },
-  "session_id": "01M0ZSE0PGMQB3W1C04V0QCQPE",
-  "case_id": "01M0ZSE11X5Q947GVXN8RJK8Z5",
+  "session_id": "01M1MSY9GFQD8QHHJ0DXVPDQYK",
+  "case_id": "01M1MSY9XNH8YHX5MNJD6RGY6H",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -34,7 +34,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0ZSFBNMXGGEXVTP6A4Z32YQ",
+      "chart_id": "01M1MSZSPY90SZ95KEXGG3XSVQ",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -194,17 +194,17 @@
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
       },
       "title": "Surface temperature (aoi)",
-      "caption": "Top-to-bottom difference surviving the run: 8.256 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. There is no heat exchange in this deck - heat is CONSERVED, so the surface falling and the depths rising is the warm layer MIXING DOWNWARD, not the lake cooling. 3D screening, not a calibrated study.",
+      "caption": "Top-to-bottom difference surviving the run: 8.256 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. There is no heat exchange in this run - heat is CONSERVED, so the surface falling and the depths rising is the warm layer MIXING DOWNWARD, not the lake cooling. 3D screening, not a calibrated study.",
       "source_layer_uri": null,
-      "created_turn_id": "01M0ZSE1WFFYEJTGF2BY3S8QQZ"
+      "created_turn_id": "01M1MSYBGMRZPDVHFHCPFVBNMW"
     }
   ],
   "layers": [
     {
-      "layer_id": "input-ncei_dem_mosaic-675132065060",
+      "layer_id": "input-ncei_dem_mosaic-f0a86f56c6cd",
       "name": "Input: TELEMAC open-water bed elevation at mesh nodes (ncei_dem_mosaic, NCEI DEM_all is a multi-resolution mosaic - 1/9\" (~3 m) to 24\" (~700 m) depending on the contributing DEM; 1800 px/deg is ~62 m)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M0ZSE2249XM4099F0NG6S78N.tif",
+      "uri": "s3://trid3nt-cache/cache/static-30d/ncei_dem_mosaic/overviews/01M1MSYC8D5P80J8NC57644C6W.tif",
       "style_preset": "continuous_dem",
       "visible": true,
       "role": "context",
@@ -216,10 +216,10 @@
       "legend": null
     },
     {
-      "layer_id": "telemac3d-bottom-01M0ZSE25XWEVZVZJ0C2NKVPD0",
+      "layer_id": "telemac3d-bottom-01M1MSYCTZKSZ70C4CCF1S299G",
       "name": "Bottom temperature (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0ZSE25XWEVZVZJ0C2NKVPD0/telemac3d_bottom.tif",
+      "uri": "s3://trid3nt-runs/01M1MSYCTZKSZ70C4CCF1S299G/telemac3d_bottom.tif",
       "style_preset": "continuous_stratified_flow",
       "visible": true,
       "role": "input",
@@ -240,10 +240,10 @@
       }
     },
     {
-      "layer_id": "01M0ZSFBX6M1CCS8TPYWPQRS8Z",
+      "layer_id": "01M1MSZTGFRY5NXAVGPHF8E7Q2",
       "name": "Surface temperature (aoi)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M0ZSE25XWEVZVZJ0C2NKVPD0/telemac3d_surface.tif",
+      "uri": "s3://trid3nt-runs/01M1MSYCTZKSZ70C4CCF1S299G/telemac3d_surface.tif",
       "style_preset": "continuous_stratified_flow",
       "visible": true,
       "role": "primary",
@@ -456,11 +456,11 @@
     "edited": {}
   },
   "plain_warnings": [],
-  "run_id": "01M0ZSE25XWEVZVZJ0C2NKVPD0",
+  "run_id": "01M1MSYCTZKSZ70C4CCF1S299G",
   "chart_spec": {
     "vertical_profile": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M0ZSFBNMXGGEXVTP6A4Z32YQ",
+      "chart_id": "01M1MSZSPY90SZ95KEXGG3XSVQ",
       "vega_lite_spec": {
         "mark": {
           "type": "line",
@@ -620,7 +620,7 @@
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
       },
       "title": "Surface temperature (aoi)",
-      "caption": "Top-to-bottom difference surviving the run: 8.256 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. There is no heat exchange in this deck - heat is CONSERVED, so the surface falling and the depths rising is the warm layer MIXING DOWNWARD, not the lake cooling. 3D screening, not a calibrated study.",
+      "caption": "Top-to-bottom difference surviving the run: 8.256 degC. The two lines are the PRESCRIBED initial column and the solved final one; their separation is what a depth-averaged model cannot show. There is no heat exchange in this run - heat is CONSERVED, so the surface falling and the depths rising is the warm layer MIXING DOWNWARD, not the lake cooling. 3D screening, not a calibrated study.",
       "source_layer_uri": null,
       "created_turn_id": null
     }
@@ -679,7 +679,7 @@
       23.39,
       23.808
     ],
-    "layer_uri": "s3://trid3nt-runs/01M0ZSE25XWEVZVZJ0C2NKVPD0/telemac3d_surface.tif",
+    "layer_uri": "s3://trid3nt-runs/01M1MSYCTZKSZ70C4CCF1S299G/telemac3d_surface.tif",
     "wind_note": "calm - the thermocline persists and no wind circulation is driven",
     "bathy_source": "noaa_greatlakes",
     "bathy_note": "real NOAA Great Lakes lake-datum bathymetry (superior)",
@@ -687,8 +687,9 @@
     "target_resolution_note": "Explicit HORIZONTAL grid node spacing; the vertical is nplan [supplied on this invocation]"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M0ZSE25XWEVZVZJ0C2NKVPD0/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M0ZSE25XWEVZVZJ0C2NKVPD0/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M1MSYCTZKSZ70C4CCF1S299G/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M1MSYCTZKSZ70C4CCF1S299G/metrics.json"
   },
-  "product_errors": {}
+  "product_errors": {},
+  "preflight_note": "daemon restarted by the driver pre-flight: the daemon started 580s before HEAD was committed"
 }

@@ -1,0 +1,424 @@
+{
+  "what": "the delivery checklist for one template+variant, assembled and verified mechanically; send exactly what `deliverables` lists, in order",
+  "code_staleness": {
+    "kind": "working_tree_dirty",
+    "code_sha": "427b7c7d576c4ffa81fa6e8bbcb6c19709d37bfa",
+    "message": "the tree is at this run's commit but carries uncommitted changes, so what produced these numbers is not fully recorded anywhere"
+  },
+  "template": "telemac_river_dye",
+  "variant": "coarse",
+  "tool": "telemac_river_dye",
+  "run_id": "01M1MSND29Q648AECNGTHWJRFY",
+  "stem": "telemac_river_dye",
+  "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse",
+  "panel_base": "telemac_river_dye",
+  "mode": "render",
+  "assembled_at": "2026-09-03T16:44:48",
+  "assembler": "scripts/assemble_proof_packet.py",
+  "time_stepped": {
+    "recorded_ntimestep": 6,
+    "frames": 6,
+    "slf": "r2d_river.slf",
+    "source": "s3://trid3nt-runs/01M1MSND29Q648AECNGTHWJRFY/r2d_river.slf",
+    "method": "SELAFIN header + file length",
+    "npoin": 907,
+    "nelem": 1615,
+    "nbv1": 6,
+    "varnames": [
+      "VELOCITY U      M/S",
+      "VELOCITY V      M/S",
+      "WATER DEPTH     M",
+      "FREE SURFACE    M",
+      "BOTTOM          M",
+      "DYE             MG/L"
+    ],
+    "bytes": 161712,
+    "header_bytes": 30744,
+    "frame_bytes": 21828
+  },
+  "animation_declarations": [
+    {
+      "name": "default",
+      "variable": "DYE",
+      "units": "mg/L",
+      "quantity": "dye_concentration",
+      "mask_var": "WATER DEPTH",
+      "mask_threshold": 0.02,
+      "dry_land_only": false,
+      "derived": [],
+      "transform": null,
+      "vectors": null,
+      "still_vectors": null,
+      "vector_density": 1.4,
+      "vector_grid_n": 200,
+      "arrow_size": 0.7,
+      "vector_lw": [
+        0.35,
+        1.1
+      ],
+      "still": "peak",
+      "plane": "surface",
+      "suffix": "",
+      "reason": "the plume IS the tracer concentration; it BUILDS as the dye arrives, so the peak frame is the answer.",
+      "exempt_reason": null,
+      "declared_in": "trid3nt_server/testing/proof_animations.py"
+    }
+  ],
+  "quantity_scales": {
+    "default": {
+      "quantity": "dye_concentration",
+      "preset": "continuous_dye_concentration",
+      "published_range": [
+        0.0,
+        91.035782
+      ],
+      "published_panels_agree": true,
+      "published_by": [
+        {
+          "layer": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
+          "range": [
+            0.0,
+            91.035782
+          ]
+        }
+      ],
+      "preset_scaled_panels": [],
+      "run_raster_presets": [
+        "continuous_dem",
+        "continuous_dye_concentration"
+      ],
+      "rendered_range": [
+        0.0,
+        91.035782
+      ],
+      "transform": "percentile",
+      "agrees": true
+    }
+  },
+  "notes": [
+    "PLUMBING PIN, not a concentration study. A concentration peak lives inside one element, so the coarse mesh measures dye_cmax_mgl LOW - the template declares that scalar peak-class for exactly this reason. The plume's REACH is a front location and travels with the front, so it is the scalar this run can be read on. The refined declaration (10 m) is what carries a concentration answer."
+  ],
+  "published_layers": [
+    "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
+    "Input: nhdplus nldi (nhdplus_nldi)",
+    "Input: nhd area water (nhd_area_water)",
+    "Input: river bed elevation (copernicus_dem)",
+    "Release point (derived) - scotia_humboldt_county_california_95562_united_s",
+    "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+    "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)"
+  ],
+  "verdict": "PASS",
+  "missing": [],
+  "deliverables": [
+    {
+      "order": 1,
+      "kind": "panel",
+      "caption": "1. Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry) - context/vector, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_01_input-osm-waterways-map-context-the-modeled-river-is-the-nldi-centerline-river-geometry.png",
+      "layer": "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
+      "bytes": 4739943,
+      "mtime": "2026-09-03T16:44:39",
+      "run_id_stamp": "01M1MSND29Q648AECNGTHWJRFY",
+      "verdict": "present"
+    },
+    {
+      "order": 2,
+      "kind": "panel",
+      "caption": "2. Input: nhdplus nldi (nhdplus_nldi) - context/vector, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_02_input-nhdplus-nldi-nhdplus-nldi.png",
+      "layer": "Input: nhdplus nldi (nhdplus_nldi)",
+      "bytes": 3726237,
+      "mtime": "2026-09-03T16:44:40",
+      "run_id_stamp": "01M1MSND29Q648AECNGTHWJRFY",
+      "verdict": "present"
+    },
+    {
+      "order": 3,
+      "kind": "panel",
+      "caption": "3. Input: nhd area water (nhd_area_water) - context/vector, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_03_input-nhd-area-water-nhd-area-water.png",
+      "layer": "Input: nhd area water (nhd_area_water)",
+      "bytes": 3852405,
+      "mtime": "2026-09-03T16:44:41",
+      "run_id_stamp": "01M1MSND29Q648AECNGTHWJRFY",
+      "verdict": "present"
+    },
+    {
+      "order": 4,
+      "kind": "panel",
+      "caption": "4. Input: river bed elevation (copernicus_dem) - context/raster, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_04_input-river-bed-elevation-copernicus-dem.png",
+      "layer": "Input: river bed elevation (copernicus_dem)",
+      "bytes": 2608293,
+      "mtime": "2026-09-03T16:44:42",
+      "run_id_stamp": "01M1MSND29Q648AECNGTHWJRFY",
+      "verdict": "present"
+    },
+    {
+      "order": 5,
+      "kind": "panel",
+      "caption": "5. Release point (derived) - scotia_humboldt_county_california_95562_united_s - context/vector, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_05_release-point-derived-scotia-humboldt-county-california-95562-united-s.png",
+      "layer": "Release point (derived) - scotia_humboldt_county_california_95562_united_s",
+      "bytes": 5502585,
+      "mtime": "2026-09-03T16:44:43",
+      "run_id_stamp": "01M1MSND29Q648AECNGTHWJRFY",
+      "verdict": "present"
+    },
+    {
+      "order": 6,
+      "kind": "panel",
+      "caption": "6. Model results (time series): scotia_humboldt_county_california_95562_united_s - context/mesh, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_06_model-results-time-series-scotia-humboldt-county-california-95562-united-s.png",
+      "layer": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+      "bytes": 3885602,
+      "mtime": "2026-09-03T16:44:44",
+      "run_id_stamp": "01M1MSND29Q648AECNGTHWJRFY",
+      "verdict": "present"
+    },
+    {
+      "order": 7,
+      "kind": "panel",
+      "caption": "7. Peak dye concentration (scotia_humboldt_county_california_95562_united_s) - primary/raster, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_07_peak-dye-concentration-scotia-humboldt-county-california-95562-united-s.png",
+      "layer": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
+      "bytes": 4021597,
+      "mtime": "2026-09-03T16:44:44",
+      "run_id_stamp": "01M1MSND29Q648AECNGTHWJRFY",
+      "verdict": "present"
+    },
+    {
+      "order": 8,
+      "kind": "canvas_view",
+      "caption": "8. CANVAS VIEW - all 7 layers stacked in emission order, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_08_canvas-view.png",
+      "bytes": 3869263,
+      "mtime": "2026-09-03T16:44:45",
+      "run_id_stamp": "01M1MSND29Q648AECNGTHWJRFY",
+      "verdict": "present"
+    },
+    {
+      "order": 9,
+      "kind": "contact_sheet",
+      "caption": "Contact sheet - every emitted layer, 8 panels in emission order, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye.png",
+      "bytes": 10331685,
+      "mtime": "2026-09-03T16:44:47",
+      "run_id_stamp": "01M1MSND29Q648AECNGTHWJRFY",
+      "verdict": "present"
+    },
+    {
+      "order": 10,
+      "kind": "chart",
+      "caption": "Chart dye_concentration - the run's persisted spec through the plugin chart dock's own renderer, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_chart_dye_concentration.png",
+      "chart": "dye_concentration",
+      "bytes": 53638,
+      "mtime": "2026-09-03T16:44:47",
+      "run_id_stamp": "01M1MSND29Q648AECNGTHWJRFY",
+      "verdict": "present"
+    },
+    {
+      "order": 11,
+      "kind": "animation",
+      "caption": "Animation [default] - DYE masked to WATER DEPTH > 0.02 (mg/L), 6 frames on one run-scoped colour scale with a static legend, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_animation.gif",
+      "animation": "default",
+      "declared_field": "DYE masked to WATER DEPTH > 0.02 (mg/L)",
+      "declared_reason": "the plume IS the tracer concentration; it BUILDS as the dye arrives, so the peak frame is the answer.",
+      "bytes": 988826,
+      "mtime": "2026-09-03T16:44:38",
+      "verdict": "present",
+      "gif_checks": {
+        "frames": 6,
+        "size": [
+          1300,
+          1378
+        ],
+        "distinct_frames": 6,
+        "legend_x_frac": 0.875,
+        "legend_ramp_colours": 59,
+        "legend_covers_a_ramp": true,
+        "legend_drift_frames": [],
+        "field_moves": true
+      }
+    },
+    {
+      "order": 12,
+      "kind": "still",
+      "caption": "PEAK frame [default] - DYE masked to WATER DEPTH > 0.02 (mg/L), the animation's own figure at its peak step, same colours and extent, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_peak_frame.png",
+      "animation": "default",
+      "bytes": 1985617,
+      "mtime": "2026-09-03T16:44:48",
+      "run_id_stamp": "01M1MSND29Q648AECNGTHWJRFY",
+      "verdict": "present"
+    },
+    {
+      "order": 13,
+      "kind": "evidence",
+      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M1MSND29Q648AECNGTHWJRFY",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_canary_evidence.json",
+      "bytes": 14745,
+      "mtime": "2026-09-03T16:30:52",
+      "verdict": "present"
+    }
+  ],
+  "render": {
+    "sheet": {
+      "sheet": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye.png",
+      "bytes": 10331450,
+      "panels": 8,
+      "layers": [
+        "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
+        "Input: nhdplus nldi (nhdplus_nldi)",
+        "Input: nhd area water (nhd_area_water)",
+        "Input: river bed elevation (copernicus_dem)",
+        "Release point (derived) - scotia_humboldt_county_california_95562_united_s",
+        "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+        "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)"
+      ],
+      "not_rendered": [],
+      "off_canvas": [],
+      "panel_pngs": [
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_01_input-osm-waterways-map-context-the-modeled-river-is-the-nldi-centerline-river-geometry.png",
+          "layer": "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
+          "framed_on_layer": true
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_02_input-nhdplus-nldi-nhdplus-nldi.png",
+          "layer": "Input: nhdplus nldi (nhdplus_nldi)",
+          "framed_on_layer": true
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_03_input-nhd-area-water-nhd-area-water.png",
+          "layer": "Input: nhd area water (nhd_area_water)",
+          "framed_on_layer": false
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_04_input-river-bed-elevation-copernicus-dem.png",
+          "layer": "Input: river bed elevation (copernicus_dem)",
+          "framed_on_layer": true
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_05_release-point-derived-scotia-humboldt-county-california-95562-united-s.png",
+          "layer": "Release point (derived) - scotia_humboldt_county_california_95562_united_s",
+          "framed_on_layer": true
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_06_model-results-time-series-scotia-humboldt-county-california-95562-united-s.png",
+          "layer": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+          "framed_on_layer": true
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_07_peak-dye-concentration-scotia-humboldt-county-california-95562-united-s.png",
+          "layer": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
+          "framed_on_layer": true
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_panel_08_canvas-view.png",
+          "layer": "CANVAS VIEW"
+        }
+      ]
+    },
+    "charts": [
+      {
+        "chart": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_chart_dye_concentration.png",
+        "name": "dye_concentration",
+        "title": "Reach maximum dye concentration - Eel River near Scotia, California",
+        "render_summary": {
+          "views": 1,
+          "lines": 1,
+          "series": 1,
+          "rules": 0,
+          "bars": 0,
+          "points": 6,
+          "skipped": 0,
+          "x_log": false,
+          "y_log": false,
+          "legend_labels": []
+        },
+        "bytes": 53371
+      }
+    ],
+    "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
+    "animations": {
+      "default": {
+        "frames": 6,
+        "animated": true,
+        "variable": "DYE",
+        "plane": "2d",
+        "peak_frame": 2,
+        "peak_time_s": 208.39999389648438,
+        "peak_value": 91.03578186035156,
+        "dry_frames": [],
+        "vmin": 0.0,
+        "vmax": 91.035782,
+        "style_preset": "continuous_dye_concentration",
+        "legend_note": "one range shared across the compared set: 0 to 91.0358 mg/L",
+        "transform": "percentile",
+        "colormap": "Reds",
+        "vectors": null,
+        "still_vectors": null,
+        "vector_density": null,
+        "arrow_size": null,
+        "vector_lw": null,
+        "vector_grid": null,
+        "still_vector_grid": null,
+        "bbox_ll": [
+          -124.0995147677556,
+          40.491507122264125,
+          -124.08903686697353,
+          40.500691651378006
+        ],
+        "local_origin_m": [
+          0.0,
+          0.0
+        ],
+        "run_id": "01M1MSND29Q648AECNGTHWJRFY",
+        "origin_bbox": [
+          -124.099515,
+          40.491508,
+          -124.089037,
+          40.500692
+        ],
+        "animation": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_animation.gif",
+        "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_river_dye/coarse/telemac_river_dye_peak_frame.png",
+        "animation_bytes": 988826,
+        "peak_bytes": 1985313
+      }
+    },
+    "scales": {
+      "default": {
+        "quantity": "dye_concentration",
+        "preset": "continuous_dye_concentration",
+        "published_range": [
+          0.0,
+          91.035782
+        ],
+        "published_panels_agree": true,
+        "published_by": [
+          {
+            "layer": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
+            "range": [
+              0.0,
+              91.035782
+            ]
+          }
+        ],
+        "preset_scaled_panels": [],
+        "run_raster_presets": [
+          "continuous_dem",
+          "continuous_dye_concentration"
+        ],
+        "rendered_range": [
+          0.0,
+          91.035782
+        ],
+        "transform": "percentile",
+        "agrees": true
+      }
+    }
+  }
+}

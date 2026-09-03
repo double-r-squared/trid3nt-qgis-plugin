@@ -1,0 +1,391 @@
+{
+  "what": "the delivery checklist for one template+variant, assembled and verified mechanically; send exactly what `deliverables` lists, in order",
+  "code_staleness": {
+    "kind": "working_tree_dirty",
+    "code_sha": "94cf53f0bed2276ae3cff638223994ea3310b4f8",
+    "message": "the tree is at this run's commit but carries uncommitted changes, so what produced these numbers is not fully recorded anywhere"
+  },
+  "template": "telemac_do_sag",
+  "variant": "coarse",
+  "tool": "telemac_do_sag",
+  "run_id": "01M1MT1N3G8698J6M8WBXWTTFH",
+  "stem": "telemac_do_sag",
+  "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse",
+  "panel_base": "telemac_do_sag",
+  "mode": "render",
+  "assembled_at": "2026-09-03T16:37:11",
+  "assembler": "scripts/assemble_proof_packet.py",
+  "time_stepped": {
+    "recorded_ntimestep": 7,
+    "frames": 7,
+    "slf": "r2d_river.slf",
+    "source": "s3://trid3nt-runs/01M1MT1N3G8698J6M8WBXWTTFH/r2d_river.slf",
+    "method": "SELAFIN header + file length",
+    "npoin": 658,
+    "nelem": 1167,
+    "nbv1": 9,
+    "varnames": [
+      "VELOCITY U      M/S",
+      "VELOCITY V      M/S",
+      "WATER DEPTH     M",
+      "FREE SURFACE    M",
+      "BOTTOM          M",
+      "DYE             MG/L",
+      "DISSOLVED O2       mgO2/l",
+      "ORGANIC LOAD       mgO2/l",
+      "NH4 LOAD           mgNH4/l"
+    ],
+    "bytes": 188904,
+    "header_bytes": 22500,
+    "frame_bytes": 23772
+  },
+  "animation_declarations": [
+    {
+      "name": "default",
+      "variable": "DISSOLVED O2",
+      "units": "mgO2/l",
+      "quantity": "dissolved_oxygen",
+      "mask_var": "WATER DEPTH",
+      "mask_threshold": 0.02,
+      "dry_land_only": false,
+      "derived": [],
+      "transform": null,
+      "vectors": null,
+      "still_vectors": null,
+      "vector_density": 1.4,
+      "vector_grid_n": 200,
+      "arrow_size": 0.7,
+      "vector_lw": [
+        0.35,
+        1.1
+      ],
+      "still": "final",
+      "plane": "surface",
+      "suffix": "",
+      "reason": "the sag is the oxygen deficit downstream of the outfall. It DECAYS toward its answer, so the still is the final frame - the peak frame is the un-depleted initial condition.",
+      "exempt_reason": null,
+      "declared_in": "trid3nt_server/testing/proof_animations.py"
+    }
+  ],
+  "quantity_scales": {
+    "default": {
+      "quantity": "dissolved_oxygen",
+      "preset": "continuous_dissolved_oxygen_mgl",
+      "published_range": null,
+      "published_panels_agree": true,
+      "published_by": [],
+      "preset_scaled_panels": [],
+      "run_raster_presets": [
+        "continuous_dem",
+        "continuous_dissolved_oxygen"
+      ],
+      "rendered_range": [
+        8.775128898620606,
+        9.022000312805176
+      ],
+      "transform": "percentile",
+      "agrees": null
+    }
+  },
+  "notes": [
+    "PLUMBING SMOKE, and nothing more. A DO sag is a TRAVEL-TIME answer - it needs k1 times travel time of order one to exist at all - and 600 s over half a kilometre is four orders short of that. This run's sag numbers are NOT a physics answer and must not be read as one; what it proves is that geocode -> flowline -> section -> mesh -> WAQTEL run -> solve -> products still runs end to end. The physics lives in the refined declaration (4 km / 48 h)."
+  ],
+  "published_layers": [
+    "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
+    "Input: nhdplus nldi (nhdplus_nldi)",
+    "Input: nhd area water (nhd_area_water)",
+    "Input: river bed elevation (copernicus_dem)",
+    "Outfall (derived) - scotia_humboldt_county_california_95562_united_s",
+    "Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s)"
+  ],
+  "verdict": "PASS",
+  "missing": [],
+  "deliverables": [
+    {
+      "order": 1,
+      "kind": "panel",
+      "caption": "1. Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry) - context/vector, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_01_input-osm-waterways-map-context-the-modeled-river-is-the-nldi-centerline-river-geometry.png",
+      "layer": "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
+      "bytes": 4738618,
+      "mtime": "2026-09-03T16:37:03",
+      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "verdict": "present"
+    },
+    {
+      "order": 2,
+      "kind": "panel",
+      "caption": "2. Input: nhdplus nldi (nhdplus_nldi) - context/vector, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_02_input-nhdplus-nldi-nhdplus-nldi.png",
+      "layer": "Input: nhdplus nldi (nhdplus_nldi)",
+      "bytes": 5057420,
+      "mtime": "2026-09-03T16:37:04",
+      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "verdict": "present"
+    },
+    {
+      "order": 3,
+      "kind": "panel",
+      "caption": "3. Input: nhd area water (nhd_area_water) - context/vector, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_03_input-nhd-area-water-nhd-area-water.png",
+      "layer": "Input: nhd area water (nhd_area_water)",
+      "bytes": 3848739,
+      "mtime": "2026-09-03T16:37:05",
+      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "verdict": "present"
+    },
+    {
+      "order": 4,
+      "kind": "panel",
+      "caption": "4. Input: river bed elevation (copernicus_dem) - context/raster, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_04_input-river-bed-elevation-copernicus-dem.png",
+      "layer": "Input: river bed elevation (copernicus_dem)",
+      "bytes": 2539833,
+      "mtime": "2026-09-03T16:37:05",
+      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "verdict": "present"
+    },
+    {
+      "order": 5,
+      "kind": "panel",
+      "caption": "5. Outfall (derived) - scotia_humboldt_county_california_95562_united_s - context/vector, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_05_outfall-derived-scotia-humboldt-county-california-95562-united-s.png",
+      "layer": "Outfall (derived) - scotia_humboldt_county_california_95562_united_s",
+      "bytes": 5690333,
+      "mtime": "2026-09-03T16:37:07",
+      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "verdict": "present"
+    },
+    {
+      "order": 6,
+      "kind": "panel",
+      "caption": "6. Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s) - primary/raster, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_06_dissolved-oxygen-sag-scotia-humboldt-county-california-95562-united-s.png",
+      "layer": "Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s)",
+      "bytes": 3481906,
+      "mtime": "2026-09-03T16:37:07",
+      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "verdict": "present"
+    },
+    {
+      "order": 7,
+      "kind": "canvas_view",
+      "caption": "7. CANVAS VIEW - all 6 layers stacked in emission order, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_07_canvas-view.png",
+      "bytes": 3866860,
+      "mtime": "2026-09-03T16:37:08",
+      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "verdict": "present"
+    },
+    {
+      "order": 8,
+      "kind": "contact_sheet",
+      "caption": "Contact sheet - every emitted layer, 7 panels in emission order, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag.png",
+      "bytes": 9429740,
+      "mtime": "2026-09-03T16:37:10",
+      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "verdict": "present"
+    },
+    {
+      "order": 9,
+      "kind": "chart",
+      "caption": "Chart do_sag_curve - the run's persisted spec through the plugin chart dock's own renderer, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_chart_do_sag_curve.png",
+      "chart": "do_sag_curve",
+      "bytes": 70005,
+      "mtime": "2026-09-03T16:37:10",
+      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "verdict": "present"
+    },
+    {
+      "order": 10,
+      "kind": "animation",
+      "caption": "Animation [default] - DISSOLVED O2 masked to WATER DEPTH > 0.02 (mgO2/l), 7 frames on one run-scoped colour scale with a static legend, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_animation.gif",
+      "animation": "default",
+      "declared_field": "DISSOLVED O2 masked to WATER DEPTH > 0.02 (mgO2/l)",
+      "declared_reason": "the sag is the oxygen deficit downstream of the outfall. It DECAYS toward its answer, so the still is the final frame - the peak frame is the un-depleted initial condition.",
+      "bytes": 840163,
+      "mtime": "2026-09-03T16:37:01",
+      "verdict": "present",
+      "gif_checks": {
+        "frames": 7,
+        "size": [
+          1300,
+          1155
+        ],
+        "distinct_frames": 7,
+        "legend_x_frac": 0.875,
+        "legend_ramp_colours": 66,
+        "legend_covers_a_ramp": true,
+        "legend_drift_frames": [],
+        "field_moves": true
+      }
+    },
+    {
+      "order": 11,
+      "kind": "still",
+      "caption": "FINAL frame [default] - DISSOLVED O2 masked to WATER DEPTH > 0.02 (mgO2/l), the animation's own figure at its final step, same colours and extent, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_final_frame.png",
+      "animation": "default",
+      "bytes": 1608130,
+      "mtime": "2026-09-03T16:37:11",
+      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "verdict": "present"
+    },
+    {
+      "order": 12,
+      "kind": "evidence",
+      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_canary_evidence.json",
+      "bytes": 1196204,
+      "mtime": "2026-09-03T16:36:03",
+      "verdict": "present"
+    }
+  ],
+  "render": {
+    "sheet": {
+      "sheet": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag.png",
+      "bytes": 9429508,
+      "panels": 7,
+      "layers": [
+        "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
+        "Input: nhdplus nldi (nhdplus_nldi)",
+        "Input: nhd area water (nhd_area_water)",
+        "Input: river bed elevation (copernicus_dem)",
+        "Outfall (derived) - scotia_humboldt_county_california_95562_united_s",
+        "Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s)"
+      ],
+      "not_rendered": [],
+      "off_canvas": [],
+      "panel_pngs": [
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_01_input-osm-waterways-map-context-the-modeled-river-is-the-nldi-centerline-river-geometry.png",
+          "layer": "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
+          "framed_on_layer": true
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_02_input-nhdplus-nldi-nhdplus-nldi.png",
+          "layer": "Input: nhdplus nldi (nhdplus_nldi)",
+          "framed_on_layer": true
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_03_input-nhd-area-water-nhd-area-water.png",
+          "layer": "Input: nhd area water (nhd_area_water)",
+          "framed_on_layer": false
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_04_input-river-bed-elevation-copernicus-dem.png",
+          "layer": "Input: river bed elevation (copernicus_dem)",
+          "framed_on_layer": true
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_05_outfall-derived-scotia-humboldt-county-california-95562-united-s.png",
+          "layer": "Outfall (derived) - scotia_humboldt_county_california_95562_united_s",
+          "framed_on_layer": true
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_06_dissolved-oxygen-sag-scotia-humboldt-county-california-95562-united-s.png",
+          "layer": "Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s)",
+          "framed_on_layer": true
+        },
+        {
+          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_07_canvas-view.png",
+          "layer": "CANVAS VIEW"
+        }
+      ]
+    },
+    "charts": [
+      {
+        "chart": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_chart_do_sag_curve.png",
+        "name": "do_sag_curve",
+        "title": "Dissolved-oxygen sag - Eel River near Scotia, California",
+        "render_summary": {
+          "views": 2,
+          "lines": 1,
+          "series": 3,
+          "rules": 1,
+          "bars": 0,
+          "points": 168,
+          "skipped": 0,
+          "x_log": false,
+          "y_log": false,
+          "legend_labels": [
+            "Dissolved O2",
+            "Streeter-Phelps closed form",
+            "CBOD"
+          ]
+        },
+        "bytes": 69746
+      }
+    ],
+    "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
+    "animations": {
+      "default": {
+        "frames": 7,
+        "animated": true,
+        "variable": "DISSOLVED O2",
+        "plane": "2d",
+        "peak_frame": 6,
+        "peak_time_s": 559.2000122070312,
+        "peak_value": 9.02200984954834,
+        "dry_frames": [],
+        "vmin": 8.775128898620606,
+        "vmax": 9.022000312805176,
+        "style_preset": "continuous_dissolved_oxygen_mgl",
+        "legend_note": "scaled to this run (p2-p98): 8.77513 to 9.022 mg/L",
+        "transform": "percentile",
+        "colormap": "RdYlBu",
+        "vectors": null,
+        "still_vectors": null,
+        "vector_density": null,
+        "arrow_size": null,
+        "vector_lw": null,
+        "vector_grid": null,
+        "still_vector_grid": null,
+        "bbox_ll": [
+          -124.09945518571809,
+          40.4914416907601,
+          -124.09079101591564,
+          40.49780495414799
+        ],
+        "local_origin_m": [
+          0.0,
+          0.0
+        ],
+        "run_id": "01M1MT1N3G8698J6M8WBXWTTFH",
+        "origin_bbox": [
+          -124.099455,
+          40.49144,
+          -124.090791,
+          40.497806
+        ],
+        "animation": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_animation.gif",
+        "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_final_frame.png",
+        "animation_bytes": 840163,
+        "peak_bytes": 1607816
+      }
+    },
+    "scales": {
+      "default": {
+        "quantity": "dissolved_oxygen",
+        "preset": "continuous_dissolved_oxygen_mgl",
+        "published_range": null,
+        "published_panels_agree": true,
+        "published_by": [],
+        "preset_scaled_panels": [],
+        "run_raster_presets": [
+          "continuous_dem",
+          "continuous_dissolved_oxygen"
+        ],
+        "rendered_range": [
+          8.775128898620606,
+          9.022000312805176
+        ],
+        "transform": "percentile",
+        "agrees": null
+      }
+    }
+  }
+}
