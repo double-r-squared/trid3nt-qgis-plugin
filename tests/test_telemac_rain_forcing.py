@@ -116,7 +116,7 @@ def test_a_unit_target_the_deck_cannot_carry_refuses():
 
 
 def test_the_transform_stamp_reaches_the_layers_provenance_row():
-    from trid3nt_server.workflows.telemac.steps import products as P
+    from trid3nt_server.workflows.telemac.products import products as P
 
     out = F._rain_forcing(150.0, None, None,
                           _rain_decl().producer.temporal)
@@ -128,7 +128,7 @@ def test_the_transform_stamp_reaches_the_layers_provenance_row():
 
 
 def test_a_gridmet_rung_row_names_the_real_source():
-    from trid3nt_server.workflows.telemac.steps import products as P
+    from trid3nt_server.workflows.telemac.products import products as P
 
     row, = P._rain_provenance({"rain_mm_per_day": 12.0,
                                "rain_rung": "gridmet_domain_mean",
@@ -137,6 +137,6 @@ def test_a_gridmet_rung_row_names_the_real_source():
 
 
 def test_a_run_with_no_rain_carries_no_rain_row():
-    from trid3nt_server.workflows.telemac.steps import products as P
+    from trid3nt_server.workflows.telemac.products import products as P
 
     assert P._rain_provenance({"rain_mm_per_day": None}) == []

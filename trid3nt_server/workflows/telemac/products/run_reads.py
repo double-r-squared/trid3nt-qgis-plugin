@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.run_reads")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.products.run_reads")
 
 __all__ = [
     "continuity_rel_error",
@@ -137,7 +137,7 @@ def sediment_scalars(*, listing_text: str, deck: Mapping[str, Any],
     if net is not None and injected > 0.0:
         stats["sediment_deposit_fraction"] = round(
             min(max(float(net) / injected, 0.0), 1.0), 4)
-    from .author import normalize_gradation
+    from ..steps.author import normalize_gradation
 
     classes = normalize_gradation(deck.get("sediment_gradation") or ())
     # A SORTED bed needs a mixture to sort: a single class is uniform by

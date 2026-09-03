@@ -19,7 +19,7 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.workflows.telemac.postprocess_telemac import (
+from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
     PostprocessTelemacError,
     _local_mesh_origin,
 )

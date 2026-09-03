@@ -13,7 +13,7 @@ import math
 
 import pytest
 
-from trid3nt_server.workflows.telemac.steps import run_reads as R
+from trid3nt_server.workflows.telemac.products import run_reads as R
 
 #: The in-image listing shape - the block GAIA prints once its run closes.
 _LISTING = """
@@ -289,7 +289,7 @@ def test_the_reach_run_says_out_loud_what_it_did_not_wet(monkeypatch):
     import asyncio
 
     from trid3nt_server.workflows.lib.journal import bind_notes, drain_notes
-    from trid3nt_server.workflows.telemac.steps import products as PR
+    from trid3nt_server.workflows.telemac.products import products as PR
 
     _selafin(monkeypatch, [1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
     token = bind_notes()
@@ -307,7 +307,7 @@ def test_an_unmeasurable_result_costs_the_run_nothing(monkeypatch):
 
     from trid3nt_server.workflows.lib.journal import bind_notes, drain_notes
     from trid3nt_server.workflows.telemac import result_reader as reader
-    from trid3nt_server.workflows.telemac.steps import products as PR
+    from trid3nt_server.workflows.telemac.products import products as PR
 
     def _boom(_path):
         raise RuntimeError("not a SELAFIN")

@@ -22,8 +22,8 @@ from trid3nt_server.workflows.telemac import result_reader as R
 #: format: a second implementation of it is a second thing to be wrong about it.
 _READERS = (
     "trid3nt_server/workflows/telemac/result_reader.py",
-    "trid3nt_server/workflows/telemac/postprocess_telemac.py",
-    "trid3nt_server/workflows/telemac/steps/run_reads.py",
+    "trid3nt_server/workflows/telemac/products/postprocess_telemac.py",
+    "trid3nt_server/workflows/telemac/products/run_reads.py",
     "trid3nt_server/workflows/telemac/steps/deck.py",
 )
 

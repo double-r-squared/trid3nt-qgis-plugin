@@ -425,7 +425,7 @@ package SolveSeam {
 
     part runReader : RunReader {
         doc /*
-        code: trid3nt_server/workflows/telemac/steps/run_reads.py
+        code: trid3nt_server/workflows/telemac/products/run_reads.py
         */
     }
 
@@ -438,7 +438,7 @@ package SolveSeam {
 
     part resultPostprocess : ResultPostprocess {
         doc /*
-        code: trid3nt_server/workflows/telemac/postprocess_telemac.py
+        code: trid3nt_server/workflows/telemac/products/postprocess_telemac.py
         */
         port fieldsIn : FieldsIn;
     }

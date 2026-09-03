@@ -275,7 +275,7 @@ def telemac_result(monkeypatch: pytest.MonkeyPatch):
                      for name in varnames},
         }
         monkeypatch.setattr(
-            "trid3nt_server.workflows.telemac.postprocess_telemac.read_selafin",
+            "trid3nt_server.workflows.telemac.products.postprocess_telemac.read_selafin",
             lambda _path: mesh)
         return mesh
 

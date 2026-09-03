@@ -41,13 +41,13 @@ from trid3nt_server.workflows.lib import Step
 from trid3nt_server.emission.publish import PublishLayerError, publish_layer
 
 from ..helpers.errors import TelemacDyeScenarioError
-from .solve import download_result_selafin
+from ..steps.solve import download_result_selafin
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.products")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.products.products")
 
 __all__ = ["Products", "publish_do_products", "publish_dye_products"]
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_PRODUCTS = "trid3nt_server.workflows.telemac.products"
 
 def _release_provenance(deck: dict[str, Any]) -> SyntheticInput:
     """Where the source entered the water, as the layer's own record.
@@ -153,7 +153,7 @@ def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
     the case discover the SELAFIN sibling, and the dispatch-level guardrail owns
     the map honesty.
     """
-    from trid3nt_server.workflows.telemac.postprocess_telemac import peak_layer_id
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import peak_layer_id
 
     honesty = _honesty_note(location_name, substance)
     update = {**mesh_meta, "synthetic_inputs": list(synthetic_inputs)}
@@ -221,7 +221,7 @@ async def _fold_sediment_products(peak: TelemacDyeLayerURI, *, run_id: str,
     run gross deposition can equal gross erosion with net ~0, so the map is
     correctly empty and the narrated mass must match it.
     """
-    from trid3nt_server.workflows.telemac.postprocess_telemac import (
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         PostprocessTelemacError,
         postprocess_telemac_deposition,
     )
@@ -379,7 +379,9 @@ async def publish_dye_products(*, deck: dict[str, Any], solve: dict[str, Any],
                                carrier_discharge: dict[str, Any]) -> TelemacDyeLayerURI:
     """Postprocess the solved reach into its published layers + narration scalars."""
     from trid3nt_server.emission.pipeline_emitter import current_emitter
-    from trid3nt_server.workflows.telemac.postprocess_telemac import postprocess_telemac
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
+        postprocess_telemac,
+    )
     from trid3nt_server.workflows.telemac.results_mesh_seam import (
         publish_results_mesh_via_seam,
     )
@@ -474,7 +476,7 @@ async def publish_do_products(*, deck: dict[str, Any], solve: dict[str, Any],
     """
     from trid3nt_contracts.telemac_contracts import TELEMAC_DO_STYLE_PRESET
     from trid3nt_server.emission.pipeline_emitter import current_emitter
-    from trid3nt_server.workflows.telemac.postprocess_telemac import (
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         postprocess_telemac_do,
     )
 
@@ -543,7 +545,7 @@ class Products:
     @staticmethod
     def dye(*, deck: Any, solve: Any, carrier_discharge: Any) -> Step:
         """The dye/oil/sediment deliverables: peak COG, results mesh, class extras."""
-        return Step(runner=f"{_STEPS}.products.publish_dye_products", stage="publish",
+        return Step(runner=f"{_PRODUCTS}.products.publish_dye_products", stage="publish",
                     kwargs={"deck": deck, "solve": solve,
                             "carrier_discharge": carrier_discharge})
 
@@ -551,6 +553,6 @@ class Products:
     def dissolved_oxygen(*, deck: Any, solve: Any, process: Any,
                          carrier_discharge: Any) -> Step:
         """The WAQTEL O2 deliverables: dissolved-O2 field COG + the along-reach sag."""
-        return Step(runner=f"{_STEPS}.products.publish_do_products", stage="publish",
+        return Step(runner=f"{_PRODUCTS}.products.publish_do_products", stage="publish",
                     kwargs={"deck": deck, "solve": solve, "do_sag_config": process,
                             "carrier_discharge": carrier_discharge})

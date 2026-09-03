@@ -456,7 +456,7 @@ async def publish_agitation_products(*, deck: dict[str, Any],
                                      solve: dict[str, Any]) -> ArtemisAgitationLayerURI:
     """Postprocess the solved harbour into its published layer + scalars."""
     from trid3nt_server.emission.pipeline_emitter import current_emitter
-    from trid3nt_server.workflows.telemac.postprocess_telemac import postprocess_artemis
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import postprocess_artemis
 
     emitter = current_emitter()
     run_id = solve["run_id"]

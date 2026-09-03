@@ -47,7 +47,7 @@ from ..helpers.forcing import (
     resolve_rain_forcing,
     review_resolved_inputs,
 )
-from .products import Products, publish_do_products, publish_dye_products
+from ..products.products import Products, publish_do_products, publish_dye_products
 from .rain_on_grid import (
     AcquireCatchment,
     Infiltration,

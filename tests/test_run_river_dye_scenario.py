@@ -324,11 +324,11 @@ def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
 # ===========================================================================
 def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.solver import solver as solver_mod
-    from trid3nt_server.workflows.telemac import postprocess_telemac as pp_mod
+    from trid3nt_server.workflows.telemac.products import postprocess_telemac as pp_mod
     from trid3nt_server.workflows.telemac import release_layer as rel_mod
     from trid3nt_server.workflows.telemac import results_mesh_seam as seam_mod
     from trid3nt_server.workflows.shared import run_products as products_mod
-    from trid3nt_server.workflows.telemac.steps import products as prod_steps
+    from trid3nt_server.workflows.telemac.products import products as prod_mod
     from trid3nt_server.workflows.mesh import step as mesh_step
     from trid3nt_server.workflows.telemac.helpers import reach as reach_mod
     from trid3nt_server.workflows.telemac.helpers import forcing as forcing_mod
@@ -463,9 +463,9 @@ def _install_step_mocks(captured: dict):
         patch.object(solve_steps, "stage_manifest", _fake_stage),
         patch.object(solve_steps, "read_run_metrics",
                      lambda rid: {"utm_epsg": 32611}),
-        patch.object(prod_steps, "download_result_selafin",
+        patch.object(prod_mod, "download_result_selafin",
                      lambda rid: "/tmp/telemac/does-not-matter.slf"),
-        patch.object(prod_steps, "_publish_peak_layer", _fake_publish),
+        patch.object(prod_mod, "_publish_peak_layer", _fake_publish),
         patch.object(pp_mod, "postprocess_telemac", _fake_postprocess),
         patch.object(seam_mod, "publish_results_mesh_via_seam", _amock(0)),
         patch.object(rel_mod, "publish_release_point", _capture_marker),

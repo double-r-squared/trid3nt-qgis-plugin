@@ -220,7 +220,7 @@ async def publish_stratified_products(*, deck: dict[str, Any],
     and the dispatch seam puts that one on the canvas.
     """
     from trid3nt_server.emission.pipeline_emitter import current_emitter
-    from trid3nt_server.workflows.telemac.postprocess_telemac import (
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         postprocess_telemac3d,
     )
 

@@ -88,7 +88,7 @@ __all__ = [
     "TELEMAC_WSE_WET_DEPTH_M",
 ]
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.postprocess_telemac")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.products.postprocess_telemac")
 
 #: Concentration (mg/L) below which a node is treated as "no dye". OPEN-23
 #: (2026-07-16): a HARDCODED 1.0 mg/L false-flagged real-but-dilute plumes as

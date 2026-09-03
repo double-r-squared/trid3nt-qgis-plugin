@@ -685,7 +685,7 @@ def _dryness_note(scalars: Mapping[str, Any], *, rain_mm: float | None) -> str:
     hanging the finding on an exactly-zero outflow instead would hide it behind
     a rounding.
     """
-    from trid3nt_server.workflows.telemac.postprocess_telemac import (
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         TELEMAC_WSE_WET_DEPTH_M,
     )
 
@@ -751,7 +751,7 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
                                         ) -> TelemacRainOnGridLayerURI:
     """Postprocess the solved catchment into its published layers + scalars."""
     from trid3nt_server.emission.pipeline_emitter import current_emitter
-    from trid3nt_server.workflows.telemac.postprocess_telemac import (
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         postprocess_telemac_wse,
     )
     from trid3nt_server.workflows.telemac.results_mesh_seam import (
@@ -759,7 +759,7 @@ async def publish_rain_on_grid_products(*, deck: dict[str, Any],
     )
 
     from .open_water import download_open_water_result
-    from .run_reads import continuity_rel_error, outlet_hydrograph
+    from ..products.run_reads import continuity_rel_error, outlet_hydrograph
 
     emitter = current_emitter()
     run_id, utm_epsg = solve["run_id"], int(solve["utm_epsg"])

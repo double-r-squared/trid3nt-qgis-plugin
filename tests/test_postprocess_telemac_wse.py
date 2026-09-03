@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac import postprocess_telemac as P
+from trid3nt_server.workflows.telemac.products import postprocess_telemac as P
 
 
 VARS = ["VELOCITY U", "WATER DEPTH", "FREE SURFACE", "BOTTOM"]

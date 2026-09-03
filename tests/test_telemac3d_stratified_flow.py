@@ -136,7 +136,7 @@ def test_the_3d_layers_are_georeferenced_from_the_aoi_corner():
     Reprojecting those local metres as ABSOLUTE UTM put BOTH COGs at the zone's
     false origin - measured on a Lake Superior run at lon -91.49, lat 0.0.
     """
-    from trid3nt_server.workflows.telemac.postprocess_telemac import _local_mesh_origin
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import _local_mesh_origin
 
     x_org, y_org = _local_mesh_origin((-87.60, 46.70, -86.60, 47.20), 32616)
     assert 300_000 < x_org < 700_000 and 5_100_000 < y_org < 5_300_000

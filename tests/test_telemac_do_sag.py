@@ -222,9 +222,9 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
         forcing as forcing_mod,
         reach as reach_mod,
     )
+    from trid3nt_server.workflows.telemac.products import products as products_mod
     from trid3nt_server.workflows.telemac.steps import (
         deck as deck_mod,
-        products as products_mod,
         solve as solve_mod,
     )
 
@@ -366,7 +366,7 @@ class _Measured:
 
 # --- the analytical overlay: wired in, anchored, and honest about absence ---- #
 def _overlay(**kw):
-    from trid3nt_server.workflows.telemac.postprocess_telemac import (
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         _streeter_phelps_overlay,
     )
     return _streeter_phelps_overlay(**kw)
@@ -415,7 +415,7 @@ def test_the_overlay_reproduces_the_closed_form_it_is_graded_against():
 
 # --- the downstream axis is pointed by the SOLVED flow ----------------------- #
 def test_the_principal_axis_is_oriented_by_the_solved_velocity():
-    from trid3nt_server.workflows.telemac.postprocess_telemac import (
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         _downstream_coordinate,
     )
 

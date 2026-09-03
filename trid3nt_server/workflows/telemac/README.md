@@ -10,7 +10,6 @@ everything else it uses is the facade's or the step family's.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The package door. |
-| `postprocess_telemac.py` | Turns a solved result's fields into the map products: the peak field, the rasterized grids, the animated frames. |
 | `result_reader.py` | `read_selafin` - a solved result's mesh and per-variable frames, read by the engine's own `TelemacFile` inside the TELEMAC image. |
 | `release_layer.py` | The reach's release point published as a context layer on the canvas. |
 | `release_point.py` | Where a release is allowed to be - inside the domain, on the river - the refusal when a supplied point is not, and where a derived one is settled inside the accepted mesh. |
@@ -24,6 +23,7 @@ everything else it uses is the facade's or the step family's.
 | folder | what it is |
 | --- | --- |
 | `steps/` | The shared step families every TELEMAC template declares. See below. |
+| `products/` | What a solved run is answered with: the postprocessors, the reach deliverables, the run's own files read on the server. See its own README. |
 | `helpers/` | What a declaration summons: the reach front, the declared forcing, the substance class, the WAQTEL relations, the typed failures. See its own README. |
 | `agitation/` | `artemis_harbor_agitation` - a swell at the harbour mouth to the agitation field inside it (ARTEMIS). |
 | `do_sag/` | `telemac_do_sag` - an outfall's BOD load to the dissolved-oxygen sag downstream (TELEMAC-2D + WAQTEL). |
@@ -42,8 +42,6 @@ everything else it uses is the facade's or the step family's.
 | `deck.py` | The DECK step: params and forcing to the run's own record of what it solves, staged for the box. |
 | `oil_templates/` | The user-fortran source an oil-class run compiles into its deck. |
 | `open_water.py` | The open-water front of the AOI templates: stage, solve, read, surface. |
-| `products.py` | The PRODUCTS step: a solved reach to the map layers, the scalars and the chart spec. |
 | `rain_on_grid.py` | The rain-on-grid front: a catchment in, an outlet hydrograph out. |
-| `run_reads.py` | What a solved run's own files say, read on the server. |
 | `solve.py` | The SOLVE step: stage the manifest, dispatch the worker, wait, surface the gates. |
 | `stratified.py` | The TELEMAC-3D deck writer and its deliverable. |

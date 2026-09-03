@@ -299,7 +299,7 @@ def _cog_object_exists(cog_uri: str) -> bool:
     """True when ``cog_uri`` names an object physically present in the store.
 
     head_object via the established pattern (mirrors
-    ``telemac.steps.products._s3_object_exists``): any lookup failure -- a
+    ``telemac.products.products._s3_object_exists``): any lookup failure -- a
     malformed uri, an unreachable bucket, a 404 -- reads as absent, never
     raises, so a fabricated URI is only ever registered once confirmed real.
     """
