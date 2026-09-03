@@ -329,13 +329,17 @@ def _mesh_field(mesh: Mapping[str, Any], name: str) -> str:
     return str(uri)
 
 
-def _outlet_boundary(mesh: Mapping[str, Any]) -> int:
-    """WHICH numbered liquid boundary the declared OUTLET role is, 1-based.
+def _outlet_boundary(mesh: Mapping[str, Any]) -> tuple[int, str]:
+    """The declared OUTLET as ``(number, what its own .cli quad prescribes)``.
 
-    The solver numbers its liquid boundaries in the order the accepted topology
-    recorded when the ``.cli`` was written, and it prints one flux per number in
-    its own volume balance. So this is what turns "the outlet" into the series the
-    hydrograph reads - the role, resolved against the numbering the engine uses.
+    The solver numbers its liquid boundaries by walking the geometry, the accepted
+    topology recorded that numbering when the ``.cli`` was written, and the solver
+    prints one flux per number in its own volume balance. So the number is what
+    turns "the outlet" into the series the hydrograph reads.
+
+    The prescription rides with it because this deck writes NO value at that
+    number: the outlet is solved on its code alone, and the deck states which
+    code that is rather than claiming a boundary condition nobody measured.
     """
     from trid3nt_server.workflows.mesh.topology import read_topology
 
@@ -348,7 +352,8 @@ def _outlet_boundary(mesh: Mapping[str, Any]) -> int:
             "to measure. Move the pour point onto the basin's own outlet, or mesh "
             "it finer so a boundary node reaches it.",
             error_code="TELEMAC_ROG_NO_OUTLET_NODES")
-    return order.index(_OUTLET_ROLE) + 1
+    number = order.index(_OUTLET_ROLE) + 1
+    return number, str(topology["liquid_boundary_prescribes"][number - 1])
 
 
 def _authoring_dir(run_tag: str) -> Path:
@@ -393,7 +398,7 @@ async def write_rain_on_grid_deck(
     utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
     probes = dict(getattr(artifact, "probes", None) or {})
     provenance = dict(catchment.get("provenance") or {})
-    outlet_boundary = _outlet_boundary(catchment)
+    outlet_boundary, outlet_prescribes = _outlet_boundary(catchment)
     mesh_size_m = float(catchment.get("min_edge_m") or mesh_resolution_m or 0.0)
     name = str(getattr(artifact, "name", None) or "watershed")
 
@@ -429,7 +434,8 @@ async def write_rain_on_grid_deck(
             results=_RESULT, cas_name=_STEERING, cn_map=_CN_MAP,
             friction_laws=_FRICTION_LAWS, zones_file=_ZONES_FILE,
             rain_mm_per_day=float(rain["intensity_mm_per_hr"]) * 24.0,
-            runoff_path="native", hyetograph_file=hyeto)
+            runoff_path="native", hyetograph_file=hyeto,
+            outlet_boundary=outlet_boundary, outlet_prescribes=outlet_prescribes)
         return friction
 
     authored_stats = await asyncio.to_thread(_author)

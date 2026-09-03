@@ -251,7 +251,8 @@ def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None,
         Path(rundir, "mesh.cli").write_text("2 2 2\n")
         return {"geo_slf": Path(rundir, "mesh.slf"), "cli": Path(rundir, "mesh.cli"),
                 "stats": {"nptfr": 4, "n_liquid_boundaries": 1,
-                          "liquid_boundary_roles": ["open"]}}
+                          "liquid_boundary_roles": ["open"],
+                          "liquid_boundary_prescribes": ["elevation"]}}
 
     shoreline = tmp_path / "shoreline" / "GSHHS_i_L1.shp"
     shoreline.parent.mkdir(parents=True, exist_ok=True)

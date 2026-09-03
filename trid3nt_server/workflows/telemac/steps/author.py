@@ -467,6 +467,7 @@ def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
 def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
                       geometry: str, boundary: str, results: str,
                       cas_name: str, liquid_boundary_order: Sequence[str],
+                      liquid_boundary_prescribes: Sequence[str],
                       bed: Mapping[str, Any], source_utm: tuple[float, float],
                       restart: str | None = None,
                       centerline_utm: Any = None,
@@ -482,7 +483,11 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
     the settled release point, in the mesh's own metres.
 
     ``liquid_boundary_order`` is the MEASURED order the pair writer reported, and
-    the PRESCRIBED lists are written in it. ``bed`` is the reach MEASURED on the
+    the PRESCRIBED lists are written in it. WHICH list carries each boundary's
+    value comes from ``liquid_boundary_prescribes`` - what the ``.cli`` quad on
+    that boundary makes the engine read - never from the role name, so the
+    steering file cannot state a level where the code file states a free exit.
+    ``bed`` is the reach MEASURED on the
     accepted mesh - the bed at its declared roles, the section its outflow face
     cuts, and the length it was built over - which the outflow stage is derived
     from as a normal depth and which the deck states alongside the result.
@@ -512,15 +517,24 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
                 f"/  measured outflow section for {normal['q_m3s']:g} m3/s at "
                 f"{normal['law']} {normal['coefficient']:g}\n")
     flowrates, elevations, tracers = [], [], []
-    for role in liquid_boundary_order:
-        if role == "inflow":
-            flowrates.append(f"{P.inflow_q_m3s}")
-            elevations.append("0.0")
-            tracers += _clean_river_tracers(P) if is_do_sag else ["0.0"]
-        else:
-            flowrates.append("0.0")
-            elevations.append(f"{outflow_stage:.3f}")
-            tracers += _clean_river_tracers(P) if is_do_sag else ["0.0"]
+    for number, (role, prescribes) in enumerate(
+            zip(liquid_boundary_order, liquid_boundary_prescribes), start=1):
+        if prescribes not in ("flowrate", "elevation"):
+            raise DeckAuthorError(
+                "TELEMAC_BOUNDARY_PRESCRIBES_NOTHING",
+                f"liquid boundary {number} ({role!r}) carries a .cli code quad "
+                f"that prescribes {prescribes!r}, so nothing this deck writes at "
+                "that number would be read; the boundary file and the steering "
+                "file would describe different boundaries.")
+        flowrates.append(f"{P.inflow_q_m3s}" if prescribes == "flowrate" else "0.0")
+        elevations.append(f"{outflow_stage:.3f}" if prescribes == "elevation"
+                          else "0.0")
+        tracers += _clean_river_tracers(P) if is_do_sag else ["0.0"]
+    # Each number, its role and what its own .cli quad prescribes: the deck's
+    # record of the agreement, checkable against the boundary file beside it.
+    boundary_line = ", ".join(
+        f"{n} {role}={what}" for n, (role, what) in enumerate(
+            zip(liquid_boundary_order, liquid_boundary_prescribes), start=1))
 
     sx, sy = float(source_utm[0]), float(source_utm[1])
     written["sources"] = (write_sources_outfall(rundir, deck=deck) if is_do_sag
@@ -607,7 +621,7 @@ def author_reach_deck(rundir: Path | str, *, deck: Mapping[str, Any],
         f"/  {float(P.pulse_window_s):.0f}s, so the plume advects and dilutes.\n")
     cas = f"""/-------------------------------------------------------------------/
 /  TELEMAC-2D REACH  -  {P.name}
-{release_line}/  Measured liquid-boundary order: {list(liquid_boundary_order)}
+{release_line}/  Measured liquid boundaries: {boundary_line}
 {bed_line}/-------------------------------------------------------------------/
 GEOMETRY FILE                   = {os.path.basename(geometry)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(boundary)}
@@ -1475,6 +1489,7 @@ def author_rog_deck(rundir: Path | str, *, deck: Mapping[str, Any],
                     geometry: str, boundary: str, results: str, cas_name: str,
                     cn_map: str, friction_laws: str, zones_file: str,
                     rain_mm_per_day: float, runoff_path: str,
+                    outlet_boundary: int, outlet_prescribes: str,
                     hyetograph_file: str | None = None) -> str:
     """Write the rain-on-grid ``.cas`` -> the basename written.
 
@@ -1490,8 +1505,11 @@ def author_rog_deck(rundir: Path | str, *, deck: Mapping[str, Any],
       * PRE-PROCESSED - the excess was computed before the run, so the engine's
         infiltration is off and the abstraction is not taken twice.
 
-    All three share the free-exit outlet, the distributed Manning and the dry
-    start. There are NO tracers: the outlet hydrograph is the product.
+    All three share the distributed Manning, the dry start and ONE outlet at the
+    pour point. This deck writes no value at that boundary's number, so the deck
+    states what its own ``.cli`` quad prescribes rather than naming a boundary
+    condition nobody measured. There are NO tracers: the outlet hydrograph is the
+    product.
     """
     _consume(deck)
     P = _Sheet(deck)
@@ -1543,7 +1561,8 @@ def author_rog_deck(rundir: Path | str, *, deck: Mapping[str, Any],
 /  TELEMAC-2D  RAIN-ON-GRID  -  {name}
 /  Rain-fed catchment on a delineated watershed TIN (UTM metres).
 /  Runoff path: {runoff_path}. Rain = {rain_mm_per_day:g} mm/day.
-/  Distributed Manning; free-exit outlet at the pour point.
+/  Distributed Manning; outlet at the pour point is liquid boundary
+/  {outlet_boundary}, whose boundary-file code prescribes {outlet_prescribes}.
 /-------------------------------------------------------------------/
 GEOMETRY FILE                   = {os.path.basename(geometry)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(boundary)}

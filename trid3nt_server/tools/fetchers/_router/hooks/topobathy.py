@@ -1098,6 +1098,23 @@ def _composite_sources_to_array(
     return composite, dst_transform, target_crs, painted, footprints
 
 
+def painted_fraction(array: Any) -> float:
+    """The share of the AOI grid that carries a real bed value.
+
+    The composite is built on a bbox-clipped grid, so every one of its cells IS
+    an AOI cell and a NaN is a cell no source painted. That makes this a measure
+    of PAINTED BED rather than of delivered footprint: a tile can cover the AOI
+    and still leave a quarter of it nodata, and crediting the footprint reports
+    a bed the programme does not publish as one it does.
+    """
+    import numpy as np
+
+    grid = np.asarray(array, dtype="float64")
+    if grid.size == 0:
+        return 0.0
+    return float(np.count_nonzero(np.isfinite(grid)) / grid.size)
+
+
 # ---------------------------------------------------------------------------
 # Orchestration -- the 4-leg select + merge, returning the array + provenance.
 # ---------------------------------------------------------------------------

@@ -443,8 +443,11 @@ def _install_step_mocks(captured: dict):
         patch.object(reach_steps, "_meshed_fraction", lambda mesh, centerline: 1.0),
         patch.object(deck_steps, "write_reach_deck", _capture_deck),
         patch.object(deck_steps, "read_topology",
-                     lambda _uri: {"roles": dict(MESH_ROLES),
-                                   "liquid_boundary_order": ["outflow", "inflow"]}),
+                     lambda _uri: {
+                         "roles": dict(MESH_ROLES),
+                         "liquid_boundary_order": ["outflow", "inflow"],
+                         "liquid_boundary_prescribes": ["elevation",
+                                                        "flowrate"]}),
         patch.object(deck_steps, "read_centerline_utm",
                      lambda _src, _epsg, **_kw: __import__("numpy").array(
                          [[0.0, 0.0], [6000.0, 0.0]])),

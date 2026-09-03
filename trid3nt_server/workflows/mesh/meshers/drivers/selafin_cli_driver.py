@@ -13,18 +13,20 @@ named is a wall). Emits the two files plus ``/data/selafin_cli_stats.json``.
 
 The stats carry the MEASURED liquid-boundary order: TELEMAC numbers its liquid
 boundaries by walking the contours, and a deck states PRESCRIBED FLOWRATES and
-PRESCRIBED ELEVATIONS in that numbering. Reading the numbering off the boundary
-file that was just written is what lets a deck be authored ONCE, against the
-order the solver will actually use, instead of being probed for by a throwaway
-solve.
+PRESCRIBED ELEVATIONS in that numbering. The numbering is measured HERE, by the
+engine's own rule (``bief/front2.f``, ported in :func:`_liquid_boundaries`),
+which is what lets a deck be authored ONCE against the order the solver will
+actually use instead of being probed for by a throwaway solve.
+
+The stats also carry what each numbered boundary PRESCRIBES, read off the code
+quad this file just wrote for it. That is the cross-file contract: one table
+decides the ``.cli`` quad, and the steering keyword the deck writes at that
+boundary's number is derived from the same quad, so a face cannot be a free exit
+in one file and a prescribed level in the other.
 
 The IPOBO written into the geometry and the contours the ``.cli`` is numbered
 from come from ONE walk of ONE connectivity, which is what makes the two files
 one artifact.
-
-``Conlim.put_content`` does not round-trip a ``.cli`` written by ``set_bnd`` - it
-drops rows and the NUMLIQ column - so Conlim is used for its numbering and the
-file itself is hermes's.
 """
 
 from __future__ import annotations
@@ -37,7 +39,9 @@ sys.path.insert(0, "/opt/conda/opentelemac/scripts/python3")
 
 import numpy as np  # noqa: E402
 
-from pretel.meshes import get_ipobo  # noqa: E402
+#: TELEMAC's own boundary-condition type codes, from ``declarations_telemac.f``:
+#: a prescribed value, a free exit, a solid wall.
+KENT, KSORT, KLOG = 5, 4, 2
 
 #: Boundary role -> the TELEMAC ``(LIHBOR, LIUBOR, LIVBOR, LITBOR)`` quad that
 #: states it. An inflow prescribes velocity and tracer and leaves the depth free;
@@ -45,12 +49,32 @@ from pretel.meshes import get_ipobo  # noqa: E402
 #: prescribed water level, free velocity - and are named apart because the
 #: measured liquid-boundary order is what a deck author reads to decide which
 #: boundary carries a flowrate and which a level.
+#:
+#: THIS IS THE ONE AUTHORING DECISION for the pair. The quad lands in the
+#: ``.cli`` and :func:`_prescribes` derives the steering keyword from the same
+#: quad, so moving an entry here moves both files together.
 _ROLE_CODES = {
-    "wall": (2, 2, 2, 2),
-    "inflow": (4, 5, 5, 5),
-    "outflow": (5, 4, 4, 4),
-    "open": (5, 4, 4, 4),
+    "wall": (KLOG, KLOG, KLOG, KLOG),
+    "inflow": (KSORT, KENT, KENT, KENT),
+    "outflow": (KENT, KSORT, KSORT, KSORT),
+    "open": (KENT, KSORT, KSORT, KSORT),
 }
+
+
+def _prescribes(codes) -> str:
+    """What a code quad makes the engine READ from the steering file.
+
+    ``bord.f`` consumes PRESCRIBED ELEVATIONS only where ``LIHBOR`` is ``KENT``
+    and the prescribed flowrate only where ``LIUBOR`` is; a value written against
+    any other code is a number the engine never looks at. Reading the quad rather
+    than the role name is what leaves the deck unable to disagree with the file.
+    """
+    lihbor, liubor = int(codes[0]), int(codes[1])
+    if lihbor == KENT:
+        return "elevation"
+    if liubor == KENT:
+        return "flowrate"
+    return "nothing"
 
 
 def _load(path: str):
@@ -73,6 +97,10 @@ def _boundary(x, y, ikle):
     would read a boundary node as interior, so the walk is the authority here and
     every node on it is numbered once, in walk order.
     """
+    # Imported inside the walk so the numbering rules above it are readable
+    # outside the image, where pretel does not exist.
+    from pretel.meshes import get_ipobo
+
     _, pbounds = get_ipobo(x, y, np.asarray(ikle, dtype=np.int32), debug=False)
     contours = [[int(n) for n in ring] for ring in pbounds]
     ipobo = np.zeros(len(x), dtype=np.int32)
@@ -126,29 +154,137 @@ def _roles_by_node(roles: dict) -> dict:
     return out
 
 
-def _numliq_roles(bnd, role_of: dict) -> list:
-    """The role of each liquid boundary, in TELEMAC's own numbering.
+def _successors(contour_lengths) -> list:
+    """``kp1bor`` over the written row order: the next row on the SAME contour.
 
-    ``set_numliq`` wrote a liquid-boundary number onto every liquid row of the
-    ``.cli``; joining that column to the roles the caller named is the MEASURED
-    order a deck is authored against. A boundary whose rows carry more than one
-    role is reported as the joined name rather than resolved - it means one
-    contiguous liquid stretch was asked to be two things.
+    TELEMAC walks the boundary by this successor and never by row order, so a run
+    that straddles a contour's first row is ONE boundary to the engine. The rows
+    are written contour after contour, in walk order, because IPOBO numbered them
+    that way - which is what makes a contour a slice of consecutive rows here.
     """
-    import numpy as np
+    kp1: list = []
+    at = 0
+    for length in contour_lengths:
+        kp1 += [at + (i + 1) % length for i in range(length)]
+        at += length
+    return kp1
 
-    numliq = np.asarray(bnd.por["lq"], dtype=int)
-    nodes = np.asarray(bnd.bor["n"], dtype=int) - 1
-    order = []
-    for index in range(1, int(bnd.nfrliq) + 1):
-        here = sorted({role_of.get(int(n), "wall")
-                       for n in nodes[numliq == index]})
-        order.append("+".join(here) if here else "wall")
-    return order
+
+def _south_west(keys, unvisited) -> int:
+    """The row FRONT2 starts a contour at: south-westernmost, then southernmost.
+
+    The engine picks its start point off the GEOMETRY, not off the file, and the
+    whole numbering follows from it.
+    """
+    sums = [keys[k][0] for k in unvisited]
+    lowest, highest = min(sums), max(sums)
+    eps = (highest - lowest) * 1.0e-4
+    corner = min(unvisited, key=lambda k: keys[k][0])
+    ties = [k for k in unvisited if abs(keys[k][0] - lowest) < eps]
+    return min(ties, key=lambda k: keys[k][1]) if ties else corner
+
+
+def _liquid_boundaries(x, y, bnodes, codes, contour_lengths) -> list:
+    """TELEMAC's OWN liquid-boundary numbering -> one ``[first, last]`` row pair.
+
+    A port of ``bief/front2.f``, which is where the engine decides which boundary
+    is number 1. It does NOT start at the first row of the file: it starts each
+    contour at the south-westernmost boundary point, walks the successor from
+    there, calls a segment solid when EITHER of its ends is solid, and folds the
+    run straddling that start point back into one boundary.
+
+    Numbering from row order instead agrees only by luck. On a reach whose inflow
+    face happens to hold the domain's south-west corner the two disagree, and the
+    deck then states its level at the inflow's number and its flowrate at the
+    outflow's - each into a code that never reads it, so the inflow supplies
+    nothing and the outflow is clamped to elevation zero and drains the domain.
+    """
+    kp1 = _successors(contour_lengths)
+    quads = [(int(quad[0]), int(quad[1])) for quad in codes]
+    solid = [quad[0] == KLOG for quad in quads]
+    keys = [(float(x[n]) + float(y[n]), float(y[n])) for n in bnodes]
+    seen = [False] * len(kp1)
+    runs: list = []
+    while not all(seen):
+        start = _south_west(keys, [k for k in range(len(seen)) if not seen[k]])
+        opened_first = not (solid[start] or solid[kp1[start]])
+        first_run = len(runs) + 1 if opened_first else 0
+        if opened_first:
+            runs.append([start, start])
+        ends_liquid = False
+        ends_solid = False
+        seen[start] = True
+        previous, here = start, kp1[start]
+        while True:
+            back, at, ahead = solid[previous], solid[here], solid[kp1[here]]
+            if back and not at and not ahead:
+                runs.append([here, here])
+                ends_liquid, ends_solid = True, False
+            elif not back and not at and ahead:
+                runs[-1][1] = here
+                ends_liquid, ends_solid = False, True
+            elif not back and not at and not ahead:
+                ends_liquid, ends_solid = True, False
+                # A liquid-liquid seam where the CODES change is a boundary
+                # break to the engine: one prescribed level and one prescribed
+                # flowrate touching are two boundaries, not one.
+                if quads[here] != quads[kp1[here]]:
+                    runs[-1][1] = here
+                    runs.append([kp1[here], kp1[here]])
+            elif back and not at and ahead:
+                raise ValueError(
+                    f"boundary node {int(bnodes[here])} is a lone liquid point "
+                    "between two solid ones; TELEMAC (front2.f) refuses it")
+            elif not back and at and not ahead:
+                raise ValueError(
+                    f"boundary node {int(bnodes[here])} is a lone solid point "
+                    "between two liquid ones; TELEMAC (front2.f) refuses it")
+            seen[here] = True
+            previous, here = here, kp1[here]
+            if here == start:
+                break
+        if ends_solid:
+            if opened_first:
+                runs[first_run - 1][0] = start
+        elif ends_liquid:
+            if opened_first:
+                if first_run != len(runs):
+                    runs[first_run - 1][0] = runs[-1][0]
+                    runs.pop()
+            else:
+                runs[-1][1] = start
+        elif opened_first:
+            # A contour of ONE type: an all-liquid ring is one circular boundary
+            # that begins and ends at the start point.
+            runs[first_run - 1] = [start, start]
+    return runs
+
+
+def _numliq(runs, kp1, nptfr) -> list:
+    """The liquid-boundary number on every row, 0 where the row is solid."""
+    numliq = [0] * nptfr
+    for number, (first, last) in enumerate(runs, start=1):
+        row = first
+        numliq[row] = number
+        while True:
+            row = kp1[row]
+            numliq[row] = number
+            if row == last:
+                break
+    return numliq
+
+
+def _joined(values) -> str:
+    """One statement per numbered boundary, or the joined names when it is two.
+
+    A boundary whose rows disagree is reported joined rather than resolved: it
+    means one contiguous liquid stretch was asked to be two things, and picking
+    one here would author a deck against a face the file does not describe.
+    """
+    return "+".join(sorted(set(values))) if values else "wall"
 
 
 def write_pair(cfg: dict) -> dict:
-    from data_manip.formats.conlim import Conlim
     from telapy.api.hermes import BND_POINT, TRIANGLE, HermesFile
 
     x, y, ikle, bottom = _load(cfg["mesh_npz"])
@@ -194,20 +330,20 @@ def write_pair(cfg: dict) -> dict:
     finally:
         geo.close()
 
-    # Conlim.set_numliq walks a contour looking for its first solid node and
-    # indexes past the end when there is none, so a fully-liquid contour is named
-    # here rather than surfacing as an upstream IndexError.
-    for index, contour in enumerate(contours):
-        if all(role_of.get(int(n), "wall") != "wall" for n in contour):
-            raise ValueError(
-                f"boundary contour {index} ({len(contour)} nodes) carries no wall "
-                "node; a TELEMAC domain needs at least one solid node per contour "
-                "to number its liquid boundaries")
-    bnd = Conlim(cfg["cli"])
-    bnd.set_numliq(contours)
+    lengths = [len(c) for c in contours]
+    runs = _liquid_boundaries(x, y, bnodes, codes, lengths)
+    numliq = _numliq(runs, _successors(lengths), nptfr)
+    rows = [[k for k in range(nptfr) if numliq[k] == number]
+            for number in range(1, len(runs) + 1)]
     return {"npoin": npoin, "nelem": int(ikle.shape[0]), "nptfr": nptfr,
-            "liquid_nodes": len(role_of), "n_liquid_boundaries": int(bnd.nfrliq),
-            "liquid_boundary_roles": _numliq_roles(bnd, role_of),
+            "liquid_nodes": len(role_of), "n_liquid_boundaries": len(runs),
+            "liquid_boundary_roles": [
+                _joined([role_of.get(int(bnodes[k]), "wall") for k in here])
+                for here in rows],
+            # What each numbered boundary PRESCRIBES, read off the quad written
+            # for it - the half of the cross-file contract the deck author reads.
+            "liquid_boundary_prescribes": [
+                _joined([_prescribes(codes[k]) for k in here]) for here in rows],
             "n_contours": len(contours),
             "ipobo_distinct": distinct, "ipobo_max": int(ipobo.max()),
             "ipobo_is_permutation": bool(distinct == nptfr

@@ -137,19 +137,27 @@ boundary. It now takes `roles={role: [node, ...]}` against one table -
 `inflow` prescribes velocity and tracer with a free depth, `outflow` and `open`
 prescribe a water level with a free velocity - and the driver reports
 `liquid_boundary_roles`: the role of each liquid boundary, in TELEMAC's OWN
-numbering, joined from the `NUMLIQ` column `Conlim.set_numliq` wrote onto the
-`.cli` it had just written.
+numbering.
 
-That measurement is what retires the two-pass probe-solve. Probed through the
-image on a straight 12x4 channel strip with the west cap declared `inflow` and
-the east cap `outflow`, the measured order comes back **`["outflow",
-"inflow"]`** - the contour walk does not start at the inflow. A deck authored
-inflow-first would put the discharge on the downstream cap and drive the reach
-backwards, and nothing in the run would say so.
+That measurement is what retires the two-pass probe-solve. A deck authored
+inflow-first when the engine numbers the outflow first would put the discharge
+on the downstream cap and drive the reach backwards, and nothing in the run
+would say so.
+
+**CORRECTED 2026-09-02.** This stage measured the numbering with
+`Conlim.set_numliq`, which walks each contour from its first SOLID ROW in file
+order. The engine does not (`bief/front2.f` starts at the south-westernmost
+boundary point and folds the run straddling it), so the two disagree on any
+domain whose south-west corner falls on a liquid face - and the `["outflow",
+"inflow"]` this section reported for the 12x4 strip is Conlim's answer, not the
+engine's. The numbering is now ported from FRONT2 in the driver and verified
+against the engine's own listing; see the DELETION_LEDGER entry and the
+`BoundaryCodesMatchTheSteering` requirement on the solve seam.
 
 **The topology bundle.** `workflows/mesh/topology.py` (60 lines) writes and
-reads the record `MeshArtifact.topology_uri` points at: the role node sets and
-the measured liquid-boundary order, as JSON, carrying NO geometry (the nodes,
+reads the record `MeshArtifact.topology_uri` points at: the role node sets, the
+measured liquid-boundary order and what each numbered boundary's own `.cli` quad
+prescribes, as JSON, carrying NO geometry (the nodes,
 cells and bed are the SELAFIN's, and a second copy could disagree with the
 first). This is the seam whose absence raises `TELEMAC_MESH_NOT_ACCEPTED`: the
 purged `corridor_tin` producer wrote a 20-array npz bundle, and what a deck

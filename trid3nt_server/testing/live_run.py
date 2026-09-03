@@ -8,6 +8,10 @@ the cards that actually fired, and the artifacts the run wrote to its OWN prefix
 Nothing is re-derived. The physical answer a test asserts on is read back out of
 the run's ``metrics.json``, and the chart is the spec the run persisted, so an
 assertion cites the product rather than a second implementation of it.
+
+Every driven run pre-flights the daemon FIRST, because acceptance evidence off a
+daemon older than the commit it is being read against is evidence about a build
+nobody asked about.
 """
 
 from __future__ import annotations
@@ -16,8 +20,12 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from trid3nt_contracts import new_ulid
@@ -35,10 +43,19 @@ from .ws_client import (
 
 logger = logging.getLogger("trid3nt_server.testing.live_run")
 
-__all__ = ["GateAnswers", "LiveRun", "RunEvidence", "drive", "run_live"]
+__all__ = ["GateAnswers", "LiveRun", "RunEvidence", "assert_daemon_runs_head",
+           "drive", "run_live"]
 
 #: What a run writes under its own prefix once it has an answer to record.
 _RUN_PRODUCTS = (("chart_spec", "chart_spec.json"), ("metrics", "metrics.json"))
+
+#: The checkout this harness is installed from, and where the daemon records the
+#: process a driver measures the age of.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_PID_FILE = _REPO_ROOT / "run" / "agent.pid"
+#: What answers once the restarted daemon is serving, and how long it is given.
+_READY_URL = "http://127.0.0.1:8766/api/telemetry/summary"
+_READY_TIMEOUT_S = 90.0
 
 
 class LiveRunError(AssertionError):
@@ -107,6 +124,10 @@ class RunEvidence:
     metrics: dict[str, Any] | None = None
     product_uris: dict[str, str] = field(default_factory=dict)
     product_errors: dict[str, str] = field(default_factory=dict)
+    #: What the pre-flight had to do before this run was driven, or None when the
+    #: daemon was already running HEAD. It rides the evidence so a report cannot
+    #: claim a live daemon it had to build itself.
+    preflight_note: str | None = None
 
     # -- assertions ------------------------------------------------------- #
     def require_ok(self) -> "RunEvidence":
@@ -211,6 +232,71 @@ class LiveRun:
     cleanup_case: bool = False
 
 
+# --------------------------------------------------------------------------- #
+# The pre-flight every driver inherits.
+# --------------------------------------------------------------------------- #
+def _daemon_started_at(pid_file: Path = _PID_FILE) -> float | None:
+    """When the running daemon STARTED, or None when there is none.
+
+    Read off ``/proc/<pid>`` rather than off the pid file: the file is written
+    once and never touched again, so its own mtime is the age of the last
+    ``make agent`` invocation and not of the process now serving.
+    """
+    try:
+        pid = int(pid_file.read_text().strip())
+    except (OSError, ValueError):
+        return None
+    try:
+        return float(Path("/proc", str(pid)).stat().st_mtime)
+    except OSError:
+        return None
+
+
+def _head_committed_at(root: Path = _REPO_ROOT) -> float:
+    """When HEAD was committed - the tree the run is about to be read against."""
+    out = subprocess.run(["git", "-C", str(root), "log", "-1", "--format=%ct"],
+                         capture_output=True, text=True, check=True)
+    return float(out.stdout.strip())
+
+
+def _restart_daemon(root: Path = _REPO_ROOT) -> None:
+    """``make agent``, then wait until the daemon answers."""
+    subprocess.run(["make", "-C", str(root), "agent"],
+                   capture_output=True, text=True, check=True)
+    deadline = time.monotonic() + _READY_TIMEOUT_S
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(_READY_URL, timeout=5):
+                return
+        except (urllib.error.URLError, OSError):
+            time.sleep(1.0)
+    raise LiveRunError(
+        f"the daemon was restarted for staleness but did not answer {_READY_URL} "
+        f"within {_READY_TIMEOUT_S:g}s; nothing was driven against it")
+
+
+def assert_daemon_runs_head(root: Path = _REPO_ROOT) -> str | None:
+    """The daemon must have started AFTER the commit it is measured against.
+
+    A driven run exists to exercise the code that changed, and a daemon older
+    than HEAD is serving a different tree. That failure does not look like a
+    failure: it looks like a PASS of the wrong build, which is the one outcome an
+    acceptance run must never produce. So staleness is repaired here rather than
+    reported - through the same target a human would use - and the restart is
+    returned so the driver's own record says the run was not simply handed a live
+    daemon.
+    """
+    started, head = _daemon_started_at(), _head_committed_at(root)
+    if started is not None and started >= head:
+        return None
+    was = ("no daemon was running" if started is None else
+           f"the daemon started {head - started:.0f}s before HEAD was committed")
+    _restart_daemon(root)
+    note = f"daemon restarted by the driver pre-flight: {was}"
+    logger.warning("live_run pre-flight: %s", note)
+    return note
+
+
 async def drive(run: LiveRun) -> RunEvidence:
     """Invoke the tool over the live socket, answering its cards, and record it.
 
@@ -221,9 +307,11 @@ async def drive(run: LiveRun) -> RunEvidence:
     """
     import websockets.asyncio.client as wsc
 
+    restarted = await asyncio.to_thread(assert_daemon_runs_head)
     args = {"restart_clean": True, **dict(run.args)}
     session_id = new_ulid()
-    ev = RunEvidence(tool=run.tool, args=dict(args), session_id=session_id)
+    ev = RunEvidence(tool=run.tool, args=dict(args), session_id=session_id,
+                     preflight_note=restarted)
     # ``ping_timeout=None``: the run's own ``timeout_s`` is the deadline, and a
     # keepalive that closes the socket after twenty seconds is a second, shorter
     # one that fires while the daemon is inside a synchronous mesh build - a live

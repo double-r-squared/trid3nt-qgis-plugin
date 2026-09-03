@@ -110,8 +110,11 @@ def writer(monkeypatch, tmp_path):
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(rel_mod, "publish_release_point", _publish)
     monkeypatch.setattr(deck_mod, "read_topology",
-                        lambda _uri: {"roles": dict(_ROLES),
-                                      "liquid_boundary_order": ["outflow", "inflow"]})
+                        lambda _uri: {
+                            "roles": dict(_ROLES),
+                            "liquid_boundary_order": ["outflow", "inflow"],
+                            "liquid_boundary_prescribes": ["elevation",
+                                                           "flowrate"]})
     monkeypatch.setattr(deck_mod, "read_centerline_utm",
                         lambda _src, _epsg, **_kw:
                             np.array([[0.0, 0.0], [6000.0, 0.0]]))

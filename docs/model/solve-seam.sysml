@@ -309,10 +309,12 @@ package SolveSeam {
         doc /*
         The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid
         boundary refuses, because a deck cannot be authored against a boundary
-        with no role on it.
+        with no role on it, and one stating no prescription per boundary refuses
+        too: it was numbered before the numbering was the engine's own.
         */
         item roles : RoleMap;
         item liquid_boundary_order : StringList;
+        item liquid_boundary_prescribes : StringList;
     }
 
     interface def AcceptedMeshRecord {
@@ -691,9 +693,57 @@ package SolveSeam {
         */
     }
 
+    requirement def BoundaryCodesMatchTheSteering {
+        doc /*
+        A TELEMAC boundary states itself TWICE - as a (LIHBOR, LIUBOR, LIVBOR,
+        LITBOR) quad on every node of its face in the boundary file, and as a
+        value at its own number in PRESCRIBED FLOWRATES or PRESCRIBED ELEVATIONS
+        in the steering file - and the engine reads the second only where the
+        first says to. bord.f consumes an elevation under LIHBOR = KENT and a
+        flowrate under LIUBOR = KENT, and nowhere else, so two files decided
+        apart disagree in SILENCE: the number is written, never read, and the
+        face runs on what its code alone means.
+
+        ONE decision therefore owns both. The role-to-quad table in the pair
+        writer is that decision; the quad lands in the boundary file and the
+        steering keyword is derived from the SAME quad, carried to the author on
+        the topology bundle. Flipping the table moves both files together, and
+        a boundary whose quad prescribes nothing refuses rather than being
+        written into a list it does not read.
+
+        The number a value is written AT is the other half of the same contract,
+        and it is measured by the engine's own rule (bief/front2.f): each contour
+        is walked from the south-westernmost boundary point, a segment is solid
+        when either end is, and the run straddling that start folds back into one
+        boundary. Numbering from file-row order agreed only by luck. On a reach
+        whose inflow face holds the domain's south-west corner the two disagreed,
+        and the deck then stated its level at the inflow's number and its
+        flowrate at the outflow's: the inflow supplied nothing, the outflow was
+        clamped to elevation zero, and the run drained its initial condition
+        while both prescribed numbers sat unread. That run reported CORRECT END
+        OF RUN, which is why this is a modeled contract and not a comment.
+        */
+    }
+
     // ----------------------------------------------------------------- //
     // Allocations
     // ----------------------------------------------------------------- //
+
+    satisfy requirement BoundaryCodesMatchTheSteering by topologyWriter;
+    satisfy requirement BoundaryCodesMatchTheSteering by deckAuthor;
+    satisfy requirement BoundaryCodesMatchTheSteering by deckStatements;
+    verify requirement BoundaryCodesMatchTheSteering by
+        "tests/test_telemac_boundary_contract.py::test_flipping_the_strategy_moves_the_quad_and_the_keyword_together";
+    verify requirement BoundaryCodesMatchTheSteering by
+        "tests/test_telemac_boundary_contract.py::test_the_engine_numbers_from_its_own_south_west_corner_not_from_row_order";
+    verify requirement BoundaryCodesMatchTheSteering by
+        "tests/test_telemac_boundary_contract.py::test_a_liquid_run_that_straddles_the_first_row_is_ONE_boundary";
+    verify requirement BoundaryCodesMatchTheSteering by
+        "tests/test_telemac_boundary_contract.py::test_the_deck_prescribes_at_the_number_whose_quad_reads_it";
+    verify requirement BoundaryCodesMatchTheSteering by
+        "tests/test_telemac_boundary_contract.py::test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing";
+    verify requirement BoundaryCodesMatchTheSteering by
+        "tests/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses";
 
     satisfy requirement OutflowStageIsNormalDepth by deckStatements;
     satisfy requirement OutflowStageIsNormalDepth by deckAuthor;

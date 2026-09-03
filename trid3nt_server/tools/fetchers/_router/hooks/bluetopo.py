@@ -210,15 +210,16 @@ def _tile_scheme_path(*, timeout_s: float) -> str:
 
 def select_bluetopo_tiles(
     bbox: tuple[float, float, float, float], *, timeout_s: float = 120.0
-) -> tuple[list[dict[str, Any]], float]:
-    """Tiles whose footprint intersects the AOI, plus the MEASURED covered share.
+) -> list[dict[str, Any]]:
+    """Tiles whose footprint intersects the AOI: id, https link, tier, UTM zone.
 
-    Returns ``(rows, coverage_fraction)`` where each row carries the tile id, its
-    https link, its resolution tier and its UTM zone. Rows the scheme defines but
-    has NOT delivered (no GeoTIFF link) are dropped: a defined tile is not data.
+    Rows the scheme defines but has NOT delivered (no GeoTIFF link) are dropped:
+    a defined tile is not data.
 
-    The share is measured against the tile scheme's OWN polygons, so it is what
-    the programme says it covers rather than what a read happened to paint.
+    A footprint is a SELECTION, never a coverage measure. BlueTopo publishes bed
+    for navigationally significant water only, so a delivered tile over a coastal
+    AOI is mostly nodata; how much of the AOI carries a bed is measured off the
+    painted grid, not off these polygons.
     """
     import geopandas as gpd
     from shapely.geometry import box
@@ -233,7 +234,6 @@ def select_bluetopo_tiles(
         ) from exc
 
     rows: list[dict[str, Any]] = []
-    covered = []
     for _, row in frame.iterrows():
         link = row.get("GeoTIFF_Link")
         geom = row.get("geometry")
@@ -248,19 +248,11 @@ def select_bluetopo_tiles(
             "utm": str(row.get("UTM") or ""),
             "delivered": str(row.get("Delivered_Date") or ""),
         })
-        covered.append(geom)
 
-    if not covered:
-        return [], 0.0
-
-    from shapely.ops import unary_union
-
-    union = unary_union(covered).intersection(aoi)
-    fraction = float(union.area / aoi.area) if aoi.area > 0 else 0.0
     # Coarsest tier FIRST so the finest tier paints LAST: the compositor is
     # last-wins, and where two tiers overlap the finer cell is the better bed.
     rows.sort(key=lambda r: -_tier_metres(r["resolution"]))
-    return rows, max(0.0, min(1.0, fraction))
+    return rows
 
 
 def _tier_metres(label: str) -> float:
@@ -361,6 +353,7 @@ def read_bluetopo(
         TopobathyEmptyError,
         TopobathyUpstreamError,
         _composite_sources_to_array,
+        painted_fraction,
     )
 
     bbox = tuple(float(v) for v in params["bbox"])
@@ -369,7 +362,7 @@ def read_bluetopo(
     mpx = params.get("min_pixel_m")
     min_pixel_m = float(mpx) if mpx is not None else None
 
-    rows, coverage = select_bluetopo_tiles(bbox, timeout_s=fetch_timeout)
+    rows = select_bluetopo_tiles(bbox, timeout_s=fetch_timeout)
     if not rows:
         raise BlueTopoCoverageGapError(
             f"no delivered NOAA BlueTopo tile intersects {bbox!r}. BlueTopo covers "
@@ -403,6 +396,11 @@ def read_bluetopo(
         ) from exc
 
     painted_rows = [row for row, ok in zip(rows, painted) if ok]
+    # PAINTED BED, not delivered footprint. A tile can intersect the whole AOI
+    # and still leave a quarter of it nodata -- BlueTopo publishes bed for
+    # navigationally significant water only -- and the ladder's gap gate reads
+    # this number to decide whether another rung has to fill the rest.
+    coverage = painted_fraction(array)
     record_provenance({
         "vertical_datum": "NAVD88",
         "tile_count": len(painted_rows),
@@ -411,8 +409,8 @@ def read_bluetopo(
         "rung_coverage": {"bluetopo": coverage},
     })
     logger.info(
-        "fetch_bluetopo: %d/%d tiles painted, tiers=%s, tile-scheme coverage %.3f",
-        len(painted_rows), len(rows),
+        "fetch_bluetopo: %d/%d tiles painted, tiers=%s, painted bed over the AOI "
+        "%.3f", len(painted_rows), len(rows),
         sorted({r["resolution"] for r in painted_rows}), coverage,
     )
     return array, transform, crs

@@ -203,10 +203,11 @@ def serve_bluetopo_bed(
     """Serve the BlueTopo rung, reporting a PARTIAL cover as a gap.
 
     BlueTopo is bathymetry only, so an AOI that includes land is partially
-    covered by construction. The share is measured against the published tile
-    scheme and handed to the walker as a :class:`LadderGap`, which is what lets
-    the next rung fill the rest under the loudness gate rather than this rung
-    quietly returning a half-painted bed as a whole one.
+    covered by construction. The share is the PAINTED bed - AOI cells the merge
+    gave a real value, so a nodata cell inside a delivered tile counts as
+    uncovered - and it is handed to the walker as a :class:`LadderGap`, which is
+    what lets the next rung fill the rest under the loudness gate rather than
+    this rung quietly returning a half-painted bed as a whole one.
     """
     from trid3nt_server.tools import TOOL_REGISTRY
 

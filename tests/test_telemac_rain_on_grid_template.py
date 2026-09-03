@@ -418,7 +418,8 @@ def rog_deck(monkeypatch, tmp_path):
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(topo_mod, "read_topology", lambda _uri: {
-        "roles": {"outflow": [1, 3]}, "liquid_boundary_order": ["outflow"]})
+        "roles": {"outflow": [1, 3]}, "liquid_boundary_order": ["outflow"],
+        "liquid_boundary_prescribes": ["elevation"]})
     monkeypatch.setattr(rog_mod, "mesh_nodes", lambda _mesh: (
         np.array([[0.0, 0.0], [20.0, 0.0], [0.0, 10.0], [20.0, 10.0]]),
         np.array([[0, 1, 2], [1, 3, 2]]), np.zeros(4),
@@ -503,7 +504,8 @@ def test_a_mesh_whose_boundary_took_no_outlet_role_refuses(rog_deck, monkeypatch
     from trid3nt_server.workflows.telemac.steps.rain_on_grid import RainOnGridError
 
     monkeypatch.setattr(topo_mod, "read_topology", lambda _uri: {
-        "roles": {"inflow": [0]}, "liquid_boundary_order": ["inflow"]})
+        "roles": {"inflow": [0]}, "liquid_boundary_order": ["inflow"],
+        "liquid_boundary_prescribes": ["flowrate"]})
     with pytest.raises(RainOnGridError) as ei:
         asyncio.run(rog_deck(rain=_DESIGN_STORM))
     assert ei.value.error_code == "TELEMAC_ROG_NO_OUTLET_NODES"

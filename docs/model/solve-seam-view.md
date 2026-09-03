@@ -145,12 +145,13 @@ The solver's own listing, teed off the child's stdout. It is the run's evidence:
 
 ### `TopologyBundle`
 
-The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid boundary refuses, because a deck cannot be authored against a boundary with no role on it.
+The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid boundary refuses, because a deck cannot be authored against a boundary with no role on it, and one stating no prescription per boundary refuses too: it was numbered before the numbering was the engine's own.
 
 | item | type | required |
 | --- | --- | --- |
 | `roles` | RoleMap | required |
 | `liquid_boundary_order` | StringList | required |
+| `liquid_boundary_prescribes` | StringList | required |
 
 ### `WorkerRunReport`
 
@@ -170,6 +171,7 @@ The run's only report, written whatever the child did. Success is not the worker
 
 | requirement | satisfied by | verified by |
 | --- | --- | --- |
+| **BoundaryCodesMatchTheSteering** | `topologyWriter`, `deckAuthor`, `deckStatements` | `tests/test_telemac_boundary_contract.py::test_flipping_the_strategy_moves_the_quad_and_the_keyword_together`<br/>`tests/test_telemac_boundary_contract.py::test_the_engine_numbers_from_its_own_south_west_corner_not_from_row_order`<br/>`tests/test_telemac_boundary_contract.py::test_a_liquid_run_that_straddles_the_first_row_is_ONE_boundary`<br/>`tests/test_telemac_boundary_contract.py::test_the_deck_prescribes_at_the_number_whose_quad_reads_it`<br/>`tests/test_telemac_boundary_contract.py::test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing`<br/>`tests/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses` |
 | **CorrectEndIsTheSuccessConvention** | `workerEntrypoint`, `launcherArm` | `workers/telemac/test_entrypoint.py::test_a_clean_exit_that_wrote_no_result_is_not_a_solve`<br/>`tests/test_run_telemac_chain.py::test_classify_exit_clean_exit_but_no_correct_end_is_error` |
 | **EchoDoctrine** | `deckAuthor`, `rainDeckAuthor`, `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_clean_child_that_wrote_its_results_is_the_run_succeeding`<br/>`workers/telemac/test_entrypoint.py::test_the_frame_count_is_measured_off_the_file_the_echo_names`<br/>`workers/telemac/test_entrypoint.py::test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero` |
 | **EmptyResultsRefuses** | `workerEntrypoint` | `workers/telemac/test_entrypoint.py::test_a_case_declaring_no_results_refuses` |
@@ -183,6 +185,7 @@ The run's only report, written whatever the child did. Success is not the worker
 
 ## What each requirement says
 
+- **BoundaryCodesMatchTheSteering** - A TELEMAC boundary states itself TWICE - as a (LIHBOR, LIUBOR, LIVBOR, LITBOR) quad on every node of its face in the boundary file, and as a value at its own number in PRESCRIBED FLOWRATES or PRESCRIBED ELEVATIONS in the steering file - and the engine reads the second only where the first says to. bord.f consumes an elevation under LIHBOR = KENT and a flowrate under LIUBOR = KENT, and nowhere else, so two files decided apart disagree in SILENCE: the number is written, never read, and the face runs on what its code alone means. ONE decision therefore owns both. The role-to-quad table in the pair writer is that decision; the quad lands in the boundary file and the steering keyword is derived from the SAME quad, carried to the author on the topology bundle. Flipping the table moves both files together, and a boundary whose quad prescribes nothing refuses rather than being written into a list it does not read. The number a value is written AT is the other half of the same contract, and it is measured by the engine's own rule (bief/front2.f): each contour is walked from the south-westernmost boundary point, a segment is solid when either end is, and the run straddling that start folds back into one boundary. Numbering from file-row order agreed only by luck. On a reach whose inflow face holds the domain's south-west corner the two disagreed, and the deck then stated its level at the inflow's number and its flowrate at the outflow's: the inflow supplied nothing, the outflow was clamped to elevation zero, and the run drained its initial condition while both prescribed numbers sat unread. That run reported CORRECT END OF RUN, which is why this is a modeled contract and not a comment.
 - **CorrectEndIsTheSuccessConvention** - Success is a clean child exit AND every declared result file on disk. A solver that returns zero without writing its result has not solved anything, and the exit code alone never decides it - on either side of the seam.
 - **EchoDoctrine** - Server-known facts are stated by the deck, copied by the worker VERBATIM, and never re-derived in the container. Worker-measured facts are the worker's own: the frame count is measured off the file the echo names, and an unmeasurable result is the ABSENCE of the key rather than a zero.
 - **EmptyResultsRefuses** - A case declaring no results collapses the success convention back to the exit code alone, which is the convention this seam retired. It refuses instead.

@@ -70,7 +70,8 @@ resolution_declarations:
   rationale: the published tile scheme's own Resolution tiers; min_pixel_m only COARSENS the merge, it never invents a finer cell than the tile it read
 caveats:
 - NOAA BlueTopo is BATHYMETRY ONLY - there is no land in it. An AOI spanning a shoreline is
-  partially covered by construction; ``coverage_fraction`` reports the measured share and a land
+  partially covered by construction; ``coverage_fraction`` reports the share of AOI cells the
+  merge actually PAINTED - a nodata cell inside a delivered tile counts as uncovered - and a land
   DEM is a separate row, never a fill this tool paints.
 - BlueTopo is on NAVD88, an orthometric datum, and is explicitly NOT on a navigational or tidal
   datum, which is what lets it merge with a NAVD88 land DEM with no VDatum step. A tile that does
@@ -134,8 +135,9 @@ docstring: |-
       ``style_preset="continuous_dem"``, ``units="meters"``. Provenance fields:
       ``vertical_datum`` (the datum read off the tiles that painted),
       ``tile_count``, ``resolution_tiers``, and ``coverage_fraction`` - the
-      share of the AOI the tile scheme covers, which is BELOW 1.0 for any AOI
-      that includes land, by construction.
+      share of the AOI that carries a PAINTED bed cell, measured off the merged
+      grid, which is BELOW 1.0 for any AOI that includes land or water the
+      programme does not publish, by construction.
 
   **Errors:**
       - ``BLUETOPO_INPUT_INVALID``: bad bbox / outside the US envelope / too

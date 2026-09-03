@@ -209,6 +209,7 @@ The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid boundary r
 | --- | --- | --- |
 | `roles` | RoleMap | required |
 | `liquid_boundary_order` | StringList | required |
+| `liquid_boundary_prescribes` | StringList | required |
 
 ## Requirements
 

@@ -179,6 +179,7 @@ def _cas(tmp_path, **deck) -> str:
                         "time_step_s": 1.0, **deck},
         geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
         cas_name="t2d_river.cas", liquid_boundary_order=("inflow", "outflow"),
+        liquid_boundary_prescribes=("flowrate", "elevation"),
         bed=_REACH, source_utm=(500.0, 0.0))
     return (tmp_path / "t2d_river.cas").read_text()
 

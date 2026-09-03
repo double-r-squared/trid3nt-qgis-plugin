@@ -3035,3 +3035,52 @@ knowledge in the suite. The postprocess tests they served now state their fields
 through the `telemac_result` conftest fixture, on the `_offline_cas_parse`
 precedent: the container round trip is stubbed and the arithmetic runs for real.
 reopen: never (a second parser of a format we do not own is the defect).
+
+## `Conlim.set_numliq` as the liquid-boundary numbering - DELETED
+
+`selafin_cli_driver.write_pair` numbered the liquid boundaries by handing the
+written `.cli` to `data_manip.formats.conlim.Conlim` and calling `set_numliq`.
+That helper walks each contour from its FIRST SOLID ROW in file order. The
+engine does not: `bief/front2.f` starts each contour at the SOUTH-WESTERNMOST
+boundary point, calls a segment solid when either end is, and folds the run
+straddling that start back into one boundary. The two agree only when the
+south-west corner happens to fall where the file's rows begin.
+
+TRACE: on the Eel-at-Scotia reach the engine's own listing (`full_listing.log`,
+run `01M1J76ZZGP171QTHJN5REAHHZ`) reports LIQUID BOUNDARY 1 = points 213 -> 4
+(the inflow, wrapping row 1) and 2 = 104 -> 115 (the outflow), while the deck
+that run solved states `Measured liquid-boundary order: ['outflow', 'inflow']`.
+`PRESCRIBED ELEVATIONS = 13.179;0.0` therefore put 13.179 m on the inflow
+(LIHBOR 4, which reads no elevation) and 0.0 m on the outflow (LIHBOR 5, which
+does): a 13.5 m bed held at elevation zero, i.e. clamped dry. `PRESCRIBED
+FLOWRATES = 0.0;2.2` put zero on the inflow. The run drained its initial
+condition and reported CORRECT END OF RUN.
+
+Replaced by `_liquid_boundaries` + `_numliq` + `_successors` (about 90 lines), a
+port of FRONT2 verified against the engine's OWN listing on every run in the
+tree that carries a `.cli`, a `.slf` and a `full_listing.log`: 136 of 136 agree
+on both boundaries' first and last rows, wrap merges included.
+
+The `Conlim` import goes with it, and so does the "boundary contour carries no
+wall node" refusal that existed only because `set_numliq` indexes past the end
+of a fully-liquid contour. FRONT2 handles a circular liquid boundary by design
+(v7p2, "Allowing for circular liquid boundaries"), so the refusal was a lie
+about the engine.
+reopen: never (numbering measured by anything other than the engine's own rule
+is a guess that reports CORRECT END OF RUN when it is wrong).
+
+## BlueTopo `coverage_fraction` as a tile FOOTPRINT share - DELETED
+
+`select_bluetopo_tiles` returned `(rows, fraction)` where the fraction was the
+area of the selected tile polygons intersected with the AOI, over the AOI. That
+is what the programme says it covers, not what the merge painted: BlueTopo
+publishes bed for navigationally significant water only, so a delivered tile
+covering the whole AOI can leave a quarter of it nodata, and the ladder's gap
+gate graded that quarter as covered.
+
+Replaced by `topobathy.painted_fraction(array)` - valid cells over AOI cells on
+the composite's own bbox-clipped grid, so a NaN inside a delivered tile counts
+as uncovered. The footprint measure had exactly one reader (the gate), so it is
+removed rather than kept beside its replacement; `select_bluetopo_tiles` now
+returns rows alone and a footprint is a SELECTION only.
+reopen: never (two coverage numbers is how one of them goes unread).

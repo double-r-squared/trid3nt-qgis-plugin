@@ -378,6 +378,7 @@ package MeshSeam {
         */
         item roles : RoleMap;
         item liquid_boundary_order : StringList;
+        item liquid_boundary_prescribes : StringList;
     }
 
     // ----------------------------------------------------------------- //
@@ -473,8 +474,10 @@ package MeshSeam {
 
     part selafinCliDriver : ShippedDriver {
         doc /*
-        The TELEMAC geometry pair, written by telapy's own Hermes and Conlim
-        inside the engine image.
+        The TELEMAC geometry pair, written by telapy's own Hermes inside the
+        engine image, and numbered by the engine's own rule: which liquid
+        boundary is number 1 follows from where FRONT2 starts its walk, not from
+        the order the rows were written.
 
         code: trid3nt_server/workflows/mesh/meshers/drivers/selafin_cli_driver.py
         */

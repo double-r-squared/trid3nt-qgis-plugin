@@ -21,6 +21,8 @@ _BED = {"bed_top_m": 100.0, "bed_drop_m": 3.0, "reach_length_m": 1000.0,
         "outflow_section": [[0.0, 100.0], [10.0, 97.0],
                             [50.0, 97.0], [60.0, 100.0]]}
 _ORDER = ("outflow", "inflow")
+#: What each of those two boundaries' own .cli quad prescribes, in the same order.
+_PRESCRIBES = ("elevation", "flowrate")
 _SOURCE = (500.0, 0.0)
 #: A straight centerline in metres - enough for a channel box and a profile fence.
 _CENTERLINE = [(x, 0.0) for x in range(0, 1100, 100)]
@@ -36,7 +38,8 @@ def _author(tmp_path, *, restart=None, **deck) -> str:
         tmp_path, deck={**base, **deck}, geometry="mesh.slf",
         boundary="mesh.cli", results="r2d.slf", restart=restart,
         cas_name="t2d_river.cas",
-        liquid_boundary_order=_ORDER, bed=_BED, source_utm=_SOURCE,
+        liquid_boundary_order=_ORDER, liquid_boundary_prescribes=_PRESCRIBES,
+        bed=_BED, source_utm=_SOURCE,
         centerline_utm=_CENTERLINE, reach_polygon_utm=_REACH_POLYGON)
     return (tmp_path / "t2d_river.cas").read_text()
 
@@ -382,7 +385,8 @@ def _dredge(tmp_path, **deck):
                         "substance_class": "sediment", "erodible_bed": True,
                         "dredging": True, **deck},
         geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
-        cas_name="t2d_river.cas", liquid_boundary_order=_ORDER, bed=_BED,
+        cas_name="t2d_river.cas", liquid_boundary_order=_ORDER,
+        liquid_boundary_prescribes=_PRESCRIBES, bed=_BED,
         source_utm=_SOURCE, centerline_utm=_CENTERLINE,
         reach_polygon_utm=polygon)
 
@@ -459,7 +463,8 @@ def _rog(tmp_path, *, deck_extra=None, **kwargs) -> str:
         geometry="rog.slf", boundary="rog.cli", results="r2d_rog.slf",
         cas_name="t2d_rog.cas", cn_map="rog_cn_map.dat",
         friction_laws="rog_friction.tbl", zones_file="rog_zones.dat",
-        rain_mm_per_day=48.0, **kwargs)
+        rain_mm_per_day=48.0, outlet_boundary=1,
+        outlet_prescribes="elevation", **kwargs)
     return (tmp_path / "t2d_rog.cas").read_text()
 
 
@@ -505,7 +510,8 @@ def test_a_rain_window_shorter_than_the_run_lets_the_catchment_drain(tmp_path):
                         "rain_duration_s": 1800.0},
         geometry="rog.slf", boundary="rog.cli", results="r2d_rog.slf",
         cas_name="t2d_rog.cas", cn_map="cn.dat", friction_laws="f.tbl",
-        zones_file="z.dat", rain_mm_per_day=48.0, runoff_path="native")
+        zones_file="z.dat", rain_mm_per_day=48.0, runoff_path="native",
+        outlet_boundary=1, outlet_prescribes="elevation")
     cas = (tmp_path / "t2d_rog.cas").read_text()
     assert "DURATION OF RAIN OR EVAPORATION IN HOURS = 0.5" in cas
 

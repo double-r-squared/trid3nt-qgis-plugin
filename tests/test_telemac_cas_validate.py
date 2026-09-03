@@ -20,6 +20,7 @@ _BED = {"bed_top_m": 100.0, "bed_drop_m": 3.0, "reach_length_m": 1000.0,
         "outflow_section": [[0.0, 100.0], [10.0, 97.0],
                             [50.0, 97.0], [60.0, 100.0]]}
 _ORDER = ("outflow", "inflow")
+_PRESCRIBES = ("elevation", "flowrate")
 _CENTERLINE = [(x, 0.0) for x in range(0, 1100, 100)]
 
 
@@ -109,7 +110,8 @@ def _authored(monkeypatch, tmp_path, tag="run", **deck):
         tmp_path, deck={"name": "reach", "duration_s": 3600.0,
                         "time_step_s": 1.0, **deck},
         geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
-        cas_name="t2d_river.cas", liquid_boundary_order=_ORDER, bed=_BED,
+        cas_name="t2d_river.cas", liquid_boundary_order=_ORDER,
+        liquid_boundary_prescribes=_PRESCRIBES, bed=_BED,
         source_utm=(500.0, 0.0), centerline_utm=_CENTERLINE)
     return submitted
 
@@ -140,5 +142,6 @@ def test_the_rain_on_grid_deck_reaches_the_parser(tmp_path, monkeypatch):
                         "time_step_s": 2.0},
         geometry="rog.slf", boundary="rog.cli", results="r2d_rog.slf",
         cas_name="t2d_rog.cas", cn_map="cn.dat", friction_laws="fr.tbl",
-        zones_file="zones.dat", rain_mm_per_day=48.0, runoff_path="native")
+        zones_file="zones.dat", rain_mm_per_day=48.0, runoff_path="native",
+        outlet_boundary=1, outlet_prescribes="elevation")
     assert submitted == {"t2d_rog.cas": "telemac2d"}

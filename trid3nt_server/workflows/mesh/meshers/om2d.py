@@ -758,14 +758,18 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
     files["slf_uri"] = str(pair["geo_slf"])
     files["cli_uri"] = str(pair["cli"])
     lb_order = list(pair["stats"].get("liquid_boundary_roles") or [])
+    lb_prescribes = list(pair["stats"].get("liquid_boundary_prescribes") or [])
     probes["liquid_boundaries"] = int(pair["stats"].get("n_liquid_boundaries", 0))
     probes["liquid_boundary_roles"] = lb_order
+    probes["liquid_boundary_prescribes"] = lb_prescribes
     probes["boundary_nodes_written"] = int(pair["stats"].get("nptfr", 0))
     if roles:
-        # The two facts a SELAFIN cannot state - which stretch carries which role,
-        # and the order the solver will number them in - ride beside it.
+        # The three facts a SELAFIN cannot state - which stretch carries which
+        # role, the order the solver will number them in, and what each one's
+        # written code quad prescribes - ride beside it.
         files["topology_uri"] = str(write_topology(
-            rundir, roles=roles, liquid_boundary_order=lb_order))
+            rundir, roles=roles, liquid_boundary_order=lb_order,
+            liquid_boundary_prescribes=lb_prescribes))
     artifact = {**dict(mesh.meta.get("artifact") or {}),
                 "open_boundary_info": info}
     if notes:

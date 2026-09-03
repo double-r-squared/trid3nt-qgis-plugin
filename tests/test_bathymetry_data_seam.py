@@ -14,6 +14,7 @@ import pytest
 
 from trid3nt_server.fallbacks import registered_ladders, resolve_ladder
 from trid3nt_server.tools.fetchers._router.hooks import bluetopo as bt
+from trid3nt_server.tools.fetchers._router.hooks import topobathy as tb
 from trid3nt_server.tools.fetchers._router.hooks import topobathy_class as tc
 from trid3nt_server.tools.fetchers._router.hooks.topobathy import (
     TopobathyCoverageGapError,
@@ -187,19 +188,53 @@ def tile_scheme(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_a_tile_row_with_no_delivered_link_is_not_data(tile_scheme: Path) -> None:
-    rows, coverage = bt.select_bluetopo_tiles((-85.6, 30.0, -85.3, 30.1))
+    rows = bt.select_bluetopo_tiles((-85.6, 30.0, -85.3, 30.1))
     assert [r["tile"] for r in sorted(rows, key=lambda r: r["tile"])] == [
         "COARSE", "FINE"
     ]
-    # Two thirds of the AOI are delivered; the undelivered third is not covered.
-    assert coverage == pytest.approx(2 / 3, abs=1e-6)
 
 
 def test_the_selected_tiles_run_coarsest_first_so_the_finest_paints_last(
     tile_scheme: Path,
 ) -> None:
-    rows, _ = bt.select_bluetopo_tiles((-85.6, 30.0, -85.3, 30.1))
+    rows = bt.select_bluetopo_tiles((-85.6, 30.0, -85.3, 30.1))
     assert [r["resolution"] for r in rows] == ["16m", "4m"]
+
+
+def test_coverage_is_the_painted_bed_not_the_delivered_footprint() -> None:
+    """A tile that intersects the whole AOI can still leave a quarter of it
+    nodata: BlueTopo publishes bed for navigationally significant water only, and
+    crediting the footprint reported a bed the programme does not publish."""
+    numpy = pytest.importorskip("numpy")
+
+    grid = numpy.full((10, 10), 1.0, dtype="float32")
+    grid[:, :4] = numpy.float32("nan")  # a delivered tile, 40% of it unpainted
+    assert tb.painted_fraction(grid) == pytest.approx(0.60)
+    assert tb.painted_fraction(numpy.full((4, 4), numpy.float32("nan"))) == 0.0
+    assert tb.painted_fraction(numpy.zeros((0, 0))) == 0.0
+
+
+def test_a_half_nan_tile_grades_the_gap_gate_on_what_it_painted(
+    monkeypatch: pytest.MonkeyPatch, tile_scheme: Path
+) -> None:
+    """The whole chain on one synthetic tile: half the AOI painted, so the rung
+    reports 0.50 and the ladder gate calls it a gap rather than a whole bed."""
+    numpy = pytest.importorskip("numpy")
+
+    half = numpy.full((8, 8), 3.0, dtype="float32")
+    half[:4, :] = numpy.float32("nan")
+    monkeypatch.setattr(bt, "assert_navd88_tile", lambda _p: "NAVD88")
+    monkeypatch.setattr(
+        tb, "_composite_sources_to_array",
+        lambda sources, *_a, **_kw: (half, None, "EPSG:4326",
+                                     [True] * len(sources),
+                                     [None] * len(sources)))
+    recorded: dict = {}
+    monkeypatch.setattr(bt, "record_provenance", recorded.update)
+
+    bt.read_bluetopo(None, {"bbox": (-85.6, 30.0, -85.3, 30.1)}, timeout_s=10.0)
+    assert recorded["coverage_fraction"] == pytest.approx(0.50)
+    assert recorded["rung_coverage"] == {"bluetopo": pytest.approx(0.50)}
 
 
 def test_an_aoi_no_delivered_tile_reaches_refuses_by_name(

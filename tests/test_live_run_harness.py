@@ -172,6 +172,7 @@ def _drive(run: LiveRun) -> RunEvidence:
         yield ws
 
     with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(L, "assert_daemon_runs_head", lambda *_a, **_kw: None)
         mp.setattr(L, "handshake", _noop)
         mp.setattr(L, "create_case", _case)
         mp.setattr(L, "_pump", _noop)
@@ -187,6 +188,64 @@ async def _noop(*_a, **_kw) -> None:
 
 async def _case(*_a, **_kw) -> str:
     return "CASE"
+
+
+# --- the pre-flight every driver inherits ------------------------------------ #
+def test_a_daemon_older_than_HEAD_is_restarted_before_anything_is_driven():
+    """Stale evidence does not look like a failure - it looks like a PASS of the
+    wrong build, which is the one outcome an acceptance run must never produce."""
+    from trid3nt_server.testing import live_run as L
+
+    restarted: list = []
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(L, "_daemon_started_at", lambda *_a, **_kw: 1000.0)
+        mp.setattr(L, "_head_committed_at", lambda *_a, **_kw: 2000.0)
+        mp.setattr(L, "_restart_daemon", lambda *_a, **_kw: restarted.append(1))
+        note = L.assert_daemon_runs_head()
+    assert restarted == [1]
+    assert "1000s before HEAD" in note
+
+
+def test_no_daemon_at_all_is_started_and_said_so():
+    from trid3nt_server.testing import live_run as L
+
+    restarted: list = []
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(L, "_daemon_started_at", lambda *_a, **_kw: None)
+        mp.setattr(L, "_head_committed_at", lambda *_a, **_kw: 2000.0)
+        mp.setattr(L, "_restart_daemon", lambda *_a, **_kw: restarted.append(1))
+        note = L.assert_daemon_runs_head()
+    assert restarted == [1] and "no daemon was running" in note
+
+
+def test_a_daemon_newer_than_HEAD_is_left_alone_and_the_run_says_nothing():
+    from trid3nt_server.testing import live_run as L
+
+    def _never(*_a, **_kw):
+        raise AssertionError("a fresh daemon must not be restarted")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(L, "_daemon_started_at", lambda *_a, **_kw: 3000.0)
+        mp.setattr(L, "_head_committed_at", lambda *_a, **_kw: 2000.0)
+        mp.setattr(L, "_restart_daemon", _never)
+        assert L.assert_daemon_runs_head() is None
+
+
+def test_the_daemon_age_is_the_PROCESS_start_not_the_pid_file_mtime(tmp_path):
+    """The pid file is written once and never touched again, so its own mtime is
+    the age of the last ``make agent`` call rather than of the process serving."""
+    import os
+
+    from trid3nt_server.testing import live_run as L
+
+    pid_file = tmp_path / "agent.pid"
+    pid_file.write_text(f"{os.getpid()}\n")
+    started = L._daemon_started_at(pid_file)
+    assert started == os.stat(f"/proc/{os.getpid()}").st_mtime
+
+    pid_file.write_text("999999999\n")
+    assert L._daemon_started_at(pid_file) is None
+    assert L._daemon_started_at(tmp_path / "absent.pid") is None
 
 
 # --- a declared card that never fired is a FAILURE, not a silent pass -------- #

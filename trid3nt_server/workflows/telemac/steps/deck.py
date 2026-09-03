@@ -765,6 +765,7 @@ async def write_reach_deck(
         geometry=_GEOMETRY_DEST, boundary=_BOUNDARY_DEST, results=_RESULT,
         restart=None if coupled_with else _RESTART, cas_name=_STEERING,
         liquid_boundary_order=topology["liquid_boundary_order"],
+        liquid_boundary_prescribes=topology["liquid_boundary_prescribes"],
         bed=_measured_reach(topology["roles"], node_xy, node_bed, centerline_utm),
         source_utm=_to_utm_point(release_lonlat, utm_epsg),
         centerline_utm=centerline_utm,

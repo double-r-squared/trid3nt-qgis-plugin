@@ -7,6 +7,11 @@ measured when the ``.cli`` was written from this geometry's own IPOBO, and a dec
 author reads them here to state PRESCRIBED FLOWRATES and PRESCRIBED ELEVATIONS in
 the order the solver will use.
 
+The third answer is what each numbered boundary PRESCRIBES, read off the code
+quad the ``.cli`` carries on it. The deck writes its lists from that rather than
+from a role-to-keyword table of its own, so the steering file cannot state a
+level at a boundary whose code never reads one.
+
 The bundle rides beside the mesh objects and its uri lands on
 ``MeshArtifact.topology_uri``. It carries no geometry: the nodes, cells and bed
 are the SELAFIN's, and duplicating them here would be a second mesh that could
@@ -26,12 +31,15 @@ TOPOLOGY_FILENAME: str = "mesh_topology.json"
 
 
 def write_topology(rundir: Path | str, *, roles: Mapping[str, Sequence[int]],
-                   liquid_boundary_order: Sequence[str]) -> Path:
+                   liquid_boundary_order: Sequence[str],
+                   liquid_boundary_prescribes: Sequence[str]) -> Path:
     """Write the accepted topology into ``rundir`` -> the path written."""
     path = Path(rundir) / TOPOLOGY_FILENAME
     path.write_text(json.dumps({
         "roles": {str(r): [int(n) for n in nodes] for r, nodes in roles.items()},
         "liquid_boundary_order": [str(r) for r in liquid_boundary_order],
+        "liquid_boundary_prescribes": [
+            str(p) for p in liquid_boundary_prescribes],
     }, indent=2), encoding="utf-8")
     return path
 
@@ -42,6 +50,12 @@ def read_topology(uri: str) -> dict[str, Any]:
     A bundle that names no liquid boundary REFUSES: a mesh whose boundary carries
     no role is a mesh no reach deck can be authored against, and returning empty
     sets would put the refusal downstream where the cause is no longer visible.
+
+    A bundle that states no PRESCRIPTION per boundary refuses for the same
+    reason. It was numbered by the superseded row-order rule, which disagrees
+    with the engine's own numbering on any domain whose south-west corner falls
+    on a liquid face, and a deck authored against it prescribes into codes that
+    never read it. There is no repair short of rebuilding the mesh.
     """
     if uri.startswith("s3://"):
         from trid3nt_server.tools.cache import read_object_bytes_s3
@@ -52,9 +66,17 @@ def read_topology(uri: str) -> dict[str, Any]:
     roles = {str(r): [int(n) for n in nodes]
              for r, nodes in (doc.get("roles") or {}).items() if nodes}
     order = [str(r) for r in (doc.get("liquid_boundary_order") or [])]
+    prescribes = [str(p) for p in (doc.get("liquid_boundary_prescribes") or [])]
     if not roles or not order:
         raise ValueError(
             f"the topology bundle at {uri} names {sorted(roles)} roles across "
             f"{len(order)} liquid boundaries; a deck cannot be authored against "
             "a boundary with no roles on it")
-    return {"roles": roles, "liquid_boundary_order": order}
+    if len(prescribes) != len(order):
+        raise ValueError(
+            f"the topology bundle at {uri} states what {len(prescribes)} of its "
+            f"{len(order)} liquid boundaries prescribe; it was numbered before "
+            "the boundary numbering was measured by the engine's own rule, so "
+            "rebuild the mesh rather than author a deck against it")
+    return {"roles": roles, "liquid_boundary_order": order,
+            "liquid_boundary_prescribes": prescribes}

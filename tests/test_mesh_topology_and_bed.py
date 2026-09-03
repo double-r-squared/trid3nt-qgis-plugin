@@ -24,11 +24,23 @@ from trid3nt_server.workflows.mesh.shared.nodes import (
 
 def test_the_bundle_round_trips_the_roles_and_the_measured_order(tmp_path):
     path = T.write_topology(tmp_path, roles={"inflow": [1, 2], "outflow": [7]},
-                            liquid_boundary_order=["outflow", "inflow"])
+                            liquid_boundary_order=["outflow", "inflow"],
+                            liquid_boundary_prescribes=["elevation", "flowrate"])
     assert path.name == T.TOPOLOGY_FILENAME
     read = T.read_topology(str(path))
     assert read["roles"] == {"inflow": [1, 2], "outflow": [7]}
     assert read["liquid_boundary_order"] == ["outflow", "inflow"]
+    assert read["liquid_boundary_prescribes"] == ["elevation", "flowrate"]
+
+
+def test_a_bundle_that_states_no_prescription_per_boundary_refuses(tmp_path):
+    """It was numbered by the superseded row-order rule, and a deck authored
+    against it prescribes into codes that never read it."""
+    path = tmp_path / T.TOPOLOGY_FILENAME
+    path.write_text(json.dumps({"roles": {"outflow": [7]},
+                                "liquid_boundary_order": ["outflow"]}))
+    with pytest.raises(ValueError, match="rebuild the mesh"):
+        T.read_topology(str(path))
 
 
 def test_a_bundle_with_no_roles_on_its_boundary_refuses(tmp_path):
@@ -42,7 +54,8 @@ def test_a_bundle_with_no_roles_on_its_boundary_refuses(tmp_path):
 def test_an_empty_role_is_not_a_role(tmp_path):
     path = tmp_path / T.TOPOLOGY_FILENAME
     path.write_text(json.dumps({"roles": {"inflow": []},
-                                "liquid_boundary_order": ["inflow"]}))
+                                "liquid_boundary_order": ["inflow"],
+                                "liquid_boundary_prescribes": ["flowrate"]}))
     with pytest.raises(ValueError):
         T.read_topology(str(path))
 
