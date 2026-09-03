@@ -390,14 +390,20 @@ def published_scale(evidence: dict, animation: ProofAnimation) -> dict:
     preset = styles.resolve_style_preset(quantity)[0] if quantity else None
     ranges: list[tuple[float, float]] = []
     published_by: list[dict] = []
+    preset_scaled: list[str] = []
     for layer in evidence.get("layers") or []:
+        if layer.get("style_preset") != preset:
+            continue
         legend = layer.get("legend")
-        if layer.get("style_preset") != preset or not isinstance(legend, dict):
-            continue
-        if legend.get("kind") != "continuous":
-            continue
-        lo, hi = legend.get("vmin"), legend.get("vmax")
-        if lo is None or hi is None:
+        lo = legend.get("vmin") if isinstance(legend, dict) else None
+        hi = legend.get("vmax") if isinstance(legend, dict) else None
+        if not isinstance(legend, dict) or legend.get("kind") != "continuous" \
+                or lo is None or hi is None:
+            # No data-driven key: the panel renders through the preset's own
+            # scale, which is the scale the animation resolved from the same
+            # preset - so these agree by construction and there is no range for
+            # the packet to carry.
+            preset_scaled.append(str(layer.get("name")))
             continue
         ranges.append((float(lo), float(hi)))
         published_by.append({"layer": str(layer.get("name")),
@@ -411,7 +417,8 @@ def published_scale(evidence: dict, animation: ProofAnimation) -> dict:
             # comparing two panels of the same field has to know whether the
             # colours mean the same value on both.
             "published_panels_agree": len({tuple(r) for r in ranges}) <= 1,
-            "published_by": published_by}
+            "published_by": published_by,
+            "preset_scaled_panels": preset_scaled}
 
 
 def _field_label(animation: ProofAnimation) -> str:
