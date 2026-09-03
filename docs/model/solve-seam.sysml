@@ -384,7 +384,7 @@ package SolveSeam {
 
     part solveStep : SolveStep {
         doc /*
-        code: trid3nt_server/workflows/telemac/steps/solve.py
+        code: trid3nt_server/workflows/telemac/solving/solve.py
         */
         port completionIn : CompletionIn;
     }

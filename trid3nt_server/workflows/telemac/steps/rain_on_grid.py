@@ -537,7 +537,7 @@ async def solve_rain_on_grid(*, deck: dict[str, Any],
     from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
     from .open_water import dispatch_and_wait
-    from .solve import read_run_metrics
+    from ..solving.solve import read_run_metrics
 
     manifest_uri = await asyncio.to_thread(_stage_inputs, deck)
     logger.info("rog staged case run_tag=%s name=%s steering=%s -> %s",

@@ -86,7 +86,7 @@ def test_an_unknown_rung_refuses_rather_than_substituting() -> None:
     any surface a reader looks at.
     """
     from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
-    from trid3nt_server.workflows.telemac.steps.solve import compute_class
+    from trid3nt_server.workflows.telemac.solving.solve import compute_class
 
     coerce = compute_class()
     with pytest.raises(TelemacDyeScenarioError) as excinfo:
@@ -100,7 +100,7 @@ def test_an_unknown_rung_refuses_rather_than_substituting() -> None:
                                   {"compute_class": ""}, {"compute_class": "   "}])
 def test_compute_class_abstains_when_absent(args: dict) -> None:
     """Absent, null, and blank are the same non-answer: emit nothing."""
-    from trid3nt_server.workflows.telemac.steps.solve import compute_class
+    from trid3nt_server.workflows.telemac.solving.solve import compute_class
 
     assert compute_class()(args) == {}
 

@@ -23,6 +23,7 @@ everything else it uses is the facade's or the step family's.
 | folder | what it is |
 | --- | --- |
 | `steps/` | The shared step families every TELEMAC template declares. See below. |
+| `solving/` | The run, dispatched: stage the manifest, hand it to the solve seam, wait, surface the gates. See its own README. |
 | `products/` | What a solved run is answered with: the postprocessors, the reach deliverables, the run's own files read on the server. See its own README. |
 | `helpers/` | What a declaration summons: the reach front, the declared forcing, the substance class, the WAQTEL relations, the typed failures. See its own README. |
 | `agitation/` | `artemis_harbor_agitation` - a swell at the harbour mouth to the agitation field inside it (ARTEMIS). |
@@ -43,5 +44,4 @@ everything else it uses is the facade's or the step family's.
 | `oil_templates/` | The user-fortran source an oil-class run compiles into its deck. |
 | `open_water.py` | The open-water front of the AOI templates: stage, solve, read, surface. |
 | `rain_on_grid.py` | The rain-on-grid front: a catchment in, an outlet hydrograph out. |
-| `solve.py` | The SOLVE step: stage the manifest, dispatch the worker, wait, surface the gates. |
 | `stratified.py` | The TELEMAC-3D deck writer and its deliverable. |

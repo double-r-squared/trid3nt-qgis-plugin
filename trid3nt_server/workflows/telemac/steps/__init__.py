@@ -77,7 +77,7 @@ from ..helpers.reach import (
     slug,
     suggest_time_step_s,
 )
-from .solve import Solve, compute_class, read_run_metrics, solve_reach
+from ..solving.solve import Solve, compute_class, read_run_metrics, solve_reach
 from .stratified import (
     Stratified,
     publish_stratified_products,

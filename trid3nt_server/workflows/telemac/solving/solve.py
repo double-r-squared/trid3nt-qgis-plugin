@@ -22,11 +22,11 @@ from typing import Any
 
 from trid3nt_server.workflows.lib import Step
 
-from .deck import stage_manifest
+from ..steps.deck import stage_manifest
 from ..helpers.errors import TelemacDyeScenarioError
 from ..helpers.reach import MESH_NODE_CAP, estimate_telemac_solve_seconds
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.solve")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.solving.solve")
 
 __all__ = [
     "Solve",
@@ -36,7 +36,7 @@ __all__ = [
     "solve_reach",
 ]
 
-_STEPS = "trid3nt_server.workflows.telemac.steps"
+_SOLVING = "trid3nt_server.workflows.telemac.solving"
 
 #: Floor on the completion wait. The worst honest mesh (the node cap) with 1.5x
 #: headroom bounds the rest: a cap-sized solve once outran the default wait and
@@ -234,6 +234,6 @@ class Solve:
     @staticmethod
     def telemac(*, deck: Any, compute_class: Any) -> Step:
         """Dispatch the staged reach to the TELEMAC worker and wait for the result."""
-        return Step(runner=f"{_STEPS}.solve.solve_reach", stage="solve",
+        return Step(runner=f"{_SOLVING}.solve.solve_reach", stage="solve",
                     kwargs={"deck": deck, "compute_class": compute_class},
                     consequential=True)

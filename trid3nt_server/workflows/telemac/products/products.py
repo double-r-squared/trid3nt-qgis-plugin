@@ -41,7 +41,7 @@ from trid3nt_server.workflows.lib import Step
 from trid3nt_server.emission.publish import PublishLayerError, publish_layer
 
 from ..helpers.errors import TelemacDyeScenarioError
-from ..steps.solve import download_result_selafin
+from ..solving.solve import download_result_selafin
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.products.products")
 

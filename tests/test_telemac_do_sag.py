@@ -223,10 +223,8 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
         reach as reach_mod,
     )
     from trid3nt_server.workflows.telemac.products import products as products_mod
-    from trid3nt_server.workflows.telemac.steps import (
-        deck as deck_mod,
-        solve as solve_mod,
-    )
+    from trid3nt_server.workflows.telemac.solving import solve as solve_mod
+    from trid3nt_server.workflows.telemac.steps import deck as deck_mod
 
     def _step(name, ret):
         async def _inner(**kwargs):
@@ -320,7 +318,7 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
 async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch, tmp_path):
     monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
     from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
-    from trid3nt_server.workflows.telemac.steps import solve as solve_mod
+    from trid3nt_server.workflows.telemac.solving import solve as solve_mod
 
     order: list[str] = []
     seen: dict = {}

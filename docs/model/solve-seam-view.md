@@ -17,7 +17,7 @@ flowchart LR
     resultPostprocess["ResultPostprocess<br/>trid3nt_server/workflows/telemac/products/postprocess_telemac.py"]
     resultReader["ResultReader<br/>trid3nt_server/workflows/telemac/result_reader.py"]
     runReader["RunReader<br/>trid3nt_server/workflows/telemac/products/run_reads.py"]
-    solveStep["SolveStep<br/>trid3nt_server/workflows/telemac/steps/solve.py"]
+    solveStep["SolveStep<br/>trid3nt_server/workflows/telemac/solving/solve.py"]
     supervisor["Supervisor<br/>trid3nt_server/workflows/solver/solver.py"]
     telapyChild["TelapyChild<br/>workers/telemac/entrypoint.py"]
     topologyWriter["TopologyWriter<br/>trid3nt_server/workflows/mesh/topology.py"]

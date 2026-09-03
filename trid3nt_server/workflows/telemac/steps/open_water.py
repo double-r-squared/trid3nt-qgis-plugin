@@ -27,7 +27,7 @@ from typing import Any, Mapping
 
 from trid3nt_server.workflows.lib import DeclarativeError, Step
 
-from .solve import read_run_metrics
+from ..solving.solve import read_run_metrics
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.steps.open_water")
 

@@ -332,7 +332,7 @@ def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.mesh import step as mesh_step
     from trid3nt_server.workflows.telemac.helpers import reach as reach_mod
     from trid3nt_server.workflows.telemac.helpers import forcing as forcing_mod
-    from trid3nt_server.workflows.telemac.steps import solve as solve_steps
+    from trid3nt_server.workflows.telemac.solving import solve as solve_mod
     from trid3nt_server.workflows.telemac.steps import deck as deck_steps
 
     def _fake_registry_fn(name):
@@ -460,8 +460,8 @@ def _install_step_mocks(captured: dict):
                      lambda lon, lat, valid_time=None: {
                          "m3s": 312.0, "reference_time": "2026-01-01T12:00:00+00:00",
                          "product": "analysis_assim", "layer": None}),
-        patch.object(solve_steps, "stage_manifest", _fake_stage),
-        patch.object(solve_steps, "read_run_metrics",
+        patch.object(solve_mod, "stage_manifest", _fake_stage),
+        patch.object(solve_mod, "read_run_metrics",
                      lambda rid: {"utm_epsg": 32611}),
         patch.object(prod_mod, "download_result_selafin",
                      lambda rid: "/tmp/telemac/does-not-matter.slf"),
@@ -617,7 +617,7 @@ def test_a_derived_release_sits_on_the_DECLARED_centerline(tmp_path, monkeypatch
 
 
 def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
-    from trid3nt_server.workflows.telemac.steps import solve as solve_steps
+    from trid3nt_server.workflows.telemac.solving import solve as solve_mod
     from trid3nt_server.workflows.telemac.steps import deck as deck_steps
     from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
@@ -627,7 +627,7 @@ def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
 
     captured: dict = {}
     out = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
-                    overrides=[patch.object(solve_steps, "solve_reach", _boom)])
+                    overrides=[patch.object(solve_mod, "solve_reach", _boom)])
     assert out["status"] == "error"
     assert out["error_code"] == "TELEMAC_DYE_RUN_FAILED"
 
