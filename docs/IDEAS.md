@@ -3229,3 +3229,182 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   close's own library check is the source). (4) The measured
   substitution rung joins the JSONL journal beside the provenance
   (one datum, one name, both records).
+
+- MBSE PILOT VERIFY RESOLUTIONS (orchestrator under the charter's own
+  acceptance criterion, 2026-09-02 - NATE may override): (1) EVIDENCE
+  PER INTERFACE USAGE, not per def - a single-module severance on any
+  hop must fire (the chartered seeded-break criterion; 20/38 items
+  were blind under pooling). A verbatim-forwarding block declares
+  itself PASS-THROUGH on the usage (a doc-line convention like code:/
+  forbid:) - this is the ruled echo doctrine ("worker copies echo
+  verbatim, asserts nothing it cannot know") given its model
+  spelling, not an invention; pass-through hops contribute no
+  per-item evidence and demand none. (2) EVERY REAL WRITER IS
+  MODELED - rain_on_grid.py binds as a second usage of the
+  deckAuthor part def; its severance must fire like deck.py's; the
+  checker refuses a contract caller found in the tree but bound to
+  no usage (the unmodeled-author class, caught structurally).
+  (3) THE CHECKER COMPUTES ITS OWN DEPENDENCY FACTS - scoped import
+  edges for the ~14 modeled modules, computed fresh at check time
+  (cheap, thin-checker-scoped); the dependency rules stop reading
+  the committed atlas graph.json (which is an instrument product,
+  not a live input; its staleness made rule c decorative).
+
+- MBSE PILOT CLEAN (2026-09-02): the solve-seam model + thin checker
+  are LIVE in the suite and pushed (be6cf396). ALL SIX seeded breaks
+  fire by name (both result_slf severances, single-writer topology,
+  phantom verify, forbidden import vs FRESH scoped edges, unmodeled
+  author); the thesis held - authoring intent caught listing_tail's
+  severed fold before any checker ran, and the seeded-break
+  criterion caught the checker's own pooling blind spot before it
+  shipped as false confidence. FOUR measurement-forced refinements
+  stand pending NATE's eye (none relitigates a ruling): pass-through
+  marks an END not a hop; WorkerCompletionRecord split into four
+  honest interfaces (the pooled def was untrue at every hop);
+  completion hops re-routed off solveStep (a hop that did not
+  exist); listingRead dropped (run_reads takes text, not the file).
+  EXTENSION PATH: mesh subsystem next (recipe/artifact contracts),
+  then fetch substrate, plan interpreter, emission - one seam per
+  wave, each with its seeded-break proof.
+
+- MODEL ELEMENTS DIE WITH THEIR SUBJECTS (NATE 2026-09-02): the
+  system model must never obstruct guided removals - same law as
+  tests-die-with-subject: a removal deletes the component's model
+  elements (blocks, hops, items, verifies) IN THE SAME COMMIT; a
+  modeled element whose module/test is gone fails the checker loudly
+  for exactly one commit's worth of attention (that loud moment IS
+  the guidance), never as a preservation order. The model shrinks
+  with the tree.
+
+- READER-INDEPENDENCE EXCEPTION RULED (orchestrator under the
+  adversarial-verification doctrine, 2026-09-02 - NATE may
+  override): the library-first law on SELAFIN scopes to THE FIELDS A
+  DELIVERY RENDERS - one reader of the format's field data
+  (telapy TelemacFile via the in-image driver), no second parser of
+  fields anywhere. The packet assembler's selafin_frame_count STAYS
+  as hand-rolled header arithmetic BY DESIGN: it is the deliberate
+  second reader the model's FrameCountCrossCheck clause protects
+  ("one reader is never the only reader of a number a delivery
+  rests on") - independent implementation + 64KB range read vs a
+  full download; converting it would make the cross-check agree
+  with itself. The model documents the exception; the
+  NoSecondParserOfTheFormat requirement names its scope. Sandbox
+  write_selafin (93 lines, mesh builders) noted for the cull/
+  emission ledger - a writer, out of this scope.
+
+- READER-WAVE VERIFY RESOLUTIONS (orchestrator under standing law,
+  2026-09-02 - NATE may override): (1) SUB-RESOLUTION SIZING LINES
+  DROP AT THE TYPED CONVERSION with a journaled measured note ("N of
+  M lines shorter than the declared edge were below sizing
+  resolution and not used") - a line shorter than one edge cannot be
+  resampled at that edge (the library crashes instead of refusing);
+  zero surviving lines = typed refusal naming the resolution. The
+  heuristic-honesty doctrine, not an adapter opinion. (2) forbid: is
+  made UNEVADABLE - the checker resolves "from pkg import submodule"
+  forms to their full module path (the seeded-break criterion; 3 of
+  12 rules were exposed). (3) ALL ship-and-exec drivers bind with
+  code: so the driver-purity law gates them (three of four were
+  unbound - the law was unenforced, not violated). Plus the ledger
+  accuracy tail (+67 not +68; the sandbox write_selafin cull note
+  moves to DELETION_LEDGER w/ CONDITION; the model names all four
+  guarded readers). NOTED pre-existing: the committed reference
+  hydrograph is flat zero (stale data from before the engine-flux
+  reader ruling - the re-drive must show NONZERO); each delivery
+  pays 2 container spins on the same file (redundant second read -
+  memo seam noted for the emission fold, not built now).
+
+- DRY IS A VALID ANSWER + AMC III CANARY (NATE 2026-09-02): (1) a
+  correct-but-dry run is a FINDING, not an error - the run
+  completes; products state the measured dryness plainly (max
+  depth, net rain, zero outflow); the hydrograph publishes as
+  measured zero; TELEMAC_OUTPUT_EMPTY fires only for truly
+  empty/failed output. (2) The rain_on_grid canary keeps its storm
+  and declares ANTECEDENT MOISTURE CONDITION III (wetter soil, more
+  runoff from the same rain) so the acceptance hydrograph is
+  measurably nonzero.
+  AMENDED (NATE 2026-09-02, the composition): the canary BASELINE is
+  a CITED design storm (NOAA Atlas 14 depth for the catchment,
+   e.g. 10-yr/24-h, basis stated) at AMC II; AMC III becomes the
+  DISCRIMINATION PAIR - the same storm at AMC II vs III must show
+  measurably more runoff at III (proves the CN/antecedent machinery
+  responds); dry-is-an-answer proven on the old small storm (zero
+  hydrograph, no refusal). Three behaviors, one extra run.
+
+- BATHYMETRY METHODOLOGY SIGNED (NATE 2026-09-02): the report's
+  recommendations stand as the signed methodology
+  (docs/research/bathymetry-sources.md): per-class ladders (coastal:
+  BlueTopo -> CUDEM -> refuse; navigable: eHydro -> BlueTopo ->
+  refuse; small stream: NXSDB-at-gages -> synthetic producer ->
+  refuse); the synthetic rung MAY exist ONLY as a declared producer
+  named for its method (Bieger 2015 bankfull regressions, drainage
+  area from NHDPlus HR) wearing the existing synthetic degradation
+  label; outflow stage = NORMAL DEPTH from the friction slope
+  (replaces bed_out + 2.0); load-bearing UNVERIFIED items verified
+  live before any rung ships. SIGNATURE CONDITION: every
+  judgment-affected area is DOCUMENTED AND TRACEABLE - each signed
+  decision lands as a model requirement (the bathymetry/data seam
+  joins the SysML model) whose doc names the decision, satisfied by
+  the code that embodies it, verified by a named test; the rendered
+  SysML view is the high-level record NATE reads. Thalweg burning
+  stays REJECTED as a bed source.
+
+- FULL PROOF PACKETS ON EVERY NEW-MACHINERY RUN (NATE 2026-09-02,
+  sharpens the mechanical-packet law): every live acceptance run
+  exercising NEWLY BUILT machinery ships the FULL house packet -
+  packet.json with ALL layers + composite + charts (+ GIF when
+  animated), wireframe on engine renders, zoom-crops on thin cuts,
+  adversarially self-interrogated BEFORE it reaches NATE - never
+  scalar-only evidence. Scalars prove the plumbing; the packet
+  proves the picture, and the picture is where the last three waves'
+  honesty findings lived. Bake into every wave's verify/acceptance
+  prompt beside the suite law.
+
+- HAPPY PATH FIRST, SYNTHETIC DEFERRED (NATE 2026-09-02, amends the
+  signed bathymetry methodology): NO synthetic bathymetry now - the
+  Bieger producer does NOT build; the navigable-river class STAYS
+  STOPPED refusing by name (no guard amendment); the small-stream
+  ladder's synthetic slot stays stated-but-empty (= refusal). The
+  DOCTRINE (standing, see memory): assume fetched data is good;
+  pick supported AOIs so cases ride the happy path; data deserts
+  get AD HOC fixes when a real case demands one - never speculative
+  machinery now; synthetic data is a USER decision when it ever
+  arrives, and best-case behavior is established FIRST, never
+  intertwined with sad-path interpolation. The Producer stage
+  shrinks to the NORMAL-DEPTH OUTFLOW alone (derived from real
+  measured geometry + friction slope - a computation, not a
+  fabrication; still signed).
+
+- THE ONE-FLOW REORG CHARTERED (NATE 2026-09-02 "Charter it";
+  proposal view = the One Flow artifact page): the five-word tree
+  (workflows / authoring / solving / products / helpers) replaces
+  telemac/steps/; ONE assembler (authoring/assembler.py) owns
+  EVERYTHING the box receives - steering file + manifest + aux,
+  staged - deck.py and rain_on_grid's authoring half unify, family
+  differences are DATA never branches (helpers summoned by the
+  declaration); "deck" and the reach-run distinction retire; "step"
+  reserved exclusively for the plan interpreter; the echo block
+  renames to SERVER FACTS (orchestrator's pick from NATE's open
+  choice - "metadata" too generic to carry the verbatim doctrine;
+  overrideable) - a manifest-key rename, so the worker gate updates
+  and the image rebuilds with smoke; "family" is MEASURED in the
+  reorg and shrinks to its real readers or dies; declarations HELD
+  as a name (SysML requirement-def collision); model code: bindings
+  move in the same commits (the checker proves every move); README
+  maps same-commit; params pass stays parked (not riding).
+  Acceptance: authored-output parity modulo the renamed key, live
+  drives per family with FULL PACKETS, seeded break on the new
+  bindings, suite zero, push on CLEAN. SEQUENCING: launches when
+  the in-flight bathymetry remedy lands (server waves serialize).
+  AMENDED (NATE 2026-09-02): the six-system picture (fetcher /
+  mesher / assembler / solver / products / runtime) is THE WORKFLOW
+  PLANE - a labeled SUBSET view of the system of systems, never
+  presented as the whole. The model's index organizes by PLANES:
+  the workflow plane (modeled - the seam files live under their
+  systems); the TOOL PLANE (processing tools, the registry, how
+  tools are surfaced/retrieved/picked), the INTELLIGENCE PLANE (LLM
+  provider selection, the adapter, routing), the USER PLANE (chat
+  dock, canvas, LLM output), the RECORD PLANE (journal, provenance,
+  the model+checker itself) - each NAMED in the index as
+  modeled-or-not-yet-modeled (a stated absence, never an omission);
+  planes get modeled as their seams are touched, never
+  speculatively.
