@@ -45,3 +45,4 @@ scripts/sandbox/hecras/_ref/
 # staging scripts rebuild them and the product lives in the object store.
 # Narrow on purpose -- scratchpad/ itself carries tracked proof artifacts.
 scratchpad/staging/
+scratchpad/

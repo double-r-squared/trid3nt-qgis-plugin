@@ -1,8 +1,0 @@
-[meshgen] perimeter pts=170  cell-center seeds=5391
-[meshgen] breakline element type = Geospatial.Vectors.Polyline
-[meshgen] MeshGenerationParams CreateVirtualCells=False SplitExternalFaces=true
-[meshgen] >>> CALLING MeshFactory.TryCreateMesh <<<
-[meshgen] TryCreateMesh returned False
-[meshgen] MeshError.Status=FacePerimeterConnectionError fatalPerim=False
-[meshgen] MeshError.msg=1 Error(s) - Face Perimeter Connection Error
-[meshgen] mesh == null

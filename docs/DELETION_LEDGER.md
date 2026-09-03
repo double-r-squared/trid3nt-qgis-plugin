@@ -3090,3 +3090,7 @@ as uncovered. The footprint measure had exactly one reader (the gate), so it is
 removed rather than kept beside its replacement; `select_bluetopo_tiles` now
 returns rows alone and a footprint is a SELECTION only.
 reopen: never (two coverage numbers is how one of them goes unread).
+
+## 2026-09-03 charter dedupe + scratchpad cull (NATE directive)
+- CLAUDE.md: was a byte-identical twin of AGENTS.md (verified by diff) - now a pointer; AGENTS.md is the one canonical charter. CONDITION: none (drift risk eliminated; the suite-law edit of 2026-09-01 had to land in both, proving the hazard).
+- scratchpad/ (37 tracked files, wave-18-era proof scraps + 162MB local bulk): deleted + gitignored. CONDITION MET: session-ephemeral evidence belongs in the session scratchpad, never in git; the spot-check-data standing approval covers the scraps.

@@ -1,7 +1,0 @@
-=== 2025-REGENERATED vs 6.x MUNCIE MESH ===
-real cells:  regen=5391  6.x=5391   (EXACT)
-faces:       regen=11166        6.x=11164 (delta 2)
-facepoints:  regen=5776         6.x=5774 (delta 2)
-cell-center displacement (ft): max=0.000000 mean=0.000000 p95=0.000000
-bijection: 5391/5391 unique 6.x cells matched
-with virtual cells: regen=5765  6.x total=5765   (EXACT)
