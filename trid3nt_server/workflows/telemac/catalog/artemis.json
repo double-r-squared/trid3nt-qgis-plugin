@@ -1,0 +1,2085 @@
+{
+  "module": "artemis",
+  "keywords": [
+    {
+      "keyword": "GEOMETRY FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file which contains the computational mesh.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "level": 1,
+      "mnemo": "NOMGEO",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "TITLE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Title of the studied case.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": "",
+      "level": 1,
+      "mnemo": "TITCAS"
+    },
+    {
+      "keyword": "DEBUGGER",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "If 1, calls of subroutines will be printed in the listing.",
+      "rubrique": [
+        "GENERAL PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "DEBUG"
+    },
+    {
+      "keyword": "VECTOR LENGTH",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Vector length on vector machines.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 2,
+      "mnemo": "LVMAC"
+    },
+    {
+      "keyword": "MATRIX STORAGE",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Defines the method to store matrices. The possible choices are: 1: classical EBE, 2: assembled EBE, 3: edge-based storage. Beware, with option 2, a special numbering of points is required.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 3,
+      "level": 2,
+      "choices": {
+        "1": "Classical EBE",
+        "2": "Assembled EBE",
+        "3": "Edge-based storage"
+      },
+      "mnemo": "OPTASS"
+    },
+    {
+      "keyword": "MATRIX-VECTOR PRODUCT",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Possible choices are: 1: Classical Product, 2: New Frontal Product.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 2,
+      "mnemo": "PRODUC"
+    },
+    {
+      "keyword": "GRAPHIC PRINTOUT PERIOD",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Fixes the period, in number of wave periods, for the writing of the VARIABLES FOR GRAPHIC PRINTOUTS (see this keyword) in the RESULTS FILE.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "LEOPRD"
+    },
+    {
+      "keyword": "LISTING PRINTOUT PERIOD",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Fixes the period, in number of wave periods, for the writing of the VARIABLES TO BE PRINTED (see this keyword).",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "LISTING"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "LISPRD"
+    },
+    {
+      "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR SOLVER",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Algorithms used for solving the matrix system are iterative. It is then necessary to limit the maximum number of iterations.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "SOLVER INFO",
+        ""
+      ],
+      "is_file": false,
+      "default": 60000,
+      "level": 2,
+      "mnemo": "SLVART\\%NITMAX"
+    },
+    {
+      "keyword": "NUMBER OF PERIODS",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with option MONODIRECTIONAL RANDOM WAVE = YES or MULTIDIRECTIONAL RANDOM WAVE = YES. It fixes the number of iso-energy frequency bands which discretize the energy spectrum.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "RANDOM WAVE",
+        ""
+      ],
+      "is_file": false,
+      "default": 5,
+      "level": 1,
+      "mnemo": "NPALE"
+    },
+    {
+      "keyword": "BOTTOM TOPOGRAPHY SMOOTHING",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of smoothings done on the topography. Each smoothing, using a mass matrix, is conservative. It is used when bathymetric data provide too irregular results after interpolation.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 2,
+      "mnemo": "LISFON"
+    },
+    {
+      "keyword": "INITIAL WATER LEVEL",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Value to be used with the option INITIAL CONDITIONS: 'CONSTANT ELEVATION'.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "INITIALIZATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "COTINI"
+    },
+    {
+      "keyword": "PRECONDITIONING",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Enables to apply preconditionning the matrix system to accelerate the convergence of the solver. 0: no preconditionning, 2: diagonal preconditionning, 3: block-diagonal preconditionning, 5: diagonal preconditionning in absolute value, 7: Element Crout preconditionning. Few of them can be combined (numbers 2 or 3 with the other). To combine some preconditionnings, impose the product of the previous numbers: example 6 means preconditioning 2 and 3 applied.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "SOLVER INFO",
+        ""
+      ],
+      "is_file": false,
+      "default": 2,
+      "level": 2,
+      "choices": {
+        "0": "no preconditioning",
+        "2": "diagonal preconditioning",
+        "3": "block-diagonal preconditioning",
+        "5": "absolute value diagonal preconditioning",
+        "7": "Crout preconditioning"
+      },
+      "mnemo": "SLVART\\%PRECON"
+    },
+    {
+      "keyword": "SOLVER",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Enables to choose the solver used for solving the matrix system. They are: 1: conjugate gradient, 2: conjugate residual, 3: conjugate gradient on the normal equation, 4: minimum error, 5: squared conjugate gradient (not programmed), 6: CGSTAB conjugate gradient, 7: GMRES, 8: direct solver.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "SOLVER INFO",
+        ""
+      ],
+      "is_file": false,
+      "default": 8,
+      "level": 2,
+      "choices": {
+        "1": "conjugate gradient",
+        "2": "conjugate residual",
+        "3": "conjugate gradient on a normal equation",
+        "4": "minimum error",
+        "5": "squared conjugate gradient",
+        "6": "CGSTAB",
+        "7": "GMRES",
+        "8": "direct",
+        "9": "parallel direct (MUMPS)"
+      },
+      "mnemo": "SLVART\\%SLV"
+    },
+    {
+      "keyword": "SOLVER OPTION",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Defines the dimension of the Krylov space when using the solver 7 (GMRES).",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "SOLVER INFO",
+        ""
+      ],
+      "is_file": false,
+      "default": 3,
+      "level": 2,
+      "mnemo": "SLVART\\%KRYLOV"
+    },
+    {
+      "keyword": "PEAK PERIOD",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with option MONODIRECTIONAL RANDOM WAVE = YES or MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the peak period (in seconds) of the energy spectrum.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "RANDOM WAVE",
+        ""
+      ],
+      "is_file": false,
+      "default": 10.0,
+      "level": 1,
+      "mnemo": "PERPIC"
+    },
+    {
+      "keyword": "GAMMA",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with option MONODIRECTIONAL RANDOM WAVE = YES or MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the $\\gamma$ value tor the JONSWAP wave energy spectrum: GAMMA = 1: Pierson-Moskowitz, GAMMA = 3.3: mean JONSWAP spectrum (default value).",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "RANDOM WAVE",
+        ""
+      ],
+      "is_file": false,
+      "default": 3.3,
+      "level": 1,
+      "mnemo": "GAMMA"
+    },
+    {
+      "keyword": "MONODIRECTIONAL RANDOM WAVE",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Yes, if one wants to run computation in random monodirectional waves (see real keywords of index 12, 13 and integer of index 10).",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "RANDOM WAVE",
+        "MONODIRECTIONAL"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "ALEMON"
+    },
+    {
+      "keyword": "MULTIDIRECTIONAL RANDOM WAVE",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Yes, if one wants to run computation in random multidirectional waves (see real keywords of index 12, 13 and integer of index 10).",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "RANDOM WAVE",
+        "MULTIDIRECTIONAL"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "ALEMUL"
+    },
+    {
+      "keyword": "PERIOD SCANNING",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Yes, if one wants to run computations by scanning a period range (resonance computations, see also reals of index 8, 9, and 10).",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "PERIODS SCANNING",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "BALAYE"
+    },
+    {
+      "keyword": "SOLVER ACCURACY",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Accuracy requested for the linear system solver.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "SOLVER INFO",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0001,
+      "level": 2,
+      "mnemo": "SLVART\\%EPS"
+    },
+    {
+      "keyword": "INITIAL DEPTH",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Value to be used along with the option INITIAL CONDITIONS: 'CONSTANT DEPTH'.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "INITIALIZATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "HAUTIN"
+    },
+    {
+      "keyword": "WAVE PERIOD",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Defines the wave period for monochromatic mode.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "MONOCHROMATIC WAVE",
+        ""
+      ],
+      "is_file": false,
+      "default": 10.0,
+      "level": 1,
+      "mnemo": "PER"
+    },
+    {
+      "keyword": "GRAVITY ACCELERATION",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sets the value of the acceleration due to gravity in m/s$^2$.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 9.81,
+      "level": 1,
+      "mnemo": "GRAV"
+    },
+    {
+      "keyword": "INITIAL CONDITIONS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Enables to define the initial conditions on water depths. The possible values are as follows: ZERO ELEVATION: fixes the free surface level to 0. Water depths are then equal to the difference between free surface level and bottom level, CONSTANT ELEVATION: fixes the free surface level to the value specified by the keyword INITIAL WATER LEVEL. Water level are then computed as before, ZERO DEPTH: initializes the water depths to 0, CONSTANT DEPTH: initializes the water depths to the value specified by the keyword INITIAL DEPTH, SPECIAL: initial conditions on water depths are to be precised in the subroutine CONDIH.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "INITIALIZATION",
+        ""
+      ],
+      "is_file": false,
+      "default": "ZERO ELEVATION",
+      "level": 1,
+      "choices": [
+        "ZERO ELEVATION",
+        "CONSTANT ELEVATION",
+        "ZERO DEPTH",
+        "CONSTANT DEPTH",
+        "SPECIAL"
+      ],
+      "mnemo": "CDTINI"
+    },
+    {
+      "keyword": "NUMBER OF DIRECTIONS",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option MULTIDIRECTIONAL RANDOM WAVE = YES. It fixes the number of iso-energy bands which discretizes the wave directional spectrum.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "RANDOM WAVE",
+        "MULTIDIRECTIONAL"
+      ],
+      "is_file": false,
+      "default": 5,
+      "level": 1,
+      "mnemo": "NDALE"
+    },
+    {
+      "keyword": "DIRECTION OF WAVE PROPAGATION",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the direction towards the incident waves at boundaries go to. It is counted in degrees and positively in the trigonometric sense relatively to the $x$ axis. This value is prescribed as a constant value along all the wave incident type boundaries. If one wants to specify a non uniform value, the user has to specify the value TETAB in the subroutine BORH.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "MONOCHROMATIC WAVE",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "TETAH"
+    },
+    {
+      "keyword": "ZERO",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Non active at the moment.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1e-12,
+      "level": 13,
+      "mnemo": "SLVART\\%ZERO"
+    },
+    {
+      "keyword": "BEGINNING PERIOD FOR PERIOD SCANNING",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option PERIOD SCANNING = YES. Fixes the minimum value (in seconds) of the period range to be used for the period scanning.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "PERIODS SCANNING",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "PERDEB"
+    },
+    {
+      "keyword": "ENDING PERIOD FOR PERIOD SCANNING",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option PERIOD SCANNING = YES. Fixes the maximum value (in seconds) of the period range to be used for the period scanning.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "PERIODS SCANNING",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "PERFIN"
+    },
+    {
+      "keyword": "STEP FOR PERIOD SCANNING",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option PERIOD SCANNING = YES. Fixes the value of the period step (in seconds) to be used for the period scanning.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "PERIODS SCANNING",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "PERPAS"
+    },
+    {
+      "keyword": "MINIMUM ANGLE OF PROPAGATION",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the minimum value (in degrees) of the directions range. It is counted positively in the trigonometric sense relatively to the $x$ axis.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "RANDOM WAVE",
+        "MULTIDIRECTIONAL"
+      ],
+      "is_file": false,
+      "default": -180.0,
+      "level": 1,
+      "mnemo": "TETMIN"
+    },
+    {
+      "keyword": "MAXIMUM ANGLE OF PROPAGATION",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the maximum value (in degrees) of the directions range. It is counted positively in the trigonometric sense relatively to the $x$ axis.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "RANDOM WAVE",
+        "MULTIDIRECTIONAL"
+      ],
+      "is_file": false,
+      "default": 180.0,
+      "level": 1,
+      "mnemo": "TETMAX"
+    },
+    {
+      "keyword": "S EXPONENT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the maximum value of exponent $S$ in the Goda formula used to express the directional wave energy spreading. See GODA Y., Random Seas and Design of Maritime Structures - Univ. of Tokyo Press, 1987.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "RANDOM WAVE",
+        "MULTIDIRECTIONAL"
+      ],
+      "is_file": false,
+      "default": 20.0,
+      "level": 1,
+      "mnemo": "EXPOS"
+    },
+    {
+      "keyword": "LISTING PRINTOUT",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "If NO is specified for this keyword, the printout listing just contains the head and the sentence END OF PROGRAM. It is advised not to use this way.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "LISTING"
+      ],
+      "is_file": false,
+      "default": true,
+      "level": 1,
+      "mnemo": "LISTIN"
+    },
+    {
+      "keyword": "INFORMATIONS ABOUT SOLVER",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Gives the iterations number which was necessary for the solver to converge.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "LISTING"
+      ],
+      "is_file": false,
+      "default": true,
+      "level": 1,
+      "mnemo": "INFOGR"
+    },
+    {
+      "keyword": "VARIABLES FOR GRAPHIC PRINTOUTS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": true,
+      "help": "Names of the variables that the user wants to write in the RESULTS FILE. Separators between variable names can be choosen free. The allowable values are: HS=wave height, PHAS=wave phase, U0=velocity u (free surface at $t$ = 0), V0=velocity v (free surface at $t$ = 0), ZS=free surface elevation (at $t$ = 0), ZF=bottom elevation, HW=still water height, C=phase velocity, CG=group velocity, K=wave number, PHIR=real potential, PHII=imaginal potential, D=prive(1,1), E=prive(1,2), F=prive(1,3), G=prive(1,4), T01=first mean spectral period, T02=second mean spectral period, TM=third mean spectral period, FX=force along X, FY=force along Y, INC=wave incidence radian, QB=breaking rate, SXX=SXX stress, SXY=SXY stress, SYY=SYY stress. The user has 4 free variables at his/her disposal to create other variables by him/herself. These variables have to be computed in the CALRES subroutine, and the name that we want to attribute has to be precibed in the NOMVAR subroutine. The 4 free variable fields are: D, E, F, G which corresponds to the private arrays PRIVE(1,1), PRIVE(1,2), PRIVE(1,3) and PRIVE (1,4). Contrary to the previous variables, these are conserved all through the computation, and can be used again. Do not forget to specify the number of private arrays you want to use in the principal programme (variable NPRIV).",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": "HS,PHAS,ZS,ZF",
+      "level": 1,
+      "choices": {
+        "HS": "wave height",
+        "PHAS": "wave phase",
+        "U0": "velocity u (free surface)(t=0)",
+        "V0": "velocity v (free surface)(t=0)",
+        "ZS": "free surface elevation (t=0)",
+        "ZF": "bottom elevation",
+        "HW": "still water height",
+        "C": "phase velocity",
+        "CG": "group velocity",
+        "K": "wave number",
+        "PHIR": "real potential",
+        "PHII": "imaginal potential",
+        "D": "prive(1,1)",
+        "E": "prive(1,2)",
+        "F": "prive(1,3)",
+        "G": "prive(1,4)",
+        "T01": "first mean spectral period",
+        "T02": "second mean spectral period",
+        "TM": "third mean spectral period",
+        "FX": "force along X",
+        "FY": "force along Y",
+        "INC": "wave incidence radian",
+        "QB": "breaking rate",
+        "SXX": "SXX stress",
+        "SXY": "SXY stress",
+        "SYY": "SYY stress"
+      },
+      "mnemo": "VARDES"
+    },
+    {
+      "keyword": "VARIABLES TO BE PRINTED",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of variables taht the user whishes to write on the screen. Possibilities are the same as for graphic outputs.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "LISTING"
+      ],
+      "is_file": false,
+      "default": " ",
+      "level": 2,
+      "choices": {
+        "HS": "wave height",
+        "PHAS": "wave phase",
+        "U0": "velocity u (free surface)(t=0)",
+        "V0": "velocity v (free surface)(t=0)",
+        "ZS": "free surface elevation (t=0)",
+        "ZF": "bottom elevation",
+        "HW": "still water height",
+        "C": "phase velocity",
+        "CG": "group velocity",
+        "K": "wave number",
+        "PHIR": "real potential",
+        "PHII": "imaginal potential",
+        "D": "prive(1,1)",
+        "E": "prive(1,2)",
+        "F": "prive(1,3)",
+        "G": "prive(1,4)",
+        "T01": "first mean spectral period",
+        "T02": "second mean spectral period",
+        "TM": "third mean spectral period",
+        "FX": "force along X",
+        "FY": "force along Y",
+        "INC": "wave incidence radian",
+        "QB": "breaking rate",
+        "SXX": "SXX stress",
+        "SXY": "SXY stress",
+        "SYY": "SYY stress"
+      },
+      "mnemo": "VARIMP"
+    },
+    {
+      "keyword": "FORTRAN FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the FORTRAN file to be submitted, including specific subroutines of the model.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "NOMFOR",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "STEERING FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the steering file used for the computation.",
+      "rubrique": [
+        "INTERNAL",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "NOMCAS",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "BOUNDARY CONDITIONS FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the boundary conditions file. It is automatically built by \\stbtel or by the mesh generator MATISSE.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "level": 1,
+      "mnemo": "ART\\_FILES(ARTCLI)\\%NAME",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "RESULTS FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the results file corresponding to the computations and which contains the variables specified by the keyword VARIABLES FOR GRAPHIC PRINTOUTS.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(ARTRES)\\%NAME",
+      "file_role": "output",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "BOTTOM TOPOGRAPHY FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of a potential bathymetry file. If this keyword is specified, the bathymetry which it is defining is accounted for.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(ARTFON)\\%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "BINARY DATA FILE 1",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Data file, written in binary mode, at the disposal of the user.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(ARTBI1)\\%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "BINARY DATA FILE 2",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Data file, written in binary mode, at the disposal of the user.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(ARTBI2)\\%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "FORMATTED DATA FILE 1",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Data file, written in ASCII mode, at the disposal of the user.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(ARTFO1)\\%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "FORMATTED DATA FILE 2",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Data file, written in ASCII mode, at the disposal of the user.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(ARTFO2)\\%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "BINARY RESULTS FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Results file, written in binary mode, at the disposal of the user.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(ARTRBI)\\%NAME",
+      "file_role": "output",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "FORMATTED RESULTS FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Results file, written in ASCII mode, at the disposal of the user.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(ARTRFO)\\%NAME",
+      "file_role": "output",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "SUB-ITERATIONS ACCURACY FOR DISSIPATION",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the accuracy requested for sub-iterations necessary to determine the dissipation coefficients.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "DISSIPATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.01,
+      "level": 3,
+      "mnemo": "EPSDIS"
+    },
+    {
+      "keyword": "SUB-ITERATIONS ACCURACY FOR CURRENT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the accuracy requested for sub-iterations necessary to determine the wave vector.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "CURRENT INFO",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.01,
+      "level": 3,
+      "mnemo": "EPSDIR"
+    },
+    {
+      "keyword": "SUB-ITERATIONS ACCURACY FOR TETAP",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the accuracy requested for sub-iterations necessary to determine value of $\\theta_p$ (criterion on cos($\\theta_p$)).",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "AUTOMATIC TETAP ANGLE",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.01,
+      "level": 3,
+      "mnemo": "EPSTP"
+    },
+    {
+      "keyword": "BREAKING",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Yes, if one wants to account for breaking process (see also reals of index 18, 19, 20, 21, 22, 23, and integer of index 12, 13).",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BATHYMETRIC BREAKING"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "DEFERL"
+    },
+    {
+      "keyword": "CURRENT",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "If = TRUE: Wave refraction due to current is described using Kostense model (1988).",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "CURRENT INFO",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "COURANT"
+    },
+    {
+      "keyword": "AUTOMATIC TETAP CALCULATION",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "If = TRUE: automatic calculation of $\\theta_p$ (based on velocity direction).",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "AUTOMATIC TETAP ANGLE",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "LANGAUTO"
+    },
+    {
+      "keyword": "AUTOMATIC CALCULATION OF PHASE",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "TRUE: automatic calculation of incident phase (based on reference water depth).",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "AUTOMATIC PHASE",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "LPHASEAUTO"
+    },
+    {
+      "keyword": "REFERENCE WATER DEPTH FOR AUTOMATIC PHASE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Water depth for automatic incident phase calculation. Try to put the incident wave boundary on a regular topography zone. The reference water depth should be representative of the water depth on the boundary.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "AUTOMATIC PHASE",
+        ""
+      ],
+      "is_file": false,
+      "default": -1.0,
+      "level": 1,
+      "mnemo": "DEPREF"
+    },
+    {
+      "keyword": "PHASE REFERENCE COORDINATES",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": false,
+      "help": "Coordinates of reference point for phase. Will not change the wave height computed.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0.0,
+        0.0
+      ],
+      "level": 1,
+      "mnemo": "X\\_PHREF,Y\\_PHREF"
+    },
+    {
+      "keyword": "KDALLY",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the coefficient $K$ used in the formulation of the dissipation coefficient proposed by Dally et al. 1984.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BATHYMETRIC BREAKING"
+      ],
+      "is_file": false,
+      "default": 0.1,
+      "level": 1,
+      "mnemo": "KDALLY"
+    },
+    {
+      "keyword": "BREAKING LAW",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Specifies the formulation chosen for calculating the dissipation coefficient through breaking. Only effective for monochromatic wave mode. 1: Formulation of Battjes \\& Janssen, 1978, 2: Formulation of Dally et al., 1984. In random wave mode, the formulation of B \\& J, 1978 is the only one to be used.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BATHYMETRIC BREAKING"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "choices": {
+        "1": "BATTJES \\& JANSSEN",
+        "2": "DALLY"
+      },
+      "mnemo": "IBREAK"
+    },
+    {
+      "keyword": "MAXIMUM OF SUB-ITERATIONS",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the maximum number of sub-iterations for the computation of dissipation.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "DISSIPATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 15,
+      "level": 3,
+      "mnemo": "NITDIS"
+    },
+    {
+      "keyword": "DISSIPATION RELAXATION",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the relaxation coefficient used between two sub-iterations for the computation of the dissipation term.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "DISSIPATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.5,
+      "level": 3,
+      "mnemo": "RELDIS"
+    },
+    {
+      "keyword": "MAXIMUM OF SUB-ITERATIONS FOR TETAP",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the maximum number of sub-iterations for the automatic computation of $\\theta_p$.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "AUTOMATIC TETAP ANGLE",
+        ""
+      ],
+      "is_file": false,
+      "default": 15,
+      "level": 3,
+      "mnemo": "NITTP"
+    },
+    {
+      "keyword": "RELAXATION ON TETAP",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the relaxation coefficient used between two sub-iterations for the computation of automatic $\\theta_p$.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "AUTOMATIC TETAP ANGLE",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 3,
+      "mnemo": "RELTP"
+    },
+    {
+      "keyword": "ALPHA",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the coefficient $\\alpha$ used in the formulation of the dissipation coefficient through breaking proposed by Battjes \\& Janssen, 1978 for random waves.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BATHYMETRIC BREAKING"
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 1,
+      "mnemo": "ALFABJ"
+    },
+    {
+      "keyword": "GAMMAS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the coefficient $\\gamma_s$ used in the criterion of the critical breaking wave height. Do not confuse with coefficient $\\gamma$ used in the JONSWAP spectrum.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BATHYMETRIC BREAKING"
+      ],
+      "is_file": false,
+      "default": 0.88,
+      "level": 1,
+      "mnemo": "GAMMAS"
+    },
+    {
+      "keyword": "GDALLY",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the $\\Gamma$ coefficient used in the formulation of Dally et al., 1984, for the dissipation coefficient in surf-breaking. Do not confuse with the coefficient $\\gamma$ used in the JONSWAP formulae and coefficient gammas used to determine the breaking wave height criterion.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BATHYMETRIC BREAKING"
+      ],
+      "is_file": false,
+      "default": 0.4,
+      "level": 1,
+      "mnemo": "GDALLY"
+    },
+    {
+      "keyword": "FRICTION",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Yes, if one wants to include dissipation through bottom friction in the computation.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "FROTTE"
+    },
+    {
+      "keyword": "FLUID KINEMATIC VISCOSITY",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Kinematic viscosity of the fluid (water) in m$^2$/s. 1.793E-6: for a temperature of 0 C, 1.567E-6: for a temperature of 4 C, 1.237E-6: for a temperature of 12 C, 1.112E-6: for a temperature of 16 C, 1.011E-6: for a temperature of 20 C, 0.802E-6: for a temperature of 30 C, 0.661E-6: for a temperature of 40 C, 1.0E-6: default value.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": 1e-06,
+      "level": 1,
+      "mnemo": "VISCO"
+    },
+    {
+      "keyword": "DIAMETER90",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "DIAM90 is the maximum grain diameter, in m, which defines 90 \\% of the total weight of sediment. 1.0E-3: for very coarse sand, 0.5E-3: for coarse sand, 0.25E-3: for medium sand, 0.125E-3: for fine sand, 0.062E-3: for very fine sand, 0.15E-3: default value.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": 0.00015,
+      "level": 1,
+      "mnemo": "DIAM90"
+    },
+    {
+      "keyword": "DIAMETER50",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "DIAM50 is the maximum grain diameter, in m, which defines 50 \\% of the total weight of sediment. Usually, we have DIAM90 = 1.5 $\\times$ DIAM50. DIAM50 is a more common value used. 0.66E-3: for very coarse sand, 0.33E-3: for coarse sand, 0.17E-3: for medium sand, 0.083E-3: for fine sand, 0.040E-3: for very fine sand, 0.10E-3: default value.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": 0.0001,
+      "level": 1,
+      "mnemo": "DIAM50"
+    },
+    {
+      "keyword": "SEDIMENT SPECIFIC WEIGHT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sediment specific weight in kg/m$^3$.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": 2650.0,
+      "level": 1,
+      "mnemo": "MVSED"
+    },
+    {
+      "keyword": "FLUID SPECIFIC MASS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fluid specific weight (water) in kg/m$^3$.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": 1000.0,
+      "level": 1,
+      "mnemo": "MVEAU"
+    },
+    {
+      "keyword": "HYDRAULIC REGIME IMPOSED",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option FRICTION = YES. Enables to impose the hydraulic regime in the case of an automatic calculation of the friction factor for sandy beds.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "ENTREG"
+    },
+    {
+      "keyword": "SKIN ROUGHNESS ONLY",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option FRICTION = YES. Enables to restrict the total roughness to the skin roughness in the case of an automatic calculation of the friction factor for sandy beds.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "ENTRUG"
+    },
+    {
+      "keyword": "WAVE HEIGHTS SMOOTHING",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "YES when one wants to smooth the wave heights to improve the radiation stresses computation (only used in regular wave mode). Default value = NO.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "MONOCHROMATIC WAVE",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "LISHOU"
+    },
+    {
+      "keyword": "VALIDATION",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "This option is primarily used for the validation documents. The REFERENCE FILE is then considered as a reference which the computation is going to be compared with. The comparison is made by the subroutine BIEF\\_VALIDA, which can be modified as to so as to include, for example, a comparison with an exact solution.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "VALID"
+    },
+    {
+      "keyword": "HYDRAULIC REGIME TYPE",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with option HYDRAULIC REGIME IMPOSED = YES. Determines the type of the hydraulic regime (laminar, smooth-turbulent, rough-turbulent, transient). laminar regime, smooth-turbulent regime, rough-turbulent regime, transient regime.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "choices": {
+        "1": "laminar regime",
+        "2": "smooth-turbulent regime",
+        "3": "rough-turbulent regime",
+        "4": "transient regime"
+      },
+      "mnemo": "REGIDO"
+    },
+    {
+      "keyword": "BOTTOM FRICTION LAW",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option FRICTION = YES. Fixes the formulation used for bottom friction law: 1: Kostense et al., 1986, 2: Putnam \\& Johnson, 1949.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "choices": {
+        "1": "Kostense formulation integrating Ue calculation (1986)",
+        "2": "Putnam \\& Johnson formulation (1949)"
+      },
+      "mnemo": "FORMFR"
+    },
+    {
+      "keyword": "FRICTION FACTOR IMPOSED",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option FRICTION = YES. If YES, enables the user to impose a friction factor, by a keyword for a constant value (see real of index 29) or by programming in the FWSPEC subroutine for non-uniform value. If NO, \\artemis automatically computes the friction factor assuming that the bottom is sandy and uses the characteristics of sediment and of motion.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "ENTFW"
+    },
+    {
+      "keyword": "FRICTION FACTOR",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Used with the option FRICTION FACTOR IMPOSED = YES. Fixes the value of the friction factor uniform over the domain.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "FWCOEF"
+    },
+    {
+      "keyword": "FRICTION COEFFICIENT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Do not confuse with the FRICTION FACTOR. Not used in \\artemis. It is let here for consistence with \\telemac{2d}.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 2,
+      "mnemo": "FFON"
+    },
+    {
+      "keyword": "RIPPLES COEFFICIENT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Fixes the ripples coefficient used in the formulae of Van Rijn to calculate the friction factor: 1.0: for single ripples, 0.7: for ripples superimposed to sand waves.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "DISSIPATION",
+        "BOTTOM FRICTION"
+      ],
+      "is_file": false,
+      "default": 0.7,
+      "level": 3,
+      "mnemo": "RICOEF"
+    },
+    {
+      "keyword": "MINIMUM SPECTRAL PERIOD",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Minimum period value requested in seconds if it is necessary to alter the energy spectrum for the computation of the periods in the case of random waves (see PERALE subroutine).",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "RANDOM WAVE",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.02,
+      "level": 2,
+      "mnemo": "PMIN"
+    },
+    {
+      "keyword": "MAXIMUM SPECTRAL PERIOD",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Maximum period value requested in seconds if it is necessary to alter the energy spectrum for the computation of the periods in the case of random waves (see PERALE subroutine).",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "RANDOM WAVE",
+        ""
+      ],
+      "is_file": false,
+      "default": 200.0,
+      "level": 2,
+      "mnemo": "PMAX"
+    },
+    {
+      "keyword": "ORIGINAL DATE OF TIME",
+      "type": "INTEGER",
+      "size": 3,
+      "unbounded": false,
+      "help": "Give the date of the time origin of the model when taking into account the tide generating force.",
+      "rubrique": [
+        "GENERAL PARAMETERS",
+        "TIME",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0,
+        0,
+        0
+      ],
+      "level": 1,
+      "mnemo": "MARDAT"
+    },
+    {
+      "keyword": "ORIGINAL HOUR OF TIME",
+      "type": "INTEGER",
+      "size": 3,
+      "unbounded": false,
+      "help": "Give the time of the time origin of the model when taking into account the tide generating force.",
+      "rubrique": [
+        "GENERAL PARAMETERS",
+        "TIME",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0,
+        0,
+        0
+      ],
+      "level": 1,
+      "mnemo": "MARTIM"
+    },
+    {
+      "keyword": "NUMBER OF PRIVATE VARIABLES",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Give the number of private variables.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "NPRIV"
+    },
+    {
+      "keyword": "PARALLEL PROCESSORS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of processors for domain partition: 0: 1 machine, compiling without parallel library, 1: 1 machine, compiling with a parallel library, 2: 2 processors or machines in parallel. etc...",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 2,
+      "mnemo": "NCSIZE"
+    },
+    {
+      "keyword": "PARTITIONING TOOL",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Partitioning tool selection: 1: METIS, 2: SCOTCH, 3: PARMETIS, 4: PTSCOTCH.",
+      "rubrique": [
+        "INTERNAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": "METIS",
+      "level": 1,
+      "choices": [
+        "METIS",
+        "SCOTCH",
+        "PARMETIS",
+        "PTSCOTCH"
+      ]
+    },
+    {
+      "keyword": "ORIGIN COORDINATES",
+      "type": "INTEGER",
+      "size": 2,
+      "unbounded": false,
+      "help": "Value in metres, used to avoid large real numbers, added in SERAFIN format, but so far no other treatment.",
+      "rubrique": [
+        "GENERAL PARAMETERS",
+        "LOCATION",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0,
+        0
+      ],
+      "level": 2,
+      "mnemo": "I\\_ORIG,J\\_ORIG"
+    },
+    {
+      "keyword": "REFERENCE FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Binary-coded result file for validation.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(ARTREF)\\%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "GEOMETRY FILE FORMAT",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "Format of the GEOMETRY FILE. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "ART\\_FILES(ARTGEO)\\%FMT"
+    },
+    {
+      "keyword": "RESULTS FILE FORMAT",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "Format of the RESULTS FILE. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "ART\\_FILES(ARTRES)\\%FMT"
+    },
+    {
+      "keyword": "REFERENCE FILE FORMAT",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "REFERENCE FILE format. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "ART\\_FILES(ARTREF)\\%FMT"
+    },
+    {
+      "keyword": "BINARY DATA FILE 1 FORMAT",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "BINARY DATA FILE 1 format. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "ART\\_FILES(ARTBI1)\\%FMT"
+    },
+    {
+      "keyword": "BINARY DATA FILE 2 FORMAT",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "BINARY DATA FILE 2 format. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "ART\\_FILES(ARTBI2)\\%FMT"
+    },
+    {
+      "keyword": "RAPIDLY VARYING TOPOGRAPHY",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Extension of mild-slope equation with second order bottom effects 0: mild-slope equation, 1: gradient second order term: grad($h$)$^2$, 2: curvature second order term: laplacian($h$), 3: gradient + curvature second order terms. Model used for functions E1 and E2 expression: Chamberlain and Porter (1995).",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "VARYING TOPOGRAPHY",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "choices": {
+        "0": "mild-slope equation",
+        "1": "gradient second order term",
+        "2": "curvature second order term",
+        "3": "gradient + curvature second order terms"
+      },
+      "mnemo": "IPENTCO"
+    },
+    {
+      "keyword": "CHECKING THE MESH",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "If this keyword is equal to YES, a call to subroutine CHECKMESH will look for errors in the mesh, superimposed points, etc.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "CHECK\\_MESH"
+    },
+    {
+      "keyword": "FREE SURFACE ANIMATION",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "This option informs that the phase and amplitude file is to be generated. This file will be used to determine the free surface elevation throughout the model area. Remember to give AMPLITUDE AND PHASE FILE and FREE SURFACE FILE.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "FREE SURFACE"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "ANIMFS"
+    },
+    {
+      "keyword": "AMPLITUDE AND PHASE FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of the results file corresponding to the computations and which contains the phase and amplitude at every point for all the periods and directions specified in the steering file.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "FREE SURFACE"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(ARTAMP)\\%NAME",
+      "file_role": "output",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "AMPLITUDE AND PHASE FILE FORMAT",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "Format of the AMPLITUDE AND PHASE FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "FREE SURFACE"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "mnemo": "ART\\_FILES(ARTAMP)\\%FMT"
+    },
+    {
+      "keyword": "FREE SURFACE FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of the results file corresponding to the computations and which contains the free surface at every point as a function of time. This file can be animated to check free surface variations with time.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "FREE SURFACE"
+      ],
+      "is_file": false,
+      "default": " ",
+      "level": 1,
+      "mnemo": "NOMFST"
+    },
+    {
+      "keyword": "FREE SURFACE FILE FORMAT",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "Format of the FREE SURFACE FILE. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "FREE SURFACE"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "mnemo": "?????"
+    },
+    {
+      "keyword": "FIRST TIME IN THE FREE SURFACE FILE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Determines the time from which the results are written in the FREE SURFACE FILE.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "FREE SURFACE"
+      ],
+      "is_file": false,
+      "default": 10000.0,
+      "level": 2,
+      "mnemo": "TINIFS"
+    },
+    {
+      "keyword": "TIME STEP",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Specifies the time step in seconds in FREE SURFACE FILE.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "FREE SURFACE"
+      ],
+      "is_file": false,
+      "default": 0.25,
+      "level": 1,
+      "mnemo": "DTFS"
+    },
+    {
+      "keyword": "NUMBER OF TIME STEPS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Specifies the number of time steps in FREE SURFACE FILE.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "FREE SURFACE"
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "NITFS"
+    },
+    {
+      "keyword": "NESTING WITHIN TOMAWAC OUTER MODEL",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Remember to give NUMBER OF DIRECTIONS IN TOMAWAC SPECTRUM and NUMBER OF FREQUENCIES IN TOMAWAC SPECTRUM with option 1. Remember to give TOMAWAC OUTER RESULT FILE, TOMAWAC OUTER SPECTRAL FILE and COORDINATES OF THE REFERENCE F SPECTRUM if using option 2. INSTANT FOR READING TOMAWAC SPECTRUM required in cases 1 and 2.",
+      "rubrique": [
+        "NESTING WITH TOMAWAC",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "choices": {
+        "0": "No nesting",
+        "1": "Uses a TOMAWAC spectrum (1 point) as input to ARTEMIS",
+        "2": "Uses several TOMAWAC spectra located along ARTEMIS boundary"
+      },
+      "mnemo": "CHAINTWC"
+    },
+    {
+      "keyword": "INSTANT FOR READING TOMAWAC SPECTRUM",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Give the instant of the \\tomawac computation at which we want to import the spectrum for \\artemis.",
+      "rubrique": [
+        "NESTING WITH TOMAWAC",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 3,
+      "mnemo": "TPSTWC"
+    },
+    {
+      "keyword": "TOMAWAC OUTER SPECTRAL FILE",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "Name of the spectral file from an outer \\tomawac wave model.",
+      "rubrique": [
+        "NESTING WITH TOMAWAC",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(WACSPE)\\%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "TOMAWAC OUTER SPECTRAL FILE FORMAT",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "Format of the TOMAWAC OUTER SPECTRAL FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "NESTING WITH TOMAWAC",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "mnemo": "ART\\_FILES(WACSPE)\\%FMT"
+    },
+    {
+      "keyword": "TOMAWAC OUTER RESULT FILE",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "Name of a file containing the results of an outer \\tomawac wave model.",
+      "rubrique": [
+        "NESTING WITH TOMAWAC",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(WACRES)\\%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "TOMAWAC OUTER RESULT FILE FORMAT",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "Format of the TOMAWAC OUTER RESULT FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "NESTING WITH TOMAWAC",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "mnemo": "ART\\_FILES(WACRES)\\%FMT"
+    },
+    {
+      "keyword": "TOMAWAC LIQUID BOUNDARY FILE",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "Name of a file containing the liquid boundaries derived from an outer \\tomawac wave model.",
+      "rubrique": [
+        "NESTING WITH TOMAWAC",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": " ",
+      "level": 1,
+      "mnemo": "ART\\_FILES(WACLQD)\\%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "TOMAWAC LIQUID BOUNDARY FILE FORMAT",
+      "type": "STRING",
+      "size": null,
+      "unbounded": false,
+      "help": "Format of the TOMAWAC LIQUID BOUNDARY FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "NESTING WITH TOMAWAC",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "mnemo": "ART\\_FILES(WACLQD)\\%FMT"
+    },
+    {
+      "keyword": "COORDINATES OF THE REFERENCE F SPECTRUM",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": false,
+      "help": "Coordinates for the frequency spectrum reference point.",
+      "rubrique": [
+        "NESTING WITH TOMAWAC",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        -99999.9,
+        -99999.9
+      ],
+      "level": 1,
+      "mnemo": "X\\_SFREF,Y\\_SFREF"
+    },
+    {
+      "keyword": "DICTIONARY",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Key word dictionary.",
+      "rubrique": [
+        "INTERNAL",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "artemis.dico",
+      "level": -3,
+      "mnemo": "",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "CONCATENATE PARTEL OUTPUT",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "With this option, partel no more generates a file (GEO/CLI/PAR) per process but a single concatenate file of them, associated to an index file. Then instead of having partel generating 3P files, it only generates 6 files.",
+      "rubrique": [
+        "INTERNAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 0,
+      "mnemo": "CONCAT\\_PARTEL"
+    }
+  ]
+}

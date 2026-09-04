@@ -1,0 +1,1561 @@
+{
+  "module": "waqtel",
+  "keywords": [
+    {
+      "keyword": "WAQ CASE TITLE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Title of the case being considered. This title will be marked on the printouts.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": "",
+      "level": 1,
+      "mnemo": "TITWAQCAS"
+    },
+    {
+      "keyword": "PARALLEL PROCESSORS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of processors for parallel processing: 0: 1 machine, compiling without parallel library, 1: 1 machine, compiling with a parallel library, 2: 2 processors or machines in parallel etc.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "NCSIZE"
+    },
+    {
+      "keyword": "GEOMETRY FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Geometry file same as the TELEMAC one.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 2,
+      "mnemo": "WAQ\\_FILES(WAQGEO)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "GEOMETRY FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Geometry file format. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": "SERAFIN",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "WAQ\\_FILES(WAQGEO)%FMT"
+    },
+    {
+      "keyword": "BOUNDARY CONDITIONS FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file containing the types of boundary conditions. This file is filled automatically by the mesh generator through colours that are assigned to the boundary nodes.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "level": 1,
+      "mnemo": "WAQ\\_FILES(WAQCLI)%NAME",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "FORTRAN FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of FORTRAN file to be submitted.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "NOMFOR",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "HYDRODYNAMIC FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Hydrodynamic data file coming from TELEMAC. Read but not used at the moment.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 2,
+      "mnemo": "WAQ\\_FILES(WAQHYD)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "HYDRODYNAMIC FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Hydrodynamic file format. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": "SERAFIN",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "WAQ\\_FILES(WAQHYD)%FMT"
+    },
+    {
+      "keyword": "REFERENCE FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of the file used to validate the computation. The results of the computation will be compared with the values of this file. The comparison is done by the subroutine BIEF\\_VALIDA, (not implemented yet).",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 2,
+      "mnemo": "WAQ\\_FILES(WAQREF)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "REFERENCE FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Hydrodynamic file format. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "DATA"
+      ],
+      "is_file": false,
+      "default": "SERAFIN",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "WAQ\\_FILES(WAQREF)%FMT"
+    },
+    {
+      "keyword": "AED2 STEERING FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file containing AED2 parameters of the WAQ computation.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "AED2"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "WAQ\\_FILES(WAQAED2)",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "AED2 PHYTOPLANKTON STEERING FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file containing AED2 phytoplankton parameters of the WAQ computation.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "AED2"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "WAQ\\_FILES(WAQAED2P)",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "AED2 ZOOPLANKTON STEERING FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file containing AED2 zooplankton parameters of the WAQ computation.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "AED2"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "WAQ\\_FILES(WAQAED2Z)",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "AED2 PATHOGEN STEERING FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file containing AED2 pathogen parameters of the WAQ computation.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "AED2"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "WAQ\\_FILES(WAQAED2PT)",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "AED2 BIVALVE STEERING FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file containing AED2 bivalve parameters of the WAQ computation.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "INPUT",
+        "AED2"
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "WAQ\\_FILES(WAQAED2B)",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "RESULTS FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of the file into which the computation results will be written, the periodicity being given by the keyword WATER QUALITY PRINTOUT PERIOD.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": true,
+      "level": 1,
+      "mnemo": "WAQ\\_FILES(WAQRES)%NAME",
+      "file_role": "output",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "RESULTS FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Results file format. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": "SERAFIN",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "WAQ\\_FILES(WAQRES)%FMT"
+    },
+    {
+      "keyword": "WATER QUALITY PRINTOUT PERIOD",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Graphic outputs period for WAQ. Read but not used at the moment.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 0,
+      "mnemo": "LEOPRD"
+    },
+    {
+      "keyword": "VARIABLES FOR WAQ PRINTOUTS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Names of variables the user wants to write into the graphic results file. Does not seem to be used at the moment.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": "",
+      "level": 1,
+      "choices": [
+        "",
+        "to edit !!!"
+      ],
+      "mnemo": ""
+    },
+    {
+      "keyword": "MASS-BALANCE",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Determines whether a check of the mass-balance over the domain is made or not. Read but not used at the moment.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "LISTING"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "WQBILMAS"
+    },
+    {
+      "keyword": "WAQ VARIABLES TO BE PRINTED",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Names of variables the user wants to write on the listing. Each variable is represented by a letter in the same manner as it is done in the graphic results file. Does not seem to be used at the moment.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "LISTING"
+      ],
+      "is_file": false,
+      "default": "",
+      "level": 2,
+      "mnemo": ""
+    },
+    {
+      "keyword": "DEBUGGER",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "If 1, calls of subroutines will be printed in the listing.",
+      "rubrique": [
+        "GENERAL PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "DEBUG"
+    },
+    {
+      "keyword": "WATER DENSITY",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sets the value of water density.",
+      "rubrique": [
+        "HYDRODYNAMICS",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 999.972,
+      "level": 1,
+      "mnemo": "RO0"
+    },
+    {
+      "keyword": "KINEMATIC WATER VISCOSITY",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Specifies the water kinematic viscosity. En m/s$^2$. Read but not used at the moment.",
+      "rubrique": [
+        "HYDRODYNAMICS",
+        "PHYSICAL PARAMETERS",
+        ""
+      ],
+      "is_file": false,
+      "default": 1e-06,
+      "level": 3,
+      "mnemo": "VCE"
+    },
+    {
+      "keyword": "DISPERSION ALONG THE FLOW",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Read but not used at the moment.",
+      "rubrique": [
+        "HYDRODYNAMICS",
+        "SUSPENSION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.01,
+      "level": 1,
+      "mnemo": "LDISP"
+    },
+    {
+      "keyword": "DISPERSION ACROSS THE FLOW",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Read but not used at the moment.",
+      "rubrique": [
+        "HYDRODYNAMICS",
+        "SUSPENSION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.01,
+      "level": 1,
+      "mnemo": "TDISP"
+    },
+    {
+      "keyword": "EVAPORATION RATE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Rate of evaporation - same unit as rainfall in m$^3$/s/m$^2$.",
+      "rubrique": [
+        "PHYSICAL PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 2,
+      "mnemo": "EVAPORATION"
+    },
+    {
+      "keyword": "METHOD OF COMPUTATION OF RAY EXTINCTION COEFFICIENT",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Choice of the method of calculation of the extinction of sun ray in water $k_e$ in m$^{-1}$. The choices are : 1: Atkins formula (1.7/Secchi), 2: Moss formula if Secchi depth is unknown, 3: constant provided by the user with the keyword LIGHT EXTINCTION COEFFICIENT. For EUTRO+BIOMASS and THERMIC in 3D.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 0,
+      "choices": {
+        "1": "ATKINS FORMULA",
+        "2": "MOSS FORMULA",
+        "3": "GIVEN CONSTANT"
+      },
+      "mnemo": "MEXTINC"
+    },
+    {
+      "keyword": "SECCHI DEPTH",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "In m. Used for EUTRO+BIOMAS, and THERMIC in 3D.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.9,
+      "level": 1,
+      "mnemo": "ZSD"
+    },
+    {
+      "keyword": "LIGHT EXTINCTION COEFFICIENT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "In m$^{-1}$. Used for EUTRO+BIOMAS, and THERMIC in 3D.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.2,
+      "level": 1,
+      "mnemo": "EXTINC"
+    },
+    {
+      "keyword": "WATER TEMPERATURE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In $^{\\circ}$C, mean temperature necessary for computing different values of $C_s$.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 7.0,
+      "level": 1,
+      "mnemo": "WATTEMP"
+    },
+    {
+      "keyword": "WATER SALINITY",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Mean salinity necessary for computing different values of $C_s$.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 35.0,
+      "level": 1,
+      "mnemo": "WATSAL"
+    },
+    {
+      "keyword": "VEGETAL RESPIRATION R",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In mgO$_2$/d/l. Variable $R$ in the documentation. For O2 only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "O2"
+      ],
+      "is_file": false,
+      "default": 0.06,
+      "level": 1,
+      "mnemo": "RESP"
+    },
+    {
+      "keyword": "CONSTANT OF DEGRADATION OF ORGANIC LOAD K1",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In d$^{-1}$. For O2 only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "O2"
+      ],
+      "is_file": false,
+      "default": 0.25,
+      "level": 1,
+      "mnemo": "K1"
+    },
+    {
+      "keyword": "CONSTANT OF NITRIFICATION KINETIC K4",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In d$^{-1}$. For O2 only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "O2"
+      ],
+      "is_file": false,
+      "default": 0.35,
+      "level": 1,
+      "mnemo": "K44"
+    },
+    {
+      "keyword": "BENTHIC DEMAND",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In gO$_2$/m$^2$/d. Variable $BEN$ in the documentation. For EUTRO+O2.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND O2"
+      ],
+      "is_file": false,
+      "default": 0.1,
+      "level": 1,
+      "mnemo": "DEMBEN"
+    },
+    {
+      "keyword": "PHOTOSYNTHESIS P",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In mgO$_2$/d/l. Variable $P$ in the documentation. Between 0.3 and 9~mgO$_2$/d/l depending on the type of river. For EUTRO+O2.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND O2"
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 1,
+      "mnemo": "PHOTO"
+    },
+    {
+      "keyword": "O2 SATURATION DENSITY OF WATER (CS)",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In mgO$_2$/l. Variable $C_s$ = 9~mgO$_2$/l at 20$^{\\circ}$C. For EUTRO+O2.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND O2"
+      ],
+      "is_file": false,
+      "default": 11.0,
+      "level": 1,
+      "mnemo": "O2SATU"
+    },
+    {
+      "keyword": "FORMULA FOR COMPUTING K2",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Gives how to compute the reaeration coefficient $k_2$ options are: 0: $k_2$ constant, in this case $k_2$ = 0.9, 1: formula of The Tenessee Valley Authority, 2: formula of Owens et al., 3: formula of Churchill et al., 4: formula of O Connor \\& Dobbins, 5: formula combining the formulae 2, 3 et 4. For EUTRO+O2.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND O2"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "FORMK2"
+    },
+    {
+      "keyword": "K2 REAERATION COEFFICIENT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In d$^{-1}$. Value between 0.1 and > 1.15~d$^{-1}$. Variable $k_2$ in the documentation. For EUTRO+O2.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND O2"
+      ],
+      "is_file": false,
+      "default": 0.9,
+      "level": 1,
+      "mnemo": "K22"
+    },
+    {
+      "keyword": "FORMULA FOR COMPUTING CS",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "In d$^{-1}$, here are the available options: 0: constant, 1: Elmore \\& Hayes formula, 2: Montgomery formula, 3: Benson \\& Krause formula (1984). For EUTRO+O2.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND O2"
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "choices": {
+        "0": "CONSTANT",
+        "1": "ELMORE AND HAYES",
+        "2": "MONTGOMERY",
+        "3": "BENSON AND KRAUSE (1984)"
+      },
+      "mnemo": "FORMCS"
+    },
+    {
+      "keyword": "MAXIMUM ALGAL GROWTH RATE AT 20C",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Maximum algal growth rate at 20$^{\\circ}$C. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 2.0,
+      "level": 1,
+      "mnemo": "CMAX"
+    },
+    {
+      "keyword": "ALGAL TOXICITY COEFFICIENTS",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": false,
+      "help": "$\\alpha_1$ and $\\alpha_2$ in the documentation. $\\alpha_i = 1$ means no toxicity. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": [
+        1.0,
+        0.0
+      ],
+      "level": 1,
+      "mnemo": "CTOXIC"
+    },
+    {
+      "keyword": "VEGETAL TURBIDITY COEFFICIENT WITHOUT PHYTO",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In m$^{-1}$. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "KPE"
+    },
+    {
+      "keyword": "PARAMETER OF CALIBRATION OF SMITH FORMULA",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In W/m$^2$. Around 100~W/m$^2$. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 120.0,
+      "level": 1,
+      "mnemo": "IK"
+    },
+    {
+      "keyword": "SUNSHINE FLUX DENSITY ON WATER SURFACE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Density of sunshine flux on the water surface in W/m$^2$. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "I0"
+    },
+    {
+      "keyword": "CONSTANT OF HALF-SATURATION WITH PHOSPHATE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In mgP/l. Around 0.005~mgP/l. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.005,
+      "level": 1,
+      "mnemo": "KP"
+    },
+    {
+      "keyword": "CONSTANT OF HALF-SATURATION WITH NITROGEN",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In mgN/l. Around 0.03~mgN/l. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.03,
+      "level": 1,
+      "mnemo": "KN"
+    },
+    {
+      "keyword": "RESPIRATION RATE OF ALGAL BIOMASS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In d$^{-1}$, at 20$^{\\circ}$C. Variable $RP$ in the documentation. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.05,
+      "level": 1,
+      "mnemo": "TRESPIR"
+    },
+    {
+      "keyword": "COEFFICIENTS OF ALGAL MORTALITY AT 20C",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": false,
+      "help": "Variables $M_1$ and $M_2$ in the documentation. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": [
+        0.1,
+        0.003
+      ],
+      "level": 1,
+      "mnemo": "CMORALG"
+    },
+    {
+      "keyword": "PROPORTION OF PHOSPHORUS WITHIN PHYTO CELLS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In mgP/$\\mu$gChlA. Variable $fp$ in the documentation. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.0025,
+      "level": 1,
+      "mnemo": "PROPHOC"
+    },
+    {
+      "keyword": "PERCENTAGE OF PHOSPHORUS ASSIMILABLE IN DEAD PHYTO",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In $\\%$. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.5,
+      "level": 1,
+      "mnemo": "DTP"
+    },
+    {
+      "keyword": "RATE OF TRANSFORMATION OF POR TO PO4",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Rate of transformation of degradable and non assimilable phosphorus (POR) to mineral dissolved assimilable phosphorus (PO4) by means of bacteria mineralization in d$^{-1}$. Variables $k_1$ for BIOMAS and $k_{320}$ for EUTRO (at 20$^{\\circ}$C) in the documentation. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.03,
+      "level": 1,
+      "mnemo": "K320"
+    },
+    {
+      "keyword": "RATE OF TRANSFORMATION OF NOR TO NO3",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Rate of transformation of degradable and non assimilable nitrogen (NOR) to mineral dissolved assimilable nitrogen (NO3) by bacteria mineralization in d$^{-1}$. Variables $k_2$ for BIOMAS and $k_{620}$ for EUTRO (at 20$^{\\circ}$C) in the documentation. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "K360"
+    },
+    {
+      "keyword": "PROPORTION OF NITROGEN WITHIN PHYTO CELLS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In mgN/$\\mu$gChlA. Variable $fn$ in the documentation. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.0035,
+      "level": 1,
+      "mnemo": "PRONITC"
+    },
+    {
+      "keyword": "PERCENTAGE OF NITROGEN ASSIMILABLE IN DEAD PHYTO",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In $\\%$. Variable $dtn$ in the documentation. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.5,
+      "level": 1,
+      "mnemo": "PERNITS"
+    },
+    {
+      "keyword": "SEDIMENTATION VELOCITY OF ORGANIC PHOSPHORUS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sedimentation velocity of non algal organic phosphorus in m/s. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "WPOR"
+    },
+    {
+      "keyword": "SEDIMENTATION VELOCITY OF NON ALGAL NITROGEN",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sedimentation velocity of non algal organic nitrogen in m/s. For EUTRO+BIOMASS.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO AND BIOMASS"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "WNOR"
+    },
+    {
+      "keyword": "CONSUMED OXYGEN BY NITRIFICATION",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In mgO$_2$/mgNH$_4$. Variable $n$ in the documentation. For EUTRO only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO"
+      ],
+      "is_file": false,
+      "default": 5.2,
+      "level": 1,
+      "mnemo": "O2NITRI"
+    },
+    {
+      "keyword": "CONSTANT FOR THE NITRIFICATION KINETIC K520",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Constant for the nitrification kinetic at 20$^{\\circ}$C. In d$^{-1}$. For EUTRO only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO"
+      ],
+      "is_file": false,
+      "default": 0.35,
+      "level": 1,
+      "mnemo": "K520"
+    },
+    {
+      "keyword": "CONSTANT OF DEGRADATION OF ORGANIC LOAD K120",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Constant of degradation kinetic of organic load at 20$^{\\circ}$C. In d$^{-1}$. For EUTRO only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO"
+      ],
+      "is_file": false,
+      "default": 0.35,
+      "level": 1,
+      "mnemo": "K120"
+    },
+    {
+      "keyword": "SEDIMENTATION VELOCITY OF ORGANIC LOAD",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In m/s. For EUTRO only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO"
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "WLOR"
+    },
+    {
+      "keyword": "OXYGEN PRODUCED BY PHOTOSYNTHESIS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In mgO$_2$/$\\mu$gChlA. Variable $f$ in the documentation. For EUTRO only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "EUTRO"
+      ],
+      "is_file": false,
+      "default": 0.15,
+      "level": 1,
+      "mnemo": "O2PHOTO"
+    },
+    {
+      "keyword": "FORMULA FOR COMPUTING RS",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Gives how to cumpute the weir reaeration coefficient RS options are: 0: RS constant, in this case RS = 1.0, 1: formula of Gameson 1, 2: formula of Gameson 2, 3: formula of WRL1, 4: formula of WRL2. Read but not used at the moment.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "SOURCES"
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "FORMRS"
+    },
+    {
+      "keyword": "WEIR REAERATION COEFFICIENT RS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In d$^{-1}$. Read but not used at the moment.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "SOURCES"
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 1,
+      "mnemo": "RSW"
+    },
+    {
+      "keyword": "COEFFICIENTS A AND B FOR RS FORMULA",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": false,
+      "help": "Coefficients needed for the calculation of RS: $a$ is between 0.65 (very polluted water and 1.8 (very clear water) and $b$ varies a lot (see array in the documentation). Read but not used at the moment.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "EUTROPHICATION",
+        "SOURCES"
+      ],
+      "is_file": false,
+      "default": [
+        1.2,
+        0.7
+      ],
+      "level": 1,
+      "mnemo": "ABRS"
+    },
+    {
+      "keyword": "SEDIMENTATION CRITICAL STRESS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sedimentation critical shear stress in Pa. For MICROPOL only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "MICROPOL",
+        ""
+      ],
+      "is_file": false,
+      "default": 5.0,
+      "level": 1,
+      "mnemo": "TAUS"
+    },
+    {
+      "keyword": "SEDIMENT SETTLING VELOCITY",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sediment velocity in m/s. Variable $w$ in the documentation. For MICROPOL only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "MICROPOL",
+        ""
+      ],
+      "is_file": false,
+      "default": 6e-06,
+      "level": 1,
+      "mnemo": "VITCHU\\_WAQ"
+    },
+    {
+      "keyword": "CRITICAL STRESS OF RESUSPENSION",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sedimentation critical shear stress in Pa. Variable $\\tau_r$ in the documentation. For MICROPOL only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "MICROPOL",
+        ""
+      ],
+      "is_file": false,
+      "default": 1000.0,
+      "level": 1,
+      "mnemo": "TAUR"
+    },
+    {
+      "keyword": "EROSION RATE",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Characteristic erosion rate of deposited SPM or also called Partheniades s constant. Variable $e$ in the documentation. For MICROPOL only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "MICROPOL",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "ERO"
+    },
+    {
+      "keyword": "KINETIC EXCHANGE MODEL",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Choice of the micropollutant-sediment exchange model. 1: one-step reversible kinetic model (only one specific site for interactions with sediments), 2: two-steps reversible kinetic model (one weak bounding site and one strong bounding site).",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "MICROPOL",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 0,
+      "choices": {
+        "1": "KINETIC MODEL 1",
+        "2": "KINETIC MODEL 2"
+      },
+      "mnemo": "KIN\\_MICROPOL"
+    },
+    {
+      "keyword": "CONSTANT OF DESORPTION KINETIC",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In s$^{-1}$. Variable $k_{-1}$ in the documentation. For MICROPOL only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "MICROPOL",
+        ""
+      ],
+      "is_file": false,
+      "default": 2.5e-07,
+      "level": 1,
+      "mnemo": "KDESORP"
+    },
+    {
+      "keyword": "COEFFICIENT OF DISTRIBUTION",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In m$^3$/kg or l/g. Variable $K_d$ in the documentation. For MICROPOL only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "MICROPOL",
+        ""
+      ],
+      "is_file": false,
+      "default": 1775.0,
+      "level": 1,
+      "mnemo": "CDISTRIB"
+    },
+    {
+      "keyword": "EXPONENTIAL DESINTEGRATION CONSTANT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In s$^{-1}$, exponential decrease law like the one of radioactivity. Variable $L$ in the documentation. For MICROPOL only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "MICROPOL",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.13e-07,
+      "level": 1,
+      "mnemo": "CCSEDIM"
+    },
+    {
+      "keyword": "CONSTANT OF DESORPTION KINETIC 2",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In s$^{-1}$. Variable $k_{-2}$ in the documentation. For MICROPOL only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "MICROPOL",
+        ""
+      ],
+      "is_file": false,
+      "default": 2.5e-09,
+      "level": 1,
+      "mnemo": "KDESORP2"
+    },
+    {
+      "keyword": "COEFFICIENT OF DISTRIBUTION 2",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Dimensionless. Variable $K_{d2}$ in the documentation. For MICROPOL only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "MICROPOL",
+        ""
+      ],
+      "is_file": false,
+      "default": 1775.0,
+      "level": 1,
+      "mnemo": "CDISTRIB2"
+    },
+    {
+      "keyword": "WATER SPECIFIC HEAT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In J/kg/$^{\\circ}$C. For THERMIC only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "THERMIC",
+        ""
+      ],
+      "is_file": false,
+      "default": 4180.0,
+      "level": 1,
+      "mnemo": "CP\\_EAU"
+    },
+    {
+      "keyword": "COEFFICIENTS FOR CALIBRATING ATMOSPHERIC RADIATION",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Variable $e_{\\rm{air}}$ in 2D or (1-$alb_{lw}$) in 3D in the documentation. For THERMIC only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "THERMIC",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.97,
+      "level": 1,
+      "mnemo": "EMA"
+    },
+    {
+      "keyword": "COEFFICIENT OF CLOUDING RATE",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Coefficient depending on the type of clouds: Cirrus = 0.04, Cirro stratus = 0.08, Alto cumulus = 0.17, Alto stratus = 0.2, Stratus = 0.24. Alto Cumulus (mean value) is usually used (T.V.A. 1972), default value in 3D. In 3D, only used with Swinbank formula (1963) for the computation of the atmospheric radiation. Variable $k$ in the documentation. For THERMIC only. Old default value = 0.2 until release V8P1.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "THERMIC",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.17,
+      "level": 1,
+      "mnemo": "COEF\\_K"
+    },
+    {
+      "keyword": "COEFFICIENTS FOR CALIBRATING SURFACE WATER RADIATION",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "It depends on the location and the obstacles around the water. For a narrow river bordered with trees, it would be around 0.97 and for a widely oopen field, it would be around 0.92. Variable $e_{\\rm{eau}}$ in the documentation. For THERMIC only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "THERMIC",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.97,
+      "level": 1,
+      "mnemo": "EMI\\_EAU"
+    },
+    {
+      "keyword": "AIR SPECIFIC HEAT",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "In J/kg/$^{\\circ}$C. For THERMIC only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "THERMIC",
+        ""
+      ],
+      "is_file": false,
+      "default": 1005.0,
+      "level": 1,
+      "mnemo": "CP\\_AIR"
+    },
+    {
+      "keyword": "COEFFICIENTS OF AERATION FORMULA",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": false,
+      "help": "Couple of calibration coefficients for the wind function of the atmosphere-water exchange models. Their close values are around 0.0025.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "THERMIC",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0.002,
+        0.0012
+      ],
+      "level": 1,
+      "mnemo": "CFAER"
+    },
+    {
+      "keyword": "ATMOSPHERE-WATER EXCHANGE MODEL",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Choice of the atmosphere-water exchange model. 0: no model (default), 1: linearised formula at the free surface, 2: model with complete balance. In 2D, if another processus than THERMIC, mandatory to let to 0.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "THERMIC",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 2,
+      "choices": {
+        "0": "NO MODEL",
+        "1": "LINEARISED FORMULA AT THE FREE SURFACE",
+        "2": "MODEL WITH COMPLETE BALANCE"
+      },
+      "mnemo": "ATMOSEXCH"
+    },
+    {
+      "keyword": "COEFFICIENT TO CALIBRATE THE ATMOSPHERE-WATER EXCHANGE MODEL",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Value of the calibration coefficient for the wind function of the atmosphere-water exchange models (linearised formula at the free surface or complete balance). A value between 0.0017 and 0.0035 is advised. Only for THERMIC 3D.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "THERMIC",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0025,
+      "level": 2,
+      "mnemo": "C\\_ATMOS"
+    },
+    {
+      "keyword": "FORMULA OF ATMOSPHERIC RADIATION",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Formula to be chosen to compute the atmospheric radiation. See GLM. 1: Idso and Jackson (1969), 2: Swibank (1963), default, 3: Brutsaert (1975), 4: Yajima Tono Dam (2014). Only for THERMIC 3D.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "THERMIC",
+        ""
+      ],
+      "is_file": false,
+      "default": 2,
+      "level": 2,
+      "choices": {
+        "1": "IDSO AND JACKSON (1969)",
+        "2": "SWINBANK (1963)",
+        "3": "BRUTSAERT (1975)",
+        "4": "YAJIMA TONO DAM (2014)"
+      },
+      "mnemo": "IRAY\\_ATM"
+    },
+    {
+      "keyword": "LIGHTNESS OF THE SKY",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "How the sky is bright (pure). Possible choices are: very bright, pure sky, moderately bright sky, foggy like the sky of industrial area. For THERMIC in 3D only.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "THERMIC",
+        ""
+      ],
+      "is_file": false,
+      "default": 2,
+      "level": 2,
+      "choices": {
+        "1": "VERY BRIGHT, PURE SKY",
+        "2": "MODERATELY BRIGHT SKY",
+        "3": "FOGGY LIKE THE SKY OF INDUSTRIAL AREA "
+      },
+      "mnemo": "ISKYTYPE"
+    },
+    {
+      "keyword": "SOLAR RADIATION READ IN METEO FILE",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "If solar radiation data is available, it can be read in the ASCII ATMOSPHERIC DATA FILE of \\telemac{2d} or \\telemac{3d} instead of been computed by the heat exchange with atmosphere module by activating this keyword to YES. For THERMIC in 3D only. This is mandatory in 2D.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "THERMIC",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 2,
+      "mnemo": "SOLRADMETEO"
+    },
+    {
+      "keyword": "LAW OF TRACERS DEGRADATION",
+      "type": "INTEGER",
+      "size": 2,
+      "unbounded": true,
+      "help": "Take in account a law for tracers decrease. Value 0 if not taken into account, 1 if law 1... For each value entered, a corresponding name should be present in the keyword NAMES OF TRACERS, so that the decrease law is applied to the correct tracer(s). Possible choices are: 0: no degradation, 1: law for bacterial degradation with $T_{90}$ coefficient, 2: degradation law of first order, constant of tracer kinetic degradation in h$^{-1}$, 3: degradation law of first order, constant of tracer kinetic degradation in d$^{-1}$, 4: law implemented by user.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "DEGRADATION",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0,
+        0
+      ],
+      "level": 0,
+      "choices": {
+        "0": "NO DEGRADATION",
+        "1": "F(T90) LAW",
+        "2": "FIRST ORDER KINETIC LAW, CONSTANT OF DEGRADATION IN HOURS",
+        "3": "FIRST ORDER KINETIC LAW, CONSTANT OF DEGRADATION IN DAYS",
+        "4": "LAW IMPLEMENTED BY USER"
+      },
+      "mnemo": "LOITRAC"
+    },
+    {
+      "keyword": "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Coefficient 1 of law for tracers decrease. Check also the relation between the keywords NAMES OF TRACERS and LAW OF TRACERS DEGRADATION.",
+      "rubrique": [
+        "WAQ PARAMETERS",
+        "DEGRADATION",
+        ""
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "COEF1TRAC"
+    },
+    {
+      "keyword": "STEERING FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file containing parameters of the WAQ computation Written by the user.",
+      "rubrique": [
+        "INTERNAL",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "DICTIONARY",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Key word dictionary.",
+      "rubrique": [
+        "INTERNAL",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "waqtel.dico",
+      "level": 100,
+      "mnemo": "",
+      "file_role": "input",
+      "file_mandatory": true
+    }
+  ]
+}

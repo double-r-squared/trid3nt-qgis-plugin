@@ -1,0 +1,2616 @@
+{
+  "module": "gaia",
+  "keywords": [
+    {
+      "keyword": "TITLE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Title of the case being considered.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": "",
+      "level": 1,
+      "mnemo": ""
+    },
+    {
+      "keyword": "RELEASE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Release of the libraries used by GAIA.",
+      "rubrique": [
+        "INTERNAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": "TRUNK",
+      "level": 3,
+      "mnemo": ""
+    },
+    {
+      "keyword": "DICTIONARY",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Key word dictionary.",
+      "rubrique": [
+        "INTERNAL",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "gaia.dico",
+      "level": 1,
+      "mnemo": "",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "PARALLEL PROCESSORS",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "NUMBER OF PROCESSORS FOR PARALLEL PROCESSING 0 : 1 machine, compiling without parallel library 1 : 1 machine, compiling with a parallel library 2 : 2 processors or machines in parallel etc....",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "NCSIZE"
+    },
+    {
+      "keyword": "NUMBER OF PRIVATE ARRAYS",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Number of arrays for own user programming",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "OUTPUT",
+        "RESULTS"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 0,
+      "mnemo": "NPRIV"
+    },
+    {
+      "keyword": "ORIGIN COORDINATES",
+      "type": "INTEGER",
+      "size": 2,
+      "unbounded": false,
+      "help": "Value in metres, used to avoid large real numbers, added in Selafin format, but so far no other treatment",
+      "rubrique": [
+        "GENERAL PARAMETERS",
+        "LOCATION",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0,
+        0
+      ],
+      "level": 0,
+      "mnemo": "I\\_ORIG,J\\_ORIG"
+    },
+    {
+      "keyword": "DEBUGGER",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "If 1, calls of subroutines will be printed in the listing",
+      "rubrique": [
+        "GENERAL PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "DEBUG"
+    },
+    {
+      "keyword": "OPTION FOR THE TREATMENT OF TIDAL FLATS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Used if 'TIDAL FLATS' is true 1 : EQUATIONS SOLVED EVERYWHERE WITH CORRECTION ON TIDAL FLATS 2 : DRY ELEMENTS FROZEN It is recommended to choose 1 since it ensures mass conservation.",
+      "rubrique": [
+        "HYDRODYNAMICS",
+        "TIDAL FLATS INFO",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 0,
+      "mnemo": "OPTBAN"
+    },
+    {
+      "keyword": "NESTOR",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "For coupling with NESTOR",
+      "rubrique": [
+        "MISCELLANEOUS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 2,
+      "mnemo": "NESTOR"
+    },
+    {
+      "keyword": "NESTOR ACTION FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the Nestor steering file",
+      "rubrique": [
+        "MISCELLANEOUS",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(SINACT)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "NESTOR POLYGON FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the Nestor polygon file",
+      "rubrique": [
+        "MISCELLANEOUS",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(SINPOL)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "NESTOR RESTART FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the Nestor file phydef-cf.cfg.ds",
+      "rubrique": [
+        "MISCELLANEOUS",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(SINRST)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "NESTOR SURFACE REFERENCE FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the Nestor file which contains the reference water surface",
+      "rubrique": [
+        "MISCELLANEOUS",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(SINREF)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "CHECKING THE MESH",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "if this key word is equal to yes, a call to subroutine checkmesh will look for errors in the mesh, superimposed points, etc.",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 0,
+      "mnemo": "CHECK\\_MESH"
+    },
+    {
+      "keyword": "MAXIMUM NUMBER OF BOUNDARIES",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "maximal number of boundaries in the mesh. Used for dimensioning arrays. Can be increased if needed",
+      "rubrique": [
+        "COMPUTATION ENVIRONMENT",
+        "GLOBAL",
+        ""
+      ],
+      "is_file": false,
+      "default": 30,
+      "level": 1,
+      "mnemo": "MAXFRO"
+    },
+    {
+      "keyword": "FLUXLINE INPUT FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the fluxline file, with data on cross-sections. If present in the steering file, the feature FLUXLINE is used to compute flux over lines without boolean keyword FLUXLINE since release 9.0.",
+      "rubrique": [
+        "GENERAL",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(GAIFLX)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "CONTROL SECTIONS",
+      "type": "INTEGER",
+      "size": 3,
+      "unbounded": false,
+      "help": "Couples of points (global numbers in the mesh) defining sections where the instantaneous and cumulated discharges will be given",
+      "rubrique": [
+        "GENERAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "CTRLSC"
+    },
+    {
+      "keyword": "CLASSES SHIELDS PARAMETERS",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Used to determine the critical bed shear stress value (non-cohesive sediments). For multi grain size, the shields parameter needs to be specified for each class. It is necessary to give a negative value in the parameter file for cohesive sediments.",
+      "rubrique": [
+        "COHESIVE AND NON COHESIVE",
+        "CHARRIAGE",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        -9.0,
+        -9.0
+      ],
+      "level": 1,
+      "mnemo": "AC"
+    },
+    {
+      "keyword": "MINIMAL VALUE OF THE WATER HEIGHT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sets the minimum value of the water depth. Is used when the keyword TIDAL FLATS is equal to yes.",
+      "rubrique": [
+        "HYDRODYNAMICS",
+        "TIDAL FLATS INFO",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.001,
+      "level": 0,
+      "mnemo": "HMIN"
+    },
+    {
+      "keyword": "TIDAL FLATS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "When no, the specific treatments for tidal flats are by-passed. This spares time, but of course you must be sure that you have no tidal flats",
+      "rubrique": [
+        "HYDRODYNAMICS",
+        "TIDAL FLATS INFO",
+        ""
+      ],
+      "is_file": false,
+      "default": true,
+      "level": 0,
+      "mnemo": ""
+    },
+    {
+      "keyword": "SECONDARY CURRENTS",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "using the parametrisation for secondary currents",
+      "rubrique": [
+        "GENERAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 2,
+      "mnemo": "SECCURRENT"
+    },
+    {
+      "keyword": "SECONDARY CURRENTS FILE",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "The radii needed for the parametrisation of secondary currents are read from SELAFIN file",
+      "rubrique": [
+        "GENERAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 2,
+      "mnemo": "HAVESECFILE"
+    },
+    {
+      "keyword": "NUMBER OF LAYERS FOR INITIAL STRATIFICATION",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Number of layers for initial stratification, default NUMSTRAT=1",
+      "rubrique": [
+        "BED STRUCTURE",
+        "INITIALIZATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "NUMSTRAT"
+    },
+    {
+      "keyword": "EFFECT OF WAVES",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Takes into account the effect of waves",
+      "rubrique": [
+        "GENERAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "HOULE"
+    },
+    {
+      "keyword": "TYPE OF WAVES",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "is used to calculate Uw if Uw is calculated with Tomawac, choose 2 (default) 1= regular (monochromatic) waves 2= irregular (spectral) waves",
+      "rubrique": [
+        "GENERAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 2,
+      "level": 1,
+      "mnemo": "TYPE\\_HOULE"
+    },
+    {
+      "keyword": "TRIGONOMETRICAL CONVENTION IN WAVE FILE",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "True if the wave directions in the wave file are measured counterclockwise from the positive x-axis, false if they are measured clockwise fron geographic North",
+      "rubrique": [
+        "GENERAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "CONV\\_WAVES"
+    },
+    {
+      "keyword": "VECTOR LENGTH",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "vector length on vector machines.",
+      "rubrique": [
+        "USELESS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "LVMAC"
+    },
+    {
+      "keyword": "STEERING FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file containing the parameters of the computation. Could be written by the user with EDAMOX.",
+      "rubrique": [
+        "USELESS",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 0,
+      "mnemo": "",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "GEOMETRY FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Geometry file format. Possible values are: - SERAFIN : classical single precision format in Telemac; - SERAFIND: classical double precision format in Telemac; - MED : MED format based on HDF5",
+      "rubrique": [
+        "INPUT-OUTPUT, FILES",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "GAI\\_FILES(GAIGEO)\\%FMT"
+    },
+    {
+      "keyword": "GEOMETRY FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of the file containing the mesh. This file may also contain the topography and the friction coefficients.",
+      "rubrique": [
+        "INPUT-OUTPUT, FILES",
+        "NAMES",
+        ""
+      ],
+      "is_file": true,
+      "level": 1,
+      "mnemo": "GAI\\_FILES(GAIGEO)%NAME",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "NAMES OF PRIVATE VARIABLES",
+      "type": "STRING",
+      "size": 2,
+      "unbounded": true,
+      "help": "Name of private variables in 32 characters, 16 for the name, 16 for the unit. They are stored in the block PRIVE and can be read in the geometry file if they are here with their name",
+      "rubrique": [
+        "INPUT-OUTPUT, FILES",
+        "NAMES",
+        ""
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "NAMES\\_PRIVE"
+    },
+    {
+      "keyword": "BEDLOAD BOUNDARIES FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Variations in time of boundary conditions in bedload. Data of this file are read on channel GAI\\_FILES(GAILIQ)%LU.",
+      "rubrique": [
+        "INPUT-OUTPUT, FILES",
+        "NAMES",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(GAILIQ)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "RESULTS FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Results file format. Possible values are: - SERAFIN : classical single precision format in Telemac; - SERAFIND: classical double precision format in Telemac; - MED : MED format based on HDF5",
+      "rubrique": [
+        "RESULTS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 1,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "GAI\\_FILES(GAIRES)\\%FMT"
+    },
+    {
+      "keyword": "RESULTS FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of the file into wich the computation results shall be written, the periodicity being given by the keyword GRAPHIC PRINTOUT PERIOD in telemac2d or telemac3d.",
+      "rubrique": [
+        "RESULTS",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "level": 1,
+      "mnemo": "GAI\\_FILES(GAIRES)%NAME",
+      "file_role": "output",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "VARIABLES TO BE PRINTED",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Names of variables the user wants to write on the listing. Each variable is represented by a letter in the same manner as it is done in the graphic results file.",
+      "rubrique": [
+        "RESULTS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": "",
+      "level": 2,
+      "choices": {
+        "U": "velocity along x axis (m/s)",
+        "V": "velocity along y axis (m/s)",
+        "C": "wawe celerity (m/s)",
+        "H": "water depth (m)",
+        "S": "free surface elevation (m)",
+        "B": "bottom elevation (m)",
+        "F": "Froude number",
+        "Q": "scalar flowrate of fluid (m2/s)",
+        "I": "flowrate along x axis (m2/s)",
+        "J": "flowrate along y axis (m2/s)",
+        "M": "bed-load discharge (m2/s)",
+        "N": "bed-load discharge along x axis (m2/s)",
+        "P": "bed-load discharge along y axis (m2/s)",
+        "E": "bottom evolution (m)",
+        "R": "non erodable bottom",
+        "KS": "bed friction coefficient (m if Nikuradse)",
+        "TOB": "mean bottom friction (N/m2)",
+        "THETAW": "wave angle with axis Oy (deg)",
+        "W": "wave height",
+        "X": "wave period",
+        "kAi": "fraction of non cohesive sediment of class i, in k layer",
+        "QSi": "bed load transport rate of sediment of class i",
+        "kES": "thicknes of bed layer k",
+        "kCONC": "concentration of bed layer k",
+        "CSi": "concentration for class i",
+        "A": "supplementary variable A",
+        "G": "supplementary variable G",
+        "L": "supplementary variable L",
+        "O": "supplementary variable O"
+      },
+      "mnemo": "VARIM"
+    },
+    {
+      "keyword": "LISTING PRINTOUT PERIOD",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Determines, in number of time steps, the printout period of the 'VARIABLES TO BE PRINTED'. The results are printed out on the listing file (file cas\\_numerodeprocessus.sortie on a workstation).",
+      "rubrique": [
+        "RESULTS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": ""
+    },
+    {
+      "keyword": "MASS-BALANCE",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Determines whether a check of the mass-balance over the domain is made or not",
+      "rubrique": [
+        "RESULTS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": ""
+    },
+    {
+      "keyword": "SECTIONS OUTPUT FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "sections output file, written by the master",
+      "rubrique": [
+        "RESULTS",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(GAISEO)%NAME",
+      "file_role": "output",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "C-VSM RESULTS FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of the file into which the C-VSM results of the computation are written, the periodicity being given by the keyword: C-VSM FULL PRINTOUT PERIOD.",
+      "rubrique": [
+        "RESULTS",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(VSPRES)\\%NAME",
+      "file_role": "output",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "C-VSM RESULTS FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Format of the C-VSM RESULT FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "RESULTS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": "SERAFIN",
+      "level": 1,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "GAI\\_FILES(VSPRES)\\%FMT"
+    },
+    {
+      "keyword": "TIME SERIES FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file into which 2D time series are written at the points defined in the TIME SERIES COORDINATES FILE.",
+      "rubrique": [
+        "RESULTS",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 0,
+      "mnemo": "GAI\\_FILES(GAIHI2)\\%NAME",
+      "file_role": "output",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "TIME SERIES FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Format of the TIME SERIES FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "rubrique": [
+        "RESULTS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": "SERAFIN",
+      "level": 0,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "GAI\\_FILES(GAIHI2)\\%FMT"
+    },
+    {
+      "keyword": "REFERENCE FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Previous computation results file format. Possible values are: - SERAFIN : classical single precision format in Telemac; - SERAFIND: classical double precision format in Telemac; - MED : MED format based on HDF5",
+      "rubrique": [
+        "DATA FILES",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 1,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "GAI\\_FILES(GAIREF)\\%FMT"
+    },
+    {
+      "keyword": "WAVE FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Wave file format. Possible values are: - SERAFIN : classical single precision format in Telemac; - SERAFIND: classical double precision format in Telemac; - MED : MED format based on HDF5",
+      "rubrique": [
+        "DATA FILES",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "GAI\\_FILES(GAICOU)\\%FMT"
+    },
+    {
+      "keyword": "FORTRAN FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of FORTRAN file to be submitted.",
+      "rubrique": [
+        "DATA FILES",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "BOUNDARY CONDITIONS FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file containing the types of boundary conditions. This file is filled automatically by the mesh generator through colours that are assigned to the computation domain boundary nodes.",
+      "rubrique": [
+        "DATA FILES",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "level": 1,
+      "mnemo": "GAI\\_FILES(GAILIM)%NAME",
+      "file_role": "input",
+      "file_mandatory": true
+    },
+    {
+      "keyword": "WAVE FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of a file containing the results a previous TOMAWAC computation made on the same mesh. The wave data (wave height, wave period, wave angle ) will be given by the last record of the file. The user has to verify that both informations (wave and current data) are consistent. Remark :The wave data can also be specified in the hydrodynamic file. the user has also the possibility to give the values of the wave data in the subroutine USER\\_FORCING\\_GAIA. This is recommended for non-steady flow simulation.",
+      "rubrique": [
+        "DATA FILES",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 2,
+      "mnemo": "GAI\\_FILES(GAICOU)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "REFERENCE FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of the file used to validate the computation. This option is primarily used for the validation documents. The results of the computation will be compared with the values of this file. This file is then considered as a reference which the computation is going to be compared with. The comparison is done by the subroutine BIEF\\_VALIDA, which can be modified so as to include, for example, a comparison with an exact solution. If present in the steering file, triggers the validation step during the computation since release 9.0 without boolean keyword VALIDATION.",
+      "rubrique": [
+        "DATA FILES",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 2,
+      "mnemo": "GAI\\_FILES(GAIREF)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "BOTTOM TOPOGRAPHY FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the possible file containing the bathymetric data.",
+      "rubrique": [
+        "DATA FILES",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(GAIFON)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "SECTIONS INPUT FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "sections input file, partitioned",
+      "rubrique": [
+        "DATA FILES",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(GAISEC)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "TIME SERIES COORDINATES FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file containing points coordinates and periods of time where time series are extracted in the TIME SERIES FILE.",
+      "rubrique": [
+        "DATA FILES",
+        "",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 0,
+      "mnemo": "GAI\\_FILES(GAICOO)\\%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "PREVIOUS SEDIMENTOLOGICAL COMPUTATION FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Previous computation results file format. Possible values are: - SERAFIN : classical single precision format in Telemac; - SERAFIND: classical double precision format in Telemac; - MED : MED format based on HDF5",
+      "rubrique": [
+        "INITIAL CONDITIONS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": "SERAFIN ",
+      "level": 1,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "GAI\\_FILES(GAIPRE)\\%FMT"
+    },
+    {
+      "keyword": "PREVIOUS SEDIMENTOLOGICAL COMPUTATION FILE",
+      "type": "STRING",
+      "size": 0,
+      "unbounded": false,
+      "help": "Name of a file containing the results of an earlier sedimentological computation which was made on the same mesh. A recorded time step will provide the initial conditions for the new computation. If present in the steering file, a continuation is done from the result of a previous computation defined by this keyword without boolean keyword COMPUTATION CONTINUED since release 9.0. In that case, all the data from the steering file may be defined once again, which provides an opportunity to change, for example, the time step. It is also possible to define new boundary conditions.",
+      "rubrique": [
+        "INITIAL CONDITIONS",
+        "RESTART",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(GAIPRE)%NAME",
+      "file_role": "input",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "SPINUP TIME FOR BED UPDATING",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": true,
+      "help": "Time in seconds after which bed updates are taken into account",
+      "rubrique": [
+        "INITIAL CONDITIONS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 2,
+      "mnemo": "SPINUP\\_TIME"
+    },
+    {
+      "keyword": "RECORD NUMBER FOR RESTART",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "In case of continuation of computation, record number to start from in the PREVIOUS SEDIMENTOLOGICAL COMPUTATION FILE. -1 means the last record is taken.",
+      "rubrique": [
+        "INITIAL CONDITIONS",
+        "RESTART",
+        ""
+      ],
+      "is_file": false,
+      "default": -1,
+      "level": 0,
+      "mnemo": "START\\_RECORD"
+    },
+    {
+      "keyword": "RESTART FILE",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Name of the file into which the computation results shall be written in order to get a perfect continued computation unlike using the RESULTS FILE. It is then an output file for the current computation, which will be used as an input file when a continued computation is expected to be perfect (the keyword PREVIOUS SEDIMENTOLOGICAL COMPUTATION FILE is then used). The RESTART FILE FORMAT and the PREVIOUS SEDIMENTOLOGICAL COMPUTATION FILE FORMAT have to be set with 'SERAFIND' or 'MED'. If present in the steering file, triggers the writing of this restart file since release 9.0 without boolean keyword RESTART MODE.",
+      "rubrique": [
+        "INITIAL CONDITIONS",
+        "RESTART",
+        ""
+      ],
+      "is_file": true,
+      "default": "",
+      "level": 1,
+      "mnemo": "GAI\\_FILES(GAIRST)\\%NAME",
+      "file_role": "output",
+      "file_mandatory": false
+    },
+    {
+      "keyword": "RESTART FILE FORMAT",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Format of the RESTART FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5. Only double precision formats ensure a perfect restart.",
+      "rubrique": [
+        "INITIAL CONDITIONS",
+        "RESTART",
+        ""
+      ],
+      "is_file": false,
+      "default": "SERAFIND",
+      "level": 2,
+      "choices": [
+        "SERAFIN",
+        "SERAFIND",
+        "MED"
+      ],
+      "mnemo": "GAI\\_FILES(GAIRST)\\%FMT"
+    },
+    {
+      "keyword": "RESTART FILE PRINTOUT PERIOD",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Determines, in number of time steps, the printout period for the variables to be saved for a perfect restart in the RESTART FILE. Default = 0 means the RESTART FILE is only written at the last time step or at the RECORD NUMBER IN RESTART FILE.",
+      "rubrique": [
+        "INITIAL CONDITIONS",
+        "RESTART",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 2,
+      "mnemo": "RSTPRD"
+    },
+    {
+      "keyword": "RECORD NUMBER IN RESTART FILE",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Determines the number of time step when printing the variables to be saved for a perfect restart in the RESTART FILE. Default = -1 means the RESTART FILE is only written at the last time step and/or periodically at the period RESTART FILE PRINTOUT PERIOD.",
+      "rubrique": [
+        "INITIAL CONDITIONS",
+        "RESTART",
+        ""
+      ],
+      "is_file": false,
+      "default": -1,
+      "level": 2,
+      "mnemo": "RESTART\\_RECORD"
+    },
+    {
+      "keyword": "VARIABLES FOR GRAPHIC PRINTOUTS",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": true,
+      "help": "Names of variables the user wants to write into the graphic results file. Each variable is represented by a letter. See CHOIX1 above. One can use *, *A* means all fractions",
+      "rubrique": [
+        "INPUT-OUTPUT, GRAPHICS AND LISTING",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": "U;V;H;S;B;R;E",
+      "level": 1,
+      "choices": {
+        "U": "velocity along x axis (m/s)",
+        "V": "velocity along y axis (m/s)",
+        "H": "water depth (m)",
+        "S": "free surface elevation (m)",
+        "B": "bottom elevation (m)",
+        "Q": "scalar flowrate of fluid (m2/s)",
+        "I": "flowrate along x axis (m2/s)",
+        "J": "flowrate along y axis (m2/s)",
+        "R": "non erodable bottom",
+        "TOB": "Bed Shear stress (Totalfriction) (N/m2)",
+        "W": "wave height",
+        "X": "wave period",
+        "THETAW": "wave angle with axis Oy (deg)",
+        "M": "bed-load discharge (kg/(m*s))",
+        "N": "bed-load discharge along x axis (kg/(m*s))",
+        "P": "bed-load discharge along y axis (kg/(m*s))",
+        "E": "bottom evolution (m)",
+        "KS": "total bed roughness (m)",
+        "MU": "Skin friction correction factor",
+        "D50": "Mean grain diameter",
+        "UWB": "wave orbital velocity (m/s)",
+        "kAi": "fraction of non cohesive sediment of class i, in k layer",
+        "QSi": "bed load transport rate of sediment of class i",
+        "CSi": "mass concentration of class i",
+        "C2DSi": "mass concentration of class i for 2D graphic printouts",
+        "SVXi": "sediment i viscosity along x axis (m2/s) - only 3D",
+        "SVYi": "sediment i viscosity along y axis (m2/s) - only 3D",
+        "SVZi": "sediment i viscosity along z axis (m2/s) - only 3D",
+        "QSBL": "bed load transport rate (kg/(m*s))",
+        "QSBLX": "bed load transport rate x axis",
+        "QSBLY": "bed load transport rate y axis",
+        "QSBLi": "bedload transport rate of class i",
+        "kES": "thickness of the k layer",
+        "kCONC": "concentration of bed layer k",
+        "A": "supplementary variable A",
+        "G": "supplementary variable G",
+        "L": "supplementary variable L",
+        "O": "supplementary variable O",
+        "kRi": "fraction of cohesive sediment of class i, in k layer",
+        "kSi": "mass of non cohesive sediment of class i, in k layer",
+        "kMi": "mass of cohesive sediment of class i, in k layer",
+        "ZRL": "reference level for Nestor"
+      },
+      "mnemo": "SORTIS"
+    },
+    {
+      "keyword": "PRESCRIBED SOLID DISCHARGES",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": false,
+      "help": "Values of prescribed solid discharges at the inflow boundaries (kg/s). One value per liquid boundary",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        "BOUNDARY CONDITIONS"
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "SOLDIS"
+    },
+    {
+      "keyword": "CLASSES IMPOSED SOLID DISCHARGES DISTRIBUTION",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Gives the proportion of the imposed solid discharge for each class. Give one numbre for each non-cohesive class",
+      "rubrique": [
+        "NON COHESIVE",
+        "CHARRIAGE",
+        "BOUNDARY CONDITIONS"
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "RATIO\\_DEBIMP"
+    },
+    {
+      "keyword": "INITIAL SUSPENDED SEDIMENTS CONCENTRATION VALUES",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets the initial values of suspended sediment concentration.",
+      "rubrique": [
+        "INITIAL CONDITION",
+        "SETTING",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "default": [
+        0.0,
+        0.0
+      ],
+      "level": 0,
+      "mnemo": "SED0"
+    },
+    {
+      "keyword": "PRESCRIBED SUSPENDED SEDIMENTS CONCENTRATION VALUES",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Suspended sediment concentration values prescribed at the inflow boundaries. Determines the imposed value of sediments at the first boundary, then at the second and so on, with the same logic as tracers.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "SETTING",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "level": 0,
+      "mnemo": "PRESED"
+    },
+    {
+      "keyword": "VERTICAL PROFILES OF SUSPENDED SEDIMENTS",
+      "type": "INTEGER",
+      "size": 2,
+      "unbounded": true,
+      "help": "Specifies the type of profiles of sediment concentration on the vertical (only for 3D simulations). Possible choices are: 0: user defined, 1: constant, 2: Rouse equilibrium, constant (diluted sediment) or Rouse (sediment), 3: Rouse (normalized) and imposed concentration. 4: Rouse modified with molecular viscosity.",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "SETTING",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "level": 1,
+      "choices": {
+        "0": "User defined",
+        "1": "Constant",
+        "2": "Constant or Rouse if sediment",
+        "3": " \"Normalized Rouse profile and imposed conc",
+        "4": " \"Modified Rouse profile accounting for molecular viscosity"
+      },
+      "mnemo": "VERPROSED"
+    },
+    {
+      "keyword": "SUSPENDED SEDIMENTS CONCENTRATION VALUES AT THE SOURCES",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Values of the suspended sediments at the sources. All sources for the first suspended sediment, then all sources for the second suspended sediment, etc. For example, if there are 3 suspended sediments (SED1, SED2 and SED3) and 2 sources (S1 and S2), the following syntax is used:\\\\ S1\\_SED1;S1\\_SED2;S1\\_SED3;S2\\_SED1;S2\\_SED2;S2\\_SED3\\\\ 10.0; 10.0; 0.0; 0.0; 10.0; 10.0",
+      "rubrique": [
+        "BOUNDARY CONDITIONS",
+        "SETTING",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "SEDSCE"
+    },
+    {
+      "keyword": "SCHEME FOR ADVECTION OF SUSPENDED SEDIMENTS",
+      "type": "INTEGER",
+      "size": 2,
+      "unbounded": true,
+      "help": "Choice of the advection scheme for the suspended sediments, ERIA works only in 2D. The order of the chosen scheme must follow the order of the suspended sediments.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "ADVECTION INFO",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "default": [
+        5,
+        5
+      ],
+      "level": 0,
+      "choices": {
+        "0": "NO ADVECTION",
+        "1": "CHARACTERISTICS",
+        "2": "EXPLICIT + SUPG",
+        "3": "EXPLICIT LEO POSTMA",
+        "4": "EXPLICIT + MURD SCHEME N",
+        "5": "EXPLICIT + MURD SCHEME PSI",
+        "13": "N-SCHEME FOR TIDAL FLATS LP",
+        "14": "N-SCHEME FOR TIDAL FLATS",
+        "15": "ERIA SCHEME - ONLY IN 2D"
+      },
+      "mnemo": "SCHADVSED"
+    },
+    {
+      "keyword": "SCHEME OPTION FOR ADVECTION OF SUSPENDED SEDIMENTS",
+      "type": "INTEGER",
+      "size": 2,
+      "unbounded": true,
+      "help": "If N or PSI SCHEME: 1=explicit 2=predictor-corrector 3= predictor-corrector second-order in time 4= implicit",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "ADVECTION INFO",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "default": [
+        4,
+        4
+      ],
+      "level": 1,
+      "mnemo": "OPTADV\\_SED"
+    },
+    {
+      "keyword": "SCHEME FOR DIFFUSION OF SUSPENDED SEDIMENTS IN 3D",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Monitors the choice of the diffusion scheme for sediments in 3D simulations. Possible choices are: 0: no diffusion, 1: implicit.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "SOLVER",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "choices": {
+        "0": "NO DIFFUSION",
+        "1": "IMPLICIT"
+      },
+      "mnemo": "SCHDSED"
+    },
+    {
+      "keyword": "SOLVER FOR DIFFUSION OF SUSPENSION",
+      "type": "INTEGER",
+      "size": 2,
+      "unbounded": true,
+      "help": "Choice of the solver for suspension resolution. Possible choices are: 1: conjugate gradient, 2: conjugate residual, 3: conjugate gradient on a normal equation, 4: minimum error, 5: squared conjugate gradient, 6: CGSTAB, 7: GMRES, 8: direct solver.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "SOLVER",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "default": [
+        1,
+        1
+      ],
+      "level": 1,
+      "choices": {
+        "1": "conjugate gradient",
+        "2": "conjugate residual",
+        "3": "conjugate gradient on a normal equation",
+        "4": "minimum error",
+        "5": "squared conjugate gradient",
+        "6": "cgstab",
+        "7": "gmres",
+        "8": "direct solver"
+      },
+      "mnemo": "SLVSED(I)\\%SLV"
+    },
+    {
+      "keyword": "SOLVER OPTION FOR DIFFUSION OF SUSPENSION",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Dimension of Krylov space for the GMRES method (7).",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "SOLVER",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "default": 5,
+      "level": 2,
+      "mnemo": "SLVSED(I)\\%KRYLOV"
+    },
+    {
+      "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR SOLVER FOR SUSPENSION",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Limits the number of solver iterations for the diffusion of sediments.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "SOLVER",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "default": 60,
+      "level": 2,
+      "mnemo": "SLVSED(I)\\%NITMAX"
+    },
+    {
+      "keyword": "ACCURACY FOR DIFFUSION OF SUSPENSION",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Sets the accuracy needed for the computation of the diffusion of suspension. It is not possible to set different values for different solvers, only one is accepted.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "SOLVER",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "default": 1e-08,
+      "level": 1,
+      "mnemo": "SLVSED\\%EPS"
+    },
+    {
+      "keyword": "PRECONDITIONING FOR DIFFUSION OF SUSPENSION",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Choice of preconditioning for the diffusion of sediments. Possible choices are: 0: no preconditioning, 2: diagonal, 3: diagonal with the condensed matrix in 3D, 5: diagonal with absolute values in 3D, 7: Crout, 11: Gauss-Seidel EBE in 3D, 13: matrix defined by the user in 3D, 14: diagonal and Crout, 17: direct solver on the vertical in 3D, 21: diagonal condensed and Crout in 3D, 34: diagonal and direct solver on the vertical in 3D.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "SOLVER",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "default": 2,
+      "level": 2,
+      "choices": {
+        "0": "no preconditioning",
+        "2": "diagonal",
+        "3": "diagonal condensed",
+        "5": "diagonal with absolute values",
+        "7": "Crout",
+        "11": "Gauss-Seidel EBE",
+        "13": "Matrix defined by the user",
+        "14": "diagonal and Crout",
+        "17": "direct solver on the vertical",
+        "21": "diagonal condensed and Crout",
+        "34": "diagonal and direct solver on the vertical"
+      },
+      "mnemo": "SLVSED(I)\\%PRECON"
+    },
+    {
+      "keyword": "FINITE VOLUME SCHEME FOR SUSPENDED SEDIMENTS DIFFUSION",
+      "type": "INTEGER",
+      "size": 2,
+      "unbounded": false,
+      "help": "Choice of the finite volume diffusion model: 1: explicit P1 finite element, 2: two points flux, 3: reconstructed two points flux.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "DIFFUSION",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        1,
+        1
+      ],
+      "level": 0,
+      "choices": {
+        "1": "explicit P1 finite element",
+        "2": "two points flux",
+        "3": "reconstructed two points flux"
+      },
+      "mnemo": "MVIST\\_SED"
+    },
+    {
+      "keyword": "ADVECTION-DIFFUSION SCHEME WITH SETTLING VELOCITY",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Choice of the vertical scheme for diffusion and settling of sediment (only in 3D): 0: Implicit-diffusion scheme, 1: Implicit-convection scheme (Tridiagonal matrix solver), 2: set\\_fall.f",
+      "rubrique": [
+        "SEDIMENT INFO",
+        "SETTLING VELOCITY",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "SETDEP"
+    },
+    {
+      "keyword": "HINDERED SETTLING",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Decides if hindered formulation is to be used to compute settling velocity for mud.",
+      "rubrique": [
+        "COHESIVE",
+        "SETTLING VELOCITY",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "HINDER"
+    },
+    {
+      "keyword": "HINDERED SETTLING FORMULA",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Type of hindered settling: 0 : User defined formula 1 : Whitehouse et al. (2000) 2 : Winterwerp (1999)",
+      "rubrique": [
+        "COHESIVE",
+        "SETTLING VELOCITY",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "HIND\\_TYPE"
+    },
+    {
+      "keyword": "WEAK SOIL CONCENTRATION FOR MUD",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "The sediment concentration at which sediment forms a weak soil in kg/m$^3$. These values are needed when HINDERED SETTLING = YES.",
+      "rubrique": [
+        "COHESIVE",
+        "SETTLING VELOCITY",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "CGEL"
+    },
+    {
+      "keyword": "THRESHOLD CONCENTRATION FOR HINDERED SETTLING",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "The sediment concentration at which hindered settling is initiated. These values are needed when HINDERED SETTLING = YES.",
+      "rubrique": [
+        "COHESIVE",
+        "SETTLING VELOCITY",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.0,
+      "level": 1,
+      "mnemo": "CINI"
+    },
+    {
+      "keyword": "FLOCCULATION",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Decides if hindered formulation is to be used to compute settling velocity for mud. Only in 3D.",
+      "rubrique": [
+        "COHESIVE",
+        "SETTLING VELOCITY",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "FLOC"
+    },
+    {
+      "keyword": "FLOCCULATION FORMULA",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Type of flocculation formula: 0: User defined formula ; 1: Van Leussen ; 2: Soulsby et al. (2013).",
+      "rubrique": [
+        "COHESIVE",
+        "SETTLING VELOCITY",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "FLOC\\_TYPE"
+    },
+    {
+      "keyword": "FLOCCULATION COEFFICIENT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "When the influence of turbulence on the settling velocity is modelled, this coefficient traduces the formation of flocs by turbulence (coefficient $a$ of Van Leussen formula). Value to be imposed if INFLUENCE OF TURBULENCE ON SETTLING VELOCITY = YES.",
+      "rubrique": [
+        "COHESIVE",
+        "SETTLING VELOCITY",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.3,
+      "level": 1,
+      "mnemo": "TURBA"
+    },
+    {
+      "keyword": "COEFFICIENT RELATIVE TO FLOC DESTRUCTION",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "When the influence of turbulence on the settling velocity is modelled, this coefficient traduces the breaking of flocs by turbulence (coefficient $b$ of Van Leussen formula). Value to be imposed if INFLUENCE OF TURBULENCE ON SETTLING VELOCITY = YES.",
+      "rubrique": [
+        "COHESIVE",
+        "SETTLING VELOCITY",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.09,
+      "level": 1,
+      "mnemo": "TURBB"
+    },
+    {
+      "keyword": "ZERO",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sets the zero of GAIA used for clipping values.",
+      "rubrique": [
+        "NUMERICAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1e-10,
+      "level": 1,
+      "mnemo": ""
+    },
+    {
+      "keyword": "FINITE VOLUMES",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Set finite volumes method or not",
+      "rubrique": [
+        "NUMERICAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "VF"
+    },
+    {
+      "keyword": "MATRIX-VECTOR PRODUCT",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Possible choices are: 1: classic, 2: frontal. Beware, with option 2, a special numbering of points is required.",
+      "rubrique": [
+        "NUMERICAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 3,
+      "mnemo": "PRODUC"
+    },
+    {
+      "keyword": "MATRIX STORAGE",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Defines the method to store matrices. The possible choices are: 1: classical EBE, 3: edge-based storage.",
+      "rubrique": [
+        "NUMERICAL",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "choices": {
+        "1": "classical EBE",
+        "3": "Edge-based storage"
+      },
+      "mnemo": "OPTASS"
+    },
+    {
+      "keyword": "UPWINDING FOR BEDLOAD",
+      "type": "REAL",
+      "size": null,
+      "unbounded": false,
+      "help": "Parameter for FV solving the Exner equation, 0.5 = Centered (precise), 1 = Upwind (stable because diffusive)",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "BEDLOAD",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.5,
+      "level": 1,
+      "mnemo": "DVF"
+    },
+    {
+      "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR POSITIVE THICKNESS",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Only for bedload in finite elements. Parameter for positive\\_depths. Old default value = 10 until release 8.1.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 50,
+      "level": 2,
+      "mnemo": "MAXADV"
+    },
+    {
+      "keyword": "BED ROUGHNESS PREDICTOR OPTION",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "1: Flat bed, 2: Rippled bed, 3: Dunes and mega ripples (Method of Van Rijn)",
+      "rubrique": [
+        "NON COHESIVE",
+        "FRICTION",
+        "ADVANCED"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "IKS"
+    },
+    {
+      "keyword": "AD NUMBER OF DERIVATIVES",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Defines the number of user derivatives, within the framework of the algorithmic differentiation.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "AUTOMATIC DIFFERENTIATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 1,
+      "mnemo": "NADVAR"
+    },
+    {
+      "keyword": "AD NAMES OF DERIVATIVES",
+      "type": "STRING",
+      "size": 2,
+      "unbounded": false,
+      "help": "Name of user derivatives in 32 characters, 16 for the name, 16 for the unit.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "AUTOMATIC DIFFERENTIATION",
+        ""
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "NAME\\_ADVAR"
+    },
+    {
+      "keyword": "AD NUMBER OF DIRECTIONS",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Defines the number of directions for the differentiators",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "AUTOMATIC DIFFERENTIATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "AD\\_NUMOFDIR"
+    },
+    {
+      "keyword": "AD SYMBOLIC LINEAR SOLVER",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Enables the symbolic linear solver for AD.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "AUTOMATIC DIFFERENTIATION",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "AD\\_SYMBLINSOLV"
+    },
+    {
+      "keyword": "AD LINEAR SOLVER RESET DERIVATIVES",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Resets the derivatives for AD.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "AUTOMATIC DIFFERENTIATION",
+        ""
+      ],
+      "is_file": false,
+      "default": true,
+      "level": 1,
+      "mnemo": "AD\\_LINSOLV\\_RESETDERIV"
+    },
+    {
+      "keyword": "AD LINEAR SOLVER DERIVATIVE CONVERGENCE",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Iterative linear solvers: derivative convergence test for AD.",
+      "rubrique": [
+        "NUMERICAL PARAMETERS",
+        "AUTOMATIC DIFFERENTIATION",
+        ""
+      ],
+      "is_file": false,
+      "default": true,
+      "level": 1,
+      "mnemo": "AD\\_LINSOLV\\_DERIVATIVE\\_CONVERGENCE"
+    },
+    {
+      "keyword": "CLASSES SEDIMENT DENSITY",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets the value of the sediment density for each class en Kg/m3",
+      "rubrique": [
+        "PHYSICS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        2650.0,
+        2650.0
+      ],
+      "level": 1,
+      "mnemo": "XMVS0"
+    },
+    {
+      "keyword": "LAYERS NON COHESIVE BED POROSITY",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "The bed volume concentration CSF=(1-porosity) is used to calculate the bed evolution of non-cohesive sand transport.",
+      "rubrique": [
+        "NON COHESIVE",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0.4,
+        0.4
+      ],
+      "level": 1,
+      "mnemo": "XKV0"
+    },
+    {
+      "keyword": "WATER VISCOSITY",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Specifies the water kinematic viscosity. M/S2",
+      "rubrique": [
+        "PHYSICS",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1e-06,
+      "level": 3,
+      "mnemo": "VCE"
+    },
+    {
+      "keyword": "SETTLING LAG",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Uses the velocity profile based on the Miles approximation",
+      "rubrique": [
+        "NON COHESIVE",
+        "SUSPENSION",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 2,
+      "mnemo": "SET\\_LAG"
+    },
+    {
+      "keyword": "CLASSES SETTLING VELOCITIES",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets the value of settling velocity for every sediment. Give a negative value to use the Stokes, Zanke or Van Rijn formulae (depending on the grain size)",
+      "rubrique": [
+        "COHESIVE AND NON COHESIVE",
+        "SUSPENSION",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        -9.0,
+        -9.0
+      ],
+      "level": 1,
+      "mnemo": "XWC0"
+    },
+    {
+      "keyword": "SUSPENSION FOR ALL SANDS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Activate suspension for all the sands in the simulation. It is not possible to have a different behaviour between sand classes. Mud is always considered in suspension.",
+      "rubrique": [
+        "NON COHESIVE",
+        "SUSPENSION",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "SUSP\\_SAND"
+    },
+    {
+      "keyword": "EQUILIBRIUM INFLOW CONCENTRATION",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Imposes the equilibrium concentration at the inlet boundaries in 2D cases. For non cohesive sediments, the equilibrium near bed concentration is computed with respect to the suspension transport formula for all sands.",
+      "rubrique": [
+        "COHESIVE AND NON COHESIVE",
+        "SUSPENSION",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 2,
+      "mnemo": "IMP\\_INFLOW\\_C"
+    },
+    {
+      "keyword": "SUSPENSION TRANSPORT FORMULA FOR ALL SANDS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Different choice to compute the equilibrium near-bed concentration 1 : Zysderman and Fredsoe, equilibrium formula 2: Bijker method. The near bed concentration is related to the bedload . This option cannot be used without bedload transport 3: Van Rijn formula 4: Soulsby\\_van Rijn formula",
+      "rubrique": [
+        "NON COHESIVE",
+        "SUSPENSION",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 2,
+      "mnemo": "ICQ"
+    },
+    {
+      "keyword": "CORRECTION ON CONVECTION VELOCITY",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Modification of 2D convection velocities to account for velocity and concentration profiles",
+      "rubrique": [
+        "SUSPENSION",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "CORR\\_CONV"
+    },
+    {
+      "keyword": "CLASSES CRITICAL SHEAR STRESS FOR MUD DEPOSITION",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Critical shear stress for deposition (Pa)",
+      "rubrique": [
+        "COHESIVE",
+        "SUSPENSION",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        1000.0,
+        1000.0
+      ],
+      "level": 2,
+      "mnemo": "TOCD\\_MUD0"
+    },
+    {
+      "keyword": "LAYERS PARTHENIADES CONSTANT",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "constant of the Krone and Partheniades erosion law (Kg/m2/s)",
+      "rubrique": [
+        "COHESIVE",
+        "SUSPENSION",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0.001,
+        0.001
+      ],
+      "level": 2,
+      "mnemo": "PARTHENIADES0"
+    },
+    {
+      "keyword": "COEFFICIENT FOR DIFFUSION OF SUSPENDED SEDIMENTS",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": true,
+      "help": "Sets the value of the suspended sediments diffusivity in 2D. This value may have a significant effect on the evolution of sediments in time. It is a scalar (one value for all sediments).",
+      "rubrique": [
+        "SUSPENSION",
+        "TURBULENCE",
+        ""
+      ],
+      "is_file": false,
+      "default": 1e-06,
+      "level": 0,
+      "mnemo": "DIFSEDNU"
+    },
+    {
+      "keyword": "COEFFICIENT FOR HORIZONTAL DIFFUSION OF SUSPENDED SEDIMENTS",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets the values of the horizontal diffusion of sediments in 3D. These values may have a significant effect on the evolution of sediments in time. It is an array, with one value per suspended sediment, separated by semicolons.",
+      "rubrique": [
+        "SUSPENSION",
+        "TURBULENCE",
+        ""
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "DNUSEDH"
+    },
+    {
+      "keyword": "COEFFICIENT FOR VERTICAL DIFFUSION OF SUSPENDED SEDIMENTS",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets the values of the vertical diffusion of sediments in 3D. These values may have a significant effect on the evolution of sediments in time. It is an array, with one value per suspended sediment, separated by semicolons.",
+      "rubrique": [
+        "SUSPENSIONS",
+        "TURBULENCE",
+        ""
+      ],
+      "is_file": false,
+      "level": 1,
+      "mnemo": "DNUSEDV"
+    },
+    {
+      "keyword": "CLASSES SEDIMENT DIAMETERS",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets value of diameter dm for particular size class.",
+      "rubrique": [
+        "COHESIVE AND NON COHESIVE",
+        "BED MATERIAL",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        0.01,
+        0.01
+      ],
+      "level": 1,
+      "mnemo": "DCLA"
+    },
+    {
+      "keyword": "CLASSES HIDING FACTOR",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets value of hiding factor for particular size class.",
+      "rubrique": [
+        "COHESIVE AND NON COHESIVE",
+        "BED MATERIAL",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        1.0,
+        1.0
+      ],
+      "level": 2,
+      "mnemo": "HIDI"
+    },
+    {
+      "keyword": "CLASSES INITIAL FRACTION",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sets the value of the initial fraction of each sediment class. Beware that the sum over all classes must be equal to 1.",
+      "rubrique": [
+        "COHESIVE AND NON COHESIVE",
+        "BED MATERIAL",
+        ""
+      ],
+      "is_file": false,
+      "default": [
+        1.0,
+        0.0
+      ],
+      "level": 2,
+      "mnemo": "AVA0"
+    },
+    {
+      "keyword": "ACTIVE LAYER THICKNESS",
+      "type": "REAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Thickness for bed stratification. Composition of first layer is used to compute bed load transport rate. If you do not want a stratification, use a large value",
+      "rubrique": [
+        "NON COHESIVE",
+        "BED MATERIAL",
+        ""
+      ],
+      "is_file": false,
+      "default": 10000.0,
+      "level": 2,
+      "mnemo": "ELAY0"
+    },
+    {
+      "keyword": "HIDING FACTOR FORMULA",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "4 hiding factor formulas are implemented in GAIA 0: const => need to give CLASSES HIDING FACTOR 1: Egiazaroff 2: Ashida \\& Michiue : 4: Karim, Holly \\& Yang",
+      "rubrique": [
+        "NON COHESIVE",
+        "BED MATERIAL",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 2,
+      "mnemo": "HIDFAC"
+    },
+    {
+      "keyword": "CONSTANT ACTIVE LAYER THICKNESS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "constant active layer thickness or not",
+      "rubrique": [
+        "NON COHESIVE",
+        "BED MATERIAL",
+        ""
+      ],
+      "is_file": false,
+      "default": true,
+      "level": 2,
+      "mnemo": "CONST\\_ALAYER"
+    },
+    {
+      "keyword": "LAYERS INITIAL THICKNESS",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Sediment layers thickness (m) for initialisation.",
+      "rubrique": [
+        "COHESIVE AND NON COHESIVE",
+        "BED MATERIAL",
+        ""
+      ],
+      "is_file": false,
+      "level": 2,
+      "mnemo": "SED\\_THICK"
+    },
+    {
+      "keyword": "D90 SAND DIAMETER FOR ONLY ONE CLASS",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Sets the value of diameter d90 for simulations with one sand class. With multiple sand classes, D90 is computed by GAIA.",
+      "rubrique": [
+        "NON COHESIVE",
+        "BED MATERIAL",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.01,
+      "level": 1,
+      "mnemo": "D90"
+    },
+    {
+      "keyword": "RATIO BETWEEN SKIN FRICTION AND MEAN DIAMETER",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Ratio for the computation of skin friction. skin roughness = ratio * mean diameter (for the mixture of sand, the mean diameter used is a value per node which is computed thanks to the fraction and the mean diameter of each sediment for each node of the mesh) if KSPRATIO =0 : use skin friction prediction from Van Rijn (2007) for currents and the Wiberg and Harris method for waves",
+      "rubrique": [
+        "NON COHESIVE",
+        "FRICTION",
+        ""
+      ],
+      "is_file": false,
+      "default": 3.0,
+      "level": 2,
+      "mnemo": "KSPRATIO"
+    },
+    {
+      "keyword": "SKIN FRICTION CORRECTION",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Formula to modify the shear stress in sediment flow rate formulae so they use the skin bed roughness (see also KSPRATIO) 0 : No correction (TAUP= TOB), valid if the roughness provided to TELEMAC is physical - close to the skin roughness, usually estimated to 3d50 1 : Correction for a flat bed (KSP= KSPRATIO * D50) 2 : Ripple correction factor",
+      "rubrique": [
+        "NON COHESIVE",
+        "FRICTION",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 2,
+      "mnemo": "ICR"
+    },
+    {
+      "keyword": "FORMULA FOR SLOPE EFFECT",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Possible choices: 1: formula of Koch et Flokstra, modification of bed load linked keyword : BETA. 2 : formula of Soulsby, modification critical shear stress, can only be used with a threshold fomula. Linked keyword : FRICTION ANGLE OF THE SEDIMENT 3 : formula of Apsley and Stansby, modification of critical shear stress and the bed load. Linked keyword: FRICTION ANGLE OF THE SEDIMENT 4 : formula of Apsley and Stansby, modification of critical shear stress and the bed load and additionally avalanching. Linked keyword: ANGLE DE FROTTEMENT DU SEDIMENT",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        "SLOPE INFLUENCE"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 2,
+      "mnemo": "SLOPEFF"
+    },
+    {
+      "keyword": "FRICTION ANGLE OF THE SEDIMENT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Angle of repose of the sediment. Used in the Soulsby formula to take into account the influence of bed slope on critical shear stress. Use if ...=2",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        "SLOPE INFLUENCE"
+      ],
+      "is_file": false,
+      "default": 40.0,
+      "level": 2,
+      "mnemo": "PHISED"
+    },
+    {
+      "keyword": "FORMULA FOR DEVIATION",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "1: Koch and Flokstra 2: formula of Talmon et al. 1995, JHR 33(4) formulas (1) and (17) linked keyword : BETA2",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        "SLOPE INFLUENCE"
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 2,
+      "mnemo": "DEVIA"
+    },
+    {
+      "keyword": "PARAMETER FOR DEVIATION",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Parameter pour la deviation pour la formule de Talmon et al.",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        "SLOPE INFLUENCE"
+      ],
+      "is_file": false,
+      "default": 0.85,
+      "level": 2,
+      "mnemo": "BETA2"
+    },
+    {
+      "keyword": "SEDIMENT SLIDE",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "Two choices of formulas, both take FRICTION ANGLE OF THE SEDIMENT into account: 0: No sliding 1: Sliding classic 2: Avalanching according Apsley and Stansby",
+      "rubrique": [
+        "NON COHESIVE",
+        "BED STRUCTURE",
+        "ADVANCED"
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 2,
+      "mnemo": "SLIDE"
+    },
+    {
+      "keyword": "SLOPE EFFECT",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "If yes, slope effect taken into account: deviation + modification of critical shear stress. NO will cancel the key-words FORMULA FOR SLOPE EFFECT and FORMULA FOR DEVIATION",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        "SLOPE INFLUENCE"
+      ],
+      "is_file": false,
+      "default": true,
+      "level": 2,
+      "mnemo": "EFFPEN"
+    },
+    {
+      "keyword": "BETA",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Specifies the value of the beta coefficient used in the Koch and Flokstra slope effect formulation.",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        "SLOPE INFLUENCE"
+      ],
+      "is_file": false,
+      "default": 1.3,
+      "level": 2,
+      "mnemo": ""
+    },
+    {
+      "keyword": "COMPUTE BED ROUGHNESS AT SEDIMENT SCALE",
+      "type": "LOGICAL",
+      "size": 0,
+      "unbounded": false,
+      "help": "Compute a bed roughness at the sediment scale - see BED ROUGHNESS PREDICTOR OPTION -. It can be different from the hydrodynamics roughness due to the action of waves or to a space-time varying grain size distribution. This roughness could be sent to Telemac but it is not supported yet.",
+      "rubrique": [
+        "NON COHESIVE",
+        "FRICTION",
+        "ADVANCED"
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "KSCALC"
+    },
+    {
+      "keyword": "SECONDARY CURRENTS ALPHA COEFFICIENT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Alpha coefficient of secondary current(-), Should be chosen between 0.75 (rough bottom) and 1 (smooth bottom)",
+      "rubrique": [
+        "SEDIMENTOLOGY",
+        "GENERAL",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 1,
+      "mnemo": "ALPHA"
+    },
+    {
+      "keyword": "MORPHOLOGICAL FACTOR",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Amplification coefficient for bed evolution",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        ""
+      ],
+      "is_file": false,
+      "default": 1.0,
+      "level": 1,
+      "mnemo": "MOFAC"
+    },
+    {
+      "keyword": "OUTPUT TIME ACCORDING TO MORPHOLOGICAL FACTOR",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "If yes the output time in the \\gaia result file will be equal to the hydrodynamic time multiplied by the morphological factor.",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "OUTPUT\\_MOFAC"
+    },
+    {
+      "keyword": "MINIMUM DEPTH FOR BEDLOAD",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "To cancel sediment fluxes to and from dry points",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        ""
+      ],
+      "is_file": false,
+      "default": 0.01,
+      "level": 1,
+      "mnemo": "HMIN\\_BEDLOAD"
+    },
+    {
+      "keyword": "BED LOAD FOR ALL SANDS",
+      "type": "LOGICAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Enables bedload for all sands",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        ""
+      ],
+      "is_file": false,
+      "default": false,
+      "level": 1,
+      "mnemo": "CHARR"
+    },
+    {
+      "keyword": "BED-LOAD TRANSPORT FORMULA FOR ALL SANDS",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "10 bed-load or total load transport formulas are implemented in GAIA. The formula Ne3, Ne30 and Ne9 should not be used in the case of coupling with the suspension. The formula Ne4, Ne5, Ne8 and Ne9 model the transport under the combined action of currents and waves : 1 : MEYER-PETER (bed load) 2 : EINSTEIN-BROWN (bed load) 3 : ENGELUND-HANSEN + CHOLLET AND CUNGE (VERSION 5.3) 30: ENGELUND-HANSEN (total) 4 : BIJKER (bed load + suspension) 5 : SOULSBY - VAN RIJN (bed load + suspension) 6 : HUNZIKER (only for sand grading) IN THIS CASE HIDING FACTOR KEYWORD DISCARDED And Hunziker formula used 7 : VAN RIJN (bed load) 8 : BAILARD (bed load + suspension) 9 : DIBAJNIA ET WATANABE (total) 10 : WILCOCK AND CROWE (graded sediment) Users can also program other formulas (subroutine bedload\\_qb\\_user.f) setting this key word to zero : 0 : FORMULA PROGRAMMED BY USER Warning : it is not then possible to choose the option VARIABLE TIME-STEP",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "ICF"
+    },
+    {
+      "keyword": "B VALUE FOR THE BIJKER FORMULA",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "b value for the Bijker formula",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        ""
+      ],
+      "is_file": false,
+      "default": 2.0,
+      "level": 2,
+      "mnemo": "BIJK"
+    },
+    {
+      "keyword": "MPM COEFFICIENT",
+      "type": "REAL",
+      "size": 1,
+      "unbounded": false,
+      "help": "Alpha coefficient for Meyer-Peter and Muller formula",
+      "rubrique": [
+        "NON COHESIVE",
+        "BEDLOAD",
+        ""
+      ],
+      "is_file": false,
+      "default": 8.0,
+      "mnemo": "MPM"
+    },
+    {
+      "keyword": "BED MODEL",
+      "type": "INTEGER",
+      "size": 1,
+      "unbounded": false,
+      "help": "3 kinds of bed model are available: 1 : multilayers (automatic active layer if several classes) 2 : multilayer with consolidation 3 : consolidation model based on Gibson theory",
+      "rubrique": [
+        "COHESIVE AND NON COHESIVE",
+        "",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 1,
+      "mnemo": "BED\\_MODEL"
+    },
+    {
+      "keyword": "CLASSES TYPE OF SEDIMENT",
+      "type": "STRING",
+      "size": 2,
+      "unbounded": true,
+      "help": "Liste of types of sediment: cohesive (CO) ou non cohesive (NCO).",
+      "rubrique": [
+        "COHESIVE AND NON COHESIVE",
+        "BED MATERIAL",
+        ""
+      ],
+      "is_file": false,
+      "level": 0,
+      "mnemo": "TYPE\\_SED"
+    },
+    {
+      "keyword": "NUMBER OF LAYERS OF THE CONSOLIDATION MODEL",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Vertical bed structure - The number of layers should be less than 10",
+      "rubrique": [
+        "COHESIVE",
+        "CONSOLIDATION",
+        ""
+      ],
+      "is_file": false,
+      "default": 1,
+      "level": 2,
+      "mnemo": "NCOUCH\\_TASS"
+    },
+    {
+      "keyword": "LAYERS MASS TRANSFER",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Mass transfert coefficients of the multilayer consolidation model in s-1",
+      "rubrique": [
+        "COHESIVE",
+        "CONSOLIDATION",
+        ""
+      ],
+      "is_file": false,
+      "level": 2,
+      "mnemo": "TRANS\\_MASS0"
+    },
+    {
+      "keyword": "LAYERS MUD CONCENTRATION",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Concentrations of the mud-bed in g per l (per layer)",
+      "rubrique": [
+        "COHESIVE",
+        "BED STRUCTURE",
+        "INITIALIZATION"
+      ],
+      "is_file": false,
+      "level": 2,
+      "mnemo": "CONC\\_MUD0"
+    },
+    {
+      "keyword": "LAYERS CRITICAL EROSION SHEAR STRESS OF THE MUD",
+      "type": "REAL",
+      "size": 2,
+      "unbounded": true,
+      "help": "Critical erosion shear stress of the mud per layer (N per m2)",
+      "rubrique": [
+        "COHESIVE",
+        "INITIALIZATION",
+        "SUSPENSION"
+      ],
+      "is_file": false,
+      "default": [
+        0.5,
+        1.0
+      ],
+      "level": 2,
+      "mnemo": "TOCE\\_MUD0"
+    },
+    {
+      "keyword": "VERTICAL GRAIN SORTING MODEL",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Defines the model of the vertical grain sorting: 0 = HR-VSM = Layer Model (Classic Hirano / Ribberink approach) 1 = C-VSM (Continous Vertical Grain Sorting Model)",
+      "rubrique": [
+        "BED MATERIAL",
+        "C-VSM",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 2,
+      "mnemo": "VSMTYPE"
+    },
+    {
+      "keyword": "C-VSM MAXIMUM SECTIONS",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Defines the maximum discretisation of the Continous Vertical Sorting Model: Should be bigger than 8xNumber of Fractions. The bigger the higher the RAM requirements, but the faster and accurater the bookkeeping of the sediments.",
+      "rubrique": [
+        "BED MATERIAL",
+        "C-VSM",
+        ""
+      ],
+      "is_file": false,
+      "default": 200,
+      "level": 2,
+      "mnemo": "PRO\\_MAX\\_MAX"
+    },
+    {
+      "keyword": "C-VSM FULL PRINTOUT PERIOD",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "Number of Timesteps to next printout of the full C-VSM. These printouts are highly time and disc consuming. 0 = Coupled to GRAPHIC PRINTOUT PERIOD >0 = Own printout period for the C-VSM",
+      "rubrique": [
+        "BED MATERIAL",
+        "C-VSM",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 2,
+      "mnemo": "CVSMPPERIOD"
+    },
+    {
+      "keyword": "C-VSM PRINTOUT SELECTION",
+      "type": "STRING",
+      "size": 1,
+      "unbounded": false,
+      "help": "Printout the C-VSM for the whole model as 3D C-VSM RESULTS FILE or / and for some nodes as C-VSM NODE FILE Give Up to 100 INTEGER numbers separated by ';' 0 = Full model .-> VSPRES N = 1,2...NPOINT; 2D-ID of a SELFIN MESH POINT ->*\\_VSP.CSV",
+      "rubrique": [
+        "BED MATERIAL",
+        "C-VSM",
+        ""
+      ],
+      "is_file": false,
+      "default": "0;0;0;0;0;0;0;0;0;0;0;0;0",
+      "level": 2,
+      "mnemo": "CVSMOUTPUT"
+    },
+    {
+      "keyword": "ACTIVE LAYER THICKNESS FORMULA",
+      "type": "INTEGER",
+      "size": 0,
+      "unbounded": false,
+      "help": "MODEL FOR ACTIVE LAYER THICKNESS 0 = ELAY0 (Keyword: ACTIVE LAYER THICKNESS) 1 = Hunziker \\& G$\\ddot{u}$nther 2 = Fredsoe \\& Deigaard (1992) 3 = van RIJN (1993) 4 = Wong (2006) 5 = Malcherek (2003) 6 = $3*d50$ within last time steps ALT",
+      "rubrique": [
+        "BED MATERIAL",
+        "C-VSM",
+        ""
+      ],
+      "is_file": false,
+      "default": 0,
+      "level": 2,
+      "mnemo": "ALT\\_MODEL"
+    }
+  ]
+}
