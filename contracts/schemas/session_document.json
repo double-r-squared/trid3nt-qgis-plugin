@@ -42,87 +42,10 @@
       "title": "ChatMessage",
       "type": "object"
     },
-    "LegendClass": {
-      "additionalProperties": false,
-      "description": "One class swatch in a CATEGORICAL ``LegendKey`` (NLCD class, drought\nD0-D4, Pelicun damage state, etc.).\n\nA class addresses the data it colors in one of two ways; populate exactly\none form per class:\n\n- ``value`` -- a single discrete value the swatch matches (the GDAL color\n  table entry, the NLCD class code, the ``\"D2\"`` drought label). May be a\n  number or a string.\n- ``value_min`` / ``value_max`` -- a half-open / closed numeric bin the\n  swatch covers (graduated buckets, e.g. damage-state mean ``0.5..1.5``).\n\n``color`` is an ``#rrggbb`` hex string; ``label`` is the human-readable\nswatch caption the frontend renders verbatim.",
-      "properties": {
-        "color": {
-          "title": "Color",
-          "type": "string"
-        },
-        "label": {
-          "title": "Label",
-          "type": "string"
-        },
-        "value": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "integer"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Value"
-        },
-        "value_max": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Value Max"
-        },
-        "value_min": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Value Min"
-        }
-      },
-      "required": [
-        "color",
-        "label"
-      ],
-      "title": "LegendClass",
-      "type": "object"
-    },
     "LegendKey": {
       "additionalProperties": false,
-      "description": "A layer's RESOLVED style: what the reader is looking at, and its scale.\n\nA preset is four renderer shapes parameterised by what the data is; this is\none of them resolved against a particular layer. The colours and the range\nare the SAME ones the render uses, because both come from this one\nresolution - there is no second range to drift.\n\n``qml`` is the resolved preset as QGIS's own style document, which is what\nthe map loads. ``None`` for a layer that is already painted (an RGB(A)\ncomposite, a COG carrying its own colour table): nothing may override the\ncolours such a file already has.\n\nFields:\n\n``kind``\n    Which preset shape drew it: ``continuous`` (a ramp over a range),\n    ``classed`` (declared breaks or an embedded class table),\n    ``reference`` (drawn, not measured), ``mesh`` (an MDAL dataset group).\n``colormap``\n    The ramp name, or explicit stops as ``[[stop_0to1, \"#rrggbb\"], ...]``.\n``vmin`` / ``vmax``\n    The one range the layer is read on. ``None`` for a reference layer.\n``classes``\n    The ordered class swatches, when the shape is ``classed``.\n``value_field``\n    For VECTOR layers: the feature property the colour is driven by.\n``units`` / ``label``\n    What the quantity is measured in and what the legend calls it.",
+      "description": "A layer's RESOLVED style: what the reader is looking at, and its scale.\n\nA preset is four renderer shapes parameterised by what the data is; this is\none of them resolved against a particular layer. The colours and the range\nare the SAME ones the render uses, because both come from this one\nresolution - there is no second range to drift.\n\n``qml`` is the resolved preset as QGIS's own style document, which is what\nthe map loads - the ONE record of how the layer is painted, swatches and\nclass breaks included. ``None`` for a layer that is already painted (an\nRGB(A) composite, a COG carrying its own colour table): nothing may\noverride the colours such a file already has.\n\nThe remaining fields are what a reader other than the map asks of a\npublished layer: the scale a packet holds a quantity to, and the words a\nrestyle starts from.\n\n``kind``\n    Which preset shape drew it: ``continuous`` (a ramp over a range),\n    ``classed`` (declared breaks or an embedded class table),\n    ``reference`` (drawn, not measured), ``mesh`` (an MDAL dataset group).\n``colormap``\n    The ramp name, or explicit stops as ``[[stop_0to1, \"#rrggbb\"], ...]``.\n``vmin`` / ``vmax``\n    The one range the layer is read on. ``None`` for a reference layer.\n``units`` / ``label``\n    What the quantity is measured in and what the legend calls it.",
       "properties": {
-        "classes": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/LegendClass"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Classes"
-        },
         "colormap": {
           "anyOf": [
             {
@@ -196,18 +119,6 @@
           ],
           "default": null,
           "title": "Units"
-        },
-        "value_field": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Value Field"
         },
         "vmax": {
           "anyOf": [

@@ -563,14 +563,13 @@ def _mesh_qml(resolved: Resolved) -> str:
 
 
 def legend_key(row: Any, *, value_range: tuple[float, float] | None = None,
-               label: str | None = None, units: str | None = None,
-               value_field: str | None = None) -> Any:
+               label: str | None = None, units: str | None = None) -> Any:
     """A declared row plus a range a producer already measured, as the wire key.
 
     For a producer that computed its own range while it had the field in hand -
     the whole point of resolving there is that nothing has to re-read the COG.
     """
-    from trid3nt_contracts.execution import LegendClass, LegendKey
+    from trid3nt_contracts.execution import LegendKey
 
     preset = from_row(row).titled(label, units)
     resolved = (Resolved(preset, value_range, FIXED) if value_range is not None
@@ -580,9 +579,6 @@ def legend_key(row: Any, *, value_range: tuple[float, float] | None = None,
         colormap=preset.ramp if preset.kind != "reference" else None,
         vmin=resolved.range[0] if resolved.range else None,
         vmax=resolved.range[1] if resolved.range else None,
-        classes=[LegendClass(value_min=lo, value_max=hi, color=color, label=text)
-                 for lo, hi, color, text in preset.classes] or None,
-        value_field=value_field or preset.attribute,
         units=preset.units,
         label=preset.label,
         qml=qml(resolved),

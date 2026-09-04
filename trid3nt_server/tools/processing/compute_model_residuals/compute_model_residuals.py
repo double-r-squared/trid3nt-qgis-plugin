@@ -513,7 +513,6 @@ def _build_legend(max_abs_residual: float, units: str | None) -> LegendKey:
         colormap="rdbu",
         vmin=-span,
         vmax=span,
-        value_field="residual",
         units=units,
         label="Model residual (observed - simulated)",
     )
@@ -610,7 +609,8 @@ def compute_model_residuals(
     (FlatGeobuf, EPSG:4326; per-feature ``observed`` / ``simulated`` /
     ``residual``, plus whatever properties the observations layer already
     carried) named ``"Model residuals (<n> points)"``, with a diverging
-    red-blue continuous legend centered on zero (``value_field="residual"``),
+    red-blue continuous legend centered on zero over the ``residual``
+    property,
     plus ``n_points`` / ``mean_error`` / ``bias`` / ``rmse`` / ``mae`` /
     ``min_residual`` / ``max_residual`` / ``units_warning`` (always
     populated) / ``interpretation`` (one-line honest summary) /

@@ -129,7 +129,6 @@ def test_synthetic_happy(spec, monkeypatch):
     assert layer.flood_area_km2 and layer.flood_area_km2 > 0
     assert "Flood water" in layer.class_breakdown
     assert layer.legend is not None and layer.legend.kind == "classed"
-    assert {c.value for c in layer.legend.classes} == {1, 2, 3}
     joined = " ".join(layer.caveats)
     assert "UNDER-detects" in joined and "SAR" in joined and "250 m" in joined
 

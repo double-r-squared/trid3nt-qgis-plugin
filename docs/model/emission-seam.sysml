@@ -275,10 +275,13 @@ package EmissionSeam {
         there is no second range to drift.
 
         ``qml`` is the resolved preset in QGIS's own format and it is what the
-        map loads; it is absent for a layer whose file already carries its
-        colours, because nothing may override those. ``colormap`` is optional
-        precisely because the paint travels IN the document - the canvas needs
-        no ramp table of its own to draw what it was handed.
+        map loads - swatches, class breaks and the classified field included;
+        it is absent for a layer whose file already carries its colours,
+        because nothing may override those. ``colormap`` is optional precisely
+        because the paint travels IN the document - the canvas needs no ramp
+        table of its own to draw what it was handed. What remains beside the
+        document is what a reader OTHER than the map asks: the scale a packet
+        holds a quantity to, and the words a restyle starts from.
         */
         item kind : String;
         item vmin : Real;
@@ -287,8 +290,6 @@ package EmissionSeam {
         item qml : String;
         item colormap : String [0..1];
         item units : String [0..1];
-        item classes : Map [0..1];
-        item value_field : String [0..1];
     }
 
     interface def LegendStash {

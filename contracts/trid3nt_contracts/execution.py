@@ -32,7 +32,6 @@ __all__ = [
     "ModelSetup",
     "ExecutionHandle",
     "RunResult",
-    "LegendClass",
     "LegendKey",
     "LayerURI",
     "HighWaterMarksLayerURI",
@@ -60,30 +59,6 @@ ComputeClass = Literal["small", "standard", "large", "gpu"]
 # --------------------------------------------------------------------------- #
 
 
-class LegendClass(GraceModel):
-    """One class swatch in a CATEGORICAL ``LegendKey`` (NLCD class, drought
-    D0-D4, Pelicun damage state, etc.).
-
-    A class addresses the data it colors in one of two ways; populate exactly
-    one form per class:
-
-    - ``value`` -- a single discrete value the swatch matches (the GDAL color
-      table entry, the NLCD class code, the ``"D2"`` drought label). May be a
-      number or a string.
-    - ``value_min`` / ``value_max`` -- a half-open / closed numeric bin the
-      swatch covers (graduated buckets, e.g. damage-state mean ``0.5..1.5``).
-
-    ``color`` is an ``#rrggbb`` hex string; ``label`` is the human-readable
-    swatch caption the frontend renders verbatim.
-    """
-
-    value: float | int | str | None = None
-    value_min: float | None = None
-    value_max: float | None = None
-    color: str  # "#rrggbb"
-    label: str
-
-
 class LegendKey(GraceModel):
     """A layer's RESOLVED style: what the reader is looking at, and its scale.
 
@@ -93,11 +68,14 @@ class LegendKey(GraceModel):
     resolution - there is no second range to drift.
 
     ``qml`` is the resolved preset as QGIS's own style document, which is what
-    the map loads. ``None`` for a layer that is already painted (an RGB(A)
-    composite, a COG carrying its own colour table): nothing may override the
-    colours such a file already has.
+    the map loads - the ONE record of how the layer is painted, swatches and
+    class breaks included. ``None`` for a layer that is already painted (an
+    RGB(A) composite, a COG carrying its own colour table): nothing may
+    override the colours such a file already has.
 
-    Fields:
+    The remaining fields are what a reader other than the map asks of a
+    published layer: the scale a packet holds a quantity to, and the words a
+    restyle starts from.
 
     ``kind``
         Which preset shape drew it: ``continuous`` (a ramp over a range),
@@ -107,10 +85,6 @@ class LegendKey(GraceModel):
         The ramp name, or explicit stops as ``[[stop_0to1, "#rrggbb"], ...]``.
     ``vmin`` / ``vmax``
         The one range the layer is read on. ``None`` for a reference layer.
-    ``classes``
-        The ordered class swatches, when the shape is ``classed``.
-    ``value_field``
-        For VECTOR layers: the feature property the colour is driven by.
     ``units`` / ``label``
         What the quantity is measured in and what the legend calls it.
     """
@@ -120,8 +94,6 @@ class LegendKey(GraceModel):
     colormap: str | list[tuple[float, str]] | None = None
     vmin: float | None = None
     vmax: float | None = None
-    classes: list[LegendClass] | None = None
-    value_field: str | None = None  # VECTOR: the feature property the colour follows
     units: str | None = None
     label: str | None = None
     #: The resolved preset as a QGIS ``.qml`` document - what the map loads.
@@ -629,9 +601,9 @@ LAYER_RESULT_MODELS: dict[str, type[LayerURI]] = {
 from . import envelope as _envelope  # noqa: E402  (deferred to break the import cycle)
 
 _envelope.ResultLayer.model_rebuild(
-    _types_namespace={**vars(_envelope), "LegendKey": LegendKey, "LegendClass": LegendClass}
+    _types_namespace={**vars(_envelope), "LegendKey": LegendKey}
 )
 _envelope.AssessmentEnvelope.model_rebuild(
-    _types_namespace={**vars(_envelope), "LegendKey": LegendKey, "LegendClass": LegendClass},
+    _types_namespace={**vars(_envelope), "LegendKey": LegendKey},
     force=True,
 )

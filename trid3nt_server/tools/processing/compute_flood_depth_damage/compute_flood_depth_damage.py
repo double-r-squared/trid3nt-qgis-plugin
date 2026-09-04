@@ -53,7 +53,7 @@ from typing import Any
 
 import numpy as np
 
-from trid3nt_contracts.execution import LayerURI, LegendClass, LegendKey
+from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
@@ -163,9 +163,8 @@ DEPTH_DAMAGE_CURVE_FT: tuple[tuple[float, float], ...] = (
     (16.0, 0.807),
 )
 
-#: Damage-fraction render classes: (min, max, "#rrggbb", label). The
-#: categorical ``LegendKey`` (value_field="damage_fraction") is built from
-#: this SAME table so the key always matches the paint.
+#: Damage-fraction render classes: (min, max, "#rrggbb", label) - the breaks
+#: the declared style row classifies on, and so the breaks the .qml paints.
 DAMAGE_FRACTION_CLASSES: tuple[tuple[float, float, str, str], ...] = (
     (0.0, 0.001, "#bdbdbd", "No damage"),
     (0.001, 0.1, "#ffffb2", "< 10% (minor)"),
@@ -187,6 +186,13 @@ _STYLE: dict = {
     "label": "Flood damage (HAZUS-style screening)",
     "classes": [list(c) for c in DAMAGE_FRACTION_CLASSES],
 }
+
+def _build_legend() -> Any:
+    """The declared style row, resolved - the same table the paint uses."""
+    from trid3nt_server.emission import presets
+
+    return presets.legend_key(_STYLE)
+
 
 _METADATA = AtomicToolMetadata(
     name="compute_flood_depth_damage",
@@ -355,20 +361,6 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
         raise FloodDamageUpstreamError(
             f"failed to upload the depth-damage FGB to the runs bucket: {exc}"
         ) from exc
-
-
-def _build_legend() -> LegendKey:
-    """Categorical damage-fraction legend built from the SAME class table."""
-    return LegendKey(
-        kind="classed",
-        classes=[
-            LegendClass(value_min=lo, value_max=hi, color=color, label=label)
-            for lo, hi, color, label in DAMAGE_FRACTION_CLASSES
-        ],
-        value_field="damage_fraction",
-        units="fraction of structure value",
-        label="Flood damage (HAZUS-style screening)",
-    )
 
 
 # ---------------------------------------------------------------------------

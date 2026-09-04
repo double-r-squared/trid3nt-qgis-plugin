@@ -12,7 +12,6 @@ from trid3nt_contracts.envelope import ResultLayer, TemporalConfig
 from trid3nt_contracts.execution import (
     ExecutionHandle,
     LayerURI,
-    LegendClass,
     LegendKey,
     ModelSetup,
     RunResult,
@@ -122,7 +121,6 @@ def test_legend_key_constructs_continuous_from_real_data_range() -> None:
     assert legend.kind == "continuous"
     assert legend.colormap == "reds"
     assert legend.vmin == 0.12 and legend.vmax == 3.47
-    assert legend.classes is None
     # explicit-stops form of colormap also validates
     stops = LegendKey(
         kind="continuous",
@@ -134,26 +132,17 @@ def test_legend_key_constructs_continuous_from_real_data_range() -> None:
     assert stops.colormap[0] == (0.0, "#ffffff")
 
 
-def test_legend_key_constructs_categorical_with_classes() -> None:
-    """A categorical legend: discrete class swatches (NLCD / damage states),
-    optionally driven by a VECTOR feature property via ``value_field``."""
+def test_legend_key_constructs_categorical() -> None:
+    """A categorical key names what the layer is read as; the swatches
+    themselves live in the ``.qml`` the map loads, not beside it."""
     legend = LegendKey(
         kind="classed",
-        value_field="ds_mean",  # the GeoJSON property the choropleth colors by
-        classes=[
-            LegendClass(value=0, color="#1a9641", label="None"),
-            LegendClass(value_min=0.5, value_max=1.5, color="#fdae61", label="Slight"),
-            LegendClass(value="D4", color="#730000", label="Exceptional"),
-        ],
+        label="Damage state",
         units=None,
+        qml="<qgis/>",
     )
     assert legend.kind == "classed"
-    assert legend.value_field == "ds_mean"
-    assert legend.classes is not None and len(legend.classes) == 3
-    # both class-addressing forms are accepted (single value OR a numeric bin)
-    assert legend.classes[0].value == 0
-    assert legend.classes[1].value_min == 0.5 and legend.classes[1].value_max == 1.5
-    assert legend.classes[2].value == "D4"
+    assert legend.label == "Damage state" and legend.qml == "<qgis/>"
     # a classed key carries no continuous range
     assert legend.colormap is None and legend.vmin is None and legend.vmax is None
 
@@ -210,17 +199,10 @@ def test_result_layer_mirrors_legend_and_round_trips() -> None:
         layer_type="vector",
         uri="s3://trid3nt/runs/01HX/damage.fgb",
         role="primary",
-        legend=LegendKey(
-            kind="classed",
-            value_field="ds_mean",
-            classes=[
-                LegendClass(value=0, color="#1a9641", label="None"),
-                LegendClass(value=4, color="#d7191c", label="Complete"),
-            ],
-        ),
+        legend=LegendKey(kind="classed", label="Damage state", qml="<qgis/>"),
     )
     assert result.legend is not None
-    assert result.legend.value_field == "ds_mean"
+    assert result.legend.label == "Damage state"
     a = result.model_dump(mode="json")
     again = ResultLayer.model_validate(a).model_dump(mode="json")
     assert a == again

@@ -1920,7 +1920,7 @@ async def test_legend_on_layer_uri_flows_to_session_state(
 ) -> None:
     """A ``LayerURI`` that carries a ``legend`` (composer / Pelicun path) emits it
     on the ``ProjectLayerSummary`` in the next session-state envelope."""
-    from trid3nt_contracts.execution import LegendClass, LegendKey
+    from trid3nt_contracts.execution import LegendKey
 
     layer = LayerURI(
         layer_id="pelicun_1",
@@ -1929,18 +1929,17 @@ async def test_legend_on_layer_uri_flows_to_session_state(
         uri="s3://b/pelicun.fgb",
         legend=LegendKey(
             kind="classed",
-            value_field="ds_mean",
             vmin=0.0,
             vmax=4.0,
-            classes=[LegendClass(value_min=1.5, value_max=2.5, color="#fee08b", label="DS2 Moderate")],
             units="damage_state",
+            label="Damage state",
         ),
     )
     await emitter.add_loaded_layer(layer)
 
     summary = _session_frames(sink)[-1]["payload"]["loaded_layers"][-1]
     assert summary["legend"] is not None
-    assert summary["legend"]["value_field"] == "ds_mean"
+    assert summary["legend"]["label"] == "Damage state"
     assert summary["legend"]["kind"] == "classed"
     assert summary["legend"]["vmin"] == 0.0 and summary["legend"]["vmax"] == 4.0
 

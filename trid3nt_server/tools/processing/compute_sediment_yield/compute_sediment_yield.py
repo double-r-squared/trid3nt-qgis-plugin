@@ -65,7 +65,7 @@ from typing import Any
 
 import numpy as np
 
-from trid3nt_contracts.execution import LayerURI, LegendClass, LegendKey
+from trid3nt_contracts.execution import LayerURI, LegendKey
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool

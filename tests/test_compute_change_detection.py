@@ -136,11 +136,9 @@ def test_gain_loss_polygons_hand_checked(index_pair, tmp_path) -> None:
     assert gdf.crs is not None and gdf.crs.to_epsg() == 4326
     assert (gdf["area_m2"] > 0).all()
 
-    # Legend rides on the LayerURI: categorical, driven by the change prop.
+    # Legend rides on the LayerURI: what the layer is read as.
     assert result.legend is not None
     assert result.legend.kind == "classed"
-    assert result.legend.value_field == "change"
-    assert {c.value for c in result.legend.classes} == {"gain", "loss"}
 
 
 def test_no_change_raises(index_pair, tmp_path) -> None:

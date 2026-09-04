@@ -195,10 +195,11 @@ def test_damage_matches_hand_computed(depth_and_assets, tmp_path) -> None:
     assert result.max_damage_fraction == pytest.approx(0.471, abs=0.002)
     assert any("nodata" in n for n in result.notes)
 
-    # Legend rides on the LayerURI, driven by the damage_fraction prop.
+    # Legend rides on the LayerURI: the declared row resolved, so the .qml
+    # graduates on the damage_fraction property.
     assert result.legend is not None
     assert result.legend.kind == "classed"
-    assert result.legend.value_field == "damage_fraction"
+    assert 'attr="damage_fraction"' in result.legend.qml
 
     # Output is EPSG:4326 and bbox matches the raster's transformed bounds.
     assert gdf.crs is not None and gdf.crs.to_epsg() == 4326

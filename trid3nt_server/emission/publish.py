@@ -226,65 +226,6 @@ _MAX_LEGEND_ENTRIES: int = 256
 _LAST_LEGEND_BY_URI: dict[str, Any] = {}
 
 
-def _rgb_to_hex(entry: Any) -> str | None:
-    """``(r, g, b[, a])`` 0-255 ints -> ``"#rrggbb"``; ``None`` on a bad entry."""
-    try:
-        r, g, b = int(entry[0]), int(entry[1]), int(entry[2])
-    except (TypeError, ValueError, IndexError):
-        return None
-    if not all(0 <= c <= 255 for c in (r, g, b)):
-        return None
-    return f"#{r:02x}{g:02x}{b:02x}"
-
-
-def _categorical_legend_from_colormap(
-    cmap: dict, *, label: str | None = None
-) -> "LegendKey | None":
-    """Build a categorical ``LegendKey`` from a band-1 GDAL color table.
-
-    ``cmap`` is ``{class_index: (r, g, b, a)}`` (the shape ``_read_band1_colormap``
-    returns for NLCD + other paletted rasters). One ``LegendClass`` per MEANINGFUL
-    entry, ordered by class index. GDAL always materializes the table to 256
-    entries; indices the raster does not actually use come back as either fully
-    transparent (``a == 0`` -- nodata / unused slots) OR the opaque-black filler
-    default ``(0, 0, 0, 255)``. Both are dropped so the legend shows only the
-    classes that meaningfully colorize pixels (a real NLCD table has ~16 distinct
-    colors, not 256). Duplicate colors are collapsed to the first class index that
-    carries them (paletted rasters never reuse a color for two real classes). The
-    label is the class index rendered verbatim (this seam carries no code->name
-    map). Returns ``None`` when nothing meaningful survives.
-    """
-    from trid3nt_contracts.execution import LegendClass, LegendKey
-
-    classes: list[LegendClass] = []
-    seen_colors: set[str] = set()
-    for idx in sorted(cmap.keys()):
-        entry = cmap[idx]
-        # Drop fully-transparent slots (nodata / unused class codes).
-        try:
-            if len(entry) >= 4 and int(entry[3]) == 0:
-                continue
-        except (TypeError, ValueError):
-            pass
-        hex_color = _rgb_to_hex(entry)
-        if hex_color is None:
-            continue
-        # Drop GDAL's opaque-black filler default for unset palette indices.
-        if hex_color == "#000000":
-            continue
-        # Collapse duplicate colors (a paletted raster gives each real class a
-        # distinct color; repeats are filler echoes).
-        if hex_color in seen_colors:
-            continue
-        seen_colors.add(hex_color)
-        classes.append(
-            LegendClass(value=int(idx), color=hex_color, label=str(int(idx)))
-        )
-    if not classes:
-        return None
-    return LegendKey(kind="classed", classes=classes, label=label)
-
-
 def legend_for_published_layer(
     style: dict[str, Any] | None,
     layer_uri: str,
@@ -298,10 +239,11 @@ def legend_for_published_layer(
     """The layer's resolved style, as the key the map renders from.
 
     The declared row is resolved ONCE here: the concrete range, the ramp and the
-    .qml all come out of that one resolution. A raster that is already painted
-    returns its own palette's classes (a paletted COG) or ``None`` (an RGB(A)
-    composite, which has no meaningful key). A vector or mesh declaration takes
-    the same route and never touches the object at all.
+    .qml all come out of that one resolution. ``None`` for a raster that is
+    already painted - an RGB(A) composite or a COG carrying its own colour
+    table paints itself, and QGIS's own renderer for such a file IS the render,
+    so there is no key to state. A vector or mesh declaration takes the same
+    route and never touches the object at all.
 
     Fail-open: ``None`` on any error, so a publish is never blocked.
     """
@@ -314,49 +256,22 @@ def legend_for_published_layer(
         resolved = resolve_layer_style(
             style, layer_uri, override=override, shared=shared,
             raster_bytes=raster_bytes, band_stats=band_stats)
-        if resolved is not None:
-            preset = resolved.preset
-            return LegendKey(
-                kind=preset.kind,
-                colormap=preset.ramp if preset.kind != "reference" else None,
-                vmin=resolved.range[0] if resolved.range else None,
-                vmax=resolved.range[1] if resolved.range else None,
-                classes=_declared_legend_classes(preset) or None,
-                units=preset.units or units,
-                label=preset.label,
-                qml=resolved.qml(),
-            )
-        # Already painted (a raster by construction - only the raster arm ever
-        # declines to resolve): only a paletted one has a meaningful key.
-        label = (style or {}).get("label")
-        if raster_bytes is None:
-            raster_bytes = _read_raster_bytes(layer_uri)
-        if raster_bytes is None:
+        if resolved is None:
             return None
-        try:
-            from rasterio.io import MemoryFile
-
-            with MemoryFile(raster_bytes) as mem, mem.open() as src:
-                table = _read_band1_colormap(src)
-        except Exception as exc:  # noqa: BLE001 - palette probe is best-effort
-            logger.debug("legend palette probe skipped (%s: %s)",
-                         type(exc).__name__, exc)
-            return None
-        if not table:
-            return None
-        return _categorical_legend_from_colormap(table, label=label)
+        preset = resolved.preset
+        return LegendKey(
+            kind=preset.kind,
+            colormap=preset.ramp if preset.kind != "reference" else None,
+            vmin=resolved.range[0] if resolved.range else None,
+            vmax=resolved.range[1] if resolved.range else None,
+            units=preset.units or units,
+            label=preset.label,
+            qml=resolved.qml(),
+        )
     except Exception as exc:  # noqa: BLE001 - never block a publish on the legend
         logger.debug("legend_for_published_layer failed for %s (%s: %s)",
                      layer_uri, type(exc).__name__, exc)
         return None
-
-
-def _declared_legend_classes(preset: "presets.Preset") -> list:
-    """The preset's declared class breaks as legend swatches."""
-    from trid3nt_contracts.execution import LegendClass
-
-    return [LegendClass(value_min=lo, value_max=hi, color=color, label=label)
-            for lo, hi, color, label in preset.classes]
 
 
 def _stash_legend_for_uri(layer_uri: str, legend: "LegendKey | None") -> None:

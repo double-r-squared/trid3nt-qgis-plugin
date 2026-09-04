@@ -106,7 +106,7 @@ The four kinds, named identically where they are validated and where they are dr
 
 ### `ResolvedStyle`
 
-One preset resolved against one layer: the concrete range, what the legend says about it, and the style document that paints it. The colourbar and the raster come from THIS resolution, both of them, so there is no second range to drift. ``qml`` is the resolved preset in QGIS's own format and it is what the map loads; it is absent for a layer whose file already carries its colours, because nothing may override those. ``colormap`` is optional precisely because the paint travels IN the document - the canvas needs no ramp table of its own to draw what it was handed.
+One preset resolved against one layer: the concrete range, what the legend says about it, and the style document that paints it. The colourbar and the raster come from THIS resolution, both of them, so there is no second range to drift. ``qml`` is the resolved preset in QGIS's own format and it is what the map loads - swatches, class breaks and the classified field included; it is absent for a layer whose file already carries its colours, because nothing may override those. ``colormap`` is optional precisely because the paint travels IN the document - the canvas needs no ramp table of its own to draw what it was handed. What remains beside the document is what a reader OTHER than the map asks: the scale a packet holds a quantity to, and the words a restyle starts from.
 
 | item | type | required |
 | --- | --- | --- |
@@ -117,8 +117,6 @@ One preset resolved against one layer: the concrete range, what the legend says 
 | `qml` | String | required |
 | `colormap` | String | optional |
 | `units` | String | optional |
-| `classes` | Map | optional |
-| `value_field` | String | optional |
 
 ### `RestyleAsk`
 

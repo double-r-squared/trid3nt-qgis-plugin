@@ -191,54 +191,20 @@ class LayerEvent:
     raw: dict = field(default_factory=dict)
 
 
-#: The numeric style fields, per family, that ride from a wire message into a
-#: NATIVE QGIS colour-ramp / classification / opacity call. The boundary sweep
-#: below strips a non-finite (NaN/inf) value from every one of them, so that
-#: even if a downstream render call site forgets its own clamp, no styling
-#: family can ferry a NaN into native Qt code (the arm64 double-to-int32
-#: saturation that smashes the stack). This is the single choke point the
-#: render-side clamps sit behind.
-_LEGEND_SCALAR_FIELDS = ("vmin", "vmax")
-_LEGEND_CLASS_SCALAR_FIELDS = ("value", "value_min", "value_max")
-
-
-def _sanitize_legend_numerics(legend, dropped: list) -> Optional[dict]:
-    """A shallow copy of ``legend`` with every non-finite numeric style field
-    removed. ``dropped`` collects ``field=value`` descriptions for one honest
-    log line. A downstream renderer treats a missing ``vmin``/``vmax`` exactly
-    like an absent one (``sane_range`` default) -- strictly safer than a NaN."""
-    if not isinstance(legend, dict):
-        return legend if isinstance(legend, dict) else None
-    clean = dict(legend)
-    for name in _LEGEND_SCALAR_FIELDS:
-        if name in clean and clean[name] is not None and not formatting.is_finite_number(clean[name]):
-            dropped.append(f"legend.{name}={clean[name]!r}")
-            clean.pop(name, None)
-    classes = clean.get("classes")
-    if isinstance(classes, list):
-        clean_classes = []
-        for cls in classes:
-            if not isinstance(cls, dict):
-                clean_classes.append(cls)
-                continue
-            cls_clean = dict(cls)
-            for name in _LEGEND_CLASS_SCALAR_FIELDS:
-                if name in cls_clean and cls_clean[name] is not None and not formatting.is_finite_number(cls_clean[name]):
-                    dropped.append(f"legend.class.{name}={cls_clean[name]!r}")
-                    cls_clean.pop(name, None)
-            clean_classes.append(cls_clean)
-        clean["classes"] = clean_classes
-    return clean
+#: Opacity is the one numeric style field that rides from a wire row into a
+#: NATIVE QGIS call (``setOpacity``), so a non-finite value is stripped here at
+#: the boundary rather than trusted downstream (the arm64 double-to-int32
+#: saturation that smashes the stack). The legend's own numbers never reach Qt
+#: from this side: the map loads the ``.qml`` the row carries, and the server
+#: resolved the range that document states.
 
 
 def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
     """Parse ``session-state.loaded_layers`` rows into ``LayerEvent``s.
 
     Defensive on two axes: malformed rows are skipped (a bad layer row must not
-    take down the chat stream), AND every numeric style field is swept for
-    non-finite (NaN/inf) values here at the WS boundary -- opacity and the
-    legend's ``vmin``/``vmax``/class anchors -- so no NaN reaches a native QGIS
-    styling call no matter which downstream render site handles the layer. A
+    take down the chat stream), AND a non-finite (NaN/inf) opacity is dropped
+    here at the WS boundary so no NaN reaches a native QGIS styling call. A
     dropped value is logged once per row, never silently swallowed.
     """
     events: list[LayerEvent] = []
@@ -260,7 +226,7 @@ def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
         opacity = raw_opacity if formatting.is_finite_number(raw_opacity) else None
         if raw_opacity is not None and opacity is None:
             dropped.append(f"opacity={raw_opacity!r}")
-        legend = _sanitize_legend_numerics(row.get("legend"), dropped)
+        legend = row.get("legend") if isinstance(row.get("legend"), dict) else None
         if dropped:
             _LOG.warning(
                 "layer %s: dropped non-finite style value(s) at WS boundary: %s",

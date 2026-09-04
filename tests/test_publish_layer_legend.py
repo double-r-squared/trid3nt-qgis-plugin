@@ -30,7 +30,6 @@ from rasterio.io import MemoryFile
 
 from trid3nt_server.emission import publish as pl
 from trid3nt_server.emission.publish import (
-    _categorical_legend_from_colormap,
     legend_for_published_layer,
     pop_legend_for_uri,
     publish_layer,
@@ -169,40 +168,19 @@ def test_continuous_legend_uses_real_percentile_range(
 
 
 # --------------------------------------------------------------------------- #
-# legend_for_published_layer -- categorical (embedded GDAL color table)
+# legend_for_published_layer -- a file that paints itself
 # --------------------------------------------------------------------------- #
 
 
-def test_categorical_legend_from_color_table() -> None:
-    """A paletted COG (empty style_params) yields a categorical legend, one swatch
-    per OPAQUE class -- transparent nodata slots dropped."""
-    legend = legend_for_published_layer(
+def test_paletted_cog_has_no_key() -> None:
+    """A COG carrying its own band-1 colour table paints itself: QGIS's own
+    renderer IS the render, so there is no key to state and nothing may
+    override the colours the file already has."""
+    assert legend_for_published_layer(
         {"kind": "classed", "label": "Land Cover"},
         "s3://b/nlcd.tif",
         raster_bytes=_paletted_geotiff_bytes(),
-    )
-    assert legend is not None
-    assert legend.kind == "classed"
-    assert legend.classes is not None
-    values = {c.value for c in legend.classes}
-    assert values == {11, 21, 41, 81, 90}  # the 5 land-cover classes
-    assert 0 not in values and 255 not in values  # transparent slots dropped
-    for c in legend.classes:
-        assert c.color.startswith("#") and len(c.color) == 7
-        assert c.label == str(c.value)
-
-
-def test_categorical_legend_helper_drops_transparent_and_orders() -> None:
-    cmap = {41: (56, 129, 78, 255), 11: (72, 109, 162, 255), 0: (0, 0, 0, 0)}
-    legend = _categorical_legend_from_colormap(cmap, label="Land cover")
-    assert legend is not None and legend.kind == "classed"
-    # ordered by class index, transparent 0 dropped.
-    assert [c.value for c in legend.classes] == [11, 41]
-    assert legend.label == "Land cover"
-
-
-def test_categorical_legend_none_when_all_transparent() -> None:
-    assert _categorical_legend_from_colormap({0: (0, 0, 0, 0), 255: (1, 1, 1, 0)}) is None
+    ) is None
 
 
 # --------------------------------------------------------------------------- #
@@ -278,12 +256,11 @@ def test_publish_continuous_raster_stashes_legend_by_s3_uri(
     assert legend.vmax > legend.vmin  # real, non-degenerate range
 
 
-def test_publish_paletted_raster_stashes_categorical_legend(
+def test_publish_paletted_raster_stashes_no_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A paletted (NLCD) raster publishes with empty style_params (palette wins)
-    and stashes a categorical legend built from the embedded GDAL table, keyed
-    by the returned s3 uri."""
+    and stashes NO key for it - the embedded GDAL table is the render."""
     _s3_titiler(monkeypatch)
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: _paletted_geotiff_bytes())
     monkeypatch.setattr(MOD, "_ensure_raster_has_overviews", lambda uri: uri)
@@ -293,10 +270,7 @@ def test_publish_paletted_raster_stashes_categorical_legend(
         layer_id="layer-nlcd-1",
     )
     assert out == "s3://bucket/runs/somerun/nlcd.tif"
-    legend = pop_legend_for_uri(out)
-    assert legend is not None
-    assert legend.kind == "classed"
-    assert {c.value for c in legend.classes} == {11, 21, 41, 81, 90}
+    assert pop_legend_for_uri(out) is None
 
 
 # --------------------------------------------------------------------------- #

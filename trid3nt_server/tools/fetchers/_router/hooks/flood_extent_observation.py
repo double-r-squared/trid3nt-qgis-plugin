@@ -21,7 +21,7 @@ import json
 import math
 from typing import Any
 
-from trid3nt_contracts.execution import LegendClass, LegendKey
+from trid3nt_contracts.execution import LegendKey
 from trid3nt_contracts.source_spec import SourceSpec
 
 from .. import hooks as _hooks
@@ -184,14 +184,7 @@ def envelope(spec: SourceSpec, params: dict[str, Any], layer: Any, data: bytes |
     return {
         "name": f"Observed flood extent (MODIS {obs_date.isoformat()})",
         "legend": LegendKey(
-            kind="classed",
-            classes=[
-                LegendClass(value=1, color="#92c5de", label="Surface water (reference)"),
-                LegendClass(value=2, color="#f4a582", label="Recurring flood"),
-                LegendClass(value=3, color="#ca0020", label="Flood water"),
-            ],
-            label="Observed flood extent (MODIS MCDWD)",
-        ),
+            kind="classed", label="Observed flood extent (MODIS MCDWD)"),
         "product": _PRODUCT,
         "observation_date": obs_date.isoformat(),
         "class_breakdown": summary["class_breakdown"],

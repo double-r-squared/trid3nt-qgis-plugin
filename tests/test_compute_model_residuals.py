@@ -185,7 +185,6 @@ def test_residuals_matches_hand_computed(tmp_path) -> None:
     assert result.legend is not None
     assert result.legend.kind == "continuous"
     assert result.legend.colormap == "rdbu"
-    assert result.legend.value_field == "residual"
     assert result.legend.vmin == pytest.approx(-2.0, abs=1e-3)
     assert result.legend.vmax == pytest.approx(2.0, abs=1e-3)
 

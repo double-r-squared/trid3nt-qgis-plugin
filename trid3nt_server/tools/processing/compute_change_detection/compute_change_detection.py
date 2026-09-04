@@ -62,7 +62,7 @@ from typing import Any
 
 import numpy as np
 
-from trid3nt_contracts.execution import LayerURI, LegendClass, LegendKey
+from trid3nt_contracts.execution import LayerURI, LegendKey
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
@@ -77,7 +77,6 @@ __all__ = [
     "ChangeDetectionNoImageryError",
     "ChangeDetectionNoChangeError",
     "ChangeDetectionUpstreamError",
-    "CHANGE_CLASSES",
 ]
 
 logger = logging.getLogger("trid3nt_server.tools.processing.compute_change_detection.compute_change_detection")
@@ -191,14 +190,6 @@ _DEFAULT_MIN_AREA_M2 = 1000.0
 #: CPU-bound AOI clamp (degrees per side): two scenes are read + differenced
 #: + vectorized in-process on the agent box.
 _MAX_AOI_DEG = 0.2
-
-#: Gain/loss render classes: (value, "#rrggbb", label). The categorical
-#: ``LegendKey`` (value_field="change") is built from this SAME table so the
-#: key always matches the paint (the data-driven vector legend seam).
-CHANGE_CLASSES: tuple[tuple[str, str, str], ...] = (
-    ("gain", "#1a9850", "Gain (index increase)"),
-    ("loss", "#d73027", "Loss (index decrease)"),
-)
 
 _STYLE = {"kind": "continuous"}
 
@@ -574,17 +565,10 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
 
 
 def _build_legend(index: str) -> LegendKey:
-    """Categorical gain/loss legend built from the SAME class table the paint
-    uses (value_field drives the client's data-driven vector fill)."""
-    return LegendKey(
-        kind="classed",
-        classes=[
-            LegendClass(value=value, color=color, label=label)
-            for value, color, label in CHANGE_CLASSES
-        ],
-        value_field="change",
-        label=f"{index.upper()} change",
-    )
+    """What this layer is read as. A gain/loss polygon set is classified by a
+    STRING field, which no preset shape writes a .qml for, so the key states
+    the quantity and QGIS's own default draws it."""
+    return LegendKey(kind="classed", label=f"{index.upper()} change")
 
 
 # ---------------------------------------------------------------------------
