@@ -988,8 +988,8 @@ def publish_layer(
     style: dict[str, Any] | None = None,
     name: str | None = None,
     #: A declared SPECIALIZATION of the contract's scale for this one layer -
-    #: the `.style()` modifier, a param knob, or `restyle_layer`. Absent means
-    #: the contract default, which is what nearly every publish wants.
+    #: a param knob, or `restyle_layer`. Absent means the contract default,
+    #: which is what nearly every publish wants.
     scale: "ScaleSpec | None" = None,
     #: One range shared across a COMPARED set, so before/after and
     #: coarse-versus-refined are painted against each other rather than each

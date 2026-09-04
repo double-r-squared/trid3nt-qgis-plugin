@@ -111,8 +111,8 @@ a legend. It reads `legend` now.
 
 | slice | result |
 |---|---|
-| `tests/test_[a-e]*` | 1714 passed, 5 skipped |
-| `tests/test_[f-o]*` | 4218 passed, 1 xfailed |
+| `tests/test_[a-e]*` | 1713 passed, 5 skipped |
+| `tests/test_[f-o]*` | 4220 passed, 1 xfailed |
 | `tests/test_[p-r]*` | 1817 passed, 1 skipped |
 | `tests/test_[s-z]*` | 1526 passed, 6 skipped |
 | `contracts/tests` | 521 passed |
@@ -138,7 +138,8 @@ recovery pin in `test_compute_layer_bounds.py`.
    shown, `rewrite_result_for_llm`, the fuzzy mangle-match and the placeholder
    resolution. That is id RESOLUTION rather than scheme translation, and cutting
    it would revive the URI-hallucination class the module exists to prevent, so
-   it is surfaced rather than decided alone.
+   it is surfaced rather than decided alone. Registered in `docs/REANALYZE_LEDGER.md`
+   with the three triggers that would retire it.
 
 2. **Session-scoped staging survives, and the spec asks for both.** The dies-row
    names "publish lifecycle / presign / session-TTL (~1,800)", but the mesh row
