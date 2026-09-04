@@ -3563,3 +3563,42 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   surviving one-line Python style decisions (postprocess wse/strat
   ramps) migrate into the declared product styling; the dead
   inferno declaration corrects.
+
+- MODULE SURFACE RULED (NATE 2026-09-04, spec docs/specs/module-surface.html
+  for his read; the wave runs only after): (1) A WORKFLOW IS A WRAPPER
+  AROUND A TELEMAC MODULE exposing the module's FULL keyword surface;
+  templates stay PYTHON (auditability was the goal, never typo checking).
+  (2) KEYWORD NAMES ARE RAW (the dico's own), each carrying the dico's
+  description, allowed values and engine default, surfaced to the LLM
+  and the human like PARAMS desc; the catalog is dico-DERIVED (extracted
+  in-image, committed JSON, image-drift audit in the suite), never hand-
+  transcribed. (3) THE WRAPPER HAS NO OPINION - it is the analog of the
+  engine's defaults; the engine default is SURFACED on every slot (never
+  a black box); variance and opinion live in TEMPLATES only. A wrapper
+  holds the CATALOG, COMPOSITES (one value standing for several slots:
+  a release -> the SOURCES keywords + series file; wind, decay, gradation,
+  dredging, oil, continuation) and OUTPUTS (the module's outputs and how
+  each is read). Vocabulary ruled: "composites" and "outputs" - not
+  "sugar", not "reads". (4) EVERYTHING IS OVERRIDABLE at invocation (two
+  dye releases = a longer list); a validated raw keywords floor on every
+  wire; underscored identifiers in a class body (the image's own
+  spaces-to-underscores map). (5) THE PLAN COLLAPSES: the system picks a
+  module; its inputs are filled by a template and edited, or by hand;
+  the LLM helps fill (points, mesh); producers run during fill so the
+  canvas shows them; EXECUTION IS HELD until the user runs; then results
+  or step-through. Tool surface = fill (repeatable) + run + a keyword
+  lookup tool. plan(ops), FormGate/DrawGate as steps, ops.* realizations,
+  _PROCESSES, Physics/Forcing, the author's family writers, the three
+  sheet namespaces, physics_registry and the worker-side artemis/t3d
+  deck builders all die. (6) SHARED TEMPLATE BODIES: inheritance in
+  templates/shared/, named for what they are (river, catchment - never
+  reach), created only when a good portion of a template is shared, two
+  extenders minimum (suite-checked), every inherited slot overridable,
+  per-slot PROVENANCE on the sheet so inherited context never hides
+  (the same keyword can mean different things in different settings).
+  (7) LAYOUT: telemac/{catalog,modules,templates/shared,authoring,
+  solving,products,helpers}; strays homed; telemac stays where it is.
+  (8) The author becomes a SERIALIZER over telapy's TelemacCas (two
+  measured caveats handled inside it). Stage 0 proofs first. DESIGN
+  STOPS for NATE before launch: form-card default view; TOMAWAC now or
+  stated absent; which rerun pieces of the interpreter survive.

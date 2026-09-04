@@ -1,0 +1,236 @@
+<title>The Module Surface</title>
+<style>
+  :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4;
+          --kw: #0000cc; --str: #a31515; --com: #008000; --num: #098658; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  }
+  :root[data-theme="dark"] { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  body { background: var(--bg); color: var(--fg); font-family: serif; line-height: 1.4; margin: 0 auto; max-width: 60em; padding: 1.5em 1em 4em; }
+  h1 { font-size: 1.6em; border-bottom: 1px solid var(--line); padding-bottom: .2em; }
+  h2 { font-size: 1.25em; border-bottom: 1px solid var(--line); padding-bottom: .15em; margin-top: 1.8em; }
+  code, pre { font-family: monospace; font-size: .95em; }
+  code { background: var(--code-bg); padding: 0 .25em; }
+  pre:not(.mermaid) { background: var(--code-bg); border: 1px solid var(--line); border-left: 4px solid var(--line); padding: .6em .8em; overflow-x: auto; }
+  .k { color: var(--kw); font-weight: bold; } .s { color: var(--str); } .c { color: var(--com); font-style: italic; } .n { color: var(--num); }
+  table { border-collapse: collapse; margin: .8em 0; }
+  th, td { border: 1px solid var(--line); padding: .3em .6em; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .scroll { overflow-x: auto; }
+  .rev { font-size: .85em; }
+  p { max-width: 72ch; }
+</style>
+
+<h1>The Module Surface</h1>
+<p class="rev">rev 1 &middot; 2026-09-04 &middot; the module-surface wave's spec, per the rulings of docs/IDEAS.md "MODULE SURFACE RULED" - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the mesh recipe (docs/specs/mesh-recipe.html), the emission fold, the worker's engine-room contract, the data seam.</p>
+
+<h2>1. The principle</h2>
+<p>A workflow is a wrapper around a TELEMAC module, exposing the module's FULL keyword surface. The engine already publishes that surface: every module's dico names each keyword, its type, its allowed values, its default and its help text. We stop transcribing it by hand into f-strings and comments. The wrapper is the engine's catalog and NOTHING ELSE that opines; variance lives in templates, which stay Python because they are read by people. Every knob is reachable at invocation. Simple system, complex work.</p>
+
+<h2>2. The sheet: a module's keywords are slots</h2>
+<p>Every keyword in a module is a SLOT. The dico's SUBMIT field marks FILE slots (GEOMETRY FILE, BOUNDARY CONDITIONS FILE, SOURCES FILE, FORTRAN FILE). A slot's value comes from exactly one of the sources below, and the sheet records which - PROVENANCE is shown per slot, so nothing inherited or derived is hidden.</p>
+<table>
+<tr><th>source</th><th>meaning</th><th>shown as</th></tr>
+<tr><td>engine default</td><td>unset; the dico's DEFAUT value stands</td><td>greyed, with the value</td></tr>
+<tr><td>shared body</td><td>a template body this template extends asserts it</td><td><code>river.py</code></td></tr>
+<tr><td>template</td><td>this template asserts it (a literal or a param)</td><td><code>river_dye</code></td></tr>
+<tr><td>fill</td><td>set at invocation: a param value, a canvas click, or a raw keyword</td><td><code>edited</code></td></tr>
+<tr><td>producer</td><td>a file slot filled by the mesh recipe, a data row, a helper, or a composite</td><td><code>mesh recipe</code>, <code>releases</code></td></tr>
+<tr><td>derived</td><td>measured by the assembler off the accepted artifact (boundary order, normal-depth stage, Z(Q))</td><td><code>derived</code></td></tr>
+</table>
+<p>Resolution order, lowest to highest: engine default, shared body, template, fill. At most two opinion layers exist and both are templates. A slot not in the module's catalog refuses by name at import time (template) or at fill time (invocation); a value outside the dico's choices refuses naming the choices.</p>
+<div class="scroll">
+<pre class="mermaid">
+classDiagram
+    class Module {
+      name : "telemac2d"
+      catalog : Slot[*]
+      composites : Composite[*]
+      outputs : Output[*]
+    }
+    class Slot {
+      keyword : raw dico name
+      desc : dico help, de-LaTeXed
+      type : INTEGER|REAL|LOGICAL|STRING
+      choices : labeled, optional
+      engine_default
+      is_file : from SUBMIT
+      level : NIVEAU
+      rubrique : 3 levels
+    }
+    class Composite {
+      name : releases | wind | continue_from
+      expand(value) : slots + files
+    }
+    class Output {
+      name : fields | mass_balance | drogues
+      read(rundir)
+    }
+    class Template {
+      STEERING : slot assertions
+      PARAMS, DATA, MESH
+      extends : Template | Module
+    }
+    class Sheet {
+      slots : keyword to (value, provenance)
+      open : mandatory slots still empty
+    }
+    Module "1" --> "*" Slot : catalog/&lt;module&gt;.json
+    Module --> Composite : one value fills several slots
+    Module --> Output : how each output is read
+    Template --> Module : extends (no opinion below)
+    Template --> Template : extends (shared body)
+    Sheet --> Template : filled from
+    Sheet --> Module : or bare, engine defaults
+</pre>
+</div>
+
+<h2>3. The wrapper: catalog, composites, outputs - no opinion</h2>
+<p>One wrapper per module under <code>telemac/modules/</code>: telemac2d, telemac3d, artemis, waqtel, gaia (tomawac: see &sect;13). The wrapper holds three things and asserts no value of its own.</p>
+<pre><span class="c"># modules/telemac2d.py</span>
+T2D = Module(<span class="s">"telemac2d"</span>)                       <span class="c"># catalog/telemac2d.json -> one Slot per keyword</span>
+T2D.composites(releases=Releases, wind=Wind,    <span class="c"># one value stands for several slots (+ the file they name)</span>
+               continue_from=Continuation)
+T2D.outputs(fields=read_selafin,                <span class="c"># the module's outputs and how each is read</span>
+            mass_balance=read_listing_balance)</pre>
+<table>
+<tr><th>part</th><th>is</th><th>is not</th></tr>
+<tr><td>catalog</td><td>the dico, extracted once in-image into <code>telemac/catalog/&lt;module&gt;.json</code> (committed; a suite test re-extracts from the image when present and fails on drift)</td><td>edited by hand; opined on</td></tr>
+<tr><td>composites</td><td>expanders for repetitive, failure-prone keyword groups: a Release becomes ABSCISSAE/ORDINATES/DISCHARGE/VALUES OF THE TRACERS AT THE SOURCES plus the sources series; wind becomes the five wind keywords with the from-direction transform; continuation becomes PREVIOUS COMPUTATION FILE + FORMAT + the staged input; decay law, gradation (four parallel CLASSES lists), dredging (NESTOR keywords + three files), oil (preset + patched Fortran)</td><td>a place for defaults; a template's private code</td></tr>
+<tr><td>outputs</td><td>bindings from the module to the existing readers in <code>products/</code></td><td>new readers</td></tr>
+</table>
+<p>Coupled modules (WAQTEL, GAIA) are wrappers too; a template names a coupling body (<code>WAQTEL.decay(...)</code>, <code>GAIA.erodible(...)</code>) whose slots serialize into the coupled steering file and whose COUPLING WITH / steering-file keywords land on the carrier's sheet.</p>
+
+<h2>4. Templates and shared bodies</h2>
+<p>A template package stays what it is: the recipe file, <code>declarations.py</code>, <code>corpus.yaml</code>. Its recipe file now carries a STEERING body of raw keywords, spelled as identifiers by the mechanical spaces-to-underscores map the image itself ships (eficas <code>&lt;module&gt;_dicoCasEnToCata.py</code>). Every hardcoded author literal becomes a visible assertion here, or an engine default by omission.</p>
+<pre><span class="c"># templates/shared/river.py - a shared body, extended by river_dye and do_sag</span>
+<span class="k">class</span> RIVER(T2D):
+    TIDAL_FLATS = <span class="k">True</span>
+    OPTION_FOR_THE_TREATMENT_OF_TIDAL_FLATS = <span class="n">1</span>
+    TREATMENT_OF_NEGATIVE_DEPTHS = <span class="n">2</span>
+    SOLVER_ACCURACY = <span class="n">1e-6</span>
+    INITIAL_CONDITIONS = <span class="s">"CONSTANT DEPTH"</span>
+    GEOMETRY_FILE = MESH                                  <span class="c"># a file slot, filled by the recipe</span>
+    BOUNDARY_CONDITIONS_FILE = MESH.boundaries
+    PRESCRIBED_FLOWRATES = derived.inflow(P.discharge_m3s)
+    PRESCRIBED_ELEVATIONS = derived.normal_depth_stage()
+    INITIAL_DEPTH = derived.normal_depth()
+
+<span class="c"># templates/river_dye/river_dye.py</span>
+<span class="k">class</span> STEERING(RIVER):                                  <span class="c"># every inherited slot overridable here</span>
+    DURATION = P.sim_duration_s
+    GRAPHIC_PRINTOUT_PERIOD = derived.steps(P.output_interval_min)
+    LAW_OF_BOTTOM_FRICTION = P.friction_law
+    FRICTION_COEFFICIENT = P.friction_coefficient
+    NUMBER_OF_TRACERS = <span class="n">1</span>
+    NAMES_OF_TRACERS = [<span class="s">"DYE MG/L"</span>]
+    releases = [Release(at=P.release_coords, q=P.source_q_m3s,
+                        conc=P.dye_concentration_mgl, window_s=P.spill_duration_s)]
+    wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
+    coupling = [WAQTEL.decay(half_life_h=P.decay_half_life_hours)]</pre>
+<p>THE INHERITANCE LAW: a shared body lives in <code>templates/shared/</code>, is named for what it is (<code>river</code>, <code>catchment</code>, <code>basin</code> - never <code>reach</code>), is created only when a good portion of a template is shared, and must have at least two extenders (one extender folds back into its template; the suite checks). Every inherited slot is overridable by plain attribute override. Per-slot provenance on the sheet keeps inherited context visible: a keyword that means something else in a new setting is seen, not assumed.</p>
+<p>PARAMS are unchanged in shape (<code>Param(desc=..., default=..., bounds=..., units=...)</code>); a slot's <code>desc</code> is the dico's help, so a raw keyword reads to the LLM and the human exactly the way a Param does. <code>Physics(...)</code> and <code>Forcing(...)</code> no longer exist; a forcing series is a file-slot producer.</p>
+
+<h2>5. Fill, then run</h2>
+<p>The plan language dissolves into two acts on one sheet. Execution is HELD until the user runs.</p>
+<div class="scroll">
+<pre class="mermaid">
+flowchart LR
+    PICK["pick: a template, or a bare module"] --> FILL
+    FILL["fill(**slots) - REPEATABLE<br/>sets slots; evaluates producers in Ref order<br/>(fetch, mesh build, release settle);<br/>refuses unknown keywords / bad choices by name"]
+    FILL -- "sheet state:<br/>filled + provenance, derived,<br/>OPEN mandatory slots with meaning" --> REVIEW["the sheet on the canvas<br/>mesh + release point visible<br/>a point slot fills by click"]
+    REVIEW -- "edit = another fill" --> FILL
+    REVIEW -- "the user says run" --> RUN["run(sheet)<br/>serialize -> stage -> box"]
+    RUN --> RESULTS["results, or step through<br/>(reentrant runs as landed)"]
+</pre>
+</div>
+<table>
+<tr><th>call</th><th>contract</th></tr>
+<tr><td><code>fill</code></td><td>Repeatable. Accepts template params, canvas points, and a validated <code>keywords={RAW: value}</code> floor. Producers run during fill so the canvas shows the mesh and the release before any solve. Returns the sheet: every filled slot with provenance; every open mandatory slot with its desc, choices and engine default.</td></tr>
+<tr><td><code>run</code></td><td>Explicit, on a complete sheet only. Serializes, stages the rundir, hands it to the box. Step-through and reentry are the landed rerun machinery, unchanged.</td></tr>
+<tr><td><code>describe_keywords</code></td><td>Read-only: "what governs friction" answered from the catalog - help, labeled choices, engine default, level, file-ness. The way the LLM reaches the 1,311-keyword surface the docstring budget cannot carry.</td></tr>
+</table>
+<p>A bare module run is the same sheet with nothing pre-filled: engine defaults plus the mandatory slots. "Filled by a template and edited, or filled by hand" is one mechanism.</p>
+
+<h2>6. The serializer</h2>
+<p>One function for every module: resolve the sheet, assign each keyword into telapy's <code>TelemacCas</code> (in-image, the existing driver pattern), write, re-parse. The re-parse is where the dico's choices are enforced; <code>cas_validate</code>'s round trip stays as that gate. Two measured caveats are handled inside the serializer, nowhere else: file keywords are assigned through <code>cas.values[...]</code> (telapy's <code>set()</code> demands the file exist), and apostrophes in string values are escaped as <code>''</code> (telapy's <code>write()</code> would corrupt them silently). The engine reads the written file; there is no second serialization path.</p>
+<pre><span class="k">def</span> serialize(module, sheet, rundir):
+    cas = TelemacCas(path, get_dico(module.name), access=<span class="s">"w"</span>)
+    <span class="k">for</span> keyword, value <span class="k">in</span> sheet.resolved():        <span class="c"># engine defaults are NOT written; the dico supplies them</span>
+        cas.values[keyword] = escape(value)
+    cas.write(path)
+    validate_authored_steering(rundir, {path.name: module.name})</pre>
+
+<h2>7. What dissolves</h2>
+<table>
+<tr><th>mass</th><th>LOC today</th><th>fate</th></tr>
+<tr><td><code>authoring/author.py</code> family writers, <code>_Sheet</code>, <code>_DEFAULTS</code>, <code>_RECORD_ONLY</code>, <code>_consume</code></td><td>1,859</td><td>dead; the serializer (~150) + composites in wrappers</td></tr>
+<tr><td><code>authoring/assembler.py</code></td><td>1,284</td><td>keeps manifest + aux staging + release settle + mesh binding (~600); the sheet renames die</td></tr>
+<tr><td><code>authoring/{agitation,stratified,open_water}.py</code> JSON-config hop</td><td>1,363</td><td>dead; artemis/telemac3d become templates over their wrappers</td></tr>
+<tr><td><code>workers/telemac/{artemis,telemac3d}_build.py</code></td><td>2,178</td><td>dead; the worker authors nothing (engine room)</td></tr>
+<tr><td><code>shared/physics_registry.py</code></td><td>753</td><td>dead; the catalog is the keyword table</td></tr>
+<tr><td><code>runtime/</code> plan language: <code>interpreter.py</code>, the plan-step half of <code>plan.py</code>, <code>_setter_envelope</code>, <code>slots</code>, <code>user_input</code>, <code>form</code> as sequence machinery, FormGate/DrawGate as steps</td><td>~2,600 of 6,755</td><td>fill/run + the sheet (~300); the Stage 1 inventory names what the rerun machinery still needs before anything deletes</td></tr>
+<tr><td><code>telemac/workflow.py</code>: <code>ops.*</code> realizations, <code>_PROCESSES</code>, <code>_refuse_uncovered_fields</code>, <code>_MESH_SHEET_PARAMS</code></td><td>382</td><td>the thin fill/run door (~120)</td></tr>
+<tr><td>templates</td><td>~3,040</td><td>STEERING bodies replace PHYSICS/FORCING/plan; literals move out; shared bodies (~2,400)</td></tr>
+</table>
+<p>Expected net of order -7,000 to -8,500 Python across server + worker; the catalog JSON is generated data. Acceptance measures the truth and the ledger records it; a promise not met is stated, not claimed.</p>
+
+<h2>8. Layout</h2>
+<pre>telemac/
+  README.md
+  workflow.py            the fill/run door (the facade, thin)
+  catalog/               telemac2d.json telemac3d.json artemis.json waqtel.json gaia.json  (generated, committed, drift-audited)
+  modules/               telemac2d.py telemac3d.py artemis.py waqtel.py gaia.py            (catalog + composites + outputs)
+  templates/
+    shared/              river.py  catchment.py (only if a good portion is shared)
+    river_dye/  do_sag/  rain_on_grid/  agitation/  stratified_flow/
+  authoring/             assembler.py serializer.py cas_validate.py                        (everything the box receives)
+  solving/               solve.py run_telemac.py
+  products/              postprocess_telemac.py products.py run_reads.py rain_on_grid.py result_reader.py results_mesh_seam.py streeter_phelps.py
+  helpers/               reach.py forcing.py substance.py catchment.py infiltration.py water_quality.py errors.py release_point.py release_layer.py</pre>
+<p>Strays homed as shown; <code>release_point</code>/<code>release_layer</code> move into the releases composite where they expand keywords. Every directory-map README rewrites in the same commit (the stale "seven templates" and "five solver names" lines go). <code>tools/__init__.py</code> imports repoint.</p>
+
+<h2>9. The model extension (the standing reminder)</h2>
+<p><code>docs/model/solve-seam.sysml</code> bindings move with the files (assembler, steeringStatements becomes the serializer, manifestStager, launcherArm, resultReader). A new <code>steering-surface</code> block set models Catalog, Slot, Module, Composite, Output, Sheet, Serializer, with requirements and verify allocations: KeywordNamesAreRaw, EverySlotDescribed, EngineDefaultSurfaced, WrapperHasNoOpinion, EverythingOverridable, CatalogMatchesImage, CompositesLiveInWrappers, SharedBodyHasTwoExtenders, RunIsHeld. This is the runtime plane's first modeled seam; the planes index updates; views regenerate; seeded breaks prove each rule fires.</p>
+
+<h2>10. Stage 0 - the proof matrix (before anything is built)</h2>
+<table>
+<tr><th>check</th><th>pass =</th></tr>
+<tr><td>catalog extraction in-image for six modules, trimmed (help de-LaTeXed, quotes unswapped, ENTIER/REEL normalized, APPARENCE marks unbounded lists, SUBMIT marks files)</td><td>six JSONs; the drift audit compares equal</td></tr>
+<tr><td><code>TelemacCas</code> writes the CURRENT river_dye deck from a dict (both caveats handled)</td><td>the engine runs it to status=ok</td></tr>
+<tr><td>the bare telemac2d sheet renders</td><td>mandatory slots named with meaning; every other slot shows its engine default</td></tr>
+</table>
+<p>A failed cell stops its dependent slice with the measured reason.</p>
+
+<h2>11. Stages</h2>
+<table>
+<tr><th>stage</th><th>lands</th></tr>
+<tr><td>1 catalog + Slot/Module + serializer + fill/run</td><td>dark, beside the current author; <code>register_workflow</code> repointed; docstring names the module, its rubriques, the open mandatory slots</td></tr>
+<tr><td>2 telemac2d + waqtel + gaia</td><td>river_dye, do_sag, rain_on_grid flipped; <code>templates/shared/river.py</code>; composites moved in; their plan(ops) dies; three canaries to status=ok with the per-keyword deck diff stated</td></tr>
+<tr><td>3 artemis + telemac3d server-side</td><td>the two worker build scripts die; image rebuild + provenance + smoke; residue not covered by the mesh recipe measured and ledgered</td></tr>
+<tr><td>4 the LLM surface live</td><td><code>describe_keywords</code> (corpus + model-free retrieval check first); two dye releases fill -&gt; run with full packet; a raw <code>LAW OF BOTTOM FRICTION=4</code> fill shown in the deck; a bare telemac2d fill; a bad choice refused naming the choices</td></tr>
+<tr><td>5 structure + model</td><td>the layout of &sect;8; model moves of &sect;9; READMEs; same commits as the moves</td></tr>
+<tr><td>6 conformance gate + close</td><td>fresh-eyes clause table; five slices at zero; packets on every acceptance run DELIVERED; ledger rows with measured LOC; IDEAS entry; push on clean</td></tr>
+</table>
+
+<h2>12. Acceptance (the wave's bar)</h2>
+<table>
+<tr><th>gate</th><th>test</th></tr>
+<tr><td>deck parity</td><td>the five canaries' authored decks vs today's: every difference is a named literal-to-assertion move; all five solve to status=ok</td></tr>
+<tr><td>the surface</td><td>two releases live; raw keyword fill live; bare-module sheet; unknown keyword and bad choice refused by name; provenance shown on every filled slot</td></tr>
+<tr><td>dissolution</td><td>grep zero: f-string keyword writers outside the serializer; <code>.cas</code> authoring in <code>workers/</code>; <code>plan(ops)</code>, <code>FormGate</code>, <code>DrawGate</code>, <code>_PROCESSES</code>, <code>physics_registry</code></td></tr>
+<tr><td>catalog</td><td>drift audit green against the image; shared bodies have two extenders</td></tr>
+<tr><td>model + suite + packets</td><td>steering-surface checked green; seeded breaks fire; five slices zero; full interrogated packets delivered on every acceptance run</td></tr>
+</table>
+
+<h2>13. Out of spec, in place</h2>
+<table>
+<tr><th>item</th><th>status</th></tr>
+<tr><td>TOMAWAC wrapper</td><td>NATE's call before launch: built only if it falls out of the Stage 3 pattern for free, else stated absent (no author exists today)</td></tr>
+<tr><td>form-card default view</td><td>NATE's call: recommend level-0 slots set by the template shown, everything else under advanced with engine defaults greyed</td></tr>
+<tr><td>which rerun pieces of <code>interpreter.py</code> survive</td><td>the Stage 1 inventory reports before any deletion in <code>runtime/</code></td></tr>
+<tr><td>dico-derived wrappers for other engines</td><td>later waves on this skeleton: MODFLOW 6 (flopy dfn) near 1:1; SWMM/SFINCS partly curated; HEC-RAS curated</td></tr>
+<tr><td>khione, mascaret, postel3d, stbtel dicos</td><td>present in the image, not exposed</td></tr>
+</table>
