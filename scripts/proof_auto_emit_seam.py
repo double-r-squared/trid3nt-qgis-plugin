@@ -140,9 +140,9 @@ async def main() -> int:
     )
     published = loaded[-1]
     assert str(published.get("uri", "")).startswith("s3://"), published
-    assert published.get("has_legend"), (
-        "the layer reached the map with neither a legend nor a style preset - "
-        "the publish enrichment did not land"
+    assert published.get("legend"), (
+        "the layer reached the map with no legend - the publish enrichment did "
+        "not land"
     )
     print("\nOK: the raster is on the map, published by the seam, "
           "with no publish_layer tool in the registry to have called.")

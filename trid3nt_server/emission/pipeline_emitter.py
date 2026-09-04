@@ -2214,7 +2214,7 @@ class PipelineEmitter:
     async def _emit_one_layer(self, layer: LayerURI) -> None:
         """Publish, guard, then track one client-bound layer. Never raises."""
         try:
-            layer = await publish_for_emission(layer, case_id=current_turn_case())
+            layer = await publish_for_emission(layer)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 - enrichment is never fatal

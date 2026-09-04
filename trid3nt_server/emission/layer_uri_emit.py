@@ -48,9 +48,7 @@ __all__ = [
 ]
 
 
-async def publish_for_emission(
-    layer: LayerURI, *, case_id: str | None = None
-) -> LayerURI:
+async def publish_for_emission(layer: LayerURI) -> LayerURI:
     """Publish a raster LayerURI on its way to the map. THE auto-emit step.
 
     Emission is automatic: a tool that produced a renderable raster has
@@ -89,20 +87,19 @@ async def publish_for_emission(
             layer_id=layer.layer_id,
             style=layer.style,
             name=layer.name,
-            case_id=case_id,
         )
     except (asyncio.CancelledError, GeneratorExit):
         raise
     except PublishLayerError as exc:
         logger.warning(
             "publish_for_emission: publish failed for layer_id=%s error_code=%s: "
-            "%s. The raw s3:// COG still reaches the map, unstyled.",
+            "%s. The s3:// COG still reaches the map, unstyled.",
             layer.layer_id, getattr(exc, "error_code", "?"), exc,
         )
         return layer
     except Exception:  # noqa: BLE001 - enrichment is never fatal to the layer
         logger.exception(
-            "publish_for_emission: publish RAISED for layer_id=%s. The raw "
+            "publish_for_emission: publish RAISED for layer_id=%s. The "
             "s3:// COG still reaches the map, unstyled.",
             layer.layer_id,
         )
