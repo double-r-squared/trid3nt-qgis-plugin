@@ -7,7 +7,7 @@ Two layers of offline coverage:
     ``TestHandshake`` there for the flat/nested/absent/malformed shapes).
   * TestRemoteEndpointsDock: the Qt DOCK wiring (``_on_connected`` ->
     ``_effective_http_base`` / ``_effective_data_base`` /
-    ``LayerMaterializer.data_base_override``, REMOTE-mode isolation, and the
+    the store's GDAL configuration, REMOTE-mode isolation, and the
     settings-layer token passthrough) runs ``qt_remote_endpoints_harness.py``
     in a SUBPROCESS under the system interpreter that has ``qgis.PyQt``,
     skipping honestly when absent -- the same convention as ``test_dock_ui``

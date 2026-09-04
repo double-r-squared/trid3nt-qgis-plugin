@@ -715,8 +715,13 @@ class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
                     sys.modules[k] = v
         return layers, core.QgsProject, _FakeRasterLayer
 
-    def _event(self, tc_mod, layer_id, name, uri="https://tiles/{z}/{x}/{y}.png"):
-        return tc_mod.LayerEvent(layer_id=layer_id, name=name, layer_type="raster", uri=uri)
+    def _event(self, tc_mod, layer_id, name, uri=None):
+        return tc_mod.LayerEvent(
+            layer_id=layer_id,
+            name=name,
+            layer_type="raster",
+            uri=uri or f"s3://trid3nt-runs/case/{layer_id}.tif",
+        )
 
     # -- ITEM A: case-switch clears stale TRID3NT groups ------------------- #
 

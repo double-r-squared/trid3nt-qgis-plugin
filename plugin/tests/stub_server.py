@@ -122,25 +122,6 @@ RASTER_LAYER_ROW: dict[str, Any] = {
     },
 }
 
-# A LEGACY raster row (old persisted cases, pre-swap): the ``uri`` is still a
-# TiTiler XYZ tile TEMPLATE whose percent-encoded ``url=`` param carries the
-# s3 COG and whose query string carries the styling. The plugin MUST keep
-# rendering these forever (unwrap -> same gdal path) -- back-compat coverage.
-LEGACY_RASTER_LAYER_ROW: dict[str, Any] = {
-    "layer_id": "01STUBLEGACYRASTERAAAAAAAA",
-    "name": "Flood depth (legacy)",
-    "layer_type": "raster",
-    "uri": (
-        "http://127.0.0.1:8080/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
-        "?url=s3%3A%2F%2Ftrid3nt-runs%2Fflood%2Fdepth.tif"
-        "&rescale=0,3&colormap_name=ylgnbu"
-    ),
-    "visible": True,
-    "role": "primary",
-    "temporal": False,
-    "opacity": 0.8,
-}
-
 # A vector row with the additive inline_geojson merge (shape).
 VECTOR_LAYER_ROW: dict[str, Any] = {
     "layer_id": "01STUBVECTORAAAAAAAAAAAAAA",
@@ -910,7 +891,6 @@ class StubAgentServer:
                         "chat_history": [],
                         "loaded_layers": [
                             RASTER_LAYER_ROW,
-                            LEGACY_RASTER_LAYER_ROW,
                             VECTOR_LAYER_ROW,
                             S3_VECTOR_LAYER_ROW,
                         ],

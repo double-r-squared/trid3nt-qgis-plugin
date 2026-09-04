@@ -1027,7 +1027,7 @@ print("[F4] tool-card border: neutral running -> green success -> red failure")
 # ---- 11. F7: error notes wrap with the view + consecutive errors fold ------- #
 # Live-feedback 2026-07-22: red error lines (the case-open rehydrate "MinIO
 # fetch failed (http://...) -- skipped" notes) rendered statically sized --
-# the unbroken presigned URL reported an unbreakable label width (measured
+# the unbroken store URL reported an unbreakable label width (measured
 # sizeHint 400px pre-fix) that dragged the dock wider than its minimum. Fix
 # (1): break-anywhere opportunities inside long unbroken tokens, so the line
 # wraps and reflows with the view. Fix (2): consecutive error notes fold into

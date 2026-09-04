@@ -3,46 +3,30 @@
 The differentiator: every layer the agent publishes lands in the QGIS layer
 tree, grouped under "TRID3NT <case>".
 
-  raster  QGIS-NATIVE rendering (the TiTiler -> QGIS swap): the agent
-          publishes the raw ``s3://...tif`` COG uri; the plugin resolves it
-          through the local MinIO http form (``s3_to_http``, the exact
-          mechanism the FlatGeobuf vector path already uses) and loads it as
-          ``QgsRasterLayer("/vsicurl/" + http, name, "gdal")``, then applies
-          its OWN renderer from the event's ``legend`` (continuous ->
-          ``QgsSingleBandPseudoColorRenderer`` with a ``ramps``-table
-          gradient; classed -> ``QgsPalettedRasterRenderer`` from the
-          COG's embedded GDAL color table). LEGACY persisted cases still
-          carry a TiTiler XYZ tile TEMPLATE (contains ``/cog/tiles/`` +
-          ``{z}/{x}/{y}``) in ``uri``: the plugin unwraps the percent-encoded
-          ``url=`` query param back to the s3 COG (the same trick the
-          server's ``export_case_to_qgis._unwrap_tile_template`` uses) and
-          recovers ``rescale``/``colormap_name`` from the query string for
-          styling, so old cases keep rendering with TiTiler gone. A plain
-          non-TiTiler XYZ template (no ``url=`` param) still lands on the
-          old wms/XYZ branch -- an unanticipated shape is never silently
-          dropped.
-  vector  an ``s3://`` uri STREAMS in place through the advertised MinIO/S3
-          http form (``http://<data_base>/<bucket>/<key>`` via GDAL
-          ``/vsicurl/``): FlatGeobuf reads its spatial index ranged, so QGIS
-          fetches only the intersecting features -- NO local copy. The agent's
-          additive ``inline_geojson`` merge is INLINE data (not a remote
-          object), so it stages to the session temp dir as a small ``.geojson``
-          -> ogr layer, labeled as staged.
+ONE STORE, ONE SCHEME: every layer reference is an ``s3://bucket/key`` uri and
+GDAL reads it natively through ``/vsis3/`` (``s3_to_vsis3``). The endpoint and
+credentials are process-wide GDAL configuration applied once
+(``configure_store_access``), so pointing at a remote store is an endpoint
+VALUE, never a second code path -- there is no local-path-versus-remote branch
+anywhere below.
 
-STREAMING IS THE PATH (remote-streaming paradigm): a layer registers
-reading IN PLACE from the advertised data endpoint -- COGs and FlatGeobuf via
-``/vsicurl/`` (ranged: overviews/windows for the COG, spatial-index reads for
-the FGB), so a remote client over the tailnet never downloads the project. The
-MinIO objects are plain anonymous HTTP GETs on the tailnet (the trust
-boundary), exactly what the vector/raster paths already issue -- ``/vsicurl/``
-mirrors that with no credentials. A format that GENUINELY cannot stream (MDAL
-netCDF -- QGIS's MDAL provider rejects a ``/vsicurl/`` or plain-URL source and
-demands a local path, proven live 2026-08-04) is the ONE fallback: it stages to
-a SESSION-scoped temp dir (``trid3nt_session_<tag>`` under the platform temp),
-cleaned up on dock disconnect/close, with a stale-session sweep at plugin start
-for crash leftovers (session TTL per NATE's no-silent-downloads policy). Every
-layer note says STREAMED vs STAGED -- nothing ever lands outside the session
-temp, and a staged layer is always labeled.
+  raster  ``QgsRasterLayer("/vsis3/<bucket>/<key>", name, "gdal")`` plus the
+          plugin's OWN renderer from the event's ``legend`` (continuous ->
+          ``QgsSingleBandPseudoColorRenderer`` with a ``ramps``-table gradient;
+          classed -> ``QgsPalettedRasterRenderer`` from the COG's embedded GDAL
+          color table). Ranged reads: overviews and windows only.
+  vector  ``QgsVectorLayer("/vsis3/<bucket>/<key>", name, "ogr")`` -- FlatGeobuf
+          reads its spatial index ranged, so QGIS fetches only the intersecting
+          features, NO local copy. The agent's additive ``inline_geojson`` merge
+          is INLINE data (not a store object), so it stages to the session temp
+          dir as a small ``.geojson`` -> ogr layer, labeled as staged.
+  mesh    the ONE cache hop: MDAL has no ``/vsi`` layer, so the object is copied
+          out of the store through GDAL's own VSI reader into a SESSION-scoped
+          temp dir (``trid3nt_session_<tag>`` under the platform temp), cleaned
+          up on dock disconnect/close, with a stale-session sweep at plugin
+          start for crash leftovers. Every layer note says STREAMED vs STAGED --
+          nothing ever lands outside the session temp, and a staged layer is
+          always labeled.
 
 Dedup: by ``layer_id`` -- session-state is replayed on every emit (A.7
 replace-not-reconcile), so the same rows arrive many times per turn.
@@ -56,8 +40,7 @@ in ``temporal`` (tested without QGIS); ``stamp_temporal`` here applies it.
 
 Mesh outputs (MDAL, the ONE staged format): a ``layer_type == "mesh"`` event
 (SFINCS ``sfincs_map.nc`` and kin) STAGES to the session temp dir first --
-QGIS's MDAL provider cannot open a ``/vsicurl/`` or plain-URL netCDF (it
-demands a local path; proven live 2026-08-04) -- then loads
+QGIS's MDAL provider demands a local path -- then loads
 ``QgsMeshLayer(local_path, name, "mdal")`` (``_add_mesh``). QGIS's MDAL
 provider reports an EMPTY crs() for a SFINCS quadtree NetCDF (proven live
 2026-07-10), so ``setCrs(QgsCoordinateReferenceSystem(crs_authid))`` is applied
@@ -82,8 +65,6 @@ import os
 import re
 import shutil
 import tempfile
-import urllib.parse
-import urllib.request
 import uuid
 from typing import List, Optional, Tuple
 
@@ -108,7 +89,7 @@ from qgis.PyQt.QtGui import QColor
 
 from . import formatting, ramps, temporal
 from ..plugin_settings import PluginSettings
-from ..net.trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_http
+from ..net.trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_vsis3
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -160,11 +141,10 @@ def _safe_filename(name: str) -> str:
     return _SAFE_NAME.sub("_", name).strip("_") or "layer"
 
 
-# -- session-scoped staging temp dir (remote-streaming TTL)
+# -- session-scoped staging temp dir
 #
-# Streaming is the path; the ONE fallback (a format MDAL cannot open over
-# /vsicurl -- netCDF meshes) stages a local copy. Per NATE's no-silent-
-# downloads / session-TTL policy every staged byte lives under a per-SESSION
+# Streaming is the path; the ONE cache hop (MDAL, which has no /vsi layer)
+# stages a local copy. Every staged byte lives under a per-SESSION
 # subdir (``trid3nt_session_<tag>``) beneath the platform temp, is cleaned up
 # when the dock disconnects/closes, and any crash leftover is swept at plugin
 # start. A dir carries its owner PID so the start sweep can tell a crash
@@ -220,10 +200,46 @@ def sweep_stale_session_dirs() -> int:
 
 def _streamed_note(kind: str, extra: str = "") -> str:
     """The STREAMED label (no local copy) -- the honesty-floor marker every
-    /vsicurl layer carries so a remote-streamed layer is never confused with a
+    /vsis3 layer carries so a remote-streamed layer is never confused with a
     downloaded one."""
     tail = f", {extra}" if extra else ""
-    return f"{kind} streamed via /vsicurl (no local copy{tail})"
+    return f"{kind} streamed via /vsis3 (no local copy{tail})"
+
+
+# -- the store, configured once --------------------------------------------- #
+
+
+def configure_store_access(
+    endpoint: str, access_key: str, secret_key: str, region: str
+) -> Optional[str]:
+    """Point GDAL's ``/vsis3`` at the object store. Called once per session.
+
+    ``endpoint`` is the store's base url (``http://host:9000``); GDAL wants the
+    host:port alone plus an explicit ``AWS_HTTPS`` flag, and MinIO serves
+    path-style buckets, so virtual hosting is off. PAM is disabled process-wide
+    because GDAL writes a ``.aux.xml`` sidecar BESIDE the dataset it opened --
+    against ``/vsis3`` that is a write into the store on every read.
+
+    Returns an honest note on failure (GDAL absent / unusable), else None.
+    """
+    try:
+        from osgeo import gdal
+    except Exception as exc:  # noqa: BLE001 -- no GDAL bindings: honest note
+        return f"store access not configured ({type(exc).__name__}: {exc})"
+    scheme, _, rest = (endpoint or "").strip().rpartition("://")
+    host = rest.strip("/")
+    for key, value in (
+        ("AWS_S3_ENDPOINT", host),
+        ("AWS_HTTPS", "YES" if scheme == "https" else "NO"),
+        ("AWS_VIRTUAL_HOSTING", "FALSE"),
+        ("AWS_ACCESS_KEY_ID", access_key),
+        ("AWS_SECRET_ACCESS_KEY", secret_key),
+        ("AWS_REGION", region),
+        ("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR"),
+        ("GDAL_PAM_ENABLED", "NO"),
+    ):
+        gdal.SetConfigOption(key, value)
+    return None
 
 
 # -- basemap + canvas zoom (the "canvas is just white" fix) ------------------ #
@@ -616,46 +632,7 @@ def _clamp_mesh_scalar_classification(layer) -> Optional[str]:
     )
 
 
-# -- QGIS-native raster rendering (the TiTiler -> QGIS swap) ----------------- #
-
-
-def _unwrap_legacy_template(
-    uri: Optional[str],
-) -> Tuple[Optional[str], Tuple[Optional[float], Optional[float], Optional[str]]]:
-    """A LEGACY TiTiler tile TEMPLATE -> ``(cog_uri, (vmin, vmax, colormap))``.
-
-    Old persisted cases carry TiTiler XYZ templates (``/cog/tiles/`` +
-    ``{z}/{x}/{y}``) whose percent-encoded ``url=`` query param IS the s3 COG
-    (the same trick the server's ``export_case_to_qgis._unwrap_tile_template``
-    uses); ``rescale=lo,hi`` + ``colormap_name=`` in the same query string are
-    the legacy styling to recover for the QGIS-native renderer. Returns
-    ``(None, (None, None, None))`` for anything that is not a TiTiler wrap
-    (raw s3 uris, plain non-TiTiler XYZ templates, junk) -- pure + defensive,
-    never raises.
-    """
-    none3: Tuple[Optional[float], Optional[float], Optional[str]] = (None, None, None)
-    if not uri or ("/cog/tiles/" not in uri and "{z}" not in uri):
-        return None, none3
-    try:
-        query = urllib.parse.parse_qs(urllib.parse.urlparse(uri).query)
-    except ValueError:
-        return None, none3
-    cog = (query.get("url") or [None])[0]
-    if not cog:
-        return None, none3
-    if "%" in cog:  # double-encoded template (parse_qs decodes one level)
-        cog = urllib.parse.unquote(cog)
-    vmin: Optional[float] = None
-    vmax: Optional[float] = None
-    rescale = (query.get("rescale") or [None])[0]
-    if rescale and "," in rescale:
-        lo_s, hi_s = rescale.split(",", 1)
-        try:
-            vmin, vmax = float(lo_s), float(hi_s)
-        except ValueError:
-            vmin = vmax = None
-    cmap = (query.get("colormap_name") or [None])[0] or None
-    return cog, (vmin, vmax, cmap)
+# -- QGIS-native raster rendering ------------------------------------------- #
 
 
 def _color_ramp_items(
@@ -815,23 +792,13 @@ def _categorical_fallback_stops(classes) -> Tuple[Optional[list], Optional[float
     return [((v - vmin) / span, c) for v, c in anchored], vmin, vmax
 
 
-def _apply_raster_renderer(
-    layer,
-    legend: Optional[dict],
-    legacy_style: Tuple[Optional[float], Optional[float], Optional[str]],
-) -> Optional[str]:
+def _apply_raster_renderer(layer, legend: Optional[dict]) -> Optional[str]:
     """Apply the QGIS-native renderer for a COG raster; returns a style note.
 
-    Style source of truth, in order (code DEFENSIVELY -- the agent is
-    simultaneously making colormap/vmin/vmax explicit on the legend):
-
-    1. the event's ``legend`` dict (``LegendKey``: kind/colormap/vmin/vmax/
-       classes) -- what ``publish_layer`` computes today;
-    2. the LEGACY tile-template query string's ``rescale``/``colormap_name``
-       (``legacy_style``) for old persisted cases without a legend;
-    3. nothing -> leave GDAL's default renderer (grayscale single-band or
-       native RGB multiband -- the CORRECT render for terrain/RGBA
-       passthrough layers, which by design carry no legend).
+    The event's ``legend`` dict (``LegendKey``: kind/colormap/vmin/vmax/classes)
+    is the style. Absent it, GDAL's default renderer stands -- grayscale
+    single-band or native RGB multiband, the CORRECT render for terrain/RGBA
+    passthrough layers, which by design carry no legend.
 
     Categorical legends render via ``QgsPalettedRasterRenderer`` from the
     COG's embedded GDAL color table; when the table is absent the legend's
@@ -839,7 +806,6 @@ def _apply_raster_renderer(
     Never raises -- a styling failure is an honest note, never a lost layer.
     """
     legend = legend if isinstance(legend, dict) else None
-    legacy_vmin, legacy_vmax, legacy_cmap = legacy_style
     try:
         kind = (legend or {}).get("kind")
         if kind == "classed":
@@ -863,14 +829,12 @@ def _apply_raster_renderer(
         colormap = (legend or {}).get("colormap")
         vmin = (legend or {}).get("vmin")
         vmax = (legend or {}).get("vmax")
-        if colormap is None:
-            colormap = legacy_cmap
         if not isinstance(vmin, (int, float)) or not isinstance(vmax, (int, float)):
-            vmin, vmax = legacy_vmin, legacy_vmax
+            vmin = vmax = None
         if colormap is None and vmin is None:
             # No styling info anywhere: terrain/RGBA passthrough by design --
             # GDAL's default renderer (grayscale autoscale / native RGB) IS
-            # the correct render, exactly as TiTiler passed these through.
+            # the correct render.
             return None
         # A finiteness-aware guard: a NaN/inf bound DEFEATS a plain
         # ``vmax <= vmin`` test (every NaN comparison is False), so it would
@@ -899,12 +863,6 @@ class LayerMaterializer:
 
     def __init__(self, settings: PluginSettings):
         self._settings = settings
-        #: Remote-daemon (tailnet) endpoint derivation: the dock sets this
-        #: to the resolved (advertised-or-fallback) MinIO/S3 http base right
-        #: after each connect (``dock._on_connected``); ``None`` before the
-        #: first connect, in which case ``_effective_data_base`` falls back
-        #: to ``settings.minio_endpoint`` (current localhost behavior).
-        self.data_base_override: Optional[str] = None
         self._added_ids: set[str] = set()
         self._group_name: Optional[str] = None
         #: Per-session staging dir tag. One materializer = one dock
@@ -936,17 +894,6 @@ class LayerMaterializer:
         self._stamped_counts = {}
         self._grouped_counts = {}
         self.last_added_layers = []
-
-    def _effective_data_base(self) -> str:
-        """The resolved MinIO/S3 http base for ``s3_to_http`` -- prefers the
-        dock-set ``data_base_override`` (server-advertised, or the dock's own
-        WS-host-derived-adjacent fallback via ``settings``), else falls back
-        to ``settings.minio_endpoint`` (current localhost behavior) directly,
-        e.g. before the first connect or in a test that builds this class
-        standalone."""
-        return self.data_base_override or getattr(
-            self._settings, "minio_endpoint", None
-        ) or "http://127.0.0.1:9000"
 
     def _clear_stale_groups(self) -> None:
         """Remove every layer-tree group whose name starts with the TRID3NT
@@ -1085,63 +1032,18 @@ class LayerMaterializer:
         return f"layer '{event.name}': type '{event.layer_type}' not supported yet -- skipped"
 
     def _add_raster(self, event: LayerEvent, frame_membership: dict) -> str:
-        """QGIS-native COG rendering (the TiTiler -> QGIS swap).
-
-        Accepts BOTH uri shapes: (a) the NEW raw ``s3://...tif`` COG uri ->
-        MinIO http form -> ``/vsicurl/`` gdal layer; (b) a LEGACY TiTiler
-        tile TEMPLATE -> unwrap the ``url=`` query param to the same s3 COG
-        (recovering ``rescale``/``colormap_name`` for styling). A plain
-        non-TiTiler XYZ template (no ``url=`` param -- e.g. an external tile
-        service) still lands on the old wms/XYZ branch rather than being
-        silently dropped. The renderer comes from the event's ``legend``
-        (``_apply_raster_renderer``), so the plugin needs no tile server.
-        """
-        cog_uri: Optional[str] = None
-        legacy_style: Tuple[Optional[float], Optional[float], Optional[str]] = (
-            None,
-            None,
-            None,
-        )
-        source_label = _streamed_note("COG raster")
-        if (event.uri or "").startswith("s3://"):
-            cog_uri = event.uri
-        else:
-            cog_uri, legacy_style = _unwrap_legacy_template(event.uri)
-            if cog_uri is None and event.wms_url:
-                cog_uri, legacy_style = _unwrap_legacy_template(event.wms_url)
-            if cog_uri is not None:
-                source_label = _streamed_note(
-                    "COG raster", "legacy tile template unwrapped"
-                )
-
-        if cog_uri is None:
-            # Neither a raw s3 COG nor a TiTiler wrap. A plain XYZ template
-            # keeps the legacy wms branch (never silently drop a shape).
-            template = event.tile_template
-            if template:
-                layer = QgsRasterLayer(qgis_xyz_uri(template), event.name, "wms")
-                if not layer.isValid():
-                    return f"raster '{event.name}': QGIS rejected the XYZ uri -- skipped"
-                return self._finish_raster_add(
-                    layer, event, frame_membership, "XYZ tiles, non-TiTiler template"
-                )
+        """A COG read in place through ``/vsis3``, styled from the event's legend."""
+        path = s3_to_vsis3(event.uri or "")
+        if path is None:
             return (
-                f"raster '{event.name}': no s3 COG uri or tile template on the "
-                "event -- skipped"
+                f"raster '{event.name}': not an s3:// COG uri ({event.uri}) "
+                "-- skipped"
             )
-
-        if not cog_uri.startswith("s3://"):
-            return (
-                f"raster '{event.name}': tile template wraps a non-s3 uri "
-                f"({cog_uri}) -- skipped"
-            )
-        http = s3_to_http(cog_uri, self._effective_data_base())
-        if not http:
-            return f"raster '{event.name}': unparseable s3 uri ({cog_uri}) -- skipped"
-        layer = QgsRasterLayer(f"/vsicurl/{http}", event.name, "gdal")
+        layer = QgsRasterLayer(path, event.name, "gdal")
         if not layer.isValid():
-            return f"raster '{event.name}': COG did not load ({http}) -- skipped"
-        style_note = _apply_raster_renderer(layer, event.legend, legacy_style)
+            return f"raster '{event.name}': COG did not load ({path}) -- skipped"
+        source_label = _streamed_note("COG raster")
+        style_note = _apply_raster_renderer(layer, event.legend)
         if style_note:
             source_label += f"; {style_note}"
         return self._finish_raster_add(layer, event, frame_membership, source_label)
@@ -1184,43 +1086,49 @@ class LayerMaterializer:
                 "inline GeoJSON)",
             )
 
-        if event.uri.startswith("s3://"):
-            http = s3_to_http(event.uri, self._effective_data_base())
-            if not http:
-                return f"vector '{event.name}': unparseable s3 uri -- skipped"
-            layer = QgsVectorLayer(f"/vsicurl/{http}", event.name, "ogr")
-            if not layer.isValid():
-                return f"vector '{event.name}': stream failed ({http}) -- skipped"
-            return self._add_to_group(
-                layer, event, f"vector '{event.name}' added ({_streamed_note('vector')})"
-            )
-
-        return f"vector '{event.name}': no inline GeoJSON and non-s3 uri -- skipped"
+        path = s3_to_vsis3(event.uri or "")
+        if path is None:
+            return f"vector '{event.name}': no inline GeoJSON and non-s3 uri -- skipped"
+        layer = QgsVectorLayer(path, event.name, "ogr")
+        if not layer.isValid():
+            return f"vector '{event.name}': stream failed ({path}) -- skipped"
+        return self._add_to_group(
+            layer, event, f"vector '{event.name}' added ({_streamed_note('vector')})"
+        )
 
     def _stage_s3_to_session(self, s3_uri: str, filename: str) -> Optional[str]:
-        """Download an ``s3://`` object to the SESSION temp dir and return the
-        local path (the ONE fallback for a format that cannot stream). The
-        object is a plain anonymous HTTP GET on the tailnet (the same trust
-        model /vsicurl uses). Returns None on any failure -- the caller turns
-        that into an honest skip note, never a crash. The staged file lives
-        under the session dir and is swept on disconnect/close (session TTL)."""
-        http = s3_to_http(s3_uri, self._effective_data_base())
-        if not http:
+        """Copy a store object into the SESSION temp dir; return the local path.
+
+        The ONE cache hop, for MDAL alone -- read through the SAME ``/vsis3``
+        GDAL uses for everything else, so there is no second credential path.
+        Returns None on any failure; the caller turns that into an honest skip
+        note. The staged file is swept on disconnect/close."""
+        src = s3_to_vsis3(s3_uri)
+        if src is None:
             return None
         dest = os.path.join(self._ensure_temp_dir(), filename)
         try:
-            with urllib.request.urlopen(http, timeout=300.0) as resp:
-                data = resp.read()
-            with open(dest, "wb") as f:
-                f.write(data)
+            from osgeo import gdal
+
+            handle = gdal.VSIFOpenL(src, "rb")
+            if handle is None:
+                return None
+            try:
+                with open(dest, "wb") as f:
+                    while True:
+                        chunk = gdal.VSIFReadL(1, 1 << 20, handle)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+            finally:
+                gdal.VSIFCloseL(handle)
         except Exception:  # noqa: BLE001 -- honest None, caller notes the skip
             return None
         return dest
 
     def _add_mesh(self, event: LayerEvent) -> str:
         """Native MDAL mesh (SFINCS ``sfincs_map.nc``, TELEMAC ``*.slf`` and kin)
-        -- a STAGED format. QGIS's MDAL provider cannot open a ``/vsicurl/`` or
-        plain-URL mesh (it demands a local path; proven live 2026-08-04), so the
+        -- a STAGED format. QGIS's MDAL provider demands a local path, so the
         object stages to the session temp dir first, then loads as
         ``QgsMeshLayer(local_path, name, "mdal")``. The staged filename PRESERVES
         the source object's extension (``.slf`` for a SELAFIN, ``.nc`` for a
@@ -1246,7 +1154,10 @@ class LayerMaterializer:
         layer = QgsMeshLayer(local_path, event.name, "mdal")
         if not layer.isValid():
             return f"mesh '{event.name}': QGIS/MDAL rejected the file -- skipped"
-        note = f"mesh '{event.name}' added (staged to session temp; MDAL netCDF)"
+        note = (
+            f"mesh '{event.name}' added (staged to session temp; MDAL "
+            f"{os.path.splitext(local_path)[1].lstrip('.') or 'mesh'})"
+        )
         crs_authid = (event.raw or {}).get("crs_authid")
         if isinstance(crs_authid, str) and crs_authid:
             crs = QgsCoordinateReferenceSystem(crs_authid)

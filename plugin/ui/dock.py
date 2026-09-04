@@ -47,8 +47,8 @@ Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
     (``session_state.loaded_layers``) and land via the SAME by-URI
     materializer live-published layers use. There is zero user-facing export
     (native QGIS covers any file export the user wants). Layers STREAM in
-    place from the advertised MinIO/S3 endpoint via GDAL ``/vsicurl/`` (ADR
-    0116); the download/export machinery is gone.
+    place from the advertised store endpoint via GDAL ``/vsis3/``; the
+    download/export machinery is gone.
 
 All socket work lives on the AgentBridge worker thread; this widget only
 handles Qt signals.
@@ -127,6 +127,7 @@ from ..plugin_settings import PluginSettings
 from ..render import probe
 from ..render.layers import (
     LayerMaterializer,
+    configure_store_access,
     ensure_basemap,
     sweep_stale_session_dirs,
     zoom_to_bbox4326,
@@ -231,9 +232,9 @@ class Trid3ntDock(QDockWidget):
         # ``http_base`` / ``data_base`` from the last connect handshake (None
         # until a daemon that advertises them acks). See
         # ``_effective_http_base`` / ``_effective_data_base`` -- every
-        # :8766 caller and the MinIO/S3 ``/vsicurl/`` translation resolve
-        # through those two so a fresh daemon's advertisement always wins and
-        # an old daemon still falls back honestly.
+        # :8766 caller and the store's GDAL configuration resolve through
+        # those two so a fresh daemon's advertisement always wins and an old
+        # daemon still falls back honestly.
         self._advertised_http_base: Optional[str] = None
         self._advertised_data_base: Optional[str] = None
         self._case_id: Optional[str] = None
@@ -333,6 +334,7 @@ class Trid3ntDock(QDockWidget):
 
         self._build_ui()
         self._wire_bridge()
+        self._configure_store_access()
         # Item R6 (live-feedback 2026-07-18): the persistent "Push layer"
         # header button was UI noise (NATE ask) -- the push action now lives
         # in the QGIS layer-tree context menu ("Push layer to case").
@@ -1383,11 +1385,25 @@ class Trid3ntDock(QDockWidget):
         return resolve_http_base(self._advertised_http_base, self.settings.local_url)
 
     def _effective_data_base(self) -> str:
-        """The resolved MinIO/S3 http base for the ``/vsicurl/`` raster +
-        vector translation (``s3_to_http``). Prefers the server-advertised
-        ``data_base``; falls back to the current localhost behavior
-        (``settings.minio_endpoint``) for daemons that do not advertise it."""
+        """The object store's endpoint. Prefers the server-advertised
+        ``data_base``; falls back to ``settings.minio_endpoint`` for daemons
+        that do not advertise it."""
         return resolve_data_base(self._advertised_data_base, self.settings.minio_endpoint)
+
+    def _configure_store_access(self) -> None:
+        """Point GDAL's ``/vsis3`` at the effective store endpoint.
+
+        Idempotent, and run both at dock construction and after each connect:
+        the endpoint is only known for certain once a handshake has advertised
+        it, and a rehydrate can paint layers before then."""
+        note = configure_store_access(
+            self._effective_data_base(),
+            self.settings.store_access_key,
+            self.settings.store_secret_key,
+            self.settings.store_region,
+        )
+        if note:
+            self._note(note, error=True)
 
     def connect_agent(self) -> None:
         if self.bridge.running:
@@ -1817,7 +1833,7 @@ class Trid3ntDock(QDockWidget):
         # below reads through ``_effective_http_base`` / ``_effective_data_base``.
         self._advertised_http_base = http_base or None
         self._advertised_data_base = data_base or None
-        self.materializer.data_base_override = self._effective_data_base()
+        self._configure_store_access()
         self._refresh_model_label()
         self._probe_effective_model()
 
@@ -2123,9 +2139,8 @@ class Trid3ntDock(QDockWidget):
         ``loaded_layer_summaries`` -- no extra HTTP round trip needed, it
         rides the case-open envelope for free, parsed by the client the
         SAME way a live publish would. The by-URI materializer STREAMS each
-        layer in place from the advertised store via ``/vsicurl/`` (which the
-        tailnet endpoint makes directly reachable -- the remote client reads
-        the same objects ranged over the tailnet, no download.
+        layer in place from the advertised store via ``/vsis3/`` -- the remote
+        client reads the same objects ranged over the tailnet, no download.
 
         Rebinds the dock: authoritative title in the header, a FRESH layer
         group named for the case (dedup reset), the persisted loaded_layers

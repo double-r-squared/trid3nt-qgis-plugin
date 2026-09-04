@@ -550,8 +550,8 @@ def _is_error_note(note: str) -> bool:
 
 # F7 (live-feedback 2026-07-22): chat NOTE text (status + error lines) rides
 # plain-text QLabels, and plain-text word-wrap breaks at whitespace ONLY -- so
-# one long unbroken token (the MinIO presigned URL inside a rehydrate failure
-# note) reported an unbreakable preferred/minimum width (measured: label
+# one long unbroken token (a store URL inside a rehydrate failure note)
+# reported an unbreakable preferred/minimum width (measured: label
 # sizeHint 400px at a 320px view; the message host's sizeHint ballooned
 # 145 -> 444px, which is what dragged the DOCK wider than its usual minimum).
 # Fix: seed invisible break OPPORTUNITIES -- a zero-width space every

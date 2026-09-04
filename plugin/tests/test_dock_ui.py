@@ -147,7 +147,7 @@ class TestDockUiBatch(unittest.TestCase):
 
     def test_error_notes_wrap_and_fold(self):
         """F7 (live-feedback 2026-07-22): error/note lines wrap like every
-        other chat text (a long unbroken presigned URL never forces the dock
+        other chat text (a long unbroken store URL never forces the dock
         wider -- break-anywhere inside long tokens, sizeHint bounded by the
         chat container) and CONSECUTIVE error notes fold into one collapsed
         inline "ERRORS (N)" toggle row (charts-collapse affordance, red

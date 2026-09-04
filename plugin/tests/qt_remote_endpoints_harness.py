@@ -8,12 +8,14 @@ Offscreen, no agent, no network -- ``_on_connected`` is invoked directly
 (exactly how ``AgentBridge.connected`` delivers a real handshake result to the
 dock; see ``ws_bridge.AgentWorker.run``), so every check below exercises the
 REAL dock code path (``_effective_http_base`` / ``_effective_data_base`` /
-``LayerMaterializer.data_base_override``), not a re-implementation of it.
+``_configure_store_access``), not a re-implementation of it.
 
 Checks:
   1. stub-shaped advertised endpoints present -> both effective bases equal
      the advertisement verbatim (trailing slash already stripped upstream),
-     and the materializer's ``data_base_override`` picks it up.
+     and GDAL's ``/vsis3`` endpoint follows it. THIS is the one-scheme claim:
+     pointing at a remote store is an endpoint VALUE, not a second code path,
+     so the same ``s3://`` layer uri resolves against whichever host is set.
   2. no advertised endpoints (old daemon) + a tailnet-shaped ``local_url`` ->
      the http base is WS-host-DERIVED (:8766), never localhost; the data
      base falls back to ``settings.minio_endpoint`` (current behavior).
@@ -78,11 +80,17 @@ if dock._effective_http_base() != "http://100.64.0.5:8766":
     _fail(f"advertised http_base not honored: {dock._effective_http_base()!r}")
 if dock._effective_data_base() != "http://100.64.0.5:9000":
     _fail(f"advertised data_base not honored: {dock._effective_data_base()!r}")
-if dock.materializer.data_base_override != "http://100.64.0.5:9000":
+from osgeo import gdal  # noqa: E402
+
+if gdal.GetConfigOption("AWS_S3_ENDPOINT") != "100.64.0.5:9000":
     _fail(
-        "materializer.data_base_override not synced: "
-        f"{dock.materializer.data_base_override!r}"
+        "GDAL /vsis3 endpoint not pointed at the advertised store: "
+        f"{gdal.GetConfigOption('AWS_S3_ENDPOINT')!r}"
     )
+if gdal.GetConfigOption("AWS_VIRTUAL_HOSTING") != "FALSE":
+    _fail("path-style addressing not set for the store")
+if gdal.GetConfigOption("GDAL_PAM_ENABLED") != "NO":
+    _fail("PAM still enabled -- a read would write .aux.xml into the store")
 
 # ---- 2. no advertisement + tailnet-shaped local_url -> WS-host derivation -- #
 dock.settings.local_url = "ws://100.64.0.7:8765/ws"
@@ -91,8 +99,13 @@ if dock._effective_http_base() != "http://100.64.0.7:8766":
     _fail(f"WS-host fallback wrong: {dock._effective_http_base()!r}")
 if dock._effective_data_base() != dock.settings.minio_endpoint:
     _fail(
-        "data_base fallback must be settings.minio_endpoint (current "
-        f"localhost behavior), got {dock._effective_data_base()!r}"
+        "data_base fallback must be settings.minio_endpoint, got "
+        f"{dock._effective_data_base()!r}"
+    )
+if gdal.GetConfigOption("AWS_S3_ENDPOINT") != "127.0.0.1:9000":
+    _fail(
+        "the fallback endpoint did not reach GDAL: "
+        f"{gdal.GetConfigOption('AWS_S3_ENDPOINT')!r}"
     )
 
 # ---- 3. no advertisement + DEFAULT local_url -> byte-identical old default - #

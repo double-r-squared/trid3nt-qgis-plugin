@@ -1,14 +1,14 @@
-"""Remote-streaming wave -- the plugin side.
+"""Remote reads -- the plugin side.
 
-Covers the three things this wave adds to the materializer:
+Covers three things the materializer owes:
 
-  * session-scoped staging TTL: ``_ensure_temp_dir`` creates one
+  * session-scoped staging: ``_ensure_temp_dir`` creates one
     ``trid3nt_session_<tag>`` subdir (owner-PID marked), ``cleanup_session``
     removes it, ``sweep_stale_session_dirs`` reaps a DEAD-owner leftover but
     keeps a LIVE-owner dir (a concurrent QGIS instance);
   * STREAMED vs STAGED honesty labels on every layer note;
-  * the MDAL mesh staging fallback (``_add_mesh``) -- the ONE format that
-    cannot stream over /vsicurl, so it stages to the session dir, labeled.
+  * the MDAL mesh cache hop (``_add_mesh``) -- the ONE format with no /vsi
+    layer, so it stages to the session dir, labeled.
 
 No QGIS required: reuses the fake-qgis import harness from
 ``test_raster_render`` and monkeypatches the mesh/CRS fakes onto the imported
@@ -23,7 +23,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from test_raster_render import MINIO, _Settings, _event, _import_layers  # noqa: E402
+from test_raster_render import _Settings, _event, _import_layers  # noqa: E402
 
 
 class _CrsFake:
@@ -135,7 +135,7 @@ class TestStreamedStagedLabels(unittest.TestCase):
             ]
         )
         self.assertTrue(
-            any("streamed via /vsicurl (no local copy)" in n for n in notes), notes
+            any("streamed via /vsis3 (no local copy)" in n for n in notes), notes
         )
 
     def test_vector_fgb_note_is_labeled_streamed(self):
@@ -152,7 +152,7 @@ class TestStreamedStagedLabels(unittest.TestCase):
                 )
             ]
         )
-        self.assertTrue(any("streamed via /vsicurl" in n for n in notes), notes)
+        self.assertTrue(any("streamed via /vsis3" in n for n in notes), notes)
 
     def test_inline_geojson_note_is_labeled_staged(self):
         notes = self.m.materialize(
@@ -210,7 +210,7 @@ class TestMeshStagingFallback(unittest.TestCase):
         self.assertEqual(len(_MeshFake.instances), 1)
         self.assertEqual(_MeshFake.instances[0].path, nc)
         self.assertTrue(any("staged to session temp" in n for n in notes), notes)
-        self.assertTrue(any("MDAL netCDF" in n for n in notes), notes)
+        self.assertTrue(any("MDAL nc" in n for n in notes), notes)
         # a valid crs_authid was applied, so the note does NOT ask to set it
         self.assertFalse(any("set manually" in n for n in notes), notes)
 

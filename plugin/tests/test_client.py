@@ -22,7 +22,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from plugin.net import trid3nt_client as tc  # noqa: E402
 from stub_server import (  # noqa: E402
-    LEGACY_RASTER_LAYER_ROW,
     RASTER_LAYER_ROW,
     S3_VECTOR_LAYER_ROW,
     STUB_CASE_ID,
@@ -68,20 +67,20 @@ class TestPureHelpers(unittest.TestCase):
             "wss://example.com/ws?sid=X&st=tok",
         )
 
-    def test_s3_to_http(self):
+    def test_s3_to_vsis3(self):
+        # The endpoint is GDAL configuration, never part of the path.
         self.assertEqual(
-            tc.s3_to_http("s3://trid3nt-runs/vectors/rivers.geojson", "http://127.0.0.1:9000"),
-            "http://127.0.0.1:9000/trid3nt-runs/vectors/rivers.geojson",
+            tc.s3_to_vsis3("s3://trid3nt-runs/vectors/rivers.geojson"),
+            "/vsis3/trid3nt-runs/vectors/rivers.geojson",
         )
         self.assertEqual(
-            tc.s3_to_http("s3://bucket/a/b/c.fgb", "http://127.0.0.1:9000/"),
-            "http://127.0.0.1:9000/bucket/a/b/c.fgb",
+            tc.s3_to_vsis3("s3://bucket/a/b/c.fgb"), "/vsis3/bucket/a/b/c.fgb"
         )
-        self.assertIsNone(tc.s3_to_http("gs://bucket/key", "http://127.0.0.1:9000"))
-        self.assertIsNone(tc.s3_to_http("s3://bucketonly", "http://127.0.0.1:9000"))
+        self.assertIsNone(tc.s3_to_vsis3("https://example.com/k.tif"))
+        self.assertIsNone(tc.s3_to_vsis3("s3://bucketonly"))
 
     def test_qgis_xyz_uri(self):
-        template = "http://127.0.0.1:8080/cog/tiles/{z}/{x}/{y}.png?url=s3%3A%2F%2Fb%2Fk.tif&rescale=0,10"
+        template = "https://tile.example.com/{z}/{x}/{y}.png?style=dark&scale=2"
         uri = tc.qgis_xyz_uri(template)
         self.assertTrue(uri.startswith("type=xyz&url="))
         self.assertTrue(uri.endswith("&zmin=0&zmax=24"))
@@ -95,8 +94,8 @@ class TestPureHelpers(unittest.TestCase):
         # Placeholders, scheme and ? stay literal so QGIS can substitute
         # tiles and the tile server sees its query verbatim.
         self.assertIn("{z}", encoded)
-        self.assertIn("http://", encoded)
-        self.assertIn("?url=s3%3A%2F%2Fb%2Fk.tif", encoded)
+        self.assertIn("https://", encoded)
+        self.assertIn("?style=dark", encoded)
 
     def test_qgis_xyz_uri_no_query(self):
         template = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -107,31 +106,21 @@ class TestPureHelpers(unittest.TestCase):
         payload = {
             "loaded_layers": [
                 RASTER_LAYER_ROW,
-                LEGACY_RASTER_LAYER_ROW,
                 VECTOR_LAYER_ROW,
                 {"name": "no layer_id -> skipped"},
                 "not-a-dict",
             ]
         }
         events = tc.parse_layer_events(payload)
-        self.assertEqual(len(events), 3)
-        raster, legacy, vector = events
-        # NEW shape (TiTiler->QGIS swap): raw s3 COG uri + explicit legend;
-        # no XYZ template on the event.
+        self.assertEqual(len(events), 2)
+        raster, vector = events
+        # One store, one scheme: the row carries an s3 uri + an explicit legend.
         self.assertEqual(raster.layer_type, "raster")
         self.assertEqual(raster.uri, RASTER_LAYER_ROW["uri"])
         self.assertTrue(raster.uri.startswith("s3://"))
-        self.assertIsNone(raster.tile_template)
         self.assertEqual(raster.legend["colormap"], "viridis")
         self.assertEqual(raster.legend["vmin"], 600.0)
-        # LEGACY shape (old persisted cases): the TiTiler template still
-        # parses as a raster event with the template intact for unwrapping.
-        self.assertEqual(legacy.layer_type, "raster")
-        self.assertEqual(legacy.tile_template, LEGACY_RASTER_LAYER_ROW["uri"])
-        self.assertIn("{z}", legacy.tile_template)
-        self.assertIn("/cog/tiles/", legacy.uri)
         self.assertEqual(vector.layer_type, "vector")
-        self.assertIsNone(vector.tile_template)
         self.assertEqual(vector.inline_geojson["type"], "FeatureCollection")
         # Defensive: junk payloads
         self.assertEqual(tc.parse_layer_events({}), [])
@@ -441,17 +430,14 @@ class TestCaseAndChat(StubServerTestCase):
         self.assertEqual(pipeline_events[0].data["steps"][0].tool_name, "fetch_elevation")
         self.assertEqual(pipeline_events[-1].data["steps"][0].state, "complete")
 
-        # Layer events: raw-s3 COG raster + LEGACY tile-template raster +
-        # inline-geojson vector + s3-only vector. The inline pad is >64 KiB so
-        # this round trip also proves the 64-bit frame-length decode path.
+        # Layer events: s3 COG raster + inline-geojson vector + s3-only vector.
+        # The inline pad is >64 KiB so this round trip also proves the 64-bit
+        # frame-length decode path.
         layer_events = [e for e in events if e.kind == "session-state"][-1].data["layers"]
         by_id = {le.layer_id: le for le in layer_events}
         raster = by_id[RASTER_LAYER_ROW["layer_id"]]
         self.assertEqual(raster.uri, RASTER_LAYER_ROW["uri"])
-        self.assertIsNone(raster.tile_template)
         self.assertEqual(raster.legend["kind"], "continuous")
-        legacy = by_id[LEGACY_RASTER_LAYER_ROW["layer_id"]]
-        self.assertEqual(legacy.tile_template, LEGACY_RASTER_LAYER_ROW["uri"])
         vector = by_id[VECTOR_LAYER_ROW["layer_id"]]
         self.assertEqual(
             len(vector.inline_geojson["features"][0]["properties"]["pad"]), 70000
@@ -459,8 +445,7 @@ class TestCaseAndChat(StubServerTestCase):
         s3vec = by_id[S3_VECTOR_LAYER_ROW["layer_id"]]
         self.assertIsNone(s3vec.inline_geojson)
         self.assertEqual(
-            tc.s3_to_http(s3vec.uri, "http://127.0.0.1:9000"),
-            "http://127.0.0.1:9000/trid3nt-runs/vectors/rivers.geojson",
+            tc.s3_to_vsis3(s3vec.uri), "/vsis3/trid3nt-runs/vectors/rivers.geojson"
         )
 
         sent = [e for e in self.server.received if e["type"] == "user-message"]

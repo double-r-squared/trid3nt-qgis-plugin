@@ -15,6 +15,13 @@ DEFAULT_LOCAL_URL = "ws://127.0.0.1:8765/ws"
 DEFAULT_MINIO_ENDPOINT = "http://127.0.0.1:9000"
 DEFAULT_EXPORT_API = "http://127.0.0.1:8766"
 
+#: The bundled local stack's object-store credentials (``scripts/start_minio.sh``
+#: provisions this user). They are defaults, not secrets: a store standing
+#: anywhere but this box is reached by overriding these two keys in the profile.
+DEFAULT_STORE_ACCESS_KEY = "trid3nt"
+DEFAULT_STORE_SECRET_KEY = "trid3nt-local-dev"
+DEFAULT_STORE_REGION = "us-east-1"
+
 #: The product is LOCAL-only: the agent runs on this box or a tailnet peer,
 #: reached over ws:// (the tailnet itself is the trust boundary). The cloud /
 #: Cognito REMOTE mode was removed. ``MODE_LOCAL`` and the read-only ``mode``
@@ -70,17 +77,41 @@ class PluginSettings:
 
     @property
     def minio_endpoint(self) -> str:
-        """Remote-daemon design: NOT a settings-dialog field anymore -- this
-        is the internal "current localhost behavior" FALLBACK
-        ``resolve_data_base`` (trid3nt_client) uses when a connect handshake
-        did not advertise ``data_base`` (older daemons). Reading defaults to
-        ``DEFAULT_MINIO_ENDPOINT`` unless a value was persisted by an older
-        plugin build (harmless -- it only matters as a fallback)."""
+        """The object store's endpoint FALLBACK -- ``resolve_data_base``
+        (trid3nt_client) uses it when a connect handshake did not advertise
+        ``data_base``. Not a settings-dialog field."""
         return self._get("minio_endpoint", DEFAULT_MINIO_ENDPOINT) or DEFAULT_MINIO_ENDPOINT
 
     @minio_endpoint.setter
     def minio_endpoint(self, value: str) -> None:
         self._set("minio_endpoint", value.strip() or DEFAULT_MINIO_ENDPOINT)
+
+    @property
+    def store_access_key(self) -> str:
+        """Object-store access key GDAL signs ``/vsis3`` reads with."""
+        return self._get("store_access_key", DEFAULT_STORE_ACCESS_KEY) or DEFAULT_STORE_ACCESS_KEY
+
+    @store_access_key.setter
+    def store_access_key(self, value: str) -> None:
+        self._set("store_access_key", value.strip() or DEFAULT_STORE_ACCESS_KEY)
+
+    @property
+    def store_secret_key(self) -> str:
+        """Object-store secret key GDAL signs ``/vsis3`` reads with."""
+        return self._get("store_secret_key", DEFAULT_STORE_SECRET_KEY) or DEFAULT_STORE_SECRET_KEY
+
+    @store_secret_key.setter
+    def store_secret_key(self, value: str) -> None:
+        self._set("store_secret_key", value.strip() or DEFAULT_STORE_SECRET_KEY)
+
+    @property
+    def store_region(self) -> str:
+        """Region the signature is scoped to; MinIO accepts any single value."""
+        return self._get("store_region", DEFAULT_STORE_REGION) or DEFAULT_STORE_REGION
+
+    @store_region.setter
+    def store_region(self, value: str) -> None:
+        self._set("store_region", value.strip() or DEFAULT_STORE_REGION)
 
     @property
     def export_api(self) -> str:

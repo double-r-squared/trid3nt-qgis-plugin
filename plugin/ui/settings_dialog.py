@@ -101,8 +101,8 @@ class SettingsDialog(QDialog):
     presented as the remote story"). There is NEVER a second data-endpoint
     field -- pointing the URL at a tailscale peer (``ws://100.x.y.z:8765/ws``
     instead of the ``ws://127.0.0.1:8765/ws`` default) is the entire
-    remote-daemon story; the agent's :8766 HTTP base and the MinIO/S3
-    ``/vsicurl/`` translation base are DERIVED (server-advertised endpoints
+    remote-daemon story; the agent's :8766 HTTP base and the object store's
+    endpoint are DERIVED (server-advertised endpoints
     on the handshake, else a WS-host fallback -- see
     ``trid3nt_client.resolve_http_base`` / ``resolve_data_base`` and
     ``dock._effective_http_base`` / ``_effective_data_base``), never a

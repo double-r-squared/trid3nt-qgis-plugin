@@ -34,10 +34,13 @@ Protocol (mirrors the web client's ``ws.ts`` (separate repo) + ``scripts/tool_ro
              ``data_base`` (flat fields, or nested under an ``endpoints``
              dict -- both shapes read defensively since the field is still
              optional on older daemons). When present they are the ONLY
-             source of truth for the agent's :8766 HTTP base and the
-             MinIO/S3 http-translation base; when absent, callers derive a
-             fallback (``resolve_http_base`` / ``resolve_data_base`` below)
-             so a tailnet daemon that predates advertisement still works.
+             source of truth for the agent's :8766 HTTP base and the object
+             store's endpoint; when absent, callers derive a fallback
+             (``resolve_http_base`` / ``resolve_data_base`` below) so a
+             tailnet daemon that predates advertisement still works. The
+             store endpoint is GDAL CONFIGURATION, not part of a layer's
+             uri: a layer reference is always ``s3://bucket/key`` and the
+             endpoint decides which host serves it.
 
 Threading: ``WebSocketConnection.send_text`` is mutex-guarded so a UI thread
 may send while a worker thread blocks in ``recv``. Everything else is
@@ -108,7 +111,7 @@ __all__ = [
     "parse_layer_events",
     "parse_pipeline_steps",
     "qgis_xyz_uri",
-    "s3_to_http",
+    "s3_to_vsis3",
     "utc_ts",
     "DEFAULT_HTTP_PORT",
     "derive_http_base",
@@ -181,26 +184,11 @@ class LayerEvent:
     name: str
     layer_type: str  # "raster" | "vector" | ...
     uri: str
-    wms_url: Optional[str] = None
     inline_geojson: Optional[dict] = None
     opacity: Optional[float] = None
     visible: bool = True
     legend: Optional[dict] = None
     raw: dict = field(default_factory=dict)
-
-    @property
-    def tile_template(self) -> Optional[str]:
-        """The XYZ tile TEMPLATE for a raster layer, or None.
-
-        The local agent publishes rasters with a ready TiTiler template
-        (contains ``{z}/{x}/{y}``) in ``uri`` (see Map.tsx buildWmsTileUrl
-        pass-through); ``wms_url`` is checked as a fallback carrier.
-        """
-        if "{z}" in (self.uri or ""):
-            return self.uri
-        if self.wms_url and "{z}" in self.wms_url:
-            return self.wms_url
-        return None
 
 
 #: The numeric style fields, per family, that ride from a wire message into a
@@ -285,7 +273,6 @@ def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
                 name=str(row.get("name") or layer_id),
                 layer_type=str(row.get("layer_type") or "raster"),
                 uri=uri if isinstance(uri, str) else "",
-                wms_url=row.get("wms_url") if isinstance(row.get("wms_url"), str) else None,
                 inline_geojson=inline,
                 opacity=opacity,
                 visible=bool(row.get("visible", True)),
@@ -952,11 +939,12 @@ def next_backoff(
 # --------------------------------------------------------------------------- #
 
 
-def s3_to_http(uri: str, endpoint: str) -> Optional[str]:
-    """Translate ``s3://bucket/key`` to the MinIO path-style http form.
+def s3_to_vsis3(uri: str) -> Optional[str]:
+    """``s3://bucket/key`` -> the ``/vsis3/bucket/key`` path GDAL reads natively.
 
-    ``endpoint`` is e.g. ``http://127.0.0.1:9000``. Returns None for
-    non-s3 uris.
+    The endpoint and credentials are GDAL configuration (``render.layers.
+    configure_store_access``), so nothing about the host appears here.
+    Returns None for anything that is not an ``s3://`` object uri.
     """
     if not uri.startswith("s3://"):
         return None
@@ -964,7 +952,7 @@ def s3_to_http(uri: str, endpoint: str) -> Optional[str]:
     bucket, _, key = rest.partition("/")
     if not bucket or not key:
         return None
-    return f"{endpoint.rstrip('/')}/{bucket}/{key}"
+    return f"/vsis3/{bucket}/{key}"
 
 
 #: The local agent's HTTP listener port (tool catalog + /api/* routes --
@@ -1003,11 +991,10 @@ def resolve_http_base(advertised: Optional[str], ws_url: str) -> str:
 
 
 def resolve_data_base(advertised: Optional[str], fallback: str) -> str:
-    """The effective MinIO/S3 http-translation base for ``s3_to_http``: the
-    server-advertised ``data_base`` when present, else ``fallback`` (the
-    current localhost behavior -- old daemons never advertise this, and
-    unlike the HTTP API there is no WS-host-derivable port to fall back to,
-    so the caller's existing default/setting is the honest fallback)."""
+    """The object store's endpoint: the server-advertised ``data_base`` when
+    present, else ``fallback`` (old daemons never advertise this, and unlike
+    the HTTP API there is no WS-host-derivable port to fall back to, so the
+    caller's existing default/setting is the honest fallback)."""
     if advertised:
         return advertised.rstrip("/")
     return fallback

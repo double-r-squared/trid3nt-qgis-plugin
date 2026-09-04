@@ -1,17 +1,11 @@
-"""QGIS-native raster rendering tests (the TiTiler -> QGIS swap).
+"""QGIS-native raster rendering tests.
 
 Covers, with an in-memory stubbed ``qgis`` package (the established
 ``test_milestone2`` pattern -- no QGIS install required):
 
-* DUAL-SHAPE uri resolution in ``LayerMaterializer._add_raster``:
-  - NEW raw ``s3://...tif`` COG uri -> ``s3_to_http`` -> a
-    ``QgsRasterLayer("/vsicurl/<minio-http>", name, "gdal")``;
-  - LEGACY TiTiler XYZ tile TEMPLATE (old persisted cases) -> the
-    percent-encoded ``url=`` query param unwraps to the SAME gdal path, and
-    ``rescale``/``colormap_name`` are recovered from the query string for
-    styling;
-  - a plain non-TiTiler XYZ template still lands on the old wms branch
-    (never silently dropped).
+* uri resolution in ``LayerMaterializer._add_raster``: an ``s3://...tif`` COG
+  uri becomes ``QgsRasterLayer("/vsis3/<bucket>/<key>", name, "gdal")``, and
+  anything that is not a store uri is an honest skip;
 * Renderer CLASS per legend kind: continuous ->
   ``QgsSingleBandPseudoColorRenderer`` (Interpolated ``QgsColorRampShader``
   from the ``ramps`` table); categorical -> ``QgsPalettedRasterRenderer``
@@ -37,7 +31,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
-from stub_server import LEGACY_RASTER_LAYER_ROW, RASTER_LAYER_ROW  # noqa: E402
+from stub_server import RASTER_LAYER_ROW  # noqa: E402
 
 #: The server's raster-styling chokepoint, which this file scans for colormap
 #: names the plugin mirror does not carry. The path was pointing at
@@ -53,7 +47,7 @@ _SERVER_PUBLISH_LAYER = os.path.join(
     "publish.py",
 )
 
-MINIO = "http://127.0.0.1:9000"
+
 
 
 # --------------------------------------------------------------------------- #
@@ -326,7 +320,6 @@ def _import_layers():
 
 class _Settings:
     mode = "local"
-    minio_endpoint = MINIO
 
 
 def _event(layers, row_or_fields):
@@ -338,7 +331,6 @@ def _event(layers, row_or_fields):
         name=row.get("name") or row["layer_id"],
         layer_type=row.get("layer_type", "raster"),
         uri=row.get("uri", ""),
-        wms_url=row.get("wms_url"),
         inline_geojson=row.get("inline_geojson"),
         opacity=row.get("opacity"),
         visible=row.get("visible", True),
@@ -348,50 +340,25 @@ def _event(layers, row_or_fields):
 
 
 # --------------------------------------------------------------------------- #
-# dual-shape uri resolution
+# uri resolution
 # --------------------------------------------------------------------------- #
 
 
-class TestDualShapeUriResolution(unittest.TestCase):
-    def test_raw_s3_uri_becomes_vsicurl_gdal_layer(self):
+class TestStoreUriResolution(unittest.TestCase):
+    def test_s3_uri_becomes_a_vsis3_gdal_layer(self):
         layers, fakes = _import_layers()
         m = layers.LayerMaterializer(settings=_Settings())
         notes = m.materialize([_event(layers, RASTER_LAYER_ROW)])
         layer = fakes.RasterLayer.instances[0]
-        self.assertEqual(
-            layer.path,
-            f"/vsicurl/{MINIO}/trid3nt-runs/dem/asheville.tif",
-        )
+        self.assertEqual(layer.path, "/vsis3/trid3nt-runs/dem/asheville.tif")
         self.assertEqual(layer.provider, "gdal")
-        self.assertTrue(any("streamed via /vsicurl" in n for n in notes), notes)
-        # opacity parity with the old tile layers (event.opacity -> setOpacity)
+        self.assertTrue(any("streamed via /vsis3" in n for n in notes), notes)
+        # event.opacity -> setOpacity
         self.assertEqual(layer.opacity, 1.0)
 
-    def test_legacy_titiler_template_unwraps_to_same_gdal_path(self):
-        layers, fakes = _import_layers()
-        m = layers.LayerMaterializer(settings=_Settings())
-        notes = m.materialize([_event(layers, LEGACY_RASTER_LAYER_ROW)])
-        layer = fakes.RasterLayer.instances[0]
-        self.assertEqual(
-            layer.path,
-            f"/vsicurl/{MINIO}/trid3nt-runs/flood/depth.tif",
-        )
-        self.assertEqual(layer.provider, "gdal")
-        self.assertTrue(
-            any("legacy tile template unwrapped" in n for n in notes), notes
-        )
-        # rescale=0,3 + colormap_name=ylgnbu recovered from the query string
-        renderer = layer.renderer
-        self.assertIsInstance(renderer, fakes.PseudoColorRenderer)
-        self.assertEqual(renderer.cmin, 0.0)
-        self.assertEqual(renderer.cmax, 3.0)
-        colors = [item.color.spec for item in renderer.shader.fn.items]
-        self.assertEqual(colors[0], "#ffffd9")   # ylgnbu low end
-        self.assertEqual(colors[-1], "#081d58")  # ylgnbu high end
-
-    def test_plain_xyz_template_keeps_wms_branch(self):
-        """A non-TiTiler XYZ template (no url= param) must not be dropped --
-        it still renders through the legacy wms/XYZ branch."""
+    def test_non_store_uri_is_an_honest_skip(self):
+        """A uri that is not an s3:// object is skipped with a note, never
+        silently dropped and never guessed at."""
         layers, fakes = _import_layers()
         m = layers.LayerMaterializer(settings=_Settings())
         notes = m.materialize(
@@ -406,12 +373,10 @@ class TestDualShapeUriResolution(unittest.TestCase):
                 )
             ]
         )
-        layer = fakes.RasterLayer.instances[0]
-        self.assertEqual(layer.provider, "wms")
-        self.assertIn("type=xyz&url=", layer.path)
-        self.assertTrue(any("non-TiTiler template" in n for n in notes), notes)
+        self.assertEqual(fakes.RasterLayer.instances, [])
+        self.assertTrue(any("skipped" in n for n in notes), notes)
 
-    def test_raster_without_uri_or_template_is_honest_skip(self):
+    def test_raster_without_uri_is_honest_skip(self):
         layers, fakes = _import_layers()
         m = layers.LayerMaterializer(settings=_Settings())
         notes = m.materialize(
@@ -536,7 +501,7 @@ class TestRendererPerLegendKind(unittest.TestCase):
         self.assertEqual(colors[0], "#440154")  # the viridis stand-in, not grey
         self.assertTrue(any("unknown colormap" in n for n in notes), notes)
 
-    def test_no_legend_no_legacy_style_leaves_default_renderer(self):
+    def test_no_legend_leaves_the_default_renderer(self):
         """Terrain/RGBA passthrough layers carry no legend BY DESIGN --
         GDAL's default render (grayscale autoscale / native RGB) is correct,
         so no renderer is forced onto them."""
@@ -556,7 +521,7 @@ class TestRendererPerLegendKind(unittest.TestCase):
         )
         layer = fakes.RasterLayer.instances[0]
         self.assertIsNone(layer.renderer)
-        self.assertTrue(any("streamed via /vsicurl" in n for n in notes), notes)
+        self.assertTrue(any("streamed via /vsis3" in n for n in notes), notes)
 
 
 # --------------------------------------------------------------------------- #
