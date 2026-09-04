@@ -655,14 +655,17 @@ def _code_staleness(completion: dict, tool: str) -> dict | None:
 
 def assemble(template: str, variant: str, *, run_id: str | None = None,
              check: bool = False, bucket: str | None = None,
-             out_dir: str | Path | None = None) -> dict:
+             out_dir: str | Path | None = None,
+             evidence: str | Path | None = None) -> dict:
     """Assemble and VERIFY one template+variant proof packet. Writes packet.json.
 
-    The DECLARATION is always read from the template's own proof folder, because
-    that is where the evidence a packet reports on lives. ``out_dir`` names where
-    the renders and ``packet.json`` land: unset it is that same folder, and a lane
-    that must not write into the frozen proof tree - an acceptance drive, a verify
-    pass - names a scratch directory instead and still owes the whole checklist.
+    ``out_dir`` names where the renders and ``packet.json`` land: unset it is the
+    template's own proof folder, and a lane that must not write into the frozen
+    proof tree - an acceptance drive, a verify pass - names a scratch directory
+    instead and still owes the whole checklist. ``evidence`` names the JSON the
+    packet is assembled FROM: unset it is the one in that proof folder, and a
+    drive holding a fresh run's evidence somewhere else points at it rather than
+    landing the file in the frozen tree first to be allowed to render it.
     """
     if variant not in VARIANTS:
         raise PacketError(f"{variant!r} is not a proof variant; the four are "
@@ -676,7 +679,9 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
     else:
         out = directory
     stem = stem_for(template, variant)
-    evidence_path = find_evidence(directory, stem)
+    evidence_path = Path(evidence) if evidence else find_evidence(directory, stem)
+    if not evidence_path.is_file():
+        raise PacketError(f"no evidence JSON at {evidence_path}")
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
     evidence = (evidence.get("evidence")
                 if isinstance(evidence.get("evidence"), dict) else evidence)
@@ -1001,13 +1006,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--bucket", default=None)
     ap.add_argument("--out-dir", dest="out_dir", default=None,
                     help="write the renders and packet.json HERE instead of into "
-                         "the template's proof folder (the declaration is still "
-                         "read from that folder)")
+                         "the template's proof folder")
+    ap.add_argument("--evidence", default=None,
+                    help="assemble from THIS evidence JSON instead of the one in "
+                         "the template's proof folder")
     ns = ap.parse_args(argv)
 
     try:
         packet = assemble(ns.template, ns.variant, run_id=ns.run, check=ns.check,
-                          bucket=ns.bucket, out_dir=ns.out_dir)
+                          bucket=ns.bucket, out_dir=ns.out_dir,
+                          evidence=ns.evidence)
     except PacketError as exc:
         print(f"NO PACKET: {exc}", file=sys.stderr)
         return 2

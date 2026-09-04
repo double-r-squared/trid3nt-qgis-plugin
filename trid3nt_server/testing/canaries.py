@@ -22,10 +22,10 @@ canary that solves but cannot be delivered exits non-zero, because "did we send
 the GIF" is not a question anybody should be answering from memory. Proof
 RENDERING stays out of the product tree by ruling; the declaration does not.
 
-THE COARSE VARIANT DELIVERS NOTHING. It is the SILENT-PIN lane - its evidence
-JSON is the whole artifact, compared run against run to catch drift - so it
-assembles no packet and its folder holds no delivery renders. Only the flagship
-refined variant is handed to a reader.
+EVERY VARIANT OWES ITS PACKET. The coarse lane is the SILENT-PIN one - its
+evidence is compared run against run to catch drift, and it is not what a reader
+is handed - but a pin whose renders nobody assembled is a pin nobody
+interrogated, so its packet is assembled and verified exactly like the flagship's.
 
 DEMO VALUES LIVE IN THE DECLARATION. A canary's location, window and station are
 here, in a labeled declaration, never as a constant inside workflow code.
@@ -46,11 +46,6 @@ from .proof_paths import split_variant
 
 __all__ = ["CANARIES", "PROOF_ANIMATIONS", "assemble_packet", "evidence_path",
            "main", "run"]
-
-#: The variant that delivers NOTHING. Its evidence JSON is the whole artifact and
-#: its folder must stay free of delivery renders, so the packet step is skipped
-#: for it rather than pointed at a folder that may not hold what it would write.
-_SILENT_PIN_VARIANT = "coarse"
 
 #: Re-exported so the canary registry and the animation ruling read as one
 #: declaration surface: this file says WHAT to run, ``proof_animations`` says
@@ -393,7 +388,8 @@ def _answer(ev: RunEvidence) -> dict[str, Any]:
     }
 
 
-def assemble_packet(name: str, out_dir: str | None = None) -> dict:
+def assemble_packet(name: str, out_dir: str | None = None,
+                    evidence: str | None = None) -> dict:
     """The canary's DELIVERY PACKET - the checklist, assembled and verified.
 
     A canary that finished is not a canary that can be handed to anybody: the
@@ -403,10 +399,11 @@ def assemble_packet(name: str, out_dir: str | None = None) -> dict:
     ``packet.json`` beside the renders, so every canary close either produces the
     ordered list of what to send or fails loudly saying what is missing.
 
-    ``out_dir`` names where those renders land. Unset, it is the template's own
-    proof folder; named, the checklist is assembled somewhere the frozen proof
-    tree is not written to, which is how an acceptance drive owes a full packet
-    without editing delivered evidence.
+    ``out_dir`` names where those renders land and ``evidence`` names the JSON
+    they are assembled FROM. Both unset, that is the template's own proof folder;
+    named, the checklist is assembled somewhere the frozen proof tree is not
+    written to, off the run that was just driven, which is how an acceptance
+    drive owes a full packet without editing delivered evidence.
 
     Imported BY PATH because proof RENDERING stays out of the product tree by
     ruling - the declaration lives here, the renderers do not.
@@ -420,7 +417,7 @@ def assemble_packet(name: str, out_dir: str | None = None) -> dict:
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("assemble_proof_packet", module)
     spec.loader.exec_module(module)
-    return module.assemble(template, variant, out_dir=out_dir)
+    return module.assemble(template, variant, out_dir=out_dir, evidence=evidence)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -464,15 +461,9 @@ def main(argv: list[str] | None = None) -> int:
         # has no variant folder to assemble into, so the packet step is skipped
         # rather than pointed at a directory it does not own.
         return 0
-    if split_variant(ns.name)[1] == _SILENT_PIN_VARIANT and not ns.packet_dir:
-        # The coarse variant is the SILENT-PIN lane: it carries its evidence JSON
-        # and nothing else. Assembling a packet into the proof folder would write
-        # the delivery artifacts the flagship folder owns into a folder that must
-        # not hold them. A named packet directory is outside that folder, so the
-        # checklist is owed there rather than skipped.
-        return 0
     try:
-        packet = assemble_packet(ns.name, out_dir=ns.packet_dir)
+        packet = assemble_packet(ns.name, out_dir=ns.packet_dir,
+                                 evidence=ns.out if ns.packet_dir else None)
     except Exception as exc:  # noqa: BLE001 - the reason IS the report
         print(f"PACKET FAILED: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1

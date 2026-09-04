@@ -30,10 +30,11 @@ FOUR variants, and no more. A fifth would be a category nobody agreed on:
 | `postmigration` | the same question re-run after a refactor, to show the representation changed and the numbers did not. |
 | `addendum` | a proof that is none of those three: a gate-card walkthrough, a release-point acceptance case, a one-off diagnostic kept because it settled something. |
 
-THE COARSE-FOLDER RULE: a `coarse` folder is the SILENT-PIN lane and carries its
-canary evidence JSON, never a `packet.json` - a coarse run is an internal parity
-pin, not a delivery. The packet artifacts (panels, contact sheet, charts, GIF and
-still) belong only to the flagship `refined` folder that delivers them.
+THE COARSE-FOLDER RULE: a `coarse` folder is the SILENT-PIN lane - its evidence
+is compared run against run to catch drift, and it is not what a reader is
+handed. It still owes the whole packet. A pin whose renders nobody assembled is a
+pin nobody interrogated, and the numbers that made two of them STOP were only
+visible because the pictures existed.
 
 ## THE MECHANISM: `scripts/assemble_proof_packet.py`
 
