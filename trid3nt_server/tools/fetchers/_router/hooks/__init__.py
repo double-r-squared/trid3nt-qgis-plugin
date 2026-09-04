@@ -53,6 +53,7 @@ __all__ = [
     "RequestPlan",
     "FramePlan",
     "FrameDegraded",
+    "frame_windows",
     "HOOK_REGISTRY",
     "register_hook",
     "resolve_hook",
@@ -95,9 +96,11 @@ class FramePlan:
 
     - ``cache_params`` -- the per-frame read_through cache key (byte-identical to
       the hand-written twin's per-frame params so the fold reuses cached frames).
-    - ``name`` -- the emitted ``LayerURI.name``, which MUST carry the monotonic
-      scrubber NAME-TOKEN (``step <N>`` + the ISO valid-time) the plugin
-      ``render/temporal.py group_frame_layers`` groups on.
+    - ``name`` -- the emitted ``LayerURI.name``, the layer's caption.
+    - ``valid_from`` / ``valid_to`` -- the ISO-8601 UTC window this frame is
+      valid for, which the map stamps as the layer's fixed temporal range. The
+      plan holds the instants already; spelling a time into ``name`` for a
+      reader to parse back out is the same fact in the wrong data class.
     - ``layer_id`` -- the emitted ``LayerURI.layer_id`` (a per-product stem keeps
       sibling products in separate scrubber groups).
     - ``bbox`` -- the AOI bbox stamped on every frame's ``LayerURI.bbox``.
@@ -112,6 +115,8 @@ class FramePlan:
     name: str
     layer_id: str
     bbox: tuple[float, float, float, float]
+    valid_from: str | None = None
+    valid_to: str | None = None
     fetch_context: dict[str, Any] = field(default_factory=dict)
     #: OPTIONAL per-frame style row override. The archive source emits
     #: distinct bands with distinct presets (goes_rgb_animation for the RGB composites,
@@ -119,6 +124,24 @@ class FramePlan:
     #: the spec's own style row cannot carry; None -> the executor falls back
     #: to the spec's row.
     style: dict | None = None
+
+
+def frame_windows(instants: list[str]) -> list[tuple[str | None, str | None]]:
+    """Each declared instant's validity window: it runs until the next one.
+
+    The LAST frame has no successor, so it keeps the interval before it - the
+    only cadence the record actually measured. A sequence of fewer than two
+    instants has no measured cadence at all and states no window rather than
+    inventing one, which is what a synthetic one-hour-per-step clock was.
+    """
+    from datetime import datetime
+
+    if len(instants) < 2:
+        return [(None, None)] * len(instants)
+    moments = [datetime.fromisoformat(t.replace("Z", "+00:00")) for t in instants]
+    ends = moments[1:] + [moments[-1] + (moments[-1] - moments[-2])]
+    return [(begin, end.strftime("%Y-%m-%dT%H:%M:%SZ"))
+            for begin, end in zip(instants, ends)]
 
 
 class FrameDegraded(Exception):

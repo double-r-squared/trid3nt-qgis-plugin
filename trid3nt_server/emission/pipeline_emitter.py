@@ -41,8 +41,7 @@ calling ``update_progress`` mid-fetch; atomic tools typically don't (they're
 sub-second), while solvers that poll a long-running job do.
 
 ``loaded_layers`` dedup policy: by the layer's uri (one store, one scheme --
-a layer has exactly one) or, for animation frames, by its series key -- see
-``add_loaded_layer``. The session-state envelope on the wire is always a
+a layer has exactly one). The session-state envelope on the wire is always a
 full snapshot.
 """
 
@@ -53,7 +52,6 @@ import contextvars
 import json
 import logging
 import os
-import re
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
@@ -334,43 +332,6 @@ except Exception:  # pragma: no cover -- websockets absent in a minimal env
 # key -- it carries a GENERIC layer name (e.g. ``LAYERS=wdpa``) shared across
 # genuinely-distinct fetches, so collapsing on it would wrongly merge two
 # independent map layers.
-
-# --------------------------------------------------------------------------- #
-# Cross-RUN animation-frame identity
-# --------------------------------------------------------------------------- #
-#
-# A re-run of a flood scenario emits the SAME "Flood depth step N" name + role
-# "context" but a NEW run-id-suffixed layer_id (...-frame-NN-<runB>) and a NEW
-# per-run COG uri (.../<runB>/..._depth_frame_NN.tif). The COG-identity dedup in
-# Uri identity therefore NEVER collapses run B's frame N against run
-# A's frame N -> the connection's ``_loaded_layers`` (and the persisted case)
-# would accumulate [step1, step1, step2, step2, ...] on every re-run. The
-# stable cross-run token is the ``name`` ("Flood depth step N") + role="context",
-# identical across runs for BOTH SWMM (postprocess_swmm) and SFINCS
-# (postprocess_flood). Keying frames on that lets the NEWEST run's step N
-# SUPERSEDE the prior run's step N in place.
-
-#: Matches the EXACT frame name token both engines emit ("Flood depth step N").
-_FLOOD_FRAME_NAME_RE = re.compile(r"^Flood depth step \d+$")
-
-
-def _frame_series_key(summary: "ProjectLayerSummary") -> str | None:
-    """Stable cross-RUN identity for an animation frame, else ``None``.
-
-    Returns ``"flood-frame::<name>"`` for a flood animation frame (role
-    "context" AND a ``"Flood depth step N"`` name); ``None`` for every other
-    layer (peak, vectors, basemaps) so they keep the COG-identity dedup
-    unchanged. Engine-agnostic: SWMM and SFINCS frames share the name token, so
-    both de-accumulate uniformly. A frame only ever matches another frame.
-    """
-    if (
-        summary.role == "context"
-        and isinstance(summary.name, str)
-        and _FLOOD_FRAME_NAME_RE.match(summary.name)
-    ):
-        return f"flood-frame::{summary.name}"
-    return None
-
 
 # --------------------------------------------------------------------------- #
 # Terminal-on-RETURN detector
@@ -976,7 +937,7 @@ class PipelineEmitter:
       ``asyncio.CancelledError`` propagates further.
     - ``add_loaded_layer(layer_uri)``: append a ``ProjectLayerSummary``
       derived from a ``LayerURI``; emit a fresh ``session-state`` envelope.
-      Dedup policy: by the layer's uri, or by its frame-series key.
+      Dedup policy: by the layer's uri.
     - ``emit_session_state()``: emit the current session-state snapshot
       (``current_pipeline`` set whenever a pipeline is running, plus the
       accumulated ``loaded_layers`` and chat history).
@@ -1942,42 +1903,35 @@ class PipelineEmitter:
             uri=layer.uri,
             visible=True,
             role=layer.role,
-            temporal=layer.temporal is not None,
+            temporal=layer.valid_from is not None,
             legend=_legend,
             # Mesh CRS: carry the LayerURI's crs_authid onto the WS
             # row so the plugin's _add_mesh can setCrs() an MDAL mesh whose
             # native crs() is empty. None for raster/vector (byte-for-byte
             # unchanged).
             crs_authid=getattr(layer, "crs_authid", None),
+            # Mesh reference time: the instant the mesh's seconds are counted
+            # from, so the plugin's temporal stamp reads the run's own clock.
+            reference_time=getattr(layer, "reference_time", None),
+            # One frame of a sequence states its own validity window, so the map
+            # stamps a fixed temporal range without reading it back out of a name.
+            valid_from=getattr(layer, "valid_from", None),
+            valid_to=getattr(layer, "valid_to", None),
         )
         # Dedup by uri -- in-place replace if present, else append.
-        # Animation frames ALSO supersede the prior run's same-step frame via
-        # the (role + "Flood depth step N") series key, because a re-run's frame N
-        # is a DISTINCT COG (new run-id) and would otherwise accumulate. A frame
-        # only ever matches another frame; everything else keeps COG-identity
-        # dedup (the ``_match`` guard prevents frame/non-frame cross-collapse).
-        _new_frame_key = _frame_series_key(summary)
-        _new_key = summary.uri
         for i, existing in enumerate(self._loaded_layers):
-            if _new_frame_key is not None:
-                _match = _frame_series_key(existing) == _new_frame_key
-            else:
-                _match = (
-                    _frame_series_key(existing) is None
-                    and existing.uri == _new_key
-                )
-            if _match:
+            if existing.uri == summary.uri:
                 # Drop the SUPERSEDED layer_id's side tables (inline GeoJSON /
                 # density meta) so a merge cannot leave an orphan keyed on the
                 # old id. No-op for raster flood layers (no inline GeoJSON).
                 if existing.layer_id != summary.layer_id:
                     self._inline_geojson_by_layer_id.pop(existing.layer_id, None)
                     self._density_meta_by_layer_id.pop(existing.layer_id, None)
-                # REUSE the superseded layer's slot so a re-publish
-                # (styled supersedes styleless, a re-run's frame N, etc.) keeps
-                # its stacking position instead of jumping to the top. Falls
-                # back to a fresh slot only if the old row never carried one
-                # (a persisted layer seeded without a z_index).
+                # REUSE the superseded layer's slot so a re-publish (a styled
+                # row superseding a styleless one) keeps its stacking position
+                # instead of jumping to the top. Falls back to a fresh slot only
+                # if the old row never carried one (a persisted layer seeded
+                # without a z_index).
                 summary.z_index = (
                     existing.z_index
                     if existing.z_index is not None

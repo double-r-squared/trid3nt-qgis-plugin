@@ -442,6 +442,9 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
                     f"{_ID_TAG}-{satellite}-{ts_tag}-{q_bbox[0]:.3f}-{q_bbox[1]:.3f}"
                 ),
                 bbox=q_bbox,
+                # The accumulation bucket IS the frame's validity window.
+                valid_from=_iso_z(b_start),
+                valid_to=_iso_z(b_end),
                 fetch_context={"satellite": satellite, "start_utc": b_start, "end_utc": b_end},
             )
         )

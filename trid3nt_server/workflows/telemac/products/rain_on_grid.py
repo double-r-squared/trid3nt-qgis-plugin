@@ -309,7 +309,8 @@ async def publish_rain_on_grid_products(*, run: dict[str, Any],
     await publish_results_mesh_via_seam(
         emitter, run_id=run_id, engine="telemac", peak_layer=raw,
         peak_quantity="flood_depth", mesh_basename=run["result_basename"],
-        mesh_epsg=utm_epsg, reach_name=name)
+        mesh_epsg=utm_epsg, reach_name=name,
+        reference_time=solve.get("started_at"))
 
     # The NOTE rides the log line: it is where a dry run states its finding, and
     # the layer envelope the wire carries has no field for it.

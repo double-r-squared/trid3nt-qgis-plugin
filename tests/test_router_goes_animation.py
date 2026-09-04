@@ -4,7 +4,7 @@ The twins folded onto the frames-list output shape (shape: animation_frames):
 - registration + metadata TWIN-IDENTICAL, spec-served.
 - the frames-list shape returns an ordered list[LayerURI] with the scrubber
   NAME-TOKEN ("GOES <ProductLabel> step <N> <ISO> (<SAT>)"), proven by the
-  plugin's pure-python group_frame_layers over REAL produced names.
+  declared per-frame validity windows the map scrubs.
 - band routing: geocolor / fire_temperature (two synchronized groups) vs blend
   (ONE composite group); the deprecated fetch_goes_blend_animation delegate.
 - honesty floor (all frames degrade / empty window -> typed EMPTY).
@@ -14,9 +14,7 @@ The twins folded onto the frames-list output shape (shape: animation_frames):
 
 from __future__ import annotations
 
-import importlib.util
 import re
-import sys
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -48,18 +46,18 @@ _W = dict(start_utc="2026-06-22T17:30:00Z", end_utc="2026-06-22T18:30:00Z")
 
 # The plugin scrubber grouper is pure python (no PyQGIS); load it by path so the
 # name-token contract is proven in the offline suite.
-def _load_group_frame_layers():
-    spec = importlib.util.spec_from_file_location(
-        "_plugin_temporal_gfl",
-        "plugin/render/temporal.py",
-    )
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod.group_frame_layers
+def _scrubs(layers) -> bool:
+    """Do these frames declare a playable sequence?
 
-
-group_frame_layers = _load_group_frame_layers()
+    Every frame states its own [valid_from, valid_to) window, the windows run
+    forward, and each one ends where the next begins - which is what the
+    temporal controller needs and all it needs. A lone frame is a static
+    overlay, not a sequence, and declares no window at all.
+    """
+    windows = [(l.valid_from, l.valid_to) for l in layers]
+    if len(windows) < 2 or any(None in w for w in windows):
+        return False
+    return all(a[1] == b[0] and a[0] < a[1] for a, b in zip(windows, windows[1:]))
 
 
 def _ts(y, mo, d, h, mi):
@@ -188,29 +186,22 @@ def test_returns_ordered_list_with_step_token_and_iso(monkeypatch):
     assert {lyr.style["kind"] for lyr in layers} == {"continuous"}
 
 
-def test_scrubber_group_forms_over_real_names(monkeypatch):
-    _stub_three_frames(monkeypatch)
+def test_the_emitted_frames_declare_a_playable_sequence(monkeypatch):
+    frame_ts = _stub_three_frames(monkeypatch)
     layers = _run("fetch_goes_animation", band="fire_temperature", satellite="goes-18")
-    groups = group_frame_layers([lyr.name for lyr in layers])
-    assert len(groups) == 1
-    assert [m.value for m in groups[0].members] == [1, 2, 3]
+    assert _scrubs(layers)
+    assert [lyr.valid_from for lyr in layers] == [ts_int_to_iso(t) for t in frame_ts]
 
 
 def test_two_products_form_two_synchronized_groups(monkeypatch):
     frame_ts = _stub_three_frames(monkeypatch)
     geo = _run("fetch_goes_animation", band="geocolor", satellite="goes-18")
     fire = _run("fetch_goes_animation", band="fire_temperature", satellite="goes-18")
-    # Two DISTINCT scrubber groups (distinct product stems).
-    groups = group_frame_layers([lyr.name for lyr in geo] + [lyr.name for lyr in fire])
-    assert len(groups) == 2
-    # step N -> the SAME valid-time in both products (time-synchronized).
-    def _step_iso(layers):
-        out = {}
-        for lyr in layers:
-            step = int(re.search(r"step (\d+)", lyr.name).group(1))
-            out[step] = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)", lyr.name).group(1)
-        return out
-    assert _step_iso(geo) == _step_iso(fire) == {1: ts_int_to_iso(frame_ts[0]), 2: ts_int_to_iso(frame_ts[1]), 3: ts_int_to_iso(frame_ts[2])}
+    assert _scrubs(geo) and _scrubs(fire)
+    # Frame N of each product is valid over the SAME window (time-synchronized),
+    # so the two products play against one clock instead of two.
+    expected = [ts_int_to_iso(t) for t in frame_ts]
+    assert [l.valid_from for l in geo] == [l.valid_from for l in fire] == expected
 
 
 @pytest.mark.parametrize("token", ["blend", "blended", "combined", "geocolor_fire_temperature"])
@@ -222,15 +213,15 @@ def test_blend_band_forms_one_group(monkeypatch, token):
     for n, lyr in enumerate(layers, start=1):
         assert lyr.name.startswith(f"GOES Fire (GeoColor + Fire Temperature) step {n} ")
         assert lyr.name.endswith("(GOES-19)")
-    assert len(group_frame_layers([lyr.name for lyr in layers])) == 1
+    assert _scrubs(layers)
 
 
-def test_blend_delegate_returns_one_group(monkeypatch):
+def test_blend_delegate_returns_a_playable_sequence(monkeypatch):
     frame_ts = _stub_three_frames(monkeypatch)
     layers = _run("fetch_goes_blend_animation", satellite="goes-18")
     assert len(layers) == len(frame_ts) == 3
     assert all(lyr.layer_id.startswith("goes-fire-blend-") for lyr in layers)
-    assert len(group_frame_layers([lyr.name for lyr in layers])) == 1
+    assert _scrubs(layers)
 
 
 # ---- honesty floor ---------------------------------------------------------

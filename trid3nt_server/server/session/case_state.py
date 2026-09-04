@@ -8,7 +8,6 @@ import logging
 from trid3nt_contracts import now_utc
 from trid3nt_server.credentials.auth_handshake import AuthResult
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.emission.pipeline_emitter import _FLOOD_FRAME_NAME_RE
 from trid3nt_server.emission.uri_registry import get_uri_registry
 from trid3nt_server.server.session.persistence_ref import get_persistence
 from trid3nt_server.server.session.state import SessionState, _SESSION_ACTIVE_CASE, _set_session_active_case
@@ -483,37 +482,6 @@ async def _persist_case_loaded_layers(
     merged: list[dict] = [
         dict(d) for d in case.loaded_layer_summaries if isinstance(d, dict)
     ]
-
-    # D3 (persist-side frame supersede): a re-run's "Flood depth step N" frames
-    # carry NEW run-id-suffixed layer_ids, so the layer_id merge below would
-    # APPEND them on top of the prior run's step-N frames -> the persisted case
-    # grows by a full frame series per re-run (and re-surfaces on reopen via
-    # reset_loaded_layers). Before the layer_id merge, drop any PRIOR persisted
-    # frame whose (role + "Flood depth step N") series key matches an INCOMING
-    # frame, so run B's step N replaces run A's step N in storage too. Keys on
-    # the engine-agnostic name token (SWMM + SFINCS share it); mirrors
-    # pipeline_emitter._frame_series_key. Non-frame layers are untouched.
-    def _dict_frame_series_key(d: dict) -> str | None:
-        name = d.get("name")
-        if (
-            d.get("role") == "context"
-            and isinstance(name, str)
-            and _FLOOD_FRAME_NAME_RE.match(name)
-        ):
-            return f"flood-frame::{name}"
-        return None
-
-    incoming_frame_keys = {
-        k
-        for d in emitter_dicts
-        if (k := _dict_frame_series_key(d)) is not None
-    }
-    if incoming_frame_keys:
-        merged = [
-            d
-            for d in merged
-            if _dict_frame_series_key(d) not in incoming_frame_keys
-        ]
 
     index_by_layer_id = {
         d.get("layer_id"): i for i, d in enumerate(merged) if d.get("layer_id")

@@ -45,7 +45,7 @@ from ...imagery._satellite_slider import (
 )
 from ...imagery._goes_common import _normalize_satellite
 from ..errors import router_empty_error, router_input_error, router_upstream_error
-from . import FrameDegraded, FramePlan, register_hook
+from . import FrameDegraded, FramePlan, frame_windows, register_hook
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.hooks.goes_animation"
@@ -282,8 +282,10 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     sat_label = satellite.upper()
 
     plans: list[FramePlan] = []
+    windows = frame_windows([ts_int_to_iso(t) for t in frame_ts])
     for frame_no, ts_int in enumerate(frame_ts, start=1):
         iso = ts_int_to_iso(ts_int)
+        valid_from, valid_to = windows[frame_no - 1]
         if is_blend:
             layer_id = f"goes-fire-blend-{ts_int}-{q_bbox[0]:.3f}-{q_bbox[1]:.3f}"
         else:
@@ -300,12 +302,11 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
                     "ts_int": ts_int,
                     "zoom": zoom,
                 },
-                # "GOES <ProductLabel> step <N> <ISO> (<SAT>)": step <N> is the
-                # monotonic scrubber token; the product label keeps GeoColor / Fire
-                # Temperature / the blend in distinct stems; ISO is the display label.
                 name=f"GOES {product_label} step {frame_no} {iso} ({sat_label})",
                 layer_id=layer_id,
                 bbox=q_bbox,
+                valid_from=valid_from,
+                valid_to=valid_to,
             )
         )
     return plans

@@ -362,7 +362,7 @@ async def _emit_oil_slick(peak: TelemacDyeLayerURI, *, run_id: str,
         logger.warning("oil slick layer skipped: %s", exc)
 
 
-async def _journal_wetted_fraction(slf_path: str) -> None:
+def _journal_wetted_fraction(metrics: dict[str, Any]) -> None:
     """Say out loud how much of the solved domain the run actually wet.
 
     The reach is meshed from the mapped ACTIVE CHANNEL, which is a bankfull
@@ -371,17 +371,16 @@ async def _journal_wetted_fraction(slf_path: str) -> None:
     rides the journal because a reader needs it beside the map; it decides
     nothing, and a run whose result cannot be measured says nothing rather than
     losing its products over a heuristic.
+
+    The postprocess measured it off the read it already made, so this narrates
+    rather than reopening the result.
     """
     from trid3nt_server.workflows.runtime import journal_note
 
-    from .run_reads import wetted_fraction
-
-    try:
-        measured = await asyncio.to_thread(wetted_fraction, slf_path)
-    except Exception as exc:  # noqa: BLE001 -- a heuristic never voids the run
-        logger.warning("wetted fraction unmeasurable: %s", exc)
-        return
-    if not measured:
+    measured = {k: metrics[k] for k in
+                ("wetted_fraction", "mesh_area_m2", "wet_area_m2", "wet_tol_m")
+                if metrics.get(k) is not None}
+    if len(measured) < 4:
         return
     journal_note(
         f"wetted fraction: {measured['wetted_fraction']:.0%} of the "
@@ -411,10 +410,10 @@ async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
     slf_path = await asyncio.to_thread(download_result_selafin, run_id)
 
     try:
-        layers, _metrics = await asyncio.to_thread(
+        layers, metrics = await asyncio.to_thread(
             postprocess_telemac, slf_path, run_id=run_id, utm_epsg=utm_epsg,
             reach_name=reach_name, substance_class=substance_class)
-        await _journal_wetted_fraction(slf_path)
+        _journal_wetted_fraction(metrics)
     finally:
         Path(slf_path).unlink(missing_ok=True)
 
@@ -439,7 +438,8 @@ async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
     await publish_results_mesh_via_seam(
         emitter, run_id=run_id, engine="telemac", peak_layer=raw_peak,
         peak_quantity=product.quantity, mesh_basename="r2d_river.slf",
-        mesh_epsg=utm_epsg, reach_name=reach_name)
+        mesh_epsg=utm_epsg, reach_name=reach_name,
+        reference_time=solve.get("started_at"))
 
     logger.info("telemac reach complete run_id=%s reach=%s class=%s cmax_mgl=%.4g "
                 "plume_reach_m=%s active_frames=%s peak_uri=%s", run_id, reach_name,
@@ -502,7 +502,7 @@ async def publish_do_products(*, run: dict[str, Any], solve: dict[str, Any],
     reach_name = run["reach_name"]
     slf_path = await asyncio.to_thread(download_result_selafin, run_id)
     try:
-        layers, _metrics = await asyncio.to_thread(
+        layers, metrics = await asyncio.to_thread(
             postprocess_telemac_do, slf_path, run_id=run_id, utm_epsg=utm_epsg,
             reach_name=reach_name,
             # Read, never re-defaulted: these were the THIRD copy of four
@@ -512,7 +512,7 @@ async def publish_do_products(*, run: dict[str, Any], solve: dict[str, Any],
             standard_mgl=float(do_sag_config["standard_mgl"]),
             k1_per_day=float(do_sag_config["k1_per_day"]),
             k2_per_day=float(do_sag_config["k2_per_day"]))
-        await _journal_wetted_fraction(slf_path)
+        _journal_wetted_fraction(metrics)
     finally:
         Path(slf_path).unlink(missing_ok=True)
 

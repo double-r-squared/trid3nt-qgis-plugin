@@ -8,7 +8,7 @@ covers:
 - registration + spec-served + signature/return parity (twin-identical surface),
 - per-frame cache_params BYTE-identity vs the twin (cache reuse), naming, layer_id,
   per-band style_preset, and the scrubber NAME-TOKEN grouping over REAL produced
-  names (the plugin's pure-python group_frame_layers),
+  declared per-frame validity windows,
 - the honesty floor (all-frames-degrade + empty-window -> GOES_ARCHIVE_EMPTY),
   satellite-spelling normalization, band aliasing, and typed input errors,
 - the pure band-math core (Fire-Temp / true-color composite, split-window fire
@@ -19,8 +19,6 @@ ASCII only.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from datetime import datetime, timezone
 
 import numpy as np
@@ -37,18 +35,18 @@ from trid3nt_server.tools.fetchers.imagery._goes_common import (
 )
 
 
-def _load_group_frame_layers():
-    spec = importlib.util.spec_from_file_location(
-        "_plugin_temporal_gfl_arch",
-        "plugin/render/temporal.py",
-    )
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod.group_frame_layers
+def _scrubs(layers) -> bool:
+    """Do these frames declare a playable sequence?
 
-
-group_frame_layers = _load_group_frame_layers()
+    Every frame states its own [valid_from, valid_to) window, the windows run
+    forward, and each one ends where the next begins - which is what the
+    temporal controller needs and all it needs. A lone frame is a static
+    overlay, not a sequence, and declares no window at all.
+    """
+    windows = [(l.valid_from, l.valid_to) for l in layers]
+    if len(windows) < 2 or any(None in w for w in windows):
+        return False
+    return all(a[1] == b[0] and a[0] < a[1] for a, b in zip(windows, windows[1:]))
 
 # Utah fire cluster AOI (the design-spike bbox).
 _BBOX = [-114.05, 37.0, -109.04, 42.0]
@@ -178,19 +176,18 @@ def test_active_fire_cache_params_byte_identical(_stub_three_keys):
 # --------------------------------------------------------------------------- #
 
 
-def test_route_returns_ordered_list_and_one_scrubber_group(_stub_three_keys):
+def test_route_returns_an_ordered_playable_sequence(_stub_three_keys):
     layers = TOOL_REGISTRY["fetch_goes_archive_animation"].fn(bbox=_BBOX, band="fire_temperature")
     assert isinstance(layers, list) and len(layers) == 3
     assert [l.layer_type for l in layers] == ["raster", "raster", "raster"]
-    groups = group_frame_layers([l.name for l in layers])
-    assert len(groups) == 1
+    assert _scrubs(layers)
 
 
-def test_two_bands_form_two_synchronized_groups(_stub_three_keys):
+def test_two_bands_play_against_one_clock(_stub_three_keys):
     ft = TOOL_REGISTRY["fetch_goes_archive_animation"].fn(bbox=_BBOX, band="fire_temperature")
     tc = TOOL_REGISTRY["fetch_goes_archive_animation"].fn(bbox=_BBOX, band="true_color")
-    groups = group_frame_layers([l.name for l in ft] + [l.name for l in tc])
-    assert len(groups) == 2
+    assert _scrubs(ft) and _scrubs(tc)
+    assert [l.valid_from for l in ft] == [l.valid_from for l in tc]
 
 
 def test_active_fire_route_returns_hotspot_frames(_stub_three_keys):

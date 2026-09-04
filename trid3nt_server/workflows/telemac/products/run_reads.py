@@ -330,7 +330,7 @@ def outlet_hydrograph(listing_text: str, *, boundary: int) -> dict[str, Any]:
     }
 
 
-def wetted_fraction(slf_path: str | Path, *, wet_tol_m: float = _WET_TOL_M
+def wetted_fraction(mesh: Mapping[str, Any], *, wet_tol_m: float = _WET_TOL_M
                     ) -> dict[str, Any]:
     """How much of the solved domain still held water at the final frame.
 
@@ -344,12 +344,13 @@ def wetted_fraction(slf_path: str | Path, *, wet_tol_m: float = _WET_TOL_M
     element, an element counting as wet when its own mean depth clears the
     tolerance. A HEURISTIC, and it gates nothing - it is the number a reader
     needs beside a picture, not a verdict on the run.
+
+    ``mesh`` is the record the postprocess ALREADY read; opening the container a
+    second time for the same file would cost a second engine round trip to
+    recompute arrays the caller is holding.
     """
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.result_reader import read_selafin
-
-    mesh = read_selafin(slf_path)
     # SELAFIN pads a variable name to 32 chars with its unit trailing ('WATER
     # DEPTH     M'), so an exact-key lookup never matches a real result.
     picked = next((v for v in mesh["varnames"]

@@ -10,7 +10,7 @@ scrubber-steppable ``step <N>`` frames. Covers:
 - frames_plan bucket resolve (single -> 1 frame, accumulation -> N) + the twin's
   byte-identical per-frame cache_params + the ``step <N>`` scrubber name-token,
 - frame_bytes GED binning to a REAL RGBA COG + FrameDegraded on an empty bucket,
-- route() list-return + the plugin group_frame_layers scrubber proof (one group),
+- route() list-return + the declared per-frame validity windows the map scrubs,
 - the honesty floor (all buckets degrade / empty window -> GLM_EMPTY),
 - typed input errors (unknown satellite / bad window / tiny accum / over-long single),
 - the pure GED point-gridding math (bin + purple ramp) relocated into the hook module.
@@ -21,9 +21,7 @@ is proven by the live proof recorded in ADR 0092. ASCII only.
 
 from __future__ import annotations
 
-import importlib.util
 import io
-import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -40,17 +38,18 @@ from trid3nt_server.tools.fetchers._router.hooks import glm as GLM
 from trid3nt_server.tools.fetchers.imagery._goes_archive_core import _grid_for_bbox
 
 
-def _load_group_frame_layers():
-    spec = importlib.util.spec_from_file_location(
-        "_plugin_temporal_gfl_glm", "plugin/render/temporal.py"
-    )
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod.group_frame_layers
+def _scrubs(layers) -> bool:
+    """Do these frames declare a playable sequence?
 
-
-group_frame_layers = _load_group_frame_layers()
+    Every frame states its own [valid_from, valid_to) window, the windows run
+    forward, and each one ends where the next begins - which is what the
+    temporal controller needs and all it needs. A lone frame is a static
+    overlay, not a sequence, and declares no window at all.
+    """
+    windows = [(l.valid_from, l.valid_to) for l in layers]
+    if len(windows) < 2 or any(None in w for w in windows):
+        return False
+    return all(a[1] == b[0] and a[0] < a[1] for a, b in zip(windows, windows[1:]))
 
 _UT_BBOX = [-1.0, -1.0, 1.0, 1.0]  # 2 deg x 2 deg @ 0.02 -> 100 x 100
 _SPEC = reg.get_spec("fetch_glm_lightning")
@@ -199,8 +198,8 @@ def test_route_single_returns_one_frame_list_and_one_group(monkeypatch):
     assert layers[0].layer_type == "raster" and layers[0].role == "context"
     assert layers[0].style["kind"] == "continuous"
     assert "step 1" in layers[0].name
-    # A ONE-frame list is a static overlay, not a scrubbable animation group.
-    assert group_frame_layers([l.name for l in layers]) == []
+    # A ONE-frame list is a static overlay, not a scrubbable sequence.
+    assert not _scrubs(layers)
     _assert_valid_rgba_cog(captured["calls"][0]["data"])
 
 
@@ -214,8 +213,7 @@ def test_route_accumulation_returns_ordered_scrubber_group(monkeypatch):
     for n, l in enumerate(layers, start=1):
         assert f"step {n}" in l.name
         assert l.style["kind"] == "continuous" and tuple(l.bbox) == tuple(_UT_BBOX)
-    groups = group_frame_layers([l.name for l in layers])
-    assert len(groups) == 1  # one scrubber group, 3 ordered step frames
+    assert _scrubs(layers)  # 3 contiguous declared windows, in order
 
 
 # --------------------------------------------------------------------------- #

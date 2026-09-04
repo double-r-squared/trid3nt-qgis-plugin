@@ -92,6 +92,12 @@ def execute(
                 role=spec.output.role,
                 units=spec.normalize.units,
                 bbox=frame.bbox,
+                # The frame's own validity window, declared by the plan that
+                # already held the instants: the map stamps it as this layer's
+                # fixed temporal range and the temporal controller plays the
+                # sequence with no name to parse.
+                valid_from=frame.valid_from,
+                valid_to=frame.valid_to,
             )
         )
 

@@ -18,8 +18,10 @@ Routing:
   * ``vector``                        -> a vector layer.
   * ``mesh``                          -> a native SELAFIN ``layer_type="mesh"``
                                          layer (role ``context``, ``crs_authid``
-                                         from the entry, ``bbox=None``); MDAL
-                                         animates every frame from the one file.
+                                         and ``reference_time`` from the entry,
+                                         ``bbox=None``); MDAL animates every
+                                         frame from the one file, on the run's
+                                         own clock.
   * ``scalar``                        -> parse + validate, log-only in v1.
 
 The emitted layer-event stream -- ``name``, ``layer_id`` (modulo run-id), the
@@ -466,6 +468,7 @@ def build_layers_from_outputs(
                 units=entry.units or None,
                 bbox=entry_bbox,
                 crs_authid=entry.crs_authid or None,
+                reference_time=entry.reference_time or None,
             )
         )
         result.frames.append(

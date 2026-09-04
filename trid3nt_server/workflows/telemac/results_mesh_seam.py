@@ -52,6 +52,7 @@ def _build_entries(
     mesh_uri: str,
     mesh_epsg: int,
     reach_name: str,
+    reference_time: str | None,
 ) -> list[dict[str, Any]]:
     """Peak entry (whole-run record, seam-skipped) + the mesh SELAFIN entry."""
     from trid3nt_contracts.outputs_manifest import build_entry
@@ -75,6 +76,7 @@ def _build_entries(
             name=_mesh_layer_name(reach_name),
             uri=mesh_uri,
             crs_authid=f"EPSG:{int(mesh_epsg)}",
+            reference_time=reference_time,
         )
     )
     return entries
@@ -89,6 +91,7 @@ def _write_and_read_mesh_layers(
     mesh_basename: str,
     mesh_epsg: int,
     reach_name: str,
+    reference_time: str | None,
 ) -> list[LayerURI]:
     """Write ``outputs.json`` then read it back into the seam's mesh LayerURIs.
 
@@ -116,6 +119,7 @@ def _write_and_read_mesh_layers(
         mesh_uri=mesh_uri,
         mesh_epsg=mesh_epsg,
         reach_name=reach_name,
+        reference_time=reference_time,
     )
     write_outputs_manifest(run_id=run_id, engine=engine, entries=entries)
 
@@ -141,14 +145,17 @@ async def publish_results_mesh_via_seam(
     mesh_basename: str,
     mesh_epsg: int,
     reach_name: str,
+    reference_time: str | None = None,
 ) -> int:
     """Write ``outputs.json`` + emit the results-mesh layer through the seam.
 
     ``peak_layer`` is the RAW postprocess peak (its ``s3://`` COG uri lands in the
     whole-run record). ``mesh_basename`` is the result SELAFIN basename under the
     run prefix (``r2d_rog.slf`` / ``r2d_river.slf`` / ``res_coastal.slf``);
-    ``mesh_epsg`` is the reach UTM zone the SELAFIN is stamped with. Returns the
-    number of mesh layers emitted (0 on any degrade). NEVER raises.
+    ``mesh_epsg`` is the reach UTM zone the SELAFIN is stamped with;
+    ``reference_time`` is the ISO-8601 UTC instant the SELAFIN's seconds are
+    counted from (the solve's own start), without which the scrubber reads 1900.
+    Returns the number of mesh layers emitted (0 on any degrade). NEVER raises.
     """
     try:
         mesh_layers = await asyncio.to_thread(
@@ -160,6 +167,7 @@ async def publish_results_mesh_via_seam(
             mesh_basename=mesh_basename,
             mesh_epsg=mesh_epsg,
             reach_name=reach_name,
+            reference_time=reference_time,
         )
     except Exception as exc:  # noqa: BLE001 -- the results mesh is a bonus
         logger.warning(

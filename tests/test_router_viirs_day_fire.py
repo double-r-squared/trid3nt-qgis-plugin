@@ -4,16 +4,13 @@ The twin folded onto the frames-list output shape (shape: animation_frames):
 - registration + metadata TWIN-IDENTICAL, spec-served.
 - the frames-list shape returns ordered list[LayerURI] with the scrubber
   NAME-TOKEN ("VIIRS Day Fire step <N> <ISO> (<SAT>)"), proven by the plugin's
-  pure-python group_frame_layers over REAL produced names.
+  declared per-frame validity windows the map scrubs.
 - the day/night pass filter + the multi-satellite merge/sort pass-list.
 - honesty floor + the typed-error surface.
 """
 
 from __future__ import annotations
 
-import importlib.util
-import re
-import sys
 from datetime import datetime, timezone
 
 import pytest
@@ -36,17 +33,18 @@ _CI_CENTER_LON = (-120.50 + -119.50) / 2.0
 _W = dict(start_utc="2026-05-15T20:47:00Z", end_utc="2026-05-19T22:01:00Z")
 
 
-def _load_group_frame_layers():
-    spec = importlib.util.spec_from_file_location(
-        "_plugin_temporal_gfl_v", "plugin/render/temporal.py"
-    )
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod.group_frame_layers
+def _scrubs(layers) -> bool:
+    """Do these frames declare a playable sequence?
 
-
-group_frame_layers = _load_group_frame_layers()
+    Every frame states its own [valid_from, valid_to) window, the windows run
+    forward, and each one ends where the next begins - which is what the
+    temporal controller needs and all it needs. A lone frame is a static
+    overlay, not a sequence, and declares no window at all.
+    """
+    windows = [(l.valid_from, l.valid_to) for l in layers]
+    if len(windows) < 2 or any(None in w for w in windows):
+        return False
+    return all(a[1] == b[0] and a[0] < a[1] for a, b in zip(windows, windows[1:]))
 _VF_SPEC = reg.get_spec("fetch_viirs_day_fire")
 
 
@@ -144,8 +142,8 @@ def test_returns_ordered_list_with_step_and_iso(monkeypatch):
         assert layer.name == f"VIIRS Day Fire step {n} {ts_int_to_iso(ts)} (JPSS)"
         assert layer.style["kind"] == "continuous"
         assert layer.layer_id.startswith("viirs-dayfire-")
-    groups = group_frame_layers([lyr.name for lyr in layers])
-    assert len(groups) == 1 and [m.value for m in groups[0].members] == [1, 2, 3]
+    assert _scrubs(layers)
+    assert [lyr.valid_from for lyr in layers] == [ts_int_to_iso(t) for t in passes]
 
 
 def test_specific_satellite_label_recorded(monkeypatch):

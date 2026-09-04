@@ -65,6 +65,8 @@ from trid3nt_server.workflows.shared.cog_io import CogIoError
 from trid3nt_server.workflows.shared.cog_io import RUNS_BUCKET_DEFAULT
 from trid3nt_server.workflows.telemac.result_reader import read_selafin
 
+from .run_reads import wetted_fraction
+
 __all__ = [
     "PostprocessTelemacError",
     "postprocess_telemac",
@@ -627,6 +629,7 @@ def postprocess_telemac(
         "bbox": list(bbox),
         "crs": "EPSG:4326",
         "honesty_label": honesty,
+        **wetted_fraction(mesh),
     }
     logger.info(
         "postprocess_telemac run_id=%s dye_var=%s cmax=%.4g mg/L peak_t=%ss "
@@ -1697,6 +1700,7 @@ def postprocess_telemac_do(
                                  if sp_sag_dev is not None else None),
         "sp_note": sp_note,
         "honesty_label": honesty,
+        **wetted_fraction(mesh),
     }
     logger.info(
         "postprocess_telemac_do run_id=%s do_var=%s do_min=%.3g mg/L at %.0fm "

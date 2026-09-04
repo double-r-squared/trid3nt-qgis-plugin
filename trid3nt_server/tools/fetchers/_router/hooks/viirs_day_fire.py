@@ -34,7 +34,7 @@ from ...imagery._satellite_slider import (
     ts_int_to_iso,
 )
 from ..errors import router_empty_error, router_input_error, router_upstream_error
-from . import FrameDegraded, FramePlan, register_hook
+from . import FrameDegraded, FramePlan, frame_windows, register_hook
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.hooks.viirs_day_fire"
@@ -225,8 +225,10 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     sat_label = "JPSS" if satellite == "all" else satellite.upper()
 
     plans: list[FramePlan] = []
+    windows = frame_windows([ts_int_to_iso(t) for t in pass_ts])
     for frame_no, ts_int in enumerate(pass_ts, start=1):
         iso = ts_int_to_iso(ts_int)
+        valid_from, valid_to = windows[frame_no - 1]
         plans.append(
             FramePlan(
                 cache_params={
@@ -236,11 +238,11 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
                     "ts_int": ts_int,
                     "zoom": zoom,
                 },
-                # "VIIRS Day Fire step <N> <ISO> (<SAT>)": step <N> is the monotonic
-                # scrubber token; the irregular polar-pass ISO is the display label.
                 name=f"VIIRS Day Fire step {frame_no} {iso} ({sat_label})",
                 layer_id=f"viirs-dayfire-{ts_int}-{q_bbox[0]:.3f}-{q_bbox[1]:.3f}",
                 bbox=q_bbox,
+                valid_from=valid_from,
+                valid_to=valid_to,
             )
         )
     return plans

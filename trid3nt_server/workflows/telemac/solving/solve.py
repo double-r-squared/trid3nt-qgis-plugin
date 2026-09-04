@@ -194,7 +194,20 @@ async def solve_reach(*, run: dict[str, Any],
                 f"{run['result_basename']}"),
         "utm_epsg": int(metrics["utm_epsg"]),
         "metrics": metrics,
+        "started_at": _run_start_iso(run_result),
     }
+
+
+def _run_start_iso(run_result: Any) -> str | None:
+    """When the solve began, as the mesh's time origin.
+
+    A SELAFIN counts seconds from an origin it never records, so the layer the
+    client scrubs needs the run to say when zero was. The solver's own
+    ``started_at`` is that instant; a run that never reported one states nothing
+    rather than inventing a clock.
+    """
+    started = getattr(run_result, "started_at", None)
+    return started.isoformat() if started is not None else None
 
 
 #: The compute ladder the dispatcher knows. Anything outside it is a model
@@ -267,6 +280,7 @@ async def solve_rain_on_grid(*, run: dict[str, Any],
         "uri": (f"s3://{_get_runs_bucket()}/{batch_run_id}/"
                 f"{run['result_basename']}"),
         "utm_epsg": int(run["utm_epsg"]), "metrics": metrics,
+        "started_at": _run_start_iso(run_result),
     }
 
 

@@ -35,7 +35,7 @@ from trid3nt_contracts.source_spec import SourceSpec
 from ...imagery import _goes_archive_core as core
 from ...imagery._goes_common import _normalize_satellite
 from ..errors import router_empty_error, router_input_error, router_upstream_error
-from . import FrameDegraded, FramePlan, register_hook
+from . import FrameDegraded, FramePlan, frame_windows, register_hook
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.hooks.goes_archive"
@@ -161,9 +161,11 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
         af_c07 = round(_thresh(params.get("bt_c07_min_k"), core.FIRE_BT_C07_MIN_K), 3)
         af_diff = round(_thresh(params.get("bt_diff_min_k"), core.FIRE_BT_DIFF_MIN_K), 3)
         plans: list[FramePlan] = []
+        windows = frame_windows([core._iso_z(t) for t, _key in frames])
         for frame_no, (t, key) in enumerate(frames, start=1):
             iso = core._iso_z(t)
             ts_tag = t.strftime("%Y%m%d%H%M%S")
+            valid_from, valid_to = windows[frame_no - 1]
             plans.append(
                 FramePlan(
                     cache_params={
@@ -178,6 +180,8 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
                     name=f"GOES Active Fire step {frame_no} {iso} ({sat_label})",
                     layer_id=f"goes-activefire-{ts_tag}-{q_bbox[0]:.3f}-{q_bbox[1]:.3f}",
                     bbox=q_bbox,
+                    valid_from=valid_from,
+                    valid_to=valid_to,
                     fetch_context={
                         "key": key,
                         "band": "fire_hotspots",
@@ -201,9 +205,11 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     product_slug = core._PRODUCT_ID_SLUGS[band]
 
     plans = []
+    windows = frame_windows([core._iso_z(t) for t, _key in frames])
     for frame_no, (t, key) in enumerate(frames, start=1):
         iso = core._iso_z(t)
         ts_tag = t.strftime("%Y%m%d%H%M%S")
+        valid_from, valid_to = windows[frame_no - 1]
         cache_params: dict[str, Any] = {
             "bbox": list(q_bbox),
             "product": band,
@@ -224,6 +230,8 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
                     f"{q_bbox[0]:.3f}-{q_bbox[1]:.3f}"
                 ),
                 bbox=q_bbox,
+                valid_from=valid_from,
+                valid_to=valid_to,
                 fetch_context={
                     "key": key,
                     "band": band,
