@@ -1,13 +1,13 @@
 """Session-scoped layer-URI registry -- layer-handle indirection.
 
-Gemini is structurally bad at echoing long opaque URIs between turns
+The LLM is structurally weak at echoing long opaque URIs between turns
 (dropped/doubled path segments, layer_id-as-basename invention, hash-tail
 hallucination, a WMS display URL substituted for the data URI, invented
 cache hashes). This module removes the failure mode architecturally:
 
 * Every tool result that carries URIs gets **registered** as
   ``handle → exact URI`` where the handle is the ``layer_id`` (or a minted
-  stable key for bare URIs). Handles are surfaced to Gemini in the
+  stable key for bare URIs). Handles are surfaced to the model in the
   function_response, and the SYSTEM_PROMPT instructs it to pass handles --
   never raw object-store paths.
 * Every URI-consuming tool param (``hazard_raster_uri``, ``assets_uri``,
