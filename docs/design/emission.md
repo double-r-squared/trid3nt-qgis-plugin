@@ -9,7 +9,11 @@ into the layer + pipeline frames the QGIS plugin renders over the WebSocket.
   frames, budget-partition chart, vector densification, legend handoff.
 - `layer_uri_emit.py` -- the emit-on-fetch seam: a router fetch with
   `purpose=` auto-emits its input layer (the job-0254 guardrail drops a
-  renderable raster URI into the map without hand-emitting).
+  renderable raster URI into the map without hand-emitting). It is also where a
+  VECTOR or MESH layer's declared row is resolved: the raster arm resolves
+  inside `publish_layer` because it reads the COG's own band, and a layer with
+  no band to read resolves here through the SAME `legend_for_published_layer`.
+  A row that names no kind takes the one its layer TYPE implies.
 - `uri_registry.py` -- the published-URI registry.
 - `presets.py` -- THE preset family: four data KINDS (continuous raster,
   classed vector-or-raster, reference outline, mesh dataset group), each

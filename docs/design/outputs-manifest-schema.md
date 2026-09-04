@@ -91,6 +91,17 @@ entries omit it (their COGs/GeoJSON are self-describing). Tolerant-read: an old
 producer that omits it is byte-unchanged. Both the contracts writer/reader and the
 worker mirror carry the field. See ADR 0283 EXECUTED.
 
+**AMENDMENT (schema_version 1, 2026-09-04):** a `kind="mesh"` entry may also
+carry `dataset_group` -- the ONE group its preset paints, spelled the way the
+mesh reader reports it. A results mesh carries every variable the solve wrote,
+so the quantity it is FILED under ("the model results") is not the field a
+reader is meant to see; this names that field, and the plugin binds the preset
+to it BY NAME. Absent, the quantity stands in. A mesh entry's `band_stats`
+carries the published max-over-time range for the same reason a raster's does:
+a mesh has no band to read, so the range it is painted on is DECLARED, and
+declaring the published one is what puts the animating canvas and the still on
+one scale. Tolerant-read: a producer that omits either is byte-unchanged.
+
 `kind="mesh"` is NO LONGER log-only (superseding Section 0's "v1 validates +
 log-only's a `mesh` entry"): `build_layers_from_outputs` now publishes a
 `layer_type="mesh"` `LayerURI` per mesh entry (uri=the SELAFIN, style via
