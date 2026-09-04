@@ -8,7 +8,7 @@ corrected args, so it must PROPAGATE rather than flatten into an envelope.
 
 from __future__ import annotations
 
-from trid3nt_server.workflows.lib import DeclarativeError
+from trid3nt_server.workflows.runtime import DeclarativeError
 
 __all__ = [
     "RainOnGridError",

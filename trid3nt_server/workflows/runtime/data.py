@@ -206,7 +206,7 @@ class ToolWord:
         return MeshTool.build_mesh(**ask)
 
 
-#: The author word itself. One object, so ``from ...lib import tool`` and
+#: The author word itself. One object, so ``from ...runtime import tool`` and
 #: ``from ...mesh.tool import tool`` are the same name for the same thing.
 tool = ToolWord()
 

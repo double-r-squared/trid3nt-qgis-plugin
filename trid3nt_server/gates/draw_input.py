@@ -131,7 +131,7 @@ def _value_from(response: Any, geometry: str) -> Any:
     function-local because the declarative library's interpreter imports this
     module, and the package edge is the cycle.
     """
-    from trid3nt_server.workflows.lib.user_input import (
+    from trid3nt_server.workflows.runtime.user_input import (
         lonlat_bbox,
         lonlat_point,
         polygon_ring,

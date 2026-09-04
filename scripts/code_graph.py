@@ -304,7 +304,7 @@ def _resolve_filenames(u: Universe, module: str, filenames: set[str]) -> list[st
 
 def _dynamic_strings(tree: ast.AST) -> tuple[set[str], set[str]]:
     """String literals that name code: dotted module paths for the importlib
-    seams (``workflows/lib/resolver._load``, ``fallbacks/walker``, the
+    seams (``workflows/runtime/resolver._load``, ``fallbacks/walker``, the
     payload-warning estimator lookup), and bare ``<name>.py`` filenames for the
     ship-and-exec drivers. Module-level string constants are resolved so
     f-strings like ``f"{_HELPERS}.water_quality.x"`` land."""

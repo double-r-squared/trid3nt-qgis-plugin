@@ -15,7 +15,7 @@ import logging
 from typing import Any, Mapping
 
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.workflows.lib import Step, WireArgsError
+from trid3nt_server.workflows.runtime import Step, WireArgsError
 
 __all__ = ["AcquireAoi", "acquire_aoi", "aoi_slug", "location_or_bbox"]
 

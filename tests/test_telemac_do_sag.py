@@ -88,7 +88,7 @@ def test_do_saturation_temperature_relation():
 
 
 def test_declared_params_and_plan_validate():
-    from trid3nt_server.workflows.lib import resolve_params, validate_plan
+    from trid3nt_server.workflows.runtime import resolve_params, validate_plan
 
     wf = _workflow()
     p = asyncio.run(resolve_params(wf.params,
@@ -101,7 +101,7 @@ def test_declared_params_and_plan_validate():
 
 def test_the_plan_reads_as_the_universal_stage_sequence():
     """The skeleton owns the sequence; the facade's five ops stamp each step."""
-    from trid3nt_server.workflows.lib import resolve_params
+    from trid3nt_server.workflows.runtime import resolve_params
 
     wf = _workflow()
     plan = wf.plan
@@ -112,7 +112,7 @@ def test_the_plan_reads_as_the_universal_stage_sequence():
 
 
 def test_declared_bounds_clamp_the_wq_knobs():
-    from trid3nt_server.workflows.lib import resolve_params
+    from trid3nt_server.workflows.runtime import resolve_params
 
     wf = _workflow()
     p = asyncio.run(resolve_params(wf.params, {"location": "x", "reach_length_km": 900.0,
@@ -145,7 +145,7 @@ async def test_malformed_outfall_coords_refuse_they_never_fall_back(bad):
 
 def test_an_absent_outfall_leaves_a_derived_provenance_row():
     """The user has to see what the sag distance is measured FROM."""
-    from trid3nt_server.workflows.lib import provenance_entries, resolve_params
+    from trid3nt_server.workflows.runtime import provenance_entries, resolve_params
 
     wf = _workflow()
     p = asyncio.run(resolve_params(wf.params, {"location": "Eel River near Scotia"}))
@@ -156,7 +156,7 @@ def test_an_absent_outfall_leaves_a_derived_provenance_row():
 
 
 def test_a_supplied_outfall_is_carried_as_a_user_row():
-    from trid3nt_server.workflows.lib import provenance_entries, resolve_params
+    from trid3nt_server.workflows.runtime import provenance_entries, resolve_params
 
     wf = _workflow()
     supplied, err = wf._normalize({"location": "x",
@@ -172,7 +172,7 @@ def test_a_supplied_outfall_is_carried_as_a_user_row():
 def test_the_plan_declares_the_run_mode_read_for_the_input_review():
     """input_mode is the gate lever, not a Param: without this the user_gated
     review of the resolved NWM discharge is silently lost."""
-    from trid3nt_server.workflows.lib import RunMode, resolve_params
+    from trid3nt_server.workflows.runtime import RunMode, resolve_params
 
     wf = _workflow()
     review = next(s for s in wf.plan.declared()
@@ -183,7 +183,7 @@ def test_the_plan_declares_the_run_mode_read_for_the_input_review():
 
 # --- the sag chart ----------------------------------------------------------- #
 def test_the_chart_title_is_not_doubled_on_a_bbox_only_invocation():
-    from trid3nt_server.workflows.lib import ParamValues
+    from trid3nt_server.workflows.runtime import ParamValues
     from trid3nt_server.workflows.telemac.do_sag.do_sag import build_sag_chart
 
     result = SimpleNamespace(

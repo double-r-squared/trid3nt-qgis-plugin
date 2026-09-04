@@ -288,7 +288,7 @@ def test_the_reach_run_says_out_loud_what_it_did_not_wet(monkeypatch):
     """
     import asyncio
 
-    from trid3nt_server.workflows.lib.journal import bind_notes, drain_notes
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
     from trid3nt_server.workflows.telemac.products import products as PR
 
     _selafin(monkeypatch, [1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
@@ -305,7 +305,7 @@ def test_the_reach_run_says_out_loud_what_it_did_not_wet(monkeypatch):
 def test_an_unmeasurable_result_costs_the_run_nothing(monkeypatch):
     import asyncio
 
-    from trid3nt_server.workflows.lib.journal import bind_notes, drain_notes
+    from trid3nt_server.workflows.runtime.journal import bind_notes, drain_notes
     from trid3nt_server.workflows.telemac import result_reader as reader
     from trid3nt_server.workflows.telemac.products import products as PR
 

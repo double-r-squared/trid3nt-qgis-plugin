@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.workflows.lib import journal
+from trid3nt_server.workflows.runtime import journal
 
 
 @pytest.fixture(autouse=True)

@@ -11,7 +11,7 @@ one can be satisfied:
     not an error.
 
 The in-memory shapes normalize through the user-input species
-(``workflows/lib/user_input.py``) so a drawn line and a typed line are the same
+(``workflows/runtime/user_input.py``) so a drawn line and a typed line are the same
 value by the time anything models them. Only the READ of a stored vector lives
 here, because that is I/O and the species is pure.
 """
@@ -22,7 +22,7 @@ import logging
 import os
 from typing import Any
 
-from trid3nt_server.workflows.lib import user_input
+from trid3nt_server.workflows.runtime import user_input
 
 logger = logging.getLogger("trid3nt_server.workflows.shared.supplied_geometry")
 

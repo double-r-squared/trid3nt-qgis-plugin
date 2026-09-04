@@ -254,7 +254,7 @@ rain = (tool("...resolve_rain_forcing", ...)
         .normalize(units="mm/day"))
 ```
 
-pandas does the arithmetic (`workflows/lib/temporal.py`); the library is
+pandas does the arithmetic (`workflows/runtime/temporal.py`); the library is
 the doctrine around it, and three rules decide every call:
 
 - THE QUANTITY CLASS PICKS THE METHOD. A RATE resamples conservatively
@@ -483,7 +483,7 @@ family campaign builds. Status: BUILT and hardened on the two-template cohort
 until NATE redlines the cohort result. What the cohort taught, recorded here so
 the contract and the code do not drift:
 
-* the base class lives at `workflows/lib/workflow.py`; the plan-value
+* the base class lives at `workflows/runtime/workflow.py`; the plan-value
   constructor that used to be called `Workflow` is DELETED and `plan(p, d, ops)`
   returns the step sequence, which the skeleton names and engines;
 * slots are unpacked by the facade at PLAN-CONSTRUCTION time, so `Step.kwargs`

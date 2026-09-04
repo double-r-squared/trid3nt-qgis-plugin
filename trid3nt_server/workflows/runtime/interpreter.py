@@ -65,7 +65,7 @@ from .validate import validate_plan
 
 __all__ = ["PlanNode", "RunResult", "expand_plan", "interpret"]
 
-logger = logging.getLogger("trid3nt_server.workflows.lib.interpreter")
+logger = logging.getLogger("trid3nt_server.workflows.runtime.interpreter")
 
 
 @dataclass
@@ -489,7 +489,7 @@ def _validate_supplied(decl: DataDecl, supplied: Any, validate: Any) -> None:
     class, and - under ``CoversAOI`` - that a domain with an extent is bound at
     all, so an artifact is never adopted against no modelled world. Whether the
     artifact's own extent COVERS that domain is not checked; see
-    :class:`~trid3nt_server.workflows.lib.data._CoversAOI` for what that costs.
+    :class:`~trid3nt_server.workflows.runtime.data._CoversAOI` for what that costs.
     """
     decl.refuse_wrong_shape(supplied)
     if validate is not CoversAOI:

@@ -25,7 +25,7 @@ from trid3nt_server.persistence import DEFAULT_DATABASE, FileMCPClient
 
 __all__ = ["LedgerRecord", "StepLedger", "invocation_key", "records_from_docs"]
 
-logger = logging.getLogger("trid3nt_server.workflows.lib.ledger")
+logger = logging.getLogger("trid3nt_server.workflows.runtime.ledger")
 
 _COLLECTION = "declarative_run_ledgers"
 _SCHEMA = 3

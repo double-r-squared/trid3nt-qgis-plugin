@@ -7,7 +7,7 @@ every value it can take live here instead of in front of them.
 
 from __future__ import annotations
 
-from trid3nt_server.workflows.lib import Accepts, Param, doors
+from trid3nt_server.workflows.runtime import Accepts, Param, doors
 
 __all__ = ["ACCEPTS", "DOC", "PARAMS"]
 

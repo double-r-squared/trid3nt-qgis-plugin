@@ -72,7 +72,7 @@ def test_window_parser_rejects_malformed():
 
 
 def _rain_decl():
-    from trid3nt_server.workflows.lib import data_rows
+    from trid3nt_server.workflows.runtime import data_rows
 
     return next(d for d in data_rows(M.DATA) if d.name == "rain")
 
@@ -100,7 +100,11 @@ def test_an_undeclared_transform_leaves_the_note_byte_identical():
 
 
 def test_a_sub_daily_target_refuses_rather_than_manufacturing_a_storm_shape():
-    from trid3nt_server.workflows.lib import ResampleSpec, TemporalShapeError, TemporalSpec
+    from trid3nt_server.workflows.runtime import (
+        ResampleSpec,
+        TemporalShapeError,
+        TemporalSpec,
+    )
 
     with pytest.raises(TemporalShapeError):
         F._rain_forcing(150.0, None, None,
@@ -108,7 +112,7 @@ def test_a_sub_daily_target_refuses_rather_than_manufacturing_a_storm_shape():
 
 
 def test_a_unit_target_the_steering_cannot_carry_refuses():
-    from trid3nt_server.workflows.lib import TemporalSpec, UnitsSpec
+    from trid3nt_server.workflows.runtime import TemporalSpec, UnitsSpec
 
     with pytest.raises(F.TelemacDyeScenarioInputError):
         F._rain_forcing(150.0, None, None,

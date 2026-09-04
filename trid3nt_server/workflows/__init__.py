@@ -13,7 +13,7 @@ template) that declares ``cacheable=False``, ``ttl_class="live-no-cache"`` and
 ``source_class="workflow_dispatch"``, forwards its arguments verbatim to the
 workflow body, and returns the workflow's ``AssessmentEnvelope`` unchanged.
 
-The engine packages here are TELEMAC plus the shared spine it runs on: ``lib``
+The engine packages here are TELEMAC plus the shared spine it runs on: ``runtime``
 (the declaration/plan/journal machinery), ``mesh``, ``shared`` and ``solver``.
 """
 

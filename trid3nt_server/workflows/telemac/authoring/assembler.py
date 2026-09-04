@@ -30,7 +30,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.workflows.lib import Step, journal_note
+from trid3nt_server.workflows.runtime import Step, journal_note
 from trid3nt_server.workflows.mesh.shared.nodes import (
     read_accepted_mesh_nodes,
     read_centerline_utm,

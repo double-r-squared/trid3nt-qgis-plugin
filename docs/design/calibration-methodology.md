@@ -879,7 +879,7 @@ the HWM comparison REPORTED-only and gate solely on the gauge.
 existing user door?** Section 6.1 argues the label matters; whether it is
 a first-class basis value or a structured note inside the existing
 override provenance is a contract question that belongs to whoever owns
-`workflows/lib`.
+`workflows/runtime`.
 
 **Q8. Gap-3 path (a) or (b)?** (b), post-processing the SELAFIN, is
 recommended: no deck change, no image rebuild, generalises to every

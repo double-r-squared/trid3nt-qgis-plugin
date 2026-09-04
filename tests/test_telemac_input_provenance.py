@@ -31,7 +31,7 @@ TELEMAC_TEMPLATES: tuple[tuple[str, str], ...] = (
 def _resolve_bare(tool_name: str, location: str):
     """The door-1 sheet a BARE ``{"location": ...}`` invocation resolves to."""
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.lib.resolver import resolve_params
+    from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     workflow = TOOL_REGISTRY[tool_name].fn.workflow
     supplied, err = workflow._normalize({"location": location})
@@ -56,7 +56,7 @@ def test_unsupplied_compute_class_is_a_labeled_default(tool_name: str,
 def test_unsupplied_compute_class_provenance_row_is_not_user(tool_name: str,
                                                              location: str) -> None:
     """The same abstention on the row the LAYER and the input-review gate read."""
-    from trid3nt_server.workflows.lib import provenance_entries
+    from trid3nt_server.workflows.runtime import provenance_entries
 
     workflow, sheet = _resolve_bare(tool_name, location)
     entry = next(e for e in provenance_entries(sheet, workflow.params)
@@ -68,7 +68,7 @@ def test_unsupplied_compute_class_provenance_row_is_not_user(tool_name: str,
 def test_a_supplied_compute_class_still_reads_as_the_users() -> None:
     """The abstention is about ABSENCE only: a sent rung is still door=user."""
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.lib.resolver import resolve_params
+    from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     workflow = TOOL_REGISTRY["telemac_river_dye"].fn.workflow
     supplied, err = workflow._normalize(

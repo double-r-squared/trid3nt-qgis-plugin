@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-logger = logging.getLogger("trid3nt_server.workflows.lib.journal")
+logger = logging.getLogger("trid3nt_server.workflows.runtime.journal")
 
 __all__ = ["append_record", "bind_notes", "drain_notes", "journal_note",
            "journal_path", "read_records", "run_origin"]

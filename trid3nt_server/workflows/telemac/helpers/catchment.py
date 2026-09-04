@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.runtime import Step
 from trid3nt_server.workflows.shared.aoi import aoi_slug
 
 from .errors import RainOnGridError
@@ -51,7 +51,7 @@ async def acquire_catchment(*, location: str | None, bbox: Any,
     ``location`` names the run and nothing else here; the catchment's shape is the
     terrain's answer, not the geocoder's.
     """
-    from trid3nt_server.workflows.lib import user_input
+    from trid3nt_server.workflows.runtime import user_input
 
     point = user_input.lonlat_point(pour_point, label="pour_point",
                                     code=f"{code_prefix}_PARAMS_INVALID")

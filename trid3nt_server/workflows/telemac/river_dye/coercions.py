@@ -1,6 +1,6 @@
 """``telemac_river_dye``'s own wire POLICY: which point seeds the reach.
 
-The SHAPES are the library's (``workflows/lib/user_input``); what lives here is
+The SHAPES are the library's (``workflows/runtime/user_input``); what lives here is
 the decision only this question has to make - a release point supplied on the
 CALL also seeds the meshed reach, while one picked at the draw gate moves the
 SOURCE alone. Re-seeding from the click would mesh a different reach than the one
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from trid3nt_server.workflows.lib import user_input
+from trid3nt_server.workflows.runtime import user_input
 from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
 __all__ = ["release_points"]

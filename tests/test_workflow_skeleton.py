@@ -28,7 +28,7 @@ from typing import Any
 import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.workflows.lib import (
+from trid3nt_server.workflows.runtime import (
     EngineOps,
     Forcing,
     Param,
@@ -95,7 +95,7 @@ def test_the_skeleton_emits_no_input_layer_of_its_own():
     second emitter would be the double-emission the ADR 0244 guard catches."""
     import inspect as _inspect
 
-    from trid3nt_server.workflows.lib import workflow as mod
+    from trid3nt_server.workflows.runtime import workflow as mod
 
     src = _inspect.getsource(mod)
     assert "publish_input_layer" not in src
@@ -104,7 +104,7 @@ def test_the_skeleton_emits_no_input_layer_of_its_own():
 
 @pytest.mark.asyncio
 async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
-    from trid3nt_server.workflows.lib import RunResult
+    from trid3nt_server.workflows.runtime import RunResult
     from trid3nt_server.workflows.shared import run_products
 
     class Checked(Workflow):
@@ -124,7 +124,7 @@ async def test_a_filled_check_hook_reaches_the_result_as_a_note(monkeypatch):
 
 # --- (3) the registration factory synthesizes the wire ---------------------- #
 def test_the_generated_signature_is_the_declaration_plus_aliases_and_controls():
-    from trid3nt_server.workflows.lib.workflow import _wire_signature
+    from trid3nt_server.workflows.runtime.workflow import _wire_signature
 
     params = (
         Param("location", door=doors.QUESTION, optional=True, desc="a place"),
@@ -192,7 +192,7 @@ def test_a_constant_supplied_off_the_model_wire_still_reaches_the_sheet():
     import asyncio
 
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.lib.resolver import resolve_params
+    from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
     supplied, err = wf._normalize({"location": "x", "sim_duration_s": 600.0,
@@ -275,7 +275,7 @@ def test_the_plan_reads_a_data_name_off_the_templates_own_body():
     """A read is attribute access on the template's own DATA, which is what lets a
     binding block sit at module level above the plan it feeds - and what makes a
     name the template does not declare unwritable."""
-    from trid3nt_server.workflows.lib import DataRef, tool
+    from trid3nt_server.workflows.runtime import DataRef, tool
 
     class DATA:
         rivers = tool("fetch_river_geometry")
@@ -296,7 +296,7 @@ def test_the_skeleton_names_and_engines_the_plan_the_template_does_not():
 def test_an_undeclared_data_name_refuses_at_registration_saying_it_is_a_data_name():
     """A ref built from a STRING has no body to refuse it, so the refusal is the
     VALIDATOR's - and it says which body the bad name claimed to come from."""
-    from trid3nt_server.workflows.lib import DataDecl, DataRef, tool
+    from trid3nt_server.workflows.runtime import DataDecl, DataRef, tool
 
     def _plan(ops):
         return (Step(runner="pkg.mod.fn", kwargs={"r": DataRef("terain")}).named("s"),)
@@ -343,7 +343,10 @@ def test_registration_refuses_a_facade_with_an_unrealized_operation():
     leaves a must-fill slot empty. A hole that reaches run time surfaces as a bare
     NotImplementedError flattened into <ENGINE>_INTERNAL_ERROR - a declaration
     defect wearing a runtime failure's clothes."""
-    from trid3nt_server.workflows.lib import FacadeIncompleteError, register_workflow
+    from trid3nt_server.workflows.runtime import (
+        FacadeIncompleteError,
+        register_workflow,
+    )
 
     class HalfEngine(Workflow):
         engine = "half"
@@ -362,7 +365,10 @@ def test_registration_refuses_a_facade_with_an_unrealized_operation():
 
 
 def test_registration_refuses_something_that_is_not_a_facade_at_all():
-    from trid3nt_server.workflows.lib import FacadeIncompleteError, register_workflow
+    from trid3nt_server.workflows.runtime import (
+        FacadeIncompleteError,
+        register_workflow,
+    )
 
     with pytest.raises(FacadeIncompleteError):
         register_workflow(object, _metadata("not_a_facade"), (), lambda o: ())
@@ -389,7 +395,7 @@ async def test_a_retryable_coercion_failure_propagates_with_its_suggestions():
 
 @pytest.mark.asyncio
 async def test_a_typed_coercion_refusal_keeps_its_own_error_code():
-    from trid3nt_server.workflows.lib import WireArgsError
+    from trid3nt_server.workflows.runtime import WireArgsError
 
     def _typed(args):
         raise WireArgsError("needs a location", error_code="TELEMAC_PARAMS_INCOMPLETE")
@@ -439,7 +445,7 @@ def test_a_malformed_provenance_row_refuses_at_declaration(row):
 def test_the_run_prefix_comes_from_the_step_the_facade_NAMES():
     """A literal "solve" would silently lose the prefix for a facade that named
     its solve step anything else - and the chart spec would persist nowhere."""
-    from trid3nt_server.workflows.lib import RunResult
+    from trid3nt_server.workflows.runtime import RunResult
 
     class Renamed(Workflow):
         solve_step = "telemac_solve"
@@ -459,7 +465,7 @@ def test_a_context_slot_puts_its_declared_shape_on_the_wire_and_in_the_prose():
     import typing
 
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.lib.data import SuppliedGeometry
+    from trid3nt_server.workflows.runtime.data import SuppliedGeometry
 
     fn = TOOL_REGISTRY["artemis_harbor_agitation"].fn
     annotation = inspect.signature(fn).parameters["structure"].annotation
@@ -477,8 +483,8 @@ def test_a_context_slot_puts_its_declared_shape_on_the_wire_and_in_the_prose():
 
 
 def test_a_slot_that_declares_no_shape_still_reaches_the_wire_as_a_string():
-    from trid3nt_server.workflows.lib import DataDecl
-    from trid3nt_server.workflows.lib.workflow import _wire_signature
+    from trid3nt_server.workflows.runtime import DataDecl
+    from trid3nt_server.workflows.runtime.workflow import _wire_signature
 
     sig, annotations = _wire_signature((), (), (DataDecl("clip_zone"),))
     assert annotations["clip_zone"] == (str | None)

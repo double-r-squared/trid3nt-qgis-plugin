@@ -25,7 +25,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
-from trid3nt_server.workflows.lib import DeclarativeError, Step
+from trid3nt_server.workflows.runtime import DeclarativeError, Step
 
 from ..solving.solve import read_run_metrics
 
@@ -161,7 +161,7 @@ async def fetch_domain_bed(*, bathy_source: Any = "auto",
     manifest stages no input.
     """
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.lib import current_domain
+    from trid3nt_server.workflows.runtime import current_domain
 
     domain = current_domain()
     extent = None if domain is None else domain.bbox

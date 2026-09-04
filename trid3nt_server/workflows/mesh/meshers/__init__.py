@@ -121,7 +121,7 @@ def is_late_bound(value: Any) -> bool:
     placeholder raises rather than answering.
     """
     try:
-        from trid3nt_server.workflows.lib.plan import ParamRef, Ref
+        from trid3nt_server.workflows.runtime.plan import ParamRef, Ref
     except Exception:  # noqa: BLE001 -- the library is absent in a stripped env
         return False
     return isinstance(value, (Ref, ParamRef))

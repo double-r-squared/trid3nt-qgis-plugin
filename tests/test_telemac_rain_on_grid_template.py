@@ -95,7 +95,7 @@ def test_corpus_yaml_present_and_routes():
 def test_the_declared_plan_is_the_rain_on_grid_sequence():
     """form -> draw -> aoi -> mesh -> infiltration -> run -> solve ->
     flood_depth, and the plan VALIDATES against its own declared params/data."""
-    from trid3nt_server.workflows.lib.validate import validate_plan
+    from trid3nt_server.workflows.runtime.validate import validate_plan
     from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid,
     )
@@ -115,7 +115,7 @@ def test_constant_door_params_off_wire_scenario_and_user_ones_present():
     lever, the mesh slot) do."""
     import inspect
 
-    from trid3nt_server.workflows.lib import doors
+    from trid3nt_server.workflows.runtime import doors
     from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid as fn,
     )
@@ -141,10 +141,10 @@ async def test_pour_point_is_never_invented_in_auto_mode():
     """pour_point is REQUIRED (door=USER, not optional) and its own DrawGate
     refuses typed in auto mode rather than falling back to a centroid nobody
     chose - unlike an OPTIONAL draw-gated param, whose absence just derives."""
-    from trid3nt_server.workflows.lib import DrawGate, param_rows
-    from trid3nt_server.workflows.lib.errors import GateRefusedError
-    from trid3nt_server.workflows.lib.interpreter import _run_draw_gate
-    from trid3nt_server.workflows.lib.resolver import resolve_params
+    from trid3nt_server.workflows.runtime import DrawGate, param_rows
+    from trid3nt_server.workflows.runtime.errors import GateRefusedError
+    from trid3nt_server.workflows.runtime.interpreter import _run_draw_gate
+    from trid3nt_server.workflows.runtime.resolver import resolve_params
     from trid3nt_server.workflows.telemac.rain_on_grid.declarations import PARAMS
 
     declared = param_rows(PARAMS)
@@ -288,7 +288,11 @@ def test_resolve_rain_event_design_storm_rung_no_window():
 
 
 def test_resolve_rain_event_malformed_window_refuses():
-    from trid3nt_server.workflows.lib.domain import Domain, bind_domain, reset_domain
+    from trid3nt_server.workflows.runtime.domain import (
+        Domain,
+        bind_domain,
+        reset_domain,
+    )
     from trid3nt_server.workflows.telemac.helpers.errors import RainOnGridError
     from trid3nt_server.workflows.telemac.helpers.forcing import resolve_rain_event
 
@@ -306,7 +310,11 @@ def test_resolve_rain_event_hyetograph_rung_builds_hourly_blocks(monkeypatch):
     """A real window fetches the hourly record and drives the run with it - the
     surviving equivalent of the deleted ``_fetch_hyetograph_blocks``."""
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.lib.domain import Domain, bind_domain, reset_domain
+    from trid3nt_server.workflows.runtime.domain import (
+        Domain,
+        bind_domain,
+        reset_domain,
+    )
     from trid3nt_server.workflows.telemac.helpers.forcing import resolve_rain_event
 
     monkeypatch.setitem(

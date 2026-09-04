@@ -78,7 +78,7 @@ def test_the_unspoken_mode_resolves_to_the_declared_default():
 # ===========================================================================
 def _sheet(**overrides):
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.lib.resolver import resolve_params
+    from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     workflow = TOOL_REGISTRY["artemis_harbor_agitation"].fn.workflow
     args = {"bbox": [-87.392, 46.528, -87.368, 46.550], "wave_mode": "diffraction",
@@ -91,7 +91,7 @@ def _sheet(**overrides):
 
 
 def test_the_declared_plan_is_the_open_water_sequence():
-    from trid3nt_server.workflows.lib.validate import validate_plan
+    from trid3nt_server.workflows.runtime.validate import validate_plan
 
     workflow, _sheet_unused = _sheet()
     plan = workflow.plan

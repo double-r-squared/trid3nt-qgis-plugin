@@ -9,7 +9,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from trid3nt_server.workflows.lib import (
+from trid3nt_server.workflows.runtime import (
     CATEGORICAL,
     DataDecl,
     tool,
@@ -240,7 +240,7 @@ def test_the_modifiers_leave_the_ladder_alone():
 def test_a_rung_that_is_not_a_producer_refuses_at_declaration():
     """A rung the interpreter cannot CALL is a fallback that never fires - which
     is the inert declaration the executing ladder exists to end."""
-    from trid3nt_server.workflows.lib import PlanValidationError
+    from trid3nt_server.workflows.runtime import PlanValidationError
 
     with pytest.raises(PlanValidationError) as excinfo:
         tool("pkg.mod.fn").ladder("copernicus_glo30")

@@ -32,7 +32,7 @@ from typing import Any
 import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.workflows.lib import (
+from trid3nt_server.workflows.runtime import (
     CoupledValidityError,
     DataDecl,
     tool,
@@ -47,9 +47,9 @@ from trid3nt_server.workflows.lib import (
     doors,
     resolve_params,
 )
-from trid3nt_server.workflows.lib import snapshot as snap_mod
-from trid3nt_server.workflows.lib.rerun import RerunRefused, reuse_plan
-from trid3nt_server.workflows.lib.rerun.derive import rerun
+from trid3nt_server.workflows.runtime import snapshot as snap_mod
+from trid3nt_server.workflows.runtime.rerun import RerunRefused, reuse_plan
+from trid3nt_server.workflows.runtime.rerun.derive import rerun
 
 
 @pytest.fixture(autouse=True)
@@ -171,7 +171,7 @@ async def test_a_derived_run_inherits_the_prefix_and_re_executes_from_the_cut(
 @pytest.mark.asyncio
 async def test_the_child_records_its_parent_in_provenance_and_in_the_journal(
         monkeypatch):
-    from trid3nt_server.workflows.lib import journal
+    from trid3nt_server.workflows.runtime import journal
 
     wf = _probe_workflow()
     await _run_probe(monkeypatch, wf, run_id="RUN1")
@@ -196,7 +196,7 @@ async def test_the_child_records_its_parent_in_provenance_and_in_the_journal(
 async def test_two_overrides_on_one_parent_make_two_independent_children(
         monkeypatch):
     """The what-if consumer: one parent, a fan of children, one chain each."""
-    from trid3nt_server.workflows.lib import journal
+    from trid3nt_server.workflows.runtime import journal
 
     wf = _probe_workflow()
     await _run_probe(monkeypatch, wf, run_id="RUN1")
@@ -471,7 +471,7 @@ def friction_ok(*, law: float, coefficient: float) -> "_Result":
 
 
 def _nodes(wf):
-    from trid3nt_server.workflows.lib import expand_plan
+    from trid3nt_server.workflows.runtime import expand_plan
 
     return expand_plan(wf.plan)
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.runtime import Step
 from trid3nt_server.workflows.mesh.tool import recipe_plan_value
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.step")

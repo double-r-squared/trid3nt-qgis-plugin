@@ -23,7 +23,7 @@ from trid3nt_contracts.telemac_contracts import (
     TelemacRainOnGridLayerURI,
 )
 
-from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.runtime import Step
 from trid3nt_server.workflows.shared.publish_product_layer import publish_product_layer
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.products.rain_on_grid")

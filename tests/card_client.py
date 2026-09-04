@@ -69,7 +69,7 @@ class CardClient:
 @pytest.fixture
 def card_client(monkeypatch) -> CardClient:
     """A :class:`CardClient` bound as the current emitter for the whole run."""
-    from trid3nt_server.workflows.lib import interpreter as _interp
+    from trid3nt_server.workflows.runtime import interpreter as _interp
 
     client = CardClient()
     monkeypatch.setattr(pe, "current_emitter", lambda: client)

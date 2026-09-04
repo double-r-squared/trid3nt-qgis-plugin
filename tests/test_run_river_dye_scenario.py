@@ -219,7 +219,7 @@ def test_a_wind_bearing_wraps_rather_than_clamping():
 # (3) Declared bounds replace the inline clamps.
 # ===========================================================================
 def _resolve(**supplied):
-    from trid3nt_server.workflows.lib import resolve_params
+    from trid3nt_server.workflows.runtime import resolve_params
     from trid3nt_server.workflows.telemac.river_dye.river_dye import PARAMS
 
     return asyncio.run(resolve_params(PARAMS, {"location": "X", **supplied}))
@@ -246,7 +246,7 @@ def test_declared_bounds_keep_the_source_inside_the_reach():
 
 
 def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
-    from trid3nt_server.workflows.lib import GateRefusedError
+    from trid3nt_server.workflows.runtime import GateRefusedError
 
     with pytest.raises(GateRefusedError):
         _resolve(reach_length_km="a lot")
@@ -254,7 +254,7 @@ def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
 
 def test_an_absent_carrier_discharge_leaves_a_derived_provenance_row():
     """The user has to see that dilution is governed by a fetched value."""
-    from trid3nt_server.workflows.lib import provenance_entries
+    from trid3nt_server.workflows.runtime import provenance_entries
     from trid3nt_server.workflows.telemac.river_dye.river_dye import PARAMS
 
     row = next(r for r in provenance_entries(_resolve(), PARAMS)
@@ -310,8 +310,8 @@ def test_a_run_with_no_persisted_history_draws_no_chart():
 # (4) The plan value.
 # ===========================================================================
 def test_the_plan_validates_and_gates_before_the_solve():
-    from trid3nt_server.workflows.lib import validate_plan
-    from trid3nt_server.workflows.lib.plan import Gate
+    from trid3nt_server.workflows.runtime import validate_plan
+    from trid3nt_server.workflows.runtime.plan import Gate
 
     wf = _workflow()
     p = _resolve()
@@ -332,7 +332,7 @@ def test_the_plan_validates_and_gates_before_the_solve():
 
 
 def test_the_declared_data_is_the_chain_in_class_body_order():
-    from trid3nt_server.workflows.lib import DataRef, data_rows
+    from trid3nt_server.workflows.runtime import DataRef, data_rows
     from trid3nt_server.workflows.telemac.river_dye.river_dye import DATA
 
     rows = data_rows(DATA)

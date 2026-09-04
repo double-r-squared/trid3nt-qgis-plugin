@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from trid3nt_server.workflows.lib import DeclarativeError
+from trid3nt_server.workflows.runtime import DeclarativeError
 
 logger = logging.getLogger("trid3nt_server.workflows.shared.tide_series")
 
@@ -94,7 +94,7 @@ async def resolve_tide_series(*, series_type: str = "observed",
     or a record with fewer than two finite points are all things a caller has to
     hear about, not silently model around.
     """
-    from trid3nt_server.workflows.lib import current_domain
+    from trid3nt_server.workflows.runtime import current_domain
 
     domain = current_domain()
     if domain is None or domain.bbox is None:

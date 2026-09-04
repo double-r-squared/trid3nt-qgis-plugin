@@ -8,7 +8,7 @@ path, inline GeoJSON. Two conversions and no more, both explicit:
     layer  -> the geometry document the op reads shapes out of
 
 Which one applies is read off the artifact's CLASS, which is the repo's one
-answer to "what kind of thing is this uri" (``lib.data.artifact_class``, by
+answer to "what kind of thing is this uri" (``runtime.data.artifact_class``, by
 suffix). A value whose class is not knowable is NOT guessed at: it passes
 through as it was written, and the op refuses it in its own words if it cannot
 use it.
@@ -28,7 +28,7 @@ __all__ = ["op_geometry", "op_input", "op_raster"]
 
 def op_input(value: Any) -> Any:
     """One op kwarg as the concrete thing the op is defined over."""
-    from trid3nt_server.workflows.lib.data import artifact_class
+    from trid3nt_server.workflows.runtime.data import artifact_class
 
     if isinstance(value, Mapping) and "type" in value:
         return dict(value)

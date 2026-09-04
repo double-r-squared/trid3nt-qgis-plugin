@@ -22,7 +22,7 @@ import os
 import tempfile
 from typing import Any
 
-from trid3nt_server.workflows.lib import RATE, Step, TemporalSpec, transform_value
+from trid3nt_server.workflows.runtime import RATE, Step, TemporalSpec, transform_value
 
 from .errors import (
     RainOnGridError,
@@ -62,7 +62,7 @@ _RAIN_NATIVE_INTERVAL, _RAIN_UNITS = "1D", "mm/day"
 
 
 def _domain_bbox() -> tuple[float, float, float, float]:
-    from trid3nt_server.workflows.lib import current_domain
+    from trid3nt_server.workflows.runtime import current_domain
 
     domain = current_domain()
     if domain is None or domain.bbox is None:
@@ -503,7 +503,7 @@ def _nwm_nearest_streamflow(seed_lon: float, seed_lat: float,
 
 def _rain_window_bbox() -> tuple[float, float, float, float]:
     """The extent the hyetograph is fetched over: the bound domain's own."""
-    from trid3nt_server.workflows.lib import current_domain
+    from trid3nt_server.workflows.runtime import current_domain
 
     domain = current_domain()
     if domain is None or domain.bbox is None:

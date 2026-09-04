@@ -4,7 +4,7 @@ The recipe on one page: the binding blocks, ``plan(ops)``, the ANSWER fields and
 the chart function. The declared params and the model-facing prose are one file
 over in ``declarations.py``. Everything else - normalizing the wire args,
 resolving the doors, walking the plan, persisting the products - is the skeleton
-(``workflows/lib/workflow.py``); the reach mechanism is the TELEMAC facade
+(``workflows/runtime/workflow.py``); the reach mechanism is the TELEMAC facade
 (``workflows/telemac/workflow.py``). See
 ``docs/design/declarative-workflows.md``.
 
@@ -21,7 +21,7 @@ from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.workflows.lib import (
+from trid3nt_server.workflows.runtime import (
     DrawGate,
     Forcing,
     FormGate,

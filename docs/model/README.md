@@ -29,7 +29,7 @@ record planes that surround it.
 | **assembler** | everything the box receives - steering file, manifest and aux, staged | `solve-seam.sysml`, its authoring end |
 | **solver** | the box's run, its completion and its diagnostics | `solve-seam.sysml` |
 | **products** | the layers, charts and packets read back out | `solve-seam.sysml`, its reader end |
-| **runtime** | the plan a flow executes as - `workflows/lib/plan.py` and its interpreter, where "step" lives | NOT YET MODELED |
+| **runtime** | the plan a flow executes as - `workflows/runtime/plan.py` and its interpreter, where "step" lives | NOT YET MODELED |
 
 One seam can be drawn across more than one system, and the solve seam is: it
 runs from the assembler through the box to the readers, so it is listed under

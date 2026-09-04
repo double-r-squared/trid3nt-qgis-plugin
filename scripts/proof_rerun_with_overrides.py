@@ -94,7 +94,7 @@ def _digest(uri: str) -> dict[str, Any]:
 
 
 async def _snapshot(run_id: str) -> Any:
-    from trid3nt_server.workflows.lib.snapshot import read_snapshot
+    from trid3nt_server.workflows.runtime.snapshot import read_snapshot
 
     return await read_snapshot(run_id)
 
@@ -150,8 +150,8 @@ async def main() -> int:
 
     os.environ.setdefault("TRID3NT_RUN_ORIGIN", "proof_rerun_with_overrides")
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.lib import journal
-    from trid3nt_server.workflows.lib.rerun import RerunRefused, reuse_plan
+    from trid3nt_server.workflows.runtime import journal
+    from trid3nt_server.workflows.runtime.rerun import RerunRefused, reuse_plan
 
     do_sag = TOOL_REGISTRY["telemac_do_sag"].fn
     rerun_tool = TOOL_REGISTRY["rerun_workflow"].fn
@@ -169,7 +169,7 @@ async def main() -> int:
         raise SystemExit(f"parent {parent_id} left no snapshot - nothing to derive")
     wf = do_sag.workflow
     cut, keep = reuse_plan(wf.plan, wf.data, ("k1_per_day",))
-    from trid3nt_server.workflows.lib import expand_plan
+    from trid3nt_server.workflows.runtime import expand_plan
 
     nodes = expand_plan(wf.plan)
     inheritable = {n.label for n in nodes if n.index < cut}

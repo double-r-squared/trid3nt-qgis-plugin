@@ -573,7 +573,7 @@ from trid3nt_server.tools.processing.model_debris_flow import model_debris_flow 
 # RERUN-WITH-OVERRIDES: derive a run from a run, with named values moved. The
 # skeleton's recalibration interface - what-if, failure recovery, calibration
 # loops.
-from trid3nt_server.workflows.lib.rerun import rerun_workflow  # noqa: E402,F401
+from trid3nt_server.workflows.runtime.rerun import rerun_workflow  # noqa: E402,F401
 from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 # -- engine templates: tier=template members are ordinary retrieval-pool tools,
 # registered by their own @register_tool in the workflow-composer block below and

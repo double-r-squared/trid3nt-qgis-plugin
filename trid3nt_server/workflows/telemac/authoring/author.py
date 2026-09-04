@@ -618,7 +618,7 @@ def author_reach(rundir: Path | str, *, sheet: Mapping[str, Any],
     ``restart`` is the perfect-restart record this run writes for whatever run
     continues it.
     """
-    from trid3nt_server.workflows.lib import journal_note
+    from trid3nt_server.workflows.runtime import journal_note
     from trid3nt_server.workflows.mesh.topology import FREE_EXIT_ROLE
 
     _consume(sheet)
@@ -1444,7 +1444,7 @@ def write_nestor_inputs(rundir: Path | str, *, sheet: Mapping[str, Any],
     none - the grade a maintenance dredge digs back TO is the channel that is
     there, not a number invented for the steering file.
     """
-    from trid3nt_server.workflows.lib import journal_note
+    from trid3nt_server.workflows.runtime import journal_note
 
     P = _Sheet(sheet)
     dig, dump, measured = _dredge_zones(P, centerline_utm, reach_polygon_utm)

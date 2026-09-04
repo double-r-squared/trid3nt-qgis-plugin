@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from trid3nt_server.workflows.lib import journal  # noqa: E402
+from trid3nt_server.workflows.runtime import journal  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger("backfill_run_journal")

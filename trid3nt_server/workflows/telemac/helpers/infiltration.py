@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.runtime import Step
 from trid3nt_server.workflows.mesh.shared.nodes import (
     node_slopes_from_mesh,
     sample_raster_at_nodes,

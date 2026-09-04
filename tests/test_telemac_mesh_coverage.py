@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.workflows.lib import journal
+from trid3nt_server.workflows.runtime import journal
 from trid3nt_server.workflows.telemac.helpers.errors import ReachMeshUncovered
 from trid3nt_server.workflows.telemac.helpers.reach import measure_mesh_coverage
 

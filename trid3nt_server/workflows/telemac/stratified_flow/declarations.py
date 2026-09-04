@@ -7,7 +7,7 @@ that describe every value it can take live here instead of in front of them.
 
 from __future__ import annotations
 
-from trid3nt_server.workflows.lib import Param, doors
+from trid3nt_server.workflows.runtime import Param, doors
 
 __all__ = ["DEFAULT_IDEALIZED_RES_M", "DEFAULT_REAL_RES_M", "DOC", "PARAMS"]
 

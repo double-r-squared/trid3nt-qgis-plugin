@@ -30,7 +30,7 @@ from .params import ResolvedParam
 
 __all__ = ["Derivation", "RunSnapshot", "read_snapshot", "write_snapshot"]
 
-logger = logging.getLogger("trid3nt_server.workflows.lib.snapshot")
+logger = logging.getLogger("trid3nt_server.workflows.runtime.snapshot")
 
 _COLLECTION = "declarative_run_snapshots"
 _SCHEMA = 1

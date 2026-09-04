@@ -43,7 +43,7 @@ from .interpreter import RunResult, interpret
 __all__ = ["EngineOps", "FacadeIncompleteError",
            "Workflow", "WireArgsError", "register_workflow"]
 
-logger = logging.getLogger("trid3nt_server.workflows.lib.workflow")
+logger = logging.getLogger("trid3nt_server.workflows.runtime.workflow")
 
 
 class WireArgsError(DeclarativeError):

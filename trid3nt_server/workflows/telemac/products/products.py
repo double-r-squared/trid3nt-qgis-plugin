@@ -37,7 +37,7 @@ from trid3nt_contracts.telemac_contracts import (
     TelemacDyeLayerURI,
 )
 
-from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.runtime import Step
 from trid3nt_server.emission.publish import PublishLayerError, publish_layer
 
 from ..helpers.errors import TelemacDyeScenarioError
@@ -372,7 +372,7 @@ async def _journal_wetted_fraction(slf_path: str) -> None:
     nothing, and a run whose result cannot be measured says nothing rather than
     losing its products over a heuristic.
     """
-    from trid3nt_server.workflows.lib import journal_note
+    from trid3nt_server.workflows.runtime import journal_note
 
     from .run_reads import wetted_fraction
 

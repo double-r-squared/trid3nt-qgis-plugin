@@ -26,7 +26,7 @@ from .params import ParamValues, ResolvedParams, wire_value
 
 __all__ = ["CoupledValidityError", "Validity", "check_validity"]
 
-logger = logging.getLogger("trid3nt_server.workflows.lib.validity")
+logger = logging.getLogger("trid3nt_server.workflows.runtime.validity")
 
 
 class CoupledValidityError(DeclarativeError):

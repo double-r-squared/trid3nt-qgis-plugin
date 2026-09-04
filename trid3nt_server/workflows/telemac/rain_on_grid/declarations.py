@@ -13,7 +13,7 @@ declared has nowhere to hide.
 
 from __future__ import annotations
 
-from trid3nt_server.workflows.lib import Param, doors
+from trid3nt_server.workflows.runtime import Param, doors
 
 __all__ = [
     "DEFAULT_MAX_EDGE_M",

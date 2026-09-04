@@ -3,7 +3,7 @@
 CONSTRAINT: this module is consumed by exactly three callers -
 ``set_sfincs_parameters`` / ``set_swmm_parameters`` / ``set_modflow_parameters``
 - and by nothing else. Their capability is the skeleton's now: recalibration is
-``rerun_workflow`` (``workflows/lib/rerun/``), which derives a child run from a
+``rerun_workflow`` (``workflows/runtime/rerun/``), which derives a child run from a
 parent's resolved sheet and inherits the work the overrides do not reach. These
 three predate their engines' migration to the skeleton and die with it; this
 file dies with the last of them. Nothing new may import it.

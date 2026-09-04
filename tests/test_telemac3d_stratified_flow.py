@@ -77,7 +77,7 @@ def test_mode_classification_from_prompt():
 # ===========================================================================
 def _sheet(**overrides):
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.lib.resolver import resolve_params
+    from trid3nt_server.workflows.runtime.resolver import resolve_params
 
     workflow = TOOL_REGISTRY["telemac3d_stratified_flow"].fn.workflow
     args = {"bbox": [-87.60, 46.70, -86.60, 47.20], "flow_mode": "stratification",
@@ -91,7 +91,7 @@ def _sheet(**overrides):
 
 
 def test_the_declared_plan_is_the_open_water_sequence():
-    from trid3nt_server.workflows.lib.validate import validate_plan
+    from trid3nt_server.workflows.runtime.validate import validate_plan
 
     workflow, _sheet_unused = _sheet()
     plan = workflow.plan

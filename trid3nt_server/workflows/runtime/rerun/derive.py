@@ -41,7 +41,7 @@ from .reuse import reuse_plan
 
 __all__ = ["RerunRefused", "rerun"]
 
-logger = logging.getLogger("trid3nt_server.workflows.lib.rerun")
+logger = logging.getLogger("trid3nt_server.workflows.runtime.rerun")
 
 
 class RerunRefused(DeclarativeError):

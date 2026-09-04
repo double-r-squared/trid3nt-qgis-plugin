@@ -20,7 +20,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.runtime import Step
 
 from ..helpers.errors import RainOnGridError, TelemacDyeScenarioError
 from ..helpers.reach import MESH_NODE_CAP, estimate_telemac_solve_seconds

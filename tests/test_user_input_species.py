@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from trid3nt_server.workflows.lib.user_input import (
+from trid3nt_server.workflows.runtime.user_input import (
     UserInputError,
     bbox,
     bearing,

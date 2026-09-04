@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.runtime import Step
 
 __all__ = ["WaqtelO2", "do_saturation_mgl", "upstream_do_mgl", "waqtel_o2_process"]
 

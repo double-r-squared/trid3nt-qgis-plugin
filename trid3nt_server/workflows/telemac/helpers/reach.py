@@ -30,7 +30,7 @@ import re
 import tempfile
 from typing import Any
 
-from trid3nt_server.workflows.lib import Step, journal_note, user_input
+from trid3nt_server.workflows.runtime import Step, journal_note, user_input
 from trid3nt_server.workflows.shared.layer_fields import layer_field
 
 from .errors import (
@@ -330,7 +330,7 @@ async def fetch_reach_flowline(*, prefetched: str | None = None) -> str | None:
     if prefetched:
         logger.warning("telemac: river_geometry_uri %r is not an object URI - ignoring",
                        prefetched)
-    from trid3nt_server.workflows.lib import current_domain
+    from trid3nt_server.workflows.runtime import current_domain
 
     domain = current_domain()
     if domain is None or domain.bbox is None:

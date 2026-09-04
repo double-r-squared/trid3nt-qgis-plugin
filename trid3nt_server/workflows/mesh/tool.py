@@ -21,8 +21,8 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
-from trid3nt_server.workflows.lib.accepts import Accepts
-from trid3nt_server.workflows.lib.data import tool
+from trid3nt_server.workflows.runtime.accepts import Accepts
+from trid3nt_server.workflows.runtime.data import tool
 from trid3nt_server.workflows.mesh.artifact import (
     MeshArtifact,
     find_case_mesh_artifacts,

@@ -13,7 +13,7 @@ import inspect
 
 import pytest
 
-from trid3nt_server.workflows.lib import param_rows
+from trid3nt_server.workflows.runtime import param_rows
 from trid3nt_server.workflows.telemac.do_sag import do_sag as do_sag_mod
 from trid3nt_server.workflows.telemac.river_dye import river_dye as dye_mod
 from trid3nt_server.workflows.telemac.helpers import forcing as F
