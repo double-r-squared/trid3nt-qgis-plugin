@@ -98,7 +98,8 @@ def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
     """Which CONTIGUOUS runs of the boundary carry which role -> the mesh, roled.
 
     ``roles`` is ``{role: face}`` or ``{role: [face, ...]}`` - ``inflow``,
-    ``outflow``, ``open``, ``free_exit`` - each face a geometry the chain measured
+    ``outflow``, ``open``, ``rating_curve``, ``free_exit`` - each face a geometry
+    the chain measured
     (a section's end transect) or the two ends of one. Every boundary node on the
     run a face names takes that role; the rest are solid wall. The role decides
     the TELEMAC code quad the pair writer stamps on those nodes, which is where

@@ -146,5 +146,9 @@ def test_the_rain_on_grid_steering_reaches_the_parser(tmp_path, monkeypatch):
         steering="t2d_rog.cas",
         node_xy=np.array([[0.0, 0.0], [20.0, 0.0], [0.0, 10.0]]),
         node_cn2=[70.0, 72.0, 74.0], node_manning=[0.035, 0.035, 0.1],
-        rain_mm_per_day=48.0, outlet_boundary=1, outlet_prescribes="elevation")
+        rain_mm_per_day=48.0, outlet_boundary=1, outlet_prescribes="elevation",
+        n_liquid_boundaries=1,
+        outlet={"section": [[0.0, 12.0], [5.0, 10.0], [15.0, 10.0], [20.0, 12.0]],
+                "slope": 0.02, "law": 4, "coefficient": 0.05,
+                "q_ceiling_m3s": 51.0, "q_ceiling_basis": "the gross rain rate"})
     assert submitted == {"t2d_rog.cas": "telemac2d"}

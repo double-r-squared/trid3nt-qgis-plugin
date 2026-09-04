@@ -46,16 +46,16 @@ KENT, KSORT, KLOG = 5, 4, 2
 
 #: Boundary role -> the TELEMAC ``(LIHBOR, LIUBOR, LIVBOR, LITBOR)`` quad that
 #: states it. An inflow prescribes velocity and tracer and leaves the depth free;
-#: an outflow and an open sea boundary make the SAME statement to the solver - a
-#: prescribed water level, free velocity - and are named apart because the
-#: measured liquid-boundary order is what a steering author reads to decide which
-#: boundary carries a flowrate and which a level. A FREE EXIT prescribes nothing
-#: at all: ``bord.f`` overrides the depth only under ``LIHBOR = KENT`` and the
-#: velocity only under ``LIUBOR = KENT``, so an all-``KSORT`` quad leaves the
-#: water leaving at whatever level and velocity the interior brings to the face.
-#: That is a STATED choice - the condition a rain-fed catchment drains through,
-#: where any prescribed level would be a cap nobody measured - and not the
-#: absence of one.
+#: an outflow, an open sea boundary and a RATING CURVE make the SAME statement to
+#: the solver - a prescribed water level, free velocity - and are named apart
+#: because the measured liquid-boundary order is what a steering author reads to
+#: decide which boundary carries a flowrate, which a level, and which one's level
+#: is read off a stage-discharge curve instead of a constant. A FREE EXIT
+#: prescribes nothing at all: ``bord.f`` overrides the depth only under
+#: ``LIHBOR = KENT`` and the velocity only under ``LIUBOR = KENT``, so an
+#: all-``KSORT`` quad leaves the water leaving at whatever level and velocity the
+#: interior brings to the face. It is well-posed only while that velocity leaves:
+#: ``propin_telemac2d.f`` refuses a free velocity whose normal component enters.
 #:
 #: THIS IS THE ONE AUTHORING DECISION for the pair. The quad lands in the
 #: ``.cli`` and :func:`_prescribes` derives the steering keyword from the same
@@ -65,6 +65,7 @@ _ROLE_CODES = {
     "inflow": (KSORT, KENT, KENT, KENT),
     "outflow": (KENT, KSORT, KSORT, KSORT),
     "open": (KENT, KSORT, KSORT, KSORT),
+    "rating_curve": (KENT, KSORT, KSORT, KSORT),
     "free_exit": (KSORT, KSORT, KSORT, KSORT),
 }
 
@@ -72,6 +73,14 @@ _ROLE_CODES = {
 #: to tell a face that states no condition from a face whose two files disagree,
 #: which are the same string in :func:`_prescribes` and opposite intentions.
 FREE_EXIT_ROLE = "free_exit"
+
+#: The role whose prescribed level comes from a STAGE-DISCHARGE CURVE. The quad
+#: is the outflow's, because ``bord.f`` reads the curve only where
+#: ``LIHBOR = KENT``; what the role adds is WHERE that level comes from, which
+#: the quad cannot say and the steering author has to know: a face carrying this
+#: role owes ``STAGE-DISCHARGE CURVES = 1`` at its number and a curve file, and a
+#: face carrying ``outflow`` owes a constant in ``PRESCRIBED ELEVATIONS``.
+RATING_CURVE_ROLE = "rating_curve"
 
 
 def _prescribes(codes) -> str:

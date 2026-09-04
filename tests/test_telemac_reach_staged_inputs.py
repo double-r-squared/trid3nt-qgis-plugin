@@ -187,19 +187,26 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
     """
     import trid3nt_server.workflows.telemac.result_reader as reader
     from trid3nt_server.workflows.telemac.authoring.assembler import (
-        _continuation_start_s,
+        _continuation_state,
     )
     from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
     previous = tmp_path / "restart_river.slf"
     previous.write_bytes(b"selafin")
-    monkeypatch.setattr(reader, "read_selafin",
-                        lambda path: {"times": [0.0, 104.2, 600.192]})
-    assert _continuation_start_s(str(previous)) == 600.192
+    monkeypatch.setattr(reader, "read_selafin", lambda path: {
+        "times": [0.0, 104.2, 600.192], "npoin": 3,
+        "varnames": ["WATER DEPTH", "FREE SURFACE"],
+        "data": {"WATER DEPTH": [[1.0, 1.0, 1.0], [1.0, 0.5, 0.0],
+                                 [0.7, 0.0, 0.0]],
+                 "FREE SURFACE": [[9.0] * 3] * 3}})
+    state = _continuation_state(str(previous))
+    assert state["start_s"] == 600.192
+    # the state a release is settled against is the LAST frame's own wet/dry
+    assert list(state["wet"]) == [True, False, False]
 
     monkeypatch.setattr(reader, "read_selafin", lambda path: {"times": []})
     with pytest.raises(TelemacDyeScenarioError) as exc:
-        _continuation_start_s(str(previous))
+        _continuation_state(str(previous))
     assert exc.value.error_code == "TELEMAC_CONTINUATION_UNREADABLE"
 
 

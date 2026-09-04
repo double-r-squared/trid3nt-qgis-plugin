@@ -590,4 +590,4 @@ def test_the_catchment_mesh_step_carries_the_whole_recipe():
     # The catchment's one liquid boundary is DECLARED as an op, at the
     # delineation's snapped outlet, exactly as the reach family declares its two.
     roles = [entry for entry in ask["ops"] if entry["op"] == "set_boundary_roles"]
-    assert len(roles) == 1 and set(roles[0]["kwargs"]) == {"outflow"}
+    assert len(roles) == 1 and set(roles[0]["kwargs"]) == {"rating_curve"}

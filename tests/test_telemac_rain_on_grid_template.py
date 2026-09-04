@@ -52,9 +52,9 @@ def test_the_outlet_boundary_is_declared_as_an_op_on_the_mesh_recipe():
     op = [o for o in MESH.ops if o.fn == "set_boundary_roles"]
     assert len(op) == 1
     roles = dict(op[0].kwargs)
-    assert set(roles) == {"outflow"}
-    assert roles["outflow"]["type"] == "Point"
-    assert roles["outflow"]["coordinates"].path == "basin.snapped_pour_point"
+    assert set(roles) == {"rating_curve"}
+    assert roles["rating_curve"]["type"] == "Point"
+    assert roles["rating_curve"]["coordinates"].path == "basin.snapped_pour_point"
 
 
 def test_docstring_carries_the_godara_envelope():
@@ -415,11 +415,15 @@ def rog_run(monkeypatch, tmp_path):
 
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(asm_mod, "read_topology", lambda _uri: {
-        "roles": {"outflow": [1, 3]}, "liquid_boundary_order": ["outflow"],
+        "roles": {"rating_curve": [1, 3]},
+        "liquid_boundary_order": ["rating_curve"],
         "liquid_boundary_prescribes": ["elevation"]})
+    # A bed that FALLS toward the outlet nodes (1 and 3): the outlet's rating
+    # curve is a uniform-flow depth, so a flat ground has no stage to hold.
     monkeypatch.setattr(asm_mod, "mesh_nodes", lambda _mesh: (
         np.array([[0.0, 0.0], [20.0, 0.0], [0.0, 10.0], [20.0, 10.0]]),
-        np.array([[0, 1, 2], [1, 3, 2]]), np.zeros(4),
+        np.array([[0, 1, 2], [1, 3, 2]]),
+        np.array([1.0, 0.8, 1.2, 1.0]),
         np.array([[-83.4, 35.0]] * 4)))
     monkeypatch.setattr(
         asm_mod, "_upload_authored",
@@ -467,16 +471,18 @@ def test_a_constant_storm_authors_a_case_and_stages_no_fortran(rog_run, tmp_path
     assert "RESULTS FILE                    = r2d_rog.slf" in cas
     assert "FORMATTED DATA FILE 2           = rog_cn_map.dat" in cas
     assert "FORTRAN FILE" not in cas
-    # The deck states what the outlet's own quad prescribes AND that this file
-    # writes no value there, so the level it reads is the boundary file's zero.
+    # The deck states what the outlet's own quad prescribes AND where the level
+    # it holds comes from: the derived curve beside it, at that number.
     assert "/  1, measured off its own boundary-file code quad, which" in cas
-    assert "/  prescribes elevation. This file writes no value there, so a" in cas
-    assert "/  prescribed level is the boundary file's own zero." in cas
+    assert "/  prescribes elevation. The level is the DERIVED Z(Q) curve in" in cas
+    assert "STAGE-DISCHARGE CURVES          = 1" in cas
+    assert "STAGE-DISCHARGE CURVES FILE     = rog_rating.txt" in cas
     assert "PRESCRIBED ELEVATIONS" not in cas
     assert "PRESCRIBED FLOWRATES" not in cas
     # every file the steering file names was authored beside it
     assert set(run["authored"]) == {"t2d_rog.cas", "rog_cn_map.dat",
-                                     "rog_friction.tbl", "rog_zones.dat"}
+                                     "rog_friction.tbl", "rog_zones.dat",
+                                     "rog_rating.txt"}
 
 
 def test_the_outputs_are_exactly_what_the_run_writes_and_was_handed(rog_run):
@@ -484,7 +490,7 @@ def test_the_outputs_are_exactly_what_the_run_writes_and_was_handed(rog_run):
     assert set(run["outputs"]) == {
         "r2d_rog.slf", "rog.slf", "rog.cli", "full_listing.log",
         "telemac_metrics.json", "t2d_rog.cas", "rog_cn_map.dat",
-        "rog_friction.tbl", "rog_zones.dat"}
+        "rog_friction.tbl", "rog_zones.dat", "rog_rating.txt"}
 
 
 def test_a_time_varying_storm_names_the_baked_fortran_on_both_channels(

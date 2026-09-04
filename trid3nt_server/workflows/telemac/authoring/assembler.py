@@ -30,12 +30,12 @@ from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts import new_ulid
 
-from trid3nt_server.workflows.lib import Step
+from trid3nt_server.workflows.lib import Step, journal_note
 from trid3nt_server.workflows.mesh.shared.nodes import (
     read_accepted_mesh_nodes,
     read_centerline_utm,
 )
-from trid3nt_server.workflows.mesh.topology import read_topology
+from trid3nt_server.workflows.mesh.topology import RATING_CURVE_ROLE, read_topology
 
 from . import author
 from .open_water import OpenWaterError, case_section, stage_telemac_manifest
@@ -82,14 +82,18 @@ _ROG_BOUNDARY = "rog.cli"
 _ROG_STEERING = "t2d_rog.cas"
 _ROG_RESULT = "r2d_rog.slf"
 
-#: The mesh boundary ROLE a catchment's outlet carries. The quad prescribes a
-#: LEVEL, and this run writes no value at its number, so the level is the boundary
-#: file's own zero - a zero-depth clamp, measured holding the outlet nodes at
-#: 0.0000 m for every frame of a design storm. The recipe that paints it says so
-#: out loud and names why the free exit is not the swap: an all-KSORT quad is
-#: ill-posed the moment flow enters, and the engine refuses it by name. The
-#: hydrograph is the flux across the nodes that took the role either way.
-_OUTLET_ROLE = "outflow"
+#: The mesh boundary ROLE a catchment's outlet carries. Its quad prescribes a
+#: LEVEL and the level comes from the run's own derived stage-discharge curve, so
+#: the outlet stands where the flow leaving it says it stands rather than at a
+#: constant nobody measured. The hydrograph is the flux across the nodes that
+#: took the role.
+_OUTLET_ROLE = RATING_CURVE_ROLE
+
+#: The bottom-friction law a catchment is solved under, which is also the law its
+#: outlet's rating curve is derived at. It is the deck's own LAW OF BOTTOM
+#: FRICTION: a curve derived under a roughness the run is not solved at is a
+#: level the run never sits at.
+_ROG_FRICTION_LAW = 4
 
 #: The bed-load transport laws GAIA can run with suspension off. Anything else
 #: (Engelund-Hansen total load etc.) falls back to the default rather than
@@ -261,6 +265,15 @@ def _mesh_field(mesh: Mapping[str, Any], name: str, *,
     return str(uri)
 
 
+def _reach_section_unmeasured(message: str) -> Exception:
+    return TelemacDyeScenarioError("TELEMAC_MESH_SECTION_UNMEASURED", message)
+
+
+def _outlet_section_unmeasured(message: str) -> Exception:
+    return RainOnGridError(message,
+                           error_code="TELEMAC_ROG_OUTLET_SECTION_UNMEASURED")
+
+
 def _reach_mesh_missing(message: str) -> Exception:
     return TelemacDyeScenarioError("TELEMAC_MESH_NOT_ACCEPTED", message)
 
@@ -312,9 +325,9 @@ def _class_files(substance_class: str, *,
     return results, outputs
 
 
-def _face_section(nodes: Sequence[int], node_xy: Any,
-                  bed: Any) -> list[list[float]]:
-    """The channel the outflow face cuts, as ``(offset, bed)`` pairs.
+def _face_section(nodes: Sequence[int], node_xy: Any, bed: Any, *,
+                  missing: Callable[[str], Exception]) -> list[list[float]]:
+    """The channel a role's face cuts, as ``(offset, bed)`` pairs.
 
     A role is a contiguous RUN of the boundary walk, so the nodes arrive in the
     order they lie along the face and the offset is the running chord distance
@@ -329,22 +342,19 @@ def _face_section(nodes: Sequence[int], node_xy: Any,
 
     xy = None if node_xy is None else np.asarray(node_xy, dtype=float)
     if xy is None or len(nodes) < 2 or max(nodes) >= xy.shape[0]:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_MESH_SECTION_UNMEASURED",
-            f"the outflow stage is a normal depth over the channel the outflow "
-            f"face cuts, and that face names {len(nodes)} node(s) against "
-            f"{0 if xy is None else xy.shape[0]} mesh coordinates; a reach mesh "
-            "recipe names its faces with set_boundary_roles.")
+        raise missing(
+            f"a uniform-flow depth is derived over the channel the face cuts, "
+            f"and that face names {len(nodes)} node(s) against "
+            f"{0 if xy is None else xy.shape[0]} mesh coordinates; a mesh recipe "
+            "names its faces with set_boundary_roles.")
     points = xy[list(nodes)]
     steps = np.hypot(*(points[1:] - points[:-1]).T)
     offsets = np.concatenate([[0.0], np.cumsum(steps)])
     section = [[round(float(o), 3), round(float(z), 3)]
                for o, z in zip(offsets, bed[list(nodes)]) if np.isfinite(z)]
     if len(section) < 2:
-        raise TelemacDyeScenarioError(
-            "TELEMAC_MESH_SECTION_UNMEASURED",
-            f"the outflow face carries {len(section)} painted node(s), which is "
-            "no section to derive a normal depth over.")
+        raise missing(f"the face carries {len(section)} painted node(s), which is "
+                      "no section to derive a normal depth over.")
     return section
 
 
@@ -391,34 +401,55 @@ def _measured_reach(roles: Mapping[str, Any], node_xy: Any, node_bed: Any,
     return {"bed_top_m": medians["inflow"],
             "bed_drop_m": medians["inflow"] - medians["outflow"],
             "reach_length_m": round(length, 3),
-            "outflow_section": _face_section(role_nodes["outflow"], node_xy, bed)}
+            "outflow_section": _face_section(role_nodes["outflow"], node_xy, bed,
+                                             missing=_reach_section_unmeasured)}
 
 
-def _continuation_start_s(uri: str) -> float:
-    """The clock time the restart record stands at - read off the file itself.
+def _continuation_state(uri: str) -> dict[str, Any]:
+    """The restart record's own last instant and depth field - read off the file.
 
     A continued run is the SAME declared scenario over an extended horizon, and
     the horizon begins where the leg being continued stopped. Only that file can
     say when: the engine writes the restart at its own last time step, which is
     not the graphic period, not the asked duration, and not something the server
-    can compute from the ask.
+    can compute from the ask. The depth at that instant is the run's INITIAL
+    STATE, which is what decides where a release can land.
     """
     import tempfile
 
+    import numpy as np
+
     from trid3nt_server.workflows.solver.solver import _download_object
     from trid3nt_server.workflows.telemac.result_reader import read_selafin
+    from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
+        _DEPTH_VAR_KEYS, TELEMAC_WSE_WET_DEPTH_M,
+    )
 
     with tempfile.TemporaryDirectory(prefix="telemac-continue-") as tmp:
         path = Path(tmp) / _PREVIOUS_DEST
         _download_object(str(uri), path)
-        times = read_selafin(path)["times"]
-    if len(times) == 0:
+        record = read_selafin(path)
+    if len(record["times"]) == 0:
         raise TelemacDyeScenarioError(
             "TELEMAC_CONTINUATION_UNREADABLE",
             f"{uri} holds no time record, so there is no state to continue from "
             "and no instant to continue the scenario at. Point continue_from at "
             f"a completed run's {_RESTART}.")
-    return float(times[-1])
+    depth = next((record["data"][name] for name in record["varnames"]
+                  if name.strip().upper() in _DEPTH_VAR_KEYS), None)
+    if depth is None:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_CONTINUATION_UNREADABLE",
+            f"{uri} carries no water depth among {record['varnames']}, so the "
+            "state this run would start from cannot say where it is wet.")
+    start_s = float(record["times"][-1])
+    wet = np.asarray(depth[-1], dtype=float) > TELEMAC_WSE_WET_DEPTH_M
+    return {
+        "start_s": start_s, "wet": wet,
+        "note": (f"the restart record this run continues from, at t={start_s:.0f} s: "
+                 f"{int(wet.sum())} of {record['npoin']} nodes clear the "
+                 f"{TELEMAC_WSE_WET_DEPTH_M} m wet floor"),
+    }
 
 
 def _to_utm(source: Any, utm_epsg: int) -> Any:
@@ -447,6 +478,16 @@ def _to_utm_point(lonlat: tuple[float, float],
     return (float(x), float(y))
 
 
+def _to_lonlat_point(xy: tuple[float, float],
+                     utm_epsg: int) -> tuple[float, float]:
+    """One point in the mesh's own metres back in lon/lat."""
+    from pyproj import Transformer
+
+    lon, lat = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True).transform(
+        float(xy[0]), float(xy[1]))
+    return (float(lon), float(lat))
+
+
 def _mesh_nodes(mesh: Mapping[str, Any]) -> tuple[Any, Any]:
     """The accepted mesh's node coordinates and bed, read off its display face.
 
@@ -457,6 +498,13 @@ def _mesh_nodes(mesh: Mapping[str, Any]) -> tuple[Any, Any]:
     """
     points, _cells, z, _lonlat = read_accepted_mesh_nodes(
         _mesh_field(mesh, "display_uri", missing=_reach_mesh_missing))
+    if points is None or z is None:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_MESH_BED_UNMEASURED",
+            "the accepted mesh's display face carries no nodes or no painted bed, "
+            "so this run has no ground to measure an outflow stage over and "
+            "nowhere to settle a release; a reach mesh recipe paints its bed with "
+            "set_bed.")
     return points, z
 
 
@@ -628,7 +676,8 @@ def _do_sag_block(cfg: dict[str, Any] | None) -> dict[str, Any]:
 async def _settle_release(
     release_pair: tuple[float, float] | None, *, mesh: dict[str, Any],
     centerline: Any, centerline_utm: Any, utm_epsg: int, spill_fraction: float,
-) -> tuple[tuple[float, float], str | None]:
+    node_xy: Any, initial_state: Mapping[str, Any],
+) -> tuple[tuple[float, float], str]:
     """WHERE the source enters the water -> ``(lon, lat)`` and how it was decided.
 
     ONE seam, because there is one centerline. A SUPPLIED point is settled against
@@ -644,21 +693,43 @@ async def _settle_release(
     is the whole navigated stretch and the mesh is only the part of it the mapped
     banks left, so "on the line" and "in the domain" are two different claims and
     only the second one solves.
+
+    Either way the settled point lands LAST on the nearest node ``initial_state``
+    holds water at. Both earlier steps answer questions about geometry - is it in
+    the domain, is it on the river - and neither asks whether there is water there
+    at t0; a bankfull domain at low flow has mapped river that is dry ground when
+    the run opens, and a source released onto it discharges into the bed.
     """
     from trid3nt_server.workflows.telemac.release_point import (
         contain_release_point, derive_release_on_mesh, domain_polygon_of,
+        snap_release_to_wetted,
     )
 
     if release_pair is None:
-        return await asyncio.to_thread(
+        lonlat, note = await asyncio.to_thread(
             derive_release_on_mesh, centerline_utm=centerline_utm, mesh=mesh,
             fraction=spill_fraction)
+    else:
+        contained = await asyncio.to_thread(
+            contain_release_point, point=release_pair,
+            domain=domain_polygon_of(mesh.get("artifact")),
+            flowline=centerline)
+        lonlat, note = (contained.lon, contained.lat), contained.note
 
-    contained = await asyncio.to_thread(
-        contain_release_point, point=release_pair,
-        domain=domain_polygon_of(mesh.get("artifact")),
-        flowline=centerline)
-    return (contained.lon, contained.lat), contained.note
+    wet_utm, moved_m, node = await asyncio.to_thread(
+        snap_release_to_wetted, _to_utm_point(lonlat, utm_epsg),
+        node_xy=node_xy, wet=initial_state["wet"], state=initial_state["note"])
+    settled = (f"solved at mesh node {node}, which holds water at t0 "
+               f"({initial_state['note']}), so nothing was moved")
+    if moved_m > 0.0:
+        settled = (f"moved {moved_m:.1f} m onto mesh node {node}, the nearest one "
+                   f"holding water at t0 - the node it landed on was dry "
+                   f"({initial_state['note']})")
+    logger.info("release settled: %s", settled)
+    journal_note(f"release point: {settled}."
+                 + (f" Before that: {note}." if note else ""))
+    return _to_lonlat_point(wet_utm, utm_epsg), "; ".join(
+        part for part in (note, settled) if part)
 
 
 async def assemble_reach(
@@ -793,9 +864,21 @@ async def assemble_reach(
     # condition for the same node.
     if run_class == "do_sag":
         spill_fraction = _DO_SAG_OUTFALL_FRAC
+    node_xy, node_bed = await asyncio.to_thread(_mesh_nodes, mesh)
+    # WHAT THE RUN STARTS FROM. A fresh reach opens at the derived normal depth
+    # laid bed-parallel, which is a positive depth at every node the deck writes
+    # it over; a CONTINUED one opens at the restart record's own wet/dry field.
+    # The release is settled against whichever it is.
+    initial_state = (
+        await asyncio.to_thread(_continuation_state, str(continue_from))
+        if continue_from else
+        {"start_s": None, "wet": [True] * len(node_xy),
+         "note": "the deck's own constant initial depth, the derived normal "
+                 "depth laid bed-parallel over every node of the accepted mesh"})
     release_lonlat, release_note = await _settle_release(
         release_pair, mesh=mesh, centerline=centerline, centerline_utm=centerline_utm,
-        utm_epsg=utm_epsg, spill_fraction=spill_fraction)
+        utm_epsg=utm_epsg, spill_fraction=spill_fraction,
+        node_xy=node_xy, initial_state=initial_state)
 
     # The marker rides BEFORE the solve, so the user sees the input against the
     # mesh rather than only in the results, and it carries the SETTLED point: the
@@ -860,15 +943,13 @@ async def assemble_reach(
         # that file, and every forcing series is written over the horizon it
         # opens.
         **({"continue_from": _PREVIOUS_DEST,
-            "start_time_s": await asyncio.to_thread(
-                _continuation_start_s, str(continue_from))}
+            "start_time_s": initial_state["start_s"]}
            if continue_from else {}),
     }
 
     topology = await asyncio.to_thread(
         read_topology, _mesh_field(mesh, "topology_uri",
                                    missing=_reach_mesh_missing))
-    node_xy, node_bed = await asyncio.to_thread(_mesh_nodes, mesh)
     results, outputs = _class_files(run_class,
                                     dredging=bool(class_block.get("dredging")))
     staged = await _assemble(
@@ -934,17 +1015,15 @@ async def assemble_reach(
 # --------------------------------------------------------------------------- #
 # The catchment: what a storm over a basin is solved as.
 # --------------------------------------------------------------------------- #
-def _outlet_boundary(mesh: Mapping[str, Any]) -> tuple[int, str]:
-    """The declared OUTLET as ``(number, what its own .cli quad prescribes)``.
+def _outlet_boundary(mesh: Mapping[str, Any]) -> tuple[dict[str, Any], int, str, int]:
+    """The declared OUTLET: ``(topology, number, what its quad prescribes, count)``.
 
     The solver numbers its liquid boundaries by walking the geometry, the accepted
     topology recorded that numbering when the ``.cli`` was written, and the solver
     prints one flux per number in its own volume balance. So the number is what
-    turns "the outlet" into the series the hydrograph reads.
-
-    The prescription rides with it because this run writes NO value at that
-    number: the outlet is solved on its code alone, and the steering file states
-    which code that is rather than claiming a boundary condition nobody measured.
+    turns "the outlet" into the series the hydrograph reads, and the count is what
+    lets the steering file state one stage-discharge entry per boundary in that
+    same numbering.
     """
     topology = read_topology(_mesh_field(mesh, "topology_uri",
                                          missing=_catchment_mesh_missing))
@@ -957,7 +1036,109 @@ def _outlet_boundary(mesh: Mapping[str, Any]) -> tuple[int, str]:
             "it finer so a boundary node reaches it.",
             error_code="TELEMAC_ROG_NO_OUTLET_NODES")
     number = order.index(_OUTLET_ROLE) + 1
-    return number, str(topology["liquid_boundary_prescribes"][number - 1])
+    return (topology, number,
+            str(topology["liquid_boundary_prescribes"][number - 1]), len(order))
+
+
+def _bed_slope(nodes: Sequence[int], node_xy: Any, node_bed: Any,
+               cells: Any) -> float:
+    """The bed gradient at a face, over the ELEMENTS that face's nodes belong to.
+
+    A friction slope is a fall over a run, and the only run a catchment outlet
+    has is the ground it drains across: the elements touching the face are the
+    mesh's own neighbourhood of it, so the plane fitted through their painted
+    nodes is a measurement rather than a window somebody chose.
+    """
+    import numpy as np
+
+    xy = np.asarray(node_xy, dtype=float)
+    bed = np.asarray(node_bed, dtype=float)
+    tri = np.asarray(cells, dtype=np.int64)
+    patch = np.unique(tri[np.isin(tri, np.asarray(list(nodes),
+                                                  dtype=np.int64)).any(axis=1)])
+    patch = patch[np.isfinite(bed[patch])]
+    if patch.size < 3:
+        raise RainOnGridError(
+            f"the outlet face touches {patch.size} painted mesh node(s), which is "
+            "no ground to measure a bed slope over; a catchment mesh paints its "
+            "bed with set_bed.",
+            error_code="TELEMAC_ROG_OUTLET_SLOPE_UNMEASURED")
+    plane = np.linalg.lstsq(
+        np.column_stack([xy[patch, 0], xy[patch, 1], np.ones(patch.size)]),
+        bed[patch], rcond=None)[0]
+    slope = float(np.hypot(plane[0], plane[1]))
+    if not (slope > 0.0):
+        raise RainOnGridError(
+            f"the bed over the {patch.size} nodes around the outlet is flat "
+            f"(gradient {slope:.6g}), so there is no uniform-flow depth for the "
+            "outlet to hold and its level would have to come from a gauge.",
+            error_code="TELEMAC_ROG_OUTLET_SLOPE_UNMEASURED")
+    return slope
+
+
+def _measured_outlet(topology: Mapping[str, Any], node_xy: Any, node_bed: Any,
+                     cells: Any, node_manning: Any, *,
+                     q_ceiling_m3s: float, q_ceiling_basis: str) -> dict[str, Any]:
+    """What the accepted mesh says about the face the basin drains through.
+
+    Everything the outlet's rating curve is derived from, measured off the
+    artifact itself: the section the outlet face cuts through the painted bed,
+    the bed slope over the elements it touches, and the roughness the run's own
+    friction field carries there. A curve derived from anything else would hold
+    the outlet at a level computed over ground the solver never reads.
+    """
+    import numpy as np
+
+    nodes = [int(n) for n in (topology["roles"].get(_OUTLET_ROLE) or ())]
+    manning = np.asarray(node_manning, dtype=float)[nodes]
+    coefficient = float(np.nanmedian(manning))
+    if not np.isfinite(coefficient) or coefficient <= 0.0:
+        raise RainOnGridError(
+            f"the friction field carries {coefficient!r} at the outlet nodes, so "
+            "the outlet's rating curve has no roughness to be derived under.",
+            error_code="TELEMAC_ROG_OUTLET_FRICTION_UNMEASURED")
+    return {
+        "section": _face_section(nodes, node_xy, node_bed,
+                                 missing=_outlet_section_unmeasured),
+        "slope": _bed_slope(nodes, node_xy, node_bed, cells),
+        "law": _ROG_FRICTION_LAW, "coefficient": coefficient,
+        "q_ceiling_m3s": float(q_ceiling_m3s),
+        "q_ceiling_basis": q_ceiling_basis,
+    }
+
+
+def _rain_ceiling(rain: Mapping[str, Any], cells: Any,
+                  node_xy: Any) -> tuple[float, str]:
+    """The most the outlet can ever discharge, and the basis of that number.
+
+    Every drop this run holds falls on the mesh, so the gross rain rate over the
+    meshed area is a CEILING on the outlet flux: infiltration only removes water
+    and storage only delays it. It is the top of the flow range the rating curve
+    is swept over, which is what "spanning the expected hydrograph" means without
+    a hydrograph in hand.
+    """
+    import numpy as np
+
+    xy = np.asarray(node_xy, dtype=float)
+    tri = np.asarray(cells, dtype=np.int64)
+    a, b, c = xy[tri[:, 0]], xy[tri[:, 1]], xy[tri[:, 2]]
+    area_m2 = float(0.5 * np.abs((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1])
+                                 - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0])).sum())
+    peak_mm_hr = (max(float(v) for v in rain["series"])
+                  if rain.get("kind") == "hyetograph"
+                  else float(rain["intensity_mm_per_hr"]))
+    if not (peak_mm_hr > 0.0 and area_m2 > 0.0):
+        raise RainOnGridError(
+            f"a storm of {peak_mm_hr:g} mm/h over {area_m2:g} m2 puts no water on "
+            "the catchment, so there is no flow range for the outlet's rating "
+            "curve to span.",
+            error_code="TELEMAC_ROG_NO_STORM")
+    ceiling = peak_mm_hr / 1000.0 / 3600.0 * area_m2
+    return ceiling, (
+        f"the gross rain rate on the meshed catchment - peak {peak_mm_hr:g} mm/h "
+        f"over {area_m2 / 1.0e6:.3f} km2 is {ceiling:.3f} m3/s, which no outlet "
+        "flux can exceed because infiltration only removes water and storage "
+        "only delays it")
 
 
 async def assemble_rain_on_grid(
@@ -992,7 +1173,8 @@ async def assemble_rain_on_grid(
     utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
     probes = dict(getattr(artifact, "probes", None) or {})
     provenance = dict(catchment.get("provenance") or {})
-    outlet_boundary, outlet_prescribes = _outlet_boundary(catchment)
+    topology, outlet_boundary, outlet_prescribes, n_liquid = _outlet_boundary(
+        catchment)
     mesh_size_m = float(catchment.get("min_edge_m") or mesh_resolution_m or 0.0)
     name = str(getattr(artifact, "name", None) or "watershed")
     bed_source = str(provenance.get("bed_source") or "staged")
@@ -1008,8 +1190,12 @@ async def assemble_rain_on_grid(
            if rain.get("rain_duration_s") is not None else {}),
     }
 
-    points_utm, _cells, _bed, _lonlat = await asyncio.to_thread(
+    points_utm, cells, node_bed, _lonlat = await asyncio.to_thread(
         mesh_nodes, catchment)
+    q_ceiling, q_ceiling_basis = _rain_ceiling(rain, cells, points_utm)
+    outlet = _measured_outlet(
+        topology, points_utm, node_bed, cells, infiltration["node_manning"],
+        q_ceiling_m3s=q_ceiling, q_ceiling_basis=q_ceiling_basis)
     staged = await _assemble(
         "rain_on_grid", sheet=sheet,
         server_facts={
@@ -1030,7 +1216,7 @@ async def assemble_rain_on_grid(
         # and the same condition decides whether it is written at all.
         outputs=[_ROG_RESULT, _ROG_GEOMETRY, _ROG_BOUNDARY, "full_listing.log",
                  "telemac_metrics.json", _ROG_STEERING, author.ROG_CN_MAP,
-                 author.ROG_FRICTION_LAWS, author.ROG_ZONES,
+                 author.ROG_FRICTION_LAWS, author.ROG_ZONES, author.ROG_RATING,
                  *([author.ROG_HYETOGRAPH] if decision.time_varying else [])],
         mesh_inputs=[
             {"gs_uri": _mesh_field(catchment, "slf_uri",
@@ -1046,8 +1232,19 @@ async def assemble_rain_on_grid(
             "rain_mm_per_day": float(rain["intensity_mm_per_hr"]) * 24.0,
             "outlet_boundary": outlet_boundary,
             "outlet_prescribes": outlet_prescribes,
+            "n_liquid_boundaries": n_liquid,
+            "outlet": outlet,
             "hyetograph_blocks": (rain["blocks"] if decision.time_varying
                                   else None)})
+    rating = staged["written"]["rating_curve"]
+    journal_note(
+        f"catchment outlet: liquid boundary {outlet_boundary} holds a DERIVED "
+        f"stage-discharge curve - {len(rating['rows'])} points from the dry "
+        f"section at {rating['thalweg_m']:.3f} m to {rating['stage_max_m']:.3f} m "
+        f"at {rating['q_ceiling_m3s']:.3f} m3/s, each a normal depth over the "
+        f"measured outlet section at {rating['law']} {rating['coefficient']:g} on "
+        f"the measured bed slope {rating['slope']:.6f}. The range is "
+        f"{outlet['q_ceiling_basis']}.")
     return {
         **staged,
         "catchment": catchment,

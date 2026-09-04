@@ -455,6 +455,14 @@ def test_oil_names_its_steering_and_moves_the_release_into_the_fortran(tmp_path)
 # --------------------------------------------------------------------------- #
 # Rain on grid: two paths, and the steering file says which.
 # --------------------------------------------------------------------------- #
+#: A trapezoid outlet section on a measured slope, at the distributed Manning the
+#: catchment deck writes - the four measurements the outlet's Z(Q) is derived
+#: from, so the curve under this deck is the one a live catchment gets.
+_OUTLET = {"section": [[0.0, 12.0], [5.0, 10.0], [15.0, 10.0], [20.0, 12.0]],
+           "slope": 0.02, "law": 4, "coefficient": 0.05,
+           "q_ceiling_m3s": 51.0, "q_ceiling_basis": "the gross rain rate"}
+
+
 def _rog(tmp_path, *, sheet_extra=None, **kwargs) -> str:
     A._author_rain_on_grid_steering(
         tmp_path, sheet={"name": "creek", "duration_s": 7200.0,
@@ -464,7 +472,12 @@ def _rog(tmp_path, *, sheet_extra=None, **kwargs) -> str:
         steering="t2d_rog.cas", cn_map="rog_cn_map.dat",
         friction_laws="rog_friction.tbl", zones_file="rog_zones.dat",
         rain_mm_per_day=48.0, outlet_boundary=1,
-        outlet_prescribes="elevation", **kwargs)
+        outlet_prescribes="elevation", n_liquid_boundaries=1,
+        rating=A.derive_rating_curve(
+            _OUTLET["section"], law=_OUTLET["law"],
+            coefficient=_OUTLET["coefficient"], slope=_OUTLET["slope"],
+            q_ceiling_m3s=_OUTLET["q_ceiling_m3s"]),
+        rating_file=A.ROG_RATING, **kwargs)
     return (tmp_path / "t2d_rog.cas").read_text()
 
 
@@ -498,14 +511,7 @@ def test_a_constant_rain_run_stages_no_fortran_at_all(tmp_path):
 
 
 def test_a_rain_window_shorter_than_the_run_lets_the_catchment_drain(tmp_path):
-    A._author_rain_on_grid_steering(
-        tmp_path, sheet={"name": "creek", "duration_s": 7200.0,
-                         "rain_duration_s": 1800.0},
-        geometry="rog.slf", boundary="rog.cli", results="r2d_rog.slf",
-        steering="t2d_rog.cas", cn_map="cn.dat", friction_laws="f.tbl",
-        zones_file="z.dat", rain_mm_per_day=48.0,
-        outlet_boundary=1, outlet_prescribes="elevation")
-    cas = (tmp_path / "t2d_rog.cas").read_text()
+    cas = _rog(tmp_path, sheet_extra={"rain_duration_s": 1800.0})
     assert "DURATION OF RAIN OR EVAPORATION IN HOURS = 0.5" in cas
 
 

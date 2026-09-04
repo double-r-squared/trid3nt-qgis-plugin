@@ -39,8 +39,8 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
     """Write the SELAFIN geometry and its ``.cli`` -> the two paths and the stats.
 
     ``roles`` maps a boundary role (``inflow``, ``outflow``, ``open``,
-    ``free_exit``) to the node indices carrying it; every other boundary node is
-    written as a solid wall.
+    ``rating_curve``, ``free_exit``) to the node indices carrying it; every other
+    boundary node is written as a solid wall.
     The stats carry what the driver MEASURED - the boundary node count, the
     liquid-boundary numbering AND the role of each numbered liquid boundary,
     whether the IPOBO it wrote is the permutation TELEMAC requires - so a caller

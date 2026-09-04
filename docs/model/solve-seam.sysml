@@ -694,6 +694,41 @@ package SolveSeam {
         */
     }
 
+    requirement def CatchmentOutletHoldsADerivedRatingCurve {
+        doc /*
+        SIGNED DECISION - the rain-on-grid catchment outlet holds a DERIVED
+        stage-discharge curve, which is the ONE fact a subcritical outlet takes
+        from outside its own interior. It replaces a boundary that prescribed a
+        level and had no value written at its number: bord.f then fell through to
+        the boundary file's own zero, and the outlet was a hard zero-DEPTH
+        Dirichlet on the one face the basin drains through. Measured on the
+        Coweeta design storm: all three outlet nodes at 0.0000 m in every frame.
+
+        The curve is the SAME uniform-flow derivation the reach's outflow stage
+        is, evaluated over a range instead of at one discharge, and every input
+        is measured on the accepted mesh: the section the outlet face cuts
+        through the painted bed, the bed gradient over the elements that face
+        belongs to, the roughness the run's own friction field carries there, and
+        the bottom-friction law the deck goes on to write. Nothing external
+        enters. A gauged curve is the calibration-era swap through this same
+        keyword, which is why the mechanism is the curve rather than a constant.
+
+        The RANGE is a bound, not a guess: every drop the run holds falls on the
+        mesh, so the gross rain rate over the meshed area - the storm's peak
+        intensity times the triangulation's own summed area - is a ceiling on the
+        outlet flux, because infiltration only removes water and storage only
+        delays it. The curve is swept from the dry section up to the stage that
+        ceiling stands at, its points spaced uniformly in STAGE because the
+        engine interpolates the level linearly between them.
+
+        Everything it cannot measure refuses by name: a flat bed at the outlet
+        has no uniform-flow depth, an unpainted face has no section, a friction
+        field with no positive roughness at the outlet has no conveyance, and a
+        storm of zero has no range. Defaulting past any of them would put the
+        clamp back with nothing saying so.
+        */
+    }
+
     requirement def BoundaryCodesMatchTheSteering {
         doc /*
         A TELEMAC boundary states itself TWICE - as a (LIHBOR, LIUBOR, LIVBOR,
@@ -728,12 +763,17 @@ package SolveSeam {
         +29,425 m3/s injected through the outlet in one printout, a domain taken
         from 1.90e6 to 1.50e7 m3 against a 4.41e6 m3 storm, 68.63 m depths and a
         runoff volume of zero - with CORRECT END OF RUN and continuity at 1e-15,
-        because the engine conserved exactly what it wrongly did. The catchment
-        outlet therefore keeps the prescribed-level quad, and the recipe that
-        paints it names the zero-depth clamp that quad becomes when no value is
-        written at its number. Which fact a subcritical outlet takes from
-        outside - a derived stage, a stage-discharge curve - is a physics
-        decision this model records as owed rather than as taken.
+        because the engine conserved exactly what it wrongly did.
+
+        The table's RATING-CURVE row is the case where the quad alone cannot say
+        the whole condition. Its codes are the outflow's, because bord.f reads a
+        stage-discharge curve only where the depth is prescribed, so quad-derived
+        `prescribes` reads "elevation" for both - and the two are still different
+        boundaries: an outflow owes a constant in PRESCRIBED ELEVATIONS, a rating
+        curve owes STAGE-DISCHARGE CURVES = 1 at its own number and the curve
+        file the level is interpolated out of. The ROLE is what the steering
+        author reads to tell them apart, exactly as it reads FREE_EXIT to tell a
+        stated silence from a disagreement. One table, two files, still.
 
         The number a value is written AT is the other half of the same contract,
         and it is measured by the engine's own rule (bief/front2.f): each contour
@@ -770,6 +810,23 @@ package SolveSeam {
         "tests/test_telemac_boundary_contract.py::test_the_free_exit_role_prescribes_nothing_as_a_stated_choice";
     verify requirement BoundaryCodesMatchTheSteering by
         "tests/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses";
+
+    satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by assembler;
+    satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by steeringStatements;
+    verify requirement CatchmentOutletHoldsADerivedRatingCurve by
+        "tests/test_telemac_outflow_stage.py::test_the_rating_curve_starts_dry_and_ends_at_the_stated_ceiling";
+    verify requirement CatchmentOutletHoldsADerivedRatingCurve by
+        "tests/test_telemac_outflow_stage.py::test_the_curve_rises_monotonically_so_the_engine_can_interpolate_it";
+    verify requirement CatchmentOutletHoldsADerivedRatingCurve by
+        "tests/test_telemac_outflow_stage.py::test_every_point_is_the_normal_depth_the_reachs_own_stage_would_be";
+    verify requirement CatchmentOutletHoldsADerivedRatingCurve by
+        "tests/test_telemac_outflow_stage.py::test_the_curve_file_is_written_in_the_engines_own_block_format";
+    verify requirement CatchmentOutletHoldsADerivedRatingCurve by
+        "tests/test_telemac_outflow_stage.py::test_the_catchments_outlet_slope_is_the_bed_over_the_elements_it_touches";
+    verify requirement CatchmentOutletHoldsADerivedRatingCurve by
+        "tests/test_telemac_outflow_stage.py::test_a_flat_outlet_refuses_rather_than_holding_a_level_nobody_measured";
+    verify requirement CatchmentOutletHoldsADerivedRatingCurve by
+        "tests/test_telemac_outflow_stage.py::test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area";
 
     satisfy requirement OutflowStageIsNormalDepth by steeringStatements;
     satisfy requirement OutflowStageIsNormalDepth by assembler;

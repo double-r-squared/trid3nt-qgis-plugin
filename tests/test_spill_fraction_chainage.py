@@ -63,8 +63,12 @@ def _walk(fraction: float, centerline_utm, monkeypatch):
             "artifact": type("A", (), {"utm_epsg": _UTM_EPSG})()}
     (lon, lat), note = asyncio.run(_settle_release(
         None, mesh=mesh, centerline=None, centerline_utm=centerline_utm,
-        utm_epsg=_UTM_EPSG, spill_fraction=fraction))
-    assert note is None  # a derived release inside the mesh relocates nothing
+        utm_epsg=_UTM_EPSG, spill_fraction=fraction,
+        node_xy=_HOLDS_EVERYTHING[0],
+        initial_state={"wet": [True] * 4, "note": "a wet stand-in state"}))
+    # a derived release inside the mesh, landing on a node that holds water,
+    # relocates nothing
+    assert "nothing was moved" in note
     return lon, lat
 
 

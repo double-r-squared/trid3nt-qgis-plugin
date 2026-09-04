@@ -145,24 +145,17 @@ MESH = tool.build_mesh(
         # takes the role, and the hydrograph is the flux across exactly those
         # nodes.
         #
-        # WHAT THIS ROLE ACTUALLY IMPOSES, stated because it is not what a reader
-        # expects: the quad prescribes a water LEVEL, and the steering file writes
-        # no value at that number, so the level the engine reads is the boundary
-        # file's own zero - a hard zero-DEPTH Dirichlet on the one face the basin
-        # drains through. Measured: the outlet nodes hold 0.0000 m for every frame
-        # of a 30 h design storm. It is a numerical drain, not a measured outlet.
-        #
-        # The all-KSORT free exit is NOT the cure and is not used here. It is
-        # well-posed only while the normal velocity leaves: propin_telemac2d.f
-        # refuses an entering velocity under a free one by name, and on this
-        # catchment it did - "ILL-POSED PROBLEM, ENTERING FREE VELOCITY" 14 times,
-        # +29,425 m3/s injected through the outlet in one printout, 68.6 m depths,
-        # and a runoff volume of zero. A subcritical outlet needs ONE fact from
-        # outside; which fact is a physics decision (a derived stage, a Q(Z)
-        # rating), and none is invented here.
+        # A subcritical outlet needs ONE fact from outside, and the RATING CURVE
+        # role is where it comes from: the quad prescribes a water LEVEL and the
+        # authoring derives the Z(Q) that level is read off - a normal depth over
+        # the section this face cuts, swept over the flow range the storm can
+        # produce - so the outlet rises and falls with the hydrograph. The
+        # all-KSORT free exit is not the alternative: it is well-posed only while
+        # the normal velocity leaves, and propin_telemac2d.f refuses an entering
+        # one by name.
         mesh_op("set_boundary_roles",
-                outflow={"type": "Point",
-                         "coordinates": Ref("basin.snapped_pour_point")}),
+                rating_curve={"type": "Point",
+                              "coordinates": Ref("basin.snapped_pour_point")}),
     ],
 )
 

@@ -243,3 +243,123 @@ def test_the_stage_is_derived_at_the_roughness_the_run_goes_on_to_write(tmp_path
     assert "LAW OF BOTTOM FRICTION          = 4" in cas
     assert "FRICTION COEFFICIENT            = 0.05" in cas
     assert "at Manning 0.05" in cas
+
+
+# --------------------------------------------------------------------------- #
+# The catchment outlet: the SAME derivation, swept over a flow range.
+# --------------------------------------------------------------------------- #
+#: The outlet face of a catchment: a 10 m trapezoid at 10 m, banks rising 2 m.
+_OUTLET_SECTION = [[0.0, 12.0], [5.0, 10.0], [15.0, 10.0], [20.0, 12.0]]
+
+
+def _curve(**over):
+    return A.derive_rating_curve(_OUTLET_SECTION, **{
+        "law": 4, "coefficient": 0.05, "slope": 0.02,
+        "q_ceiling_m3s": 51.0, **over})
+
+
+def test_the_rating_curve_starts_dry_and_ends_at_the_stated_ceiling():
+    """Its two ends are the two facts the engine holds it to: below the first
+    point the level is that point's, above the last it is the last one's."""
+    rows = _curve()["rows"]
+    assert rows[0] == (0.0, 10.0)  # the dry section, at its own thalweg
+    assert rows[-1][0] == pytest.approx(51.0, rel=1e-4)
+    assert rows[-1][1] > rows[0][1]
+
+
+def test_the_curve_rises_monotonically_so_the_engine_can_interpolate_it():
+    rows = _curve()["rows"]
+    assert all(b[0] > a[0] and b[1] > a[1] for a, b in zip(rows, rows[1:]))
+
+
+def test_every_point_is_the_normal_depth_the_reachs_own_stage_would_be():
+    """ONE derivation, two callers. A stage on the curve is the stage the reach's
+    machinery solves for that same discharge over that same section."""
+    q, z = _curve()["rows"][10]
+    reach = A._normal_depth_stage(
+        A._Sheet({"inflow_q_m3s": q, "friction_law": 4,
+                  "friction_coefficient": 0.05}),
+        {"bed_top_m": 30.0, "bed_drop_m": 20.0, "reach_length_m": 1000.0,
+         "outflow_section": _OUTLET_SECTION})
+    assert reach["stage_m"] == pytest.approx(z, abs=1e-3)
+
+
+@pytest.mark.parametrize("over,code", [
+    ({"slope": 0.0}, "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE"),
+    ({"coefficient": 0.0}, "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE"),
+    ({"q_ceiling_m3s": 0.0}, "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE"),
+    ({"law": 5}, "TELEMAC_OUTFLOW_FRICTION_UNREADABLE"),
+])
+def test_an_input_the_outlet_cannot_measure_refuses_by_name(over, code):
+    with pytest.raises(A.SteeringAuthorError) as excinfo:
+        _curve(**over)
+    assert excinfo.value.error_code == code
+
+
+def test_a_section_of_one_point_is_no_channel_to_derive_a_curve_over():
+    with pytest.raises(A.SteeringAuthorError) as excinfo:
+        A.derive_rating_curve([[0.0, 10.0]], law=4, coefficient=0.05,
+                              slope=0.02, q_ceiling_m3s=51.0)
+    assert excinfo.value.error_code == "TELEMAC_OUTFLOW_SECTION_UNMEASURED"
+
+
+def test_the_curve_file_is_written_in_the_engines_own_block_format(tmp_path):
+    """``read_fic_curves.f`` reads a header naming the boundary, a units line it
+    skips, then two columns until a blank; under Q(n) the first column is the
+    discharge."""
+    A.write_stage_discharge_curve(tmp_path, A.ROG_RATING, boundary=2,
+                                  rows=[(0.0, 10.0), (51.0, 11.3)],
+                                  note="derived Z(Q)")
+    lines = (tmp_path / A.ROG_RATING).read_text().splitlines()
+    assert lines[0].startswith("#")
+    assert lines[1] == "Q(2) Z(2)"
+    assert lines[2] == "m3/s m"
+    assert lines[3].split() == ["0.000000", "10.0000"]
+    assert lines[4].split() == ["51.000000", "11.3000"]
+
+
+def test_the_catchments_outlet_slope_is_the_bed_over_the_elements_it_touches():
+    """Measured, not chosen: the plane through the painted nodes of the elements
+    the face belongs to."""
+    xy = np.array([[0.0, 0.0], [10.0, 0.0], [0.0, 10.0], [10.0, 10.0]])
+    bed = np.array([1.0, 0.8, 1.0, 0.8])  # falls 0.2 m over 10 m eastward
+    cells = np.array([[0, 1, 2], [1, 3, 2]])
+    assert D._bed_slope([1, 3], xy, bed, cells) == pytest.approx(0.02, rel=1e-6)
+
+
+def test_a_flat_outlet_refuses_rather_than_holding_a_level_nobody_measured():
+    xy = np.array([[0.0, 0.0], [10.0, 0.0], [0.0, 10.0], [10.0, 10.0]])
+    cells = np.array([[0, 1, 2], [1, 3, 2]])
+    from trid3nt_server.workflows.telemac.helpers.errors import RainOnGridError
+
+    with pytest.raises(RainOnGridError) as excinfo:
+        D._bed_slope([1, 3], xy, np.zeros(4), cells)
+    assert excinfo.value.error_code == "TELEMAC_ROG_OUTLET_SLOPE_UNMEASURED"
+
+
+def test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area():
+    """The ceiling is a BOUND, not a guess: infiltration only removes water and
+    storage only delays it, so nothing can leave faster than the rain arrives."""
+    xy = np.array([[0.0, 0.0], [1000.0, 0.0], [0.0, 1000.0], [1000.0, 1000.0]])
+    cells = np.array([[0, 1, 2], [1, 3, 2]])  # 1 km2
+    ceiling, basis = D._rain_ceiling(
+        {"kind": "design_storm", "intensity_mm_per_hr": 36.0}, cells, xy)
+    assert ceiling == pytest.approx(0.036 / 3600.0 * 1.0e6)
+    assert "1.000 km2" in basis and "36 mm/h" in basis
+
+    peak, _basis = D._rain_ceiling(
+        {"kind": "hyetograph", "series": [3.0, 12.5, 0.0]}, cells, xy)
+    assert peak == pytest.approx(0.0125 / 3600.0 * 1.0e6)
+
+
+def test_the_curve_is_spaced_EVENLY_IN_DISCHARGE_so_the_low_end_is_not_a_cliff():
+    """The engine looks the curve up BY discharge and interpolates linearly, so a
+    first interval carrying almost no flow and centimetres of stage makes the
+    boundary swing metres on a trickle - and a boundary above a catchment that has
+    not started running off yet lifts water back into it."""
+    rows = _curve()["rows"]
+    steps = [b[0] - a[0] for a, b in zip(rows, rows[1:])]
+    assert max(steps) - min(steps) < 1e-5
+    slopes = [(b[1] - a[1]) / (b[0] - a[0]) for a, b in zip(rows, rows[1:])]
+    # the steepest interval is the first, and the curve flattens from there
+    assert slopes == sorted(slopes, reverse=True)

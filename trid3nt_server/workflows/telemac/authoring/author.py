@@ -37,7 +37,7 @@ import math
 import os
 import re
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from .cas_validate import validate_authored_steering
 
@@ -319,7 +319,8 @@ def _write_steering(rundir: Path | str, basename: str,
 
 
 # --------------------------------------------------------------------------- #
-# The outflow stage: a normal depth over the measured section.
+# Uniform flow over a measured section: the outflow stage, and the rating curve
+# that is the same derivation swept over a range of discharges.
 # --------------------------------------------------------------------------- #
 #: The friction laws a uniform-flow depth reads under, as the exponent each puts
 #: on the hydraulic radius and whether its coefficient is a RECIPROCAL
@@ -368,6 +369,67 @@ def _wetted(section: Sequence[tuple[float, float]],
                                  for end in (0, -1))
 
 
+def _conveyance(law: int, coefficient: float) -> tuple[str, float, float]:
+    """``(law name, radius exponent, conveyance)`` for a friction law -> refuses.
+
+    The conveyance is the coefficient the discharge is LINEAR in, which is the
+    coefficient itself under Strickler and Chezy and its reciprocal under
+    Manning; every caller multiplies by it rather than branching on the law.
+    """
+    if law not in _CONVEYANCE:
+        raise SteeringAuthorError(
+            "TELEMAC_OUTFLOW_FRICTION_UNREADABLE",
+            f"the steering file is written under bottom-friction law {law}, whose "
+            f"coefficient is not a conveyance {sorted(_CONVEYANCE)} reads, so a "
+            "uniform-flow depth cannot be derived under the roughness this run "
+            "is actually solved at.")
+    law_name, exponent, reciprocal = _CONVEYANCE[law]
+    return law_name, exponent, (1.0 / coefficient if reciprocal else coefficient)
+
+
+def _uniform_flow(section: Sequence[tuple[float, float]], *, law: int,
+                  coefficient: float, slope: float) -> Callable[[float], float]:
+    """The discharge this section conveys at a water elevation, under uniform flow.
+
+    One closure, so the stage a discharge is solved for and the discharge a stage
+    is evaluated at cannot come from two spellings of the same conveyance.
+    """
+    _name, exponent, conveyance = _conveyance(law, coefficient)
+    root_slope = math.sqrt(slope)
+
+    def discharge(stage: float) -> float:
+        area, perimeter = _wetted(section, stage)
+        if area <= 0.0 or perimeter <= 0.0:
+            return 0.0
+        return conveyance * area * (area / perimeter) ** exponent * root_slope
+
+    return discharge
+
+
+def _stage_conveying(discharge: Callable[[float], float], thalweg: float,
+                     q_m3s: float, *, slope: float) -> float:
+    """The elevation at which ``discharge`` reaches ``q_m3s`` -> refuses.
+
+    The bracket opens a decimetre over the section's lowest painted node and
+    doubles until the section carries the flow; a channel that needs a kilometre
+    of water to convey it is not the channel this discharge belongs to.
+    """
+    from scipy.optimize import brentq
+
+    top = thalweg + _STAGE_SEED_M
+    while discharge(top) < q_m3s:
+        top = thalweg + 2.0 * (top - thalweg)
+        if top - thalweg > _STAGE_CEILING_M:
+            raise SteeringAuthorError(
+                "TELEMAC_OUTFLOW_STAGE_UNCONVEYABLE",
+                f"the measured section conveys {q_m3s:g} m3/s only more than "
+                f"{_STAGE_CEILING_M:g} m above its own bed at slope "
+                f"{slope:.6g}; the discharge and the channel this run states "
+                "describe different rivers.")
+    return float(brentq(lambda s: discharge(s) - q_m3s,
+                        thalweg + _STAGE_FLOOR_M, top, xtol=1.0e-4))
+
+
 def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
     """The outflow stage as NORMAL DEPTH -> the elevation and what derived it.
 
@@ -391,8 +453,6 @@ def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
     uniform-flow depth at all, and defaulting past that would put a made-up level
     on the one boundary the run's water surface is anchored to.
     """
-    from scipy.optimize import brentq
-
     section = [(float(o), float(z))
                for o, z in (bed.get("outflow_section") or ())]
     if len(section) < 2:
@@ -413,14 +473,6 @@ def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
             "outflow level has to come from a gauge or a rating curve rather "
             "than from the reach itself.")
     law = 3 if P.friction_law is None else int(P.friction_law)
-    if law not in _CONVEYANCE:
-        raise SteeringAuthorError(
-            "TELEMAC_OUTFLOW_FRICTION_UNREADABLE",
-            f"the steering file is written under bottom-friction law {law}, whose "
-            f"coefficient is not a conveyance {sorted(_CONVEYANCE)} reads, so the "
-            "outflow stage cannot be a normal depth under the roughness this run "
-            "is actually solved at.")
-    law_name, exponent, reciprocal = _CONVEYANCE[law]
     coefficient = (_STRICKLER_DEFAULT if P.friction_coefficient is None
                    else float(P.friction_coefficient))
     discharge_q = float(P.inflow_q_m3s)
@@ -428,33 +480,96 @@ def _normal_depth_stage(P: _Sheet, bed: Mapping[str, Any]) -> dict[str, Any]:
         raise SteeringAuthorError(
             "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE",
             f"a normal depth needs a positive roughness and a positive "
-            f"discharge; this file states {law_name} {coefficient:g} and "
-            f"{discharge_q:g} m3/s.")
-    conveyance = 1.0 / coefficient if reciprocal else coefficient
-    root_slope = math.sqrt(slope)
-
-    def discharge(stage: float) -> float:
-        area, perimeter = _wetted(section, stage)
-        if area <= 0.0 or perimeter <= 0.0:
-            return 0.0
-        return conveyance * area * (area / perimeter) ** exponent * root_slope
-
+            f"discharge; this file states law {law} coefficient "
+            f"{coefficient:g} and {discharge_q:g} m3/s.")
+    discharge = _uniform_flow(section, law=law, coefficient=coefficient,
+                              slope=slope)
+    law_name = _CONVEYANCE[law][0]
     thalweg = min(z for _offset, z in section)
-    top = thalweg + _STAGE_SEED_M
-    while discharge(top) < discharge_q:
-        top = thalweg + 2.0 * (top - thalweg)
-        if top - thalweg > _STAGE_CEILING_M:
-            raise SteeringAuthorError(
-                "TELEMAC_OUTFLOW_STAGE_UNCONVEYABLE",
-                f"the measured outflow section conveys {discharge_q:g} m3/s only "
-                f"more than {_STAGE_CEILING_M:g} m above its own bed at slope "
-                f"{slope:.6g}; the discharge and the channel this run states "
-                "describe different rivers.")
-    stage = float(brentq(lambda s: discharge(s) - discharge_q,
-                         thalweg + _STAGE_FLOOR_M, top, xtol=1.0e-4))
+    stage = _stage_conveying(discharge, thalweg, discharge_q, slope=slope)
     return {"stage_m": stage, "depth_m": stage - thalweg, "slope": slope,
             "drop_m": drop, "length_m": length, "law": law_name,
             "coefficient": coefficient, "q_m3s": discharge_q}
+
+
+#: How many points the derived rating curve carries, spaced uniformly in
+#: DISCHARGE from nothing up to the range's ceiling. Discharge is what the engine
+#: LOOKS the curve up by, so even spacing there bounds the slope of every
+#: interval at the physical dZ/dQ of the channel. Spacing them evenly in stage
+#: instead crushes the low-flow end into a first interval carrying almost no
+#: discharge and several centimetres of stage - measured on the Coweeta outlet,
+#: 4.25 m of level per m3/s - and a boundary that swings metres on a trickle
+#: lifts water back into a catchment that has not started running off yet.
+_RATING_POINTS = 20
+
+
+def derive_rating_curve(section: Sequence[tuple[float, float]], *, law: int,
+                        coefficient: float, slope: float,
+                        q_ceiling_m3s: float) -> dict[str, Any]:
+    """The section's stage-discharge curve under uniform flow -> what derived it.
+
+    The SAME normal-depth derivation the outflow stage of a reach is, evaluated
+    over a range of discharges instead of at one: at each stage the section
+    conveys a discharge, and the pairs are the rating curve the engine reads a
+    level off. It imports no gauge - a gauged curve is the calibration-era swap
+    through this same keyword - and nothing here is fitted.
+
+    ``q_ceiling_m3s`` is the top of the range, and its BASIS is the caller's to
+    state; the curve is flat above it because the engine holds the last point,
+    so a ceiling below the flow that arrives caps the level rather than
+    extrapolating a channel nobody measured.
+
+    Returns the rows as ``(discharge, elevation)`` pairs, lowest first, with the
+    dry section at zero discharge as the first one.
+    """
+    import numpy as np
+
+    rows = [(float(o), float(z)) for o, z in section]
+    if len(rows) < 2:
+        raise SteeringAuthorError(
+            "TELEMAC_OUTFLOW_SECTION_UNMEASURED",
+            f"a rating curve is a uniform-flow depth over the channel the outlet "
+            f"face cuts, and that face carries {len(rows)} painted point(s).")
+    if slope <= 0.0 or coefficient <= 0.0 or q_ceiling_m3s <= 0.0:
+        raise SteeringAuthorError(
+            "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE",
+            f"a rating curve needs a positive slope, roughness and flow range; "
+            f"this outlet states slope {slope:.6g}, coefficient "
+            f"{coefficient:g} and a ceiling of {q_ceiling_m3s:g} m3/s.")
+    discharge = _uniform_flow(rows, law=law, coefficient=coefficient, slope=slope)
+    thalweg = min(z for _offset, z in rows)
+    stage_max = _stage_conveying(discharge, thalweg, q_ceiling_m3s, slope=slope)
+    flows = np.linspace(0.0, float(q_ceiling_m3s), _RATING_POINTS)
+    # The dry section carries no flow, and it is the level the engine holds the
+    # outlet at below the curve, so it is stated rather than solved for.
+    return {
+        "rows": [(round(float(q), 6),
+                  round(thalweg if q <= 0.0 else
+                        _stage_conveying(discharge, thalweg, float(q),
+                                         slope=slope), 4))
+                 for q in flows],
+        "law": _CONVEYANCE[law][0], "coefficient": float(coefficient),
+        "slope": float(slope), "thalweg_m": float(thalweg),
+        "q_ceiling_m3s": float(q_ceiling_m3s), "stage_max_m": float(stage_max),
+    }
+
+
+def write_stage_discharge_curve(rundir: Path | str, basename: str, *,
+                                boundary: int, rows: Sequence[Any],
+                                note: str) -> str:
+    """Write one boundary's Z(Q) curve in the engine's own format -> the basename.
+
+    ``read_fic_curves.f`` reads a block per curve: a header naming the boundary,
+    a UNITS line it skips without checking, then two columns until a blank or a
+    ``#``. Under a ``Q(n)`` header the first column is the discharge, which is
+    the order the rows arrive in.
+    """
+    _write_lines(rundir, basename, [
+        f"{_FILE_COMMENT}{note}",
+        f"Q({int(boundary)}) Z({int(boundary)})",
+        "m3/s m",
+        *(f"{q:.6f} {z:.4f}" for q, z in rows)])
+    return basename
 
 
 # --------------------------------------------------------------------------- #
@@ -1535,7 +1650,8 @@ def _author_rain_on_grid_steering(
         geometry: str, boundary: str, results: str, steering: str,
         cn_map: str, friction_laws: str, zones_file: str,
         rain_mm_per_day: float,
-        outlet_boundary: int, outlet_prescribes: str,
+        outlet_boundary: int, outlet_prescribes: str, n_liquid_boundaries: int,
+        rating: Mapping[str, Any], rating_file: str,
         hyetograph_file: str | None = None) -> str:
     """Write the rain-on-grid ``.cas`` -> the basename written.
 
@@ -1549,13 +1665,14 @@ def _author_rain_on_grid_steering(
         fortran the image bakes to turn that branch on. The recession comes from
         the hyetograph's own dry tail, so no rain window is stated.
 
-    Both share the distributed Manning, the dry start and ONE outlet at the
-    pour point. It writes no value at that boundary's number and states what
-    that boundary's own ``.cli`` quad prescribes rather than naming a condition
-    nobody measured - which on a quad that prescribes a LEVEL means the level
-    the engine reads is the boundary file's own zero, and the deck says so
-    rather than reading as an outlet nobody capped. There are NO tracers: the
-    outlet hydrograph is the product.
+    Both share the distributed Manning, the dry start and ONE outlet at the pour
+    point, whose level is the DERIVED STAGE-DISCHARGE CURVE beside this file:
+    ``bord.f`` reads the curve at every prescribed-depth boundary whose
+    ``STAGE-DISCHARGE CURVES`` entry is 1, interpolates the elevation against
+    that boundary's own measured flux and relaxes the depth toward it, so the
+    outlet level rises and falls with the storm instead of standing at the
+    boundary file's zero. There are NO tracers: the outlet hydrograph is the
+    product.
     """
     _consume(sheet)
     P = _Sheet(sheet)
@@ -1602,21 +1719,38 @@ def _author_rain_on_grid_steering(
             f"OPTION FOR INITIAL ABSTRACTION RATIO = {abstraction}\n"
             f"FORMATTED DATA FILE 2           = {os.path.basename(cn_map)}\n")
 
+    if outlet_prescribes != "elevation":
+        raise SteeringAuthorError(
+            "TELEMAC_BOUNDARY_PRESCRIBES_NOTHING",
+            f"liquid boundary {outlet_boundary} carries a .cli code quad that "
+            f"prescribes {outlet_prescribes!r}, and a stage-discharge curve is "
+            "read only where the depth is prescribed; the boundary file and this "
+            "steering file would describe different outlets.")
+    rows = list(rating["rows"])
+    curves = ";".join("1" if n == int(outlet_boundary) else "0"
+                      for n in range(1, int(n_liquid_boundaries) + 1))
+    rating_block = (
+        f"STAGE-DISCHARGE CURVES          = {curves}\n"
+        f"STAGE-DISCHARGE CURVES FILE     = {os.path.basename(rating_file)}\n")
+
     cas = f"""/-------------------------------------------------------------------/
 /  TELEMAC-2D  RAIN-ON-GRID  -  {name}
 /  Rain-fed catchment on a delineated watershed TIN (UTM metres).
 /  Rain = {rain_mm_per_day:g} mm/day, {rain_path}.
 /  Distributed Manning; outlet at the pour point is liquid boundary
 /  {outlet_boundary}, measured off its own boundary-file code quad, which
-/  prescribes {outlet_prescribes}. This file writes no value there, so a
-/  prescribed level is the boundary file's own zero.
+/  prescribes {outlet_prescribes}. The level is the DERIVED Z(Q) curve in
+/  {os.path.basename(rating_file)} - {len(rows)} points, each a normal depth over
+/  the measured outlet section at {rating['law']} {rating['coefficient']:g} on the
+/  measured bed slope {rating['slope']:.6f}, running from the dry section at
+/  {rating['thalweg_m']:.3f} m to {rating['stage_max_m']:.3f} m at {rating['q_ceiling_m3s']:.3f} m3/s.
 /-------------------------------------------------------------------/
 GEOMETRY FILE                   = {os.path.basename(geometry)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(boundary)}
 RESULTS FILE                    = {os.path.basename(results)}
 FRICTION DATA FILE              = {os.path.basename(friction_laws)}
 ZONES FILE                      = {os.path.basename(zones_file)}
-/
+{rating_block}/
 TITLE : '{name} RAIN-ON-GRID'
 VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B'
 GRAPHIC PRINTOUT PERIOD         = {graphic}
@@ -1665,6 +1799,7 @@ ROG_CN_MAP = "rog_cn_map.dat"
 ROG_FRICTION_LAWS = "rog_friction.tbl"
 ROG_ZONES = "rog_zones.dat"
 ROG_HYETOGRAPH = "rog_hyeto.txt"
+ROG_RATING = "rog_rating.txt"
 
 
 def author_rain_on_grid(rundir: Path | str, *, sheet: Mapping[str, Any],
@@ -1672,6 +1807,7 @@ def author_rain_on_grid(rundir: Path | str, *, sheet: Mapping[str, Any],
                         steering: str, node_xy: Any, node_cn2: Any,
                         node_manning: Any, rain_mm_per_day: float,
                         outlet_boundary: int, outlet_prescribes: str,
+                        n_liquid_boundaries: int, outlet: Mapping[str, Any],
                         hyetograph_blocks: Any = None) -> dict[str, Any]:
     """Write the rain-on-grid ``.cas`` and every field it names -> what was written.
 
@@ -1681,11 +1817,18 @@ def author_rain_on_grid(rundir: Path | str, *, sheet: Mapping[str, Any],
     both channels. Given none, the storm is the constant design rate the steering
     file states itself.
 
-    The outlet is the mesh's own declared one, and this file writes NO value at
-    its number - it is solved on its ``.cli`` code alone, and the steering file
-    states which code that is.
+    ``outlet`` is the mesh's own declared outlet, MEASURED: the section its face
+    cuts through the painted bed, the bed slope over the elements that face
+    touches, the roughness the friction field carries there, and the ceiling of
+    the flow range the curve has to span. The Z(Q) curve is derived from those
+    here, beside the deck that names it, so the level the engine holds the outlet
+    at and the channel that level was computed over are one authoring.
     """
     rundir = Path(rundir)
+    rating = derive_rating_curve(
+        outlet["section"], law=int(outlet["law"]),
+        coefficient=float(outlet["coefficient"]), slope=float(outlet["slope"]),
+        q_ceiling_m3s=float(outlet["q_ceiling_m3s"]))
     write_cn_map(rundir, ROG_CN_MAP, x=node_xy[:, 0], y=node_xy[:, 1],
                  cn2=node_cn2)
     written = write_friction_files(
@@ -1698,10 +1841,19 @@ def author_rain_on_grid(rundir: Path | str, *, sheet: Mapping[str, Any],
             duration_s=float(_Sheet(sheet).duration_s)))
         hyetograph = ROG_HYETOGRAPH
         written["user_fortran"] = RAINDEF3_USER_FORTRAN
+    write_stage_discharge_curve(
+        rundir, ROG_RATING, boundary=outlet_boundary, rows=rating["rows"],
+        note=f"derived Z(Q) at liquid boundary {outlet_boundary}: normal depth "
+             f"over the measured outlet section at {rating['law']} "
+             f"{rating['coefficient']:g}, bed slope {rating['slope']:.6f}, "
+             f"{outlet['q_ceiling_basis']}")
+    written["rating_curve"] = rating
     written["steering"] = _author_rain_on_grid_steering(
         rundir, sheet=sheet, geometry=geometry, boundary=boundary,
         results=results, steering=steering, cn_map=ROG_CN_MAP,
         friction_laws=ROG_FRICTION_LAWS, zones_file=ROG_ZONES,
         rain_mm_per_day=rain_mm_per_day, hyetograph_file=hyetograph,
-        outlet_boundary=outlet_boundary, outlet_prescribes=outlet_prescribes)
+        outlet_boundary=outlet_boundary, outlet_prescribes=outlet_prescribes,
+        n_liquid_boundaries=n_liquid_boundaries, rating=rating,
+        rating_file=ROG_RATING)
     return written

@@ -184,3 +184,42 @@ def test_a_centerline_the_mesh_never_holds_refuses(monkeypatch):
     with pytest.raises(TelemacDyeScenarioError):
         derive_release_on_mesh(centerline_utm=[[0.0, 0.0], [1000.0, 0.0]],
                                mesh=mesh, fraction=0.0)
+
+
+# --------------------------------------------------------------------------- #
+# The third question: is there WATER there when the run opens?
+# --------------------------------------------------------------------------- #
+#: Four nodes 100 m apart along one bank line. The engine solves a source at the
+#: node nearest it (``proxim.f``), so these are the only places a release can be.
+_NODES = [[0.0, 0.0], [100.0, 0.0], [200.0, 0.0], [300.0, 0.0]]
+
+
+def _snap(point, wet):
+    from trid3nt_server.workflows.telemac.release_point import snap_release_to_wetted
+
+    return snap_release_to_wetted(point, node_xy=_NODES, wet=wet,
+                                  state="a stand-in initial state")
+
+
+def test_a_release_landing_on_a_wet_node_is_left_exactly_where_it_was():
+    """The point the user placed or the centerline derived is the answer; moving
+    a release that is already in water would answer a different question."""
+    where, moved, node = _snap((110.0, 0.0), [True] * 4)
+    assert where == (110.0, 0.0) and moved == 0.0 and node == 1
+
+
+def test_a_release_landing_on_a_DRY_node_moves_to_the_nearest_wet_one():
+    """A source on dry ground discharges into the bed: the plume then starts
+    where the water later arrives rather than where it was released."""
+    where, moved, node = _snap((110.0, 0.0), [True, False, False, True])
+    assert node == 0 and where == (0.0, 0.0)
+    assert moved == pytest.approx(110.0)
+
+
+def test_an_initial_state_with_no_wet_node_anywhere_refuses_typed():
+    with pytest.raises(TelemacDyeScenarioError) as excinfo:
+        _snap((110.0, 0.0), [False] * 4)
+    assert excinfo.value.error_code == "TELEMAC_RELEASE_NOWHERE_WET"
+    # the refusal names how far the water it could not find would have been
+    assert "10 m away and DRY" in str(excinfo.value)
+    assert "a stand-in initial state" in str(excinfo.value)

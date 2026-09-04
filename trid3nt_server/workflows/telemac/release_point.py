@@ -1,12 +1,13 @@
-"""Where a release is allowed to be: inside the domain, on the river.
+"""Where a release is allowed to be: inside the domain, on the river, in water.
 
-A release point is a claim about where the substance enters the water, and two
+A release point is a claim about where the substance enters the water, and three
 things make it a solvable claim - it has to lie inside the DOMAIN the run is
-solved over, and it has to sit ON the river rather than beside it. Both are
-answered here, on the server, before anything is staged: the domain polygon and
-the flowline are real fetched geometry the run already holds, so a point that
-cannot be honored is refused while the user can still move it, and a point that
-can is moved onto the flowline by the shortest step there is.
+solved over, it has to sit ON the river rather than beside it, and it has to land
+where the run actually holds water at t0. All three are answered here, on the
+server, before anything is staged: the domain polygon and the flowline are real
+fetched geometry the run already holds and the initial state is the one the deck
+declares, so a point that cannot be honored is refused while the user can still
+move it, and a point that can is moved by the shortest step there is.
 
 Nothing here invents a tolerance. A band around the flowline would be a second,
 softer domain standing in for the one the run actually has, and a point it
@@ -27,7 +28,7 @@ from trid3nt_server.workflows.telemac.helpers.errors import (
 logger = logging.getLogger("trid3nt_server.workflows.telemac.release_point")
 
 __all__ = ["ContainedRelease", "contain_release_point", "derive_release_on_mesh",
-           "domain_polygon_of"]
+           "domain_polygon_of", "snap_release_to_wetted"]
 
 
 @dataclass(frozen=True)
@@ -130,6 +131,50 @@ def derive_release_on_mesh(*, centerline_utm: Any, mesh: Any,
         "inside the accepted mesh, so there is nowhere in the solved domain to "
         "put the release. Mesh more of the reach (a finer mesh_resolution_m or a "
         "supplied mesh) or place the release explicitly.")
+
+
+def snap_release_to_wetted(point_utm: tuple[float, float], *, node_xy: Any,
+                           wet: Any, state: str) -> tuple[tuple[float, float],
+                                                          float, int]:
+    """Put a release where the run holds WATER at t0 -> where it went, how far.
+
+    The engine solves a source at a mesh NODE - ``proxim.f`` picks the nearest
+    vertex of the element the coordinates fall in - so the node nearest the
+    settled point is where the substance actually enters, and whether THAT node
+    is wet when the run opens is the question the domain tests upstream never
+    ask. A dry one discharges the substance into ground: the plume then starts
+    wherever the water later arrives rather than where it was released. So a dry
+    landing moves to the nearest node the initial state does hold water at, and a
+    wet one is left exactly where the user or the centerline put it.
+
+    ``wet`` is the initial state's own wet mask over the same node numbering and
+    ``state`` is what the deck says that state IS. A state with NO wet node
+    anywhere refuses: there is nowhere in this run for a release to be.
+
+    Returns ``((x, y), moved_m, node)`` in the mesh's own metres.
+    """
+    import numpy as np
+
+    xy = np.asarray(node_xy, dtype=float)
+    mask = np.asarray(wet, dtype=bool)
+    here = np.asarray(point_utm, dtype=float)
+    reach = np.hypot(xy[:, 0] - here[0], xy[:, 1] - here[1])
+    nearest = int(np.argmin(reach))
+    if mask[nearest]:
+        return (float(here[0]), float(here[1])), 0.0, nearest
+    if not mask.any():
+        raise TelemacDyeScenarioError(
+            "TELEMAC_RELEASE_NOWHERE_WET",
+            f"the release lands at mesh node {nearest}, {reach[nearest]:.0f} m "
+            f"away and DRY, and there is no wet water to move it to: {state}. A "
+            "release needs water at t0 - continue from a state that holds some, "
+            "or run the scenario that fills the domain first.")
+    wet_nodes = np.flatnonzero(mask)
+    node = int(wet_nodes[np.argmin(reach[wet_nodes])])
+    moved = float(np.hypot(xy[node, 0] - here[0], xy[node, 1] - here[1]))
+    logger.info("release node %d is dry at t0; moved %.1f m to wet node %d",
+                nearest, moved, node)
+    return (float(xy[node, 0]), float(xy[node, 1])), moved, node
 
 
 def contain_release_point(*, point: tuple[float, float], domain: Any,

@@ -24,8 +24,8 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-__all__ = ["FREE_EXIT_ROLE", "TOPOLOGY_FILENAME", "write_topology",
-           "read_topology"]
+__all__ = ["FREE_EXIT_ROLE", "RATING_CURVE_ROLE", "TOPOLOGY_FILENAME",
+           "write_topology", "read_topology"]
 
 #: Basename the bundle is written and staged under.
 TOPOLOGY_FILENAME: str = "mesh_topology.json"
@@ -37,6 +37,13 @@ TOPOLOGY_FILENAME: str = "mesh_topology.json"
 #: The quad itself is the pair writer's table, which is the one decision; this
 #: side of the mount carries the name that indexes it.
 FREE_EXIT_ROLE: str = "free_exit"
+
+#: The role whose prescribed level is read off a STAGE-DISCHARGE CURVE rather
+#: than written as a constant. Its quad is the outflow's - the engine consumes a
+#: curve only where the depth is prescribed - so the quad alone cannot say where
+#: the level comes from and the steering author reads this name to know it owes
+#: the curve keywords at that boundary's number instead of an elevation.
+RATING_CURVE_ROLE: str = "rating_curve"
 
 
 def write_topology(rundir: Path | str, *, roles: Mapping[str, Sequence[int]],
