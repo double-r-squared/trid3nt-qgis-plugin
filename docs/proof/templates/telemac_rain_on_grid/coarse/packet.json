@@ -1,22 +1,37 @@
 {
   "what": "the delivery checklist for one template+variant, assembled and verified mechanically; send exactly what `deliverables` lists, in order",
+  "code_staleness": {
+    "kind": "engine_code_moved",
+    "code_sha": "90ec4e5454a1ccedeced8bcdd9482abe43efffbe",
+    "engine": "telemac",
+    "paths": [
+      "workers/telemac/",
+      "trid3nt_server/workflows/telemac/"
+    ],
+    "commit_count": 1,
+    "commits": [
+      "3d409673 catchment outlet: the level is a derived rating curve, and a release lands where there is water"
+    ],
+    "message": "STALE vs CODE: 1 commit(s) have touched the telemac engine's paths since this run was dispatched at 90ec4e545; the numbers below came from the older code."
+  },
   "template": "telemac_rain_on_grid",
   "variant": "coarse",
   "tool": "telemac_rain_on_grid",
-  "run_id": "01M0YPJ339R6J2T91ACAH4SAET",
+  "run_id": "01M1N1YP436AY5MQFER74BV7SN",
   "stem": "telemac_rain_on_grid",
   "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse",
   "panel_base": "telemac_rain_on_grid",
-  "mode": "render",
-  "assembled_at": "2026-08-26T02:38:21",
+  "mode": "check",
+  "assembled_at": "2026-09-03T19:56:51",
   "assembler": "scripts/assemble_proof_packet.py",
   "time_stepped": {
-    "frames": 13,
+    "recorded_ntimestep": 61,
+    "frames": 61,
     "slf": "r2d_rog.slf",
-    "source": "s3://trid3nt-runs/01M0YPJ339R6J2T91ACAH4SAET/r2d_rog.slf",
+    "source": "s3://trid3nt-runs/01M1N1YP436AY5MQFER74BV7SN/r2d_rog.slf",
     "method": "SELAFIN header + file length",
-    "npoin": 4986,
-    "nelem": 9781,
+    "npoin": 6615,
+    "nelem": 12974,
     "nbv1": 5,
     "varnames": [
       "VELOCITY U      M/S",
@@ -25,10 +40,9 @@
       "FREE SURFACE    M",
       "BOTTOM          M"
     ],
-    "bytes": 1474680,
-    "header_bytes": 177644,
-    "frame_bytes": 99772,
-    "recorded_ntimestep": null
+    "bytes": 8308980,
+    "header_bytes": 235508,
+    "frame_bytes": 132352
   },
   "animation_declarations": [
     {
@@ -87,16 +101,17 @@
       "declared_in": "trid3nt_server/testing/proof_animations.py"
     }
   ],
+  "quantity_scales": {},
   "notes": [
-    "THIN TEST. This canary is a 1-hour design storm on a 30 km2 catchment: it proves the delineate -> mesh -> infiltrate -> solve chain and the two animations' plumbing, and it is NOT a study of the hydrology. The depths are millimetre-scale and the velocities are sub-mm/s, which is why the depth animation needs a log ramp to separate the drainage network from the hillslope at all. The refined, longer flagship run at the family's close is the real show; read this packet as a mechanism check, not as a result."
+    "SCREENING RUN, not a calibrated study. The storm is the NOAA Atlas 14 10-year / 24-hour depth at the pour point spread as a CONSTANT rate - a real design depth, but a rectangular hyetograph, so the crest arrives when the rain stops rather than when the basin's own intensity peak passes. The catchment is UNGAUGED here: no observed hydrograph has been paired against this outlet, so the peak and the runoff coefficient are the model's answer under the declared curve numbers, not a verified one. The peak DEPTH is a single-node maximum that a terrain pit can set on its own - read it beside the p99, which is the sheet.",
+    "STARTUP TRANSIENT, STATED not fixed: 26/60 listing samples show flux briefly entering the outlet before runoff begins, max 2.31 m3/s, ~20,285 m3 = 0.46% of the storm - visible as the small negative trough at the start of the delivered outlet hydrograph. The derived Z(Q) rating-curve outlet pins WITH this transient: a wetting boundary under an imposed level can legitimately pass a bounded inflow before the catchment starts draining, and inventing an activation threshold would be sad-path machinery. Bounded, measured, accepted per docs/REANALYZE_LEDGER.md (2026-09-03)."
   ],
   "published_layers": [
-    "Input: river geometry (river_geometry)",
-    "Input: copernicus dem (copernicus_dem)",
     "Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus)",
+    "Input: river geometry (river_geometry)",
     "Input: land cover (landcover)",
-    "Model results (time series): watershed",
-    "Max water depth (watershed)"
+    "Model results (time series): watershed mesh",
+    "Max water depth (watershed mesh)"
   ],
   "verdict": "PASS",
   "missing": [],
@@ -104,154 +119,143 @@
     {
       "order": 1,
       "kind": "panel",
-      "caption": "1. Input: river geometry (river_geometry) - context/vector, run 01M0YPJ339R6J2T91ACAH4SAET",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_01_input-river-geometry-river-geometry.png",
-      "layer": "Input: river geometry (river_geometry)",
-      "bytes": 4294277,
-      "mtime": "2026-08-26T02:38:14",
-      "run_id_stamp": "01M0YPJ339R6J2T91ACAH4SAET",
+      "caption": "1. Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus) - context/raster, run 01M1N1YP436AY5MQFER74BV7SN",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_01_input-mesh-bed-dem-3dep-1-10-m-us-lidar-default-10-m-copernicus-glo-30-30-m-global-via-source-copernicus.png",
+      "layer": "Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus)",
+      "bytes": 2787588,
+      "mtime": "2026-09-03T19:55:51",
+      "run_id_stamp": "01M1N1YP436AY5MQFER74BV7SN",
       "verdict": "present"
     },
     {
       "order": 2,
       "kind": "panel",
-      "caption": "2. Input: copernicus dem (copernicus_dem) - context/raster, run 01M0YPJ339R6J2T91ACAH4SAET",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_02_input-copernicus-dem-copernicus-dem.png",
-      "layer": "Input: copernicus dem (copernicus_dem)",
-      "bytes": 2923287,
-      "mtime": "2026-08-26T02:38:14",
-      "run_id_stamp": "01M0YPJ339R6J2T91ACAH4SAET",
+      "caption": "2. Input: river geometry (river_geometry) - context/vector, run 01M1N1YP436AY5MQFER74BV7SN",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_02_input-river-geometry-river-geometry.png",
+      "layer": "Input: river geometry (river_geometry)",
+      "bytes": 4330763,
+      "mtime": "2026-09-03T19:55:52",
+      "run_id_stamp": "01M1N1YP436AY5MQFER74BV7SN",
       "verdict": "present"
     },
     {
       "order": 3,
       "kind": "panel",
-      "caption": "3. Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus) - context/raster, run 01M0YPJ339R6J2T91ACAH4SAET",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_03_input-mesh-bed-dem-3dep-1-10-m-us-lidar-default-10-m-copernicus-glo-30-30-m-global-via-source-copernicus.png",
-      "layer": "Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus)",
-      "bytes": 2787303,
-      "mtime": "2026-08-26T02:38:15",
-      "run_id_stamp": "01M0YPJ339R6J2T91ACAH4SAET",
+      "caption": "3. Input: land cover (landcover) - context/raster, run 01M1N1YP436AY5MQFER74BV7SN",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_03_input-land-cover-landcover.png",
+      "layer": "Input: land cover (landcover)",
+      "bytes": 3518843,
+      "mtime": "2026-09-03T19:55:53",
+      "run_id_stamp": "01M1N1YP436AY5MQFER74BV7SN",
       "verdict": "present"
     },
     {
       "order": 4,
       "kind": "panel",
-      "caption": "4. Input: land cover (landcover) - context/raster, run 01M0YPJ339R6J2T91ACAH4SAET",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_04_input-land-cover-landcover.png",
-      "layer": "Input: land cover (landcover)",
-      "bytes": 3517127,
-      "mtime": "2026-08-26T02:38:16",
-      "run_id_stamp": "01M0YPJ339R6J2T91ACAH4SAET",
+      "caption": "4. Model results (time series): watershed mesh - context/mesh, run 01M1N1YP436AY5MQFER74BV7SN",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_04_model-results-time-series-watershed-mesh.png",
+      "layer": "Model results (time series): watershed mesh",
+      "bytes": 3954872,
+      "mtime": "2026-09-03T19:55:54",
+      "run_id_stamp": "01M1N1YP436AY5MQFER74BV7SN",
       "verdict": "present"
     },
     {
       "order": 5,
       "kind": "panel",
-      "caption": "5. Model results (time series): watershed - context/mesh, run 01M0YPJ339R6J2T91ACAH4SAET",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_05_model-results-time-series-watershed.png",
-      "layer": "Model results (time series): watershed",
-      "bytes": 3903792,
-      "mtime": "2026-08-26T02:38:17",
-      "run_id_stamp": "01M0YPJ339R6J2T91ACAH4SAET",
+      "caption": "5. Max water depth (watershed mesh) - primary/raster, run 01M1N1YP436AY5MQFER74BV7SN",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_05_max-water-depth-watershed-mesh.png",
+      "layer": "Max water depth (watershed mesh)",
+      "bytes": 2454903,
+      "mtime": "2026-09-03T19:55:54",
+      "run_id_stamp": "01M1N1YP436AY5MQFER74BV7SN",
       "verdict": "present"
     },
     {
       "order": 6,
-      "kind": "panel",
-      "caption": "6. Max water depth (watershed) - primary/raster, run 01M0YPJ339R6J2T91ACAH4SAET",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_06_max-water-depth-watershed.png",
-      "layer": "Max water depth (watershed)",
-      "bytes": 2323129,
-      "mtime": "2026-08-26T02:38:17",
-      "run_id_stamp": "01M0YPJ339R6J2T91ACAH4SAET",
+      "kind": "canvas_view",
+      "caption": "6. CANVAS VIEW - all 5 layers stacked in emission order, run 01M1N1YP436AY5MQFER74BV7SN",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_06_canvas-view.png",
+      "bytes": 3979511,
+      "mtime": "2026-09-03T19:55:55",
+      "run_id_stamp": "01M1N1YP436AY5MQFER74BV7SN",
       "verdict": "present"
     },
     {
       "order": 7,
-      "kind": "canvas_view",
-      "caption": "7. CANVAS VIEW - all 6 layers stacked in emission order, run 01M0YPJ339R6J2T91ACAH4SAET",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_07_canvas-view.png",
-      "bytes": 3951771,
-      "mtime": "2026-08-26T02:38:18",
-      "run_id_stamp": "01M0YPJ339R6J2T91ACAH4SAET",
+      "kind": "contact_sheet",
+      "caption": "Contact sheet - every emitted layer, 6 panels in emission order, run 01M1N1YP436AY5MQFER74BV7SN",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid.png",
+      "bytes": 6421477,
+      "mtime": "2026-09-03T19:55:56",
+      "run_id_stamp": "01M1N1YP436AY5MQFER74BV7SN",
       "verdict": "present"
     },
     {
       "order": 8,
-      "kind": "contact_sheet",
-      "caption": "Contact sheet - every emitted layer, 7 panels in emission order, run 01M0YPJ339R6J2T91ACAH4SAET",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid.png",
-      "bytes": 7252207,
-      "mtime": "2026-08-26T02:38:20",
-      "run_id_stamp": "01M0YPJ339R6J2T91ACAH4SAET",
+      "kind": "chart",
+      "caption": "Chart rain_on_grid_outlet_hydrograph - the run's persisted spec through the plugin chart dock's own renderer, run 01M1N1YP436AY5MQFER74BV7SN",
+      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_chart_rain_on_grid_outlet_hydrograph.png",
+      "chart": "rain_on_grid_outlet_hydrograph",
+      "bytes": 57135,
+      "mtime": "2026-09-03T19:55:56",
+      "run_id_stamp": "01M1N1YP436AY5MQFER74BV7SN",
       "verdict": "present"
     },
     {
       "order": 9,
-      "kind": "chart",
-      "caption": "Chart rain_on_grid_outlet_hydrograph - the run's persisted spec through the plugin chart dock's own renderer, run 01M0YPJ339R6J2T91ACAH4SAET",
-      "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_chart_rain_on_grid_outlet_hydrograph.png",
-      "chart": "rain_on_grid_outlet_hydrograph",
-      "bytes": 48503,
-      "mtime": "2026-08-26T02:38:20",
-      "run_id_stamp": "01M0YPJ339R6J2T91ACAH4SAET",
-      "verdict": "present"
-    },
-    {
-      "order": 10,
       "kind": "animation",
-      "caption": "Animation [inundation_depth] - WATER DEPTH masked to WATER DEPTH > 0.0 on a LOG ramp (m), 13 frames on one run-scoped colour scale with a static legend, run 01M0YPJ339R6J2T91ACAH4SAET",
+      "caption": "Animation [inundation_depth] - WATER DEPTH masked to WATER DEPTH > 0.0 on a LOG ramp (m), 61 frames on one run-scoped colour scale with a static legend, run 01M1N1YP436AY5MQFER74BV7SN",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_animation_inundation_depth.gif",
       "animation": "inundation_depth",
       "declared_field": "WATER DEPTH masked to WATER DEPTH > 0.0 on a LOG ramp (m)",
       "declared_reason": "the question is overland sheet flow on a dry-start catchment, so the answer is the depth itself; free surface on a hillslope is terrain. Masked at depth > 0 rather than at the coastal WET_TOL, which is thicker than the entire sheet-flow field. LOG ramp because uniform design-storm forcing over a millimetre-scale field on a linear scale renders as the whole grid darkening together - the drainage network only separates from the hillslope when millimetre sheet flow and centimetre channel accumulation stop sharing one linear ramp.",
-      "bytes": 2376063,
-      "mtime": "2026-08-26T02:37:39",
+      "bytes": 22200795,
+      "mtime": "2026-09-03T19:51:37",
       "verdict": "present",
       "gif_checks": {
-        "frames": 13,
+        "frames": 61,
         "size": [
           1300,
-          972
+          969
         ],
-        "distinct_frames": 13,
+        "distinct_frames": 61,
         "legend_x_frac": 0.875,
-        "legend_ramp_colours": 59,
+        "legend_ramp_colours": 55,
         "legend_covers_a_ramp": true,
         "legend_drift_frames": [],
         "field_moves": true
       }
     },
     {
-      "order": 11,
+      "order": 10,
       "kind": "still",
-      "caption": "PEAK frame [inundation_depth] - WATER DEPTH masked to WATER DEPTH > 0.0 on a LOG ramp (m), the animation's own figure at its peak step, same colours and extent, run 01M0YPJ339R6J2T91ACAH4SAET",
+      "caption": "PEAK frame [inundation_depth] - WATER DEPTH masked to WATER DEPTH > 0.0 on a LOG ramp (m), the animation's own figure at its peak step, same colours and extent, run 01M1N1YP436AY5MQFER74BV7SN",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_inundation_depth_peak_frame.png",
       "animation": "inundation_depth",
-      "bytes": 1685109,
-      "mtime": "2026-08-26T02:38:20",
-      "run_id_stamp": "01M0YPJ339R6J2T91ACAH4SAET",
+      "bytes": 1745929,
+      "mtime": "2026-09-03T19:55:58",
+      "run_id_stamp": "01M1N1YP436AY5MQFER74BV7SN",
       "verdict": "present"
     },
     {
-      "order": 12,
+      "order": 11,
       "kind": "animation",
-      "caption": "Animation [flow_dynamics] - VELOCITY MAGNITUDE derived from VELOCITY U / VELOCITY V masked to WATER DEPTH > 0.0 with streamlines (density 1.4, arrow 0.23) still as quiver (m/s), 13 frames on one run-scoped colour scale with a static legend, run 01M0YPJ339R6J2T91ACAH4SAET",
+      "caption": "Animation [flow_dynamics] - VELOCITY MAGNITUDE derived from VELOCITY U / VELOCITY V masked to WATER DEPTH > 0.0 with streamlines (density 1.4, arrow 0.23) still as quiver (m/s), 61 frames on one run-scoped colour scale with a static legend, run 01M1N1YP436AY5MQFER74BV7SN",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_animation_flow_dynamics.gif",
       "animation": "flow_dynamics",
       "declared_field": "VELOCITY MAGNITUDE derived from VELOCITY U / VELOCITY V masked to WATER DEPTH > 0.0 with streamlines (density 1.4, arrow 0.23) still as quiver (m/s)",
       "declared_reason": "speed is what shows the water MOVING - runoff concentrating off the hillslopes into the drainage network - which a depth field cannot show. Linear, because a speed field spans one order of magnitude rather than three. Streamlines over the magnitude ramp so the frame carries DIRECTION as well as speed: a scalar speed field says the water is fast without saying where it is going, with the trace's width - not its arrowhead - carrying how fast.",
-      "bytes": 2524130,
-      "mtime": "2026-08-26T02:38:11",
+      "bytes": 6398491,
+      "mtime": "2026-09-03T19:55:41",
       "verdict": "present",
       "gif_checks": {
-        "frames": 13,
+        "frames": 61,
         "size": [
           1300,
-          972
+          969
         ],
-        "distinct_frames": 13,
+        "distinct_frames": 61,
         "legend_x_frac": 0.875,
         "legend_ramp_colours": 41,
         "legend_covers_a_ramp": true,
@@ -260,203 +264,24 @@
       }
     },
     {
-      "order": 13,
+      "order": 12,
       "kind": "still",
-      "caption": "PEAK frame [flow_dynamics] - VELOCITY MAGNITUDE derived from VELOCITY U / VELOCITY V masked to WATER DEPTH > 0.0 with streamlines (density 1.4, arrow 0.23) still as quiver (m/s), the animation's own figure at its peak step, same colours and extent, run 01M0YPJ339R6J2T91ACAH4SAET",
+      "caption": "PEAK frame [flow_dynamics] - VELOCITY MAGNITUDE derived from VELOCITY U / VELOCITY V masked to WATER DEPTH > 0.0 with streamlines (density 1.4, arrow 0.23) still as quiver (m/s), the animation's own figure at its peak step, same colours and extent, run 01M1N1YP436AY5MQFER74BV7SN",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_flow_dynamics_peak_frame.png",
       "animation": "flow_dynamics",
-      "bytes": 1887648,
-      "mtime": "2026-08-26T02:38:21",
-      "run_id_stamp": "01M0YPJ339R6J2T91ACAH4SAET",
+      "bytes": 1926515,
+      "mtime": "2026-09-03T19:55:59",
+      "run_id_stamp": "01M1N1YP436AY5MQFER74BV7SN",
       "verdict": "present"
     },
     {
-      "order": 14,
+      "order": 13,
       "kind": "evidence",
-      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M0YPJ339R6J2T91ACAH4SAET",
+      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M1N1YP436AY5MQFER74BV7SN",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_canary_evidence.json",
-      "bytes": 1858437,
-      "mtime": "2026-08-26T02:32:23",
+      "bytes": 1863892,
+      "mtime": "2026-09-03T18:56:54",
       "verdict": "present"
     }
-  ],
-  "render": {
-    "sheet": {
-      "sheet": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid.png",
-      "bytes": 7251969,
-      "panels": 7,
-      "layers": [
-        "Input: river geometry (river_geometry)",
-        "Input: copernicus dem (copernicus_dem)",
-        "Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus)",
-        "Input: land cover (landcover)",
-        "Model results (time series): watershed",
-        "Max water depth (watershed)"
-      ],
-      "not_rendered": [],
-      "off_canvas": [],
-      "panel_pngs": [
-        {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_01_input-river-geometry-river-geometry.png",
-          "layer": "Input: river geometry (river_geometry)",
-          "framed_on_layer": false
-        },
-        {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_02_input-copernicus-dem-copernicus-dem.png",
-          "layer": "Input: copernicus dem (copernicus_dem)",
-          "framed_on_layer": false
-        },
-        {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_03_input-mesh-bed-dem-3dep-1-10-m-us-lidar-default-10-m-copernicus-glo-30-30-m-global-via-source-copernicus.png",
-          "layer": "Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus)",
-          "framed_on_layer": false
-        },
-        {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_04_input-land-cover-landcover.png",
-          "layer": "Input: land cover (landcover)",
-          "framed_on_layer": false
-        },
-        {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_05_model-results-time-series-watershed.png",
-          "layer": "Model results (time series): watershed",
-          "framed_on_layer": true
-        },
-        {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_06_max-water-depth-watershed.png",
-          "layer": "Max water depth (watershed)",
-          "framed_on_layer": true
-        },
-        {
-          "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_panel_07_canvas-view.png",
-          "layer": "CANVAS VIEW"
-        }
-      ]
-    },
-    "charts": [
-      {
-        "chart": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_chart_rain_on_grid_outlet_hydrograph.png",
-        "name": "rain_on_grid_outlet_hydrograph",
-        "title": "Outlet hydrograph - watershed",
-        "render_summary": {
-          "views": 1,
-          "lines": 1,
-          "series": 1,
-          "rules": 0,
-          "bars": 0,
-          "points": 13,
-          "skipped": 0,
-          "x_log": false,
-          "y_log": false,
-          "legend_labels": []
-        },
-        "bytes": 48220
-      }
-    ],
-    "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
-    "animations": {
-      "inundation_depth": {
-        "frames": 13,
-        "animated": true,
-        "variable": "WATER DEPTH     M",
-        "plane": "2d",
-        "peak_frame": 12,
-        "peak_time_s": 7200.0,
-        "peak_value": 0.027252569794654846,
-        "dry_frames": [
-          0,
-          1
-        ],
-        "vmin": 0.00023321801563724875,
-        "vmax": 0.01381966657936573,
-        "style_preset": "continuous_flood_depth",
-        "legend_note": "scaled to this run (log): 0.000233218 to 0.0138197 m",
-        "transform": "log",
-        "colormap": "YlGnBu",
-        "vectors": null,
-        "still_vectors": null,
-        "vector_density": null,
-        "arrow_size": null,
-        "vector_lw": null,
-        "vector_grid": null,
-        "still_vector_grid": null,
-        "bbox_ll": [
-          -83.47703039920658,
-          35.02183461623179,
-          -83.39982041925938,
-          35.07321122240706
-        ],
-        "local_origin_m": [
-          0.0,
-          0.0
-        ],
-        "run_id": "01M0YPJ339R6J2T91ACAH4SAET",
-        "origin_bbox": [
-          -83.4770304670296,
-          35.02183518806534,
-          -83.39982025301708,
-          35.073210729988745
-        ],
-        "animation": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_animation_inundation_depth.gif",
-        "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_inundation_depth_peak_frame.png",
-        "animation_bytes": 2376063,
-        "peak_bytes": 1684775
-      },
-      "flow_dynamics": {
-        "frames": 13,
-        "animated": true,
-        "variable": "VELOCITY MAGNITUDE",
-        "plane": "2d",
-        "peak_frame": 12,
-        "peak_time_s": 7200.0,
-        "peak_value": 0.003613793752255598,
-        "dry_frames": [
-          0,
-          1
-        ],
-        "vmin": 1.9553397439141033e-08,
-        "vmax": 0.0006189695675373036,
-        "style_preset": "continuous_flow_velocity_ms",
-        "legend_note": "scaled to this run (p2-p98): 1.95534e-08 to 0.00061897 m/s",
-        "transform": "percentile",
-        "colormap": "plasma",
-        "vectors": "streamlines",
-        "still_vectors": "quiver",
-        "vector_density": 1.4,
-        "arrow_size": 0.23,
-        "vector_lw": [
-          0.3,
-          1.3
-        ],
-        "vector_grid": [
-          200,
-          162
-        ],
-        "still_vector_grid": [
-          66,
-          53
-        ],
-        "bbox_ll": [
-          -83.47703039920658,
-          35.02183461623179,
-          -83.39982041925938,
-          35.07321122240706
-        ],
-        "local_origin_m": [
-          0.0,
-          0.0
-        ],
-        "run_id": "01M0YPJ339R6J2T91ACAH4SAET",
-        "origin_bbox": [
-          -83.4770304670296,
-          35.02183518806534,
-          -83.39982025301708,
-          35.073210729988745
-        ],
-        "animation": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_animation_flow_dynamics.gif",
-        "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_rain_on_grid/coarse/telemac_rain_on_grid_flow_dynamics_peak_frame.png",
-        "animation_bytes": 2524130,
-        "peak_bytes": 1887226
-      }
-    }
-  }
+  ]
 }

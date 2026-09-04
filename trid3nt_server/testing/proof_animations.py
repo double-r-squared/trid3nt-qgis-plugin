@@ -281,6 +281,15 @@ PACKET_NOTES: dict[tuple[str, str], tuple[str, ...]] = {
         "the model's answer under the declared curve numbers, not a verified "
         "one. The peak DEPTH is a single-node maximum that a terrain pit can set "
         "on its own - read it beside the p99, which is the sheet.",
+        "STARTUP TRANSIENT, STATED not fixed: 26/60 listing samples show flux "
+        "briefly entering the outlet before runoff begins, max 2.31 m3/s, "
+        "~20,285 m3 = 0.46% of the storm - visible as the small negative trough "
+        "at the start of the delivered outlet hydrograph. The derived Z(Q) "
+        "rating-curve outlet pins WITH this transient: a wetting boundary under "
+        "an imposed level can legitimately pass a bounded inflow before the "
+        "catchment starts draining, and inventing an activation threshold would "
+        "be sad-path machinery. Bounded, measured, accepted per "
+        "docs/REANALYZE_LEDGER.md (2026-09-03).",
     ),
     # THE COARSE LANE'S OWN CAVEAT, per template. A coarse packet that passes
     # every mechanical check still shows a run sized to prove the plumbing, and
