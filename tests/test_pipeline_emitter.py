@@ -1950,14 +1950,14 @@ async def test_legend_lifted_from_publish_stash_by_uri(
     emitter: PipelineEmitter, sink: _CapturingSink
 ) -> None:
     """The atomic publish_layer wrap-site rebuilds a LayerURI WITHOUT a legend; the
-    emitter lifts the legend publish_layer stashed by display uri onto the
-    summary (the continuous-raster path)."""
+    emitter lifts the legend publish_layer stashed by that uri onto the summary
+    (the continuous-raster path)."""
     from trid3nt_server.emission.publish import _stash_legend_for_uri
     from trid3nt_contracts.execution import LegendKey
 
-    tile_uri = "https://cf.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3%3A%2F%2Fb%2Fx.tif&rescale=0,3&colormap_name=ylgnbu"
+    cog_uri = "s3://b/x.tif"
     _stash_legend_for_uri(
-        tile_uri,
+        cog_uri,
         LegendKey(kind="continuous", colormap="ylgnbu", vmin=0.0, vmax=3.0, label="Flood depth"),
     )
     # The wrap-site rebuilds the LayerURI from the bare string -> no legend on it.
@@ -1965,7 +1965,7 @@ async def test_legend_lifted_from_publish_stash_by_uri(
         layer_id="flood_1",
         name="flood_1",
         layer_type="raster",
-        uri=tile_uri,
+        uri=cog_uri,
     )
     assert layer.legend is None  # the wrap-site cannot set it
     await emitter.add_loaded_layer(layer)

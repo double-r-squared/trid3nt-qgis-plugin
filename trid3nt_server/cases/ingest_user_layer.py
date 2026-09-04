@@ -25,19 +25,14 @@ for the staging upload half.
 
 **Vector path:** the uploaded artifact (GeoJSON / FlatGeobuf / GeoPackage) is
 read via geopandas/pyogrio, reprojected to EPSG:4326, and written out as a
-FlatGeobuf -- the SAME durable-vector-data-face format every other vector case
-layer uses (see ``publish_layer`` module docstring: "Vectors are produced as
-FlatGeobuf"). The canonical FGB lands at
-``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.fgb`` (DATA face); the
-existing ``publish_layer._write_durable_vector_geojson`` helper is reused
-UNCHANGED to materialize the browser-readable GeoJSON DISPLAY face at the SAME
-Phase-0 key (``durable_vector_geojson_key``).
+FlatGeobuf -- the SAME format every other vector case layer uses. It lands at
+``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.fgb``, which is the layer's
+one uri: the plugin opens it natively.
 
 **Raster path:** the uploaded GeoTIFF is validated readable via rasterio, then
-handed to the existing ``publish_layer`` atomic tool VERBATIM -- it already owns
-COG-overview validation/auto-translate (F33, ``_ensure_raster_has_overviews``),
-style-preset resolution, and TiTiler tile-template minting for an ``s3://``
-raster. No COG logic is duplicated here.
+handed to ``publish_layer`` VERBATIM -- it already owns COG-overview
+enforcement (``_ensure_raster_has_overviews``), style resolution and
+registration for an ``s3://`` raster. No COG logic is duplicated here.
 
 **Persistence is the contract.** The ingested layer is merged into the Case's
 durable ``loaded_layer_summaries`` (the SAME field

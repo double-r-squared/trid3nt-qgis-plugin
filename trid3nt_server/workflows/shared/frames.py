@@ -161,10 +161,9 @@ def peak_layer_id(stem: str, run_id: str) -> str:
 def frame_layer_id(stem: str, frame_no: int, run_id: str) -> str:
     """The per-frame layer id ``"<stem>-frame-NN-<run_id>"`` (NN zero-padded).
 
-    A DISTINCT object key per frame -> distinct TiTiler ``url=`` -> distinct
-    ``_layer_identity_key`` -> no dedup collapse (the scrubber group keeps every
-    member). ``frame_no`` is 1-based; the id is zero-padded to two digits exactly
-    as the engines do (``frame_{frame_no:02d}``).
+    A DISTINCT object key per frame -> a distinct uri -> no dedup collapse (the
+    scrubber group keeps every member). ``frame_no`` is 1-based; the id is
+    zero-padded to two digits exactly as the engines do (``frame_{frame_no:02d}``).
     """
     return f"{stem}-frame-{frame_no:02d}-{run_id}"
 

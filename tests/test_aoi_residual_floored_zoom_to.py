@@ -88,10 +88,7 @@ def _stub_composer():
             layer_id=f"flood-{new_ulid()}",
             name="Flood depth",
             layer_type="raster",
-            uri=(
-                "https://titiler.example/cog/tiles/WebMercatorQuad/"
-                "{z}/{x}/{y}.png?url=s3://x/flood.tif"
-            ),
+            uri="s3://x/flood.tif",
             bbox=tuple(bbox) if bbox is not None else None,  # type: ignore[arg-type]
         )
 

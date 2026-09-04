@@ -62,6 +62,10 @@ kept alive forever to serve a set that only shrinks: it would have preserved
 the titiler branches in the registry and the republish branch in `publish_layer`
 - roughly the whole second-face surface this change exists to delete.
 
+This closes the condition ADR 0269 attached to the registry's TiTiler unwrap:
+"KEEP until a persisted-data migration proves no live Case carries a TiTiler
+template." The migration is that proof, and the unwrap went with it.
+
 The rewrite renames a reference; it does not change which bytes a layer is (the
 embedded `url=` param IS the object the template always pointed at).
 `case_chat_messages.json` (131 occurrences) was deliberately NOT touched: it is

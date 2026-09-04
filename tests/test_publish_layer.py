@@ -112,7 +112,7 @@ def test_derive_readable_layer_name_from_the_declared_label() -> None:
         None,
         _BARE_ULID,
         {"kind": "continuous", "label": "Hillshade"},
-        "https://tiles.example.com/cog/tiles/{z}/{x}/{y}?url=s3://bucket/hillshade/abc123.tif",
+        "s3://bucket/hillshade/abc123.tif",
     )
     assert name.startswith("Hillshade")
     assert name != _BARE_ULID
@@ -126,7 +126,7 @@ def test_derive_readable_layer_name_explicit_name_untouched() -> None:
         "Fort Myers Flood Depth",
         _BARE_ULID,
         {"kind": "continuous", "label": "Flood depth"},
-        "https://tiles.example.com/cog/tiles/{z}/{x}/{y}?url=s3://bucket/flood/abc123.tif",
+        "s3://bucket/flood/abc123.tif",
     )
     assert name == "Fort Myers Flood Depth"
 
@@ -139,7 +139,7 @@ def test_derive_readable_layer_name_explicit_name_that_is_itself_a_ulid_is_ignor
         _BARE_ULID,
         _BARE_ULID,
         {"kind": "continuous", "label": "Hillshade"},
-        "https://tiles.example.com/cog/tiles/{z}/{x}/{y}?url=s3://bucket/hillshade/abc123.tif",
+        "s3://bucket/hillshade/abc123.tif",
     )
     assert name.startswith("Hillshade")
     assert name != _BARE_ULID

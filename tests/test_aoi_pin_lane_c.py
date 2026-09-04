@@ -95,10 +95,7 @@ def _stub_swmm_solver(monkeypatch):
             layer_id=f"swmm-peak-{new_ulid()}",
             name="Peak flood depth",
             layer_type="raster",
-            uri=(
-                "https://titiler.example/cog/tiles/WebMercatorQuad/"
-                "{z}/{x}/{y}.png?url=s3://x/peak.tif"
-            ),
+            uri="s3://x/peak.tif",
             bbox=tuple(_SOLVE_DOMAIN),  # type: ignore[arg-type]
         )
 

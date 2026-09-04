@@ -112,7 +112,7 @@ def _stub_fetch_dem(monkeypatch):
             layer_id=f"dem-{len(_FETCHES)}",
             name="Elevation (DEM)",  # carries the 'dem' kind marker via name
             layer_type="raster",
-            uri="https://titiler.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3://x/dem.tif",
+            uri="s3://x/dem.tif",
             bbox=bb,  # type: ignore[arg-type]
         )
 

@@ -339,16 +339,13 @@ def _stub_fetch_tool():
 
     def _fn(bbox=None, **_kw) -> LayerURI:
         _FETCHES.append({"bbox": bbox})
-        # Raster-shaped display URI (the F96 fixture pattern) so the emitter
-        # keeps the layer without attempting a vector densify read.
+        # Raster-shaped so the emitter keeps the layer without attempting a
+        # vector densify read.
         return LayerURI(
             layer_id=f"wdpa-{len(_FETCHES)}",
             name="WDPA Protected Areas",
             layer_type="raster",
-            uri=(
-                "https://titiler.example/cog/tiles/WebMercatorQuad/"
-                f"{{z}}/{{x}}/{{y}}.png?url=s3://x/wdpa-{len(_FETCHES)}.tif"
-            ),
+            uri=f"s3://x/wdpa-{len(_FETCHES)}.tif",
             bbox=tuple(bbox),
         )
 

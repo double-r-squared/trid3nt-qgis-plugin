@@ -304,57 +304,6 @@ async def test_unknown_uri_raises_typed_error() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Test 6b — D1 Fix B: a TiTiler tile-template / display URL is tolerated.
-# The defense-in-depth fallback in _resolve_layer_to_local_path recovers the
-# COG from the template's url= param so an LLM that passed the display URL
-# (the live SWMM UNKNOWN_LAYER_URI incident) still gets a deterministic extent.
-# --------------------------------------------------------------------------- #
-
-
-def test_resolve_titiler_template_recovers_s3_cog(monkeypatch) -> None:
-    """_resolve_layer_to_local_path extracts the url= COG from a TiTiler
-    template and routes it through the s3 branch."""
-    import trid3nt_server.tools.cache as cache_mod
-    import trid3nt_server.tools.processing.compute_layer_bounds.compute_layer_bounds as clb
-
-    real_cog = "s3://trid3nt-runs/01ABC/swmm_depth_frame_01.tif"
-    captured: dict[str, str] = {}
-
-    def _fake_read(uri: str) -> bytes:  # stands in for read_object_bytes_s3
-        captured["uri"] = uri
-        return b"\x00\x01\x02"  # bytes unused — we only assert the routing
-
-    # The tool does `from .cache import read_object_bytes_s3` inside the s3
-    # branch, so patch the name on the cache module it imports from.
-    monkeypatch.setattr(cache_mod, "read_object_bytes_s3", _fake_read)
-
-    template = (
-        "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
-        "?url=s3%3A%2F%2Ftrid3nt-runs%2F01ABC%2Fswmm_depth_frame_01.tif"
-        "&rescale=0%2C2&colormap_name=blues"
-    )
-    path, is_temp = clb._resolve_layer_to_local_path(template)
-    try:
-        assert captured["uri"] == real_cog  # the COG was recovered + downloaded
-        assert is_temp is True
-        assert path.endswith(".tif")
-    finally:
-        if is_temp and os.path.isfile(path):
-            os.unlink(path)
-
-
-def test_resolve_titiler_template_without_url_param_raises_typed_error() -> None:
-    """A display URL with no recoverable s3 url= param still raises the typed
-    UNKNOWN_LAYER_URI (honest, retryable) — it must not fail open silently."""
-    import trid3nt_server.tools.processing.compute_layer_bounds.compute_layer_bounds as clb
-
-    bad = "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/3/2/1.png"
-    with pytest.raises(ComputeLayerBoundsError) as ei:
-        clb._resolve_layer_to_local_path(bad)
-    assert ei.value.error_code == "UNKNOWN_LAYER_URI"
-
-
-# --------------------------------------------------------------------------- #
 # Test 7 — no emitter bound → no emit, no crash (UX action, not a gate)
 # --------------------------------------------------------------------------- #
 
