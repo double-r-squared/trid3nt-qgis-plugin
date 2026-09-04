@@ -28,6 +28,9 @@ auto-fixed.
 | stream timeouts / stale presigns / TTL-expiry failures -> the class ceases | LANDED | there is no presign to go stale and no TTL on a read; the only timeout left was the urllib staging download, which is deleted |
 | the plugin-era "streaming IS the path" ruling lands vindicated | LANDED | implemented by GDAL + MinIO. Ledger row 3 states it |
 
+Wave total across the six commits: **1,358 insertions, 2,760 deletions** over 61
+files - net **-1,402**, of which the two named files carry -588.
+
 ### The local/remote duality: the grep
 
 ```
@@ -37,10 +40,20 @@ $ grep -rn "s3_to_http\|data_base_override" --include=*.py -> (nothing)
 
 `plugin/render/layers.py` holds no branch that asks where the store is. Both
 `_add_raster` and `_add_vector` are: `s3_to_vsis3(uri)` -> `None` is an honest
-skip, else construct the layer. `_add_mesh` has ONE branch, and it is not about
-locality: `os.path.isfile(uri)` accepts an already-local mesh path for the
-headless/scripted drive, which is a test-drive affordance rather than a remote
-mode.
+skip, else construct the layer.
+
+Two local-path arms survive, and NEITHER is a remote mode - stated rather than
+swept under the claim:
+
+* `_add_mesh` accepts an already-local mesh path (`os.path.isfile(uri)`) for the
+  headless/scripted drive;
+* `publish._read_raster_bytes` / `_write_overview_cog` read and write a local
+  file when handed one, which is how the overview-enforcement tests push real
+  rasterio bytes through the real translate path.
+
+Both are test-drive affordances on a path `publish_layer` itself refuses
+(`LAYER_URI_NOT_FOUND` fires on any non-`s3://` raster before either runs), not
+a second transport a product layer can travel.
 
 ### The 199 legacy `/cog/tiles` uris: MIGRATED, and why
 
@@ -79,23 +92,43 @@ a real `QgsApplication` against a real case's persisted
 * the unsigned GET is 403;
 * `cleanup_session` removes the staging dir.
 
+## Live gates
+
+| gate | result |
+|---|---|
+| daemon restart + `scripts/ws_smoke.py` | `all_passed=True` |
+| `scripts/proof_auto_emit_seam.py` (fetch_dem then compute_hillshade through the emitter seam, real 3DEP terrain) | OK - two publishes unasked, both rasters on the map as `s3://` uris with their legends, no `publish_layer` in the registry to have called |
+| `plugin/tests/headless_store_reads_proof.py` | 0 failed checks (above) |
+| GDAL `/vsis3` open of a live published COG | `801 x 617`, 1 band, 1 overview level |
+| unsigned HTTP GET of the same object | 403 |
+
+`proof_auto_emit_seam` also carried a defect this slice fixed rather than
+stepped around: its last assertion read `has_legend` off the RAW layer row, a
+key only the printed report carries, so it failed on a run whose every layer HAD
+a legend. It reads `legend` now.
+
 ## Suite
 
 | slice | result |
 |---|---|
-| `tests/test_[a-e]*` | 1715 passed, 5 skipped |
+| `tests/test_[a-e]*` | 1714 passed, 5 skipped |
 | `tests/test_[f-o]*` | 4218 passed, 1 xfailed |
 | `tests/test_[p-r]*` | 1817 passed, 1 skipped |
-| `tests/test_[s-z]*` | see the close-out line |
+| `tests/test_[s-z]*` | 1526 passed, 6 skipped |
 | `contracts/tests` | 521 passed |
 | `plugin/` (its own lane) | 412 run, 2 failed - `test_case_bbox` + `test_tool_picker`, the documented pre-existing pair |
+
+Zero failures in every slice. The final gate was re-run with the daemon UP:
+`test_live_run_harness` needs it, and an earlier pass showed its two tests red
+purely because the migration had required stopping the stack.
 
 Counts fall where test files died with their subjects:
 `test_publish_layer_durable_vector_geojson_165p0.py` (whole file - the durable
 GeoJSON twin is gone), the WMS/`.qgs` half of the vector-and-overviews file, the
 three legacy-unwrap pins in the envelope file, the two display-face pins in
 `test_layer_handles_adr0014.py`, and `TestTitilerTemplateRecovery` +
-`test_i4_wms_url_as_hazard` in `test_uri_registry.py`.
+`test_i4_wms_url_as_hazard` in `test_uri_registry.py`, and the tile-template
+recovery pin in `test_compute_layer_bounds.py`.
 
 ## Deviations, reported rather than taken
 

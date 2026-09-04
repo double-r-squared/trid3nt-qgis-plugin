@@ -47,3 +47,5 @@ lands; never rewrite history - supersede with a new note that links back.
 - [0318 - the reach family migration: the meshed river becomes the visible river](0318-the-reach-family-migration-and-the-river-that-is-visible.md)
 - [0323 - the suite re-baseline after the test cull](0323-suite-re-baseline-after-the-test-cull.md)
 - [0325 - the catchment outlet holds a derived rating curve](0325-the-catchment-outlet-holds-a-derived-rating-curve.md)
+- [0326 - the preset family: four kinds, and presentation declared where the data is](0326-the-preset-family.md)
+- [0327 - one store, one scheme: a layer reference is an s3:// uri](0327-one-store-one-scheme.md)
