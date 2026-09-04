@@ -96,7 +96,7 @@ _BLEND_BAND_TOKENS = frozenset(
      "geocolor+fire", "geocolor_and_fire_temperature"}
 )
 
-#: Upper bound on emitted frames (mirrors postprocess_flood.MAX_FLOOD_FRAMES=144).
+#: Upper bound on emitted frames: past this a window even-subsamples down.
 MAX_ANIM_FRAMES: int = int(os.environ.get("TRID3NT_MAX_ANIM_FRAMES", "144"))
 
 _BBOX_QUANTIZE_DP = 6

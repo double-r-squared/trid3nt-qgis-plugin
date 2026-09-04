@@ -107,8 +107,7 @@ class RasterField:
 class TimeseriesField:
     """A time-varying field to publish as a PEAK COG + N animation-frame COGs.
 
-    ``n_steps`` is the raw step count (the executor subsamples to
-    ``frames.MAX_FLOOD_FRAMES``); ``read_step(raw_index) -> RasterField`` reads
+    ``n_steps`` is the raw step count; ``read_step(raw_index) -> RasterField`` reads
     one frame's grid on demand (so the reader never materializes all frames at
     once); ``peak`` is the representative PEAK ``RasterField`` (always published
     as ``layers[0]``). ``quantity_label`` is the web token base (e.g.

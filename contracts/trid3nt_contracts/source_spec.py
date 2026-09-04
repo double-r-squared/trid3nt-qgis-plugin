@@ -586,9 +586,9 @@ class HookSpec(GraceModel):
     #: this hook: it does the pre-loop timestamp-index fetch + window + subsample +
     #: (optional) filter and returns the ORDERED list of per-frame plans -- each a
     #: :class:`FramePlan` carrying the frame's ``cache_params`` (the read_through
-    #: cache key, byte-identical to the twin's per-frame params), the scrubber
-    #: NAME-TOKEN (the monotonic ``step <N>`` / ISO the plugin ``group_frame_layers``
-    #: keys on), the ``layer_id``, and the AOI ``bbox``. Raises the source's typed
+    #: cache key, byte-identical to the twin's per-frame params), its display
+    #: ``name``, the ``valid_from``/``valid_to`` window the map stamps as the
+    #: frame's temporal range, the ``layer_id``, and the AOI ``bbox``. Raises the source's typed
     #: EMPTY error when the window matches no frames (honesty floor). No prior spec
     #: declares it (strict no-op).
     frames_plan: str | None = None

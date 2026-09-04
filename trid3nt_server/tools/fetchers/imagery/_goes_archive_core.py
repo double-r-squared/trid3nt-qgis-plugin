@@ -226,8 +226,8 @@ FIRE_HOTSPOT_RAMP_KELVIN_RANGE = (310.0, 350.0)
 #: core (no duplicated I/O).
 ARCHIVE_BANDS = ("fire_temperature", "true_color", "fire_hotspots", "fire_baked")
 
-#: Upper bound on emitted frames (mirrors fetch_goes_animation.MAX_ANIM_FRAMES /
-#: postprocess_flood.MAX_FLOOD_FRAMES=144). A wider window even-subsamples down
+#: Upper bound on emitted frames (mirrors fetch_goes_animation.MAX_ANIM_FRAMES).
+#: A wider window even-subsamples down
 #: (first + last kept). Overridable via env.
 MAX_ARCHIVE_FRAMES: int = int(os.environ.get("TRID3NT_MAX_ARCHIVE_FRAMES", "144"))
 

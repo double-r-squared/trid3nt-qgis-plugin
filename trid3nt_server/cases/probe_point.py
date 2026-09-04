@@ -17,10 +17,9 @@ Reuses two existing seams rather than re-deriving them:
   (``layers_from_case``) + point-sampling primitives (``stage_layer_local``
   and ``sample_raster_at_point``, nearest-neighbour via rasterio).
 - ``extract_timeseries_at_point``'s frame-sequence classifier
-  (``detect_frame_sequences`` / ``parse_frame_token``) -- the SAME stem/token
-  grouping the web LayerPanel scrubber and ``extract_timeseries_at_point``
-  use, so a clicked point's "Flood depth step N" stack collapses into one
-  series entry instead of N separate single-value rows.
+  (``detect_frame_sequences`` / ``parse_frame_token``), so a clicked point's
+  frame stack collapses into one series entry instead of N separate
+  single-value rows.
 
 Honesty (data-source fallback norm): a point outside a layer's extent, or on
 nodata, is an honest ``value: null`` + ``note`` entry -- never dropped, never

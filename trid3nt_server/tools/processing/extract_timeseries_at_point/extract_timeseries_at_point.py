@@ -10,14 +10,16 @@ How frame sequences are represented
 ===================================
 
 Animation frames live in ``CaseSummary.loaded_layer_summaries`` as SIBLING
-raster layers whose NAMES differ only in a monotonic frame token -- the same
-grouping the QGIS plugin's Temporal Controller support detects
-(``plugin/render/temporal.py`` ``parse_frame_token`` /
-``group_frame_layers``). This module ports that detection: the token patterns
-(``F+03h``, ``hr 6``, ``step 4`` / ``frame 02`` / ``idx 3``, ``t+2``, ``#3``,
-``day 1``) and the ISO-8601 valid-time label preference are the same, and
-grouping is equally conservative -- a group forms only from >= 2 raster
-layers sharing a stem with strictly-increasing token values.
+raster layers whose NAMES differ only in a monotonic frame token, and this
+module reads that token: ``F+03h``, ``hr 6``, ``step 4`` / ``frame 02`` /
+``idx 3``, ``t+2``, ``#3``, ``day 1``, preferring an ISO-8601 valid-time label
+when one is present. Grouping is conservative -- a group forms only from >= 2
+raster layers sharing a stem with strictly-increasing token values.
+
+The token read here is an ANALYSIS over layers a case already holds, not the
+map's clock: presentation reads the ``valid_from``/``valid_to`` window each
+frame declares. A case persisted before that window existed carries only the
+name, which is why the token read stays.
 
 Honesty (data-source fallback norm)
 ===================================
