@@ -1195,21 +1195,16 @@ async def _stream_model_reply(
                         _layer_id: (_uri_reg.short_for_uri(_uri) or _layer_id)
                         for _layer_id, _uri in _new_handles.items()
                     }
-                    # The note must make the publish step explicit --
-                    # a computed/fetched layer is invisible until publish_layer
-                    # adds it to the QGIS project (the model can otherwise finish
-                    # a colored-relief turn without publishing).
+                    # Emission is automatic: a produced layer is already on the
+                    # map, so the note carries the one thing the model must do
+                    # with a handle - pass it, never rebuild it.
                     summary["layer_handles_note"] = (
-                        "A layer is NOT visible on the user's map until "
-                        "publish_layer(layer_uri=<handle>, "
-                        "layer_id=<descriptive-id>) has run for it — if the "
-                        "user asked to see this layer, call publish_layer "
-                        "with the handle before finishing. Pass the short "
-                        "handle (the L<n> value above) or the layer name "
+                        "These layers are already on the user's map. Pass the "
+                        "short handle (the L<n> value above) or the layer name "
                         "(the key) for any *_uri tool parameter — the server "
                         "resolves handles to the exact stored URIs. Do "
-                        "NOT construct or echo gs:// paths, s3:// paths, or "
-                        "any other storage URI."
+                        "NOT construct or echo s3:// paths or any other "
+                        "storage URI."
                     )
                 # A top-level run-a-model composer just delivered its artifact -- stamp
                 # a one-time wrap-up directive on its function_response so the model

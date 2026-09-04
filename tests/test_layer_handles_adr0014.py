@@ -464,5 +464,5 @@ async def test_emit_seam_llm_sees_handle_not_uri(fake_llm) -> None:
     # The announcement maps layer name -> short handle (no raw URIs).
     assert payload.get("layer_handles") == {"flood-a": "L1"}
     note = payload.get("layer_handles_note", "")
-    assert "NOT visible on the user's map" in note
-    assert "Do NOT construct or echo gs:// paths" in note
+    assert "already on the user's map" in note
+    assert "Do NOT construct or echo s3:// paths" in note

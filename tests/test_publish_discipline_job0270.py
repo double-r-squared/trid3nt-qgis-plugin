@@ -1,19 +1,13 @@
-"""colored-relief chain-to-pixels fixes, server-level evidence.
-
-Live failure ("Compute a colored relief map for Boulder, Colorado"): the DEM
-fetched and the relief computed, but after compute_colored_relief succeeded the
-model ended the turn with text only; publish_layer never ran, so the computed
-raster stayed invisible (a layer is not on the map until publish_layer adds it
-to the QGIS Server project).
+"""Layer-handle announcement, server-level evidence.
 
 These tests drive ``_stream_model_reply`` end-to-end (fake model, fake tool
-dispatch — no live calls) and prove:
+dispatch - no live calls) and prove:
 
 - a registry-valid tool dispatches on the FIRST call and sticks in the Case's
   monotonic visible set for the rest of the session.
-- the function_response for a layer-producing tool carries the strengthened
-  ``layer_handles_note`` that says the layer is NOT on the map yet and
-  instructs calling publish_layer with the handle.
+- the function_response for a layer-producing tool announces its handles and
+  carries the ``layer_handles_note``: the layer is already on the map, and a
+  handle is passed rather than a storage URI rebuilt.
 """
 
 from __future__ import annotations
@@ -158,15 +152,14 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches(fake_llm) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Strengthened layer_handles_note in the function_response payload
+# layer_handles_note in the function_response payload
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_layer_producing_tool_response_carries_publish_instruction(fake_llm) -> None:
-    """The function_response for a layer-producing tool must tell Gemini the
-    layer is NOT on the map yet and to call publish_layer with the handle —
-    the demo8 publish-omission fix."""
+async def test_layer_producing_tool_response_carries_handle_instruction(fake_llm) -> None:
+    """The function_response for a layer-producing tool announces the handle
+    and tells the model to pass it rather than rebuild a storage URI."""
     from trid3nt_server import server as agent_server
 
     async def _fake_invoke(_ws, state, name, args):
@@ -201,9 +194,7 @@ async def test_layer_producing_tool_response_carries_publish_instruction(fake_ll
     handles = payload.get("layer_handles")
     assert handles and "colored-relief-boulder" in handles
 
-    # ...and the note carries the publish instruction (job-0270 wording).
+    # ...and the note carries the handle discipline.
     note = payload.get("layer_handles_note", "")
-    assert "NOT visible on the user's map" in note
-    assert "publish_layer(layer_uri=<handle>" in note
-    # The original handle-discipline guidance survives.
-    assert "Do NOT construct or echo gs:// paths" in note
+    assert "already on the user's map" in note
+    assert "Do NOT construct or echo s3:// paths" in note

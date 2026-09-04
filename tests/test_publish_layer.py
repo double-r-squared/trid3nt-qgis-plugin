@@ -7,10 +7,8 @@ vector no-op and overview enforcement in
 Coverage here:
 1. ``test_publish_layer_is_not_a_registered_tool`` - publish is a mechanism
    the emission seam calls, never a tool a model routes to.
-2. ``derive_layer_id`` - registered-handle / basename-stem / ULID-fallback
-   derivation.
-3. ``derive_readable_layer_name`` - a bare-ULID layer_id never reaches the
-   UI's layer list when a better signal is available.
+2. ``derive_readable_layer_name`` - a bare-ULID layer_id never reaches the
+   layer list when a better signal is available.
 """
 
 from __future__ import annotations
@@ -20,7 +18,6 @@ import pytest
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.emission.publish import (
     PublishLayerError,
-    derive_layer_id,
     derive_readable_layer_name,
     publish_layer,
 )
@@ -46,59 +43,8 @@ def test_publish_layer_is_not_a_registered_tool() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 2026-07-08 - layer_id is OPTIONAL (small-model resilience)
-#
-# Live evidence: local 8B models call publish_layer without layer_id at all
-# (TypeError: publish_layer() missing 1 required positional argument:
-# 'layer_id'). The arg now defaults to None and is DERIVED - registered
-# handle for the resolved layer_uri, else the URI basename stem, else a
-# fresh layer-<ulid>.
-# --------------------------------------------------------------------------- #
-
-
-def test_derive_layer_id_prefers_registered_handle() -> None:
-    """A layer_uri the registry knows derives the producing tool's layer_id."""
-    from trid3nt_server.emission.uri_registry import (
-        get_uri_registry,
-        reset_uri_registries_for_tests,
-    )
-
-    reset_uri_registries_for_tests()
-    try:
-        reg = get_uri_registry("sess-derive-layer-id")
-        reg.record(
-            "dem-3dep-10m",
-            uri="s3://trid3nt-cache/cache/static-30d/fetch_dem/abc.tif",
-            tool_name="fetch_dem",
-        )
-        derived = derive_layer_id(
-            "s3://trid3nt-cache/cache/static-30d/fetch_dem/abc.tif", reg
-        )
-        assert derived == "dem-3dep-10m"
-    finally:
-        reset_uri_registries_for_tests()
-
-
-def test_derive_layer_id_falls_back_to_basename_stem() -> None:
-    assert (
-        derive_layer_id("s3://bucket/runs/01X/flood_depth_peak.tif")
-        == "flood_depth_peak"
-    )
-    assert derive_layer_id("gs://bucket/dir/continuous-dem-10m.tif") == (
-        "continuous-dem-10m"
-    )
-
-
-def test_derive_layer_id_sanitizes_and_never_returns_empty() -> None:
-    assert derive_layer_id("s3://bucket/dir/my layer (v2).tif") == "my-layer-v2"
-    # No basename at all -> a fresh ULID-suffixed id, never an empty string.
-    derived = derive_layer_id("s3://bucket/dir/")
-    assert derived.startswith("layer-") and len(derived) > len("layer-")
-
-
-# --------------------------------------------------------------------------- #
 # derive_readable_layer_name (OPEN-9, 2026-07-10): a bare-ULID layer_id must
-# never reach the UI's layer summary as the display name when a better
+# never reach the layer summary as the display name when a better
 # signal (an explicit name, a declared label, or a URI path segment) exists.
 # --------------------------------------------------------------------------- #
 

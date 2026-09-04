@@ -25,6 +25,13 @@ does, in order:
 Vectors are a benign no-op: they are already objects in the same store and the
 plugin opens them natively too, so there is nothing to publish.
 
+Everything in this module belongs to one of those three, plus the naming a
+layer list needs (``derive_readable_layer_name`` and the URI-segment helpers
+under it): a layer whose producer named nothing must still be readable in the
+tree. There is no defensive handle parsing here - every caller arrives with the
+``s3://`` uri its own producer wrote, so an unresolvable reference is a caller
+bug, not a shape this module guesses at.
+
 **Cross-cutting principles:**
 
 - **Side effect, never cached.** A publish writes overview COGs and registers a
@@ -54,7 +61,6 @@ from .uri_registry import observe_published_layer
 __all__ = [
     "publish_layer",
     "PublishLayerError",
-    "derive_layer_id",
     "derive_readable_layer_name",
     "legend_for_published_layer",
     "pop_legend_for_uri",
@@ -78,14 +84,8 @@ class PublishLayerError(RuntimeError):
     by ``adapter._classify_error``) tells the model whether re-issuing the
     call with corrected args can succeed.
 
-    Codes:
-    - ``UNKNOWN_LAYER_HANDLE`` (retryable) - ``layer_uri`` is a
-      bare placeholder token or fabricated scheme that no registry entry
-      resolved; the message names the case's available handles so the model
-      retries with one verbatim.
-    - ``LAYER_URI_NOT_FOUND`` (retryable) - ``layer_uri`` is not an ``s3://``
-      COG on this deployment; the model should re-issue with the producing
-      tool's layer handle or its ``s3://`` URI verbatim.
+    One code: ``LAYER_URI_NOT_FOUND`` (retryable) - ``layer_uri`` is not an
+    ``s3://`` COG in this store, which is the only thing a publish can consume.
     """
 
     def __init__(self, error_code: str, message: str, *, retryable: bool = False) -> None:
@@ -339,8 +339,8 @@ def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
 
     A vector needs no publish: it is already an object in the store and the
     plugin opens it natively. So this neither raises (the step completes green)
-    nor registers anything. The returned string is what the caller gets back -
-    an honest "no publish needed" rather than a failure it must explain.
+    nor registers anything. The returned string is what the caller logs - an
+    honest "no publish needed" rather than a failure it must explain.
     """
     logger.info(
         "publish_layer: benign vector no-op for layer_id=%s uri=%s",
@@ -349,9 +349,8 @@ def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
     )
     return (
         f"noop: layer_id={layer_id!r} is a VECTOR ({layer_uri!r}); it is already "
-        "an object in the store and the map reads it directly. publish_layer is "
-        "raster-only; no publish was needed and none was performed. Do NOT "
-        "re-call publish_layer for this vector layer."
+        "an object in the store and the map reads it directly, so no publish "
+        "was needed and none was performed."
     )
 
 
@@ -704,107 +703,6 @@ def _ensure_raster_has_overviews(layer_uri: str) -> str:
     return new_uri
 
 
-#: URI schemes ``publish_layer`` can actually consume. Anything scheme-shaped
-#: outside this set (e.g. a fabricated ``qgis://project1``) or a bare token
-#: with no scheme/path shape at all (e.g. ``'LayerURI_from_previous_step'``)
-#: is an UNRESOLVED HANDLE: a real handle would have been substituted with its
-#: registered URI by ``uri_registry.resolve_params`` before dispatch.
-_CONSUMABLE_URI_SCHEMES = ("s3://", "gs://", "http://", "https://", "file://")
-
-
-def _looks_like_unresolved_handle(layer_uri: str) -> bool:
-    """True when ``layer_uri`` cannot be a consumable URI or filesystem path.
-
-    Small models sometimes call a publish in the SAME iteration as the
-    producing tool with literal placeholders ('LayerURI_from_previous_step')
-    or invented pseudo-URIs ('qgis://project1'). Those fail deep in the
-    publish path with an unhelpful GDAL/storage error. This predicate gates
-    them at the door so the caller gets a typed error that NAMES the
-    actually available handles instead. The class is rarer now that no
-    model calls a publish tool, but the guard still covers a composer
-    handing on an unresolved handle.
-
-    Conservative by construction -- everything a valid caller passes today is
-    accepted: registered handles are already resolved to real URIs before this
-    runs; composers pass ``s3://``/``gs://``/tile-template URLs; ``/vsi*`` GDAL
-    paths and absolute filesystem paths pass through.
-    """
-    v = (layer_uri or "").strip()
-    if not v:
-        return True
-    # Angle brackets and literal ellipses are never valid in a real URI -
-    # they are template-placeholder shapes, e.g.
-    # 'gs://<result-fetched_usgs_earthquakes-uri>' and a fabricated
-    # 's3://.../earthquakes_layer.fgb' that slipped past a scheme allowlist
-    # and hit the benign vector no-op, minting a success-shaped "Layer
-    # published" for a URI that was never real. Tile-template braces
-    # ({z}/{x}/{y}) remain VALID input for the legacy tile-template unwrap
-    # branch (old persisted cases), so braces are NOT placeholder markers.
-    if "<" in v or ">" in v or "..." in v:
-        return True
-    if v.startswith("/vsi") or v.startswith("/") or v.startswith("\\"):
-        return False  # GDAL virtual path / absolute filesystem path
-    if any(v.startswith(scheme) for scheme in _CONSUMABLE_URI_SCHEMES):
-        return False
-    return True  # bare token (placeholder/handle) or unknown scheme
-
-
-def _unknown_handle_error(layer_uri: str) -> "PublishLayerError":
-    """Typed, retryable unknown-handle error naming the available handles."""
-    from trid3nt_server.emission.uri_registry import ambient_layer_handle_inventory
-
-    handles = ambient_layer_handle_inventory(limit=8)
-    if handles:
-        inventory = (
-            "available handles in this case: "
-            + ", ".join(repr(h) for h in handles)
-            + "; pass one verbatim"
-        )
-    else:
-        inventory = (
-            "no layers have been produced in this case yet - run a fetch or "
-            "composer tool first"
-        )
-    return PublishLayerError(
-        "UNKNOWN_LAYER_HANDLE",
-        f"unknown layer handle {layer_uri!r}; {inventory}, or skip "
-        f"publish_layer entirely - fetch and composer tools auto-publish "
-        f"their own results.",
-        retryable=True,
-    )
-
-
-def derive_layer_id(layer_uri: str, registry: Any | None = None) -> str:
-    """Derive a stable ``layer_id`` when the caller omitted one.
-
-    Local 8B models omit ``publish_layer``'s ``layer_id`` entirely.
-    Derivation order:
-
-    1. the registered layer handle whose URI equals the (already
-       server-resolved) ``layer_uri`` - i.e. the producing tool's own
-       ``layer_id`` (``uri_registry.lookup_handle_for_uri``; uses the ambient
-       dispatch registry when ``registry`` is not passed);
-    2. the URI basename stem, sanitized to ``[A-Za-z0-9_-]`` (QGIS layer name
-       + WMS ``LAYERS=`` safe);
-    3. a fresh ``layer-<ulid>`` when the stem is empty.
-    """
-    import re as _re
-    from urllib.parse import urlparse as _urlparse
-
-    from trid3nt_server.emission.uri_registry import lookup_handle_for_uri
-
-    handle = lookup_handle_for_uri(layer_uri, registry)
-    if handle:
-        return handle
-    path = _urlparse(layer_uri).path if "://" in layer_uri else layer_uri
-    base = path.rsplit("/", 1)[-1]
-    stem = base.rsplit(".", 1)[0] if "." in base else base
-    slug = _re.sub(r"[^A-Za-z0-9_-]+", "-", stem).strip("-")
-    if slug:
-        return slug
-    return f"layer-{new_ulid()}"
-
-
 def _looks_like_ulid(value: str) -> bool:
     """True for a 26-char Crockford-base32 ULID shape (case-insensitive).
 
@@ -876,12 +774,11 @@ def derive_readable_layer_name(
     style: dict[str, Any] | None,
     layer_uri: str,
 ) -> str:
-    """Derive a human-readable layer name for the UI's layer list.
+    """Derive a human-readable layer name for the layer list.
 
-    Local 8B models routinely omit ``publish_layer``'s ``name``, and when
-    ``layer_id`` ALSO degrades to a bare ULID (``derive_layer_id``'s last
-    resort), the published layer would show up in the UI as e.g.
-    ``'01KX5TEZ20BK86EE6DG8PSVFJK'`` -- meaningless to the user. Precedence:
+    A producer that names nothing, and whose ``layer_id`` is a bare ULID, would
+    otherwise reach the layer list as ``'01KX5TEZ20BK86EE6DG8PSVFJK'`` --
+    meaningless to the user. Precedence:
 
     1. an explicit, non-empty ``name`` that is not ITSELF a bare-ULID shape
        -- returned VERBATIM, no disambiguator appended (the caller already
@@ -913,7 +810,7 @@ def derive_readable_layer_name(
 
 def publish_layer(
     layer_uri: str,
-    layer_id: str | None = None,
+    layer_id: str,
     style: dict[str, Any] | None = None,
     name: str | None = None,
     #: A declared SPECIALIZATION of the contract's scale for this one layer -
@@ -943,11 +840,9 @@ def publish_layer(
     registered tool and there is no model-facing intent that reaches it.
 
     Args:
-        layer_uri: the ``s3://`` COG URI, or a registered layer handle the
-            caller has already resolved. A bare unresolved handle raises.
-        layer_id: stable, Case-unique id for the published layer. Derived from
-            the registered producer id / the URI basename / a fresh
-            ``layer-<ulid>`` when omitted.
+        layer_uri: the ``s3://`` COG URI. Every caller reaches here with the
+            uri its own producer wrote, already resolved.
+        layer_id: stable, Case-unique id for the published layer.
         style: the DECLARED style row - which of the four preset shapes draws
             this layer and the parameters that shape needs. ``None`` takes the
             continuous kind's bare default.
@@ -960,32 +855,9 @@ def publish_layer(
         when one had to be built). Suitable as a ``LayerURI.uri``.
 
     Raises:
-        PublishLayerError: unknown layer handle, or a non-``s3://`` raster URI.
-            ``error_code`` carries a SCREAMING_SNAKE_CASE code.
+        PublishLayerError: a non-``s3://`` raster URI. ``error_code`` carries a
+            SCREAMING_SNAKE_CASE code.
     """
-    # Unknown/placeholder handle guard. A registered
-    # handle was already substituted with its real URI by the server's
-    # ``uri_registry.resolve_params`` seam before this body runs, so a bare
-    # token ('LayerURI_from_previous_step') or a fabricated scheme
-    # ('qgis://project1') reaching this point can NEVER publish. Fail at the
-    # door with a typed, retryable error that names the case's actually
-    # available handles so a small model self-corrects instead of spiraling.
-    if _looks_like_unresolved_handle(layer_uri):
-        raise _unknown_handle_error(layer_uri)
-
-    # Small-model resilience: layer_id is optional. Local 8B models call
-    # publish_layer without it (otherwise a TypeError: missing 1 required
-    # positional argument: 'layer_id'). The server dispatch seam injects the
-    # same derived id into params so the wrap-site emission still fires; this
-    # in-tool derivation covers direct/programmatic callers.
-    if not layer_id:
-        layer_id = derive_layer_id(layer_uri)
-        logger.info(
-            "publish_layer: layer_id omitted - derived %r from layer_uri=%s",
-            layer_id,
-            layer_uri,
-        )
-
     # ``name`` is a transport-only carrier (see docstring) - the
     # actual LayerURI.name the client renders is computed by the server-side
     # wrap-site's ``derive_readable_layer_name`` call (it has the resolved
