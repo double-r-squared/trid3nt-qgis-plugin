@@ -517,9 +517,16 @@ class TestCaseGroupClearing(unittest.TestCase):
                 self._name = name
                 self.children_ = []  # list[_FakeGroup | _FakeLayerNode]
                 self._expanded = True
+                self._properties = {}
 
             def name(self):
                 return self._name
+
+            def setCustomProperty(self, key, value):
+                self._properties[key] = value
+
+            def customProperty(self, key, default=None):
+                return self._properties.get(key, default)
 
             def setName(self, name):
                 self._name = name
@@ -607,6 +614,9 @@ class TestCaseGroupClearing(unittest.TestCase):
             def addMapLayer(self, layer, add_to_legend=True):
                 self.added.append(layer)
 
+            def mapLayers(self):
+                return {layer.id(): layer for layer in self.added}
+
             def removeMapLayers(self, ids):
                 self.removed_ids.extend(ids)
                 self.added = [l for l in self.added if l.id() not in ids]
@@ -622,7 +632,14 @@ class TestCaseGroupClearing(unittest.TestCase):
                 self._id = f"{name}_{_FakeRasterLayer._counter}"
                 self.style_loads = []
                 self.repainted = False
+                self._properties = {}
                 _FakeRasterLayer.instances.append(self)
+
+            def setCustomProperty(self, key, value):
+                self._properties[key] = value
+
+            def customProperty(self, key, default=None):
+                return self._properties.get(key, default)
 
             def isValid(self):
                 return True

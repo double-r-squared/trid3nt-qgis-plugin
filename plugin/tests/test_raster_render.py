@@ -104,9 +104,16 @@ def _import_layers():
         def __init__(self, name=""):
             self._name = name
             self.children_ = []
+            self.properties = {}
 
         def name(self):
             return self._name
+
+        def setCustomProperty(self, key, value):
+            self.properties[key] = value
+
+        def customProperty(self, key, default=None):
+            return self.properties.get(key, default)
 
         def setName(self, name):
             self._name = name
@@ -128,7 +135,12 @@ def _import_layers():
             return node
 
         def findLayerIds(self):
-            return []
+            return [c.layer().id() for c in self.children_
+                    if not isinstance(c, _FakeGroup)]
+
+        def removeChildNode(self, node):
+            if node in self.children_:
+                self.children_.remove(node)
 
     class _FakeRoot(_FakeGroup):
         def findGroup(self, name):
@@ -173,7 +185,7 @@ def _import_layers():
             return {layer.id(): layer for layer in self.added}
 
         def removeMapLayers(self, ids):
-            pass
+            self.added = [l for l in self.added if l.id() not in set(ids)]
 
         def timeSettings(self):
             if not hasattr(self, "_time"):
@@ -798,6 +810,52 @@ class TestMeshStagingExtension(unittest.TestCase):
     def test_extensionless_uri_defaults_to_nc(self):
         fname = self._capture_staged_fname("s3://trid3nt-runs/01ABC/mesh_object")
         self.assertTrue(fname.endswith(".nc"), fname)
+
+
+# --------------------------------------------------------------------------- #
+# the preset is a BIRTH default
+# --------------------------------------------------------------------------- #
+
+
+class TestThePresetAppliesAtBirthOnly(unittest.TestCase):
+    def test_a_case_reopen_adopts_its_own_layers_and_loads_no_style_over_them(self):
+        """Reopening a case must not repaint what the user has since restyled.
+
+        The project keeps the layer AND the styling it now carries, so the
+        replayed row resolves to a layer already on the canvas: it is adopted,
+        not rebuilt, and no style document is loaded over it.
+        """
+        layers, fakes = _import_layers()
+        m = layers.LayerMaterializer(settings=_Settings())
+        row = dict(RASTER_LAYER_ROW)
+        row["legend"] = {"kind": "continuous", "qml": _QML}
+
+        m.set_case("01CASEAAAAAAAAAAAAAAAAAAAA", "first open")
+        m.materialize([_event(layers, row)])
+        born = fakes.RasterLayer.instances[0]
+        self.assertEqual(born.loaded_qml, _QML)
+
+        # the user restyles natively: the document QGIS now holds is theirs
+        born.loaded_qml = "<user's own style>"
+
+        m.set_case("01CASEAAAAAAAAAAAAAAAAAAAA", "reopened")
+        notes = m.materialize([_event(layers, row)])
+        self.assertEqual(len(fakes.RasterLayer.instances), 1, notes)
+        self.assertEqual(born.loaded_qml, "<user's own style>")
+
+    def test_a_different_case_sweeps_the_group_it_did_not_open(self):
+        """Adoption is per CASE: another case's layers are still cleared, so
+        the canvas never stacks two cases' answers on one map."""
+        layers, fakes = _import_layers()
+        m = layers.LayerMaterializer(settings=_Settings())
+        m.set_case("01CASEAAAAAAAAAAAAAAAAAAAA", "first")
+        m.materialize([_event(layers, RASTER_LAYER_ROW)])
+        self.assertEqual(len(fakes.Project.instance().added), 1)
+
+        m.set_case("01CASEBBBBBBBBBBBBBBBBBBBB", "second")
+        self.assertEqual(fakes.Project.instance().added, [])
+        m.materialize([_event(layers, RASTER_LAYER_ROW)])
+        self.assertEqual(len(fakes.RasterLayer.instances), 2)
 
 
 if __name__ == "__main__":

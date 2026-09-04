@@ -30,7 +30,11 @@ anywhere below.
           always labeled.
 
 Dedup: by ``layer_id`` -- session-state is replayed on every emit (A.7
-replace-not-reconcile), so the same rows arrive many times per turn.
+replace-not-reconcile), so the same rows arrive many times per turn. A case-open
+seeds that same set from the layers the PROJECT already holds, so a layer the
+user has since restyled in QGIS is adopted rather than rebuilt: the declared
+preset is a BIRTH default, and the project's own persistence owns every choice
+made after.
 
 Temporal: a layer states its own clock and this side stamps it. One frame of
 a sequence carries the ``valid_from``/``valid_to`` window its producer already
@@ -128,6 +132,12 @@ _ALL_BASEMAP_LAYER_NAMES = [v[0] for v in BASEMAP_PRESETS.values()]
 #: directly at layerTreeRoot (never inside a group -- see ``ensure_basemap``)
 #: so it never matches this prefix and is never touched.
 _GROUP_PREFIX = "TRID3NT "
+
+#: The case a TRID3NT group belongs to, stamped on the group node. A title can
+#: collide between two cases; the id cannot, and a case-open has to be able to
+#: tell its OWN group (adopted, with whatever styling its layers now carry)
+#: from another case's (swept).
+_CASE_PROPERTY = "trid3nt/case_id"
 
 
 def _safe_filename(name: str) -> str:
@@ -639,6 +649,7 @@ class LayerMaterializer:
         self._settings = settings
         self._added_ids: set[str] = set()
         self._group_name: Optional[str] = None
+        self._case_id: Optional[str] = None
         #: Per-session staging dir tag. One materializer = one dock
         #: connection = one session; its ``trid3nt_session_<tag>`` subdir holds
         #: every staged (non-streamable) artifact and is swept on close.
@@ -652,26 +663,32 @@ class LayerMaterializer:
     # -- lifecycle ------------------------------------------------------------- #
 
     def set_case(self, case_id: str, title: Optional[str] = None) -> None:
-        """Bind to a case: clears every stale TRID3NT layer-tree group (ITEM
-        A -- this materializer's own previous-case group AND any "Open case
-        in QGIS" export groups, which otherwise accumulate across switches),
-        names the fresh layer-tree group, and resets dedup state so the
-        case-open replay always repaints from a clean slate."""
+        """Bind to a case: adopt the layers this case already has in the
+        project, clear every OTHER TRID3NT layer-tree group (a previous case's,
+        and any "Open case in QGIS" export group, which otherwise accumulate
+        across switches), and name the case's group.
+
+        A layer this project already holds for this case is ADOPTED, never
+        rebuilt: its id joins the dedup set, so the replay treats it as
+        already-materialized and no preset is loaded over it. That is what
+        makes a preset a BIRTH default -- the user's own restyling of a layer
+        is the project's to keep, and repainting it on reopen would be this
+        side overruling a choice the user made in QGIS."""
         label = title or case_id[:8]
         self._group_name = f"TRID3NT {label}"
-        self._clear_stale_groups()
+        self._case_id = case_id
         self._added_ids.clear()
         self.last_added_layers = []
+        self._clear_stale_groups(case_id)
+        self._added_ids.update(self._adopt_existing_layers())
 
-    def _clear_stale_groups(self) -> None:
-        """Remove every layer-tree group whose name starts with the TRID3NT
-        group PREFIX (the live per-case group AND any "Open case in QGIS"
-        export groups -- both share the prefix), along with the layers each
-        one owns. Always clears ALL of them, including one that happens to
-        share the incoming case's own group name -- a case-open always
-        repaints its layers fresh (dedup state is reset right after), so
-        keeping a same-named group around would only risk stacking
-        duplicate layers into it.
+    def _clear_stale_groups(self, case_id: str) -> None:
+        """Remove every TRID3NT layer-tree group EXCEPT this case's own.
+
+        The prefix matches the live per-case group and any "Open case in QGIS"
+        export group; a group is this case's when it carries the case id this
+        materializer was just bound to (the id is stamped at creation, so a
+        second case whose title happens to collide is still a different group).
 
         NEVER touches the OpenStreetMap basemap (added directly at
         layerTreeRoot, never inside a group -- see ``ensure_basemap``) or
@@ -681,7 +698,9 @@ class LayerMaterializer:
         try:
             project = QgsProject.instance()
             root = project.layerTreeRoot()
-            stale = [g for g in root.findGroups() if g.name().startswith(_GROUP_PREFIX)]
+            stale = [g for g in root.findGroups()
+                     if g.name().startswith(_GROUP_PREFIX)
+                     and g.customProperty(_CASE_PROPERTY) != case_id]
             for group in stale:
                 try:
                     layer_ids = group.findLayerIds()
@@ -692,6 +711,23 @@ class LayerMaterializer:
                     continue
         except Exception:  # noqa: BLE001 -- honest no-op, never a crash
             pass
+
+    def _adopt_existing_layers(self) -> set:
+        """The layer ids this case's surviving group already holds.
+
+        A project restored from disk (or a reconnect within one session) brings
+        its layers back WITH the styling they carry, the user's own included.
+        Adopting their ids is what stops the replay adding a second copy and
+        what stops a preset being loaded over a choice already made."""
+        adopted: set = set()
+        try:
+            for layer in QgsProject.instance().mapLayers().values():
+                layer_id = layer.customProperty("trid3nt/layer_id")
+                if isinstance(layer_id, str) and layer_id:
+                    adopted.add(layer_id)
+        except Exception:  # noqa: BLE001 -- an unreadable tree adopts nothing
+            return set()
+        return adopted
 
     def _ensure_temp_dir(self) -> str:
         """The SESSION staging dir (``trid3nt_session_<tag>`` under the platform
@@ -724,9 +760,16 @@ class LayerMaterializer:
     def _ensure_group(self):
         root = QgsProject.instance().layerTreeRoot()
         name = self._group_name or "TRID3NT"
-        group = root.findGroup(name)
+        # By CASE first: the case is the identity, and a case reopened under a
+        # different title must land back in the group its layers already live
+        # in rather than beside it.
+        group = next((g for g in root.findGroups()
+                      if self._case_id
+                      and g.customProperty(_CASE_PROPERTY) == self._case_id), None)
         if group is None:
-            group = root.insertGroup(0, name)
+            group = root.findGroup(name) or root.insertGroup(0, name)
+        if self._case_id:
+            group.setCustomProperty(_CASE_PROPERTY, self._case_id)
         return group
 
     # -- materialization -------------------------------------------------------- #
