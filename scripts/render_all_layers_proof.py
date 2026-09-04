@@ -13,7 +13,7 @@ emission record.
 
 Styling comes from the PRODUCT, never from a palette invented here: a raster with
 a data-driven ``legend`` renders through that key, otherwise through
-``publish_layer._resolve_qgis_style_params`` for its declared ``style_preset``.
+``publish_layer.resolve_layer_style`` for its declared style row.
 A preset that resolves to EMPTY style params is the terrain / RGBA passthrough -
 QGIS auto-scales it, and so does the panel, captioned as such. Vector presets are
 QGIS-side symbology with no server-side colour to read, so vectors get honest
@@ -137,7 +137,7 @@ def _collapse_frames(layers: list[dict]) -> list[dict]:
     out: list[dict] = []
     for layer in layers:
         stem = _FRAME_SUFFIX_RE.sub("", str(layer.get("name") or "")).strip()
-        key = (stem, layer.get("role"), layer.get("style_preset"),
+        key = (stem, layer.get("role"), _preset_label(layer),
                layer.get("layer_type"))
         if stem != str(layer.get("name") or "").strip() and key in seen:
             out[seen[key]]["_frames"] = out[seen[key]].get("_frames", 1) + 1
@@ -174,23 +174,18 @@ def _raster_style(layer: dict) -> tuple[float | None, float | None, str | None, 
     if isinstance(legend, dict) and legend.get("kind") == "continuous":
         return (legend.get("vmin"), legend.get("vmax"),
                 legend.get("colormap") or "viridis", "LayerURI.legend")
-    from trid3nt_server.emission.publish import (
-        _parse_style_params,
-        _resolve_qgis_style_params,
-    )
+    from trid3nt_server.emission.publish import resolve_layer_style
 
-    params = _resolve_qgis_style_params(layer.get("style_preset") or "",
-                                        str(layer.get("uri") or ""))
-    if not params:
-        return (None, None, None, "passthrough (QGIS auto-scale)")
-    vmin, vmax, cmap = _parse_style_params(params)
-    return vmin, vmax, cmap, "publish_layer style params"
+    resolved = resolve_layer_style(layer.get("style"), str(layer.get("uri") or ""))
+    if resolved is None or resolved.range is None:
+        return (None, None, None, "already painted (the file carries its colours)")
+    return (resolved.range[0], resolved.range[1], resolved.preset.ramp,
+            "the layer's resolved style")
 
 
-def _preset_label(preset: str | None) -> str:
-    from trid3nt_server.emission.publish import _label_from_style_preset
-
-    return _label_from_style_preset(preset) or (preset or "(none)")
+def _preset_label(layer: dict) -> str:
+    legend = layer.get("legend") or {}
+    return (legend.get("label") if isinstance(legend, dict) else None) or "(none)"
 
 
 # --------------------------------------------------------------------------- #
@@ -540,8 +535,7 @@ def _panel_caption(index: int, layer: dict, payload: dict,
     kind = str(layer.get("layer_type"))
     bits = [f"{index}. {layer.get('name')}",
             f"role={layer.get('role')}  kind={kind}  "
-            f"preset={layer.get('style_preset') or '(none)'} "
-            f"[{_preset_label(layer.get('style_preset'))}]"]
+            f"style={_preset_label(layer)}"]
     if kind == "raster":
         rng = ("auto-scaled" if payload.get("cmap") is None
                else f"{payload['vmin']:.4g} to {payload['vmax']:.4g}"

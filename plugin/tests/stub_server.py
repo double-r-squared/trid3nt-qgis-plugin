@@ -108,7 +108,6 @@ RASTER_LAYER_ROW: dict[str, Any] = {
     "name": "DEM Asheville",
     "layer_type": "raster",
     "uri": "s3://trid3nt-runs/dem/asheville.tif",
-    "style_preset": "dem_hillshade",
     "visible": True,
     "role": "primary",
     "temporal": False,
@@ -136,7 +135,6 @@ LEGACY_RASTER_LAYER_ROW: dict[str, Any] = {
         "?url=s3%3A%2F%2Ftrid3nt-runs%2Fflood%2Fdepth.tif"
         "&rescale=0,3&colormap_name=ylgnbu"
     ),
-    "style_preset": "continuous_flood_depth",
     "visible": True,
     "role": "primary",
     "temporal": False,
@@ -149,7 +147,6 @@ VECTOR_LAYER_ROW: dict[str, Any] = {
     "name": "Buildings",
     "layer_type": "vector",
     "uri": "s3://trid3nt-runs/vectors/buildings.fgb",
-    "style_preset": "buildings",
     "visible": True,
     "role": "context",
     "temporal": False,
@@ -177,7 +174,6 @@ S3_VECTOR_LAYER_ROW: dict[str, Any] = {
     "name": "Rivers",
     "layer_type": "vector",
     "uri": "s3://trid3nt-runs/vectors/rivers.geojson",
-    "style_preset": "rivers",
     "visible": True,
     "role": "context",
     "temporal": False,

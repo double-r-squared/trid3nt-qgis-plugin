@@ -10,7 +10,7 @@ tree, grouped under "TRID3NT <case>".
           ``QgsRasterLayer("/vsicurl/" + http, name, "gdal")``, then applies
           its OWN renderer from the event's ``legend`` (continuous ->
           ``QgsSingleBandPseudoColorRenderer`` with a ``ramps``-table
-          gradient; categorical -> ``QgsPalettedRasterRenderer`` from the
+          gradient; classed -> ``QgsPalettedRasterRenderer`` from the
           COG's embedded GDAL color table). LEGACY persisted cases still
           carry a TiTiler XYZ tile TEMPLATE (contains ``/cog/tiles/`` +
           ``{z}/{x}/{y}``) in ``uri``: the plugin unwraps the percent-encoded
@@ -842,7 +842,7 @@ def _apply_raster_renderer(
     legacy_vmin, legacy_vmax, legacy_cmap = legacy_style
     try:
         kind = (legend or {}).get("kind")
-        if kind == "categorical":
+        if kind == "classed":
             classes = _embedded_palette_classes(layer.dataProvider())
             if classes:
                 layer.setRenderer(
@@ -1041,6 +1041,10 @@ class LayerMaterializer:
         frame_membership = _frame_membership([n for n in candidate_names if n])
         for event in events:
             if event.layer_id in self._added_ids:
+                # A layer already on the canvas can still be TAKEN OFF it: the
+                # un-emit half of the presentation surface arrives as a
+                # visibility flip on a row this materializer has already seen.
+                self._apply_visibility(event)
                 continue
             try:
                 note = self._materialize_one(event, frame_membership)
@@ -1293,6 +1297,19 @@ class LayerMaterializer:
             node.setItemVisibilityChecked(False)
         self.last_added_layers.append(layer)
         return note
+
+    def _apply_visibility(self, event) -> None:
+        """Match the layer tree to the row's ``visible``. Never raises."""
+        try:
+            root = QgsProject.instance().layerTreeRoot()
+            for layer in QgsProject.instance().mapLayers().values():
+                if layer.customProperty("trid3nt/layer_id") != event.layer_id:
+                    continue
+                node = root.findLayer(layer.id())
+                if node is not None and node.isVisible() != bool(event.visible):
+                    node.setItemVisibilityChecked(bool(event.visible))
+        except Exception:  # noqa: BLE001 -- visibility is best-effort, never fatal
+            pass
 
     # -- extent union (canvas-zoom fallback, item 1) ---------------------------- #
 

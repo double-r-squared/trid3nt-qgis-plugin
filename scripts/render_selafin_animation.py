@@ -62,9 +62,9 @@ from trid3nt_server.workflows.telemac.result_reader import (  # noqa: E402
 )
 
 try:  # a standalone script must still run where the server package is not importable
-    from trid3nt_server.emission import styles as _STYLES  # noqa: E402
+    from trid3nt_server.emission import presets as _PRESETS  # noqa: E402
 except Exception:  # noqa: BLE001 - absence degrades to the local percentile scale
-    _STYLES = None
+    _PRESETS = None
 
 #: Frames per second. Slow enough that a reader can follow a 10-40 frame solve.
 _FPS = 4
@@ -73,7 +73,7 @@ _PAD_FRAC = 0.06
 #: Render density: fine enough that the elements survive, coarse enough that a
 #: 40-frame GIF stays a few megabytes.
 _DPI = 130
-#: The clip the style contract's own band reader uses when a preset declares none.
+#: The clip the preset family's own band reader uses when a row declares none.
 _DEFAULT_CLIP = (2.0, 98.0)
 #: Vectors read as WHITE with a dark casing under them. A magnitude ramp runs
 #: dark at one end and bright at the other, so a single-colour trace disappears
@@ -101,7 +101,6 @@ class AnimationScale:
     vmax: float
     colormap: str
     note: str
-    preset: str | None = None
     #: How the values map onto the ramp - ``linear``, ``log`` or ``sqrt``. A
     #: field spanning orders of magnitude has no linear ramp that shows both
     #: ends, and the legend note carries this word so the reader is told.
@@ -145,14 +144,14 @@ def _matplotlib_colormap(name: str | None) -> str:
     return table.get((name or "").strip().lower(), "viridis")
 
 
-def resolve_animation_style(values, *, preset: str | None = None,
+def resolve_animation_style(values, *, style: dict | None = None,
                             transform: str | None = None,
                             shared: tuple[float, float] | None = None) -> AnimationScale:
     """THE scale for an animation, resolved over EVERY frame at once.
 
     The scope of a data-policy rescale is the RUN, never the frame: resolving here,
     off the whole ``(time, node)`` array, is what makes one colour mean one value
-    for the length of the GIF. Routing it through the style contract's resolver is
+    for the length of the GIF. Routing it through the preset family's resolver is
     what makes this GIF and the published raster of the same quantity agree on the
     ramp, the range and the sentence the legend says about them.
 
@@ -166,35 +165,31 @@ def resolve_animation_style(values, *, preset: str | None = None,
     is not importable, so the script still runs standalone.
     """
     finite = _finite(values)
-    if _STYLES is None:
+    if _PRESETS is None:
         found = shared or _percentile_range(finite, _DEFAULT_CLIP)
         lo, hi = _widen(found or (0.0, 1.0))
         how = ("the published raster's own range" if shared else
                "scaled to this run (p2-p98)" if found else "empty field")
-        return AnimationScale(lo, hi, "viridis", f"{how}: {lo:g} to {hi:g}", None,
+        return AnimationScale(lo, hi, "viridis", f"{how}: {lo:g} to {hi:g}",
                               transform or "linear")
-    # The TRANSFORM rides in as a scale OVERRIDE, which is the contract's own
-    # fourth entry point - not a second opinion invented here. ``merged`` keeps
-    # the preset's policy, clip and fallback range, so the range is still read
-    # p2-p98 over the whole run and only the ramp mapping moves; the resolver
-    # then labels the override on the legend, which is the whole point.
-    override = None
-    if transform:
-        from trid3nt_contracts.styles import ScaleSpec
-
-        override = ScaleSpec(transform=transform)
-    resolved = _STYLES.resolve_style(
-        preset, read_range=lambda scale: _percentile_range(finite, scale.clip),
+    # The TRANSFORM rides in as a scale OVERRIDE - not a second opinion invented
+    # here. ``merged`` keeps the row's policy, clip and fallback range, so the
+    # range is still read p2-p98 over the whole run and only the ramp mapping
+    # moves; the resolver then labels the override on the legend.
+    override = _PRESETS.Scale(transform=transform) if transform else None
+    resolved = _PRESETS.resolve(
+        _PRESETS.from_row(style),
+        read_range=lambda scale: _percentile_range(finite, scale.clip),
         override=override, shared=shared)
     lo, hi = _widen(resolved.range or (0.0, 1.0))
-    return AnimationScale(lo, hi, _matplotlib_colormap(resolved.colormap),
-                          resolved.legend_note(), resolved.preset,
-                          resolved.scale.transform or "linear")
+    return AnimationScale(lo, hi, _matplotlib_colormap(resolved.preset.ramp),
+                          resolved.legend_note(),
+                          resolved.preset.scale.transform or "linear")
 
 
-def animation_scale(values, *, preset: str | None = None) -> tuple[float, float]:
+def animation_scale(values, *, style: dict | None = None) -> tuple[float, float]:
     """``(vmin, vmax)`` for a whole animation - the pure scale decision, alone."""
-    return resolve_animation_style(values, preset=preset).range
+    return resolve_animation_style(values, style=style).range
 
 
 def _s3():
@@ -446,7 +441,7 @@ def _draw_vectors(style: str | None, ax, gx, gy, u, v, *, density: float,
 def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
                   units: str, title: str, run_id: str, source_name: str,
                   variable: str, gif_path: Path, peak_path: Path,
-                  preset: str | None = None, still: str = "peak",
+                  style: dict | None = None, still: str = "peak",
                   plane_note: str = "", axes_factory=None,
                   transform: str | None = None, vector_uv=None,
                   vectors: str | None = None, vector_density: float = 1.4,
@@ -476,7 +471,7 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
     rather than this function guessing them from the grid.
     """
     values = np.asarray(values, dtype="float64")
-    scale = resolve_animation_style(values, preset=preset, transform=transform,
+    scale = resolve_animation_style(values, style=style, transform=transform,
                                     shared=shared_range)
     # WHICH frame the still shows. "peak" is right for a field that BUILDS (a
     # rising tide, an arriving plume); "final" for one that DECAYS toward its
@@ -626,7 +621,7 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
                            if not np.isfinite(v)],
             "vmin": (float(norm.vmin) if norm is not None else scale.vmin),
             "vmax": (float(norm.vmax) if norm is not None else scale.vmax),
-            "style_preset": scale.preset, "legend_note": scale.note,
+            "legend_note": scale.note,
             "transform": scale.transform, "colormap": scale.colormap,
             "vectors": anim_style, "still_vectors": still_style,
             "vector_density": vector_density if anim_style else None,
@@ -643,7 +638,7 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
            units: str, title: str, run_id: str, gif_path: Path,
            peak_path: Path, nplan: int = 1, plane: str = "surface",
            still: str = "peak", mask_var: str | None = None,
-           mask_min: float = 0.0, preset: str | None = None,
+           mask_min: float = 0.0, style: dict | None = None,
            source_name: str | None = None,
            initial_water_level: float | None = None,
            derived: tuple[str, ...] = (), transform: str | None = None,
@@ -733,7 +728,7 @@ def render(slf_path: str, *, utm_epsg: int, origin_bbox, variable: str,
                            title=title, run_id=run_id,
                            source_name=source_name or Path(slf_path).name,
                            variable=name.strip(),
-                           gif_path=gif_path, peak_path=peak_path, preset=preset,
+                           gif_path=gif_path, peak_path=peak_path, style=style,
                            still=still, plane_note=plane_note + dry_land_note,
                            transform=transform,
                            vector_uv=(tuple(components[:2])
@@ -801,9 +796,8 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
         raise SystemExit(f"run {run_id} records no utm_epsg; pass utm_epsg")
     origin = origin_bbox if origin_bbox is not None else worker.get("bbox")
 
-    preset = None
-    if quantity and _STYLES is not None:
-        preset, _fallback = _STYLES.resolve_style_preset(quantity)
+    style = ({"kind": "continuous", "label": quantity.replace("_", " ").capitalize()}
+             if quantity else None)
 
     local = _download(bucket, f"{run_id}/{slf}", ".slf")
     # ``name_infix`` separates a template's SEVERAL animations on disk. It is
@@ -817,7 +811,7 @@ def render_run(*, run_id: str, slf: str, var: str, stem: str, out_dir,
                         run_id=run_id, gif_path=gif, peak_path=peak,
                         nplan=int(nplan or worker.get("nplan") or 1), plane=plane,
                         still=still, mask_var=mask_var, mask_min=mask_min,
-                        preset=preset, source_name=slf,
+                        style=style, source_name=slf,
                         initial_water_level=initial_water_level,
                         derived=derived, transform=transform, vectors=vectors,
                         vector_density=vector_density,

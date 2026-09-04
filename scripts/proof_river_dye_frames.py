@@ -10,7 +10,7 @@ never a re-derivation:
   * ``telemac_dye_peak.tif``, the published peak COG, as the still.
 
 Both are coloured through the product's OWN styling seam
-(``publish_layer._resolve_qgis_style_params``), so the proof shows the colours
+(``publish_layer.resolve_layer_style``), so the proof shows the colours
 the canvas shows rather than a second palette invented here. The basemap is
 whichever ESRI service actually rendered under the frame, credited by name, in
 EPSG:3857 for both tiles and data.
@@ -75,15 +75,13 @@ def _read_json(bucket: str, key: str) -> dict:
 
 def _product_style(peak_uri: str) -> tuple[float | None, float | None, str]:
     """The vmin/vmax/colormap the PRODUCT publishes this raster with."""
-    from trid3nt_server.emission.publish import (
-        _parse_style_params,
-        _resolve_qgis_style_params,
-    )
-    from trid3nt_contracts.telemac_contracts import TELEMAC_DYE_STYLE_PRESET
+    from trid3nt_contracts.telemac_contracts import TELEMAC_DYE_STYLE
+    from trid3nt_server.emission.publish import resolve_layer_style
 
-    params = _resolve_qgis_style_params(TELEMAC_DYE_STYLE_PRESET, peak_uri)
-    vmin, vmax, cmap = _parse_style_params(params or "")
-    return vmin, vmax, (cmap or "viridis")
+    resolved = resolve_layer_style(TELEMAC_DYE_STYLE, peak_uri)
+    if resolved is None or resolved.range is None:
+        return None, None, "viridis"
+    return resolved.range[0], resolved.range[1], resolved.preset.ramp
 
 
 def _dye_variable(varnames: list[str]) -> str:

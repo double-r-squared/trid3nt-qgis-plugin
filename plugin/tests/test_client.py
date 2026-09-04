@@ -193,7 +193,7 @@ class TestPureHelpers(unittest.TestCase):
                         "layer_id": "L1",
                         "uri": "s3://b/x.tif",
                         "legend": {
-                            "kind": "categorical",
+                            "kind": "classed",
                             "classes": [
                                 {"value": float("nan"), "color": "#ffffcc"},
                                 {"value_min": 1.0, "value_max": float("inf"), "color": "#e31a1c"},

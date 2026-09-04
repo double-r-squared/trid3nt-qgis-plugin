@@ -75,8 +75,8 @@ async def _drive_artemis() -> int:
     row = rows[0]
     print("[artemis] bed input:", row.name)
     print("[artemis] bed uri  :", row.uri, "role:", row.role,
-          "preset:", row.style_preset)
-    assert row.role == "context" and row.style_preset == "continuous_dem"
+          "style:", row.style)
+    assert row.role == "context" and row.style["label"] == "Elevation"
     inside, bnds, epsg = _bounds_inside(row.uri, aoi, pad=0.02)
     print(f"[artemis] bed COG bounds={bnds} epsg={epsg} inside_AOI={inside}")
     assert epsg == 4326, f"bed COG not 4326: {epsg}"

@@ -92,7 +92,23 @@ def continuous(tmp: Path) -> None:
 
 
 def classed(tmp: Path) -> None:
-    from qgis.core import QgsFeature, QgsGeometry, QgsVectorLayer
+    from qgis.core import QgsFeature, QgsGeometry, QgsRasterLayer, QgsVectorLayer
+
+    # A classed RASTER: discrete bands, one per declared break.
+    raster_style = presets.resolve(presets.Preset(
+        kind="classed", units="t/ha/yr",
+        classes=((0.0, 1.0, "#ffffcc", "< 1"), (1.0, 3.0, "#bd0026", "1-3"))))
+    layer = QgsRasterLayer(_raster_fixture(tmp), "r", "gdal")
+    _msg, ok = layer.loadNamedStyle(_write(tmp, "classed_raster", raster_style.qml()))
+    check("classed[raster] / loads", bool(ok))
+    check("classed[raster] / renderer is singlebandpseudocolor",
+          layer.renderer().type() == "singlebandpseudocolor", layer.renderer().type())
+    shader = layer.renderer().shader().rasterShaderFunction()
+    check("classed[raster] / the shader is DISCRETE",
+          shader.colorRampType() == shader.Discrete, str(shader.colorRampType()))
+    breaks = [(i.value, i.color.name(), i.label) for i in shader.colorRampItemList()]
+    check("classed[raster] / breaks read back exactly",
+          breaks == [(1.0, "#ffffcc", "< 1"), (3.0, "#bd0026", "1-3")], str(breaks))
 
     resolved = presets.resolve(presets.Preset(
         kind="classed", geometry="polygon", units="t/ha/yr",
@@ -105,17 +121,17 @@ def classed(tmp: Path) -> None:
     feature.setAttribute("value", 0.5)
     layer.dataProvider().addFeatures([feature])
     before = layer.renderer().type()
-    _msg, ok = layer.loadNamedStyle(_write(tmp, "classed", resolved.qml()))
-    check("classed / loads", bool(ok))
+    _msg, ok = layer.loadNamedStyle(_write(tmp, "classed_vector", resolved.qml()))
+    check("classed[vector] / loads", bool(ok))
     renderer = layer.renderer()
-    check("classed / renderer is graduatedSymbol",
+    check("classed[vector] / renderer is graduatedSymbol",
           renderer.type() == "graduatedSymbol", renderer.type())
-    check("classed / the render changed", renderer.type() != before, before)
-    check("classed / classifies on the declared attribute",
+    check("classed[vector] / the render changed", renderer.type() != before, before)
+    check("classed[vector] / classifies on the declared attribute",
           renderer.classAttribute() == "value", renderer.classAttribute())
     breaks = [(r.lowerValue(), r.upperValue(), r.symbol().color().name(), r.label())
               for r in renderer.ranges()]
-    check("classed / breaks read back exactly",
+    check("classed[vector] / breaks read back exactly",
           breaks == [(0.0, 1.0, "#ffffcc", "< 1 (very low)"),
                      (1.0, 5.0, "#feb24c", "1-5 (low)"),
                      (5.0, 100.0, "#bd0026", ">= 5 (high)")], str(breaks))

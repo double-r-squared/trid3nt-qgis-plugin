@@ -384,39 +384,41 @@ def published_scale(evidence: dict, animation: ProofAnimation) -> dict:
     published raster of its own has nothing to agree with, and the row says that
     rather than inventing an agreement.
     """
-    from trid3nt_server.emission import styles
+    from trid3nt_server.emission import presets
+    from trid3nt_server.emission.outputs_seam import quantity_label
 
     quantity = animation.quantity
-    preset = styles.resolve_style_preset(quantity)[0] if quantity else None
+    title = quantity_label(quantity) if quantity else None
     ranges: list[tuple[float, float]] = []
     published_by: list[dict] = []
     preset_scaled: list[str] = []
-    #: Every preset the run's rasters were painted under. An animation whose
-    #: declared quantity resolves to NONE of them is not "a field nobody
-    #: published" - it is the same field published under a different preset, and
-    #: so a second scale for one quantity that no range comparison can catch.
+    #: Every title the run's rasters were painted under. An animation whose
+    #: declared quantity matches NONE of them is not "a field nobody published"
+    #: - it is the same field published under a different title, and so a second
+    #: scale for one quantity that no range comparison can catch.
     seen: list[str] = []
     for layer in evidence.get("layers") or []:
-        if layer.get("layer_type") == "raster" and layer.get("style_preset"):
-            seen.append(str(layer["style_preset"]))
-        if layer.get("style_preset") != preset:
+        legend = layer.get("legend") or {}
+        painted = legend.get("label") if isinstance(legend, dict) else None
+        if layer.get("layer_type") == "raster" and painted:
+            seen.append(str(painted))
+        if painted != title:
             continue
-        legend = layer.get("legend")
         lo = legend.get("vmin") if isinstance(legend, dict) else None
         hi = legend.get("vmax") if isinstance(legend, dict) else None
         if not isinstance(legend, dict) or legend.get("kind") != "continuous" \
                 or lo is None or hi is None:
-            # No data-driven key: the panel renders through the preset's own
-            # scale, which is the scale the animation resolved from the same
-            # preset - so these agree by construction and there is no range for
-            # the packet to carry.
+            # No resolved key: the panel renders through the row's own scale,
+            # which is the scale the animation resolved from the same row - so
+            # these agree by construction and there is no range for the packet
+            # to carry.
             preset_scaled.append(str(layer.get("name")))
             continue
         ranges.append((float(lo), float(hi)))
         published_by.append({"layer": str(layer.get("name")),
                              "range": [float(lo), float(hi)]})
-    found = styles.shared_range(ranges)
-    return {"quantity": quantity, "preset": preset,
+    found = presets.shared_range(ranges)
+    return {"quantity": quantity, "preset": title,
             "published_range": list(found) if found else None,
             # SEVERAL published layers of one quantity may each carry their own
             # band-read range, and then the shared range is their span rather

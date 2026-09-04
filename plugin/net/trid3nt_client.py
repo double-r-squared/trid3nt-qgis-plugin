@@ -182,7 +182,6 @@ class LayerEvent:
     layer_type: str  # "raster" | "vector" | ...
     uri: str
     wms_url: Optional[str] = None
-    style_preset: Optional[str] = None
     inline_geojson: Optional[dict] = None
     opacity: Optional[float] = None
     visible: bool = True
@@ -287,9 +286,6 @@ def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
                 layer_type=str(row.get("layer_type") or "raster"),
                 uri=uri if isinstance(uri, str) else "",
                 wms_url=row.get("wms_url") if isinstance(row.get("wms_url"), str) else None,
-                style_preset=row.get("style_preset")
-                if isinstance(row.get("style_preset"), str)
-                else None,
                 inline_geojson=inline,
                 opacity=opacity,
                 visible=bool(row.get("visible", True)),

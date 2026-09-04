@@ -119,7 +119,6 @@ async def main() -> int:
                 "layer_id": layer.get("layer_id"),
                 "name": layer.get("name"),
                 "uri": layer.get("uri"),
-                "style_preset": layer.get("style_preset"),
                 "has_legend": bool(layer.get("legend")),
             }
             for layer in loaded
@@ -141,7 +140,7 @@ async def main() -> int:
     )
     published = loaded[-1]
     assert str(published.get("uri", "")).startswith("s3://"), published
-    assert published.get("has_legend") or published.get("style_preset"), (
+    assert published.get("has_legend"), (
         "the layer reached the map with neither a legend nor a style preset - "
         "the publish enrichment did not land"
     )

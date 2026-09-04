@@ -339,7 +339,6 @@ def _event(layers, row_or_fields):
         layer_type=row.get("layer_type", "raster"),
         uri=row.get("uri", ""),
         wms_url=row.get("wms_url"),
-        style_preset=row.get("style_preset"),
         inline_geojson=row.get("inline_geojson"),
         opacity=row.get("opacity"),
         visible=row.get("visible", True),
@@ -463,7 +462,7 @@ class TestRendererPerLegendKind(unittest.TestCase):
                         "layer_id": "01CATRASTERAAAAAAAAAAAAAAA",
                         "name": "NLCD landcover",
                         "uri": "s3://trid3nt-runs/landcover/nlcd.tif",
-                        "legend": {"kind": "categorical", "classes": []},
+                        "legend": {"kind": "classed", "classes": []},
                     },
                 )
             ]
@@ -491,7 +490,7 @@ class TestRendererPerLegendKind(unittest.TestCase):
                         "name": "Soil loss",
                         "uri": "s3://trid3nt-runs/rusle/yield.tif",
                         "legend": {
-                            "kind": "categorical",
+                            "kind": "classed",
                             "classes": [
                                 {"value_min": 0.0, "value_max": 1.0, "color": "#ffffcc", "label": "<1"},
                                 {"value_min": 1.0, "value_max": 5.0, "color": "#fed976", "label": "1-5"},
@@ -853,7 +852,7 @@ class TestCategoricalNonFiniteAnchorsDropped(unittest.TestCase):
                         "name": "Broken categorical",
                         "uri": "s3://trid3nt-runs/x/y.tif",
                         "legend": {
-                            "kind": "categorical",
+                            "kind": "classed",
                             "classes": [
                                 {"value": float("nan"), "color": "#ffffcc"},
                                 {"value": 1.0, "color": "#fed976"},
