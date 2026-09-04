@@ -51,7 +51,36 @@ __all__ = [
     "HookSpec",
     "DispatchSpec",
     "SourceSpec",
+    "STYLE_GEOMETRIES",
+    "STYLE_KINDS",
 ]
+
+#: The preset family, closed. A style row naming anything else is a typo, and a
+#: typo that reaches a layer paints it as something it is not.
+STYLE_KINDS = ("continuous", "classed", "reference", "mesh")
+STYLE_GEOMETRIES = ("point", "line", "polygon")
+
+
+def _validate_style_row(name: str, row: Any, *, where: str = "output.style") -> None:
+    """Reject a style row at REGISTRATION rather than at paint time."""
+    if row is None:
+        return
+    if not isinstance(row, dict):
+        raise ValueError(f"{name}: {where} must be a mapping; got {type(row).__name__}")
+    kind = row.get("kind", "continuous")
+    if kind not in STYLE_KINDS:
+        raise ValueError(f"{name}: {where}.kind {kind!r} not in {list(STYLE_KINDS)}")
+    geometry = row.get("geometry")
+    if geometry is not None and geometry not in STYLE_GEOMETRIES:
+        raise ValueError(
+            f"{name}: {where}.geometry {geometry!r} not in {list(STYLE_GEOMETRIES)}")
+    by_param = row.get("by_param")
+    if by_param is None:
+        return
+    if not isinstance(by_param, dict) or not by_param.get("param"):
+        raise ValueError(f"{name}: {where}.by_param needs a param name")
+    for value, mapped in (by_param.get("map") or {}).items():
+        _validate_style_row(name, mapped, where=f"{where}.by_param.map[{value!r}]")
 
 
 # --------------------------------------------------------------------------- #
@@ -247,18 +276,22 @@ class OutputSpec(GraceModel):
     layer_type: Literal["raster", "vector", "record"]
     ext: Literal["tif", "fgb", "json"]
     role: Literal["primary", "context", "input"] = "primary"
-    style_preset: str                        # may template on a param
-    #: Per-param MAPPED style preset (phase-2 wave-7). ``{"param": "layer", "map":
-    #: {"fbfm40": "categorical_landcover", "cbh": "continuous_dem", ...}}`` selects
-    #: the preset by a param value; a value absent from the map falls back to the
-    #: static ``style_preset``. Default (None) = the static preset for every prior
-    #: spec (strict no-op).
-    style_preset_by_param: dict[str, Any] | None = None
+    #: HOW THIS DATASET DRAWS ITSELF - the ``style:`` row. A dataset's default
+    #: rendering is a fact about the DATA, so it is declared here beside the
+    #: source rather than mapped to it somewhere else. ``{kind: continuous |
+    #: classed | reference | mesh}`` picks one of the four preset shapes and the
+    #: remaining keys parameterise it (``ramp`` / ``units`` / ``label`` /
+    #: ``scale`` / ``classes`` / ``geometry`` / ``color``). ``by_param`` -
+    #: ``{param: <name>, map: {<value>: <partial row>}}`` - overrides those
+    #: parameters per param value, which is how one source that serves several
+    #: variables gives each its own ramp and range. Absent (None) = the kind's
+    #: bare default.
+    style: dict[str, Any] | None = None
     #: Per-param MAPPED role (multi-asset RGB composite wave). ``{"param":
     #: "band_combo", "map": {"thermal": "primary"}}`` selects the LayerURI ``role`` by
     #: a param value; a value absent from the map falls back to the static ``role``.
     #: The landsat thermal LST product is the analytical ``primary`` while the RGB
-    #: true/false-color composites are ``context`` basemaps -- one style_preset, split
+    #: true/false-color composites are ``context`` basemaps -- one style row, split
     #: role. Default (None) = the static ``role`` for every prior spec (strict no-op).
     role_by_param: dict[str, Any] | None = None
     #: Whether the emitted ``LayerURI`` carries the request bbox. Default True
@@ -766,6 +799,7 @@ class SourceSpec(GraceModel):
     @model_validator(mode="after")
     def _validate_shape_consistency(self) -> "SourceSpec":
         """Cross-field consistency the router relies on at dispatch time."""
+        _validate_style_row(self.name, self.output.style)
         # raster shapes emit tif; vector/station shapes emit fgb (or json).
         if self.shape == "raster-cog" and self.output.layer_type != "raster":
             raise ValueError(

@@ -16,7 +16,7 @@ Invariants this module is responsible for:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import Field, model_validator
 
@@ -94,27 +94,25 @@ class ResultLayer(GraceModel):
     """A renderable result layer.
 
     Field-for-field alignable with ``map-command load-layer`` args
-    (``layer_id``, ``style_preset``, ``temporal``) so the UI renders without
+    (``layer_id``, ``style``, ``temporal``) so the UI renders without
     translation. Output formats are fixed by/: rasters COG,
     vectors FlatGeobuf/GeoParquet. ``LayerURI`` (execution.py) is the producer
     shape that maps onto this.
 
-    ``legend`` mirrors ``LayerURI.legend`` -- the DATA-DRIVEN render key (see
-    ``execution.LegendKey``): the colormap is the semantic per-variable choice,
-    the range is the REAL data range. Additive + optional -- ``None`` means
-    legacy ``style_preset`` rendering, so layers without a legend render exactly
-    as before.
+    ``style`` mirrors ``LayerURI.style`` (the declared row) and ``legend``
+    mirrors ``LayerURI.legend`` (that row resolved against this layer, with the
+    concrete range and the .qml the map loads).
     """
 
     layer_id: str  # stable id; used in map-command messages
     name: str  # human-readable display name
     layer_type: Literal["raster", "vector"]
     uri: str  # gs://... canonical location (COG / FlatGeobuf / GeoParquet)
-    style_preset: str  # references the QML preset library
+    style: dict[str, Any] | None = None  # the declared style row
     temporal: TemporalConfig | None = None  # present iff layer is time-varying
     role: Literal["primary", "context", "input"]
     units: str | None = None  # e.g., "meters", "m/s", or None for categorical
-    legend: "LegendKey | None" = None  # data-driven render key; None => legacy style_preset rendering
+    legend: "LegendKey | None" = None  # the resolved style; None until published
     # Which rungs of a declared fallback ladder produced this layer's inputs.
     # Empty means "no ladder governs this", never "nothing was substituted".
     fallbacks: list[FallbackActivation] = Field(default_factory=list)

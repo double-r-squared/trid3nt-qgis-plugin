@@ -45,7 +45,6 @@ def _modeled_flood_envelope() -> AssessmentEnvelope:
                 name="Flood depth (m)",
                 layer_type="raster",
                 uri="gs://trid3nt/runs/01HX/depth.cog.tif",
-                style_preset="flood_depth_blue",
                 temporal=TemporalConfig(
                     start="2022-09-28T00:00:00Z",
                     end="2022-09-30T00:00:00Z",
@@ -188,7 +187,7 @@ def test_grid_resolution_must_be_positive() -> None:
 
 def test_result_layer_aligns_with_load_layer_args() -> None:
     """The visualization seam: ResultLayer fields map onto map-command load-layer
-    args without translation (layer_id, style_preset, optional temporal)."""
+    args without translation (layer_id, optional temporal)."""
     from trid3nt_contracts.ws import LoadLayerArgs
 
     rl = ResultLayer(
@@ -196,7 +195,6 @@ def test_result_layer_aligns_with_load_layer_args() -> None:
         name="Flood depth (m)",
         layer_type="raster",
         uri="gs://trid3nt/runs/01HX/depth.cog.tif",
-        style_preset="flood_depth_blue",
         temporal=TemporalConfig(
             start="2022-09-28T00:00:00Z",
             end="2022-09-30T00:00:00Z",
@@ -207,7 +205,6 @@ def test_result_layer_aligns_with_load_layer_args() -> None:
     args = LoadLayerArgs(
         layer_id=rl.layer_id,
         wms_url="https://qgis.example.com/wms?MAP=01HX.qgs",
-        style_preset=rl.style_preset,
         temporal={
             "start": rl.temporal.model_dump(mode="json")["start"],
             "end": rl.temporal.model_dump(mode="json")["end"],
@@ -216,4 +213,4 @@ def test_result_layer_aligns_with_load_layer_args() -> None:
     )
     # No transformations required beyond plumbing the WMS URL — the visualization
     # seam holds.
-    assert args.layer_id == rl.layer_id and args.style_preset == rl.style_preset
+    assert args.layer_id == rl.layer_id

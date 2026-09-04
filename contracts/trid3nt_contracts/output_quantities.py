@@ -146,8 +146,8 @@ class OutputQuantitySpec:
     Fields:
         quantity_id: stable id (the layer-id STEM + the registry key), e.g.
             ``"flood-depth"`` / ``"flood-velocity"`` / ``"plume-concentration"``.
-            It is also the STYLE key: a producer declares the QUANTITY and the
-            style contract (``styles.yaml``) owns quantity -> preset, so nothing
+            A producer declares the QUANTITY; which preset shape draws it and
+            what titles it follow from the quantity and its units, so nothing
             here names a colormap.
         kind: ``raster`` | ``timeseries`` | ``scalar`` (routes the executor).
         name: the human + web-grouping LayerURI name (e.g. "Peak flood depth").

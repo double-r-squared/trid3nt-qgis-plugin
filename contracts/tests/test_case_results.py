@@ -22,7 +22,6 @@ def _mk_layer(label: str, layer_type: str = "raster") -> LayerURI:
         name=f"{label} layer",
         layer_type=layer_type,  # type: ignore[arg-type]
         uri=f"gs://test/{label}.tif" if layer_type == "raster" else f"gs://test/{label}.fgb",
-        style_preset=f"{label}_style",
         role="primary",
     )
 

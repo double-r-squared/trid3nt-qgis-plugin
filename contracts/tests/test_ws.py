@@ -628,7 +628,6 @@ def test_map_command_load_layer_args_roundtrip(session_id: str) -> None:
     args = ws.LoadLayerArgs(
         layer_id="run-01HX-flood-depth",
         wms_url="https://qgis.example.com/wms?MAP=01HX.qgs",
-        style_preset="flood_depth_blue",
         temporal=ws.MapTemporal(
             start="2026-06-05T00:00:00Z", end="2026-06-05T06:00:00Z", step_seconds=300
         ),

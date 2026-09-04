@@ -107,18 +107,14 @@ class ProjectLayerSummary(GraceModel):
     """Denormalized layer entry on a project (and on session map state).
 
     The ``wms_url`` field carries the QGIS Server WMS endpoint the client uses
-    for MapLibre source registration; ``uri`` remains the underlying GCS file
-    pointer (gs://...). ``style_preset`` drives client-side legend matching.
-    ``opacity`` (0.0–1.0) and ``z_index`` enable layer-stack arbitration;
-    clients fall back to ``1.0`` / a default order if both are absent.
+    for MapLibre source registration; ``uri`` remains the underlying file
+    pointer. ``opacity`` (0.0-1.0) and ``z_index`` enable layer-stack
+    arbitration; clients fall back to ``1.0`` / a default order if both are
+    absent.
 
-    ``legend`` is the DATA-DRIVEN render key mirrored from ``LayerURI.legend``
-    (see ``execution.LegendKey``): the colormap is the semantic per-variable
-    choice, the range is the REAL data range. Additive + optional -- ``None``
-    means legacy ``style_preset`` rendering, so layers without a legend render
-    exactly as before. The pipeline emitter copies it onto this summary.
-
-    Closes OQ-62-LAYERURI-URI-FIELD, OQ-W-65-STYLE-PRESET, OQ-0068-ZIDX.
+    ``legend`` is the layer's RESOLVED style, mirrored from ``LayerURI.legend``
+    (see ``execution.LegendKey``): the concrete range, the colours and the .qml
+    the map loads. The pipeline emitter copies it onto this summary.
     """
 
     layer_id: str
@@ -128,7 +124,6 @@ class ProjectLayerSummary(GraceModel):
     # ``LayerURI.layer_type``.
     layer_type: Literal["raster", "vector", "mesh"]
     uri: str
-    style_preset: str
     visible: bool
     role: Literal["primary", "context", "input"]
     temporal: bool  # has WMS-T config
@@ -145,8 +140,7 @@ class ProjectLayerSummary(GraceModel):
     # plugin reads. ``None`` for raster/vector.
     crs_authid: str | None = None
 
-    # --- Data-driven render key (additive; None => legacy style_preset path) --- #
-    legend: LegendKey | None = None  # mirrored from LayerURI.legend; see execution.LegendKey
+    legend: LegendKey | None = None  # mirrored from LayerURI.legend
 
 
 class ProjectDocument(DocModel):

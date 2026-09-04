@@ -737,7 +737,6 @@ class LoadLayerArgs(GraceModel):
 
     layer_id: str
     wms_url: str
-    style_preset: str
     temporal: MapTemporal | None = None
 
 
@@ -913,7 +912,6 @@ class ReferenceLayer(GraceModel):
 
     layer_id: str
     wms_url: str
-    style_preset: str
 
 
 class SuggestedView(GraceModel):

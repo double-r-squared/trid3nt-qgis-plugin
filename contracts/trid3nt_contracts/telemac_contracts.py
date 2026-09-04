@@ -24,17 +24,17 @@ from pydantic import Field
 from .execution import LayerURI
 
 __all__ = [
-    "TELEMAC_DYE_STYLE_PRESET",
-    "TELEMAC_SEDIMENT_CONCENTRATION_STYLE_PRESET",
+    "TELEMAC_DYE_STYLE",
+    "TELEMAC_SEDIMENT_CONCENTRATION_STYLE",
     "TELEMAC_SUBSTANCE_PRODUCTS",
     "SubstanceProduct",
-    "TELEMAC_BED_EVOLUTION_STYLE_PRESET",
-    "TELEMAC_WSE_STYLE_PRESET",
-    "TELEMAC_DO_STYLE_PRESET",
-    "TELEMAC_WAVE_STYLE_PRESET",
-    "TELEMAC_AGITATION_STYLE_PRESET",
-    "TELEMAC3D_STRATIFICATION_STYLE_PRESET",
-    "TELEMAC_COASTAL_DEPTH_STYLE_PRESET",
+    "TELEMAC_BED_EVOLUTION_STYLE",
+    "TELEMAC_WSE_STYLE",
+    "TELEMAC_DO_STYLE",
+    "TELEMAC_WAVE_STYLE",
+    "TELEMAC_AGITATION_STYLE",
+    "TELEMAC3D_STRATIFICATION_STYLE",
+    "TELEMAC_COASTAL_DEPTH_STYLE",
     "TelemacDyeLayerURI",
     "TelemacSedimentLayerURI",
     "TelemacWseLayerURI",
@@ -46,48 +46,67 @@ __all__ = [
     "TelemacRainOnGridLayerURI",
 ]
 
-#: Style preset for the coastal tidal/surge PEAK-INUNDATION-DEPTH raster (ADR
-#: 0259). A DISTINCT continuous key for the peak-depth raster (never the
-#: dye/WSE/wave/agitation/3D presets). The rising-tide animation rides the result
-#: SELAFIN, published as a ``layer_type="mesh"`` layer by the emit-on-solve seam
-#: (ADR 0283). The layer carries a data-driven ``legend`` so the real depth renders
-#: (additive / legend-drives-render, same as the other TELEMAC layers).
-TELEMAC_COASTAL_DEPTH_STYLE_PRESET: str = "continuous_coastal_inundation_depth"
+# --------------------------------------------------------------------------- #
+# The product contract's own style rows.
+#
+# Each row says which of the four preset shapes draws the product and what the
+# quantity contributes to it - its ramp, its units, its legend title. Nothing
+# here is a preset NAME, so nothing here can drift from one: the dye and the
+# suspended-sediment fields differ because their PARAMETERS differ, which is
+# what a reader sees on the canvas.
+# --------------------------------------------------------------------------- #
 
-#: Style preset for the TELEMAC-3D stratified / 3D-hydrodynamics surface (or
-#: bottom) field raster. A DISTINCT continuous key (never the dye/WSE/DO/wave/
-#: agitation presets) so the peak raster styles cleanly. The COG variable differs
-#: by mode
-#: (temperature C / velocity m/s / salinity psu), so the layer ALWAYS carries a
-#: data-driven ``legend`` and the preset is purely the mesh-sibling routing key
-#: (additive / legend-drives-render, same as the other TELEMAC layers).
-TELEMAC3D_STRATIFICATION_STYLE_PRESET: str = "continuous_stratified_flow"
+#: The coastal tidal/surge PEAK-INUNDATION-DEPTH raster. The rising-tide
+#: animation rides the result SELAFIN as a ``layer_type="mesh"`` layer.
+TELEMAC_COASTAL_DEPTH_STYLE: dict = {
+    "kind": "continuous", "ramp": "ylgnbu", "units": "m",
+    "label": "Peak inundation depth"}
 
-#: Style preset for the ARTEMIS agitation-coefficient (Kd = Hs/H0) raster (ADR
-#: 0237). A DISTINCT continuous key so it never collides with the TOMAWAC Hs
-#: preset for the mesh-sibling animation map; the layer carries a data-driven
-#: ``legend`` so the 0..~2.5 Kd range renders regardless of QML preset coverage.
-TELEMAC_AGITATION_STYLE_PRESET: str = "continuous_wave_agitation"
+#: The TELEMAC-3D surface (or bottom) field. The COG variable differs by mode -
+#: temperature C, velocity m/s, salinity psu - so the caller titles this row
+#: with the variable it actually rasterized rather than minting a row per mode.
+TELEMAC3D_STRATIFICATION_STYLE: dict = {"kind": "continuous", "ramp": "inferno"}
 
-#: Style preset for the TOMAWAC significant-wave-height (Hs) raster. A
-#: DISTINCT continuous key (never the dye/WSE/DO presets) so the peak raster styles
-#: cleanly. The layer always carries a data-driven
-#: ``legend`` so it renders regardless of QML preset-library coverage.
-TELEMAC_WAVE_STYLE_PRESET: str = "continuous_significant_wave_height"
+#: The ARTEMIS agitation coefficient Kd = Hs/H0 - a dimensionless amplification
+#: ratio, not a wave height.
+TELEMAC_AGITATION_STYLE: dict = {
+    "kind": "continuous", "units": "Kd", "label": "Agitation coefficient (Kd)"}
 
-#: Style preset for the dye-concentration raster. A DISTINCT key (not the flood
-#: ``continuous_flood_depth`` nor the MODFLOW ``continuous_plume_concentration``)
-#: so the peak raster styles cleanly; the dye animation rides the result SELAFIN,
-#: published as a ``layer_type="mesh"`` layer by the emit-on-solve seam (ADR 0283).
-#: The layer always carries a data-driven ``legend`` so it renders regardless of
-#: the QML
-#: preset library's coverage of this key (additive, legend-drives-render design).
-TELEMAC_DYE_STYLE_PRESET: str = "continuous_dye_concentration"
+#: The TOMAWAC significant wave height Hs.
+TELEMAC_WAVE_STYLE: dict = {
+    "kind": "continuous", "ramp": "gnbu", "units": "m",
+    "label": "Significant wave height"}
 
-#: Style preset for the GAIA SUSPENDED-SEDIMENT concentration raster - a grain
-#: load in mg/L, on its own ramp so it never reads as the dissolved dye field a
-#: sediment run also carries a bed-evolution map beside.
-TELEMAC_SEDIMENT_CONCENTRATION_STYLE_PRESET: str = "continuous_suspended_sediment"
+#: The dye-concentration raster.
+TELEMAC_DYE_STYLE: dict = {
+    "kind": "continuous", "ramp": "reds", "units": "mg/L",
+    "label": "Dye concentration"}
+
+#: The GAIA SUSPENDED-SEDIMENT concentration raster - a grain load, on its own
+#: ramp so it never reads as the dissolved dye field a sediment run publishes
+#: beside it.
+TELEMAC_SEDIMENT_CONCENTRATION_STYLE: dict = {
+    "kind": "continuous", "ramp": "oranges", "units": "mg/L",
+    "label": "Suspended sediment concentration"}
+
+#: The GAIA bed-evolution raster: deposition positive, erosion negative, so the
+#: ramp diverges about zero.
+TELEMAC_BED_EVOLUTION_STYLE: dict = {
+    "kind": "continuous", "ramp": "rdbu", "units": "mm", "label": "Bed evolution"}
+
+#: The MAX FREE-SURFACE ELEVATION raster. A water SURFACE is not a depth: it is
+#: referenced to a vertical datum and it is signed, so it is titled and ramped
+#: apart from the inundation depth a coastal run publishes beside it.
+TELEMAC_WSE_STYLE: dict = {
+    "kind": "continuous", "ramp": "cividis", "units": "m",
+    "label": "Water surface elevation"}
+
+#: The DISSOLVED-OXYGEN field from a WAQTEL O2 sag run. rdylbu, NOT reversed:
+#: low DO reads red and high DO reads blue, which is the direction a sag curve
+#: is read in.
+TELEMAC_DO_STYLE: dict = {
+    "kind": "continuous", "ramp": "rdylbu", "units": "mg/L",
+    "label": "Dissolved oxygen"}
 
 
 class SubstanceProduct(NamedTuple):
@@ -96,18 +115,18 @@ class SubstanceProduct(NamedTuple):
     The product's NAME must not assert more than the field carries: an oil run
     advects the same passive tracer a dye run does (the slick physics rides the
     drogues track, not this raster) and a sediment run's tracer is a suspended
-    grain load, so each class names its own COG, declares its own QUANTITY for
-    the styling seam, and carries its own preset and noun.
+    grain load, so each class names its own COG, declares its own QUANTITY, and
+    carries its own style row and noun.
 
         cog: the basename the COG is uploaded under, per run.
-        quantity: the quantity row the style contract resolves this raster by.
-        style_preset: the preset that quantity carries.
+        quantity: the physical field this raster carries.
+        style: the declared style row that draws it.
         noun: what the layer name and the legend call the field.
     """
 
     cog: str
     quantity: str
-    style_preset: str
+    style: dict
     noun: str
 
 
@@ -115,44 +134,17 @@ class SubstanceProduct(NamedTuple):
 #: the dye row: a tracer whose class declared no chemistry of its own IS dye.
 TELEMAC_SUBSTANCE_PRODUCTS: dict[str, SubstanceProduct] = {
     "tracer": SubstanceProduct("telemac_dye_peak.tif", "dye_concentration",
-                               TELEMAC_DYE_STYLE_PRESET, "dye"),
+                               TELEMAC_DYE_STYLE, "dye"),
     "decay": SubstanceProduct("telemac_dye_peak.tif", "dye_concentration",
-                              TELEMAC_DYE_STYLE_PRESET, "dye"),
+                              TELEMAC_DYE_STYLE, "dye"),
     "oil": SubstanceProduct("telemac_oil_tracer_peak.tif",
                             "oil_tracer_concentration",
-                            TELEMAC_DYE_STYLE_PRESET, "oil tracer"),
+                            TELEMAC_DYE_STYLE, "oil tracer"),
     "sediment": SubstanceProduct("telemac_sediment_peak.tif",
                                  "suspended_sediment_concentration",
-                                 TELEMAC_SEDIMENT_CONCENTRATION_STYLE_PRESET,
+                                 TELEMAC_SEDIMENT_CONCENTRATION_STYLE,
                                  "suspended sediment"),
 }
-
-#: Style preset for the GAIA sediment BED-EVOLUTION (deposition) raster. A DISTINCT
-#: diverging key (mirrors the ``diverging_river_seepage`` pattern) so
-#: ``publish_layer._resolve_titiler_style_params`` renders it on a diverging rdbu
-#: ramp centered on 0 (deposition positive / erosion negative), never colliding
-#: with the dye preset. The
-#: layer carries a data-driven ``legend`` so the mm-scale range renders (a fixed
-#: registry range would wash out mm deposition), additive/legend-drives-render.
-TELEMAC_BED_EVOLUTION_STYLE_PRESET: str = "diverging_bed_evolution"
-
-#: Style preset for the MAX FREE-SURFACE ELEVATION (WSE) raster -- the validation
-#: deliverable for the dam-break / river archetype (Malpasset). A DISTINCT
-#: continuous key so it renders on a sequential ramp (WSE decreases down-valley)
-#: and never collides with the dye/sediment presets. The layer carries a
-#: data-driven ``legend`` so the real WSE range renders (additive /
-#: legend-drives-render, same as the other TELEMAC layers).
-TELEMAC_WSE_STYLE_PRESET: str = "continuous_water_surface_elevation"
-
-#: Style preset for the DISSOLVED-OXYGEN (DO) field raster from a WAQTEL O2 sag
-#: run. A DISTINCT continuous key (never the dye/WSE/sediment presets) so
-#: ``publish_layer._resolve_titiler_style_params`` renders it on a REVERSED
-#: sequential ramp (low DO = the hazard = the hot end), never colliding with
-#: another engine's preset. The layer carries
-#: a data-driven ``legend`` so the mg/L range renders (additive /
-#: legend-drives-render, same as the other TELEMAC layers).
-TELEMAC_DO_STYLE_PRESET: str = "continuous_dissolved_oxygen"
-
 
 class TelemacWseLayerURI(LayerURI):
     """A ``LayerURI`` for a TELEMAC-2D peak (max-over-time) FREE-SURFACE raster.
@@ -192,8 +184,8 @@ class TelemacWseLayerURI(LayerURI):
             identity, no reprojection distortion); ``fallback_note`` records the
             local-frame caveat.
 
-    ``layer_type`` is ``"raster"`` (the peak-WSE COG). The raster uses the
-    ``continuous_water_surface_elevation`` style preset + a data-driven ``legend``.
+    ``layer_type`` is ``"raster"`` (the peak-WSE COG), drawn by
+    ``TELEMAC_WSE_STYLE``.
     """
 
     wse_max_m: float
@@ -316,7 +308,7 @@ class TelemacDoLayerURI(LayerURI):
 
     ``layer_type`` is ``"raster"`` (the steady-state DO COG); the time animation
     plays from the SELAFIN mesh sibling. The raster uses the
-    ``continuous_dissolved_oxygen`` style preset + a data-driven ``legend``.
+    ``TELEMAC_DO_STYLE`` row.
     """
 
     do_min_mgl: float = Field(ge=0.0)
@@ -350,7 +342,7 @@ class TelemacSedimentLayerURI(LayerURI):
     The SECOND COG a GAIA sediment run emits beside the peak suspended-sediment
     concentration ribbon: the final CUMUL BED EVOL field (deposition, in mm) read
     from ``gaia_river.slf`` and rendered on the diverging
-    ``TELEMAC_BED_EVOLUTION_STYLE_PRESET`` ramp. Extends ``LayerURI`` field-for-
+    ``TELEMAC_BED_EVOLUTION_STYLE`` ramp. Extends ``LayerURI`` field-for-
     field (so it still maps onto ``map-command load-layer``) and adds the sediment
     scalars the agent cites rather than invents (Invariant 1):
 
@@ -368,7 +360,7 @@ class TelemacSedimentLayerURI(LayerURI):
 
     ``layer_type`` is ``"raster"`` (the deposition COG); the time animation plays
     from the ``gaia_river.slf`` SELAFIN mesh sibling that ``export_case_to_qgis``
-    discovers via ``TELEMAC_BED_EVOLUTION_STYLE_PRESET``.
+    discovers via ``TELEMAC_BED_EVOLUTION_STYLE``.
     """
 
     deposited_mass_kg: float | None = Field(default=None, ge=0.0)
@@ -419,7 +411,7 @@ class TelemacWaveLayerURI(LayerURI):
 
     ``layer_type`` is ``"raster"`` (the Hs COG); the time evolution plays from the
     TOMAWAC result SELAFIN mesh sibling that ``export_case_to_qgis`` discovers via
-    ``TELEMAC_WAVE_STYLE_PRESET``. The raster carries a data-driven ``legend``.
+    ``TELEMAC_WAVE_STYLE``. The raster carries a data-driven ``legend``.
     """
 
     hs_max_m: float = Field(ge=0.0)
@@ -469,7 +461,7 @@ class ArtemisAgitationLayerURI(LayerURI):
 
     ``layer_type`` is ``"raster"`` (the Kd COG); the phase field plays from the
     ARTEMIS result SELAFIN mesh sibling discovered via
-    ``TELEMAC_AGITATION_STYLE_PRESET``. The raster carries a data-driven ``legend``.
+    ``TELEMAC_AGITATION_STYLE``. The raster carries a data-driven ``legend``.
     """
 
     kd_max: float = Field(ge=0.0)
@@ -532,7 +524,7 @@ class Telemac3dLayerURI(LayerURI):
 
     ``layer_type`` is ``"raster"`` (the surface-field COG); the full-column
     evolution plays from the TELEMAC-3D result SELAFIN mesh sibling that
-    ``export_case_to_qgis`` discovers via ``TELEMAC3D_STRATIFICATION_STYLE_PRESET``.
+    ``export_case_to_qgis`` discovers via ``TELEMAC3D_STRATIFICATION_STYLE``.
     The raster carries a data-driven ``legend``.
     """
 
@@ -608,7 +600,7 @@ class TelemacCoastalLayerURI(LayerURI):
 
     ``layer_type`` is ``"raster"`` on both; the rising-tide animation plays from
     the coastal result SELAFIN mesh sibling that ``export_case_to_qgis`` discovers
-    via ``TELEMAC_COASTAL_DEPTH_STYLE_PRESET``. Both rasters carry a data-driven
+    via ``TELEMAC_COASTAL_DEPTH_STYLE``. Both rasters carry a data-driven
     ``legend``, each over its OWN range.
     """
 

@@ -80,7 +80,6 @@ def test_layer_uri_maps_field_for_field_onto_load_layer_args() -> None:
         name="Flood depth (m)",
         layer_type="raster",
         uri="gs://trid3nt/runs/01HX/depth.cog.tif",
-        style_preset="flood_depth_blue",
         temporal=TemporalConfig(
             start="2022-09-28T00:00:00Z",
             end="2022-09-30T00:00:00Z",
@@ -92,7 +91,6 @@ def test_layer_uri_maps_field_for_field_onto_load_layer_args() -> None:
     args = LoadLayerArgs(
         layer_id=layer.layer_id,
         wms_url="https://qgis.example.com/wms?MAP=01HX.qgs",
-        style_preset=layer.style_preset,
         temporal=MapTemporal(
             start=layer.temporal.start,
             end=layer.temporal.end,
@@ -100,7 +98,6 @@ def test_layer_uri_maps_field_for_field_onto_load_layer_args() -> None:
         ),
     )
     assert args.layer_id == layer.layer_id
-    assert args.style_preset == layer.style_preset
     assert args.temporal is not None
     assert args.temporal.step_seconds == layer.temporal.step_seconds
 
@@ -141,7 +138,7 @@ def test_legend_key_constructs_categorical_with_classes() -> None:
     """A categorical legend: discrete class swatches (NLCD / damage states),
     optionally driven by a VECTOR feature property via ``value_field``."""
     legend = LegendKey(
-        kind="categorical",
+        kind="classed",
         value_field="ds_mean",  # the GeoJSON property the choropleth colors by
         classes=[
             LegendClass(value=0, color="#1a9641", label="None"),
@@ -150,14 +147,14 @@ def test_legend_key_constructs_categorical_with_classes() -> None:
         ],
         units=None,
     )
-    assert legend.kind == "categorical"
+    assert legend.kind == "classed"
     assert legend.value_field == "ds_mean"
     assert legend.classes is not None and len(legend.classes) == 3
     # both class-addressing forms are accepted (single value OR a numeric bin)
     assert legend.classes[0].value == 0
     assert legend.classes[1].value_min == 0.5 and legend.classes[1].value_max == 1.5
     assert legend.classes[2].value == "D4"
-    # categorical keys carry no continuous range
+    # a classed key carries no continuous range
     assert legend.colormap is None and legend.vmin is None and legend.vmax is None
 
 
@@ -169,7 +166,6 @@ def test_layer_uri_carries_legend_and_round_trips() -> None:
         name="Flood depth (m)",
         layer_type="raster",
         uri="s3://trid3nt/runs/01HX/depth.cog.tif",
-        style_preset="flood_depth_blue",
         role="primary",
         units="meters",
         legend=LegendKey(
@@ -191,13 +187,12 @@ def test_layer_uri_carries_legend_and_round_trips() -> None:
 
 def test_layer_uri_legend_is_optional_backward_compat() -> None:
     """Additive + optional: a ``LayerURI`` without a legend is unchanged
-    (legend defaults to None => legacy ``style_preset`` rendering)."""
+    (legend defaults to None: the layer reaches the map unstyled)."""
     layer = LayerURI(
         layer_id="legacy",
         name="Legacy raster",
         layer_type="raster",
         uri="s3://trid3nt/runs/legacy/depth.cog.tif",
-        style_preset="flood_depth_blue",
     )
     assert layer.legend is None
     dumped = layer.model_dump(mode="json")
@@ -214,10 +209,9 @@ def test_result_layer_mirrors_legend_and_round_trips() -> None:
         name="Damage state",
         layer_type="vector",
         uri="s3://trid3nt/runs/01HX/damage.fgb",
-        style_preset="pelicun_damage_state",
         role="primary",
         legend=LegendKey(
-            kind="categorical",
+            kind="classed",
             value_field="ds_mean",
             classes=[
                 LegendClass(value=0, color="#1a9641", label="None"),

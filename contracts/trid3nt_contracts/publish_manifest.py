@@ -8,7 +8,7 @@ SFINCS raster postprocess offload (Phase 4) lifts the heavy NetCDF/.mat -> COG
 conversion into the Batch worker; the worker now writes display-ready
 overview-bearing COGs + this manifest, and the agent collapses to: parse this
 manifest, build the TiTiler tile URL from each bare ``cog_uri`` + the agent-owned
-style registry (keyed on ``style_preset``), register + persist.
+style resolution, register + persist.
 
 Design notes (deliberate divergence from ``GraceModel``):
 
@@ -80,11 +80,10 @@ class PublishManifestBandStats(_ReaderModel):
 class PublishManifestLayer(_ReaderModel):
     """One ``layers[]`` entry - a single display-ready COG the agent registers.
 
-    ``cog_uri`` is a BARE ``s3://`` key (the worker NEVER embeds a tile URL - the
-    agent re-templates it onto ``TRID3NT_TILE_SERVER_BASE``). ``style_preset`` is a
-    KEY into the agent-owned ``_TITILER_STYLE_REGISTRY`` (the preset -> rescale +
-    colormap table stays agent-side as the single source of truth). ``name`` is
-    the EXACT grouping token ("Peak flood depth" and the wave equivalents).
+    ``cog_uri`` is a BARE ``s3://`` key. ``style`` is the declared style row for
+    the layer (kind plus parameters); a manifest that carries none takes the
+    kind's bare default. ``name`` is the EXACT grouping token ("Peak flood
+    depth" and the wave equivalents).
 
     ``frame_no`` is the LEGACY temporal marker: the docker raster workers write
     only non-frame entries now (their frames ride ``outputs.json``), so a
@@ -95,7 +94,7 @@ class PublishManifestLayer(_ReaderModel):
     name: str
     layer_type: str = "raster"
     role: str = "primary"
-    style_preset: str
+    style: dict[str, Any] | None = None
     units: str = ""
     cog_uri: str
     frame_no: int | None = None

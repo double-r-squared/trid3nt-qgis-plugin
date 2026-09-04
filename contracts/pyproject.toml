@@ -29,7 +29,7 @@ where = ["."]
 include = ["trid3nt_contracts*"]
 
 [tool.setuptools.package-data]
-trid3nt_contracts = ["py.typed", "styles.yaml"]
+trid3nt_contracts = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

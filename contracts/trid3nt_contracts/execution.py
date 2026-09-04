@@ -13,7 +13,7 @@ Invariants this module is responsible for:
   (``workflows_execution_id``) so ``agent`` calls Workflows ``terminate``
   without string-parsing. There is one handle type; no per-backend variants.
 - **``LayerURI`` aligns field-for-field with ``map-command load-layer`` args**
-  (``layer_id``, ``style_preset``, optional ``temporal``) and with
+  (``layer_id``, ``style``, optional ``temporal``) and with
   ``ResultLayer`` so postprocess output flows to the map without translation.
   Output formats are fixed: rasters COG, vectors FlatGeobuf/GeoParquet.
 """
@@ -85,74 +85,48 @@ class LegendClass(GraceModel):
 
 
 class LegendKey(GraceModel):
-    """The DATA-DRIVEN render key for a layer -- the colormap/legend the
-    frontend draws and the raster/vector colors are driven by.
+    """A layer's RESOLVED style: what the reader is looking at, and its scale.
 
-    The principle (NATE): the gradient/key comes FROM THE DATA at fetch time,
-    so it MEANS something rather than being a retroactive hardcoded guess. The
-    producer (``publish_layer``) emits a ``LegendKey`` from values it already
-    computed; the frontend renders ANY key generically, so a new tool that
-    emits a ``LegendKey`` needs ZERO web changes.
+    A preset is four renderer shapes parameterised by what the data is; this is
+    one of them resolved against a particular layer. The colours and the range
+    are the SAME ones the render uses, because both come from this one
+    resolution - there is no second range to drift.
 
-    Two split of responsibility for the range:
-
-    - The colormap CHOICE stays the semantic per-variable decision (drought
-      ramps tan->dark-red, temperature ``rdylbu``, seismic PGA ``reds``, ...).
-    - The RANGE (``vmin`` / ``vmax``) is the REAL data range by default -- the
-      p2/p98 percentile read ``publish_layer`` already computes -- UNLESS a
-      variable has a canonical fixed scale (seismic PGA 0-1, temperature K),
-      which a tool/preset may pin. The legend and the raster render MUST agree
-      on the same range, so the legacy hardcoded ``"0,3"``-style guesses are
-      retired as the source of truth (kept only as the canonical-fixed-scale
-      override or the no-data fallback).
-
-    Additive + optional everywhere (``legend=None`` => legacy ``style_preset``
-    rendering: the existing preset + URL-rescale + preset-fallback path stays
-    as the fallback, so legacy layers render exactly as before).
+    ``qml`` is the resolved preset as QGIS's own style document, which is what
+    the map loads. ``None`` for a layer that is already painted (an RGB(A)
+    composite, a COG carrying its own colour table): nothing may override the
+    colours such a file already has.
 
     Fields:
 
     ``kind``
-        ``"continuous"`` for rasters + graduated vectors (a ramp over a numeric
-        range); ``"categorical"`` for discrete classes (NLCD, drought, damage
-        states).
-    ``colormap`` (continuous)
-        Either a named ramp the frontend resolves to stops (e.g. ``"reds"`` /
-        ``"viridis"``) OR explicit stops as ``[[stop_0to1, "#rrggbb"], ...]``
-        (each stop a float in ``[0, 1]``). ``None`` for purely categorical
-        keys that carry ``classes`` instead.
-    ``vmin`` / ``vmax`` (continuous)
-        The REAL data range the colormap spans (the percentile read by
-        default; a canonical fixed scale when a variable pins one). ``None``
-        when unknown / not applicable.
-    ``classes`` (categorical)
-        The ordered list of ``LegendClass`` swatches. ``None`` for continuous
-        keys.
+        Which preset shape drew it: ``continuous`` (a ramp over a range),
+        ``classed`` (declared breaks or an embedded class table),
+        ``reference`` (drawn, not measured), ``mesh`` (an MDAL dataset group).
+    ``colormap``
+        The ramp name, or explicit stops as ``[[stop_0to1, "#rrggbb"], ...]``.
+    ``vmin`` / ``vmax``
+        The one range the layer is read on. ``None`` for a reference layer.
+    ``classes``
+        The ordered class swatches, when the shape is ``classed``.
     ``value_field``
-        For VECTOR layers: the GeoJSON feature property the color is driven by
-        (e.g. ``"ds_mean"`` on a Pelicun choropleth). ``None`` for rasters
-        (the raster band IS the value).
-    ``units``
-        The data units the legend annotates (e.g. ``"meters"``, ``"mg/L"``).
-        ``None`` for unitless / categorical.
-    ``label``
-        Optional human-readable legend title (e.g. ``"Flood depth"``).
+        For VECTOR layers: the feature property the colour is driven by.
+    ``units`` / ``label``
+        What the quantity is measured in and what the legend calls it.
     """
 
-    kind: Literal["continuous", "categorical"]
+    kind: Literal["continuous", "classed", "reference", "mesh"]
 
-    # continuous (rasters + graduated vectors)
     colormap: str | list[tuple[float, str]] | None = None
     vmin: float | None = None
     vmax: float | None = None
-
-    # categorical (NLCD classes, drought D0-D4, damage states)
     classes: list[LegendClass] | None = None
-
-    # both
-    value_field: str | None = None  # VECTOR: the GeoJSON property the color is driven by
+    value_field: str | None = None  # VECTOR: the feature property the colour follows
     units: str | None = None
     label: str | None = None
+    #: The resolved preset as a QGIS ``.qml`` document - what the map loads.
+    #: ``None`` for a layer whose file already carries its colours.
+    qml: str | None = None
 
 
 class ModelSetup(GraceModel):
@@ -247,11 +221,10 @@ class LayerURI(GraceModel):
     flies to the layer's geographic extent. Format: ``(min_lon, min_lat,
     max_lon, max_lat)`` in EPSG:4326.
 
-    ``legend`` is the DATA-DRIVEN render key (see ``LegendKey``): the colormap
-    is the semantic per-variable choice, the range is the REAL data range the
-    producer already computed. Additive + optional -- ``legend=None`` means
-    legacy ``style_preset`` rendering (the existing preset + URL-rescale +
-    preset-fallback path), so layers without a legend render exactly as before.
+    ``style`` is the DECLARED style row (which of the four preset shapes draws
+    this layer and the parameters that shape needs); ``legend`` is that row
+    RESOLVED against the layer, carrying the concrete range and the .qml the
+    map loads. The producer declares, the publish path resolves.
     """
 
     layer_id: str  # stable id; flows into map-command load-layer args
@@ -262,12 +235,14 @@ class LayerURI(GraceModel):
     # (retroactively) the SFINCS quadtree map are the mesh producers.
     layer_type: Literal["raster", "vector", "mesh"]
     uri: str  # gs://... COG / FlatGeobuf / GeoParquet / UGRID netCDF (mesh)
-    style_preset: str  # references the QML preset library
+    #: The DECLARED style row - ``{kind, ramp, units, label, scale, classes,
+    #: geometry, color}``. ``None`` = the kind's bare default.
+    style: dict[str, Any] | None = None
     temporal: TemporalConfig | None = None  # present iff time-varying
     role: Literal["primary", "context", "input"] = "primary"
     units: str | None = None
     bbox: tuple[float, float, float, float] | None = None  # (min_lon, min_lat, max_lon, max_lat); triggers zoom-to
-    legend: LegendKey | None = None  # data-driven render key; None => legacy style_preset rendering
+    legend: LegendKey | None = None  # the resolved style; None until published
     # Cross-source fallback honesty marker (2026-07-13, DEM 3DEP->GLO-30
     # ladder): set ONLY when a tool substituted a fallback data source for the
     # requested/default primary (e.g. ``fetch_dem`` with USGS 3DEP down returns

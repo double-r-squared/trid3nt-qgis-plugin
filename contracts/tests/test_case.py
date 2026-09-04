@@ -165,7 +165,6 @@ def test_case_chat_message_roundtrip() -> None:
                 "args": {
                     "layer_id": "run-01HX-flood-depth",
                     "wms_url": "https://qgis.example.com/wms?MAP=01HX.qgs",
-                    "style_preset": "flood_depth_blue",
                 },
             },
             {
@@ -238,7 +237,6 @@ def test_case_session_state_roundtrip() -> None:
                 "name": "Flood depth",
                 "layer_type": "raster",
                 "uri": "gs://trid3nt/runs/01HX/depth.cog.tif",
-                "style_preset": "flood_depth_blue",
                 "visible": True,
                 "role": "primary",
                 "temporal": False,

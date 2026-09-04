@@ -8,10 +8,6 @@
           "title": "Layer Id",
           "type": "string"
         },
-        "style_preset": {
-          "title": "Style Preset",
-          "type": "string"
-        },
         "wms_url": {
           "title": "Wms Url",
           "type": "string"
@@ -19,8 +15,7 @@
       },
       "required": [
         "layer_id",
-        "wms_url",
-        "style_preset"
+        "wms_url"
       ],
       "title": "ReferenceLayer",
       "type": "object"
