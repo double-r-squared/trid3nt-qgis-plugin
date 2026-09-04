@@ -766,20 +766,6 @@ class TestReplaceFromLayers:
         assert out["dem_uri"] == "case-a-dem"
         assert out["dem_uri"] != DEM_COG
 
-    def test_seed_from_layers_is_additive_not_a_replace(self) -> None:
-        """Contrasts with replace_from_layers — documents WHY case-switch call
-        sites must use replace, not the plain additive seed."""
-        reg = make_registry("sess-additive")
-        reg.record("case-a-dem", uri=DEM_COG, tool_name="fetch_dem")
-        reg.seed_from_layers(
-            [{"layer_id": NSI_LAYER_ID, "name": "NSI", "layer_type": "vector",
-              "uri": REAL_NSI_FGB}]
-        )
-        # Additive: BOTH handles resolve (the leak replace_from_layers exists
-        # to prevent).
-        assert set(reg.known_handles()) == {"case-a-dem", NSI_LAYER_ID}
-
-
 class TestDemHintInventoryText:
     """``_inventory_text`` (F32): tool-aware empty-registry suggestion + a
     wider (10, was 5) handle-listing cap."""

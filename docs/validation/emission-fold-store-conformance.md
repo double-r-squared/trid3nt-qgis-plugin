@@ -57,7 +57,8 @@ a second transport a product layer can travel.
 
 ### The 199 legacy `/cog/tiles` uris: MIGRATED, and why
 
-`scripts/migrate_legacy_tile_templates.py --apply` rewrote **199** uris in
+`scripts/migrate_legacy_tile_templates.py --apply` (a one-time script, deleted
+at rung 4 once it had run) rewrote **199** uris in
 `projects.json` and **8** in `sessions.json` to the `s3://` object each template
 already embedded, backing up both files alongside. Verified: `grep -c cog/tiles`
 returns 0 on both, and a spot-checked row reads

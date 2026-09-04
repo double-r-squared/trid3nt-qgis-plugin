@@ -535,19 +535,6 @@ class SessionUriRegistry:
                 announce=False,
             )
 
-    def seed_from_layers(self, layers: Any) -> None:
-        """Seed from persisted Case ``loaded_layers`` (rehydration path).
-
-        ADDITIVE -- merges into whatever this registry already holds. Callers
-        switching the active Case on a connection (case-open / case-switch)
-        must use :meth:`replace_from_layers` instead so a prior Case's
-        handles don't leak into the new Case's inventory/resolution.
-        """
-        try:
-            self._walk(layers, "case-rehydration", depth=0, seen=set())
-        except Exception:  # noqa: BLE001 -- best-effort seam
-            logger.exception("uri_registry[%s]: seed failed", self.session_id)
-
     def clear(self) -> None:
         """Drop every registered handle/URI/pending-announcement.
 
@@ -570,14 +557,11 @@ class SessionUriRegistry:
 
         The registry is keyed by ``session_id``, not by Case -- a session that
         switches Cases (or a fresh connection that opens an existing Case)
-        reuses the SAME ``SessionUriRegistry``. ``seed_from_layers`` alone is
-        additive, so a prior Case's handles/URIs would keep resolving after
-        the switch (a cross-case leak: a handle from Case A could satisfy a
-        Case B tool call, or a stale Case A URI could win a fuzzy match over
-        the correct Case B one). Case-open / case-switch call sites clear
-        first so the registry reflects ONLY the now-active Case's persisted
-        layers, mirroring the emitter's ``reset_loaded_layers`` (replace, not
-        reconcile -- the same rule applied here too).
+        reuses the SAME ``SessionUriRegistry``. A merge would leak across the
+        switch (a handle from Case A could satisfy a Case B tool call, or a
+        stale Case A URI could win a fuzzy match over the correct Case B one),
+        so this REPLACES: the registry reflects ONLY the now-active Case's
+        persisted layers, mirroring the emitter's ``reset_loaded_layers``.
 
         ``short_handles`` is the Case's PERSISTED ``{L<n>: uri}``
         map -- imported BEFORE the layer seed so already-announced handles
@@ -585,7 +569,10 @@ class SessionUriRegistry:
         """
         self.clear()
         self.import_short_handles(short_handles)
-        self.seed_from_layers(layers)
+        try:
+            self._walk(layers, "case-rehydration", depth=0, seen=set())
+        except Exception:  # noqa: BLE001 -- best-effort seam
+            logger.exception("uri_registry[%s]: seed failed", self.session_id)
 
     # ------------------------------------------------------------------ #
     # Announcements (function_response surfacing)
@@ -903,6 +890,7 @@ class SessionUriRegistry:
         return f"Known handles: {lines}."
 
     def known_handles(self) -> list[str]:
+        """The registered handles, minted fuzzy-match records excluded."""
         return [h for h in self._records if not h.startswith("uri:")]
 
 
