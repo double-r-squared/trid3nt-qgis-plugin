@@ -47,6 +47,7 @@ __all__ = [
     "bare_default",
     "fixed_range_reader",
     "from_row",
+    "paints_a_raster",
     "qml",
     "ramp_stops",
     "resolve",
@@ -179,6 +180,17 @@ _BARE: dict[Kind, Preset] = {
 def bare_default(kind: str | None) -> Preset:
     """The kind's own preset, for a declaration that named no parameters."""
     return _BARE.get(str(kind or "continuous").strip().lower(), _BARE["continuous"])
+
+
+def paints_a_raster(preset: Preset) -> bool:
+    """Does this preset draw a RASTER - the only shape with bands to read?
+
+    The resolver's raster probes (the band read, the palette and RGB(A) guards)
+    are facts about a COG's bytes; a vector's features and a mesh's dataset
+    groups have none of them. A ``geometry`` is what makes a classed preset a
+    vector, and a ``mesh`` is never a raster.
+    """
+    return preset.kind in ("continuous", "classed") and preset.geometry is None
 
 
 def _scale_from(doc: Any, fallback: Scale) -> Scale:

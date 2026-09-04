@@ -190,9 +190,9 @@ def entry_style(entry: OutputEntry) -> dict[str, Any]:
     """The style row a solved output derives from the product contract.
 
     The entry's ``kind`` picks the preset shape and its ``quantity`` / ``units``
-    parameterise it. A mesh entry names the dataset group QGIS binds by (the
-    quantity, as the solver wrote it). Nothing here is keyed on a preset name,
-    so nothing here can be mislabelled by one.
+    parameterise it. A mesh entry names the dataset group QGIS binds by - the
+    group the entry declares, else the quantity. Nothing here is keyed on a
+    preset name, so nothing here can be mislabelled by one.
     """
     row: dict[str, Any] = {
         "kind": _KIND_BY_ENTRY.get(entry.kind, "continuous"),
@@ -201,7 +201,15 @@ def entry_style(entry: OutputEntry) -> dict[str, Any]:
     if entry.units:
         row["units"] = entry.units
     if entry.kind == "mesh":
-        row["dataset_group"] = entry.quantity
+        row["dataset_group"] = entry.dataset_group or entry.quantity
+        # A mesh has no band to read, so a range it is to be painted on has to
+        # be DECLARED. The producer states the published max-over-time range
+        # here, which is how the animating canvas ends up on the same scale as
+        # the still - one scale per quantity, across both.
+        bs = entry.band_stats
+        if bs is not None and bs.p2 is not None and bs.p98 is not None:
+            row["scale"] = {"policy": "fixed",
+                            "range": [float(bs.p2), float(bs.p98)]}
     return row
 
 
@@ -286,6 +294,7 @@ def _build_raster_layer(
         layer_type="raster",
         uri=entry.uri,
         style=style,
+        quantity=entry.quantity,
         role=role,  # type: ignore[arg-type]
         units=entry.units or None,
         bbox=entry_bbox or bbox,
@@ -423,6 +432,7 @@ def build_layers_from_outputs(
                 layer_type="vector",
                 uri=entry.uri,
                 style=entry_style(entry),
+                quantity=entry.quantity,
                 role="primary",
                 units=entry.units or None,
                 bbox=entry_bbox or bbox,
@@ -464,6 +474,7 @@ def build_layers_from_outputs(
                 layer_type="mesh",
                 uri=entry.uri,
                 style=entry_style(entry),
+                quantity=entry.quantity,
                 role="context",
                 units=entry.units or None,
                 bbox=entry_bbox,

@@ -165,8 +165,19 @@ def resolve_layer_style(
     percentiles, so the range resolves without downloading the COG. ``None`` is
     returned for a raster that is already painted - an RGB(A) composite, or a
     COG carrying its own band-1 colour table.
+
+    A VECTOR or MESH declaration resolves through this same call and the same
+    ``presets.resolve``: it simply skips the raster probes, which are questions
+    about a COG's bytes that a FlatGeobuf's features and a SELAFIN's dataset
+    groups cannot answer. One seam, four kinds - never a second resolver per
+    layer type.
     """
     preset = presets.from_row(style)
+    if not presets.paints_a_raster(preset):
+        resolved = presets.resolve(preset, override=override, shared=shared)
+        logger.info("publish_layer (style) uri=%s -> %s", layer_uri,
+                    resolved.legend_note())
+        return resolved
     if raster_bytes is None and band_stats is None and presets.needs_run_range(
             preset, override):
         raster_bytes = _read_raster_bytes(layer_uri)
@@ -289,14 +300,16 @@ def legend_for_published_layer(
     The declared row is resolved ONCE here: the concrete range, the ramp and the
     .qml all come out of that one resolution. A raster that is already painted
     returns its own palette's classes (a paletted COG) or ``None`` (an RGB(A)
-    composite, which has no meaningful key).
+    composite, which has no meaningful key). A vector or mesh declaration takes
+    the same route and never touches the object at all.
 
     Fail-open: ``None`` on any error, so a publish is never blocked.
     """
     from trid3nt_contracts.execution import LegendKey
 
     try:
-        if raster_bytes is None and band_stats is None:
+        paints_raster = presets.paints_a_raster(presets.from_row(style))
+        if paints_raster and raster_bytes is None and band_stats is None:
             raster_bytes = _read_raster_bytes(layer_uri)
         resolved = resolve_layer_style(
             style, layer_uri, override=override, shared=shared,
@@ -313,7 +326,8 @@ def legend_for_published_layer(
                 label=preset.label,
                 qml=resolved.qml(),
             )
-        # Already painted: only a paletted raster has a meaningful key.
+        # Already painted (a raster by construction - only the raster arm ever
+        # declines to resolve): only a paletted one has a meaningful key.
         label = (style or {}).get("label")
         if raster_bytes is None:
             raster_bytes = _read_raster_bytes(layer_uri)

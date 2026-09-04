@@ -145,3 +145,47 @@ def test_missing_manifest_is_a_noop():
 
     # No outputs.json object exists for this run -> None (byte-identical no-op).
     assert read_outputs_manifest(_Result()) is None
+
+
+# --------------------------------------------------------------------------- #
+# The mesh entry: one group, one scale
+# --------------------------------------------------------------------------- #
+def test_a_mesh_entry_paints_the_group_it_declares_on_the_published_range():
+    """A results mesh carries every variable the solve wrote, so the quantity it
+    is filed under is not the field a reader is meant to see - and it has no
+    band to read a range off, so both are DECLARED.
+
+    The range declared is the published max-over-time one, which is what puts
+    the animating canvas and the still on a single scale.
+    """
+    from trid3nt_server.emission.outputs_seam import entry_style
+
+    manifest = _manifest([
+        build_entry(kind="mesh", quantity="model_results",
+                    name="Model results (time series): watershed",
+                    uri="s3://b/%s/r2d_rog.slf" % RID, units="m",
+                    crs_authid="EPSG:32617", dataset_group="WATER DEPTH",
+                    band_stats={"p2": 0.0, "p98": 9.9493}),
+    ])
+    entry = manifest.entries[0]
+    row = entry_style(entry)
+    assert row["kind"] == "mesh"
+    assert row["dataset_group"] == "WATER DEPTH"
+    assert row["scale"] == {"policy": "fixed", "range": [0.0, 9.9493]}
+
+    layers = build_layers_from_outputs(manifest, run_id=RID).layers
+    assert [l.quantity for l in layers] == ["model_results"]
+
+
+def test_a_mesh_entry_without_a_declared_group_falls_back_to_its_quantity():
+    """The quantity stands in when nothing names a group - a producer that
+    declares neither gets the reader's own default rather than a wrong bind."""
+    from trid3nt_server.emission.outputs_seam import entry_style
+
+    manifest = _manifest([
+        build_entry(kind="mesh", quantity="water_depth", name="Mesh",
+                    uri="s3://b/%s/m.slf" % RID),
+    ])
+    row = entry_style(manifest.entries[0])
+    assert row["dataset_group"] == "water_depth"
+    assert "scale" not in row

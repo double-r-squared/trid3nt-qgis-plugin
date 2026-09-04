@@ -603,6 +603,18 @@
           "default": null,
           "title": "Opacity"
         },
+        "quantity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quantity"
+        },
         "reference_time": {
           "anyOf": [
             {

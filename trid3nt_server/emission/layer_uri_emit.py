@@ -167,6 +167,11 @@ def emit_layer_uri(
     layer's data; they are stamped here so a re-emitted layer never loses them
     (see :func:`stamp_fallbacks`).
 
+    A VECTOR or MESH layer's declared row is resolved here (see
+    :func:`_resolve_non_raster_legend`), because this is the seam every
+    client-bound layer of every kind crosses. A raster's row was already
+    resolved by ``publish_layer`` against its own bytes.
+
     Guardrail:
         * Renderable RASTER carrying a genuinely un-renderable uri (``gs://``,
           ``file://`` local paths the plugin cannot reach, or EMPTY) -> DROP
@@ -200,7 +205,48 @@ def emit_layer_uri(
         )
         return None
 
-    return stamp_fallbacks(layer, fallbacks)
+    return stamp_fallbacks(_resolve_non_raster_legend(layer), fallbacks)
+
+
+#: The preset shape a layer TYPE implies when its row names none. A vector is
+#: drawn, not measured; a mesh paints one of its own dataset groups. Neither can
+#: be the raster default, whose resolution reads bands the object does not have.
+_KIND_BY_LAYER_TYPE = {"vector": "reference", "mesh": "mesh"}
+
+
+def _resolve_non_raster_legend(layer: LayerURI) -> LayerURI:
+    """Resolve a VECTOR or MESH layer's declared row into its render key.
+
+    The raster arm resolves inside ``publish_layer`` because it has to read the
+    COG's own band; a vector and a mesh have no band to read, so their rows
+    resolve HERE - through the SAME ``legend_for_published_layer``, so all four
+    kinds share one resolution and one .qml writer. Untouched: a layer that
+    already carries a resolved legend (a composer resolved it while it had the
+    field in hand), every raster, and any row that resolves to a raster shape,
+    which has nothing to say about features or dataset groups.
+    """
+    kind = _KIND_BY_LAYER_TYPE.get(layer.layer_type)
+    if kind is None or layer.legend is not None:
+        return layer
+    row = {**(layer.style or {})}
+    row.setdefault("kind", kind)
+    try:
+        from .presets import from_row, paints_a_raster
+        from .publish import legend_for_published_layer
+
+        if paints_a_raster(from_row(row)):
+            return layer
+        legend = legend_for_published_layer(
+            row, layer.uri or "", units=layer.units)
+    except Exception as exc:  # noqa: BLE001 - a style never blocks an emit
+        logger.warning(
+            "layer_uri_emit: style resolution skipped for layer_id=%s (%s: %s); "
+            "the layer reaches the map on QGIS's own default rendering.",
+            layer.layer_id, type(exc).__name__, exc)
+        return layer
+    if legend is None:
+        return layer
+    return layer.model_copy(update={"legend": legend})
 
 
 async def publish_input_layer(

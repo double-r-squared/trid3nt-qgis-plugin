@@ -77,6 +77,7 @@ def build_entry(
     band_stats: dict[str, Any] | None = None,
     crs_authid: str | None = None,
     reference_time: str | None = None,
+    dataset_group: str | None = None,
 ) -> dict[str, Any]:
     """Build ONE flat manifest entry dict (``{kind, quantity, name, uri, t?,
     units?}`` plus the OPTIONAL render-hint fields ``bbox?`` / ``band_stats?`` /
@@ -111,6 +112,12 @@ def build_entry(
     record, so a temporal layer built from one reads its first step as 1900
     unless the run states when it began. Like ``crs_authid`` it is per-run, so it
     rides the entry; absent for raster/vector entries.
+
+    ``dataset_group`` is the ONE group a ``kind="mesh"`` entry's preset paints,
+    spelled the way the mesh format's own reader reports it. A results mesh
+    carries every variable the solve wrote, so the quantity it is FILED under
+    ("the model results") is not the field a reader is meant to see; this names
+    that field. Absent, the quantity stands in.
     """
     if kind not in OUTPUT_KINDS:
         raise ValueError(
@@ -140,6 +147,8 @@ def build_entry(
         entry["crs_authid"] = str(crs_authid)
     if reference_time:
         entry["reference_time"] = str(reference_time)
+    if dataset_group:
+        entry["dataset_group"] = str(dataset_group)
     return entry
 
 
@@ -238,6 +247,8 @@ class OutputEntry(_ReaderModel):
     plugin's ``QgsMeshLayer.setCrs``. ``reference_time`` is its temporal twin: the
     ISO-8601 UTC instant the mesh's seconds are counted from, threaded onto the
     mesh ``LayerURI`` so the scrubber reads the run's own clock instead of 1900.
+    ``dataset_group`` names the ONE group a mesh entry's preset paints, in the
+    mesh reader's own spelling; absent, the quantity stands in.
     Tolerant-read: an old producer that omits any of them is byte-unchanged.
     """
 
@@ -251,6 +262,7 @@ class OutputEntry(_ReaderModel):
     band_stats: OutputBandStats | None = None
     crs_authid: str | None = None
     reference_time: str | None = None
+    dataset_group: str | None = None
 
 
 class OutputsManifest(_ReaderModel):

@@ -85,23 +85,33 @@ def test_raster_http_url_passes_identity() -> None:
 def test_vector_gs_uri_passes_untouched_job0175() -> None:
     """A vector LayerURI carrying gs:// is the inline-GeoJSON path (job-0175):
     the emitter reads the uri server-side and ships inline GeoJSON; the browser
-    never fetches gs://. The seam MUST NOT break this — it passes untouched."""
-    layer = _layer("vector", "gs://bucket/alerts.fgb")
-    out = emit_layer_uri(layer)
-    assert out is layer
+    never fetches gs://. The seam MUST NOT break this -- the uri is untouched."""
+    out = emit_layer_uri(_layer("vector", "gs://bucket/alerts.fgb"))
+    assert out is not None
     assert out.uri == "gs://bucket/alerts.fgb"
 
 
 def test_vector_s3_uri_passes_untouched() -> None:
     """A vector LayerURI carrying s3:// is the same inline-GeoJSON path -- the
-    emitter reads the uri server-side; the seam passes it untouched."""
-    layer = _layer("vector", "s3://bucket/runs/r1/alerts.fgb")
-    assert emit_layer_uri(layer) is layer
+    emitter reads the uri server-side; the seam passes the uri untouched."""
+    out = emit_layer_uri(_layer("vector", "s3://bucket/runs/r1/alerts.fgb"))
+    assert out is not None
+    assert out.uri == "s3://bucket/runs/r1/alerts.fgb"
 
 
 def test_vector_https_uri_passes_identity() -> None:
-    layer = _layer("vector", "https://host/alerts.geojson")
-    assert emit_layer_uri(layer) is layer
+    out = emit_layer_uri(_layer("vector", "https://host/alerts.geojson"))
+    assert out is not None
+    assert out.uri == "https://host/alerts.geojson"
+
+
+def test_a_vector_declaring_no_row_takes_its_kinds_default_not_the_rasters() -> None:
+    """The bare default is per KIND, and a vector's kind is not a raster's: a
+    row that named nothing must never resolve into a band read of a file that
+    has no bands."""
+    out = emit_layer_uri(_layer("vector", "s3://bucket/runs/r1/alerts.fgb"))
+    assert out.legend is not None
+    assert out.legend.kind == "reference"
 
 
 def test_vsigs_and_local_raster_pass_through() -> None:

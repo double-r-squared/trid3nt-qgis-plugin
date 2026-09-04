@@ -238,6 +238,11 @@ class LayerURI(GraceModel):
     #: The DECLARED style row - ``{kind, ramp, units, label, scale, classes,
     #: geometry, color}``. ``None`` = the kind's bare default.
     style: dict[str, Any] | None = None
+    #: The PHYSICAL QUANTITY this layer carries, as its producer names it. A
+    #: title is prose and may be rewritten; the quantity is the layer's
+    #: identity, and it is what a still, a frame and an animation of one field
+    #: are held to a single scale by.
+    quantity: str | None = None
     temporal: TemporalConfig | None = None  # present iff time-varying
     role: Literal["primary", "context", "input"] = "primary"
     units: str | None = None

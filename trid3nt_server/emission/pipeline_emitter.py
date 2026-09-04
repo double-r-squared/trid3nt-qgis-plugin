@@ -1905,6 +1905,10 @@ class PipelineEmitter:
             role=layer.role,
             temporal=layer.valid_from is not None,
             legend=_legend,
+            # The quantity travels with the layer: a title is prose a producer
+            # may rewrite, and matching one field's still to its animation by
+            # prose is how two scales for one quantity get shipped.
+            quantity=getattr(layer, "quantity", None),
             # Mesh CRS: carry the LayerURI's crs_authid onto the WS
             # row so the plugin's _add_mesh can setCrs() an MDAL mesh whose
             # native crs() is empty. None for raster/vector (byte-for-byte

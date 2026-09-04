@@ -153,6 +153,12 @@ class ProjectLayerSummary(GraceModel):
 
     legend: LegendKey | None = None  # mirrored from LayerURI.legend
 
+    # --- The physical quantity; mirrored from LayerURI.quantity
+    # A layer's identity, as its producer names it - what a still, a frame and
+    # an animation of ONE field are matched by when they are held to one scale.
+    # ``None`` for a layer whose producer declared no quantity.
+    quantity: str | None = None
+
 
 class ProjectDocument(DocModel):
     """``projects`` (D.2): metadata index over .qgs files in GCS."""

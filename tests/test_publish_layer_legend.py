@@ -297,3 +297,81 @@ def test_publish_paletted_raster_stashes_categorical_legend(
     assert legend is not None
     assert legend.kind == "classed"
     assert {c.value for c in legend.classes} == {11, 21, 41, 81, 90}
+
+
+# --------------------------------------------------------------------------- #
+# the vector + mesh arms of the SAME resolution
+# --------------------------------------------------------------------------- #
+
+
+def test_a_vector_row_resolves_through_the_same_seam_without_reading_the_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A FlatGeobuf has no band, so the arm that reads one must not run.
+
+    The resolution is the same call, the writer is the same writer, and what
+    comes back is the symbol document QGIS loads onto a line layer.
+    """
+    def _never(uri: str) -> bytes:
+        raise AssertionError(f"a vector must not be read as a raster: {uri}")
+
+    monkeypatch.setattr(MOD, "_read_raster_bytes", _never)
+    legend = legend_for_published_layer(
+        {"kind": "reference", "geometry": "line", "color": "#1f78b4",
+         "label": "River geometry"},
+        "s3://b/rivers.fgb")
+    assert legend is not None
+    assert legend.kind == "reference"
+    assert legend.label == "River geometry"
+    assert '<renderer-v2 type="singleSymbol"' in legend.qml
+    assert 'class="SimpleLine"' in legend.qml
+
+
+def test_a_mesh_row_resolves_bound_to_the_group_it_declares(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A mesh preset paints ONE dataset group, and the reader binds it BY NAME,
+    so the declared group has to travel INSIDE the document."""
+    def _never(uri: str) -> bytes:
+        raise AssertionError(f"a mesh must not be read as a raster: {uri}")
+
+    monkeypatch.setattr(MOD, "_read_raster_bytes", _never)
+    legend = legend_for_published_layer(
+        {"kind": "mesh", "ramp": "ylgnbu", "units": "m",
+         "dataset_group": "WATER DEPTH",
+         "scale": {"policy": "fixed", "range": [0.0, 9.9]}},
+        "s3://b/r2d_rog.slf")
+    assert legend is not None
+    assert legend.kind == "mesh"
+    assert (legend.vmin, legend.vmax) == (0.0, 9.9)
+    assert "<mesh-renderer-settings>" in legend.qml
+    assert 'name="WATER DEPTH"' in legend.qml
+
+
+def test_the_emission_seam_stamps_the_resolved_row_on_a_vector_it_passes() -> None:
+    """The seam every client-bound layer crosses is where a non-raster row is
+    resolved, so a vector reaches the canvas styled without a second seam."""
+    from trid3nt_contracts.execution import LayerURI
+    from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
+
+    layer = LayerURI(
+        layer_id="input-river-1", name="Input: river geometry",
+        layer_type="vector", uri="s3://b/rivers.fgb",
+        style={"kind": "reference", "geometry": "line"})
+    emitted = emit_layer_uri(layer)
+    assert emitted is not None
+    assert emitted.legend is not None
+    assert 'class="SimpleLine"' in emitted.legend.qml
+
+
+def test_the_emission_seam_leaves_a_raster_to_the_publish_that_read_its_bytes() -> None:
+    """A raster's row was already resolved against the COG itself; resolving it
+    again here would be a second read and a second range."""
+    from trid3nt_contracts.execution import LayerURI
+    from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
+
+    layer = LayerURI(
+        layer_id="peak-1", name="Max water depth", layer_type="raster",
+        uri="s3://b/peak.tif", style={"kind": "continuous"})
+    emitted = emit_layer_uri(layer)
+    assert emitted is not None and emitted.legend is None

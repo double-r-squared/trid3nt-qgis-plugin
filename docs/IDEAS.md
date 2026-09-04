@@ -3547,3 +3547,19 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   declarations stay presentation-free); sim outputs derive defaults
   from the product contract's kind+quantity. NATE read the spec:
   the emission wave is GO.
+
+- EMISSION VERIFY RESOLUTIONS (orchestrator under standing law,
+  2026-09-04 - NATE may override): (F1) ONE resolution seam - the
+  emit path grows VECTOR and MESH style arms inside the existing
+  publisher, never a second seam (the one-styling-seam law). (F2)
+  DURABILITY BY RESTRAINT - the declared preset applies at a layer's
+  BIRTH only; on case reopen an existing layer is never re-styled by
+  us; QGIS project persistence (already per-case durable) owns the
+  user's choice. "User choice beats preset" = preset is the birth
+  default. (F3) the animation and the max-over-time still are ONE
+  quantity under the one-scale law (the F5 re-pin precedent: the
+  published range wins); the GIF shares the envelope's range,
+  labeled - early faintness is the honest picture. Also: the two
+  surviving one-line Python style decisions (postprocess wse/strat
+  ramps) migrate into the declared product styling; the dead
+  inferno declaration corrects.
