@@ -177,16 +177,16 @@ def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
     if raw_peak.layer_type != "raster" or not raw_peak.uri.startswith(("gs://", "s3://")):
         return raw_peak.model_copy(update={"fallback_note": honesty, **update})
     layer_id = peak_layer_id(run_id, substance_class)
-    preset = raw_peak.style_preset or _substance_product(substance_class).style_preset
+    style = raw_peak.style or _substance_product(substance_class).style
     try:
         published_uri = publish_layer(
-            layer_uri=raw_peak.uri, layer_id=layer_id, style_preset=preset)
+            layer_uri=raw_peak.uri, layer_id=layer_id, style=style)
     except PublishLayerError as exc:
         logger.warning("telemac: publish_layer FAILED layer_id=%s error_code=%s (%s) "
                        "- returning the unpublished peak.", layer_id, exc.error_code, exc)
         return raw_peak.model_copy(update={"fallback_note": honesty, **update})
     return raw_peak.model_copy(update={
-        "layer_id": layer_id, "uri": published_uri, "style_preset": preset,
+        "layer_id": layer_id, "uri": published_uri, "style": style,
         "fallback_note": honesty, **update})
 
 
@@ -283,7 +283,7 @@ async def _fold_sediment_products(peak: TelemacDyeLayerURI, *, run_id: str,
     try:
         pub_uri = await asyncio.to_thread(
             publish_layer, layer_uri=dep_raw.uri, layer_id=dep_raw.layer_id,
-            style_preset=dep_raw.style_preset)
+            style=dep_raw.style)
         dep_pub = dep_raw.model_copy(update={"uri": pub_uri})
     except PublishLayerError as exc:
         logger.warning("sediment deposition publish failed (%s) - emitting the "
@@ -491,7 +491,7 @@ async def publish_do_products(*, run: dict[str, Any], solve: dict[str, Any],
     The along-reach distance uses the principal-flow-axis proxy (no centerline is
     threaded to the postprocess); the layer's honesty label states it.
     """
-    from trid3nt_contracts.telemac_contracts import TELEMAC_DO_STYLE_PRESET
+    from trid3nt_contracts.telemac_contracts import TELEMAC_DO_STYLE
     from trid3nt_server.emission.pipeline_emitter import current_emitter
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         postprocess_telemac_do,
@@ -530,7 +530,7 @@ async def publish_do_products(*, run: dict[str, Any], solve: dict[str, Any],
         try:
             pub_uri = await asyncio.to_thread(
                 publish_layer, layer_uri=raw.uri, layer_id=raw.layer_id,
-                style_preset=raw.style_preset or TELEMAC_DO_STYLE_PRESET)
+                style=raw.style or TELEMAC_DO_STYLE)
             published = raw.model_copy(update={"uri": pub_uri, **mesh_meta})
         except PublishLayerError as exc:
             logger.warning("do_sag publish_layer failed (%s) - unpublished COG", exc)

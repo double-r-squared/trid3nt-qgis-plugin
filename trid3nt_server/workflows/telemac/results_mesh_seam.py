@@ -29,7 +29,7 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.results_mesh_seam")
 __all__ = ["publish_results_mesh_via_seam"]
 
 #: The generic quantity a native-mesh temporal entry carries (ADR 0283). Resolves
-#: to the ``mesh_grid`` style preset in the seam's quantity->style registry --
+#: to a ``kind="mesh"`` style row naming the run's own dataset group --
 #: consistent across all three TELEMAC legs (the SELAFIN carries every variable, so
 #: the mesh layer is a whole-results animation, not one physical field).
 RESULTS_MESH_QUANTITY: str = "model_results"

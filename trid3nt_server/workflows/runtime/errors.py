@@ -11,7 +11,6 @@ __all__ = [
     "ParamOutOfRangeError",
     "ParamRefLeakedError",
     "PlanValidationError",
-    "RenderSourceMissingError",
     "StepFailedError",
     "SuppliedCoverageError",
     "SuppliedGeometryError",
@@ -81,17 +80,6 @@ class SuppliedGeometryError(DeclarativeError):
     """
 
     error_code = "SUPPLIED_GEOMETRY_MISMATCH"
-
-
-class RenderSourceMissingError(DeclarativeError):
-    """The step a render declares produced NO raster to style.
-
-    The honesty floor, not a styling miss: the render node is auxiliary, but its
-    SOURCE is the primary product, so this one is fatal while a styling failure
-    downstream of a real raster is only a note.
-    """
-
-    error_code = "RENDER_SOURCE_MISSING"
 
 
 class StepFailedError(DeclarativeError):

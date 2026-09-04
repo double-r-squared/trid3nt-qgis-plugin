@@ -33,7 +33,7 @@ from typing import Any
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.telemac_contracts import (
-    TELEMAC_AGITATION_STYLE_PRESET,
+    TELEMAC_AGITATION_STYLE,
     ArtemisAgitationLayerURI,
 )
 
@@ -484,7 +484,7 @@ async def publish_agitation_products(*, run: dict[str, Any],
     raw = layers[0]
 
     published = await publish_product_layer(
-        raw, style_preset=TELEMAC_AGITATION_STYLE_PRESET,
+        raw, style=TELEMAC_AGITATION_STYLE,
         update={
             "kd_sheltered": metrics.get("kd_sheltered"),
             "kd_exposed": metrics.get("kd_exposed"),

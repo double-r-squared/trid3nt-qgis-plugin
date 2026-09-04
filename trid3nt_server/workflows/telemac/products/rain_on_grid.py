@@ -19,7 +19,7 @@ from typing import Any, Mapping
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.telemac_contracts import (
-    TELEMAC_WSE_STYLE_PRESET,
+    TELEMAC_WSE_STYLE,
     TelemacRainOnGridLayerURI,
 )
 
@@ -286,7 +286,7 @@ async def publish_rain_on_grid_products(*, run: dict[str, Any],
     }
     typed = TelemacRainOnGridLayerURI(**raw.model_dump(), **scalars)
     published = await publish_product_layer(
-        typed, style_preset=TELEMAC_WSE_STYLE_PRESET,
+        typed, style=TELEMAC_WSE_STYLE,
         update={
             # The published raster is in the mesh's UTM metres, so the postprocess
             # leaves it without a zoom-to extent; the DOMAIN's own 4326 bounds are

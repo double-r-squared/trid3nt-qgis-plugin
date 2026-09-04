@@ -34,7 +34,6 @@ __all__ = [
     "RunMode",
     "STAGES",
     "Step",
-    "StyleSpec",
     "When",
     "body_rows",
     "declared_reads",
@@ -245,50 +244,6 @@ RunMode = _RunMode()
 
 
 @dataclass(frozen=True, slots=True)
-class StyleSpec:
-    """A declared SPECIALIZATION of how a step's layer is painted.
-
-    Emission is automatic and the style contract already answers "how is this
-    quantity painted" for every product, so this modifier exists only for the ad
-    hoc case the defaults cannot express - a template that knows its own field is
-    read on a log scale, or against a fixed domain range the contract has no row
-    for. Absent means the contract default, which is what nearly every step wants.
-
-    The fields ARE the contract's scale vocabulary (policy / range / transform /
-    clip) plus the two identity fields, so the modifier, a declared param knob and
-    the ``restyle_layer`` tool all speak one schema and later stages override
-    earlier ones field by field.
-    """
-
-    preset: str | None = None
-    colormap: str | None = None
-    policy: str | None = None
-    range: tuple[float, float] | None = None
-    transform: str | None = None
-    clip: tuple[float, float] | None = None
-
-    def __post_init__(self) -> None:
-        if self.policy is not None and self.policy not in ("data", "fixed"):
-            raise PlanValidationError(
-                f".style(policy={self.policy!r}) is not a scale policy "
-                "(data | fixed).")
-        if self.transform is not None and self.transform not in (
-                "linear", "log", "sqrt", "percentile"):
-            raise PlanValidationError(
-                f".style(transform={self.transform!r}) is not a declared transform "
-                "(linear | log | sqrt | percentile).")
-        if self.policy == "fixed" and self.range is None:
-            raise PlanValidationError(
-                ".style(policy='fixed') declares no range; a fixed scale IS its "
-                "range.")
-        if not any((self.preset, self.colormap, self.policy, self.range,
-                    self.transform, self.clip)):
-            raise PlanValidationError(
-                ".style() overrides nothing. Drop it - absence already means the "
-                "style contract's default.")
-
-
-@dataclass(frozen=True, slots=True)
 class ChartSpec:
     """A declared chart: the SPEC is the product; the plugin dock is the renderer.
 
@@ -333,7 +288,6 @@ class Step:
     #: This step runs its OWN input-review gate (a migrated composite does), so the
     #: plan must not declare a second one in front of it - the validator refuses it.
     self_gating: bool = False
-    styles: tuple[StyleSpec, ...] = ()
     charts: tuple[ChartSpec, ...] = ()
     #: Which universal stage this step belongs to (see ``STAGES``). Stamped by the
     #: engine facade's four operations; a step a template declares directly leaves
@@ -368,19 +322,6 @@ class Step:
         """Declare that this step REFINES the current domain for every step after it."""
         return replace(self, rebinds_domain=True)
 
-    def style(self, *, preset: str | None = None, colormap: str | None = None,
-              policy: str | None = None, range: tuple[float, float] | None = None,
-              transform: str | None = None,
-              clip: tuple[float, float] | None = None) -> "Step":
-        """Specialize how this step's layer is painted. Absent = the contract default."""
-        spec = StyleSpec(preset=preset, colormap=colormap, policy=policy,
-                         range=range, transform=transform, clip=clip)
-        if self.styles:
-            raise ModifierIllegalError(
-                "this step already declares a .style(); one step, one style "
-                "override.")
-        return replace(self, styles=(spec,))
-
     def chart(self, name: str, *, builder: Callable[..., Any]) -> "Step":
         """Declare a chart SPEC built from this step's result by ``builder`` itself."""
         return replace(self, charts=self.charts + (ChartSpec(name=name, builder=builder),))
@@ -400,9 +341,6 @@ class Gate(Step):
 
     def overrides_domain(self) -> "Gate":
         raise ModifierIllegalError(".overrides_domain() is illegal on a gate.")
-
-    def style(self, **_kw: Any) -> "Gate":
-        raise ModifierIllegalError(".style() is illegal on a gate - a gate paints nothing.")
 
     def chart(self, *_a: Any, **_kw: Any) -> "Gate":
         raise ModifierIllegalError(".chart() is illegal on a gate.")
@@ -497,8 +435,6 @@ class Plan:
                 bits.append(f"[{guard.label}]")
             if step.rebinds_domain:
                 bits.append("[overrides domain]")
-            for st in step.styles:
-                bits.append(f"[style {st.preset or st.policy or 'override'}]")
             for c in step.charts:
                 bits.append(f"[chart {c.name}]")
             lines.append(f"  {i}. {' '.join(bits)}")

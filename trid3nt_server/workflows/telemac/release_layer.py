@@ -26,7 +26,7 @@ _BBOX_PAD_DEG = 0.002
 
 #: This layer's style token. Vector presets are free descriptive strings (the QML
 #: style registry governs rasters), so it names what the point IS.
-RELEASE_POINT_STYLE_PRESET = "release_point"
+RELEASE_POINT_STYLE = {"kind": "reference", "geometry": "point"}
 
 
 async def publish_release_point(emitter: Any, *, lon: float, lat: float,
@@ -52,7 +52,7 @@ async def publish_release_point(emitter: Any, *, lon: float, lat: float,
             name=f"{label} ({basis}) - {reach_name}",
             layer_type="vector",
             uri=uri,
-            style_preset=RELEASE_POINT_STYLE_PRESET,
+            style=RELEASE_POINT_STYLE,
             role="context",
             bbox=(lon - _BBOX_PAD_DEG, lat - _BBOX_PAD_DEG,
                   lon + _BBOX_PAD_DEG, lat + _BBOX_PAD_DEG),

@@ -41,7 +41,6 @@ from .errors import (
     GateRefusedError,
     LeakScanTruncated,
     ParamRefLeakedError,
-    RenderSourceMissingError,
     StepFailedError,
 )
 from .form import build_param_sheet
@@ -56,7 +55,6 @@ from .plan import (
     Ref,
     RunMode,
     Step,
-    StyleSpec,
     When,
     declared_reads,
 )
@@ -195,7 +193,7 @@ async def interpret(
             try:
                 value = await _run_node(node, env, emitter)
             except Exception as exc:  # noqa: BLE001 - re-raised for the primary result
-                if node.kind == "step" or isinstance(exc, RenderSourceMissingError):
+                if node.kind == "step":
                     _carry_notes(exc, out.notes)
                     raise
                 _note_aux_failure(out, plan.name, node, exc)
@@ -269,7 +267,7 @@ def _note_aux_failure(out: RunResult, plan_name: str, node: PlanNode,
     The primary result already exists; retracting a 27-minute solve because a
     chart builder threw would be the failure-retracts-something anti-pattern.
     """
-    kind = "chart" if node.kind == "chart" else "style"
+    kind = "chart"
     logger.warning("plan %s: %s node %r FAILED (%s); the run's primary result stands",
                    plan_name, kind, node.label, exc, exc_info=True)
     out.notes.append(f"the {kind} {node.label!r} could not be produced: {exc}")
@@ -296,9 +294,6 @@ def _expand_into(nodes: list[PlanNode], declared: tuple[Any, ...],
                                guards=guards))
             continue
         nodes.append(PlanNode(i, node.label, node.runner, "step", node, guards=guards))
-        for spec in node.styles:
-            nodes.append(PlanNode(len(nodes), f"{node.label}.style", node.runner,
-                               "style", node, spec, guards))
         for spec in node.charts:
             nodes.append(PlanNode(len(nodes), f"{node.label}.chart:{spec.name}",
                                spec.builder_path, "chart", node, spec, guards))
@@ -507,9 +502,7 @@ async def _run_node(node: PlanNode, env: _Env, emitter: Any) -> Any:
         if node.kind == "step":
             kwargs = await _bind(dict(node.step.kwargs), env, node.label)
             return await _call_runner(node.runner, kwargs, node.label)
-        if node.kind == "chart":
-            return await _run_chart(node, env)
-        return await _run_style(node, env)
+        return await _run_chart(node, env)
 
 
 async def _call_runner(runner: str, kwargs: dict[str, Any], label: str) -> Any:
@@ -557,43 +550,6 @@ async def _run_chart(node: PlanNode, env: _Env) -> Any:
     env.charts[spec.name] = payload
     await emit_chart_payloads(payload)
     return {"chart": spec.name, "emitted": True}
-
-
-async def _run_style(node: PlanNode, env: _Env) -> Any:
-    """Re-emit a step's layer under its declared style OVERRIDE.
-
-    Emission already happened - the step's own publisher put the layer on the map
-    through the one seam - so this touches the DISPLAY FACE only. NO layer behind
-    the result is the step's defect and says so: a step that declared a style and
-    produced nothing to paint did not do what it claimed.
-    """
-    spec: StyleSpec = node.spec
-    source = env.results.get(node.step.name or node.step.label)
-    uri = getattr(source, "uri", None)
-    layer_id = getattr(source, "layer_id", None)
-    if not uri or not layer_id or not str(uri).startswith(("s3://", "gs://")):
-        raise RenderSourceMissingError(
-            f"step {node.step.label!r} declares a style override but produced no "
-            f"object-store layer to paint (uri={uri!r}, layer_id={layer_id!r}); "
-            "there is no map layer behind this result."
-        )
-    from trid3nt_server.emission.restyle import apply_style
-
-    try:
-        applied = await asyncio.to_thread(
-            apply_style, layer_uri=uri, layer_id=layer_id, preset=spec.preset,
-            colormap=spec.colormap, policy=spec.policy, value_range=spec.range,
-            transform=spec.transform, clip=spec.clip,
-            fallback_preset=getattr(source, "style_preset", None))
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - a styling miss is auxiliary, not the result
-        raise StepFailedError(
-            f"style override on {uri} failed: {exc}",
-            error_code=getattr(exc, "error_code", None) or "RENDER_STYLE_FAILED",
-            step=node.label, cause=exc,
-        ) from exc
-    return {"style": applied.preset, "legend": applied.legend_note()}
 
 
 #: One code for law 9 whether the refusal came from a declared form gate or from

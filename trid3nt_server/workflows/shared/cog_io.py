@@ -60,7 +60,6 @@ __all__ = [
     "upload_cog",
     "RUNS_BUCKET_DEFAULT",
     "NODATA_DEPTH_M",
-    "FLOOD_DEPTH_STYLE_PRESET",
     "_read_crs_from_dataset",
 ]
 
@@ -76,15 +75,9 @@ RUNS_BUCKET_DEFAULT: str = "trid3nt-runs"
 
 #: Minimum depth threshold below which cells are masked to NaN (treated as dry).
 #: 5 cm is the physically meaningful wet-cell threshold -- matches the
-#: ``flooded_cell_count`` reporting convention and the lowest QML colour stop
-#: (``continuous_flood_depth.qml`` alpha=0 at 0.05 m). Shared by every depth COG
-#: writer (SFINCS / GeoClaw / SWMM).
+#: ``flooded_cell_count`` reporting convention. Shared by every depth COG writer
+#: (SFINCS / GeoClaw / SWMM).
 NODATA_DEPTH_M: float = 0.05
-
-#: QML style preset name attached to a postprocessed flood-depth COG. Shared by
-#: the depth-producing engines (SFINCS / SWMM) so the web + QGIS render depth
-#: identically.
-FLOOD_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
 
 
 def _read_crs_from_dataset(ds: Any) -> str:

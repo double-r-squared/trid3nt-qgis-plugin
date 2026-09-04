@@ -22,7 +22,7 @@ from typing import Any
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.telemac_contracts import (
-    TELEMAC3D_STRATIFICATION_STYLE_PRESET,
+    TELEMAC3D_STRATIFICATION_STYLE,
     Telemac3dLayerURI,
 )
 
@@ -266,7 +266,7 @@ async def publish_stratified_products(*, run: dict[str, Any],
     # the returned surface layer rides the dispatch seam onto the canvas.
     if len(layers) > 1 and emitter is not None:
         bottom_pub = await publish_product_layer(
-            layers[1], style_preset=TELEMAC3D_STRATIFICATION_STYLE_PRESET,
+            layers[1], style=TELEMAC3D_STRATIFICATION_STYLE,
             update={"fallback_note": _honesty_note(run)})
         try:
             from trid3nt_server.emission.layer_uri_emit import publish_input_layer
@@ -278,7 +278,7 @@ async def publish_stratified_products(*, run: dict[str, Any],
             logger.warning("telemac3d bottom emit failed: %s", exc)
 
     published = await publish_product_layer(
-        layers[0], style_preset=TELEMAC3D_STRATIFICATION_STYLE_PRESET, update=update)
+        layers[0], style=TELEMAC3D_STRATIFICATION_STYLE, update=update)
     logger.info("telemac3d complete run_id=%s domain=%s mode=%s metric=%.4g "
                 "surface_mean=%s bottom_mean=%s uri=%s", run_id, reach,
                 run["flow_mode"], published.stratification_metric,

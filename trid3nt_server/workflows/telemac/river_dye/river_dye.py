@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from trid3nt_contracts.telemac_contracts import TELEMAC_DYE_STYLE
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
 from trid3nt_server.workflows.runtime import (
@@ -218,14 +219,13 @@ def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     peak_t = getattr(result, "dye_peak_time_s", None)
     if not times or not values or cmax is None or peak_t is None:
         return None
-    from trid3nt_server.emission.styles import preset_units
     from trid3nt_server.tools.processing.charts_common import build_chart_payload
 
     where = params.get("location") or getattr(result, "name", None) or "the reach"
     substance = params.get("substance") or "dye"
-    # The UNITS come from the style contract, so the chart's axis and the layer's
-    # legend cannot disagree about what this field is measured in.
-    units = preset_units("continuous_plume_concentration") or "mg/L"
+    # The layer's own declared units, so the chart's axis and the legend cannot
+    # disagree about what this field is measured in.
+    units = TELEMAC_DYE_STYLE["units"]
     return build_chart_payload(
         vega_lite_spec={
             "mark": {"type": "line", "point": True},

@@ -28,12 +28,12 @@ logger = logging.getLogger("trid3nt_server.workflows.shared.publish_product_laye
 __all__ = ["publish_product_layer"]
 
 
-async def publish_product_layer(raw: Any, *, style_preset: str,
+async def publish_product_layer(raw: Any, *, style: dict,
                                 update: dict[str, Any]) -> Any:
     """Style ``raw``'s COG through ``publish_layer`` and fold ``update`` onto it.
 
     A layer whose ``uri`` is not an object-store URI has nothing to style, so it
-    is only enriched. The layer's OWN ``style_preset`` wins over the caller's
+    is only enriched. The layer's OWN ``style`` row wins over the caller's
     default when the postprocess already chose one.
     """
     from trid3nt_server.emission.publish import (
@@ -46,7 +46,7 @@ async def publish_product_layer(raw: Any, *, style_preset: str,
     try:
         published_uri = await asyncio.to_thread(
             publish_layer, layer_uri=raw.uri, layer_id=raw.layer_id,
-            style_preset=raw.style_preset or style_preset)
+            style=raw.style or style)
     except PublishLayerError as exc:
         logger.warning("publish_layer failed (%s) - the unpublished COG is returned",
                        exc)

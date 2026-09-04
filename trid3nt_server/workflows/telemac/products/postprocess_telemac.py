@@ -41,15 +41,15 @@ from pathlib import Path
 from typing import Any
 
 from trid3nt_contracts.telemac_contracts import (
-    TELEMAC3D_STRATIFICATION_STYLE_PRESET,
-    TELEMAC_AGITATION_STYLE_PRESET,
-    TELEMAC_BED_EVOLUTION_STYLE_PRESET,
-    TELEMAC_COASTAL_DEPTH_STYLE_PRESET,
-    TELEMAC_DO_STYLE_PRESET,
-    TELEMAC_DYE_STYLE_PRESET,
+    TELEMAC3D_STRATIFICATION_STYLE,
+    TELEMAC_AGITATION_STYLE,
+    TELEMAC_BED_EVOLUTION_STYLE,
+    TELEMAC_COASTAL_DEPTH_STYLE,
+    TELEMAC_DO_STYLE,
+    TELEMAC_DYE_STYLE,
     TELEMAC_SUBSTANCE_PRODUCTS,
-    TELEMAC_WAVE_STYLE_PRESET,
-    TELEMAC_WSE_STYLE_PRESET,
+    TELEMAC_WAVE_STYLE,
+    TELEMAC_WSE_STYLE,
     ArtemisAgitationLayerURI,
     Telemac3dLayerURI,
     TelemacCoastalLayerURI,
@@ -59,8 +59,7 @@ from trid3nt_contracts.telemac_contracts import (
     TelemacWaveLayerURI,
     TelemacWseLayerURI,
 )
-from trid3nt_contracts.execution import LegendKey
-
+from trid3nt_server.emission import presets
 from trid3nt_server.workflows.shared import cog_io
 from trid3nt_server.workflows.shared.cog_io import CogIoError
 from trid3nt_server.workflows.shared.cog_io import RUNS_BUCKET_DEFAULT
@@ -77,12 +76,12 @@ __all__ = [
     "postprocess_telemac3d",
     "postprocess_coastal",
     "peak_layer_id",
-    "TELEMAC_WAVE_STYLE_PRESET",
-    "TELEMAC_AGITATION_STYLE_PRESET",
-    "TELEMAC_DYE_STYLE_PRESET",
-    "TELEMAC_BED_EVOLUTION_STYLE_PRESET",
-    "TELEMAC_WSE_STYLE_PRESET",
-    "TELEMAC_DO_STYLE_PRESET",
+    "TELEMAC_WAVE_STYLE",
+    "TELEMAC_AGITATION_STYLE",
+    "TELEMAC_DYE_STYLE",
+    "TELEMAC_BED_EVOLUTION_STYLE",
+    "TELEMAC_WSE_STYLE",
+    "TELEMAC_DO_STYLE",
     "TELEMAC_DYE_WET_MGL",
     "TELEMAC_TARGET_GROUND_RES_M",
     "TELEMAC_WSE_WET_DEPTH_M",
@@ -586,14 +585,9 @@ def postprocess_telemac(
         cog_io.safe_unlink(cog)
 
     vmax = round(max(dye_cmax, wet), 6)
-    legend = LegendKey(
-        kind="continuous",
-        colormap="viridis",
-        vmin=0.0,
-        vmax=vmax,
-        units=dye_units,
-        label=f"{product.noun.capitalize()} concentration ({dye_units})",
-    )
+    legend = presets.legend_key(
+        product.style, value_range=(0.0, vmax), units=dye_units,
+        label=f"{product.noun.capitalize()} concentration ({dye_units})")
     # Honesty floor: this is an idealized demo release (flat/planar idealized bed
     # + a prescribed dispersion coefficient), NOT a calibrated site study.
     honesty = (
@@ -606,7 +600,7 @@ def postprocess_telemac(
         name=f"Peak {product.noun} concentration ({reach_name})",
         layer_type="raster",
         uri=uri,
-        style_preset=product.style_preset,
+        style=product.style,
         role="primary",
         units=dye_units,
         bbox=bbox,
@@ -840,11 +834,10 @@ def postprocess_telemac_deposition(
                          1e-3), 4)
     else:
         vext = round(max(max_dep_mm, 1e-3), 4)
-    legend = LegendKey(
-        kind="continuous", colormap="rdbu", vmin=-vext, vmax=vext, units="mm",
+    legend = presets.legend_key(
+        TELEMAC_BED_EVOLUTION_STYLE, value_range=(-vext, vext),
         label="Bed evolution (mm): scour < 0 < deposition"
-        if erodible else "Bed evolution / deposition (mm)",
-    )
+        if erodible else "Bed evolution / deposition (mm)")
     if erodible:
         honesty = (
             "Event-scale bed evolution (mm) under active bedload morphodynamics "
@@ -872,7 +865,7 @@ def postprocess_telemac_deposition(
         name=layer_name,
         layer_type="raster",
         uri=uri,
-        style_preset=TELEMAC_BED_EVOLUTION_STYLE_PRESET,
+        style=TELEMAC_BED_EVOLUTION_STYLE,
         role="primary",
         units="mm",
         bbox=bbox,
@@ -1233,14 +1226,11 @@ def postprocess_telemac_wse(
     flat = legend_max <= legend_min
     if flat:
         legend_max = round(legend_min + TELEMAC_WSE_WET_DEPTH_M, 4)
-    legend = LegendKey(
-        kind="continuous",
-        colormap="viridis" if is_depth else "blues",
-        vmin=legend_min,
-        vmax=legend_max,
-        units="m",
-        label=f"{label_txt} (m{f', {vertical_datum}' if vertical_datum else ''})",
-    )
+    style = ({**TELEMAC_WSE_STYLE, "ramp": "ylgnbu"} if is_depth
+             else TELEMAC_WSE_STYLE)
+    legend = presets.legend_key(
+        style, value_range=(legend_min, legend_max),
+        label=f"{label_txt} (m{f', {vertical_datum}' if vertical_datum else ''})")
     honesty_bits = [
         f"Peak {'depth' if is_depth else 'free-surface elevation'} over the run "
         f"({int(times.size)} output frame(s))",
@@ -1274,7 +1264,7 @@ def postprocess_telemac_wse(
         name=f"{label_txt} ({reach_name})",
         layer_type="raster",
         uri=uri,
-        style_preset=TELEMAC_WSE_STYLE_PRESET,
+        style=style,
         role="primary",
         units="m",
         bbox=None,  # mesh-CRS metres, not EPSG:4326 lon/lat -> no zoom-to bbox
@@ -1638,11 +1628,11 @@ def postprocess_telemac_do(
     finally:
         cog_io.safe_unlink(cog)
 
-    legend = LegendKey(
-        kind="continuous", colormap="rdylbu",
-        vmin=round(min(do_min, float(standard_mgl)), 3),
-        vmax=round(max(float(saturation_mgl), float(np.nanmax(do_f))), 3),
-        units="mg/L", label="Dissolved oxygen (mg/L)")
+    legend = presets.legend_key(
+        TELEMAC_DO_STYLE,
+        value_range=(round(min(do_min, float(standard_mgl)), 3),
+                     round(max(float(saturation_mgl), float(np.nanmax(do_f))), 3)),
+        label="Dissolved oxygen (mg/L)")
     honesty = (
         f"Steady-state DO field (last of {int(times.size)} frame(s)); downstream "
         f"distance by {s_label}, each station a depth-weighted cross-section mean. "
@@ -1659,7 +1649,7 @@ def postprocess_telemac_do(
     layer = TelemacDoLayerURI(
         layer_id=f"telemac-do-field-{run_id}",
         name=f"Dissolved oxygen sag ({reach_name})",
-        layer_type="raster", uri=uri, style_preset=TELEMAC_DO_STYLE_PRESET,
+        layer_type="raster", uri=uri, style=TELEMAC_DO_STYLE,
         role="primary", units="mg/L", bbox=bbox, legend=legend,
         fallback_note=honesty,
         do_min_mgl=round(do_min, 4),
@@ -1796,7 +1786,7 @@ def postprocess_tomawac(
     writes + uploads ONE COG (``tomawac_hs.tif``), and returns
     ``([TelemacWaveLayerURI], metrics)``. The time evolution plays from the
     SELAFIN mesh sibling ``export_case_to_qgis`` discovers via
-    ``TELEMAC_WAVE_STYLE_PRESET`` (no per-frame COGs).
+    ``TELEMAC_WAVE_STYLE`` (no per-frame COGs).
 
     ``domain_bbox`` is the 4326 AOI the REAL-lake grid was built over, and it is
     what georeferences the result. The wave worker builds its grid in LOCAL
@@ -1916,10 +1906,8 @@ def postprocess_tomawac(
         cog_io.safe_unlink(cog)
 
     vmax = round(max(hs_max, _HS_WET_FLOOR), 4)
-    legend = LegendKey(
-        kind="continuous", colormap="viridis", vmin=0.0, vmax=vmax, units="m",
-        label="Significant wave height Hs (m)",
-    )
+    legend = presets.legend_key(TELEMAC_WAVE_STYLE, value_range=(0.0, vmax),
+                                label="Significant wave height Hs (m)")
     honesty = (
         "Spectral-wave screening (TOMAWAC WAM4 physics): significant wave height "
         "Hs over the domain. A planning-grade wave field driven by a prescribed "
@@ -1930,7 +1918,7 @@ def postprocess_tomawac(
         name=f"Significant wave height ({reach_name})",
         layer_type="raster",
         uri=uri,
-        style_preset=TELEMAC_WAVE_STYLE_PRESET,
+        style=TELEMAC_WAVE_STYLE,
         role="primary",
         units="m",
         bbox=bbox,
@@ -2134,10 +2122,8 @@ def postprocess_artemis(
     kd_wet = kd[finite & (kd > _KD_WET_FLOOR)]
     kd_p995 = float(np.percentile(kd_wet, 99.5)) if kd_wet.size else kd_max
     vmax = round(max(min(kd_max, max(kd_p995, 1.0)), 1.0), 3)
-    legend = LegendKey(
-        kind="continuous", colormap="viridis", vmin=0.0, vmax=vmax, units="Kd",
-        label="Agitation coefficient Kd = Hs / H0",
-    )
+    legend = presets.legend_key(TELEMAC_AGITATION_STYLE, value_range=(0.0, vmax),
+                                label="Agitation coefficient Kd = Hs / H0")
     honesty = (
         "Phase-resolving harbour-agitation screening (ARTEMIS elliptic mild-slope "
         "/ Berkhoff): agitation coefficient Kd = Hs/H0 (how much the incident wave "
@@ -2149,7 +2135,7 @@ def postprocess_artemis(
         name=f"Wave agitation Kd ({reach_name})",
         layer_type="raster",
         uri=uri,
-        style_preset=TELEMAC_AGITATION_STYLE_PRESET,
+        style=TELEMAC_AGITATION_STYLE,
         role="primary",
         units="Kd",
         bbox=bbox,
@@ -2339,7 +2325,7 @@ def postprocess_telemac3d(
     come from ``worker_metrics`` (computed off the full 3D column in the worker -
     the agent venv has no TELEMAC), folded onto BOTH layers so the agent narrates
     typed numbers (invariant 1). The full-column time evolution plays from the
-    TELEMAC-3D result SELAFIN mesh sibling via ``TELEMAC3D_STRATIFICATION_STYLE_PRESET``.
+    TELEMAC-3D result SELAFIN mesh sibling via ``TELEMAC3D_STRATIFICATION_STYLE``.
 
     Honesty floor (invariant 1): every 3D scalar is plain arithmetic over the
     SELAFIN field -- no LLM. The COG carries an idealized/screening label.
@@ -2407,20 +2393,19 @@ def postprocess_telemac3d(
             "NoData in these rasters."
         )
 
+    style = {**TELEMAC3D_STRATIFICATION_STYLE, "ramp": colormap}
+
     def _mk(uri, bbox, role, is_surface, node_mean):
-        if signed:
-            legend = LegendKey(kind="continuous", colormap=colormap,
-                               vmin=-vext, vmax=vext, **legend_common)
-        else:
-            legend = LegendKey(kind="continuous", colormap=colormap,
-                               vmin=lo, vmax=hi, **legend_common)
+        legend = presets.legend_key(
+            style, value_range=((-vext, vext) if signed else (lo, hi)),
+            **legend_common)
         which = "Surface" if is_surface else "Bottom"
         return Telemac3dLayerURI(
             layer_id=f"telemac3d-{'surface' if is_surface else 'bottom'}-{run_id}",
             name=f"{which} {var_label.split(' ', 1)[-1] if ' ' in var_label else var_label} ({reach_name})",
             layer_type="raster",
             uri=uri,
-            style_preset=TELEMAC3D_STRATIFICATION_STYLE_PRESET,
+            style=style,
             role=role,
             units=units or None,
             bbox=bbox,
@@ -2544,7 +2529,7 @@ def postprocess_coastal(
     fields onto one adaptive 4326 grid, uploads both COGs, and returns
     ``([inundation, water_depth], metrics)``. The rising-tide animation plays from
     the coastal result SELAFIN mesh sibling ``export_case_to_qgis`` discovers via
-    ``TELEMAC_COASTAL_DEPTH_STYLE_PRESET``.
+    ``TELEMAC_COASTAL_DEPTH_STYLE``.
 
     The coastal worker writes LOCAL (origin-shifted) mesh coordinates into the
     result SELAFIN, so ``domain_bbox`` (the 4326 AOI the domain was built over) is
@@ -2742,13 +2727,13 @@ def postprocess_coastal(
         name=f"Peak inundation depth over initially-dry land ({reach_name})",
         layer_type="raster",
         uri=inundation_uri,
-        style_preset=TELEMAC_COASTAL_DEPTH_STYLE_PRESET,
+        style=TELEMAC_COASTAL_DEPTH_STYLE,
         role="primary",
         units="m",
         bbox=bbox,
-        legend=LegendKey(
-            kind="continuous", colormap="YlGnBu", vmin=0.0,
-            vmax=round(max(inundation_peak, TELEMAC_WSE_WET_DEPTH_M), 4), units="m",
+        legend=presets.legend_key(
+            TELEMAC_COASTAL_DEPTH_STYLE,
+            value_range=(0.0, round(max(inundation_peak, TELEMAC_WSE_WET_DEPTH_M), 4)),
             label="Peak inundation depth over initially-dry land (m)"),
         fallback_note=honesty,
         **scalars,
@@ -2758,13 +2743,13 @@ def postprocess_coastal(
         name=f"Total water depth at peak ({reach_name})",
         layer_type="raster",
         uri=uri,
-        style_preset=TELEMAC_COASTAL_DEPTH_STYLE_PRESET,
+        style=TELEMAC_COASTAL_DEPTH_STYLE,
         role="context",
         units="m",
         bbox=bbox,
-        legend=LegendKey(
-            kind="continuous", colormap="YlGnBu", vmin=0.0,
-            vmax=round(max(peak_depth, TELEMAC_WSE_WET_DEPTH_M), 4), units="m",
+        legend=presets.legend_key(
+            TELEMAC_COASTAL_DEPTH_STYLE,
+            value_range=(0.0, round(max(peak_depth, TELEMAC_WSE_WET_DEPTH_M), 4)),
             label="Total water depth at peak (m)"),
         fallback_note=context_honesty,
         **scalars,

@@ -193,7 +193,7 @@ class MeshSession:
         return LayerURI(
             layer_id=f"mesh-{self.mesh_id}", name=f"Mesh: {self.name}",
             layer_type=("mesh" if mesh.has_cells else "vector"), uri=uri,
-            style_preset="mesh_wireframe", role="primary",
+            style={"kind": "reference", "geometry": "line"}, role="primary",
             bbox=_lonlat_bbox(mesh), crs_authid=mesh.crs_authid,
             synthetic_inputs=_synthetic_inputs(mesh),
             fallback_note=mesh.meta.get("bed_fallback_note"))

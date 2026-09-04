@@ -48,7 +48,6 @@ from trid3nt_contracts.publish_manifest import (
 from trid3nt_server.emission.publish import (
     _stash_legend_for_uri,
     legend_for_published_layer,
-    style_params_from_band_stats,
 )
 from trid3nt_server.emission.uri_registry import observe_published_layer
 
@@ -198,52 +197,27 @@ def _register_one_layer(
 ) -> RegisteredLayer:
     """Resolve ONE manifest layer to a registered ``LayerURI``.
 
-    Mirrors the on-box ``publish_layer`` s3 branch byte-for-byte in shape
-    (TiTiler exit): resolve style params (from band_stats, NO COG read), stash
-    the data-driven LEGEND keyed by the raw ``cog_uri``, register the COG via
+    Mirrors the on-box ``publish_layer`` s3 branch in shape: resolve the
+    declared style row against the manifest's own band stats (NO COG read),
+    stash the RESOLVED style keyed by the raw ``cog_uri``, register the COG via
     ``observe_published_layer``, return a ``LayerURI`` carrying the raw
-    ``cog_uri`` as ``uri`` (the plugin reads it via /vsicurl/).
+    ``cog_uri`` as ``uri``.
     """
     stem = entry.layer_id_stem
     cog_uri = entry.cog_uri
     layer_id = f"{stem}-{run_id}"
 
+    # The pipeline emitter's add_loaded_layer lifts the stash back out by
+    # ``layer.uri``. ``raster_bytes=b""`` pins the register-only contract: NO
+    # COG download here. Fail-open: a legend failure never blocks registration.
     bs = entry.band_stats
-    style_params = style_params_from_band_stats(
-        entry.style_preset,
-        is_categorical=bs.is_categorical,
-        is_rgba=bs.is_rgba,
-        p2=bs.p2,
-        p98=bs.p98,
-        layer_uri=cog_uri,
-    )
-
-    # DATA-DRIVEN LEGEND (mirror of publish_layer's raw-cog exit): derive the
-    # render KEY from the SAME resolved style_params and stash it keyed by the
-    # ENVELOPE uri - the raw s3:// COG this layer emits. The pipeline emitter's
-    # add_loaded_layer lifts it back out by ``layer.uri``. ``raster_bytes=b""``
-    # pins the register-only fast-path contract: NO COG download here - an
-    # empty style_params (categorical/RGBA register-only layer) therefore
-    # stashes None and falls back to the plugin's style_preset/default
-    # rendering, exactly as the legacy template seam did. Fail-open: a legend
-    # failure never blocks registration.
     try:
-        legend = None
-        if style_params:
-            legend = legend_for_published_layer(
-                entry.style_preset,
-                cog_uri,
-                style_params,
-                units=entry.units or None,
-                raster_bytes=b"",
-            )
-        _stash_legend_for_uri(cog_uri, legend)
+        _stash_legend_for_uri(cog_uri, legend_for_published_layer(
+            entry.style, cog_uri, units=entry.units or None, raster_bytes=b"",
+            band_stats=(bs.p2, bs.p98)))
     except Exception as exc:  # noqa: BLE001 - legend never blocks a register
-        logger.debug(
-            "register_published_manifest legend stash skipped (%s: %s)",
-            type(exc).__name__,
-            exc,
-        )
+        logger.debug("register_published_manifest legend stash skipped (%s: %s)",
+                     type(exc).__name__, exc)
 
     # Register the published COG: with the TiTiler exit there is no
     # separate display face - the raw s3:// COG IS both the consumable DATA uri
@@ -267,7 +241,7 @@ def _register_one_layer(
         name=entry.name,  # EXACT web grouping token - never rename.
         layer_type=entry.layer_type or "raster",
         uri=cog_uri,
-        style_preset=entry.style_preset,
+        style=entry.style,
         role=entry.role or "primary",  # type: ignore[arg-type]
         units=entry.units or None,
         bbox=entry_bbox or bbox,
