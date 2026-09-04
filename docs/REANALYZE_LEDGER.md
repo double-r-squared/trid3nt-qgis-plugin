@@ -43,3 +43,15 @@ fuzzy match and the placeholder branch are dead weight, not defense;
 different handle vocabulary) - the indirection is re-derived, not
 patched; (c) NATE reads the residual and rules the thin record is what
 he meant.
+
+## 2026-09-04 - sheet form-card default view: set slots + open mandatory, rest under advanced
+DECIDED: the module-surface sheet's card shows what the template or a
+fill set (with provenance) plus any mandatory slot still open; every
+other slot sits under advanced, grouped by the dico's rubrique, greyed
+with its engine default. Chosen over "level-0 slots always visible"
+(the dico's ~220 core keywords for telemac2d) for card length.
+Evidence: 376 telemac2d keywords, 220 at NIVEAU 0 (measured in-image).
+REVISIT TRIGGER: NATE's standing intent - a SIDE-BY-SIDE evaluation of
+the two views once the sheet is live, judged on which performs better
+for a human and for the model filling a sheet; the winner replaces the
+default. Backburner until fill/run has real use.

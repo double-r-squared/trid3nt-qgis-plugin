@@ -3602,3 +3602,10 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   measured caveats handled inside it). Stage 0 proofs first. DESIGN
   STOPS for NATE before launch: form-card default view; TOMAWAC now or
   stated absent; which rerun pieces of the interpreter survive.
+  DESIGN STOPS RESOLVED (NATE 2026-09-04): card view = set slots + open
+  mandatory shown, rest under advanced (REANALYZE_LEDGER: side-by-side
+  later); TOMAWAC = wrapper only if free from the Stage 3 pattern, else
+  stated absent - COME BACK TO IT (the rung-4 wave_field rebuild is the
+  natural moment; do not let it drop); interpreter = inventory first,
+  rerun-needed pieces move under the sheet, plan-step machinery
+  deletes, ambiguity DESIGN-STOPs. The wave is GO.
