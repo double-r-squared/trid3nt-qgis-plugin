@@ -50,11 +50,6 @@ from trid3nt_server.emission.uri_registry import (
 COG_A = "s3://trid3nt-runs/01KX00000000000000000000A1/flood_depth_peak.tif"
 COG_B = "s3://trid3nt-runs/01KX00000000000000000000B2/hillshade.tif"
 FRAME_COG = "s3://trid3nt-runs/01KX00000000000000000000A1/depth_frame_07.tif"
-TILE_FACE_A = (
-    "https://tiles.example.net/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
-    "?url=s3%3A%2F%2Ftrid3nt-runs%2F01KX00000000000000000000A1"
-    "%2Fflood_depth_peak.tif&rescale=0%2C2"
-)
 
 
 @pytest.fixture(autouse=True)
@@ -110,11 +105,6 @@ class TestHandleMint:
         assert short is not None and SHORT_HANDLE_RE.match(short)
         out = reg.resolve_params("t", {"raster_uri": short})
         assert out["raster_uri"] == FRAME_COG
-
-    def test_display_face_maps_to_the_data_uris_handle(self) -> None:
-        reg = make_registry()
-        reg.record("flood-a", uri=COG_A, wms_url=TILE_FACE_A, tool_name="publish_layer")
-        assert reg.short_for_uri(TILE_FACE_A) == reg.short_for_uri(COG_A) == "L1"
 
     def test_export_import_round_trip_resolves_same_handles(self) -> None:
         """The persist round-trip: reopen restores the SAME L<n> numbers and
@@ -188,12 +178,6 @@ class TestEmitRewrite:
         out = reg.rewrite_result_for_llm({"message": msg})
         assert COG_A not in out["message"]
         assert "L1" in out["message"]
-
-    def test_display_face_rewrites_to_the_same_handle(self) -> None:
-        reg = make_registry()
-        reg.record("flood-a", uri=COG_A, wms_url=TILE_FACE_A)
-        out = reg.rewrite_result_for_llm({"uri": TILE_FACE_A})
-        assert out["uri"] == "L1"
 
     def test_unregistered_strings_pass_through(self) -> None:
         reg = make_registry()

@@ -144,15 +144,13 @@ def _layer_stats_line(layer: dict[str, Any], tmpdir: str) -> str:
         _summarize_raster,
         _summarize_vector,
     )
-    from trid3nt_server.tools._uri_util import _strip_query, _unwrap_tile_template
+    from trid3nt_server.tools._uri_util import _strip_query
 
     uri = str(layer.get("uri") or "")
     if not uri:
         return "statistics unavailable: layer has no uri"
     try:
-        resolved = _unwrap_tile_template(uri)
-        if not resolved.startswith("s3://"):
-            resolved = _strip_query(resolved)
+        resolved = uri if uri.startswith("s3://") else _strip_query(uri)
         local = _materialize_uri(resolved, tmpdir, _sanitize_name(layer.get("name") or "layer"))
         declared = layer.get("layer_type")
         ltype = declared if declared in ("raster", "vector") else _layer_type(local)

@@ -106,11 +106,10 @@ class DocModel(GraceModel):
 class ProjectLayerSummary(GraceModel):
     """Denormalized layer entry on a project (and on session map state).
 
-    The ``wms_url`` field carries the QGIS Server WMS endpoint the client uses
-    for MapLibre source registration; ``uri`` remains the underlying file
-    pointer. ``opacity`` (0.0-1.0) and ``z_index`` enable layer-stack
-    arbitration; clients fall back to ``1.0`` / a default order if both are
-    absent.
+    One store, one scheme: ``uri`` is the layer's ONE reference
+    (``s3://bucket/key``), which the client reads natively. ``opacity``
+    (0.0-1.0) and ``z_index`` enable layer-stack arbitration; clients fall back
+    to ``1.0`` / a default order if both are absent.
 
     ``legend`` is the layer's RESOLVED style, mirrored from ``LayerURI.legend``
     (see ``execution.LegendKey``): the concrete range, the colours and the .qml
@@ -129,7 +128,6 @@ class ProjectLayerSummary(GraceModel):
     temporal: bool  # has WMS-T config
 
     # --- Fields added by (D.2 amendment)
-    wms_url: str | None = None       # QGIS Server WMS URL for MapLibre tile registration
     opacity: float | None = None     # 0.0–1.0; client falls back to 1.0 if absent
     z_index: int | None = None       # MapLibre layer-order arbitration; lower draws first
 

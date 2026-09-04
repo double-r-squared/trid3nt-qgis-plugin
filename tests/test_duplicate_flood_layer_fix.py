@@ -5,15 +5,15 @@ the canvas. Three independent things can break that, and each gets a class:
 
 PRIMARY (``adapter.summarize_tool_result``): a scenario wrapper's
 already-published LayerURI is summarized with explicit ``published`` /
-``on_map`` / ``wms_url`` signals, so the model recognizes the layer is already
-on the map and does not issue a second publish of the same COG.
+``on_map`` signals, so the model recognizes the layer is already on the map and
+does not issue a second publish of the same COG.
 
 THE STYLE BOUNDARY (``emission.presets``): a layer is drawn by the style row
 its PRODUCER DECLARED. A style is never inferred from a filename or a layer id.
 
 THE DEDUP RULE (``pipeline_emitter.add_loaded_layer``): two publishes of the
-SAME underlying COG under different display URLs collapse to ONE loaded layer,
-while two genuinely distinct COGs must still coexist as two rows.
+SAME COG collapse to ONE loaded layer, while two genuinely distinct COGs must
+still coexist as two rows.
 
 Every appended layer also carries a stable, monotonic ``z_index``, and an
 in-place re-publish reuses the superseded layer's slot rather than renumbering.
@@ -33,7 +33,7 @@ from trid3nt_server.adapters.adapter import (
     _published_scenario_tool_names,
     summarize_tool_result,
 )
-from trid3nt_server.emission.pipeline_emitter import PipelineEmitter, _layer_identity_key
+from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
 from trid3nt_server.emission import presets
 
 
@@ -49,16 +49,12 @@ class _Sink:
 
 def _published_flood_layer_uri(run_id: str) -> LayerURI:
     """The single styled, ALREADY-PUBLISHED peak-depth LayerURI a flood scenario
-    wrapper returns on success (uri is the renderable TiTiler tile template)."""
-    cog = f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif"
+    wrapper returns on success. One store, one scheme: its uri IS the COG."""
     return LayerURI(
         layer_id=f"flood-depth-peak-{run_id}",
         name="Peak flood depth",
         layer_type="raster",
-        uri=(
-            "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
-            f"?url={cog}&rescale=0,3&colormap_name=blues"
-        ),
+        uri=f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif",
         role="primary",
         units="meters",
         bbox=(-85.4, 35.0, -85.2, 35.2),
@@ -81,9 +77,6 @@ class TestScenarioPublishedSignal:
         assert summary["published"] is True
         assert summary["on_map"] is True
         assert summary["publish_status"] == "published"
-        # The prompt's escape clause also keys on a "wms_url" field - it must be
-        # present and carry the renderable URL.
-        assert summary["wms_url"] == result.uri
         # The canonical handle + metadata the loop needs to narrate.
         assert summary["layer_id"] == result.layer_id
         assert summary["handle"] == result.layer_id
@@ -110,18 +103,18 @@ class TestScenarioPublishedSignal:
         assert "published" not in summary
         assert "on_map" not in summary
 
-    def test_raw_gs_cog_not_flagged_published(self) -> None:
-        """A scenario result whose uri is a RAW gs:// COG (storage, not on the
-        map) must NOT be flagged published - only an http(s) WMS uri is."""
-        raw = LayerURI(
+    def test_foreign_http_uri_not_flagged_published(self) -> None:
+        """A scenario result whose uri points at somebody else's http service is
+        NOT a layer this stack published - only a store uri is."""
+        foreign = LayerURI(
             layer_id="flood-depth-peak-R",
             name="Peak flood depth",
             layer_type="raster",
-            uri="gs://legacy-cloud-runs/R/flood_depth_peak.tif",
+            uri="https://example.net/tiles/R/flood_depth_peak.tif",
             role="primary",
         )
-        assert _layer_uri_is_published(raw) is False
-        summary = summarize_tool_result("sfincs_flood", raw)
+        assert _layer_uri_is_published(foreign) is False
+        summary = summarize_tool_result("sfincs_flood", foreign)
         assert "published" not in summary
 
     def test_failed_scenario_envelope_unaffected(self) -> None:
@@ -185,32 +178,25 @@ class TestPublishBoundaryStyle:
 
 class TestDedupByIdentity:
     @pytest.mark.asyncio
-    async def test_same_cog_two_display_urls_merge_to_one(self) -> None:
+    async def test_two_publishes_of_one_cog_merge_to_one(self) -> None:
         emitter = PipelineEmitter(session_id=new_ulid(), sink=_Sink())
         cog = "s3://trid3nt-runs/RUN/flood_depth_peak.tif"
 
-        # 1. The workflow's internal styled publish (continuous_flood_depth ramp).
+        # 1. The workflow's internal styled publish.
         workflow_layer = LayerURI(
             layer_id="flood-depth-peak-RUN",
             name="Peak flood depth",
             layer_type="raster",
-            uri=(
-                "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
-                f"?url={cog}&rescale=0,3&colormap_name=blues"
-            ),
+            uri=cog,
         )
         await emitter.add_loaded_layer(workflow_layer)
 
-        # 2. A redundant LLM re-publish of the SAME COG - DIFFERENT display URL
-        #    (different tile-template query order / id) AND a different layer_id.
+        # 2. A redundant LLM re-publish of the SAME COG under a different id.
         llm_republish = LayerURI(
             layer_id="chattanooga-100-year",
             name="chattanooga-100-year",
             layer_type="raster",
-            uri=(
-                "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
-                f"?url={cog}&rescale=0,5&colormap_name=viridis"
-            ),
+            uri=cog,
         )
         await emitter.add_loaded_layer(llm_republish)
 
@@ -221,43 +207,22 @@ class TestDedupByIdentity:
         assert layers[0].layer_id == "chattanooga-100-year"
 
     @pytest.mark.asyncio
-    async def test_identity_key_extracts_shared_cog(self) -> None:
-        cog = "s3://runs/RUN/flood_depth_peak.tif"
-        a = (
-            "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
-            f"?url={cog}&rescale=0,3&colormap_name=blues"
-        )
-        b = (
-            "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
-            f"?url={cog}&rescale=0,5&colormap_name=viridis"
-        )
-        assert _layer_identity_key(a) == _layer_identity_key(b) == cog
-
-    @pytest.mark.asyncio
-    async def test_plain_cog_keys_to_itself(self) -> None:
-        # A bare gs:// COG (no query string) keys to its own uri - legacy behavior.
-        assert _layer_identity_key("gs://b/dem.tif") == "gs://b/dem.tif"
-
-    @pytest.mark.asyncio
-    async def test_distinct_cogs_do_not_merge_f97_guard(self) -> None:
-        """F97 coexistence guard: two genuinely DIFFERENT layers (distinct COGs /
-        distinct display URLs that share only a generic WMS LAYERS name) must
-        STILL coexist as two rows. The identity key must not collapse them."""
+    async def test_distinct_cogs_do_not_merge(self) -> None:
+        """Coexistence guard: two genuinely DIFFERENT layers must STILL coexist
+        as two rows, independently deletable."""
         emitter = PipelineEmitter(session_id=new_ulid(), sink=_Sink())
 
-        # Two WDPA fetches: same generic LAYERS=wdpa name, but distinct (n=) ->
-        # genuinely distinct layers that MUST remain independently deletable.
         first = LayerURI(
             layer_id="wdpa-aaaaaaaaaaaaaaaaaaaaaaaaaa",
             name="Protected Areas",
             layer_type="raster",
-            uri="https://qgis.example/ogc/wms?LAYERS=wdpa&n=1",
+            uri="s3://trid3nt-cache/wdpa/1.tif",
         )
         second = LayerURI(
             layer_id="wdpa-bbbbbbbbbbbbbbbbbbbbbbbbbb",
             name="Protected Areas",
             layer_type="raster",
-            uri="https://qgis.example/ogc/wms?LAYERS=wdpa&n=2",
+            uri="s3://trid3nt-cache/wdpa/2.tif",
         )
         await emitter.add_loaded_layer(first)
         await emitter.add_loaded_layer(second)
@@ -276,16 +241,12 @@ class TestDedupByIdentity:
 
 class TestStableMonotonicZIndex:
     def _distinct_layer(self, n: int) -> LayerURI:
-        """A genuinely-distinct layer (own COG -> own identity key) so the
-        dedup-by-identity rule appends rather than merges."""
+        """A genuinely-distinct layer (own COG) so the dedup rule appends."""
         return LayerURI(
             layer_id=f"layer-{n}",
             name=f"Layer {n}",
             layer_type="raster",
-            uri=(
-                "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
-                f"?url=s3://runs/RUN/dem_{n}.tif"
-            ),
+            uri=f"s3://runs/RUN/dem_{n}.tif",
         )
 
     @pytest.mark.asyncio
@@ -315,17 +276,13 @@ class TestStableMonotonicZIndex:
         before = {l.layer_id: l.z_index for l in emitter.loaded_layers}
         z2_before = before["layer-2"]
 
-        # Re-publish layer 2 (SAME underlying COG -> same identity key) under a
-        # DIFFERENT display URL + a different layer_id. This collides on the COG
-        # identity and REPLACES the existing row in place.
+        # Re-publish layer 2 (SAME COG) under a different layer_id. It collides
+        # on the uri and REPLACES the existing row in place.
         republish = LayerURI(
             layer_id="layer-2-restyled",
             name="Layer 2 (restyled)",
             layer_type="raster",
-            uri=(
-                "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
-                "?url=s3://runs/RUN/dem_2.tif&colormap_name=viridis"
-            ),
+            uri="s3://runs/RUN/dem_2.tif",
         )
         await emitter.add_loaded_layer(republish)
 

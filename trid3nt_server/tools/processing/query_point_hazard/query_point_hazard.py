@@ -226,13 +226,11 @@ async def layers_from_case(
 def stage_layer_local(uri: str, tmpdir: str, label: str) -> str:
     """Materialize a layer uri locally (s3:// via boto3, else a local path).
 
-    Raster tile-template display URLs are unwrapped to the underlying COG
-    first (the layer-uri resolution convention). Raises on failure -- callers
-    convert to a per-layer honest entry.
+    Raises on failure -- callers convert to a per-layer honest entry.
     """
-    from trid3nt_server.tools._uri_util import _strip_query, _unwrap_tile_template
+    from trid3nt_server.tools._uri_util import _strip_query
 
-    resolved = _unwrap_tile_template(uri)
+    resolved = uri
     if resolved.startswith("s3://"):
         from trid3nt_server.tools.cache import read_object_bytes_s3
 

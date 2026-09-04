@@ -40,8 +40,8 @@ matching exception). Long-running tools opt in to progress emission by
 calling ``update_progress`` mid-fetch; atomic tools typically don't (they're
 sub-second), while solvers that poll a long-running job do.
 
-``loaded_layers`` dedup policy: by the underlying COG/run IDENTITY
-(``_layer_identity_key``), not the display ``uri`` alone -- see
+``loaded_layers`` dedup policy: by the layer's uri (one store, one scheme --
+a layer has exactly one) or, for animation frames, by its series key -- see
 ``add_loaded_layer``. The session-state envelope on the wire is always a
 full snapshot.
 """
@@ -335,34 +335,6 @@ except Exception:  # pragma: no cover -- websockets absent in a minimal env
 # genuinely-distinct fetches, so collapsing on it would wrongly merge two
 # independent map layers.
 
-def _layer_identity_key(uri: str) -> str:
-    """Stable cross-publish identity for a layer's display ``uri``.
-
-    Two publishes of the SAME underlying COG (workflow-internal + a redundant LLM
-    re-publish) yield the SAME key because each tile-template display URL embeds
-    the SAME ``url=<COG>`` query param even when the surrounding rescale/colormap
-    differs. Everything else falls back to the raw ``uri``."""
-    from urllib.parse import parse_qs, unquote, urlsplit
-
-    if not isinstance(uri, str) or not uri:
-        return uri
-    try:
-        parts = urlsplit(uri)
-    except Exception:  # noqa: BLE001 -- a malformed URL degrades to itself
-        return uri
-    if not parts.query:
-        return uri
-    qs = parse_qs(parts.query)
-    # Tile-template display URL -- the underlying COG is the ``url=`` param.
-    # This is the SHARED identity across the workflow publish and a redundant
-    # LLM re-publish of the same COG (the duplicate-flood-layer mechanism).
-    cog = qs.get("url")
-    if cog and cog[0]:
-        return unquote(cog[0])
-    # Unrecognized -- keep the full uri so behavior is unchanged.
-    return uri
-
-
 # --------------------------------------------------------------------------- #
 # Cross-RUN animation-frame identity
 # --------------------------------------------------------------------------- #
@@ -370,7 +342,7 @@ def _layer_identity_key(uri: str) -> str:
 # A re-run of a flood scenario emits the SAME "Flood depth step N" name + role
 # "context" but a NEW run-id-suffixed layer_id (...-frame-NN-<runB>) and a NEW
 # per-run COG uri (.../<runB>/..._depth_frame_NN.tif). The COG-identity dedup in
-# ``_layer_identity_key`` therefore NEVER collapses run B's frame N against run
+# Uri identity therefore NEVER collapses run B's frame N against run
 # A's frame N -> the connection's ``_loaded_layers`` (and the persisted case)
 # would accumulate [step1, step1, step2, step2, ...] on every re-run. The
 # stable cross-run token is the ``name`` ("Flood depth step N") + role="context",
@@ -1004,8 +976,7 @@ class PipelineEmitter:
       ``asyncio.CancelledError`` propagates further.
     - ``add_loaded_layer(layer_uri)``: append a ``ProjectLayerSummary``
       derived from a ``LayerURI``; emit a fresh ``session-state`` envelope.
-      Dedup policy: by the underlying COG/run identity, not the display
-      ``uri`` alone -- see ``_layer_identity_key``.
+      Dedup policy: by the layer's uri, or by its frame-series key.
     - ``emit_session_state()``: emit the current session-state snapshot
       (``current_pipeline`` set whenever a pipeline is running, plus the
       accumulated ``loaded_layers`` and chat history).
@@ -1360,8 +1331,7 @@ class PipelineEmitter:
         the terminal layer survives the blip deterministically -- independent of
         the persist-to-Case timing and the 25s keepalive bare-resume.
 
-        Union by COG/layer identity (the same ``_layer_identity_key`` /
-        ``layer_id`` dedup ``add_loaded_layer`` uses) so a layer THIS emitter
+        Union by uri / ``layer_id`` (the same dedup ``add_loaded_layer`` uses) so a layer THIS emitter
         already holds is never duplicated; the live turn's still-newer emits stay
         supersets (replace-not-reconcile on the wire), so no later emit regresses
         the seeded snapshot. Copies each merged layer's inline-GeoJSON / density
@@ -1369,11 +1339,11 @@ class PipelineEmitter:
         the count of newly-merged layers for telemetry/tests."""
         if other is self or not other._loaded_layers:
             return 0
-        existing_keys = {_layer_identity_key(l.uri) for l in self._loaded_layers}
+        existing_keys = {l.uri for l in self._loaded_layers}
         existing_ids = {l.layer_id for l in self._loaded_layers}
         merged = 0
         for layer in other._loaded_layers:
-            key = _layer_identity_key(layer.uri)
+            key = layer.uri
             if key in existing_keys or layer.layer_id in existing_ids:
                 continue
             new_layer = layer.model_copy(deep=True)
@@ -1950,16 +1920,12 @@ class PipelineEmitter:
         and append to the session's ``loaded_layers``, then emit a fresh
         ``session-state`` envelope (A.7 replace-not-reconcile).
 
-        Dedup policy (SAFETY NET): by the underlying
-        COG/run IDENTITY (``_layer_identity_key``), NOT by the display ``uri``
-        alone. The workflow's internal publish and a redundant LLM re-publish of
-        the SAME COG arrive with different display URLs (distinct tile-template
-        query strings / WMS LAYERS) and different layer_ids; keying on the shared
-        COG identity makes them COLLIDE and MERGE into ONE row instead of painting
-        a styleless duplicate. The existing entry is REPLACED in place with the
-        fresh metadata (e.g. a styled re-publish supersedes a styleless one). A
-        plain gs:///s3:// COG (no query string) keys to its own uri, so
-        uri-only identity is preserved for everything not display-wrapped.
+        Dedup policy (SAFETY NET): by the layer's URI. One store, one scheme
+        means the workflow's internal publish and a redundant LLM re-publish of
+        the SAME COG name the SAME uri, so they COLLIDE and MERGE into one row
+        instead of painting a styleless duplicate. The existing entry is
+        REPLACED in place with the fresh metadata (a styled re-publish
+        supersedes a styleless one).
         """
         # RESOLVED STYLE carry-over: copy the LayerURI's ``legend`` onto the
         # summary so the range, the ramp and the .qml reach the client.
@@ -1984,23 +1950,21 @@ class PipelineEmitter:
             # unchanged).
             crs_authid=getattr(layer, "crs_authid", None),
         )
-        # Dedup by underlying-COG identity -- in-place replace if present, else
-        # append. ``_layer_identity_key`` collapses two display URLs of the same
-        # COG to one key; for a plain COG it is the uri itself.
+        # Dedup by uri -- in-place replace if present, else append.
         # Animation frames ALSO supersede the prior run's same-step frame via
         # the (role + "Flood depth step N") series key, because a re-run's frame N
         # is a DISTINCT COG (new run-id) and would otherwise accumulate. A frame
         # only ever matches another frame; everything else keeps COG-identity
         # dedup (the ``_match`` guard prevents frame/non-frame cross-collapse).
         _new_frame_key = _frame_series_key(summary)
-        _new_key = _layer_identity_key(summary.uri)
+        _new_key = summary.uri
         for i, existing in enumerate(self._loaded_layers):
             if _new_frame_key is not None:
                 _match = _frame_series_key(existing) == _new_frame_key
             else:
                 _match = (
                     _frame_series_key(existing) is None
-                    and _layer_identity_key(existing.uri) == _new_key
+                    and existing.uri == _new_key
                 )
             if _match:
                 # Drop the SUPERSEDED layer_id's side tables (inline GeoJSON /

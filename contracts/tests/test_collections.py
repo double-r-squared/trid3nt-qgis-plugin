@@ -581,46 +581,41 @@ def test_pipeline_step_summary_rejects_unknown_role() -> None:
         )
 
 
-# --- D.2 ProjectLayerSummary: new optional fields
-# Closes OQ-62-LAYERURI-URI-FIELD, OQ-W-65-STYLE-PRESET, OQ-0068-ZIDX.
+# --- D.2 ProjectLayerSummary: the optional presentation fields
 
 
-def test_project_layer_summary_new_optional_fields_default_to_none() -> None:
-    """All three new optional fields (wms_url, opacity, z_index) default to None."""
+def test_project_layer_summary_optional_fields_default_to_none() -> None:
+    """opacity and z_index default to None."""
     layer = ProjectLayerSummary(
         layer_id="run-01HX-flood-depth",
         name="Flood depth (m)",
         layer_type="raster",
-        uri="gs://trid3nt/runs/01HX/depth.cog.tif",
+        uri="s3://trid3nt-runs/01HX/depth.cog.tif",
         visible=True,
         role="primary",
         temporal=False,
     )
-    assert layer.wms_url is None
     assert layer.opacity is None
     assert layer.z_index is None
 
 
-def test_project_layer_summary_new_optional_fields_roundtrip_non_default() -> None:
-    """Non-None values for wms_url, opacity, z_index round-trip through JSON."""
+def test_project_layer_summary_optional_fields_roundtrip_non_default() -> None:
+    """Non-None opacity / z_index round-trip through JSON."""
     layer = ProjectLayerSummary(
         layer_id="run-01HX-flood-depth",
         name="Flood depth (m)",
         layer_type="raster",
-        uri="gs://trid3nt/runs/01HX/depth.cog.tif",
+        uri="s3://trid3nt-runs/01HX/depth.cog.tif",
         visible=True,
         role="primary",
         temporal=False,
-        wms_url="https://qgis.example.com/wms?MAP=01HX.qgs&LAYERS=flood_depth",
         opacity=0.75,
         z_index=10,
     )
-    assert layer.wms_url == "https://qgis.example.com/wms?MAP=01HX.qgs&LAYERS=flood_depth"
     assert layer.opacity == 0.75
     assert layer.z_index == 10
 
     dumped = layer.model_dump(mode="json")
-    assert dumped["wms_url"] == layer.wms_url
     assert dumped["opacity"] == 0.75
     assert dumped["z_index"] == 10
 
@@ -633,33 +628,29 @@ def test_project_layer_summary_new_optional_fields_roundtrip_non_default() -> No
     assert text_a == text_b
 
 
-def test_project_layer_summary_backward_compat_missing_new_fields() -> None:
-    """Documents written before (without wms_url/opacity/z_index) still parse."""
+def test_project_layer_summary_backward_compat_missing_optional_fields() -> None:
+    """Documents written without opacity / z_index still parse."""
     import json
 
     old_doc = {
         "layer_id": "run-01HX-flood-depth",
         "name": "Flood depth (m)",
         "layer_type": "raster",
-        "uri": "gs://trid3nt/runs/01HX/depth.cog.tif",
+        "uri": "s3://trid3nt-runs/01HX/depth.cog.tif",
         "visible": True,
         "role": "primary",
         "temporal": False,
-        # no wms_url, no opacity, no z_index
     }
     layer = ProjectLayerSummary.model_validate(old_doc)
-    assert layer.wms_url is None
     assert layer.opacity is None
     assert layer.z_index is None
 
-    # Re-serialized form includes the new fields as null.
+    # Re-serialized form includes them as null.
     dumped = layer.model_dump(mode="json")
-    assert dumped["wms_url"] is None
     assert dumped["opacity"] is None
     assert dumped["z_index"] is None
 
     # Re-parsing the serialized form is also stable.
     layer_b = ProjectLayerSummary.model_validate(json.loads(json.dumps(dumped)))
-    assert layer_b.wms_url is None
     assert layer_b.opacity is None
     assert layer_b.z_index is None

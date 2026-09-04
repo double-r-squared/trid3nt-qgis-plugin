@@ -372,23 +372,11 @@ async def _ingest_vector(
         _put_object_bytes, fgb_uri, fgb_bytes, content_type="application/octet-stream"
     )
 
-    # Reuse the Phase-0 durable-vector-GeoJSON writer UNCHANGED -- it re-reads the
-    # fgb we just wrote and materializes the browser-readable DISPLAY face at the
-    # frozen key. Fail-open (None) is honored: the layer still registers, just
-    # without a cold-view display asset (the live inline-GeoJSON path still works
-    # while the agent box is awake).
-    from trid3nt_server.emission.publish import _write_durable_vector_geojson
-
-    geojson_uri = await asyncio.to_thread(
-        _write_durable_vector_geojson, fgb_uri, layer_id, case_id
-    )
-
     summary = {
         "layer_id": layer_id,
         "name": name,
         "layer_type": "vector",
         "uri": fgb_uri,
-        "wms_url": geojson_uri,
         "visible": True,
         "role": "input",
         "temporal": False,
@@ -397,7 +385,7 @@ async def _ingest_vector(
         "summary": summary,
         "bbox": bounds,
         "feature_count": feature_count,
-        "display_uri": geojson_uri or fgb_uri,
+        "display_uri": fgb_uri,
     }
 
 
@@ -461,14 +449,13 @@ async def _ingest_raster(
 
     bounds = await asyncio.to_thread(_validate_raster_and_bounds, raw_bytes, crs_authid)
 
-    # Reuse publish_layer VERBATIM -- it owns F33 COG-overview validation, style
-    # resolution, and TiTiler tile-template minting for an s3:// raster. It is a
-    # blocking (sync) call (boto3 + rasterio internally); run it off the event
-    # loop.
+    # Reuse publish_layer VERBATIM -- it owns COG-overview enforcement, style
+    # resolution and registration for an s3:// raster. It is a blocking (sync)
+    # call (boto3 + rasterio internally); run it off the event loop.
     from trid3nt_server.emission.publish import PublishLayerError, publish_layer
 
     try:
-        tile_template = await asyncio.to_thread(
+        published_uri = await asyncio.to_thread(
             publish_layer, layer_uri=s3_uri, layer_id=layer_id, name=name
         )
     except PublishLayerError as exc:
@@ -483,13 +470,13 @@ async def _ingest_raster(
     # physical meaning, and its filename is not a measurement. It publishes on
     # the continuous kind's bare default - the field's own range under a single
     # ramp - never on a physical band inferred from what the file is called.
-    layer_name = derive_readable_layer_name(name, layer_id, None, tile_template)
+    layer_name = derive_readable_layer_name(name, layer_id, None, published_uri)
 
     summary = {
         "layer_id": layer_id,
         "name": layer_name,
         "layer_type": "raster",
-        "uri": tile_template,
+        "uri": published_uri,
         "visible": True,
         "role": "input",
         "temporal": False,
@@ -498,7 +485,7 @@ async def _ingest_raster(
         "summary": summary,
         "bbox": list(bounds),
         "feature_count": None,
-        "display_uri": tile_template,
+        "display_uri": published_uri,
     }
 
 

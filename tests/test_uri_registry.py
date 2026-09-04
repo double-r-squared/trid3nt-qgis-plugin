@@ -1,26 +1,24 @@
-"""Tests for the session-scoped layer-URI registry (job-0263).
+"""Tests for the session-scoped layer-URI registry.
 
-Layer-handle indirection kills the LLM-URI-mangling incident class. The
-suite covers, per the kickoff:
+Layer-handle indirection kills the LLM-URI-mangling incident class. The suite
+covers:
 
-1. registration on tool results (LayerURI models, dicts, bare gs:// strings,
-   WMS URLs, composer observation hook);
+1. registration on tool results (LayerURI models, dicts, bare store uris, the
+   composer observation hook);
 2. all four resolution branches (exact pass / handle substitution / fuzzy
-   mangle-match + WARNING / ADR-0014 typed URI_HANDLE_UNRESOLVED reject for
-   unknown object-store URIs and display-face URLs, with non-object-store
-   strings — external http(s) links, local paths — still failing open);
+   mangle-match + WARNING / typed URI_HANDLE_UNRESOLVED reject for an unknown
+   store URI, with non-store strings — external http(s) links, local paths —
+   still failing open);
 3. cross-session isolation;
-4. the FIVE historical incident shapes, each replayed with the REAL logged
-   values from the Stage 3 / demo evidence:
+4. the historical incident shapes, each replayed with the REAL logged values:
 
-   - I1 runs/ prefix mangle      (job-0253 agent_restart_0253.log:475)
-   - I2 layer_id-as-basename     (same call — assets_uri)
-   - I3 hash-tail hallucination  (job-0257 report, 3/3 publishes)
-   - I4 WMS-URL-as-hazard        (job-0255 agent_log_p5_turn.txt:170)
-   - I5 invented cache hash      (same call — assets_uri)
+   - I1 runs/ prefix mangle
+   - I2 layer_id-as-basename (same call — assets_uri)
+   - I3 hash-tail hallucination (3/3 publishes)
+   - I5 invented cache hash (same call — assets_uri)
 
 5. server-seam wiring: ``_invoke_tool_via_emitter`` resolves params before
-   dispatch, registers results after, and the typed error reaches Gemini as
+   dispatch, registers results after, and the typed error reaches the model as
    a structured retryable function_response listing the real handles.
 """
 
@@ -45,25 +43,25 @@ from trid3nt_server.emission.uri_registry import (
 from trid3nt_contracts.execution import LayerURI
 
 # --------------------------------------------------------------------------- #
-# Real logged values from the evidence files. Bucket/host names were
-# neutralized (legacy-cloud-*, legacy-qgis-server) after the legacy-cloud
-# decommission; path shapes, ULIDs and hash basenames are verbatim.
+# Real logged values from the evidence files. Bucket names carry the live
+# store's; the MANGLE SHAPES - the doubled prefix, the layer-id basename, the
+# hash tail, the invented name - are what these pin, and they are verbatim.
 # --------------------------------------------------------------------------- #
 
 # job-0253 (Fort Myers flood -> Pelicun, session 01KTS5T50ET0FZZ1TWRMGCQTBA)
 REAL_FLOOD_COG_0253 = (
-    "gs://legacy-cloud-runs/01KTS5W9GTE7A7WPC3BNBE10EQ/flood_depth_peak.tif"
+    "s3://trid3nt-runs/01KTS5W9GTE7A7WPC3BNBE10EQ/flood_depth_peak.tif"
 )
 MANGLED_RUNS_PREFIX_0253 = (
-    "gs://legacy-cloud-runs/runs/01KTS5W9GTE7A7WPC3BNBE10EQ/flood_depth_peak.tif"
+    "s3://trid3nt-runs/runs/01KTS5W9GTE7A7WPC3BNBE10EQ/flood_depth_peak.tif"
 )
 REAL_NSI_FGB = (
-    "gs://legacy-cloud-cache/cache/static-30d/usace_nsi/"
+    "s3://trid3nt-cache/cache/static-30d/usace_nsi/"
     "852a6cc379b18c865bf9d99ec1acaa35.fgb"
 )
 NSI_LAYER_ID = "usace-nsi--81.9126-26.5476--81.7511-26.6892"
 MANGLED_NSI_LAYERID_BASENAME_0253 = (
-    "gs://legacy-cloud-cache/cache/static-30d/usace_nsi/"
+    "s3://trid3nt-cache/cache/static-30d/usace_nsi/"
     f"{NSI_LAYER_ID}.fgb"
 )
 
@@ -73,19 +71,15 @@ HILLSHADE_MANGLED_CHICAGO_1 = "090a4ff8d9a083b28499252309d12999.tif"
 HILLSHADE_MANGLED_CHICAGO_2 = "090a4ff8d9a08321a43a7a9437b0e51c.tif"
 HILLSHADE_REAL_SEATTLE = "4007d642cb157d11f5db275a50286ae5.tif"
 HILLSHADE_MANGLED_SEATTLE = "4007d642cb157d22b1113a4b912a2ee3.tif"
-HILLSHADE_CACHE_DIR = "gs://legacy-cloud-cache/cache/static-30d/compute_hillshade"
+HILLSHADE_CACHE_DIR = "s3://trid3nt-cache/cache/static-30d/compute_hillshade"
 
 # job-0255 (Fort Myers round 10, session 01KTS7QFMKWMKWG8V54D8GMH89)
 REAL_FLOOD_COG_0255 = (
-    "gs://legacy-cloud-runs/01KTS8H8RJT6311A2V4BKX6H8A/flood_depth_peak.tif"
+    "s3://trid3nt-runs/01KTS8H8RJT6311A2V4BKX6H8A/flood_depth_peak.tif"
 )
 FLOOD_LAYER_ID_0255 = "flood-depth-peak-01KTS8H8RJT6311A2V4BKX6H8A"
-WMS_URL_0255 = (
-    "https://legacy-qgis-server.example.com/ogc/wms"
-    "?MAP=/mnt/qgs/grace2-sample.qgs&LAYERS=flood-depth-peak-01KTS8H8RJT6311A2V4BKX6H8A"
-)
 MANGLED_NSI_INVENTED_HASH_0255 = (
-    "gs://legacy-cloud-cache/cache/static-30d/usace_nsi/20240516140505.fgb"
+    "s3://trid3nt-cache/cache/static-30d/usace_nsi/20240516140505.fgb"
 )
 
 
@@ -135,7 +129,7 @@ class TestRegistration:
             "layers": [
                 {
                     "layer_id": FLOOD_LAYER_ID_0255,
-                    "uri": WMS_URL_0255,  # composer substitutes the WMS URL
+                    "uri": REAL_FLOOD_COG_0255,
                     "layer_type": "raster",
                 }
             ],
@@ -152,41 +146,16 @@ class TestRegistration:
             == REAL_FLOOD_COG_0255
         )
 
-    def test_wms_url_in_uri_slot_never_displaces_data_uri(self) -> None:
-        reg = make_registry()
-        reg.record(FLOOD_LAYER_ID_0255, uri=REAL_FLOOD_COG_0255, tool_name="publish")
-        # Composer envelope re-registers the handle with the WMS display URL.
-        reg.record(FLOOD_LAYER_ID_0255, uri=WMS_URL_0255, tool_name="composer")
-        resolved = reg.resolve_params(
-            "pelicun_damage_assessment",
-            {"hazard_raster_uri": FLOOD_LAYER_ID_0255},
-        )
-        assert resolved["hazard_raster_uri"] == REAL_FLOOD_COG_0255
-
-    def test_vsigs_normalized_to_gs(self) -> None:
-        reg = make_registry()
-        reg.record(
-            "flood-x",
-            uri="/vsigs/legacy-cloud-runs/01ABC/flood_depth_peak.tif",
-        )
-        assert (
-            reg.resolve_params("t", {"hazard_raster_uri": "flood-x"})[
-                "hazard_raster_uri"
-            ]
-            == "gs://legacy-cloud-runs/01ABC/flood_depth_peak.tif"
-        )
-
     def test_observation_hook_requires_active_context(self) -> None:
         reg = make_registry()
         # No active registry — observation is a no-op (direct/test calls).
-        observe_published_layer("h1", gcs_uri=REAL_FLOOD_COG_0253)
+        observe_published_layer("h1", uri=REAL_FLOOD_COG_0253)
         assert reg.known_handles() == []
         token = activate_registry(reg)
         try:
             observe_published_layer(
                 "flood-depth-peak-01KTS5W9GTE7A7WPC3BNBE10EQ",
-                gcs_uri=REAL_FLOOD_COG_0253,
-                wms_url="https://x/ogc/wms?MAP=p.qgs&LAYERS=flood-depth-peak-01KTS5W9GTE7A7WPC3BNBE10EQ",
+                uri=REAL_FLOOD_COG_0253,
             )
         finally:
             deactivate_registry(token)
@@ -243,7 +212,7 @@ class TestResolutionBranches:
         object). Verbatim REGISTERED URIs still pass (branch 1 dual-accept)."""
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
-        invented = "gs://legacy-cloud-cache/cache/static-30d/totally/made_up.tif"
+        invented = "s3://trid3nt-cache/cache/static-30d/totally/made_up.tif"
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params("t", {"layer_uri": invented})
         assert exc_info.value.error_code == "URI_HANDLE_UNRESOLVED"
@@ -251,22 +220,21 @@ class TestResolutionBranches:
         assert NSI_LAYER_ID in str(exc_info.value)  # inventory hint present
 
     def test_branch4_empty_registry_message_says_run_producer_first(self) -> None:
-        """The typed error (now raised only for display-face URLs with no
-        recoverable data URI) still tells the model to run a producer first."""
+        """An empty registry tells the model to run a producer first."""
         reg = make_registry()
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params(
                 "pelicun_damage_assessment",
-                {"hazard_raster_uri": "https://tiles.example.com/wms?LAYERS=never-produced"},
+                {"hazard_raster_uri": "s3://trid3nt-runs/never/produced.tif"},
             )
         assert "producing tool" in str(exc_info.value)
 
     def test_foreign_bucket_unknown_uri_rejects_typed(self) -> None:
-        """ADR 0014: a foreign object-store path the session never produced
-        rejects typed too — external data reaches the agent as http(s) links
-        or registered layers, never as a bare invented gs://s3 path."""
+        """A foreign store path the session never produced rejects typed too —
+        external data reaches the agent as http(s) links or registered layers,
+        never as a bare invented store path."""
         reg = make_registry()
-        foreign = "gs://some-user-bucket/their/data.tif"
+        foreign = "s3://some-user-bucket/their/data.tif"
         with pytest.raises(UriResolutionError):
             reg.resolve_params("t", {"raster_uri": foreign})
         # Non-object-store strings (external http(s) sources, local paths)
@@ -295,88 +263,6 @@ class TestResolutionBranches:
             reg.resolve_params("publish_layer", {"layer_uri": mangled})
         msg = str(exc_info.value)
         assert "hillshade-a" in msg and "hillshade-b" in msg
-
-    def test_handle_with_only_wms_face_raises_instead_of_handing_display_url(
-        self,
-    ) -> None:
-        reg = make_registry()
-        reg.record(FLOOD_LAYER_ID_0255, wms_url=WMS_URL_0255)
-        with pytest.raises(UriResolutionError):
-            reg.resolve_params(
-                "pelicun_damage_assessment",
-                {"hazard_raster_uri": FLOOD_LAYER_ID_0255},
-            )
-
-
-# --------------------------------------------------------------------------- #
-# 2b. TiTiler tile-template DISPLAY URL recovery (D1 — the live SWMM run, case
-#     01KVH4MZ9JF7GGHQ88D5PSWZVH: compute_layer_bounds UNKNOWN_LAYER_URI when the
-#     LLM passes a frame's display tile URL to a *_uri param instead of the COG).
-# --------------------------------------------------------------------------- #
-
-# A SWMM depth-frame COG + its TiTiler display template (the `url=` param is the
-# COG, URL-encoded, exactly as publish_layer.py:1763 builds it).
-SWMM_FRAME_COG = (
-    "s3://trid3nt-runs/01KVHKWETM1QMXH059QZGXP4V6/swmm_depth_frame_01.tif"
-)
-SWMM_FRAME_LAYER_ID = "swmm-depth-frame-01-01KVHKWETM1QMXH059QZGXP4V6"
-SWMM_FRAME_TILE_TEMPLATE = (
-    "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
-    "?url=s3%3A%2F%2Ftrid3nt-runs%2F01KVHKWETM1QMXH059QZGXP4V6"
-    "%2Fswmm_depth_frame_01.tif&rescale=0%2C2&colormap_name=blues"
-)
-
-
-class TestTitilerTemplateRecovery:
-    def test_titiler_display_template_resolves_to_registered_cog(self) -> None:
-        """The live failure: the LLM grabs a frame's display tile URL from
-        loaded_layers and hands it to compute_layer_bounds(layer_uri=...).
-        The resolver must recover the registered COG, not fail open."""
-        reg = make_registry()
-        # publish_layer registers both faces (observe_published_layer):
-        reg.record(
-            SWMM_FRAME_LAYER_ID,
-            uri=SWMM_FRAME_COG,
-            wms_url=SWMM_FRAME_TILE_TEMPLATE,
-            tool_name="publish_layer",
-        )
-        out = reg.resolve_params(
-            "compute_layer_bounds", {"layer_uri": SWMM_FRAME_TILE_TEMPLATE}
-        )
-        assert out["layer_uri"] == SWMM_FRAME_COG
-
-    def test_titiler_template_unregistered_cog_returns_embedded_cog(self) -> None:
-        """Even with NO registered record, the embedded `url=` COG is the real
-        object key, so it is recovered verbatim (honest, deterministic)."""
-        reg = make_registry()
-        out = reg.resolve_params(
-            "compute_layer_bounds", {"layer_uri": SWMM_FRAME_TILE_TEMPLATE}
-        )
-        assert out["layer_uri"] == SWMM_FRAME_COG
-
-    def test_titiler_template_with_no_url_param_raises_typed_error(self) -> None:
-        """A tile template lacking a recoverable `url=` COG raises the typed,
-        retryable URI_HANDLE_UNRESOLVED so the LLM self-corrects."""
-        reg = make_registry()
-        reg.record(SWMM_FRAME_LAYER_ID, uri=SWMM_FRAME_COG)
-        bad = "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/3/2/1.png"
-        with pytest.raises(UriResolutionError):
-            reg.resolve_params("compute_layer_bounds", {"layer_uri": bad})
-
-    def test_titiler_template_does_not_disturb_handle_path(self) -> None:
-        """The already-working path (LLM passes the layer_id handle) still
-        resolves directly — the new branch is additive."""
-        reg = make_registry()
-        reg.record(
-            SWMM_FRAME_LAYER_ID,
-            uri=SWMM_FRAME_COG,
-            wms_url=SWMM_FRAME_TILE_TEMPLATE,
-        )
-        out = reg.resolve_params(
-            "compute_layer_bounds", {"layer_uri": SWMM_FRAME_LAYER_ID}
-        )
-        assert out["layer_uri"] == SWMM_FRAME_COG
-
 
 # --------------------------------------------------------------------------- #
 # 3. Cross-session isolation
@@ -417,13 +303,13 @@ class TestSessionIsolation:
 
 class TestHistoricalIncidents:
     def test_i1_runs_prefix_mangle_job0253(self) -> None:
-        """gs://...-runs/runs/<ULID>/flood_depth_peak.tif -> the real COG."""
+        """s3://...-runs/runs/<ULID>/flood_depth_peak.tif -> the real COG."""
         reg = make_registry()
         token = activate_registry(reg)
         try:
             observe_published_layer(
                 "flood-depth-peak-01KTS5W9GTE7A7WPC3BNBE10EQ",
-                gcs_uri=REAL_FLOOD_COG_0253,
+                uri=REAL_FLOOD_COG_0253,
             )
         finally:
             deactivate_registry(token)
@@ -494,44 +380,6 @@ class TestHistoricalIncidents:
         )
         assert out["layer_uri"] == f"{HILLSHADE_CACHE_DIR}/{real_base}"
 
-    def test_i4_wms_url_as_hazard_job0255(self) -> None:
-        """The QGIS display URL passed as hazard_raster_uri -> the gs:// COG."""
-        reg = make_registry()
-        # publish_layer (inside the composer) observed both faces:
-        token = activate_registry(reg)
-        try:
-            observe_published_layer(
-                FLOOD_LAYER_ID_0255,
-                gcs_uri=REAL_FLOOD_COG_0255,
-                wms_url=WMS_URL_0255,
-            )
-        finally:
-            deactivate_registry(token)
-        # ...then the composer's envelope re-registered the WMS URL face.
-        reg.register_tool_result(
-            "sfincs_flood",
-            {
-                "layers": [
-                    {
-                        "layer_id": FLOOD_LAYER_ID_0255,
-                        "uri": WMS_URL_0255,
-                        "layer_type": "raster",
-                    }
-                ]
-            },
-        )
-        # The NSI fetch ran earlier in the live session (its uri was correct
-        # in the logged call) — register it as the session did.
-        reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
-        out = reg.resolve_params(
-            "pelicun_damage_assessment",
-            {
-                "hazard_raster_uri": WMS_URL_0255,  # exact value from the log
-                "assets_uri": REAL_NSI_FGB,
-            },
-        )
-        assert out["hazard_raster_uri"] == REAL_FLOOD_COG_0255
-
     def test_i5_invented_cache_hash_job0255(self) -> None:
         """The timestamp-shaped invented .fgb basename -> unique same-dir match."""
         reg = make_registry()
@@ -559,7 +407,7 @@ class TestHistoricalIncidents:
         reg.record(
             "usace-nsi-tampa",
             uri=(
-                "gs://legacy-cloud-cache/cache/static-30d/usace_nsi/"
+                "s3://trid3nt-cache/cache/static-30d/usace_nsi/"
                 "ffffffffffffffffffffffffffffffff.fgb"
             ),
             tool_name="fetch_usace_nsi",
@@ -678,7 +526,7 @@ def test_invoke_seam_unresolved_raises_typed_error(_dummy_uri_tool) -> None:
                 "consume_layer_t",
                 {
                     "assets_uri": (
-                        "https://tiles.example.com/wms?LAYERS=layer-never-produced"
+                        "s3://trid3nt-runs/layer/never-produced.fgb"
                     )
                 },
             )
@@ -781,11 +629,11 @@ class TestPlaceholderResolution:
 
     def test_uri_shaped_values_are_never_placeholder_resolved(self) -> None:
         reg = self._registry_with_dem()
-        # Observed live: a hallucinated FOREIGN gs:// path. It is uri-shaped,
-        # so the placeholder branch must not touch it — and under ADR 0014 an
-        # unknown object-store URI is a TYPED reject (never a silent
-        # substitution, never a pass-through 404).
-        hallucinated = "gs://3dep-cache/continuous-dem-10m.tif"
+        # Observed live: a hallucinated FOREIGN store path. It is uri-shaped,
+        # so the placeholder branch must not touch it — and an unknown store
+        # URI is a TYPED reject (never a silent substitution, never a
+        # pass-through 404).
+        hallucinated = "s3://3dep-cache/continuous-dem-10m.tif"
         with pytest.raises(UriResolutionError):
             reg.resolve_params("publish_layer", {"layer_uri": hallucinated})
         # Even an s3:// path that NAMES the producing tool must not be
@@ -873,7 +721,7 @@ class TestReplaceFromLayers:
         reg.clear()
         assert reg.known_handles() == []
         # A handle that resolved before clearing no longer maps to the URI —
-        # a bare (non-gs://) handle string that resolves to nothing fails OPEN
+        # a bare (non-store) handle string that resolves to nothing fails OPEN
         # (passed through unresolved, per the existing fail-open convention
         # for non-URI-shaped values — see test_bare_handle_in_other_session_
         # unresolved above), so the proof is "no longer substituted", not "now
@@ -950,7 +798,7 @@ class TestDemHintInventoryText:
             with pytest.raises(UriResolutionError) as exc_info:
                 reg.resolve_params(
                     tool,
-                    {"dem_uri": "https://tiles.example.com/wms?LAYERS=never-produced"},
+                    {"dem_uri": "s3://trid3nt-runs/never/produced.tif"},
                 )
             msg = str(exc_info.value)
             assert "fetch_dem" in msg
@@ -961,7 +809,7 @@ class TestDemHintInventoryText:
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params(
                 "pelicun_damage_assessment",
-                {"hazard_raster_uri": "https://tiles.example.com/wms?LAYERS=never-produced"},
+                {"hazard_raster_uri": "s3://trid3nt-runs/never/produced.tif"},
             )
         msg = str(exc_info.value)
         assert "sfincs_flood" in msg
@@ -977,7 +825,7 @@ class TestDemHintInventoryText:
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params(
                 "t",
-                {"assets_uri": "https://tiles.example.com/wms?LAYERS=does-not-exist"},
+                {"assets_uri": "s3://trid3nt-runs/does/not/exist.tif"},
             )
         msg = str(exc_info.value)
         listed = sum(1 for i in range(12) if f"layer-{i:02d}" in msg)
@@ -1078,7 +926,7 @@ class TestReconnectSeedsRegistryFromCase:
             reg = get_uri_registry(state.session_id)
             assert reg.known_handles() == []
             # Case A's handle no longer maps to Case A's URI (fails open,
-            # unresolved — bare non-gs:// handle strings never raise; see
+            # unresolved — bare non-store handle strings never raise; see
             # TestReplaceFromLayers.test_clear_drops_everything).
             out = reg.resolve_params("t", {"dem_uri": "case-a-dem"})
             assert out["dem_uri"] == "case-a-dem"

@@ -41,7 +41,6 @@ logger = logging.getLogger("trid3nt_server.server")
 #: these and so loads the no-progress streak.
 _PROGRESS_RESULT_KEYS: tuple[str, ...] = (
     "layer_id",
-    "wms_url",
     "uri",
     "layer_uri",
     "feature_count",

@@ -225,7 +225,7 @@ def _register_one_layer(
     # outside an active dispatch ContextVar - which is exactly why registration
     # stays agent-side (it cannot move to the worker; a missing registration
     # breaks the flood->Pelicun URI-handle resolution).
-    observe_published_layer(layer_id, gcs_uri=cog_uri)
+    observe_published_layer(layer_id, uri=cog_uri)
 
     # Per-layer bbox: prefer the manifest entry's, else the workflow's AOI bbox.
     entry_bbox: tuple[float, float, float, float] | None = None

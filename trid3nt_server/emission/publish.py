@@ -1,4 +1,4 @@
-"""The raster PUBLISH mechanism - overviews, styling, legend, registration.
+"""The raster PUBLISH mechanism - write, register, notify.
 
 Emission is AUTOMATIC: there is no "display this" intent and no
 ``publish_layer`` tool for a model to call. Every renderable raster a tool
@@ -7,46 +7,34 @@ through this module on its way to the map, intermediates included - the user
 hides what they do not want to see in QGIS.
 
     ``publish_layer(layer_uri, layer_id, style, ...)``
-      -> ``str`` (the raster's raw ``s3://`` COG URI, ready for the envelope)
+      -> ``str`` (the raster's ``s3://`` COG URI, ready for the envelope)
 
-**The path (s3 + QGIS-native rendering; the only publish path)**
+One store, one scheme. A raster lives as a COG at ``s3://<bucket>/<key>`` and
+the QGIS plugin - the ONLY client - reads THAT uri natively through GDAL
+``/vsis3``, so a publish never mints a second face for the same layer. What it
+does, in order:
 
-Rasters live as COGs at ``s3://<bucket>/<key>`` on the object store (MinIO
-locally). The QGIS plugin - the ONLY client - opens the COG DIRECTLY via
-GDAL ``/vsicurl/`` (the same s3->http translation it already uses for
-FlatGeobuf vectors) and applies its own renderer from the envelope's
-legend/style fields, so the publish emits the raw ``s3://`` URI itself:
+1. **write** - enforce COG overviews, writing a tiled+overview sibling into the
+   same bucket when the source has none (a no-overview COG renders spotty);
+2. **register** - ``observe_published_layer`` binds the layer handle to that
+   one uri, so downstream tools resolve the handle to readable bytes;
+3. **notify** - resolve the DECLARED style row through ``emission/presets.py``
+   (the already-painted guards first, then the preset) and stash the resulting
+   ``LegendKey`` keyed by the uri the envelope carries.
 
-1. Guard against unresolved layer handles / placeholder URIs (typed,
-   retryable errors that name the case's real handles).
-2. Vectors: benign no-op (they already render inline via their producing
-   fetch tool's GeoJSON), OR a durable per-Case GeoJSON asset,
-   OR - when ``TRID3NT_QGIS_WMS_BASE`` is exported - a styled QGIS Server
-   WMS GetMap face.
-3. Rasters: enforce COG overviews (auto-translate when missing), resolve the
-   DECLARED style row through ``emission/presets.py`` (the already-painted
-   guards first, then the preset), stash the resolved style keyed by the
-   ``s3://`` uri the envelope will carry, and register the layer via
-   ``observe_published_layer``.
-
-QGIS-native rendering: nothing here mints
-``{tile_base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}`` XYZ templates or reads
-``TRID3NT_TILE_SERVER_BASE``. Old persisted cases still carry legacy
-tile-template URIs; a re-publish of one is UNWRAPPED to its embedded ``url=``
-s3 COG and flows through the normal raster path, and the plugin unwraps legacy
-templates it rehydrates on its own. No worker round-trip, no ``.qgs`` mutation
-on the raster path.
+Vectors are a benign no-op: they are already objects in the same store and the
+plugin opens them natively too, so there is nothing to publish.
 
 **Cross-cutting principles:**
 
-- **Side effect, never cached.** A publish writes overview COGs / durable
-  vector assets and registers layer faces; there is nothing to memoize.
+- **Side effect, never cached.** A publish writes overview COGs and registers a
+  layer; there is nothing to memoize.
 - **Resilience:** failures surface as typed :class:`PublishLayerError`
   (not unhandled exceptions); style/legend/overview probes fail OPEN so a
   publish is never blocked by a best-effort enhancement. The caller at the
   emission seam also fails open: a raster whose publish fails still reaches
-  the map as its raw ``s3://`` COG, unstyled, because the QGIS plugin can
-  read that - a degrade, not a broken layer row.
+  the map as its ``s3://`` COG, unstyled, because the QGIS plugin can read
+  that - a degrade, not a broken layer row.
 """
 
 from __future__ import annotations
@@ -71,20 +59,9 @@ __all__ = [
     "legend_for_published_layer",
     "pop_legend_for_uri",
     "resolve_layer_style",
-    "set_default_qgs_uri",
-    "DEFAULT_PROJECT_QGS_URI",
 ]
 
 logger = logging.getLogger("trid3nt_server.emission.publish")
-
-
-# --------------------------------------------------------------------------- #
-# Constants
-# --------------------------------------------------------------------------- #
-
-#: Default canonical project .qgs URI, consumed by the ``TRID3NT_QGIS_WMS_BASE``
-#: vector-WMS seam - override via ``set_default_qgs_uri``.
-DEFAULT_PROJECT_QGS_URI: str = "s3://trid3nt-qgs/sample.qgs"
 
 
 # --------------------------------------------------------------------------- #
@@ -102,7 +79,6 @@ class PublishLayerError(RuntimeError):
     call with corrected args can succeed.
 
     Codes:
-    - ``QGS_URI_PARSE_ERROR`` - malformed ``project_qgs_uri`` (vector-WMS seam).
     - ``UNKNOWN_LAYER_HANDLE`` (retryable) - ``layer_uri`` is a
       bare placeholder token or fabricated scheme that no registry entry
       resolved; the message names the case's available handles so the model
@@ -116,113 +92,6 @@ class PublishLayerError(RuntimeError):
         super().__init__(message)
         self.error_code = error_code
         self.retryable = retryable
-
-
-# --------------------------------------------------------------------------- #
-# DI seams
-# --------------------------------------------------------------------------- #
-
-_DEFAULT_QGS_URI: str | None = None
-
-
-def set_default_qgs_uri(uri: str | None) -> None:
-    """Override the default canonical .qgs URI.
-
-    Useful for smoke harnesses and integration tests that target a non-production
-    project. ``None`` restores the constant default.
-    """
-    global _DEFAULT_QGS_URI
-    _DEFAULT_QGS_URI = uri
-
-
-def _get_effective_qgs_uri(project_qgs_uri: str | None) -> str:
-    if project_qgs_uri is not None:
-        return project_qgs_uri
-    if _DEFAULT_QGS_URI is not None:
-        return _DEFAULT_QGS_URI
-    return DEFAULT_PROJECT_QGS_URI
-
-
-def _parse_qgs_key(qgs_uri: str) -> str:
-    """Extract the object key (no leading slash) from a gs:// or s3:// URI.
-
-    Used to build the MAP= parameter in the WMS URL. Both schemes share the
-    ``<scheme>://<bucket>/<key>`` shape, so the key extraction is identical.
-    Accepting ``gs://`` keeps old persisted project URIs parseable; the
-    QGIS-vector WMS branch (``TRID3NT_QGIS_WMS_BASE`` set) needs the
-    ``s3://`` form or the branch fails.
-
-    Examples:
-        ``s3://trid3nt-qgs/sample.qgs`` -> ``sample.qgs``
-        ``gs://legacy-cloud-qgs/sample.qgs`` -> ``sample.qgs``
-
-    Raises:
-        PublishLayerError: if the URI is not a gs:// or s3:// URI, or has no
-        key component.
-    """
-    for scheme in ("gs://", "s3://"):
-        if qgs_uri.startswith(scheme):
-            rest = qgs_uri[len(scheme):]
-            break
-    else:
-        raise PublishLayerError(
-            "QGS_URI_PARSE_ERROR",
-            f"project_qgs_uri must be a gs:// or s3:// URI; got {qgs_uri!r}",
-        )
-    # <scheme>://<bucket>/<key>
-    slash_idx = rest.find("/")
-    if slash_idx == -1 or slash_idx == len(rest) - 1:
-        raise PublishLayerError(
-            "QGS_URI_PARSE_ERROR",
-            f"project_qgs_uri has no key component: {qgs_uri!r}",
-        )
-    key = rest[slash_idx + 1:]
-    return key
-
-
-#: Env var that, WHEN SET, activates the s3-branch QGIS-vector publish route.
-#: It is the base URL of a QGIS Server WMS endpoint. Dormant seam: until
-#: ``TRID3NT_QGIS_WMS_BASE`` is exported the s3 branch keeps the existing
-#: ``_benign_vector_noop`` (vectors already render inline via their
-#: producing fetch tool's GeoJSON), so behavior is unchanged. Exporting this
-#: var flips publish_layer to compose a styled WMS GetMap face for the vector.
-_QGIS_WMS_BASE_ENV: str = "TRID3NT_QGIS_WMS_BASE"
-
-
-def _get_qgis_wms_base() -> str:
-    """Return the configured QGIS Server WMS base (trailing slash stripped).
-
-    Empty string when ``TRID3NT_QGIS_WMS_BASE`` is unset/blank - the caller
-    treats that as "infra not yet stood up" and falls back to the benign no-op.
-    """
-    return os.environ.get(_QGIS_WMS_BASE_ENV, "").rstrip("/")
-
-
-def _build_vector_wms_url(
-    wms_base: str,
-    layer_uri: str,
-    layer_id: str,
-    qgs_key: str,
-) -> str:
-    """Compose a styled WMS GetMap URL for a VECTOR on the QGIS-vector path.
-
-    Points at ``TRID3NT_QGIS_WMS_BASE`` and carries the standard WMS GetMap
-    envelope so ``uri_registry._looks_like_wms`` recognizes it as a
-    renderable display face. The MAP= param uses the ``/mnt/qgs/<key>``
-    mount convention the QGIS Server worker expects.
-
-    ``STYLES=`` is left empty, which is a valid WMS request for the server's
-    own default style.
-    """
-    from urllib.parse import quote
-
-    map_param = f"/mnt/qgs/{qgs_key}"
-    return (
-        f"{wms_base}?MAP={quote(map_param, safe='/')}"
-        "&SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap"
-        f"&LAYERS={quote(layer_id, safe='')}"
-        "&STYLES=&FORMAT=image/png&TRANSPARENT=true"
-    )
 
 
 # --------------------------------------------------------------------------- #
@@ -334,15 +203,14 @@ def resolve_layer_style(
 # --------------------------------------------------------------------------- #
 
 #: Module-level side-table of the most-recent published-raster ``LegendKey``
-#: keyed by the layer's ENVELOPE uri - the raw ``s3://`` COG the atomic
-#: ``publish_layer`` returns; the register-only manifest seam keys by the same
-#: raw ``cog_uri``, so both producers share one key shape. ``publish_layer``
-#: returns a bare URI string, so the server wrap-site rebuilds a ``LayerURI``
-#: from it WITHOUT a legend; the pipeline emitter's ``add_loaded_layer`` lifts
-#: the legend back out of this stash by ``layer.uri``. Module scope is safe -
-#: the legend is a pure function of the content-addressed COG plus the declared
-#: row. FIFO-bounded at the write site so the always-on agent process never
-#: grows it without limit.
+#: keyed by the layer's ``s3://`` COG uri; the register-only manifest seam keys
+#: by the same ``cog_uri``, so both producers share one key shape.
+#: ``publish_layer`` returns a bare URI string, so the server wrap-site rebuilds
+#: a ``LayerURI`` from it WITHOUT a legend; the pipeline emitter's
+#: ``add_loaded_layer`` lifts the legend back out of this stash by ``layer.uri``.
+#: Module scope is safe - the legend is a pure function of the
+#: content-addressed COG plus the declared row. FIFO-bounded at the write site
+#: so the always-on agent process never grows it without limit.
 _MAX_LEGEND_ENTRIES: int = 256
 _LAST_LEGEND_BY_URI: dict[str, Any] = {}
 
@@ -477,38 +345,34 @@ def _declared_legend_classes(preset: "presets.Preset") -> list:
             for lo, hi, color, label in preset.classes]
 
 
-def _stash_legend_for_uri(display_uri: str, legend: "LegendKey | None") -> None:
-    """Record (or clear) the published layer's ``LegendKey`` keyed by envelope uri
-    (the raw ``s3://`` COG - both the atomic publish and the register-only
-    manifest seam key by it).
+def _stash_legend_for_uri(layer_uri: str, legend: "LegendKey | None") -> None:
+    """Record (or clear) the published layer's ``LegendKey`` keyed by its uri.
 
-    FIFO-bounded (mirrors ``_LAST_DENSITY_META_BY_URI``) so the always-on agent
-    process cannot grow this side-table without limit. A ``None`` legend clears
-    any stale entry for this uri (so a re-publish that now resolves to no key
-    cannot leave an orphaned one behind).
+    FIFO-bounded so the always-on agent process cannot grow this side-table
+    without limit. A ``None`` legend clears any stale entry for this uri (so a
+    re-publish that now resolves to no key cannot leave an orphaned one behind).
     """
-    if not display_uri:
+    if not layer_uri:
         return
-    if display_uri in _LAST_LEGEND_BY_URI:
-        del _LAST_LEGEND_BY_URI[display_uri]
+    if layer_uri in _LAST_LEGEND_BY_URI:
+        del _LAST_LEGEND_BY_URI[layer_uri]
     if legend is None:
         return
-    _LAST_LEGEND_BY_URI[display_uri] = legend
+    _LAST_LEGEND_BY_URI[layer_uri] = legend
     while len(_LAST_LEGEND_BY_URI) > _MAX_LEGEND_ENTRIES:
         _LAST_LEGEND_BY_URI.pop(next(iter(_LAST_LEGEND_BY_URI)))
 
 
-def pop_legend_for_uri(display_uri: str) -> "LegendKey | None":
-    """Look up the stashed ``LegendKey`` for a published layer's envelope uri
-    (the raw ``s3://`` COG - atomic publish and register-only path alike).
+def pop_legend_for_uri(layer_uri: str) -> "LegendKey | None":
+    """Look up the stashed ``LegendKey`` for a published layer's uri.
 
     Non-destructive READ (a re-emit / replay of the SAME layer must resolve the
     same key). The pipeline emitter's ``add_loaded_layer`` calls this to lift the
     legend onto the ``ProjectLayerSummary`` for the publish_layer wrap-site path
     (where the rebuilt ``LayerURI`` carries no legend of its own). Returns
-    ``None`` when nothing was stashed (legacy / categorical-RGBA layers).
+    ``None`` when nothing was stashed (a categorical-RGBA layer).
     """
-    return _LAST_LEGEND_BY_URI.get(display_uri)
+    return _LAST_LEGEND_BY_URI.get(layer_uri)
 
 
 # NOTE: QGIS-native rendering emits the raw ``s3://`` COG uri directly (see
@@ -520,11 +384,11 @@ def pop_legend_for_uri(display_uri: str) -> "LegendKey | None":
 # --------------------------------------------------------------------------- #
 
 #: Vector artifact extensions. ``publish_layer`` is RASTER-ONLY (see the module
-#: docstring + the inline-GeoJSON path). A vector reaching here is ALREADY on
-#: the map via its producing fetch tool (``add_loaded_layer`` inline GeoJSON),
-#: so a publish is unnecessary - and GDAL cannot open a FlatGeobuf as a
-#: raster COG, so routing one through the raster path would fail to open,
-#: not render. Token-tail matched against the resolved URI basename.
+#: docstring). A vector reaching here is ALREADY a store object the plugin
+#: opens natively, so a publish is unnecessary - and GDAL cannot open a
+#: FlatGeobuf as a raster COG, so routing one through the raster path would
+#: fail to open, not render. Token-tail matched against the resolved URI
+#: basename.
 _VECTOR_EXTS = (
     ".fgb",
     ".geojson",
@@ -544,194 +408,22 @@ def _is_vector_uri(layer_uri: str) -> bool:
 def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
     """Return a calm, NON-ERROR signal for a vector handed to publish_layer.
 
-    The agent keeps calling ``publish_layer`` on vector layers (roads/rivers)
-    that ALREADY rendered inline via their producing fetch tool's GeoJSON
-    (``add_loaded_layer`` path); this is a benign no-op for that call: NO
-    raise (so ``emit_tool_call`` ``mark_complete``s the step - green, not
-    red), NO tile template, NO ``observe_published_layer`` registration (so
-    no hanging-tile face is minted). The returned string is what the caller
-    gets back - a clear, honest "already rendered inline; no publish needed"
-    rather than a failure it would have to explain.
+    A vector needs no publish: it is already an object in the store and the
+    plugin opens it natively. So this neither raises (the step completes green)
+    nor registers anything. The returned string is what the caller gets back -
+    an honest "no publish needed" rather than a failure it must explain.
     """
     logger.info(
-        "publish_layer: benign vector no-op for layer_id=%s uri=%s - vector "
-        "already rendered inline (Wave 4.9 GeoJSON); no raster publish needed",
+        "publish_layer: benign vector no-op for layer_id=%s uri=%s",
         layer_id,
         layer_uri,
     )
     return (
-        f"noop: layer_id={layer_id!r} is a VECTOR ({layer_uri!r}) and is already "
-        "rendered on the map inline by its producing fetch tool (GeoJSON). "
-        "publish_layer is raster-only; no publish was needed and none was "
-        "performed. Do NOT re-call publish_layer for this vector layer."
+        f"noop: layer_id={layer_id!r} is a VECTOR ({layer_uri!r}); it is already "
+        "an object in the store and the map reads it directly. publish_layer is "
+        "raster-only; no publish was needed and none was performed. Do NOT "
+        "re-call publish_layer for this vector layer."
     )
-
-
-# --------------------------------------------------------------------------- #
-# Durable browser-readable GeoJSON for every vector.
-#
-# Vectors are produced as FlatGeobuf (``.fgb``) which the browser CANNOT read,
-# and today the agent delivers them INLINE (it reads the .fgb back, parses to
-# GeoJSON, and ships the FeatureCollection on the WS). That works ONLY while the
-# agent box is awake - the box-off cold path (signer -> S3) has no browser-
-# readable copy of a vector layer, so a cold-opened case paints rasters but not
-# roads/rivers/footprints/mesh.
-#
-# Durable contract: every vector publish materializes a GeoJSON
-# FeatureCollection at a STABLE, per-Case key in the DURABLE runs bucket
-# (the same bucket that holds the case-view snapshot + solver decks), so a
-# case manifest / cold-view materializer can serve it with ZERO agent
-# involvement. The .fgb stays the DATA face (analytical tools open it); the
-# GeoJSON asset is the DISPLAY face (the browser fetches it).
-#
-# Contract:
-#   bucket : TRID3NT_RUNS_BUCKET (solver._get_runs_bucket - the DURABLE runs
-#            bucket, NOT the 30-day-TTL content-addressed cache bucket; a
-#            published layer must outlive cache eviction).
-#   key    : ``case-data/<case_id>/<layer_id>.geojson``
-#   asset  : the returned ``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.geojson``
-#            URI - the DISPLAY face the QGIS plugin reads for the vector layer.
-#   faces  : observe_published_layer(layer_id, gcs_uri=<s3 .fgb DATA>,
-#            wms_url=<s3 .geojson DISPLAY>) - the GeoJSON never displaces the
-#            data uri (mirrors the vector-WMS branch above).
-# --------------------------------------------------------------------------- #
-
-#: Object-key prefix for durable per-Case vector GeoJSON assets in the runs
-#: bucket. Single seam so the writer and any reader name the object identically.
-DURABLE_CASE_DATA_PREFIX: str = "case-data"
-
-
-def durable_vector_geojson_key(case_id: str, layer_id: str) -> str:
-    """Return the runs-bucket object key for a Case's durable vector GeoJSON.
-
-    Frozen contract: ``case-data/<case_id>/<layer_id>.geojson``.
-    One seam so the writer (here) and any later reader name it identically.
-    """
-    return f"{DURABLE_CASE_DATA_PREFIX}/{case_id}/{layer_id}.geojson"
-
-
-def _vector_uri_to_geojson_bytes(layer_uri: str) -> bytes | None:
-    """Read a vector artifact URI and return UTF-8 GeoJSON FeatureCollection bytes.
-
-    REUSES the existing read + parse helpers - does NOT reimplement them:
-      - ``.fgb`` bytes -> ``pipeline_emitter._fgb_bytes_to_geojson`` (pyogrio +
-        geopandas; the same converter the inline path uses).
-      - ``.geojson`` / ``.json`` -> validated FeatureCollection passed through.
-
-    Source bytes are read with the SAME boto3 client every other s3
-    download in this module uses (``cache.read_object_bytes_s3``); a
-    local path is read directly (dev / test convenience). Returns ``None`` on
-    ANY read / parse / unsupported-extension error (caller fails open).
-    """
-    import json as _json
-
-    try:
-        if layer_uri.startswith("s3://"):
-            from trid3nt_server.tools.cache import read_object_bytes_s3
-
-            raw = read_object_bytes_s3(layer_uri)
-        elif layer_uri.startswith(("gs://", "/vsigs/")):
-            # gs:// is not a live store here (MinIO/s3:// is); a gs:// vector
-            # is unexpected. Fail open (caller -> benign no-op).
-            return None
-        else:
-            with open(layer_uri, "rb") as f:
-                raw = f.read()
-    except Exception as exc:  # noqa: BLE001 - fail-open
-        logger.warning(
-            "publish_layer: durable-geojson source read failed uri=%s (%s: %s)",
-            layer_uri,
-            type(exc).__name__,
-            exc,
-        )
-        return None
-
-    ext = layer_uri.lower().rstrip("/").rsplit(".", 1)[-1] if "." in layer_uri else ""
-    try:
-        if ext == "fgb":
-            from trid3nt_server.emission.pipeline_emitter import _fgb_bytes_to_geojson
-
-            obj = _fgb_bytes_to_geojson(raw)
-            if obj is None:
-                return None
-        elif ext in {"geojson", "json"}:
-            obj = _json.loads(raw)
-            if not isinstance(obj, dict) or obj.get("type") != "FeatureCollection":
-                logger.warning(
-                    "publish_layer: durable-geojson source is not a "
-                    "FeatureCollection uri=%s",
-                    layer_uri,
-                )
-                return None
-        else:
-            logger.warning(
-                "publish_layer: durable-geojson unsupported extension %r uri=%s",
-                ext,
-                layer_uri,
-            )
-            return None
-        return _json.dumps(obj).encode("utf-8")
-    except Exception as exc:  # noqa: BLE001 - fail-open
-        logger.warning(
-            "publish_layer: durable-geojson parse/dump failed uri=%s (%s: %s)",
-            layer_uri,
-            type(exc).__name__,
-            exc,
-        )
-        return None
-
-
-def _write_durable_vector_geojson(
-    layer_uri: str, layer_id: str, case_id: str
-) -> str | None:
-    """Materialize a vector layer's GeoJSON to the DURABLE runs bucket.
-
-    Reads ``layer_uri`` (FlatGeobuf / GeoJSON) to a GeoJSON FeatureCollection,
-    writes it to ``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.geojson``
-    through the ONE object-store seam (``solver._get_s3_client`` +
-    ``solver._get_runs_bucket``), and returns the durable ``s3://`` asset URI.
-
-    FAIL-OPEN: returns ``None`` on ANY read / parse / write error (the
-    caller degrades to the existing benign no-op). NEVER raises.
-    """
-    geojson_bytes = _vector_uri_to_geojson_bytes(layer_uri)
-    if geojson_bytes is None:
-        return None
-    try:
-        from trid3nt_server.workflows.solver.solver import (
-            _get_runs_bucket,
-            _get_s3_client,
-        )
-
-        bucket = _get_runs_bucket()
-        key = durable_vector_geojson_key(case_id, layer_id)
-        s3 = _get_s3_client()
-        s3.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=geojson_bytes,
-            ContentType="application/geo+json",
-        )
-        asset_uri = f"s3://{bucket}/{key}"
-        logger.info(
-            "publish_layer: durable vector GeoJSON written layer_id=%s case=%s "
-            "asset=%s bytes=%d",
-            layer_id,
-            case_id,
-            asset_uri,
-            len(geojson_bytes),
-        )
-        return asset_uri
-    except Exception as exc:  # noqa: BLE001 - fail-open
-        logger.warning(
-            "publish_layer: durable vector GeoJSON write failed layer_id=%s "
-            "case=%s (%s: %s) - falling back to benign no-op",
-            layer_id,
-            case_id,
-            type(exc).__name__,
-            exc,
-        )
-        return None
 
 
 # --------------------------------------------------------------------------- #
@@ -1294,8 +986,6 @@ def publish_layer(
     layer_uri: str,
     layer_id: str | None = None,
     style: dict[str, Any] | None = None,
-    project_qgs_uri: str | None = None,
-    case_id: str | None = None,
     name: str | None = None,
     #: A declared SPECIALIZATION of the contract's scale for this one layer -
     #: the `.style()` modifier, a param knob, or `restyle_layer`. Absent means
@@ -1310,15 +1000,13 @@ def publish_layer(
     # twenty-nine.
     **_extra_ignored: Any,
 ) -> str:
-    """Publish a COG raster: overviews, styling, legend, registration.
+    """Publish a COG raster: write, register, notify.
 
-    Resolves the raster's styling (rescale + colormap -> the data-driven
-    legend), enforces COG overviews, registers the layer, and returns the
-    raster's ``s3://`` COG URI - the QGIS plugin loads the COG directly via
-    GDAL ``/vsicurl/`` and renders it from the envelope's legend/style fields.
-    Vectors are a benign no-op (they already render inline via their producing
-    fetch tool's GeoJSON) unless a durable per-Case GeoJSON asset or the
-    dormant WMS face is asked for.
+    Enforces COG overviews, registers the layer handle against the ONE uri it
+    carries, resolves the declared style row into a legend the envelope hands
+    the map, and returns that ``s3://`` COG uri - the QGIS plugin opens it
+    natively through GDAL ``/vsis3``. Vectors are a benign no-op: they are
+    already store objects the plugin opens the same way.
 
     Called by the emission seam for every renderable raster a tool returns
     (``layer_uri_emit.publish_for_emission``), by the solver outputs seam, and
@@ -1334,17 +1022,13 @@ def publish_layer(
         style: the DECLARED style row - which of the four preset shapes draws
             this layer and the parameters that shape needs. ``None`` takes the
             continuous kind's bare default.
-        project_qgs_uri: legacy ``.qgs`` project URI; consumed only by the
-            dormant ``TRID3NT_QGIS_WMS_BASE`` vector-WMS seam.
-        case_id: Case identifier for case-scoped ``.qgs`` routing on the
-            vector-WMS seam. Transport-only; no persistence I/O happens here.
         name: display name for the layer list. Derived from the preset label /
             a URI path segment when omitted, so a bare ULID never reaches the
             layer summary.
 
     Returns:
-        The published raster's raw ``s3://`` COG URI (the overview-enforced
-        sibling when one had to be built). Suitable as a ``LayerURI.uri``.
+        The published raster's ``s3://`` COG URI (the overview-enforced sibling
+        when one had to be built). Suitable as a ``LayerURI.uri``.
 
     Raises:
         PublishLayerError: unknown layer handle, or a non-``s3://`` raster URI.
@@ -1381,117 +1065,17 @@ def publish_layer(
     if name:
         logger.info("publish_layer: name=%r layer_id=%r", name, layer_id)
 
-    # QGIS-native rendering: rasters publish as their raw s3:// COG URI -
-    # the QGIS plugin (the only client) opens the COG directly via GDAL
-    # /vsicurl/ and styles it from the envelope legend. No tile server, no
-    # TRID3NT_TILE_SERVER_BASE, no XYZ template mint. The COG itself is the
-    # published artifact; no .qgs mutation, no worker round-trip.
-    #
-    # Legacy republish:
-    # old persisted cases (and pre-swap composer registrations) carry legacy
-    # tile-TEMPLATE display URLs. A re-publish of one is NOT an error - UNWRAP
-    # the embedded ``url=`` s3 COG (the same trick
-    # ``_uri_util._unwrap_tile_template`` uses) and flow it through
-    # the normal raster path below, so the envelope comes out in the NEW raw
-    # ``s3://`` shape with a fresh legend stash. A template with no
-    # recoverable COG is returned verbatim (degraded legacy behavior; the
-    # plugin unwraps templates it rehydrates on its own).
-    if layer_uri.startswith(("http://", "https://")) and "/cog/tiles/" in layer_uri:
-        from trid3nt_server.tools._uri_util import _unwrap_tile_template
-
-        unwrapped = _unwrap_tile_template(layer_uri)
-        if unwrapped != layer_uri and unwrapped.startswith("s3://"):
-            logger.info(
-                "publish_layer: legacy tile-template input unwrapped to its "
-                "s3 COG layer_id=%s cog=%s",
-                layer_id,
-                unwrapped,
-            )
-            layer_uri = unwrapped
-        else:
-            logger.info(
-                "publish_layer: legacy tile-template input with no "
-                "recoverable s3 COG - returning verbatim layer_id=%s",
-                layer_id,
-            )
-            return layer_uri
-    # publish_layer is RASTER-ONLY (see module docstring) but is repeatedly
-    # handed VECTOR artifacts (roads/rivers .fgb/.geojson) that ALREADY
-    # rendered inline via their producing fetch tool's GeoJSON
-    # (``add_loaded_layer`` path), and GDAL cannot open a FlatGeobuf as a
-    # raster. Return a BENIGN, non-error result instead - no raise (the step
-    # completes GREEN), no tile template, no ``observe_published_layer``
-    # registration (no hanging-tile face), and a calm function_response so
-    # the agent narrates honestly and never re-calls publish_layer for the
-    # vector.
+    # A vector needs no publish: it is already a store object the plugin opens
+    # natively, and GDAL cannot open a FlatGeobuf as a raster COG. Return a
+    # BENIGN, non-error result so the step completes GREEN and the agent
+    # narrates honestly instead of re-calling.
     if _is_vector_uri(layer_uri):
-        # Dormant seam: WHEN a QGIS Server is stood up and
-        # TRID3NT_QGIS_WMS_BASE is exported, route the vector through a
-        # styled WMS GetMap face (MAP=<.qgs key>&LAYERS=<id>&...). This
-        # NO-OPs on the live stack TODAY: the var is unset until the infra
-        # exists, so the existing benign no-op is returned and behavior is
-        # byte-for-byte unchanged (vectors render inline via their
-        # producing fetch tool's GeoJSON).
-        wms_base = _get_qgis_wms_base()
-        if wms_base:
-            effective_qgs_uri = _get_effective_qgs_uri(project_qgs_uri)
-            qgs_key = _parse_qgs_key(effective_qgs_uri)
-            wms_url = _build_vector_wms_url(
-                wms_base, layer_uri, layer_id, qgs_key
-            )
-            logger.info(
-                "publish_layer (qgis-vector) layer_id=%s uri=%s wms=%s",
-                layer_id,
-                layer_uri,
-                wms_url,
-            )
-            # Register BOTH faces: the s3:// vector (consumable DATA uri)
-            # + the WMS GetMap URL (display face). ``_looks_like_wms``
-            # routes the WMS URL to the wms/display slot so it never
-            # displaces the s3:// data uri.
-            observe_published_layer(
-                layer_id, gcs_uri=layer_uri, wms_url=wms_url
-            )
-            return wms_url
-        # When no QGIS WMS base is configured (the live stack TODAY) write a
-        # DURABLE, browser-readable GeoJSON for this vector so the box-off
-        # cold path can paint it. The .fgb is the browser-unreadable DATA
-        # face; the GeoJSON asset is the DISPLAY face. ``case_id`` is
-        # threaded by the server wrapper (``_invoke_tool_via_emitter``:
-        # ``params.setdefault("case_id", ...)`` for EVERY publish_layer
-        # call, raster OR vector) so an in-Case vector publish reaches here
-        # with the Case bound. FAIL-OPEN: any geopandas/read/write error
-        # returns the existing benign no-op (never raise).
-        if case_id:
-            asset_uri = _write_durable_vector_geojson(
-                layer_uri, layer_id, case_id
-            )
-            if asset_uri is not None:
-                # Register BOTH faces: the s3:// .fgb stays the DATA uri,
-                # the durable s3:// GeoJSON asset is the DISPLAY face. It is
-                # routed via ``wms_url`` so it NEVER displaces the data uri
-                # (mirrors the WMS branch above).
-                observe_published_layer(
-                    layer_id, gcs_uri=layer_uri, wms_url=asset_uri
-                )
-                logger.info(
-                    "publish_layer (durable-vector) layer_id=%s data=%s "
-                    "display=%s",
-                    layer_id,
-                    layer_uri,
-                    asset_uri,
-                )
-                return asset_uri
-        # No Case context, or the durable write failed: fall back to the
-        # existing benign no-op (vectors still render inline via their
-        # producing fetch tool's GeoJSON while the agent box is awake).
         return _benign_vector_noop(layer_uri, layer_id)
     if not layer_uri.startswith("s3://"):
         raise PublishLayerError(
             "LAYER_URI_NOT_FOUND",
-            f"layer_uri {layer_uri!r} is not an s3:// COG on this AWS "
-            "deployment. Pass the producing tool's layer handle or its "
-            "s3:// URI verbatim.",
+            f"layer_uri {layer_uri!r} is not an s3:// COG in this store. "
+            "Pass the producing tool's layer handle or its s3:// URI verbatim.",
             retryable=True,
         )
     # A no-overview COG renders SPOTTY (per-strip range requests time out
@@ -1502,10 +1086,10 @@ def publish_layer(
 
     # The DECLARED style row, resolved against this raster ONCE: the concrete
     # range, the ramp and the .qml the map loads all come out of that one
-    # resolution, and the result is stashed keyed by the ENVELOPE uri - the raw
-    # s3:// COG this call returns. publish_layer returns a bare URI string, so
-    # the server wrap-site rebuilds a LayerURI WITHOUT a legend; the pipeline
-    # emitter's add_loaded_layer lifts it back out of the stash by layer.uri.
+    # resolution, and the result is stashed keyed by the s3:// uri this call
+    # returns. publish_layer returns a bare URI string, so the server wrap-site
+    # rebuilds a LayerURI WITHOUT a legend; the pipeline emitter's
+    # add_loaded_layer lifts it back out of the stash by layer.uri.
     # Fail-open: a None legend clears the stash entry.
     try:
         _stash_legend_for_uri(layer_uri, legend_for_published_layer(
@@ -1513,11 +1097,9 @@ def publish_layer(
     except Exception as exc:  # noqa: BLE001 - legend never blocks a publish
         logger.debug("publish_layer legend build skipped (%s: %s)",
                      type(exc).__name__, exc)
-    logger.info("publish_layer (raw-cog) layer_id=%s uri=%s", layer_id, layer_uri)
-    # register the published layer in the session URI registry so
-    # the ``flood-depth-peak-<id>``-style handle resolves to a consumable
-    # DATA uri for downstream tools (Pelicun, zonal stats). Under
-    # QGIS-native rendering there is no separate display face: the raw
-    # s3:// COG IS both the data uri and the envelope uri the plugin renders.
-    observe_published_layer(layer_id, gcs_uri=layer_uri)
+    logger.info("publish_layer layer_id=%s uri=%s", layer_id, layer_uri)
+    # Register the layer so the ``flood-depth-peak-<id>``-style handle resolves
+    # for downstream tools (Pelicun, zonal stats). One scheme, one face: the
+    # s3:// COG is both the data uri and the uri the plugin renders.
+    observe_published_layer(layer_id, uri=layer_uri)
     return layer_uri

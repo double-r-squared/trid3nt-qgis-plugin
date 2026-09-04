@@ -200,7 +200,7 @@
     },
     "ProjectLayerSummary": {
       "additionalProperties": false,
-      "description": "Denormalized layer entry on a project (and on session map state).\n\nThe ``wms_url`` field carries the QGIS Server WMS endpoint the client uses\nfor MapLibre source registration; ``uri`` remains the underlying file\npointer. ``opacity`` (0.0-1.0) and ``z_index`` enable layer-stack\narbitration; clients fall back to ``1.0`` / a default order if both are\nabsent.\n\n``legend`` is the layer's RESOLVED style, mirrored from ``LayerURI.legend``\n(see ``execution.LegendKey``): the concrete range, the colours and the .qml\nthe map loads. The pipeline emitter copies it onto this summary.",
+      "description": "Denormalized layer entry on a project (and on session map state).\n\nOne store, one scheme: ``uri`` is the layer's ONE reference\n(``s3://bucket/key``), which the client reads natively. ``opacity``\n(0.0-1.0) and ``z_index`` enable layer-stack arbitration; clients fall back\nto ``1.0`` / a default order if both are absent.\n\n``legend`` is the layer's RESOLVED style, mirrored from ``LayerURI.legend``\n(see ``execution.LegendKey``): the concrete range, the colours and the .qml\nthe map loads. The pipeline emitter copies it onto this summary.",
       "properties": {
         "crs_authid": {
           "anyOf": [
@@ -274,18 +274,6 @@
         "visible": {
           "title": "Visible",
           "type": "boolean"
-        },
-        "wms_url": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Wms Url"
         },
         "z_index": {
           "anyOf": [

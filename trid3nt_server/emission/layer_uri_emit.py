@@ -5,11 +5,10 @@ THE ONE PLACE a ``LayerURI`` destined for the client passes through before
 carries it to the QGIS plugin. Every site that hands a ``LayerURI`` to
 ``add_loaded_layer`` routes it through :func:`emit_layer_uri` first.
 
-No client surface fetches a raw ``gs://`` object: rasters reach the client as
-a raw ``s3://`` COG the QGIS plugin fetches via ``/vsicurl/``, or as an
-http(s) tile/WMS URL; vectors reach the client as inline GeoJSON
-(``PipelineEmitter`` reads the ``s3://`` uri server-side and ships the parsed
-FeatureCollection inline); charts embed their data inline.
+One store, one scheme: a raster reaches the client as the ``s3://`` COG the
+QGIS plugin opens natively through GDAL ``/vsis3``; vectors reach it the same
+way (or as inline GeoJSON when the emitter merged features server-side);
+charts embed their data inline.
 
 The guardrail
 =============
@@ -20,10 +19,9 @@ outcome is to keep the layer off the map and let the narration/tool-card carry
 the failure (the LLM-visible tool result stays truthful so the
 retry-on-failure loop can act). Everything else passes untouched:
 
-  * raster + ``s3://`` (raw COG; the QGIS plugin reads it via /vsicurl/) -> PASS
-  * raster + ``http(s)`` (a WMS/tile URL) -> PASS
-  * vector + ``gs://`` / ``s3://`` (inline-GeoJSON path) -> PASS
-    (do NOT break it)
+  * raster + ``s3://`` (the COG the plugin reads via /vsis3) -> PASS
+  * raster + ``http(s)`` (somebody else's service) -> PASS
+  * vector + ``gs://`` / ``s3://`` -> PASS (do NOT break it)
   * vector + ``http(s)`` -> PASS
 """
 
@@ -70,9 +68,9 @@ async def publish_for_emission(
 
     FAILS OPEN, and that is honest rather than lax: publishing enriches a
     raster (COG overviews, the resolved style params, the data-driven legend),
-    it does not make it reachable. The QGIS plugin reads a raw ``s3://`` COG
-    via ``/vsicurl/`` either way, so a failed publish is a DEGRADE - an
-    unstyled layer with a warning in the log - not a broken layer row. The
+    it does not make it reachable. The QGIS plugin reads the ``s3://`` COG via
+    ``/vsis3`` either way, so a failed publish is a DEGRADE - an unstyled layer
+    with a warning in the log - not a broken layer row. The
     guardrail that keeps genuinely un-renderable rasters off the map is
     :func:`emit_layer_uri`, and it still runs after this.
     """
@@ -177,8 +175,8 @@ def emit_layer_uri(
           ``file://`` local paths the plugin cannot reach, or EMPTY) -> DROP
           (return ``None``). Emitting one only paints a broken layer row. This
           is exactly the publish-FAILURE degraded path's leak.
-        * RASTER carrying a raw ``s3://`` COG uri -> PASS. The QGIS plugin
-          loads it via /vsicurl/ (publish_layer's raster SUCCESS shape).
+        * RASTER carrying an ``s3://`` COG uri -> PASS. The QGIS plugin opens
+          it via /vsis3 (publish_layer's raster SUCCESS shape).
         * VECTOR carrying ``gs://`` / ``s3://`` -> PASS. Vectors are delivered
           as inline GeoJSON; the uri is read server-side by the
           emitter and never fetched by the client. Do NOT break this path.
@@ -187,19 +185,19 @@ def emit_layer_uri(
     uri = layer.uri or ""
 
     # The guardrail: renderable raster + a genuinely un-renderable uri -> drop.
-    # Vectors carrying gs:// / s3:// are the inline-GeoJSON path and pass
-    # untouched. A raster s3:// PASSES: publish_layer returns the raw s3://
-    # COG uri and the QGIS plugin reads it via /vsicurl/. Still dropped
-    # (nothing can render them): gs:// (no reachable face on this stack),
-    # file:// local paths the plugin cannot reach, and EMPTY uris.
+    # Vectors carrying gs:// / s3:// pass untouched. A raster s3:// PASSES:
+    # publish_layer returns the s3:// COG uri and the QGIS plugin reads it via
+    # /vsis3. Still dropped (nothing can render them): gs:// (no reachable face
+    # on this stack), file:// local paths the plugin cannot reach, and EMPTY
+    # uris.
     if layer.layer_type == "raster" and (
         not uri or uri.startswith("gs://") or uri.startswith("file://")
     ):
         logger.warning(
             "layer_uri_emit: DROPPING renderable raster LayerURI with an "
             "un-renderable uri (never reaches the map). layer_id=%s uri=%r. "
-            "The renderable forms are an http(s) tile/WMS URL or a raw s3:// "
-            "COG (plugin /vsicurl/).",
+            "The renderable form is an s3:// object the plugin reads via "
+            "/vsis3.",
             layer.layer_id,
             uri,
         )
@@ -241,12 +239,11 @@ async def publish_input_layer(
     returns ``False``. Returns ``True`` only when the layer actually reached the
     emitter. The step's own returned layer is untouched; this only ADDS rows.
 
-    Note: a RASTER input must carry a renderable uri -- an http(s) tile/WMS URL
-    or a raw ``s3://`` COG (the QGIS plugin reads it via /vsicurl/). A
-    ``gs://`` / ``file://`` / empty-uri raster is correctly DROPPED
-    here by the ``emit_layer_uri`` guardrail (nothing can render it); VECTORS
-    carrying ``s3://`` inline server-side and pass straight through,
-    so they need no round-trip.
+    Note: a RASTER input must carry a renderable uri -- an ``s3://`` COG the
+    QGIS plugin reads via /vsis3. A ``gs://`` / ``file://`` / empty-uri raster
+    is correctly DROPPED here by the ``emit_layer_uri`` guardrail (nothing can
+    render it); VECTORS carrying ``s3://`` pass straight through, so they need
+    no round-trip.
     """
     if emitter is None or layer_uri is None:
         return False

@@ -268,7 +268,7 @@ def _build_raster_layer(
         logger.debug("outputs_seam legend stash skipped (%s: %s)",
                      type(exc).__name__, exc)
 
-    observe_published_layer(layer_id, gcs_uri=entry.uri)
+    observe_published_layer(layer_id, uri=entry.uri)
 
     entry_bbox: tuple[float, float, float, float] | None = None
     if entry.bbox and len(entry.bbox) == 4:
@@ -405,7 +405,7 @@ def build_layers_from_outputs(
     # --- Vector layers. ---
     for entry in vectors:
         layer_id = f"{_quantity_base(entry.quantity)}-{run_id}"
-        observe_published_layer(layer_id, gcs_uri=entry.uri)
+        observe_published_layer(layer_id, uri=entry.uri)
         entry_bbox: tuple[float, float, float, float] | None = None
         if entry.bbox and len(entry.bbox) == 4:
             entry_bbox = (
@@ -446,7 +446,7 @@ def build_layers_from_outputs(
     # for idempotence, matching the raster stems' naming.
     for entry in meshes:
         layer_id = f"{_quantity_base(entry.quantity)}-mesh-{run_id}"
-        observe_published_layer(layer_id, gcs_uri=entry.uri)
+        observe_published_layer(layer_id, uri=entry.uri)
         entry_bbox: tuple[float, float, float, float] | None = None
         if entry.bbox and len(entry.bbox) == 4:
             entry_bbox = (

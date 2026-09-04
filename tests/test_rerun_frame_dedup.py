@@ -1,17 +1,17 @@
 """D3 coverage: a re-run's flood animation frames SUPERSEDE the prior run's
 same-step frames instead of accumulating.
 
-Live symptom (case 01KVH4MZ9JF7GGHQ88D5PSWZVH, 50 layers): re-running a scenario
-appends a SECOND full "Flood depth step N" frame series under fresh run_ids. The
-frames are DISTINCT COGs (per-run S3 keys + run-id-suffixed layer_ids), so the
-COG-identity dedup (``_layer_identity_key``) never collapses run B's step N
-against run A's step N -> [step1, step1, step2, step2, ...].
+Live symptom (50 layers on one case): re-running a scenario appends a SECOND
+full "Flood depth step N" frame series under fresh run_ids. The frames are
+DISTINCT COGs (per-run store keys + run-id-suffixed layer_ids), so uri identity
+never collapses run B's step N against run A's step N -> [step1, step1, step2,
+step2, ...].
 
 Fix (``pipeline_emitter._frame_series_key`` + ``add_loaded_layer`` dedup, and a
 matching prune in ``server._persist_case_loaded_layers``): animation frames key
 on (role="context" + "Flood depth step N"), so step N of run B replaces step N
 of run A. Engine-agnostic (SWMM + SFINCS share the name token). Peak / vector /
-basemap layers keep COG-identity dedup unchanged.
+basemap layers keep uri dedup unchanged.
 """
 
 from __future__ import annotations
@@ -43,10 +43,7 @@ def _frame_layer(frame_no: int, run_id: str, *, engine: str = "swmm") -> LayerUR
         layer_id=f"{prefix}-{frame_no:02d}-{run_id}",
         name=f"Flood depth step {frame_no}",
         layer_type="raster",
-        uri=(
-            "https://titiler.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
-            f"?url={cog}&rescale=0,2&colormap_name=blues"
-        ),
+        uri=cog,
         role="context",
     )
 
@@ -57,10 +54,7 @@ def _peak_layer(run_id: str) -> LayerURI:
         layer_id=f"swmm-depth-peak-{run_id}",
         name="Peak flood depth",
         layer_type="raster",
-        uri=(
-            "https://titiler.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
-            f"?url={cog}&rescale=0,3&colormap_name=blues"
-        ),
+        uri=cog,
         role="primary",
     )
 
@@ -164,23 +158,22 @@ async def test_distinct_steps_coexist_within_a_run() -> None:
 
 
 @pytest.mark.asyncio
-async def test_non_frame_layers_keep_cog_identity_dedup() -> None:
-    """The pre-existing COG-identity dedup (job duplicate-flood-layer) still
-    collapses two display URLs of the SAME peak COG to one row."""
+async def test_non_frame_layers_keep_uri_dedup() -> None:
+    """Two publishes of the SAME peak COG still collapse to one row."""
     emitter = PipelineEmitter(session_id=new_ulid(), sink=_Sink())
     cog = "s3://trid3nt-runs/RUN/swmm_depth_peak.tif"
     a = LayerURI(
         layer_id="peak-a",
         name="Peak flood depth",
         layer_type="raster",
-        uri=f"https://t/cog/tiles/{{z}}/{{x}}/{{y}}.png?url={cog}&colormap_name=blues",
+        uri=cog,
         role="primary",
     )
     b = LayerURI(
         layer_id="peak-b",
         name="Peak flood depth",
         layer_type="raster",
-        uri=f"https://t/cog/tiles/{{z}}/{{x}}/{{y}}.png?url={cog}&colormap_name=viridis",
+        uri=cog,
         role="primary",
     )
     await emitter.add_loaded_layer(a)

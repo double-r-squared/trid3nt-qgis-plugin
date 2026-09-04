@@ -164,26 +164,9 @@ def _resolve_layer_to_local_path(
     if os.path.isfile(uri):
         return uri, False
 
-    # Tolerant fallback: a TiTiler tile-template / display URL embeds the real
-    # COG in its ``url=`` query param (mirrors pipeline_emitter._layer_identity_key
-    # and uri_registry._is_tile_template). Recover it and read the COG directly so
-    # an LLM that passed the display URL still gets a deterministic extent rather
-    # than a hard UNKNOWN_LAYER_URI. Defense-in-depth behind the uri_registry
-    # resolver fix (which normally substitutes the COG before dispatch).
-    if uri.startswith(("http://", "https://")):
-        from urllib.parse import parse_qs, unquote, urlparse
-
-        cog = (parse_qs(urlparse(uri).query).get("url") or [None])[0]
-        if cog:
-            cog = unquote(cog)
-            if cog.startswith("s3://"):
-                # storage_client was already del'd above (GCP decommissioned -- # ignored); recurse on the s3:// COG branch with None.
-                return _resolve_layer_to_local_path(cog, None)
-
     raise ComputeLayerBoundsError(
         "UNKNOWN_LAYER_URI",
-        f"layer URI {uri!r} is not an s3:// URI, a TiTiler tile template with an "
-        f"s3:// url= param, or a readable local file.",
+        f"layer URI {uri!r} is not an s3:// URI or a readable local file.",
     )
 
 

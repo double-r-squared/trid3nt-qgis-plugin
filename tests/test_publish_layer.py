@@ -1,22 +1,16 @@
-"""Unit tests for the ``publish_layer`` atomic tool.
+"""Unit tests for ``publish_layer``'s identity derivation.
 
-The GCP-era Cloud Run PyQGIS-worker dispatch path (and its tests: mocked
-JobsClient round-trips, gs:///vsigs staging, GCS layer_uri validation, .qgs
-verification) was removed with the cloud strip - rasters publish exclusively
-through the s3 + TiTiler branch, which is covered by
-``test_publish_layer_titiler_base_sprint14aws.py`` /
-``test_publish_layer_titiler_style_resolver_f51.py`` /
+The envelope contract is pinned in ``test_publish_layer_envelope.py``; the
+vector no-op and overview enforcement in
 ``test_publish_layer_vector_and_overviews_f32_f33.py``.
 
 Coverage here:
 1. ``test_publish_layer_is_not_a_registered_tool`` - publish is a mechanism
-   the emission seam calls, never a tool a model routes to (ADR 0313).
-2. ``test_parse_qgs_key`` - ``_parse_qgs_key`` extracts the object key from
-   ``gs://`` / ``s3://`` .qgs URIs (the vector-WMS seam parser).
-3. ``derive_layer_id`` - registered-handle / basename-stem / ULID-fallback
-   derivation (2026-07-08 small-model resilience).
-4. ``derive_readable_layer_name`` - OPEN-9: a bare-ULID layer_id never
-   reaches the UI's layer list when a better signal is available.
+   the emission seam calls, never a tool a model routes to.
+2. ``derive_layer_id`` - registered-handle / basename-stem / ULID-fallback
+   derivation.
+3. ``derive_readable_layer_name`` - a bare-ULID layer_id never reaches the
+   UI's layer list when a better signal is available.
 """
 
 from __future__ import annotations
@@ -28,7 +22,6 @@ from trid3nt_server.emission.publish import (
     PublishLayerError,
     derive_layer_id,
     derive_readable_layer_name,
-    _parse_qgs_key,
     publish_layer,
 )
 
@@ -50,26 +43,6 @@ def test_publish_layer_is_not_a_registered_tool() -> None:
         '"display this" intent has no meaning'
     )
     assert callable(publish_layer)
-
-
-# --------------------------------------------------------------------------- #
-# Test 2 - _parse_qgs_key (vector-WMS seam parser)
-# --------------------------------------------------------------------------- #
-
-
-def test_parse_qgs_key() -> None:
-    """_parse_qgs_key extracts the object key from a gs:// or s3:// URI."""
-    assert _parse_qgs_key("gs://legacy-cloud-qgs/sample.qgs") == "sample.qgs"
-    assert _parse_qgs_key("gs://bucket/subdir/project.qgs") == "subdir/project.qgs"
-    assert _parse_qgs_key("s3://bucket/subdir/project.qgs") == "subdir/project.qgs"
-
-    with pytest.raises(PublishLayerError) as exc_info:
-        _parse_qgs_key("/vsigs/bucket/file.qgs")
-    assert exc_info.value.error_code == "QGS_URI_PARSE_ERROR"
-
-    with pytest.raises(PublishLayerError) as exc_info:
-        _parse_qgs_key("gs://no-key-here/")
-    assert exc_info.value.error_code == "QGS_URI_PARSE_ERROR"
 
 
 # --------------------------------------------------------------------------- #

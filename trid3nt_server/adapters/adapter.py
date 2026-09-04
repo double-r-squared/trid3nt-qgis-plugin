@@ -2073,8 +2073,7 @@ def _extract_flood_metrics_phrase(result: dict[str, Any]) -> str:
 #: Scenario/simulation composer tool names whose successful return is an
 #: ALREADY-PUBLISHED, styled layer on the user's map (job duplicate-flood-layer).
 #: Their thin wrapper publishes the postprocess result internally and returns the
-#: published LayerURI (uri = the renderable http(s) WMS/tile URL). The LLM must
-#: NOT be told to display it again. Kept
+#: published LayerURI. The LLM must NOT be told to display it again. Kept
 #: aligned with ``scenario_reuse.EXPENSIVE_SCENARIO_TOOLS`` (the reuse index keys
 #: off the same set); a lazy import keeps the two in lockstep without a hard
 #: module coupling at import time.
@@ -2089,15 +2088,18 @@ def _published_scenario_tool_names() -> frozenset[str]:
 
 
 def _layer_uri_is_published(result: Any) -> bool:
-    """True when ``result`` duck-types as a LayerURI whose ``uri`` is a renderable
-    http(s) WMS/tile URL -- i.e. it has ALREADY been published to the map. A raw
-    ``gs://`` / ``s3://`` COG handle is storage-only and returns False."""
+    """True when ``result`` duck-types as a LayerURI carrying a store uri.
+
+    One store, one scheme: a layer has exactly ONE uri and the map reads THAT,
+    so an ``s3://`` COG on a scenario return IS the published face. An external
+    http(s) address is somebody else's service, not a layer this stack put on
+    the map."""
     if isinstance(result, (dict, str, bytes)) or result is None:
         return False
     uri = getattr(result, "uri", None)
     if not (hasattr(result, "layer_id") and isinstance(uri, str)):
         return False
-    return uri.startswith("http://") or uri.startswith("https://")
+    return uri.startswith("s3://")
 
 
 def _extract_synthetic_inputs(result: Any) -> list[dict[str, Any]]:
@@ -2192,11 +2194,11 @@ def _summarize_published_scenario_layer(
     """Compact function_response for a scenario wrapper that returned an
     ALREADY-PUBLISHED, styled LayerURI (job duplicate-flood-layer, PRIMARY fix).
 
-    Carries explicit ``published`` / ``on_map`` flags (plus a ``publish_status``
-    and a ``wms_url`` alias matching the prompt's escape-clause vocabulary) so the
-    LLM reliably recognizes the layer is on the map and does NOT issue a redundant
-    display request for a layer already on the map. The metadata the loop needs to narrate + pass the handle is kept:
-    layer_id (the canonical handle), name, layer_type, uri, bbox.
+    Carries explicit ``published`` / ``on_map`` / ``publish_status`` flags so the
+    LLM reliably recognizes the layer is on the map and does NOT issue a
+    redundant display request for it. The metadata the loop needs to narrate +
+    pass the handle is kept: layer_id (the canonical handle), name, layer_type,
+    uri, bbox.
     """
     layer_id = getattr(result, "layer_id", None)
     uri = getattr(result, "uri", None)
@@ -2207,12 +2209,9 @@ def _summarize_published_scenario_layer(
         "published": True,
         "on_map": True,
         "publish_status": "published",
-        # ``wms_url`` alias -- the publish-discipline escape clause keys on this
-        # field name; the LayerURI's ``uri`` IS the renderable WMS/tile URL here.
-        "wms_url": uri,
         "layer_id": layer_id,
         # ``handle`` mirrors the layer_id so the model passes the canonical
-        # handle (never a raw gs:// path) into any downstream *_uri param.
+        # handle (never a raw object path) into any downstream *_uri param.
         "handle": layer_id,
         "name": getattr(result, "name", None),
         "layer_type": getattr(result, "layer_type", None),
@@ -2320,14 +2319,12 @@ def summarize_tool_result(
 
     # A scenario/simulation composer returns its result layer ALREADY published,
     # styled, and on the map (its thin wrapper publishes the postprocess result
-    # internally; the returned LayerURI's ``uri`` is the renderable http(s)
-    # WMS/tile URL). Without an explicit signal this LayerURI falls through to
-    # the repr-coerce branch below and the model, seeing only a raw COG-ish repr,
+    # internally). Without an explicit signal this LayerURI falls through to the
+    # repr-coerce branch below and the model, seeing only a raw COG-ish repr,
     # narrates it as unfinished work. Stamp ``published``/``on_map`` so the model
-    # narrates from the layer. Scoped to the scenario tool set AND a
-    # genuinely-published (http) LayerURI, so a FAILED scenario (no layer /
-    # honesty-floor empty envelope, handled above) and every non-scenario tool
-    # are untouched.
+    # narrates from the layer. Scoped to the scenario tool set AND a LayerURI
+    # carrying a store uri, so a FAILED scenario (no layer / honesty-floor empty
+    # envelope, handled above) and every non-scenario tool are untouched.
     if tool_name in _published_scenario_tool_names() and _layer_uri_is_published(
         result
     ):
@@ -2520,8 +2517,8 @@ def summarize_tool_result(
 #     keyed off the SAME honesty-floor classifier ``summarize_tool_result`` uses
 #     (NO_RENDERABLE_LAYER / failure-tagged modeled envelope), so the two stay
 #     in lockstep at the single dispatch chokepoint.
-#   - ``True`` -- a real renderable result (a LayerURI / non-empty layers list /
-#     a published WMS layer) OR a non-empty data payload from a layer/data tool.
+#   - ``True`` -- a real renderable result (a LayerURI / non-empty layers list)
+#     OR a non-empty data payload from a layer/data tool.
 #   - ``None`` -- the notion does not apply (meta / control-plane tools that never
 #     produce a layer or a data payload, e.g. confirmation / discovery / cancel
 #     helpers; also when the call itself errored -- usability is undefined for a
@@ -2532,15 +2529,14 @@ def summarize_tool_result(
 
 #: Result keys whose presence marks a layer-producing return. A non-empty value
 #: under any of these is a renderable artifact (LayerURI dict, gs://"/s3:// COG,
-#: WMS URL, or a layers list). Mirrors the *_uri vocabulary the adapter already
-#: tracks for handle-passing (see the module-level docstring).
+#: or a layers list). Mirrors the *_uri vocabulary the adapter already tracks
+#: for handle-passing (see the module-level docstring).
 _LAYER_RESULT_KEYS = frozenset(
     {
         "layers",
         "layer_uri",
         "layer",
         "published_layers",
-        "wms_url",
         "result_layers",
     }
 )
