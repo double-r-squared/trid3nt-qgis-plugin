@@ -46,3 +46,4 @@ scripts/sandbox/hecras/_ref/
 # Narrow on purpose -- scratchpad/ itself carries tracked proof artifacts.
 scratchpad/staging/
 scratchpad/
+experiments/
