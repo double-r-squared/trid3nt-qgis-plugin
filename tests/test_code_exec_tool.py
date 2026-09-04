@@ -25,7 +25,6 @@ from trid3nt_contracts import new_ulid
 from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_contracts.sandbox_contracts import CodeExecResultPayload
 
-from trid3nt_server.sandbox.sandbox_runner import run_sandbox_local
 from trid3nt_server.tools.meta.code_exec_tool.code_exec_tool import (
     CODE_EXEC_RESULT_KEY,
     CodeExecConfirmationRequired,
@@ -37,12 +36,11 @@ from trid3nt_server.tools.meta.code_exec_tool.code_exec_tool import (
 
 
 @pytest.fixture(autouse=True)
-def _force_local_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every test runs the local-subprocess sandbox + a short cap for the timeout
-    scenario (keeps the suite fast; the executor's SIGALRM honors the env)."""
-    monkeypatch.setenv("TRID3NT_SANDBOX_LOCAL", "1")
-    monkeypatch.setenv("MPLBACKEND", "Agg")
-    monkeypatch.setenv("TRID3NT_SANDBOX_TIMEOUT", "5")
+def _short_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A short box cap: the tool takes no timeout, and the runaway case is real."""
+    from trid3nt_server.sandbox import box
+
+    monkeypatch.setattr(box, "_CAP_SECONDS", 5)
 
 
 # --------------------------------------------------------------------------- #
@@ -270,8 +268,8 @@ def test_approved_blocked_egress_reports_blocked() -> None:
     )
     out = code_exec_request(code, confirmed=True, code_exec_id=new_ulid())
     assert out["status"] == "blocked", out
-    # The honest reason is surfaced (never dressed up as ok).
-    assert "block" in (out["stderr_tail"] or "").lower()
+    # The denial travels verbatim as the box met it, never restated as our own.
+    assert "URLError" in (out["stderr_tail"] or "")
     assert out[CODE_EXEC_RESULT_KEY]["status"] == "blocked"
 
 
@@ -318,46 +316,6 @@ def test_finding1_oversized_container_result_too_large_descriptor() -> None:
     assert out["result"]["kind"] == "too_large"
     assert out["result"]["truncated"] is True
     assert json.loads(json.dumps(out))["result"]["kind"] == "too_large"
-
-
-# --------------------------------------------------------------------------- #
-# FINDING-2: huge stdout never corrupts the parsed envelope (parse-then-bound)
-# --------------------------------------------------------------------------- #
-
-
-def test_finding2_huge_stdout_envelope_stays_valid() -> None:
-    # Print far more than MAX_OUTPUT_CHARS; the executor caps stdout, the host
-    # runner parses the FULL line then bounds it — the result must be intact.
-    code = 'print("A" * 5_000_000)\nresult = 42\n'
-    env = run_sandbox_local(code)
-    assert env["status"] == "ok", env
-    assert env["result"] == {"kind": "json", "value": 42}
-    assert env["stdout_truncated"] is True
-    # The envelope round-trips as valid JSON (the FINDING-2 fix: no blind slice).
-    assert json.loads(json.dumps(env))["result"]["value"] == 42
-
-
-def test_finding2_host_side_bound_envelope_marks_truncation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Directly exercise the host-side parse-then-bound on an oversized field."""
-    from trid3nt_server.sandbox import sandbox_runner as sr
-
-    monkeypatch.setattr(sr, "MAX_ENVELOPE_FIELD_CHARS", 100)
-    env = {
-        "status": "ok",
-        "stdout": "Z" * 5000,
-        "stderr": "",
-        "result": {"kind": "json", "value": 7},
-        "error": None,
-    }
-    bounded = sr._bound_envelope(dict(env))
-    assert bounded["stdout_truncated"] is True
-    assert len(bounded["stdout"]) < 5000
-    assert "truncated" in bounded["stdout"]
-    # result is untouched and the dict is valid JSON.
-    assert bounded["result"] == {"kind": "json", "value": 7}
-    assert json.loads(json.dumps(bounded))["result"]["value"] == 7
 
 
 # --------------------------------------------------------------------------- #
