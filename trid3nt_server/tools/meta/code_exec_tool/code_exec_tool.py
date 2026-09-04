@@ -1,7 +1,7 @@
 """``code_exec_request`` - user-confirmed Python sandbox atomic tool.
 
-This is the LLM-facing entry point to the egress-denied Python sandbox
-(``infra/python-sandbox/``). It lets the agent run **ad-hoc Python over
+This is the LLM-facing entry point to the network-denied code-exec box
+(``trid3nt_server/sandbox/``). It lets the agent run **ad-hoc Python over
 layers already on the map** — "compute the 95th-percentile flood depth over the
 city polygon", "cross-tabulate damage by land-cover class" — when no existing
 atomic tool fits, then narrate the structured result.
@@ -29,9 +29,9 @@ bypass, and it is honest: there is no hidden auto-approve.
 
 The flow once confirmed
 -----------------------
-``confirmed=True`` -> dispatch via ``sandbox_runner`` (local-subprocess in dev /
-the Cloud Run Job in prod) -> shape a :class:`CodeExecResultPayload` -> return a
-dict carrying BOTH a compact function_response summary (for Gemini narration —
+``confirmed=True`` -> dispatch into the box (``sandbox.box``) -> shape a
+:class:`CodeExecResultPayload` -> return a dict carrying BOTH a compact
+function_response summary (for the model's narration —
 status + the result descriptor + bounded stdout tail, NEVER the full payload) AND
 the full result payload under ``_code_exec_result`` so ``server.py`` emits the
 ``code-exec-result`` envelope (the chart-emission detect-and-emit precedent).
@@ -58,7 +58,7 @@ from trid3nt_contracts.sandbox_contracts import CodeExecResultPayload
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.sandbox import sandbox_runner
+from trid3nt_server.sandbox import box
 
 __all__ = [
     "code_exec_request",
@@ -74,10 +74,10 @@ logger = logging.getLogger("trid3nt_server.tools.meta.code_exec_tool.code_exec_t
 #: The key under which the tool result dict carries the FULL
 #: ``CodeExecResultPayload`` (JSON dict) for ``server.py`` to detect + emit the
 #: ``code-exec-result`` envelope. Stripped from the function_response by
-#: ``adapter.summarize_tool_result`` so Gemini never sees the full payload.
+#: ``adapter.summarize_tool_result`` so the model never sees the full payload.
 CODE_EXEC_RESULT_KEY = "_code_exec_result"
 
-#: Char cap on the stdout/stderr tails fed back to Gemini in the
+#: Char cap on the stdout/stderr tails fed back to the model in the
 #: function_response summary (the wire envelope's own caps are larger; the LLM
 #: only needs a short tail to narrate).
 _LLM_TAIL_CHARS = 2000
@@ -122,12 +122,10 @@ def build_code_exec_result_payload(
 ) -> CodeExecResultPayload:
     """Map a sandbox executor envelope -> a validated :class:`CodeExecResultPayload`.
 
-    ``envelope`` is the dict ``run_sandbox_local`` / the container emits:
-    ``{stdout, stderr, result, status, error, stdout_truncated,
-    stderr_truncated, wallclock_cap_seconds, ...}``. We map it onto the wire
-    payload, deriving the single honest ``truncated`` flag from the union of the
-    stdout/stderr truncation flags AND the result descriptor's own ``truncated``
-    marker (executor FINDING-1 cap)."""
+    ``envelope`` is the dict the box returns: ``{stdout, stderr, result,
+    status, error, stdout_truncated, stderr_truncated, duration_s,
+    wallclock_cap_seconds}``. The single honest ``truncated`` flag is the union
+    of the stdout/stderr truncation flags and the result descriptor's own."""
     status = envelope.get("status", "error")
     if status not in ("ok", "error", "timeout", "blocked"):
         status = "error"
@@ -140,7 +138,6 @@ def build_code_exec_result_payload(
     truncated = bool(
         envelope.get("stdout_truncated")
         or envelope.get("stderr_truncated")
-        or envelope.get("envelope_truncated")
         or result_truncated
     )
 
@@ -183,10 +180,10 @@ def _tail(text: str, cap: int) -> str:
 
 
 def summarize_code_exec_for_llm(payload: CodeExecResultPayload) -> dict[str, Any]:
-    """Build the COMPACT function_response Gemini sees (never the full payload).
+    """Build the COMPACT function_response the model sees (never the full payload).
 
     Carries the status, the structured ``result`` descriptor (the numbers the
-    LLM narrates), a short stdout tail, the ``truncated`` honesty
+    model narrates), a short stdout tail, the ``truncated`` honesty
     flag, and the duration. Deliberately omits the wire payload's larger
     stdout/stderr fields and the envelope plumbing — the LLM narrates from
     ``result``, not from raw logs."""
@@ -307,39 +304,7 @@ def code_exec_request(
         len(layer_refs or {}),
     )
 
-    # Dispatch through the sandbox runner. In local mode this returns a finished
-    # envelope dict synchronously; in cloud mode it returns a pending handle whose
-    # result envelope is read back from Cloud Logging (the executor
-    # prints a marker-prefixed envelope to stdout -> Cloud Logging, read under the
-    # agent's identity). A genuine readback failure surfaces a typed error which
-    # we convert to an honest error envelope (never a fabricated result).
-    dispatch = sandbox_runner.submit_sandbox_job(python_code, layer_refs or {})
-
-    if isinstance(dispatch, sandbox_runner.SandboxExecutionHandle):
-        # Cloud dispatch: the executor printed its result envelope to stdout,
-        # which Cloud Run ships to Cloud Logging. read_sandbox_result
-        # polls Cloud Logging for the marker line and returns the parsed envelope.
-        # On a genuine readback failure (envelope not ingested in time, or the
-        # logging client can't be built) it raises a typed error — we convert
-        # that to an HONEST error envelope (never a fabricated result) so the
-        # agent narrates the limitation truthfully.
-        try:
-            envelope = sandbox_runner.read_sandbox_result(dispatch)
-        except (
-            sandbox_runner.SandboxResultNotFound,
-            sandbox_runner.SandboxCloudModeUnavailable,
-        ) as exc:
-            envelope = {
-                "status": "error",
-                "error": str(exc),
-                "stdout": "",
-                "stderr": str(exc),
-                "result": {"kind": "none", "value": None},
-                "stdout_truncated": False,
-                "stderr_truncated": False,
-            }
-    else:
-        envelope = dispatch
+    envelope = box.submit_sandbox_job(python_code, layer_refs or {})
 
     payload = build_code_exec_result_payload(cx_id, envelope)
     summary = summarize_code_exec_for_llm(payload)

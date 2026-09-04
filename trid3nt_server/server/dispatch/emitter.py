@@ -274,13 +274,10 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # heartbeat (feedback_no_sync_blocking_on_asyncio_loop).
         "fetch_aorc_precip",
         "fetch_lter_records",
-        # sandbox-staging: code_exec_request now PRE-FETCHES each layer_ref URI
-        # (single OR a list of animation frames) from S3 into the per-run sandbox
-        # workdir before the jailed executor opens them as local files, then runs
-        # the executor subprocess synchronously -- multi-second sync network +
-        # subprocess work. Off-load so it never stalls the WS heartbeat
-        # (feedback_no_sync_blocking_on_asyncio_loop). The body is emit-free (the
-        # confirm card is emitted on the loop by _gate_on_code_exec; server.py
+        # code_exec_request stages every layer_ref into the run dir (sync network
+        # reads) and then blocks on a container run -- seconds of sync work either
+        # way. Off-load so it never stalls the WS heartbeat. The body is emit-free
+        # (the confirm card is emitted on the loop by _gate_on_code_exec; server.py
         # emits the result envelope), so the off-load is safe.
         "code_exec_request",
         # list_run_frames reads the run's outputs.json from S3 (with a legacy
