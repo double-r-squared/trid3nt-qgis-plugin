@@ -11,7 +11,7 @@ their seams are touched, never speculatively and never to fill in the table.
 | plane | what it holds | state |
 | --- | --- | --- |
 | **workflow** | the six systems a run passes through - fetcher, mesher, assembler, solver, products, runtime | MODELED in part: three seams, listed below |
-| **tool** | the processing tools, the registry, how a tool is surfaced, retrieved and picked | NOT YET MODELED |
+| **tool** | the processing tools, the registry, how a tool is surfaced, retrieved and picked | MODELED in part: one seam, `tool-plane.sysml` |
 | **intelligence** | LLM provider selection, the adapter, the routing between them | NOT YET MODELED |
 | **user** | the chat dock, the canvas, what the model says back | NOT YET MODELED |
 | **record** | the run journal, provenance, and this model with its checker | NOT YET MODELED |
@@ -84,5 +84,6 @@ directory rather than a list somebody maintains.
 | --- | --- | --- |
 | `solve-seam.sysml` | workflow / assembler -> solver -> products | The TELEMAC solve seam: the blocks from the assembler to the readers, the manifest / server-facts / completion / topology / accepted-mesh contracts by their real key names, and the standing laws with their satisfying block and verifying test. |
 | `mesh-seam.sysml` | workflow / mesher | The mesh seam: the router, the recipe, the op tool, the session and its gate, the two mesher adapters and the GPL-isolated box behind one of them, the shared primitives, the artifact record and the topology writer - plus every other shipped driver, which binds here because the purity law is written over the directory they share - with the recipe laws, the box's isolation and the removal doctrine as requirements. |
+| `tool-plane.sysml` | tool / code-exec | The code-exec box: the tool that drives it, the host end that stages and launches, the driver inside the container, and the dispatch that keeps the run off the event loop - with the network-none posture, the staged-data rule and the off-load as requirements. The plane's other systems are unmodeled and stated so above. |
 | `data-seam.sysml` | workflow / fetcher | The data seam under a hydraulic run: the topobathy row's per-water-body-class bed ladders, the classifier that picks one from the rows the reach chain already holds, the BlueTopo source and its declaration, the ladder registry / walker / router, and the result model the datum and coverage ride on - with the signed bathymetry decisions as requirements, each doc naming the decision it lands. |
 | `<seam>-view.md` | as its model | GENERATED. The seam's place, the flow graph, the item tables and the requirement-to-test allocation, derived from `<seam>.sysml` by `python scripts/model_check.py --model docs/model/<seam>.sysml --view`. The suite fails while one is stale; never hand-edit them. |

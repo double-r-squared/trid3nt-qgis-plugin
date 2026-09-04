@@ -99,7 +99,8 @@ reference.
   -- both the GCP-era MongoDB MCP path and the AWS DynamoDB backend were
   removed for the local-only build (Decision 0006).
 - Heavy/sandboxed compute runs locally: SFINCS via `local-docker`, MODFLOW
-  and the Python sandbox against the local `mf6` binary / subprocess,
+  against the local `mf6` binary, the `code_exec` box in a network-none
+  container (`sandbox/`),
   GeoClaw/TELEMAC/ELMFIRE via locally-built docker images -- see
   [Engines](../docs/site/engines.md) for the per-engine matrix. No AWS Batch,
   no cloud queue.

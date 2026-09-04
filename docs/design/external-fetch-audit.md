@@ -298,13 +298,12 @@ argument -- it reuses the current sanctioned hook. It is `__main__`-guarded
 beats a wrong execution.
 
 **The `code_exec` playground is not an egress path** -- verified, not assumed.
-`trid3nt_server/sandbox/` runs under bwrap with `--unshare-net`
-(`sandbox_hardening.py:33`), plus an in-process `socket.connect` /
-`connect_ex` / `create_connection` monkeypatch and proxy-env stripping
-(`sandbox_executor.py:178-230`), and fails CLOSED when bwrap is missing
-(`:368-369`). Hygiene note only: `DEFAULT_NET_ALLOW` (`:102-107`) still lists
-`googleapis.com`, `google.internal`, `mongodb.net` -- dead GCP/Atlas-era hosts,
-moot behind the netns but stale.
+`trid3nt_server/sandbox/` runs the snippet in a `docker run --network none`
+container (`box.py`), and the driver inside it imports nothing that could
+fetch (`driver.py`) -- a rule the model checks as a forbidden import edge. Every
+layer a snippet reads is staged into the run directory by the HOST before the
+container starts, so a world-read stays on the router's gate-visible fetch
+path.
 
 **DEV-DRIVER, each proven by an absent product call site** (basename grep across
 `trid3nt_server/` returns nothing, or only provenance prose):
