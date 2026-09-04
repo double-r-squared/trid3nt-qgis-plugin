@@ -38,7 +38,6 @@ ROOTS: tuple[str, ...] = (
     "trid3nt_server.__main__",   # python -m trid3nt_server, delegates to .main
     "trid3nt_server.tools",      # the tool registry: import-time @register_tool surface
     "workers.telemac.entrypoint",
-    "workers.mesh.entrypoint",
     "plugin",                    # QGIS calls plugin.classFactory on load
 )
 

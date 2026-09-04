@@ -1,24 +1,21 @@
-# TRID3NT mesh worker -- oceanmesh coastal_tin generator (oceanmesh wave leg 2).
+# TRID3NT mesh environment -- the box OceanMesh2D lives in.
 #
-# A DEDICATED, GPL-ISOLATED mesh worker (the load-bearing decision below): the
-# `oceanmesh` PyPI package is GPL-3, so -- exactly like gmsh in the TELEMAC image
-# -- it must NEVER enter the server venv. It also carries three pybind11 C++
-# extensions (delaunay_class / HamiltonJacobi / fast_geometry) that link CGAL
-# (>=5.0) -> GMP + MPFR, so it needs a full C++ toolchain to build. Riding an
-# existing worker would either drag CGAL into that image or fail the source
-# build; a slim, single-purpose mesh image is the honest home (container-hygiene
-# rule: multi-stage build, minimal runtime, size reported in ADR 0101).
+# This image is an ENVIRONMENT, not a worker: it carries the CHLNDDEV
+# `oceanmesh` port and nothing of ours. The mesh recipe path
+# (trid3nt_server/workflows/mesh/meshers/om2d.py) bind-mounts its driver at
+# /drivers and a rundir at /data, overrides the entrypoint with `python`, and
+# runs the driver here; the library is the only thing this image supplies.
 #
-# Backs the server-side agent/mesh/coastal_tin.py component: shoreline + DEM ->
-# graded coastal TIN via OceanMesh2D sizing functions (distance / feature-size /
-# wavelength / slope grading + gradation enforcement). NO solver consumes the
-# TIN yet (future SCHISM/TELEMAC-coastal); this wave lands the generator + a
-# paper-first validation case (oceanmesh's own shipped test geometry + the
-# OceanMesh2D User Guide quality floor).
+# GPL ISOLATION is why the box exists. `oceanmesh` is GPL-3, so -- exactly like
+# gmsh in the TELEMAC image -- it must never enter the server venv. It also
+# carries three pybind11 C++ extensions (delaunay_class / HamiltonJacobi /
+# fast_geometry) that link CGAL (>=5.0) -> GMP + MPFR, so it needs a full C++
+# toolchain to build: riding an existing image would drag CGAL into that image
+# or fail the source build.
 #
-# Shoreline input: a vector polygon shapefile supplied per-run via the manifest
-# (GSHHG L1 is the keyless source oceanmesh's README + tests use). The validation
-# case uses oceanmesh's OWN bundled test fixtures so it needs no network.
+# Every input is bind-mounted per run: the GSHHG L1 polygon shapefile at
+# /shoreline, the config and arrays at /data. The container is run with
+# `--network none` and resolves nothing itself.
 
 # --------------------------------------------------------------------------- #
 # Stage 1: build oceanmesh (+ its CGAL-linked C++ extensions) into a venv.
@@ -46,18 +43,17 @@ RUN pip install --no-cache-dir "numpy<2" \
     && pip install --no-cache-dir "git+https://github.com/CHLNDDEV/oceanmesh.git@${OCEANMESH_REF}" meshio
 
 # --------------------------------------------------------------------------- #
-# Stage 2: slim runtime -- the venv + the worker code only.
+# Stage 2: slim runtime -- the venv and nothing else.
 # --------------------------------------------------------------------------- #
 FROM python:3.11-slim AS runtime
-LABEL org.opencontainers.image.title="trid3nt-mesh-worker" \
-      org.opencontainers.image.description="oceanmesh (GPL-3) coastal_tin generator: shoreline+DEM -> graded coastal TIN via OceanMesh2D sizing functions. Reads a manifest from /data, writes coastal_tin.geojson + mesh_stats.json." \
+LABEL org.opencontainers.image.title="trid3nt-mesh" \
+      org.opencontainers.image.description="The GPL-isolated OceanMesh2D environment: the CHLNDDEV oceanmesh port on python 3.11, run with a driver and a rundir bind-mounted in." \
       org.opencontainers.image.licenses="GPL-3.0-or-later"
 
 # Runtime shared libs the CGAL-linked oceanmesh C++ extensions dlopen (GMP +
 # MPFR; CGAL is header-only). The GDAL/GEOS/PROJ natives ride inside the
 # rasterio/fiona/shapely manylinux wheels -- but the fiona wheel dlopen()s
-# libexpat (the documented modflow/rasterio lesson, ADR 0100), so libexpat1 is
-# explicitly added.
+# libexpat, so libexpat1 is explicitly added.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libgmp10 libmpfr6 libexpat1 \
     && rm -rf /var/lib/apt/lists/*
@@ -65,8 +61,3 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=build /opt/mesh/.venv /opt/mesh/.venv
 ENV PATH="/opt/mesh/.venv/bin:$PATH" \
     OCEANMESH_INPOLY_ACCEL=1
-
-WORKDIR /app
-COPY __init__.py entrypoint.py coastal_tin_build.py /app/
-
-ENTRYPOINT ["python", "/app/entrypoint.py"]

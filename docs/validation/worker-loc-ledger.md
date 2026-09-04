@@ -151,3 +151,23 @@ column.
 
 Docs are excluded from every figure above (+1,166 across `docs/`, of which the
 DELETION_LEDGER is +546).
+
+## Wave E - the mesh worker cut (2026-09-04)
+
+| worker dir | product LOC before | product LOC after | test LOC | files |
+|---|---|---|---|---|
+| workers/mesh/ | 346 | **0** | 0 | 3 -> 0 |
+
+`workers/mesh/` no longer holds Python. Its three modules (`entrypoint.py` 136,
+`coastal_tin_build.py` 203, `__init__.py` 7) were the pre-recipe payload: an
+image `ENTRYPOINT` reading a `manifest.json` and building one hard-coded
+coastal TIN. The recipe path shells the same image with `--entrypoint python`
+over a bind-mounted driver
+(`trid3nt_server/workflows/mesh/meshers/drivers/om2d_driver.py`), so the baked
+entrypoint was unreachable and the server half it named
+(`agent/mesh/coastal_tin.py`) had already gone to the attic. What remains at
+`workers/mesh/` is a Dockerfile: the GPL-isolated OceanMesh2D ENVIRONMENT.
+
+The workers TOTAL is now **2,873** product (`workers/telemac/` alone, excluding
+the 34-line root `conftest.py`) and **798** test, against row 0's 46,947 /
+13,782.
