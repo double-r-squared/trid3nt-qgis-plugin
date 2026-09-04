@@ -1286,14 +1286,14 @@
       "module": "scripts.assemble_proof_packet",
       "package": "scripts",
       "path": "scripts/assemble_proof_packet.py",
-      "loc": 893,
+      "loc": 1025,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 330
+      "unresolved_calls": 395
     },
     {
       "module": "scripts.backfill_run_journal",
@@ -1387,19 +1387,6 @@
       "unresolved_calls": 96
     },
     {
-      "module": "scripts.drive_telemac_leg_4b",
-      "package": "scripts",
-      "path": "scripts/drive_telemac_leg_4b.py",
-      "loc": 193,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 71
-    },
-    {
       "module": "scripts.gen_tool_support_page",
       "package": "scripts",
       "path": "scripts/gen_tool_support_page.py",
@@ -1429,14 +1416,14 @@
       "module": "scripts.model_check",
       "package": "scripts",
       "path": "scripts/model_check.py",
-      "loc": 761,
+      "loc": 788,
       "reachable": false,
       "test_only": true,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 330
+      "unresolved_calls": 336
     },
     {
       "module": "scripts.proof_artemis_composer_live",
@@ -1465,23 +1452,10 @@
       "unresolved_calls": 104
     },
     {
-      "module": "scripts.proof_artemis_real_breakwater",
-      "package": "scripts",
-      "path": "scripts/proof_artemis_real_breakwater.py",
-      "loc": 177,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 115
-    },
-    {
       "module": "scripts.proof_artemis_real_breakwater_v2",
       "package": "scripts",
       "path": "scripts/proof_artemis_real_breakwater_v2.py",
-      "loc": 309,
+      "loc": 308,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -1504,23 +1478,10 @@
       "unresolved_calls": 51
     },
     {
-      "module": "scripts.proof_bathymetry_input_layer",
-      "package": "scripts",
-      "path": "scripts/proof_bathymetry_input_layer.py",
-      "loc": 52,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 13
-    },
-    {
       "module": "scripts.proof_rerun_with_overrides",
       "package": "scripts",
       "path": "scripts/proof_rerun_with_overrides.py",
-      "loc": 326,
+      "loc": 327,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -1541,32 +1502,6 @@
       "is_script": true,
       "is_marker": false,
       "unresolved_calls": 129
-    },
-    {
-      "module": "scripts.proof_telemac_bed_continuity",
-      "package": "scripts",
-      "path": "scripts/proof_telemac_bed_continuity.py",
-      "loc": 71,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 27
-    },
-    {
-      "module": "scripts.proof_telemac_rain",
-      "package": "scripts",
-      "path": "scripts/proof_telemac_rain.py",
-      "loc": 178,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 119
     },
     {
       "module": "scripts.proof_wave_bed_input_live",
@@ -1595,30 +1530,17 @@
       "unresolved_calls": 18
     },
     {
-      "module": "scripts.prove_telemac_seam",
-      "package": "scripts",
-      "path": "scripts/prove_telemac_seam.py",
-      "loc": 131,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 35
-    },
-    {
       "module": "scripts.render_all_layers_proof",
       "package": "scripts",
       "path": "scripts/render_all_layers_proof.py",
-      "loc": 830,
+      "loc": 861,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 398
+      "unresolved_calls": 408
     },
     {
       "module": "scripts.render_fidelity_proof_generic",
@@ -1650,7 +1572,7 @@
       "module": "scripts.render_selafin_animation",
       "package": "scripts",
       "path": "scripts/render_selafin_animation.py",
-      "loc": 882,
+      "loc": 900,
       "reachable": false,
       "test_only": true,
       "script_only": false,
@@ -1712,75 +1634,10 @@
       "unresolved_calls": 52
     },
     {
-      "module": "scripts.sandbox.oceanmesh._mesh_incontainer",
-      "package": "scripts",
-      "path": "scripts/sandbox/oceanmesh/_mesh_incontainer.py",
-      "loc": 157,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 79
-    },
-    {
-      "module": "scripts.sandbox.oceanmesh._mesh_watershed_incontainer",
-      "package": "scripts",
-      "path": "scripts/sandbox/oceanmesh/_mesh_watershed_incontainer.py",
-      "loc": 136,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 83
-    },
-    {
-      "module": "scripts.sandbox.oceanmesh.build_coastal_mesh",
-      "package": "scripts",
-      "path": "scripts/sandbox/oceanmesh/build_coastal_mesh.py",
-      "loc": 384,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 141
-    },
-    {
-      "module": "scripts.sandbox.oceanmesh.build_coastal_water_edge_mesh",
-      "package": "scripts",
-      "path": "scripts/sandbox/oceanmesh/build_coastal_water_edge_mesh.py",
-      "loc": 315,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 106
-    },
-    {
-      "module": "scripts.sandbox.oceanmesh.build_watershed_mesh",
-      "package": "scripts",
-      "path": "scripts/sandbox/oceanmesh/build_watershed_mesh.py",
-      "loc": 358,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 135
-    },
-    {
       "module": "scripts.sandbox.oceanmesh.merc_render",
       "package": "scripts",
       "path": "scripts/sandbox/oceanmesh/merc_render.py",
-      "loc": 142,
+      "loc": 141,
       "reachable": false,
       "test_only": true,
       "script_only": false,
@@ -1793,7 +1650,7 @@
       "module": "scripts.sandbox.oceanmesh.mesh_formats",
       "package": "scripts",
       "path": "scripts/sandbox/oceanmesh/mesh_formats.py",
-      "loc": 284,
+      "loc": 287,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -1801,19 +1658,6 @@
       "is_script": true,
       "is_marker": false,
       "unresolved_calls": 148
-    },
-    {
-      "module": "scripts.sandbox.oceanmesh.render_mesh",
-      "package": "scripts",
-      "path": "scripts/sandbox/oceanmesh/render_mesh.py",
-      "loc": 78,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 24
     },
     {
       "module": "scripts.sandbox.oceanmesh.schism_gr3",
@@ -1827,32 +1671,6 @@
       "is_script": true,
       "is_marker": false,
       "unresolved_calls": 119
-    },
-    {
-      "module": "scripts.sandbox.oceanmesh.selafin_io",
-      "package": "scripts",
-      "path": "scripts/sandbox/oceanmesh/selafin_io.py",
-      "loc": 93,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 44
-    },
-    {
-      "module": "scripts.sandbox.oceanmesh.water_edge",
-      "package": "scripts",
-      "path": "scripts/sandbox/oceanmesh/water_edge.py",
-      "loc": 538,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 193
     },
     {
       "module": "scripts.sandbox.pysheds_watershed.proof_watershed",
@@ -1894,71 +1712,6 @@
       "unresolved_calls": 50
     },
     {
-      "module": "scripts.sandbox.replication.rog_ballcreek_calib",
-      "package": "scripts",
-      "path": "scripts/sandbox/replication/rog_ballcreek_calib.py",
-      "loc": 89,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 66
-    },
-    {
-      "module": "scripts.sandbox.replication.rog_ballcreek_events",
-      "package": "scripts",
-      "path": "scripts/sandbox/replication/rog_ballcreek_events.py",
-      "loc": 210,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 148
-    },
-    {
-      "module": "scripts.sandbox.replication.rog_ballcreek_final",
-      "package": "scripts",
-      "path": "scripts/sandbox/replication/rog_ballcreek_final.py",
-      "loc": 101,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 92
-    },
-    {
-      "module": "scripts.sandbox.replication.rog_ballcreek_hyeto",
-      "package": "scripts",
-      "path": "scripts/sandbox/replication/rog_ballcreek_hyeto.py",
-      "loc": 190,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 143
-    },
-    {
-      "module": "scripts.sandbox.replication.rog_ballcreek_proofs",
-      "package": "scripts",
-      "path": "scripts/sandbox/replication/rog_ballcreek_proofs.py",
-      "loc": 96,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 49
-    },
-    {
       "module": "scripts.sandbox.telemac.render_erodible_scour_proof",
       "package": "scripts",
       "path": "scripts/sandbox/telemac/render_erodible_scour_proof.py",
@@ -1970,45 +1723,6 @@
       "is_script": true,
       "is_marker": false,
       "unresolved_calls": 103
-    },
-    {
-      "module": "scripts.sandbox.telemac.rog_offline_smoke",
-      "package": "scripts",
-      "path": "scripts/sandbox/telemac/rog_offline_smoke.py",
-      "loc": 107,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 53
-    },
-    {
-      "module": "scripts.sandbox.telemac.rog_render_proofs",
-      "package": "scripts",
-      "path": "scripts/sandbox/telemac/rog_render_proofs.py",
-      "loc": 163,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 117
-    },
-    {
-      "module": "scripts.sandbox.telemac.rog_twopulse_smoke",
-      "package": "scripts",
-      "path": "scripts/sandbox/telemac/rog_twopulse_smoke.py",
-      "loc": 153,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 75
     },
     {
       "module": "scripts.sandbox.telemac.run_erodible_scour_direct",
@@ -2126,19 +1840,6 @@
       "is_script": true,
       "is_marker": false,
       "unresolved_calls": 99
-    },
-    {
-      "module": "scripts.verify_slf_dockload_4b",
-      "package": "scripts",
-      "path": "scripts/verify_slf_dockload_4b.py",
-      "loc": 85,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 30
     },
     {
       "module": "scripts.ws_smoke",
@@ -2755,14 +2456,14 @@
       "module": "tests.test_code_exec_tool",
       "package": "tests",
       "path": "tests/test_code_exec_tool.py",
-      "loc": 463,
+      "loc": 421,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 70
+      "unresolved_calls": 60
     },
     {
       "module": "tests.test_cog_io",
@@ -3899,7 +3600,7 @@
       "module": "tests.test_mesh_topology_and_bed",
       "package": "tests",
       "path": "tests/test_mesh_topology_and_bed.py",
-      "loc": 572,
+      "loc": 573,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -3912,14 +3613,14 @@
       "module": "tests.test_model_conformance",
       "package": "tests",
       "path": "tests/test_model_conformance.py",
-      "loc": 125,
+      "loc": 139,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 37
+      "unresolved_calls": 43
     },
     {
       "module": "tests.test_model_debris_flow",
@@ -3946,19 +3647,6 @@
       "is_script": false,
       "is_marker": false,
       "unresolved_calls": 69
-    },
-    {
-      "module": "tests.test_mongo_mcp_wiring",
-      "package": "tests",
-      "path": "tests/test_mongo_mcp_wiring.py",
-      "loc": 157,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": true,
-      "is_script": false,
-      "is_marker": false,
-      "unresolved_calls": 6
     },
     {
       "module": "tests.test_multi_turn_loop",
@@ -4102,6 +3790,19 @@
       "is_script": false,
       "is_marker": false,
       "unresolved_calls": 61
+    },
+    {
+      "module": "tests.test_persistence_singleton_wiring",
+      "package": "tests",
+      "path": "tests/test_persistence_singleton_wiring.py",
+      "loc": 157,
+      "reachable": false,
+      "test_only": false,
+      "script_only": false,
+      "is_test": true,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 6
     },
     {
       "module": "tests.test_physics_registry",
@@ -5303,14 +5004,14 @@
       "module": "tests.test_run_river_dye_scenario",
       "package": "tests",
       "path": "tests/test_run_river_dye_scenario.py",
-      "loc": 799,
+      "loc": 841,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 148
+      "unresolved_calls": 153
     },
     {
       "module": "tests.test_run_telemac_chain",
@@ -5339,30 +5040,17 @@
       "unresolved_calls": 58
     },
     {
-      "module": "tests.test_sandbox_hardening",
+      "module": "tests.test_sandbox_box",
       "package": "tests",
-      "path": "tests/test_sandbox_hardening.py",
-      "loc": 376,
+      "path": "tests/test_sandbox_box.py",
+      "loc": 235,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 40
-    },
-    {
-      "module": "tests.test_sandbox_runner",
-      "package": "tests",
-      "path": "tests/test_sandbox_runner.py",
-      "loc": 602,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": true,
-      "is_script": false,
-      "is_marker": false,
-      "unresolved_calls": 69
+      "unresolved_calls": 41
     },
     {
       "module": "tests.test_satellite_slider",
@@ -5781,43 +5469,43 @@
       "unresolved_calls": 16
     },
     {
-      "module": "tests.test_telemac_author_decks",
+      "module": "tests.test_telemac_author_steering",
       "package": "tests",
-      "path": "tests/test_telemac_author_decks.py",
-      "loc": 606,
+      "path": "tests/test_telemac_author_steering.py",
+      "loc": 599,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 148
+      "unresolved_calls": 147
     },
     {
       "module": "tests.test_telemac_boundary_contract",
       "package": "tests",
       "path": "tests/test_telemac_boundary_contract.py",
-      "loc": 147,
+      "loc": 164,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 34
+      "unresolved_calls": 36
     },
     {
       "module": "tests.test_telemac_cas_validate",
       "package": "tests",
       "path": "tests/test_telemac_cas_validate.py",
-      "loc": 147,
+      "loc": 150,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 34
+      "unresolved_calls": 35
     },
     {
       "module": "tests.test_telemac_do_sag",
@@ -5888,14 +5576,14 @@
       "module": "tests.test_telemac_outflow_stage",
       "package": "tests",
       "path": "tests/test_telemac_outflow_stage.py",
-      "loc": 209,
+      "loc": 245,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 36
+      "unresolved_calls": 40
     },
     {
       "module": "tests.test_telemac_rain_forcing",
@@ -5927,33 +5615,33 @@
       "module": "tests.test_telemac_rain_on_grid_template",
       "package": "tests",
       "path": "tests/test_telemac_rain_on_grid_template.py",
-      "loc": 520,
+      "loc": 532,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 60
+      "unresolved_calls": 62
     },
     {
       "module": "tests.test_telemac_reach_mesh_session",
       "package": "tests",
       "path": "tests/test_telemac_reach_mesh_session.py",
-      "loc": 378,
+      "loc": 380,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 64
+      "unresolved_calls": 65
     },
     {
       "module": "tests.test_telemac_reach_staged_inputs",
       "package": "tests",
       "path": "tests/test_telemac_reach_staged_inputs.py",
-      "loc": 241,
+      "loc": 252,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -6096,7 +5784,7 @@
       "module": "tests.test_tide_series_datum",
       "package": "tests",
       "path": "tests/test_tide_series_datum.py",
-      "loc": 101,
+      "loc": 102,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -6382,7 +6070,7 @@
       "module": "tests.test_workflow_skeleton",
       "package": "tests",
       "path": "tests/test_workflow_skeleton.py",
-      "loc": 592,
+      "loc": 593,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -6746,14 +6434,14 @@
       "module": "trid3nt_contracts.telemac_contracts",
       "package": "trid3nt_contracts",
       "path": "contracts/trid3nt_contracts/telemac_contracts.py",
-      "loc": 705,
+      "loc": 712,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 133
+      "unresolved_calls": 135
     },
     {
       "module": "trid3nt_contracts.tool_metadata",
@@ -7136,14 +6824,14 @@
       "module": "trid3nt_server.emission.styles",
       "package": "trid3nt_server.emission",
       "path": "trid3nt_server/emission/styles.py",
-      "loc": 367,
+      "loc": 370,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 62
+      "unresolved_calls": 61
     },
     {
       "module": "trid3nt_server.emission.uri_registry",
@@ -7486,28 +7174,15 @@
     {
       "module": "trid3nt_server.persistence",
       "package": "trid3nt_server.persistence",
-      "path": "trid3nt_server/persistence/__init__.py",
-      "loc": 11,
+      "path": "trid3nt_server/persistence.py",
+      "loc": 1252,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 0
-    },
-    {
-      "module": "trid3nt_server.persistence.persistence",
-      "package": "trid3nt_server.persistence",
-      "path": "trid3nt_server/persistence/persistence.py",
-      "loc": 1276,
-      "reachable": true,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": false,
-      "is_marker": false,
-      "unresolved_calls": 220
+      "unresolved_calls": 213
     },
     {
       "module": "trid3nt_server.plugin_repo",
@@ -7526,53 +7201,40 @@
       "module": "trid3nt_server.sandbox",
       "package": "trid3nt_server.sandbox",
       "path": "trid3nt_server/sandbox/__init__.py",
-      "loc": 1,
+      "loc": 5,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
-      "is_marker": true,
+      "is_marker": false,
       "unresolved_calls": 0
     },
     {
-      "module": "trid3nt_server.sandbox.sandbox_executor",
+      "module": "trid3nt_server.sandbox.box",
       "package": "trid3nt_server.sandbox",
-      "path": "trid3nt_server/sandbox/sandbox_executor.py",
-      "loc": 864,
+      "path": "trid3nt_server/sandbox/box.py",
+      "loc": 136,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 201
+      "unresolved_calls": 44
     },
     {
-      "module": "trid3nt_server.sandbox.sandbox_hardening",
+      "module": "trid3nt_server.sandbox.driver",
       "package": "trid3nt_server.sandbox",
-      "path": "trid3nt_server/sandbox/sandbox_hardening.py",
-      "loc": 628,
+      "path": "trid3nt_server/sandbox/driver.py",
+      "loc": 200,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 70
-    },
-    {
-      "module": "trid3nt_server.sandbox.sandbox_runner",
-      "package": "trid3nt_server.sandbox",
-      "path": "trid3nt_server/sandbox/sandbox_runner.py",
-      "loc": 588,
-      "reachable": true,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": false,
-      "is_marker": false,
-      "unresolved_calls": 97
+      "unresolved_calls": 111
     },
     {
       "module": "trid3nt_server.scenario_reuse",
@@ -7643,7 +7305,7 @@
       "module": "trid3nt_server.server.dispatch.emitter",
       "package": "trid3nt_server.server",
       "path": "trid3nt_server/server/dispatch/emitter.py",
-      "loc": 1293,
+      "loc": 1290,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -7981,7 +7643,7 @@
       "module": "trid3nt_server.testing.canaries",
       "package": "trid3nt_server.testing",
       "path": "trid3nt_server/testing/canaries.py",
-      "loc": 480,
+      "loc": 491,
       "reachable": false,
       "test_only": false,
       "script_only": true,
@@ -8007,7 +7669,7 @@
       "module": "trid3nt_server.testing.proof_animations",
       "package": "trid3nt_server.testing",
       "path": "trid3nt_server/testing/proof_animations.py",
-      "loc": 289,
+      "loc": 334,
       "reachable": false,
       "test_only": false,
       "script_only": true,
@@ -11023,14 +10685,14 @@
       "module": "trid3nt_server.tools.meta.code_exec_tool.code_exec_tool",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/meta/code_exec_tool/code_exec_tool.py",
-      "loc": 348,
+      "loc": 313,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 41
+      "unresolved_calls": 37
     },
     {
       "module": "trid3nt_server.tools.meta.compose_case_report",
@@ -12765,7 +12427,7 @@
       "module": "trid3nt_server.workflows.lib.workflow",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/lib/workflow.py",
-      "loc": 671,
+      "loc": 674,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -12895,7 +12557,7 @@
       "module": "trid3nt_server.workflows.mesh.meshers.drivers.selafin_cli_driver",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/mesh/meshers/drivers/selafin_cli_driver.py",
-      "loc": 365,
+      "loc": 386,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13025,7 +12687,7 @@
       "module": "trid3nt_server.workflows.mesh.shared.primitives",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/mesh/shared/primitives.py",
-      "loc": 413,
+      "loc": 415,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13038,7 +12700,7 @@
       "module": "trid3nt_server.workflows.mesh.shared.selafin_cli",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/mesh/shared/selafin_cli.py",
-      "loc": 84,
+      "loc": 85,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13077,7 +12739,7 @@
       "module": "trid3nt_server.workflows.mesh.topology",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/mesh/topology.py",
-      "loc": 82,
+      "loc": 92,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13425,17 +13087,30 @@
       "unresolved_calls": 108
     },
     {
-      "module": "trid3nt_server.workflows.telemac.authoring.author",
+      "module": "trid3nt_server.workflows.telemac.authoring.assembler",
       "package": "trid3nt_server.workflows",
-      "path": "trid3nt_server/workflows/telemac/authoring/author.py",
-      "loc": 1619,
+      "path": "trid3nt_server/workflows/telemac/authoring/assembler.py",
+      "loc": 1087,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 498
+      "unresolved_calls": 249
+    },
+    {
+      "module": "trid3nt_server.workflows.telemac.authoring.author",
+      "package": "trid3nt_server.workflows",
+      "path": "trid3nt_server/workflows/telemac/authoring/author.py",
+      "loc": 1707,
+      "reachable": true,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 506
     },
     {
       "module": "trid3nt_server.workflows.telemac.authoring.cas_validate",
@@ -13451,23 +13126,10 @@
       "unresolved_calls": 22
     },
     {
-      "module": "trid3nt_server.workflows.telemac.authoring.deck",
-      "package": "trid3nt_server.workflows",
-      "path": "trid3nt_server/workflows/telemac/authoring/deck.py",
-      "loc": 843,
-      "reachable": true,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": false,
-      "is_marker": false,
-      "unresolved_calls": 190
-    },
-    {
       "module": "trid3nt_server.workflows.telemac.authoring.open_water",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/authoring/open_water.py",
-      "loc": 524,
+      "loc": 526,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13475,19 +13137,6 @@
       "is_script": false,
       "is_marker": false,
       "unresolved_calls": 87
-    },
-    {
-      "module": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "package": "trid3nt_server.workflows",
-      "path": "trid3nt_server/workflows/telemac/authoring/rain_on_grid.py",
-      "loc": 899,
-      "reachable": true,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": false,
-      "is_marker": false,
-      "unresolved_calls": 275
     },
     {
       "module": "trid3nt_server.workflows.telemac.authoring.stratified",
@@ -13555,10 +13204,23 @@
       "unresolved_calls": 0
     },
     {
+      "module": "trid3nt_server.workflows.telemac.helpers.catchment",
+      "package": "trid3nt_server.workflows",
+      "path": "trid3nt_server/workflows/telemac/helpers/catchment.py",
+      "loc": 104,
+      "reachable": true,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 21
+    },
+    {
       "module": "trid3nt_server.workflows.telemac.helpers.errors",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/helpers/errors.py",
-      "loc": 113,
+      "loc": 122,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13571,14 +13233,27 @@
       "module": "trid3nt_server.workflows.telemac.helpers.forcing",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/helpers/forcing.py",
-      "loc": 477,
+      "loc": 575,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 116
+      "unresolved_calls": 154
+    },
+    {
+      "module": "trid3nt_server.workflows.telemac.helpers.infiltration",
+      "package": "trid3nt_server.workflows",
+      "path": "trid3nt_server/workflows/telemac/helpers/infiltration.py",
+      "loc": 100,
+      "reachable": true,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 23
     },
     {
       "module": "trid3nt_server.workflows.telemac.helpers.reach",
@@ -13636,33 +13311,46 @@
       "module": "trid3nt_server.workflows.telemac.products.postprocess_telemac",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/products/postprocess_telemac.py",
-      "loc": 2788,
+      "loc": 2795,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 980
+      "unresolved_calls": 983
     },
     {
       "module": "trid3nt_server.workflows.telemac.products.products",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/products/products.py",
-      "loc": 558,
+      "loc": 575,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 123
+      "unresolved_calls": 126
+    },
+    {
+      "module": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "package": "trid3nt_server.workflows",
+      "path": "trid3nt_server/workflows/telemac/products/rain_on_grid.py",
+      "loc": 332,
+      "reachable": true,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 104
     },
     {
       "module": "trid3nt_server.workflows.telemac.products.run_reads",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/products/run_reads.py",
-      "loc": 371,
+      "loc": 372,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13714,7 +13402,7 @@
       "module": "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/rain_on_grid/rain_on_grid.py",
-      "loc": 307,
+      "loc": 323,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13818,14 +13506,14 @@
       "module": "trid3nt_server.workflows.telemac.river_dye.river_dye",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/river_dye/river_dye.py",
-      "loc": 303,
+      "loc": 316,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 19
+      "unresolved_calls": 27
     },
     {
       "module": "trid3nt_server.workflows.telemac.run_telemac",
@@ -13857,14 +13545,14 @@
       "module": "trid3nt_server.workflows.telemac.solving.solve",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/solving/solve.py",
-      "loc": 239,
+      "loc": 297,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 38
+      "unresolved_calls": 44
     },
     {
       "module": "trid3nt_server.workflows.telemac.stratified_flow",
@@ -13935,7 +13623,7 @@
       "module": "trid3nt_server.workflows.telemac.workflow",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/workflow.py",
-      "loc": 380,
+      "loc": 382,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -14052,20 +13740,20 @@
       "module": "workers.telemac.entrypoint",
       "package": "workers",
       "path": "workers/telemac/entrypoint.py",
-      "loc": 508,
+      "loc": 516,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 161
+      "unresolved_calls": 157
     },
     {
       "module": "workers.telemac.telemac3d_build",
       "package": "workers",
       "path": "workers/telemac/telemac3d_build.py",
-      "loc": 1001,
+      "loc": 1002,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -14078,7 +13766,7 @@
       "module": "workers.telemac.test_entrypoint",
       "package": "workers",
       "path": "workers/telemac/test_entrypoint.py",
-      "loc": 465,
+      "loc": 468,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -15433,6 +15121,13 @@
     },
     {
       "importer": "scripts.assemble_proof_packet",
+      "imported": "trid3nt_server.emission.styles",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "scripts.assemble_proof_packet",
       "imported": "trid3nt_server.testing.proof_animations",
       "static": 4,
       "dynamic": 0,
@@ -15698,27 +15393,6 @@
       "refs": 2
     },
     {
-      "importer": "scripts.drive_telemac_leg_4b",
-      "imported": "scripts._env_guard",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.drive_telemac_leg_4b",
-      "imported": "scripts.seed_showcase_cases",
-      "static": 10,
-      "dynamic": 0,
-      "refs": 8
-    },
-    {
-      "importer": "scripts.drive_telemac_leg_4b",
-      "imported": "trid3nt_server.workflows.telemac.result_reader",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
       "importer": "scripts.proof_artemis_composer_live",
       "imported": "trid3nt_server.tools",
       "static": 1,
@@ -15796,13 +15470,6 @@
       "refs": 1
     },
     {
-      "importer": "scripts.proof_artemis_real_breakwater",
-      "imported": "trid3nt_server.workflows.telemac.result_reader",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
       "importer": "scripts.proof_artemis_real_breakwater_v2",
       "imported": "trid3nt_server.workflows.telemac.result_reader",
       "static": 1,
@@ -15843,13 +15510,6 @@
       "static": 1,
       "dynamic": 0,
       "refs": 0
-    },
-    {
-      "importer": "scripts.proof_bathymetry_input_layer",
-      "imported": "scripts.render_fidelity_proof_generic",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
     },
     {
       "importer": "scripts.proof_rerun_with_overrides",
@@ -15915,20 +15575,6 @@
       "refs": 1
     },
     {
-      "importer": "scripts.proof_telemac_bed_continuity",
-      "imported": "scripts.render_fidelity_proof_generic",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "scripts.proof_telemac_rain",
-      "imported": "scripts._env_guard",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
       "importer": "scripts.proof_wave_bed_input_live",
       "imported": "scripts.render_fidelity_proof_generic",
       "static": 1,
@@ -15964,27 +15610,6 @@
       "refs": 2
     },
     {
-      "importer": "scripts.prove_telemac_seam",
-      "imported": "scripts._env_guard",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.prove_telemac_seam",
-      "imported": "trid3nt_server.workflows.solver.solver",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "scripts.prove_telemac_seam",
-      "imported": "trid3nt_server.workflows.telemac.run_telemac",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
       "importer": "scripts.render_all_layers_proof",
       "imported": "trid3nt_server.emission.publish",
       "static": 3,
@@ -15993,7 +15618,7 @@
     },
     {
       "importer": "scripts.render_all_layers_proof",
-      "imported": "trid3nt_server.persistence.persistence",
+      "imported": "trid3nt_server.persistence",
       "static": 1,
       "dynamic": 0,
       "refs": 1
@@ -16083,158 +15708,11 @@
       "refs": 0
     },
     {
-      "importer": "scripts.sandbox.oceanmesh.build_coastal_mesh",
-      "imported": "scripts.sandbox.oceanmesh.mesh_formats",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_coastal_mesh",
-      "imported": "scripts.sandbox.oceanmesh.render_mesh",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_coastal_mesh",
-      "imported": "scripts.sandbox.oceanmesh.schism_gr3",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_coastal_mesh",
-      "imported": "scripts.sandbox.oceanmesh.selafin_io",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_coastal_mesh",
-      "imported": "trid3nt_server.tools.fetchers._router.hooks.topobathy",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_coastal_water_edge_mesh",
-      "imported": "scripts.sandbox.oceanmesh.build_coastal_mesh",
-      "static": 6,
-      "dynamic": 0,
-      "refs": 7
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_coastal_water_edge_mesh",
-      "imported": "scripts.sandbox.oceanmesh.merc_render",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 5
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_coastal_water_edge_mesh",
-      "imported": "scripts.sandbox.oceanmesh.mesh_formats",
-      "static": 4,
-      "dynamic": 0,
-      "refs": 4
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_coastal_water_edge_mesh",
-      "imported": "scripts.sandbox.oceanmesh.schism_gr3",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_coastal_water_edge_mesh",
-      "imported": "scripts.sandbox.oceanmesh.selafin_io",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_coastal_water_edge_mesh",
-      "imported": "scripts.sandbox.oceanmesh.water_edge",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_watershed_mesh",
-      "imported": "scripts.sandbox.oceanmesh.build_coastal_mesh",
-      "static": 4,
-      "dynamic": 0,
-      "refs": 5
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_watershed_mesh",
-      "imported": "scripts.sandbox.oceanmesh.merc_render",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 6
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_watershed_mesh",
-      "imported": "scripts.sandbox.oceanmesh.mesh_formats",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_watershed_mesh",
-      "imported": "scripts.sandbox.oceanmesh.schism_gr3",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_watershed_mesh",
-      "imported": "scripts.sandbox.oceanmesh.selafin_io",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_watershed_mesh",
-      "imported": "trid3nt_server.tools",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_watershed_mesh",
-      "imported": "trid3nt_server.tools.cache",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.build_watershed_mesh",
-      "imported": "trid3nt_server.tools.processing.delineate_watershed.delineate_watershed",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
       "importer": "scripts.sandbox.oceanmesh.mesh_formats",
       "imported": "scripts.sandbox.oceanmesh.schism_gr3",
       "static": 3,
       "dynamic": 0,
       "refs": 4
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.render_mesh",
-      "imported": "scripts.sandbox.oceanmesh.merc_render",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 7
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.selafin_io",
-      "imported": "scripts.sandbox.oceanmesh.schism_gr3",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
     },
     {
       "importer": "scripts.sandbox.pysheds_watershed.proof_watershed",
@@ -16270,48 +15748,6 @@
       "static": 3,
       "dynamic": 0,
       "refs": 3
-    },
-    {
-      "importer": "scripts.sandbox.replication.rog_ballcreek_calib",
-      "imported": "trid3nt_server.tools.processing.compute_skill_metrics.compute_skill_metrics",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 4
-    },
-    {
-      "importer": "scripts.sandbox.replication.rog_ballcreek_events",
-      "imported": "trid3nt_server.tools",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.sandbox.replication.rog_ballcreek_events",
-      "imported": "trid3nt_server.tools.processing.compute_skill_metrics.compute_skill_metrics",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 4
-    },
-    {
-      "importer": "scripts.sandbox.replication.rog_ballcreek_final",
-      "imported": "trid3nt_server.tools.processing.compute_skill_metrics.compute_skill_metrics",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 4
-    },
-    {
-      "importer": "scripts.sandbox.replication.rog_ballcreek_hyeto",
-      "imported": "trid3nt_server.tools.processing.compute_skill_metrics.compute_skill_metrics",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 4
-    },
-    {
-      "importer": "scripts.sandbox.replication.rog_ballcreek_proofs",
-      "imported": "trid3nt_server.tools.processing.compute_skill_metrics.compute_skill_metrics",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
     },
     {
       "importer": "scripts.sandbox.telemac.run_erodible_scour_direct",
@@ -16651,7 +16087,7 @@
     },
     {
       "importer": "tests.reach_chain",
-      "imported": "trid3nt_server.workflows.telemac.authoring.deck",
+      "imported": "trid3nt_server.workflows.telemac.authoring.assembler",
       "static": 1,
       "dynamic": 0,
       "refs": 0
@@ -18058,10 +17494,10 @@
     },
     {
       "importer": "tests.test_code_exec_tool",
-      "imported": "trid3nt_server.sandbox.sandbox_runner",
-      "static": 2,
+      "imported": "trid3nt_server.sandbox.box",
+      "static": 1,
       "dynamic": 0,
-      "refs": 2
+      "refs": 0
     },
     {
       "importer": "tests.test_code_exec_tool",
@@ -21011,20 +20447,6 @@
       "refs": 2
     },
     {
-      "importer": "tests.test_mongo_mcp_wiring",
-      "imported": "trid3nt_server.persistence",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "tests.test_mongo_mcp_wiring",
-      "imported": "trid3nt_server.server",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 17
-    },
-    {
       "importer": "tests.test_multi_turn_loop",
       "imported": "trid3nt_contracts",
       "static": 1,
@@ -21261,6 +20683,20 @@
       "static": 3,
       "dynamic": 0,
       "refs": 14
+    },
+    {
+      "importer": "tests.test_persistence_singleton_wiring",
+      "imported": "trid3nt_server.persistence",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 3
+    },
+    {
+      "importer": "tests.test_persistence_singleton_wiring",
+      "imported": "trid3nt_server.server",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 17
     },
     {
       "importer": "tests.test_physics_registry",
@@ -24365,10 +23801,17 @@
     },
     {
       "importer": "tests.test_run_river_dye_scenario",
+      "imported": "trid3nt_contracts.common",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "tests.test_run_river_dye_scenario",
       "imported": "trid3nt_contracts.telemac_contracts",
       "static": 2,
       "dynamic": 0,
-      "refs": 1
+      "refs": 2
     },
     {
       "importer": "tests.test_run_river_dye_scenario",
@@ -24428,8 +23871,8 @@
     },
     {
       "importer": "tests.test_run_river_dye_scenario",
-      "imported": "trid3nt_server.workflows.telemac.authoring.deck",
-      "static": 3,
+      "imported": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "static": 2,
       "dynamic": 0,
       "refs": 0
     },
@@ -24492,9 +23935,9 @@
     {
       "importer": "tests.test_run_river_dye_scenario",
       "imported": "trid3nt_server.workflows.telemac.river_dye.river_dye",
-      "static": 9,
+      "static": 12,
       "dynamic": 0,
-      "refs": 5
+      "refs": 8
     },
     {
       "importer": "tests.test_run_river_dye_scenario",
@@ -24546,49 +23989,28 @@
       "refs": 10
     },
     {
-      "importer": "tests.test_sandbox_hardening",
-      "imported": "trid3nt_server.sandbox.sandbox_hardening",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 17
-    },
-    {
-      "importer": "tests.test_sandbox_hardening",
-      "imported": "trid3nt_server.sandbox.sandbox_runner",
+      "importer": "tests.test_sandbox_box",
+      "imported": "trid3nt_server.sandbox.box",
       "static": 2,
       "dynamic": 0,
-      "refs": 6
+      "refs": 16
     },
     {
-      "importer": "tests.test_sandbox_runner",
-      "imported": "trid3nt_contracts",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "tests.test_sandbox_runner",
-      "imported": "trid3nt_contracts.chart_contracts",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "tests.test_sandbox_runner",
-      "imported": "trid3nt_server.sandbox.sandbox_executor",
+      "importer": "tests.test_sandbox_box",
+      "imported": "trid3nt_server.sandbox.driver",
       "static": 0,
       "dynamic": 1,
       "refs": 0
     },
     {
-      "importer": "tests.test_sandbox_runner",
-      "imported": "trid3nt_server.sandbox.sandbox_runner",
-      "static": 8,
+      "importer": "tests.test_sandbox_box",
+      "imported": "trid3nt_server.server.dispatch.emitter",
+      "static": 1,
       "dynamic": 0,
-      "refs": 28
+      "refs": 1
     },
     {
-      "importer": "tests.test_sandbox_runner",
+      "importer": "tests.test_sandbox_box",
       "imported": "trid3nt_server.tools.cache",
       "static": 0,
       "dynamic": 1,
@@ -25240,7 +24662,7 @@
     },
     {
       "importer": "tests.test_spill_fraction_chainage",
-      "imported": "trid3nt_server.workflows.telemac.authoring.deck",
+      "imported": "trid3nt_server.workflows.telemac.authoring.assembler",
       "static": 1,
       "dynamic": 0,
       "refs": 1
@@ -25463,7 +24885,7 @@
       "refs": 4
     },
     {
-      "importer": "tests.test_telemac_author_decks",
+      "importer": "tests.test_telemac_author_steering",
       "imported": "trid3nt_server.workflows.telemac.authoring.author",
       "static": 1,
       "dynamic": 0,
@@ -25475,6 +24897,13 @@
       "static": 1,
       "dynamic": 0,
       "refs": 1
+    },
+    {
+      "importer": "tests.test_telemac_boundary_contract",
+      "imported": "trid3nt_server.workflows.mesh.topology",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 0
     },
     {
       "importer": "tests.test_telemac_boundary_contract",
@@ -25541,7 +24970,7 @@
     },
     {
       "importer": "tests.test_telemac_do_sag",
-      "imported": "trid3nt_server.workflows.telemac.authoring.deck",
+      "imported": "trid3nt_server.workflows.telemac.authoring.assembler",
       "static": 1,
       "dynamic": 0,
       "refs": 0
@@ -25744,17 +25173,17 @@
     },
     {
       "importer": "tests.test_telemac_outflow_stage",
-      "imported": "trid3nt_server.workflows.telemac.authoring.author",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 14
-    },
-    {
-      "importer": "tests.test_telemac_outflow_stage",
-      "imported": "trid3nt_server.workflows.telemac.authoring.deck",
+      "imported": "trid3nt_server.workflows.telemac.authoring.assembler",
       "static": 1,
       "dynamic": 0,
       "refs": 4
+    },
+    {
+      "importer": "tests.test_telemac_outflow_stage",
+      "imported": "trid3nt_server.workflows.telemac.authoring.author",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 15
     },
     {
       "importer": "tests.test_telemac_outflow_stage",
@@ -25856,10 +25285,10 @@
     },
     {
       "importer": "tests.test_telemac_rain_on_grid_template",
-      "imported": "trid3nt_server.workflows.mesh.topology",
+      "imported": "trid3nt_server.workflows.telemac.authoring.assembler",
       "static": 2,
       "dynamic": 0,
-      "refs": 0
+      "refs": 1
     },
     {
       "importer": "tests.test_telemac_rain_on_grid_template",
@@ -25870,10 +25299,31 @@
     },
     {
       "importer": "tests.test_telemac_rain_on_grid_template",
-      "imported": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "static": 14,
+      "imported": "trid3nt_server.workflows.telemac.helpers.catchment",
+      "static": 4,
       "dynamic": 0,
-      "refs": 13
+      "refs": 4
+    },
+    {
+      "importer": "tests.test_telemac_rain_on_grid_template",
+      "imported": "trid3nt_server.workflows.telemac.helpers.errors",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "tests.test_telemac_rain_on_grid_template",
+      "imported": "trid3nt_server.workflows.telemac.helpers.forcing",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 4
+    },
+    {
+      "importer": "tests.test_telemac_rain_on_grid_template",
+      "imported": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 4
     },
     {
       "importer": "tests.test_telemac_rain_on_grid_template",
@@ -25940,7 +25390,7 @@
     },
     {
       "importer": "tests.test_telemac_reach_mesh_session",
-      "imported": "trid3nt_server.workflows.telemac.authoring.deck",
+      "imported": "trid3nt_server.workflows.telemac.authoring.assembler",
       "static": 1,
       "dynamic": 0,
       "refs": 1
@@ -25968,7 +25418,7 @@
     },
     {
       "importer": "tests.test_telemac_reach_staged_inputs",
-      "imported": "trid3nt_server.workflows.telemac.authoring.deck",
+      "imported": "trid3nt_server.workflows.telemac.authoring.assembler",
       "static": 5,
       "dynamic": 0,
       "refs": 11
@@ -28565,45 +28015,31 @@
     },
     {
       "importer": "trid3nt_server.persistence",
-      "imported": "trid3nt_server.persistence.persistence",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.persistence.persistence",
       "imported": "trid3nt_contracts",
       "static": 2,
       "dynamic": 0,
       "refs": 6
     },
     {
-      "importer": "trid3nt_server.persistence.persistence",
+      "importer": "trid3nt_server.persistence",
       "imported": "trid3nt_contracts.case",
       "static": 4,
       "dynamic": 0,
       "refs": 5
     },
     {
-      "importer": "trid3nt_server.persistence.persistence",
+      "importer": "trid3nt_server.persistence",
       "imported": "trid3nt_contracts.collections",
       "static": 3,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "trid3nt_server.persistence.persistence",
+      "importer": "trid3nt_server.persistence",
       "imported": "trid3nt_contracts.user",
       "static": 2,
       "dynamic": 0,
       "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.persistence.persistence",
-      "imported": "trid3nt_server.persistence",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
     },
     {
       "importer": "trid3nt_server.plugin_repo",
@@ -28613,28 +28049,21 @@
       "refs": 1
     },
     {
-      "importer": "trid3nt_server.sandbox.sandbox_executor",
-      "imported": "trid3nt_contracts.chart_contracts",
+      "importer": "trid3nt_server.sandbox",
+      "imported": "trid3nt_server.sandbox.box",
       "static": 2,
       "dynamic": 0,
       "refs": 0
     },
     {
-      "importer": "trid3nt_server.sandbox.sandbox_runner",
-      "imported": "trid3nt_server.sandbox.sandbox_executor",
+      "importer": "trid3nt_server.sandbox.box",
+      "imported": "trid3nt_server.sandbox.driver",
       "static": 0,
       "dynamic": 1,
       "refs": 0
     },
     {
-      "importer": "trid3nt_server.sandbox.sandbox_runner",
-      "imported": "trid3nt_server.sandbox.sandbox_hardening",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 5
-    },
-    {
-      "importer": "trid3nt_server.sandbox.sandbox_runner",
+      "importer": "trid3nt_server.sandbox.box",
       "imported": "trid3nt_server.tools.cache",
       "static": 2,
       "dynamic": 0,
@@ -33668,10 +33097,10 @@
     },
     {
       "importer": "trid3nt_server.tools.meta.code_exec_tool.code_exec_tool",
-      "imported": "trid3nt_server.sandbox.sandbox_runner",
+      "imported": "trid3nt_server.sandbox.box",
       "static": 2,
       "dynamic": 0,
-      "refs": 2
+      "refs": 1
     },
     {
       "importer": "trid3nt_server.tools.meta.code_exec_tool.code_exec_tool",
@@ -35789,7 +35218,7 @@
     },
     {
       "importer": "trid3nt_server.workflows.lib.journal",
-      "imported": "trid3nt_server.persistence.persistence",
+      "imported": "trid3nt_server.persistence",
       "static": 2,
       "dynamic": 0,
       "refs": 1
@@ -37160,11 +36589,151 @@
       "refs": 0
     },
     {
-      "importer": "trid3nt_server.workflows.telemac.authoring.author",
-      "imported": "trid3nt_server.workflows.lib",
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_contracts",
       "static": 2,
       "dynamic": 0,
       "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.emission.pipeline_emitter",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.tools.processing._geometry_common",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.lib",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.mesh.shared.nodes",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.mesh.topology",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.shared.physics_registry",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.solver.solver",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.telemac.authoring",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.telemac.authoring.author",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.telemac.authoring.open_water",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.telemac.helpers.catchment",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.telemac.helpers.errors",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 12
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.telemac.helpers.reach",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.telemac.helpers.substance",
+      "static": 6,
+      "dynamic": 0,
+      "refs": 5
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.telemac.release_layer",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.telemac.release_point",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "imported": "trid3nt_server.workflows.telemac.result_reader",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.author",
+      "imported": "trid3nt_server.workflows.lib",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.authoring.author",
+      "imported": "trid3nt_server.workflows.mesh.topology",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
     },
     {
       "importer": "trid3nt_server.workflows.telemac.authoring.author",
@@ -37186,125 +36755,6 @@
       "static": 0,
       "dynamic": 1,
       "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_contracts",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.emission.pipeline_emitter",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.tools.processing._geometry_common",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.lib",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.mesh.shared.nodes",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.mesh.topology",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.shared.physics_registry",
-      "static": 4,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.solver.solver",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.telemac.authoring",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.telemac.authoring.author",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.telemac.authoring.open_water",
-      "static": 4,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.telemac.helpers.errors",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 10
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.telemac.helpers.reach",
-      "static": 4,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.telemac.helpers.substance",
-      "static": 6,
-      "dynamic": 0,
-      "refs": 5
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.telemac.release_layer",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.telemac.release_point",
-      "static": 4,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.deck",
-      "imported": "trid3nt_server.workflows.telemac.result_reader",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
     },
     {
       "importer": "trid3nt_server.workflows.telemac.authoring.open_water",
@@ -37357,167 +36807,6 @@
     },
     {
       "importer": "trid3nt_server.workflows.telemac.authoring.open_water",
-      "imported": "trid3nt_server.workflows.telemac.solving.solve",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_contracts",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_contracts.common",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 8
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_contracts.telemac_contracts",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.emission.pipeline_emitter",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.tools",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.tools.cache",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.lib",
-      "static": 4,
-      "dynamic": 0,
-      "refs": 6
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.lib.user_input",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.mesh.shared.nodes",
-      "static": 4,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.mesh.topology",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.shared.aoi",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.shared.layer_fields",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.shared.publish_product_layer",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.solver.solver",
-      "static": 5,
-      "dynamic": 0,
-      "refs": 4
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.telemac.authoring",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.telemac.authoring.author",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 4
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.telemac.authoring.open_water",
-      "static": 6,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.telemac.products.postprocess_telemac",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.telemac.products.run_reads",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration",
-      "static": 5,
-      "dynamic": 0,
-      "refs": 5
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.telemac.results_mesh_seam",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "imported": "trid3nt_server.workflows.telemac.run_telemac",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
       "imported": "trid3nt_server.workflows.telemac.solving.solve",
       "static": 2,
       "dynamic": 0,
@@ -37727,6 +37016,55 @@
       "refs": 0
     },
     {
+      "importer": "trid3nt_server.workflows.telemac.helpers.catchment",
+      "imported": "trid3nt_server.workflows.lib",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.catchment",
+      "imported": "trid3nt_server.workflows.lib.user_input",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.catchment",
+      "imported": "trid3nt_server.workflows.mesh.shared.nodes",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.catchment",
+      "imported": "trid3nt_server.workflows.shared.aoi",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.catchment",
+      "imported": "trid3nt_server.workflows.telemac.helpers",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.catchment",
+      "imported": "trid3nt_server.workflows.telemac.helpers.errors",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.errors",
+      "imported": "trid3nt_server.workflows.lib",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
       "importer": "trid3nt_server.workflows.telemac.helpers.forcing",
       "imported": "trid3nt_contracts.common",
       "static": 2,
@@ -37757,16 +37095,16 @@
     {
       "importer": "trid3nt_server.workflows.telemac.helpers.forcing",
       "imported": "trid3nt_server.tools",
-      "static": 3,
+      "static": 4,
       "dynamic": 0,
       "refs": 0
     },
     {
       "importer": "trid3nt_server.workflows.telemac.helpers.forcing",
       "imported": "trid3nt_server.workflows.lib",
-      "static": 6,
+      "static": 7,
       "dynamic": 0,
-      "refs": 4
+      "refs": 5
     },
     {
       "importer": "trid3nt_server.workflows.telemac.helpers.forcing",
@@ -37785,9 +37123,58 @@
     {
       "importer": "trid3nt_server.workflows.telemac.helpers.forcing",
       "imported": "trid3nt_server.workflows.telemac.helpers.errors",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 14
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.infiltration",
+      "imported": "trid3nt_server.tools.cache",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.infiltration",
+      "imported": "trid3nt_server.workflows.lib",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.infiltration",
+      "imported": "trid3nt_server.workflows.mesh.shared.nodes",
       "static": 3,
       "dynamic": 0,
-      "refs": 11
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.infiltration",
+      "imported": "trid3nt_server.workflows.shared.layer_fields",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.infiltration",
+      "imported": "trid3nt_server.workflows.telemac.helpers",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.infiltration",
+      "imported": "trid3nt_server.workflows.telemac.helpers.catchment",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.helpers.infiltration",
+      "imported": "trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 3
     },
     {
       "importer": "trid3nt_server.workflows.telemac.helpers.reach",
@@ -37913,7 +37300,7 @@
       "imported": "trid3nt_contracts.common",
       "static": 2,
       "dynamic": 0,
-      "refs": 6
+      "refs": 7
     },
     {
       "importer": "trid3nt_server.workflows.telemac.products.products",
@@ -38014,6 +37401,83 @@
       "refs": 0
     },
     {
+      "importer": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "imported": "trid3nt_contracts.common",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 8
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "imported": "trid3nt_contracts.telemac_contracts",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "imported": "trid3nt_server.emission.pipeline_emitter",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "imported": "trid3nt_server.workflows.lib",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "imported": "trid3nt_server.workflows.shared.publish_product_layer",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "imported": "trid3nt_server.workflows.solver.solver",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "imported": "trid3nt_server.workflows.telemac.authoring.open_water",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "imported": "trid3nt_server.workflows.telemac.products",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "imported": "trid3nt_server.workflows.telemac.products.postprocess_telemac",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "imported": "trid3nt_server.workflows.telemac.products.run_reads",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.products.rain_on_grid",
+      "imported": "trid3nt_server.workflows.telemac.results_mesh_seam",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
       "importer": "trid3nt_server.workflows.telemac.products.run_reads",
       "imported": "trid3nt_server.workflows.telemac.authoring.author",
       "static": 2,
@@ -38078,16 +37542,23 @@
     },
     {
       "importer": "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid",
-      "imported": "trid3nt_server.workflows.telemac.authoring",
+      "imported": "trid3nt_server.workflows.telemac.helpers",
       "static": 0,
       "dynamic": 1,
       "refs": 0
     },
     {
       "importer": "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid",
-      "imported": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "static": 2,
+      "imported": "trid3nt_server.workflows.telemac.helpers.forcing",
+      "static": 0,
       "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid",
+      "imported": "trid3nt_server.workflows.telemac.helpers.infiltration",
+      "static": 2,
+      "dynamic": 0,
       "refs": 1
     },
     {
@@ -38375,7 +37846,7 @@
       "imported": "trid3nt_server.workflows.lib",
       "static": 2,
       "dynamic": 0,
-      "refs": 1
+      "refs": 2
     },
     {
       "importer": "trid3nt_server.workflows.telemac.solving.solve",
@@ -38387,23 +37858,23 @@
     {
       "importer": "trid3nt_server.workflows.telemac.solving.solve",
       "imported": "trid3nt_server.workflows.solver.solver",
-      "static": 10,
+      "static": 11,
       "dynamic": 0,
-      "refs": 10
+      "refs": 11
     },
     {
       "importer": "trid3nt_server.workflows.telemac.solving.solve",
-      "imported": "trid3nt_server.workflows.telemac.authoring.deck",
+      "imported": "trid3nt_server.workflows.telemac.authoring.open_water",
       "static": 2,
       "dynamic": 0,
-      "refs": 0
+      "refs": 1
     },
     {
       "importer": "trid3nt_server.workflows.telemac.solving.solve",
       "imported": "trid3nt_server.workflows.telemac.helpers.errors",
-      "static": 2,
+      "static": 3,
       "dynamic": 0,
-      "refs": 4
+      "refs": 5
     },
     {
       "importer": "trid3nt_server.workflows.telemac.solving.solve",
@@ -38415,7 +37886,7 @@
     {
       "importer": "trid3nt_server.workflows.telemac.solving.solve",
       "imported": "trid3nt_server.workflows.telemac.run_telemac",
-      "static": 2,
+      "static": 3,
       "dynamic": 0,
       "refs": 0
     },
@@ -38547,8 +38018,8 @@
     },
     {
       "importer": "trid3nt_server.workflows.telemac.workflow",
-      "imported": "trid3nt_server.workflows.telemac.authoring.deck",
-      "static": 3,
+      "imported": "trid3nt_server.workflows.telemac.authoring.assembler",
+      "static": 4,
       "dynamic": 0,
       "refs": 0
     },
@@ -38561,15 +38032,15 @@
     },
     {
       "importer": "trid3nt_server.workflows.telemac.workflow",
-      "imported": "trid3nt_server.workflows.telemac.authoring.rain_on_grid",
-      "static": 5,
+      "imported": "trid3nt_server.workflows.telemac.authoring.stratified",
+      "static": 3,
       "dynamic": 0,
-      "refs": 3
+      "refs": 1
     },
     {
       "importer": "trid3nt_server.workflows.telemac.workflow",
-      "imported": "trid3nt_server.workflows.telemac.authoring.stratified",
-      "static": 3,
+      "imported": "trid3nt_server.workflows.telemac.helpers.catchment",
+      "static": 2,
       "dynamic": 0,
       "refs": 1
     },
@@ -38596,10 +38067,17 @@
     },
     {
       "importer": "trid3nt_server.workflows.telemac.workflow",
-      "imported": "trid3nt_server.workflows.telemac.solving.solve",
+      "imported": "trid3nt_server.workflows.telemac.products.rain_on_grid",
       "static": 2,
       "dynamic": 0,
       "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.telemac.workflow",
+      "imported": "trid3nt_server.workflows.telemac.solving.solve",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 2
     },
     {
       "importer": "workers.mesh.entrypoint",

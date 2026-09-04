@@ -1,12 +1,12 @@
 """Tests for the Persistence-singleton startup wiring.
 
 Coverage:
-    1. ``test_no_mcp_falls_back_to_dev_persistence`` — ``init_persistence_from_env``
+    1. ``test_prebound_file_persistence_is_preserved`` — ``init_persistence_from_env``
        preserves a file-backed ``Persistence`` pre-bound by the startup path
        (``main._maybe_bind_dev_persistence``) and returns it, not ``None``.
        The agent must never crash on a fresh clone.
 
-    2. ``test_no_mcp_stdio_returns_prebound_or_none`` — with
+    2. ``test_disabled_dev_persistence_returns_none`` — with
        ``TRID3NT_DEV_PERSISTENCE=0`` (the no-persistence escape hatch) the
        function returns ``None`` and the singleton stays unbound; callers
        handle ``None`` gracefully.
@@ -46,7 +46,7 @@ from trid3nt_server.server import (
 
 
 class _MockMCPClient:
-    """Minimal in-memory MCP client that satisfies ``MCPClientProtocol``."""
+    """Minimal in-memory store client that satisfies ``MCPClientProtocol``."""
 
     async def call_tool(self, name: str, arguments: dict | None = None) -> dict:
         return {"documents": []}
@@ -66,7 +66,7 @@ def _clean_persistence_singleton():
 
 
 @pytest.mark.asyncio
-async def test_no_mcp_falls_back_to_dev_persistence(tmp_path):
+async def test_prebound_file_persistence_is_preserved(tmp_path):
     """init_persistence_from_env preserves the pre-bound file-backed singleton.
 
     When ``TRID3NT_DEV_PERSISTENCE=1`` (forced on) and
@@ -99,7 +99,7 @@ async def test_no_mcp_falls_back_to_dev_persistence(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_no_mcp_stdio_returns_prebound_or_none():
+async def test_disabled_dev_persistence_returns_none():
     """With TRID3NT_DEV_PERSISTENCE=0, returns None.
 
     This is the no-persistence escape hatch: the singleton stays unbound and
@@ -121,9 +121,9 @@ async def test_no_mcp_stdio_returns_prebound_or_none():
         set_persistence(None)
 
 
-# ``MCPClientProtocol`` is the abstract document-store surface: the file
-# backend implements it in production and an in-memory mock implements it in
-# tests. The compatibility test below pins that structural contract.
+# ``MCPClientProtocol`` is the store surface: the file backend implements it in
+# production and an in-memory mock implements it in tests. The compatibility test
+# below pins that structural contract.
 
 
 def test_mcp_client_protocol_compatibility():

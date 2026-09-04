@@ -10,28 +10,28 @@ venvs/agent/bin/python scripts/code_graph.py
 
 | metric | value |
 |---|---|
-| modules scanned | 1085 |
-| total loc | 324143 |
-| reachable from roots | 491 (169566 loc) |
+| modules scanned | 1061 |
+| total loc | 318140 |
+| reachable from roots | 491 (168001 loc) |
 | test-only-reachable | 12 |
 | script-only-reachable | 2 |
 | orphans (product) | 2 |
 | package markers excluded from orphans | 116 |
-| orphans (scripts/ entry modules) | 64 |
-| test modules | 401 |
-| import edges | 3378 |
-| dynamic (string-resolved) edges | 184 |
-| reference call-site edges | 13563 |
-| unattributed call sites | 71513 |
-| dead symbols (conf >= 80) | 10 |
-| unused callables (conf 60 tier) | 43 |
-| vulture findings muted by whitelist | 24 |
+| orphans (scripts/ entry modules) | 41 |
+| test modules | 400 |
+| import edges | 3346 |
+| dynamic (string-resolved) edges | 185 |
+| reference call-site edges | 13438 |
+| unattributed call sites | 69349 |
+| dead symbols (conf >= 80) | 8 |
+| unused callables (conf 60 tier) | 42 |
+| vulture findings muted by whitelist | 23 |
 
 ## Honesty checks
 
 - Known-culled modules from this arc still present: **0** (all confirmed gone)
 - grimp modules with no file in the scanned universe: 0
-- Call sites the import table could not attribute: 71513 (builtins, locals, methods on non-imported objects -- counted, not guessed).
+- Call sites the import table could not attribute: 69349 (builtins, locals, methods on non-imported objects -- counted, not guessed).
 - Out of scope, so its imports anchor nothing: `experiments/`, `third_party/`, `docs/proof/**/*.py`.
 
 ## False-positive classes handled
@@ -55,14 +55,14 @@ venvs/agent/bin/python scripts/code_graph.py
 
 | module | loc | path |
 |---|---|---|
-| `scripts.render_selafin_animation` | 882 | scripts/render_selafin_animation.py |
-| `scripts.model_check` | 761 | scripts/model_check.py |
+| `scripts.render_selafin_animation` | 900 | scripts/render_selafin_animation.py |
+| `scripts.model_check` | 788 | scripts/model_check.py |
 | `trid3nt_server.testing.live_run` | 526 | trid3nt_server/testing/live_run.py |
 | `trid3nt_contracts.output_quantities` | 458 | contracts/trid3nt_contracts/output_quantities.py |
 | `trid3nt_server.tools.fetchers._router.stratified` | 328 | trid3nt_server/tools/fetchers/_router/stratified.py |
 | `trid3nt_server.workflows.shared.tide_series` | 276 | trid3nt_server/workflows/shared/tide_series.py |
 | `scripts.harvest_living_atlas` | 224 | scripts/harvest_living_atlas.py |
-| `scripts.sandbox.oceanmesh.merc_render` | 142 | scripts/sandbox/oceanmesh/merc_render.py |
+| `scripts.sandbox.oceanmesh.merc_render` | 141 | scripts/sandbox/oceanmesh/merc_render.py |
 | `trid3nt_contracts.export_schemas` | 116 | contracts/trid3nt_contracts/export_schemas.py |
 | `trid3nt_server.testing.ws_client` | 111 | trid3nt_server/testing/ws_client.py |
 | `trid3nt_server.testing.proof_paths` | 76 | trid3nt_server/testing/proof_paths.py |
@@ -75,9 +75,7 @@ venvs/agent/bin/python scripts/code_graph.py
 | `return` | unreachable_code | trid3nt_server/server/protocol/connections.py:92 | 30 |
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:188 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:117 | 1 |
-| `poll_interval_seconds` | parameter | trid3nt_server/sandbox/sandbox_runner.py:569 | 1 |
-| `logging_client` | parameter | trid3nt_server/sandbox/sandbox_runner.py:570 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:1179 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:1176 | 1 |
 | `isochlor_value` | parameter | trid3nt_server/tools/processing/charts_common.py:1088 | 1 |
 | `lat_deg` | parameter | trid3nt_server/tools/processing/extract_model_at_observations/extract_model_at_observations.py:632 | 1 |
 | `gs_backend` | parameter | trid3nt_server/workflows/shared/cog_io.py:542 | 1 |
@@ -89,8 +87,8 @@ venvs/agent/bin/python scripts/code_graph.py
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | contracts | . | . | . | . | 61 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | plugin | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| scripts | . | 2 | . | . | 9 | 1 | 1 | 2 | . | . | 6 | . | . | 2 | 1 | . | . | . | . | . | 15 | 41 | 34 | 3 |
-| tests | . | 3 | 4 | . | 271 | 1 | . | 82 | 4 | 10 | 89 | 4 | 36 | 14 | 31 | 1 | 5 | 11 | 101 | 10 | 1 | 569 | 231 | 2 |
+| scripts | . | 2 | . | . | 9 | 1 | 1 | 2 | . | . | 7 | . | . | 2 | 1 | . | . | . | . | . | 15 | 31 | 30 | 3 |
+| tests | . | 3 | 4 | . | 270 | 1 | . | 82 | 4 | 10 | 89 | 4 | 36 | 14 | 31 | 1 | 3 | 11 | 102 | 10 | 1 | 569 | 235 | 2 |
 | trid3nt_contracts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . |
@@ -103,11 +101,11 @@ venvs/agent/bin/python scripts/code_graph.py
 | trid3nt_server.main | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | 1 | 1 | . | 15 | 1 | . |
 | trid3nt_server.persistence | . | . | . | . | 4 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.plugin_repo | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| trid3nt_server.sandbox | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . |
+| trid3nt_server.sandbox | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . |
 | trid3nt_server.scenario_reuse | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.server | . | . | . | . | 29 | 1 | . | 9 | 2 | 4 | 11 | . | 14 | 2 | 2 | 1 | . | 2 | . | 2 | . | 17 | 1 | . |
 | trid3nt_server.telemetry | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | 1 | . | . | . | 1 | . | . | . | . | . |
 | trid3nt_server.testing | . | . | . | . | 2 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . |
 | trid3nt_server.tools | . | . | . | . | 183 | . | . | . | . | . | 18 | 3 | 2 | 1 | . | . | 1 | . | . | 2 | . | . | 22 | . |
-| trid3nt_server.workflows | . | . | . | . | 51 | . | . | . | . | . | 29 | . | 7 | . | 3 | . | . | . | . | 1 | . | 38 | . | . |
+| trid3nt_server.workflows | . | . | . | . | 50 | . | . | . | . | . | 29 | . | 7 | . | 3 | . | . | . | . | 1 | . | 37 | . | . |
 | workers | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |

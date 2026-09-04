@@ -1,16 +1,13 @@
-"""Thin typed wrapper over the persistence MCP surface.
+"""Thin typed wrapper over the document store.
 
 Agent code calls ``Persistence.upsert_case(case_dataclass)``; this module
 issues logical ``insert-one`` / ``update-one`` / ``find-one`` / ``find`` calls
-through an ``MCPClientProtocol`` client and serializes/deserializes through
+through a store client and serializes/deserializes through
 ``trid3nt_contracts`` ``GraceModel`` types (never raw dicts at the call site).
 
-Live backend (local-first build): the file-backed twin ``FileMCPClient`` --
-a small JSON-document store that implements the same logical MCP surface with
-Mongo-faithful filter/update semantics. It is bound by
+The store is local JSON: ``FileMCPClient`` keeps one file per collection and is
+the only backend this stack has. It is bound by
 ``main._maybe_bind_dev_persistence`` / ``server.init_persistence_from_env``.
-Another document-store client implementing the same ``MCPClientProtocol`` drops
-in unchanged, but the local stack binds only the file backend.
 
 Supports ``CaseSummary`` round-trip (get/upsert/list/archive/delete),
 ``CaseChatMessage`` append + ``CaseSessionState`` hydration, and ``User``
@@ -20,10 +17,10 @@ seam into the in-memory ``credentials.resolver`` session cache, with env vars
 the headless / dev floor.
 
 Containment: every storage call goes through
-``mcp_client.call_tool("<mcp-method>", args)``, a single seam; callers pass
-typed ``GraceModel`` instances in and get typed instances out, and the
-``dict``-shape MCP transport is contained here. Persistence is the I/O
-substrate; any confirmation policy lives at the ``server.py`` call sites.
+``client.call_tool("<method>", args)``, a single seam; callers pass typed
+``GraceModel`` instances in and get typed instances out, and the ``dict``-shape
+transport is contained here. Persistence is the I/O substrate; any confirmation
+policy lives at the ``server.py`` call sites.
 
 Invariants: no quota/cost/spend fields on any record.
 """
@@ -31,6 +28,7 @@ Invariants: no quota/cost/spend fields on any record.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Protocol
 
 from trid3nt_contracts import now_utc
@@ -43,13 +41,11 @@ from trid3nt_contracts.user import User
 
 logger = logging.getLogger("trid3nt_server.persistence")
 
-# Logical database name for all Case/User/Secret persistence. The file backend
-# uses it as a namespace prefix; another document-store client would use it as
-# the DB name.
-# Override via env var ``TRID3NT_MONGO_DB`` for staging / test isolation.
-import os
-
-DEFAULT_DATABASE = os.environ.get("TRID3NT_MONGO_DB", "trid3nt_dev")
+# Logical database name for all Case/User/Secret persistence: the file backend
+# uses it as the namespace subdirectory under the dev-persistence root. Test
+# isolation goes through ``TRID3NT_DEV_PERSISTENCE_DIR``, which relocates the
+# whole root rather than renaming one namespace inside it.
+DEFAULT_DATABASE = "trid3nt_dev"
 
 # Collection names -- pinned nomenclature: "projects" for Cases, "sessions"
 # for chat history, "users" for the forward-looking Auth track stub,
@@ -61,16 +57,15 @@ USERS_COLLECTION = "users"  # Auth/Users track stub
 
 
 # --------------------------------------------------------------------------- #
-# MCP client protocol -- duck-typed so tests can pass a mock
+# Store client protocol -- duck-typed so tests can pass a mock
 # --------------------------------------------------------------------------- #
 
 
 class MCPClientProtocol(Protocol):
-    """Minimal MCP client surface this module depends on.
+    """Minimal store-client surface this module depends on.
 
-    The file-backed ``FileMCPClient`` implements it; another document-store
-    client that speaks the same logical ``call_tool`` surface drops in without
-    adaptation. Tests pass a mock implementing this single method.
+    ``FileMCPClient`` implements it. Tests pass a mock implementing this single
+    method.
     """
 
     async def call_tool(
@@ -84,31 +79,16 @@ class MCPClientProtocol(Protocol):
 # --------------------------------------------------------------------------- #
 
 
-def _unwrap_mcp_result(raw: dict[str, Any]) -> Any:
-    """Extract the structured payload from an MCP ``tools/call`` result.
+def _unwrap_result(raw: dict[str, Any]) -> Any:
+    """Extract the payload from one store-client result.
 
-    An MCP document-store client returns results in a ``content`` array with a
-    JSON string in the first entry's ``text`` field for document operations.
-    Best-effort: if the shape doesn't match we surface ``None`` so callers can
-    branch on "no document" vs "raw dict already parsed".
+    A read returns its payload under ``document`` (single) or ``documents``
+    (list); a write returns its counts dict as-is. Anything that carries neither
+    key is already the payload, so it passes through and callers branch on "no
+    document" against ``None`` rather than against a shape.
     """
     if not isinstance(raw, dict):
         return raw
-    # Direct dict already -- e.g., when the mock test client returns a dict.
-    if "content" not in raw and "document" not in raw and "documents" not in raw:
-        return raw
-    # MCP document-store: content[0].text is a JSON string
-    content = raw.get("content")
-    if isinstance(content, list) and content:
-        first = content[0]
-        if isinstance(first, dict) and isinstance(first.get("text"), str):
-            import json as _json
-
-            try:
-                return _json.loads(first["text"])
-            except _json.JSONDecodeError:
-                return first["text"]
-    # Some MCP variants emit ``document`` / ``documents`` directly.
     if "document" in raw:
         return raw["document"]
     if "documents" in raw:
@@ -117,21 +97,20 @@ def _unwrap_mcp_result(raw: dict[str, Any]) -> Any:
 
 
 class Persistence:
-    """Typed wrapper over the persistence MCP surface (``MCPClientProtocol``).
+    """Typed wrapper over the document store (``MCPClientProtocol``).
 
-    Construct with any object implementing ``MCPClientProtocol`` -- on this
-    stack that is the file-backed ``FileMCPClient``; another document-store
-    client drops in unchanged. All methods are ``async`` (the file backend
-    off-loads its blocking I/O; a remote client's transport is async).
+    Construct with any object implementing the protocol -- on this stack that is
+    the file-backed ``FileMCPClient``. All methods are ``async`` because the file
+    backend off-loads its blocking I/O to a thread.
     """
 
     def __init__(
         self,
-        mcp_client: MCPClientProtocol,
+        client: MCPClientProtocol,
         *,
         database: str = DEFAULT_DATABASE,
     ) -> None:
-        self._mcp = mcp_client
+        self._store = client
         self._db = database
 
     # ----- Cases --------------------------------------------------------- #
@@ -144,7 +123,7 @@ class Persistence:
         ``owner_user_id``, etc.). The Case envelope is a UI denormalization
         of the storage shape -- extra storage fields are expected and ignored.
         """
-        raw = await self._mcp.call_tool(
+        raw = await self._store.call_tool(
             "find-one",
             {
                 "database": self._db,
@@ -152,7 +131,7 @@ class Persistence:
                 "filter": {"_id": case_id},
             },
         )
-        doc = _unwrap_mcp_result(raw)
+        doc = _unwrap_result(raw)
         if not doc or not isinstance(doc, dict):
             return None
         return self._doc_to_case_summary(doc)
@@ -192,7 +171,7 @@ class Persistence:
     ) -> CaseSummary:
         """Insert or update a Case. Returns the persisted ``CaseSummary``.
 
-        Uses MCP ``update-one`` with ``upsert=True`` so a fresh Case lands and
+        Uses ``update-one`` with ``upsert=True`` so a fresh Case lands and
         an existing one is overwritten in a single round-trip.
 
         when ``owner_user_id``
@@ -218,7 +197,7 @@ class Persistence:
         body["_id"] = case.case_id  # the ``_id`` primary key
         if owner_user_id:
             body["user_id"] = owner_user_id
-        await self._mcp.call_tool(
+        await self._store.call_tool(
             "update-one",
             {
                 "database": self._db,
@@ -248,7 +227,7 @@ class Persistence:
         resurrected by this side-channel -- the write is simply a no-op.
         Callers treat this as best-effort (wrap + log, never raise).
         """
-        await self._mcp.call_tool(
+        await self._store.call_tool(
             "update-one",
             {
                 "database": self._db,
@@ -268,7 +247,7 @@ class Persistence:
         ``None`` and the registry degrades to fresh minting. Only
         str->str entries survive the shape filter.
         """
-        raw = await self._mcp.call_tool(
+        raw = await self._store.call_tool(
             "find-one",
             {
                 "database": self._db,
@@ -276,7 +255,7 @@ class Persistence:
                 "filter": {"_id": case_id},
             },
         )
-        doc = _unwrap_mcp_result(raw)
+        doc = _unwrap_result(raw)
         if not isinstance(doc, dict):
             return None
         value = doc.get("layer_handles")
@@ -298,13 +277,13 @@ class Persistence:
         until then it returns the full Case list for the deployment.
 
         Soft-deleted and archived Cases are excluded both in the query and
-        by a post-validation guard (belt-and-suspenders for MCP backends
+        by a post-validation guard (belt-and-suspenders for backends
         whose filter dialect quietly ignores the operator); the ``$nin``
         filter still matches docs with no ``status`` field at all (pre-status
         records are live by definition: ``CaseSummary.status`` defaults to
         ``"active"``).
         """
-        raw = await self._mcp.call_tool(
+        raw = await self._store.call_tool(
             "find",
             {
                 "database": self._db,
@@ -319,8 +298,8 @@ class Persistence:
                 },
             },
         )
-        docs = _unwrap_mcp_result(raw)
-        # If the MCP server returned no filter match, ``docs`` may be empty
+        docs = _unwrap_result(raw)
+        # If the store returned no filter match, ``docs`` may be empty
         # list or None. Be tolerant.
         if not docs:
             return []
@@ -347,7 +326,7 @@ class Persistence:
         Preserves the document for un-archive; ``delete_case`` is the hard
         path. Mirrors ``CaseStatus`` Literal in ``trid3nt_contracts.case``.
         """
-        await self._mcp.call_tool(
+        await self._store.call_tool(
             "update-one",
             {
                 "database": self._db,
@@ -369,7 +348,7 @@ class Persistence:
         addition; data-retention rules (the ``deleted_at`` stamp) point this way
         anyway. Status mirrors the ``CaseStatus`` Literal tombstone value.
         """
-        await self._mcp.call_tool(
+        await self._store.call_tool(
             "update-one",
             {
                 "database": self._db,
@@ -396,7 +375,7 @@ class Persistence:
         """
         body = msg.model_dump(mode="json")
         body["_id"] = msg.message_id
-        await self._mcp.call_tool(
+        await self._store.call_tool(
             "insert-one",
             {
                 "database": self._db,
@@ -433,7 +412,7 @@ class Persistence:
         update: dict[str, Any] = {"$set": body}
         if created_at is not None:
             update["$setOnInsert"] = {"created_at": created_at}
-        await self._mcp.call_tool(
+        await self._store.call_tool(
             "update-one",
             {
                 "database": self._db,
@@ -460,7 +439,7 @@ class Persistence:
         case = await self.get_case(case_id)
         if case is None:
             # Surface a minimal placeholder so the caller can decide how to
-            # handle "Case not found" without raising through the MCP layer.
+            # handle "Case not found" without raising through the store layer.
             return CaseSessionState(
                 case=CaseSummary(
                     case_id=case_id,
@@ -471,7 +450,7 @@ class Persistence:
                 ),
             )
         # Chat history, oldest-first
-        raw = await self._mcp.call_tool(
+        raw = await self._store.call_tool(
             "find",
             {
                 "database": self._db,
@@ -480,7 +459,7 @@ class Persistence:
                 "sort": {"created_at": 1},
             },
         )
-        docs = _unwrap_mcp_result(raw) or []
+        docs = _unwrap_result(raw) or []
         if isinstance(docs, dict):
             docs = [docs]
         chat: list[CaseChatMessage] = []
@@ -514,7 +493,7 @@ class Persistence:
         # emitted_at order. Best-effort: a missing/odd doc yields no charts.
         charts: list[dict] = []
         try:
-            sraw = await self._mcp.call_tool(
+            sraw = await self._store.call_tool(
                 "find-one",
                 {
                     "database": self._db,
@@ -522,7 +501,7 @@ class Persistence:
                     "filter": {"_id": case_id},
                 },
             )
-            sdoc = _unwrap_mcp_result(sraw)
+            sdoc = _unwrap_result(sraw)
             if isinstance(sdoc, dict) and isinstance(sdoc.get("charts"), list):
                 records = [r for r in sdoc["charts"] if isinstance(r, dict)]
                 records.sort(key=lambda r: r.get("emitted_at") or "")
@@ -553,7 +532,7 @@ class Persistence:
         """
         body = doc.model_dump(mode="json", by_alias=True)
         session_id = body.pop("_id")
-        await self._mcp.call_tool(
+        await self._store.call_tool(
             "update-one",
             {
                 "database": self._db,
@@ -609,7 +588,7 @@ class Persistence:
         }
         if case_id is not None:
             update["$addToSet"] = {"project_ids": case_id}
-        await self._mcp.call_tool(
+        await self._store.call_tool(
             "update-one",
             {
                 "database": self._db,
@@ -622,10 +601,10 @@ class Persistence:
         # Header repair: a session doc created by an earlier bare ``$push``
         # (chart-emission upserts before any touch -- ordering) has
         # no ``created_at``/``schema_version``, and ``$setOnInsert`` above
-        # can never backfill an EXISTING doc (real Mongo semantics too).
+        # can never backfill an EXISTING doc.
         # Detect and repair once; ``created_at=now`` is the best available
         # approximation for a doc whose true start was never recorded.
-        raw = await self._mcp.call_tool(
+        raw = await self._store.call_tool(
             "find-one",
             {
                 "database": self._db,
@@ -633,7 +612,7 @@ class Persistence:
                 "filter": {"_id": session_id},
             },
         )
-        doc = _unwrap_mcp_result(raw)
+        doc = _unwrap_result(raw)
         if isinstance(doc, dict) and (
             "created_at" not in doc or "schema_version" not in doc
         ):
@@ -642,7 +621,7 @@ class Persistence:
                 repair["created_at"] = iso_now
             if "schema_version" not in doc:
                 repair["schema_version"] = "v1"
-            await self._mcp.call_tool(
+            await self._store.call_tool(
                 "update-one",
                 {
                     "database": self._db,
@@ -680,7 +659,7 @@ class Persistence:
         """
         now = now_utc()
         iso_now = now.isoformat().replace("+00:00", "Z")
-        await self._mcp.call_tool(
+        await self._store.call_tool(
             "update-one",
             {
                 "database": self._db,
@@ -708,7 +687,7 @@ class Persistence:
         cache survives process death. Best-effort: any malformed shape yields
         ``None``.
         """
-        raw = await self._mcp.call_tool(
+        raw = await self._store.call_tool(
             "find-one",
             {
                 "database": self._db,
@@ -716,7 +695,7 @@ class Persistence:
                 "filter": {"_id": session_id},
             },
         )
-        doc = _unwrap_mcp_result(raw)
+        doc = _unwrap_result(raw)
         if not isinstance(doc, dict):
             return None
         value = doc.get("last_active_case_id")
@@ -732,7 +711,7 @@ class Persistence:
         """
         from trid3nt_contracts.collections import SessionDocument
 
-        raw = await self._mcp.call_tool(
+        raw = await self._store.call_tool(
             "find-one",
             {
                 "database": self._db,
@@ -740,7 +719,7 @@ class Persistence:
                 "filter": {"_id": session_id},
             },
         )
-        doc = _unwrap_mcp_result(raw)
+        doc = _unwrap_result(raw)
         if not doc or not isinstance(doc, dict):
             return None
         allowed = set(SessionDocument.model_fields.keys())
@@ -760,7 +739,7 @@ class Persistence:
         """Insert or update a user record."""
         body = user.model_dump(mode="json")
         body["_id"] = user.user_id
-        await self._mcp.call_tool(
+        await self._store.call_tool(
             "update-one",
             {
                 "database": self._db,
@@ -778,7 +757,7 @@ class Persistence:
         The local-single-user resolver looks up the one fixed
         ``LOCAL_SINGLE_USER_ID`` record by id on every connect.
         """
-        raw = await self._mcp.call_tool(
+        raw = await self._store.call_tool(
             "find-one",
             {
                 "database": self._db,
@@ -786,7 +765,7 @@ class Persistence:
                 "filter": {"_id": user_id},
             },
         )
-        doc = _unwrap_mcp_result(raw)
+        doc = _unwrap_result(raw)
         if not doc or not isinstance(doc, dict):
             return None
         normalized = {k: v for k, v in doc.items() if k != "_id"}
@@ -804,21 +783,20 @@ class Persistence:
 
 
 # --------------------------------------------------------------------------- #
-# Local-dev file-backed MCP client
+# The file-backed store
 # --------------------------------------------------------------------------- #
-# The file-backed shim is the LIVE persistence substrate on this stack. It
-# satisfies the same ``MCPClientProtocol`` surface a cloud MCP client would, so
-# ``Persistence`` doesn't need to know which substrate it is talking to, and
-# can be bound at startup either way.
+# The file-backed client is the persistence substrate on this stack, and the
+# only one. It satisfies ``MCPClientProtocol``, so ``Persistence`` is written
+# against the protocol rather than against the files.
 #
 # Storage: ``~/.trid3nt/dev_persistence/<database>/<collection>.json``, one
 # JSON file per collection (dict mapping ``_id`` -> document). Atomicity: a
 # per-collection ``asyncio.Lock`` serializes concurrent calls; writes go to a
 # sibling ``<collection>.json.tmp`` then ``os.replace`` (POSIX-atomic
-# rename). Scope matches the MCP tool subset Persistence actually invokes:
+# rename). Scope matches the method subset Persistence actually invokes:
 # ``insert-one``/``update-one`` (``$set`` + optional ``upsert``)/``delete-one``
-# /``find-one``/``find`` (optional single-key sort). Not a Mongo emulator -- just
-# enough query semantics to round-trip Persistence's calls.
+# /``find-one``/``find`` (optional single-key sort) -- just enough query
+# semantics to round-trip Persistence's calls, and no more.
 
 import asyncio as _asyncio
 import contextlib as _contextlib
@@ -896,18 +874,16 @@ def _default_dev_persistence_dir() -> _Path:
 
 
 class FileMCPClient:
-    """File-backed shim that satisfies :class:`MCPClientProtocol`.
+    """The file-backed store, satisfying :class:`MCPClientProtocol`.
 
-    Implements the MCP tool methods the :class:`Persistence` wrapper and the
-    declarative step ledger actually invoke (``insert-one``, ``update-one``,
-    ``delete-one``, ``find-one``, ``find``) against a per-collection JSON file in
+    Implements the methods the :class:`Persistence` wrapper and the declarative
+    step ledger actually invoke (``insert-one``, ``update-one``, ``delete-one``,
+    ``find-one``, ``find``) against a per-collection JSON file in
     ``base_dir / database / coll.json``.
 
-    The return shape mirrors what ``Persistence._unwrap_mcp_result`` expects:
-    we return a plain dict for single-document operations and a
-    ``{"documents": [...]}`` envelope for list operations. This keeps the
-    Persistence layer agnostic of substrate -- the same code paths that
-    deserialize MCP-server JSON responses deserialize our file payloads.
+    Returns what ``Persistence._unwrap_result`` reads: a ``{"document": ...}``
+    envelope for single-document reads, ``{"documents": [...]}`` for list reads,
+    and a counts dict for writes.
     """
 
     def __init__(self, base_dir: _Path | None = None) -> None:
@@ -995,7 +971,7 @@ class FileMCPClient:
         _os_for_file.replace(tmp, path)
 
     # ------------------------------------------------------------------ #
-    # Query matcher -- same subset MockMCPClient supports in tests
+    # Query matcher -- the same subset the test mock supports
     # ------------------------------------------------------------------ #
 
     @staticmethod
@@ -1014,7 +990,7 @@ class FileMCPClient:
                     return False
                 continue
             if isinstance(v, dict) and "$nin" in v:
-                # Mongo-faithful: a MISSING field matches $nin (the doc's
+                # A MISSING field matches $nin (the doc's
                 # value, None, is "not in" the exclusion list unless None is
                 # listed). uses this for the case-list status filter
                 # so pre-status Case docs stay listed.
@@ -1031,7 +1007,7 @@ class FileMCPClient:
 
     @staticmethod
     def _apply_update(doc: dict, update: dict, *, inserting: bool) -> None:
-        """Apply a Mongo update document in-place, Mongo-faithful semantics.
+        """Apply an update document in-place.
 
         Supported operators (the set Persistence + chart-emission actually
         send): ``$set``, ``$setOnInsert`` (applied ONLY when ``inserting``),
@@ -1072,7 +1048,7 @@ class FileMCPClient:
                 )
 
     # ------------------------------------------------------------------ #
-    # MCP tool surface
+    # The call surface
     # ------------------------------------------------------------------ #
 
     async def call_tool(
@@ -1093,7 +1069,7 @@ class FileMCPClient:
             return await _asyncio.to_thread(self._cycle, path, apply)
 
     def _operation(self, name: str, args: dict[str, Any]) -> Any:
-        """The mutation for one MCP tool call: ``(store) -> (result, dirty)``.
+        """The mutation for one call: ``(store) -> (result, dirty)``.
 
         Built OUTSIDE the lock, applied INSIDE it against the store as it is then.
         """
@@ -1174,7 +1150,7 @@ class FileMCPClient:
             return _find
 
         raise NotImplementedError(
-            f"FileMCPClient: unsupported MCP tool {name!r} "
+            f"FileMCPClient: unsupported method {name!r} "
             f"(supports insert-one / update-one / update-many / delete-one / "
             f"find-one / find)"
         )
@@ -1201,7 +1177,7 @@ def is_dev_persistence_enabled() -> bool:
 
 
 def make_file_persistence(base_dir: _Path | None = None) -> Persistence:
-    """Construct a ``Persistence`` backed by the file-backed MCP shim.
+    """Construct a ``Persistence`` backed by the file store.
 
     Convenience for ``server.init_persistence_from_env`` and tests -- wraps
     the substrate selection so the call site stays a one-liner.

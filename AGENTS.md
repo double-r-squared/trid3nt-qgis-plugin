@@ -19,7 +19,7 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   engine + cards + pending registries), `adapters/` (LLM providers -
   the ONLY place provider nouns appear), `server/` (session/ turn/
   dispatch/ protocol/), `emission/` (layer publication + the
-  emit-on-solve seam), `persistence/`.
+  emit-on-solve seam), `persistence.py`.
 - `workers/` - the telemac solver worker plus the mesh and qgis
   legs. Worker code is INERT until its image is
   rebuilt: absolute -f/context paths, provenance-check the new code is

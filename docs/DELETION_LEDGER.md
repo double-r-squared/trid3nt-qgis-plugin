@@ -3203,3 +3203,52 @@ host-runner tests were removed from `tests/test_code_exec_tool.py`.
 reopen: never for the cloud handles and the readback (there is no cloud). The
 in-process guards would only reopen if the box itself ever ran without a
 container, which is the posture this rewrite exists to end.
+
+## `persistence/` flattens to `persistence.py`, and the decommissioned substrate leaves its prose (2026-09-03)
+
+The package was one module plus an `__init__.py` whose entire body re-exported
+it. A directory around a single file bought a namespace and a second place for a
+docstring to drift; `trid3nt_server.persistence.X` resolves identically either
+way, which is why the flatten touches almost nothing.
+
+- `trid3nt_server/persistence/persistence.py` -> `trid3nt_server/persistence.py` (git mv, contents carried), and `trid3nt_server/persistence/__init__.py` (11 lines) DELETED. CONDITION: none - its 11 lines were `from .persistence import *` plus one named re-export of `_default_dev_persistence_dir`, and a flat module exposes both by construction. Nothing to fold.
+- The two DEEP-path importers repoint from `trid3nt_server.persistence.persistence` to `trid3nt_server.persistence`: `workflows/lib/journal.py` and `scripts/render_all_layers_proof.py`. The six that already imported the package path - `main.py`, `telemetry.py`, `credentials/auth_handshake.py`, `server/dispatch/persist.py`, `server/session/persistence_ref.py`, `workflows/lib/{ledger,snapshot}.py` - are byte-unchanged, and so is every one of the ~30 test modules. `persistence_ref` STAYS: it is the accessor seam six server modules reach the singleton through, and it is not what was flattened.
+- LOC: 1,287 (11 + 1,276) -> 1,252. **-35.**
+
+ERA SCRUB, measured before and after. Mongo: **7 references -> 0.** MCP: **75
+lines -> 18**, and all 18 that remain are the two public identifiers
+`MCPClientProtocol` / `FileMCPClient` - **zero prose, zero config, zero dead
+branch.**
+
+DELETED, dead config and a dead branch (the store is local JSON):
+
+- `DEFAULT_DATABASE = os.environ.get("TRID3NT_MONGO_DB", "trid3nt_dev")` -> a constant. CONDITION MET: `TRID3NT_MONGO_DB` is set nowhere in the tree and read nowhere else - it named a database on a substrate that is gone. Test isolation was never done through it: every test relocates the whole root with `TRID3NT_DEV_PERSISTENCE_DIR`, which the comment now says. The mid-file `import os` it needed moves to the top import block.
+- `_unwrap_mcp_result`'s `content[0].text` JSON-parse branch, and the three-key guard that existed to reach it. CONDITION MET: that shape is an MCP server's `tools/call` wire envelope. `FileMCPClient` returns `{"document": ...}`, `{"documents": [...]}` or a counts dict and never a `content` array; no test constructs one either (grep to zero across `tests/` and `contracts/tests/`). The function is now four lines and is named `_unwrap_result` - private, zero external references before the rename.
+
+REWRITTEN substrate-neutral, the prose that named the dead era as if it were a
+live option (module docstring, the `Persistence` and `FileMCPClient` class
+docstrings, the file-backend section banner, and eleven inline comments): "the
+persistence MCP surface" -> "the document store"; "Mongo-faithful semantics" ->
+what the semantics actually are; "another document-store client drops in
+unchanged" -> deleted, because a swap nothing is planning is not a property of
+this module. The private carrier renames with the prose: `self._mcp` ->
+`self._store`, the `mcp_client` parameter -> `client` (never passed by keyword
+anywhere). Seven call sites repoint - six test modules that reach the private
+attribute and `server/dispatch/persist.py`'s telemetry writer.
+
+RENAMED: `tests/test_mongo_mcp_wiring.py` -> `tests/test_persistence_singleton_wiring.py`.
+Its subject is LIVE - the Persistence-singleton startup wiring - so the test does
+not die; only the decommissioned substrate in its name and in two of its test
+names (`test_no_mcp_falls_back_to_dev_persistence` ->
+`test_prebound_file_persistence_is_preserved`, `test_no_mcp_stdio_returns_prebound_or_none`
+-> `test_disabled_dev_persistence_returns_none`; "stdio" was an MCP transport).
+CONSEQUENCE, stated rather than hidden: the file moves from suite slice 2
+(`[f-o]`) to slice 3 (`[p-r]`), so the per-slice baseline shifts by its four
+tests with no change in the total.
+
+KEPT, and reported rather than taken: the two PUBLIC names `MCPClientProtocol`
+and `FileMCPClient` still say MCP. They are exported, imported by
+`workflows/lib/{ledger,snapshot}.py` and ~15 test modules, and renaming them is a
+naming decision on a live seam rather than era residue in prose - so it is
+surfaced here, not taken silently. The seam itself is real: `Persistence` is
+written against the protocol, never against the files.

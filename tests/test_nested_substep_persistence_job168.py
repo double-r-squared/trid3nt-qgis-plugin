@@ -295,7 +295,7 @@ async def test_legacy_tool_card_row_without_children_loads(
         "map_command_emissions": [],
         "created_at": now_utc().isoformat().replace("+00:00", "Z"),
     }
-    await file_persistence._mcp.call_tool(
+    await file_persistence._store.call_tool(
         "insert-one",
         {
             "database": file_persistence._db,

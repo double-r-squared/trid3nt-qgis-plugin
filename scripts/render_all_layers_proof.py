@@ -122,7 +122,7 @@ def _layers_from_case(case_id: str) -> tuple[list[dict], str]:
     """The persisted Case's own ordered ``loaded_layer_summaries``."""
     import asyncio
 
-    from trid3nt_server.persistence.persistence import make_persistence_for_backend
+    from trid3nt_server.persistence import make_persistence_for_backend
 
     state = asyncio.run(make_persistence_for_backend().get_session_state(case_id))
     rows = []

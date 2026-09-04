@@ -585,7 +585,7 @@ def test_persist_chat_turn_noop_when_no_active_case(
         _persist_chat_turn(state, role="user", content="hello (no case)")
     )
     # No writes to the chat collection
-    mcp_mock = _persistence_bound._mcp  # type: ignore[attr-defined]
+    mcp_mock = _persistence_bound._store  # type: ignore[attr-defined]
     chat_inserts = [
         (n, a) for n, a in mcp_mock.calls
         if n == "insert-one" and a.get("collection") == CHAT_COLLECTION

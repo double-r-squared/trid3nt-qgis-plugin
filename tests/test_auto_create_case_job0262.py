@@ -80,7 +80,7 @@ PROMPT = "Show flood risk near Fort Myers after Hurricane Ian"
 
 def _case_docs(p: Persistence) -> list[dict]:
     """All raw Case docs the mock MCP client holds."""
-    mcp = p._mcp  # type: ignore[attr-defined]
+    mcp = p._store  # type: ignore[attr-defined]
     return list(mcp._store.get(CASES_COLLECTION, {}).values())
 
 

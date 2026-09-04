@@ -541,7 +541,7 @@ async def _persist_chart_record(state: SessionState, payload: dict) -> None:
             emitted_at=now_utc(),
         )
         body = record.model_dump(mode="json")
-        await persistence._mcp.call_tool(  # noqa: SLF001 -- telemetry-writer pattern
+        await persistence._store.call_tool(  # noqa: SLF001 -- telemetry-writer pattern
             "update-one",
             {
                 "database": DEFAULT_DATABASE,

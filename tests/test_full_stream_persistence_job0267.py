@@ -516,7 +516,7 @@ async def test_pre_status_case_docs_stay_listed(file_persistence) -> None:
     # job-0252 (OQ-0115): the doc carries a user_id so it survives the now
     # owner-scoped listing — this test exercises pre-*status*-field
     # backward-compat, not the (now removed) pre-Auth owner leak.
-    await file_persistence._mcp.call_tool(
+    await file_persistence._store.call_tool(
         "insert-one",
         {
             "database": file_persistence._db,

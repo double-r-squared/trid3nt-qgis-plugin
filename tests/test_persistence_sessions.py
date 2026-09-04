@@ -209,7 +209,7 @@ def test_chart_push_lands_and_typed_read_tolerates_extras(file_persistence, tmp_
     async def run():
         await file_persistence.touch_session(sid)
         # Mirror server._persist_chart_record's raw MCP call shape exactly.
-        await file_persistence._mcp.call_tool(
+        await file_persistence._store.call_tool(
             "update-one",
             {
                 "database": file_persistence._db,
@@ -219,7 +219,7 @@ def test_chart_push_lands_and_typed_read_tolerates_extras(file_persistence, tmp_
                 "upsert": True,
             },
         )
-        raw = await file_persistence._mcp.call_tool(
+        raw = await file_persistence._store.call_tool(
             "find-one",
             {
                 "database": file_persistence._db,
@@ -242,7 +242,7 @@ def test_chart_push_on_headerless_doc_then_touch_backfills_header(file_persisten
     sid = new_ulid()
 
     async def run():
-        await file_persistence._mcp.call_tool(
+        await file_persistence._store.call_tool(
             "update-one",
             {
                 "database": file_persistence._db,
@@ -253,7 +253,7 @@ def test_chart_push_on_headerless_doc_then_touch_backfills_header(file_persisten
             },
         )
         await file_persistence.touch_session(sid)
-        raw = await file_persistence._mcp.call_tool(
+        raw = await file_persistence._store.call_tool(
             "find-one",
             {
                 "database": file_persistence._db,

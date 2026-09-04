@@ -141,7 +141,7 @@ def test_get_case_tolerates_legacy_expires_at(tmp_path: Path) -> None:
     body["_id"] = case.case_id
     body["expires_at"] = int(now_utc().timestamp()) + 604800
     asyncio.run(
-        p._mcp.call_tool(
+        p._store.call_tool(
             "update-one",
             {
                 "database": DEFAULT_DATABASE,
