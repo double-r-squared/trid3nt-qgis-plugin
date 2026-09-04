@@ -75,7 +75,8 @@ output:
   layer_type: raster
   ext: tif
   role: primary
-  style_preset: flood_extent_observed
+  style:
+    kind: continuous
   result_model: FloodExtentObservationResult
 cache:
   ttl_class: semi-static-7d

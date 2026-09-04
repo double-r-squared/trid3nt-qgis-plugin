@@ -57,12 +57,8 @@ output:
   layer_type: raster
   ext: tif
   role: primary
-  style_preset: sst_celsius
-  style_preset_by_param:
-    param: variable
-    map:
-      sst: sst_celsius
-      anomaly: sst_anomaly
+  style:
+    kind: continuous
   emit_bbox: true
 cache:
   ttl_class: static-30d
@@ -83,7 +79,7 @@ docstring: |-
   **What it does:** Subsets the NOAA Coral Reef Watch operational daily 5 km
   global SST product (via the keyless NOAA CoastWatch ERDDAP griddap endpoint)
   to a single day + the requested ocean ``bbox``, and returns a single-band
-  float32 COG in degrees Celsius (``style_preset="sst_celsius"``). Pass
+  float32 COG in degrees Celsius (). Pass
   ``variable="anomaly"`` for the SST ANOMALY (observed minus climatology,
   degrees C, diverging blue-red ramp ``sst_anomaly``).
 
@@ -117,8 +113,7 @@ docstring: |-
 
   **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="primary"``,
   ``units="degrees Celsius"``) pointing at a single-band float32 COG in the
-  ``static-30d``/``noaa_sst`` cache prefix.
-  ``style_preset="sst_celsius"`` (or ``"sst_anomaly"`` for the anomaly).
+  ``static-30d``/``noaa_sst`` cache prefix.(or ``"sst_anomaly"`` for the anomaly).
 
   **Data source:** NOAA Coral Reef Watch Operational Daily 5 km
   (``NOAA_DHW``; ``CRW_SST`` / ``CRW_SSTANOMALY``) via the NOAA CoastWatch

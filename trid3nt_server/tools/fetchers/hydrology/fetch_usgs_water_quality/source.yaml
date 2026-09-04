@@ -85,7 +85,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: water_quality
+  style:
+    kind: reference
+    geometry: point
 cache:
   ttl_class: semi-static-7d
 payload_estimate:
@@ -153,8 +155,7 @@ docstring: |-
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
       ``s3://<cache-bucket>/cache/semi-static-7d/usgs_water_quality/<key>.fgb``
-      - ``layer_type="vector"``, ``role="primary"``,
-        ``style_preset="water_quality"``.
+      - ``layer_type="vector"``, ``role="primary"``
       - Geometry: Point at each monitoring location, EPSG:4326.
       - ``bbox`` is set to the sites' extent so the client camera auto-zooms
         (the layer renders via the inline-GeoJSON vector path).

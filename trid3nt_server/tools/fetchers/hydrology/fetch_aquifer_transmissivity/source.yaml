@@ -49,7 +49,14 @@ output:
   ext: tif
   role: primary
   emit_bbox: true
-  style_preset: "aquifer_transmissivity_m2_day"
+  style:
+    kind: continuous
+    units: m^2/day
+    label: Surficial aquifer transmissivity (modelled)
+    scale:
+      policy: fixed
+      range: [1, 1000]
+      transform: linear
   # A calibrated model output, not a pumping-test measurement.
   display_name: "Surficial aquifer transmissivity (modelled)"
 

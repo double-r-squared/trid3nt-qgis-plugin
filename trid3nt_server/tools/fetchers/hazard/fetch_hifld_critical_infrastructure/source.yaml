@@ -62,7 +62,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: "hifld_critical_infrastructure"
+  style:
+    kind: reference
+    geometry: point
 
 # --- cache + payload gate -------------------------------------------------
 cache:
@@ -116,8 +118,7 @@ docstring: |
       ``LayerURI`` -> FlatGeobuf of ``Point`` features in EPSG:4326. Properties
       carry the HIFLD source columns (NAME, ADDRESS, CITY, STATE, ZIP, and
       type-specific fields) plus ``facility_type`` and ``facility_label``.
-      ``layer_type="vector"``, ``role="primary"``,
-      ``style_preset="hifld_critical_infrastructure"``, ``units=None``.
+      ``layer_type="vector"``, ``role="primary"`` ``units=None``.
 
   **Error types:**
       - ``HIFLDInfraInputError``: unknown facility_type or bad bbox

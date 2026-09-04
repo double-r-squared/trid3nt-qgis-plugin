@@ -53,7 +53,15 @@ output:
   layer_type: raster
   ext: tif
   role: input
-  style_preset: "population_density"
+  style:
+    kind: continuous
+    ramp: magma
+    units: people/km^2
+    label: Population density
+    scale:
+      policy: fixed
+      range: [0, 250]
+      transform: linear
   emit_bbox: true
 
 cache:
@@ -102,7 +110,7 @@ docstring: |-
 
   Returns:
       A ``LayerURI`` (``layer_type="raster"``, ``role="input"``,
-      ``units="people"``, ``style_preset="population_density"``) pointing at a
+      ``units="people"``) pointing at a
       single-band Cloud-Optimized GeoTIFF in the cache bucket
       ``s3://trid3nt-cache/cache/static-30d/population/<key>.tif`` (units = people
       per cell at the selected resolution).

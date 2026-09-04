@@ -61,7 +61,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: usgs_high_water_marks
+  style:
+    kind: reference
+    geometry: point
   bbox_from_features:
     pad: 0.02
   result_model: HighWaterMarksLayerURI

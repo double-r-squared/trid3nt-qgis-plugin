@@ -70,7 +70,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: nws_river_gauges
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: true
   bbox_from_features:
     pad: 0.05

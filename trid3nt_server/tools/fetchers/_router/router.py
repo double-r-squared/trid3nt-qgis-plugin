@@ -608,12 +608,22 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     )
 
 
-def _template(text: str, params: dict[str, Any]) -> str:
-    """Best-effort ``str.format`` templating for style_preset (missing key -> raw)."""
-    try:
-        return text.format(**params)
-    except (KeyError, IndexError):
-        return text
+def resolve_style_row(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any] | None:
+    """The declared ``style:`` row for THIS call, with ``by_param`` applied.
+
+    A mapped entry overrides the base row key by key, which is how one source
+    serving several variables gives each its own ramp, units and range.
+    """
+    row = spec.output.style
+    if row is None:
+        return None
+    by_param = row.get("by_param")
+    row = {k: v for k, v in row.items() if k != "by_param"}
+    if by_param:
+        mapped = (by_param.get("map") or {}).get(params.get(by_param.get("param")))
+        if isinstance(mapped, dict):
+            row = {**row, **mapped}
+    return row
 
 
 def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> LayerURI:
@@ -658,14 +668,6 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
                 units = resolved
         except Exception:  # noqa: BLE001 -- never fail emission on units resolution
             pass
-    # style_preset_by_param (wave-7): MAP a param value to the preset (landfire/usfs
-    # per-layer); a value absent from the map falls back to the static preset.
-    style_preset = _template(spec.output.style_preset, params)
-    sbp = spec.output.style_preset_by_param
-    if sbp:
-        style_preset = (sbp.get("map") or {}).get(
-            params.get(sbp.get("param")), style_preset
-        )
     # role_by_param: MAP a param value to the LayerURI role (landsat
     # thermal LST -> primary, RGB composites -> context); a value absent from the
     # map falls back to the static role. No-op when unset.
@@ -678,7 +680,7 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
         name=spec.output.display_name or f"{spec.source_class} {variable}",
         layer_type=spec.output.layer_type,
         uri=uri,
-        style_preset=style_preset,
+        style=resolve_style_row(spec, params),
         role=role,
         units=units,
         bbox=bbox,

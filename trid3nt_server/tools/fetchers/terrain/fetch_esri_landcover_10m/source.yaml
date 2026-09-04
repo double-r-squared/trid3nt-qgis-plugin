@@ -69,7 +69,9 @@ output:
   layer_type: raster
   ext: tif
   role: input
-  style_preset: "categorical_landcover"
+  style:
+    kind: classed
+    label: Land Cover
 
 # --- cache + payload gate -------------------------------------------------
 cache:
@@ -143,8 +145,7 @@ docstring: |
 
   **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="input"``)
   pointing at a single-band categorical COG in the ``static-30d`` /
-  ``esri_landcover_10m`` cache prefix. ``style_preset="categorical_landcover"``
-  (embedded-palette passthrough  --  no single-band rescale),
+  ``esri_landcover_10m`` cache prefix.(embedded-palette passthrough  --  no single-band rescale),
   ``units="esri_io_lulc_class_code"``.
 
   **Data source:** Esri / Impact Observatory 10m Annual LULC (9-class) V2 via

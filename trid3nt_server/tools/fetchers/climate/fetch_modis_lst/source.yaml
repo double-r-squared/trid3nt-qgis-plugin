@@ -79,7 +79,8 @@ output:
   ext: tif
   role: primary
   emit_bbox: false
-  style_preset: "land_surface_temp_c"
+  style:
+    kind: continuous
 
 cache:
   ttl_class: static-30d
@@ -139,8 +140,7 @@ docstring: |-
 
   **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="primary"`` --
   LST is the analytical product) pointing at a single-band float32 deg-C COG in
-  the ``static-30d``/``modis_lst`` cache prefix.
-  ``style_preset="land_surface_temp_c"``, ``units="Land-surface temperature
+  the ``static-30d``/``modis_lst`` cache prefix. ``units="Land-surface temperature
   (deg C)"``.
 
   **Data source:** MODIS 8-day LST via the Microsoft Planetary Computer STAC

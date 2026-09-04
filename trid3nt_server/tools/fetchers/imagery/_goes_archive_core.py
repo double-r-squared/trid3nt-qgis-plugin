@@ -245,7 +245,7 @@ _TRUE_COLOR_RES_DEG = 0.005
 #: Bbox quantization (6dp) for cache-key stability.
 _BBOX_QUANTIZE_DP = 6
 
-#: Shared style preset across every frame -- the SAME preset fetch_goes_animation
+#: Shared style across every frame -- the SAME row fetch_goes_animation
 #: emits, so Track A + the web scrubber consume the archive frames UNCHANGED. A
 #: 3-band RGB COG renders via publish_layer's multiband passthrough (no colormap).
 _GOES_ARCHIVE_STYLE_PRESET = "goes_rgb_animation"
@@ -263,19 +263,6 @@ _PRODUCT_LABELS: dict[str, str] = {
     "true_color": "True Color (Archive)",
     "fire_hotspots": "Active Fire Hotspots (Archive)",
     "fire_baked": "Fire Baked on Imagery (Archive)",
-}
-
-#: Per-band style preset. The Fire-Temp + baked products are 3-band RGB COGs and
-#: the hotspots product is a 4-band RGBA COG -- BOTH render via publish_layer's
-#: RGBA/multiband passthrough (band count >= 3 OR an alpha band -> empty
-#: style_params, baked colors render directly with alpha respected). The preset
-#: token is informational for the scrubber group; no new style_preset row is
-#: needed in publish_layer because the passthrough handles RGB(A) directly.
-_PRODUCT_STYLE_PRESETS: dict[str, str] = {
-    "fire_temperature": "goes_rgb_animation",
-    "true_color": "goes_rgb_animation",
-    "fire_hotspots": "goes_fire_hotspots_rgba",
-    "fire_baked": "goes_rgb_animation",
 }
 
 #: LayerURI id slug per band (keeps the products' ids distinct).
@@ -766,7 +753,7 @@ def _bake_fire_over_base(base_rgb: Any, fire_rgba: Any) -> Any:
     Where the fire alpha is 0 (every non-fire pixel) the base shows through
     UNCHANGED; where the fire alpha is 255 (a detected fire pixel) the fire color
     fully replaces the base. The result is an opaque 3-band RGB the user gets as
-    "fire baked onto the satellite image" -- one layer, no new style preset
+    "fire baked onto the satellite image" -- one layer, no new style
     (publish_layer's multiband passthrough renders the 3-band RGB directly).
 
     ``base_rgb`` is ``(3, H, W)`` uint8; ``fire_rgba`` is ``(4, H, W)`` uint8.

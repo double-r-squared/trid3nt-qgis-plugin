@@ -77,7 +77,8 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: movebank_tracks
+  style:
+    kind: reference
   emit_bbox: false
 cache:
   ttl_class: static-30d
@@ -165,7 +166,7 @@ docstring: |-
       ``s3://trid3nt-cache/cache/static-30d/movebank/<key>.fgb``
       containing the tracks/points clipped to the requested bbox (if any),
       in EPSG:4326. ``layer_type="vector"``, ``role="context"``,
-      ``units=None``, ``style_preset="movebank_tracks"``.
+      ``units=None``
 
   Output schema:
       geometry_type="linestring":

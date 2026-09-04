@@ -44,7 +44,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: "hifld_transmission_lines"
+  style:
+    kind: reference
+    geometry: line
   emit_bbox: true                            # twin LayerURI carries bbox
 
 cache:
@@ -98,8 +100,7 @@ docstring: |-
       ``LayerURI`` -> FlatGeobuf of ``LineString`` / ``MultiLineString``
       features in EPSG:4326. Properties carry the HIFLD source columns plus
       ``infra_type`` (always ``"transmission_line"``) and ``infra_label``.
-      ``layer_type="vector"``, ``role="primary"``,
-      ``style_preset="hifld_transmission_lines"``, ``units="kV"``.
+      ``layer_type="vector"``, ``role="primary"`` ``units="kV"``.
 
   **Error types:**
       - ``HIFLDTransmissionInputError``: bad bbox or min_voltage_kv

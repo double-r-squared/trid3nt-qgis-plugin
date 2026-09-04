@@ -49,8 +49,7 @@ docstring: |
     the MODIS Collection-5 delta-T* heritage value).
 
   **Returns:** an ORDERED ``list[LayerURI]`` (ascending UTC), each a 4-band
-  transparent RGBA hotspot COG (``layer_type="raster"``, ``role="context"``,
-  ``style_preset="goes_fire_hotspots_rgba"``, same ``bbox``) named
+  transparent RGBA hotspot COG (``layer_type="raster"``, ``role="context"`` same ``bbox``) named
   ``"GOES Active Fire step <N> <ISO> (<SAT>)"``. A window with no archived frames
   OR no detected hot pixels raises a typed error (honesty floor) -- it never
   emits a blank overlay.
@@ -106,7 +105,8 @@ output:
   layer_type: raster
   ext: tif
   role: context
-  style_preset: goes_fire_hotspots_rgba
+  style:
+    kind: continuous
   emit_bbox: true
 
 cache:

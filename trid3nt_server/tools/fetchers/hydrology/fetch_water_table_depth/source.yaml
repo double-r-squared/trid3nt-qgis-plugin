@@ -49,7 +49,15 @@ output:
   ext: tif
   role: primary
   emit_bbox: true
-  style_preset: "water_table_depth_m"
+  style:
+    kind: continuous
+    ramp: rdylbu_r
+    units: m
+    label: Water table depth (modelled)
+    scale:
+      policy: fixed
+      range: [0, 50]
+      transform: linear
   # Simulated steady-state groundwater heads, not well readings -- the layer
   # name carries that identity onto the map.
   display_name: "Water table depth (modelled)"

@@ -64,7 +64,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: "usace_levees"
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: false                            # twin LayerURI omits bbox
 
 cache:

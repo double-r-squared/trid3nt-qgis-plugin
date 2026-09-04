@@ -43,7 +43,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: "gtsm_{output}"
+  style:
+    kind: reference
+    geometry: point
 
 cache:
   ttl_class: static-30d

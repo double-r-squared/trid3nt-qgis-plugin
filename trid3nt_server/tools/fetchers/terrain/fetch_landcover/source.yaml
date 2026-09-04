@@ -62,7 +62,9 @@ output:
   layer_type: raster
   ext: tif
   role: input
-  style_preset: categorical_landcover
+  style:
+    kind: classed
+    label: Land Cover
   result_model: LandcoverResult
 cache:
   ttl_class: static-30d
@@ -135,8 +137,7 @@ docstring: |-
   **Returns:**
   A dict with keys:
   - ``layer`` (LayerURI): COG at
-    ``s3://trid3nt-cache/cache/static-30d/landcover/<key>.tif``;
-    ``style_preset="categorical_landcover"``, ``units="nlcd_class_code"``.
+    ``s3://trid3nt-cache/cache/static-30d/landcover/<key>.tif``; ``units="nlcd_class_code"``.
   - ``nlcd_vintage_year`` (int): vintage year consumed by hydraulic
     model setup to validate the Manning's mapping CSV.
   - ``dataset`` (str): echo of the input dataset string for provenance.

@@ -45,7 +45,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: "climate_normals"
+  style:
+    kind: reference
+    geometry: point
 
 cache:
   ttl_class: static-30d

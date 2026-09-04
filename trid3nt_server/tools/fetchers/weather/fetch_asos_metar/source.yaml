@@ -57,7 +57,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: asos_metar
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: true
 cache:
   ttl_class: dynamic-1h

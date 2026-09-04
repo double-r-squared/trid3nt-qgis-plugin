@@ -169,7 +169,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: lehd_jobs_choropleth
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: true
 cache:
   ttl_class: static-30d
@@ -205,7 +207,7 @@ docstring: "Census LEHD LODES workplace employment as a tract choropleth FlatGeo
   \ Each feature is a Polygon (census tract) in\n    EPSG:4326. Properties: ``geoid`` (str, 11-digit),\
   \ ``name`` (str),\n    ``state`` (str FIPS), ``county`` (str FIPS), ``segment`` (str),\n    ``value``\
   \ (float|null -- aggregated job count), ``units`` (``\"jobs\"``),\n    ``year`` (int). ``layer_type=\"\
-  vector\"``, ``role=\"primary\"``,\n    ``style_preset=\"lehd_jobs_choropleth\"``.\n\n**Error types:**\n\
+  vector\"``, ``role=\"primary\"``,\n\n\n**Error types:**\n\
   \    - ``LehdJobsInputError``: bad bbox / unknown segment / bad year\n      (retryable=False).\n   \
   \ - ``LehdJobsUpstreamError``: TIGERweb or LODES network / HTTP / parse\n      failure, or a year missing\
   \ for a state (retryable=True).\n    - ``LehdJobsEmptyError``: no tracts in bbox (not raised by default\

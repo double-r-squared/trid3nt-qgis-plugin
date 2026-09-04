@@ -185,7 +185,7 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
                         "bt_diff_min_k": af_diff,
                         "res_deg": core._OUT_RES_DEG,
                     },
-                    style_preset="goes_fire_hotspots_rgba",
+                    style={"kind": "continuous"},
                 )
             )
         return plans
@@ -198,7 +198,6 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     res_deg = core._resolve_res_deg(band, float(tcr) if tcr is not None else None)
 
     product_label = core._PRODUCT_LABELS[band]
-    product_preset = core._PRODUCT_STYLE_PRESETS[band]
     product_slug = core._PRODUCT_ID_SLUGS[band]
 
     plans = []
@@ -232,7 +231,7 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
                     "bt_diff_min_k": bt_diff,
                     "res_deg": res_deg,
                 },
-                style_preset=product_preset,
+                style={"kind": "continuous"},
             )
         )
     return plans

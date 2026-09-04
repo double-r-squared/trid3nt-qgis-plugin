@@ -47,7 +47,9 @@ output:
   layer_type: vector
   ext: fgb
   role: input
-  style_preset: affected_buildings
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: false
 cache:
   ttl_class: static-30d

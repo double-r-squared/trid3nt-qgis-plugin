@@ -42,7 +42,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: admin_boundaries
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: false
 cache:
   ttl_class: static-30d

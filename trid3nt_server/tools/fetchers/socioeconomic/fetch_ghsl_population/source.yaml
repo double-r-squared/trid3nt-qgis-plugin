@@ -46,7 +46,15 @@ output:
   layer_type: raster
   ext: tif
   role: primary
-  style_preset: population_density
+  style:
+    kind: continuous
+    ramp: magma
+    units: people/km^2
+    label: Population density
+    scale:
+      policy: fixed
+      range: [0, 250]
+      transform: linear
   emit_bbox: true
 cache:
   ttl_class: static-30d

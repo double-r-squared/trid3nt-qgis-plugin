@@ -184,7 +184,7 @@ def envelope(spec: SourceSpec, params: dict[str, Any], layer: Any, data: bytes |
     return {
         "name": f"Observed flood extent (MODIS {obs_date.isoformat()})",
         "legend": LegendKey(
-            kind="categorical",
+            kind="classed",
             classes=[
                 LegendClass(value=1, color="#92c5de", label="Surface water (reference)"),
                 LegendClass(value=2, color="#f4a582", label="Recurring flood"),

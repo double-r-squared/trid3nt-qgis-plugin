@@ -51,7 +51,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: "nhd_waterbodies"
+  style:
+    kind: reference
+    geometry: polygon
 
 cache:
   ttl_class: static-30d
@@ -104,8 +106,7 @@ docstring: |-
 
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf of Polygon geometries in
-      EPSG:4326, ``layer_type="vector"``, ``role="context"``,
-      ``style_preset="nhd_waterbodies"``. One property: ``ftype``.
+      EPSG:4326, ``layer_type="vector"``, ``role="context"`` One property: ``ftype``.
 
   Rendering: a VECTOR layer renders INLINE on the map automatically.
 

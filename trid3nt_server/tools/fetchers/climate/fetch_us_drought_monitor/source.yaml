@@ -52,7 +52,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: "us_drought_monitor"
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: true                            # twin LayerURI carries bbox
 
 cache:
@@ -108,8 +110,7 @@ docstring: |-
       is a (Multi)Polygon in EPSG:4326. Properties: ``dm`` (int 0-4 drought
       class), ``label`` (str, e.g. "D2 Severe Drought"), ``period`` (str
       ``YYYYMMDD``), ``valid_date`` (str ISO date or empty). ``layer_type``
-      is ``"vector"``, ``role`` is ``"primary"``, ``style_preset`` is
-      ``"us_drought_monitor"``, ``units`` is ``"dm_class"``.
+      is ``"vector"``, ``role`` is ``"primary"`` ``units`` is ``"dm_class"``.
 
   **Cross-tool dependencies:**
       - Feeds INTO: ``spatial_query`` (assets/acres inside a drought

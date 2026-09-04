@@ -53,7 +53,8 @@ output:
   ext: tif
   role: primary
   emit_bbox: false
-  style_preset: "continuous_dem"
+  style:
+    kind: continuous
 
 cache:
   ttl_class: static-30d

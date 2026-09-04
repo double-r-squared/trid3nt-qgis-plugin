@@ -40,7 +40,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: "nifc_fire_perimeters"
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: false                          # twin LayerURI omits bbox
 
 cache:

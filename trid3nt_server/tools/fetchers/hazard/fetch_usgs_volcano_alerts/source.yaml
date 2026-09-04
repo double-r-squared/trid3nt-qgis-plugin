@@ -48,7 +48,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: volcano_alerts
+  style:
+    kind: reference
+    geometry: point
   bbox_from_features:
     pad: 0.25
 cache:
@@ -88,8 +90,7 @@ docstring: "Fetch the CURRENT USGS volcano alert levels as a point FlatGeobuf.\n
   \ or\n        ``fetch_administrative_boundaries`` first for area-scoped asks.\n        Example: ``bbox=(-156.5,\
   \ 18.8, -154.5, 20.5)`` for the Hawaiian\n        volcanoes (Kilauea, Mauna Loa, Mauna Kea, Hualalai).\n\
   \nReturns:\n    ``LayerURI`` pointing at a FlatGeobuf in the cache bucket. Geometry:\n    Point at each\
-  \ summit, EPSG:4326. ``layer_type=\"vector\"``,\n    ``role=\"primary\"``, ``style_preset=\"volcano_alerts\"\
-  `` (the client colors\n    the marker by ``color_code`` / ``alert_level``), ``units=\"alert level\"\
+  \ summit, EPSG:4326. ``layer_type=\"vector\"``,\n    ``role=\"primary\"`` (the client colors\n  \    the marker by ``color_code`` / ``alert_level``), ``units=\"alert level\"\
   ``.\n    ``bbox`` is set to the volcanoes' extent so the camera auto-zooms.\n    Properties per volcano:\n\
   \        - ``vnum`` (Smithsonian GVP volcano number, e.g. ``\"332010\"``),\n        - ``volcano_name``\
   \ (e.g. \"Kilauea\"),\n        - ``alert_level`` (\"NORMAL\" | \"ADVISORY\" | \"WATCH\" | \"WARNING\"\

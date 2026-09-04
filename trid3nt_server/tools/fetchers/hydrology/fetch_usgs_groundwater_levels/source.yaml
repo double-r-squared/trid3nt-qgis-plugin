@@ -51,7 +51,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: "usgs_groundwater"
+  style:
+    kind: reference
+    geometry: point
   bbox_from_features:
     pad: 0.05
 
@@ -116,8 +118,7 @@ docstring: |-
 
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket.
-      - ``layer_type="vector"``, ``role="primary"``,
-        ``style_preset="usgs_groundwater"``, ``units="ft (water level)"``.
+      - ``layer_type="vector"``, ``role="primary"`` ``units="ft (water level)"``.
       - Geometry: Point at each well's coordinates, EPSG:4326.
       - ``bbox`` is set to the wells' extent so the client camera auto-zooms
         (the layer renders via the inline-GeoJSON vector path).

@@ -79,7 +79,11 @@ output:
   layer_type: raster
   ext: tif
   role: input
-  style_preset: continuous_dem
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+    label: Elevation
   emit_bbox: true
   result_model: TopobathyResult
   provenance: true
@@ -187,8 +191,7 @@ docstring: |-
       A ``TopobathyResult`` (a ``LayerURI`` subclass) pointing at the merged
       COG in the cache bucket
       (``.../cache/static-30d/topobathy/<key>.tif``).
-      ``layer_type="raster"``, ``role="input"``,
-      ``style_preset="continuous_dem"``, ``units="meters"``. Extra honesty
+      ``layer_type="raster"``, ``role="input"`` ``units="meters"``. Extra honesty
       fields: ``bathymetry_present`` (False on the land-only fallback),
       ``fallback_warning`` (set when bathy is absent), ``cudem_tile_count``.
 

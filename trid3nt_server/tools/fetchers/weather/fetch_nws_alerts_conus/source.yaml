@@ -66,7 +66,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: nws_alerts
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: false
   keep_null_geometry: true
 cache:

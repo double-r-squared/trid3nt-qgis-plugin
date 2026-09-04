@@ -46,7 +46,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: epa_frs_facilities
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: true
 cache:
   ttl_class: static-30d
@@ -81,8 +83,7 @@ docstring: "EPA regulated-facility points by program as a FlatGeobuf layer.\n\nF
   **Returns:**\n    ``LayerURI`` -> FlatGeobuf of ``Point`` features in EPSG:4326. Properties\n    carry\
   \ ``registry_id``, ``program``, ``program_label``, ``program_acronym``,\n    ``program_id``, ``facility_name``,\
   \ ``address``, ``city``, ``county``,\n    ``state``, ``postal_code``, ``epa_region``, ``facility_url``\
-  \ (and\n    ``npl_status`` for Superfund). ``layer_type=\"vector\"``, ``role=\"primary\"``,\n    ``style_preset=\"\
-  epa_frs_facilities\"``, ``units=None``.\n\n**Error types:**\n    - ``EpaFrsInputError``: unknown facility_program\
+  \ (and\n    ``npl_status`` for Superfund). ``layer_type=\"vector\"``, ``role=\"primary\"``,\n  \    ``units=None``.\n\n**Error types:**\n    - ``EpaFrsInputError``: unknown facility_program\
   \ or bad bbox\n      (retryable=False).\n    - ``EpaFrsUpstreamError``: HTTP/network failure, ArcGIS\
   \ error envelope,\n      or FlatGeobuf serialization failure (retryable=True).\n    - ``EpaFrsEmptyError``:\
   \ no features in bbox (retryable=False; not raised\n      by default -- empty FGB is returned).\n\n\

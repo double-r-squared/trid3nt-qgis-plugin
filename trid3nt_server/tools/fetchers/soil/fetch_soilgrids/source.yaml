@@ -83,16 +83,8 @@ output:
   layer_type: raster
   ext: tif
   role: input
-  style_preset: soil_clay_pct
-  style_preset_by_param:
-    param: soil_property
-    map:
-      clay: soil_clay_pct
-      sand: soil_sand_pct
-      silt: soil_silt_pct
-      soc: soil_soc
-      bdod: soil_bdod
-      phh2o: soil_phh2o
+  style:
+    kind: continuous
 
 cache:
   ttl_class: static-30d
@@ -159,8 +151,7 @@ docstring: |-
   **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="input"``)
   pointing at a single-band float32 COG in the ``static-30d`` / ``soilgrids``
   cache prefix. ``units`` is the physical unit (percent / g/kg / kg/dm3 / pH),
-  NoData ``-9999``, ~250 m, EPSG:4326. ``style_preset`` is a per-property
-  continuous token (e.g. ``"soil_clay_pct"``).
+  NoData ``-9999``, ~250 m, EPSG:4326.
 
   **Data source:** ISRIC SoilGrids 2.0 (CC-BY 4.0, no API key) --
   ``https://files.isric.org/soilgrids/latest/data``.

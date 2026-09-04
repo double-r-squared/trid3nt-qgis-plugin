@@ -175,7 +175,7 @@ def maybe_emit_input_on_fetch(
                     cog_uri=uri,
                     layer_id=layer_id,
                     name=name,
-                    style_preset=layer.style_preset,
+                    style=layer.style,
                     role="context",
                     fallback_note=layer.fallback_note,
                     fallbacks=layer.fallbacks,

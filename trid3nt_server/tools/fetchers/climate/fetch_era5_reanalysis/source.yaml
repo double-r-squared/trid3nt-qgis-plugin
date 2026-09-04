@@ -52,17 +52,43 @@ output:
   layer_type: raster
   ext: tif
   role: primary
-  style_preset: era5_2m_temperature
-  style_preset_by_param:
-    param: variable
-    map:
-      10m_wind_speed: wind_speed
-      10m_u_component_of_wind: era5_10m_u_component_of_wind
-      10m_v_component_of_wind: era5_10m_v_component_of_wind
-      2m_temperature: era5_2m_temperature
-      total_precipitation: era5_total_precipitation
-      runoff: era5_runoff
-      significant_height_of_combined_wind_waves_and_swell: era5_significant_height_of_combined_wind_waves_and_swell
+  style:
+    kind: continuous
+    ramp: rdylbu_r
+    units: K
+    label: Era5 2m temperature
+    scale:
+      policy: fixed
+      range: [250, 320]
+      transform: linear
+    by_param:
+      param: variable
+      map:
+        10m_wind_speed:
+          kind: continuous
+          units: m/s
+          label: Wind speed
+          scale:
+            policy: fixed
+            range: [0, 25]
+            transform: linear
+        10m_u_component_of_wind:
+          kind: continuous
+        10m_v_component_of_wind:
+          kind: continuous
+        total_precipitation:
+          kind: continuous
+          ramp: blues
+          units: mm
+          label: Era5 total precipitation
+          scale:
+            policy: fixed
+            range: [0, 100]
+            transform: linear
+        runoff:
+          kind: continuous
+        significant_height_of_combined_wind_waves_and_swell:
+          kind: continuous
 
 cache:
   ttl_class: static-30d

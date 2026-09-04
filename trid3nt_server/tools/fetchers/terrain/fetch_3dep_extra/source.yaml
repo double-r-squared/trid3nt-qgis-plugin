@@ -45,7 +45,11 @@ output:
   layer_type: raster
   ext: tif
   role: input
-  style_preset: continuous_dem
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+    label: Elevation
 cache:
   ttl_class: static-30d
 payload_estimate:
@@ -94,7 +98,7 @@ docstring: "Fetch a non-default 3DEP DEM resolution for a US bbox.\n\nWhat it do
   \ the live count exceeds this.\n    timeout_s: ScienceBase / TNM connect-and-read timeout in seconds.\n\
   \        Defaults to 120. Multi-tile mosaics can take a while at high\n        resolution.\n\nReturns:\n\
   \    ``LayerURI`` pointing at a single-band COG in the cache bucket\n    ``s3://trid3nt-cache/cache/static-30d/3dep_extra/<key>.tif``.\n\
-  \    ``layer_type=\"raster\"``, ``role=\"input\"``,\n    ``style_preset=\"continuous_dem\"``, ``units=\"\
+  \    ``layer_type=\"raster\"``, ``role=\"input\"``,\n ``units=\"\
   meters\"`` (NAVD88 or\n    local vertical datum depending on the resolution path; for v0.1\n    we report\
   \ ``meters`` and surface CRS-level metadata in the COG\n    header rather than the LayerURI). Downstream\
   \ tools consume the\n    COG as elevation input for slope / aspect / hillshade / pfdf\n    debris-flow\

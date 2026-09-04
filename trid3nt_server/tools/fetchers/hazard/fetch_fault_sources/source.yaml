@@ -52,7 +52,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: fault_line
+  style:
+    kind: reference
+    geometry: line
   variant_by_emptiness: fault_sources.empty_record
   result_model: FaultSourcesResult
 cache:

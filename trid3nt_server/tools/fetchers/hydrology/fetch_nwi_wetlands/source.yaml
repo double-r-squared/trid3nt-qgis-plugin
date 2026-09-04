@@ -32,7 +32,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: nwi_wetlands
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: false
 cache:
   ttl_class: static-30d
@@ -61,7 +63,7 @@ docstring: "USFWS National Wetlands Inventory (NWI) wetland polygons as a vector
   \ not support a global query (national-scale polygon corpus).\n        Recommended <= ~1 deg on a side;\
   \ larger envelopes risk the\n        100k-feature pagination ceiling. Example (Naples, FL):\n      \
   \  ``(-81.5, 26.0, -81.3, 26.2)``.\n\nReturns:\n    ``LayerURI`` (``layer_type=\"vector\"``, ``role=\"\
-  context\"``,\n    ``style_preset=\"nwi_wetlands\"``, ``units=None``) pointing at a\n    FlatGeobuf in\
+  context\"``,\n ``units=None``) pointing at a\n    FlatGeobuf in\
   \ the cache bucket with per-polygon columns:\n        attribute     (str) -- NWI code (e.g. \"L1UBHx\"\
   , \"PFO1A\")\n        wetland_type  (str) -- Cowardin type (e.g. \"Lake\", \"Freshwater\n          \
   \                      Forested/Shrub Wetland\", \"Estuarine and\n                                Marine\

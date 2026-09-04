@@ -38,12 +38,8 @@ output:
   layer_type: raster
   ext: tif
   role: input
-  style_preset: statsgo_kffact
-  style_preset_by_param:
-    param: field
-    map:
-      KFFACT: statsgo_kffact
-      THICK: statsgo_thick
+  style:
+    kind: continuous
 cache:
   ttl_class: static-30d
 payload_estimate:
@@ -85,7 +81,7 @@ docstring: "Fetch a STATSGO soils raster (KFFACT or THICK) for a CONUS bbox.\n\n
   \ server connect-and-read timeout in seconds.\n        Defaults to 60.0 (matches pfdf default). Reduce\
   \ for impatient\n        callers; raise (or set None upstream) only for known-slow links.\n\nReturns:\n\
   \    ``LayerURI`` pointing at a single-band COG in the cache bucket\n    ``s3://trid3nt-cache/cache/static-30d/statsgo_soils/<key>.tif``.\n\
-  \    ``layer_type=\"raster\"``, ``role=\"input\"``,\n    ``style_preset=\"statsgo_kffact\"`` or ``\"\
+  \    ``layer_type=\"raster\"``, ``role=\"input\"``,\nor ``\"\
   statsgo_thick\"``,\n    ``units=\"centimeters\"`` for THICK and ``None`` for KFFACT.\n    Downstream\
   \ tools consume the COG as a catchment-aggregation input\n    (typically via ``spatial_query`` against\
   \ a watershed\n    polygon from ``fetch_administrative_boundaries`` /\n    ``fetch_nhdplus_nldi_navigate``\

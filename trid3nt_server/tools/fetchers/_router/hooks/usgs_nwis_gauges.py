@@ -7,7 +7,7 @@ both resolved here as PURE hooks over the ``http_json`` parse_fallback executor:
    5-field (latest instantaneous) OR 12-field (a full discharge hydrograph with an
    inline ``time_series_csv``). ``usgs_nwis.resolve`` (pre_resolve) derives a
    ``_mode`` param (instantaneous / hydrograph) pre-cache-key; ``properties_by_param``
-   pins the per-mode column schema and ``style_preset_by_param`` / ``units_by_param``
+   pins the per-mode column schema and ``units_by_param``
    the per-mode stamps -- one declarative switch keyed on the derived mode.
 
 2. The IV WaterML-JSON -> Site-service RDB cross-parser FALLBACK. In instantaneous

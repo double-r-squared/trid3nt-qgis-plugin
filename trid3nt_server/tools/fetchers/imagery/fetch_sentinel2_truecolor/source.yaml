@@ -79,7 +79,8 @@ output:
   layer_type: raster
   ext: tif
   role: context
-  style_preset: s2_truecolor
+  style:
+    kind: continuous
   emit_bbox: false
 cache:
   ttl_class: static-30d
@@ -137,8 +138,6 @@ docstring: |-
   **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="context"``  --
   it is a basemap, not the analytical primary) pointing at a 3-band RGB COG in
   the ``static-30d``/``s2_truecolor`` cache prefix.
-  ``style_preset="s2_truecolor"`` (a multiband-passthrough token  --  no
-  single-band rescale).
 
   **Data source:** Sentinel-2 Level-2A via the Microsoft Planetary Computer
   STAC (``sentinel-2-l2a`` collection; bands B04/B03/B02 + SCL).

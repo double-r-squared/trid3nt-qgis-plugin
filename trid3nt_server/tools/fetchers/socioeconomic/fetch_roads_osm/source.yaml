@@ -49,7 +49,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: osm_roads
+  style:
+    kind: reference
+    geometry: line
 cache:
   ttl_class: static-30d
 payload_estimate:

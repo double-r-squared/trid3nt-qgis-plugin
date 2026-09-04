@@ -71,7 +71,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: nws_alerts
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: false
 cache:
   ttl_class: dynamic-1h

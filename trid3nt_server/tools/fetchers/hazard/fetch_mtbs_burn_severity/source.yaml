@@ -42,7 +42,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: "mtbs_burn_severity"
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: false                           # twin LayerURI omits bbox
 
 cache:

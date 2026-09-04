@@ -62,7 +62,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: storm_tracks
+  style:
+    kind: reference
+    geometry: line
   emit_bbox: true
   bbox_from_features:
     pad: 0.5
@@ -152,8 +154,7 @@ docstring: |-
 
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket.
-      ``layer_type="vector"``, ``role="primary"``,
-      ``style_preset="storm_tracks"``, ``units="kt / mb"``. ``bbox`` is the
+      ``layer_type="vector"``, ``role="primary"`` ``units="kt / mb"``. ``bbox`` is the
       extent of the returned tracks (which can exceed the query bbox because
       full tracks are kept).
       Line props: ``sid``, ``name``, ``season``, ``basin``,

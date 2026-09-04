@@ -53,7 +53,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: "nhd_waterbodies"
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: false                           # twin LayerURI omits bbox
 
 cache:
@@ -93,8 +95,7 @@ docstring: |-
           ``(-81.5, 26.0, -81.3, 26.2)``.
 
   Returns:
-      ``LayerURI`` (``layer_type="vector"``, ``role="context"``,
-      ``style_preset="nhd_waterbodies"``, ``units=None``) pointing at a
+      ``LayerURI`` (``layer_type="vector"``, ``role="context"`` ``units=None``) pointing at a
       FlatGeobuf in the cache bucket with per-polygon columns:
           permanent_identifier (str) -- stable NHD id
           gnis_name            (str) -- GNIS place name (null for many small ponds)

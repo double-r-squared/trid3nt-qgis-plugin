@@ -47,7 +47,9 @@ output:
   layer_type: vector
   ext: fgb
   role: input
-  style_preset: osm_waterways
+  style:
+    kind: reference
+    geometry: line
 cache:
   ttl_class: static-30d
 payload_estimate:

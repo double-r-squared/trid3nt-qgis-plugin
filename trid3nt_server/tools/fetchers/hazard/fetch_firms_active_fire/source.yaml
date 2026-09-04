@@ -68,7 +68,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: firms_active_fire
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: true
 cache:
   ttl_class: dynamic-1h

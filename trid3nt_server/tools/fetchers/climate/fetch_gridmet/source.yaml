@@ -64,7 +64,25 @@ output:
   layer_type: raster
   ext: tif
   role: primary
-  style_preset: "gridmet_{variable}"
+  style:
+    kind: continuous
+    by_param:
+      param: variable
+      map:
+        fm100: {kind: continuous, ramp: ylgn, units: '%', label: Gridmet fm100,
+                scale: {policy: fixed, range: [0, 40], transform: linear}}
+        fm1000: {kind: continuous, ramp: ylgn, units: '%', label: Gridmet fm1000,
+                 scale: {policy: fixed, range: [0, 40], transform: linear}}
+        pdsi: {kind: continuous, ramp: rdbu, units: index, label: Gridmet pdsi,
+               scale: {policy: fixed, range: [-6, 6], transform: linear}}
+        pr: {kind: continuous, ramp: blues, units: mm, label: Gridmet pr,
+             scale: {policy: fixed, range: [0, 100], transform: linear}}
+        tmmn: {kind: continuous, ramp: rdylbu_r, units: K, label: Gridmet tmmn,
+               scale: {policy: fixed, range: [250, 320], transform: linear}}
+        tmmx: {kind: continuous, ramp: rdylbu_r, units: K, label: Gridmet tmmx,
+               scale: {policy: fixed, range: [250, 320], transform: linear}}
+        vs: {kind: continuous, units: 'm s-1', label: Gridmet vs,
+             scale: {policy: fixed, range: [0, 25], transform: linear}}
   emit_bbox: false             # twin gridMET LayerURI omits bbox (parity tell)
 
 # --- cache + payload gate ------------------------------------------------

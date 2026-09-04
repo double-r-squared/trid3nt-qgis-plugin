@@ -52,7 +52,11 @@ output:
   layer_type: raster
   ext: tif
   role: input
-  style_preset: continuous_dem
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+    label: Elevation
   emit_bbox: true
 cache:
   ttl_class: static-30d
@@ -115,7 +119,7 @@ docstring: |-
 
   **Returns:**
       A ``LayerURI`` pointing at the cached GeoTIFF. ``layer_type="raster"``,
-      ``role="input"``, ``style_preset="continuous_dem"``, ``units="meters"``.
+      ``role="input"`` ``units="meters"``.
 
   **Errors:**
       - ``NCEI_DEM_MOSAIC_INPUT_INVALID``: bad bbox (retryable=False).

@@ -54,7 +54,8 @@ output:
   layer_type: raster
   ext: tif
   role: context
-  style_preset: goes_satellite
+  style:
+    kind: continuous
   emit_bbox: false
   result_model: GOESSatelliteLayerURI
   provenance: true

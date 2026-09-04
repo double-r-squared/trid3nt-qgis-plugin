@@ -59,7 +59,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: earthquakes
+  style:
+    kind: reference
+    geometry: point
   bbox_from_features:
     pad: 0.1
 cache:
@@ -105,7 +107,7 @@ docstring: "Fetch REAL, RECORDED USGS earthquakes as a point FlatGeobuf.\n\nRetr
   \        or a higher value (e.g. ``4.5`` or ``6``) for only the significant\n        events. Pass ``None``\
   \ for no floor (all catalogued events).\n\nReturns:\n    ``LayerURI`` pointing at a FlatGeobuf in the\
   \ cache bucket. Geometry:\n    Point at each epicenter, EPSG:4326. ``layer_type=\"vector\"``,\n    ``role=\"\
-  primary\"``, ``style_preset=\"earthquakes\"`` (the client sizes the\n    marker by ``mag`` and colors\
+  primary\"``(the client sizes the\n    marker by ``mag`` and colors\
   \ by ``depth_km``), ``units=\"magnitude / km\"``.\n    ``bbox`` is set to the events' extent so the\
   \ camera auto-zooms.\n    Properties per event:\n        - ``id`` (USGS event id, e.g. ``\"nc75382006\"\
   ``),\n        - ``mag`` (magnitude; null if not assigned),\n        - ``depth_km`` (focal depth, km;\

@@ -65,7 +65,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: tsunami_events
+  style:
+    kind: reference
+    geometry: point
   bbox_from_features:
     pad: 0.1
 cache:
@@ -110,7 +112,7 @@ docstring: "Fetch REAL historical tsunamis as a point FlatGeobuf.\n\nRetrieves r
   \        height at each coastline); use only with a TIGHT bbox + short year\n        window, as a wide\
   \ runups scope hits the result cap.\n\nReturns:\n    ``LayerURI`` pointing at a FlatGeobuf in the cache\
   \ bucket. Geometry:\n    Point per record, EPSG:4326. ``layer_type=\"vector\"``, ``role=\"primary\"\
-  ``,\n    ``style_preset=\"tsunami_events\"`` (the client sizes the marker by\n    ``max_water_height``\
+  ``,\n(the client sizes the marker by\n    ``max_water_height``\
   \ and colors by ``cause``),\n    ``units=\"m water height\"``. ``bbox`` is set to the records' extent\
   \ so\n    the camera auto-zooms. Properties per record:\n        - ``id`` (NCEI record id),\n      \
   \  - ``year`` (event year; negative = BC),\n        - ``cause_code`` (NCEI integer cause) + ``cause``\

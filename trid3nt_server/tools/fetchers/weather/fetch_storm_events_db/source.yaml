@@ -65,7 +65,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: storm_events
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: false
 cache:
   ttl_class: static-30d

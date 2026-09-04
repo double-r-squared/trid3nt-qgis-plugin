@@ -60,12 +60,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: usgs_gauges
-  style_preset_by_param:
-    param: _mode
-    map:
-      instantaneous: usgs_gauges
-      hydrograph: usgs_gauges_hydrograph
+  style:
+    kind: reference
+    geometry: point
   # Camera extent from the emitted gauge points (twin _records_bbox, 0.05 deg pad).
   bbox_from_features: {pad: 0.05}
 
@@ -162,8 +159,7 @@ docstring: |
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
       ``s3://trid3nt-cache/cache/dynamic-1h/usgs_nwis_gauges/<key>.fgb``
-      - ``layer_type="vector"``, ``role="primary"``,
-        ``style_preset="usgs_gauges"``, ``units="mixed (cfs / ft)"``.
+      - ``layer_type="vector"``, ``role="primary"`` ``units="mixed (cfs / ft)"``.
       - Geometry: Point at each gauge station's coordinates, EPSG:4326.
       - ``bbox`` is set to the stations' extent so the client camera
         auto-zooms (the layer renders via the inline-GeoJSON vector path).

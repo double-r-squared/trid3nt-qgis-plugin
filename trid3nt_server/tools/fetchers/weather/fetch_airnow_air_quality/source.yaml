@@ -65,7 +65,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: airnow_air_quality
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: false
 cache:
   ttl_class: dynamic-1h

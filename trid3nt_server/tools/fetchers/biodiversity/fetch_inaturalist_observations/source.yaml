@@ -62,7 +62,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: inaturalist_observations
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: true
 cache:
   ttl_class: static-30d

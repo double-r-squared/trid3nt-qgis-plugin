@@ -59,7 +59,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: fema_disaster_declarations
+  style:
+    kind: reference
+    geometry: polygon
   bbox_from_features:
     pad: 0.1
 cache:
@@ -131,8 +133,7 @@ docstring: |-
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket
       (``s3://.../cache/semi-static-7d/openfema_disasters/<key>.fgb``):
-      - ``layer_type="vector"``, ``role="primary"``,
-        ``style_preset="fema_disaster_declarations"``.
+      - ``layer_type="vector"``, ``role="primary"``
       - Geometry: one county Polygon per affected county, EPSG:4326.
       - ``bbox`` is the joined counties' extent so the camera auto-zooms.
       - Properties per county: ``county_fips`` (5-digit), ``county_name``,

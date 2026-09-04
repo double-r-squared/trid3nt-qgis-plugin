@@ -61,7 +61,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: "nhdplus_flowlines"
+  style:
+    kind: reference
+    geometry: line
 
 cache:
   ttl_class: static-30d
@@ -123,8 +125,7 @@ docstring: |-
 
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf of LineString geometries in
-      EPSG:4326, ``layer_type="vector"``, ``role="context"``,
-      ``style_preset="nhdplus_flowlines"``. Properties per feature:
+      EPSG:4326, ``layer_type="vector"``, ``role="context"`` Properties per feature:
       ``gnis_name`` (str), ``streamorde`` (int), ``totdasqkm`` (float).
 
   Rendering: a VECTOR layer renders INLINE on the map automatically.

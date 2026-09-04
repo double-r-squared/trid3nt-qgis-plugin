@@ -53,7 +53,8 @@ output:
   layer_type: raster
   ext: tif
   role: context
-  style_preset: glm_lightning
+  style:
+    kind: continuous
   emit_bbox: true
 
 cache:
@@ -116,7 +117,7 @@ docstring: |-
     accumulated into a SINGLE frame -- returned as a one-frame list.
 
   **Returns:** an ORDERED ``list[LayerURI]`` of 4-band transparent RGBA GED COG
-  frames (``layer_type="raster"``, ``role="context"``, ``style_preset="glm_lightning"``,
+  frames (``layer_type="raster"``, ``role="context"``
   identical preset + bbox across frames, ascending UTC, ``step <N>`` scrubber names).
   The single-accumulation case is a one-frame list. A window where no bucket has any
   lightning group inside the AOI raises a typed EMPTY error (honesty floor) -- it

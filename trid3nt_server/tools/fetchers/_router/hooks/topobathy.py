@@ -212,7 +212,7 @@ _TILE_NAME_RE = re.compile(
 _BBOX_DECIMALS = 6
 
 #: Single shared style preset (same continuous-DEM ramp as fetch_dem).
-_STYLE_PRESET = "continuous_dem"
+_STYLE = {"kind": "continuous", "ramp": "gray", "units": "m", "label": "Elevation"}
 
 #: Absolute physical cap (metres) on a coastal topo-bathymetry elevation; any
 #: |z| at or above this is an UNFLAGGED fill/nodata sentinel leak, masked to NaN.
@@ -1850,7 +1850,8 @@ def serve_user_supplied_bed(
         ),
         layer_type="raster",
         uri=str(dem_uri),
-        style_preset="continuous_dem",
+        style={"kind": "continuous", "ramp": "gray", "units": "m",
+               "label": "Elevation"},
         role="input",
         units="meters",
         bbox=(b[0], b[1], b[2], b[3]),

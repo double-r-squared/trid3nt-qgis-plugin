@@ -61,7 +61,8 @@ output:
   ext: tif
   role: context
   emit_bbox: true
-  style_preset: "noaa_slr_confidence"
+  style:
+    kind: continuous
 
 cache:
   ttl_class: static-30d
@@ -109,7 +110,7 @@ docstring: |-
     payload-warning-coupled). Defaults to ~50 m (the symbology is coarse).
 
   **Returns:** a 4-band transparent RGBA COG ``LayerURI`` (``layer_type="raster"``,
-  ``role="context"``, ``style_preset="noaa_slr_confidence"``). A bbox with no SLR
+  ``role="context"``). A bbox with no SLR
   coverage at this level returns a valid transparent (empty) overlay -- never
   fabricated content.
 

@@ -48,7 +48,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: "ebird_observations"
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: false
 
 cache:

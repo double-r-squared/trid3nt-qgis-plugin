@@ -51,7 +51,8 @@ output:
   layer_type: raster
   ext: tif
   role: context
-  style_preset: naip_rgb
+  style:
+    kind: continuous
   emit_bbox: false
 cache:
   ttl_class: static-30d
@@ -97,8 +98,7 @@ docstring: |-
 
   **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="context"``  --
   it is a basemap, not the analytical primary) pointing at a 3-band RGB COG in
-  the ``static-30d``/``naip`` cache prefix. ``style_preset="naip_rgb"`` (a
-  multiband passthrough token  --  no single-band rescale).
+  the ``static-30d``/``naip`` cache prefix.
 
   **Data source:** USDA NAIP via the Microsoft Planetary Computer STAC
   (``naip`` collection; ``image`` asset).

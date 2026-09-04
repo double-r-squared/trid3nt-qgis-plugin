@@ -77,7 +77,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: "acs_choropleth"
+  style:
+    kind: reference
+    geometry: polygon
 
 # --- cache + payload gate -------------------------------------------------
 cache:
@@ -134,7 +136,7 @@ docstring: |
       EPSG:4326. Properties: ``geoid`` (str, 11-digit), ``name`` (str),
       ``state`` (str FIPS), ``county`` (str FIPS), ``variable`` (str),
       ``value`` (float|null), ``units`` (str). ``layer_type="vector"``,
-      ``role="primary"``, ``style_preset="acs_choropleth"``.
+      ``role="primary"``
 
   **Error types:**
       - ``CensusACSInputError``: bad bbox / unknown variable / nonexistent

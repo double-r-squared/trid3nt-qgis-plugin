@@ -58,7 +58,8 @@ output:
   layer_type: raster
   ext: tif
   role: context
-  style_preset: goes_rgb_animation
+  style:
+    kind: continuous
   emit_bbox: true
 
 cache:

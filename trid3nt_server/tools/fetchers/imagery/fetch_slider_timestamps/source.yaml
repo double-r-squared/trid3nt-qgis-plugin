@@ -75,7 +75,6 @@ normalize:
 output:
   layer_type: record
   ext: json
-  style_preset: none
   emit_bbox: false
 
 # live-no-cache by construction: the SLIDER availability index turns over every

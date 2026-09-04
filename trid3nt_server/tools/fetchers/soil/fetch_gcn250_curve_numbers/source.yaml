@@ -50,7 +50,8 @@ output:
   ext: tif
   role: primary
   emit_bbox: true
-  style_preset: "curve_number"
+  style:
+    kind: continuous
 
 cache:
   ttl_class: static-30d

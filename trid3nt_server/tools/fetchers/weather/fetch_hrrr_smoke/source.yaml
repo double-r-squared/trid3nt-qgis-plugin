@@ -64,13 +64,8 @@ output:
   layer_type: raster
   ext: tif
   role: primary
-  style_preset: hrrr_smoke_near_surface_smoke
-  style_preset_by_param:
-    param: variable
-    map:
-      near_surface_smoke: hrrr_smoke_near_surface_smoke
-      smoke_column_mass: hrrr_smoke_smoke_column_mass
-      aerosol_optical_depth: hrrr_smoke_aerosol_optical_depth
+  style:
+    kind: continuous
 cache:
   ttl_class: dynamic-1h
 payload_estimate:

@@ -67,7 +67,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: field_boundaries
+  style:
+    kind: reference
+    geometry: polygon
 cache:
   ttl_class: static-30d
 payload_estimate:

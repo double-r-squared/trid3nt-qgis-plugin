@@ -58,7 +58,11 @@ output:
   ext: tif
   role: input
   emit_bbox: true
-  style_preset: "continuous_dem"
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+    label: Elevation
 
 cache:
   ttl_class: static-30d
@@ -85,4 +89,4 @@ docstring: |-
 
   Fetches a GLOBAL 30 m elevation model (Copernicus GLO-30) for ``bbox`` via the
   Microsoft Planetary Computer STAC and returns a single-band float32 (meters)
-  Cloud-Optimized GeoTIFF (``style_preset="continuous_dem"``).
+  Cloud-Optimized GeoTIFF ().

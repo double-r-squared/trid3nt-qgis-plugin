@@ -72,7 +72,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: "noaa_slr_scenarios"
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: true
 
 cache:
@@ -136,8 +138,7 @@ docstring: |-
       is a Polygon in EPSG:4326. Properties: ``slr_ft`` (float, scenario level
       in feet), ``scenario_label`` (str, e.g. "1.0 ft SLR"), ``dissolve``
       (int, always 1 -- source is fully dissolved per scenario). ``layer_type``
-      is ``"vector"``, ``role`` is ``"primary"``, ``style_preset`` is
-      ``"noaa_slr_scenarios"``, ``units`` is ``"feet"``.
+      is ``"vector"``, ``role`` is ``"primary"`` ``units`` is ``"feet"``.
 
   **Cross-tool dependencies:**
       - Feeds INTO: ``spatial_query`` (structure count / population inside

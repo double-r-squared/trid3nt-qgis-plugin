@@ -255,7 +255,7 @@ def envelope(
     return {
         "name": f"Active fault {plural} ({n})",
         "legend": LegendKey(
-            kind="categorical",
+            kind="classed",
             classes=[LegendClass(value="fault", color="#FF6A00", label="Active fault trace")],
             label="Active faults (GEM)",
         ),

@@ -62,7 +62,15 @@ output:
   ext: tif
   role: primary
   emit_bbox: false
-  style_preset: "mobi_biodiversity"
+  style:
+    kind: continuous
+    ramp: ylgn
+    units: species
+    label: Mobi biodiversity
+    scale:
+      policy: fixed
+      range: [0, 40]
+      transform: linear
 
 cache:
   ttl_class: static-30d
@@ -115,8 +123,7 @@ docstring: |-
 
   **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="primary"``,
   ``units="imperiled-species count"`` for richness layers) pointing at a
-  single-band float32 COG in the ``static-30d``/``mobi`` cache prefix.
-  ``style_preset="mobi_biodiversity"`` (YlGn ramp).
+  single-band float32 COG in the ``static-30d``/``mobi`` cache prefix.(YlGn ramp).
 
   **Data source:** NatureServe Map of Biodiversity Importance via the
   Microsoft Planetary Computer STAC (``mobi`` collection).

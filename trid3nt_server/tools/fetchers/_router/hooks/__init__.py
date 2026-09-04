@@ -113,12 +113,12 @@ class FramePlan:
     layer_id: str
     bbox: tuple[float, float, float, float]
     fetch_context: dict[str, Any] = field(default_factory=dict)
-    #: OPTIONAL per-frame style_preset override. The archive source emits
+    #: OPTIONAL per-frame style row override. The archive source emits
     #: distinct bands with distinct presets (goes_rgb_animation for the RGB composites,
     #: goes_fire_hotspots_rgba for the transparent hotspot RGBA) that a single
-    #: spec.output.style_preset cannot carry; None -> the executor falls back to
-    #: spec.output.style_preset (a strict no-op for the wave-1 single-preset SLIDER frames).
-    style_preset: str | None = None
+    #: the spec's own style row cannot carry; None -> the executor falls back
+    #: to the spec's row.
+    style: dict | None = None
 
 
 class FrameDegraded(Exception):

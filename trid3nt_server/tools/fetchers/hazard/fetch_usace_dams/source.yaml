@@ -96,7 +96,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: usace_nid_dams
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: false
 cache:
   ttl_class: static-30d

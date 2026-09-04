@@ -84,7 +84,7 @@ MAX_GLM_FRAMES = 24
 
 #: Style preset -- the per-frame GROUPING key for the web scrubber (identical across
 #: frames); the COG is baked RGBA so publish_layer's passthrough ignores it for styling.
-_STYLE_PRESET = "glm_lightning"
+_STYLE = {"kind": "continuous"}
 
 _PRODUCT_LABEL = "GLM Lightning GED"
 _ID_TAG = "glm-ged"

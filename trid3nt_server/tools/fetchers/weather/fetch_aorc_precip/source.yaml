@@ -50,7 +50,6 @@ normalize:
 output:
   layer_type: record
   ext: json
-  style_preset: none
   emit_bbox: false
 
 cache:

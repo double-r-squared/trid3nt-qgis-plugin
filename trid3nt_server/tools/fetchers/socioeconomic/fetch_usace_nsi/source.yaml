@@ -56,7 +56,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: usace_nsi
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: false
 cache:
   ttl_class: static-30d
@@ -124,8 +126,7 @@ docstring: |-
       A ``LayerURI`` pointing at a FlatGeobuf of NSI Point features (one
       per structure) at
       ``s3://trid3nt-cache/cache/static-30d/usace_nsi/<key>.fgb``.
-      ``layer_type="vector"``, ``role="primary"``, ``units=None``,
-      ``style_preset="usace_nsi"``. Each feature carries:
+      ``layer_type="vector"``, ``role="primary"``, ``units=None`` Each feature carries:
 
       - ``fd_id`` (int) — NSI persistent feature ID.
       - ``occtype`` (str) — HAZUS occupancy class (``RES1``, ``RES3A``,

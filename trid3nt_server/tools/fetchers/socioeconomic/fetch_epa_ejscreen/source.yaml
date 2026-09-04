@@ -85,7 +85,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: "epa_ejscreen"
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: true
 
 cache:
@@ -144,8 +146,7 @@ docstring: |-
       ``p_lead_paint``/``p_superfund``/``p_rmp``/``p_tsdf``/``p_wastewater``/
       ``p_minority`` (float|null [0,100]), ``minority_pct``/``lowincome_pct``/
       ``demographic_index`` (float|null [0,1]), ``pm25_raw``/``ozone_raw``
-      (float|null). ``layer_type="vector"``, ``role="primary"``,
-      ``style_preset="epa_ejscreen"``, ``units="percentile"``.
+      (float|null). ``layer_type="vector"``, ``role="primary"`` ``units="percentile"``.
 
   **Cross-tool dependencies:**
       - Combine WITH ``fetch_cdc_svi`` + ``fetch_epa_frs_facilities`` for

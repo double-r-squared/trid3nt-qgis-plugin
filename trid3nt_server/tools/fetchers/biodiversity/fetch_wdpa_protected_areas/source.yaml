@@ -38,7 +38,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: wdpa_protected_areas
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: false
 cache:
   ttl_class: static-30d

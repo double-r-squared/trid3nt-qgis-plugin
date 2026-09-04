@@ -63,14 +63,8 @@ output:
   layer_type: raster
   ext: tif
   role: input
-  style_preset: water_occurrence_pct
-  style_preset_by_param:
-    param: band
-    map:
-      occurrence: water_occurrence_pct
-      recurrence: water_recurrence_pct
-      seasonality: water_seasonality_months
-      change: water_change_intensity
+  style:
+    kind: continuous
 
 cache:
   ttl_class: static-30d

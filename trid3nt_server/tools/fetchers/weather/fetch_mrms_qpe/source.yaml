@@ -61,7 +61,15 @@ output:
   ext: tif
   role: primary
   emit_bbox: true
-  style_preset: precipitation_mm
+  style:
+    kind: continuous
+    ramp: blues
+    units: mm
+    label: Precipitation mm
+    scale:
+      policy: fixed
+      range: [0, 100]
+      transform: linear
 cache:
   ttl_class: dynamic-1h
 payload_estimate:

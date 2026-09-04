@@ -53,7 +53,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: fema_nfhl_zones
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: false
 cache:
   ttl_class: static-30d
@@ -116,8 +118,7 @@ docstring: |-
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
       ``s3://trid3nt-cache/cache/static-30d/fema_nfhl/<key>.fgb``.
-      ``layer_type="vector"``, ``role="primary"``, ``units=None``,
-      ``style_preset="fema_nfhl_zones"`` (downstream QML preset colors AE/A
+      ``layer_type="vector"``, ``role="primary"``, ``units=None``(downstream QML preset colors AE/A
       deep blue, VE coastal-high-hazard red, X minimal-hazard pale,
       D undetermined hatched). Downstream tools consume:
       ``FLD_ZONE`` (categorical legend), ``STATIC_BFE`` (numeric depth

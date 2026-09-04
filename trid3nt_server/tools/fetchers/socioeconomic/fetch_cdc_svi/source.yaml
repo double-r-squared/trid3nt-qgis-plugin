@@ -48,7 +48,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: "cdc_svi"
+  style:
+    kind: reference
+    geometry: polygon
   emit_bbox: true                            # twin LayerURI carries bbox
 
 cache:
@@ -101,7 +103,7 @@ docstring: |-
       ``location`` (str), ``total_pop`` (int|null), ``rpl_themes``
       (float|null, overall percentile [0,1]), ``rpl_theme1..rpl_theme4``
       (float|null, per-theme percentiles). ``layer_type="vector"``,
-      ``role="primary"``, ``style_preset="cdc_svi"``, ``units="percentile"``.
+      ``role="primary"`` ``units="percentile"``.
 
   **Cross-tool dependencies:**
       - Feeds INTO: ``spatial_query`` (vulnerable population inside a hazard

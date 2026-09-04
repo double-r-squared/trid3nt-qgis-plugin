@@ -77,15 +77,46 @@ output:
   layer_type: raster
   ext: tif
   role: primary
-  style_preset: hrrr_2m_temperature
-  style_preset_by_param:
-    param: variable
-    map:
-      2m_temperature: hrrr_2m_temperature
-      10m_u_wind: hrrr_10m_u_wind
-      10m_v_wind: hrrr_10m_v_wind
-      surface_precip_1hr: hrrr_surface_precip_1hr
-      10m_wind_speed: wind_speed
+  style:
+    kind: continuous
+    ramp: rdylbu_r
+    units: K
+    label: Hrrr 2m temperature
+    scale:
+      policy: fixed
+      range: [250, 320]
+      transform: linear
+    by_param:
+      param: variable
+      map:
+        10m_u_wind:
+          kind: continuous
+          ramp: rdbu
+          units: m/s
+          label: Hrrr 10m u wind
+          scale:
+            policy: fixed
+            range: [-25, 25]
+            transform: linear
+        10m_v_wind:
+          kind: continuous
+          ramp: rdbu
+          units: m/s
+          label: Hrrr 10m v wind
+          scale:
+            policy: fixed
+            range: [-25, 25]
+            transform: linear
+        surface_precip_1hr:
+          kind: continuous
+        10m_wind_speed:
+          kind: continuous
+          units: m/s
+          label: Wind speed
+          scale:
+            policy: fixed
+            range: [0, 25]
+            transform: linear
 cache:
   ttl_class: dynamic-1h
 payload_estimate:

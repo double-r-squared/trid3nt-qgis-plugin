@@ -70,7 +70,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: nwm_streamflow
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: true
   result_model: NWMStreamflowLayerURI
   provenance: true
@@ -146,8 +148,7 @@ docstring: |-
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
       ``s3://trid3nt-cache/cache/dynamic-1h/nwm_streamflow/<key>.fgb``
-      - ``layer_type="vector"``, ``role="primary"``,
-        ``style_preset="nwm_streamflow"``, ``units="m^3/s"``.
+      - ``layer_type="vector"``, ``role="primary"`` ``units="m^3/s"``.
       - Geometry: Point at each NHDPlus reach centroid (LineString midpoint
         from NLDI), EPSG:4326.
       - Properties per feature: ``feature_id`` (int, NHDPlus v2.1 COMID),

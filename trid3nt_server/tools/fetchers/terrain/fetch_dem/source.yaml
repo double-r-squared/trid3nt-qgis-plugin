@@ -52,7 +52,11 @@ output:
   layer_type: raster
   ext: tif
   role: input
-  style_preset: continuous_dem
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+    label: Elevation
   emit_bbox: true
   result_model: DemLayerURI
 cache:
@@ -148,8 +152,7 @@ docstring: |-
   (``s3://trid3nt-cache/cache/static-30d/dem/<key>.tif``).
   CRS: EPSG:5070 (py3dep default); units: meters above NAVD88.
   Fields consumed downstream: ``uri`` → by hydraulic model setup and
-  the QGIS plugin's native rendering;
-  ``style_preset="continuous_dem"`` → map rendering. When the
+  the QGIS plugin's native rendering;→ map rendering. When the
   bbox forced a coarser grid than requested, ``name`` carries an honest
   coarsening note (approximate terrain -- fine for a hillshade/overview,
   not site-scale analysis).

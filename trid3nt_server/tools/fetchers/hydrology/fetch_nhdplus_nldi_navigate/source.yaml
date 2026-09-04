@@ -50,7 +50,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: nhdplus_flowlines
+  style:
+    kind: reference
+    geometry: line
 cache:
   ttl_class: static-30d
 payload_estimate:
@@ -128,8 +130,7 @@ docstring: |-
   Returns:
       ``LayerURI`` pointing at a FlatGeobuf in the cache bucket
       ``s3://trid3nt-cache/cache/static-30d/nhdplus_nldi/<key>.fgb``.
-      ``layer_type="vector"``, ``role="context"``,
-      ``style_preset="nhdplus_flowlines"``, ``units=None``. Geometry
+      ``layer_type="vector"``, ``role="context"`` ``units=None``. Geometry
       is LineString in EPSG:4326. Single property per feature:
       ``nhdplus_comid`` (int) -- the join key downstream tools (NWM,
       NWIS, NHDPlus VAA tables) consume.

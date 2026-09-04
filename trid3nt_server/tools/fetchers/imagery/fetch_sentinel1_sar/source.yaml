@@ -87,7 +87,8 @@ output:
   layer_type: raster
   ext: tif
   role: primary
-  style_preset: sar_backscatter_db
+  style:
+    kind: continuous
   emit_bbox: false
 cache:
   ttl_class: static-30d
@@ -152,8 +153,7 @@ docstring: |-
 
   **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="primary"``  --
   the backscatter IS the analytical product) pointing at a single-band float32
-  dB COG in the ``static-30d``/``sentinel1_sar`` cache prefix.
-  ``style_preset="sar_backscatter_db"`` (single-band; auto-rescaled by band
+  dB COG in the ``static-30d``/``sentinel1_sar`` cache prefix.(single-band; auto-rescaled by band
   percentile so the dark-water / bright-urban contrast renders). ``units`` is
   ``"VV/VH gamma0 backscatter (dB)"``.
 

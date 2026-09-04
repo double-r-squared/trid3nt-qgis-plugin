@@ -52,7 +52,9 @@ output:
   layer_type: vector
   ext: fgb
   role: context
-  style_preset: gbif_occurrences
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: false
 cache:
   ttl_class: static-30d

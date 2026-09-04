@@ -52,7 +52,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: overpass_pois
+  style:
+    kind: reference
+    geometry: point
   bbox_from_features:
     pad: 0.02
 cache:
@@ -96,7 +98,7 @@ docstring: "Fetch OpenStreetMap POIs / tagged features as a point FlatGeobuf ove
   \ inferred for common classes.\n    - ``category`` (str): alias for ``tag`` -- a ``\"key=value\"`` or\
   \ a known\n      bare value.\n    - ``value`` (str): a bare value resolved to its key for common classes.\n\
   \n**Returns:** A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket\n(``.../cache/static-30d/overpass_pois/<key>.fgb``).\n\
-  ``layer_type=\"vector\"``, ``role=\"primary\"``,\n``style_preset=\"overpass_pois\"``, ``units=None``.\
+  ``layer_type=\"vector\"``, ``role=\"primary\"``,\n ``units=None``.\
   \ ``bbox`` is set to the\nfeatures' extent so the camera auto-zooms. Properties per feature:\n``osm_id``\
   \ (int), ``osm_type`` (str), ``name`` (str | None), ``key`` (str),\n``value`` (str), ``tags_json`` (str\
   \ -- full OSM tag dict).\n\n**Fallback behaviour (data-source fallback norm -- primary -> fallback ->\n\

@@ -55,7 +55,15 @@ output:
   ext: tif
   role: primary
   emit_bbox: true
-  style_preset: "groundwater_recharge_mm_yr"
+  style:
+    kind: continuous
+    ramp: blues
+    units: mm/yr
+    label: Groundwater recharge mm yr
+    scale:
+      policy: fixed
+      range: [0, 800]
+      transform: linear
 
 cache:
   ttl_class: static-30d

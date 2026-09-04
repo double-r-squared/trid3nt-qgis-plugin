@@ -46,7 +46,11 @@ output:
   layer_type: raster
   ext: tif
   role: input
-  style_preset: continuous_dem
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+    label: Elevation
   emit_bbox: true
   display_name: NOAA BlueTopo bathymetry (NAVD88)
   result_model: BlueTopoResult
@@ -131,8 +135,7 @@ docstring: |-
 
   **Returns:**
       A ``BlueTopoResult`` (a ``LayerURI`` subclass) pointing at the merged COG
-      in the cache bucket. ``layer_type="raster"``, ``role="input"``,
-      ``style_preset="continuous_dem"``, ``units="meters"``. Provenance fields:
+      in the cache bucket. ``layer_type="raster"``, ``role="input"`` ``units="meters"``. Provenance fields:
       ``vertical_datum`` (the datum read off the tiles that painted),
       ``tile_count``, ``resolution_tiers``, and ``coverage_fraction`` - the
       share of the AOI that carries a PAINTED bed cell, measured off the merged

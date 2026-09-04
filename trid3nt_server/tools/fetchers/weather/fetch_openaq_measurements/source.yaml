@@ -61,7 +61,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: openaq_measurements
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: true
 cache:
   ttl_class: dynamic-1h

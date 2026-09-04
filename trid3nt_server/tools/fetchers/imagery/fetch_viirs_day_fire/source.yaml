@@ -50,8 +50,7 @@ docstring: |
     daytime product; night passes are black).
 
   **Returns:** an ORDERED ``list[LayerURI]`` (ascending UTC). Each is a 3-band
-  uint8 RGB COG (``layer_type="raster"``, ``role="context"``,
-  ``style_preset="viirs_day_fire_animation"``, same ``bbox``) whose ``name`` is
+  uint8 RGB COG (``layer_type="raster"``, ``role="context"`` same ``bbox``) whose ``name`` is
   ``"VIIRS Day Fire step <N> <ISO> (<SAT>)"`` -- the scrubber-group contract:
   ``step <N>`` is the monotonic frame value the web parser keys on (the
   irregular polar-pass ISO alone is not a recognized token), and the ISO pass
@@ -112,7 +111,8 @@ output:
   layer_type: raster
   ext: tif
   role: context
-  style_preset: viirs_day_fire_animation
+  style:
+    kind: continuous
   emit_bbox: true
 
 cache:

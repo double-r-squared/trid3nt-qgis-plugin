@@ -55,8 +55,7 @@ docstring: |
     the SLIDER timestamps inside the window, then even-subsampled to the cap).
 
   **Returns:** an ORDERED ``list[LayerURI]`` (ascending UTC). Each is a 3-band
-  uint8 RGB COG (``layer_type="raster"``, ``role="context"``,
-  ``style_preset="goes_rgb_animation"``, same ``bbox``) whose ``name`` is
+  uint8 RGB COG (``layer_type="raster"``, ``role="context"`` same ``bbox``) whose ``name`` is
   ``"GOES <ProductLabel> step <N> <ISO> (<SAT>)"`` -- the scrubber-group
   contract: the ``step <N>`` token is the monotonic frame value the web parser
   keys on, the product label keeps the per-product STEM distinct (so GeoColor
@@ -117,7 +116,8 @@ output:
   layer_type: raster
   ext: tif
   role: context
-  style_preset: goes_rgb_animation
+  style:
+    kind: continuous
   emit_bbox: true
 
 cache:

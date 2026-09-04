@@ -44,7 +44,9 @@ output:
   layer_type: vector
   ext: fgb
   role: primary
-  style_preset: snotel_snow
+  style:
+    kind: reference
+    geometry: point
   emit_bbox: true
   bbox_from_features:
     pad: 0.05
@@ -80,7 +82,7 @@ docstring: "Fetch REAL, OBSERVED NRCS SNOTEL/SCAN snow stations as a point FlatG
   \ to this bbox\n        client-side (there is no service-side bbox parameter). Choose a\n        mountain\
   \ region; lowland bboxes have no SNOTEL coverage and raise\n        ``SnotelNoStationsError``.\n\nReturns:\n\
   \    ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:\n    ``s3://trid3nt-cache/cache/dynamic-1h/snotel_snow/<key>.fgb``\n\
-  \    - ``layer_type=\"vector\"``, ``role=\"primary\"``,\n      ``style_preset=\"snotel_snow\"``, ``units=\"\
+  \    - ``layer_type=\"vector\"``, ``role=\"primary\"``,\n ``units=\"\
   in (SWE / snow depth)\"``.\n    - Geometry: Point at each station's coordinates, EPSG:4326.\n    - ``bbox``\
   \ is set to the stations' extent so the client camera\n      auto-zooms (the layer renders via the inline-GeoJSON\
   \ vector path).\n    - Properties per station: ``triplet`` (NRCS station triplet, e.g.\n      ``\"335:CO:SNTL\"\

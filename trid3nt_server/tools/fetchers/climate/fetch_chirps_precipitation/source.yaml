@@ -47,7 +47,8 @@ output:
   ext: tif
   role: primary
   emit_bbox: true
-  style_preset: "precip_mm"
+  style:
+    kind: continuous
 
 cache:
   ttl_class: static-30d
@@ -115,7 +116,7 @@ docstring: |-
   (``s3://<cache-bucket>/cache/static-30d/chirps_precipitation/<key>.tif``).
   COG: float32, EPSG:4326, deflate-compressed, nodata=-9999, band 1
   ``"precipitation_mm"``. ``layer_type="raster"``, ``role="primary"``,
-  ``units="mm"``, ``style_preset="precip_mm"``.
+  ``units="mm"``
 
   Raises: ``CHIRPSInputError`` (bad bbox / date / period),
   ``CHIRPSNotAvailableError`` (no published raster for that date, HTTP 404),

@@ -176,7 +176,8 @@ output:
     param: band_combo
     map:
       thermal: primary
-  style_preset: landsat_rgb
+  style:
+    kind: continuous
   emit_bbox: false
 cache:
   ttl_class: static-30d
@@ -252,8 +253,7 @@ docstring: |-
   **Returns:** A ``LayerURI`` (``layer_type="raster"``) pointing at a 3-band
   RGB COG in the ``static-30d``/``landsat_imagery`` cache prefix.
   ``role="primary"`` for thermal LST (the analytical product) else ``"context"``
-  (a basemap). ``style_preset="landsat_rgb"`` (a multiband-passthrough token  --
-  no single-band rescale).
+  (a basemap).
 
   **Data source:** Landsat Collection-2 Level-2 via the Microsoft Planetary
   Computer STAC (``landsat-c2-l2``; assets red/green/blue/nir08/lwir11 +

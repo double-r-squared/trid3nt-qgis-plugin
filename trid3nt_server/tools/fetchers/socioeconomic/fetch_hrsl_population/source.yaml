@@ -40,7 +40,15 @@ output:
   ext: tif
   role: primary
   emit_bbox: true
-  style_preset: "population_density"
+  style:
+    kind: continuous
+    ramp: magma
+    units: people/km^2
+    label: Population density
+    scale:
+      policy: fixed
+      range: [0, 250]
+      transform: linear
 
 cache:
   ttl_class: static-30d

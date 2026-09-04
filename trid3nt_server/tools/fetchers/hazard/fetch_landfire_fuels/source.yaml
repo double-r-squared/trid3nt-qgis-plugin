@@ -57,16 +57,16 @@ output:
   ext: tif
   role: primary
   emit_bbox: false
-  style_preset: "categorical_landcover"
-  style_preset_by_param:
-    param: layer
-    map:
-      fbfm40: categorical_landcover
-      fbfm13: categorical_landcover
-      cbh: continuous_dem
-      cbd: continuous_dem
-      cc: continuous_dem
-      ch: continuous_dem
+  style:
+    kind: classed
+    label: Land Cover
+    by_param:
+      param: layer
+      map:
+        cbh: {kind: continuous}
+        cbd: {kind: continuous}
+        cc: {kind: continuous}
+        ch: {kind: continuous}
 
 cache:
   ttl_class: static-30d
