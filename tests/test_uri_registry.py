@@ -7,15 +7,15 @@ covers:
    composer observation hook);
 2. all four resolution branches (exact pass / handle substitution / fuzzy
    mangle-match + WARNING / typed URI_HANDLE_UNRESOLVED reject for an unknown
-   store URI, with non-store strings — external http(s) links, local paths —
+   store URI, with non-store strings - external http(s) links, local paths -
    still failing open);
 3. cross-session isolation;
 4. the historical incident shapes, each replayed with the REAL logged values:
 
    - I1 runs/ prefix mangle
-   - I2 layer_id-as-basename (same call — assets_uri)
+   - I2 layer_id-as-basename (same call - assets_uri)
    - I3 hash-tail hallucination (3/3 publishes)
-   - I5 invented cache hash (same call — assets_uri)
+   - I5 invented cache hash (same call - assets_uri)
 
 5. server-seam wiring: ``_invoke_tool_via_emitter`` resolves params before
    dispatch, registers results after, and the typed error reaches the model as
@@ -230,7 +230,7 @@ class TestResolutionBranches:
         assert "producing tool" in str(exc_info.value)
 
     def test_foreign_bucket_unknown_uri_rejects_typed(self) -> None:
-        """A foreign store path the session never produced rejects typed too —
+        """A foreign store path the session never produced rejects typed too -
         external data reaches the agent as http(s) links or registered layers,
         never as a bare invented store path."""
         reg = make_registry()
@@ -630,7 +630,7 @@ class TestPlaceholderResolution:
     def test_uri_shaped_values_are_never_placeholder_resolved(self) -> None:
         reg = self._registry_with_dem()
         # Observed live: a hallucinated FOREIGN store path. It is uri-shaped,
-        # so the placeholder branch must not touch it — and an unknown store
+        # so the placeholder branch must not touch it - and an unknown store
         # URI is a TYPED reject (never a silent substitution, never a
         # pass-through 404).
         hallucinated = "s3://3dep-cache/continuous-dem-10m.tif"
@@ -926,7 +926,7 @@ class TestReconnectSeedsRegistryFromCase:
             reg = get_uri_registry(state.session_id)
             assert reg.known_handles() == []
             # Case A's handle no longer maps to Case A's URI (fails open,
-            # unresolved — bare non-store handle strings never raise; see
+            # unresolved - bare non-store handle strings never raise; see
             # TestReplaceFromLayers.test_clear_drops_everything).
             out = reg.resolve_params("t", {"dem_uri": "case-a-dem"})
             assert out["dem_uri"] == "case-a-dem"

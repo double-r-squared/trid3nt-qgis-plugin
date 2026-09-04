@@ -16,7 +16,7 @@ OVERVIEW ENFORCEMENT:
 
 These exercise the pure-helper layer (``_ensure_raster_has_overviews``,
 ``_is_vector_uri``, ``_benign_vector_noop``) plus the publish path end-to-end
-with real GeoTIFF bytes built by rasterio — no network I/O.
+with real GeoTIFF bytes built by rasterio - no network I/O.
 """
 
 from __future__ import annotations
