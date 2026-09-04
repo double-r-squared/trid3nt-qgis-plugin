@@ -254,6 +254,18 @@
           "default": null,
           "title": "Opacity"
         },
+        "reference_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Time"
+        },
         "role": {
           "enum": [
             "primary",
@@ -270,6 +282,30 @@
         "uri": {
           "title": "Uri",
           "type": "string"
+        },
+        "valid_from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid From"
+        },
+        "valid_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid To"
         },
         "visible": {
           "title": "Visible",

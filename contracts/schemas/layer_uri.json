@@ -470,6 +470,18 @@
       "title": "Name",
       "type": "string"
     },
+    "reference_time": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reference Time"
+    },
     "role": {
       "default": "primary",
       "enum": [
@@ -526,6 +538,30 @@
     "uri": {
       "title": "Uri",
       "type": "string"
+    },
+    "valid_from": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Valid From"
+    },
+    "valid_to": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Valid To"
     }
   },
   "required": [

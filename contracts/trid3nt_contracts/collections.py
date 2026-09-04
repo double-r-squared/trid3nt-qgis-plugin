@@ -138,6 +138,19 @@ class ProjectLayerSummary(GraceModel):
     # plugin reads. ``None`` for raster/vector.
     crs_authid: str | None = None
 
+    # --- Mesh reference time; mirrored from LayerURI.reference_time
+    # The ISO-8601 UTC instant a mesh row's dataset times are counted from. A
+    # SELAFIN records no origin, so without it the temporal controller scrubs
+    # 1900. ``None`` for raster/vector.
+    reference_time: str | None = None
+
+    # --- Frame validity window; mirrored from LayerURI.valid_from / valid_to
+    # ISO-8601 UTC. One frame of an ordered sequence states its own window and
+    # the map stamps it as the layer's fixed temporal range. ``None`` for a
+    # layer that is not one frame of a sequence.
+    valid_from: str | None = None
+    valid_to: str | None = None
+
     legend: LegendKey | None = None  # mirrored from LayerURI.legend
 
 

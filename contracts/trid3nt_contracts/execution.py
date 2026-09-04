@@ -273,6 +273,20 @@ class LayerURI(GraceModel):
     # ``None`` for a raster/vector row (their CRS rides in the object bytes).
     # Additive + optional per the GraceModel forward-compat rule.
     crs_authid: str | None = None
+    # The temporal twin of ``crs_authid`` for a ``layer_type="mesh"`` row: the
+    # ISO-8601 UTC instant the mesh's dataset times are counted from. A SELAFIN
+    # records no origin, so the plugin stamps this through
+    # ``QgsMeshLayer.setReferenceTime`` and the temporal controller scrubs the
+    # run's own clock rather than 1900. ``None`` for a raster/vector row.
+    reference_time: str | None = None
+    # The window this layer is valid for, as ISO-8601 UTC instants: one frame of
+    # an ordered sequence states its own [valid_from, valid_to) and the map
+    # stamps it straight onto the layer's fixed temporal range. The producer
+    # holds the instant already; a time spelled into the display NAME and parsed
+    # back out of it is the same fact in the wrong data class. ``None`` for a
+    # layer that is not one frame of a sequence.
+    valid_from: str | None = None
+    valid_to: str | None = None
 
 
 # --------------------------------------------------------------------------- #

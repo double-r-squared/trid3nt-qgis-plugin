@@ -76,6 +76,7 @@ def build_entry(
     bbox: list[float] | None = None,
     band_stats: dict[str, Any] | None = None,
     crs_authid: str | None = None,
+    reference_time: str | None = None,
 ) -> dict[str, Any]:
     """Build ONE flat manifest entry dict (``{kind, quantity, name, uri, t?,
     units?}`` plus the OPTIONAL render-hint fields ``bbox?`` / ``band_stats?`` /
@@ -104,6 +105,12 @@ def build_entry(
     UTM zone), so it cannot live in the quantity->style registry; it rides the
     entry. Absent for raster/vector entries (their COGs are self-describing).
     Tolerant-read: an old producer that omits it is byte-unchanged.
+
+    ``reference_time`` is the ISO-8601 UTC instant a ``kind="mesh"`` entry's time
+    axis is measured from. A SELAFIN counts seconds from an origin it does not
+    record, so a temporal layer built from one reads its first step as 1900
+    unless the run states when it began. Like ``crs_authid`` it is per-run, so it
+    rides the entry; absent for raster/vector entries.
     """
     if kind not in OUTPUT_KINDS:
         raise ValueError(
@@ -131,6 +138,8 @@ def build_entry(
         entry["band_stats"] = dict(band_stats)
     if crs_authid:
         entry["crs_authid"] = str(crs_authid)
+    if reference_time:
+        entry["reference_time"] = str(reference_time)
     return entry
 
 
@@ -226,8 +235,10 @@ class OutputEntry(_ReaderModel):
     uses the workflow bbox + a lazy stats touch). ``crs_authid`` is the OPTIONAL
     EPSG authority id a ``kind="mesh"`` entry carries (ADR 0283): a SELAFIN sibling
     has no CRS, so the seam threads this onto the mesh ``LayerURI`` for the
-    plugin's ``QgsMeshLayer.setCrs``. Tolerant-read: an old producer that omits any
-    of them is byte-unchanged.
+    plugin's ``QgsMeshLayer.setCrs``. ``reference_time`` is its temporal twin: the
+    ISO-8601 UTC instant the mesh's seconds are counted from, threaded onto the
+    mesh ``LayerURI`` so the scrubber reads the run's own clock instead of 1900.
+    Tolerant-read: an old producer that omits any of them is byte-unchanged.
     """
 
     kind: str
@@ -239,6 +250,7 @@ class OutputEntry(_ReaderModel):
     bbox: list[float] | None = None
     band_stats: OutputBandStats | None = None
     crs_authid: str | None = None
+    reference_time: str | None = None
 
 
 class OutputsManifest(_ReaderModel):
