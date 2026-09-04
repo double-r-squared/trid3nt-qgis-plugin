@@ -12,10 +12,10 @@
       "Model results (time series): scotia_humboldt_county_california_95562_united_s",
       "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)"
     ],
-    "run_id": "01M1MSND29Q648AECNGTHWJRFY",
+    "run_id": "01M1N33A7SKNRFWHAFNAHE8E4S",
     "product_uris": {
-      "chart_spec": "s3://trid3nt-runs/01M1MSND29Q648AECNGTHWJRFY/chart_spec.json",
-      "metrics": "s3://trid3nt-runs/01M1MSND29Q648AECNGTHWJRFY/metrics.json"
+      "chart_spec": "s3://trid3nt-runs/01M1N33A7SKNRFWHAFNAHE8E4S/chart_spec.json",
+      "metrics": "s3://trid3nt-runs/01M1N33A7SKNRFWHAFNAHE8E4S/metrics.json"
     },
     "product_errors": {},
     "charts_emitted": 1,
@@ -43,8 +43,8 @@
       "input_mode": "auto",
       "mesh_resolution_m": 12.0
     },
-    "session_id": "01M1MSN0M6NYABMBE0HR3F42DA",
-    "case_id": "01M1MSN0YYZWDAFZ1DDN7VND3H",
+    "session_id": "01M1N32Z5M3WGSE287BJDRXR8G",
+    "case_id": "01M1N32ZK0ZBJH4C4QPS9MBQ6Z",
     "tool_status": null,
     "dispatched": true,
     "is_error": false,
@@ -56,7 +56,7 @@
     "chart_payloads": [
       {
         "envelope_type": "chart-emission",
-        "chart_id": "01M1MSNTZGWA2TZJ0CZWWZFE8X",
+        "chart_id": "01M1N33RD4W8RCMA2AMEXQVRRA",
         "vega_lite_spec": {
           "mark": {
             "type": "line",
@@ -105,9 +105,9 @@
           "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
         },
         "title": "Reach maximum dye concentration - Eel River near Scotia, California",
-        "caption": "The highest dye concentration anywhere in the reach at each of 6 output times; peaks at 91 mg/L, 208 s after release. Bed: bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M1MSN734DREAT02NVABNPWYN.tif.",
+        "caption": "The highest dye concentration anywhere in the reach at each of 6 output times; peaks at 91 mg/L, 208 s after release. Bed: bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M1N335Q1611Z36M49H2NJ7T7.tif.",
         "source_layer_uri": null,
-        "created_turn_id": "01M1MSN1WX478ZMMA7MG9XVNDJ"
+        "created_turn_id": "01M1N330T0JC0WN9ET4AG31PJ4"
       }
     ],
     "layers": [
@@ -307,10 +307,10 @@
         "legend": null
       },
       {
-        "layer_id": "telemac-release-01M1MSN9QHK3GRH23PNV4V32BM",
+        "layer_id": "telemac-release-01M1N3376W09T94F1WZY3N3XT0",
         "name": "Release point (derived) - scotia_humboldt_county_california_95562_united_s",
         "layer_type": "vector",
-        "uri": "s3://trid3nt-runs/inputs/01M1MSN9Q3R47T1RKJCE0RYYM5/release_point.geojson",
+        "uri": "s3://trid3nt-runs/inputs/01M1N3376MJGKY68FRG01AKFK8/release_point.geojson",
         "style_preset": "release_point",
         "visible": true,
         "role": "context",
@@ -342,10 +342,10 @@
         }
       },
       {
-        "layer_id": "model-results-mesh-01M1MSND29Q648AECNGTHWJRFY",
+        "layer_id": "model-results-mesh-01M1N33A7SKNRFWHAFNAHE8E4S",
         "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
         "layer_type": "mesh",
-        "uri": "s3://trid3nt-runs/01M1MSND29Q648AECNGTHWJRFY/r2d_river.slf",
+        "uri": "s3://trid3nt-runs/01M1N33A7SKNRFWHAFNAHE8E4S/r2d_river.slf",
         "style_preset": "mesh_grid",
         "visible": true,
         "role": "context",
@@ -357,10 +357,10 @@
         "legend": null
       },
       {
-        "layer_id": "01M1MSNVSA63VT01A3ATPFY8KC",
+        "layer_id": "01M1N33SAWYWEMSWMDS8Q0KFE7",
         "name": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
         "layer_type": "raster",
-        "uri": "s3://trid3nt-runs/01M1MSND29Q648AECNGTHWJRFY/overviews/01M1MSNTTZ0PDWTDWM4AFZZ2QQ.tif",
+        "uri": "s3://trid3nt-runs/01M1N33A7SKNRFWHAFNAHE8E4S/overviews/01M1N33R8YEMW1K8NQZ4KBKK8V.tif",
         "style_preset": "continuous_dye_concentration",
         "visible": true,
         "role": "primary",
@@ -384,11 +384,11 @@
     "draw_card": null,
     "form_card": null,
     "plain_warnings": [],
-    "run_id": "01M1MSND29Q648AECNGTHWJRFY",
+    "run_id": "01M1N33A7SKNRFWHAFNAHE8E4S",
     "chart_spec": {
       "dye_concentration": {
         "envelope_type": "chart-emission",
-        "chart_id": "01M1MSNTZGWA2TZJ0CZWWZFE8X",
+        "chart_id": "01M1N33RD4W8RCMA2AMEXQVRRA",
         "vega_lite_spec": {
           "mark": {
             "type": "line",
@@ -437,7 +437,7 @@
           "$schema": "https://vega.github.io/schema/vega-lite/v5.json"
         },
         "title": "Reach maximum dye concentration - Eel River near Scotia, California",
-        "caption": "The highest dye concentration anywhere in the reach at each of 6 output times; peaks at 91 mg/L, 208 s after release. Bed: bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M1MSN734DREAT02NVABNPWYN.tif.",
+        "caption": "The highest dye concentration anywhere in the reach at each of 6 output times; peaks at 91 mg/L, 208 s after release. Bed: bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M1N335Q1611Z36M49H2NJ7T7.tif.",
         "source_layer_uri": null,
         "created_turn_id": null
       }
@@ -453,15 +453,15 @@
       "deposit_fraction": null,
       "sediment_surface_d50_range_um": null,
       "mesh_size_m": 10.415,
-      "layer_uri": "s3://trid3nt-runs/01M1MSND29Q648AECNGTHWJRFY/overviews/01M1MSNTTZ0PDWTDWM4AFZZ2QQ.tif",
+      "layer_uri": "s3://trid3nt-runs/01M1N33A7SKNRFWHAFNAHE8E4S/overviews/01M1N33R8YEMW1K8NQZ4KBKK8V.tif",
       "discharge_m3s": 2.2,
       "discharge_note": "carrier discharge 2.2 m3/s (user-supplied)"
     },
     "product_uris": {
-      "chart_spec": "s3://trid3nt-runs/01M1MSND29Q648AECNGTHWJRFY/chart_spec.json",
-      "metrics": "s3://trid3nt-runs/01M1MSND29Q648AECNGTHWJRFY/metrics.json"
+      "chart_spec": "s3://trid3nt-runs/01M1N33A7SKNRFWHAFNAHE8E4S/chart_spec.json",
+      "metrics": "s3://trid3nt-runs/01M1N33A7SKNRFWHAFNAHE8E4S/metrics.json"
     },
     "product_errors": {},
-    "preflight_note": null
+    "preflight_note": "daemon restarted by the driver pre-flight: the daemon started 1186s before HEAD was committed"
   }
 }

@@ -2,24 +2,24 @@
   "what": "the delivery checklist for one template+variant, assembled and verified mechanically; send exactly what `deliverables` lists, in order",
   "code_staleness": {
     "kind": "working_tree_dirty",
-    "code_sha": "94cf53f0bed2276ae3cff638223994ea3310b4f8",
+    "code_sha": "3f3843db9e70a17fc10ec36223301951eb06c220",
     "message": "the tree is at this run's commit but carries uncommitted changes, so what produced these numbers is not fully recorded anywhere"
   },
   "template": "telemac_do_sag",
   "variant": "coarse",
   "tool": "telemac_do_sag",
-  "run_id": "01M1MT1N3G8698J6M8WBXWTTFH",
+  "run_id": "01M1N3485XHGCGC5CTW1GF38KZ",
   "stem": "telemac_do_sag",
   "directory": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse",
   "panel_base": "telemac_do_sag",
   "mode": "render",
-  "assembled_at": "2026-09-03T16:37:11",
+  "assembled_at": "2026-09-03T19:20:38",
   "assembler": "scripts/assemble_proof_packet.py",
   "time_stepped": {
     "recorded_ntimestep": 7,
     "frames": 7,
     "slf": "r2d_river.slf",
-    "source": "s3://trid3nt-runs/01M1MT1N3G8698J6M8WBXWTTFH/r2d_river.slf",
+    "source": "s3://trid3nt-runs/01M1N3485XHGCGC5CTW1GF38KZ/r2d_river.slf",
     "method": "SELAFIN header + file length",
     "npoin": 658,
     "nelem": 1167,
@@ -104,110 +104,110 @@
     {
       "order": 1,
       "kind": "panel",
-      "caption": "1. Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry) - context/vector, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "1. Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry) - context/vector, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_01_input-osm-waterways-map-context-the-modeled-river-is-the-nldi-centerline-river-geometry.png",
       "layer": "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
-      "bytes": 4738618,
-      "mtime": "2026-09-03T16:37:03",
-      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "bytes": 4738983,
+      "mtime": "2026-09-03T19:20:30",
+      "run_id_stamp": "01M1N3485XHGCGC5CTW1GF38KZ",
       "verdict": "present"
     },
     {
       "order": 2,
       "kind": "panel",
-      "caption": "2. Input: nhdplus nldi (nhdplus_nldi) - context/vector, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "2. Input: nhdplus nldi (nhdplus_nldi) - context/vector, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_02_input-nhdplus-nldi-nhdplus-nldi.png",
       "layer": "Input: nhdplus nldi (nhdplus_nldi)",
-      "bytes": 5057420,
-      "mtime": "2026-09-03T16:37:04",
-      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "bytes": 5057670,
+      "mtime": "2026-09-03T19:20:31",
+      "run_id_stamp": "01M1N3485XHGCGC5CTW1GF38KZ",
       "verdict": "present"
     },
     {
       "order": 3,
       "kind": "panel",
-      "caption": "3. Input: nhd area water (nhd_area_water) - context/vector, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "3. Input: nhd area water (nhd_area_water) - context/vector, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_03_input-nhd-area-water-nhd-area-water.png",
       "layer": "Input: nhd area water (nhd_area_water)",
-      "bytes": 3848739,
-      "mtime": "2026-09-03T16:37:05",
-      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "bytes": 3848826,
+      "mtime": "2026-09-03T19:20:32",
+      "run_id_stamp": "01M1N3485XHGCGC5CTW1GF38KZ",
       "verdict": "present"
     },
     {
       "order": 4,
       "kind": "panel",
-      "caption": "4. Input: river bed elevation (copernicus_dem) - context/raster, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "4. Input: river bed elevation (copernicus_dem) - context/raster, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_04_input-river-bed-elevation-copernicus-dem.png",
       "layer": "Input: river bed elevation (copernicus_dem)",
-      "bytes": 2539833,
-      "mtime": "2026-09-03T16:37:05",
-      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "bytes": 2539931,
+      "mtime": "2026-09-03T19:20:33",
+      "run_id_stamp": "01M1N3485XHGCGC5CTW1GF38KZ",
       "verdict": "present"
     },
     {
       "order": 5,
       "kind": "panel",
-      "caption": "5. Outfall (derived) - scotia_humboldt_county_california_95562_united_s - context/vector, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "5. Outfall (derived) - scotia_humboldt_county_california_95562_united_s - context/vector, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_05_outfall-derived-scotia-humboldt-county-california-95562-united-s.png",
       "layer": "Outfall (derived) - scotia_humboldt_county_california_95562_united_s",
-      "bytes": 5690333,
-      "mtime": "2026-09-03T16:37:07",
-      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "bytes": 5690532,
+      "mtime": "2026-09-03T19:20:34",
+      "run_id_stamp": "01M1N3485XHGCGC5CTW1GF38KZ",
       "verdict": "present"
     },
     {
       "order": 6,
       "kind": "panel",
-      "caption": "6. Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s) - primary/raster, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "6. Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s) - primary/raster, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_06_dissolved-oxygen-sag-scotia-humboldt-county-california-95562-united-s.png",
       "layer": "Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s)",
-      "bytes": 3481906,
-      "mtime": "2026-09-03T16:37:07",
-      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "bytes": 3482148,
+      "mtime": "2026-09-03T19:20:35",
+      "run_id_stamp": "01M1N3485XHGCGC5CTW1GF38KZ",
       "verdict": "present"
     },
     {
       "order": 7,
       "kind": "canvas_view",
-      "caption": "7. CANVAS VIEW - all 6 layers stacked in emission order, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "7. CANVAS VIEW - all 6 layers stacked in emission order, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_panel_07_canvas-view.png",
-      "bytes": 3866860,
-      "mtime": "2026-09-03T16:37:08",
-      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "bytes": 3866997,
+      "mtime": "2026-09-03T19:20:36",
+      "run_id_stamp": "01M1N3485XHGCGC5CTW1GF38KZ",
       "verdict": "present"
     },
     {
       "order": 8,
       "kind": "contact_sheet",
-      "caption": "Contact sheet - every emitted layer, 7 panels in emission order, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "Contact sheet - every emitted layer, 7 panels in emission order, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag.png",
-      "bytes": 9429740,
-      "mtime": "2026-09-03T16:37:10",
-      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "bytes": 9428167,
+      "mtime": "2026-09-03T19:20:37",
+      "run_id_stamp": "01M1N3485XHGCGC5CTW1GF38KZ",
       "verdict": "present"
     },
     {
       "order": 9,
       "kind": "chart",
-      "caption": "Chart do_sag_curve - the run's persisted spec through the plugin chart dock's own renderer, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "Chart do_sag_curve - the run's persisted spec through the plugin chart dock's own renderer, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_chart_do_sag_curve.png",
       "chart": "do_sag_curve",
-      "bytes": 70005,
-      "mtime": "2026-09-03T16:37:10",
-      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "bytes": 69044,
+      "mtime": "2026-09-03T19:20:37",
+      "run_id_stamp": "01M1N3485XHGCGC5CTW1GF38KZ",
       "verdict": "present"
     },
     {
       "order": 10,
       "kind": "animation",
-      "caption": "Animation [default] - DISSOLVED O2 masked to WATER DEPTH > 0.02 (mgO2/l), 7 frames on one run-scoped colour scale with a static legend, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "Animation [default] - DISSOLVED O2 masked to WATER DEPTH > 0.02 (mgO2/l), 7 frames on one run-scoped colour scale with a static legend, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_animation.gif",
       "animation": "default",
       "declared_field": "DISSOLVED O2 masked to WATER DEPTH > 0.02 (mgO2/l)",
       "declared_reason": "the sag is the oxygen deficit downstream of the outfall. It DECAYS toward its answer, so the still is the final frame - the peak frame is the un-depleted initial condition.",
-      "bytes": 840163,
-      "mtime": "2026-09-03T16:37:01",
+      "bytes": 842114,
+      "mtime": "2026-09-03T19:20:29",
       "verdict": "present",
       "gif_checks": {
         "frames": 7,
@@ -226,28 +226,28 @@
     {
       "order": 11,
       "kind": "still",
-      "caption": "FINAL frame [default] - DISSOLVED O2 masked to WATER DEPTH > 0.02 (mgO2/l), the animation's own figure at its final step, same colours and extent, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "FINAL frame [default] - DISSOLVED O2 masked to WATER DEPTH > 0.02 (mgO2/l), the animation's own figure at its final step, same colours and extent, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_final_frame.png",
       "animation": "default",
-      "bytes": 1608130,
-      "mtime": "2026-09-03T16:37:11",
-      "run_id_stamp": "01M1MT1N3G8698J6M8WBXWTTFH",
+      "bytes": 1607348,
+      "mtime": "2026-09-03T19:20:38",
+      "run_id_stamp": "01M1N3485XHGCGC5CTW1GF38KZ",
       "verdict": "present"
     },
     {
       "order": 12,
       "kind": "evidence",
-      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M1MT1N3G8698J6M8WBXWTTFH",
+      "caption": "Canary evidence JSON - the declaration, layers, metrics and products this whole packet was assembled from, run 01M1N3485XHGCGC5CTW1GF38KZ",
       "path": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_canary_evidence.json",
       "bytes": 1196204,
-      "mtime": "2026-09-03T16:36:03",
+      "mtime": "2026-09-03T19:17:50",
       "verdict": "present"
     }
   ],
   "render": {
     "sheet": {
       "sheet": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag.png",
-      "bytes": 9429508,
+      "bytes": 9427935,
       "panels": 7,
       "layers": [
         "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
@@ -317,7 +317,7 @@
             "CBOD"
           ]
         },
-        "bytes": 69746
+        "bytes": 68785
       }
     ],
     "origin_bbox_basis": "telemac_metrics.json / the canary's declared bbox",
@@ -354,7 +354,7 @@
           0.0,
           0.0
         ],
-        "run_id": "01M1MT1N3G8698J6M8WBXWTTFH",
+        "run_id": "01M1N3485XHGCGC5CTW1GF38KZ",
         "origin_bbox": [
           -124.099455,
           40.49144,
@@ -363,8 +363,8 @@
         ],
         "animation": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_animation.gif",
         "peak": "/home/nate/Documents/trid3nt-local/docs/proof/templates/telemac_do_sag/coarse/telemac_do_sag_final_frame.png",
-        "animation_bytes": 840163,
-        "peak_bytes": 1607816
+        "animation_bytes": 842114,
+        "peak_bytes": 1607034
       }
     },
     "scales": {

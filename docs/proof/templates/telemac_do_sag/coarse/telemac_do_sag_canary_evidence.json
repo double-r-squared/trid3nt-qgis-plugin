@@ -19,8 +19,8 @@
     "mesh_resolution_m": 12.0,
     "discharge_m3s": 60.0
   },
-  "session_id": "01M1MT1A980RHK7474QVWXHBDW",
-  "case_id": "01M1MT1AKW3SFFQRT6H53SQN93",
+  "session_id": "01M1N33XZ196C04KCH7CPS1G2S",
+  "case_id": "01M1N33YA3SNZA0PXEMSYVPNRE",
   "tool_status": null,
   "dispatched": true,
   "is_error": false,
@@ -32,7 +32,7 @@
   "chart_payloads": [
     {
       "envelope_type": "chart-emission",
-      "chart_id": "01M1MT234J5JZYEMX1NBMDR7TJ",
+      "chart_id": "01M1N34PC4V156FJH35R1MNVBE",
       "vega_lite_spec": {
         "layer": [
           {
@@ -931,7 +931,7 @@
       "title": "Dissolved-oxygen sag - Eel River near Scotia, California",
       "caption": "DO sag: minimum 8.8474 mg/L at 193.4 m downstream (meets the 5 mg/L standard, red dashed). CBOD decay drives the sag; reaeration recovers it. The Streeter-Phelps closed form is drawn beside it on this run's own mix point, load and velocity - whole-profile RMS 0.162 mg/L, sag minimum 0.0225 mg/L above it. Screening/permit grade.",
       "source_layer_uri": null,
-      "created_turn_id": "01M1MT1BH7GD0MFGV9Q1CQ4595"
+      "created_turn_id": "01M1N33Z88N45H9F6B304XDWHS"
     }
   ],
   "layers": [
@@ -46387,10 +46387,10 @@
       "legend": null
     },
     {
-      "layer_id": "telemac-release-01M1MT1HSRB791Y5JXCARQ7YTS",
+      "layer_id": "telemac-release-01M1N344YKNFPHTYHBWTSAZ6Z5",
       "name": "Outfall (derived) - scotia_humboldt_county_california_95562_united_s",
       "layer_type": "vector",
-      "uri": "s3://trid3nt-runs/inputs/01M1MT1HS4RKJRBAEQQTDYVWY0/release_point.geojson",
+      "uri": "s3://trid3nt-runs/inputs/01M1N344YAVRVKFF21VBNCFHX0/release_point.geojson",
       "style_preset": "release_point",
       "visible": true,
       "role": "context",
@@ -46422,10 +46422,10 @@
       }
     },
     {
-      "layer_id": "01M1MT23ZJTA5S2XN1E4AFFK1C",
+      "layer_id": "01M1N34Q94HW428D72JA4AQ71G",
       "name": "Dissolved oxygen sag (scotia_humboldt_county_california_95562_united_s)",
       "layer_type": "raster",
-      "uri": "s3://trid3nt-runs/01M1MT1N3G8698J6M8WBXWTTFH/overviews/01M1MT23180EHJHQW9GHYZW8JK.tif",
+      "uri": "s3://trid3nt-runs/01M1N3485XHGCGC5CTW1GF38KZ/overviews/01M1N34P922A9GBRYMYMHMBFM3.tif",
       "style_preset": "continuous_dissolved_oxygen",
       "visible": true,
       "role": "primary",
@@ -46449,11 +46449,11 @@
   "draw_card": null,
   "form_card": null,
   "plain_warnings": [],
-  "run_id": "01M1MT1N3G8698J6M8WBXWTTFH",
+  "run_id": "01M1N3485XHGCGC5CTW1GF38KZ",
   "chart_spec": {
     "do_sag_curve": {
       "envelope_type": "chart-emission",
-      "chart_id": "01M1MT234J5JZYEMX1NBMDR7TJ",
+      "chart_id": "01M1N34PC4V156FJH35R1MNVBE",
       "vega_lite_spec": {
         "layer": [
           {
@@ -47654,13 +47654,13 @@
     "sp_sag_deviation_mgl": 0.0225,
     "sp_note": "Streeter-Phelps closed form from the modeled mix point (193 m downstream, CBOD 6.01 mg/L, DO 8.85 mg/L) at the solved mean along-reach velocity 0.610 m/s",
     "mesh_size_m": 9.323,
-    "layer_uri": "s3://trid3nt-runs/01M1MT1N3G8698J6M8WBXWTTFH/overviews/01M1MT23180EHJHQW9GHYZW8JK.tif",
+    "layer_uri": "s3://trid3nt-runs/01M1N3485XHGCGC5CTW1GF38KZ/overviews/01M1N34P922A9GBRYMYMHMBFM3.tif",
     "discharge_m3s": 60.0,
     "discharge_note": "carrier discharge 60.0 m3/s (user-supplied)"
   },
   "product_uris": {
-    "chart_spec": "s3://trid3nt-runs/01M1MT1N3G8698J6M8WBXWTTFH/chart_spec.json",
-    "metrics": "s3://trid3nt-runs/01M1MT1N3G8698J6M8WBXWTTFH/metrics.json"
+    "chart_spec": "s3://trid3nt-runs/01M1N3485XHGCGC5CTW1GF38KZ/chart_spec.json",
+    "metrics": "s3://trid3nt-runs/01M1N3485XHGCGC5CTW1GF38KZ/metrics.json"
   },
   "product_errors": {},
   "preflight_note": null
