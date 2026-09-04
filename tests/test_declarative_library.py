@@ -2573,3 +2573,35 @@ async def test_one_runs_notes_do_not_leak_into_the_next():
     first = await _run(plan, _params(), {}, resume=False)
     second = await _run(plan, _params(), {}, resume=False)
     assert first.notes == second.notes == ["measured 42.0% coverage"]
+
+
+# --- presentation is not declaration vocabulary ------------------------------- #
+
+#: The words a picture is described with. A declaration that carried one would
+#: be describing the render instead of the run, and would freeze it at authoring
+#: time, where the reader who wants it different is not.
+_PRESENTATION_WORDS = ("style", "ramp", "colormap", "colourmap", "legend",
+                       "preset", "palette", "vmin", "vmax", "opacity")
+
+
+def _presentation_named_by(cls) -> list[str]:
+    names = [f.name for f in dataclasses.fields(cls)] if dataclasses.is_dataclass(cls) else []
+    names += [n for n in dir(cls) if not n.startswith("_")]
+    return sorted({n for n in names
+                   if any(w in n.lower() for w in _PRESENTATION_WORDS)})
+
+
+def test_a_declaration_carries_no_presentation_vocabulary():
+    """A ramp moves no water, so a workflow has no way to state one.
+
+    Presentation is DISPLAY STATE: changing it recomputes nothing, so it lives
+    at runtime on the restyle surface rather than in the plan. A dataset still
+    declares how it draws - that is a fact about the DATA, and it lives beside
+    the source, not here.
+    """
+    runtime = importlib.import_module("trid3nt_server.workflows.runtime")
+    assert [n for n in runtime.__all__
+            if any(w in n.lower() for w in _PRESENTATION_WORDS)] == []
+    for cls in (runtime.Plan, runtime.Step, runtime.Gate, runtime.When,
+                runtime.Workflow, runtime.ChartSpec):
+        assert _presentation_named_by(cls) == [], cls.__name__

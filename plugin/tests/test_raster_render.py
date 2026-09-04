@@ -94,6 +94,9 @@ def _import_layers():
         def layer(self):
             return self._layer
 
+        def isVisible(self):
+            return self.visibility
+
         def setItemVisibilityChecked(self, checked):
             self.visibility = checked
 
@@ -134,6 +137,19 @@ def _import_layers():
                     return child
             return None
 
+        def findLayer(self, layer_id):
+            def walk(node):
+                for child in node.children_:
+                    if isinstance(child, _FakeGroup):
+                        found = walk(child)
+                        if found is not None:
+                            return found
+                    elif child.layer().id() == layer_id:
+                        return child
+                return None
+
+            return walk(self)
+
     class _FakeProject:
         _instance = None
 
@@ -152,6 +168,9 @@ def _import_layers():
 
         def addMapLayer(self, layer, add_to_legend=True):
             self.added.append(layer)
+
+        def mapLayers(self):
+            return {layer.id(): layer for layer in self.added}
 
         def removeMapLayers(self, ids):
             pass
@@ -195,10 +214,20 @@ def _import_layers():
             self.loaded_qml = None
             self.opacity = None
             self.temporal = _FakeTemporalProps()
+            self.properties = {}
             _FakeRasterLayer.instances.append(self)
 
         def isValid(self):
             return self._valid
+
+        def id(self):
+            return f"{self._name}_{id(self)}"
+
+        def setCustomProperty(self, key, value):
+            self.properties[key] = value
+
+        def customProperty(self, key, default=None):
+            return self.properties.get(key, default)
 
         def name(self):
             return self._name
@@ -374,6 +403,35 @@ class TestStoreUriResolution(unittest.TestCase):
         )
         self.assertEqual(fakes.RasterLayer.instances, [])
         self.assertTrue(any("skipped" in n for n in notes), notes)
+
+# --------------------------------------------------------------------------- #
+# the un-emit
+# --------------------------------------------------------------------------- #
+
+
+class TestTheUnEmitReachesTheLayerTree(unittest.TestCase):
+    def test_a_visibility_flip_on_a_row_already_seen_reaches_the_layer_tree(self):
+        """Taking a layer off the canvas is a row that arrives again, flipped.
+
+        Session state is replayed whole on every emit, so a layer this side has
+        already added arrives many times; the row's ``visible`` is the un-emit,
+        and it has to be applied to a layer the materializer will not add twice.
+        """
+        layers, fakes = _import_layers()
+        m = layers.LayerMaterializer(settings=_Settings())
+        m.materialize([_event(layers, RASTER_LAYER_ROW)])
+        node = fakes.Project.instance().layerTreeRoot().findLayer(
+            fakes.RasterLayer.instances[0].id())
+        self.assertTrue(node.isVisible())
+
+        hidden = dict(RASTER_LAYER_ROW, visible=False)
+        m.materialize([_event(layers, hidden)])
+        self.assertEqual(len(fakes.RasterLayer.instances), 1)
+        self.assertFalse(node.isVisible())
+
+        m.materialize([_event(layers, dict(RASTER_LAYER_ROW, visible=True))])
+        self.assertTrue(node.isVisible())
+
 
 # --------------------------------------------------------------------------- #
 # the declared preset, loaded as QGIS's own style document

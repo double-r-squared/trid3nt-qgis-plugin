@@ -152,6 +152,49 @@ def test_load_spec_rejects_non_mapping():
 
 
 # --------------------------------------------------------------------------- #
+# the declared style row: the preset family is closed at registration
+#
+# A row naming a shape nothing can draw must fail HERE, where a spec is loaded,
+# and not at paint time - a layer that reaches the canvas with no renderer is a
+# blank the reader has to diagnose.
+# --------------------------------------------------------------------------- #
+
+
+def test_a_style_row_naming_a_kind_outside_the_family_is_refused_at_registration():
+    bad = raster_spec()
+    bad["output"]["style"] = {"kind": "heatmap", "ramp": "viridis"}
+    with pytest.raises(SpecLoadError):
+        load_spec(bad)
+
+
+def test_a_style_row_naming_a_geometry_outside_the_family_is_refused():
+    bad = vector_spec()
+    bad["output"]["style"] = {"kind": "reference", "geometry": "blob"}
+    with pytest.raises(SpecLoadError):
+        load_spec(bad)
+
+
+def test_a_per_param_row_is_held_to_the_same_family():
+    """The overlay is a style row too, and a typo hides well inside a map."""
+    bad = raster_spec()
+    bad["output"]["style"] = {
+        "kind": "continuous",
+        "by_param": {"param": "variable", "map": {"pr": {"kind": "chloropleth"}}},
+    }
+    with pytest.raises(SpecLoadError):
+        load_spec(bad)
+
+
+def test_a_declared_row_survives_the_load_as_the_spec_wrote_it():
+    spec = load_spec(raster_spec())
+    assert spec.output.style == {"kind": "continuous"}
+    # An absent row is the kind's bare default, not a missing style.
+    bare = raster_spec()
+    del bare["output"]["style"]
+    assert load_spec(bare).output.style is None
+
+
+# --------------------------------------------------------------------------- #
 # co-located corpus pickup + tree walk
 # --------------------------------------------------------------------------- #
 

@@ -10,10 +10,10 @@ their seams are touched, never speculatively and never to fill in the table.
 
 | plane | what it holds | state |
 | --- | --- | --- |
-| **workflow** | the six systems a run passes through - fetcher, mesher, assembler, solver, products, runtime | MODELED in part: three seams, listed below |
+| **workflow** | the six systems a run passes through - fetcher, mesher, assembler, solver, products, runtime | MODELED in part: four seams, listed below |
 | **tool** | the processing tools, the registry, how a tool is surfaced, retrieved and picked | MODELED in part: one seam, `tool-plane.sysml` |
 | **intelligence** | LLM provider selection, the adapter, the routing between them | NOT YET MODELED |
-| **user** | the chat dock, the canvas, what the model says back | NOT YET MODELED |
+| **user** | the chat dock, the canvas, what the model says back | MODELED at ONE EDGE: the canvas end of `emission-seam.sysml` - the layer row a produced layer arrives on and the style document it is drawn from. The dock, the chat and the cards are unmodeled |
 | **record** | the run journal, provenance, and this model with its checker | NOT YET MODELED |
 
 ## The workflow plane - six systems
@@ -24,16 +24,18 @@ record planes that surround it.
 
 | system | what it produces | modeled by |
 | --- | --- | --- |
-| **fetcher** | the measured data a run stands on | `data-seam.sysml` - the bed under a hydraulic run |
+| **fetcher** | the measured data a run stands on | `data-seam.sysml` - the bed under a hydraulic run; `emission-seam.sysml`, its declaring end - how a dataset says it draws |
 | **mesher** | the accepted mesh | `mesh-seam.sysml` |
 | **assembler** | everything the box receives - steering file, manifest and aux, staged | `solve-seam.sysml`, its authoring end |
 | **solver** | the box's run, its completion and its diagnostics | `solve-seam.sysml` |
-| **products** | the layers, charts and packets read back out | `solve-seam.sysml`, its reader end |
+| **products** | the layers, charts and packets read back out | `solve-seam.sysml`, its reader end; `emission-seam.sysml` - how a product becomes a picture |
 | **runtime** | the plan a flow executes as - `workflows/runtime/plan.py` and its interpreter, where "step" lives | NOT YET MODELED |
 
-One seam can be drawn across more than one system, and the solve seam is: it
-runs from the assembler through the box to the readers, so it is listed under
-all three rather than cut to fit a row.
+One seam can be drawn across more than one system, and two of them are: the
+solve seam runs from the assembler through the box to the readers, and the
+emission seam runs from a dataset's own declaration through both emission arms
+and out of this plane entirely, to the canvas in the user plane. They are
+listed under every system they cross rather than cut to fit a row.
 
 ## What is authored here
 
@@ -86,4 +88,5 @@ directory rather than a list somebody maintains.
 | `mesh-seam.sysml` | workflow / mesher | The mesh seam: the router, the recipe, the op tool, the session and its gate, the two mesher adapters and the GPL-isolated box behind one of them, the shared primitives, the artifact record and the topology writer - plus every other shipped driver, which binds here because the purity law is written over the directory they share - with the recipe laws, the box's isolation and the removal doctrine as requirements. |
 | `tool-plane.sysml` | tool / code-exec | The code-exec box: the tool that drives it, the host end that stages and launches, the driver inside the container, and the dispatch that keeps the run off the event loop - with the network-none posture, the staged-data rule and the off-load as requirements. The plane's other systems are unmodeled and stated so above. |
 | `data-seam.sysml` | workflow / fetcher | The data seam under a hydraulic run: the topobathy row's per-water-body-class bed ladders, the classifier that picks one from the rows the reach chain already holds, the BlueTopo source and its declaration, the ladder registry / walker / router, and the result model the datum and coverage ride on - with the signed bathymetry decisions as requirements, each doc naming the decision it lands. |
+| `emission-seam.sysml` | workflow / fetcher -> products, reaching the user plane's canvas | The emission seam: a dataset's own `style:` row and the schema that closes the four-kind family, the router that resolves the row per call, both automatic emission arms - on fetch and on solve - the publish path where the row is resolved once against the layer's bytes, the preset family that writes the style document, the id-to-uri record the one store leaves, the restyle surface and its ad hoc ask, and the canvas that opens the store natively and loads the document it was handed - with presentation-free declarations, one scale per quantity, the user's choice over the preset, automatic emission and declared-or-bare-default styling as requirements. |
 | `<seam>-view.md` | as its model | GENERATED. The seam's place, the flow graph, the item tables and the requirement-to-test allocation, derived from `<seam>.sysml` by `python scripts/model_check.py --model docs/model/<seam>.sysml --view`. The suite fails while one is stale; never hand-edit them. |
