@@ -3271,3 +3271,49 @@ and `FileMCPClient` still say MCP. They are exported, imported by
 naming decision on a live seam rather than era residue in prose - so it is
 surfaced here, not taken silently. The seam itself is real: `Persistence` is
 written against the protocol, never against the files.
+
+## The plugin's mesh dataset-group heuristics - DELETED (2026-09-04, the Temporal-stop resolutions)
+
+`_select_peak_depth_dataset_group` (31), `_select_tracer_dataset_group` (22),
+`_PEAK_DEPTH_GROUP_RE` and `_TRACER_GROUP_HINTS`: two name-sniffing passes that
+guessed which of a mesh's dataset groups deserved the canvas - one matching a
+SFINCS `maximum_water_depth_timemax:<seconds>` group by its largest time
+suffix, the other any group whose name contained `dye` / `tracer` /
+`concentration` / `conc`. A GUESS FROM A NAME IS THE SAME SIN AS A STYLE FROM A
+FILENAME (ADR 0326): the producer knows which quantity it published, and the
+plugin was inferring it back out of a substring.
+
+CONDITION MET: the declared preset names the quantity, and
+`bind_declared_mesh_style` resolves that quantity against the groups the OPEN
+layer reports (`name.strip().upper().startswith(declared)`), writes the matched
+name into the document's `name-to-global-index` row, and READS THE BINDING BACK
+off the layer. Measured live on a solved river-dye SELAFIN
+(`plugin/tests/qt_mesh_temporal_harness.py`, groups
+`['velocity      ms', 'water depth     m', 'free surface    m', 'bottom          m', 'dye             mgl']`):
+the declared quantity `dye` binds group 4, the declared range and ramp stops
+read back exactly, and the SAME document loaded UNBOUND leaves the layer with
+active scalar group `-1` - accepted by `loadNamedStyle` and rendering nothing.
+That measurement is why the match is made on this side: reproducing MDAL's
+fixed-width spelling in the producer would be a second parser of a format QGIS
+has already parsed.
+
+CONSEQUENCE, stated rather than hidden: a quantity no group answers to now
+takes MDAL's own default group plus a visible note naming the quantity and the
+groups the mesh actually carries, where the heuristics would have silently
+picked one. The TELEMAC results-mesh entry declares `model_results` (a whole-
+results animation, not one field), so it lands in exactly that branch today.
+
+`_clamp_mesh_scalar_classification` STAYS and runs BEFORE the preset: it is the
+native-legend crash guard (a degenerate NaN/inf group range saturating
+`qt_doubleToAscii`), not styling. Measured ordering fact: loading a mesh style
+replaces the scalar settings of the ONE group it binds and leaves every other
+group's clamped classification intact.
+
+KEPT, the clarified survivor (emission-fold spec section 6): the PEAK COG. A
+max-over-time field is an ANSWER no SELAFIN dataset group carries, so it stays a
+product while the per-frame display rasterization dies - published `role="primary"`,
+styled from the product contract's kind + quantity row (`TELEMAC_DYE_STYLE` and
+its siblings: ramp, units, label), resolved ONCE through `presets.legend_key`
+over the whole envelope's range so the still and the mesh are read on one scale,
+carrying its bbox and its narration scalars. No code changed for it; it is
+recorded here so "the frames die" is never read as "the peak dies".

@@ -37,12 +37,12 @@ copy-pasting file paths.
   time slider.
 - **GeoTIFF / case export** -- pull a case's exported layers (GeoTIFFs,
   vector tables) directly into your current QGIS project via "Open in QGIS".
-- **Mesh outputs (MDAL)** -- a SFINCS flood run's native mesh
-  (`sfincs_map.nc`) loads as a first-class `QgsMeshLayer` alongside the
-  exported GeoTIFFs/vectors (local mode), with its CRS set automatically and
-  the peak flood-depth dataset group pre-selected; every dataset group SFINCS
-  wrote (bed level, Manning roughness, per-timestep max depth/level) stays
-  selectable from Layer Properties.
+- **Mesh outputs (MDAL)** -- a solver's native mesh (a TELEMAC `.slf`, a
+  SFINCS `sfincs_map.nc`) loads as a first-class `QgsMeshLayer` alongside the
+  exported GeoTIFFs/vectors, with its CRS set automatically and its declared
+  preset bound to the dataset group that preset names; a quantity none of the
+  mesh's groups answers to keeps MDAL's own default and says so in the dock.
+  Every dataset group the solver wrote stays selectable from Layer Properties.
 - **Push layer** -- the reverse of "Open in QGIS": send your ACTIVE QGIS
   layer (vector or raster) into the current case as a first-class input
   layer with one click ("Push layer" in the header). An optional "Set as

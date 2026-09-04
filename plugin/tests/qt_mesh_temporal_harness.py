@@ -16,10 +16,18 @@ What it proves, on the INSTALLED QGIS rather than on a description of it:
     renderer CHANGES (loadNamedStyle's boolean is well-formedness only, so the
     post-load state is what the gate reads);
   * a raster carrying its own colour table and no ``.qml`` keeps QGIS's own
-    paletted renderer - the render this side no longer rebuilds.
+    paletted renderer - the render this side no longer rebuilds;
+  * ``bind_declared_mesh_style`` binds a DECLARED quantity to the group MDAL
+    actually reports (a SELAFIN's names are fixed-width: ``dye
+    mgl``), and the same document loaded UNBOUND leaves the mesh with no
+    active scalar group at all - the blank render the binding exists to
+    prevent;
+  * a declared quantity no group answers to keeps MDAL's own default group and
+    says so.
 
-Argument: the path to a SELAFIN to open. Prints QT-MESH-TEMPORAL-OK and exits 0
-on success; prints the failing assertion and exits 1 otherwise.
+Arguments: a SELAFIN to open, and a SELAFIN carrying a tracer group. Prints
+QT-MESH-TEMPORAL-OK and exits 0 on success; prints the failing assertion and
+exits 1 otherwise.
 """
 
 from __future__ import annotations
@@ -33,6 +41,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from qgis.core import (  # noqa: E402
     QgsApplication,
+    QgsMeshDatasetIndex,
     QgsMeshLayer,
     QgsRasterLayer,
 )
@@ -56,6 +65,103 @@ _QML = (
     "    </rasterrenderer>\n"
     "  </pipe>\n</qgis>\n"
 )
+
+
+#: The mesh preset as its writer writes it, with the DECLARED quantity in the
+#: binding row QGIS remaps by name.
+_MESH_QML = (
+    "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n"
+    '<qgis version="3.40.6" styleCategories="Symbology">\n'
+    "  <mesh-renderer-settings>\n"
+    '    <active-dataset-group scalar="0" vector="-1"/>\n'
+    '    <scalar-settings group="0" min-val="0" max-val="5" opacity="1"'
+    ' interpolation-method="no-resampling">\n'
+    '      <colorrampshader colorRampType="INTERPOLATED" classificationMode="1"'
+    ' clip="0" minimumValue="0" maximumValue="5" labelPrecision="4">\n'
+    '        <item value="0" color="#a50026" alpha="255" label="0 mg/L"/>\n'
+    '        <item value="5" color="#313695" alpha="255" label="5 mg/L"/>\n'
+    "      </colorrampshader>\n"
+    "    </scalar-settings>\n"
+    "  </mesh-renderer-settings>\n"
+    '  <name-to-global-index global-index="0" name="{declared}"/>\n'
+    "</qgis>\n"
+)
+
+#: The quantity the tracer leg declares, and one no SELAFIN group answers to.
+_DECLARED_TRACER = "dye"
+_DECLARED_ABSENT = "model_results"
+
+
+def _write(tmp: str, stem: str, document: str) -> str:
+    path = os.path.join(tmp, f"{stem}.qml")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(document)
+    return path
+
+
+def _group_names(mesh):
+    return [mesh.datasetGroupMetadata(QgsMeshDatasetIndex(i, 0)).name()
+            for i in range(mesh.datasetGroupCount())]
+
+
+def _mesh_binding(layers, slf_path: str, tmp: str) -> None:
+    """The declared quantity, bound to the group the OPEN mesh reports."""
+    mesh = QgsMeshLayer(slf_path, "tracer results", "mdal")
+    assert mesh.isValid(), f"MDAL rejected {slf_path}"
+    names = _group_names(mesh)
+    print(f"mesh dataset groups: {names}", flush=True)
+    matched = [i for i, n in enumerate(names)
+               if n.strip().upper().startswith(_DECLARED_TRACER.upper())]
+    assert matched, f"the tracer fixture carries no dye group: {names}"
+    index = matched[0]
+
+    # A document QGIS accepts and then renders nothing from: the declared
+    # quantity is not how MDAL spells the group, so no group binds.
+    unbound = QgsMeshLayer(slf_path, "unbound", "mdal")
+    _msg, ok = unbound.loadNamedStyle(
+        _write(tmp, "unbound", _MESH_QML.format(declared=_DECLARED_TRACER)))
+    assert ok, "QGIS rejected the mesh document outright"
+    dropped = unbound.rendererSettings().activeScalarDatasetGroup()
+    assert dropped == -1, (
+        f"the unbound document left group {dropped} active; this harness "
+        "proves the bind against a document that binds nothing")
+
+    # Every group's classification is pinned first; the declared style then
+    # wins on the one group it binds.
+    layers._clamp_mesh_scalar_classification(mesh)
+    note = layers.bind_declared_mesh_style(
+        mesh, {"qml": _MESH_QML.format(declared=_DECLARED_TRACER)}, tmp)
+    print(f"bind note:{note}", flush=True)
+    assert "styled from the declared preset" in note, note
+    assert names[index].strip() in note, note
+    settings = mesh.rendererSettings()
+    assert settings.activeScalarDatasetGroup() == index, (
+        f"active group is {settings.activeScalarDatasetGroup()}, not {index}")
+    scalar = settings.scalarSettings(index)
+    assert (scalar.classificationMinimum(), scalar.classificationMaximum()) == (
+        0.0, 5.0), (f"declared range did not apply: "
+                    f"{scalar.classificationMinimum()}.."
+                    f"{scalar.classificationMaximum()}")
+    colours = [i.color.name() for i in scalar.colorRampShader().colorRampItemList()]
+    assert colours == ["#a50026", "#313695"], colours
+    other = (index + 1) % len(names)
+    kept = settings.scalarSettings(other)
+    assert (kept.classificationMinimum(), kept.classificationMaximum()) != (0.0, 5.0), (
+        "the declared range leaked onto a group the preset never bound")
+
+    # A quantity no group answers to: MDAL's own default stands, said out loud.
+    absent = QgsMeshLayer(slf_path, "absent", "mdal")
+    before = absent.rendererSettings().activeScalarDatasetGroup()
+    note = layers.bind_declared_mesh_style(
+        absent, {"qml": _MESH_QML.format(declared=_DECLARED_ABSENT)}, tmp)
+    print(f"unmatched note:{note}", flush=True)
+    assert _DECLARED_ABSENT in note and "default group stands" in note, note
+    assert absent.rendererSettings().activeScalarDatasetGroup() == before, (
+        "an unmatched quantity moved the active group")
+
+    # A row carrying no preset at all is still a note, never a silence.
+    bare = layers.bind_declared_mesh_style(absent, None, tmp)
+    assert "no declared preset" in bare, bare
 
 
 def _event(layers, **fields):
@@ -98,7 +204,7 @@ def _write_tif(path: str, paletted: bool) -> None:
 _APP: "QgsApplication | None" = None
 
 
-def main(slf_path: str) -> None:
+def main(slf_path: str, tracer_slf_path: str) -> None:
     global _APP
 
     _APP = QgsApplication([], False)
@@ -154,6 +260,8 @@ def main(slf_path: str) -> None:
     assert type(painted.renderer()).__name__ == "QgsPalettedRasterRenderer", (
         "QGIS did not keep the COG's own colour table")
 
+    _mesh_binding(layers, tracer_slf_path, tmp)
+
     print("QT-MESH-TEMPORAL-OK", flush=True)
 
 
@@ -162,7 +270,7 @@ if __name__ == "__main__":
     # alive, and a segfault at exit says nothing about what was measured. The
     # verdict is the flushed token, so the process ends on the measurement.
     try:
-        main(sys.argv[1])
+        main(sys.argv[1], sys.argv[2])
         _rc = 0
     except BaseException:  # noqa: BLE001 -- the traceback IS the failure report
         import traceback

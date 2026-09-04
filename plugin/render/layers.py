@@ -48,16 +48,15 @@ provider reports an EMPTY crs() for a SELAFIN and for a SFINCS quadtree NetCDF
 (proven live), so ``setCrs(QgsCoordinateReferenceSystem(crs_authid))`` is applied
 explicitly from the event's ``crs_authid`` (carried on the row); when that is
 unresolved the layer is still added with an honest dock note instead of a
-silent wrong-CRS render. The active scalar dataset group is set to the
-``maximum_water_depth_timemax`` group with the LARGEST time suffix (the final
-cumulative peak-depth field -- MDAL's own group ORDER is alphabetical, not
-chronological, so picking "the last group" by index would often land on an
-EARLY, near-zero timestep instead), else a tracer/concentration group, so the
-mesh renders something meaningful the instant it lands. The libhdf5 "File Type"
-attribute warnings QGIS's MDAL/netCDF backend prints on open are benign (proven
-live) and are not treated as failure -- only ``layer.isValid()`` gates success.
-The staged ``.nc`` lives under the session temp dir and is swept on
-disconnect/close (session TTL) -- never a persistent download.
+silent wrong-CRS render. Its declared preset paints ONE dataset group, and the
+binding is made HERE, against the groups the open layer reports
+(``bind_declared_mesh_style``) -- MDAL spells a SELAFIN's groups in the
+fixed-width names the file carries, and a quantity no group answers to is a
+visible note, never a blank render. The libhdf5 "File Type" attribute warnings
+QGIS's MDAL/netCDF backend prints on open are benign (proven live) and are not
+treated as failure -- only ``layer.isValid()`` gates success. The staged ``.nc``
+lives under the session temp dir and is swept on disconnect/close (session TTL)
+-- never a persistent download.
 """
 
 from __future__ import annotations
@@ -69,6 +68,7 @@ import shutil
 import tempfile
 import uuid
 from typing import List, Optional, Tuple
+from xml.sax.saxutils import quoteattr
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -89,15 +89,12 @@ from ..net.trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_vsis3
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
 
-#: SFINCS quadtree dataset group name for a cumulative max-depth field ending
-#: at time offset N (seconds) -- see ``_select_peak_depth_dataset_group``.
-_PEAK_DEPTH_GROUP_RE = re.compile(r"^maximum_water_depth_timemax:(\d+)$")
-
-#: Tracer/concentration dataset-group name fragments (TELEMAC-2D DYE, generic
-#: tracers) -- ``_select_tracer_dataset_group`` prefers one of these as the
-#: active scalar so a mesh whose "interesting" field is a tracer (not depth)
-#: renders the plume by default instead of MDAL's first group (velocity/bed).
-_TRACER_GROUP_HINTS = ("dye", "tracer", "concentration", "conc")
+#: The row a mesh preset binds its dataset group with. QGIS remaps the
+#: document's own group index through this NAME when it loads the style, so
+#: the name has to be one the OPEN layer carries -- see
+#: ``bind_declared_mesh_style``.
+_MESH_GROUP_BINDING = re.compile(
+    r"(<name-to-global-index\b[^>]*\bname=)(\"[^\"]*\"|'[^']*')")
 
 #: The OSM raster tile TEMPLATE ensure_basemap() adds (contains {z}/{x}/{y}).
 _OSM_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -424,61 +421,87 @@ def stamp_mesh_temporal(layer, event: LayerEvent) -> Optional[str]:
 # -- mesh outputs (MDAL) ----------------------------------------------------- #
 
 
-def _select_peak_depth_dataset_group(layer) -> bool:
-    """Set ``layer``'s active scalar dataset group to the
-    ``maximum_water_depth_timemax:<seconds>`` group with the LARGEST time
-    suffix -- the cumulative max-depth field at the end of the run, i.e. the
-    real "peak flood depth" (MDAL enumerates dataset groups in the file's own
-    variable order, which is ALPHABETICAL for these names, not chronological
-    -- naively picking "the last matching group encountered" can land on an
-    EARLY timestep instead of the true peak). Returns True when a group was
-    selected; False (a no-op) when the mesh carries no such group -- QGIS's
-    own default selection stands, never a crash.
+def _mesh_group_names(layer) -> List[str]:
+    """Every dataset group the OPEN layer reports, in MDAL's own spelling."""
+    names: List[str] = []
+    for i in range(layer.datasetGroupCount()):
+        try:
+            names.append(
+                layer.datasetGroupMetadata(QgsMeshDatasetIndex(i, 0)).name() or "")
+        except Exception:  # noqa: BLE001 -- a bad group index is skipped, not fatal
+            names.append("")
+    return names
+
+
+def _active_scalar_group(layer) -> int:
+    """The group index the mesh renders its scalar from right now."""
+    try:
+        return int(layer.rendererSettings().activeScalarDatasetGroup())
+    except Exception:  # noqa: BLE001 -- unreadable settings read as "none active"
+        return -1
+
+
+def bind_declared_mesh_style(layer, legend: Optional[dict], temp_dir: str) -> str:
+    """Load the declared preset onto a mesh, bound to one of ITS OWN groups.
+
+    A mesh preset paints ONE dataset group and QGIS binds that group BY NAME:
+    the document's ``name-to-global-index`` row is remapped against the open
+    layer's groups on load, and a name no group carries leaves the layer with
+    NO active scalar group at all -- a document that loads and then renders
+    nothing. MDAL spells a SELAFIN's groups in the fixed-width names the file
+    itself carries (``dye             mgl``), so the DECLARED quantity is
+    resolved against the names the OPEN layer reports and the matched one is
+    written into the document before QGIS reads it. Reproducing MDAL's
+    spelling on the producer side would be a second parser of a format QGIS
+    has already parsed.
+
+    Returns the note tail the dock shows. Always something: an unbound
+    quantity is a fact about the render, never a silence. Never raises -- a
+    styling failure is a note, never a lost layer.
     """
-    best_index = None
-    best_time = -1
-    for i in range(layer.datasetGroupCount()):
-        try:
-            name = layer.datasetGroupMetadata(QgsMeshDatasetIndex(i, 0)).name()
-        except Exception:  # noqa: BLE001 -- a bad group index is skipped, not fatal
-            continue
-        match = _PEAK_DEPTH_GROUP_RE.match(name or "")
-        if not match:
-            continue
-        t = int(match.group(1))
-        if t > best_time:
-            best_time = t
-            best_index = i
-    if best_index is None:
-        return False
-    settings = layer.rendererSettings()
-    settings.setActiveScalarDatasetGroup(best_index)
-    layer.setRendererSettings(settings)
-    return True
-
-
-def _select_tracer_dataset_group(layer) -> bool:
-    """Set ``layer``'s active scalar dataset group to a TRACER/concentration
-    group (TELEMAC-2D ``DYE``, or any group whose name hints a tracer) so the
-    plume is the DEFAULT-rendered field. MDAL activates its FIRST group (for a
-    TELEMAC ``.slf`` that is VELOCITY U -- not the dye), so without this the
-    native mesh loads but shows the wrong variable. Returns True when a tracer
-    group was selected; False (a no-op) when the mesh carries none -- QGIS's own
-    default selection stands, never a crash. Additive to
-    ``_select_peak_depth_dataset_group`` (SFINCS depth wins first; this is the
-    fallback for tracer meshes) so no flood engine regresses."""
-    for i in range(layer.datasetGroupCount()):
-        try:
-            name = layer.datasetGroupMetadata(QgsMeshDatasetIndex(i, 0)).name()
-        except Exception:  # noqa: BLE001 -- a bad group index is skipped, not fatal
-            continue
-        low = (name or "").lower()
-        if any(h in low for h in _TRACER_GROUP_HINTS):
+    qml = (legend or {}).get("qml") if isinstance(legend, dict) else None
+    if not isinstance(qml, str) or not qml.strip():
+        return " -- no declared preset on the row; MDAL's own default group stands"
+    try:
+        match = _MESH_GROUP_BINDING.search(qml)
+        declared = match.group(2)[1:-1].strip() if match else ""
+        if not declared:
+            return (" -- the declared preset names no dataset group; MDAL's own "
+                    "default group stands")
+        names = _mesh_group_names(layer)
+        wanted = declared.upper()
+        index = next(
+            (i for i, name in enumerate(names)
+             if name.strip().upper().startswith(wanted)), None)
+        if index is None:
+            carried = ", ".join(repr(n.strip()) for n in names) or "none"
+            return (f" -- the declared quantity {declared!r} names none of this "
+                    f"mesh's dataset groups ({carried}); MDAL's own default "
+                    "group stands")
+        before = _active_scalar_group(layer)
+        bound = names[index]
+        document = _MESH_GROUP_BINDING.sub(
+            lambda m: m.group(1) + quoteattr(bound), qml, count=1)
+        ok, message = _load_style_document(layer, document, temp_dir)
+        if not ok:
+            return (f" -- the declared preset was rejected "
+                    f"({message or 'rejected by QGIS'}); MDAL's own default "
+                    "group stands")
+        # loadNamedStyle's boolean is well-formedness only: QGIS accepts a
+        # document whose renderer block it then drops, so the BINDING is read
+        # back off the layer rather than believed.
+        if _active_scalar_group(layer) != index:
             settings = layer.rendererSettings()
-            settings.setActiveScalarDatasetGroup(i)
+            settings.setActiveScalarDatasetGroup(before)
             layer.setRendererSettings(settings)
-            return True
-    return False
+            return (f" -- the declared preset for {declared!r} did not bind; "
+                    "MDAL's own default group stands")
+        scalar = layer.rendererSettings().scalarSettings(index)
+        return (f" -- {bound.strip()!r} styled from the declared preset "
+                f"({scalar.classificationMinimum():g} to "
+                f"{scalar.classificationMaximum():g})")
+    except Exception as exc:  # noqa: BLE001 -- honest note, never a lost layer
+        return f" -- mesh style load failed ({type(exc).__name__}: {exc})"
 
 
 def _clamp_mesh_scalar_classification(layer) -> Optional[str]:
@@ -567,12 +590,9 @@ def load_declared_style(layer, legend: Optional[dict], temp_dir: str) -> Optiona
     qml = (legend or {}).get("qml") if isinstance(legend, dict) else None
     if not isinstance(qml, str) or not qml.strip():
         return None
-    path = os.path.join(temp_dir, f"style_{uuid.uuid4().hex[:12]}.qml")
     try:
-        with open(path, "w", encoding="utf-8") as fh:
-            fh.write(qml)
         before = _renderer_tag(layer)
-        message, ok = layer.loadNamedStyle(path)
+        ok, message = _load_style_document(layer, qml, temp_dir)
         if not ok:
             return f"style not loaded ({message or 'rejected by QGIS'})"
         after = _renderer_tag(layer)
@@ -581,6 +601,21 @@ def load_declared_style(layer, legend: Optional[dict], temp_dir: str) -> Optiona
         return f"styled from the declared preset ({after})"
     except Exception as exc:  # noqa: BLE001 -- honest note, never a lost layer
         return f"style load failed ({type(exc).__name__}: {exc})"
+
+
+def _load_style_document(layer, document: str, temp_dir: str) -> Tuple[bool, str]:
+    """Hand QGIS a ``.qml`` to read; return ``(loaded, message)``.
+
+    ``loadNamedStyle`` takes a PATH, so the document is written into the
+    session temp dir and removed again -- a style is a message, not an
+    artifact.
+    """
+    path = os.path.join(temp_dir, f"style_{uuid.uuid4().hex[:12]}.qml")
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(document)
+        message, ok = layer.loadNamedStyle(path)
+        return bool(ok), (message or "")
     finally:
         try:
             os.unlink(path)
@@ -821,8 +856,9 @@ class LayerMaterializer:
         netCDF): MDAL selects its driver partly by extension, so a SELAFIN staged
         as ``.nc`` would be rejected. CRS comes from the row's ``crs_authid`` (MDAL
         reports an empty crs() for a SELAFIN and a SFINCS quadtree grid); the active
-        scalar group is the cumulative peak-depth field, else a tracer group. Every
-        outcome is an honest note; never raises."""
+        scalar group is the one the declared preset binds to
+        (``bind_declared_mesh_style``). Every outcome is an honest note; never
+        raises."""
         uri = event.uri or ""
         if uri.startswith("s3://"):
             # Preserve the source extension so MDAL's extension-sensitive driver
@@ -853,11 +889,15 @@ class LayerMaterializer:
                 note += " -- CRS unresolved, set manually via layer properties"
         else:
             note += " -- CRS unknown, set manually via layer properties"
-        if not _select_peak_depth_dataset_group(layer):
-            _select_tracer_dataset_group(layer)
+        # The clamp runs BEFORE the preset: it pins EVERY group's
+        # classification to a finite range, and the declared style then wins on
+        # the one group it binds (QGIS leaves the other groups' settings
+        # untouched when it loads a mesh style).
         clamp_note = _clamp_mesh_scalar_classification(layer)
         if clamp_note:
             note += clamp_note
+        note += bind_declared_mesh_style(
+            layer, event.legend, self._ensure_temp_dir())
         temporal_note = stamp_mesh_temporal(layer, event)
         if temporal_note:
             note += temporal_note

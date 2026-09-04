@@ -3,8 +3,12 @@
 The collapse this covers only pays off if the platform really does the work:
 MDAL owns a mesh's time axis, QGIS owns the render, and this side only states
 facts. So the proof runs in a subprocess on the system interpreter (the one
-with ``qgis.core``) over a real SELAFIN, and skips honestly when no such
+with ``qgis.core``) over real SELAFINs, and skips honestly when no such
 interpreter exists -- the same tier as ``TestQtBridgeStart``.
+
+The mesh binding is proven on the group names MDAL reports for a real solved
+result, because those names (fixed-width, ``dye             mgl``) are the whole
+reason the declared quantity is resolved on this side.
 
 The harness itself carries what is asserted; this module owns finding an
 interpreter and reading its verdict.
@@ -21,6 +25,12 @@ import unittest
 _SELAFIN = os.path.join(
     os.path.dirname(__file__), "..", "..", "docs", "proof", "templates",
     "rog_run_products", "coweeta_full_results.slf")
+
+#: A solved river-dye result: the same four hydrodynamic groups plus the tracer
+#: the binding proof declares.
+_TRACER_SELAFIN = os.path.join(
+    os.path.dirname(__file__), "..", "..", "docs", "proof", "templates",
+    "01KZH561BN64PFA5HWZ8EYEJPM_r2d_river.slf")
 
 
 class TestQtMeshTemporalAndDeclaredStyle(unittest.TestCase):
@@ -47,12 +57,14 @@ class TestQtMeshTemporalAndDeclaredStyle(unittest.TestCase):
         py = self._qgis_python()
         if py is None:
             self.skipTest("no interpreter with qgis.core available")
-        if not os.path.exists(_SELAFIN):
-            self.skipTest(f"mesh fixture missing: {_SELAFIN}")
+        for fixture in (_SELAFIN, _TRACER_SELAFIN):
+            if not os.path.exists(fixture):
+                self.skipTest(f"mesh fixture missing: {fixture}")
         harness = os.path.join(
             os.path.dirname(__file__), "qt_mesh_temporal_harness.py")
         proc = subprocess.run(
-            [py, "-u", harness, os.path.abspath(_SELAFIN)],
+            [py, "-u", harness, os.path.abspath(_SELAFIN),
+             os.path.abspath(_TRACER_SELAFIN)],
             capture_output=True,
             timeout=300,
             text=True,
