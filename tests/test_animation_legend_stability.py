@@ -176,3 +176,62 @@ def test_an_empty_field_still_yields_a_usable_scale():
     scale = module.resolve_animation_style(np.full((3, 4), np.nan), style=STYLE)
     assert scale.vmax > scale.vmin, "a zero-width scale is not a scale"
     assert "unreadable" in scale.note, "the legend admits it never saw the data"
+
+
+# --------------------------------------------------------------------------- #
+# WHICH published layer an animation is held to
+# --------------------------------------------------------------------------- #
+
+
+def _packet_module():
+    spec = importlib.util.spec_from_file_location(
+        "assemble_proof_packet", REPO / "scripts" / "assemble_proof_packet.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_published_range_is_found_by_quantity_not_by_the_title_it_was_painted_under():
+    """A title is prose a product may rewrite; the quantity is the layer's
+    identity. Matching on prose is how a still and its animation drift onto two
+    scales for one field with no range comparison able to catch it.
+    """
+    from trid3nt_server.testing.proof_animations import ProofAnimation
+
+    packet = _packet_module()
+    evidence = {"layers": [
+        {"name": "Max water depth (watershed mesh)", "layer_type": "raster",
+         "quantity": "water_depth",
+         "legend": {"kind": "continuous", "label": "Max water depth",
+                    "vmin": 0.0, "vmax": 9.9493}},
+        {"name": "Input: mesh bed", "layer_type": "raster",
+         "quantity": None,
+         "legend": {"kind": "continuous", "label": "Elevation",
+                    "vmin": 621.0, "vmax": 1382.0}},
+    ]}
+    scale = packet.published_scale(
+        evidence, ProofAnimation(variable="WATER DEPTH", units="m",
+                                 quantity="water_depth"))
+    assert scale["published_range"] == [0.0, 9.9493]
+    assert scale["published_by"] == [
+        {"layer": "Max water depth (watershed mesh)", "range": [0.0, 9.9493]}]
+
+
+def test_a_quantity_the_run_never_published_has_nothing_to_agree_with():
+    """Honest silence, not an invented agreement: a field with no published
+    raster of its own is rendered on its own range and the row says so."""
+    from trid3nt_server.testing.proof_animations import ProofAnimation
+
+    packet = _packet_module()
+    evidence = {"layers": [
+        {"name": "Max water depth", "layer_type": "raster",
+         "quantity": "water_depth",
+         "legend": {"kind": "continuous", "label": "Max water depth",
+                    "vmin": 0.0, "vmax": 9.9}},
+    ]}
+    scale = packet.published_scale(
+        evidence, ProofAnimation(variable="VELOCITY MAGNITUDE", units="m/s",
+                                 quantity="flow_velocity"))
+    assert scale["published_range"] is None
+    assert scale["run_raster_presets"] == ["Max water depth"]

@@ -70,9 +70,10 @@ class ProofAnimation:
     name: str = "default"
     variable: str | None = None
     units: str = ""
-    #: The published quantity this field is, so the animation resolves the SAME
-    #: style-contract row - ramp, range and legend sentence - as the published
-    #: raster of that quantity.
+    #: The published quantity this field is - the token the producing product
+    #: states on its own layer, matched against it verbatim - so the animation
+    #: resolves the SAME range and legend sentence as the published raster of
+    #: that quantity rather than a second read of the same field.
     quantity: str | None = None
     mask_var: str | None = None
     mask_threshold: float = 0.0
@@ -159,7 +160,7 @@ PROOF_ANIMATIONS: dict[str, tuple[ProofAnimation, ...]] = {
     "telemac_rain_on_grid": (
         ProofAnimation(
             name="inundation_depth",
-            variable="WATER DEPTH", units="m", quantity="flood_depth",
+            variable="WATER DEPTH", units="m", quantity="water_depth",
             mask_var="WATER DEPTH", mask_threshold=0.0, still="peak",
             transform="log",
             reason="the question is overland sheet flow on a dry-start "

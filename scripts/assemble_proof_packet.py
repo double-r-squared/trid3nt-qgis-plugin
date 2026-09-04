@@ -383,6 +383,11 @@ def published_scale(evidence: dict, animation: ProofAnimation) -> dict:
     so its range is the one the GIF and its still are held to. A quantity with no
     published raster of its own has nothing to agree with, and the row says that
     rather than inventing an agreement.
+
+    The match is on the layer's QUANTITY, never on the title it was painted
+    under: a title is prose a producer may rewrite, and matching on prose is how
+    one field's still and its animation drift onto two scales without any range
+    comparison catching it.
     """
     from trid3nt_server.emission import presets
     from trid3nt_server.emission.outputs_seam import quantity_label
@@ -392,17 +397,15 @@ def published_scale(evidence: dict, animation: ProofAnimation) -> dict:
     ranges: list[tuple[float, float]] = []
     published_by: list[dict] = []
     preset_scaled: list[str] = []
-    #: Every title the run's rasters were painted under. An animation whose
-    #: declared quantity matches NONE of them is not "a field nobody published"
-    #: - it is the same field published under a different title, and so a second
-    #: scale for one quantity that no range comparison can catch.
+    #: Every title the run's rasters were painted under - reported so a reader
+    #: sees what else the run put on the map beside the field being animated.
     seen: list[str] = []
     for layer in evidence.get("layers") or []:
         legend = layer.get("legend") or {}
         painted = legend.get("label") if isinstance(legend, dict) else None
         if layer.get("layer_type") == "raster" and painted:
             seen.append(str(painted))
-        if painted != title:
+        if not quantity or layer.get("quantity") != quantity:
             continue
         lo = legend.get("vmin") if isinstance(legend, dict) else None
         hi = legend.get("vmax") if isinstance(legend, dict) else None

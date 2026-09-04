@@ -72,6 +72,12 @@ package EmissionSeam {
         renderable raster on the way past and drops the ones carrying a uri
         nothing can open, so a broken row never reaches the map wearing the
         look of a working one.
+
+        A layer with no band to read - a vector's features, a mesh's dataset
+        groups - has its declared row resolved HERE, through the same
+        resolution the raster arm runs inside its publish. One resolution,
+        four kinds, and nothing on the canvas is left to a default nobody
+        declared.
         */
     }
 
@@ -81,6 +87,10 @@ package EmissionSeam {
         handle is bound to its one uri, and the declared row is resolved
         against the raster's own bytes - the ONE resolution point, so the
         legend and the paint can never come from two different reads.
+
+        The probes that read those bytes are questions only a raster can
+        answer, so they are asked only of a raster; every other kind resolves
+        through the same call with nothing read at all.
         */
     }
 
@@ -146,6 +156,11 @@ package EmissionSeam {
         The canvas end, in the other process. It opens the store uri natively,
         loads the style document it was handed, and stamps the clock the row
         declares. It computes no colours of its own.
+
+        It loads that document ONCE, when the layer is first created in the
+        case. A case reopened adopts the layers the project already holds -
+        with whatever styling they now carry - so a preset is the look a layer
+        is BORN with and never a repaint of a choice made since.
         */
     }
 
@@ -655,6 +670,10 @@ package EmissionSeam {
         "tests/test_animation_legend_stability.py::test_the_animation_paints_what_the_published_raster_of_that_quantity_paints";
     verify requirement OneScalePerQuantity by
         "tests/test_publish_layer_legend.py::test_the_layer_ships_the_qml_the_map_loads_over_that_same_range";
+    verify requirement OneScalePerQuantity by
+        "tests/test_outputs_seam.py::test_a_mesh_entry_paints_the_group_it_declares_on_the_published_range";
+    verify requirement OneScalePerQuantity by
+        "tests/test_animation_legend_stability.py::test_the_published_range_is_found_by_quantity_not_by_the_title_it_was_painted_under";
 
     satisfy requirement UserChoiceBeatsPreset by presetFamily;
     satisfy requirement UserChoiceBeatsPreset by restyleSurface;
@@ -667,6 +686,10 @@ package EmissionSeam {
         "tests/test_restyle_surface.py::test_an_ask_nobody_made_leaves_the_declaration_alone";
     verify requirement UserChoiceBeatsPreset by
         "tests/test_restyle_surface.py::test_a_comparison_paints_every_layer_on_the_one_range";
+    verify requirement UserChoiceBeatsPreset by
+        "plugin/tests/test_raster_render.py::test_a_case_reopen_adopts_its_own_layers_and_loads_no_style_over_them";
+    verify requirement UserChoiceBeatsPreset by
+        "plugin/tests/test_raster_render.py::test_a_different_case_sweeps_the_group_it_did_not_open";
 
     satisfy requirement EmissionIsAutomatic by emissionSeamPoint;
     satisfy requirement EmissionIsAutomatic by outputsSeamPoint;
@@ -700,6 +723,12 @@ package EmissionSeam {
         "tests/test_router_spec_loader.py::test_a_style_row_naming_a_geometry_outside_the_family_is_refused";
     verify requirement StyleIsDeclaredOrKindDefault by
         "plugin/tests/test_raster_render.py::test_the_legends_qml_reaches_load_named_style";
+    verify requirement StyleIsDeclaredOrKindDefault by
+        "tests/test_publish_layer_legend.py::test_a_vector_row_resolves_through_the_same_seam_without_reading_the_object";
+    verify requirement StyleIsDeclaredOrKindDefault by
+        "tests/test_publish_layer_legend.py::test_a_mesh_row_resolves_bound_to_the_group_it_declares";
+    verify requirement StyleIsDeclaredOrKindDefault by
+        "tests/test_publish_layer_legend.py::test_the_emission_seam_stamps_the_resolved_row_on_a_vector_it_passes";
     verify requirement StyleIsDeclaredOrKindDefault by
         "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 }
