@@ -1,0 +1,95 @@
+<title>The Emission Fold</title>
+<style>
+  :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4;
+          --kw: #0000cc; --str: #a31515; --com: #008000; --num: #098658; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  }
+  :root[data-theme="dark"] { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  body { background: var(--bg); color: var(--fg); font-family: serif; line-height: 1.4; margin: 0 auto; max-width: 60em; padding: 1.5em 1em 4em; }
+  h1 { font-size: 1.6em; border-bottom: 1px solid var(--line); padding-bottom: .2em; }
+  h2 { font-size: 1.25em; border-bottom: 1px solid var(--line); padding-bottom: .15em; margin-top: 1.8em; }
+  code, pre { font-family: monospace; font-size: .95em; }
+  code { background: var(--code-bg); padding: 0 .25em; }
+  pre:not(.mermaid) { background: var(--code-bg); border: 1px solid var(--line); border-left: 4px solid var(--line); padding: .6em .8em; overflow-x: auto; }
+  .k { color: var(--kw); font-weight: bold; } .s { color: var(--str); } .c { color: var(--com); font-style: italic; }
+  table { border-collapse: collapse; margin: .8em 0; }
+  th, td { border: 1px solid var(--line); padding: .3em .6em; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .scroll { overflow-x: auto; }
+  .rev { font-size: .85em; }
+  p { max-width: 72ch; }
+</style>
+
+<h1>The Emission Fold</h1>
+<p class="rev">rev 1 &middot; 2026-09-03 &middot; the emission leg's spec, per the rulings of docs/IDEAS.md "EMISSION LEG RULED" - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>.</p>
+
+<h2>1. The principle</h2>
+<p>The platform we run on (QGIS + GDAL + MDAL + MinIO) already does rendering, styling, temporal playback, and remote reads. We stop reimplementing all four. What remains OURS: which layers exist, their provenance, the presets, per-case durability, and the honesty record. Presentation NEVER appears in a workflow declaration - it does not change the simulation.</p>
+
+<h2>2. The paradigm: automatic emission, one presentation surface</h2>
+<table>
+<tr><th>behavior</th><th>rule</th></tr>
+<tr><td>emission</td><td>AUTOMATIC - a produced layer appears (emit-on-fetch / emit-on-solve, kept). No <code>.emit()</code> exists anywhere.</td></tr>
+<tr><td>presentation</td><td><code>restyle(...)</code> is the ENTIRE surface - runtime, ad hoc, journaled: ramps, titles, presets, visibility. <code>restyle(hide)</code> is the un-emit.</td></tr>
+<tr><td>user adjustments</td><td>made NATIVELY in QGIS on any layer; per-case durability persists them; a user choice always beats a preset.</td></tr>
+</table>
+
+<h2>3. Presets are native .qml - a UNIFORM MINIMAL FAMILY</h2>
+<p>Presets are keyed by DATA KIND, never by quantity: continuous raster ramp, classed/categorical vector, point-and-line reference, mesh contours/vectors - roughly FOUR. Everything quantity-specific (units, label, the one-scale range) is a PARAMETER of the uniform preset, never a new preset; the per-quantity preset zoo (the temperature_c-vs-stratified_flow class of finding) dissolves with it. Every emitted layer ships styled by its kind's default - restyling is predictable because every layer starts from one of four known bases. FETCHER STYLE LIVES IN THE FETCHER'S DECLARATION: source.yaml gains a style: row (kind + parameters) so emit-on-fetch styling is uniform, auditable, and diffable - never buried in Python mappings. This does not contradict presentation-free workflow declarations: a dataset describing its own default rendering is a fact about the DATA; workflow files still carry zero presentation. Sim outputs derive their default from the product contract's kind + quantity metadata.</p>
+<p><code>styles.yaml</code> and any yaml-to-qml compiler both die. The preset set is curated <code>.qml</code> documents - QGIS's own declarative style format - covering the FOUR renderer shapes products actually use: singleband pseudocolor (rasters), graduated + categorized (vectors), mesh contours/vectors (MDAL). The steering-file pattern applies verbatim: THEIR format, OUR writer (a small subset templater the <code>restyle</code> machinery drives - no human edits XML), THEIR validator (every generated .qml is load-checked through the plugin/qgis_process smoke before it ships). One scale per quantity per packet remains law and now lives in the preset.</p>
+
+<h2>4. One store, one scheme (the transport)</h2>
+<p>Products write ONCE into the EXISTING MinIO store - the staging and product stores unify into one bucket family. QGIS reads <code>s3://</code> URIs NATIVELY via GDAL <code>/vsis3</code> (endpoint + credentials configured once per profile, set by the plugin). Locally the endpoint is localhost; remotely it is the same URI at another address. The control plane (plugin -&gt; daemon websocket) is already remote-capable; remote parity for the whole product is therefore an ENDPOINT SETTING, never a code path.</p>
+<table>
+<tr><th>dies</th><th>replaced by</th></tr>
+<tr><td>publish lifecycle / presign / session-TTL (~1,800)</td><td>bucket credentials, once</td></tr>
+<tr><td>uri_registry translation layers (~1,200 -&gt; thin id-to-URI record)</td><td>one scheme, nothing to translate</td></tr>
+<tr><td>the plugin's streaming client + vsicurl wrapping</td><td>GDAL native</td></tr>
+<tr><td>the local/remote duality</td><td>never exists</td></tr>
+<tr><td>stream timeouts / stale presigns / TTL-expiry failures</td><td>the class ceases</td></tr>
+</table>
+<p>Ledger condition stated: the plugin-era "streaming IS the path" ruling lands vindicated - implemented by GDAL + MinIO instead of ~3k of ours.</p>
+
+<h2>5. Temporal</h2>
+<p>Mesh results load as MDAL TEMPORAL layers; the QGIS temporal controller is the canvas scrubber and playback (the UI pass inherits it free). The rasterize-frames-for-canvas machinery dies; GIFs survive ONLY where packets need them. The per-delivery double container-read (the memo seam) dies with it - display stops re-reading what products already read.</p>
+
+<h2>6. What dissolves (measured targets)</h2>
+<table>
+<tr><th>mass</th><th>LOC today</th><th>fate</th></tr>
+<tr><td><code>emission/pipeline_emitter.py</code></td><td>2,862</td><td>the mesh-display + frame halves die; the emit-record core survives thin</td></tr>
+<tr><td><code>emission/publish.py</code></td><td>1,817</td><td>-&gt; write + register + notify</td></tr>
+<tr><td><code>emission/uri_registry.py</code></td><td>1,205</td><td>-&gt; thin id-to-URI record</td></tr>
+<tr><td><code>emission/styles.py</code> + <code>restyle.py</code> + styles.yaml</td><td>~500 + contract</td><td>-&gt; the .qml subset templater under restyle</td></tr>
+<tr><td><code>telemac/products/</code> display-rasterization half</td><td>part of 4,079</td><td>MDAL renders the mesh; products keep the MEASURED quantities (answers, charts, metrics)</td></tr>
+<tr><td>plugin <code>render/layers.py</code> translation + <code>render/temporal.py</code> + ramps</td><td>~1,700</td><td>-&gt; addMapLayer + loadNamedStyle + the temporal controller</td></tr>
+</table>
+<p>Order-of-magnitude expectation: ~10k touched, ~6-7k net gone. The honest number lands in the ledger with the wave.</p>
+
+<h2>7. The model extension (the standing reminder)</h2>
+<p>The wave MODELS what it builds: <code>docs/model/emission-seam.sysml</code> - the emit record, the store contract (one bucket family, the id-to-URI interface), the preset/restyle surface, requirements (PresentationNeverInDeclarations, OneScalePerQuantity, UserChoiceBeatsPreset, EmissionIsAutomatic) with verify allocations; the planes index updates (the user plane's row gains its first modeled edge); views regenerate; seeded breaks prove the new rules fire. <code>workflows/lib/ -&gt; runtime/</code> rides as the mechanical rename with bindings moving same-commit.</p>
+
+<h2>8. Stage 0 - the proof matrix (before anything is built)</h2>
+<table>
+<tr><th>check</th><th>pass =</th></tr>
+<tr><td>raster over <code>/vsis3</code> from the local MinIO into the installed QGIS</td><td>renders</td></tr>
+<tr><td>vector (FlatGeobuf) likewise</td><td>renders</td></tr>
+<tr><td>mesh (.slf) via MDAL - remote, else download-to-cache fallback measured</td><td>renders, fallback cost stated</td></tr>
+<tr><td>mesh TEMPORAL - time steps visible, controller scrubs</td><td>scrubs</td></tr>
+<tr><td>a hand-written subset .qml load-validates and styles a layer</td><td>styles</td></tr>
+</table>
+<p>A failed cell STOPS its dependent slice with the measured reason - never shipped on the assumption.</p>
+
+<h2>9. Acceptance (the wave's bar)</h2>
+<table>
+<tr><th>gate</th><th>test</th></tr>
+<tr><td>the paradigm live</td><td>a full template run emits automatically; <code>restyle</code> changes a ramp live; <code>restyle(hide)</code> removes and restores a layer; a native QGIS user restyle survives case reopen (durability)</td></tr>
+<tr><td>remote parity</td><td>the SAME run served with the store endpoint set to a non-localhost address: identical canvas result (the one-scheme claim proven, not asserted)</td></tr>
+<tr><td>temporal</td><td>a mesh result scrubs in the temporal controller; the frame-machinery grep returns zero</td></tr>
+<tr><td>presets</td><td>every shipped preset load-validates; one-scale-per-quantity holds across a packet</td></tr>
+<tr><td>dissolution</td><td>styles.yaml, presign/TTL, the streaming client, the local/remote branch: zero live spellings; ledger rows with the measured LOC</td></tr>
+<tr><td>model</td><td>emission-seam checked green; seeded breaks fire; planes index current</td></tr>
+<tr><td>packets + suite</td><td>full interrogated packets on every acceptance run, DELIVERED to NATE; five slices at the standing zero; push on CLEAN</td></tr>
+</table>

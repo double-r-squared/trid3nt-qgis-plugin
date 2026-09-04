@@ -3537,3 +3537,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   entry: the rain outlet's accepted 0.46% startup transient (pin
   proceeds per NATE, the transient stated on the packet). Distinct
   from IDEAS (rulings/parked work) and DELETION_LEDGER (removals).
+  AMENDED (NATE 2026-09-03, spec rev 1 amended in place before
+  launch): presets are a UNIFORM MINIMAL FAMILY keyed by DATA KIND
+  (~four: continuous raster, classed vector, reference, mesh);
+  quantity specifics are PARAMETERS of the preset, never new
+  presets - the per-quantity zoo dissolves; FETCHER STYLE LIVES IN
+  source.yaml (a style: row - uniform, auditable, diffable; a
+  dataset's default rendering is a fact about the data, workflow
+  declarations stay presentation-free); sim outputs derive defaults
+  from the product contract's kind+quantity. NATE read the spec:
+  the emission wave is GO.
