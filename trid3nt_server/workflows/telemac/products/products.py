@@ -437,7 +437,8 @@ async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
     # artifact. The typed peak above stays this step's own.
     await publish_results_mesh_via_seam(
         emitter, run_id=run_id, engine="telemac", peak_layer=raw_peak,
-        peak_quantity=product.quantity, mesh_basename="r2d_river.slf",
+        peak_quantity=product.quantity, mesh_group=product.mesh_group,
+        mesh_basename="r2d_river.slf",
         mesh_epsg=utm_epsg, reach_name=reach_name,
         reference_time=solve.get("started_at"))
 

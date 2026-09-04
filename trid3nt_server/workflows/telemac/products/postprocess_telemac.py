@@ -41,12 +41,14 @@ from pathlib import Path
 from typing import Any
 
 from trid3nt_contracts.telemac_contracts import (
+    TELEMAC3D_SIGNED_STYLE,
     TELEMAC3D_STRATIFICATION_STYLE,
     TELEMAC_AGITATION_STYLE,
     TELEMAC_BED_EVOLUTION_STYLE,
     TELEMAC_COASTAL_DEPTH_STYLE,
     TELEMAC_DO_STYLE,
     TELEMAC_DYE_STYLE,
+    TELEMAC_MAX_DEPTH_STYLE,
     TELEMAC_SUBSTANCE_PRODUCTS,
     TELEMAC_WAVE_STYLE,
     TELEMAC_WSE_STYLE,
@@ -603,6 +605,7 @@ def postprocess_telemac(
         layer_type="raster",
         uri=uri,
         style=product.style,
+        quantity=product.quantity,
         role="primary",
         units=dye_units,
         bbox=bbox,
@@ -869,6 +872,7 @@ def postprocess_telemac_deposition(
         layer_type="raster",
         uri=uri,
         style=TELEMAC_BED_EVOLUTION_STYLE,
+        quantity="bed_evolution",
         role="primary",
         units="mm",
         bbox=bbox,
@@ -1218,7 +1222,8 @@ def postprocess_telemac_wse(
     finally:
         cog_io.safe_unlink(cog)
 
-    label_txt = "Max water depth" if is_depth else "Max water-surface elevation"
+    style = TELEMAC_MAX_DEPTH_STYLE if is_depth else TELEMAC_WSE_STYLE
+    label_txt = str(style["label"])
     # A FLAT field has no range of its own, and a degenerate vmin==vmax ramp
     # paints every cell the MIDDLE colour - a catchment that measured zero water
     # everywhere renders as a full basin of it, which is the opposite of the
@@ -1229,15 +1234,13 @@ def postprocess_telemac_wse(
     flat = legend_max <= legend_min
     if flat:
         legend_max = round(legend_min + TELEMAC_WSE_WET_DEPTH_M, 4)
-    style = ({**TELEMAC_WSE_STYLE, "ramp": "ylgnbu"} if is_depth
-             else TELEMAC_WSE_STYLE)
-    legend = presets.legend_key(
-        style, value_range=(legend_min, legend_max),
-        label=f"{label_txt} (m{f', {vertical_datum}' if vertical_datum else ''})")
+    legend = presets.legend_key(style, value_range=(legend_min, legend_max))
     honesty_bits = [
         f"Peak {'depth' if is_depth else 'free-surface elevation'} over the run "
         f"({int(times.size)} output frame(s))",
     ]
+    if vertical_datum:
+        honesty_bits.append(f"elevations are metres in {vertical_datum}")
     if wet_note:
         honesty_bits.append(wet_note)
     if is_depth and not ever_wet.any():
@@ -1653,6 +1656,7 @@ def postprocess_telemac_do(
         layer_id=f"telemac-do-field-{run_id}",
         name=f"Dissolved oxygen sag ({reach_name})",
         layer_type="raster", uri=uri, style=TELEMAC_DO_STYLE,
+        quantity="dissolved_oxygen",
         role="primary", units="mg/L", bbox=bbox, legend=legend,
         fallback_note=honesty,
         do_min_mgl=round(do_min, 4),
@@ -1923,6 +1927,7 @@ def postprocess_tomawac(
         layer_type="raster",
         uri=uri,
         style=TELEMAC_WAVE_STYLE,
+        quantity="significant_wave_height",
         role="primary",
         units="m",
         bbox=bbox,
@@ -2140,6 +2145,7 @@ def postprocess_artemis(
         layer_type="raster",
         uri=uri,
         style=TELEMAC_AGITATION_STYLE,
+        quantity="agitation_coefficient",
         role="primary",
         units="Kd",
         bbox=bbox,
@@ -2370,7 +2376,6 @@ def postprocess_telemac3d(
     # a signed field (velocity) reads on a diverging ramp centered on 0; a strictly
     # positive field (temperature / salinity) reads on a sequential ramp.
     signed = lo < 0.0 < hi
-    colormap = "rdbu" if signed else "viridis"
     vext = round(max(abs(lo), abs(hi)), 5)
     legend_common = dict(units=units or None, label=f"{var_label} ({units})" if units else var_label)
 
@@ -2397,7 +2402,7 @@ def postprocess_telemac3d(
             "NoData in these rasters."
         )
 
-    style = {**TELEMAC3D_STRATIFICATION_STYLE, "ramp": colormap}
+    style = TELEMAC3D_SIGNED_STYLE if signed else TELEMAC3D_STRATIFICATION_STYLE
 
     def _mk(uri, bbox, role, is_surface, node_mean):
         legend = presets.legend_key(
@@ -2732,6 +2737,7 @@ def postprocess_coastal(
         layer_type="raster",
         uri=inundation_uri,
         style=TELEMAC_COASTAL_DEPTH_STYLE,
+        quantity="inundation_depth",
         role="primary",
         units="m",
         bbox=bbox,
@@ -2748,6 +2754,7 @@ def postprocess_coastal(
         layer_type="raster",
         uri=uri,
         style=TELEMAC_COASTAL_DEPTH_STYLE,
+        quantity="water_depth",
         role="context",
         units="m",
         bbox=bbox,

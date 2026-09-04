@@ -19,7 +19,8 @@ from typing import Any, Mapping
 
 from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.telemac_contracts import (
-    TELEMAC_WSE_STYLE,
+    TELEMAC_MAX_DEPTH_STYLE,
+    TELEMAC_RAIN_ON_GRID_MESH_GROUP,
     TelemacRainOnGridLayerURI,
 )
 
@@ -286,7 +287,7 @@ async def publish_rain_on_grid_products(*, run: dict[str, Any],
     }
     typed = TelemacRainOnGridLayerURI(**raw.model_dump(), **scalars)
     published = await publish_product_layer(
-        typed, style=TELEMAC_WSE_STYLE,
+        typed, style=TELEMAC_MAX_DEPTH_STYLE,
         update={
             # The published raster is in the mesh's UTM metres, so the postprocess
             # leaves it without a zoom-to extent; the DOMAIN's own 4326 bounds are
@@ -308,7 +309,9 @@ async def publish_rain_on_grid_products(*, run: dict[str, Any],
     # two families.
     await publish_results_mesh_via_seam(
         emitter, run_id=run_id, engine="telemac", peak_layer=raw,
-        peak_quantity="flood_depth", mesh_basename=run["result_basename"],
+        peak_quantity="water_depth",
+        mesh_group=TELEMAC_RAIN_ON_GRID_MESH_GROUP,
+        mesh_basename=run["result_basename"],
         mesh_epsg=utm_epsg, reach_name=name,
         reference_time=solve.get("started_at"))
 

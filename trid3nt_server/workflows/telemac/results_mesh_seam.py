@@ -35,6 +35,19 @@ __all__ = ["publish_results_mesh_via_seam"]
 RESULTS_MESH_QUANTITY: str = "model_results"
 
 
+def _peak_range(peak_layer: LayerURI) -> tuple[float, float] | None:
+    """The PUBLISHED max-over-time range, off the peak layer's resolved key.
+
+    One scale per quantity: the mesh the canvas animates paints its answer group
+    on the range the peak raster is published under, so a frame's colour and the
+    still's colour mean the same depth. ``None`` when the peak carries no
+    resolved range - the mesh then takes the reader's own statistics.
+    """
+    legend = getattr(peak_layer, "legend", None)
+    lo, hi = getattr(legend, "vmin", None), getattr(legend, "vmax", None)
+    return None if lo is None or hi is None else (float(lo), float(hi))
+
+
 def _mesh_layer_name(reach_name: str) -> str:
     """The EXACT web/scrubber group token for the results-mesh layer.
 
@@ -49,6 +62,7 @@ def _build_entries(
     run_id: str,
     peak_layer: LayerURI,
     peak_quantity: str,
+    mesh_group: str,
     mesh_uri: str,
     mesh_epsg: int,
     reach_name: str,
@@ -69,14 +83,19 @@ def _build_entries(
             bbox=bbox,
         )
     )
+    published = _peak_range(peak_layer)
     entries.append(
         build_entry(
             kind="mesh",
             quantity=RESULTS_MESH_QUANTITY,
             name=_mesh_layer_name(reach_name),
             uri=mesh_uri,
+            units=getattr(peak_layer, "units", None) or None,
             crs_authid=f"EPSG:{int(mesh_epsg)}",
             reference_time=reference_time,
+            dataset_group=mesh_group,
+            band_stats=({"p2": published[0], "p98": published[1]}
+                        if published is not None else None),
         )
     )
     return entries
@@ -88,6 +107,7 @@ def _write_and_read_mesh_layers(
     engine: str,
     peak_layer: LayerURI,
     peak_quantity: str,
+    mesh_group: str,
     mesh_basename: str,
     mesh_epsg: int,
     reach_name: str,
@@ -116,6 +136,7 @@ def _write_and_read_mesh_layers(
         run_id=run_id,
         peak_layer=peak_layer,
         peak_quantity=peak_quantity,
+        mesh_group=mesh_group,
         mesh_uri=mesh_uri,
         mesh_epsg=mesh_epsg,
         reach_name=reach_name,
@@ -142,6 +163,7 @@ async def publish_results_mesh_via_seam(
     engine: str,
     peak_layer: LayerURI,
     peak_quantity: str,
+    mesh_group: str,
     mesh_basename: str,
     mesh_epsg: int,
     reach_name: str,
@@ -155,6 +177,9 @@ async def publish_results_mesh_via_seam(
     ``mesh_epsg`` is the reach UTM zone the SELAFIN is stamped with;
     ``reference_time`` is the ISO-8601 UTC instant the SELAFIN's seconds are
     counted from (the solve's own start), without which the scrubber reads 1900.
+    ``mesh_group`` is the leg's ANSWER field, spelled the way the SELAFIN reader
+    reports it, because a mesh preset paints ONE of the many groups the file
+    carries and the reader binds it by name.
     Returns the number of mesh layers emitted (0 on any degrade). NEVER raises.
     """
     try:
@@ -164,6 +189,7 @@ async def publish_results_mesh_via_seam(
             engine=engine,
             peak_layer=peak_layer,
             peak_quantity=peak_quantity,
+            mesh_group=mesh_group,
             mesh_basename=mesh_basename,
             mesh_epsg=mesh_epsg,
             reach_name=reach_name,

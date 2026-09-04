@@ -35,6 +35,9 @@ __all__ = [
     "TELEMAC_AGITATION_STYLE",
     "TELEMAC3D_STRATIFICATION_STYLE",
     "TELEMAC_COASTAL_DEPTH_STYLE",
+    "TELEMAC_MAX_DEPTH_STYLE",
+    "TELEMAC_RAIN_ON_GRID_MESH_GROUP",
+    "TELEMAC3D_SIGNED_STYLE",
     "TelemacDyeLayerURI",
     "TelemacSedimentLayerURI",
     "TelemacWseLayerURI",
@@ -62,10 +65,16 @@ TELEMAC_COASTAL_DEPTH_STYLE: dict = {
     "kind": "continuous", "ramp": "ylgnbu", "units": "m",
     "label": "Peak inundation depth"}
 
-#: The TELEMAC-3D surface (or bottom) field. The COG variable differs by mode -
-#: temperature C, velocity m/s, salinity psu - so the caller titles this row
-#: with the variable it actually rasterized rather than minting a row per mode.
-TELEMAC3D_STRATIFICATION_STYLE: dict = {"kind": "continuous", "ramp": "inferno"}
+#: The TELEMAC-3D surface (or bottom) field, where the field is strictly
+#: positive - temperature C, salinity psu - and reads on a sequential ramp. The
+#: COG variable differs by mode, so the caller titles this row with the variable
+#: it actually rasterized rather than minting a row per mode.
+TELEMAC3D_STRATIFICATION_STYLE: dict = {"kind": "continuous", "ramp": "viridis"}
+
+#: The same TELEMAC-3D field when it is SIGNED - a velocity component, where the
+#: sign IS the direction - so the ramp diverges about zero and a reader tells
+#: upstream from downstream by colour rather than by magnitude.
+TELEMAC3D_SIGNED_STYLE: dict = {"kind": "continuous", "ramp": "rdbu"}
 
 #: The ARTEMIS agitation coefficient Kd = Hs/H0 - a dimensionless amplification
 #: ratio, not a wave height.
@@ -99,7 +108,14 @@ TELEMAC_BED_EVOLUTION_STYLE: dict = {
 #: apart from the inundation depth a coastal run publishes beside it.
 TELEMAC_WSE_STYLE: dict = {
     "kind": "continuous", "ramp": "cividis", "units": "m",
-    "label": "Water surface elevation"}
+    "label": "Max water-surface elevation"}
+
+#: The MAX WATER DEPTH raster the same postprocess publishes when the run's
+#: answer is depth above ground rather than an elevation: no datum, always
+#: positive, and on the wet-blue ramp an inundation field is read on.
+TELEMAC_MAX_DEPTH_STYLE: dict = {
+    "kind": "continuous", "ramp": "ylgnbu", "units": "m",
+    "label": "Max water depth"}
 
 #: The DISSOLVED-OXYGEN field from a WAQTEL O2 sag run. rdylbu, NOT reversed:
 #: low DO reads red and high DO reads blue, which is the direction a sag curve
@@ -122,29 +138,37 @@ class SubstanceProduct(NamedTuple):
         quantity: the physical field this raster carries.
         style: the declared style row that draws it.
         noun: what the layer name and the legend call the field.
+        mesh_group: the SELAFIN variable this class's tracer lands in, which is
+            the group the results mesh's preset paints.
     """
 
     cog: str
     quantity: str
     style: dict
     noun: str
+    mesh_group: str
 
 
 #: substance class -> its transported-field product. A class absent here takes
 #: the dye row: a tracer whose class declared no chemistry of its own IS dye.
 TELEMAC_SUBSTANCE_PRODUCTS: dict[str, SubstanceProduct] = {
     "tracer": SubstanceProduct("telemac_dye_peak.tif", "dye_concentration",
-                               TELEMAC_DYE_STYLE, "dye"),
+                               TELEMAC_DYE_STYLE, "dye", "DYE"),
     "decay": SubstanceProduct("telemac_dye_peak.tif", "dye_concentration",
-                              TELEMAC_DYE_STYLE, "dye"),
+                              TELEMAC_DYE_STYLE, "dye", "DYE"),
     "oil": SubstanceProduct("telemac_oil_tracer_peak.tif",
                             "oil_tracer_concentration",
-                            TELEMAC_DYE_STYLE, "oil tracer"),
+                            TELEMAC_DYE_STYLE, "oil tracer", "DYE"),
     "sediment": SubstanceProduct("telemac_sediment_peak.tif",
                                  "suspended_sediment_concentration",
                                  TELEMAC_SEDIMENT_CONCENTRATION_STYLE,
-                                 "suspended sediment"),
+                                 "suspended sediment", "NCOH SEDIMENT1"),
 }
+
+#: The SELAFIN group a rain-on-grid results mesh paints. A mesh preset binds ONE
+#: group and the reader binds it BY NAME, so the answer field is named here in
+#: the solver's own spelling rather than derived from a quantity token.
+TELEMAC_RAIN_ON_GRID_MESH_GROUP: str = "WATER DEPTH"
 
 class TelemacWseLayerURI(LayerURI):
     """A ``LayerURI`` for a TELEMAC-2D peak (max-over-time) FREE-SURFACE raster.
