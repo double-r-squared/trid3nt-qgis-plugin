@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """CORRECTED mesh-faithful proof render for the REAL Cinder Pond ARTEMIS pair.
 
-Supersedes ``proof_artemis_real_breakwater.py`` for the render (the solve is
-unchanged -- reads the SAME solved SELAFIN the flagged iteration used, now stashed
-under ``docs/proof/templates/artemis_real_breakwater/solved_slf/`` so this is
-reproducible without docker).
+The solve is not rerun -- this reads the SAME solved SELAFIN the flagged iteration
+used, stashed under ``docs/proof/templates/artemis_real_breakwater/solved_slf/``,
+so the render is reproducible without docker.
 
 NATE flagged three things on the flagged pair (artemis_real_breakwater_pair.png):
   1. "agitation moving through the breakwater" -- DIAGNOSED a RENDER-LIE: the old

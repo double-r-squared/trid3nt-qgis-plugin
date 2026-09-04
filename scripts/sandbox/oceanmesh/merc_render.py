@@ -2,10 +2,9 @@
 renderers (STANDALONE sandbox).
 
 Single source of truth for the basemap math used by every mesh/watershed proof
-render (build_coastal_mesh via render_mesh, build_coastal_water_edge_mesh,
-build_watershed_mesh, and pysheds_watershed/proof_watershed). Each renderer keeps
-its own matplotlib composition but MUST get its tiles + extent from ``fetch_basemap``
-so the imagery placement is defined in exactly one place.
+render. Each renderer keeps its own matplotlib composition but MUST get its tiles
++ extent from ``fetch_basemap`` so the imagery placement is defined in exactly one
+place.
 
 CRS: ESRI World_Imagery tiles are spherical Web Mercator (EPSG:3857). Meshes are
 EPSG:4326 lon/lat and are projected to the SAME spherical mercator via

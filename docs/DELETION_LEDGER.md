@@ -544,7 +544,7 @@ LayerURI-shaped dict returns as an inert blob).
 | `compute_urban_heat_island` (module + `corpus.yaml` + `__init__.py` + `tests/test_compute_urban_heat_island.py` + the `tools/__init__.py` registration + the sync-offload allowlist entry in `server/dispatch/emitter.py` + its `_OPEN_WORLD_COMPUTE_EXCEPTIONS` entry) | trid3nt_server/tools/processing/compute_urban_heat_island + tests + tools/__init__.py + server/dispatch/emitter.py + tests/test_tool_annotations.py | the EMIT reason code that protected it does not survive inspection: the tool's map product is the MODIS LST resampled onto the 10 m land-cover grid, painted with `style_preset="land_surface_temp_c"` - a preset its OWN source comments as "the fetch_modis_lst paint". Condition: the LST layer reaches the map without this tool, so that demoting loses no layer. | DELETED (cleanup wave phase 2, commit 0041b1e0). CONDITION MET by ADR 0313: `fetch_modis_lst` paints the LST itself at its NATIVE resolution and, since emission became automatic, without being asked. What the demote loses is the UPSAMPLE - a ~1 km measurement resampled onto a 10 m grid - which is a fidelity claim the data does not support, so losing it is an honesty gain rather than a capability loss. What remains is per-class means + the built-minus-vegetation delta over two staged rasters: the zonal recipe with land-cover classes as the zones. Recipe landed at `docs/playbooks/urban-heat-island-recipe.md` with its three honest LOSSES (the resampled COG, the typed delta-is-None note, the in-tool AOI clamp). Corpus SPLIT rather than dropped, per the 0043 re-home pattern: the six analysis phrasings to `meta/code_exec_tool/corpus.yaml`, the three "show me the surface heat" phrasings to `fetchers/climate/fetch_modis_lst/corpus.yaml` - the map half goes to the tool that paints the map. Registry 252 -> 251. 611 LOC module + 240 LOC test deleted. reopen: a registered primitive that can paint an arbitrary array appears, at which point the resample is expressible in the playground too and the question is moot. | cleanup wave phase 2 / ADR 0043 |
 | `compute_change_detection`, `compute_flood_depth_damage`, `compute_sediment_yield`, `compute_model_residuals`, `compute_exposure_summary` (the five NOT demoted) | trid3nt_server/tools/processing | KEPT, with per-module reasons recorded so this is a decision and not an omission. FOUR fail the EMIT gate - each paints a layer (categorical gain/loss FGB, per-structure damage points, styled log-class RUSLE COG, diverging residual points) that no registered fetcher produces and the playground cannot write. `compute_exposure_summary` clears EMIT (it is tabular, the zonal profile) but fails on a live consumer: `compose_case_report.py:354` imports `get_session_exposure` and reads a Case-keyed in-process session store a sandbox return value cannot repopulate. `compute_sediment_yield` additionally has a hard importer - `emission/publish.py:540` reads its `SEDIMENT_YIELD_LOG_CLASSES` as the single source of truth for the publish styling ladder. `compute_model_residuals` is PROTECTED-VNV and `extract_model_at_observations` defines itself by reference to it. | REJECTED for this wave (decision record). Re-open conditions, per module: change_detection / flood_depth_damage / sediment_yield / model_residuals - a registered primitive that paints an arbitrary array or feature set exists; sediment_yield ALSO needs its log-class table moved to `emission/quantity_styles.py` first (its own ledger row above); exposure_summary - the Case report reads exposure from persisted Case state rather than an in-process store, at which point the tool is the zonal recipe with two fetchers in front of it. | cleanup wave phase 2 |
 | `tests/test_publish_layer_map_emission_job0272.py` (232 lines, 5 cases) | tests | its whole premise is void: it guarded the job-0272 wrap-site, which existed because "the atomic `publish_layer` returns a bare WMS URL string" and `emit_tool_call` only feeds `add_loaded_layer` on a typed `LayerURI`. There is no atomic publish_layer, and the publish now happens INSIDE the seam that feeds `add_loaded_layer`, on a value that is already a `LayerURI` - so the failure it guards is unreachable by construction rather than merely unobserved. Condition: the replacement assertion exists somewhere. | DELETED (cleanup wave phase 2, commit 0041b1e0, ADR 0313). CONDITION MET twice over: `tests/test_auto_publish_droppable_raster.py::test_raster_s3_publishes_once_and_reaches_the_map` asserts the PUBLISHED uri reaches `loaded_layers`, which is the thing job-0272 was about, and the readable-name precedence the file's other two cases covered (`derive_readable_layer_name`, bare-ULID -> style-preset label) is already covered by `tests/test_publish_layer.py` items 3 and 4 against the same function, which survives in `emission/publish.py` and still has a live caller in `cases/ingest_user_layer.py:481`. reopen: never - a test whose setup has to construct a tool that does not exist is not testing the product. | cleanup wave phase 2 |
-| `scripts/sandbox/oceanmesh/selafin_io.py` (93 lines: `write_selafin` + `_ipobo` + the record helpers) | scripts/sandbox/oceanmesh/ | A hand-rolled SELAFIN WRITER - `struct.pack(">i", ...)` records and a hand-numbered IPOBO - for a format nobody on this side owns. The reader half of the same debt died 2026-09-02 (`postprocess_telemac.read_selafin`); this is the writer half, and it sits OUTSIDE the scope the reader ruling drew (the field data a delivery renders), which is why it survived that wave rather than being missed by it. The product already writes the geometry pair through telapy's own Hermes (`mesh/shared/selafin_cli.py` + `meshers/drivers/selafin_cli_driver.py`), so this is a second writer of a format with one owner. Condition: the queued `scripts/` stale-sweep confirms its three callers - `build_coastal_mesh.py`, `build_watershed_mesh.py`, `build_coastal_water_edge_mesh.py` (1,057 lines of pre-mesher sandbox builders) - are superseded by the om2d mesher's recipe path; the writer dies with them, and any survivor re-points at `write_telemac_pair`. | QUEUED | IDEAS 2026-09-02 (reader-independence exception) |
+| `scripts/sandbox/oceanmesh/selafin_io.py` (93 lines: `write_selafin` + `_ipobo` + the record helpers) | scripts/sandbox/oceanmesh/ | A hand-rolled SELAFIN WRITER - `struct.pack(">i", ...)` records and a hand-numbered IPOBO - for a format nobody on this side owns. The reader half of the same debt died 2026-09-02 (`postprocess_telemac.read_selafin`); this is the writer half, and it sits OUTSIDE the scope the reader ruling drew (the field data a delivery renders), which is why it survived that wave rather than being missed by it. The product already writes the geometry pair through telapy's own Hermes (`mesh/shared/selafin_cli.py` + `meshers/drivers/selafin_cli_driver.py`), so this is a second writer of a format with one owner. Condition: the queued `scripts/` stale-sweep confirms its three callers - `build_coastal_mesh.py`, `build_watershed_mesh.py`, `build_coastal_water_edge_mesh.py` (1,057 lines of pre-mesher sandbox builders) - are superseded by the om2d mesher's recipe path; the writer dies with them, and any survivor re-points at `write_telemac_pair`. | DELETED (stale-scripts sweep 2026-09-03). CONDITION MET: the sweep walked every reference to the three builders and found no product importer - the om2d mesher's recipe path is the one way a mesh is built - so all three are deleted in the same commit and the writer has no survivor to re-point. | IDEAS 2026-09-02 (reader-independence exception) |
 | `init_depth_m` as the OUTFLOW STAGE (`outflow_stage = bed_out + init_depth_m`, defaulting to 2.0 m) | trid3nt_server/workflows/telemac/steps/author.py | the one level the run's whole water surface is anchored to was a labeled default, and 2.0 m is not a property of a reach - it was the same number on a mountain creek and a coastal plain river. Condition: the outflow stage is derived from the reach itself. | DELETED (outflow-stage slice). CONDITION MET by the SIGNED bathymetry methodology M4: the stage is the NORMAL DEPTH for the deck's own discharge over the section the accepted mesh's outflow face cuts, at the friction slope that mesh measures. The KEY SURVIVES with its other role - `INITIAL CONDITIONS = 'CONSTANT DEPTH'` / `INITIAL DEPTH` - so the shrink is one role, not the param. CONSEQUENCE, stated: the initial free surface and the prescribed outflow no longer agree by construction, so a run starts with a transient toward the derived level; whether the initial depth should follow the same derivation is a DESIGN question left open rather than taken silently. reopen: never - a declared depth on that boundary cannot discriminate between reaches. | bathymetry methodology M4; IDEAS 2026-09-02 HAPPY PATH FIRST |
 | `init_depth_m` ITSELF (the sheet key, its 2.0 m default, and the `INITIAL CONDITIONS = 'CONSTANT DEPTH'` / `INITIAL DEPTH` pair it wrote) | trid3nt_server/workflows/telemac/authoring/author.py | the CONSEQUENCE the outflow-stage slice stated and left open: a blanket 2 m start and a derived outflow stage no longer agreed by construction, so every fresh reach spent its first minutes draining the one into the other - a transient the run had to pay before it answered the question it was asked, and the same number on a mountain creek and a coastal plain river. Condition: the initial free surface follows the same derivation as the boundary it is anchored to. | DELETED (F1 interim). CONDITION MET: `INITIAL DEPTH` is now the DERIVED normal depth the outflow stage is computed as - laid bed-parallel, which is the uniform-flow surface that stage is the downstream end of - so ONE derivation is read once and written at both ends, and stated in the deck comment and the run journal. DEVIATION FROM THE LETTER OF THE RULING, reported not taken silently: the ruling said constant ELEVATION at the stage; the stage is derived only on a reach that FALLS (the derivation refuses one that does not), so a horizontal surface at the outlet's level dries every node above it - measured 14 of 907 nodes wet on the flagship coarse reach - and TELEMAC refuses the prescribed discharge it then has no water to impose (`DEBIMP: PROBLEM ON BOUNDARY NUMBER 1`, exit code 2, run 01M1MS3CRNNZNZAE6ZAB3WEV25). `test_the_initial_depth_is_no_longer_the_level_the_run_is_anchored_at` died with it. SPIN-UP (steady-inflow settle, rain-then-drain drainage initialization) is PARKED as refined-run behaviour for a later pass, not a fallback here. reopen: never - a declared start depth cannot discriminate between reaches any better than a declared stage could. | IDEAS 2026-09-03 F1/F6 INTERIM RULED |
 | Superseded PANEL generations in two coarse proof folders (7 PNGs) | docs/proof/templates/artemis_harbor_agitation/coarse/, docs/proof/templates/telemac3d_stratified_flow/coarse/ | A re-pin REPLACES a baseline, and the panel filenames encode a layer slug, so a run that publishes different layers leaves the previous generation's panels beside the new ones under the same base. The assembler cannot tell which set belongs to the evidence - it picks by index and audits last month's picture against this month's run - and says so: "delete the superseded generation or move it to an addendum". CONDITION: the folder's own evidence JSON no longer describes them. | DELETED (coarse re-pin 2026-09-03). TRACE: agitation's pinned evidence (run 01M0ZSCK..., 2 layers) never described the four 2026-08-25 panels (surveyed-breakwater-aoi, input-lake-bed-bathymetry-...-in-worker, wave-agitation-kd-aoi, canvas-view: sha1 9b2aaeb5, 22647e5d, a816351d, a92cc96e); stratified's three 2026-08-25 panels (bottom-temperature-aoi, surface-temperature-aoi, canvas-view: sha1 8a4bcb96, f38d016c, 8a311b63) predate the layer set its evidence carries. Both folders now assemble a PASS packet. reopen: never - a re-pin that keeps the superseded generation is not a replacement. | coarse silent-pin refresh 2026-09-03 |
@@ -3094,3 +3094,112 @@ reopen: never (two coverage numbers is how one of them goes unread).
 ## 2026-09-03 charter dedupe + scratchpad cull (NATE directive)
 - CLAUDE.md: was a byte-identical twin of AGENTS.md (verified by diff) - now a pointer; AGENTS.md is the one canonical charter. CONDITION: none (drift risk eliminated; the suite-law edit of 2026-09-01 had to land in both, proving the hazard).
 - scratchpad/ (37 tracked files, wave-18-era proof scraps + 162MB local bulk): deleted + gitignored. CONDITION MET: session-ephemeral evidence belongs in the session scratchpad, never in git; the spot-check-data standing approval covers the scraps.
+
+## The stale-scripts sweep (2026-09-03)
+
+`scripts/` holds product - the drivers, `model_check.py`, `code_graph.py`,
+`assemble_proof_packet.py`, the image builds, `install_plugin.sh`, the canaries -
+so the sweep cut MEMBERS, not the tree. Evidence for every row below: the code
+graph's script-entry orphan list, a whole-repo reference walk over tracked files,
+and the subject test - does the thing the script drives still exist.
+
+DELETED, the dead-era one-offs (887 lines):
+
+- `scripts/proof_artemis_real_breakwater.py` (177). ADR 0237 records `_v2` as its replacement for the render, and the solve it read is unchanged. CONDITION MET: `_v2` reads the same stashed SELAFIN and is the render the packet carries; its docstring stops narrating the supersession.
+- `scripts/proof_telemac_rain.py` (178). Rendered `telemac_river_dye_rainfall_diffmap.png` + `_timing_chart.png` into `docs/proof/templates/`. CONDITION MET: neither file exists - distributed rain left `telemac_river_dye` for the rain-on-grid front, so the driver's whole product is gone.
+- `scripts/proof_telemac_bed_continuity.py` (71). A before/after render for the staged-bed migration: it took a pre-migration run's bed COG as its second argument to put the old lattice beside the new surface. CONDITION MET: the migration landed and there is no pre-migration run left to pass it. Zero references.
+- `scripts/proof_bathymetry_input_layer.py` (52). Rendered the input bathymetry the `schism_pahm_surge` showcase surfaced. CONDITION MET: SCHISM left the tree; the name survives only as a purged-name guard in `tests/test_catalog_surfacing.py`. Zero references.
+- `scripts/verify_slf_dockload_4b.py` (85). A wave-4b one-off proving the plugin's `.nc`-vs-`.slf` staging bug was fixed, by staging one file two ways under PyQGIS. CONDITION MET: the fix landed; a proof that a past bug was a bug is a record, and the record is the ADR. Zero references.
+- `scripts/drive_telemac_leg_4b.py` (193). The wave-4b evidence driver - one registered leg through the daemon, capturing the results-mesh layer and the run's `outputs.json`. CONDITION MET: the wave closed and the mesh layer is asserted by the canaries; zero references outside a dated ADR line.
+- `scripts/prove_telemac_seam.py` (131). Already FLAGGED as dead against the current image (ledger, 2026-09-02): it stages a `reach` manifest section with its own `graphic_period`, and that section left the worker at worker-unification stage 2. CONDITION MET: the sweep this was flagged for.
+
+DELETED, the rain-on-grid sandbox family (1,109 lines) - all of it HARD-dead,
+each member importing a module that no longer exists:
+
+- `scripts/sandbox/telemac/rog_offline_smoke.py` (107) and `rog_twopulse_smoke.py` (153): both `import rog_build as R` from the mounted worker dir. CONDITION MET: `rog_build` is nowhere in the tree - the in-worker RoG builder went with the worker unification, so neither script can be imported, let alone run.
+- `scripts/sandbox/telemac/rog_render_proofs.py` (163): renders the artifacts those two runs left. CONDITION MET: nothing produces them.
+- `scripts/sandbox/replication/rog_ballcreek_{events,hyeto,final,calib}.py` (590): all four `import rog_ballcreek_live as LIVE`. CONDITION MET: `rog_ballcreek_live.py` is already gone, so the four are ImportError on line one.
+- `scripts/sandbox/replication/rog_ballcreek_proofs.py` (96): the family's chart renderer. CONDITION MET: it reads the solve artifacts the deleted live driver produced. The three charts it drew SURVIVE as pinned evidence under `docs/proof/templates/telemac_rain_on_grid/addendum/`; deleting the renderer does not touch them, and it could not redraw them anyway.
+
+DELETED, the pre-mesher oceanmesh builders (2,059 lines) - superseded by the
+om2d mesher's recipe path (`workflows/mesh/recipe.py` + `meshers/om2d.py`, which
+wrap the library where it lives and take a supplied polygon or a GSHHG-cut
+extent):
+
+- `scripts/sandbox/oceanmesh/build_coastal_mesh.py` (384), `build_coastal_water_edge_mesh.py` (315), `build_watershed_mesh.py` (358). CONDITION MET: no product module imports them; the recipe path is the one way a mesh is built, and `build_coastal_mesh.py:91` was already flagged as carrying the pre-F2 `fetch_dem`-shaped bed helper the product deleted in ADR 0299 - the shape the sweep guard exists to prevent.
+- `water_edge.py` (538): the OSM-coastline water-domain builder, imported only by `build_coastal_water_edge_mesh.py`.
+- `_mesh_incontainer.py` (157) + `_mesh_watershed_incontainer.py` (136): the two mounted in-container scripts those builders shelled to. The recipe path runs its ops in `trid3nt-local/mesh:latest` through `om2d._run_op`.
+- `render_mesh.py` (78): the builders' proof render.
+- `selafin_io.py` (93): the QUEUED row above executes here. Its CONDITION was exactly this - that the sweep confirm its three callers are superseded by the recipe path. They are, and they are deleted in this same commit; the product writes the geometry pair through telapy's own Hermes (`mesh/shared/selafin_cli.py`), so the hand-rolled writer had no survivor to re-point.
+
+KEPT, with the reason recorded so this is a decision and not an omission:
+
+- `scripts/sandbox/oceanmesh/{mesh_formats,schism_gr3}.py` are PRODUCT DEPENDENCIES, not sandbox: `workflows/mesh/shared/nodes.py` puts the directory on `sys.path` and imports `mesh_formats` for `extract_boundary_loops` on every mesh build. `mesh_formats.py`'s docstring said "SANDBOX ONLY (nothing landed)" and is corrected to state the dependency, because a reader acting on that sentence would delete the repo's one topology pass. `schism_gr3.py` was relocated here by NATE ruling for this reason.
+- `scripts/sandbox/oceanmesh/shoreline/` (GSHHG L1): the only copy in the tree of the dataset `om2d._shoreline_shp` names in its typed refusal (`TRID3NT_GSHHG_SHP`). Data, and live.
+- `merc_render.py`: `tests/test_proof_basemap_credit.py` reads it, and `render_erodible_scour_proof.py` imports it. Its docstring stops listing the four deleted callers.
+- `harvest_living_atlas.py` and `backfill_run_journal.py`, both checked for a dead subject and both found live: the Living Atlas tools (`search_living_atlas`, `fetch_living_atlas_layer`) are registered and read the two catalogs the harvest writes, and the run journal the backfill seeds is written by the skeleton's publish stage. Both are idempotent, re-runnable ops tooling.
+- The routing harnesses `tool_routing_bench.py`, `tool_routing_sweep.py`, `routing_failure_split.py`, `tool_sweep.py`: `docs/site/models.md` and `docs/design/local-model-upgrade-2026-07.md` name them as the rerunnable procedure.
+- `stage_groundwater_recharge.py` + `stage_zell_sanford_groundwater.py`: ADR 0297 requires the staging script to be committed and re-runnable, and three live fetcher `source.yaml` files cite them as their provenance.
+- `scripts/sandbox/telemac/{run_erodible_scour_direct,render_erodible_scour_proof}.py`: `telemac_river_dye` still declares `erodible_bed`, `grain_size_um`, `bed_thickness_m` and `morphological_factor`, so the direct call still binds.
+
+REPORTED, not cut (ambiguous - the reference walk found no live caller, but no
+staleness evidence either):
+
+- `scripts/tool_usability_sweep.py` (237): zero references anywhere, and it is the one member of the routing-harness family the models page does not name. It imports `tool_routing_sweep`, which is live, so it still runs.
+- `scripts/telemac_routing_probe.py` (224): reproduces the LOCAL model's per-turn assembly, and the thing it mirrors has moved (`run_telemac` is not a registered tool; its `TRID3NT_OPENAI_EXTRA_SYSTEM` copy has already been scrubbed once).
+- `scripts/sandbox/pysheds_watershed/proof_watershed.py` (323): the generation it belongs to is deleted above, but `delineate_watershed` is a live registered tool with NO test file, and this is its only real-DEM proof.
+- `scripts/sandbox/replication/{ballcreek_delineate_explore,edi_coweeta_coverage}.py` (339) and the three provenance JSONs: neither imports the deleted live driver. `edi_coweeta_coverage.py` is cited by the LIVE router hook `fetchers/_router/hooks/lter_records.py` as its proof.
+
+RESIDUE, reported not touched (another session owns the file): the module
+docstring of `tests/test_telemac_rain_on_grid_template.py` points at two scripts
+that do not exist - `rog_coweeta_live.py` (already gone before this sweep) and
+`rog_offline_smoke.py` (deleted here).
+
+## The AWS/GCP-era sandbox - DELETED (2026-09-03, sandbox rewrite)
+
+2,081 lines across `sandbox_executor.py` (864), `sandbox_hardening.py` (628) and
+`sandbox_runner.py` (588), replaced by 341 lines in `box.py` + `driver.py` +
+`__init__.py` (ADR 0324). The seam `code_exec_request` calls -
+`submit_sandbox_job(python_code, layer_refs)` returning a result envelope - is
+unchanged in signature and shape.
+
+Gone with them, each because the container states it instead:
+- the in-process `socket.connect` / `connect_ex` / `create_connection`
+  monkeypatch, the proxy-env strip, `SandboxNetworkBlocked`, and
+  `DEFAULT_NET_ALLOW` with its dead `googleapis.com` / `google.internal` /
+  `mongodb.net` hosts -- `--network none`;
+- the whole bubblewrap layer (`wrap_with_jail`, `build_jailed_cmd`,
+  `jail_setenv_args`, `_ro_bind_args`, `_venv_site_packages`,
+  `_editable_source_roots`, `JailUnavailable`, the `TRID3NT_SANDBOX_BWRAP*`
+  env seams) -- the container is the namespace jail;
+- the env allowlist / deny-prefix / deny-substring machinery
+  (`build_child_env`, `assert_env_scrubbed`, the IMDS-disable knobs) -- a
+  container env is built from nothing, not filtered down from `os.environ`;
+- `preexec_resource_limits` and `rlimit_spec` -- `--memory`, `--cpus`,
+  `--pids-limit`;
+- the `SIGALRM` watchdog, `_hard_kill`, and the outer grace window -- one
+  `subprocess.run(timeout=cap)` plus `docker kill` on the named container;
+- `ENVELOPE_MARKER`, `_emit_envelope`, `_parse_envelope`, `_bound_envelope`,
+  `_bound_str_field`, `MAX_ENVELOPE_BYTES`, `MAX_ENVELOPE_FIELD_CHARS` -- the
+  driver writes `result.json` into the mounted run dir, so there is no stdout
+  to scrape and no JSON to re-bound;
+- `SandboxExecutionHandle`, `read_sandbox_result`, `SandboxCloudModeUnavailable`,
+  `SandboxResultNotFound`, and the `isinstance` branch in `code_exec_tool`
+  that consumed them -- the run has been synchronous since the cloud left;
+- `load_payload`'s CLI/env/`gs://` payload sourcing -- the payload is one file
+  in the run dir;
+- the Vega-Lite `chart_emission` shaping and its soft `trid3nt_contracts`
+  import -- nothing read it; the plugin card branches on `result["kind"]` and
+  the PNG is what a matplotlib figure actually is;
+- the undocumented injected aliases `layer_uris`, `layer_refs` and
+  `<var>_uris` -- no reader in the tree, and the tool docstring promises only
+  the named handle, `<name>_uri` and `layers`.
+
+Tests died with their subjects: `tests/test_sandbox_hardening.py` (376) and
+`tests/test_sandbox_runner.py` (602) are replaced by `tests/test_sandbox_box.py`
+(18 tests, every one through a real container), and the two FINDING-2
+host-runner tests were removed from `tests/test_code_exec_tool.py`.
+
+reopen: never for the cloud handles and the readback (there is no cloud). The
+in-process guards would only reopen if the box itself ever ran without a
+container, which is the posture this rewrite exists to end.

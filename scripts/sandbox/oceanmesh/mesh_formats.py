@@ -1,8 +1,11 @@
-"""Coastal-TIN -> solver-mesh format writers for the mesh-front sandbox.
+"""Coastal-TIN -> solver-mesh format writers, and the repo's ONE topology pass.
 
-SANDBOX ONLY (nothing landed): given the oceanmesh worker's raw output
-(``points`` (N,2) lon/lat + ``cells`` (M,3) 0-indexed triangles), emit the two
-cheapest-to-prove unstructured formats:
+The boundary walk here is product code: ``workflows/mesh/shared/nodes.py`` imports
+this module for ``extract_boundary_loops`` on every mesh build, so the walk and the
+orient/clean pass have one home rather than a copy beside each writer.
+
+Given the oceanmesh worker's raw output (``points`` (N,2) lon/lat + ``cells`` (M,3)
+0-indexed triangles), it emits two unstructured formats:
 
   * SCHISM ``hgrid.gr3`` -- delegated to the ALREADY-PROVEN in-repo bridge
     ``schism_gr3.tin_to_hgrid`` (pure numpy). This is
