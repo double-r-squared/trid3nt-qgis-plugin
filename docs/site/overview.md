@@ -28,7 +28,7 @@ cloud-to-local rewiring is environment variables -- no fork of the agent code.
 | LLM | AWS Bedrock (Sonnet default) | Ollama `qwen3:8b-16k` (or any OpenAI-compatible endpoint) | `MODEL_PROVIDER=openai` + `openai_adapter.py` |
 | Object storage | S3 runs + cache buckets | MinIO on `:9000` (S3-compatible, zero code change) | `AWS_ENDPOINT_URL` |
 | Persistence | DynamoDB (`trid3nt_*` tables) | FilePersistence -- JSON store on disk | `TRID3NT_DEV_PERSISTENCE_DIR` |
-| Raster rendering | TiTiler EC2 (always-on) | none -- the QGIS plugin loads COGs directly from MinIO via GDAL `/vsicurl/` and styles them client-side | `publish_layer` emits raw `s3://` COG URIs |
+| Raster rendering | TiTiler EC2 (always-on) | none -- the QGIS plugin opens COGs from MinIO natively via GDAL `/vsis3` and styles them client-side | `publish_layer` emits the `s3://` COG URI |
 | Solvers | AWS Batch (Spot, scale-to-zero) | Local subprocess / local docker per engine | `TRID3NT_SOLVER_BACKEND`, per-engine gates |
 
 Data fetchers need internet (USGS/NOAA/OSM/etc. are public HTTPS or anonymous public S3) but
@@ -69,7 +69,7 @@ graph TD
 
     SPA -- "ws://localhost:8765" --> WS
     SPA -- "http://localhost:8766" --> HTTP
-    SPA -- "COG reads (/vsicurl/)" --> MinIO
+    SPA -- "signed COG reads (/vsis3)" --> MinIO
     WS --> Tools
     Tools -- "chat/completions (streaming tools)" --> Ollama
     Tools -.-> CloudAPI
@@ -84,8 +84,10 @@ graph TD
 ```
 
 The flow is identical to the cloud build: prompt -> LLM tool selection -> fetch/compute tools ->
-solver dispatch -> COG outputs in the runs bucket -> `publish_layer` emits raw `s3://` COG URIs ->
-the QGIS plugin loads them via GDAL `/vsicurl/` and applies the envelope's legend/style client-side.
+solver dispatch -> COG outputs in the runs bucket -> `publish_layer` emits the `s3://` COG URI ->
+the QGIS plugin opens it via GDAL `/vsis3` and applies the envelope's legend/style client-side.
+One store, one scheme: the buckets are private, the read is signed, and the store's endpoint is
+GDAL configuration the plugin sets once - so a remote store is an endpoint value, not a code path.
 Only the substrate under each seam changes.
 
 ---

@@ -79,6 +79,12 @@ and `http://100.x.x.x:8766` back automatically -- so the sibling services follow
 the daemon's host with zero extra config. Old clients that never read the field,
 and the offline stub that never sets it, are unaffected (it defaults absent).
 
+`data_base` is not part of any layer's uri -- a layer reference is always
+`s3://bucket/key`. The plugin feeds the advertised endpoint (plus its own store
+credentials) to GDAL once per session, and GDAL reads the SAME uri from
+whichever host is configured. That is the whole of remote parity: an endpoint
+value, never a second code path.
+
 **Binding.** All three listeners must bind `0.0.0.0`, not loopback, to be
 reachable off-box:
 
@@ -87,9 +93,15 @@ reachable off-box:
   host. Already remote-ready.
 - **MinIO (`:9000`)** -- `scripts/start_minio.sh` starts it with
   `--address :9000` (empty host = all interfaces), so MinIO is already reachable
-  off-box. If you ever pin it to `127.0.0.1:9000`, remote layer fetches
-  (`s3://` -> path-style http against `data_base`) will fail from other devices;
-  keep the address host empty (or `0.0.0.0`).
+  off-box. If you ever pin it to `127.0.0.1:9000`, remote layer reads (signed
+  `/vsis3` against `data_base`) will fail from other devices; keep the address
+  host empty (or `0.0.0.0`).
+
+**Store credentials.** The buckets are PRIVATE and every read is signed, so a
+remote client also needs the store's access key and secret. They are plugin
+settings (`trid3nt/store_access_key`, `trid3nt/store_secret_key`) defaulting to
+the bundled local stack's `trid3nt` / `trid3nt-local-dev`; override them in the
+QGIS profile when the daemon's MinIO uses different ones.
 
 | Variable | Default | What it does |
 |----------|---------|--------------|
