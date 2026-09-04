@@ -674,6 +674,8 @@ package EmissionSeam {
         "tests/test_outputs_seam.py::test_a_mesh_entry_paints_the_group_it_declares_on_the_published_range";
     verify requirement OneScalePerQuantity by
         "tests/test_animation_legend_stability.py::test_the_published_range_is_found_by_quantity_not_by_the_title_it_was_painted_under";
+    verify requirement OneScalePerQuantity by
+        "tests/test_animation_legend_stability.py::test_a_log_ramp_takes_the_published_top_and_its_own_declared_floor";
 
     satisfy requirement UserChoiceBeatsPreset by presetFamily;
     satisfy requirement UserChoiceBeatsPreset by restyleSurface;

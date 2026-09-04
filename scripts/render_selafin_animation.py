@@ -105,6 +105,10 @@ class AnimationScale:
     #: field spanning orders of magnitude has no linear ramp that shows both
     #: ends, and the legend note carries this word so the reader is told.
     transform: str = "linear"
+    #: The percentiles the declared row reads its range at. A LOG ramp needs a
+    #: strictly positive floor, and the published range's floor is routinely
+    #: zero, so the floor is read at THIS clip over the positive values.
+    clip: tuple[float, float] = _DEFAULT_CLIP
 
     @property
     def range(self) -> tuple[float, float]:
@@ -122,6 +126,32 @@ def _percentile_range(finite: np.ndarray, clip) -> tuple[float, float] | None:
         return None
     lo_pct, hi_pct = clip or _DEFAULT_CLIP
     return (float(np.percentile(finite, lo_pct)), float(np.percentile(finite, hi_pct)))
+
+
+def log_norm(values, scale: "AnimationScale"):
+    """The LOG norm for a run, floored at a number a reader can read.
+
+    A log ramp needs a strictly positive floor and the range it ADOPTS does not
+    supply one: a field that starts dry reads a p2 of zero, and a published
+    max-over-time envelope's floor IS zero. So the floor is read at the clip the
+    row already declares, over the POSITIVE values - a number the solver wrote,
+    at a percentile nobody invented here. Reaching for the smallest positive
+    value instead spans every decade down to a float32 denormal and paints the
+    whole domain one colour, which is a picture of the norm rather than of the
+    water.
+
+    The TOP stays the range's own: that is the end a peak is read off, and it is
+    where a log animation and the still beside it are held to agreement.
+    """
+    from matplotlib.colors import LogNorm
+
+    arr = np.asarray(values, dtype="float64")
+    positive = arr[np.isfinite(arr) & (arr > 0)]
+    clipped = _percentile_range(positive, scale.clip)
+    floor = max(scale.vmin, clipped[0] if clipped else 0.0)
+    if floor <= 0.0:
+        floor = float(positive.min()) if positive.size else scale.vmax / 1e4
+    return LogNorm(vmin=floor, vmax=max(scale.vmax, floor * 10.0))
 
 
 def _widen(rng: tuple[float, float]) -> tuple[float, float]:
@@ -184,7 +214,8 @@ def resolve_animation_style(values, *, style: dict | None = None,
     lo, hi = _widen(resolved.range or (0.0, 1.0))
     return AnimationScale(lo, hi, _matplotlib_colormap(resolved.preset.ramp),
                           resolved.legend_note(),
-                          resolved.preset.scale.transform or "linear")
+                          resolved.preset.scale.transform or "linear",
+                          resolved.preset.scale.clip or _DEFAULT_CLIP)
 
 
 def animation_scale(values, *, style: dict | None = None) -> tuple[float, float]:
@@ -489,19 +520,7 @@ def render_frames(tri: Triangulation, values: np.ndarray, times, *, bbox_ll,
                   else int(np.nanargmax(frame_max)) if np.any(np.isfinite(frame_max))
                   else 0)
 
-    # A LOG ramp needs a strictly positive floor, and a p2 clip over a field that
-    # starts dry can sit at or below zero. The floor is the smallest POSITIVE
-    # value the run actually produced rather than an invented epsilon, so the
-    # bottom of the ramp is a number the solver wrote.
-    norm = None
-    if scale.transform == "log":
-        from matplotlib.colors import LogNorm
-
-        positive = values[np.isfinite(values) & (values > 0)]
-        floor = (max(scale.vmin, float(positive.min())) if positive.size
-                 else max(scale.vmin, scale.vmax / 1e4))
-        norm = LogNorm(vmin=floor if floor > 0 else scale.vmax / 1e4,
-                       vmax=max(scale.vmax, floor * 10.0))
+    norm = log_norm(values, scale) if scale.transform == "log" else None
 
     fig, ax, basemap_credit = (axes_factory or _axes_with_basemap)(bbox_ll, title)
     coll = ax.tripcolor(tri, values[0], shading="gouraud", cmap=scale.colormap,

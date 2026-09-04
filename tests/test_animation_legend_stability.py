@@ -235,3 +235,29 @@ def test_a_quantity_the_run_never_published_has_nothing_to_agree_with():
                                  quantity="flow_velocity"))
     assert scale["published_range"] is None
     assert scale["run_raster_presets"] == ["Max water depth"]
+
+
+def test_a_log_ramp_takes_the_published_top_and_its_own_declared_floor():
+    """A published envelope's floor is routinely ZERO, and a log ramp has no
+    zero. Reaching for the smallest positive value the run wrote spans every
+    decade down to a float32 denormal and paints the whole domain one colour -
+    a picture of the norm rather than of the water. The floor is read at the
+    clip the row declares; the TOP is the published one, which is the end a
+    peak is read off.
+    """
+    module = _animation_module()
+    values = np.zeros((3, 400), dtype="float64")
+    values[1, :200] = np.linspace(1e-40, 1e-3, 200)   # a denormal-adjacent tail
+    values[2, :] = np.linspace(1e-3, 9.9, 400)
+
+    scale = module.resolve_animation_style(
+        values, style={"kind": "continuous"}, transform="log",
+        shared=(0.0, 9.9493))
+    assert scale.range == (0.0, 9.9493)
+
+    positive = values[values > 0]
+    expected = float(np.percentile(positive, scale.clip[0]))
+    norm = module.log_norm(values, scale)
+    assert norm.vmin == pytest.approx(expected)
+    assert norm.vmax == pytest.approx(9.9493)
+    assert norm.vmin > 1e-12, "a denormal floor is not a scale a reader can read"
