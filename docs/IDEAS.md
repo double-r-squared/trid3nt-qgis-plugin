@@ -3479,3 +3479,61 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   reach's own normal-depth machinery, already built) or the
   STAGE-DISCHARGE Q(Z) curve this same ruling defers to the
   calibration era. Nothing was invented here.
+
+- SANDBOX REWRITE RULED (NATE 2026-09-03, "shrink and simplify"):
+  the AWS-era sandbox (2,081 LOC, stage-to-bucket/poll/remote-log)
+  REWRITES as the local box pattern - staged workdir in, constrained
+  CONTAINER execution (--network none; data enters STAGED - fetch
+  first via the substrate, analyze second, world-reads stay
+  gate-visible), results out; the seam the processing tools call
+  stays put (zero caller churn); the _ALWAYS_OFFLOAD_SYNC_TOOLS
+  loop-block protection preserved; target ~150-300 LOC. Afterward it
+  models as the TOOL PLANE's first seam (the planes law: modeled
+  when touched). MRE hard: shrink, never grow.
+
+- OUTLET + RELEASE RULED (NATE 2026-09-03): (1) the catchment outlet
+  holds a DERIVED STAGE-DISCHARGE CURVE - the normal-depth machinery
+  swept over a flow range -> TELEMAC's native STAGE-DISCHARGE CURVES;
+  the outlet level tracks the storm; calibration later swaps in a
+  gauged curve through the same mechanism; the named zero-depth
+  clamp and the ill-posed free exit both retire for subcritical
+  outlets. (2) RELEASE SNAPS TO WETTED WATER: a release point must
+  land in water actually wet at t0 - snap to the nearest wetted node
+  of the initial state, journaled with the moved distance; nowhere
+  near wet water refuses typed. (3) P2: canaries.py's "coarse
+  DELIVERS NOTHING" claim is factually false since the re-pin - the
+  code loses, coarse owes the packet. (4) assemble_proof_packet
+  gains --evidence PATH (the freeze/packet tooling gap). PARKED: the
+  resonance-idealized canary's G1-G3 georef findings ride the
+  rung-4 artemis rematch, not now.
+
+- EMISSION LEG RULED (NATE 2026-09-03, spec to follow for his read):
+  (1) PRESENTATION LEAVES THE DECLARATION - no .emit() anywhere;
+  emission is AUTOMATIC (emit-on-fetch/emit-on-solve kept);
+  .restyle() is the ENTIRE presentation surface, runtime and ad hoc,
+  including .restyle(hide) as the un-emit. (2) NATIVE .QML PRESETS -
+  styles.yaml AND the proposed yaml->qml compiler both die; presets
+  are a curated .qml set (subset templates: pseudocolor, graduated,
+  categorized, mesh contours), AGENT-authored via the restyle
+  abstraction, LOAD-VALIDATED (the steering-file pattern: their
+  format, our writer, their validator); users restyle ad hoc in
+  QGIS natively and per-case durability persists it. (3) ONE STORE,
+  ONE SCHEME - products write into the EXISTING MinIO store (staging
+  + products unify); QGIS reads s3:// natively via GDAL /vsis3
+  (endpoint+creds once, plugin-set); publish lifecycle/presign/TTL
+  + uri_registry translation + the plugin streaming client + the
+  local/remote duality ALL die; remote parity = an endpoint setting
+  (control plane already remote-capable via ws). (4) MDAL temporal
+  layers + the QGIS temporal controller replace canvas frame
+  machinery; GIFs remain packet-only. (5) workflows/lib -> runtime/
+  rides (the plane vocabulary). STAGE 0 = the proof matrix: raster
+  remote, vector remote, mesh remote-or-cached, mesh temporal.
+  STANDING REMINDER (NATE): every wave EXTENDS THE SYSML - the
+  emission wave models the display/emission seam and updates the
+  planes index; the rendered model stays the full picture.
+
+- REANALYZE LEDGER OPENED (NATE 2026-09-03): docs/REANALYZE_LEDGER.md
+  - decisions that stand today with a stated revisit trigger; first
+  entry: the rain outlet's accepted 0.46% startup transient (pin
+  proceeds per NATE, the transient stated on the packet). Distinct
+  from IDEAS (rulings/parked work) and DELETION_LEDGER (removals).
