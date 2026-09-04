@@ -223,8 +223,7 @@ a frame renders byte-consistently with the peak; frame `t = totim DAYS * 86400` 
 
 The shared `workflows/hecras/_frame_emit.read_and_emit_hecras_frames` reads it back
 (`frames_only=True`) and all four depth-class composers emit the `flood_depth` group;
-NEVER-OMIT (every step, no cap -- the `shared/frames` selector is dead for the
-host-exec producers, LIVE only for the docker S-class). Cadence: the universal
+NEVER-OMIT (every step, no cap). Cadence: the universal
 `output_interval_min` lever DEFERS ENTIRELY (ADR 0287 fork 2, the 0284-3A precedent) --
 it is ASYMMETRIC (6.x `Base Output Interval` attr-patch reachable; 2025 mapping
 interval is a managed-engine decompile), and an asymmetric lever silently no-oping on
@@ -256,9 +255,8 @@ frame `t = hour * 3600` s.
   PEAK-ONLY (`write_frames_manifest` defaults False) -- response-vs-knob sweeps (chart +
   representative peak) or single-case discriminants, not animations.
 
-NEVER-OMIT: `toa_frame_grids` no longer calls `shared/frames._select_frame_time_indices`
-(the cap is gone; the hourly derivation cadence is the only frame-count control). The
-`shared/frames` selector stays LIVE for the docker S-class producers below.
+NEVER-OMIT: the cap is gone; the hourly derivation cadence is the only
+frame-count control.
 
 ## Campaign close -- the per-engine emit-on-solve mechanism (all 10 engines)
 
@@ -276,9 +274,8 @@ seam. The mechanism differs by where the native field lives and who writes the m
 | **ELMFIRE** | ONE cumulative ToA raster (no per-step field) | agent-side postprocess | agent | DERIVED: lossless per-hour `toa<=h` threshold of the single solved field | 0288 |
 
 Common to all: `frames_only=True` on read-back skips the composer's typed peak (no
-double registration); NEVER-OMIT (every saved/derived step, no post-hoc cap on the
-host-exec + agent-side producers; the `shared/frames` subsample selector is LIVE only
-for the docker S-class); each frame quantity resolves to the peak's physical preset so a
+double registration); NEVER-OMIT (every saved/derived step, no post-hoc cap); each
+frame quantity resolves to the peak's physical preset so a
 frame renders byte-consistently with the peak; a frame publish/read/emit miss degrades
 to peak-only, never sinking the run.
 

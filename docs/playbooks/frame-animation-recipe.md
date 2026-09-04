@@ -45,10 +45,10 @@ The three retained primitives that unblock the frame-animation pattern:
    end_utc)` (or `fetch_goes_blend_animation` for the CIRA GeoColor+FireTemp
    blend, or `fetch_viirs_day_fire` for the JPSS polar Day-Fire product). Returns
    an ordered `list[LayerURI]`; publish/emit each.
-4. Scrubber: the plugin's `render/temporal.py group_frame_layers` auto-groups the
-   frames by their shared name-token stem (>= 2 members with strictly-increasing
-   step values) so QGIS's Temporal Controller plays them. NO web/plugin change
-   is needed -- just emit the fetcher's frame names verbatim.
+4. Scrubber: each frame carries the `valid_from` / `valid_to` window its
+   `frames_plan` hook declared, and the plugin stamps that window as the layer's
+   fixed temporal range, so QGIS's Temporal Controller plays the sequence. NO
+   plugin change is needed -- the window rides the emitted row.
 
 The honesty floor is inherited from the fetchers: an animation with zero
 non-empty frames never reads `status=ok`.
@@ -175,15 +175,15 @@ into ordered scrubber frames.
    `goes-19` (GOES-East). The honesty floor is inherited: a window with no
    in-AOI lightning in ANY bucket raises `GLM_EMPTY` -- never a blank overlay.
 3. Publish/emit each frame (`publish_layer` per frame).
-4. Scrubber: `render/temporal.py group_frame_layers` auto-groups the frames by
-   their shared name-token stem (>= 2 members, strictly-increasing `step`) so
-   QGIS's Temporal Controller plays them. NO web/plugin change is needed.
+4. Scrubber: each frame carries its declared `valid_from` / `valid_to` window
+   (here, the accumulation bucket itself), which the plugin stamps as the
+   layer's fixed temporal range. NO plugin change is needed.
 
 Live replication (2026-07-29, Florida AOI, 2026-07-27 21:00..21:05Z, GOES-19)
 fired exactly `fetch_glm_lightning(accumulation_window_s=60)` -> 5 ordered GED
-frames -> `publish_layer` per frame -> `group_frame_layers` formed ONE scrubber
-group (stem `glm lightning ged (goes-19)`, members 1..5). Fired-set ==
-`{fetch_glm_lightning, publish_layer}`, no news/geocode/wrapper step.
+frames -> `publish_layer` per frame -> five contiguous declared windows, one
+per bucket. Fired-set == `{fetch_glm_lightning, publish_layer}`, no
+news/geocode/wrapper step.
 
 ### Moving-base variant ("lightning over satellite")
 
@@ -197,11 +197,11 @@ single fixed base into each frame.
    end_utc, step_minutes=5, band="true_color")` (or `band="fire_temperature"`
    for a day/night thermal base) -> ordered ABI RGB COGs named
    `"GOES True Color (Archive) step <N> <ISO> (<SAT>)"`.
-3. Publish/emit both. Their DISTINCT name stems make `group_frame_layers` return
-   TWO independent scrubber sequences -- the transparent GED overlay group over
-   the opaque moving-imagery group -- which the user toggles/scrubs together.
+3. Publish/emit both. Each sequence declares its own windows over the SAME
+   clock, so the transparent GED overlay and the opaque moving-imagery loop
+   scrub together under one Temporal Controller.
 
 Live replication (2026-07-29, same AOI, GOES-19) co-published the 5 GLM frames +
-3 `fetch_goes_archive_animation` true_color frames; `group_frame_layers` over the
-combined names returned EXACTLY 2 groups (`glm lightning ged` x5 +
-`goes true color (archive)` x3). Fired-set adds `fetch_goes_archive_animation`.
+3 `fetch_goes_archive_animation` true_color frames, each carrying its own
+declared window on the shared clock. Fired-set adds
+`fetch_goes_archive_animation`.

@@ -436,8 +436,9 @@ still carry non-frame entries.
 Once every engine leg is migrated: delete `workers/_raster_postprocess/manifest.py`
 + `contracts/trid3nt_contracts/publish_manifest.py`'s bespoke schema (superseded
 by `outputs.json`'s `schema_version`), delete each engine's bespoke
-per-engine frame-selection duplication that is not already centralized in
-`workflows/shared/frames.py`, and retire `register_published_manifest.py`
+per-engine frame-selection duplication (`workflows/shared/frames.py`, which
+centralized it, is itself now deleted: the canvas frame machinery it served has
+no producer left), and retire `register_published_manifest.py`
 in favor of the seam's own `outputs.json` consumer (Section 5.2). Per the
 deletion-ledger norm, each of these should be registered as a QUEUED
 deletion with its CONDITION-to-delete ("last engine migrated off
