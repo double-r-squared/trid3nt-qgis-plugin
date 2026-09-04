@@ -1941,7 +1941,7 @@ async def test_legend_on_layer_uri_flows_to_session_state(
     summary = _session_frames(sink)[-1]["payload"]["loaded_layers"][-1]
     assert summary["legend"] is not None
     assert summary["legend"]["value_field"] == "ds_mean"
-    assert summary["legend"]["kind"] == "categorical"
+    assert summary["legend"]["kind"] == "classed"
     assert summary["legend"]["vmin"] == 0.0 and summary["legend"]["vmax"] == 4.0
 
 
