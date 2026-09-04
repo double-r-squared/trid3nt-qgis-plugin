@@ -503,7 +503,7 @@ def test_end_to_end_historical_lines_happy_path(monkeypatch, fake_s3) -> None:
     assert isinstance(res, StormTracksLayerURI)
     assert res.layer_type == "vector"
     assert res.role == "primary"
-    assert res.style_preset == "storm_tracks"
+    assert res.style["kind"] == "reference"
     assert res.units == "kt / mb"
     assert res.uri is not None and res.uri.endswith(".fgb")
     assert res.layer_id.startswith("storm-tracks-")

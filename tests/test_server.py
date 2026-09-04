@@ -61,7 +61,6 @@ def _stub_list_tool():
                 name=f"GOES true-color frame {i}",
                 layer_type="raster",
                 uri=f"s3://bucket/goes/frame-{i}.tif",
-                style_preset="true_color",
                 role="primary",
             )
             for i in range(3)

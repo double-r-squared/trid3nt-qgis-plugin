@@ -175,4 +175,4 @@ def test_3dep_library_error_maps_to_upstream(monkeypatch):
 def test_3dep_layer_uri_stamps():
     layer = router.build_layer_uri(SPEC, _vp(bbox=list(_FORT_MYERS)), "s3://c/k.tif")
     assert layer.layer_type == "raster" and layer.role == "input"
-    assert layer.units == "meters" and layer.style_preset == "continuous_dem"
+    assert layer.units == "meters" and layer.style == {"kind": "continuous", "ramp": "gray", "units": "m", "label": "Elevation"}

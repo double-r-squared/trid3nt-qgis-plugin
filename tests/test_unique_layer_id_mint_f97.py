@@ -73,7 +73,6 @@ def _stub_collision_tool():
             # Distinct uri per fetch -> two genuinely different layers that the
             # tool would otherwise have collapsed onto one colliding layer_id.
             uri=f"https://qgis.example.run.app/ogc/wms?LAYERS=wdpa&n={len(_FETCH_N)}",
-            style_preset="wdpa_protected_areas",
             role="context",
         )
 

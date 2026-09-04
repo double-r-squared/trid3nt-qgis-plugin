@@ -168,7 +168,8 @@ def test_damage_matches_hand_computed(depth_and_assets, tmp_path) -> None:
     assert isinstance(result, FloodDepthDamageLayerURI)
     assert isinstance(result, LayerURI)
     assert result.layer_type == "vector"
-    assert result.style_preset == "flood_depth_damage"
+    assert result.style["kind"] == "classed"
+    assert result.style["attribute"] == "damage_fraction"
     assert result.n_structures == 4
     assert result.n_flooded == 2
     assert result.n_with_value == 4
@@ -196,7 +197,7 @@ def test_damage_matches_hand_computed(depth_and_assets, tmp_path) -> None:
 
     # Legend rides on the LayerURI, driven by the damage_fraction prop.
     assert result.legend is not None
-    assert result.legend.kind == "categorical"
+    assert result.legend.kind == "classed"
     assert result.legend.value_field == "damage_fraction"
 
     # Output is EPSG:4326 and bbox matches the raster's transformed bounds.
@@ -278,7 +279,6 @@ def test_nsi_fetch_used_when_no_assets(depth_and_assets, tmp_path, monkeypatch) 
             name="NSI (test)",
             layer_type="vector",
             uri=assets,
-            style_preset="usace_nsi",
         )
 
     monkeypatch.setitem(

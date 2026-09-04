@@ -142,7 +142,7 @@ def test_returns_ordered_list_with_step_and_iso(monkeypatch):
     assert isinstance(layers, list) and len(layers) == 3
     for n, (layer, ts) in enumerate(zip(layers, passes), start=1):
         assert layer.name == f"VIIRS Day Fire step {n} {ts_int_to_iso(ts)} (JPSS)"
-        assert layer.style_preset == "viirs_day_fire_animation"
+        assert layer.style["kind"] == "continuous"
         assert layer.layer_id.startswith("viirs-dayfire-")
     groups = group_frame_layers([lyr.name for lyr in layers])
     assert len(groups) == 1 and [m.value for m in groups[0].members] == [1, 2, 3]

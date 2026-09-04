@@ -197,7 +197,7 @@ def test_route_single_returns_one_frame_list_and_one_group(monkeypatch):
     )
     assert isinstance(layers, list) and len(layers) == 1
     assert layers[0].layer_type == "raster" and layers[0].role == "context"
-    assert layers[0].style_preset == "glm_lightning"
+    assert layers[0].style["kind"] == "continuous"
     assert "step 1" in layers[0].name
     # A ONE-frame list is a static overlay, not a scrubbable animation group.
     assert group_frame_layers([l.name for l in layers]) == []
@@ -213,7 +213,7 @@ def test_route_accumulation_returns_ordered_scrubber_group(monkeypatch):
     assert isinstance(layers, list) and len(layers) == 3
     for n, l in enumerate(layers, start=1):
         assert f"step {n}" in l.name
-        assert l.style_preset == "glm_lightning" and tuple(l.bbox) == tuple(_UT_BBOX)
+        assert l.style["kind"] == "continuous" and tuple(l.bbox) == tuple(_UT_BBOX)
     groups = group_frame_layers([l.name for l in layers])
     assert len(groups) == 1  # one scrubber group, 3 ordered step frames
 

@@ -173,21 +173,20 @@ def test_payload_estimate_declared(spec):
     assert spec.payload_estimate.model == "bbox_area"
 
 
-def test_style_preset_resolves_in_the_qgis_registry(spec):
-    """A preset absent from the registry silently renders a wrong colormap."""
-    from trid3nt_server.emission import publish as pl
+def test_the_spec_declares_how_its_raster_is_drawn(spec):
+    from trid3nt_server.emission import presets
 
-    from trid3nt_server.emission.styles import known_preset
+    row = spec.output.style
+    assert presets.from_row(row).kind == "continuous"
+    assert row["units"] and row["label"]
 
-    assert known_preset(spec.output.style_preset)
 
-
-def test_the_three_presets_are_distinct(specs):
-    """Depth, thickness and transmissivity must not share a ramp -- their
+def test_the_three_products_are_distinguishable(specs):
+    """Depth, thickness and transmissivity must not read as one field -- their
     ranges and their meanings differ (a wetness reading, a quantity, and a
     long-tailed flow-capacity field)."""
-    presets = [specs[n].output.style_preset for n in _NAMES]
-    assert len(set(presets)) == len(presets)
+    rows = [specs[n].output.style for n in _NAMES]
+    assert len({(r["label"], r["units"]) for r in rows}) == len(rows)
 
 
 def test_every_layer_name_says_modelled(spec):
@@ -209,14 +208,10 @@ def test_the_router_stamps_the_declared_layer_name(specs):
 
 
 def test_the_legend_caption_says_modelled_too(specs):
-    """The legend is the second human surface; derived from the preset name it
-    would read "Aquifer saturated thickness m" -- a measured-sounding caption
-    over a modelled raster."""
-    import trid3nt_server.emission.publish as pl
-
+    """The legend is the second human surface, and a caption derived from a
+    machine name would read as a measured field over a modelled raster."""
     for name in _NAMES:
-        preset = specs[name].output.style_preset
-        assert "modelled" in (pl._legend_label_for(preset) or "").lower()
+        assert "modelled" in specs[name].output.style["label"].lower()
 
 
 def test_a_spec_without_a_display_name_keeps_the_router_default():

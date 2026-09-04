@@ -185,7 +185,7 @@ def test_returns_ordered_list_with_step_token_and_iso(monkeypatch):
         assert layer.layer_type == "raster" and layer.role == "context"
     steps = [int(re.search(r"step (\d+)", lyr.name).group(1)) for lyr in layers]
     assert steps == [1, 2, 3]
-    assert {lyr.style_preset for lyr in layers} == {"goes_rgb_animation"}
+    assert {lyr.style["kind"] for lyr in layers} == {"continuous"}
 
 
 def test_scrubber_group_forms_over_real_names(monkeypatch):

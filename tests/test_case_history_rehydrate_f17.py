@@ -85,7 +85,6 @@ def _layer(layer_id: str, name: str, layer_type: str = "raster") -> dict:
         "name": name,
         "layer_type": layer_type,
         "uri": f"gs://bucket/{layer_id}.tif",
-        "style_preset": "depth",
         "visible": True,
         "role": "primary",
         "temporal": False,

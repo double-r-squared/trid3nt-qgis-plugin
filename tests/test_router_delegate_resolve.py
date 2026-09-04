@@ -73,7 +73,7 @@ def _spec(resolve_hook: str | None) -> SourceSpec:
             "params": {"cycle": {"type": "str", "schema_optional": True}},
             "ingest": {"access": "library_delegate", "delegate": {"library": "zarr-stub", "timeout_s": 5.0}},
             "hooks": hooks,
-            "output": {"layer_type": "raster", "ext": "tif", "style_preset": "continuous_dem"},
+            "output": {"layer_type": "raster", "ext": "tif", "style": {"kind": "continuous"}},
             "cache": {"ttl_class": "static-30d"},
             "payload_estimate": {"model": "bbox_area", "floor_mb": 0.01},
         }
@@ -154,7 +154,7 @@ def test_registration_rejects_resolve_without_delegate():
             "endpoints": {"main": {"url": "https://example.invalid/zarr"}},
             "ingest": {"access": "library_delegate"},
             "hooks": {"delegate_resolve": "t_delres.resolve"},
-            "output": {"layer_type": "raster", "ext": "tif", "style_preset": "continuous_dem"},
+            "output": {"layer_type": "raster", "ext": "tif", "style": {"kind": "continuous"}},
             "cache": {"ttl_class": "static-30d"},
             "payload_estimate": {"model": "bbox_area", "floor_mb": 0.01},
         }

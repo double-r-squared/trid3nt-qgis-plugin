@@ -101,7 +101,6 @@ def _make_vector_layer(uri: str, layer_id: str) -> LayerURI:
         name="OSM buildings",
         layer_type="vector",
         uri=uri,
-        style_preset="osm_buildings",
     )
 
 

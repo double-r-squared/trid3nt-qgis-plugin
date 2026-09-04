@@ -92,7 +92,6 @@ def _stub_composer():
                 "https://titiler.example/cog/tiles/WebMercatorQuad/"
                 "{z}/{x}/{y}.png?url=s3://x/flood.tif"
             ),
-            style_preset="continuous_flood_depth",
             bbox=tuple(bbox) if bbox is not None else None,  # type: ignore[arg-type]
         )
 

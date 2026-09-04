@@ -152,7 +152,6 @@ def test_apply_envelope_strips_protected_keys():
     )
     base = LayerURI(
         layer_id="x", name="n", layer_type="vector", uri="s3://real/ok.fgb",
-        style_preset="usgs_high_water_marks",
     )
     out = _router_mod._apply_envelope(spec, {"bbox": _BBOX}, base, b"")
     assert isinstance(out, HighWaterMarksLayerURI)

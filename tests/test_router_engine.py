@@ -51,7 +51,7 @@ def _raster_spec(**over) -> SourceSpec:
         "gates": {"conus_only": True},
         "ingest": {"access": "opendap"},
         "normalize": {"crs": "EPSG:4326", "units": "Percent"},
-        "output": {"layer_type": "raster", "ext": "tif", "role": "primary", "style_preset": "demo_{variable}"},
+        "output": {"layer_type": "raster", "ext": "tif", "role": "primary", "style": {"kind": "continuous"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 0.01, "floor_mb": 0.01},
     }
@@ -151,7 +151,7 @@ def test_payload_estimator_per_station_scales_with_days():
         "name": "s", "source_class": "s", "shape": "station-timeseries-fgb",
         "endpoints": {"data": {"url": "http://x"}},
         "params": {"bbox": {"type": "bbox", "required": True}},
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "p"},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "continuous"}},
         "cache": {"ttl_class": "dynamic-1h"},
         "payload_estimate": {"model": "per_station", "kb_per_station_per_day": 2.0,
                              "stations_per_sq_deg": 2.0, "overhead_kb": 0.5},
@@ -168,7 +168,7 @@ def test_payload_estimator_tiled_counts_tiles():
         "endpoints": {"data": {"url": "http://x"}},
         "params": {"bbox": {"type": "bbox", "required": True}},
         "ingest": {"tile_deg2": 0.5, "mosaic": {}},
-        "output": {"layer_type": "raster", "ext": "tif", "style_preset": "p"},
+        "output": {"layer_type": "raster", "ext": "tif", "style": {"kind": "continuous"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "tiled", "mb_per_tile": 0.05, "tile_deg2": 0.5},
     })
@@ -208,7 +208,6 @@ def test_route_end_to_end_writes_cache_and_emits_layeruri(fake_s3, monkeypatch):
     layer = router.route(spec, dict(args))
     assert isinstance(layer, LayerURI)
     assert layer.layer_type == "raster"
-    assert layer.style_preset == "demo_fm100"  # templated on variable
     assert layer.units == "Percent"
     assert layer.uri.startswith("s3://")
     assert "cache/static-30d/demo_raster/" in layer.uri
@@ -228,7 +227,7 @@ def test_route_vector_source_class_in_uri(fake_s3, monkeypatch):
         "name": "fetch_demo_vector", "source_class": "demo_vector", "shape": "vector-fgb",
         "endpoints": {"data": {"url": "http://x/query"}},
         "params": {"bbox": {"type": "bbox", "required": True}},
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "vec"},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "semi-static-7d"},
         "payload_estimate": {"model": "per_feature", "kb_per_feature": 1.0},
     })

@@ -59,7 +59,7 @@ def test_schema_tolerant_history_read_backfills_scenario() -> None:
 
     env = {
         "layer_id": "l", "name": "t", "layer_type": "raster", "uri": "s3://x",
-        "style_preset": "default", "synthetic_inputs": [old],
+        "synthetic_inputs": [old],
     }
     lyr = LayerURI.model_validate(env, context={"tolerant_history": True})
     assert lyr.synthetic_inputs[0].consequence == "scenario"

@@ -358,7 +358,7 @@ def test_roads_end_to_end_layer_uri(monkeypatch):
     assert layer.layer_type == "vector"
     assert layer.role == "context"
     assert layer.units is None
-    assert layer.style_preset == "osm_roads"
+    assert layer.style["kind"] == "reference"
     assert "osm_roads" in layer.uri
 
 
@@ -389,7 +389,7 @@ def test_pois_end_to_end_bbox_from_features(monkeypatch):
     layer = router.route(POIS_SPEC, {"bbox": list(_FORT_MYERS), "amenity": "hospital"})
     assert layer.layer_type == "vector"
     assert layer.role == "primary"
-    assert layer.style_preset == "overpass_pois"
+    assert layer.style["kind"] == "reference"
     # single-point extent padded by 0.02 (bbox_from_features)
     assert layer.bbox is not None
     w, s, e, n = layer.bbox

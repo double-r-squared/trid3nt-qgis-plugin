@@ -297,7 +297,7 @@ def test_a_partial_bluetopo_cover_is_reported_as_a_gap_not_a_whole_bed(
 
     partial = BlueTopoResult(
         layer_id="x", name="x", layer_type="raster", uri="s3://x.tif",
-        style_preset="continuous_dem", coverage_fraction=0.42,
+        coverage_fraction=0.42,
     )
     monkeypatch.setitem(
         TOOL_REGISTRY, "fetch_bluetopo",

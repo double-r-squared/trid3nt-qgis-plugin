@@ -110,7 +110,7 @@ def test_gain_loss_polygons_hand_checked(index_pair, tmp_path) -> None:
     assert isinstance(result, ChangeDetectionLayerURI)
     assert isinstance(result, LayerURI)
     assert result.layer_type == "vector"
-    assert result.style_preset == "change_detection"
+    assert result.style == {"kind": "continuous"}
     assert result.index == "ndvi"
     assert result.threshold == pytest.approx(0.15)
     assert tuple(result.bbox) == BBOX
@@ -138,7 +138,7 @@ def test_gain_loss_polygons_hand_checked(index_pair, tmp_path) -> None:
 
     # Legend rides on the LayerURI: categorical, driven by the change prop.
     assert result.legend is not None
-    assert result.legend.kind == "categorical"
+    assert result.legend.kind == "classed"
     assert result.legend.value_field == "change"
     assert {c.value for c in result.legend.classes} == {"gain", "loss"}
 

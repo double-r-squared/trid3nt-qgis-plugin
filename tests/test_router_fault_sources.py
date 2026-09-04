@@ -84,7 +84,7 @@ def test_spec_identity(spec):
     assert spec.supports_global_query is True
     assert spec.output.result_model == "FaultSourcesResult"
     assert spec.output.variant_by_emptiness == "fault_sources.empty_record"
-    assert spec.output.style_preset == "fault_line"
+    assert spec.output.style["kind"] == "reference"
     assert spec.output.role == "context"
     assert spec.cache.ttl_class == "static-30d"
     assert (spec.ingest or {}).get("constant_cache", {}).get("file_id") == "gem_active_faults_harmonized"
@@ -160,7 +160,7 @@ def test_envelope_reconstructs_records(spec):
     assert env["name"] == "Active fault traces (2)"
     assert env["catalog"] == "gem"
     assert env["note"] is None
-    assert env["legend"].kind == "categorical"
+    assert env["legend"].kind == "classed"
     names = {r["name"] for r in env["faults"]}
     assert names == {"San Andreas (Peninsula)", "Mount Diablo Thrust"}
     sa = next(r for r in env["faults"] if r["name"].startswith("San Andreas"))

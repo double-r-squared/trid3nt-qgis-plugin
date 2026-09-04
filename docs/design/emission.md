@@ -11,12 +11,16 @@ into the layer + pipeline frames the QGIS plugin renders over the WebSocket.
   `purpose=` auto-emits its input layer (the job-0254 guardrail drops a
   renderable raster URI into the map without hand-emitting).
 - `uri_registry.py` -- the published-URI registry.
-- `quantity_styles.py` -- the emit-on-SOLVE seam's `quantity -> style_preset`
-  registry (ADR 0280). An `outputs.json` entry carries a physical `quantity`
-  and NO style; `resolve_style_preset(quantity)` maps it to a preset key in
-  `publish_layer._QGIS_STYLE_REGISTRY`. An unregistered quantity degrades to
-  `NEUTRAL_FALLBACK_PRESET` (an honest band-stats neutral ramp) + a WARNING +
-  a process fallback counter -- never a silent physically-wrong colormap.
+- `presets.py` -- THE preset family: four data KINDS (continuous raster,
+  classed vector-or-raster, reference outline, mesh dataset group), each
+  parameterised by what the data is (its ramp, units, legend title, and the one
+  scale it is read on), plus the writer that turns a resolved preset into
+  QGIS's own `.qml`. There are no preset NAMES: a producer declares a `style:`
+  row and a solved output derives one from its manifest entry's kind and
+  quantity, so no quantity can be "unregistered".
+- `restyle.py` -- THE presentation surface: ramp, title, units, scale, kind,
+  and `hide` (the un-emit, and its undo). Journaled with the sentence the
+  legend ends up saying.
 - `outputs_seam.py` -- the emit-on-SOLVE CONSUMER (ADR 0280 item 4).
   `read_outputs_manifest(run_result)` reads `outputs.json` from the run prefix
   (missing/unknown-schema -> `None`, the byte-identical no-op);
@@ -111,8 +115,8 @@ reads it back through the seam (`frames_only=True`) and emits the mesh layer
 (`role="context"`). Like the M-class it uses `frames_only=True` so the composer keeps
 its OWN typed peak -- but the mesh IS the temporal artifact, so `build_layers_from_outputs`
 builds it EVEN under `frames_only` (only standalone rasters + vectors are skipped).
-The mesh `LayerURI` carries `style_preset="mesh_grid"` (new registry row
-`model_results -> mesh_grid`), `bbox=None` (MDAL derives the extent), and the
+The mesh `LayerURI` carries a `kind="mesh"` style row naming its dataset group,
+`bbox=None` (MDAL derives the extent), and the
 `crs_authid` from the entry; `layer_id = {quantity-base}-mesh-{run_id}`.
 
 - **rain_on_grid** (`r2d_rog.slf`): MIGRATED -- the bespoke `_publish_full_results_mesh`
@@ -137,8 +141,8 @@ so NO image law binds this leg) computes the typed peak COG; the composer then w
 `outputs.json` (peak entry + the `kind="mesh"` netCDF entry, `crs_authid=EPSG:4326`
 or absent for the idealized planar QuarterAnnulus) via `workflows/schism/`
 `results_mesh_seam.publish_results_mesh_via_seam`, which reads it back through the
-seam (`frames_only=True`) and emits the mesh layer (`role="context"`,
-`style_preset="mesh_grid"`, `bbox=None`, `layer_id={quantity-base}-mesh-{run_id}`).
+seam (`frames_only=True`) and emits the mesh layer (`role="context"`, a
+`kind="mesh"` style row, `bbox=None`, `layer_id={quantity-base}-mesh-{run_id}`).
 The bespoke `publish_input_layer(mesh_layer)` in ALL FOUR composers (tidal_hydro,
 pahm_surge, coupled_waves, baroclinic) + the three inline mesh `LayerURI`
 constructions in `postprocess_schism` are SUPERSEDED against byte-equivalence

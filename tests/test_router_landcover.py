@@ -101,7 +101,7 @@ def test_spec_identity(spec):
     assert spec.error_code_prefix == "LANDCOVER"
     assert spec.source_class == "landcover"
     assert spec.output.result_model == "LandcoverResult"
-    assert spec.output.style_preset == "categorical_landcover"
+    assert spec.output.style == {"kind": "classed", "label": "Land Cover"}
     assert spec.output.role == "input"
     assert spec.normalize.units == "nlcd_class_code"
     assert spec.hooks.pre_resolve == "landcover.pre_resolve"
@@ -159,7 +159,7 @@ def test_full_route_paletted_cog_and_sidecar(spec, monkeypatch):
     out = _router.route(spec, {"bbox": list(_FORT_MYERS), "dataset": "nlcd_2021", "resolution_m": 30})
     assert isinstance(out, LandcoverResult)
     assert out.layer_type == "raster"
-    assert out.style_preset == "categorical_landcover"
+    assert out.style == {"kind": "classed", "label": "Land Cover"}
     assert out.role == "input"
     assert out.units == "nlcd_class_code"
     assert out.uri.startswith("s3://")

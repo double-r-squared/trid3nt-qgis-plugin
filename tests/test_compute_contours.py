@@ -11,7 +11,7 @@ Coverage:
  3. ``test_run_gdal_contour_invocation_args`` — ``-a elev -i <interval>`` and
     the FlatGeobuf driver appear in the subprocess argv.
  5. ``test_compute_contours_layer_uri_shape`` — vector LayerURI (layer_type
-    vector, bbox set, style_preset contours, units m).
+    vector, bbox set, drawn as a line reference, units m).
  6. ``test_compute_contours_binary_missing_raises`` — binary-missing typed
     error (ContourComputeError / GDAL_CONTOUR_UNAVAILABLE).
  7. ``test_compute_contours_no_dem_input_raises`` — neither dem_uri nor bbox.
@@ -290,7 +290,7 @@ def test_run_gdal_contour_invocation_args():
 
 
 # ---------------------------------------------------------------------------
-# Test 5 — vector LayerURI shape (bbox set, style_preset contours, vector)
+# Test 5 - vector LayerURI shape (bbox set, line reference, vector)
 # ---------------------------------------------------------------------------
 
 
@@ -318,7 +318,7 @@ def test_compute_contours_layer_uri_shape(fake_storage):
 
     assert result.layer_type == "vector"
     assert result.role == "context"
-    assert result.style_preset == "contours"
+    assert result.style == {"kind": "reference", "geometry": "line"}
     assert result.units == "m"
     assert result.uri.startswith("s3://")
     assert "/contours/" in result.uri
@@ -457,7 +457,6 @@ def test_compute_contours_bbox_fetches_dem(fake_storage):
             name="DEM",
             layer_type="raster",
             uri="gs://test-bucket/cache/static-30d/dem/frombbox.tif",
-            style_preset="continuous_dem",
             role="input",
             units="meters",
         )

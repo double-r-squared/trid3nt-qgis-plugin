@@ -1355,7 +1355,7 @@ def test_emit_seam_carries_activation_rows_onto_a_reemitted_layer() -> None:
 
     layer = LayerURI(
         layer_id="input-topobathy-abc", name="Coastal bed", layer_type="raster",
-        uri="s3://bucket/bed.tif", style_preset="continuous_dem", role="context",
+        uri="s3://bucket/bed.tif", role="context",
     )
     rows = [
         FallbackActivation(capability="fetch_topobathy", rung="cudem_nearshore",

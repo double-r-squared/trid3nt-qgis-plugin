@@ -100,7 +100,7 @@ def test_spec_identity(spec):
     assert spec.source_class == "mcdwd_flood_extent"
     assert spec.supports_global_query is False
     assert spec.output.result_model == "FloodExtentObservationResult"
-    assert spec.output.style_preset == "flood_extent_observed"
+    assert spec.output.style["kind"] == "continuous"
     assert spec.hooks.pre_resolve == "flood_extent_observation.pre_resolve"
     assert spec.hooks.envelope == "flood_extent_observation.envelope"
     assert spec.cache.ttl_class == "semi-static-7d"
@@ -121,14 +121,14 @@ def test_synthetic_happy(spec, monkeypatch):
 
     assert isinstance(layer, FloodExtentObservationResult)
     assert layer.layer_type == "raster"
-    assert layer.style_preset == "flood_extent_observed"
+    assert layer.style["kind"] == "continuous"
     assert layer.uri.startswith("s3://")
     assert layer.observation_date == "2026-07-17"
     assert layer.product == "MCDWD_L3_F3_NRT"
     assert layer.flood_pixel_count > 0
     assert layer.flood_area_km2 and layer.flood_area_km2 > 0
     assert "Flood water" in layer.class_breakdown
-    assert layer.legend is not None and layer.legend.kind == "categorical"
+    assert layer.legend is not None and layer.legend.kind == "classed"
     assert {c.value for c in layer.legend.classes} == {1, 2, 3}
     joined = " ".join(layer.caveats)
     assert "UNDER-detects" in joined and "SAR" in joined and "250 m" in joined

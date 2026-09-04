@@ -3,8 +3,8 @@
 A time-stepped picture whose scale moves with the frame is a picture of the
 renderer, not of the run: the same colour means one value at t=0 and another at
 t=5, so a reader watching the plume "arrive" may only be watching the autoscale
-chase it. The style contract states the rule - the scope of a ``policy: data``
-rescale is THE RUN, never the frame - and this pins it in pixels.
+chase it. The preset family states the rule - the scope of a ``policy: data`` rescale is
+THE RUN, never the frame - and this pins it in pixels.
 
 Frames 0-2 live in 0..1 and frames 3-5 in 0..100, which is as loud a per-frame
 rescale as a field can offer. The legend region of the produced GIF must still be
@@ -26,14 +26,15 @@ pytest.importorskip("PIL")
 
 import numpy as np  # noqa: E402
 
-from trid3nt_server.emission import styles  # noqa: E402
+from trid3nt_server.emission import presets  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "scripts" / "render_selafin_animation.py"
 
-#: The quantity the synthetic field claims to be, so the animation resolves the
-#: SAME contract row the published raster of that quantity resolves.
-QUANTITY = "plume_concentration"
+#: The style row the synthetic field is drawn by - the same row the published
+#: raster of that quantity carries.
+STYLE = {"kind": "continuous", "ramp": "reds", "units": "mg/L",
+         "label": "Plume concentration"}
 
 #: Where the colorbar and its labels sit in the produced figure, as a fraction of
 #: image width. Everything the frames animate is left of this; a change to the
@@ -83,29 +84,28 @@ def rendered(tmp_path_factory) -> dict:
     values = _frames()
     out = tmp_path_factory.mktemp("animation")
     gif = out / "legend_stability.gif"
-    preset, _fallback = styles.resolve_style_preset(QUANTITY)
     result = module.render_frames(
         _triangulation(), values, list(range(values.shape[0])),
         bbox_ll=(-85.5, 29.9, -85.3, 30.1), units="mg/L",
         title="legend stability", run_id="TEST", source_name="synthetic.slf",
         variable="TRACER", gif_path=gif, peak_path=out / "legend_stability.png",
-        preset=preset, axes_factory=module.plain_axes)
+        style=STYLE, axes_factory=module.plain_axes)
     return {"module": module, "values": values, "gif": gif, "result": result,
-            "preset": preset}
+            "preset": presets.from_row(STYLE)}
 
 
 def test_the_scale_is_resolved_over_the_whole_run_never_one_frame(rendered):
     module, values = rendered["module"], rendered["values"]
     preset = rendered["preset"]
-    scale = module.animation_scale(values, preset=preset)
+    scale = module.animation_scale(values, style=STYLE)
 
     whole_run = (float(np.percentile(values, 2.0)), float(np.percentile(values, 98.0)))
     assert scale == pytest.approx(whole_run), (
         "the range must be read over EVERY frame at once - the scope of a "
         "data-policy rescale is the run, never the frame")
 
-    quiet = module.animation_scale(values[:1], preset=preset)
-    loud = module.animation_scale(values[-1:], preset=preset)
+    quiet = module.animation_scale(values[:1], style=STYLE)
+    loud = module.animation_scale(values[-1:], style=STYLE)
     assert scale != pytest.approx(quiet) and scale != pytest.approx(loud), (
         "the fixture's frames must differ enough that a per-frame scale would be "
         "a visibly different picture")
@@ -116,18 +116,16 @@ def test_the_animation_paints_what_the_published_raster_of_that_quantity_paints(
         rendered):
     module, values = rendered["module"], rendered["values"]
     preset = rendered["preset"]
-    published = styles.resolve_style(
+    published = presets.resolve(
         preset,
         read_range=lambda _s: (float(np.percentile(values, 2.0)),
                                float(np.percentile(values, 98.0))))
 
-    assert rendered["result"]["style_preset"] == preset == \
-        "continuous_plume_concentration"
     assert (rendered["result"]["vmin"], rendered["result"]["vmax"]) == \
         pytest.approx(published.range)
     assert rendered["result"]["legend_note"] == published.legend_note()
-    assert rendered["result"]["colormap"].lower() == published.colormap.lower(), (
-        "one declared colormap, spelled for matplotlib rather than chosen again")
+    assert rendered["result"]["colormap"].lower() == preset.ramp.lower(), (
+        "one declared ramp, spelled for matplotlib rather than chosen again")
 
 
 def test_the_legend_region_is_byte_identical_in_every_frame(rendered):
@@ -160,14 +158,14 @@ def test_the_still_reports_the_run_peak_and_the_run_scale(rendered):
         "a p98 clip sits below the run maximum by construction")
 
 
-def test_the_scale_helper_runs_without_the_style_contract(monkeypatch):
+def test_the_scale_helper_runs_without_the_preset_family(monkeypatch):
     """The script stays runnable where the server package is not importable."""
     module = _animation_module()
-    monkeypatch.setattr(module, "_STYLES", None)
+    monkeypatch.setattr(module, "_PRESETS", None)
     values = _frames()
 
     scale = module.resolve_animation_style(values)
-    assert scale.colormap == "viridis" and scale.preset is None
+    assert scale.colormap == "viridis"
     assert (scale.vmin, scale.vmax) == pytest.approx(
         (float(np.percentile(values, 2.0)), float(np.percentile(values, 98.0))))
     assert "scaled to this run (p2-p98)" in scale.note
@@ -175,7 +173,6 @@ def test_the_scale_helper_runs_without_the_style_contract(monkeypatch):
 
 def test_an_empty_field_still_yields_a_usable_scale():
     module = _animation_module()
-    scale = module.resolve_animation_style(np.full((3, 4), np.nan),
-                                           preset="continuous_plume_concentration")
+    scale = module.resolve_animation_style(np.full((3, 4), np.nan), style=STYLE)
     assert scale.vmax > scale.vmin, "a zero-width scale is not a scale"
     assert "unreadable" in scale.note, "the legend admits it never saw the data"

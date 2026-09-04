@@ -217,7 +217,7 @@ def test_only_diffraction_gets_a_real_harbour():
 
 def test_the_agitation_chart_plots_the_workers_own_transect():
     from trid3nt_contracts.telemac_contracts import (
-        TELEMAC_AGITATION_STYLE_PRESET,
+        TELEMAC_AGITATION_STYLE,
         ArtemisAgitationLayerURI,
     )
     from trid3nt_server.workflows.telemac.agitation.agitation import (
@@ -226,8 +226,7 @@ def test_the_agitation_chart_plots_the_workers_own_transect():
 
     layer = ArtemisAgitationLayerURI(
         layer_id="x", name="Wave agitation Kd (aoi)", layer_type="raster",
-        uri="s3://b/k.tif", style_preset=TELEMAC_AGITATION_STYLE_PRESET,
-        role="primary", kd_max=3.947, kd_sheltered=0.09, kd_exposed=0.352,
+        uri="s3://b/k.tif", role="primary", kd_max=3.947, kd_sheltered=0.09, kd_exposed=0.352,
         wave_period_s=8.0, agitation_curve_m=[-1747.9, -1710.1, -1686.8],
         agitation_curve_kd=[1.256, 1.459, 0.86],
         agitation_curve_kind="diffraction_transect")

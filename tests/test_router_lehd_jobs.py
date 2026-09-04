@@ -63,7 +63,7 @@ def test_spec_identity():
     assert SPEC.name == "fetch_lehd_jobs" and SPEC.source_class == "lehd_lodes"
     assert SPEC.error_code_prefix == "LEHD_JOBS" and SPEC.input_error_suffix == "INPUT_INVALID"
     assert SPEC.shape == "vector-fgb" and SPEC.output.layer_type == "vector"
-    assert SPEC.output.role == "primary" and SPEC.output.style_preset == "lehd_jobs_choropleth"
+    assert SPEC.output.role == "primary" and SPEC.output.style["kind"] == "reference"
     j = SPEC.join
     assert j["variable_param"] == "segment" and j["value_field"] == "segment"
     assert j["allow_raw_code"] is False

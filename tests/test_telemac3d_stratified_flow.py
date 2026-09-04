@@ -144,7 +144,7 @@ def test_the_3d_layers_are_georeferenced_from_the_aoi_corner():
 
 def test_the_profile_chart_shows_the_column_before_and_after():
     from trid3nt_contracts.telemac_contracts import (
-        TELEMAC3D_STRATIFICATION_STYLE_PRESET,
+        TELEMAC3D_STRATIFICATION_STYLE,
         Telemac3dLayerURI,
     )
     from trid3nt_server.workflows.telemac.stratified_flow.stratified_flow import (
@@ -153,8 +153,7 @@ def test_the_profile_chart_shows_the_column_before_and_after():
 
     layer = Telemac3dLayerURI(
         layer_id="x", name="Surface temperature (aoi)", layer_type="raster",
-        uri="s3://b/k.tif", style_preset=TELEMAC3D_STRATIFICATION_STYLE_PRESET,
-        role="primary", stratification_metric=4.5347, stratification_dt=4.5347,
+        uri="s3://b/k.tif", role="primary", stratification_metric=4.5347, stratification_dt=4.5347,
         variable_label="Surface temperature", variable_units="degC",
         profile_sigma=[0.0, 0.5, 1.0], profile_values=[15.0, 15.0, 19.535],
         profile_values_initial=[15.0, 15.0, 25.0])

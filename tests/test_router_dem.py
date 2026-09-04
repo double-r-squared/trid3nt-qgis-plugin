@@ -70,7 +70,6 @@ def _fake_copernicus_layer(bbox=None, **_kw):
         name="Copernicus GLO-30 DEM (30m)",
         layer_type="raster",
         uri="s3://trid3nt-cache/cache/static-30d/copernicus_dem/fake.tif",
-        style_preset="continuous_dem",
         role="input",
         units="meters",
         bbox=tuple(bbox),
@@ -118,7 +117,7 @@ def test_fetch_dem_happy_path_writes_through_cache(monkeypatch, fake_s3):
     layer = fetch_dem(bbox=FORT_MYERS_BBOX, resolution_m=10)
     assert isinstance(layer, DemLayerURI)
     assert layer.layer_type == "raster"
-    assert layer.style_preset == "continuous_dem"
+    assert layer.style == {"kind": "continuous", "ramp": "gray", "units": "m", "label": "Elevation"}
     assert layer.uri.startswith("s3://trid3nt-cache/cache/static-30d/dem/")
     assert layer.uri.endswith(".tif")
     assert layer.units == "meters"

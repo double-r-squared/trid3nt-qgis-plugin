@@ -283,8 +283,7 @@ async def test_a_chained_layer_handle_is_read_as_the_uri_it_carries() -> None:
     path = _write_geojson([_point_feature(-124.16, 40.49),
                            _point_feature(-124.04, 40.51)])
     layer = LayerURI(layer_id="centerline", name="centerline",
-                     layer_type="vector", uri=path, style_preset="nhd_flowlines",
-                     role="context")
+                     layer_type="vector", uri=path, role="context")
     try:
         result = await compute_layer_bounds(layer, fit_map=False)
     finally:

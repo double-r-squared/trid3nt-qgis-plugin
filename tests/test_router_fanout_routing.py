@@ -84,7 +84,7 @@ def _fanout_spec() -> SourceSpec:
                 },
             },
         },
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "demo"},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 0.3},
     })
@@ -115,7 +115,7 @@ def _levees_like_spec() -> SourceSpec:
                 "system_routes": ["SYSTEM_ID", "MAX_HEIGHT"],
             }},
         },
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "demo", "emit_bbox": False},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}, "emit_bbox": False},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "per_feature", "kb_per_feature": 20.0},
     })
@@ -310,7 +310,7 @@ def _ejscreen_like_spec() -> SourceSpec:
                 "total_pop": {"from": "ACSTOTPOP", "kind": "int", "null_below": -999.0},
             },
         },
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "demo"},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 4.0},
     })

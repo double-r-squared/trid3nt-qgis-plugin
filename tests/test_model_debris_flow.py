@@ -130,7 +130,7 @@ def test_full_pipeline_synthetic(synthetic_inputs, tmp_path) -> None:
     assert isinstance(result.notes, list) and result.notes
 
     assert result.layer_type == "vector"
-    assert result.style_preset == "debris_flow_hazard"
+    assert result.style == {"kind": "reference", "geometry": "line"}
     assert tuple(result.bbox) == BBOX
 
     # The GeoJSON artifact exists locally (offline write path) and carries the

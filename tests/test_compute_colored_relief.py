@@ -14,7 +14,7 @@ Coverage:
   from the fake GCS store.
 - ``ColoredReliefError`` on unknown ramp name.
 - The returned ``LayerURI`` carries the expected shape (layer_type="raster",
-  style_preset="continuous_dem", role="context", units="rgb").
+  role="context", units="rgb").
 
 Tests that exercise ``gdaldem`` (the synthetic-DEM tests) are skipped when
 the ``gdaldem`` binary is not on PATH, so they do not break CI environments
@@ -447,7 +447,7 @@ def test_compute_colored_relief_returns_correct_layer_uri_shape():
     assert layer_uri.layer_type == "raster"
     assert layer_uri.role == "context"
     assert layer_uri.units == "rgb"
-    assert layer_uri.style_preset == "continuous_dem"
+    assert layer_uri.style == {"kind": "continuous", "ramp": "gray", "units": "m", "label": "Elevation"}
     assert layer_uri.uri.startswith("s3://")
     assert "colored_relief" in layer_uri.uri
     assert "grayscale" in layer_uri.name.lower()

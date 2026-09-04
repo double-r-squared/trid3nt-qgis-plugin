@@ -31,7 +31,6 @@ def _layer(layer_type: str, uri: str, layer_id: str = "L1") -> LayerURI:
         name="demo",
         layer_type=layer_type,  # type: ignore[arg-type]
         uri=uri,
-        style_preset="preset",
     )
 
 

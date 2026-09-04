@@ -52,7 +52,6 @@ def _frame_layer(stem: str, name: str, frame_no, cog_uri: str) -> dict:
     return {
         "layer_id_stem": stem,
         "name": name,
-        "style_preset": "flood_depth",
         "cog_uri": cog_uri,
         "frame_no": frame_no,
     }

@@ -33,7 +33,7 @@ def _spec(prefix: str, source_class: str) -> SourceSpec:
         "error_prefix": prefix, "input_error_suffix": "INPUT_INVALID", "shape": "vector-fgb",
         "endpoints": {"data": {"url": "https://x/query"}},
         "auth": {"mode": "none", "user_agent": "ua"},
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "s"},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "per_feature"},
     })
@@ -227,7 +227,7 @@ def test_tolerate_page_error_returns_partial():
     from trid3nt_server.tools.fetchers._router.executors import chained_resolution as ch
     s = SourceSpec.model_validate({
         "schema_version": "v1", "name": "t", "source_class": "sc", "shape": "vector-fgb",
-        "endpoints": {"data": {"url": "https://x"}}, "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "s"},
+        "endpoints": {"data": {"url": "https://x"}}, "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "static-30d"}, "payload_estimate": {"model": "per_feature"},
         "hooks": {"build_request": "fema_nfhl_zones.build_request", "next_page": "fema_nfhl_zones.next_page",
                   "parse_response": "fema_nfhl_zones.parse_response"},

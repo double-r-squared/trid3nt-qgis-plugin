@@ -393,7 +393,7 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
     assert result.layer_type == "raster"
     assert result.role == "context"
     assert result.units is None
-    assert result.style_preset == "building_density"
+    assert result.style == {"kind": "continuous"}
     assert result.bbox is not None
     assert len(fake_gcs.store) == 1
 

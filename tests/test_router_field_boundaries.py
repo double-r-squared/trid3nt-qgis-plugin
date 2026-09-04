@@ -38,7 +38,7 @@ def test_spec_identity():
     assert SPEC.name == "fetch_field_boundaries" and SPEC.source_class == "ftw_field_boundaries"
     assert SPEC.error_code_prefix == "FIELDS"
     assert SPEC.shape == "vector-fgb" and SPEC.output.layer_type == "vector"
-    assert SPEC.output.role == "context" and SPEC.output.style_preset == "field_boundaries"
+    assert SPEC.output.role == "context" and SPEC.output.style["kind"] == "reference"
     assert SPEC.hooks.delegate == "field_boundaries.read"
     assert SPEC.hooks.pre_resolve == "field_boundaries.select"
     keys = {d["key"] for d in SPEC.ingest["field_boundaries"]["datasets"]}

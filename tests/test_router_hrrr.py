@@ -203,13 +203,13 @@ def test_read_all_nan_raises_empty(monkeypatch):
 def test_units_and_style_by_param():
     p = _vp(SPEC_FC, bbox=list(_FL), variable="10m_wind_speed")
     layer = router.build_layer_uri(SPEC_FC, p, "s3://c/k.tif")
-    assert layer.units == "m s-1" and layer.style_preset == "wind_speed"
+    assert layer.units == "m s-1" and layer.style["kind"] == "continuous"
     p2 = _vp(SPEC_FC, bbox=list(_FL), variable="2m_temperature")
     l2 = router.build_layer_uri(SPEC_FC, p2, "s3://c/k.tif")
-    assert l2.units == "K" and l2.style_preset == "hrrr_2m_temperature"
+    assert l2.units == "K" and l2.style["kind"] == "continuous"
     ps = _vp(SPEC_SM, bbox=list(_FL), variable="aerosol_optical_depth")
     ls = router.build_layer_uri(SPEC_SM, ps, "s3://c/k.tif")
-    assert ls.units == "1" and ls.style_preset == "hrrr_smoke_aerosol_optical_depth"
+    assert ls.units == "1" and ls.style["kind"] == "continuous"
     assert layer.layer_type == "raster" and layer.role == "primary"
 
 

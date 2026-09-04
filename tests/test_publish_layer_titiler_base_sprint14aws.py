@@ -9,9 +9,9 @@ previously pinned the tile-base derivation) now pins the swapped contract:
   - a raster publish returns the raw ``s3://`` COG URI VERBATIM - no
     ``/cog/tiles/`` path, no ``{z}/{x}/{y}`` placeholders, regardless of
     whether the legacy env var is set (the env read is GONE);
-  - the data-driven LEGEND (colormap name + vmin/vmax) is stashed keyed by
-    the returned ``s3://`` uri, so the pipeline emitter's ``layer.uri``
-    lookup still matches the envelope uri;
+  - the RESOLVED STYLE (ramp + range + the .qml) is stashed keyed by the
+    returned ``s3://`` uri, so the pipeline emitter's ``layer.uri`` lookup
+    still matches the envelope uri;
   - ``observe_published_layer`` registers the s3 COG as the DATA uri with
     NO separate display face (the raw COG IS the envelope uri);
   - LEGACY republish: an old persisted case's ``/cog/tiles/...?url=<cog>``
@@ -22,7 +22,7 @@ previously pinned the tile-base derivation) now pins the swapped contract:
   - a non-s3 raster URI still raises the typed LAYER_URI_NOT_FOUND error.
 
 No TiTiler / network I/O - ``_read_raster_bytes`` is patched to fail open so
-style resolution lands on the typed flood registry entry.
+style resolution lands on the declared row's fallback range.
 """
 
 from __future__ import annotations
@@ -40,9 +40,13 @@ from trid3nt_server.emission.publish import (
 
 MOD = pl
 
-# A representative s3:// COG handle (flood-family so the F51 no-preset path
-# infers continuous_flood_depth and resolves the typed registry ramp).
+# A representative s3:// COG handle, and the row a flood-depth producer
+# declares for it. A NAME is not a measurement: the row is what carries the
+# ramp, never the filename.
 S3_URI = "s3://trid3nt-runs/runs/ian/flood_depth_peak.tif"
+FLOOD_STYLE = {"kind": "continuous", "ramp": "ylgnbu", "units": "m",
+               "label": "Flood depth",
+               "scale": {"policy": "fixed", "range": [0, 3], "transform": "linear"}}
 ENCODED = quote(S3_URI, safe="")
 
 # A legacy TiTiler tile TEMPLATE wrapping S3_URI (the shape old persisted
@@ -68,14 +72,13 @@ def test_raster_publish_returns_raw_s3_uri() -> None:
     assert "{z}/{x}/{y}" not in out
 
 
-def test_flood_legend_stashed_by_s3_uri() -> None:
-    """The flood ramp rides the LEGEND (keyed by the envelope s3 uri), not a
-    tile-URL query string: colormap NAME + vmin/vmax recoverable for the
-    plugin renderer."""
+def test_flood_style_stashed_by_s3_uri() -> None:
+    """The declared row is RESOLVED and stashed by the envelope s3 uri: the
+    ramp, the range and the .qml the map loads."""
     out = publish_layer(
         layer_uri=S3_URI,
         layer_id="flood-demo",
-        style_preset="continuous_flood_depth",
+        style=FLOOD_STYLE,
     )
     legend = pop_legend_for_uri(out)
     assert legend is not None
@@ -83,6 +86,7 @@ def test_flood_legend_stashed_by_s3_uri() -> None:
     assert legend.colormap == "ylgnbu"
     assert legend.vmin == 0.0
     assert legend.vmax == 3.0
+    assert legend.qml is not None
 
 
 def test_observe_registers_data_uri_without_display_face(
@@ -108,13 +112,13 @@ def test_legacy_template_input_unwraps_to_s3(monkeypatch: pytest.MonkeyPatch) ->
     the embedded url= COG is unwrapped and flows through the raster path."""
     out = publish_layer(layer_uri=LEGACY_TEMPLATE, layer_id="flood-demo")
     assert out == S3_URI
-    # ...and the fresh legend is stashed under the NEW s3 envelope uri. Nothing
-    # declared a quantity here, so the legend is the NEUTRAL one: the layer_id
-    # says "flood" and a name is not a measurement, so no depth ramp may be read
-    # off it.
+    # ...and the fresh style is stashed under the NEW s3 envelope uri. Nothing
+    # declared a row here, so the layer takes the continuous kind's BARE
+    # default and stays untitled: the layer_id says "flood" and a name is not a
+    # measurement, so no depth ramp may be read off it.
     legend = pop_legend_for_uri(out)
     assert legend is not None
-    assert legend.colormap == "viridis" and legend.label == "Value"
+    assert legend.colormap == "viridis" and legend.label is None
 
 
 def test_legacy_http_template_also_unwraps() -> None:

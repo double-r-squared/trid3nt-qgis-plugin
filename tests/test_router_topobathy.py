@@ -232,7 +232,7 @@ def test_end_to_end_with_bathy(monkeypatch, tmp_path, fake_s3) -> None:
     res = _fetch_topobathy(bbox=_SMOKE_BBOX)
     assert isinstance(res, TopobathyResult)
     assert res.layer_type == "raster"
-    assert res.style_preset == "continuous_dem"
+    assert res.style == {"kind": "continuous", "ramp": "gray", "units": "m", "label": "Elevation"}
     assert res.units == "meters"
     assert res.role == "input"
     assert res.uri and res.uri.endswith(".tif")

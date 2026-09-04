@@ -371,13 +371,13 @@ waits per the hybrid rule).
 
 ## Steps beyond fetch/solve
 
-- STYLE as a declaration MODIFIER, not a step. Emission is AUTOMATIC on every
-  surface, and the style contract already answers "how is this quantity painted"
-  for every product, so `.style(preset=|colormap=|policy=|range=|transform=|clip=)`
-  exists only for the ad hoc case the defaults cannot express. Absence means the
-  contract default. The `.render` verb is RETIRED: renders are the plugin's job,
-  and workflows describe products. The honesty floor survives the swap - a step
-  that declared a style and produced no layer to paint failed, and says so.
+- PRESENTATION IS NOT IN A DECLARATION. Emission is automatic on every surface,
+  and how a product is drawn follows from what it IS: a fetcher's `style:` row,
+  a solved output's kind and quantity. A workflow declares no ramp, no range and
+  no title, because none of them change the simulation. Everything ad hoc lives
+  on the ONE presentation surface, `restyle_layer`, at runtime. The `.render`
+  verb and the `.style()` modifier are both RETIRED: renders are the plugin's
+  job, and workflows describe products.
 - CHART STEPS: the chart SPEC (kind + data + axes) is the persisted
   product; the plugin chart dock is the ONE renderer. Closes the
   chart-restore gap; ends server-side figure generation (matplotlib
@@ -736,27 +736,26 @@ PRODUCERS DECLARE PRODUCTS; EMISSION PERFORMS THEM; NOTHING ELSE MAY PUBLISH.
 That is the whole contract, and the rest of this section is what each clause
 costs.
 
-**A producer declares a QUANTITY, never a style.** A step that computed a depth
-field says `flood_depth`. Which colours that gets, over what range, in what units
-and under what legend label is the STYLE CONTRACT's answer
-(`contracts/trid3nt_contracts/styles.yaml`), which holds the preset table and the
-quantity -> preset defaults IN ONE FILE so a mirror between them is not
-constructible. A preset constant imported into engine code is the coupling this
-replaces.
+**A producer declares a QUANTITY, and presentation is declared where the DATA
+is.** A step that computed a depth field says `flood_depth`; a fetcher carries a
+`style:` row in its own `source.yaml`; a solved output derives its row from the
+manifest entry's kind, quantity and units. There are no preset NAMES, so there
+is no table a quantity can be missing from and nothing to drift between.
 
-**One resolver.** `trid3nt_server/emission/styles.py` turns a preset plus a raster
-into a concrete scale and into the sentence the legend says about it. The
-data-driven rescale LOGIC is code and stays code (reading band statistics is not a
-declaration); the POLICY is declared. `emission/publish.py` keeps only the three
-RASTER guards - an embedded palette, an RGB(A) composite, a terrain token - because
-those are facts about the file, not about the style, and each is a way a
-single-band rescale would corrupt an already-coloured image.
+**One family, four kinds.** `trid3nt_server/emission/presets.py` holds the four
+renderer shapes (continuous raster, classed, reference, mesh) and everything a
+quantity contributes is a PARAMETER of one of them. It resolves a row plus a
+raster into a concrete scale, into the sentence the legend says about it, and
+into the `.qml` the map loads. The data-driven rescale LOGIC is code and stays
+code (reading band statistics is not a declaration); the POLICY is declared.
+`emission/publish.py` keeps only the two FILE guards - an embedded palette and
+an RGB(A) composite - because those are facts about the file, not about the
+style, and each is a way a ramp would corrupt an already-painted image.
 
-**Scale vocabulary, one schema, four entry points.** `policy` (data | fixed),
-`range`, `transform` (linear | log | sqrt | percentile), `clip`. The four entries
-are the contract default, a template's `.style()` modifier, a declared param knob,
-and the `restyle_layer` tool's arguments. Later stages override earlier ones field
-by field, every override is labelled, and the data underneath never changes.
+**Scale vocabulary, one schema.** `policy` (data | fixed), `range`, `transform`
+(linear | log | sqrt | percentile), `clip`. It arrives from the declared row or
+from `restyle_layer`'s arguments; the later one overrides the earlier field by
+field, every override is labelled, and the data underneath never changes.
 
 **`policy: data` is the default for model output**, because a hardcoded scale
 makes an output less informative the moment a run leaves the range somebody
@@ -773,12 +772,12 @@ Fixed ranges remain for domain-standard bounded quantities (a probability, a PGA
 in g, a temperature in K). LEGENDS ALWAYS STATE WHICH POLICY RAN AND OVER WHAT
 RANGE, because the colours cannot.
 
-**Style is DISPLAY STATE.** Rescaling recomputes nothing and changes no number, so
-the policy is available both up front and after the fact: `restyle_layer` re-emits
-the DISPLAY FACE of an already-published layer, and takes several layer ids plus
-`shared_scale` for an honest comparison. It deliberately cannot make a layer
-visible - a URI nothing published is a typed refusal - because that would be the
-deleted `publish_layer` tool wearing a new name.
+**Presentation is DISPLAY STATE.** Restyling recomputes nothing and changes no
+number, so all of it is available after the fact: `restyle_layer` re-paints,
+retitles, rescales or HIDES an already-published layer, and takes several layer
+ids plus `shared_scale` for an honest comparison. `hide=True` is the un-emit and
+`hide=False` puts the layer back. It deliberately cannot CREATE a layer - a uri
+nothing published is a typed refusal.
 
 **Charts read the same vocabulary.** A chart's axis title and a layer's legend
 label come from one place, so the picture and the map cannot disagree about what a
@@ -796,7 +795,7 @@ declarative workflows (the skeleton's publish stage), and
 processing-primitive rasters (NEW - hillshade/NDVI/slope and playground
 outputs auto-emit, intermediates included: they are useful input
 checks, and the user hides what they don't want). The mechanism -
-styling seam (`_resolve_qgis_style_params`), overview enforcement,
+the style resolution (`resolve_layer_style`), overview enforcement,
 layer registration - moves OUT of the publish_layer tool file into
 `emission/` as its single home. The registered `publish_layer` tool is
 then DELETED (DELETION_LEDGER entry QUEUED 2026-08-24; condition: a

@@ -219,7 +219,6 @@ def test_fetch_image_service_dynamic_spec(la_catalogs, no_probe, monkeypatch):
         return LayerURI(
             layer_id=spec.source_class, name="x", layer_type="raster",
             uri="s3://trid3nt-cache/cache/static-30d/%s/deadbeef.tif" % spec.source_class,
-            style_preset="",
         )
 
     monkeypatch.setattr(router, "route", fake_route)
@@ -252,7 +251,6 @@ def test_fetch_feature_service_dynamic_spec(la_catalogs, no_probe, monkeypatch):
         return LayerURI(
             layer_id=spec.source_class, name="x", layer_type="vector",
             uri="s3://trid3nt-cache/cache/static-30d/%s/beef.fgb" % spec.source_class,
-            style_preset="",
         )
 
     monkeypatch.setattr(router, "route", fake_route)

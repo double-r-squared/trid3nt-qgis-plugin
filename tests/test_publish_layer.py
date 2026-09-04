@@ -126,19 +126,19 @@ def test_derive_layer_id_sanitizes_and_never_returns_empty() -> None:
 # --------------------------------------------------------------------------- #
 # derive_readable_layer_name (OPEN-9, 2026-07-10): a bare-ULID layer_id must
 # never reach the UI's layer summary as the display name when a better
-# signal (explicit name, style_preset, or a URI path segment) is available.
+# signal (an explicit name, a declared label, or a URI path segment) exists.
 # --------------------------------------------------------------------------- #
 
 _BARE_ULID = "01KX5TEZ20BK86EE6DG8PSVFJK"
 
 
-def test_derive_readable_layer_name_from_hillshade_style_preset() -> None:
-    """Omitted name + a known style_preset -> a readable name, not the bare
+def test_derive_readable_layer_name_from_the_declared_label() -> None:
+    """Omitted name + a declared label -> a readable name, not the bare
     ULID layer_id (the live bug this fixes)."""
     name = derive_readable_layer_name(
         None,
         _BARE_ULID,
-        "standard_hillshade",
+        {"kind": "continuous", "label": "Hillshade"},
         "https://tiles.example.com/cog/tiles/{z}/{x}/{y}?url=s3://bucket/hillshade/abc123.tif",
     )
     assert name.startswith("Hillshade")
@@ -148,11 +148,11 @@ def test_derive_readable_layer_name_from_hillshade_style_preset() -> None:
 
 def test_derive_readable_layer_name_explicit_name_untouched() -> None:
     """An explicit, non-ULID-shaped name is returned VERBATIM -- no
-    disambiguator appended, no override by style_preset/URI."""
+    disambiguator appended, no override by the declared label or the URI."""
     name = derive_readable_layer_name(
         "Fort Myers Flood Depth",
         _BARE_ULID,
-        "continuous_flood_depth",
+        {"kind": "continuous", "label": "Flood depth"},
         "https://tiles.example.com/cog/tiles/{z}/{x}/{y}?url=s3://bucket/flood/abc123.tif",
     )
     assert name == "Fort Myers Flood Depth"
@@ -161,11 +161,11 @@ def test_derive_readable_layer_name_explicit_name_untouched() -> None:
 def test_derive_readable_layer_name_explicit_name_that_is_itself_a_ulid_is_ignored() -> None:
     """A 'name' that is itself just the bare ULID (a model echoing layer_id
     into both fields) is treated as NO usable name -- falls through to the
-    style_preset/URI derivation instead of surfacing the ULID."""
+    declared label / URI derivation instead of surfacing the ULID."""
     name = derive_readable_layer_name(
         _BARE_ULID,
         _BARE_ULID,
-        "standard_hillshade",
+        {"kind": "continuous", "label": "Hillshade"},
         "https://tiles.example.com/cog/tiles/{z}/{x}/{y}?url=s3://bucket/hillshade/abc123.tif",
     )
     assert name.startswith("Hillshade")
@@ -173,7 +173,7 @@ def test_derive_readable_layer_name_explicit_name_that_is_itself_a_ulid_is_ignor
 
 
 def test_derive_readable_layer_name_uri_segment_fallback() -> None:
-    """No name, no informative style_preset -> derive from the source URI's
+    """No name, no declared label -> derive from the source URI's
     path segment (e.g. '.../hillshade/<hash>.tif' -> 'Hillshade')."""
     name = derive_readable_layer_name(
         None,
@@ -186,7 +186,7 @@ def test_derive_readable_layer_name_uri_segment_fallback() -> None:
 
 
 def test_derive_readable_layer_name_generic_fallback_never_bare_ulid() -> None:
-    """No name, no style_preset, no human URI segment (flat path, hash-shaped
+    """No name, no declared label, no human URI segment (flat path, hash-shaped
     stem, no parent directory to fall back to) -> a generic 'Layer' label
     with a disambiguator -- STILL never the bare ULID."""
     name = derive_readable_layer_name(
@@ -204,9 +204,9 @@ def test_derive_readable_layer_name_disambiguator_varies_by_layer_id() -> None:
     """Two layers in the same family get DISTINCT derived names (the
     disambiguator suffix), so they don't collide in the UI's layer list."""
     name_a = derive_readable_layer_name(
-        None, "01AAAAAAAAAAAAAAAAAAAAAAAA", "standard_hillshade", "s3://b/x.tif"
+        None, "01AAAAAAAAAAAAAAAAAAAAAAAA", {"label": "Hillshade"}, "s3://b/x.tif"
     )
     name_b = derive_readable_layer_name(
-        None, "01BBBBBBBBBBBBBBBBBBBBBBBB", "standard_hillshade", "s3://b/x.tif"
+        None, "01BBBBBBBBBBBBBBBBBBBBBBBB", {"label": "Hillshade"}, "s3://b/x.tif"
     )
     assert name_a != name_b

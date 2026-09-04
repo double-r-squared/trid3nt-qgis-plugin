@@ -73,17 +73,22 @@ def _spec(
     )
 
 
+#: What the DEM spec declares about how its raster draws.
+_DEM_STYLE = {"kind": "continuous", "ramp": "gray", "units": "m",
+              "label": "Elevation"}
+
+
 def _raster_layer(uri: str = "s3://cache/3dep/aoi.tif") -> LayerURI:
     return LayerURI(
         layer_id="raw", name="3dep elevation", layer_type="raster",
-        uri=uri, style_preset="continuous_dem", role="primary",
+        uri=uri, role="primary", style=_DEM_STYLE,
     )
 
 
 def _vector_layer(uri: str = "s3://cache/rivers/aoi.fgb") -> LayerURI:
     return LayerURI(
         layer_id="raw", name="osm rivers", layer_type="vector",
-        uri=uri, style_preset="osm_waterways", role="primary",
+        uri=uri, role="primary",
         bbox=(-1.0, -1.0, 1.0, 1.0),
     )
 
@@ -125,14 +130,16 @@ def test_input_layer_name_shape_and_purpose():
 async def test_raster_input_surfaced_via_worker_thread(monkeypatch):
     """A raster fetched by an OFF-LOADED sync fetcher (no running loop in that
     thread) is driven back onto the emitter's bound loop and surfaced as a
-    role=context continuous_dem input."""
+    role=context input under the spec's OWN declared style row."""
     import asyncio
 
     emitter = _emitter()
     tokens = _bind(emitter, dispatched="model_landlab_scenario",
                    loop=asyncio.get_running_loop())
+    published: list = []
 
-    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
+    def _mock_publish_layer(layer_uri, layer_id, style=None, name=None, **kw):  # noqa: ANN001
+        published.append(style)
         return layer_uri  # raw s3 COG passes the emit guardrail (plugin /vsicurl/)
 
     try:
@@ -151,7 +158,7 @@ async def test_raster_input_surfaced_via_worker_thread(monkeypatch):
     row = emitter._loaded_layers[0]
     assert row.role == "context"
     assert row.layer_type == "raster"
-    assert row.style_preset == "continuous_dem"
+    assert published == [_DEM_STYLE]
     assert row.name == "Input: mesh bed (3dep, 3DEP 10 m)"
     assert row.layer_id.startswith("input-3dep-")
 
@@ -260,7 +267,7 @@ async def test_dedup_by_uri_within_session(monkeypatch):
     tokens = _bind(emitter, dispatched="model_a",
                    loop=asyncio.get_running_loop())
 
-    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
+    def _mock_publish_layer(layer_uri, layer_id, style=None, name=None, **kw):  # noqa: ANN001
         return layer_uri
 
     try:

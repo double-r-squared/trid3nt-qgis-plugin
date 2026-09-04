@@ -183,7 +183,7 @@ async def test_mesh_op_appends_regenerates_and_re_presents(tmp_path, monkeypatch
     assert out["recipe"]["ops"] == [{"op": "set_boundary_roles"}]
     # The presentation is a MESH layer on the map, not a picture of one.
     assert fake.layers and fake.layers[-1].layer_type == "mesh"
-    assert fake.layers[-1].style_preset == "mesh_wireframe"
+    assert fake.layers[-1].style == {"kind": "reference", "geometry": "line"}
     mesh_gate.close_mesh_gate(gate)
 
 

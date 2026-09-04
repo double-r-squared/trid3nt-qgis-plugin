@@ -26,7 +26,7 @@ import pytest
 
 from tests.reach_chain import MESH_ROLES, install_reach_chain
 from trid3nt_contracts.telemac_contracts import (
-    TELEMAC_DYE_STYLE_PRESET,
+    TELEMAC_DYE_STYLE,
     TelemacDyeLayerURI,
 )
 
@@ -59,7 +59,6 @@ def _fake_peak(run_id: str, reach_name: str) -> TelemacDyeLayerURI:
         name=f"Peak dye concentration ({reach_name})",
         layer_type="raster",
         uri=f"s3://runs/{run_id}/telemac_dye_peak.tif",
-        style_preset=TELEMAC_DYE_STYLE_PRESET,
         role="primary",
         units="mg/L",
         bbox=list(_AOI),
@@ -268,8 +267,7 @@ def _peak_layer(**overrides: Any) -> TelemacDyeLayerURI:
 
     return TelemacDyeLayerURI(
         layer_id="L", name="Peak dye concentration (reach)", layer_type="raster",
-        uri="s3://runs/x.tif", style_preset=TELEMAC_DYE_STYLE_PRESET,
-        dye_cmax_mgl=4.9, dye_peak_time_s=200.0,
+        uri="s3://runs/x.tif", dye_cmax_mgl=4.9, dye_peak_time_s=200.0,
         dye_curve_time_s=[0.0, 100.0, 200.0, 300.0],
         dye_curve_cmax_mgl=[0.0, 1.2, 4.9, 2.1],
         synthetic_inputs=[SyntheticInput(

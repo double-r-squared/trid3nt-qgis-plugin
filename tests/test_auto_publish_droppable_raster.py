@@ -113,7 +113,6 @@ def _raster(uri: str = S3_COG, **over) -> LayerURI:
         name="Hillshade",
         layer_type="raster",
         uri=uri,
-        style_preset="continuous_dem",
         role="primary",
     )
     base.update(over)

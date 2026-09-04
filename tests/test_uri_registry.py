@@ -113,7 +113,6 @@ class TestRegistration:
             name="USACE NSI Structures",
             layer_type="vector",
             uri=REAL_NSI_FGB,
-            style_preset="usace_nsi",
         )
         new = reg.register_tool_result("fetch_usace_nsi", layer)
         assert new == {NSI_LAYER_ID: REAL_NSI_FGB}
@@ -278,7 +277,7 @@ class TestResolutionBranches:
 
     def test_non_uri_params_and_non_strings_untouched(self) -> None:
         reg = make_registry()
-        params = {"bbox": [1, 2, 3, 4], "style_preset": "blues", "layer_uri": 7}
+        params = {"bbox": [1, 2, 3, 4], "style": {"kind": "continuous"}, "layer_uri": 7}
         assert reg.resolve_params("t", params) == params
 
     def test_ambiguous_hash_prefix_refuses_to_guess(self) -> None:
@@ -451,7 +450,6 @@ class TestHistoricalIncidents:
                 name="USACE NSI Structures",
                 layer_type="vector",
                 uri=REAL_NSI_FGB,
-                style_preset="usace_nsi",
             ),
         )
         out = reg.resolve_params(
@@ -480,7 +478,6 @@ class TestHistoricalIncidents:
                 name="Hillshade",
                 layer_type="raster",
                 uri=f"{HILLSHADE_CACHE_DIR}/{real_base}",
-                style_preset="hillshade_standard",
             ),
         )
         # Both runs' rasters present (chicago + seattle) — prefix match must
@@ -545,7 +542,6 @@ class TestHistoricalIncidents:
                 name="USACE NSI Structures",
                 layer_type="vector",
                 uri=REAL_NSI_FGB,
-                style_preset="usace_nsi",
             ),
         )
         out = reg.resolve_params(
@@ -606,7 +602,6 @@ def _dummy_uri_tool():
             name="USACE NSI Structures",
             layer_type="vector",
             uri=REAL_NSI_FGB,
-            style_preset="usace_nsi",
         )
 
     def consume_layer(assets_uri: str, **kwargs: Any) -> dict:
@@ -736,7 +731,6 @@ class TestPlaceholderResolution:
                 name="3DEP DEM 10m",
                 layer_type="raster",
                 uri=DEM_COG,
-                style_preset="continuous_dem",
             ),
         )
         return reg
@@ -779,7 +773,6 @@ class TestPlaceholderResolution:
                 name="3DEP DEM 10m (second AOI)",
                 layer_type="raster",
                 uri=DEM_COG_2,
-                style_preset="continuous_dem",
             ),
         )
         placeholder = "LayerURI_from_fetch_dem"
@@ -823,7 +816,6 @@ class TestPlaceholderResolution:
                 name="NLCD 2021",
                 layer_type="raster",
                 uri="s3://trid3nt-cache/cache/static-30d/fetch_landcover/aa.tif",
-                style_preset="",
             ),
         )
         placeholder = "output of fetch_dem and fetch_landcover"
@@ -840,7 +832,6 @@ class TestPlaceholderResolution:
                 name="Hi-res DEM",
                 layer_type="raster",
                 uri=hires,
-                style_preset="continuous_dem",
             ),
         )
         out = reg.resolve_params(

@@ -185,7 +185,7 @@ def test_static_pairing_and_interop(tmp_path) -> None:
     assert isinstance(result, PairedObsLayerURI)
     assert isinstance(result, LayerURI)
     assert result.layer_type == "vector"
-    assert result.style_preset == "model_obs_pairs"
+    assert result.style == {"kind": "reference", "geometry": "point"}
     assert result.name == "Model-obs pairs (3 points)"
     assert result.n_paired == 3
     assert result.n_dropped == 0

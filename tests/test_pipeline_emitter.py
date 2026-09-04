@@ -208,7 +208,6 @@ def _make_layer(uri: str, layer_id: str = "L1") -> LayerURI:
         name="Demo DEM",
         layer_type="raster",
         uri=uri,
-        style_preset="dem-default",
     )
 
 
@@ -263,7 +262,6 @@ async def test_emit_tool_call_layer_uri_return_funnels_to_loaded_layers(
         name="Demo DEM",
         layer_type="raster",
         uri="https://qgis.run.app/wms?LAYERS=dem_1",
-        style_preset="dem-default",
     )
 
     def fake_tool() -> LayerURI:
@@ -306,7 +304,6 @@ async def test_emit_tool_call_layer_uri_terminal_frame_before_session_state(
         name="Hillshade",
         layer_type="raster",
         uri="https://qgis.run.app/wms?LAYERS=hillshade_1",
-        style_preset="hillshade",
     )
 
     def compute_hillshade() -> LayerURI:
@@ -467,19 +464,17 @@ async def test_loaded_layers_dedup_by_uri(
     layer = _make_layer("gs://b/dem.tif", layer_id="dem_1")
     await emitter.add_loaded_layer(layer)
 
-    # Same uri, different style_preset on a re-fetch
+    # Same uri, a re-fetch
     refreshed = LayerURI(
         layer_id="dem_1",
         name="Demo DEM (refreshed)",
         layer_type="raster",
         uri="gs://b/dem.tif",
-        style_preset="dem-bluescale",
     )
     await emitter.add_loaded_layer(refreshed)
 
     layers = emitter.loaded_layers
     assert len(layers) == 1
-    assert layers[0].style_preset == "dem-bluescale"
     assert layers[0].name == "Demo DEM (refreshed)"
 
 
@@ -537,7 +532,6 @@ async def test_vector_layer_inlines_geojson_into_session_state(
         name="NWS Alerts CONUS",
         layer_type="vector",
         uri="gs://b/alerts.fgb",
-        style_preset="nws_alerts",
     )
     await emitter.add_loaded_layer(vector_layer)
 
@@ -570,7 +564,6 @@ async def test_vector_layer_inline_geojson_failure_is_non_fatal(
         name="NWS Alerts (broken)",
         layer_type="vector",
         uri="gs://b/missing.fgb",
-        style_preset="nws_alerts",
     )
     await emitter.add_loaded_layer(vector_layer)
 
@@ -601,7 +594,6 @@ async def test_raster_layer_does_not_trigger_inline_path(
         name="Demo DEM",
         layer_type="raster",
         uri="gs://b/dem.tif",
-        style_preset="dem-default",
     )
     await emitter.add_loaded_layer(raster_layer)
 
@@ -629,7 +621,6 @@ async def test_reset_loaded_layers_clears_inline_table(
         name="A",
         layer_type="vector",
         uri="gs://b/a.fgb",
-        style_preset="nws_alerts",
     )
     await emitter.add_loaded_layer(vector_layer)
     emitter.reset_loaded_layers([])
@@ -805,7 +796,6 @@ async def test_emit_byte_identical_with_seam_for_passing_layers(
         name="Demo DEM",
         layer_type="raster",
         uri="https://qgis.run.app/wms?LAYERS=dem_1",
-        style_preset="dem-default",
     )
 
     # Path A: seam-routed (through emit_tool_call's isinstance gate).
@@ -1937,9 +1927,8 @@ async def test_legend_on_layer_uri_flows_to_session_state(
         name="Pelicun damage",
         layer_type="vector",
         uri="s3://b/pelicun.fgb",
-        style_preset="pelicun_damage_state",
         legend=LegendKey(
-            kind="categorical",
+            kind="classed",
             value_field="ds_mean",
             vmin=0.0,
             vmax=4.0,
@@ -1977,7 +1966,6 @@ async def test_legend_lifted_from_publish_stash_by_uri(
         name="flood_1",
         layer_type="raster",
         uri=tile_uri,
-        style_preset="continuous_flood_depth",
     )
     assert layer.legend is None  # the wrap-site cannot set it
     await emitter.add_loaded_layer(layer)

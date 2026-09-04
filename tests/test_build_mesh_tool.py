@@ -518,7 +518,7 @@ def test_snapshot_is_the_display_face(tmp_path):
     session = MeshSession(_recipe(), workdir=tmp_path, name="lattice")
     layer = session.snapshot()
     assert layer.layer_type == "mesh"
-    assert layer.style_preset == "mesh_wireframe"
+    assert layer.style == {"kind": "reference", "geometry": "line"}
     assert layer.uri.endswith("mesh.2dm")
     assert layer.crs_authid == "EPSG:4326"
     assert (tmp_path / "mesh.2dm").read_text().startswith("MESH2D")

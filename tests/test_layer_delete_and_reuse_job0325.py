@@ -82,7 +82,6 @@ def _layer_uri(layer_id: str, name: str, uri: str) -> LayerURI:
         name=name,
         layer_type="raster",
         uri=uri,
-        style_preset="flood_depth",
         role="primary",
     )
 
@@ -129,7 +128,6 @@ def _fresh_case_with_layers(case_id: str) -> CaseSummary:
                 "name": "Flood depth",
                 "layer_type": "raster",
                 "uri": "s3://bucket/flood.tif",
-                "style_preset": "flood_depth",
                 "visible": True,
                 "role": "primary",
                 "temporal": False,
@@ -139,7 +137,6 @@ def _fresh_case_with_layers(case_id: str) -> CaseSummary:
                 "name": "DEM",
                 "layer_type": "raster",
                 "uri": "s3://bucket/dem.tif",
-                "style_preset": "dem",
                 "visible": True,
                 "role": "input",
                 "temporal": False,
@@ -215,7 +212,6 @@ def test_layer_delete_reinlines_surviving_vectors_before_emit(
             "name": name,
             "layer_type": "vector",
             "uri": uri,
-            "style_preset": "vector_outline",
             "visible": True,
             "role": "input",
             "temporal": False,

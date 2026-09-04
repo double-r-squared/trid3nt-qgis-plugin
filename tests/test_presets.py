@@ -17,8 +17,8 @@ from trid3nt_server.emission import presets
 from trid3nt_server.emission.presets import Preset, Scale
 
 
-def _doc(resolved, **kwargs):
-    return ET.fromstring(presets.qml(resolved, **kwargs))
+def _doc(resolved):
+    return ET.fromstring(presets.qml(resolved))
 
 
 # --------------------------------------------------------------------------- #
@@ -27,9 +27,22 @@ def _doc(resolved, **kwargs):
 
 def test_the_family_is_four_kinds_and_every_one_of_them_writes_a_document():
     assert presets.KINDS == ("continuous", "classed", "reference", "mesh")
+    parameterised = {
+        "continuous": Preset(kind="continuous"),
+        "classed": Preset(kind="classed", geometry="polygon",
+                          classes=((0.0, 1.0, "#ffffcc", "low"),)),
+        "reference": Preset(kind="reference", geometry="line"),
+        "mesh": Preset(kind="mesh", dataset_group="WATER DEPTH"),
+    }
     for kind in presets.KINDS:
-        resolved = presets.resolve(presets.bare_default(kind))
-        assert _doc(resolved).tag == "qgis"
+        assert _doc(presets.resolve(parameterised[kind])).tag == "qgis"
+
+
+def test_a_preset_with_nothing_to_say_about_this_layer_writes_no_document():
+    # QGIS binds a mesh dataset group BY NAME and silently drops an unbound
+    # block; a reference symbol of the wrong shape loads and draws nothing.
+    assert presets.qml(presets.resolve(Preset(kind="mesh"))) is None
+    assert presets.qml(presets.resolve(Preset(kind="reference"))) is None
 
 
 def test_a_declaration_that_names_no_parameters_gets_its_kinds_bare_default():
@@ -166,11 +179,22 @@ def test_the_continuous_document_carries_the_resolved_range_and_the_ramp():
     assert items[-1].get("label") == "4 m/s"
 
 
+def test_a_classed_raster_paints_discrete_bands_not_a_ramp():
+    # A field spanning orders of magnitude has no linear ramp that shows both
+    # ends, and a classed row with no geometry is a raster.
+    resolved = presets.resolve(Preset(
+        kind="classed", classes=((0.0, 1.0, "#ffffcc", "low"),
+                                 (1.0, 5.0, "#bd0026", "high"))))
+    shader = _doc(resolved).find("./pipe/rasterrenderer/rastershader/colorrampshader")
+    assert shader.get("colorRampType") == "DISCRETE"
+    assert [i.get("value") for i in shader.findall("./item")] == ["1", "5"]
+
+
 def test_a_classed_document_carries_every_declared_break_once():
     resolved = presets.resolve(Preset(
-        kind="classed", geometry="polygon",
+        kind="classed", geometry="polygon", attribute="yield",
         classes=((0.0, 1.0, "#ffffcc", "low"), (1.0, 5.0, "#bd0026", "high"))))
-    renderer = _doc(resolved, attribute="yield").find("./renderer-v2")
+    renderer = _doc(resolved).find("./renderer-v2")
     assert renderer.get("type") == "graduatedSymbol"
     assert renderer.get("attr") == "yield"
     labels = [r.get("label") for r in renderer.findall("./ranges/range")]

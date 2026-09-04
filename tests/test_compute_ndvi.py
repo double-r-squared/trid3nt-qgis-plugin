@@ -30,7 +30,7 @@ from trid3nt_server.tools.cache import compute_cache_key
 from trid3nt_server.tools.processing.compute_ndvi import compute_ndvi as ndvi_mod
 from trid3nt_server.tools.processing.compute_ndvi.compute_ndvi import (
     _METADATA,
-    _STYLE_PRESET,
+    _STYLE,
     NDVIBboxError,
     NDVINoImageryError,
     compute_ndvi,
@@ -109,15 +109,14 @@ def test_tool_is_registered() -> None:
     assert meta.payload_mb_estimator_name == "estimate_payload_mb"
 
 
-def test_style_preset_resolves_to_a_declared_ramp() -> None:
-    """The ndvi preset must resolve to a real (rescale, colormap) so a
-    single-band NDVI COG is never published as bare grayscale."""
-    from trid3nt_server.emission.styles import resolve_style
+def test_the_declared_row_paints_the_index_over_its_own_domain() -> None:
+    """NDVI runs -1 to 1 by definition, so the row pins that range rather than
+    letting a single-band COG publish as bare grayscale."""
+    from trid3nt_server.emission import presets
 
-    params = resolve_style(_STYLE_PRESET).style_params()
-    assert params is not None
-    assert "rescale=-1,1" in params
-    assert "colormap_name=rdylgn" in params
+    resolved = presets.resolve(presets.from_row(_STYLE))
+    assert resolved.range == (-1.0, 1.0)
+    assert resolved.preset.ramp == "rdylgn"
 
 
 def test_payload_estimator_scales_with_area() -> None:
@@ -205,7 +204,7 @@ def test_ndvi_happy_path_roundtrips_to_cog() -> None:
         layer = compute_ndvi(bbox=_SC_BBOX, start_date="2024-04-01", end_date="2024-09-30")
 
     assert layer.layer_type == "raster"
-    assert layer.style_preset == _STYLE_PRESET
+    assert layer.style == _STYLE
     assert layer.role == "primary"
     assert layer.uri.startswith("s3://")
     assert layer.units == "NDVI (-1..1)"

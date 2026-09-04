@@ -8,10 +8,8 @@ already-published LayerURI is summarized with explicit ``published`` /
 ``on_map`` / ``wms_url`` signals, so the model recognizes the layer is already
 on the map and does not issue a second publish of the same COG.
 
-THE STYLE BOUNDARY (``publish.style_preset_for_publish``): a layer publishes
-under the preset its PRODUCER DECLARED - an explicit preset, else the declared
-quantity resolved through the style contract, else the neutral ramp. A preset
-is never inferred from a filename or a layer id.
+THE STYLE BOUNDARY (``emission.presets``): a layer is drawn by the style row
+its PRODUCER DECLARED. A style is never inferred from a filename or a layer id.
 
 THE DEDUP RULE (``pipeline_emitter.add_loaded_layer``): two publishes of the
 SAME underlying COG under different display URLs collapse to ONE loaded layer,
@@ -36,8 +34,7 @@ from trid3nt_server.adapters.adapter import (
     summarize_tool_result,
 )
 from trid3nt_server.emission.pipeline_emitter import PipelineEmitter, _layer_identity_key
-from trid3nt_server.emission.publish import style_preset_for_publish
-from trid3nt_server.emission.styles import NEUTRAL_FALLBACK_PRESET
+from trid3nt_server.emission import presets
 
 
 # --------------------------------------------------------------------------- #
@@ -62,7 +59,6 @@ def _published_flood_layer_uri(run_id: str) -> LayerURI:
             "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
             f"?url={cog}&rescale=0,3&colormap_name=blues"
         ),
-        style_preset="continuous_flood_depth",
         role="primary",
         units="meters",
         bbox=(-85.4, 35.0, -85.2, 35.2),
@@ -91,7 +87,6 @@ class TestScenarioPublishedSignal:
         # The canonical handle + metadata the loop needs to narrate.
         assert summary["layer_id"] == result.layer_id
         assert summary["handle"] == result.layer_id
-        assert summary["style_preset"] == "continuous_flood_depth"
         assert summary["bbox"] == [-85.4, 35.0, -85.2, 35.2]
         # A human-readable already-on-the-map note for the model.
         assert "ALREADY published" in summary["already_published_note"]
@@ -123,7 +118,6 @@ class TestScenarioPublishedSignal:
             name="Peak flood depth",
             layer_type="raster",
             uri="gs://legacy-cloud-runs/R/flood_depth_peak.tif",
-            style_preset="continuous_flood_depth",
             role="primary",
         )
         assert _layer_uri_is_published(raw) is False
@@ -144,64 +138,43 @@ class TestScenarioPublishedSignal:
 
 
 # --------------------------------------------------------------------------- #
-# (a) THE STYLE BOUNDARY - the preset comes from what the producer DECLARED,
-#     and a filename is not a declaration.
+# (a) THE STYLE BOUNDARY - the shape and its parameters come from what the
+#     producer DECLARED, and a filename is not a declaration.
 # --------------------------------------------------------------------------- #
 
 
-class TestPublishBoundaryPreset:
-    def test_declared_flood_depth_quantity_gets_the_flood_preset(self) -> None:
-        preset = style_preset_for_publish(
-            style_preset="", quantity="flood_depth"
-        )
-        assert preset == "continuous_flood_depth"
+class TestPublishBoundaryStyle:
+    def test_a_declared_row_is_what_draws_the_layer(self) -> None:
+        preset = presets.from_row({"kind": "continuous", "ramp": "ylgnbu",
+                                   "units": "m", "label": "Flood depth"})
+        assert (preset.kind, preset.ramp, preset.label) == (
+            "continuous", "ylgnbu", "Flood depth")
 
-    def test_the_hyphenated_spelling_of_the_same_quantity_agrees(self) -> None:
-        assert style_preset_for_publish(
-            style_preset=None, quantity="swmm-depth"
-        ) == "continuous_flood_depth"
+    def test_a_layer_that_declares_nothing_gets_its_kinds_bare_default(self) -> None:
+        # No row: the physical meaning is unknown, so the layer takes a single
+        # ramp over its OWN range, never a physical band somebody guessed.
+        preset = presets.from_row(None)
+        assert preset == presets.bare_default("continuous")
+        assert preset.label is None and preset.units is None
 
-    def test_explicit_preset_is_honored(self) -> None:
-        # The producer named its own ramp; a declared quantity never overrides it.
-        preset = style_preset_for_publish(
-            style_preset="continuous_dem", quantity="flood_depth"
-        )
-        assert preset == "continuous_dem"
-
-    def test_undeclared_quantity_publishes_neutral(self) -> None:
-        # No preset and no quantity: the layer's physical meaning is unknown, so
-        # it gets the neutral ramp over its own range, not a physical band.
-        preset = style_preset_for_publish(style_preset="", quantity=None)
-        assert preset == NEUTRAL_FALLBACK_PRESET
-        assert preset != "continuous_flood_depth"
-
-    def test_unregistered_quantity_publishes_neutral(self) -> None:
-        preset = style_preset_for_publish(
-            style_preset=None, quantity="no_such_quantity"
-        )
-        assert preset == NEUTRAL_FALLBACK_PRESET
-
-    def test_the_boundary_cannot_see_a_filename(self) -> None:
+    def test_the_resolver_cannot_see_a_filename(self) -> None:
         """The anti-guess pin: a file name and a layer id are NAMES, not
-        measurements, so the boundary is not given either one. A COG called
-        ``flood_depth_peak.tif`` cannot acquire a flood ramp here, because
-        nothing here is told what the file is called."""
-        params = set(inspect.signature(style_preset_for_publish).parameters)
-        assert params == {"style_preset", "quantity"}, params
+        measurements, so the resolver is not given either one. A COG called
+        ``flood_depth_peak.tif`` cannot acquire a flood ramp, because nothing
+        here is told what the file is called."""
+        params = set(inspect.signature(presets.from_row).parameters)
+        assert params == {"row"}, params
 
-    def test_a_flood_named_layer_with_no_declaration_stays_neutral(self) -> None:
+    def test_a_flood_named_layer_with_no_declaration_stays_bare(self) -> None:
         # The layer the old filename guess styled as flood depth. Its producer
-        # declared nothing, so it publishes neutral.
+        # declared nothing, so it draws bare.
         layer = LayerURI(
             layer_id="flood-depth-peak-R",
             name="flood_depth_peak.tif",
             layer_type="raster",
             uri="s3://runs/R/flood_depth_peak.tif",
-            style_preset="",
         )
-        assert style_preset_for_publish(
-            style_preset=layer.style_preset
-        ) == NEUTRAL_FALLBACK_PRESET
+        assert presets.from_row(layer.style) == presets.bare_default("continuous")
 
 
 # --------------------------------------------------------------------------- #
@@ -225,7 +198,6 @@ class TestDedupByIdentity:
                 "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
                 f"?url={cog}&rescale=0,3&colormap_name=blues"
             ),
-            style_preset="continuous_flood_depth",
         )
         await emitter.add_loaded_layer(workflow_layer)
 
@@ -239,7 +211,6 @@ class TestDedupByIdentity:
                 "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
                 f"?url={cog}&rescale=0,5&colormap_name=viridis"
             ),
-            style_preset="continuous_flood_depth",
         )
         await emitter.add_loaded_layer(llm_republish)
 
@@ -281,14 +252,12 @@ class TestDedupByIdentity:
             name="Protected Areas",
             layer_type="raster",
             uri="https://qgis.example/ogc/wms?LAYERS=wdpa&n=1",
-            style_preset="wdpa_protected_areas",
         )
         second = LayerURI(
             layer_id="wdpa-bbbbbbbbbbbbbbbbbbbbbbbbbb",
             name="Protected Areas",
             layer_type="raster",
             uri="https://qgis.example/ogc/wms?LAYERS=wdpa&n=2",
-            style_preset="wdpa_protected_areas",
         )
         await emitter.add_loaded_layer(first)
         await emitter.add_loaded_layer(second)
@@ -317,7 +286,6 @@ class TestStableMonotonicZIndex:
                 "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
                 f"?url=s3://runs/RUN/dem_{n}.tif"
             ),
-            style_preset="continuous_dem",
         )
 
     @pytest.mark.asyncio
@@ -358,7 +326,6 @@ class TestStableMonotonicZIndex:
                 "https://titiler.example/cog/tiles/{z}/{x}/{y}.png"
                 "?url=s3://runs/RUN/dem_2.tif&colormap_name=viridis"
             ),
-            style_preset="continuous_dem",
         )
         await emitter.add_loaded_layer(republish)
 
@@ -385,7 +352,6 @@ class TestStableMonotonicZIndex:
                     "name": "Seed A",
                     "layer_type": "raster",
                     "uri": "https://qgis.example/ogc/wms?LAYERS=a",
-                    "style_preset": "continuous_dem",
                     "visible": True,
                     "role": "context",
                     "temporal": False,
@@ -396,7 +362,6 @@ class TestStableMonotonicZIndex:
                     "name": "Seed B",
                     "layer_type": "raster",
                     "uri": "https://qgis.example/ogc/wms?LAYERS=b",
-                    "style_preset": "continuous_dem",
                     "visible": True,
                     "role": "context",
                     "temporal": False,

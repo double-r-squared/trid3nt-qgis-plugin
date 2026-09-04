@@ -249,7 +249,7 @@ def test_river_end_to_end_layer_uri(monkeypatch):
     layer = router.route(RIVER_SPEC, {"bbox": list(_KANSAS)})
     assert layer.layer_type == "vector"
     assert layer.role == "input"
-    assert layer.style_preset == "osm_waterways"
+    assert layer.style["kind"] == "reference"
     assert layer.uri.startswith("s3://") and "/river_geometry/" in layer.uri
     assert layer.uri.endswith(".fgb")
 

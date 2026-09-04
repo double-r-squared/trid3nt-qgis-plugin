@@ -14,7 +14,6 @@ from trid3nt_contracts.outputs_manifest import (
     build_entry,
     parse_outputs_manifest,
 )
-from trid3nt_server.emission import styles as quantity_styles
 from trid3nt_server.emission.outputs_seam import (
     build_layers_from_outputs,
     read_outputs_manifest,
@@ -60,22 +59,22 @@ def test_temporal_grouping_and_deterministic_ids():
     assert [l.layer_id for l in res2.layers] == ids
 
 
-def test_registered_quantity_pins_preset():
+def test_a_solved_raster_derives_its_row_from_its_own_kind_and_quantity():
     entries = [build_entry(kind="raster", quantity="flood_depth",
                            name="Peak flood depth",
                            uri="s3://b/%s/flood_depth_peak.tif" % RID, units="meters")]
     res = build_layers_from_outputs(_manifest(entries), run_id=RID)
-    assert res.layers[0].style_preset == "continuous_flood_depth"
-    assert res.unknown_quantity_count == 0
+    assert res.layers[0].style == {"kind": "continuous", "label": "Flood depth",
+                                   "units": "meters"}
 
 
-def test_unknown_quantity_neutral_ramp():
-    quantity_styles.reset_unknown_quantity_fallback_count()
+def test_no_quantity_can_be_unregistered_because_nothing_registers_one():
+    # The quantity nobody put in a table still gets its own title and its own
+    # range - there is no table to be missing from, so there is no fallback.
     entries = [build_entry(kind="raster", quantity="mystery_field",
                            name="Mystery", uri="s3://b/%s/mystery.tif" % RID)]
     res = build_layers_from_outputs(_manifest(entries), run_id=RID)
-    assert res.layers[0].style_preset == "neutral_ramp"
-    assert res.unknown_quantity_count == 1
+    assert res.layers[0].style == {"kind": "continuous", "label": "Mystery field"}
 
 
 def test_scalar_is_log_only():
@@ -119,7 +118,8 @@ def test_mesh_entry_publishes_native_mesh_layer(tmp_path):
     assert mesh.name == "Model results (time series): %s" % reach
     assert mesh.layer_type == "mesh"
     assert mesh.uri == mesh_uri
-    assert mesh.style_preset == "mesh_grid"
+    assert mesh.style == {"kind": "mesh", "label": "Model results",
+                          "dataset_group": "model_results"}
     assert mesh.role == "context"
     assert mesh.bbox is None  # NOT the composer AOI -- MDAL derives it.
     assert mesh.crs_authid == "EPSG:32617"

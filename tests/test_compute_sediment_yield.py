@@ -23,7 +23,7 @@ Coverage:
     ``SedimentYieldAoiTooLargeError``.
 8.  ``test_bad_bbox_raises`` / ``test_bad_erosivity_raises`` -- typed input
     validation.
-9.  ``test_style_preset_resolves_log_colormap`` -- the publish seam resolves
+9.  ``test_the_declared_breaks_are_the_paint`` -- the publish seam resolves
     ``sediment_yield_t_ha_yr`` to a TiTiler interval ``&colormap=`` built from
     the log-spaced class table (the log-scaled colormap requirement).
 """
@@ -142,7 +142,8 @@ def test_rusle_matches_hand_computed_cell(synthetic_inputs, tmp_path) -> None:
     assert isinstance(result, SedimentYieldLayerURI)
     assert isinstance(result, LayerURI)
     assert result.layer_type == "raster"
-    assert result.style_preset == "sediment_yield_t_ha_yr"
+    assert result.style["kind"] == "classed"
+    assert result.style["units"] == "t/ha/yr"
     assert result.units == "t/ha/yr"
     assert tuple(result.bbox) == BBOX
     assert result.rainfall_erosivity == R_TEST
@@ -170,7 +171,7 @@ def test_rusle_matches_hand_computed_cell(synthetic_inputs, tmp_path) -> None:
 
     # The legend rides on the LayerURI, built from the log-class table.
     assert result.legend is not None
-    assert result.legend.kind == "categorical"
+    assert result.legend.kind == "classed"
     assert len(result.legend.classes) == len(SEDIMENT_YIELD_LOG_CLASSES)
 
 
@@ -294,20 +295,24 @@ def test_bad_erosivity_raises(synthetic_inputs) -> None:
         compute_sediment_yield(bbox=BBOX, rainfall_erosivity="wet")
 
 
-def test_style_preset_resolves_log_colormap() -> None:
-    """The one resolver turns the preset into a log-spaced interval colormap."""
-    from trid3nt_server.emission.styles import resolve_style
+def test_the_declared_breaks_are_the_paint() -> None:
+    """ONE table: the declared row's classes are the swatches the legend shows
+    and the ranges the .qml paints."""
+    from trid3nt_server.emission import presets
+    from trid3nt_server.tools.processing.compute_sediment_yield.compute_sediment_yield import (
+        _STYLE,
+    )
 
-    params = resolve_style("sediment_yield_t_ha_yr").style_params()
-    assert params and params.startswith("&colormap=")
-    (key, encoded), = parse_qsl(params.lstrip("&"))
-    assert key == "colormap"
-    intervals = json.loads(encoded)
-    assert len(intervals) == len(SEDIMENT_YIELD_LOG_CLASSES)
-    # Breaks are the log-spaced 1/5/10/50/100/500 table, colors are RGBA.
-    assert [iv[0][0] for iv in intervals] == [
-        lo for lo, _hi, _c, _l in SEDIMENT_YIELD_LOG_CLASSES
-    ]
-    for iv in intervals:
-        assert len(iv[1]) == 4
-        assert all(0 <= ch <= 255 for ch in iv[1])
+    legend = presets.legend_key(_STYLE)
+    assert legend.kind == "classed"
+    assert [(c.value_min, c.value_max, c.color) for c in legend.classes] == [
+        (lo, hi, color) for lo, hi, color, _l in SEDIMENT_YIELD_LOG_CLASSES]
+    # ONE table: the .qml paints the same upper bounds and colours the legend
+    # shows, as DISCRETE bands (a linear ramp over orders of magnitude paints
+    # everything below the worst gullies one flat colour).
+    assert 'colorRampType="DISCRETE"' in legend.qml
+    from xml.sax.saxutils import escape
+
+    for _lo, hi, color, label in SEDIMENT_YIELD_LOG_CLASSES:
+        assert f'value="{hi:.10g}" color="{color}"' in legend.qml
+        assert escape(label) in legend.qml

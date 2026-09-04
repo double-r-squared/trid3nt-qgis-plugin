@@ -494,7 +494,6 @@ def _ok_layer() -> LayerURI:
         name="FIRMS active fires",
         layer_type="vector",
         uri="gs://bucket/cache/dynamic-1h/firms_active_fire/x.fgb",
-        style_preset="firms_active_fire",
         role="primary",
     )
 

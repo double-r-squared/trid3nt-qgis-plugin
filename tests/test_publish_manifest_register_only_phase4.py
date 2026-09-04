@@ -67,7 +67,7 @@ def _depth_manifest_dict() -> dict:
                 "name": "Peak flood depth",
                 "layer_type": "raster",
                 "role": "primary",
-                "style_preset": "continuous_flood_depth",
+                "style": {"kind": "continuous", "ramp": "ylgnbu"},
                 "units": "meters",
                 "cog_uri": "s3://runs/RUNRUNRUN/flood_depth_peak.tif",
                 "frame_no": None,
@@ -93,7 +93,6 @@ def _depth_manifest_dict() -> dict:
                 "name": "Flood depth step 1",
                 "layer_type": "raster",
                 "role": "context",
-                "style_preset": "continuous_flood_depth",
                 "units": "meters",
                 "cog_uri": "s3://runs/RUNRUNRUN/flood_depth_frame_01.tif",
                 "frame_no": 1,
@@ -204,10 +203,10 @@ def test_register_manifest_layers_emits_raw_cog_uri_and_registers(active_registr
     assert rec is not None
     assert rec.uri == "s3://runs/RUNRUNRUN/flood_depth_peak.tif"
 
-    # DATA-DRIVEN LEGEND: stashed keyed by the cog_uri, carrying the SAME ramp
-    # the one resolver produced - and the SAME range the raster is painted on,
-    # which under this preset's declared `policy: data` is the run's own band
-    # statistics off the manifest, not a hardcoded 0-3 m.
+    # The RESOLVED style, stashed keyed by the cog_uri: the declared ramp, and
+    # the SAME range the raster is painted on - under the row's default
+    # `policy: data` that is the run's own band statistics off the manifest,
+    # never a hardcoded 0-3 m.
     legend = pl.pop_legend_for_uri(peak.uri)
     assert legend is not None
     assert legend.kind == "continuous"
@@ -216,20 +215,18 @@ def test_register_manifest_layers_emits_raw_cog_uri_and_registers(active_registr
     assert (legend.vmin, legend.vmax) == (stats["p2"], stats["p98"])
 
 
-def test_style_params_from_band_stats_honors_rgba_and_generic_fallback():
-    # RGBA -> empty (TiTiler renders baked colors), no COG read.
-    assert pl.style_params_from_band_stats("anything", is_rgba=True) == ""
-    # Categorical -> empty (embedded palette wins).
-    assert pl.style_params_from_band_stats("anything", is_categorical=True) == ""
-    # Unknown single-band preset -> generic p2/p98 viridis rescale (no COG read).
-    sp = pl.style_params_from_band_stats("some_unregistered_scalar", p2=1.0, p98=9.0)
-    assert "rescale=1,9" in sp and "colormap_name=viridis" in sp
-    # Flood/wave presets resolve to their pinned ramps (byte-for-byte parity).
-    assert pl.style_params_from_band_stats("continuous_flood_depth") == (
-        "&rescale=0,3&colormap_name=ylgnbu"
-    )
-    sp_wave = pl.style_params_from_band_stats("continuous_wave_height")
-    assert "rescale=0,6" in sp_wave and "colormap_name=gnbu" in sp_wave
+def test_the_register_path_resolves_from_band_stats_without_reading_the_cog():
+    # ``raster_bytes=b""`` is the register-only contract: the worker already
+    # computed the percentiles, so the range resolves with NO COG download.
+    legend = pl.legend_for_published_layer(
+        {"kind": "continuous", "ramp": "ylgnbu", "units": "m"},
+        "s3://runs/R/x.tif", raster_bytes=b"", band_stats=(1.0, 9.0))
+    assert (legend.vmin, legend.vmax) == (1.0, 9.0)
+    assert legend.colormap == "ylgnbu"
+    # A row nobody declared takes the continuous kind's bare default.
+    bare = pl.legend_for_published_layer(
+        None, "s3://runs/R/x.tif", raster_bytes=b"", band_stats=(1.0, 9.0))
+    assert bare.colormap == "viridis" and (bare.vmin, bare.vmax) == (1.0, 9.0)
 
 
 # --------------------------------------------------------------------------- #

@@ -501,7 +501,7 @@ def test_returns_layer_uri_fields():
         assert result.layer_type == "raster"
         assert result.role == "context"
         assert result.units is None
-        assert result.style_preset == "categorical_landcover"
+        assert result.style == {"kind": "classed", "label": "Land Cover"}
         assert "landcover-class" in result.layer_id
         # The class tag appears in the layer_id so two different class-set calls
         # produce distinguishable layer ids.

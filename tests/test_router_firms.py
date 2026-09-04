@@ -67,7 +67,7 @@ def test_spec_identity(spec):
     assert spec.supports_global_query is False
     assert spec.cache.ttl_class == "dynamic-1h"          # twin ttl
     assert spec.source_class == "firms_active_fire"       # twin cache prefix
-    assert spec.output.style_preset == "firms_active_fire"
+    assert spec.output.style["kind"] == "reference"
     assert spec.output.role == "primary"
 
 

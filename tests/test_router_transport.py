@@ -336,7 +336,7 @@ def _direct_window_spec(url: str) -> SourceSpec:
         "params": {"bbox": {"type": "bbox", "required": True}},
         "ingest": {"access": "direct_window"},
         "normalize": {"crs": "EPSG:4326", "units": "Meters"},
-        "output": {"layer_type": "raster", "ext": "tif", "style_preset": "elevation"},
+        "output": {"layer_type": "raster", "ext": "tif", "style": {"kind": "continuous"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 1.0},
     })

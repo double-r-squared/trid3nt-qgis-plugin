@@ -286,7 +286,6 @@ def _stub_fetch_dem():
                 "https://titiler.example/cog/tiles/WebMercatorQuad/"
                 "{z}/{x}/{y}.png?url=s3://x/dem.tif"
             ),
-            style_preset="dem",
             bbox=bb,  # type: ignore[arg-type]
         )
 

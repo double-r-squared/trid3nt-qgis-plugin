@@ -122,13 +122,14 @@ def test_payload_estimate_declared(spec):
     assert spec.payload_estimate.model == "bbox_area"
 
 
-def test_style_preset_resolves_in_the_qgis_registry(spec):
-    """A preset absent from the registry silently renders a wrong colormap."""
-    from trid3nt_server.emission import publish as pl
+def test_the_spec_declares_how_its_raster_is_drawn(spec):
+    """A row nobody declared renders on the bare default, saying nothing about
+    a modelled recharge field."""
+    from trid3nt_server.emission import presets
 
-    from trid3nt_server.emission.styles import known_preset
-
-    assert known_preset(spec.output.style_preset)
+    row = spec.output.style
+    assert presets.from_row(row).kind == "continuous"
+    assert row["units"] and row["label"]
 
 
 def test_corpus_carries_natural_recharge_phrasings(spec):

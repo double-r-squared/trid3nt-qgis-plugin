@@ -54,7 +54,7 @@ def _raster_spec() -> SourceSpec:
         "params": {"bbox": {"type": "bbox", "required": True}},
         "ingest": {"access": "opendap"},
         "normalize": {"crs": "EPSG:4326", "units": "Percent"},
-        "output": {"layer_type": "raster", "ext": "tif", "style_preset": "demo"},
+        "output": {"layer_type": "raster", "ext": "tif", "style": {"kind": "continuous"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 0.01},
     })
@@ -72,7 +72,7 @@ def _vector_spec(properties=None, page_size=2, max_features=5) -> SourceSpec:
         "params": {"bbox": {"type": "bbox", "required": True}},
         "gates": {"max_features": max_features},
         "ingest": ingest,
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "demo_vec"},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "semi-static-7d"},
         "payload_estimate": {"model": "per_feature", "kb_per_feature": 1.0},
     })
@@ -94,7 +94,7 @@ def _station_spec() -> SourceSpec:
             "per_station": {"rows_key": ["data"], "time_key": "t", "value_key": "v"},
         },
         "normalize": {"datum": "MLLW", "units": "m (MLLW)"},
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "coops"},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "dynamic-1h"},
         "payload_estimate": {"model": "per_station", "kb_per_station_per_day": 2.0},
     })
@@ -113,7 +113,7 @@ def _mosaic_spec(max_bbox_deg2=8.0, tile_deg2=0.5) -> SourceSpec:
             "tile_deg2": tile_deg2,
             "mosaic": {"method": "first", "resampling": "nearest"},
         },
-        "output": {"layer_type": "raster", "ext": "tif", "style_preset": "demo_lc"},
+        "output": {"layer_type": "raster", "ext": "tif", "style": {"kind": "continuous"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "tiled", "mb_per_tile": 0.05, "tile_deg2": tile_deg2},
     })
@@ -141,7 +141,7 @@ def _join_spec() -> SourceSpec:
                 },
             },
         },
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "acs"},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "per_feature", "kb_per_feature": 2.0},
     })
@@ -210,9 +210,10 @@ def _imageserver_spec() -> SourceSpec:
         "normalize": {"crs": "EPSG:4326",
                       "units_by_param": {"param": "layer", "map": {"b": "m * 10"}}},
         "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
-                   "emit_bbox": False, "style_preset": "categorical_landcover",
-                   "style_preset_by_param": {"param": "layer",
-                                             "map": {"a": "categorical_landcover", "b": "continuous_dem"}}},
+                   "emit_bbox": False,
+                   "style": {"kind": "continuous",
+                             "by_param": {"param": "layer",
+                                          "map": {"a": {"kind": "classed"}}}}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 0.5, "floor_mb": 0.05, "ceil_mb": 50.0},
     })
@@ -289,13 +290,14 @@ def test_imageserver_export_all_zero_is_empty(monkeypatch):
 def test_imageserver_layer_uri_param_keyed_style_and_units():
     from trid3nt_server.tools.fetchers._router import router as rmod
     spec = _imageserver_spec()
-    # layer "a": categorical preset, units None (absent from units map), no bbox.
+    # layer "a": the mapped row overrides the base kind; units None (absent
+    # from the units map), no bbox.
     la = rmod.build_layer_uri(spec, {"bbox": [-112.0, 34.5, -111.9, 34.6], "layer": "a"}, "s3://x.tif")
-    assert la.style_preset == "categorical_landcover" and la.units is None
+    assert la.style == {"kind": "classed"} and la.units is None
     assert la.role == "primary" and la.bbox is None
-    # layer "b": continuous preset, mapped units.
+    # layer "b": no mapped row, so the base row stands; mapped units.
     lb = rmod.build_layer_uri(spec, {"bbox": [-112.0, 34.5, -111.9, 34.6], "layer": "b"}, "s3://x.tif")
-    assert lb.style_preset == "continuous_dem" and lb.units == "m * 10"
+    assert lb.style == {"kind": "continuous"} and lb.units == "m * 10"
 
 
 # --------------------------------------------------------------------------- #
@@ -332,7 +334,7 @@ def _stac_float_spec() -> SourceSpec:
         },
         "normalize": {"crs": "EPSG:4326", "units": "deg C"},
         "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
-                   "emit_bbox": False, "style_preset": "land_surface_temp_c"},
+                   "emit_bbox": False, "style": {"kind": "continuous"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 0.5, "floor_mb": 0.1},
     })
@@ -680,7 +682,7 @@ def _wave2_spec(**over) -> SourceSpec:
         "endpoints": {"data": {"url": "http://example.test/FeatureServer/0/query"}},
         "params": {"bbox": {"type": "bbox", "required": True}},
         "ingest": {"pagination": {"page_size": 2}},
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "w2"},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "per_feature", "kb_per_feature": 1.0},
     }
@@ -806,8 +808,7 @@ def _serialize_spec(serialize: dict | None) -> SourceSpec:
         "params": {"bbox": {"type": "bbox", "required": True}},
         "ingest": ingest,
         "normalize": {"crs": "EPSG:4326", "units": "meters"},
-        "output": {"layer_type": "raster", "ext": "tif", "role": "input",
-                   "style_preset": "continuous_dem"},
+        "output": {"layer_type": "raster", "ext": "tif", "role": "input"},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 8.0, "floor_mb": 0.1},
     })
@@ -875,8 +876,7 @@ def _dw_spec(**ingest_extra) -> SourceSpec:
                    "amc": {"type": "enum", "default": "average", "values": ["dry", "average", "wet"]}},
         "ingest": ingest,
         "normalize": {"crs": "EPSG:4326", "units": "curve_number"},
-        "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
-                   "style_preset": "curve_number"},
+        "output": {"layer_type": "raster", "ext": "tif", "role": "primary"},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 2.0},
     })
@@ -946,8 +946,7 @@ def _mu_spec() -> SourceSpec:
         "params": {"bbox": {"type": "bbox", "required": True}},
         "ingest": {"access": "multi_url", "multi_url": {"mode": "vrt"}},
         "normalize": {"crs": "EPSG:4326", "units": "persons_per_cell"},
-        "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
-                   "style_preset": "population_density"},
+        "output": {"layer_type": "raster", "ext": "tif", "role": "primary"},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 12.0},
     })
@@ -1052,8 +1051,7 @@ def _gz_spec(**go_extra) -> SourceSpec:
         "ingest": {"access": "gzip_object", "gzip_object": go,
                    "serialize": {"nodata": -9999.0, "dtype": "float32"}},
         "normalize": {"crs": "EPSG:4326", "units": "mm"},
-        "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
-                   "style_preset": "precip_mm"},
+        "output": {"layer_type": "raster", "ext": "tif", "role": "primary"},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 0.01},
     })

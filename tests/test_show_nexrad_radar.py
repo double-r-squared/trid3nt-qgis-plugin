@@ -92,7 +92,7 @@ def test_product_n0q_produces_distinct_layeruri() -> None:
     assert "Base Reflectivity" in n0q.name
     assert n0q.units == "dBZ"
     assert n0q.layer_id == "nexrad-n0q-conus"
-    assert n0q.style_preset == "nexrad_n0q"
+    assert n0q.style["kind"] == "continuous"
 
 
 def test_product_vil_produces_distinct_layeruri() -> None:
@@ -102,7 +102,7 @@ def test_product_vil_produces_distinct_layeruri() -> None:
     assert "Vertically Integrated Liquid" in vil.name
     assert vil.units == "kg/m^2"
     assert vil.layer_id == "nexrad-vil-conus"
-    assert vil.style_preset == "nexrad_vil"
+    assert vil.style["kind"] == "continuous"
 
 
 # ---------------------------------------------------------------------------

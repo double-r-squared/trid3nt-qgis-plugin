@@ -14,7 +14,7 @@ Coverage:
     displacement, and straightness all match hand-computed expectations.
  4. ``test_multi_individual_grouping`` — two individuals -> two independent
     trajectories; no segment spans two animals.
- 5. ``test_layer_uri_shape`` — vector LayerURI (layer_type vector, style_preset,
+ 5. ``test_layer_uri_shape`` - vector LayerURI (layer_type vector, style,
     units m, bbox set) and the segment FlatGeobuf round-trips through the cache.
  6. ``test_honest_empty_single_point`` — < 2 points -> INSUFFICIENT_POINTS typed
     error (the honest-empty path; never an empty-success layer).
@@ -303,7 +303,7 @@ def test_layer_uri_shape():
 
     assert isinstance(layer, LayerURI)
     assert layer.layer_type == "vector"
-    assert layer.style_preset == "movement_trajectory"
+    assert layer.style == {"kind": "reference", "geometry": "line"}
     assert layer.role == "context"
     assert layer.units == "m"
     assert layer.uri is not None and layer.uri.endswith(".fgb")

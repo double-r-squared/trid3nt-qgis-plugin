@@ -47,7 +47,6 @@ def _frame_layer(frame_no: int, run_id: str, *, engine: str = "swmm") -> LayerUR
             "https://titiler.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
             f"?url={cog}&rescale=0,2&colormap_name=blues"
         ),
-        style_preset="continuous_flood_depth",
         role="context",
     )
 
@@ -62,7 +61,6 @@ def _peak_layer(run_id: str) -> LayerURI:
             "https://titiler.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
             f"?url={cog}&rescale=0,3&colormap_name=blues"
         ),
-        style_preset="continuous_flood_depth",
         role="primary",
     )
 
@@ -103,7 +101,6 @@ def _frame_summary(layer: LayerURI):
         name=layer.name,
         layer_type=layer.layer_type,
         uri=layer.uri,
-        style_preset=layer.style_preset,
         visible=True,
         role=layer.role,
         temporal=layer.temporal is not None,
@@ -177,7 +174,6 @@ async def test_non_frame_layers_keep_cog_identity_dedup() -> None:
         name="Peak flood depth",
         layer_type="raster",
         uri=f"https://t/cog/tiles/{{z}}/{{x}}/{{y}}.png?url={cog}&colormap_name=blues",
-        style_preset="continuous_flood_depth",
         role="primary",
     )
     b = LayerURI(
@@ -185,7 +181,6 @@ async def test_non_frame_layers_keep_cog_identity_dedup() -> None:
         name="Peak flood depth",
         layer_type="raster",
         uri=f"https://t/cog/tiles/{{z}}/{{x}}/{{y}}.png?url={cog}&colormap_name=viridis",
-        style_preset="continuous_flood_depth",
         role="primary",
     )
     await emitter.add_loaded_layer(a)

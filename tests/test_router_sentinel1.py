@@ -125,5 +125,5 @@ def test_units_by_param(spec):
         "s3://bucket/x.tif",
     )
     assert layer.units == "VH gamma0 backscatter (dB)"
-    assert layer.style_preset == "sar_backscatter_db"
+    assert layer.style["kind"] == "continuous"
     assert layer.role == "primary"

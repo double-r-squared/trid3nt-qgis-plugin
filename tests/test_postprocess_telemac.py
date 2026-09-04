@@ -31,13 +31,13 @@ def test_no_substance_class_but_the_dye_one_publishes_a_dye_named_product():
     for name in ("oil", "sediment"):
         assert "dye" not in T[name].cog
         assert "dye" not in T[name].quantity
-    # each class's raster resolves through the ONE styling seam, never a preset
-    # engine code invented.
-    from trid3nt_server.emission.styles import resolve_style_preset
+    # each class carries its OWN declared row, so two classes on one canvas are
+    # told apart by what the reader is shown, not by a name in a table.
+    from trid3nt_server.emission import presets
 
     for product in T.values():
-        preset, is_fallback = resolve_style_preset(product.quantity)
-        assert (preset, is_fallback) == (product.style_preset, False)
+        assert presets.from_row(product.style).kind == "continuous"
+    assert len({(p.style["ramp"], p.style["label"]) for p in T.values()}) == 2
 
 
 def test_the_peak_layer_handle_carries_the_class_that_produced_it():

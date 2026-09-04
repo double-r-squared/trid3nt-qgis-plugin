@@ -365,7 +365,6 @@ async def test_ingest_merges_alongside_existing_layers(monkeypatch, fake_persist
         "name": "Flood depth",
         "layer_type": "raster",
         "uri": "https://tiles.example/flood",
-        "style_preset": "continuous_flood_depth",
         "visible": True,
         "role": "primary",
         "temporal": False,

@@ -46,7 +46,7 @@ def raster_spec() -> dict:
         "gates": {"conus_only": True},
         "ingest": {"access": "opendap"},
         "normalize": {"crs": "EPSG:4326", "units": "Percent", "orientation": "north_up"},
-        "output": {"layer_type": "raster", "ext": "tif", "style_preset": "demo_{variable}"},
+        "output": {"layer_type": "raster", "ext": "tif", "style": {"kind": "continuous"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 0.01},
     }
@@ -60,7 +60,7 @@ def vector_spec() -> dict:
         "endpoints": {"data": {"url": "http://example.test/FeatureServer/0/query"}},
         "params": {"bbox": {"type": "bbox", "required": True}},
         "gates": {"max_features": 5},
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "demo_vec"},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "semi-static-7d"},
         "payload_estimate": {"model": "per_feature", "kb_per_feature": 1.0},
     }
@@ -87,7 +87,7 @@ def join_spec() -> dict:
                 },
             },
         },
-        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "acs"},
+        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "per_feature", "kb_per_feature": 2.0},
     }

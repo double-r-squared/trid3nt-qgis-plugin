@@ -295,7 +295,7 @@ def test_enhance_returns_layer_uri_fields(tmp_path, monkeypatch_local_cache):
     layer = enhance_satellite_image(src, _bucket="test-bucket")
     assert layer.layer_type == "raster"
     assert layer.units == "rgb"
-    assert layer.style_preset == "rgb_composite"
+    assert layer.style == {"kind": "continuous"}
     assert layer.name.startswith("Enhanced")
     assert layer.role == "context"
 

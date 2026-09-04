@@ -31,7 +31,6 @@ from trid3nt_server.workflows.runtime import (
     Physics,
     PlanValidationError,
     Ref,
-    RenderSourceMissingError,
     ResolvedParams,
     RunMode,
     StepFailedError,
@@ -169,18 +168,6 @@ async def stub_rung(**kwargs):
     if "stub_rung" in _FAIL_AT:
         raise RuntimeError("rung down")
     return "s3://b/rung.tif"
-
-
-class _StubLayer:
-    """Stands in for a published LayerURI: a real object-store raster to style."""
-
-    uri = "s3://b/real.tif"
-    layer_id = "stub-layer"
-
-
-async def stub_layer(**kwargs):
-    _CALLS.append("stub_layer")
-    return _StubLayer()
 
 
 async def stub_self_gating(**kwargs):
@@ -456,7 +443,7 @@ def test_named_applies_once():
 
 def test_gate_rejects_step_modifiers():
     for call in (lambda g: g.named("x"), lambda g: g.overrides_domain(),
-                 lambda g: g.style(preset="p"), lambda g: g.chart("c", builder=stub_chart)):
+                 lambda g: g.chart("c", builder=stub_chart)):
         with pytest.raises(ModifierIllegalError):
             call(FormGate())
 
@@ -1280,35 +1267,6 @@ async def test_an_auxiliary_chart_failure_does_not_kill_the_run():
     assert out.value["uri"] == "s3://b/k.tif"
     assert out.executed == ["a"]
     assert len(out.notes) == 1 and "chart-boom" in out.notes[0]
-
-
-@pytest.mark.asyncio
-async def test_a_step_that_produced_no_layer_to_style_is_FATAL():
-    """The honesty floor: a declared style whose source is not a layer means the
-    step did not make the map layer it promised - that is a primary defect, not a
-    styling note."""
-    plan = Plan("aux_r", None, (
-        Step(runner=f"{_HERE}.stub_producer").named("a").style(preset="p"),
-    ))
-    with pytest.raises(RenderSourceMissingError, match="no object-store layer"):
-        await _run(plan, _params(), {}, resume=False)
-
-
-@pytest.mark.asyncio
-async def test_a_styling_failure_over_a_real_layer_is_only_a_note(monkeypatch):
-    """The other half of the split: there IS a layer, the re-painting of it failed."""
-    import trid3nt_server.emission.restyle as _rs
-
-    def _boom(**kwargs):
-        raise RuntimeError("restyle-boom")
-
-    monkeypatch.setattr(_rs, "apply_style", _boom)
-    plan = Plan("style_r", None, (
-        Step(runner=f"{_HERE}.stub_layer").named("a").style(preset="p"),
-    ))
-    out = await _run(plan, _params(), {}, resume=False)
-    assert out.value.uri == "s3://b/real.tif"
-    assert len(out.notes) == 1 and "restyle-boom" in out.notes[0]
 
 
 @pytest.mark.asyncio

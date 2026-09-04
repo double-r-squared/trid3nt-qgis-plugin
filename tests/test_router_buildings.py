@@ -90,7 +90,7 @@ def test_spec_identity():
     assert SPEC.name == "fetch_buildings" and SPEC.source_class == "buildings"
     assert SPEC.error_code_prefix == "BUILDINGS"
     assert SPEC.shape == "vector-fgb" and SPEC.output.layer_type == "vector"
-    assert SPEC.output.role == "input" and SPEC.output.style_preset == "affected_buildings"
+    assert SPEC.output.role == "input" and SPEC.output.style["kind"] == "reference"
     assert SPEC.output.emit_bbox is False
     assert SPEC.hooks.build_request == "buildings.build_request"
     sw = SPEC.ingest["sidecar_write"]

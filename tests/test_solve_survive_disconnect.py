@@ -239,7 +239,6 @@ def _depth_layer() -> LayerURI:
         name="Peak flood depth",
         layer_type="raster",
         uri="s3://runs/flood-run/peak_depth.tif?cog",
-        style_preset="continuous_flood_depth",
         role="primary",
     )
 
@@ -250,7 +249,6 @@ def _input_layer() -> LayerURI:
         name="Land cover",
         layer_type="raster",
         uri="s3://runs/flood-run/landcover.tif?cog",
-        style_preset="nlcd",
         role="input",
     )
 

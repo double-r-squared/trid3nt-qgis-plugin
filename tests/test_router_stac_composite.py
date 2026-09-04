@@ -72,12 +72,12 @@ def test_landsat_role_and_units_split(specs):
         s, router.validate_params(s, {"bbox": list(_BBOX), "band_combo": "thermal"}), "s3://x/t.tif")
     assert thermal.role == "primary"
     assert thermal.units == "Land-surface temperature (deg C)"
-    assert thermal.style_preset == "landsat_rgb"
+    assert thermal.style["kind"] == "continuous"
     rgb = router.build_layer_uri(
         s, router.validate_params(s, {"bbox": list(_BBOX), "band_combo": "true_color"}), "s3://x/r.tif")
     assert rgb.role == "context"
     assert rgb.units is None
-    assert rgb.style_preset == "landsat_rgb"
+    assert rgb.style["kind"] == "continuous"
 
 
 # --------------------------------------------------------------------------- #

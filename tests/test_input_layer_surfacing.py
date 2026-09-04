@@ -70,7 +70,6 @@ async def test_publish_input_layer_forces_role_input_and_no_bbox():
         name="Rivers",
         layer_type="vector",
         uri="s3://runs/r/rivers.fgb",
-        style_preset="osm_waterways",
         role="primary",
         bbox=(-1.0, -1.0, 1.0, 1.0),
     )
@@ -105,7 +104,6 @@ async def test_publish_input_layer_surfaces_raw_s3_raster():
         name="DEM",
         layer_type="raster",
         uri="s3://runs/r/dem.tif",  # raw s3 COG - now renderable
-        style_preset="continuous_dem",
         role="input",
     )
     ok = await publish_input_layer(emitter, layer)
@@ -126,7 +124,6 @@ async def test_publish_input_layer_drops_gs_raster():
         name="DEM",
         layer_type="raster",
         uri="gs://runs/r/dem.tif",  # genuinely un-renderable
-        style_preset="continuous_dem",
         role="input",
     )
     ok = await publish_input_layer(emitter, layer)
@@ -139,7 +136,7 @@ async def test_publish_input_layer_none_emitter_is_noop():
     """No emitter bound (verify/CI direct-call) -> no-op, returns False, no raise."""
     layer = LayerURI(
         layer_id="x", name="x", layer_type="vector", uri="s3://r/x.fgb",
-        style_preset="p", role="input",
+        role="input",
     )
     assert await publish_input_layer(None, layer) is False
     assert await publish_input_layer(_emitter(), None) is False
@@ -157,7 +154,7 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
     emitter.add_loaded_layer = _boom  # type: ignore[method-assign]
     layer = LayerURI(
         layer_id="v", name="v", layer_type="vector", uri="s3://r/v.fgb",
-        style_preset="p", role="input",
+        role="input",
     )
     # Must NOT raise.
     ok = await publish_input_layer(emitter, layer)
@@ -183,10 +180,10 @@ async def test_publish_raster_input_cog_surfaces_with_provenance():
     MUST reach the emitter, never silently drop."""
     published: list[dict] = []
 
-    def _mock_publish_layer(layer_uri, layer_id, style_preset, name=None, **kw):  # noqa: ANN001
+    def _mock_publish_layer(layer_uri, layer_id, style=None, name=None, **kw):  # noqa: ANN001
         published.append(
             {"layer_uri": layer_uri, "layer_id": layer_id,
-             "style_preset": style_preset, "name": name}
+             "style": style, "name": name}
         )
         return "s3://test-runs/RID/input-bathymetry.tif"
 
@@ -198,7 +195,8 @@ async def test_publish_raster_input_cog_surfaces_with_provenance():
             cog_uri="s3://test-cache/topobathy/aoi.tif",
             layer_id="input-bathymetry-RID",
             name='Input: bathymetry (topobathy, native CUDEM 1/9")',
-            style_preset="continuous_dem",
+            style={"kind": "continuous", "ramp": "gray", "units": "m",
+                   "label": "Elevation"},
         )
 
     assert ok is True
@@ -206,13 +204,12 @@ async def test_publish_raster_input_cog_surfaces_with_provenance():
     # publish_layer as the layer_uri.
     assert len(published) == 1
     assert published[0]["layer_uri"] == "s3://test-cache/topobathy/aoi.tif"
-    assert published[0]["style_preset"] == "continuous_dem"
+    assert published[0]["style"]["label"] == "Elevation"
     # The valid LayerURI reached the emitter (cannot silently drop).
     assert len(emitter._loaded_layers) == 1
     row = emitter._loaded_layers[0]
     assert row.role == "context"
     assert row.layer_type == "raster"
-    assert row.style_preset == "continuous_dem"
     assert row.name.startswith("Input: bathymetry (")
     assert row.uri == "s3://test-runs/RID/input-bathymetry.tif"
 
@@ -234,8 +231,7 @@ async def test_publish_raster_input_cog_publish_failure_non_fatal():
          patch(_PUBLISH_LAYER_TARGET, side_effect=_boom):
         ok = await publish_raster_input_cog(
             emitter, cog_uri="s3://c/x.tif", layer_id="input-bathymetry-x",
-            name="Input: bathymetry (x)", style_preset="continuous_dem",
-        )
+            name="Input: bathymetry (x)", )
     assert ok is False
     assert emitter._loaded_layers == []
 
@@ -261,7 +257,7 @@ async def test_publish_raster_input_cog_skips_missing_object_loudly(caplog):
         ok = await publish_raster_input_cog(
             emitter, cog_uri="s3://test-runs/RID/bed_bathymetry.tif",
             layer_id="input-river-bed-DEAD", name="Input: river bed bathymetry",
-            style_preset="continuous_dem", role="context",
+            role="context",
         )
 
     assert ok is False
@@ -286,11 +282,9 @@ async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
     with patch(_PUBLISH_LAYER_TARGET, side_effect=_spy):
         assert await publish_raster_input_cog(
             None, cog_uri="s3://c/x.tif", layer_id="i", name="n",
-            style_preset="continuous_dem",
         ) is False
         assert await publish_raster_input_cog(
             _emitter(), cog_uri="", layer_id="i", name="n",
-            style_preset="continuous_dem",
         ) is False
     assert called["n"] == 0
 

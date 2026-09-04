@@ -485,7 +485,7 @@ class TestResultMaterialization:
         # Vector-tool envelope conventions (clip_vector_to_polygon shape).
         assert result.layer_type == "vector"
         assert result.role == "primary"
-        assert result.style_preset == sq_module._RESULT_STYLE_PRESET
+        assert result.style == sq_module._RESULT_STYLE
         assert result.layer_id.startswith("spatial-query-")
         assert result.uri.endswith(".fgb")
         assert Path(result.uri).is_file()

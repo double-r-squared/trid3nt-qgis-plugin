@@ -320,7 +320,7 @@ def test_end_to_end_happy_path_roundtrip(monkeypatch, fake_s3) -> None:
     assert isinstance(res, NWMStreamflowLayerURI)
     assert res.layer_type == "vector"
     assert res.role == "primary"
-    assert res.style_preset == "nwm_streamflow"
+    assert res.style["kind"] == "reference"
     assert res.units == "m^3/s"
     assert res.uri is not None and res.uri.endswith(".fgb")
     assert res.layer_id.startswith("nwm-streamflow-analysis_assim-")

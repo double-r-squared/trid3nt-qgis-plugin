@@ -199,18 +199,18 @@ def test_the_chart_title_is_not_doubled_on_a_bbox_only_invocation():
 
 def test_do_layer_contract_fields():
     from trid3nt_contracts.telemac_contracts import (
-        TELEMAC_DO_STYLE_PRESET,
+        TELEMAC_DO_STYLE,
         TelemacDoLayerURI,
     )
     lay = TelemacDoLayerURI(
         layer_id="t", name="n", layer_type="raster", uri="s3://b/k.tif",
-        style_preset=TELEMAC_DO_STYLE_PRESET, role="primary",
+        style=TELEMAC_DO_STYLE, role="primary",
         do_min_mgl=4.0, do_min_distance_m=6500.0, do_standard_mgl=5.0,
         do_violates_standard=True, sag_curve_distance_m=[0.0, 100.0],
         sag_curve_do_mgl=[9.0, 8.0], sag_curve_bod_mgl=[20.0, 18.0],
     )
     assert lay.do_violates_standard is True
-    assert lay.style_preset == "continuous_dissolved_oxygen"
+    assert lay.style == TELEMAC_DO_STYLE
 
 
 # --- the REAL composition, driven through the declared plan ------------------ #
@@ -270,7 +270,7 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
     as a dye release point."""
     monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
     from trid3nt_contracts.telemac_contracts import (
-        TELEMAC_DO_STYLE_PRESET,
+        TELEMAC_DO_STYLE,
         TelemacDoLayerURI,
     )
     from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
@@ -279,7 +279,7 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
     seen: dict = {}
     layer = TelemacDoLayerURI(
         layer_id="t", name="Dissolved oxygen sag (eel)", layer_type="raster",
-        uri="s3://b/k.tif", style_preset=TELEMAC_DO_STYLE_PRESET, role="primary",
+        uri="s3://b/k.tif", role="primary",
         do_min_mgl=8.0, do_min_distance_m=100.0, do_standard_mgl=5.0,
         do_violates_standard=False)
 

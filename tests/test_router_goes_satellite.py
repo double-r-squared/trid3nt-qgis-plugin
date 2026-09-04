@@ -321,7 +321,7 @@ def test_end_to_end_visible_band_happy_path(monkeypatch, fake_s3) -> None:
     assert isinstance(res, GOESSatelliteLayerURI)
     assert res.layer_type == "raster"
     assert res.role == "context"
-    assert res.style_preset == "goes_satellite"
+    assert res.style["kind"] == "continuous"
     assert res.units == "reflectance"
     assert res.uri is not None and res.uri.endswith(".tif")
     assert res.layer_id == "goes-goes-19-visible--82.0000-26.0000"

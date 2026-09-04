@@ -44,7 +44,6 @@ def _make_layer(layer_id: str = "L-flood-cancel-001") -> LayerURI:
         name="Flood depth peak",
         layer_type="raster",
         uri=f"https://qgis.example/wms?LAYERS={layer_id}",
-        style_preset="continuous_flood_depth",
         role="primary",
     )
 

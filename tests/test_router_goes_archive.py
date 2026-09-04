@@ -140,7 +140,7 @@ def test_archive_fire_temperature_cache_params_byte_identical(_stub_three_keys):
     }
     assert plans[0].name == "GOES Fire Temperature (Archive) step 1 2026-06-22T14:00:00Z (GOES-18)"
     assert plans[0].layer_id == "goes-arch-firetemp-20260622140000--114.050-37.000"
-    assert plans[0].style_preset == "goes_rgb_animation"
+    assert plans[0].style["kind"] == "continuous"
 
 
 def test_archive_hotspots_adds_thresholds_and_preset(_stub_three_keys):
@@ -148,7 +148,7 @@ def test_archive_hotspots_adds_thresholds_and_preset(_stub_three_keys):
     assert p.cache_params["product"] == "fire_hotspots"
     assert p.cache_params["bt_c07_min_k"] == 320.0 and p.cache_params["bt_diff_min_k"] == 10.0
     assert p.cache_params["gamma"] == 1 and p.cache_params["res_deg"] == 0.02
-    assert p.style_preset == "goes_fire_hotspots_rgba"
+    assert p.style["kind"] == "continuous"
 
 
 def test_archive_true_color_alias_and_finer_res(_stub_three_keys):
@@ -196,7 +196,7 @@ def test_two_bands_form_two_synchronized_groups(_stub_three_keys):
 def test_active_fire_route_returns_hotspot_frames(_stub_three_keys):
     layers = TOOL_REGISTRY["fetch_goes_active_fire"].fn(bbox=_BBOX)
     assert isinstance(layers, list) and len(layers) == 3
-    assert layers[0].style_preset == "goes_fire_hotspots_rgba"
+    assert layers[0].style["kind"] == "continuous"
 
 
 def test_honesty_floor_all_frames_degrade(_stub_three_keys, monkeypatch):

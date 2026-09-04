@@ -283,7 +283,7 @@ def test_the_bed_spec_is_registered_and_declares_a_fixed_service():
     assert spec.ingest["access"] == "imageserver_export"
     assert spec.ingest["imageserver"]["service"] == "DEM_all"
     assert spec.output.role == "input"
-    assert spec.output.style_preset == "continuous_dem"
+    assert spec.output.style == {"kind": "continuous", "ramp": "gray", "units": "m", "label": "Elevation"}
 
 
 # --------------------------------------------------------------------------- #

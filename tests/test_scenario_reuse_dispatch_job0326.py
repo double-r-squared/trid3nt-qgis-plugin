@@ -52,7 +52,6 @@ def _make_plume(layer_id: str, lat: float, lon: float) -> TelemacDyeLayerURI:
         name="Contaminant Plume",
         layer_type="raster",
         uri=f"s3://runs/{layer_id}/peak_concentration.tif",
-        style_preset="continuous_dye_concentration",
         bbox=(lon - 0.1, lat - 0.1, lon + 0.1, lat + 0.1),
         dye_cmax_mgl=12.5,
     )

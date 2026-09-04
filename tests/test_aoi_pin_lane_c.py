@@ -99,7 +99,6 @@ def _stub_swmm_solver(monkeypatch):
                 "https://titiler.example/cog/tiles/WebMercatorQuad/"
                 "{z}/{x}/{y}.png?url=s3://x/peak.tif"
             ),
-            style_preset="swmm_depth",
             bbox=tuple(_SOLVE_DOMAIN),  # type: ignore[arg-type]
         )
 
@@ -200,7 +199,6 @@ def test_followup_fetch_defaults_to_pinned_aoi_end_to_end(
             name="Building footprints (OSM)",
             layer_type="vector",
             uri="https://qgis.example/ogc/wms?LAYERS=buildings",
-            style_preset="",
             bbox=tuple(bbox) if bbox else None,  # type: ignore[arg-type]
         )
 

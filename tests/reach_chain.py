@@ -63,7 +63,7 @@ def _write(tmp_path, name: str, geometry: dict[str, Any]) -> str:
 
 def _layer(uri: str, name: str, bbox: list[float] | None) -> LayerURI:
     return LayerURI(layer_id=name, name=name, layer_type="vector", uri=uri,
-                    style_preset="nhd_waterbodies", role="context", bbox=bbox)
+                    role="context", bbox=bbox)
 
 
 def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,

@@ -74,7 +74,6 @@ def _layer(layer_id: str, uri: str, layer_type: str = "raster") -> LayerURI:
         name=layer_id,
         layer_type=layer_type,  # type: ignore[arg-type]
         uri=uri,
-        style_preset="",
     )
 
 

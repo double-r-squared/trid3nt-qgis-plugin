@@ -34,7 +34,7 @@ from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.processing.digitize_water_body import digitize_water_body as wb_mod
 from trid3nt_server.tools.processing.digitize_water_body.digitize_water_body import (
     _METADATA,
-    _STYLE_PRESET,
+    _STYLE,
     WaterBodyBboxError,
     WaterBodyNoImageryError,
     WaterBodyNoWaterError,
@@ -237,7 +237,7 @@ def test_happy_path_digitizes_water_and_roundtrips() -> None:
         )
 
     assert layer.layer_type == "vector"
-    assert layer.style_preset == _STYLE_PRESET
+    assert layer.style == _STYLE
     assert layer.role == "primary"
     assert layer.uri.startswith("s3://")
     assert layer.units == "m^2"

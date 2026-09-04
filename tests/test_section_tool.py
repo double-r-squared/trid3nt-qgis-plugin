@@ -47,7 +47,7 @@ def test_the_cut_between_two_points_keeps_only_what_lies_between_them(tmp_path):
     assert cut.length_m == pytest.approx(4565.0, rel=0.01)
     assert cut.utm_epsg == 32617
     assert cut.layer_type == "vector"
-    assert cut.style_preset == "section_polygon"
+    assert cut.style == {"kind": "reference", "geometry": "polygon"}
 
 
 def test_the_two_end_faces_stand_where_the_points_were_put(tmp_path):

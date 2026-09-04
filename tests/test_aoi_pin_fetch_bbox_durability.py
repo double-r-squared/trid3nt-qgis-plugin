@@ -113,7 +113,6 @@ def _stub_fetch_buildings():
             name="Building footprints (OSM)",
             layer_type="vector",
             uri="https://qgis.example/ogc/wms?LAYERS=buildings",
-            style_preset="",
             bbox=tuple(bbox) if bbox else None,  # type: ignore[arg-type]
         )
 

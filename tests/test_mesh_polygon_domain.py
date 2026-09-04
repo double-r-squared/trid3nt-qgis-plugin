@@ -176,7 +176,7 @@ def test_the_layer_a_chained_row_produced_enters_as_the_geometry_it_carries(
     path.write_text(json.dumps(_BASIN))
     layer = LayerURI(layer_id="section-1", name="Section of a polygon",
                      layer_type="vector", uri=str(path),
-                     style_preset="section_polygon", role="primary")
+                     role="primary")
     sent = _stub_om2d(monkeypatch, tmp_path)
     OM2D.build(_recipe(extent=layer))
     assert sent["config"]["domain_geojson"] == "/data/domain.geojson"

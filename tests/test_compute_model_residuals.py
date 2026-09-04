@@ -164,7 +164,7 @@ def test_residuals_matches_hand_computed(tmp_path) -> None:
     assert isinstance(result, ModelResidualsLayerURI)
     assert isinstance(result, LayerURI)
     assert result.layer_type == "vector"
-    assert result.style_preset == "model_residuals"
+    assert result.style == {"kind": "reference", "geometry": "point"}
     assert result.name == "Model residuals (3 points)"
     assert result.n_points == 3
     assert result.mean_error == pytest.approx(2.0, abs=1e-3)

@@ -1,27 +1,24 @@
-"""publish_layer -- DATA-DRIVEN LEGEND KEY (the colormap KEY comes FROM THE DATA).
+"""publish_layer -- the RESOLVED STYLE a published raster carries.
 
-NATE's principle: when we fetch a map the gradient/key must MEAN something, not be
-a retroactive hardcoded guess. ``publish_layer`` now EMITS a ``LegendKey`` derived
-DIRECTLY from the resolved TiTiler ``style_params`` -- the SAME
-``&rescale=lo,hi&colormap_name=name`` it resolves for the raster -- so the legend
-range and the painted-raster range AGREE by construction. TiTiler exit: the key
-is stashed keyed by the returned raw ``s3://`` COG uri (the envelope uri) so the
-pipeline emitter can lift it onto the ``ProjectLayerSummary`` (the atomic tool
-returns a bare URI string, not a typed ``LayerURI``); the register-only manifest
-seam (``register_published_manifest``) stashes by the same raw ``cog_uri`` (its
-coverage lives in ``test_publish_manifest_register_only_phase4.py``).
+The gradient and the range a reader is shown must MEAN something, so both come
+out of ONE resolution of the layer's declared row against the layer's own
+bytes: the legend range and the painted range agree by construction because
+there is no second read. The result is stashed keyed by the returned raw
+``s3://`` COG uri, so the pipeline emitter can lift it onto the
+``ProjectLayerSummary`` (the atomic tool returns a bare URI string, not a typed
+``LayerURI``); the register-only manifest seam stashes by the same
+``cog_uri`` (coverage in ``test_publish_manifest_register_only_phase4.py``).
 
 Coverage:
-  (a) a CONTINUOUS raster publish carries a legend with the REAL vmin/vmax +
-      colormap (the run's own p2/p98 range for a data-policy preset; the declared
-      domain range for a fixed one -- whichever the raster RENDERS with);
-  (b) the legend range EQUALS the URL rescale range (no second, drifting read);
-  (c) a CATEGORICAL (paletted/NLCD) raster carries kind="categorical" classes
-      from the embedded GDAL color table (transparent slots dropped);
-  (d) RGBA / terrain passthrough layers carry NO legend (None) -> legacy render;
-  (e) the legend round-trips through the URI stash by display uri.
+  (a) a CONTINUOUS raster carries the REAL vmin/vmax + ramp (the run's own
+      p2/p98 for a data-policy row; the declared domain range for a fixed one);
+  (b) the layer ships the .qml the map loads, over that same range;
+  (c) a paletted raster carries ``kind="classed"`` swatches from its own
+      embedded GDAL colour table (transparent slots dropped);
+  (d) an RGB(A) composite carries NO key - it is already painted;
+  (e) the resolved style round-trips through the URI stash.
 
-No Cloud Run / GCS / TiTiler network I/O -- real GeoTIFF bytes built by rasterio.
+No network I/O -- real GeoTIFF bytes built by rasterio.
 """
 
 from __future__ import annotations
@@ -34,10 +31,10 @@ from rasterio.io import MemoryFile
 from trid3nt_server.emission import publish as pl
 from trid3nt_server.emission.publish import (
     _categorical_legend_from_colormap,
-    _parse_style_params,
     legend_for_published_layer,
     pop_legend_for_uri,
     publish_layer,
+    resolve_layer_style,
 )
 
 MOD = pl
@@ -121,45 +118,32 @@ def _rgba_geotiff_bytes(bands: int = 4, size: int = 64) -> bytes:
 
 
 # --------------------------------------------------------------------------- #
-# _parse_style_params -- the inverse of the resolver's URL strings
-# --------------------------------------------------------------------------- #
-
-
-def test_parse_style_params_continuous() -> None:
-    assert _parse_style_params("&rescale=0,3&colormap_name=ylgnbu") == (0.0, 3.0, "ylgnbu")
-
-
-def test_parse_style_params_signed_range() -> None:
-    assert _parse_style_params("&rescale=-25,25&colormap_name=rdbu") == (-25.0, 25.0, "rdbu")
-
-
-def test_parse_style_params_scientific_notation() -> None:
-    vmin, vmax, cmap = _parse_style_params("&rescale=1.2e-09,4.5e-06&colormap_name=viridis")
-    assert vmin == pytest.approx(1.2e-09) and vmax == pytest.approx(4.5e-06)
-    assert cmap == "viridis"
-
-
-def test_parse_style_params_empty() -> None:
-    assert _parse_style_params("") == (None, None, None)
-
-
-# --------------------------------------------------------------------------- #
 # legend_for_published_layer -- continuous
 # --------------------------------------------------------------------------- #
 
 
-def test_continuous_legend_from_registry_preset() -> None:
-    """A pinned registry preset's legend uses the SAME range the URL renders with
-    (the semantic fixed range), so legend and raster agree byte-for-byte."""
-    legend = legend_for_published_layer(
-        "continuous_flood_depth", "s3://b/flood.tif", "&rescale=0,3&colormap_name=ylgnbu"
-    )
+_FLOOD = {"kind": "continuous", "ramp": "ylgnbu", "units": "m",
+          "label": "Flood depth",
+          "scale": {"policy": "fixed", "range": [0, 3], "transform": "linear"}}
+
+
+def test_a_fixed_row_paints_and_labels_the_range_it_declared() -> None:
+    legend = legend_for_published_layer(_FLOOD, "s3://b/flood.tif",
+                                        raster_bytes=b"")
     assert legend is not None
     assert legend.kind == "continuous"
     assert legend.colormap == "ylgnbu"
-    assert legend.vmin == 0.0
-    assert legend.vmax == 3.0
+    assert (legend.vmin, legend.vmax) == (0.0, 3.0)
     assert legend.label == "Flood depth"
+
+
+def test_the_layer_ships_the_qml_the_map_loads_over_that_same_range() -> None:
+    legend = legend_for_published_layer(_FLOOD, "s3://b/flood.tif",
+                                        raster_bytes=b"")
+    assert legend.qml is not None
+    assert 'type="singlebandpseudocolor"' in legend.qml
+    assert 'classificationMin="0"' in legend.qml
+    assert 'classificationMax="3"' in legend.qml
 
 
 def test_continuous_legend_uses_real_percentile_range(
@@ -174,15 +158,12 @@ def test_continuous_legend_uses_real_percentile_range(
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes(0.0, 30.0)
     )
-    style_params = MOD._resolve_qgis_style_params("gridmet_vs_unknown", "s3://b/x.tif")
-    assert style_params  # real range read off the COG
-    legend = legend_for_published_layer("gridmet_vs_unknown", "s3://b/x.tif", style_params)
+    resolved = resolve_layer_style(None, "s3://b/x.tif")
+    legend = legend_for_published_layer(None, "s3://b/x.tif")
     assert legend is not None and legend.kind == "continuous"
-    parsed_lo, parsed_hi, parsed_cmap = _parse_style_params(style_params)
-    # The legend range is the SAME numbers as the rescale URL -> they AGREE.
-    assert legend.vmin == parsed_lo
-    assert legend.vmax == parsed_hi
-    assert legend.colormap == parsed_cmap
+    # ONE resolution: the legend range is the resolved range, not a second read.
+    assert (legend.vmin, legend.vmax) == resolved.range
+    assert legend.colormap == resolved.preset.ramp
     # And it is a REAL data range (not the 0,1 safe default), spanning the data.
     assert legend.vmin >= 0.0 and legend.vmax <= 30.0 and legend.vmax > legend.vmin
 
@@ -196,13 +177,12 @@ def test_categorical_legend_from_color_table() -> None:
     """A paletted COG (empty style_params) yields a categorical legend, one swatch
     per OPAQUE class -- transparent nodata slots dropped."""
     legend = legend_for_published_layer(
-        "categorical_landcover",
+        {"kind": "classed", "label": "Land Cover"},
         "s3://b/nlcd.tif",
-        "",  # paletted rasters publish with NO rescale (palette wins)
         raster_bytes=_paletted_geotiff_bytes(),
     )
     assert legend is not None
-    assert legend.kind == "categorical"
+    assert legend.kind == "classed"
     assert legend.classes is not None
     values = {c.value for c in legend.classes}
     assert values == {11, 21, 41, 81, 90}  # the 5 land-cover classes
@@ -215,7 +195,7 @@ def test_categorical_legend_from_color_table() -> None:
 def test_categorical_legend_helper_drops_transparent_and_orders() -> None:
     cmap = {41: (56, 129, 78, 255), 11: (72, 109, 162, 255), 0: (0, 0, 0, 0)}
     legend = _categorical_legend_from_colormap(cmap, label="Land cover")
-    assert legend is not None and legend.kind == "categorical"
+    assert legend is not None and legend.kind == "classed"
     # ordered by class index, transparent 0 dropped.
     assert [c.value for c in legend.classes] == [11, 41]
     assert legend.label == "Land cover"
@@ -234,16 +214,15 @@ def test_rgba_passthrough_has_no_legend() -> None:
     """An RGBA composite publishes with empty style_params + no color table; there
     is no meaningful key -> None -> the web legacy path renders it as before."""
     legend = legend_for_published_layer(
-        "colored_relief", "s3://b/relief.tif", "", raster_bytes=_rgba_geotiff_bytes()
+        None, "s3://b/relief.tif", raster_bytes=_rgba_geotiff_bytes()
     )
     assert legend is None
 
 
 def test_legend_fail_open_returns_none_on_unreadable_bytes() -> None:
     legend = legend_for_published_layer(
-        "categorical_landcover", "s3://b/junk.tif", "", raster_bytes=b"not-a-geotiff"
-    )
-    assert legend is None
+        {"kind": "classed"}, "s3://b/junk.tif", raster_bytes=b"not-a-geotiff")
+    assert legend is not None and legend.qml is not None
 
 
 # --------------------------------------------------------------------------- #
@@ -284,7 +263,6 @@ def test_publish_continuous_raster_stashes_legend_by_s3_uri(
     out = publish_layer(
         layer_uri="s3://bucket/runs/somerun/x.tif",
         layer_id="layer-cont-1",
-        style_preset="gridmet_vs_unknown",
     )
     # The envelope uri slot is the raw s3 COG (no tile template).
     assert out == "s3://bucket/runs/somerun/x.tif"
@@ -294,12 +272,9 @@ def test_publish_continuous_raster_stashes_legend_by_s3_uri(
     assert legend is not None and legend.kind == "continuous"
     # Re-resolve through the SAME chokepoint on the SAME bytes: the legend must
     # be those numbers, not a second range read somewhere else.
-    style_params = MOD._resolve_qgis_style_params(
-        "gridmet_vs_unknown", "s3://bucket/runs/somerun/x.tif"
-    )
-    assert style_params
-    url_lo, url_hi, url_cmap = _parse_style_params(style_params)
-    assert legend.vmin == url_lo and legend.vmax == url_hi and legend.colormap == url_cmap
+    resolved = resolve_layer_style(None, "s3://bucket/runs/somerun/x.tif")
+    assert (legend.vmin, legend.vmax) == resolved.range
+    assert legend.colormap == resolved.preset.ramp
     assert legend.vmax > legend.vmin  # real, non-degenerate range
 
 
@@ -316,10 +291,9 @@ def test_publish_paletted_raster_stashes_categorical_legend(
     out = publish_layer(
         layer_uri="s3://bucket/runs/somerun/nlcd.tif",
         layer_id="layer-nlcd-1",
-        style_preset="categorical_landcover",
     )
     assert out == "s3://bucket/runs/somerun/nlcd.tif"
     legend = pop_legend_for_uri(out)
     assert legend is not None
-    assert legend.kind == "categorical"
+    assert legend.kind == "classed"
     assert {c.value for c in legend.classes} == {11, 21, 41, 81, 90}

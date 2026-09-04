@@ -55,7 +55,6 @@ def _make_layer(layer_id: str = "L-plume-001") -> LayerURI:
         name="plume concentration",
         layer_type="raster",
         uri=f"https://qgis.example/wms?LAYERS={layer_id}",
-        style_preset="continuous_flood_depth",
         role="primary",
     )
 
@@ -268,7 +267,6 @@ async def test_merge_preserves_previously_persisted_layers(
         "name": prior["name"],
         "layer_type": prior["layer_type"],
         "uri": prior["uri"],
-        "style_preset": prior["style_preset"],
         "visible": True,
         "role": "primary",
         "temporal": False,

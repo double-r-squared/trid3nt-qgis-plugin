@@ -262,7 +262,6 @@ def _stub_expensive_tool():
             name="Contaminant Plume",
             layer_type="raster",
             uri=f"https://example.test/wms?LAYERS=plume-{len(_SIM_LAUNCHES)}",
-            style_preset="plume",
             bbox=(lon - 0.1, lat - 0.1, lon + 0.1, lat + 0.1),
         )
 
@@ -350,7 +349,6 @@ def _stub_fetch_tool():
                 "https://titiler.example/cog/tiles/WebMercatorQuad/"
                 f"{{z}}/{{x}}/{{y}}.png?url=s3://x/wdpa-{len(_FETCHES)}.tif"
             ),
-            style_preset="",
             bbox=tuple(bbox),
         )
 

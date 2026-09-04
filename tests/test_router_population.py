@@ -283,6 +283,6 @@ def test_population_units_and_style_stamps():
     layer = router.build_layer_uri(POP_SPEC, _vp(bbox=list(FORT_MYERS_BBOX)), "s3://c/p.tif")
     assert layer.layer_type == "raster" and layer.role == "input"
     assert layer.units == "people"
-    assert layer.style_preset == "population_density"
+    assert layer.style["kind"] == "continuous"
     # bbox stamp is the res_100-quantized request bbox (the twin's grid-snap).
     assert list(layer.bbox) == _vp(bbox=list(FORT_MYERS_BBOX))["bbox"]
