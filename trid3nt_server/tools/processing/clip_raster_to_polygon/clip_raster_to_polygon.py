@@ -717,7 +717,7 @@ def clip_raster_to_polygon(
         name=name,
         layer_type="raster",
         uri=result.uri,
-        style_preset="continuous_dem",  # default; caller can override at the map layer
+        style={"kind": "continuous", "ramp": "gray", "units": "m", "label": "Elevation"},
         role="context",
         units=None,
         bbox=None,

@@ -389,7 +389,6 @@ async def _ingest_vector(
         "layer_type": "vector",
         "uri": fgb_uri,
         "wms_url": geojson_uri,
-        "style_preset": "",
         "visible": True,
         "role": "input",
         "temporal": False,
@@ -478,22 +477,19 @@ async def _ingest_raster(
             error_code=getattr(exc, "error_code", "RASTER_PUBLISH_FAILED"),
         ) from exc
 
-    from trid3nt_server.emission.publish import style_preset_for_publish
     from trid3nt_server.emission.publish import derive_readable_layer_name
 
     # A user upload declares no quantity: the bytes are a raster of unknown
     # physical meaning, and its filename is not a measurement. It publishes on
-    # the neutral ramp over its own range, never on a physical band inferred
-    # from what the file happens to be called.
-    resolved_style = style_preset_for_publish(style_preset=None)
-    layer_name = derive_readable_layer_name(name, layer_id, resolved_style, tile_template)
+    # the continuous kind's bare default - the field's own range under a single
+    # ramp - never on a physical band inferred from what the file is called.
+    layer_name = derive_readable_layer_name(name, layer_id, None, tile_template)
 
     summary = {
         "layer_id": layer_id,
         "name": layer_name,
         "layer_type": "raster",
         "uri": tile_template,
-        "style_preset": resolved_style,
         "visible": True,
         "role": "input",
         "temporal": False,

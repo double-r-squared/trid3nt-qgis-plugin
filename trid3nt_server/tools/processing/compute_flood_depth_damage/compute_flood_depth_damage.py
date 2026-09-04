@@ -177,7 +177,16 @@ DAMAGE_FRACTION_CLASSES: tuple[tuple[float, float, str, str], ...] = (
 
 _M_TO_FT = 3.280839895
 
-_STYLE_PRESET = "flood_depth_damage"
+#: Damage is read as a class, not a ramp: the breaks the legend shows are the
+#: breaks the paint uses.
+_STYLE: dict = {
+    "kind": "classed",
+    "geometry": "point",
+    "attribute": "damage_fraction",
+    "units": "fraction of structure value",
+    "label": "Flood damage (HAZUS-style screening)",
+    "classes": [list(c) for c in DAMAGE_FRACTION_CLASSES],
+}
 
 _METADATA = AtomicToolMetadata(
     name="compute_flood_depth_damage",
@@ -351,7 +360,7 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
 def _build_legend() -> LegendKey:
     """Categorical damage-fraction legend built from the SAME class table."""
     return LegendKey(
-        kind="categorical",
+        kind="classed",
         classes=[
             LegendClass(value_min=lo, value_max=hi, color=color, label=label)
             for lo, hi, color, label in DAMAGE_FRACTION_CLASSES
@@ -592,7 +601,7 @@ def compute_flood_depth_damage(
         name=f"Flood depth-damage screening ({n_structures} structures)",
         layer_type="vector",
         uri=uri,
-        style_preset=_STYLE_PRESET,
+        style=_STYLE,
         role="primary",
         units="fraction of structure value",
         bbox=tuple(round(float(v), 6) for v in bbox_4326),

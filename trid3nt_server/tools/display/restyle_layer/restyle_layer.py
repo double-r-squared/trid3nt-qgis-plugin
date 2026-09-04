@@ -1,19 +1,20 @@
-"""``restyle_layer`` - re-paint a layer that is ALREADY on the map.
+"""``restyle_layer`` - THE presentation surface for layers already on the map.
 
-A colour scale is DISPLAY STATE. Changing it recomputes nothing and changes no
-number, so it is available after the fact and not only as a declaration up front.
-That is what makes "rescale that to 0-30 so I can see the tail" a one-second
-answer instead of a re-solve.
+Presentation is DISPLAY STATE. Changing a ramp, a title, a scale, or whether a
+layer is on the canvas at all recomputes nothing and moves no number, so all of
+it is available after the fact rather than only as a declaration up front. That
+is what makes "rescale that to 0-30 so I can see the tail" a one-second answer
+instead of a re-solve.
 
-Two things this tool deliberately cannot do. It cannot make a layer VISIBLE - it
-re-emits the display face of a layer some producer already published, and a URI
-nothing published is a typed refusal. And it cannot invent a style: every preset
-it accepts is declared in the style contract.
+Two things this tool deliberately cannot do. It cannot CREATE a layer - emission
+is automatic, and a uri nothing published is a typed refusal. And it cannot
+invent a renderer: every layer is drawn by one of four preset shapes, and a
+restyle parameterises one of those four.
 
 The COMPARISON mode is the reason it takes a LIST. Two layers a reader is
 comparing - before and after an override, a coarse run against its refined
-rematch, two calibration iterations - must be painted on ONE range or the picture
-is of two different colour maps rather than of a difference.
+rematch, two calibration iterations - must be painted on ONE range or the
+picture is of two different colour maps rather than of a difference.
 """
 
 from __future__ import annotations
@@ -23,8 +24,8 @@ from typing import Any, Literal
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.emission import styles
-from trid3nt_server.emission.restyle import RestyleError, apply_style
+from trid3nt_server.emission import presets
+from trid3nt_server.emission.restyle import RestyleError, apply_style, set_hidden
 from trid3nt_server.tools import register_tool
 
 __all__ = ["restyle_layer"]
@@ -57,8 +58,11 @@ _METADATA = AtomicToolMetadata(
 )
 async def restyle_layer(
     layer_ids: list[str] | str | None = None,
-    preset: str | None = None,
-    colormap: str | None = None,
+    hide: bool | None = None,
+    kind: Literal["continuous", "classed", "reference", "mesh"] | None = None,
+    ramp: str | None = None,
+    title: str | None = None,
+    units: str | None = None,
     policy: Literal["data", "fixed"] | None = None,
     min_value: float | None = None,
     max_value: float | None = None,
@@ -68,23 +72,30 @@ async def restyle_layer(
     shared_scale: bool = False,
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """RE-PAINT layers already on the map - a colour scale change, zero recompute.
+    """RE-PAINT, RETITLE or HIDE layers already on the map - zero recompute.
 
     ROUTING: use this for "rescale that layer", "the plume is all one colour, stretch
     it", "put these two on the same scale so I can compare them", "show that on a log
-    scale", "change the colour ramp", "clip the outliers out of the legend". Style is
-    DISPLAY STATE: nothing is re-solved, no number changes, and the underlying data is
-    untouched. NOT for creating a layer or making one visible - a layer must already be
-    published; use the tool that produces the quantity for that.
+    scale", "change the colour ramp", "clip the outliers out of the legend", "call
+    that layer X", "hide that layer", "bring it back". Presentation is DISPLAY STATE:
+    nothing is re-solved, no number changes, and the data is untouched. NOT for
+    creating a layer - a layer must already be published; use the tool that produces
+    the quantity for that.
 
     Args:
-        layer_ids: the layer id (or ids) to re-paint. Several ids plus
+        layer_ids: the layer id (or ids) to restyle. Several ids plus
             `shared_scale=True` paints them all on ONE range - the honest way to
             compare a before against an after.
-        preset: a declared style preset to switch to. Omit to keep the layer's own.
-        colormap: a colour ramp name (viridis, blues, reds, rdbu, ...).
+        hide: `True` takes the layers off the canvas, `False` puts them back.
+            When set, nothing else is applied.
+        kind: re-shape how the layer is drawn - `continuous` (a ramp over a
+            range), `classed` (declared breaks), `reference` (drawn, not
+            measured), `mesh` (an MDAL dataset group). Omit to keep its own.
+        ramp: a colour ramp name (viridis, blues, reds, rdbu, ...).
+        title: the legend title the layer is read under.
+        units: the units the legend annotates the numbers with.
         policy: `data` scales to the layer's own values; `fixed` uses min_value /
-            max_value. Omit to keep the contract's declared policy.
+            max_value. Omit to keep the declared policy.
         min_value / max_value: the fixed range, when policy is `fixed`.
         transform: linear | log | sqrt | percentile.
         clip_low / clip_high: percentile bounds under `percentile` (e.g. 2 and 98).
@@ -92,7 +103,7 @@ async def restyle_layer(
             and paint every one on it.
 
     Returns:
-        `status="ok"` plus, per layer, the resolved preset and the LEGEND SENTENCE
+        `status="ok"` plus, per layer, the resolved shape and the LEGEND SENTENCE
         stating which scale policy ran and over what range - narrate that sentence,
         because the colours cannot say it themselves. On failure `status="error"`
         with `error_code`.
@@ -102,14 +113,26 @@ async def restyle_layer(
         raise RestyleArgsError(
             "restyle_layer needs at least one layer_id - the id of a layer that is "
             "already on the map.")
-    if preset is not None and not styles.known_preset(preset):
-        return _error("STYLE_PRESET_UNKNOWN",
-                      f"{preset!r} is not a declared style preset. Declared presets "
-                      f"include: {', '.join(styles.all_presets()[:12])} ...")
+    if kind is not None and kind not in presets.KINDS:
+        return _error("STYLE_KIND_UNKNOWN",
+                      f"{kind!r} is not one of the four preset kinds "
+                      f"{list(presets.KINDS)}.")
     if policy == "fixed" and (min_value is None or max_value is None):
         return _error("RESTYLE_ARGS_INVALID",
                       "policy='fixed' needs both min_value and max_value - a fixed "
                       "scale IS its range.")
+
+    if hide is not None:
+        missing = [lid for lid in ids if not await set_hidden(lid, hide)]
+        if missing:
+            return _error(
+                "LAYER_NOT_PUBLISHED",
+                f"nothing published {missing} - restyle_layer changes a layer that "
+                "is already on the map; it cannot create one.")
+        return {"status": "ok", "layers": [{"layer_id": lid, "hidden": hide}
+                                           for lid in ids],
+                "note": ("removed from the canvas" if hide
+                         else "restored to the canvas")}
 
     resolved_uris = _resolve_uris(ids)
     missing = [lid for lid, uri in resolved_uris.items() if not uri]
@@ -126,21 +149,22 @@ async def restyle_layer(
 
     shared = None
     if shared_scale and len(ids) > 1:
-        shared = styles.shared_range(
-            _band_range(uri, preset) for uri in resolved_uris.values())
+        shared = presets.shared_range(
+            _band_range(uri) for uri in resolved_uris.values())
         logger.info("restyle_layer: %d layers share the range %s", len(ids), shared)
 
     out: list[dict[str, Any]] = []
     for layer_id, uri in resolved_uris.items():
         try:
-            style = apply_style(layer_uri=uri, layer_id=layer_id, preset=preset,
-                                colormap=colormap, policy=policy,
+            style = apply_style(layer_uri=uri, layer_id=layer_id,
+                                declared=_declared_row(uri), kind=kind, ramp=ramp,
+                                label=title, units=units, policy=policy,
                                 value_range=value_range, transform=transform,
                                 clip=clip, shared=shared)
         except RestyleError as exc:
             return _error(exc.error_code, str(exc))
-        out.append({"layer_id": layer_id, "preset": style.preset,
-                    "colormap": style.colormap,
+        out.append({"layer_id": layer_id, "kind": style.preset.kind,
+                    "ramp": style.preset.ramp,
                     "range": list(style.range) if style.range else None,
                     "legend": style.legend_note()})
     return {"status": "ok", "layers": out,
@@ -163,13 +187,25 @@ def _resolve_uris(ids: list[str]) -> dict[str, str | None]:
     return {layer_id: lookup_uri_for_handle(layer_id) for layer_id in ids}
 
 
-def _band_range(uri: str | None, preset: str | None) -> tuple[float, float] | None:
+def _declared_row(uri: str | None) -> dict[str, Any] | None:
+    """The row this layer was published under, so a restyle overrides rather
+    than replaces it."""
+    from trid3nt_server.emission.publish import pop_legend_for_uri
+
+    legend = pop_legend_for_uri(uri or "")
+    if legend is None:
+        return None
+    ramp = legend.colormap if isinstance(legend.colormap, str) else None
+    return {"kind": legend.kind, "ramp": ramp or presets.DEFAULT_RAMP,
+            "units": legend.units, "label": legend.label}
+
+
+def _band_range(uri: str | None) -> tuple[float, float] | None:
     from trid3nt_server.emission.publish import _read_raster_bytes
 
     if not uri:
         return None
-    return styles.band_range_reader(_read_raster_bytes(uri))(
-        styles.scale_for(preset))
+    return presets.band_range_reader(_read_raster_bytes(uri))(presets.Scale())
 
 
 def _error(code: str, message: str) -> dict[str, Any]:

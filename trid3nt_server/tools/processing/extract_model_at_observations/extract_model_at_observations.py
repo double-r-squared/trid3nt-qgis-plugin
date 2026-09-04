@@ -248,7 +248,7 @@ DATUM_FIELD_CANDIDATES: tuple[str, ...] = (
     "datum",
 )
 
-_STYLE_PRESET = "model_obs_pairs"
+_STYLE = {"kind": "reference", "geometry": "point"}
 
 _METADATA = AtomicToolMetadata(
     name="extract_model_at_observations",
@@ -1514,7 +1514,7 @@ def extract_model_at_observations(
         name=f"Model-obs pairs ({n_paired} points)",
         layer_type="vector",
         uri=uri,
-        style_preset=_STYLE_PRESET,
+        style=_STYLE,
         role="primary",
         bbox=tuple(round(float(v), 6) for v in bbox_4326),
         paired_table_uri=uri,

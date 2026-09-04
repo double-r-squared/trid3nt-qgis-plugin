@@ -16,8 +16,7 @@ carries the planimetric ``area_km2`` of that isopleth.
 **Why a projected CRS.** Kernel bandwidth and area are meaningless in degrees,
 so the points are reprojected to the local UTM zone (metres) before the KDE; the
 isopleth polygons are reprojected back to EPSG:4326 for the inline-GeoJSON vector
-render path (one ``Polygon``/``MultiPolygon`` per isopleth, ``style_preset=
-"home_range_kde"``). The artifact is a FlatGeobuf stored under the cache
+render path (one ``Polygon``/``MultiPolygon`` per isopleth, ). The artifact is a FlatGeobuf stored under the cache
 shim:
 
     ``s3://<cache-bucket>/cache/static-30d/home_range_kde/<key>.fgb``
@@ -655,7 +654,7 @@ def compute_home_range_kde(
             pools all fixes.
 
     Returns:
-        ``LayerURI`` (vector, ``style_preset="home_range_kde"``,
+        ``LayerURI`` (vector
         ``units="km2"``) for isopleth polygons in EPSG:4326, each carrying
         ``isopleth_pct``, ``area_km2``, ``n_points``, ``individual_id``,
         ``bandwidth_m``. Cache bucket, TTL 30d.
@@ -732,7 +731,7 @@ def compute_home_range_kde(
         name=name,
         layer_type="vector",
         uri=result.uri,
-        style_preset="home_range_kde",
+        style={"kind": "reference", "geometry": "polygon"},
         role="context",
         units="km2",
         bbox=bbox_4326,

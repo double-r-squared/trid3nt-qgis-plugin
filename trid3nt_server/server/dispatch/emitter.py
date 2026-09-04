@@ -706,7 +706,6 @@ async def _invoke_tool_via_emitter(
                     name=reuse.name,
                     layer_type=reuse.layer_type,  # type: ignore[arg-type]
                     uri=reuse.uri,
-                    style_preset="",
                     bbox=reuse.bbox,
                 )
                 # Replace the dispatch with a synchronous return of the existing
@@ -767,7 +766,6 @@ async def _invoke_tool_via_emitter(
                     name=fmatch.name,
                     layer_type=fmatch.layer_type,  # type: ignore[arg-type]
                     uri=fmatch.uri,
-                    style_preset="",
                     bbox=fmatch.bbox,
                 )
                 entry = _ReuseEntry(entry.metadata, _reused_fetch_layer)

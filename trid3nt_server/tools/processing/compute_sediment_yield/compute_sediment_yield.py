@@ -41,9 +41,8 @@ bucket (or ``_output_dir`` for offline tests) and returned as a
 ``SedimentYieldLayerURI`` -- a ``LayerURI`` subclass (the ``FaultSourcesResult``
 house pattern) carrying summary scalars + honest ``notes``. The raster renders
 through the SAME publish path as every other compute_* raster tool: the
-wrap-site auto-publishes the s3 COG via ``publish_layer``, whose styling seam
-(``emission.styles.resolve_style``) resolves ``style_preset="sediment_yield_t_ha_yr"``
-to a LOG-SCALED interval colormap (class breaks 1/5/10/50/100/500 t/ha/yr --
+wrap-site auto-publishes the s3 COG via ``publish_layer``, which resolves this
+tool's declared CLASSED style row -- a LOG-SCALED break table (1/5/10/50/100/500 t/ha/yr --
 half-decade steps -- because soil loss spans orders of magnitude; a linear
 rescale would render everything but the worst gullies as one flat color).
 
@@ -69,7 +68,6 @@ import numpy as np
 from trid3nt_contracts.execution import LayerURI, LegendClass, LegendKey
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.emission.styles import legend_classes
 from trid3nt_server.tools import register_tool
 
 __all__ = [
@@ -210,14 +208,18 @@ C_BY_IO_LULC_CLASS: dict[int, float] = {
     11: 0.08,
 }
 
-#: LOG-SCALED render classes for the published layer, READ FROM THE STYLE
-#: CONTRACT. Soil loss spans orders of magnitude, so the half-decade breaks at
-#: 1/5/10/50/100/500 are the standard erosion-map convention - and they are a
-#: STYLE declaration, so they live in ``trid3nt_contracts/styles.yaml`` under the
-#: ``sediment_yield_t_ha_yr`` preset. Reading them here is what keeps this layer's
-#: legend key and its paint the same table rather than two that agree today.
-SEDIMENT_YIELD_LOG_CLASSES: tuple[tuple[float, float, str, str], ...] = tuple(
-    legend_classes("sediment_yield_t_ha_yr")
+#: LOG-SCALED render classes for the published layer. Soil loss spans orders of
+#: magnitude, so the half-decade breaks at 1/5/10/50/100/500 are the standard
+#: erosion-map convention. ONE table: the declared style row paints from it and
+#: the legend key is built from it.
+SEDIMENT_YIELD_LOG_CLASSES: tuple[tuple[float, float, str, str], ...] = (
+    (0.0, 1.0, "#ffffcc", "< 1 (very low)"),
+    (1.0, 5.0, "#ffeda0", "1-5 (low)"),
+    (5.0, 10.0, "#fed976", "5-10 (moderate)"),
+    (10.0, 50.0, "#feb24c", "10-50 (high)"),
+    (50.0, 100.0, "#fd8d3c", "50-100 (very high)"),
+    (100.0, 500.0, "#f03b20", "100-500 (severe)"),
+    (500.0, 1000000000.0, "#bd0026", ">= 500 (extreme)"),
 )
 
 _NODATA: float = -9999.0
@@ -597,17 +599,21 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
         ) from exc
 
 
+#: A soil loss spanning orders of magnitude is unreadable on a linear ramp, so
+#: the breaks are log-spaced and are the SAME table the legend key is built from.
+_STYLE: dict = {
+    "kind": "classed",
+    "units": "t/ha/yr",
+    "label": "Annual soil loss (RUSLE)",
+    "classes": [list(c) for c in SEDIMENT_YIELD_LOG_CLASSES],
+}
+
+
 def _build_legend() -> LegendKey:
-    """Categorical legend built from the SAME log-class table the paint uses."""
-    return LegendKey(
-        kind="categorical",
-        classes=[
-            LegendClass(value_min=lo, value_max=hi, color=color, label=label)
-            for lo, hi, color, label in SEDIMENT_YIELD_LOG_CLASSES
-        ],
-        units="t/ha/yr",
-        label="Annual soil loss (RUSLE)",
-    )
+    """The declared style row, resolved - the same table the paint uses."""
+    from trid3nt_server.emission import presets
+
+    return presets.legend_key(_STYLE)
 
 
 # ---------------------------------------------------------------------------
@@ -654,7 +660,7 @@ def compute_sediment_yield(
 
     Returns:
         ``SedimentYieldLayerURI`` -- raster ``LayerURI`` (single-band
-        float32, ``style_preset="sediment_yield_t_ha_yr"``, log-scaled)
+        float32 log-scaled)
         with ``mean_soil_loss_t_ha_yr``/``max_soil_loss_t_ha_yr``/
         ``p95_soil_loss_t_ha_yr``, ``rainfall_erosivity``, honest ``notes``.
 
@@ -744,7 +750,7 @@ def compute_sediment_yield(
         ),
         layer_type="raster",
         uri=uri,
-        style_preset="sediment_yield_t_ha_yr",
+        style=_STYLE,
         role="primary",
         units="t/ha/yr",
         bbox=q_bbox,

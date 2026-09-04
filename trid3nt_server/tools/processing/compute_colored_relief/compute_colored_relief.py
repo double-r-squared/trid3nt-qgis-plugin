@@ -443,7 +443,7 @@ def compute_colored_relief(
         name=f"Colored Relief -- {ramp_label}",
         layer_type="raster",
         uri=result.uri,
-        style_preset="continuous_dem",  # closest existing preset; colored-relief preset is follow-up
+        style={"kind": "continuous", "ramp": "gray", "units": "m", "label": "Elevation"},
         role="context",
         units="rgb",
     )

@@ -576,7 +576,7 @@ def compute_blended_composite(
         name=name,
         layer_type="raster",
         uri=result.uri,
-        style_preset="rgb_composite",  # RGBA COG -- rendered as a true-color image
+        style={"kind": "continuous"},
         role="context",
         units="rgb",
     )

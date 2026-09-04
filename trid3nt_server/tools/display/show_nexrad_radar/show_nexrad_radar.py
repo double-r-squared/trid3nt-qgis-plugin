@@ -282,7 +282,7 @@ def show_nexrad_radar(
         name=name,
         layer_type="raster",
         uri=url,
-        style_preset=f"nexrad_{product}",
+        style={"kind": "continuous"},
         role="context",
         units=("dBZ" if product in ("n0r", "n0q") else "kg/m^2"),
         bbox=bbox,

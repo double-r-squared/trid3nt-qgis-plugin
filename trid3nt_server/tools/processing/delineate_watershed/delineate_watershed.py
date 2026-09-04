@@ -352,7 +352,7 @@ def delineate_watershed(
         name=f"Watershed upstream of ({lon:.4f}, {lat:.4f}) -- {area_km2:.2f} km^2",
         layer_type="vector",
         uri=uri,
-        style_preset="watershed_boundary",
+        style={"kind": "reference", "geometry": "polygon"},
         role="primary",
         units="km^2",
         bbox=(float(minx), float(miny), float(maxx), float(maxy)),

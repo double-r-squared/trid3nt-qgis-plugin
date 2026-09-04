@@ -196,7 +196,7 @@ def _build_dynamic_spec(entry: LivingAtlasEntry):
             "normalize": {"crs": "EPSG:4326", "orientation": "north_up",
                           "quantity": "living_atlas"},
             "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
-                       "style_preset": "", "emit_bbox": False},
+                       "emit_bbox": False},
             "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 1.0, "floor_mb": 0.05},
         })
     elif entry.service_type == "Map Service":
@@ -220,7 +220,7 @@ def _build_dynamic_spec(entry: LivingAtlasEntry):
             },
             "normalize": {"crs": "EPSG:4326"},
             "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
-                       "style_preset": "", "emit_bbox": False},
+                       "emit_bbox": False},
             "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 1.0, "floor_mb": 0.05},
         })
     elif entry.service_type == "Feature Service":
@@ -241,7 +241,7 @@ def _build_dynamic_spec(entry: LivingAtlasEntry):
             },
             "normalize": {"crs": "EPSG:4326"},
             "output": {"layer_type": "vector", "ext": "fgb", "role": "primary",
-                       "style_preset": "", "emit_bbox": True},
+                       "emit_bbox": True},
             "payload_estimate": {"model": "per_feature", "features_per_sq_deg": 500.0,
                                  "kb_per_feature": 2.0, "floor_mb": 0.02},
         })

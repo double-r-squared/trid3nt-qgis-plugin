@@ -69,7 +69,7 @@ class CombinedGeometryLayerURI(LayerURI):
 #: The label the combined document travels under. It carries whatever the sources
 #: meant, so it claims none of their semantics - the same reason ``section``
 #: names its own preset rather than borrowing the polygon's.
-_STYLE_PRESET = "combined_geometry"
+_STYLE = {"kind": "reference"}
 
 _COMBINE_METADATA = AtomicToolMetadata(
     name="combine",
@@ -157,8 +157,7 @@ def combine(
             list of them. Optional.
 
     Returns:
-        ``CombinedGeometryLayerURI`` -- one GeoJSON FeatureCollection (EPSG:4326,
-        ``style_preset="combined_geometry"``) with ``polygon_count``,
+        ``CombinedGeometryLayerURI`` -- one GeoJSON FeatureCollection (EPSG:4326) with ``polygon_count``,
         ``line_count``, ``point_count``, ``source_count`` and honest ``notes``.
 
     Raises:
@@ -192,7 +191,7 @@ def combine(
         name=f"Combined geometry - {polygons} polygon(s), {linestrings} line(s)",
         layer_type="vector",
         uri=uri,
-        style_preset=_STYLE_PRESET,
+        style=_STYLE,
         role="primary",
         crs_authid="EPSG:4326",
         bbox=(minx, miny, maxx, maxy),

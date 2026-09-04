@@ -192,7 +192,7 @@ OBSERVED_FIELD_CANDIDATES: tuple[str, ...] = (
 
 _M_TO_FT = 3.280839895
 
-_STYLE_PRESET = "model_residuals"
+_STYLE = {"kind": "reference", "geometry": "point"}
 
 _METADATA = AtomicToolMetadata(
     name="compute_model_residuals",
@@ -837,7 +837,7 @@ def compute_model_residuals(
         name=f"Model residuals ({n_points} points)",
         layer_type="vector",
         uri=uri,
-        style_preset=_STYLE_PRESET,
+        style=_STYLE,
         role="primary",
         units=units,
         bbox=tuple(round(float(v), 6) for v in bbox_4326),

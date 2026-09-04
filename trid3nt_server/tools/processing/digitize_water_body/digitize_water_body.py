@@ -36,7 +36,7 @@ via the PC SAS REST endpoint (``_pc_stac.sas_sign_href``) and reads a
 bbox-windowed, EPSG:4326-warped array per band through GDAL ``/vsicurl/``  --  the
 same fetch path ``compute_ndvi`` uses. The water mask is vectorized with
 ``rasterio.features.shapes`` and the polygons are re-emitted as a FlatGeobuf
-(EPSG:4326) with a ``water_bodies`` style preset.
+(EPSG:4326), drawn as a polygon reference layer.
 
 Honesty (data-source fallback norm)
 ===================================
@@ -167,9 +167,9 @@ _MAX_BBOX_DEG2 = 0.5
 #: 6-dp bbox quantization (~0.1 m) for cache-key stability.
 _BBOX_DECIMALS = 6
 
-#: Water-polygon style preset (blue fill). Consumed by the automatic
+#: Water polygons are an outline a reader locates themselves by. Consumed by the automatic
 #: map-render vector style registry; falls back gracefully if unregistered.
-_STYLE_PRESET = "water_bodies"
+_STYLE = {"kind": "reference", "geometry": "polygon"}
 
 
 # ---------------------------------------------------------------------------
@@ -559,8 +559,7 @@ def digitize_water_body(
             removes few-pixel specks).
 
     Returns:
-        ``LayerURI`` (vector, ``role="primary"``, ``units="m^2"``,
-        ``style_preset="water_bodies"``) for a FlatGeobuf of water
+        ``LayerURI`` (vector, ``role="primary"``, ``units="m^2"``) for a FlatGeobuf of water
         polygons (EPSG:4326) with ``area_m2``, ``water_index``,
         ``ndwi_threshold``. Source: Sentinel-2 L2A via Microsoft Planetary
         Computer STAC (bands B03+B08).
@@ -617,7 +616,7 @@ def digitize_water_body(
         name="Surface Water Bodies (NDWI)",
         layer_type="vector",
         uri=result.uri,
-        style_preset=_STYLE_PRESET,
+        style=_STYLE,
         role="primary",
         units="m^2",
         bbox=q_bbox,

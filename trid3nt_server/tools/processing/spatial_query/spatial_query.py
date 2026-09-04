@@ -105,8 +105,8 @@ _MAX_CELL_CHARS = 300
 #: result set lives in the FlatGeobuf layer; the wire stays compact).
 _PREVIEW_ROWS = 10
 
-#: Generic vector style preset.
-_RESULT_STYLE_PRESET = "affected_buildings"
+#: The result is an outline, drawn rather than measured.
+_RESULT_STYLE = {"kind": "reference", "geometry": "polygon"}
 
 #: Extensions treated as raster (out of scope v1 - typed error).
 _RASTER_EXTS = {".tif", ".tiff", ".img", ".vrt", ".nc"}
@@ -700,7 +700,7 @@ def _materialize_result(
         name=name,
         layer_type="vector",
         uri=uri,
-        style_preset=_RESULT_STYLE_PRESET,
+        style=_RESULT_STYLE,
         role="primary",
         units=None,
         bbox=bbox,

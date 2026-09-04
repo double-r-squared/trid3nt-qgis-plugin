@@ -304,19 +304,17 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 
 
-def axis_title(quantity: str, *, fallback: str | None = None) -> str:
-    """The axis title for a published QUANTITY - from the style contract.
+def axis_title(quantity: str, *, units: str | None = None,
+               fallback: str | None = None) -> str:
+    """The axis title for a published QUANTITY.
 
     A chart of a quantity and the map layer of that same quantity must not
-    disagree about what it is called or what it is measured in, so both read one
-    vocabulary. ``fallback`` covers a quantity the contract has no row for; an
-    unregistered quantity is a missing contract row, not a reason to invent a
-    label here.
+    disagree about what it is called, so both say the quantity out loud the same
+    way. ``units`` are the producer's own - the same ones its style row carries.
     """
-    from trid3nt_server.emission.styles import quantity_axis
+    from trid3nt_server.emission.outputs_seam import quantity_label
 
-    label, units = quantity_axis(quantity)
-    label = label or fallback or quantity.replace("_", " ").capitalize()
+    label = fallback or quantity_label(quantity)
     return f"{label} ({units})" if units else label
 
 

@@ -668,7 +668,7 @@ def compute_movement_trajectory(
             ISO-8601 and Movebank ``YYYY-MM-DD HH:MM:SS.mmm`` both parsed.
 
     Returns:
-        ``LayerURI`` (vector, ``style_preset="movement_trajectory"``,
+        ``LayerURI`` (vector
         ``units="m"``) for FlatGeobuf segments in EPSG:4326, each with
         ``individual_id``, ``seg_index``, ``step_length_m``, ``duration_s``,
         ``speed_mps``, ``bearing_deg``, ``turn_angle_deg``, ``t_start``/
@@ -766,7 +766,7 @@ def compute_movement_trajectory(
         name=name,
         layer_type="vector",
         uri=result.uri,
-        style_preset="movement_trajectory",
+        style={"kind": "reference", "geometry": "line"},
         role="context",
         units="m",
         bbox=bbox_4326,

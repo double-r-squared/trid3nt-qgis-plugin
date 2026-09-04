@@ -8,7 +8,7 @@ This module registers one atomic tool that computes elevation contour lines
 The result is a vector contour layer -- ``LineString`` features each carrying an
 ``elev`` (elevation, metres) attribute -- at a fixed contour INTERVAL. It is
 emitted as a FlatGeobuf in EPSG:4326 so the QGIS plugin renders it natively
-as a line layer (``style_preset="contours"``). The artifact is stored
+as a line layer (). The artifact is stored
 under the cache shim at:
 
     ``s3://trid3nt-cache/cache/static-30d/contours/<key>.fgb``
@@ -481,7 +481,7 @@ def compute_contours(
             sensible interval from DEM relief (~10-20 readable contours).
 
     Returns:
-        ``LayerURI`` (vector, ``style_preset="contours"``, ``units="m"``)
+        ``LayerURI`` (vector ``units="m"``)
         for a FlatGeobuf of ``LineString`` contours (EPSG:4326, each with
         an ``elev`` attribute), cache bucket, TTL 30d.
 
@@ -557,7 +557,7 @@ def compute_contours(
         name=name,
         layer_type="vector",
         uri=result.uri,
-        style_preset="contours",  # thin line style; renderer colors lines generically
+        style={"kind": "reference", "geometry": "line"},
         role="context",
         units="m",
         bbox=dem_bbox,

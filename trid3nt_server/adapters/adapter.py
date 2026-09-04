@@ -2196,7 +2196,7 @@ def _summarize_published_scenario_layer(
     and a ``wms_url`` alias matching the prompt's escape-clause vocabulary) so the
     LLM reliably recognizes the layer is on the map and does NOT issue a redundant
     display request for a layer already on the map. The metadata the loop needs to narrate + pass the handle is kept:
-    layer_id (the canonical handle), name, layer_type, uri, style_preset, bbox.
+    layer_id (the canonical handle), name, layer_type, uri, bbox.
     """
     layer_id = getattr(result, "layer_id", None)
     uri = getattr(result, "uri", None)
@@ -2217,7 +2217,6 @@ def _summarize_published_scenario_layer(
         "name": getattr(result, "name", None),
         "layer_type": getattr(result, "layer_type", None),
         "uri": uri,
-        "style_preset": getattr(result, "style_preset", None),
         "already_published_note": (
             "This scenario layer is ALREADY published, styled, and on the user's "
             "map. Narrate the result from this layer; there is nothing further to "

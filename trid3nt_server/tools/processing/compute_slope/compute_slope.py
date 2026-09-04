@@ -284,7 +284,9 @@ def compute_slope(
         name=f"Slope ({output_unit}, {algorithm}) [{unit_label}]",
         layer_type="raster",
         uri=result.uri,
-        style_preset="slope_angle_deg",  # tools-backlog: slope-angle ylorrd ramp (deg). Backend colormap here; the Orchestrator wires the frontend legend.
+        style={"kind": "continuous", "ramp": "ylorrd", "units": "deg",
+         "label": "Slope angle", "scale": {"policy": "fixed",
+         "range": [0, 60], "transform": "linear"}},  # tools-backlog: slope-angle ylorrd ramp (deg). Backend colormap here; the Orchestrator wires the frontend legend.
         role="context",
         units=output_unit,
     )

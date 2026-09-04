@@ -24,7 +24,7 @@ Assets are Azure-Blob COGs behind SAS tokens; this tool signs each asset href
 via the PC SAS REST endpoint (see ``_pc_stac.sas_sign_href``) and reads a
 bbox-windowed, EPSG:4326-warped array per band through GDAL ``/vsicurl/``. NDVI
 is computed in-memory and re-emitted as a single-band float32 COG (-1..1) with a
-green vegetation colormap (``ndvi`` style preset -> RdYlGn ramp).
+green vegetation colormap (an RdYlGn ramp over the index's own -1..1 domain).
 
 Honesty (data-source fallback norm): if NO Sentinel-2 scene intersects the bbox
 in the window (or none under the cloud threshold), a typed
@@ -132,9 +132,10 @@ _NATIVE_COMFORT_DEG2 = 0.5
 #: 6-dp bbox quantization (~0.1 m) for cache-key stability.
 _BBOX_DECIMALS = 6
 
-#: NDVI colormap style preset  --  green vegetation ramp (RdYlGn rescaled -1..1).
-#: Declared in the style contract (contracts/trid3nt_contracts/styles.yaml).
-_STYLE_PRESET = "ndvi"
+#: NDVI runs -1 to 1 by definition, so the row pins that domain.
+_STYLE = {"kind": "continuous", "ramp": "rdylgn", "units": "index",
+         "label": "NDVI", "scale": {"policy": "fixed",
+         "range": [-1, 1], "transform": "linear"}}
 
 
 # ---------------------------------------------------------------------------
@@ -445,8 +446,7 @@ def compute_ndvi(
             least-cloudy scene chosen.
 
     Returns:
-        ``LayerURI`` (raster, ``role="primary"``, ``units="NDVI (-1..1)"``,
-        ``style_preset="ndvi"``) for a single-band float32 COG, cache
+        ``LayerURI`` (raster, ``role="primary"``, ``units="NDVI (-1..1)"``) for a single-band float32 COG, cache
         bucket, TTL 30d. Source: Sentinel-2 L2A via Microsoft Planetary
         Computer STAC (bands B04+B08).
     """
@@ -489,7 +489,7 @@ def compute_ndvi(
         name="Sentinel-2 NDVI",
         layer_type="raster",
         uri=result.uri,
-        style_preset=_STYLE_PRESET,
+        style=_STYLE,
         role="primary",
         units="NDVI (-1..1)",
     )

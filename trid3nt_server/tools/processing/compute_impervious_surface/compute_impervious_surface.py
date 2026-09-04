@@ -554,7 +554,10 @@ def compute_impervious_surface(
         name="Impervious Surface Fraction (NLCD-derived)",
         layer_type="raster",
         uri=result.uri,
-        style_preset="impervious_surface_pct",  # tools-backlog #3: 0-100% reds ramp
+        style={"kind": "continuous", "ramp": "reds", "units": "%",
+         "label": "Impervious surface",
+         "scale": {"policy": "fixed", "range": [0, 100],
+         "transform": "linear"}},  # tools-backlog #3: 0-100% reds ramp
         role="context",
         units=None,
     )

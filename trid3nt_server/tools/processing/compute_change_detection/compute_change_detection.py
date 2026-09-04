@@ -200,7 +200,7 @@ CHANGE_CLASSES: tuple[tuple[str, str, str], ...] = (
     ("loss", "#d73027", "Loss (index decrease)"),
 )
 
-_STYLE_PRESET = "change_detection"
+_STYLE = {"kind": "continuous"}
 
 _METADATA = AtomicToolMetadata(
     name="compute_change_detection",
@@ -577,7 +577,7 @@ def _build_legend(index: str) -> LegendKey:
     """Categorical gain/loss legend built from the SAME class table the paint
     uses (value_field drives the client's data-driven vector fill)."""
     return LegendKey(
-        kind="categorical",
+        kind="classed",
         classes=[
             LegendClass(value=value, color=color, label=label)
             for value, color, label in CHANGE_CLASSES
@@ -787,7 +787,7 @@ def compute_change_detection(
         ),
         layer_type="vector",
         uri=uri,
-        style_preset=_STYLE_PRESET,
+        style=_STYLE,
         role="primary",
         units="m^2",
         bbox=q_bbox,

@@ -682,7 +682,7 @@ def model_debris_flow(
 
     Returns:
         ``DebrisFlowLayerURI`` -- stream-segment vector (GeoJSON
-        LineStrings, ``style_preset="debris_flow_hazard"``; per-feature
+        LineStrings per-feature
         ``likelihood``, ``volume_m3``, ``hazard_class``) with
         ``segment_count``/``high_hazard_count``/``moderate_hazard_count``/
         ``low_hazard_count``, ``likelihood_max``/``volume_max_m3``,
@@ -905,7 +905,7 @@ def model_debris_flow(
         ),
         layer_type="vector",
         uri=uri,
-        style_preset="debris_flow_hazard",
+        style={"kind": "reference", "geometry": "line"},
         role="primary",
         units="likelihood (0-1) / m^3",
         bbox=q_bbox,

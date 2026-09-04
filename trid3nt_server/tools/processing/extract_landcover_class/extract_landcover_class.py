@@ -459,8 +459,7 @@ def extract_landcover_class(
 
     Returns:
         ``LayerURI`` for a binary uint8 mask GeoTIFF (1=match, 0=other,
-        255=nodata; cache bucket, TTL 30d; ``style_preset=
-        "categorical_landcover"``). Suitable as a zone mask for a
+        255=nodata; cache bucket, TTL 30d; ). Suitable as a zone mask for a
         code_exec playground zonal-stats recipe.
 
     Raises:
@@ -519,7 +518,7 @@ def extract_landcover_class(
         name=name,
         layer_type="raster",
         uri=result.uri,
-        style_preset="categorical_landcover",
+        style={"kind": "classed", "label": "Land Cover"},
         role="context",
         units=None,
         bbox=bbox_rounded if bbox_rounded is not None else None,

@@ -71,7 +71,7 @@ class EndpointsLayerURI(LayerURI):
 
 #: The label the two points travel under: ends the tool MEASURED off a line,
 #: whose meaning is whatever the line meant.
-_STYLE_PRESET = "line_endpoints"
+_STYLE = {"kind": "reference", "geometry": "point"}
 
 _ENDPOINTS_METADATA = AtomicToolMetadata(
     name="endpoints",
@@ -166,7 +166,7 @@ def endpoints(
 
     Returns:
         ``EndpointsLayerURI`` -- the two points as a GeoJSON point layer
-        (EPSG:4326, ``style_preset="line_endpoints"``) with ``between`` (the pair,
+        (EPSG:4326) with ``between`` (the pair,
         as ``section`` takes it), ``start``, ``end``, ``length_m``,
         ``part_count`` and honest ``notes``.
 
@@ -206,7 +206,7 @@ def endpoints(
         name=f"End points of a {length / 1000.0:.2f} km line",
         layer_type="vector",
         uri=uri,
-        style_preset=_STYLE_PRESET,
+        style=_STYLE,
         role="primary",
         units="m",
         crs_authid="EPSG:4326",

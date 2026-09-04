@@ -20,7 +20,7 @@ It is the imagery sibling of ``compute_blended_composite``: read an RGB COG with
 rasterio, run a pure-numpy/PIL transform, write a tiled RGB COG (with overviews,
 in-process via the rasterio COG driver), route through the ``read_through`` cache
 shim, and return a ``LayerURI`` that renders verbatim on the map via the
-existing multiband RGB passthrough (NO new style preset required).
+existing multiband RGB passthrough (the file already carries its colours).
 
 THE FOUR PASSES (each toggleable, each a pure ``__all__`` helper)
 -----------------------------------------------------------------
@@ -685,7 +685,7 @@ def enhance_satellite_image(
         name=name,
         layer_type="raster",
         uri=result.uri,
-        style_preset="rgb_composite",  # RGB(A) COG - rendered as a true-color image
+        style={"kind": "continuous"},
         role="context",
         units="rgb",
     )

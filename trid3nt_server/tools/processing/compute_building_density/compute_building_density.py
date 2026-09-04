@@ -765,7 +765,7 @@ def compute_building_density(
         name=f"Building Density (MS Global ML; {int(cell_size_m)} m cells)",
         layer_type="raster",
         uri=result.uri,
-        style_preset="building_density",
+        style={"kind": "continuous"},
         role="context",
         units=None,
         bbox=q_bbox,

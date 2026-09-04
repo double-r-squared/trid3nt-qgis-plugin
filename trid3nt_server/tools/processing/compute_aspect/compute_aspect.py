@@ -290,7 +290,9 @@ def compute_aspect(
         name=f"Aspect ({algorithm}, {'zero-flat' if zero_for_flat else 'nodata-flat'})",
         layer_type="raster",
         uri=result.uri,
-        style_preset="aspect_compass_deg",  # tools-backlog: cyclic compass-aspect hsv ramp (deg). Backend colormap here; the Orchestrator wires the frontend compass legend.
+        style={"kind": "continuous", "ramp": "hsv", "units": "deg",
+         "label": "Aspect", "scale": {"policy": "fixed",
+         "range": [0, 360], "transform": "linear"}},  # tools-backlog: cyclic compass-aspect hsv ramp (deg). Backend colormap here; the Orchestrator wires the frontend compass legend.
         role="context",
         units="degrees",
     )

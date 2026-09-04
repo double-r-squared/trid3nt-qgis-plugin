@@ -275,7 +275,7 @@ def extract_stream_network(
         ),
         layer_type="vector",
         uri=uri,
-        style_preset="stream_network",
+        style={"kind": "reference", "geometry": "line"},
         role="primary",
         units="upslope cells",
         bbox=q_bbox,

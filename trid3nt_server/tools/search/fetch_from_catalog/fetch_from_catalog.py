@@ -79,29 +79,18 @@ def _layer_uri_from_entry(
 ) -> LayerURI:
     """Build a LayerURI for a fetched cached artifact.
 
-    Style preset routing per the v0.1 seven engine-owned presets:
-    ``categorical_landcover`` for landcover; ``continuous_dem`` for DEM /
-    elevation; ``affected_buildings`` for buildings; everything else falls
-    back to ``continuous_dem`` as a placeholder (the catalog-driven preset
-    routing).
+    A catalog entry declares no style of its own, so the layer takes its kind's
+    bare default: a vector is drawn, a raster gets the neutral ramp over its own
+    range. Guessing a physical band from a source-class substring would paint an
+    unknown quantity in the colours of one somebody assumed.
     """
-    preset = "continuous_dem"
-    sc = entry.source_class.lower()
-    if "landcover" in sc:
-        preset = "categorical_landcover"
-    elif "building" in sc:
-        preset = "affected_buildings"
-    elif "flood" in sc:
-        preset = "flood_depth"
-    elif "track" in sc:
-        preset = "hurricane_track"
     layer_type = "vector" if ext in ("fgb", "geojson", "json") else "raster"
     return LayerURI(
         layer_id=f"catalog-{entry.id}",
         name=entry.name,
         layer_type=layer_type,
         uri=uri,
-        style_preset=preset,
+        style={"kind": "reference" if layer_type == "vector" else "continuous"},
         role="input",
     )
 

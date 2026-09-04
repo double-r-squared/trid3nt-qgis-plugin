@@ -102,7 +102,7 @@ _ON_CUT_M: float = 1.0e-6
 #: The label the section travels under: an outline the tool CUT, whose meaning is
 #: whatever the polygon it came from meant. A producer names its own preset, and
 #: this one cannot claim the source's semantics because it is handed any polygon.
-_STYLE_PRESET = "section_polygon"
+_STYLE = {"kind": "reference", "geometry": "polygon"}
 
 _SECTION_METADATA = AtomicToolMetadata(
     name="section",
@@ -370,8 +370,7 @@ def section(
             this extent. Supply this OR ``between``.
 
     Returns:
-        ``SectionLayerURI`` -- the sectioned polygon (GeoJSON, EPSG:4326,
-        ``style_preset="section_polygon"``) with ``area_km2``,
+        ``SectionLayerURI`` -- the sectioned polygon (GeoJSON, EPSG:4326) with ``area_km2``,
         ``source_area_km2``, ``length_m``, ``utm_epsg``, ``parts_kept``,
         ``parts_dropped``, ``face_start`` / ``face_end`` (the two end transects a
         ``between`` cut left, which a mesh prescribes its boundary roles across),
@@ -440,7 +439,7 @@ def section(
         name=name,
         layer_type="vector",
         uri=uri,
-        style_preset=_STYLE_PRESET,
+        style=_STYLE,
         role="primary",
         units="km^2",
         crs_authid="EPSG:4326",
