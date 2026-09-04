@@ -6,14 +6,12 @@ Covers, with an in-memory stubbed ``qgis`` package (the established
 * uri resolution in ``LayerMaterializer._add_raster``: an ``s3://...tif`` COG
   uri becomes ``QgsRasterLayer("/vsis3/<bucket>/<key>", name, "gdal")``, and
   anything that is not a store uri is an honest skip;
-* Renderer CLASS per legend kind: continuous ->
-  ``QgsSingleBandPseudoColorRenderer`` (Interpolated ``QgsColorRampShader``
-  from the ``ramps`` table); categorical -> ``QgsPalettedRasterRenderer``
-  from the COG's embedded GDAL color table, degrading to the gradient path
-  when the table is absent.
-* The ``ramps`` colormap table covers EVERY colormap name the server style
-  registry can emit (scans ``src/.../publish_layer.py`` so registry
-  drift fails here instead of rendering grey).
+* the styling seam: the ``.qml`` the legend carries reaches
+  ``loadNamedStyle``, and a layer whose file already carries its colours (no
+  ``.qml`` on the legend) keeps QGIS's own renderer untouched;
+* the temporal seam: a row's DECLARED ``valid_from``/``valid_to`` window
+  becomes the layer's fixed temporal range, and a row that declares none is
+  left alone.
 
 Run via ``make test`` from plugin/.
 """
@@ -32,22 +30,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from stub_server import RASTER_LAYER_ROW  # noqa: E402
-
-#: The server's raster-styling chokepoint, which this file scans for colormap
-#: names the plugin mirror does not carry. The path was pointing at
-#: ``server/src/trid3nt_server/tools/publish_layer.py`` - a layout that stopped
-#: existing two refactors ago - so the ``skipUnless(os.path.exists(...))`` guard
-#: below had been silently skipping the drift check rather than running it.
-_SERVER_PUBLISH_LAYER = os.path.join(
-    os.path.dirname(__file__),
-    "..",
-    "..",
-    "trid3nt_server",
-    "emission",
-    "publish.py",
-)
-
-
 
 
 # --------------------------------------------------------------------------- #
@@ -68,19 +50,41 @@ def _import_layers():
             pass
 
     class _FakeQDateTime:
+        """Just enough of QDateTime for the declared-instant parse + compare."""
+
+        def __init__(self, text="", valid=True):
+            self.text, self._valid = text, valid
+
         @staticmethod
         def fromString(text, fmt=None):
-            return text
+            import datetime as _dt
+
+            try:
+                _dt.datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+            except ValueError:
+                return _FakeQDateTime(text, valid=False)
+            return _FakeQDateTime(text)
+
+        def isValid(self):
+            return self._valid
+
+        def toString(self, fmt=None):
+            return self.text
+
+        def __lt__(self, other):
+            return self.text < other.text
+
+        def __gt__(self, other):
+            return self.text > other.text
+
+        def __eq__(self, other):
+            return isinstance(other, _FakeQDateTime) and self.text == other.text
 
     class _FakeQt:
         ISODate = 1
 
-    class _FakeQColor:
-        def __init__(self, spec=""):
-            self.spec = spec
-
-        def name(self):
-            return self.spec
+        class DateFormat:
+            ISODate = 1
 
     class _FakeLayerNode:
         def __init__(self, layer):
@@ -152,25 +156,45 @@ def _import_layers():
         def removeMapLayers(self, ids):
             pass
 
-    class _FakeDataProvider:
-        def __init__(self, color_table):
-            self._color_table = list(color_table)
+        def timeSettings(self):
+            if not hasattr(self, "_time"):
+                self._time = _FakeTimeSettings()
+            return self._time
 
-        def colorTable(self, band):
-            return list(self._color_table)
+    class _FakeTemporalProps:
+        def __init__(self):
+            self.mode = None
+            self.range = None
+            self.active = False
+
+        ModeFixedTemporalRange = "fixed"
+
+        def setMode(self, mode):
+            self.mode = mode
+
+        def setFixedTemporalRange(self, rng):
+            self.range = rng
+
+        def setIsActive(self, active):
+            self.active = active
 
     class _FakeRasterLayer:
         instances = []
         #: per-construction knobs (reset by each _import_layers call)
         next_valid = True
-        next_color_table = []
+        #: what ``loadNamedStyle`` reports back, and the renderer name it
+        #: leaves behind (a document that loads without changing the render
+        #: is the case the seam has to notice).
+        next_style_result = ("", True)
+        next_styled_renderer = "QgsSingleBandPseudoColorRenderer"
 
         def __init__(self, path, name, provider=""):
             self.path, self._name, self.provider = path, name, provider
             self._valid = _FakeRasterLayer.next_valid
-            self.renderer = None
+            self.renderer_name = "QgsMultiBandColorRenderer"
+            self.loaded_qml = None
             self.opacity = None
-            self._provider = _FakeDataProvider(_FakeRasterLayer.next_color_table)
+            self.temporal = _FakeTemporalProps()
             _FakeRasterLayer.instances.append(self)
 
         def isValid(self):
@@ -179,11 +203,19 @@ def _import_layers():
         def name(self):
             return self._name
 
-        def dataProvider(self):
-            return self._provider
+        def renderer(self):
+            return type(self.renderer_name, (), {})()
 
-        def setRenderer(self, renderer):
-            self.renderer = renderer
+        def loadNamedStyle(self, path):
+            with open(path, "r", encoding="utf-8") as fh:
+                self.loaded_qml = fh.read()
+            message, ok = _FakeRasterLayer.next_style_result
+            if ok:
+                self.renderer_name = _FakeRasterLayer.next_styled_renderer
+            return message, ok
+
+        def temporalProperties(self):
+            return self.temporal
 
         def setOpacity(self, opacity):
             self.opacity = opacity
@@ -191,71 +223,38 @@ def _import_layers():
     class _FakeVectorLayer(_FakeRasterLayer):
         pass
 
-    class _FakeColorRampItem:
-        def __init__(self, value, color, label=""):
-            self.value, self.color, self.label = value, color, label
-
-    class _FakeColorRampShader:
-        Interpolated = 1
-        ColorRampItem = _FakeColorRampItem
-
-        def __init__(self, vmin=0.0, vmax=255.0, *args):
-            self.vmin, self.vmax = vmin, vmax
-            self.items = []
-            self.ramp_type = None
-
-        def setColorRampType(self, ramp_type):
-            self.ramp_type = ramp_type
-
-        def setColorRampItemList(self, items):
-            self.items = list(items)
-
-    class _FakeRasterShader:
+    class _FakeTimeSettings:
         def __init__(self):
-            self.fn = None
+            self.range = None
 
-        def setRasterShaderFunction(self, fn):
-            self.fn = fn
+        def temporalRange(self):
+            return self.range
 
-    class _FakePseudoColorRenderer:
-        def __init__(self, provider, band, shader):
-            self.provider, self.band, self.shader = provider, band, shader
-            self.cmin = self.cmax = None
-
-        def setClassificationMin(self, v):
-            self.cmin = v
-
-        def setClassificationMax(self, v):
-            self.cmax = v
-
-    class _FakePalettedRenderer:
-        def __init__(self, provider, band, classes):
-            self.provider, self.band, self.classes = provider, band, classes
-
-        @staticmethod
-        def colorTableToClassData(table):
-            return list(table)
-
-    class _FakeStyleDb:
-        def colorRamp(self, name):
-            return None  # force the hardcoded stop-table fallback (deterministic)
-
-    class _FakeStyle:
-        @staticmethod
-        def defaultStyle():
-            return _FakeStyleDb()
+        def setTemporalRange(self, rng):
+            self.range = rng
 
     qtcore = types.ModuleType("qgis.PyQt.QtCore")
     qtcore.QSettings = _FakeQSettings
     qtcore.QDateTime = _FakeQDateTime
     qtcore.Qt = _FakeQt
-    qtgui = types.ModuleType("qgis.PyQt.QtGui")
-    qtgui.QColor = _FakeQColor
     pyqt = types.ModuleType("qgis.PyQt")
     pyqt.QtCore = qtcore
-    pyqt.QtGui = qtgui
     core = types.ModuleType("qgis.core")
-    core.QgsDateTimeRange = type("QgsDateTimeRange", (), {})
+
+    class _FakeRange:
+        def __init__(self, begin=None, end=None):
+            self._begin, self._end = begin, end
+
+        def begin(self):
+            return self._begin
+
+        def end(self):
+            return self._end
+
+        def isInfinite(self):
+            return self._begin is None
+
+    core.QgsDateTimeRange = _FakeRange
     core.QgsProject = _FakeProject
     core.QgsRasterLayer = _FakeRasterLayer
     core.QgsVectorLayer = _FakeVectorLayer
@@ -266,11 +265,6 @@ def _import_layers():
         "QgsMeshDatasetIndex", (), {"__init__": lambda self, group=0, dataset=0: None}
     )
     core.QgsMeshLayer = type("QgsMeshLayer", (), {})
-    core.QgsColorRampShader = _FakeColorRampShader
-    core.QgsPalettedRasterRenderer = _FakePalettedRenderer
-    core.QgsRasterShader = _FakeRasterShader
-    core.QgsSingleBandPseudoColorRenderer = _FakePseudoColorRenderer
-    core.QgsStyle = _FakeStyle
     qgis_mod = types.ModuleType("qgis")
     qgis_mod.PyQt = pyqt
     qgis_mod.core = core
@@ -279,7 +273,6 @@ def _import_layers():
         "qgis",
         "qgis.PyQt",
         "qgis.PyQt.QtCore",
-        "qgis.PyQt.QtGui",
         "qgis.core",
     )
     saved = {k: sys.modules.get(k) for k in stub_keys}
@@ -288,7 +281,6 @@ def _import_layers():
             "qgis": qgis_mod,
             "qgis.PyQt": pyqt,
             "qgis.PyQt.QtCore": qtcore,
-            "qgis.PyQt.QtGui": qtgui,
             "qgis.core": core,
         }
     )
@@ -311,8 +303,6 @@ def _import_layers():
 
     fakes = types.SimpleNamespace(
         RasterLayer=_FakeRasterLayer,
-        PseudoColorRenderer=_FakePseudoColorRenderer,
-        PalettedRenderer=_FakePalettedRenderer,
         Project=_FakeProject,
     )
     return layers, fakes
@@ -386,211 +376,121 @@ class TestStoreUriResolution(unittest.TestCase):
         self.assertTrue(any("skipped" in n for n in notes), notes)
 
 # --------------------------------------------------------------------------- #
-# renderer class per legend kind
+# the declared preset, loaded as QGIS's own style document
 # --------------------------------------------------------------------------- #
 
 
-class TestRendererPerLegendKind(unittest.TestCase):
-    def test_continuous_legend_builds_pseudocolor_renderer(self):
+_QML = (
+    '<!DOCTYPE qgis><qgis version="3.40"><pipe><rasterrenderer '
+    'type="singlebandpseudocolor" band="1"/></pipe></qgis>'
+)
+
+
+class TestDeclaredStyleIsLoadedNotRebuilt(unittest.TestCase):
+    def test_the_legends_qml_reaches_load_named_style(self):
+        """The document the producer resolved is what QGIS reads.
+
+        Not a colour-ramp NAME this side looks up in a table of its own - that
+        table was a mirror of the server's, and a mirror drifts.
+        """
+        layers, fakes = _import_layers()
+        m = layers.LayerMaterializer(settings=_Settings())
+        row = dict(RASTER_LAYER_ROW)
+        row["legend"] = {"kind": "continuous", "qml": _QML}
+        notes = m.materialize([_event(layers, row)])
+        layer = fakes.RasterLayer.instances[0]
+        self.assertEqual(layer.loaded_qml, _QML)
+        self.assertTrue(any("styled from the declared preset" in n for n in notes), notes)
+
+    def test_a_layer_that_carries_its_own_colours_keeps_qgis_own_renderer(self):
+        """No ``.qml`` means the file is already painted - an RGB(A) composite or
+        a COG with a band-1 colour table. Overriding QGIS there would repaint a
+        picture the producer had already painted."""
+        layers, fakes = _import_layers()
+        m = layers.LayerMaterializer(settings=_Settings())
+        row = dict(RASTER_LAYER_ROW)
+        row["legend"] = {"kind": "classed", "classes": [{"value": 11, "color": "#0f0",
+                                                         "label": "forest"}]}
+        m.materialize([_event(layers, row)])
+        layer = fakes.RasterLayer.instances[0]
+        self.assertIsNone(layer.loaded_qml)
+        self.assertEqual(layer.renderer_name, "QgsMultiBandColorRenderer")
+
+    def test_a_rejected_document_is_an_honest_note_not_a_lost_layer(self):
+        layers, fakes = _import_layers()
+        fakes.RasterLayer.next_style_result = ("not well formed", False)
+        m = layers.LayerMaterializer(settings=_Settings())
+        row = dict(RASTER_LAYER_ROW)
+        row["legend"] = {"kind": "continuous", "qml": _QML}
+        notes = m.materialize([_event(layers, row)])
+        self.assertEqual(len(fakes.RasterLayer.instances), 1)
+        self.assertTrue(any("style not loaded" in n for n in notes), notes)
+
+    def test_a_document_that_loads_without_changing_the_render_says_so(self):
+        """``loadNamedStyle``'s boolean is well-formedness only, so a document
+        that parses and changes nothing must not read as a styled layer."""
+        layers, fakes = _import_layers()
+        fakes.RasterLayer.next_styled_renderer = "QgsMultiBandColorRenderer"
+        m = layers.LayerMaterializer(settings=_Settings())
+        row = dict(RASTER_LAYER_ROW)
+        row["legend"] = {"kind": "continuous", "qml": _QML}
+        notes = m.materialize([_event(layers, row)])
+        self.assertTrue(any("renderer is unchanged" in n for n in notes), notes)
+
+
+# --------------------------------------------------------------------------- #
+# the declared validity window, stamped as the layer's temporal range
+# --------------------------------------------------------------------------- #
+
+
+class TestDeclaredTemporalWindow(unittest.TestCase):
+    def test_a_frames_declared_window_becomes_its_fixed_temporal_range(self):
+        """The producer held the instant; this side stamps it.
+
+        Nothing here reads a time out of the layer NAME, so a frame named in any
+        language still plays, and a name that merely LOOKS like a step number
+        cannot manufacture a clock.
+        """
+        layers, fakes = _import_layers()
+        m = layers.LayerMaterializer(settings=_Settings())
+        row = dict(RASTER_LAYER_ROW)
+        row["valid_from"] = "2026-06-22T18:00:00Z"
+        row["valid_to"] = "2026-06-22T18:10:00Z"
+        notes = m.materialize([_event(layers, row)])
+        layer = fakes.RasterLayer.instances[0]
+        self.assertTrue(layer.temporal.active)
+        self.assertEqual(layer.temporal.range.begin().toString(), "2026-06-22T18:00:00Z")
+        self.assertEqual(layer.temporal.range.end().toString(), "2026-06-22T18:10:00Z")
+        self.assertTrue(any("Temporal Controller" in n for n in notes), notes)
+
+    def test_the_project_range_grows_to_cover_the_window(self):
+        layers, fakes = _import_layers()
+        m = layers.LayerMaterializer(settings=_Settings())
+        row = dict(RASTER_LAYER_ROW)
+        row["valid_from"] = "2026-06-22T18:00:00Z"
+        row["valid_to"] = "2026-06-22T18:10:00Z"
+        m.materialize([_event(layers, row)])
+        span = fakes.Project.instance().timeSettings().temporalRange()
+        self.assertEqual(span.begin().toString(), "2026-06-22T18:00:00Z")
+        self.assertEqual(span.end().toString(), "2026-06-22T18:10:00Z")
+
+    def test_a_row_that_declares_no_window_is_left_alone(self):
+        """A still is not a frame. It gets no invented clock and no stamp."""
         layers, fakes = _import_layers()
         m = layers.LayerMaterializer(settings=_Settings())
         m.materialize([_event(layers, RASTER_LAYER_ROW)])
         layer = fakes.RasterLayer.instances[0]
-        renderer = layer.renderer
-        self.assertIsInstance(renderer, fakes.PseudoColorRenderer)
-        self.assertEqual(renderer.band, 1)
-        # legend vmin/vmax drive the classification range
-        self.assertEqual(renderer.cmin, 600.0)
-        self.assertEqual(renderer.cmax, 2100.0)
-        shader_fn = renderer.shader.fn
-        self.assertEqual(shader_fn.ramp_type, shader_fn.Interpolated)
-        colors = [item.color.spec for item in shader_fn.items]
-        self.assertEqual(colors[0], "#440154")   # viridis low
-        self.assertEqual(colors[-1], "#fde725")  # viridis high
-        values = [item.value for item in shader_fn.items]
-        self.assertEqual(values[0], 600.0)
-        self.assertEqual(values[-1], 2100.0)
+        self.assertFalse(layer.temporal.active)
+        self.assertIsNone(layer.temporal.range)
 
-    def test_categorical_legend_with_embedded_table_builds_paletted(self):
-        layers, fakes = _import_layers()
-        fakes.RasterLayer.next_color_table = [
-            ("entry-11", "green"),
-            ("entry-21", "grey"),
-            ("entry-41", "forest"),
-        ]
-        m = layers.LayerMaterializer(settings=_Settings())
-        notes = m.materialize(
-            [
-                _event(
-                    layers,
-                    {
-                        "layer_id": "01CATRASTERAAAAAAAAAAAAAAA",
-                        "name": "NLCD landcover",
-                        "uri": "s3://trid3nt-runs/landcover/nlcd.tif",
-                        "legend": {"kind": "classed", "classes": []},
-                    },
-                )
-            ]
-        )
-        layer = fakes.RasterLayer.instances[0]
-        renderer = layer.renderer
-        self.assertIsInstance(renderer, fakes.PalettedRenderer)
-        self.assertEqual(renderer.band, 1)
-        self.assertEqual(len(renderer.classes), 3)
-        self.assertTrue(any("embedded color table, 3 classes" in n for n in notes), notes)
-
-    def test_categorical_without_table_falls_back_to_legend_swatches(self):
-        """No embedded GDAL palette (e.g. the sediment-yield log-binned COG):
-        the legend's own class swatches drive a gradient renderer instead of
-        silently defaulting to grey."""
-        layers, fakes = _import_layers()
-        fakes.RasterLayer.next_color_table = []
-        m = layers.LayerMaterializer(settings=_Settings())
-        m.materialize(
-            [
-                _event(
-                    layers,
-                    {
-                        "layer_id": "01SEDIMENTAAAAAAAAAAAAAAAA",
-                        "name": "Soil loss",
-                        "uri": "s3://trid3nt-runs/rusle/yield.tif",
-                        "legend": {
-                            "kind": "classed",
-                            "classes": [
-                                {"value_min": 0.0, "value_max": 1.0, "color": "#ffffcc", "label": "<1"},
-                                {"value_min": 1.0, "value_max": 5.0, "color": "#fed976", "label": "1-5"},
-                                {"value_min": 5.0, "value_max": 10.0, "color": "#e31a1c", "label": "5-10"},
-                            ],
-                        },
-                    },
-                )
-            ]
-        )
-        renderer = fakes.RasterLayer.instances[0].renderer
-        self.assertIsInstance(renderer, fakes.PseudoColorRenderer)
-        colors = [item.color.spec for item in renderer.shader.fn.items]
-        self.assertEqual(colors, ["#ffffcc", "#fed976", "#e31a1c"])
-        # range spans the class anchors (bin midpoints)
-        self.assertEqual(renderer.cmin, 0.5)
-        self.assertEqual(renderer.cmax, 7.5)
-
-    def test_unknown_colormap_never_defaults_to_grey(self):
+    def test_an_unparseable_instant_is_absent_not_guessed(self):
         layers, fakes = _import_layers()
         m = layers.LayerMaterializer(settings=_Settings())
-        notes = m.materialize(
-            [
-                _event(
-                    layers,
-                    {
-                        "layer_id": "01UNKNOWNCMAPAAAAAAAAAAAAA",
-                        "name": "Mystery field",
-                        "uri": "s3://trid3nt-runs/x/y.tif",
-                        "legend": {
-                            "kind": "continuous",
-                            "colormap": "not_a_real_ramp",
-                            "vmin": 0.0,
-                            "vmax": 10.0,
-                        },
-                    },
-                )
-            ]
-        )
-        renderer = fakes.RasterLayer.instances[0].renderer
-        self.assertIsInstance(renderer, fakes.PseudoColorRenderer)
-        colors = [item.color.spec for item in renderer.shader.fn.items]
-        self.assertEqual(colors[0], "#440154")  # the viridis stand-in, not grey
-        self.assertTrue(any("unknown colormap" in n for n in notes), notes)
-
-    def test_no_legend_leaves_the_default_renderer(self):
-        """Terrain/RGBA passthrough layers carry no legend BY DESIGN --
-        GDAL's default render (grayscale autoscale / native RGB) is correct,
-        so no renderer is forced onto them."""
-        layers, fakes = _import_layers()
-        m = layers.LayerMaterializer(settings=_Settings())
-        notes = m.materialize(
-            [
-                _event(
-                    layers,
-                    {
-                        "layer_id": "01TERRAINRGBAAAAAAAAAAAAAA",
-                        "name": "Colored relief",
-                        "uri": "s3://trid3nt-runs/terrain/relief.tif",
-                    },
-                )
-            ]
-        )
-        layer = fakes.RasterLayer.instances[0]
-        self.assertIsNone(layer.renderer)
-        self.assertTrue(any("streamed via /vsis3" in n for n in notes), notes)
-
-
-# --------------------------------------------------------------------------- #
-# ramps table completeness vs the server style registry
-# --------------------------------------------------------------------------- #
-
-
-class TestRampTableCoversServerRegistry(unittest.TestCase):
-    """Every colormap name the server can emit must resolve to real stops.
-
-    ``ramps.SERVER_COLORMAP_NAMES`` is a hand-synced mirror of the server
-    style registry (see the ramps module docstring); this test scans the
-    server source so a registry addition FAILS here until the mirror + stop
-    table are updated -- colormap drift is never silent grey.
-    """
-
-    def _load_ramps(self):
-        plugin_root = os.path.join(os.path.dirname(__file__), "..", "..")
-        sys.path.insert(0, plugin_root)
-        try:
-            # Pure-python module (no qgis imports) -- direct import is safe.
-            from plugin.render import ramps
-
-            return ramps
-        finally:
-            sys.path.remove(plugin_root)
-
-    def test_every_mirrored_name_resolves_to_nongrey_stops(self):
-        ramps = self._load_ramps()
-        for name in ramps.SERVER_COLORMAP_NAMES:
-            stops = ramps.resolve_stops(name)
-            self.assertIsNotNone(stops, f"no ramp stops for {name!r}")
-            self.assertGreaterEqual(len(stops), 2, name)
-            colors = {color for _t, color in stops}
-            self.assertGreater(len(colors), 1, f"{name!r} is a flat ramp")
-
-    def test_generic_reversed_variant_resolves(self):
-        ramps = self._load_ramps()
-        # a *_r name with no direct table entry reverses its base
-        stops = ramps.resolve_stops("viridis_r")
-        self.assertIsNotNone(stops)
-        self.assertEqual(stops[0][1], "#fde725")
-        self.assertEqual(stops[-1][1], "#440154")
-
-    @unittest.skipUnless(
-        os.path.exists(_SERVER_PUBLISH_LAYER),
-        "server tree not present next to plugin/",
-    )
-    def test_server_registry_is_subset_of_mirror(self):
-        with open(_SERVER_PUBLISH_LAYER, "r", encoding="utf-8") as f:
-            source = f.read()
-        found: set[str] = set()
-        # registry / family-rule tuples: ("lo,hi", "cmap")
-        found.update(re.findall(r'\("[-0-9.,e]+",\s*"([a-z0-9_]+)"\)', source))
-        # literal style-params emissions: &colormap_name=<cmap>
-        found.update(re.findall(r"colormap_name=([a-z0-9_]+)", source))
-        found.discard("name")  # the docstring placeholder "colormap_name=name"
-        ramps = self._load_ramps()
-        missing = sorted(found - set(ramps.SERVER_COLORMAP_NAMES))
-        self.assertEqual(
-            missing,
-            [],
-            "server style registry emits colormap names the plugin ramp "
-            f"mirror does not carry: {missing} -- add them to "
-            "trid3nt/render/ramps.py (SERVER_COLORMAP_NAMES + _RAMP_STOPS)",
-        )
-        # and every mirrored name must resolve (guards table typos)
-        for name in found:
-            self.assertIsNotNone(ramps.resolve_stops(name), name)
+        row = dict(RASTER_LAYER_ROW)
+        row["valid_from"] = "sometime tuesday"
+        row["valid_to"] = "2026-06-22T18:10:00Z"
+        m.materialize([_event(layers, row)])
+        self.assertFalse(fakes.RasterLayer.instances[0].temporal.active)
 
 
 # --------------------------------------------------------------------------- #
@@ -799,58 +699,6 @@ class TestZoomToExtentFiniteGuard(unittest.TestCase):
         rect = _FakeRect(-85.0, 29.0, -84.0, 30.0)
         self.assertTrue(layers.zoom_to_extent(canvas, rect))
         self.assertTrue(canvas.extent_set)
-
-
-class TestCategoricalNonFiniteAnchorsDropped(unittest.TestCase):
-    """A categorical legend whose class anchors carry NaN/inf must not ferry a
-    non-finite value into the gradient-fallback native ramp items."""
-
-    def test_nan_class_values_are_filtered_before_the_native_ramp(self):
-        layers, fakes = _import_layers()
-        m = layers.LayerMaterializer(settings=_Settings())
-        m.materialize(
-            [
-                _event(
-                    layers,
-                    {
-                        "layer_id": "01NANCLASSAAAAAAAAAAAAAAAA",
-                        "name": "Broken categorical",
-                        "uri": "s3://trid3nt-runs/x/y.tif",
-                        "legend": {
-                            "kind": "classed",
-                            "classes": [
-                                {"value": float("nan"), "color": "#ffffcc"},
-                                {"value": 1.0, "color": "#fed976"},
-                                {"value": float("inf"), "color": "#e31a1c"},
-                                {"value": 5.0, "color": "#800026"},
-                            ],
-                        },
-                    },
-                )
-            ]
-        )
-        renderer = fakes.RasterLayer.instances[0].renderer
-        self.assertIsInstance(renderer, fakes.PseudoColorRenderer)
-        # the two finite anchors (1.0, 5.0) drive a sane, finite range
-        self.assertTrue(math.isfinite(renderer.cmin))
-        self.assertTrue(math.isfinite(renderer.cmax))
-        for item in renderer.shader.fn.items:
-            self.assertTrue(math.isfinite(item.value), item.value)
-
-
-class TestColorRampItemsRejectNonFiniteOffset(unittest.TestCase):
-    """An explicit stops list carrying a non-finite offset must not produce a
-    non-finite ``ColorRampItem`` value (``min/max`` pass NaN through)."""
-
-    def test_nan_offset_stop_is_dropped(self):
-        layers, _ = _import_layers()
-        items, _note = layers._color_ramp_items(
-            [[0.0, "#000000"], [float("nan"), "#808080"], [1.0, "#ffffff"]],
-            0.0,
-            10.0,
-        )
-        for item in items:
-            self.assertTrue(math.isfinite(item.value), item.value)
 
 
 class TestMeshStagingExtension(unittest.TestCase):

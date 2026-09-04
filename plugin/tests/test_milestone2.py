@@ -463,17 +463,15 @@ def _make_gpkg(path: str, tables: list) -> None:
     conn.close()
 
 
-class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
-    """ITEM A (case-switch group clear) + ITEM C (frame-sequence animation
-    subgroup) -- live-feedback 2026-07-10.
+class TestCaseGroupClearing(unittest.TestCase):
+    """The case-switch group clear: one TRID3NT group per case, no leftovers.
 
     ``layers.py`` imports ``qgis.core`` / ``qgis.PyQt`` at module top, so
     this installs an in-memory fake ``qgis.core`` rich enough to model a
     QgsLayerTreeGroup/QgsLayerTreeRoot's group/layer nesting -- groups,
-    nested subgroups, ``findGroups``/``findLayer``/``findLayerIds``,
-    ``removeChildNode``, and per-layer visibility -- since ``set_case``'s
-    stale-group sweep and ``group_frame_sequences`` both drive that API
-    directly.
+    ``findGroups``/``findLayer``/``findLayerIds``, ``removeChildNode``, and
+    per-layer visibility -- since ``set_case``'s stale-group sweep drives that
+    API directly.
     """
 
     def _import_layers(self):
@@ -766,84 +764,6 @@ class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
         self.assertEqual([g.name() for g in root.findGroups()], ["TRID3NT Case A"])
         case_group = root.findGroup("TRID3NT Case A")
         self.assertEqual(len(case_group.findLayerIds()), 1)  # no duplicate
-
-    # -- ITEM C: frame-sequence rasters land in a collapsed subgroup ------- #
-
-    def test_frame_sequence_lands_in_collapsed_animation_subgroup(self):
-        from plugin.net import trid3nt_client as tc
-
-        layers, FakeProject, _fake_raster = self._import_layers()
-        m = layers.LayerMaterializer(settings=None)
-        root = FakeProject.instance().layerTreeRoot()
-
-        m.set_case("case-a", "Case A")
-        notes = m.materialize(
-            [
-                self._event(tc, "L1", "DEM"),  # non-sequence -- stays flat
-                self._event(tc, "L2", "Flood_depth_step_1"),
-                self._event(tc, "L3", "Flood_depth_step_2"),
-                self._event(tc, "L4", "Flood_depth_step_3"),
-            ]
-        )
-        case_group = root.findGroup("TRID3NT Case A")
-        top_level_names = [
-            c.layer().name() for c in case_group.children() if hasattr(c, "layer")
-        ]
-        top_level_groups = [c.name() for c in case_group.children() if hasattr(c, "findGroups")]
-        self.assertEqual(top_level_names, ["DEM"])  # non-sequence stays flat
-        self.assertEqual(top_level_groups, ["flood depth (animation, 3 frames)"])
-
-        subgroup = case_group.findGroup("flood depth (animation, 3 frames)")
-        self.assertFalse(subgroup.isExpanded())  # collapsed
-        self.assertEqual(
-            sorted(c.layer().name() for c in subgroup.children()),
-            ["Flood_depth_step_1", "Flood_depth_step_2", "Flood_depth_step_3"],
-        )
-        self.assertTrue(
-            any(
-                "flood depth: 3 frames grouped - open View > Panels > "
-                "Temporal Controller and press play to animate." == n
-                for n in notes
-            )
-        )
-
-    def test_growing_sequence_renames_subgroup_without_losing_members(self):
-        from plugin.net import trid3nt_client as tc
-
-        layers, FakeProject, _fake_raster = self._import_layers()
-        m = layers.LayerMaterializer(settings=None)
-        root = FakeProject.instance().layerTreeRoot()
-
-        m.set_case("case-a", "Case A")
-        m.materialize(
-            [
-                self._event(tc, "L1", "Flood_depth_step_1"),
-                self._event(tc, "L2", "Flood_depth_step_2"),
-            ]
-        )
-        case_group = root.findGroup("TRID3NT Case A")
-        self.assertIsNotNone(case_group.findGroup("flood depth (animation, 2 frames)"))
-
-        # session-state replay grows the sequence to 3 members.
-        m.materialize(
-            [
-                self._event(tc, "L1", "Flood_depth_step_1"),
-                self._event(tc, "L2", "Flood_depth_step_2"),
-                self._event(tc, "L3", "Flood_depth_step_3"),
-            ]
-        )
-        self.assertIsNone(case_group.findGroup("flood depth (animation, 2 frames)"))
-        subgroup = case_group.findGroup("flood depth (animation, 3 frames)")
-        self.assertIsNotNone(subgroup)
-        self.assertEqual(
-            sorted(c.layer().name() for c in subgroup.children()),
-            ["Flood_depth_step_1", "Flood_depth_step_2", "Flood_depth_step_3"],
-        )
-        # only ONE animation subgroup exists -- no leftover stale-named one
-        self.assertEqual(
-            len([g for g in case_group.findGroups() if "animation" in g.name()]), 1
-        )
-
 
 
 if __name__ == "__main__":

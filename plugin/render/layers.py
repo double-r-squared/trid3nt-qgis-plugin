@@ -10,11 +10,12 @@ credentials are process-wide GDAL configuration applied once
 VALUE, never a second code path -- there is no local-path-versus-remote branch
 anywhere below.
 
-  raster  ``QgsRasterLayer("/vsis3/<bucket>/<key>", name, "gdal")`` plus the
-          plugin's OWN renderer from the event's ``legend`` (continuous ->
-          ``QgsSingleBandPseudoColorRenderer`` with a ``ramps``-table gradient;
-          classed -> ``QgsPalettedRasterRenderer`` from the COG's embedded GDAL
-          color table). Ranged reads: overviews and windows only.
+  raster  ``QgsRasterLayer("/vsis3/<bucket>/<key>", name, "gdal")`` styled by
+          ``loadNamedStyle`` from the ``.qml`` the event's ``legend`` carries -
+          the resolved preset, in QGIS's own style format. A COG that already
+          carries its colours (RGB(A), an embedded colour table) ships no
+          ``.qml`` and keeps QGIS's own default renderer, which is already the
+          correct render. Ranged reads: overviews and windows only.
   vector  ``QgsVectorLayer("/vsis3/<bucket>/<key>", name, "ogr")`` -- FlatGeobuf
           reads its spatial index ranged, so QGIS fetches only the intersecting
           features, NO local copy. The agent's additive ``inline_geojson`` merge
@@ -31,19 +32,20 @@ anywhere below.
 Dedup: by ``layer_id`` -- session-state is replayed on every emit (A.7
 replace-not-reconcile), so the same rows arrive many times per turn.
 
-Temporal animation: after layers land (both the live-stream and the
-exported-case paths), frame-sequence rasters (``Flood_depth_step_1..N``,
-``F+03h`` stacks, ISO valid-time frames -- the same series the web scrubber
-groups) are stamped with per-layer fixed temporal ranges so the built-in
-QGIS Temporal Controller plays them natively. Pure grouping/range math lives
-in ``temporal`` (tested without QGIS); ``stamp_temporal`` here applies it.
+Temporal: a layer states its own clock and this side stamps it. One frame of
+a sequence carries the ``valid_from``/``valid_to`` window its producer already
+held, so the built-in Temporal Controller plays the sequence with no name to
+parse and no synthetic clock. A mesh carries a ``reference_time``: MDAL owns
+the time axis inside a SELAFIN but the file records no origin for it, so the
+row says when zero was and ``setReferenceTime`` moves the whole extent onto
+the run's own clock.
 
 Mesh outputs (MDAL, the ONE staged format): a ``layer_type == "mesh"`` event
 (SFINCS ``sfincs_map.nc`` and kin) STAGES to the session temp dir first --
 QGIS's MDAL provider demands a local path -- then loads
 ``QgsMeshLayer(local_path, name, "mdal")`` (``_add_mesh``). QGIS's MDAL
-provider reports an EMPTY crs() for a SFINCS quadtree NetCDF (proven live
-2026-07-10), so ``setCrs(QgsCoordinateReferenceSystem(crs_authid))`` is applied
+provider reports an EMPTY crs() for a SELAFIN and for a SFINCS quadtree NetCDF
+(proven live), so ``setCrs(QgsCoordinateReferenceSystem(crs_authid))`` is applied
 explicitly from the event's ``crs_authid`` (carried on the row); when that is
 unresolved the layer is still added with an honest dock note instead of a
 silent wrong-CRS render. The active scalar dataset group is set to the
@@ -69,25 +71,19 @@ import uuid
 from typing import List, Optional, Tuple
 
 from qgis.core import (
-    QgsColorRampShader,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsDateTimeRange,
     QgsMeshDatasetIndex,
     QgsMeshLayer,
-    QgsPalettedRasterRenderer,
     QgsProject,
     QgsRasterLayer,
-    QgsRasterShader,
     QgsRectangle,
-    QgsSingleBandPseudoColorRenderer,
-    QgsStyle,
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QDateTime, Qt
-from qgis.PyQt.QtGui import QColor
 
-from . import formatting, ramps, temporal
+from . import formatting
 from ..plugin_settings import PluginSettings
 from ..net.trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_vsis3
 
@@ -328,13 +324,40 @@ def zoom_to_bbox4326(
     return zoom_to_extent(canvas, rect, margin=margin)
 
 
-# -- Temporal Controller stamping (frame-sequence animation) ----------------- #
+# -- Temporal Controller stamping -------------------------------------------- #
 
 
-def _temporal_qdt(dt) -> QDateTime:
-    """An aware-UTC ``datetime`` -> ``QDateTime`` (ISO round trip -- the
-    trailing Z parses as UTC on both Qt5 and Qt6)."""
-    return QDateTime.fromString(dt.strftime("%Y-%m-%dT%H:%M:%SZ"), Qt.DateFormat.ISODate)
+def _temporal_qdt(text) -> Optional[QDateTime]:
+    """A DECLARED ISO-8601 UTC instant -> ``QDateTime``, else ``None``.
+
+    The trailing Z parses as UTC on both Qt5 and Qt6; anything the parser
+    refuses is an absent time, never a guessed one.
+    """
+    if not isinstance(text, str) or not text.strip():
+        return None
+    stamp = QDateTime.fromString(text.strip(), Qt.DateFormat.ISODate)
+    return stamp if stamp.isValid() else None
+
+
+def _widen_project_temporal_range(begin: QDateTime, end: QDateTime) -> None:
+    """Grow the project temporal range to cover [begin, end) so the Temporal
+    Controller picks the sequence up immediately (existing coverage is kept)."""
+    settings = QgsProject.instance().timeSettings()
+    try:
+        current = settings.temporalRange()
+        if (
+            current is not None
+            and not current.isInfinite()
+            and current.begin().isValid()
+            and current.end().isValid()
+        ):
+            if current.begin() < begin:
+                begin = current.begin()
+            if current.end() > end:
+                end = current.end()
+    except (AttributeError, TypeError):
+        pass  # unreadable current range -- just set this layer's span
+    settings.setTemporalRange(QgsDateTimeRange(begin, end))
 
 
 def _fixed_temporal_mode(props):
@@ -347,167 +370,58 @@ def _fixed_temporal_mode(props):
         return props.ModeFixedTemporalRange
 
 
-def _apply_fixed_range(layer, begin, end) -> None:
-    """Stamp one raster layer: FixedTemporalRange [begin, end), active."""
-    props = layer.temporalProperties()
-    props.setMode(_fixed_temporal_mode(props))
-    props.setFixedTemporalRange(
-        QgsDateTimeRange(_temporal_qdt(begin), _temporal_qdt(end))
-    )
-    props.setIsActive(True)
+def stamp_raster_temporal(layer, event: LayerEvent) -> Optional[str]:
+    """Stamp a raster with the validity window its row DECLARED.
 
-
-def _widen_project_temporal_range(begin, end) -> None:
-    """Grow the project temporal range to cover [begin, end) so the Temporal
-    Controller picks the sequence up immediately (existing coverage is kept)."""
-    begin_qdt, end_qdt = _temporal_qdt(begin), _temporal_qdt(end)
-    settings = QgsProject.instance().timeSettings()
-    try:
-        current = settings.temporalRange()
-        if (
-            current is not None
-            and not current.isInfinite()
-            and current.begin().isValid()
-            and current.end().isValid()
-        ):
-            if current.begin() < begin_qdt:
-                begin_qdt = current.begin()
-            if current.end() > end_qdt:
-                end_qdt = current.end()
-    except (AttributeError, TypeError):
-        pass  # unreadable current range -- just set the group's span
-    settings.setTemporalRange(QgsDateTimeRange(begin_qdt, end_qdt))
-
-
-def stamp_temporal(raster_layers, stamped_counts: Optional[dict] = None) -> List[str]:
-    """Stamp frame-sequence rasters for the native Temporal Controller.
-
-    Detects frame groups among ``raster_layers`` (``temporal.group_frame_layers``
-    -- the web scrubber's grouping), stamps each member with a per-frame
-    FixedTemporalRange (ISO valid-times when the labels carry them, else a
-    synthetic today-00:00-UTC + 1 h/step clock), activates the properties,
-    and widens the project temporal range to span the group.
-
-    ``stamped_counts`` (stem -> member count, per-case state) makes replays
-    idempotent: a group is (re)stamped only when it gains members. Never
-    raises -- failures become honest notes.
+    One frame of a sequence carries its own ``valid_from``/``valid_to``, so the
+    Temporal Controller plays the sequence from the producer's own instants --
+    there is no name to parse and no synthetic clock to invent. A row that
+    declares no window is not a frame and is left alone. Never raises.
     """
-    notes: List[str] = []
-    by_name: dict = {}
-    for layer in raster_layers:
-        try:
-            by_name.setdefault(layer.name(), layer)
-        except (AttributeError, RuntimeError):  # deleted/half-built layer
-            continue
-    for group in temporal.group_frame_layers(list(by_name)):
-        count = len(group.members)
-        if stamped_counts is not None and stamped_counts.get(group.stem) == count:
-            continue
-        try:
-            ranges = temporal.assign_frame_ranges(group)
-            for name, begin, end in ranges:
-                _apply_fixed_range(by_name[name], begin, end)
-            _widen_project_temporal_range(ranges[0][1], ranges[-1][2])
-        except Exception as exc:  # noqa: BLE001 -- honest note, never a crash
-            notes.append(
-                f"temporal stamp for sequence '{group.stem}' failed "
-                f"({type(exc).__name__}: {exc})"
-            )
-            continue
-        if stamped_counts is not None:
-            stamped_counts[group.stem] = count
-        notes.append(
-            f"{count}-frame sequence '{group.stem}' stamped for the Temporal "
-            "Controller (View > Panels > Temporal Controller, press play)"
-        )
-    return notes
+    begin = _temporal_qdt((event.raw or {}).get("valid_from"))
+    end = _temporal_qdt((event.raw or {}).get("valid_to"))
+    if begin is None or end is None:
+        return None
+    try:
+        props = layer.temporalProperties()
+        props.setMode(_fixed_temporal_mode(props))
+        props.setFixedTemporalRange(QgsDateTimeRange(begin, end))
+        props.setIsActive(True)
+        _widen_project_temporal_range(begin, end)
+    except Exception as exc:  # noqa: BLE001 -- honest note, never a lost layer
+        return f"temporal stamp failed ({type(exc).__name__}: {exc})"
+    return (
+        f"valid {begin.toString(Qt.DateFormat.ISODate)} - the Temporal "
+        "Controller plays the sequence (View > Panels > Temporal Controller)"
+    )
 
 
-# -- animation grouping (ITEM C: nested subgroup, not flat siblings) -------- #
-#
-# DESIGN NOTE (proven live 2026-07-10): a frame-sequence raster is placed
-# into its animation subgroup AT INSERTION TIME (``_ensure_animation_subgroup``
-# below, consulted by ``LayerMaterializer._add_raster`` BEFORE the layer's
-# tree node is ever created) -- never moved there after the fact.
-#
-# An earlier version built every raster flat first, then RELOCATED the
-# frame-sequence members into a subgroup afterward (via
-# ``removeChildNode``+``insertLayer``, then ``takeChild``+``insertChildNode``
-# when the first approach looked suspect). BOTH relocation strategies proved
-# unsafe against a REAL Qt event loop: reproduced with a minimal script
-# (construct group -> relocate members -> call ``QCoreApplication.
-# processEvents()`` a few times) -- the relocated nodes' underlying C++
-# objects got silently destroyed once the loop next drained, even though
-# ``findLayerIds()`` read back correctly immediately after the move. A
-# synchronous single-shot script never pumps the Qt loop, so it never
-# caught this; the live dock does (every ``pump``/timer tick), which is
-# exactly where it surfaced -- an animation subgroup that read "N frames
-# grouped" then silently emptied moments later. Root cause is very likely a
-# SIP ownership-transfer gap between the group's C++-side child list and
-# the Python-side node wrapper for a RELOCATED node (a freshly-``insertLayer``
-# -created node, which is never relocated, does not exhibit it -- verified
-# by direct construction-into-a-nested-subgroup surviving the same
-# processEvents() churn cleanly). Placing at creation time sidesteps the
-# whole relocation code path.
+def stamp_mesh_temporal(layer, event: LayerEvent) -> Optional[str]:
+    """Point a mesh layer's time axis at the instant its run DECLARED as zero.
+
+    MDAL activates a mesh layer's temporal properties itself, but a SELAFIN
+    records no origin for the seconds it counts, so the controller scrubs 1900
+    until the run says when zero was. Never raises.
+    """
+    reference = _temporal_qdt((event.raw or {}).get("reference_time"))
+    if reference is None:
+        return None
+    try:
+        layer.setReferenceTime(reference)
+        props = layer.temporalProperties()
+        props.setIsActive(True)
+        extent = props.timeExtent()
+        if extent.begin().isValid() and extent.end().isValid():
+            _widen_project_temporal_range(extent.begin(), extent.end())
+    except Exception as exc:  # noqa: BLE001 -- honest note, never a lost layer
+        return f" -- temporal stamp failed ({type(exc).__name__}: {exc})"
+    return (
+        f" -- time axis from {reference.toString(Qt.DateFormat.ISODate)}; scrub "
+        "it in View > Panels > Temporal Controller"
+    )
 
 
-def _ensure_animation_subgroup(parent_group, stem: str, count: int):
-    """Find-or-create the animation subgroup for a frame-sequence ``stem``
-    with ``count`` members, RENAMING an existing prefix-matched subgroup in
-    place when the count grew (a plain property rename -- no node move, no
-    reconstruction, safe). Never places a member itself; callers insert
-    directly into the returned group at construction time."""
-    prefix = f"{stem} (animation, "
-    subgroup_name = f"{prefix}{count} frames)"
-    for existing in parent_group.findGroups():
-        if existing.name().startswith(prefix):
-            if existing.name() != subgroup_name:
-                existing.setName(subgroup_name)
-            return existing
-    subgroup = parent_group.insertGroup(0, subgroup_name)
-    subgroup.setExpanded(False)
-    return subgroup
-
-
-def _frame_membership(names) -> dict:
-    """``{layer_name: (stem, member_count)}`` for every name that is part of
-    a detected frame-sequence group (``temporal.group_frame_layers`` -- the
-    SAME grouping ``stamp_temporal`` stamps). Names not part of any
-    (>= 2-member) sequence are simply absent -- callers treat that as "stays
-    flat"."""
-    membership: dict = {}
-    for group in temporal.group_frame_layers(list(names)):
-        count = len(group.members)
-        for member in group.members:
-            membership[member.name] = (group.stem, count)
-    return membership
-
-
-def _animation_group_notes(raster_layers, grouped_counts: dict) -> List[str]:
-    """Dock notes for frame-sequence groups that changed size THIS call.
-    Pure bookkeeping -- placement already happened at insertion time (see
-    the module docstring above); this only decides what to SAY, using the
-    same idempotent stem->count dedup pattern as ``stamp_temporal``."""
-    notes: List[str] = []
-    names = []
-    for layer in raster_layers:
-        try:
-            names.append(layer.name())
-        except (AttributeError, RuntimeError):  # deleted/half-built layer
-            continue
-    for group in temporal.group_frame_layers(names):
-        count = len(group.members)
-        if grouped_counts.get(group.stem) == count:
-            continue
-        grouped_counts[group.stem] = count
-        notes.append(
-            f"{group.stem}: {count} frames grouped - open View > Panels > "
-            "Temporal Controller and press play to animate."
-        )
-    return notes
-
-
-# -- mesh outputs (MDAL phase 1) --------------------------------------------- #
+# -- mesh outputs (MDAL) ----------------------------------------------------- #
 
 
 def _select_peak_depth_dataset_group(layer) -> bool:
@@ -632,230 +546,55 @@ def _clamp_mesh_scalar_classification(layer) -> Optional[str]:
     )
 
 
-# -- QGIS-native raster rendering ------------------------------------------- #
+# -- the resolved preset, loaded as QGIS's own style document ----------------- #
 
 
-def _color_ramp_items(
-    colormap, vmin: float, vmax: float
-) -> Tuple[list, Optional[str]]:
-    """Build ``QgsColorRampShader.ColorRampItem`` list for ``colormap``.
+def load_declared_style(layer, legend: Optional[dict], temp_dir: str) -> Optional[str]:
+    """Load the layer's RESOLVED preset onto it, and say what happened.
 
-    ``colormap`` is either a rio-tiler NAME (resolved against the installed
-    QGIS default-style gradient presets first -- ``ramps.QGIS_RAMP_SOURCES``
-    -- then the hardcoded ``ramps`` stop table) or the legend's EXPLICIT
-    stops (``[[t_0to1, "#rrggbb"], ...]``). Returns ``(items, note)`` where
-    ``note`` is an honest remark when the name was unknown and the viridis
-    default stood in -- rendering NEVER silently defaults to grey.
+    The legend carries the preset already resolved into a ``.qml`` - QGIS's own
+    declarative style format - so the render is QGIS reading its own document
+    rather than this side rebuilding a renderer out of a colour-ramp name and a
+    range. ``qml`` is absent for a layer whose file already carries its colours
+    (an RGB(A) composite, a COG with a band-1 colour table): QGIS's own default
+    renderer IS the correct render for those, and overriding it would repaint a
+    picture the producer had already painted.
+
+    ``loadNamedStyle``'s boolean is well-formedness only, so a document that
+    loads without changing the renderer still reports honestly. Never raises --
+    a styling failure is a note, never a lost layer.
     """
-    note: Optional[str] = None
-    stops: Optional[List[Tuple[float, str]]] = None
-    if isinstance(colormap, (list, tuple)):
-        parsed: List[Tuple[float, str]] = []
-        for entry in colormap:
-            try:
-                t, color = float(entry[0]), str(entry[1])
-            except (TypeError, ValueError, IndexError):
-                continue
-            # A non-finite offset survives ``min/max`` (NaN comparisons are all
-            # False) and would ride into a native ``ColorRampItem`` value; drop
-            # it rather than let it reach the native shader.
-            if not formatting.is_finite_number(t):
-                continue
-            parsed.append((min(1.0, max(0.0, t)), color))
-        stops = sorted(parsed) or None
-        if stops is None:
-            note = "legend stops unreadable -- viridis default applied"
-    elif isinstance(colormap, str) and colormap:
-        # Prefer the installed QGIS built-in gradient (smoother than 5 stops).
-        source = ramps.QGIS_RAMP_SOURCES.get(colormap.strip().lower())
-        if source is not None:
-            try:
-                ramp = QgsStyle.defaultStyle().colorRamp(source[0])
-                if ramp is not None:
-                    if source[1]:
-                        ramp.invert()
-                    span = vmax - vmin
-                    items = []
-                    for i in range(11):
-                        t = i / 10.0
-                        items.append(
-                            QgsColorRampShader.ColorRampItem(
-                                vmin + t * span,
-                                ramp.color(t),
-                                formatting.format_number(vmin + t * span),
-                            )
-                        )
-                    return items, None
-            except Exception:  # noqa: BLE001 -- style DB unavailable: stop table
-                pass
-        stops = ramps.resolve_stops(colormap)
-        if stops is None:
-            note = (
-                f"unknown colormap '{colormap}' -- viridis default applied"
-            )
-    else:
-        note = "no colormap on the legend -- viridis default applied"
-    if stops is None:
-        stops = ramps.resolve_stops(ramps.DEFAULT_COLORMAP) or []
-    span = vmax - vmin
-    items = [
-        QgsColorRampShader.ColorRampItem(
-            vmin + t * span, QColor(color),
-            formatting.format_number(vmin + t * span),
-        )
-        for t, color in stops
-    ]
-    return items, note
-
-
-def _build_pseudocolor_renderer(layer, colormap, vmin: float, vmax: float):
-    """``(QgsSingleBandPseudoColorRenderer, note)`` -- Interpolated shader.
-
-    The SINGLE native seam that feeds ``QgsColorRampShader`` +
-    ``setClassificationMin/Max``: a non-finite (NaN/inf) or degenerate
-    (``vmax <= vmin``) range is coerced to a sane default HERE, so no caller
-    can hand QGIS a range whose legend-label precision computes to a
-    non-finite double (the arm64 INT_MAX -> ``qt_doubleToAscii`` crash).
-    """
-    vmin, vmax = formatting.sane_range(vmin, vmax)
-    items, note = _color_ramp_items(colormap, vmin, vmax)
-    shader_fn = QgsColorRampShader(vmin, vmax)
-    try:
-        shader_fn.setColorRampType(QgsColorRampShader.Interpolated)
-    except (AttributeError, TypeError):
-        pass  # newer-API enum relocation -- Interpolated is the default anyway
-    shader_fn.setColorRampItemList(items)
-    shader = QgsRasterShader()
-    shader.setRasterShaderFunction(shader_fn)
-    renderer = QgsSingleBandPseudoColorRenderer(layer.dataProvider(), 1, shader)
-    try:
-        renderer.setClassificationMin(vmin)
-        renderer.setClassificationMax(vmax)
-    except (AttributeError, TypeError):
-        pass
-    return renderer, note
-
-
-def _embedded_palette_classes(provider):
-    """Band-1 GDAL color-table -> paletted class data, or ``None``.
-
-    ``provider.colorTable(1)`` returns the COG's embedded palette (NLCD +
-    other categorical rasters);
-    ``QgsPalettedRasterRenderer.colorTableToClassData`` converts it to the
-    class list the renderer constructor takes. ``None`` (fall back to the
-    continuous path) when the table is absent/empty or the API probe fails.
-    """
-    try:
-        table = provider.colorTable(1)
-    except (AttributeError, TypeError):
+    qml = (legend or {}).get("qml") if isinstance(legend, dict) else None
+    if not isinstance(qml, str) or not qml.strip():
         return None
-    if not table:
-        return None
+    path = os.path.join(temp_dir, f"style_{uuid.uuid4().hex[:12]}.qml")
     try:
-        classes = QgsPalettedRasterRenderer.colorTableToClassData(table)
-    except (AttributeError, TypeError):
-        return None
-    return classes or None
-
-
-def _categorical_fallback_stops(classes) -> Tuple[Optional[list], Optional[float], Optional[float]]:
-    """Legend ``classes`` (LegendClass dicts) -> explicit gradient stops.
-
-    For a categorical legend whose COG carries NO embedded color table
-    (e.g. the sediment-yield log-binned legend), the legend's own swatches
-    are the best colorization available: anchor each class at its numeric
-    ``value`` (or the ``value_min``/``value_max`` bin midpoint), normalize to
-    0..1 stops, and let the continuous path interpolate. Returns
-    ``(stops, vmin, vmax)`` or ``(None, None, None)`` when the classes carry
-    no numeric anchors.
-    """
-    anchored: List[Tuple[float, str]] = []
-    for cls in classes or []:
-        if not isinstance(cls, dict):
-            continue
-        color = cls.get("color")
-        if not isinstance(color, str) or not color:
-            continue
-        value = cls.get("value")
-        if not formatting.is_finite_number(value):
-            lo, hi = cls.get("value_min"), cls.get("value_max")
-            if formatting.is_finite_number(lo) and formatting.is_finite_number(hi):
-                value = (float(lo) + float(hi)) / 2.0
-            else:
-                continue
-        anchored.append((float(value), color))
-    if len(anchored) < 2:
-        return None, None, None
-    anchored.sort()
-    vmin, vmax = anchored[0][0], anchored[-1][0]
-    span = (vmax - vmin) or 1.0
-    return [((v - vmin) / span, c) for v, c in anchored], vmin, vmax
-
-
-def _apply_raster_renderer(layer, legend: Optional[dict]) -> Optional[str]:
-    """Apply the QGIS-native renderer for a COG raster; returns a style note.
-
-    The event's ``legend`` dict (``LegendKey``: kind/colormap/vmin/vmax/classes)
-    is the style. Absent it, GDAL's default renderer stands -- grayscale
-    single-band or native RGB multiband, the CORRECT render for terrain/RGBA
-    passthrough layers, which by design carry no legend.
-
-    Categorical legends render via ``QgsPalettedRasterRenderer`` from the
-    COG's embedded GDAL color table; when the table is absent the legend's
-    own class swatches (then the legend colormap) drive the continuous path.
-    Never raises -- a styling failure is an honest note, never a lost layer.
-    """
-    legend = legend if isinstance(legend, dict) else None
-    try:
-        kind = (legend or {}).get("kind")
-        if kind == "classed":
-            classes = _embedded_palette_classes(layer.dataProvider())
-            if classes:
-                layer.setRenderer(
-                    QgsPalettedRasterRenderer(layer.dataProvider(), 1, classes)
-                )
-                return f"categorical renderer (embedded color table, {len(classes)} classes)"
-            # No embedded table: the legend's own swatches, else its colormap.
-            stops, cls_vmin, cls_vmax = _categorical_fallback_stops(
-                (legend or {}).get("classes")
-            )
-            if stops is not None:
-                renderer, note = _build_pseudocolor_renderer(
-                    layer, stops, cls_vmin, cls_vmax
-                )
-                layer.setRenderer(renderer)
-                return note or "categorical legend rendered as gradient (no embedded color table)"
-            # fall through to the continuous path with the legend colormap
-        colormap = (legend or {}).get("colormap")
-        vmin = (legend or {}).get("vmin")
-        vmax = (legend or {}).get("vmax")
-        if not isinstance(vmin, (int, float)) or not isinstance(vmax, (int, float)):
-            vmin = vmax = None
-        if colormap is None and vmin is None:
-            # No styling info anywhere: terrain/RGBA passthrough by design --
-            # GDAL's default renderer (grayscale autoscale / native RGB) IS
-            # the correct render.
-            return None
-        # A finiteness-aware guard: a NaN/inf bound DEFEATS a plain
-        # ``vmax <= vmin`` test (every NaN comparison is False), so it would
-        # otherwise reach the native color-ramp legend and crash Qt. Route the
-        # range through ``sane_range`` and note the substitution honestly.
-        if formatting.is_sane_range(vmin, vmax):
-            note_range = ""
-            vmin, vmax = float(vmin), float(vmax)
-        else:
-            note_range = " (no usable range on the legend -- 0..1 assumed)"
-            vmin, vmax = formatting.sane_range(vmin, vmax)
-        renderer, note = _build_pseudocolor_renderer(layer, colormap, vmin, vmax)
-        layer.setRenderer(renderer)
-        if note_range:
-            return (note or "").rstrip() + note_range if note else f"styled{note_range}"
-        return note
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(qml)
+        before = _renderer_tag(layer)
+        message, ok = layer.loadNamedStyle(path)
+        if not ok:
+            return f"style not loaded ({message or 'rejected by QGIS'})"
+        after = _renderer_tag(layer)
+        if after == before:
+            return f"style loaded but the renderer is unchanged ({after})"
+        return f"styled from the declared preset ({after})"
     except Exception as exc:  # noqa: BLE001 -- honest note, never a lost layer
-        return (
-            f"renderer application failed ({type(exc).__name__}: {exc}) "
-            "-- layer kept with default rendering"
-        )
+        return f"style load failed ({type(exc).__name__}: {exc})"
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def _renderer_tag(layer) -> str:
+    """The layer's current renderer identity, for the before/after read-back."""
+    try:
+        renderer = layer.renderer()
+        return type(renderer).__name__ if renderer is not None else "none"
+    except (AttributeError, RuntimeError):
+        return "none"
 
 
 class LayerMaterializer:
@@ -870,9 +609,6 @@ class LayerMaterializer:
         #: every staged (non-streamable) artifact and is swept on close.
         self._session_tag: str = uuid.uuid4().hex[:12]
         self._temp_dir: Optional[str] = None
-        self._case_rasters: List = []  # QgsRasterLayer refs, this case
-        self._stamped_counts: dict = {}  # frame-group stem -> stamped size
-        self._grouped_counts: dict = {}  # frame-group stem -> animated size (ITEM C)
         #: Layers added by the MOST RECENT ``materialize`` call (reset at its
         #: top) -- lets the dock zoom to "what just landed" without re-deriving
         #: it from notes strings.
@@ -884,15 +620,12 @@ class LayerMaterializer:
         """Bind to a case: clears every stale TRID3NT layer-tree group (ITEM
         A -- this materializer's own previous-case group AND any "Open case
         in QGIS" export groups, which otherwise accumulate across switches),
-        names the fresh layer-tree group, and resets dedup/animation state
-        so the case-open replay always repaints from a clean slate."""
+        names the fresh layer-tree group, and resets dedup state so the
+        case-open replay always repaints from a clean slate."""
         label = title or case_id[:8]
         self._group_name = f"TRID3NT {label}"
         self._clear_stale_groups()
         self._added_ids.clear()
-        self._case_rasters = []
-        self._stamped_counts = {}
-        self._grouped_counts = {}
         self.last_added_layers = []
 
     def _clear_stale_groups(self) -> None:
@@ -971,21 +704,7 @@ class LayerMaterializer:
         crash (honesty floor: failures are visible, not silent).
         """
         notes: List[str] = []
-        rasters_before = len(self._case_rasters)
         self.last_added_layers = []
-        # ITEM C: decide frame-sequence membership UP FRONT (existing case
-        # rasters + this batch's about-to-land raster events), so a brand
-        # new frame member is placed straight into its animation subgroup
-        # at construction time -- see the module docstring above the
-        # animation-grouping helpers for why members are never relocated
-        # after the fact.
-        candidate_names = [self._safe_layer_name(l) for l in self._case_rasters]
-        candidate_names.extend(
-            event.name
-            for event in events
-            if event.layer_type == "raster" and event.layer_id not in self._added_ids
-        )
-        frame_membership = _frame_membership([n for n in candidate_names if n])
         for event in events:
             if event.layer_id in self._added_ids:
                 # A layer already on the canvas can still be TAKEN OFF it: the
@@ -994,7 +713,7 @@ class LayerMaterializer:
                 self._apply_visibility(event)
                 continue
             try:
-                note = self._materialize_one(event, frame_membership)
+                note = self._materialize_one(event)
             except Exception as exc:  # noqa: BLE001
                 note = f"layer '{event.name}': failed ({type(exc).__name__}: {exc})"
             if note is not None:
@@ -1002,36 +721,18 @@ class LayerMaterializer:
                 # re-note on every session-state replay of the snapshot.
                 self._added_ids.add(event.layer_id)
                 notes.append(note)
-        # Frame-sequence rasters landed in their animation subgroups above
-        # (placement is per-layer, at insertion time); this only stamps the
-        # native Temporal Controller ranges and announces newly-(re)grouped
-        # sequences. Only when this snapshot added a raster; the per-case
-        # stamped/grouped counts dicts keep session-state replays (and the
-        # case-open replay, which flows through this same method) idempotent.
-        if len(self._case_rasters) != rasters_before:
-            notes.extend(stamp_temporal(self._case_rasters, self._stamped_counts))
-            notes.extend(_animation_group_notes(self._case_rasters, self._grouped_counts))
         return notes
 
-    @staticmethod
-    def _safe_layer_name(layer) -> str:
-        try:
-            return layer.name()
-        except (AttributeError, RuntimeError):  # deleted/half-built layer
-            return ""
-
-    def _materialize_one(
-        self, event: LayerEvent, frame_membership: Optional[dict] = None
-    ) -> Optional[str]:
+    def _materialize_one(self, event: LayerEvent) -> Optional[str]:
         if event.layer_type == "raster":
-            return self._add_raster(event, frame_membership or {})
+            return self._add_raster(event)
         if event.layer_type in ("vector", "geojson"):
             return self._add_vector(event)
         if event.layer_type in ("mesh", "ugrid"):
             return self._add_mesh(event)
         return f"layer '{event.name}': type '{event.layer_type}' not supported yet -- skipped"
 
-    def _add_raster(self, event: LayerEvent, frame_membership: dict) -> str:
+    def _add_raster(self, event: LayerEvent) -> str:
         """A COG read in place through ``/vsis3``, styled from the event's legend."""
         path = s3_to_vsis3(event.uri or "")
         if path is None:
@@ -1042,31 +743,13 @@ class LayerMaterializer:
         layer = QgsRasterLayer(path, event.name, "gdal")
         if not layer.isValid():
             return f"raster '{event.name}': COG did not load ({path}) -- skipped"
-        source_label = _streamed_note("COG raster")
-        style_note = _apply_raster_renderer(layer, event.legend)
-        if style_note:
-            source_label += f"; {style_note}"
-        return self._finish_raster_add(layer, event, frame_membership, source_label)
-
-    def _finish_raster_add(
-        self, layer, event: LayerEvent, frame_membership: dict, source_label: str
-    ) -> str:
-        """Shared raster tail: track for temporal stamping + place in the
-        case group (ITEM C: a recognized frame-sequence member goes straight
-        into its found-or-created-or-renamed animation subgroup; everything
-        else stays flat under the case group)."""
-        self._case_rasters.append(layer)
-        destination = None
-        membership = frame_membership.get(event.name)
-        if membership is not None:
-            stem, count = membership
-            destination = _ensure_animation_subgroup(self._ensure_group(), stem, count)
+        notes = [_streamed_note("COG raster")]
+        notes.extend(n for n in (
+            load_declared_style(layer, event.legend, self._ensure_temp_dir()),
+            stamp_raster_temporal(layer, event),
+        ) if n)
         return self._add_to_group(
-            layer,
-            event,
-            f"raster '{event.name}' added ({source_label})",
-            group=destination,
-        )
+            layer, event, f"raster '{event.name}' added ({'; '.join(notes)})")
 
     def _add_vector(self, event: LayerEvent) -> str:
         if event.inline_geojson is not None:
@@ -1080,11 +763,8 @@ class LayerMaterializer:
             if not layer.isValid():
                 return f"vector '{event.name}': GeoJSON did not load -- skipped"
             return self._add_to_group(
-                layer,
-                event,
-                f"vector '{event.name}' added (staged to session temp, "
-                "inline GeoJSON)",
-            )
+                layer, event, self._vector_note(
+                    layer, event, "staged to session temp, inline GeoJSON"))
 
         path = s3_to_vsis3(event.uri or "")
         if path is None:
@@ -1093,8 +773,14 @@ class LayerMaterializer:
         if not layer.isValid():
             return f"vector '{event.name}': stream failed ({path}) -- skipped"
         return self._add_to_group(
-            layer, event, f"vector '{event.name}' added ({_streamed_note('vector')})"
-        )
+            layer, event, self._vector_note(layer, event, _streamed_note("vector")))
+
+    def _vector_note(self, layer, event: LayerEvent, source_label: str) -> str:
+        """Style the vector from its declared preset and say what landed."""
+        style_note = load_declared_style(
+            layer, event.legend, self._ensure_temp_dir())
+        tail = f"; {style_note}" if style_note else ""
+        return f"vector '{event.name}' added ({source_label}{tail})"
 
     def _stage_s3_to_session(self, s3_uri: str, filename: str) -> Optional[str]:
         """Copy a store object into the SESSION temp dir; return the local path.
@@ -1172,6 +858,9 @@ class LayerMaterializer:
         clamp_note = _clamp_mesh_scalar_classification(layer)
         if clamp_note:
             note += clamp_note
+        temporal_note = stamp_mesh_temporal(layer, event)
+        if temporal_note:
+            note += temporal_note
         return self._add_to_group(layer, event, note)
 
     # -- project insertion helper -------------------------------------------- #
