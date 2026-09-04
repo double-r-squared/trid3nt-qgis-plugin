@@ -139,9 +139,12 @@ class Preset:
     """One of four renderer shapes, parameterised by what the data is.
 
     ``classes`` are ``(lower, upper, "#rrggbb", label)`` breaks and are what
-    makes a ``classed`` preset classed; ``geometry`` picks the symbol shape a
-    vector kind needs; ``dataset_group`` names the MDAL group a mesh preset
-    paints, which is how QGIS binds it (an index does not survive the load).
+    makes a ``classed`` preset classed. ``geometry`` picks the symbol shape a
+    vector kind needs, and its PRESENCE is what says the layer is a vector: a
+    classed row without one is a classed RASTER, drawn as discrete bands rather
+    than as graduated symbols. ``dataset_group`` names the MDAL group a mesh
+    preset paints, which is how QGIS binds it (an index does not survive the
+    load).
     """
 
     kind: Kind = "continuous"
@@ -150,8 +153,10 @@ class Preset:
     label: str | None = None
     scale: Scale = Scale()
     classes: tuple[tuple[float, float, str, str], ...] = ()
-    geometry: Geometry = "point"
+    geometry: Geometry | None = None
     color: str = "#3b7dd8"
+    #: The vector field a ``classed`` preset classifies on.
+    attribute: str | None = None
     dataset_group: str | None = None
 
     def titled(self, label: str | None, units: str | None) -> "Preset":
@@ -161,12 +166,12 @@ class Preset:
 
 _BARE: dict[Kind, Preset] = {
     "continuous": Preset(kind="continuous"),
-    "classed": Preset(kind="classed", geometry="polygon"),
+    "classed": Preset(kind="classed"),
     # A reference layer is an outline a reader locates themselves by - a gauge,
     # a flowline, an administrative edge - so it is drawn, not measured, and it
-    # declares no scale.
-    "reference": Preset(kind="reference", geometry="point",
-                        scale=Scale(policy="fixed", range=None)),
+    # declares no scale. Its geometry is undeclared by default: a symbol of the
+    # wrong shape draws nothing, so an undeclared one leaves QGIS's own default.
+    "reference": Preset(kind="reference", scale=Scale(policy="fixed", range=None)),
     "mesh": Preset(kind="mesh"),
 }
 
@@ -206,8 +211,9 @@ def from_row(row: Any) -> Preset:
         scale=_scale_from(row.get("scale"), base.scale),
         classes=tuple((float(c[0]), float(c[1]), str(c[2]), str(c[3]))
                       for c in (row.get("classes") or ())),
-        geometry=str(row.get("geometry") or base.geometry),  # type: ignore[arg-type]
+        geometry=row.get("geometry") or base.geometry,  # type: ignore[arg-type]
         color=str(row.get("color") or base.color),
+        attribute=row.get("attribute") or base.attribute,
         dataset_group=row.get("dataset_group") or base.dataset_group,
     )
 
@@ -254,7 +260,7 @@ class Resolved:
         }.get(self.source, self.source)
         return f"{how}: {lo:g} to {hi:g}{units}"
 
-    def qml(self) -> str:
+    def qml(self) -> str | None:
         return qml(self)
 
 
@@ -443,8 +449,8 @@ def _continuous_qml(resolved: Resolved) -> str:
         "  </pipe>\n")
 
 
-def _symbol(name: str, geometry: Geometry, color: str, indent: str) -> str:
-    stype, sclass, color_key = _SYMBOL[geometry]
+def _symbol(name: str, geometry: Geometry | None, color: str, indent: str) -> str:
+    stype, sclass, color_key = _SYMBOL[geometry or "point"]
     extra = ('        <Option name="outline_color" type="QString" '
              f'value="{_rgba("#232323")}"/>\n'
              '        <Option name="outline_width" type="QString" value="0.26"/>\n'
@@ -469,7 +475,32 @@ def _symbol(name: str, geometry: Geometry, color: str, indent: str) -> str:
         f"{indent}</symbol>")
 
 
-def _classed_qml(resolved: Resolved, attribute: str) -> str:
+def _classed_raster_qml(resolved: Resolved) -> str:
+    """Discrete bands over a raster: each class paints up to its upper bound."""
+    classes = resolved.preset.classes
+    lo = classes[0][0] if classes else 0.0
+    hi = classes[-1][1] if classes else 1.0
+    items = "\n".join(
+        f'{"        "}<item value="{upper:.10g}" color="{color}" alpha="255" '
+        f"label={quoteattr(label)}/>"
+        for _lower, upper, color, label in classes)
+    return (
+        "  <pipe>\n"
+        f'    <rasterrenderer type="singlebandpseudocolor" band="1" opacity="1"'
+        f' alphaBand="-1" classificationMin="{lo:.10g}" classificationMax="{hi:.10g}"'
+        f' nodataColor="">\n'
+        "      <rastershader>\n"
+        f'        <colorrampshader colorRampType="DISCRETE" classificationMode="2"'
+        f' clip="0" minimumValue="{lo:.10g}" maximumValue="{hi:.10g}"'
+        f' labelPrecision="4">\n'
+        f"{items}\n"
+        "        </colorrampshader>\n"
+        "      </rastershader>\n"
+        "    </rasterrenderer>\n"
+        "  </pipe>\n")
+
+
+def _classed_vector_qml(resolved: Resolved, attribute: str) -> str:
     classes = resolved.preset.classes
     ranges = "\n".join(
         f'      <range lower="{lo:.10f}" upper="{hi:.10f}" symbol="{i}"'
@@ -519,15 +550,53 @@ def _mesh_qml(resolved: Resolved) -> str:
         f"{binding}")
 
 
-def qml(resolved: Resolved, *, attribute: str = "value") -> str:
-    """The resolved preset as a QGIS ``.qml`` document.
+def legend_key(row: Any, *, value_range: tuple[float, float] | None = None,
+               label: str | None = None, units: str | None = None,
+               value_field: str | None = None) -> Any:
+    """A declared row plus a range a producer already measured, as the wire key.
 
-    ``attribute`` is the vector field a ``classed`` preset classifies on; the
-    other three kinds ignore it.
+    For a producer that computed its own range while it had the field in hand -
+    the whole point of resolving there is that nothing has to re-read the COG.
     """
+    from trid3nt_contracts.execution import LegendClass, LegendKey
+
+    preset = from_row(row).titled(label, units)
+    resolved = (Resolved(preset, value_range, FIXED) if value_range is not None
+                else resolve(preset))
+    return LegendKey(
+        kind=preset.kind,
+        colormap=preset.ramp if preset.kind != "reference" else None,
+        vmin=resolved.range[0] if resolved.range else None,
+        vmax=resolved.range[1] if resolved.range else None,
+        classes=[LegendClass(value_min=lo, value_max=hi, color=color, label=text)
+                 for lo, hi, color, text in preset.classes] or None,
+        value_field=value_field or preset.attribute,
+        units=preset.units,
+        label=preset.label,
+        qml=qml(resolved),
+    )
+
+
+def qml(resolved: Resolved) -> str | None:
+    """The resolved preset as a QGIS ``.qml`` document, or ``None``.
+
+    ``None`` when the preset has nothing it can honestly say about THIS layer:
+    a mesh preset with no named dataset group (QGIS binds a group by name, and
+    an unbound block is silently dropped), or a reference preset whose geometry
+    was never declared (a symbol of the wrong shape loads and then draws
+    nothing). QGIS's own default rendering stands in both cases.
+
+    """
+    if resolved.preset.kind == "mesh" and not resolved.preset.dataset_group:
+        return None
+    if resolved.preset.kind == "reference" and resolved.preset.geometry is None:
+        return None
     body = {
         "continuous": lambda: _continuous_qml(resolved),
-        "classed": lambda: _classed_qml(resolved, attribute),
+        "classed": lambda: (
+            _classed_vector_qml(resolved, resolved.preset.attribute or "value")
+            if resolved.preset.geometry
+            else _classed_raster_qml(resolved)),
         "reference": lambda: _reference_qml(resolved),
         "mesh": lambda: _mesh_qml(resolved),
     }[resolved.preset.kind]()

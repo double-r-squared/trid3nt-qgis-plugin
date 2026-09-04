@@ -1,14 +1,14 @@
-"""Re-paint an ALREADY-PUBLISHED layer. Display state, never solve state.
+"""THE presentation surface. Re-paint, retitle, or un-emit an existing layer.
 
-A scale is a property of the picture, not of the physics: changing it costs zero
-recompute and changes no number. So the policy is available both up front (the
-contract default, a template's ``.style()`` modifier, a declared param knob) and
-AFTERWARDS, here.
+Emission is automatic - a produced layer appears - so nothing here puts a layer
+on the map. What lives here is everything a reader may want to change about one
+AFTERWARDS: its ramp, its title, its scale, which of the four preset shapes
+draws it, and whether it is on the canvas at all. All of it is DISPLAY STATE:
+changing any of it recomputes nothing and moves no number.
 
-What this is NOT: a way to put a layer on the map. It re-emits the DISPLAY FACE of
-a layer that is already there, and refuses a URI nothing published - otherwise it
-would be the deleted ``publish_layer`` tool wearing a new name, and the model
-would be back to deciding what the user gets to see.
+``hide=True`` is the un-emit and ``hide=False`` puts the layer back. Every
+restyle is journaled with the sentence the legend ends up saying, because the
+colours cannot state which policy produced them.
 """
 
 from __future__ import annotations
@@ -16,14 +16,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from trid3nt_contracts.styles import ScaleSpec
+from trid3nt_server.workflows.runtime.journal import journal_note
 
-from . import styles
-from .styles import ResolvedStyle
+from . import presets
+from .presets import Resolved, Scale
 
 logger = logging.getLogger("trid3nt_server.emission.restyle")
 
-__all__ = ["RestyleError", "apply_style", "scale_override"]
+__all__ = ["RestyleError", "apply_style", "scale_override", "set_hidden"]
 
 
 class RestyleError(RuntimeError):
@@ -39,16 +39,16 @@ class RestyleError(RuntimeError):
 def scale_override(*, policy: str | None = None,
                    value_range: tuple[float, float] | None = None,
                    transform: str | None = None,
-                   clip: tuple[float, float] | None = None) -> ScaleSpec | None:
-    """The caller's scale ASK as the contract's own vocabulary, or ``None``.
+                   clip: tuple[float, float] | None = None) -> Scale | None:
+    """The caller's scale ASK in the preset vocabulary, or ``None``.
 
     ``None`` when nothing was overridden, which is what lets the resolver fall
-    straight through to the contract default rather than merging an empty spec
-    that would quietly re-assert defaults over the preset's own declaration.
+    straight through to the declared row rather than merging an empty spec that
+    would quietly re-assert defaults over it.
     """
     if policy is None and value_range is None and transform is None and clip is None:
         return None
-    return ScaleSpec(
+    return Scale(
         policy=policy or "data",
         range=tuple(value_range) if value_range else None,   # type: ignore[arg-type]
         transform=transform or "linear",
@@ -56,59 +56,82 @@ def scale_override(*, policy: str | None = None,
     )
 
 
+def restyled_row(declared: dict[str, Any] | None, *,
+                 kind: str | None = None,
+                 ramp: str | None = None,
+                 label: str | None = None,
+                 units: str | None = None) -> dict[str, Any]:
+    """The declared row with the caller's presentation asks laid over it.
+
+    A kind override re-shapes the layer (a classed field read as a ramp, say);
+    everything else parameterises the shape it already has.
+    """
+    row = dict(declared or {})
+    if kind is not None:
+        if kind not in presets.KINDS:
+            raise RestyleError(
+                f"{kind!r} is not one of the four preset kinds "
+                f"{list(presets.KINDS)}.", error_code="STYLE_KIND_UNKNOWN")
+        row["kind"] = kind
+    if ramp is not None:
+        row["ramp"] = ramp
+    if label is not None:
+        row["label"] = label
+    if units is not None:
+        row["units"] = units
+    return row
+
+
+async def set_hidden(layer_id: str, hidden: bool) -> bool:
+    """Take a layer off the canvas, or put it back. The un-emit.
+
+    Returns False when no emitter is bound or the session never loaded that
+    layer - a restyle of a layer nobody published is a refusal, not a no-op.
+    """
+    from .pipeline_emitter import current_emitter
+
+    emitter = current_emitter()
+    if emitter is None:
+        return False
+    return await emitter.set_layer_visible(layer_id, not hidden)
+
+
 def apply_style(*, layer_uri: str, layer_id: str,
-                preset: str | None = None,
-                colormap: str | None = None,
+                declared: dict[str, Any] | None = None,
+                kind: str | None = None,
+                ramp: str | None = None,
+                label: str | None = None,
+                units: str | None = None,
                 policy: str | None = None,
                 value_range: tuple[float, float] | None = None,
                 transform: str | None = None,
                 clip: tuple[float, float] | None = None,
-                shared: tuple[float, float] | None = None,
-                fallback_preset: str | None = None) -> ResolvedStyle:
-    """Re-emit one published layer's display face under an overridden scale.
+                shared: tuple[float, float] | None = None) -> Resolved:
+    """Re-emit one published layer's display face under the caller's asks.
 
-    Returns the RESOLVED style, so the caller can say on the legend which policy
-    ran and over what range - the resolver's answer, not the caller's ask.
+    Returns the RESOLVED preset, so the caller can say on the legend which
+    policy ran and over what range - the resolver's answer, not the ask.
     """
     if not layer_uri or not layer_id:
         raise RestyleError("a restyle needs both the layer's uri and its layer id.")
-    name = preset or fallback_preset
-    if preset is not None and not styles.known_preset(preset):
-        raise RestyleError(
-            f"{preset!r} is not a declared style preset. Declared presets live in "
-            "the style contract (trid3nt_contracts/styles.yaml).",
-            error_code="STYLE_PRESET_UNKNOWN")
-    if colormap:
-        # A colormap with no other ask is still an ask, so it rides as an override
-        # the resolver merges - but the CONTRACT owns which colormap a quantity
-        # gets, and a per-layer swap is deliberately the ad hoc case.
-        logger.info("restyle %s: colormap override %r", layer_id, colormap)
 
     from .publish import publish_layer
 
+    row = restyled_row(declared, kind=kind, ramp=ramp, label=label, units=units)
     override = scale_override(policy=policy, value_range=value_range,
                               transform=transform, clip=clip)
-    publish_layer(layer_uri=layer_uri, layer_id=layer_id, style_preset=name,
+    publish_layer(layer_uri=layer_uri, layer_id=layer_id, style=row,
                   scale=override, shared_range=shared)
-    resolved = styles.resolve_style(
-        name, override=override, shared=shared,
-        read_range=_range_reader(layer_uri))
-    if colormap:
-        resolved = _with_colormap(resolved, colormap)
-    logger.info("restyle %s -> %s", layer_id, resolved.legend_note())
+    resolved = presets.resolve(presets.from_row(row), override=override,
+                               shared=shared, read_range=_range_reader(layer_uri))
+    journal_note(f"restyle {layer_id}: {resolved.legend_note()}")
     return resolved
 
 
 def _range_reader(layer_uri: str) -> Any:
     from .publish import _read_raster_bytes
 
-    def _read(scale: ScaleSpec) -> tuple[float, float] | None:
-        return styles.band_range_reader(_read_raster_bytes(layer_uri))(scale)
+    def _read(scale: Scale) -> tuple[float, float] | None:
+        return presets.band_range_reader(_read_raster_bytes(layer_uri))(scale)
 
     return _read
-
-
-def _with_colormap(resolved: ResolvedStyle, colormap: str) -> ResolvedStyle:
-    import dataclasses
-
-    return dataclasses.replace(resolved, colormap=colormap)

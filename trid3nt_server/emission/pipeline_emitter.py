@@ -915,7 +915,7 @@ def _legend_for_layer_uri(uri: str | None) -> Any:
     display uri (the tile template). This lifts it back out by ``layer.uri`` so
     the ``ProjectLayerSummary`` carries the render KEY. Lazy import (the module
     is owned alongside this one) + fail-open: any error returns ``None`` so the
-    layer falls back to legacy ``style_preset`` rendering, never blocked.
+    layer reaches the map unstyled rather than not at all.
     """
     if not uri:
         return None
@@ -1275,6 +1275,20 @@ class PipelineEmitter:
     def loaded_layers(self) -> list[ProjectLayerSummary]:
         """Return a defensive shallow copy of the current loaded_layers list."""
         return list(self._loaded_layers)
+
+    async def set_layer_visible(self, layer_id: str, visible: bool) -> bool:
+        """Take a published layer off the canvas, or put it back.
+
+        The un-emit half of the presentation surface. False when this session
+        never loaded that layer - hiding what nobody published is a refusal.
+        """
+        for summary in self._loaded_layers:
+            if summary.layer_id == layer_id:
+                if summary.visible != visible:
+                    summary.visible = visible
+                    await self.emit_session_state()
+                return True
+        return False
 
     def reset_loaded_layers(self, layers: list[dict] | None) -> None:
         """Replace the in-memory ``_loaded_layers`` from a persisted snapshot.
@@ -1947,22 +1961,19 @@ class PipelineEmitter:
         plain gs:///s3:// COG (no query string) keys to its own uri, so
         uri-only identity is preserved for everything not display-wrapped.
         """
-        # DATA-DRIVEN LEGEND carry-over: copy the LayerURI's ``legend`` onto the
-        # summary so the render KEY (colormap + REAL data range, or categorical
-        # classes) reaches the client. Composer/auto-publish layers carry the legend
-        # ON the LayerURI directly (e.g. Pelicun's ds_mean choropleth key). The
-        # atomic ``publish_layer`` returns a BARE tile-template string, so the
-        # server wrap-site rebuilds a LayerURI WITHOUT a legend; for that path we
-        # lift the legend out of publish_layer's module stash by ``layer.uri``
-        # (the same display uri it was stashed under). ``None`` falls back to
-        # ``style_preset`` rendering.
+        # RESOLVED STYLE carry-over: copy the LayerURI's ``legend`` onto the
+        # summary so the range, the ramp and the .qml reach the client.
+        # Composer/auto-publish layers carry it ON the LayerURI directly; the
+        # atomic ``publish_layer`` returns a BARE uri string, so the server
+        # wrap-site rebuilds a LayerURI WITHOUT one and this lifts it out of
+        # publish_layer's module stash by ``layer.uri``. ``None`` means the
+        # layer reaches the map unstyled.
         _legend = getattr(layer, "legend", None) or _legend_for_layer_uri(layer.uri)
         summary = ProjectLayerSummary(
             layer_id=layer.layer_id,
             name=layer.name,
             layer_type=layer.layer_type,
             uri=layer.uri,
-            style_preset=layer.style_preset,
             visible=True,
             role=layer.role,
             temporal=layer.temporal is not None,

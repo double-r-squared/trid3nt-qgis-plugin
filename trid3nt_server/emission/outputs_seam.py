@@ -3,8 +3,10 @@
 A solver leg writes an append-only ``outputs.json`` manifest under its run
 prefix (``trid3nt_contracts.outputs_manifest``, ``schema_version`` 1); this
 module reads it at completion and turns every entry into a registered,
-styled, legend-stashed ``LayerURI``, keyed on the entry's physical
-``quantity`` instead of a worker-baked ``style_preset``.
+styled, legend-stashed ``LayerURI``. A solved product's style is DERIVED from
+the manifest entry itself - its ``kind`` picks the preset shape, its
+``quantity`` and ``units`` are the parameters - so a worker never bakes a
+style and no quantity can be "unregistered".
 
 Routing:
   * ``raster`` with NO ``t``          -> ONE standalone layer (role ``primary``).
@@ -20,17 +22,12 @@ Routing:
                                          animates every frame from the one file.
   * ``scalar``                        -> parse + validate, log-only in v1.
 
-The emitted layer-event stream -- ``name``, ``layer_id`` (modulo run-id),
-``style_preset``, the resolved ``&rescale=..&colormap_name=..`` params + the
-data-driven legend, ``bbox``, ``role``, ``units``, and the temporal-group
-membership -- must stay byte-identical to what ``register_manifest_layers``
-renders for the same solved output. Styling resolves through
-``styles.resolve_style_preset`` (a registered quantity -> its pinned preset
-in ``contracts/trid3nt_contracts/styles.yaml``, so ``band_stats`` is NOT
-consulted for it -- e.g. ``flood_depth`` -> ``continuous_flood_depth`` -> the
-pinned ``0,3`` / ``ylgnbu``); an UNREGISTERED quantity degrades to the honest
-neutral ramp, which is the ONE place a lazy per-COG stats touch happens (only
-when the entry carries no ``band_stats``).
+The emitted layer-event stream -- ``name``, ``layer_id`` (modulo run-id), the
+declared ``style`` row and the resolved legend, ``bbox``, ``role``, ``units``
+and the temporal-group membership -- must stay byte-identical to what
+``register_manifest_layers`` renders for the same solved output. The RANGE is
+the run's own: one per quantity, spanning the peak and every frame, read from
+the producer's ``band_stats`` where present and off the COG only where absent.
 
 ``layer_id`` is minted deterministically from ``(quantity, t-ordinal, run_id)``
 so a re-poll of an already-published entry resolves to the SAME id and is a
@@ -53,14 +50,12 @@ from trid3nt_contracts.outputs_manifest import (
     parse_outputs_manifest,
 )
 
+from trid3nt_server.emission import presets
 from trid3nt_server.emission.publish import (
     _read_raster_bytes,
     _stash_legend_for_uri,
     legend_for_published_layer,
-    style_params_from_band_stats,
 )
-from trid3nt_server.emission import styles
-from trid3nt_server.emission.styles import resolve_style_preset
 from trid3nt_server.emission.uri_registry import observe_published_layer
 
 __all__ = [
@@ -78,8 +73,8 @@ class PublishedFrame:
     """Replay metadata for one published entry.
 
     Carried ALONGSIDE the emitted ``LayerURI`` so the persistence layer can stamp
-    the optional ``t`` / ``group_id`` / seam-resolved ``style_preset`` onto the
-    case-layer record; a Case reopen rebuilds the temporal group from these
+    the optional ``t`` / ``group_id`` onto the case-layer record; a Case reopen
+    rebuilds the temporal group from these
     without re-polling ``outputs.json`` (which may be GC'd). The live-emitted
     ``LayerURI`` itself carries none of this -- it stays byte-identical to the
     register path.
@@ -89,7 +84,6 @@ class PublishedFrame:
     quantity: str
     t: float | None
     group_id: str | None
-    style_preset: str
     uri: str
 
 
@@ -108,7 +102,6 @@ class SeamPublishResult:
     metrics: dict[str, Any] = field(default_factory=dict)
     mesh_count: int = 0
     scalar_count: int = 0
-    unknown_quantity_count: int = 0
 
 
 # --------------------------------------------------------------------------- #
@@ -175,22 +168,55 @@ def _quantity_base(quantity: str) -> str:
     return (quantity or "").strip().lower().replace("_", "-")
 
 
-def _entry_range(entry: OutputEntry, style_preset: str) -> tuple[float, float] | None:
+#: manifest kind -> the preset shape that draws it. A solved product declares
+#: WHAT it produced; which of the four shapes paints it follows from that.
+_KIND_BY_ENTRY: dict[str, str] = {
+    "raster": "continuous", "vector": "reference", "mesh": "mesh"}
+
+
+def quantity_label(quantity: str) -> str:
+    """``flood_depth`` -> ``Flood depth``: the quantity, said out loud.
+
+    The producer already named the physical field; a second table mapping that
+    name to a prettier one is the mirror this seam exists without.
+    """
+    words = (quantity or "").strip().replace("-", " ").replace("_", " ").strip()
+    return words[:1].upper() + words[1:] if words else "Value"
+
+
+def entry_style(entry: OutputEntry) -> dict[str, Any]:
+    """The style row a solved output derives from the product contract.
+
+    The entry's ``kind`` picks the preset shape and its ``quantity`` / ``units``
+    parameterise it. A mesh entry names the dataset group QGIS binds by (the
+    quantity, as the solver wrote it). Nothing here is keyed on a preset name,
+    so nothing here can be mislabelled by one.
+    """
+    row: dict[str, Any] = {
+        "kind": _KIND_BY_ENTRY.get(entry.kind, "continuous"),
+        "label": quantity_label(entry.quantity),
+    }
+    if entry.units:
+        row["units"] = entry.units
+    if entry.kind == "mesh":
+        row["dataset_group"] = entry.quantity
+    return row
+
+
+def _entry_range(entry: OutputEntry) -> tuple[float, float] | None:
     """The RUN range this one raster contributes - its band stats, or one read.
 
     Producers usually precompute the stats onto the manifest, so the read is the
-    exception. A fixed-scale preset contributes nothing: nobody is going to use it.
+    exception.
     """
     bs = entry.band_stats
     if bs is not None and (bs.is_categorical or bs.is_rgba):
         return None
-    if not styles.needs_run_range(style_preset):
-        return None
     if bs is not None and bs.p2 is not None and bs.p98 is not None:
         return (float(bs.p2), float(bs.p98))
     try:
-        return styles.band_range_reader(_read_raster_bytes(entry.uri))(
-            styles.scale_for(style_preset))
+        preset = presets.from_row(entry_style(entry))
+        return presets.band_range_reader(_read_raster_bytes(entry.uri))(preset.scale)
     except Exception as exc:  # noqa: BLE001 -- degrade to the declared fallback
         logger.warning(
             "outputs_seam: the run-range read failed for %s (%s: %s) -- the "
@@ -211,53 +237,8 @@ def _run_ranges(manifest: OutputsManifest) -> dict[str, tuple[float, float] | No
     for entry in manifest.entries:
         if entry.kind != "raster":
             continue
-        preset, _fallback = resolve_style_preset(entry.quantity)
-        contributions.setdefault(entry.quantity, []).append(
-            _entry_range(entry, preset))
-    return {q: styles.shared_range(found) for q, found in contributions.items()}
-
-
-def _style_and_legend(
-    entry: OutputEntry, *, style_preset: str,
-    shared: tuple[float, float] | None = None,
-) -> tuple[str, Any, bool]:
-    """Resolve ``(style_params, legend, needed_cog_touch)`` for one raster entry.
-
-    Mirrors ``register_manifest_layers._register_one_layer`` exactly. ``band_stats``
-    comes from the entry when the producer precomputed it (the register-only,
-    no-COG-read fast path); when ABSENT and the quantity is UNREGISTERED (the
-    neutral ramp needs a real range), this does the ONE lazy per-COG percentile
-    touch. A registry preset never needs stats.
-    """
-    bs = entry.band_stats
-    is_categorical = bool(bs.is_categorical) if bs else False
-    is_rgba = bool(bs.is_rgba) if bs else False
-    needed_cog_touch = shared is not None and bs is None
-
-    style_params = style_params_from_band_stats(
-        style_preset,
-        is_categorical=is_categorical,
-        is_rgba=is_rgba,
-        p2=shared[0] if shared else (bs.p2 if bs else None),
-        p98=shared[1] if shared else (bs.p98 if bs else None),
-        layer_uri=entry.uri,
-    )
-    legend = None
-    try:
-        if style_params:
-            legend = legend_for_published_layer(
-                style_preset,
-                entry.uri,
-                style_params,
-                units=entry.units or None,
-                raster_bytes=b"",  # register-only contract: NO COG download here
-            )
-        _stash_legend_for_uri(entry.uri, legend)
-    except Exception as exc:  # noqa: BLE001 -- legend never blocks a register
-        logger.debug(
-            "outputs_seam legend stash skipped (%s: %s)", type(exc).__name__, exc
-        )
-    return style_params, legend, needed_cog_touch
+        contributions.setdefault(entry.quantity, []).append(_entry_range(entry))
+    return {q: presets.shared_range(found) for q, found in contributions.items()}
 
 
 def _build_raster_layer(
@@ -270,13 +251,22 @@ def _build_raster_layer(
     shared: tuple[float, float] | None = None,
 ) -> LayerURI:
     """Register + build ONE raster ``LayerURI`` (register-path byte parity)."""
-    style_preset, _fallback = resolve_style_preset(entry.quantity)
-    # Resolves style params + STASHES the data-driven legend side-band keyed by
-    # the raw COG uri (the register-path transport: the pipeline emitter lifts it
-    # by ``layer.uri`` in add_loaded_layer). The returned LayerURI therefore
-    # carries legend=None -- byte-identical to register_manifest_layers, which
-    # never attaches the legend to the LayerURI itself.
-    _style_and_legend(entry, style_preset=style_preset, shared=shared)
+    style = entry_style(entry)
+    # STASHES the resolved style keyed by the raw COG uri (the register-path
+    # transport: the pipeline emitter lifts it by ``layer.uri`` in
+    # add_loaded_layer). The returned LayerURI therefore carries legend=None --
+    # byte-identical to register_manifest_layers, which never attaches the
+    # legend to the LayerURI itself. ``raster_bytes=b""`` pins the register-only
+    # contract: NO COG download here.
+    bs = entry.band_stats
+    try:
+        _stash_legend_for_uri(entry.uri, legend_for_published_layer(
+            style, entry.uri, units=entry.units or None, raster_bytes=b"",
+            band_stats=(shared if shared is not None
+                        else ((bs.p2, bs.p98) if bs else (None, None)))))
+    except Exception as exc:  # noqa: BLE001 -- legend never blocks a register
+        logger.debug("outputs_seam legend stash skipped (%s: %s)",
+                     type(exc).__name__, exc)
 
     observe_published_layer(layer_id, gcs_uri=entry.uri)
 
@@ -293,19 +283,13 @@ def _build_raster_layer(
         name=entry.name,  # EXACT grouping token the plugin matches on -- never rename.
         layer_type="raster",
         uri=entry.uri,
-        style_preset=style_preset,
+        style=style,
         role=role,  # type: ignore[arg-type]
         units=entry.units or None,
         bbox=entry_bbox or bbox,
     )
-    logger.info(
-        "outputs_seam: registered layer_id=%s name=%r quantity=%s preset=%s uri=%s",
-        layer_id,
-        entry.name,
-        entry.quantity,
-        style_preset,
-        entry.uri,
-    )
+    logger.info("outputs_seam: registered layer_id=%s name=%r quantity=%s uri=%s",
+                layer_id, entry.name, entry.quantity, entry.uri)
     return layer
 
 
@@ -375,9 +359,6 @@ def build_layers_from_outputs(
 
     # --- Standalone rasters (peak/final field): role primary. ---
     for entry in standalone:
-        preset, is_fallback = resolve_style_preset(entry.quantity)
-        if is_fallback:
-            result.unknown_quantity_count += 1
         layer_id = f"{_quantity_base(entry.quantity)}-peak-{run_id}"
         layer = _build_raster_layer(
             entry, run_id=run_id, layer_id=layer_id, role="primary", bbox=bbox,
@@ -390,7 +371,6 @@ def build_layers_from_outputs(
                 quantity=entry.quantity,
                 t=None,
                 group_id=None,
-                style_preset=preset,
                 uri=entry.uri,
             )
         )
@@ -406,9 +386,6 @@ def build_layers_from_outputs(
         base = _quantity_base(quantity)
         group_id = f"{base}-{run_id}"
         for ordinal, entry in enumerate(ordered, start=1):
-            preset, is_fallback = resolve_style_preset(entry.quantity)
-            if is_fallback:
-                result.unknown_quantity_count += 1
             layer_id = f"{base}-frame-{ordinal:02d}-{run_id}"
             layer = _build_raster_layer(
                 entry, run_id=run_id, layer_id=layer_id, role="context", bbox=bbox,
@@ -421,16 +398,12 @@ def build_layers_from_outputs(
                     quantity=quantity,
                     t=float(entry.t) if entry.t is not None else None,
                     group_id=group_id,
-                    style_preset=preset,
                     uri=entry.uri,
                 )
             )
 
     # --- Vector layers. ---
     for entry in vectors:
-        preset, is_fallback = resolve_style_preset(entry.quantity)
-        if is_fallback:
-            result.unknown_quantity_count += 1
         layer_id = f"{_quantity_base(entry.quantity)}-{run_id}"
         observe_published_layer(layer_id, gcs_uri=entry.uri)
         entry_bbox: tuple[float, float, float, float] | None = None
@@ -447,7 +420,7 @@ def build_layers_from_outputs(
                 name=entry.name,
                 layer_type="vector",
                 uri=entry.uri,
-                style_preset=preset,
+                style=entry_style(entry),
                 role="primary",
                 units=entry.units or None,
                 bbox=entry_bbox or bbox,
@@ -459,7 +432,6 @@ def build_layers_from_outputs(
                 quantity=entry.quantity,
                 t=None,
                 group_id=None,
-                style_preset=preset,
                 uri=entry.uri,
             )
         )
@@ -473,9 +445,6 @@ def build_layers_from_outputs(
     # composer AOI. layer_id is minted off the quantity (``{base}-mesh-{run_id}``)
     # for idempotence, matching the raster stems' naming.
     for entry in meshes:
-        preset, is_fallback = resolve_style_preset(entry.quantity)
-        if is_fallback:
-            result.unknown_quantity_count += 1
         layer_id = f"{_quantity_base(entry.quantity)}-mesh-{run_id}"
         observe_published_layer(layer_id, gcs_uri=entry.uri)
         entry_bbox: tuple[float, float, float, float] | None = None
@@ -492,7 +461,7 @@ def build_layers_from_outputs(
                 name=entry.name,
                 layer_type="mesh",
                 uri=entry.uri,
-                style_preset=preset,
+                style=entry_style(entry),
                 role="context",
                 units=entry.units or None,
                 bbox=entry_bbox,
@@ -505,24 +474,17 @@ def build_layers_from_outputs(
                 quantity=entry.quantity,
                 t=float(entry.t) if entry.t is not None else None,
                 group_id=None,
-                style_preset=preset,
                 uri=entry.uri,
             )
         )
         logger.info(
             "outputs_seam: registered MESH layer_id=%s name=%r quantity=%s "
-            "preset=%s crs=%s uri=%s",
-            layer_id,
-            entry.name,
-            entry.quantity,
-            preset,
-            entry.crs_authid,
-            entry.uri,
-        )
+            "crs=%s uri=%s",
+            layer_id, entry.name, entry.quantity, entry.crs_authid, entry.uri)
 
     logger.info(
         "outputs_seam: built %d layer(s) run_id=%s (standalone=%d temporal_groups=%d "
-        "vectors=%d mesh=%d scalar=%d unknown_quantity=%d)",
+        "vectors=%d mesh=%d scalar=%d)",
         len(result.layers),
         run_id,
         len(standalone),
@@ -530,6 +492,5 @@ def build_layers_from_outputs(
         len(vectors),
         result.mesh_count,
         result.scalar_count,
-        result.unknown_quantity_count,
     )
     return result

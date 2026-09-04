@@ -80,15 +80,8 @@ async def publish_for_emission(
     if layer.layer_type != "raster" or not uri.startswith("s3://"):
         return layer
 
-    from .publish import PublishLayerError, publish_layer, style_preset_for_publish
+    from .publish import PublishLayerError, publish_layer
 
-    # The ``LayerURI`` contract declares a ``style_preset`` and forbids extra
-    # fields, so no quantity travels on this seam: a producer that computed one
-    # (the solver outputs seam, the quantity publisher) already resolved it
-    # through the style contract before the layer reached here. A layer that
-    # arrives with no preset therefore has no declared quantity either, and
-    # publishes neutral rather than on a ramp guessed from its uri.
-    style_preset = style_preset_for_publish(style_preset=layer.style_preset)
     try:
         # OFFLOAD: publish runs rasterio / GDAL over the COG. Keep it off the
         # event loop so the WS keepalive stays responsive.
@@ -96,7 +89,7 @@ async def publish_for_emission(
             publish_layer,
             layer_uri=uri,
             layer_id=layer.layer_id,
-            style_preset=style_preset or None,
+            style=layer.style,
             name=layer.name,
             case_id=case_id,
         )
@@ -127,12 +120,9 @@ async def publish_for_emission(
         )
         return layer
 
-    update: dict[str, Any] = {}
-    if published != uri:
-        update["uri"] = published
-    if style_preset and style_preset != layer.style_preset:
-        update["style_preset"] = style_preset
-    return layer.model_copy(update=update) if update else layer
+    if published == uri:
+        return layer
+    return layer.model_copy(update={"uri": published})
 
 
 def stamp_fallbacks(
@@ -277,12 +267,8 @@ async def publish_input_layer(
             return False
         await emitter.add_loaded_layer(safe)
         logger.info(
-            "publish_input_layer: surfaced layer_id=%s type=%s preset=%s role=%s",
-            safe.layer_id,
-            safe.layer_type,
-            safe.style_preset,
-            safe.role,
-        )
+            "publish_input_layer: surfaced layer_id=%s type=%s role=%s",
+            safe.layer_id, safe.layer_type, safe.role)
         return True
     except Exception as exc:  # noqa: BLE001 - input surfacing is NEVER fatal
         layer_id = getattr(layer_uri, "layer_id", "<unknown>")
@@ -322,7 +308,7 @@ async def publish_raster_input_cog(
     cog_uri: str | None,
     layer_id: str,
     name: str,
-    style_preset: str,
+    style: dict[str, Any] | None = None,
     role: str = "context",
     fallback_note: str | None = None,
     fallbacks: Sequence[Any] | None = None,
@@ -332,7 +318,7 @@ async def publish_raster_input_cog(
     The raster twin of :func:`publish_input_layer` for a COG that is NOT yet
     registered with the render bridge. Rides the object ALREADY in the runs
     bucket / cache (NO re-upload): rounds the ``s3://`` COG through
-    ``publish_layer`` (which registers its ``style_preset`` and returns a
+    ``publish_layer`` (which resolves its declared style row and returns a
     plugin-renderable uri), builds a ``role`` LayerURI, and hands it to
     :func:`publish_input_layer`. The shared seam for any composer that needs
     to surface a fetched raster input (e.g. bathymetry) this way.
@@ -377,7 +363,7 @@ async def publish_raster_input_cog(
             publish_layer,
             layer_uri=cog_uri,
             layer_id=layer_id,
-            style_preset=style_preset,
+            style=style,
             name=name,
         )
     except PublishLayerError as exc:
@@ -403,7 +389,7 @@ async def publish_raster_input_cog(
         name=name,
         layer_type="raster",
         uri=renderable,
-        style_preset=style_preset,
+        style=style,
         role=role,
         bbox=None,
         fallback_note=fallback_note,

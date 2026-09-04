@@ -6,7 +6,7 @@ returns rides :func:`trid3nt_server.emission.layer_uri_emit.publish_for_emission
 through this module on its way to the map, intermediates included - the user
 hides what they do not want to see in QGIS.
 
-    ``publish_layer(layer_uri, layer_id, style_preset, ...)``
+    ``publish_layer(layer_uri, layer_id, style, ...)``
       -> ``str`` (the raster's raw ``s3://`` COG URI, ready for the envelope)
 
 **The path (s3 + QGIS-native rendering; the only publish path)**
@@ -23,13 +23,10 @@ legend/style fields, so the publish emits the raw ``s3://`` URI itself:
    fetch tool's GeoJSON), OR a durable per-Case GeoJSON asset,
    OR - when ``TRID3NT_QGIS_WMS_BASE`` is exported - a styled QGIS Server
    WMS GetMap face.
-3. Rasters: enforce COG overviews (auto-translate when missing),
-   resolve styling via ``_resolve_qgis_style_params`` (THE render
-   chokepoint: categorical/RGBA/terrain passthroughs, then the contract-
-   declared preset in ``contracts/trid3nt_contracts/styles.yaml`` resolved
-   by ``emission/styles.py``, then band-stats percentile fallback, then a
-   safe default), stash the data-driven legend keyed by the ``s3://`` uri
-   the envelope will carry, and register the layer via
+3. Rasters: enforce COG overviews (auto-translate when missing), resolve the
+   DECLARED style row through ``emission/presets.py`` (the already-painted
+   guards first, then the preset), stash the resolved style keyed by the
+   ``s3://`` uri the envelope will carry, and register the layer via
    ``observe_published_layer``.
 
 QGIS-native rendering: nothing here mints
@@ -60,21 +57,20 @@ import tempfile
 from typing import Any
 
 from trid3nt_contracts import new_ulid
-from trid3nt_contracts.styles import ScaleSpec
 
-from . import styles
+from . import presets
 from .cog import translate_to_cog
+from .presets import Scale
 from .uri_registry import observe_published_layer
 
 __all__ = [
     "publish_layer",
-    "style_preset_for_publish",
     "PublishLayerError",
     "derive_layer_id",
     "derive_readable_layer_name",
-    "style_params_from_band_stats",
     "legend_for_published_layer",
     "pop_legend_for_uri",
+    "resolve_layer_style",
     "set_default_qgs_uri",
     "DEFAULT_PROJECT_QGS_URI",
 ]
@@ -215,109 +211,33 @@ def _build_vector_wms_url(
     renderable display face. The MAP= param uses the ``/mnt/qgs/<key>``
     mount convention the QGIS Server worker expects.
 
-    Style seam: the family-aware ``_infer_style_preset`` (the same selector the
-    raster paths use) is threaded into a ``STYLES=`` value so the QGIS Server
-    can apply a named style when one is registered; the empty-string default
-    (terrain-family / unknown) yields ``STYLES=`` which is a valid WMS "server
-    default style" request.
+    ``STYLES=`` is left empty, which is a valid WMS request for the server's
+    own default style.
     """
     from urllib.parse import quote
 
-    style = _infer_style_preset(layer_uri, layer_id)
     map_param = f"/mnt/qgs/{qgs_key}"
     return (
         f"{wms_base}?MAP={quote(map_param, safe='/')}"
         "&SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap"
         f"&LAYERS={quote(layer_id, safe='')}"
-        f"&STYLES={quote(style, safe='')}"
-        "&FORMAT=image/png&TRANSPARENT=true"
+        "&STYLES=&FORMAT=image/png&TRANSPARENT=true"
     )
-
-
-#: token vocabulary marking TERRAIN-family rasters. These are
-#: RGBA (colored relief) or single-band grayscale/Float32 (hillshade, slope,
-#: aspect, raw DEM) products - QGIS DEFAULT rendering visualizes them
-#: correctly, while the flood-depth pseudocolor ramp clamps them to a
-#: uniform/transparent tile.
-#: Token-boundary matching (not substring) so e.g. a layer_id like
-#: ``"demo-flood"`` does NOT match ``dem``.
-_TERRAIN_STYLE_TOKENS = frozenset(
-    # slope/aspect are NOT terrain tokens: they carry real colormaps
-    # (slope_angle_deg ylorrd / aspect_compass_deg hsv) via the style
-    # registry, routed by _infer_style_preset below. dem/relief/hillshade/
-    # terrain/elevation stay grayscale -- bare DEM + shaded relief render
-    # correctly unstyled.
-    {"dem", "relief", "hillshade", "terrain", "elevation"}
-)
-
-#: URI/id token -> the slope/aspect colormap preset, applied BEFORE the
-#: terrain passthrough so an auto-inferred slope/aspect layer is
-#: colormapped (not left grayscale and not mis-defaulted to flood depth).
-_SLOPE_ASPECT_PRESET_BY_TOKEN: dict[str, str] = {
-    "slope": "slope_angle_deg",
-    "aspect": "aspect_compass_deg",
-}
-
-
-def _infer_style_preset(layer_uri: str, layer_id: str) -> str:
-    """The RENDERING-FAMILY default for a raster whose producer named no preset.
-
-    This routes on how a raster must be PAINTED, never on what it measures: a
-    filename is not a measurement, so nothing here may conclude a physical
-    quantity from one. Slope and aspect carry their own colormaps; the remaining
-    terrain rasters (dem/relief/hillshade/terrain/elevation) are RGBA or
-    grayscale and render correctly unstyled, so they take ``""``.
-
-    Everything else takes the NEUTRAL ramp - a single-hue colormap over the
-    field's own range, labelled for an unknown quantity. A named physical ramp
-    here would paint a quantity nobody declared in the colours and legend of one
-    somebody guessed. A producer that knows its quantity declares it and gets
-    the contract's ramp; the price of not declaring is a neutral picture, not a
-    wrong one.
-
-    Tokenizes BOTH the resolved URI and the layer_id on non-alphanumerics and
-    matches whole tokens, so ``demo`` never trips ``dem``.
-    """
-    import re as _re
-
-    tokens = set(
-        _re.split(r"[^a-z0-9]+", f"{layer_uri} {layer_id}".lower())
-    )
-    for token, preset in _SLOPE_ASPECT_PRESET_BY_TOKEN.items():
-        if token in tokens:
-            return preset
-    if tokens & _TERRAIN_STYLE_TOKENS:
-        return ""
-    return styles.NEUTRAL_FALLBACK_PRESET
 
 
 # --------------------------------------------------------------------------- #
-# QGIS style resolver (s3 branch)
+# The render chokepoint
 #
-# A single-band float32 raster renders as AUTOSCALED GRAYSCALE unless the
-# resolved style-params carry an explicit ``&rescale=<lo>,<hi>`` and
-# ``&colormap_name=<name>`` (the rio-tiler string the QGIS plugin parses into
-# vmin/vmax/colormap).
+# Two guards run FIRST because they are facts about the FILE rather than about
+# the style, and each one is a way a ramp would CORRUPT an already-painted
+# image: a COG carrying its own band-1 colour table (NLCD land cover) is
+# coloured by that table, and an RGB(A) / multiband COG (a coloured relief, a
+# landcover-plus-hillshade composite) is coloured already. Neither takes a
+# preset - they are handed back as "already painted".
 #
-# ``_resolve_qgis_style_params`` is the single resolution point. CRITICAL
-# guards run FIRST so rasters that are ALREADY colorized are never corrupted
-# by a single-band rescale/colormap (the HIGH-severity terrain/RGBA
-# regression a rescale would otherwise introduce):
-#   - categorical / paletted COG (NLCD land cover) -> "" (embedded GDAL
-#     color table wins);
-#   - RGB(A) / multiband COG (colored relief, blended landcover + hillshade
-#     composite) -> "" (QGIS renders the baked colors directly);
-#   - terrain-token preset/URI (continuous_dem / hillshade / slope / aspect /
-#     relief / terrain / elevation) -> "" (grayscale terrain auto-scales,
-#     RGBA terrain renders directly).
-# Only AFTER those passthroughs does it delegate to the contract-declared
-# preset in ``contracts/trid3nt_contracts/styles.yaml``, resolved by
-# ``emission/styles.py``, for single-band weather SCALARS, falling back to a
-# generic band-stats percentile rescale for any preset the contract does not
-# cover, then a SAFE non-empty default. Colormap names are LOWERCASE
-# rio-tiler names (viridis, blues, ylgnbu, reds, rdbu, rdylbu_r, ylgn,
-# ylorrd, gray, gray_r, ...) - rio-tiler casing is lowercase (NOT
-# matplotlib), do not change.
+# Everything after that is the STYLE decision, and it is not made here: the
+# producer DECLARED a style row and ``emission/presets.py`` resolves it,
+# reading this raster's own range only when the declared policy asks for it.
 # --------------------------------------------------------------------------- #
 
 def _is_rgba_or_multiband(raster_bytes: bytes | None) -> bool:
@@ -326,11 +246,10 @@ def _is_rgba_or_multiband(raster_bytes: bytes | None) -> bool:
     Reads the in-hand COG bytes via a rasterio ``MemoryFile`` and reports True
     when band count >= 3 OR any band's color interpretation is one of
     Red/Green/Blue/Alpha. Such rasters (colored relief, blended landcover +
-    hillshade composites) are already colorized: a single-band ``&rescale`` +
-    ``&colormap_name`` would corrupt them, so the resolver returns ``""``
-    (empty style_params = QGIS passthrough) for them. Best-effort: returns
-    False on any read failure so a real single-band scalar still gets its
-    rescale.
+    hillshade composites) are already colorized: a single-band ramp would
+    corrupt them, so the resolver hands them back unstyled. Best-effort:
+    returns False on any read failure so a real single-band scalar still gets
+    its range.
     """
     if not raster_bytes:
         return False
@@ -357,166 +276,75 @@ def _is_rgba_or_multiband(raster_bytes: bytes | None) -> bool:
         return False
 
 
-def _is_terrain_token_preset(style_preset: str | None, layer_uri: str) -> bool:
-    """True if the preset / URI tokenizes to a TERRAIN-family token.
-
-    Reuses ``_TERRAIN_STYLE_TOKENS`` (dem, relief, hillshade, slope, aspect,
-    terrain, elevation). Tokenizes the ``style_preset`` AND ``layer_uri`` on
-    non-alphanumerics and matches whole tokens, so e.g. ``"continuous_dem"``
-    tokenizes to ``{continuous, dem}`` -> matches ``dem``. Terrain rasters
-    (grayscale hillshade/slope/aspect, RGBA colored relief) render correctly
-    with NO rescale, so the resolver returns ``""`` for them before trying
-    the contract preset / band-stats.
-    """
-    import re as _re
-
-    tokens = set(
-        _re.split(r"[^a-z0-9]+", f"{style_preset or ''} {layer_uri or ''}".lower())
-    )
-    return bool(tokens & _TERRAIN_STYLE_TOKENS)
+def _already_painted(raster_bytes: bytes | None) -> bool:
+    """True when the COG carries its own colours and no preset may override them."""
+    return _is_rgba_or_multiband(raster_bytes)
 
 
-def _resolve_qgis_style_params(
-    style_preset: str | None, layer_uri: str, *,
-    override: "ScaleSpec | None" = None,
+def resolve_layer_style(
+    style: dict[str, Any] | None,
+    layer_uri: str,
+    *,
+    override: "Scale | None" = None,
     shared: tuple[float, float] | None = None,
-) -> str:
-    """The ``&rescale=..&colormap_name=..`` string the QGIS plugin parses.
+    raster_bytes: bytes | None = None,
+    band_stats: tuple[float | None, float | None] | None = None,
+) -> "presets.Resolved | None":
+    """Resolve a DECLARED style row against this raster. The one resolution point.
 
-    THE RENDER CHOKEPOINT. Three RASTER guards live here because they are facts
-    about the file rather than about the style, and each one is a way a
-    single-band rescale would CORRUPT an already-colorized image:
-
-    1. an embedded band-1 GDAL colour table (NLCD land cover) - the palette wins;
-    2. RGB(A) / >=3 bands (coloured relief, a landcover+hillshade composite) -
-       the baked colours render directly;
-    3. a terrain-family preset or URI (dem / hillshade / slope / aspect / relief /
-       elevation) - grayscale terrain auto-scales and RGBA terrain renders as is.
-
-    Everything after that is the STYLE decision, and it is not made here: the
-    contract declares the preset and ``emission/styles.py`` resolves it, reading
-    this raster's own range only when the declared policy asks for it. The COG
-    bytes are read ONCE and shared by all three probes and the range read.
+    ``band_stats`` is the register-only fast path: a worker already computed the
+    percentiles, so the range resolves without downloading the COG. ``None`` is
+    returned for a raster that is already painted - an RGB(A) composite, or a
+    COG carrying its own band-1 colour table.
     """
-    raster_bytes = _read_raster_bytes(layer_uri)
-
-    if raster_bytes is not None:
+    preset = presets.from_row(style)
+    if raster_bytes is None and band_stats is None and presets.needs_run_range(
+            preset, override):
+        raster_bytes = _read_raster_bytes(layer_uri)
+    if raster_bytes:
         try:
             from rasterio.io import MemoryFile
 
             with MemoryFile(raster_bytes) as mem, mem.open() as src:
                 if _read_band1_colormap(src) is not None:
-                    logger.info(
-                        "publish_layer (style) %s carries an embedded band-1 colour "
-                        "table - leaving style_params empty so QGIS colorizes from "
-                        "the palette", layer_uri)
-                    return ""
+                    return None
         except Exception as exc:  # noqa: BLE001 - palette probe is best-effort
             logger.debug("palette probe skipped (%s: %s)", type(exc).__name__, exc)
-
-    if _is_rgba_or_multiband(raster_bytes):
-        logger.info(
-            "publish_layer (style) %s is RGB(A)/multiband - leaving style_params "
-            "empty so QGIS renders the baked colours directly", layer_uri)
-        return ""
-
-    if _is_terrain_token_preset(style_preset, layer_uri):
-        logger.info(
-            "publish_layer (style) preset=%r uri=%s is a TERRAIN-family raster - "
-            "leaving style_params empty", style_preset, layer_uri)
-        return ""
-
-    resolved = styles.resolve_style(
-        style_preset, read_range=styles.band_range_reader(raster_bytes),
-        override=override, shared=shared)
-    logger.info("publish_layer (style) preset=%r uri=%s -> %s",
-                style_preset, layer_uri, resolved.legend_note())
-    return resolved.style_params()
-
-
-def style_params_from_band_stats(
-    style_preset: str | None,
-    *,
-    is_categorical: bool = False,
-    is_rgba: bool = False,
-    p2: float | None = None,
-    p98: float | None = None,
-    layer_uri: str = "",
-) -> str:
-    """The same string, WITHOUT a COG download - the register-only fast path.
-
-    The worker precomputed the band stats onto the manifest, so the agent asks the
-    ONE resolver the same question with the percentiles already in hand. The three
-    raster guards arrive as flags for the same reason.
-    """
-    if is_categorical or is_rgba:
-        return ""
-    if _is_terrain_token_preset(style_preset, layer_uri):
-        return ""
-    return styles.resolve_style(
-        style_preset, read_range=styles.fixed_range_reader(p2, p98)).style_params()
+    if _already_painted(raster_bytes):
+        return None
+    read_range = (presets.fixed_range_reader(*band_stats) if band_stats is not None
+                  else presets.band_range_reader(raster_bytes))
+    resolved = presets.resolve(preset, read_range=read_range, override=override,
+                               shared=shared)
+    logger.info("publish_layer (style) uri=%s -> %s", layer_uri,
+                resolved.legend_note())
+    return resolved
 
 
 # --------------------------------------------------------------------------- #
-# Data-driven legend KEY: the color gradient/key must come FROM THE DATA - it
-# must mean something.
+# The resolved style, as the layer carries it
 #
-# The legend is derived DIRECTLY from the resolved style_params string
-# (the SAME ``&rescale=lo,hi&colormap_name=name`` the raster render uses), so
-# the legend range and the painted raster range AGREE by construction -- there
-# is no second, separately-computed range to drift. For contract-pinned
-# presets that is the semantic fixed range (flood 0-3, seismic PGA 0-1,
-# temperature 250-320 K); for the generic fallback it is the REAL p2/p98
-# percentile range the resolver already read off the COG. Categorical
-# (paletted/NLCD) rasters carry NO style_params (the embedded GDAL table
-# colorizes them), so their legend comes from ``_read_band1_colormap``
-# instead -- one ``LegendClass`` per table entry.
+# The legend is built from the SAME resolution the .qml is written from, so the
+# colourbar and the painted raster span identical numbers - there is no second
+# range to drift. A raster that is already painted has no resolution to report:
+# a paletted COG's legend comes from its own table, and an RGB(A) composite has
+# no meaningful key at all.
 #
-# Fail-open: ANY failure here returns ``None`` so the publish proceeds
-# exactly as before (legend=None => the QGIS plugin falls back to rendering
-# from style_preset).
+# Fail-open: ANY failure here returns ``None`` so a publish is never blocked.
 # --------------------------------------------------------------------------- #
 
 #: Module-level side-table of the most-recent published-raster ``LegendKey``
 #: keyed by the layer's ENVELOPE uri - the raw ``s3://`` COG the atomic
-#: ``publish_layer`` returns (QGIS-native); the register-only manifest seam
-#: keys by the same raw ``cog_uri``, so both producers share one key shape.
-#: ``publish_layer`` returns a bare URI string, so the server wrap-site
-#: rebuilds a ``LayerURI`` from it WITHOUT a legend; the pipeline emitter's
-#: ``add_loaded_layer`` lifts the legend back out of this stash by
-#: ``layer.uri``. Mirrors ``_LAST_DENSITY_META_BY_URI`` exactly (module scope
-#: is safe -- the legend is a pure function of the content-addressed COG +
-#: preset, so two sessions publishing the same layer compute the identical
-#: key). FIFO-bounded at the write site so the always-on agent process never
+#: ``publish_layer`` returns; the register-only manifest seam keys by the same
+#: raw ``cog_uri``, so both producers share one key shape. ``publish_layer``
+#: returns a bare URI string, so the server wrap-site rebuilds a ``LayerURI``
+#: from it WITHOUT a legend; the pipeline emitter's ``add_loaded_layer`` lifts
+#: the legend back out of this stash by ``layer.uri``. Module scope is safe -
+#: the legend is a pure function of the content-addressed COG plus the declared
+#: row. FIFO-bounded at the write site so the always-on agent process never
 #: grows it without limit.
 _MAX_LEGEND_ENTRIES: int = 256
 _LAST_LEGEND_BY_URI: dict[str, Any] = {}
-
-
-def _parse_style_params(style_params: str) -> tuple[float | None, float | None, str | None]:
-    """Pull ``(vmin, vmax, colormap_name)`` out of a ``&rescale=lo,hi&colormap_name=name``
-    style-params string. Any field absent / unparseable -> ``None`` for that slot.
-
-    This is the inverse of the strings the resolver builds, so the legend and the
-    raster render are GUARANTEED to use the same numbers (no second range read).
-    """
-    from urllib.parse import parse_qsl
-
-    vmin: float | None = None
-    vmax: float | None = None
-    cmap: str | None = None
-    if not style_params:
-        return (None, None, None)
-    for k, v in parse_qsl(style_params.lstrip("&"), keep_blank_values=False):
-        if k == "rescale" and "," in v:
-            lo_s, hi_s = v.split(",", 1)
-            try:
-                vmin, vmax = float(lo_s), float(hi_s)
-            except ValueError:
-                vmin = vmax = None
-        elif k == "colormap_name":
-            cmap = v or None
-    return (vmin, vmax, cmap)
 
 
 def _rgb_to_hex(entry: Any) -> str | None:
@@ -575,107 +403,78 @@ def _categorical_legend_from_colormap(
         )
     if not classes:
         return None
-    return LegendKey(kind="categorical", classes=classes, label=label)
+    return LegendKey(kind="classed", classes=classes, label=label)
 
 
 def legend_for_published_layer(
-    style_preset: str | None,
+    style: dict[str, Any] | None,
     layer_uri: str,
-    style_params: str,
     *,
     units: str | None = None,
     raster_bytes: bytes | None = None,
+    override: "Scale | None" = None,
+    shared: tuple[float, float] | None = None,
+    band_stats: tuple[float | None, float | None] | None = None,
 ) -> "LegendKey | None":
-    """Build the data-driven ``LegendKey`` for a just-published RASTER layer.
+    """The layer's resolved style, as the key the map renders from.
 
-    Derived from the ALREADY-resolved ``style_params`` so the legend range equals
-    the rendered range by construction:
+    The declared row is resolved ONCE here: the concrete range, the ramp and the
+    .qml all come out of that one resolution. A raster that is already painted
+    returns its own palette's classes (a paletted COG) or ``None`` (an RGB(A)
+    composite, which has no meaningful key).
 
-    - ``style_params`` carries ``&rescale=lo,hi&colormap_name=name`` -> a
-      ``kind="continuous"`` key with ``colormap=name``, ``vmin=lo``, ``vmax=hi``
-      (the real p2/p98 range for unpinned presets; the pinned semantic range for
-      contract presets -- whichever the raster actually renders with).
-    - empty ``style_params`` (categorical / RGBA / terrain passthrough) -> probe
-      the COG for an embedded GDAL color table and emit a ``kind="categorical"``
-      key of one swatch per class. RGBA composites + grayscale terrain carry no
-      table, so they get ``None`` (there is no meaningful key).
-
-    Fail-open: returns ``None`` on ANY error so the publish is never blocked
-    (``legend=None`` => the QGIS plugin renders the layer from style_preset
-    exactly as before).
+    Fail-open: ``None`` on any error, so a publish is never blocked.
     """
     from trid3nt_contracts.execution import LegendKey
 
     try:
-        vmin, vmax, cmap_name = _parse_style_params(style_params)
-        label = _legend_label_for(style_preset)
-        if cmap_name is not None and vmin is not None and vmax is not None:
-            # Continuous raster: the resolved rescale IS the legend range, so the
-            # colorbar and the painted tiles span the identical numbers.
+        if raster_bytes is None and band_stats is None:
+            raster_bytes = _read_raster_bytes(layer_uri)
+        resolved = resolve_layer_style(
+            style, layer_uri, override=override, shared=shared,
+            raster_bytes=raster_bytes, band_stats=band_stats)
+        if resolved is not None:
+            preset = resolved.preset
             return LegendKey(
-                kind="continuous",
-                colormap=cmap_name,
-                vmin=vmin,
-                vmax=vmax,
-                units=units,
-                label=label,
+                kind=preset.kind,
+                colormap=preset.ramp if preset.kind != "reference" else None,
+                vmin=resolved.range[0] if resolved.range else None,
+                vmax=resolved.range[1] if resolved.range else None,
+                classes=_declared_legend_classes(preset) or None,
+                units=preset.units or units,
+                label=preset.label,
+                qml=resolved.qml(),
             )
-        # No rescale/colormap in the URL -> categorical/paletted, RGBA, or
-        # terrain passthrough. Only a paletted raster has a meaningful key.
+        # Already painted: only a paletted raster has a meaningful key.
+        label = (style or {}).get("label")
         if raster_bytes is None:
             raster_bytes = _read_raster_bytes(layer_uri)
         if raster_bytes is None:
             return None
         try:
-            import rasterio
             from rasterio.io import MemoryFile
 
             with MemoryFile(raster_bytes) as mem, mem.open() as src:
                 table = _read_band1_colormap(src)
         except Exception as exc:  # noqa: BLE001 - palette probe is best-effort
-            logger.debug(
-                "legend palette probe skipped (%s: %s)", type(exc).__name__, exc
-            )
+            logger.debug("legend palette probe skipped (%s: %s)",
+                         type(exc).__name__, exc)
             return None
         if not table:
             return None
         return _categorical_legend_from_colormap(table, label=label)
     except Exception as exc:  # noqa: BLE001 - never block a publish on the legend
-        logger.debug(
-            "legend_for_published_layer failed for %s (%s: %s)",
-            layer_uri,
-            type(exc).__name__,
-            exc,
-        )
+        logger.debug("legend_for_published_layer failed for %s (%s: %s)",
+                     layer_uri, type(exc).__name__, exc)
         return None
 
 
-def _legend_label_for(style_preset: str | None) -> str | None:
-    """A short human-readable legend title from the preset, or ``None``.
+def _declared_legend_classes(preset: "presets.Preset") -> list:
+    """The preset's declared class breaks as legend swatches."""
+    from trid3nt_contracts.execution import LegendClass
 
-    The caption is DECLARED on the preset in the style contract, because a
-    caption derived from the preset name alone cannot state what the name does
-    not carry: a modelled surface reads as a measured one. The derivation below
-    is the fallback for a preset the contract does not declare.
-
-    Best-effort cosmetic: the QGIS plugin renders the result verbatim as the
-    legend caption and ``None`` is fine (it falls back to the layer name). Never
-    affects the range.
-    """
-    if not style_preset or style_preset == "auto":
-        return None
-    declared = styles.preset_label(style_preset)
-    if declared:
-        return declared
-    cleaned = style_preset
-    for prefix in ("continuous_", "categorical_", "diverging_"):
-        if cleaned.startswith(prefix):
-            cleaned = cleaned[len(prefix) :]
-            break
-    cleaned = cleaned.replace("_", " ").strip()
-    if not cleaned:
-        return None
-    return cleaned[:1].upper() + cleaned[1:]
+    return [LegendClass(value_min=lo, value_max=hi, color=color, label=label)
+            for lo, hi, color, label in preset.classes]
 
 
 def _stash_legend_for_uri(display_uri: str, legend: "LegendKey | None") -> None:
@@ -1410,30 +1209,6 @@ def _looks_like_hash_or_id(value: str) -> bool:
     return bool(_re.match(r"^[0-9a-f]{12,64}$", value, _re.IGNORECASE))
 
 
-def _label_from_style_preset(style_preset: str | None) -> str | None:
-    """Human label for a ``style_preset``, or ``None`` if uninformative.
-
-    A preset's label is part of what the preset IS, so it is read from the STYLE
-    CONTRACT and nowhere else. The token cleanup below is the FALLBACK for a
-    preset the contract does not declare - never a second table of labels.
-    """
-    if not style_preset:
-        return None
-    label = styles.preset_label(style_preset)
-    if label:
-        return label
-    if style_preset == "auto":
-        return None
-    import re as _re
-
-    # Strip a family prefix (e.g. "continuous_"/"standard_"/"categorical_")
-    # and title-case what remains, so an undeclared-but-descriptive preset
-    # (e.g. "continuous_ndvi") still yields a readable label ("Ndvi").
-    cleaned = _re.sub(r"^(standard_|continuous_|categorical_)", "", style_preset)
-    cleaned = cleaned.replace("_", " ").replace("-", " ").strip()
-    return cleaned.title() if cleaned else None
-
-
 def _label_from_uri(layer_uri: str) -> str | None:
     """Human label from a source ``layer_uri`` path segment, or ``None``.
 
@@ -1477,7 +1252,7 @@ def _short_disambiguator(layer_id: str) -> str:
 def derive_readable_layer_name(
     name: str | None,
     layer_id: str,
-    style_preset: str | None,
+    style: dict[str, Any] | None,
     layer_uri: str,
 ) -> str:
     """Derive a human-readable layer name for the UI's layer list.
@@ -1490,8 +1265,7 @@ def derive_readable_layer_name(
     1. an explicit, non-empty ``name`` that is not ITSELF a bare-ULID shape
        -- returned VERBATIM, no disambiguator appended (the caller already
        chose it deliberately; second-guessing it would be surprising).
-    2. ``style_preset`` mapped to a human label (e.g. ``"standard_hillshade"``
-       -> ``"Hillshade"``).
+    2. the declared style row's own ``label``.
     3. a human segment of the source ``layer_uri`` path (the parent
        directory / product-family segment -- the file stem is typically a
        cache hash or a ULID).
@@ -1500,49 +1274,16 @@ def derive_readable_layer_name(
     Cases 2-4 append a short disambiguator (``_short_disambiguator``) so two
     derived names for the same family don't collide in the UI list.
     INVARIANT: a bare-ULID name must never reach the layer summary when any
-    better signal (an explicit name, a style_preset, or a URI segment) is
+    better signal (an explicit name, a declared label, or a URI segment) is
     available.
     """
     if name and name.strip() and not _looks_like_ulid(name.strip()):
         return name.strip()
 
-    label = _label_from_style_preset(style_preset) or _label_from_uri(layer_uri)
+    label = (style or {}).get("label") or _label_from_uri(layer_uri)
     if not label:
         label = "Layer"
     return f"{label} {_short_disambiguator(layer_id)}"
-
-
-# --------------------------------------------------------------------------- #
-# Style-preset resolution at the publish boundary
-# --------------------------------------------------------------------------- #
-
-def style_preset_for_publish(
-    *, style_preset: str | None, quantity: str | None = None
-) -> str:
-    """The preset a layer publishes under, from what its producer DECLARED.
-
-    Deliberately NOT called ``resolve_style_preset``: ``emission/styles.py``
-    already owns that name for the contract lookup this delegates to. This one
-    answers the boundary question - what a layer arriving at publish is styled
-    as - and the whole rule is three steps:
-
-    1. an explicit non-empty ``style_preset``: the producer named its own ramp;
-    2. the declared ``quantity``, resolved through the style contract's
-       ``quantity_defaults`` table;
-    3. the NEUTRAL ramp, for a layer whose physical meaning nobody declared.
-
-    A raster's QUANTITY is never inferred from its filename or its layer id. A
-    name is not a measurement, so a ramp guessed from one paints a physical
-    band over values that may not be in it; the neutral ramp over the field's
-    own range is the honest picture of an undeclared quantity.
-    """
-    named = (style_preset or "").strip()
-    if named:
-        return named
-    declared = (quantity or "").strip()
-    if not declared:
-        return styles.NEUTRAL_FALLBACK_PRESET
-    return styles.resolve_style_preset(declared)[0]
 
 
 # --------------------------------------------------------------------------- #
@@ -1552,7 +1293,7 @@ def style_preset_for_publish(
 def publish_layer(
     layer_uri: str,
     layer_id: str | None = None,
-    style_preset: str | None = None,
+    style: dict[str, Any] | None = None,
     project_qgs_uri: str | None = None,
     case_id: str | None = None,
     name: str | None = None,
@@ -1590,8 +1331,9 @@ def publish_layer(
         layer_id: stable, Case-unique id for the published layer. Derived from
             the registered producer id / the URI basename / a fresh
             ``layer-<ulid>`` when omitted.
-        style_preset: the preset naming this quantity's ramp, or ``None`` for
-            AUTO selection through the resolver ladder.
+        style: the DECLARED style row - which of the four preset shapes draws
+            this layer and the parameters that shape needs. ``None`` takes the
+            continuous kind's bare default.
         project_qgs_uri: legacy ``.qgs`` project URI; consumed only by the
             dormant ``TRID3NT_QGIS_WMS_BASE`` vector-WMS seam.
         case_id: Case identifier for case-scoped ``.qgs`` routing on the
@@ -1634,7 +1376,7 @@ def publish_layer(
     # ``name`` is a transport-only carrier (see docstring) - the
     # actual LayerURI.name the client renders is computed by the server-side
     # wrap-site's ``derive_readable_layer_name`` call (it has the resolved
-    # published URI + style_preset this function's caller does not see yet).
+    # published URI this function's caller does not see yet).
     # Logged here purely for observability of what the model actually sent.
     if name:
         logger.info("publish_layer: name=%r layer_id=%r", name, layer_id)
@@ -1758,56 +1500,20 @@ def publish_layer(
     # raster is registered. Fail-open (publishes as-is) on any error.
     layer_uri = _ensure_raster_has_overviews(layer_uri)
 
-    # Style -> render params. The ``&rescale=..&colormap_name=..`` string
-    # does not ride a tile-URL query (QGIS-native); it feeds the stashed
-    # LEGEND the plugin renders from. _resolve_qgis_style_params is the
-    # single resolution point:
-    #   - flood depths keep the blue ramp over 0-3 m; plume concentrations
-    # keep the red ramp over 0-10 mg/L (byte-for-byte);
-    #   - precip / temperature / wind / drought / fuel-moisture / satellite
-    #     resolve to physically-correct contract bands;
-    #   - anything unknown gets a band-1 2nd/98th-percentile auto-rescale
-    #     (viridis) read from the COG bytes already in hand, with a SAFE
-    #     non-empty default if the stats read fails;
-    #   - CATEGORICAL guard: a COG with an embedded GDAL color table (NLCD
-    # land cover) gets NO rescale so the palette colorizes it
-    #     - never washed out; the legend carries the palette classes.
-    # _infer_style_preset is applied here for the auto/None case so the
-    # raster path keeps the same default selection as before.
-    effective_preset = style_preset
-    if effective_preset is None or effective_preset == "auto":
-        effective_preset = _infer_style_preset(layer_uri, layer_id)
-    style_params = _resolve_qgis_style_params(
-        effective_preset, layer_uri, override=scale, shared=shared_range)
-    # DATA-DRIVEN LEGEND: derive the render KEY from the SAME resolved
-    # style_params (so the legend range equals the painted range by
-    # construction) and stash it keyed by the ENVELOPE uri - the raw s3://
-    # COG this call returns. publish_layer returns a bare URI string, so the
-    # server wrap-site rebuilds a LayerURI WITHOUT a legend; the pipeline
-    # emitter's add_loaded_layer lifts the legend back out of the stash by
-    # layer.uri (which now equals this s3 uri). The legend carries the
-    # colormap NAME + vmin/vmax (continuous) or palette classes
-    # (categorical) - everything the plugin renderer needs alongside the
-    # envelope's style_preset field. Fail-open: a None legend just clears
-    # the stash entry and the plugin falls back to its style_preset/default
-    # rendering exactly as before.
+    # The DECLARED style row, resolved against this raster ONCE: the concrete
+    # range, the ramp and the .qml the map loads all come out of that one
+    # resolution, and the result is stashed keyed by the ENVELOPE uri - the raw
+    # s3:// COG this call returns. publish_layer returns a bare URI string, so
+    # the server wrap-site rebuilds a LayerURI WITHOUT a legend; the pipeline
+    # emitter's add_loaded_layer lifts it back out of the stash by layer.uri.
+    # Fail-open: a None legend clears the stash entry.
     try:
-        _legend = legend_for_published_layer(
-            effective_preset, layer_uri, style_params
-        )
-        _stash_legend_for_uri(layer_uri, _legend)
+        _stash_legend_for_uri(layer_uri, legend_for_published_layer(
+            style, layer_uri, override=scale, shared=shared_range))
     except Exception as exc:  # noqa: BLE001 - legend never blocks a publish
-        logger.debug(
-            "publish_layer legend build skipped (%s: %s)",
-            type(exc).__name__,
-            exc,
-        )
-    logger.info(
-        "publish_layer (raw-cog) layer_id=%s uri=%s style_params=%s",
-        layer_id,
-        layer_uri,
-        style_params,
-    )
+        logger.debug("publish_layer legend build skipped (%s: %s)",
+                     type(exc).__name__, exc)
+    logger.info("publish_layer (raw-cog) layer_id=%s uri=%s", layer_id, layer_uri)
     # register the published layer in the session URI registry so
     # the ``flood-depth-peak-<id>``-style handle resolves to a consumable
     # DATA uri for downstream tools (Pelicun, zonal stats). Under
