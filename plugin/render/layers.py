@@ -634,11 +634,25 @@ def _load_style_document(layer, document: str, temp_dir: str) -> Tuple[bool, str
 
 
 def _renderer_tag(layer) -> str:
-    """The layer's current renderer identity, for the before/after read-back."""
+    """The layer's current rendering identity, for the before/after read-back.
+
+    The renderer TYPE alone does not discriminate on a vector: QGIS's own
+    default for one is already a single-symbol renderer, so a document that
+    loaded its declared symbol would read as "unchanged". The SYMBOL is what
+    changed, so the symbol is what the tag carries.
+    """
     try:
         renderer = layer.renderer()
-        return type(renderer).__name__ if renderer is not None else "none"
-    except (AttributeError, RuntimeError):
+        if renderer is None:
+            return "none"
+        tag = type(renderer).__name__
+        symbol = getattr(renderer, "symbol", None)
+        if symbol is None:
+            return tag
+        drawn = symbol()
+        return (f"{tag}/{drawn.symbolLayer(0).layerType()} "
+                f"{drawn.color().name()}")
+    except (AttributeError, IndexError, RuntimeError):
         return "none"
 
 

@@ -724,6 +724,8 @@ package EmissionSeam {
     verify requirement StyleIsDeclaredOrKindDefault by
         "plugin/tests/test_raster_render.py::test_the_legends_qml_reaches_load_named_style";
     verify requirement StyleIsDeclaredOrKindDefault by
+        "plugin/tests/test_raster_render.py::test_a_vectors_declared_symbol_is_what_the_read_back_reports";
+    verify requirement StyleIsDeclaredOrKindDefault by
         "tests/test_publish_layer_legend.py::test_a_vector_row_resolves_through_the_same_seam_without_reading_the_object";
     verify requirement StyleIsDeclaredOrKindDefault by
         "tests/test_publish_layer_legend.py::test_a_mesh_row_resolves_bound_to_the_group_it_declares";

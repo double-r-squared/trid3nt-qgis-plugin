@@ -261,8 +261,50 @@ def _import_layers():
         def setOpacity(self, opacity):
             self.opacity = opacity
 
+    class _FakeSymbolLayer:
+        def __init__(self, kind):
+            self._kind = kind
+
+        def layerType(self):
+            return self._kind
+
+    class _FakeSymbol:
+        """A symbol whose class and colour the read-back reports."""
+
+        def __init__(self, kind="SimpleLine", color="#000000"):
+            self._kind, self._color = kind, color
+
+        def symbolLayer(self, index):
+            return _FakeSymbolLayer(self._kind)
+
+        def color(self):
+            return type("QColor", (), {"name": lambda _self: self._color})()
+
+    class _FakeVectorRenderer:
+        def __init__(self, symbol):
+            self._symbol = symbol
+
+        def symbol(self):
+            return self._symbol
+
     class _FakeVectorLayer(_FakeRasterLayer):
-        pass
+        """A vector whose renderer TYPE never changes - only its symbol does,
+        which is what makes it the case a type-only read-back cannot see."""
+
+        #: What the symbol becomes once a declared document is loaded.
+        next_styled_symbol = ("SimpleLine", "#3b7dd8")
+
+        def __init__(self, path, name, provider=""):
+            super().__init__(path, name, provider)
+            self._symbol = _FakeSymbol("SimpleMarker", "#a1b2c3")
+
+        def renderer(self):
+            return _FakeVectorRenderer(self._symbol)
+
+        def loadNamedStyle(self, path):
+            result = super().loadNamedStyle(path)
+            self._symbol = _FakeSymbol(*_FakeVectorLayer.next_styled_symbol)
+            return result
 
     class _FakeTimeSettings:
         def __init__(self):
@@ -856,6 +898,28 @@ class TestThePresetAppliesAtBirthOnly(unittest.TestCase):
         self.assertEqual(fakes.Project.instance().added, [])
         m.materialize([_event(layers, RASTER_LAYER_ROW)])
         self.assertEqual(len(fakes.RasterLayer.instances), 2)
+
+
+class TestTheReadBackSeesWhatChanged(unittest.TestCase):
+    def test_a_vectors_declared_symbol_is_what_the_read_back_reports(self):
+        """A vector's renderer TYPE is the same before and after: QGIS's own
+        default for one is already a single-symbol renderer. The SYMBOL is what
+        the document changed, so it is what the assertion has to read - or a
+        style that loaded and a style that did nothing report identically.
+        """
+        layers, fakes = _import_layers()
+        m = layers.LayerMaterializer(settings=_Settings())
+        row = {
+            "layer_id": "01VECTORAAAAAAAAAAAAAAAAAA",
+            "name": "Input: river geometry",
+            "layer_type": "vector",
+            "uri": "s3://trid3nt-cache/cache/rivers.fgb",
+            "legend": {"kind": "reference", "qml": _QML},
+        }
+        notes = m.materialize([_event(layers, row)])
+        self.assertTrue(
+            any("styled from the declared preset" in n and "SimpleLine" in n
+                and "#3b7dd8" in n for n in notes), notes)
 
 
 if __name__ == "__main__":
