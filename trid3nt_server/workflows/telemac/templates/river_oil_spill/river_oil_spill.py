@@ -38,7 +38,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Wind,
 )
 from trid3nt_server.workflows.telemac.products.products import Products
-from trid3nt_server.workflows.telemac.solving.solve import compute_class, solve_reach
+from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.templates.river_dye.coercions import (
     release_points,
 )
@@ -57,6 +57,7 @@ __all__ = ["ANSWER", "DATA", "PARAMS", "STEERING", "build_slick_chart",
            "telemac_river_oil_spill"]
 
 _HELPERS = "trid3nt_server.workflows.telemac.helpers"
+_SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 
 #: What the run directory calls this deck.
 _STEERING_FILE = "t2d_river.cas"
@@ -211,7 +212,7 @@ telemac_river_oil_spill = register_workflow(
                "COEFFICIENT_FOR_DIFFUSION_OF_TRACERS": R.tracer_diffusivity},
         results=(river.RESULT, river.RESTART, _DROGUES),
         steering_file=_STEERING_FILE, prefix="telemac",
-        dispatch=solve_reach, compute_class=S.compute_class,
+        dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
         meta={"substance": "oil", "substance_class": "oil"},
         read=lambda run: Products.dye(
             run=run, solve=run,

@@ -11,7 +11,7 @@ import inspect
 
 import pytest
 
-from trid3nt_server.workflows.telemac.river_dye import river_dye as M
+from trid3nt_server.workflows.telemac.templates.river_dye import river_dye as M
 from trid3nt_server.workflows.telemac.helpers import forcing as F
 
 

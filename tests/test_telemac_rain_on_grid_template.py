@@ -22,7 +22,7 @@ def test_registered_on_the_model_surface():
     ask and the hydrograph is measured server-side off the run's own result, so
     nothing is left for a park to state."""
     import trid3nt_server.main as _main
-    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid,
     )
 
@@ -47,7 +47,7 @@ def test_the_outlet_boundary_is_declared_as_an_op_on_the_mesh_recipe():
     boundary role is - as a ``set_boundary_roles`` op on the recipe, at the
     delineation's snapped outlet - rather than resolved by a server step between
     the mesh and the authoring."""
-    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import MESH
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import MESH
 
     op = [o for o in MESH.ops if o.fn == "set_boundary_roles"]
     assert len(op) == 1
@@ -58,8 +58,8 @@ def test_the_outlet_boundary_is_declared_as_an_op_on_the_mesh_recipe():
 
 
 def test_docstring_carries_the_godara_envelope():
-    import trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid as rog_module
-    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+    import trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid as rog_module
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid,
     )
 
@@ -80,7 +80,7 @@ def test_corpus_yaml_present_and_routes():
 
     import yaml
 
-    import trid3nt_server.workflows.telemac.rain_on_grid as pkg
+    import trid3nt_server.workflows.telemac.templates.rain_on_grid as pkg
 
     corpus = Path(pkg.__file__).parent / "corpus.yaml"
     assert corpus.exists()
@@ -93,17 +93,17 @@ def test_corpus_yaml_present_and_routes():
 # The DECLARATION: the plan value and the wire-signature door contract.
 # ===========================================================================
 def test_the_declared_plan_is_the_rain_on_grid_sequence():
-    """form -> draw -> aoi -> mesh -> infiltration -> run -> solve ->
-    flood_depth, and the plan VALIDATES against its own declared params/data."""
+    """aoi -> mesh -> infiltration -> settled -> sheet -> solve -> flood_depth,
+    and the sequence VALIDATES against its own declared params and data."""
     from trid3nt_server.workflows.runtime.validate import validate_plan
-    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid,
     )
 
     workflow = telemac_rain_on_grid.workflow
     plan = workflow.plan
     assert [step.label for step in plan.declared()] == [
-        "form", "draw", "aoi", "mesh", "infiltration", "run", "solve",
+        "aoi", "mesh", "infiltration", "settled", "sheet", "solve",
         "flood_depth"]
     validate_plan(plan, workflow.params, workflow.data)
 
@@ -116,7 +116,7 @@ def test_constant_door_params_off_wire_scenario_and_user_ones_present():
     import inspect
 
     from trid3nt_server.workflows.runtime import doors
-    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         telemac_rain_on_grid as fn,
     )
 
@@ -145,7 +145,7 @@ async def test_pour_point_is_never_invented_in_auto_mode():
     from trid3nt_server.workflows.runtime.errors import GateRefusedError
     from trid3nt_server.workflows.runtime.interpreter import _run_draw_gate
     from trid3nt_server.workflows.runtime.resolver import resolve_params
-    from trid3nt_server.workflows.telemac.rain_on_grid.declarations import PARAMS
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import PARAMS
 
     declared = param_rows(PARAMS)
     pour_point_param = next(p for p in declared if p.name == "pour_point")
@@ -163,7 +163,7 @@ async def test_pour_point_is_never_invented_in_auto_mode():
 # amc_condition_for: the three SCS words, and a refused fourth.
 # ===========================================================================
 def test_amc_condition_for_maps_the_three_words():
-    from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.cn_infiltration import (
         amc_condition_for,
     )
 
@@ -173,7 +173,7 @@ def test_amc_condition_for_maps_the_three_words():
 
 
 def test_amc_condition_for_refuses_a_fourth_word():
-    from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.cn_infiltration import (
         CNInfiltrationError, amc_condition_for,
     )
 
@@ -187,7 +187,7 @@ def test_amc_condition_for_refuses_a_fourth_word():
 def test_hydrograph_chart_none_with_no_series():
     from types import SimpleNamespace
 
-    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         build_hydrograph_chart,
     )
 
@@ -198,7 +198,7 @@ def test_hydrograph_chart_none_with_no_series():
 def test_hydrograph_chart_line_spec_with_a_series():
     from types import SimpleNamespace
 
-    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         build_hydrograph_chart,
     )
 
@@ -222,7 +222,7 @@ def test_a_series_of_measured_zeros_is_drawn_and_labelled_a_measurement():
     suppressed chart would read as a run that produced nothing."""
     from types import SimpleNamespace
 
-    from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import (
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
         build_hydrograph_chart,
     )
 
@@ -342,7 +342,7 @@ def test_resolve_rain_event_hyetograph_rung_builds_hourly_blocks(monkeypatch):
 # ===========================================================================
 def test_aoi_from_pour_point_buffers_the_outlet():
     from trid3nt_server.workflows.telemac.helpers.catchment import catchment_aoi
-    from trid3nt_server.workflows.telemac.rain_on_grid.declarations import (
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import (
         POUR_POINT_BUFFER_DEG,
     )
 
@@ -412,10 +412,11 @@ def _accepted_catchment_mesh():
 
 @pytest.fixture()
 def rog_run(monkeypatch, tmp_path):
-    """``assemble_rain_on_grid`` with the accepted mesh's reads stood in for.
+    """``settle_catchment`` with the accepted mesh's reads stood in for, and the
+    STEERING body filled from what it measured.
 
-    The AUTHORING is real: the steering file and every field it names are written
-    into a temp run directory by the author this step calls.
+    The DECK is real: every keyword and every file the template states is
+    resolved here, without the container the serializer writes them through.
     """
     import numpy as np
 
@@ -442,16 +443,24 @@ def rog_run(monkeypatch, tmp_path):
         asm_mod, "_write_manifest",
         lambda case, run_tag, **_kw: f"s3://c/telemac_rog/{run_tag}/manifest.json")
 
-    async def _write(**kwargs):
-        return await asm_mod.assemble_rain_on_grid(
-            catchment=_accepted_catchment_mesh(),
-            infiltration={"amc_condition": 2, "curve_number": None,
-                          "node_cn2": [70.0, 72.0, 74.0, 76.0],
-                          "node_manning": [0.035, 0.035, 0.1, 0.06]},
-            time_step_s=3.0,
-            **kwargs)
+    async def _fill(**kwargs):
+        from trid3nt_server.workflows.telemac.modules import fill
+        from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+            STEERING,
+        )
 
-    return _write
+        infiltration = {"amc_condition": 2, "curve_number": None,
+                        "node_cn2": [70.0, 72.0, 74.0, 76.0],
+                        "node_manning": [0.035, 0.035, 0.1, 0.06]}
+        settled = await asm_mod.settle_catchment(
+            catchment=_accepted_catchment_mesh(), infiltration=infiltration,
+            time_step_s=3.0, **kwargs)
+        sheet = fill(STEERING,
+                     produced={"settled": settled, "infiltration": infiltration},
+                     params={"time_step_s": 3.0})
+        return settled, sheet
+
+    return _fill
 
 
 _DESIGN_STORM = {"kind": "design_storm", "intensity_mm_per_hr": 25.0,
@@ -460,69 +469,71 @@ _DESIGN_STORM = {"kind": "design_storm", "intensity_mm_per_hr": 25.0,
                  "duration_basis": "storm"}
 
 
-def test_a_constant_storm_authors_a_case_and_stages_no_fortran(rog_run, tmp_path):
-    run = asyncio.run(rog_run(rain=_DESIGN_STORM))
-    case = run["case"]
-    assert case["module"] == "telemac2d"
-    assert case["steering"] == "t2d_rog.cas"
-    assert case["results"] == ["r2d_rog.slf"]
-    # a constant-rain run compiles nothing, so the key is ABSENT: the worker's
-    # strict gate reads a present key as a directory it must compile.
-    assert "user_fortran" not in case
-    assert case["server_facts"]["utm_epsg"] == 32617
-    assert (case["server_facts"]["npoin"] == 4
-            and case["server_facts"]["nelem"] == 2)
+def test_a_constant_storm_states_a_deck_and_names_no_fortran(rog_run):
+    settled, sheet = asyncio.run(rog_run(rain=_DESIGN_STORM))
+    facts = settled["server_facts"]
+    assert facts["utm_epsg"] == 32617
+    assert facts["npoin"] == 4 and facts["nelem"] == 2
+    assert facts["result_slf"] == "r2d_rog.slf"
 
-    cas = (tmp_path / f"telemac-{run['run_tag']}" / "t2d_rog.cas").read_text()
-    assert "GEOMETRY FILE                   = rog.slf" in cas
-    assert "BOUNDARY CONDITIONS FILE        = rog.cli" in cas
-    assert "RESULTS FILE                    = r2d_rog.slf" in cas
-    assert "FORMATTED DATA FILE 2           = rog_cn_map.dat" in cas
-    assert "FORTRAN FILE" not in cas
-    # The deck states what the outlet's own quad prescribes AND where the level
-    # it holds comes from: the derived curve beside it, at that number.
-    assert "/  1, measured off its own boundary-file code quad, which" in cas
-    assert "/  prescribes elevation. The level is the DERIVED Z(Q) curve in" in cas
-    assert "STAGE-DISCHARGE CURVES          = 1" in cas
-    assert "STAGE-DISCHARGE CURVES FILE     = rog_rating.txt" in cas
-    assert "PRESCRIBED ELEVATIONS" not in cas
-    assert "PRESCRIBED FLOWRATES" not in cas
-    # every file the steering file names was authored beside it
-    assert set(run["authored"]) == {"t2d_rog.cas", "rog_cn_map.dat",
-                                     "rog_friction.tbl", "rog_zones.dat",
-                                     "rog_rating.txt"}
+    deck = dict(sheet.resolved())
+    assert deck["GEOMETRY FILE"] == "rog.slf"
+    assert deck["BOUNDARY CONDITIONS FILE"] == "rog.cli"
+    assert deck["RESULTS FILE"] == "r2d_rog.slf"
+    assert deck["FORMATTED DATA FILE 2"] == "rog_cn_map.dat"
+    # a constant-rain run compiles nothing, so the keyword is ABSENT: the
+    # worker's strict gate reads a present one as a directory it must compile.
+    assert "FORTRAN FILE" not in deck
+    # The level the outlet holds comes from the DERIVED curve beside the deck,
+    # at the number the mesh's own walk gave that boundary.
+    assert deck["STAGE-DISCHARGE CURVES"] == [1]
+    assert deck["STAGE-DISCHARGE CURVES FILE"] == "rog_rating.txt"
+    assert "PRESCRIBED ELEVATIONS" not in deck
+    assert "PRESCRIBED FLOWRATES" not in deck
+    assert sheet.files["rog_rating.txt"].splitlines()[0].startswith(
+        "#derived Z(Q) at liquid boundary 1")
+    # every file the deck names is stated beside it
+    assert set(sheet.files) == {"rog_cn_map.dat", "rog_friction.tbl",
+                                "rog_zones.dat", "rog_rating.txt"}
 
 
 def test_the_outputs_are_exactly_what_the_run_writes_and_was_handed(rog_run):
-    run = asyncio.run(rog_run(rain=_DESIGN_STORM))
-    assert set(run["outputs"]) == {
+    """What a reader may OPEN is the sheet's own answer plus the mesh it was
+    handed and the deck it read - nothing listed that the run does not carry."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    settled, sheet = asyncio.run(rog_run(rain=_DESIGN_STORM))
+    door = TOOL_REGISTRY["telemac_rain_on_grid"].fn.workflow.plan_decl
+    handed = [row["dest"] for row in settled["mesh_inputs"]]
+    assert {*door.results, *handed, door.steering_file, "full_listing.log",
+            "telemac_metrics.json", *sheet.files} == {
         "r2d_rog.slf", "rog.slf", "rog.cli", "full_listing.log",
         "telemac_metrics.json", "t2d_rog.cas", "rog_cn_map.dat",
         "rog_friction.tbl", "rog_zones.dat", "rog_rating.txt"}
 
 
-def test_a_time_varying_storm_names_the_baked_fortran_on_both_channels(
-        rog_run, tmp_path):
-    from trid3nt_server.workflows.telemac.authoring.author import RAINDEF3_USER_FORTRAN
+def test_a_time_varying_storm_names_the_baked_fortran_on_both_channels(rog_run):
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+        RAINDEF3_USER_FORTRAN,
+    )
 
-    run = asyncio.run(rog_run(rain={
+    settled, sheet = asyncio.run(rog_run(rain={
         "kind": "hyetograph", "intensity_mm_per_hr": 25.0, "duration_s": 10800.0,
         "series": [3.0, 12.5, 0.0], "note": "the REAL hourly AORC hyetograph",
         "duration_basis": "hyetograph", "window": "2015-12-23/2015-12-24",
         "blocks": [[3600.0, 3.0], [7200.0, 12.5], [10800.0, 0.0]]}))
-    assert run["case"]["user_fortran"] == RAINDEF3_USER_FORTRAN
-    cas = (tmp_path / f"telemac-{run['run_tag']}" / "t2d_rog.cas").read_text()
-    assert f"FORTRAN FILE                    = '{RAINDEF3_USER_FORTRAN}'" in cas
-    assert "FORMATTED DATA FILE 1           = rog_hyeto.txt" in cas
-    assert "rog_hyeto.txt" in run["authored"]
-    assert run["hyetograph_total_mm"] == 15.5
+    deck = dict(sheet.resolved())
+    assert deck["FORTRAN FILE"] == RAINDEF3_USER_FORTRAN
+    assert deck["FORMATTED DATA FILE 1"] == "rog_hyeto.txt"
+    assert "rog_hyeto.txt" in sheet.files
+    assert settled["hyetograph_total_mm"] == 15.5
 
 
 def test_the_hydrograph_reads_the_declared_outlets_own_boundary_number(rog_run):
     """The role, resolved against the numbering the SOLVER uses - so the flux the
     listing prints under that number is the one the hydrograph reads."""
-    run = asyncio.run(rog_run(rain=_DESIGN_STORM))
-    assert run["outlet_boundary"] == 1
+    settled, _sheet = asyncio.run(rog_run(rain=_DESIGN_STORM))
+    assert settled["outlet_boundary"] == 1
 
 
 def test_a_mesh_whose_boundary_took_no_outlet_role_refuses(rog_run, monkeypatch):
@@ -540,7 +551,7 @@ def test_a_mesh_whose_boundary_took_no_outlet_role_refuses(rog_run, monkeypatch)
 def test_the_rainfall_volume_is_the_gross_depth_over_the_meshed_area(rog_run):
     from trid3nt_server.workflows.telemac.products.rain_on_grid import _rain_applied
 
-    run = asyncio.run(rog_run(rain=_DESIGN_STORM))
+    run, _sheet = asyncio.run(rog_run(rain=_DESIGN_STORM))
     # 25 mm/h over 6 h = 150 mm over 2.5 km2. The depth travels beside the
     # volume: a dry run is narrated in millimetres as well as cubic metres.
     assert _rain_applied(run) == (pytest.approx(150.0), pytest.approx(0.15 * 2.5e6))

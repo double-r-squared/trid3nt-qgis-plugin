@@ -41,7 +41,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Wind,
 )
 from trid3nt_server.workflows.telemac.products.products import Products
-from trid3nt_server.workflows.telemac.solving.solve import compute_class, solve_reach
+from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.templates.river_dye.coercions import (
     release_points,
 )
@@ -60,6 +60,7 @@ __all__ = ["ANSWER", "DATA", "PARAMS", "STEERING", "build_dye_chart",
            "telemac_river_dye"]
 
 _HELPERS = "trid3nt_server.workflows.telemac.helpers"
+_SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 
 #: What the run directory calls this deck. It is the steering file's own name,
 #: so the directory reads as the record of the run it is.
@@ -244,7 +245,7 @@ telemac_river_dye = register_workflow(
                "COEFFICIENT_FOR_DIFFUSION_OF_TRACERS": R.tracer_diffusivity},
         results=(river.RESULT, river.RESTART),
         steering_file=_STEERING_FILE, prefix="telemac",
-        dispatch=solve_reach, compute_class=S.compute_class,
+        dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
         meta={"substance": "dye", "substance_class": "tracer"},
         read=lambda run: Products.dye(
             run=run, solve=run,

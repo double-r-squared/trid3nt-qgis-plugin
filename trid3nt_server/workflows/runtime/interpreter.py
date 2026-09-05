@@ -45,7 +45,7 @@ from .errors import (
 )
 from .form import build_param_sheet
 from .journal import bind_notes, drain_notes
-from .ledger import LedgerRecord, StepLedger, invocation_key
+from .ledger import LedgerRecord, StepLedger, inputs_digest, invocation_key
 from .params import Param, ResolvedParams
 from .plan import (
     ChartSpec,
@@ -181,7 +181,15 @@ async def interpret(
                                          self_reviewed=self_reviewed)
             if node.step.consequential:
                 _refuse_missing_required(env.params, plan.name)
-            cached = ledger.replay_for(node.index, node.label) if resume else None
+            # BIND FIRST: what a node would run on is what decides whether the
+            # work it already did is still this run's work. The producers a
+            # binding dereferences have all been produced by now, so this costs
+            # a walk rather than a fetch.
+            bound = (await _bind(dict(node.step.kwargs), env, node.label)
+                     if node.kind == "step" else None)
+            key = inputs_digest(bound)
+            cached = (ledger.replay_for(node.index, node.label, key)
+                      if resume else None)
             if cached is not None and await _artifacts_live(cached):
                 value = _rehydrate(cached)
                 if value is not _UNREPLAYABLE:
@@ -191,7 +199,7 @@ async def interpret(
                                 plan.name, node.index, node.label)
                     continue
             try:
-                value = await _run_node(node, env, emitter)
+                value = await _run_node(node, env, emitter, bound)
             except Exception as exc:  # noqa: BLE001 - re-raised for the primary result
                 if node.kind == "step":
                     _carry_notes(exc, out.notes)
@@ -201,7 +209,7 @@ async def interpret(
             # Adopt BEFORE recording: a domain-rebinding step must record the
             # domain it LEAVES, not the one it started under.
             _adopt(env, node, value, out, replayed=False)
-            record = _record(node, value)
+            record = _record(node, value, key)
             out.records.append(record)
             await ledger.record(record, final=node.index == final_index)
         out.domain = current_domain()
@@ -420,7 +428,8 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
             return value
     label = _data_step_label(decl.name)
     answered, value = await _walk_ladder(env, producer, label)
-    record = _record_for(decl.name, answered.runner, value)
+    record = _record_for(decl.name, answered.runner, value,
+                         inputs_key=inputs_digest(answered.kwargs))
     env.data_records.append(dataclasses.replace(
         record, index=-1, node=_data_step_label(decl.name)))
     if env.ledger is not None:
@@ -497,11 +506,11 @@ def _validate_supplied(decl: DataDecl, supplied: Any, validate: Any) -> None:
         )
 
 
-async def _run_node(node: PlanNode, env: _Env, emitter: Any) -> Any:
+async def _run_node(node: PlanNode, env: _Env, emitter: Any,
+                    bound: dict[str, Any] | None) -> Any:
     async with substep(emitter, node.label):
         if node.kind == "step":
-            kwargs = await _bind(dict(node.step.kwargs), env, node.label)
-            return await _call_runner(node.runner, kwargs, node.label)
+            return await _call_runner(node.runner, dict(bound or {}), node.label)
         return await _run_chart(node, env)
 
 
@@ -1028,17 +1037,19 @@ class _Unreplayable:
 _UNREPLAYABLE = _Unreplayable()
 
 
-def _record(node: PlanNode, value: Any) -> LedgerRecord:
-    return _record_for(node.label, node.runner, value, index=node.index)
+def _record(node: PlanNode, value: Any, inputs_key: str = "") -> LedgerRecord:
+    return _record_for(node.label, node.runner, value, index=node.index,
+                       inputs_key=inputs_key)
 
 
-def _record_for(label: str, runner: str, value: Any, *, index: int = 0) -> LedgerRecord:
+def _record_for(label: str, runner: str, value: Any, *, index: int = 0,
+                inputs_key: str = "") -> LedgerRecord:
     _refuse_leaked_param_refs({"result": value},
                               f"the ledger record for {label!r}")
     kind, payload, type_path = _serialize(value)
     dom = current_domain()
     return LedgerRecord(
-        index=index, node=label, runner=runner,
+        index=index, node=label, runner=runner, inputs_key=inputs_key,
         completed_at=datetime.now(timezone.utc).isoformat(),
         result_kind=kind, result=payload, result_type=type_path,
         artifact_uris=_artifact_uris(value),

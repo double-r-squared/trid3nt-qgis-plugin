@@ -19,7 +19,8 @@ import pytest
 
 from trid3nt_server.workflows.mesh import topology as T
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
-from trid3nt_server.workflows.telemac.authoring import author as A
+from trid3nt_server.workflows.telemac.modules import T2D
+from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
 
 sys.path.insert(0, str(drivers_dir()))
 import selafin_cli_driver as D  # noqa: E402
@@ -92,37 +93,35 @@ def test_the_keyword_is_read_off_the_quad_the_boundary_file_carries():
     assert D._prescribes(D._ROLE_CODES["wall"]) == "nothing"
 
 
-_BED = {"bed_top_m": 100.0, "bed_drop_m": 3.0, "reach_length_m": 1000.0,
-        "outflow_section": [[0.0, 100.0], [10.0, 97.0],
-                            [50.0, 97.0], [60.0, 100.0]]}
+#: What the accepted mesh MEASURED, as the boundaries composite reads it. The
+#: stage is a normal depth the assembler derived; here it is a number, because
+#: what is under test is which list it lands in.
+_MEASURED = {"inflow_q_m3s": 50.0, "outflow_stage_m": 97.792}
 
 
-def _cas(tmp_path, numbered) -> str:
-    A.author_reach(
-        tmp_path, sheet={"name": "reach", "inflow_q_m3s": 50.0,
-                         "duration_s": 600.0, "time_step_s": 1.0},
-        geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
-        steering="t2d_river.cas",
-        liquid_boundary_order=[role for role, _ in numbered],
-        liquid_boundary_prescribes=[what for _, what in numbered],
-        bed=_BED, source_utm=(500.0, 0.0))
-    return (tmp_path / "t2d_river.cas").read_text()
+def _lists(numbered):
+    """The three PRESCRIBED lists the composite writes for that walk."""
+    slots, _files = T2D.COMPOSITES["boundaries"].expand(Boundaries(
+        measured={**_MEASURED,
+                  "liquid_boundary_order": [role for role, _ in numbered],
+                  "liquid_boundary_prescribes": [what for _, what in numbered]},
+        tracers=[0.0]))
+    return slots
 
 
-def test_the_run_prescribes_at_the_number_whose_quad_reads_it(tmp_path):
+def test_the_run_prescribes_at_the_number_whose_quad_reads_it():
     """End to end over the domain above: the engine calls the inflow 1 and the
     outflow 2, so the discharge is first and the level second - each one landing
     on the code that consumes it."""
     numbered = _numbered()
     assert numbered == [("inflow", "flowrate"), ("outflow", "elevation")]
-    cas = _cas(tmp_path, numbered)
-    assert "PRESCRIBED FLOWRATES            = 50.0;0.0" in cas
-    assert "PRESCRIBED ELEVATIONS           = 0.0;97.792" in cas
-    assert "/  Measured liquid boundaries: 1 inflow=flowrate, " \
-           "2 outflow=elevation" in cas
+    slots = _lists(numbered)
+    assert slots["PRESCRIBED_FLOWRATES"] == [50.0, 0.0]
+    assert slots["PRESCRIBED_ELEVATIONS"] == [0.0, 97.792]
+    assert slots["PRESCRIBED_TRACERS_VALUES"] == [0.0, 0.0]
 
 
-def test_flipping_the_strategy_moves_the_quad_and_the_keyword_together(tmp_path):
+def test_flipping_the_strategy_moves_the_quad_and_the_keyword_together():
     """ONE table decides both files. Swap what the two roles prescribe and the
     boundary file's quads and the steering file's lists move as one - there is no
     second place holding the old answer for them to disagree from."""
@@ -131,34 +130,29 @@ def test_flipping_the_strategy_moves_the_quad_and_the_keyword_together(tmp_path)
                "outflow": D._ROLE_CODES["inflow"]}
     numbered = _numbered(swapped)
     assert numbered == [("inflow", "elevation"), ("outflow", "flowrate")]
-    cas = _cas(tmp_path, numbered)
-    assert "PRESCRIBED ELEVATIONS           = 97.792;0.0" in cas
-    assert "PRESCRIBED FLOWRATES            = 0.0;50.0" in cas
+    slots = _lists(numbered)
+    assert slots["PRESCRIBED_ELEVATIONS"] == [97.792, 0.0]
+    assert slots["PRESCRIBED_FLOWRATES"] == [0.0, 50.0]
 
 
-def test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing(
-        tmp_path):
+def test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing():
     """An OUTFLOW is the role that means a prescribed level, so an all-KSORT quad
     under that name is the two files describing different boundaries: a value
     written at its number would be a number the engine never looks at, which is
     exactly the silence this contract exists to end."""
     mislabelled = {**D._ROLE_CODES, "outflow": (D.KSORT,) * 4}
-    with pytest.raises(A.SteeringAuthorError) as exc:
-        _cas(tmp_path, _numbered(mislabelled))
-    assert exc.value.error_code == "TELEMAC_BOUNDARY_PRESCRIBES_NOTHING"
+    with pytest.raises(ValueError, match="prescribes 'nothing'"):
+        _lists(_numbered(mislabelled))
 
 
-def test_the_free_exit_role_prescribes_nothing_as_a_stated_choice(tmp_path):
+def test_the_free_exit_role_prescribes_nothing_as_a_stated_choice():
     """The same ``"nothing"``, under the role that DECLARES it. A free exit is a
     boundary condition - the water leaves at the level and velocity the interior
-    brings to it - so the file writes a placeholder the engine never reads and
-    says which number carries it, instead of refusing."""
+    brings to it - so the deck writes a placeholder the engine never reads,
+    instead of refusing."""
     assert D._prescribes(D._ROLE_CODES[D.FREE_EXIT_ROLE]) == "nothing"
     assert D._ROLE_CODES[D.FREE_EXIT_ROLE] == (D.KSORT,) * 4
     assert D.FREE_EXIT_ROLE == T.FREE_EXIT_ROLE
-    cas = _cas(tmp_path, [("inflow", "flowrate"),
-                          (D.FREE_EXIT_ROLE, "nothing")])
-    assert "PRESCRIBED FLOWRATES            = 50.0;0.0" in cas
-    assert "PRESCRIBED ELEVATIONS           = 0.0;0.0" in cas
-    assert "/  Measured liquid boundaries: 1 inflow=flowrate, " \
-           "2 free_exit=nothing" in cas
+    slots = _lists([("inflow", "flowrate"), (D.FREE_EXIT_ROLE, "nothing")])
+    assert slots["PRESCRIBED_FLOWRATES"] == [50.0, 0.0]
+    assert slots["PRESCRIBED_ELEVATIONS"] == [0.0, 0.0]

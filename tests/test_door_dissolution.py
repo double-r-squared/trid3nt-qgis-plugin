@@ -30,6 +30,9 @@ from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 #: retrieval matrix below is only a guarantee if the roster it walks is fixed.
 EXPECTED_TEMPLATES = {
     "telemac_river_dye",
+    "telemac_river_oil_spill",
+    "telemac_river_scour",
+    "telemac_river_sediment_plume",
     "telemac_do_sag",
     "telemac_rain_on_grid",
     "telemac3d_stratified_flow",

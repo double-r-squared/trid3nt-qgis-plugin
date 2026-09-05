@@ -1326,7 +1326,7 @@ def test_the_routing_view_stops_before_the_param_sheet():
 
 
 def test_do_sag_publishes_both_docstring_views():
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
+    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
 
     assert "Params:" in (telemac_do_sag.__doc__ or "")
     assert "Params:" not in telemac_do_sag.routing_doc
@@ -1492,12 +1492,16 @@ def test_validator_refuses_a_form_gate_in_front_of_a_self_gating_step():
 
 
 @pytest.mark.asyncio
-async def test_do_sag_declares_no_form_gate_in_front_of_its_self_gating_review():
+async def test_do_sag_declares_no_gate_in_front_of_its_self_gating_review():
+    """The fill/run door reviews the sheet it just filled, so the plan declares
+    no gate of its own: a second card's edits would land on a sheet the door
+    never reads."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
     validate_plan(wf.plan, wf.params, wf.data)
-    assert [s.kind for s in wf.plan.declared() if hasattr(s, "kind")] == ["draw"]
+    assert [s.kind for s in wf.plan.declared() if hasattr(s, "kind")] == []
+    assert [s.label for s in wf.plan.declared() if s.self_gating] == ["sheet"]
 
 
 # --- the completion tombstone: three ghost paths ----------------------------- #
@@ -2258,7 +2262,7 @@ async def test_a_tombstoned_orphan_key_cannot_be_replayed(monkeypatch):
     monkeypatch.setattr(_ledger, "_reap", _boom)
     await ledger.clear()
     reloaded = await _ledger.StepLedger.load("orphan_key", "w")
-    assert reloaded.replay_for(0, "a") is None
+    assert reloaded.replay_for(0, "a", "") is None
 
 
 # --- the chart PAYLOAD is the surface, not the node's return dict ------------ #

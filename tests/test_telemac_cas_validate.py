@@ -13,16 +13,7 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring import author as A
 from trid3nt_server.workflows.telemac.authoring import cas_validate as V
-
-_BED = {"bed_top_m": 100.0, "bed_drop_m": 3.0, "reach_length_m": 1000.0,
-        "outflow_section": [[0.0, 100.0], [10.0, 97.0],
-                            [50.0, 97.0], [60.0, 100.0]]}
-_ORDER = ("outflow", "inflow")
-_PRESCRIBES = ("elevation", "flowrate")
-_CENTERLINE = [(x, 0.0) for x in range(0, 1100, 100)]
-
 
 class _Completed:
     def __init__(self, returncode=0, stdout="", stderr=""):
@@ -91,64 +82,56 @@ def test_a_driver_that_could_not_run_at_all_refuses_too(tmp_path, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# The wiring: every DAMOCLES file the author wrote reaches the parser.
+# The wiring: every DAMOCLES file the SERIALIZER wrote reaches the parser.
 # --------------------------------------------------------------------------- #
-def _authored(monkeypatch, tmp_path, tag="run", **sheet):
-    submitted: dict = {}
-    tmp_path = tmp_path / tag
-    tmp_path.mkdir()
+def _submitted(monkeypatch, tmp_path, sheet) -> dict:
+    """What the serializer offers the parser, and under which dictionary."""
+    from trid3nt_server.workflows.telemac.authoring import serializer as Z
+
+    seen: dict = {}
 
     def _record(rundir, steering):
         from pathlib import Path
 
-        submitted.update({name: module for name, module in steering.items()
-                          if (Path(rundir) / name).is_file()})
+        seen.update({name: module for name, module in steering.items()
+                     if (Path(rundir) / name).is_file()})
         return {}
 
-    monkeypatch.setattr(A, "validate_authored_steering", _record)
-    A.author_reach(
-        tmp_path, sheet={"name": "reach", "duration_s": 3600.0,
-                         "time_step_s": 1.0, **sheet},
-        geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
-        steering="t2d_river.cas", liquid_boundary_order=_ORDER,
-        liquid_boundary_prescribes=_PRESCRIBES, bed=_BED,
-        source_utm=(500.0, 0.0), centerline_utm=_CENTERLINE)
-    return submitted
+    def _driver(rundir, config, *, what):
+        from pathlib import Path
+
+        for name in config["write"]:
+            (Path(rundir) / name).write_text("/ written\n")
+        (Path(rundir) / "telemac_cas_written.json").write_text(
+            json.dumps({name: {} for name in config["write"]}))
+
+    monkeypatch.setattr(Z, "validate_authored_steering", _record)
+    monkeypatch.setattr(Z, "run_cas_driver", _driver)
+    Z.serialize(sheet, tmp_path, steering="t2d_river.cas")
+    return seen
 
 
 def test_a_tracer_reach_submits_only_its_own_steering(tmp_path, monkeypatch):
-    assert _authored(monkeypatch, tmp_path) == {"t2d_river.cas": "telemac2d"}
+    from trid3nt_server.workflows.telemac.modules import T2D, fill
+
+    assert _submitted(monkeypatch, tmp_path, fill(T2D, DURATION=600.0)) == {
+        "t2d_river.cas": "telemac2d"}
 
 
 def test_a_coupled_reach_submits_the_coupled_modules_steering_too(tmp_path,
                                                                   monkeypatch):
     """Each file is read against the dictionary of the module that reads it."""
-    assert _authored(monkeypatch, tmp_path, tag="o2", substance_class="do_sag",
-                     do_sag_effluent_bod_mgl=250.0,
-                     do_sag_effluent_q_m3s=1.0, do_sag_effluent_do_mgl=2.0,
-                     do_sag_upstream_do_mgl=9.0) == {
-        "t2d_river.cas": "telemac2d", A.WAQTEL_FILENAME: "waqtel"}
-    assert _authored(monkeypatch, tmp_path, tag="sed",
-                     substance_class="sediment") == {
-        "t2d_river.cas": "telemac2d", A.GAIA_STEERING_FILENAME: "gaia"}
+    from trid3nt_server.workflows.telemac.modules import GAIA, T2D, WAQTEL, fill
 
+    o2 = fill(T2D, coupling=[WAQTEL.o2(water_temp_c=20.0, k1_per_day=0.3,
+                                       k2_per_day=0.9, k2_formula=0,
+                                       saturation_mgl=9.0)])
+    assert _submitted(monkeypatch, tmp_path / "o2", o2) == {
+        "t2d_river.cas": "telemac2d", "t2d_river.waqtel": "waqtel"}
 
-def test_the_rain_on_grid_steering_reaches_the_parser(tmp_path, monkeypatch):
-    import numpy as np
-
-    submitted: dict = {}
-    monkeypatch.setattr(A, "validate_authored_steering",
-                        lambda _rundir, steering: submitted.update(steering) or {})
-    A.author_rain_on_grid(
-        tmp_path, sheet={"name": "creek", "duration_s": 7200.0,
-                         "time_step_s": 2.0},
-        geometry="rog.slf", boundary="rog.cli", results="r2d_rog.slf",
-        steering="t2d_rog.cas",
-        node_xy=np.array([[0.0, 0.0], [20.0, 0.0], [0.0, 10.0]]),
-        node_cn2=[70.0, 72.0, 74.0], node_manning=[0.035, 0.035, 0.1],
-        rain_mm_per_day=48.0, outlet_boundary=1, outlet_prescribes="elevation",
-        n_liquid_boundaries=1,
-        outlet={"section": [[0.0, 12.0], [5.0, 10.0], [15.0, 10.0], [20.0, 12.0]],
-                "slope": 0.02, "law": 4, "coefficient": 0.05,
-                "q_ceiling_m3s": 51.0, "q_ceiling_basis": "the gross rain rate"})
-    assert submitted == {"t2d_rog.cas": "telemac2d"}
+    bed = fill(T2D, coupling=[GAIA.erodible(
+        geometry="river.slf", boundary="river.cli", d50_um=200.0,
+        density=2650.0, thickness_m=5.0, formula=1,
+        morphological_factor=10.0)])
+    assert _submitted(monkeypatch, tmp_path / "sed", bed) == {
+        "t2d_river.cas": "telemac2d", "gaia_river.cas": "gaia"}

@@ -1,6 +1,6 @@
 """P4 tests for the TELEMAC river-dye LLM surface: the ``telemac_river_dye``
-template (declared PARAMS + DATA + ``plan(p, d)``) over the shared TELEMAC step
-family.
+template - its declared PARAMS, its DATA chain and the fill/run door it hands
+them to - over the shared river part it lists.
 
 Exercised in ISOLATION with geocode / fetch_river_geometry / NWM / run_solver /
 boto3 / postprocess / publish all MOCKED (no network, no docker, no TELEMAC).
@@ -10,10 +10,10 @@ These pin:
   2. Wire-arg normalization: the AOI rules, the three release-point shapes, the
      release-point / reach-seed decoupling, the contaminant promotion.
   3. Declared bounds + the non-numeric refusal replacing the old inline clamps.
-  4. The plan: its shape, its gate placement, and that it validates.
+  4. The sequence the door builds: its shape, where the run is HELD, and that
+     it validates.
   5. The chain geocode -> seed -> carrier discharge -> run -> solve -> products,
      with the manifest's case section carrying what the sheet resolved to.
-  6. The erodible-bed / GAIA single gate (an armed bed is always sediment).
 """
 
 from __future__ import annotations
@@ -88,7 +88,7 @@ def test_telemac_river_dye_registered_as_engine_template():
 
 
 def test_docstring_routing_view_fits_the_truncation_budget():
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import telemac_river_dye
 
     head = telemac_river_dye.routing_doc.split("\nReturns:")[0]
     assert len(head) <= 1000
@@ -118,7 +118,7 @@ def _norm(**kw):
 
 
 def test_tool_rejects_neither_location_nor_bbox():
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import telemac_river_dye
 
     out = asyncio.run(telemac_river_dye())
     assert out["status"] == "error"
@@ -127,7 +127,7 @@ def test_tool_rejects_neither_location_nor_bbox():
 
 def test_numeric_garbage_bbox_refuses_typed():
     """A bbox that is numeric-ish but unusable dead-ends typed, never guesses."""
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import telemac_river_dye
 
     out = asyncio.run(telemac_river_dye(bbox="1,2"))
     assert out["status"] == "error"
@@ -166,7 +166,7 @@ def test_every_release_point_shape_reaches_the_same_param(kwargs):
 
 
 def test_a_malformed_release_point_refuses_it_never_falls_back():
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import telemac_river_dye
 
     out = asyncio.run(telemac_river_dye(location="X", release_coords="somewhere"))
     assert out["error_code"] == "TELEMAC_PARAMS_INVALID"
@@ -186,13 +186,6 @@ def test_the_reach_seed_is_the_call_release_and_only_the_call_release():
 
     drawn, _ = _norm(location="X")
     assert "release_coords" not in drawn and "reach_seed_coords" not in drawn
-
-
-def test_a_non_tracer_contaminant_beats_a_tracer_substance():
-    supplied, _ = _norm(location="X", substance="dye", contaminant="crude oil")
-    assert supplied["substance"] == "crude oil"
-    kept, _ = _norm(location="X", substance="sewage", contaminant="water")
-    assert kept["substance"] == "sewage"
 
 
 def test_an_invented_compute_class_refuses_at_the_ladder():
@@ -218,10 +211,15 @@ def test_a_wind_bearing_wraps_rather_than_clamping():
 # (3) Declared bounds replace the inline clamps.
 # ===========================================================================
 def _resolve(**supplied):
-    from trid3nt_server.workflows.runtime import resolve_params
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import PARAMS
+    """The sheet the invocation resolves, over EVERY row the template declares.
 
-    return asyncio.run(resolve_params(PARAMS, {"location": "X", **supplied}))
+    A river template composes the shared part's rows with its own, so the sheet
+    is the workflow's rather than the template's own class body.
+    """
+    from trid3nt_server.workflows.runtime import resolve_params
+
+    return asyncio.run(resolve_params(_workflow().params,
+                                      {"location": "X", **supplied}))
 
 
 def test_declared_bounds_clamp_and_label_the_domain_extent():
@@ -254,9 +252,8 @@ def test_a_non_numeric_bounded_arg_refuses_it_is_never_defaulted():
 def test_an_absent_carrier_discharge_leaves_a_derived_provenance_row():
     """The user has to see that dilution is governed by a fetched value."""
     from trid3nt_server.workflows.runtime import provenance_entries
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import PARAMS
 
-    row = next(r for r in provenance_entries(_resolve(), PARAMS)
+    row = next(r for r in provenance_entries(_resolve(), _workflow().params)
                if r.param == "discharge_m3s")
     assert row.basis == "derived"
     assert "National Water Model" in (row.note or "")
@@ -278,7 +275,7 @@ def _peak_layer(**overrides: Any) -> TelemacDyeLayerURI:
 
 def test_the_dye_chart_is_the_run_s_own_history_not_two_points():
     """Every frame the solver wrote is a point; the peak is one of them."""
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import build_dye_chart
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import build_dye_chart
 
     payload = build_dye_chart(result=_peak_layer(), params={"location": "the reach"})
     values = payload["vega_lite_spec"]["data"]["values"]
@@ -287,7 +284,7 @@ def test_the_dye_chart_is_the_run_s_own_history_not_two_points():
 
 
 def test_the_dye_chart_caption_names_the_bed_the_run_actually_read():
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import build_dye_chart
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import build_dye_chart
 
     payload = build_dye_chart(result=_peak_layer(), params={"location": "the reach"})
     assert "Copernicus GLO-30" in payload["caption"]
@@ -296,7 +293,7 @@ def test_the_dye_chart_caption_names_the_bed_the_run_actually_read():
 
 def test_a_run_with_no_persisted_history_draws_no_chart():
     """No curve is the honest answer; two invented points are not."""
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import build_dye_chart
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import build_dye_chart
 
     bare = _peak_layer()
     bare.dye_curve_time_s = None
@@ -305,33 +302,34 @@ def test_a_run_with_no_persisted_history_draws_no_chart():
 
 
 # ===========================================================================
-# (4) The plan value.
+# (4) The sequence the door builds.
 # ===========================================================================
-def test_the_plan_validates_and_gates_before_the_solve():
+def test_the_sequence_validates_and_holds_the_run_after_the_fill():
     from trid3nt_server.workflows.runtime import validate_plan
     from trid3nt_server.workflows.runtime.plan import Gate
 
     wf = _workflow()
-    p = _resolve()
     pl = wf.plan
     validate_plan(pl, wf.params, wf.data)
 
     steps = list(pl.declared())
-    assert [s.label for s in steps][2:] == [
+    assert [s.label for s in steps] == [
         "reach", "seed", "carrier_discharge", "mesh", "measure_mesh_coverage",
-        "run", "solve", "plume"]
-    # Both gates precede every step, so nothing consumes a value the review can
-    # still revise.
-    assert all(isinstance(s, Gate) for s in steps[:2])
-    assert not any(isinstance(s, Gate) for s in steps[2:])
-    assert steps[2].rebinds_domain          # the geocode binds the reach AOI
-    assert steps[-2].consequential          # the solve is the consequential node
+        "decay", "settled", "sheet", "solve", "plume"]
+    # NO gate: the review is the door's view of the sheet it just filled, so the
+    # run is HELD there rather than in front of a step that has not run.
+    assert not any(isinstance(s, Gate) for s in steps)
+    assert [s.label for s in steps if s.self_gating] == ["sheet"]
+    assert steps[0].rebinds_domain          # the geocode binds the reach AOI
+    assert steps[-2].consequential          # the run is the consequential node
     assert steps[-1].charts[0].name == "dye_concentration"
 
 
-def test_the_declared_data_is_the_chain_in_class_body_order():
+def test_the_declared_data_is_the_chain_in_declaration_order():
+    """The shared part's chain, then the row this question adds to it."""
     from trid3nt_server.workflows.runtime import DataRef, data_rows
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import DATA
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import DATA
+    from trid3nt_server.workflows.telemac.templates.shared import river
 
     rows = data_rows(DATA)
     # CLASS-BODY ORDER is the declaration's own, and the chain reads down it.
@@ -344,7 +342,7 @@ def test_the_declared_data_is_the_chain_in_class_body_order():
     assert by_name["ends"].producer.kwargs["line"] == DataRef("centerline")
     assert by_name["reach_polygon"].producer.kwargs["polygon"] == DataRef(
         "mapped_water")
-    assert DATA.rivers == DataRef("rivers")
+    assert river.DATA.rivers == DataRef("rivers")
     # None of these is superseded by a supplied artifact.
     assert all(d.producer.supplied_uri is None for d in rows)
     # No producer here declares a ladder: gridMET-vs-user-rate is a branch on the
@@ -354,10 +352,10 @@ def test_the_declared_data_is_the_chain_in_class_body_order():
 
 
 def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import DATA
+    from trid3nt_server.workflows.telemac.templates.shared import river
 
     with pytest.raises(AttributeError):
-        DATA.centreline
+        river.DATA.centreline
 
 
 # ===========================================================================
@@ -375,6 +373,7 @@ def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.telemac.helpers import forcing as forcing_mod
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
     from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
+    from trid3nt_server.workflows.telemac.authoring import serializer as ser_mod
 
     def _fake_registry_fn(name):
         if name == "geocode_location":
@@ -437,18 +436,23 @@ def _install_step_mocks(captured: dict):
         captured["run_tag"] = run_tag
         return f"s3://cache/telemac/{run_tag}/manifest.json"
 
-    _assemble_reach = asm_mod.assemble_reach
+    _settle_reach = asm_mod.settle_reach
 
-    async def _capture_run(**kw):
-        """The real author, with the SHEET it serialized kept for inspection.
-
-        The sheet stopped travelling to the worker when the authoring flipped, so
-        the assertions below read it where it is written rather than off a
-        manifest that no longer carries it.
-        """
-        out = await _assemble_reach(**kw)
-        captured["reach"] = out["sheet"]
+    async def _capture_settle(**kw):
+        """The real settle, with what it MEASURED kept for inspection."""
+        out = await _settle_reach(**kw)
+        captured["settled"] = out
         return out
+
+    def _capture_deck(sheet, rundir, *, steering=None):
+        """The serializer stands in: the deck it would write is what is read here.
+
+        Writing it is a docker round trip into the image, and what a chain test
+        proves is which values reached which keyword.
+        """
+        captured["deck"] = dict(sheet.resolved())
+        captured["deck_files"] = dict(sheet.files)
+        return {"steering": steering or "t2d_river.cas"}
 
     async def _capture_marker(_emitter, *, lon, lat, user_supplied, **_kw):
         captured["release_marker"] = {"lon": lon, "lat": lat,
@@ -482,7 +486,8 @@ def _install_step_mocks(captured: dict):
         # The mesh session stands in, so its display face is a uri nothing wrote:
         # what the mesh holds of the reach is measured in its own test module.
         patch.object(reach_mod, "_meshed_fraction", lambda mesh, centerline: 1.0),
-        patch.object(asm_mod, "assemble_reach", _capture_run),
+        patch.object(asm_mod, "settle_reach", _capture_settle),
+        patch.object(ser_mod, "serialize", _capture_deck),
         patch.object(asm_mod, "read_topology",
                      lambda _uri: {
                          "roles": dict(MESH_ROLES),
@@ -519,7 +524,7 @@ def _install_step_mocks(captured: dict):
 
 def _run_tool(tmp_path, monkeypatch, captured: dict, overrides=(), water=None,
               **kwargs):
-    from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import telemac_river_dye
 
     monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
     install_reach_chain(monkeypatch, tmp_path, captured, water=water)
@@ -555,18 +560,23 @@ def test_the_chain_geocodes_dispatches_and_stages_the_resolved_sheet(
     assert captured["pp_run_id"] == "TELERID"
     assert captured["pp_utm_epsg"] == 32611
 
-    reach = captured["reach"]
-    assert reach["spill_frac"] == pytest.approx(0.4)
-    assert reach["pulse_window_s"] == pytest.approx(600.0)
-    assert reach["dye_conc_mgl"] == pytest.approx(250.0)
-    assert reach["distance_km"] == pytest.approx(4.0)
-    assert reach["duration_s"] == pytest.approx(1800.0)
-    assert reach["seed_lon"] == pytest.approx(-114.31, abs=1e-4)
-    assert reach["seed_lat"] == pytest.approx(42.58, abs=1e-4)
-    assert reach["nav_direction"] == "DM"
+    settled, deck = captured["settled"], captured["deck"]
+    assert settled["spill_fraction"] == pytest.approx(0.4)
+    assert settled["seed_lon"] == pytest.approx(-114.31, abs=1e-4)
+    assert settled["seed_lat"] == pytest.approx(42.58, abs=1e-4)
+    assert captured["navigates"][0]["direction"] == "DM"
+    assert captured["navigates"][0]["distance_km"] == 4.0
+    # The scenario reached the KEYWORDS: the pulse's concentration at the source,
+    # the horizon, and the window the sources series steps at.
+    assert deck["VALUES OF THE TRACERS AT THE SOURCES"] == [pytest.approx(250.0)]
+    assert deck["DURATION"] == pytest.approx(1800.0)
+    series = captured["deck_files"]["river_sources.txt"].splitlines()
+    assert [row.split()[0] for row in series[3:]] == [
+        "0.000", "600.000", "600.100", "1900.000"]
     # The carrier discharge the NWM lookup resolved reached the boundary
     # condition, and the layer says where it came from.
-    assert reach["inflow_q_m3s"] == pytest.approx(312.0)
+    assert settled["inflow_q_m3s"] == pytest.approx(312.0)
+    assert deck["PRESCRIBED FLOWRATES"] == [0.0, pytest.approx(312.0)]
     q_row = next(r for r in peak.synthetic_inputs if r.param == "discharge_m3s")
     assert q_row.basis == "fetched" and "Water Model" in (q_row.real_source_if_any or "")
 
@@ -592,9 +602,9 @@ def test_the_seed_falls_back_to_the_centroid_when_extraction_misses(
         overrides=[patch.object(reach_mod, "river_seed_from_geometry",
                                 lambda uri: None)])
     assert isinstance(peak, TelemacDyeLayerURI)
-    reach = captured["reach"]
-    assert reach["seed_lon"] == pytest.approx(-114.4609, abs=1e-3)
-    assert reach["seed_lat"] == pytest.approx(42.5629, abs=1e-3)
+    settled = captured["settled"]
+    assert settled["seed_lon"] == pytest.approx(-114.4609, abs=1e-3)
+    assert settled["seed_lat"] == pytest.approx(42.5629, abs=1e-3)
 
 
 def _real_centerline_read() -> dict:
@@ -630,9 +640,10 @@ def test_a_supplied_seed_point_is_the_one_the_centerline_is_navigated_from(
     _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
               release_coords=[-124.10, 40.50], **_real_centerline_read())
     assert captured["navigates"][0]["seed_point"] == [-124.10, 40.50]
-    assert captured["reach"]["seed_lon"] == pytest.approx(-124.10)
-    # the supplied point was settled against THAT centerline, and the sheet says so
-    assert captured["reach"]["release_lon"] == pytest.approx(-124.10)
+    assert captured["settled"]["seed_lon"] == pytest.approx(-124.10)
+    # the supplied point was settled against THAT centerline, and the run says so
+    assert captured["settled"]["release_lon"] == pytest.approx(-124.10)
+    assert captured["settled"]["release_user_supplied"] is True
     assert captured["release_marker"]["user_supplied"] is True
 
 
@@ -651,10 +662,10 @@ def test_a_derived_release_sits_on_the_DECLARED_centerline(tmp_path, monkeypatch
     assert marker["user_supplied"] is False
     line = LineString(CENTERLINE["coordinates"])
     assert line.distance(Point(marker["lon"], marker["lat"])) < 1e-4
-    # ... and the sheet states the FRACTION rather than a coordinate, because a
-    # release row that reads "user" over a derived point is the dishonest one.
-    assert captured["reach"]["spill_frac"] == 0.5
-    assert "release_lon" not in captured["reach"]
+    # ... and the run states the FRACTION rather than a user coordinate, because
+    # a release row that reads "user" over a derived point is the dishonest one.
+    assert captured["settled"]["spill_fraction"] == 0.5
+    assert captured["settled"]["release_user_supplied"] is False
 
 
 def test_a_step_failure_maps_to_the_typed_error_envelope(tmp_path, monkeypatch):
@@ -755,85 +766,3 @@ def test_an_unmapped_reach_refuses_terminally_naming_the_three_supply_paths():
     for path in ("Draw or supply the reach polygon", "name a case layer",
                  "pick a reach with mapped water coverage"):
         assert path in str(exc)
-
-
-# ===========================================================================
-# (6) The erodible-bed / GAIA single gate: an armed bed is ALWAYS sediment.
-#     The old false green: substance='scour' fell through classify to 'tracer'
-#     while the scour hint independently armed erodible_bed=True, so nothing
-#     coupled GAIA and the run only LOOKED morphodynamic.
-# ===========================================================================
-@pytest.mark.parametrize("s", [
-    "scour", "bed scour below the weir", "erosion", "bed erosion",
-    "erodible bed", "bedload", "bed load transport", "bed degradation",
-    "channel aggradation", "mobile bed morphodynamics", "bed lowering",
-    "morphological change",
-])
-def test_scour_phrasing_classifies_as_sediment(s):
-    from trid3nt_server.workflows.telemac.helpers.substance import classify_substance
-
-    cls, payload = classify_substance(s)
-    assert cls == "sediment", (s, cls)
-    assert isinstance(payload, dict) and payload.get("grain_size", 0) > 0.0
-
-
-def test_sediment_and_tracer_regression_unchanged():
-    from trid3nt_server.workflows.telemac.helpers.substance import classify_substance
-
-    assert classify_substance("dye") == ("tracer", None)
-    assert classify_substance("water") == ("tracer", None)
-    assert classify_substance("oil")[0] == "oil"
-    assert classify_substance("sewage")[0] == "decay"
-    assert classify_substance("sand")[0] == "sediment"
-    assert classify_substance("oily scour")[0] == "oil"        # oil still wins
-    assert classify_substance("sewage erosion")[0] == "decay"  # decay still wins
-
-
-def test_scour_phrasing_arms_the_erodible_bed_without_an_explicit_knob():
-    from trid3nt_server.workflows.telemac.helpers.substance import arm_sediment_modules
-
-    erodible, gradation, dredging = arm_sediment_modules(
-        "scour below the weir", erodible_bed=None, sediment_gradation=None,
-        dredging=None)
-    assert erodible is True and gradation is None and dredging is False
-    # A graded mixture and a dig rule each force a MOBILE bed to act on.
-    assert arm_sediment_modules("graded sand", erodible_bed=None,
-                                sediment_gradation=None, dredging=None)[0] is True
-    assert arm_sediment_modules("maintenance dredging", erodible_bed=None,
-                                sediment_gradation=None, dredging=None)[0] is True
-    # An explicit False still wins over the vocabulary.
-    assert arm_sediment_modules("scour", erodible_bed=False,
-                                sediment_gradation=None, dredging=None)[0] is False
-
-
-def test_a_scour_prompt_stages_the_sediment_class_and_arms_gaia(
-        tmp_path, monkeypatch):
-    captured: dict = {}
-    peak = _run_tool(tmp_path, monkeypatch, captured,
-                     location="Twin Falls, Idaho", substance="scour below the weir")
-    assert isinstance(peak, TelemacDyeLayerURI)
-    reach = captured["reach"]
-    assert reach["substance_class"] == "sediment"   # NOT tracer (the bug)
-    assert reach["erodible_bed"] is True
-
-
-@pytest.mark.parametrize("subst", ["dye", "water", "red dye", "some chemical"])
-def test_an_armed_erodible_bed_forces_sediment_over_any_tracer(
-        subst, tmp_path, monkeypatch):
-    captured: dict = {}
-    _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
-              substance=subst, erodible_bed=True)
-    reach = captured["reach"]
-    assert reach["substance_class"] == "sediment"
-    assert reach["erodible_bed"] is True
-
-
-def test_no_run_stages_an_erodible_tracer(tmp_path, monkeypatch):
-    """The honesty-floor invariant, over a matrix: an armed bed is never tracer."""
-    for subst in ("dye", "scour", "oil", "sewage", "sand"):
-        captured: dict = {}
-        _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
-                  substance=subst, erodible_bed=True)
-        reach = captured["reach"]
-        assert not (reach.get("erodible_bed")
-                    and reach.get("substance_class") != "sediment"), (subst, reach)

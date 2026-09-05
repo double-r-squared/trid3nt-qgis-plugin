@@ -106,8 +106,8 @@ def test_the_plan_reads_as_the_universal_stage_sequence():
     wf = _workflow()
     plan = wf.plan
     stages = [s.stage for s in plan.declared() if s.stage]
-    assert stages == ["acquire", "acquire", "acquire", "prep", "gates", "mesh",
-                      "mesh", "author", "solve", "publish"]
+    assert stages == ["acquire", "acquire", "acquire", "mesh", "mesh", "prep",
+                      "author", "author", "solve", "publish"]
     assert [s.name for s in plan.declared()][-1] == "do_field"
 
 
@@ -124,7 +124,7 @@ def test_declared_bounds_clamp_the_wq_knobs():
 
 @pytest.mark.asyncio
 async def test_do_sag_requires_location_or_bbox():
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
+    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
     out = await telemac_do_sag()
     assert isinstance(out, dict) and out["status"] == "error"
     assert out["error_code"] == "TELEMAC_PARAMS_INCOMPLETE"
@@ -136,7 +136,7 @@ async def test_do_sag_requires_location_or_bbox():
 @pytest.mark.asyncio
 async def test_malformed_outfall_coords_refuse_they_never_fall_back(bad):
     """A garbage discharge location must not silently become the reach seed."""
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
+    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
     out = await telemac_do_sag(location="Eel River near Scotia, California",
                                outfall_coords=bad)
     assert isinstance(out, dict) and out["error_code"] == "TELEMAC_PARAMS_INVALID"
@@ -169,22 +169,21 @@ def test_a_supplied_outfall_is_carried_as_a_user_row():
 
 
 # --- the gate-mode lever reaches the resolved-input review ------------------- #
-def test_the_plan_declares_the_run_mode_read_for_the_input_review():
+def test_the_door_declares_the_run_mode_read_for_the_sheet_review():
     """input_mode is the gate lever, not a Param: without this the user_gated
-    review of the resolved NWM discharge is silently lost."""
-    from trid3nt_server.workflows.runtime import RunMode, resolve_params
+    review of the filled sheet is silently lost."""
+    from trid3nt_server.workflows.runtime import RunMode
 
     wf = _workflow()
-    review = next(s for s in wf.plan.declared()
-                  if s.name == "reviewed_discharge")
+    review = next(s for s in wf.plan.declared() if s.name == "sheet")
     assert review.kwargs["input_mode"] is RunMode
-    assert review.self_gating is True    # so no second FormGate may be declared
+    assert review.self_gating is True    # so no gate may be declared in front
 
 
 # --- the sag chart ----------------------------------------------------------- #
 def test_the_chart_title_is_not_doubled_on_a_bbox_only_invocation():
     from trid3nt_server.workflows.runtime import ParamValues
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import build_sag_chart
+    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import build_sag_chart
 
     result = SimpleNamespace(
         name="Dissolved oxygen sag (Eel_River_near_Scotia)",
@@ -225,6 +224,7 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
     from trid3nt_server.workflows.telemac.products import products as products_mod
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
     from trid3nt_server.workflows.telemac.authoring import assembler as asm_mod
+    from trid3nt_server.workflows.telemac import workflow as door_mod
 
     def _step(name, ret):
         async def _inner(**kwargs):
@@ -253,8 +253,19 @@ def _stub_reach_pipeline(monkeypatch, order, seen, *, layer, review, tmp_path=No
                         lambda mesh, centerline: 1.0)
     if tmp_path is not None:
         install_reach_chain(monkeypatch, tmp_path, seen)
-    monkeypatch.setattr(asm_mod, "assemble_reach",
-                        _step("run", {"sheet": {"name": "eel"}, "run_tag": "T"}))
+    monkeypatch.setattr(asm_mod, "settle_reach",
+                        _step("settled", {
+                            "name": "eel", "title": "eel REACH",
+                            "graphic_period": 200, "until_s": 3700.0,
+                            "time_step_s": 1.0, "depth_m": 1.2,
+                            "friction_law": 3, "friction_coefficient": 33.0,
+                            "release_at": [0.0, 0.0],
+                            "mesh_inputs": [], "server_facts": {},
+                            "continue_from": None, "inflow_q_m3s": 2.0,
+                            "outflow_stage_m": 1.0,
+                            "liquid_boundary_order": ["inflow"],
+                            "liquid_boundary_prescribes": ["flowrate"]}))
+    monkeypatch.setattr(door_mod, "run_sheet", _step("run", {"run_id": "R"}))
     monkeypatch.setattr(solve_mod, "solve_reach", _step("solve", {"run_id": "R"}))
     monkeypatch.setattr(products_mod, "publish_do_products", _step("products", layer))
     monkeypatch.setattr(gate_mod, "gate_input_review", review)
@@ -273,7 +284,7 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
         TELEMAC_DO_STYLE,
         TelemacDoLayerURI,
     )
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
+    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
 
     order: list[str] = []
     seen: dict = {}
@@ -299,25 +310,28 @@ async def test_the_declared_plan_composes_the_shared_steps_in_order(monkeypatch,
         outfall_coords=[-124.11, 40.51], input_mode="user_gated")
 
     assert not isinstance(out, dict), out
-    assert order == ["geocode", "rivers", "seed", "discharge", "review", "mesh",
-                     "run", "solve", "products"]
+    assert order == ["geocode", "rivers", "seed", "discharge", "mesh", "settled",
+                     "review", "run", "products"]
     # the outfall pins the MESHED water body, so it rides as the reach seed the
     # ONE centerline is navigated from - never as a dye release point
     assert seen["seed"]["supplied"] == (-124.11, 40.51)
-    assert "release_coords" not in seen["run"]
-    # DO cannot ride in above its own saturation - the one coupled clamp
-    assert seen["run"]["do_sag_config"]["upstream_do_mgl"] == pytest.approx(9.022)
-    assert seen["run"]["do_sag_config"]["k2_formula"] == 0
+    assert seen["settled"]["release_coords"] == (-124.11, 40.51)
+    # DO cannot ride in above its own saturation - the one coupled clamp - and
+    # the body reads the clamped value where it states its boundary and source.
+    body = seen["run"]["sheet"].body
+    assert body.ASSERTED["boundaries"]["tracers"][1].path == \
+        "waqtel.upstream_do_mgl"
+    filled = dict(seen["run"]["sheet"].resolved())
+    assert filled["PRESCRIBED TRACERS VALUES"][1] == pytest.approx(9.022)
     assert seen["review"]["mode"] == "user_gated"
-    assert seen["solve"]["run"] is seen["products"]["run"]
-    # the REVIEWED discharge is what the author and the products both read
-    assert seen["run"]["carrier_discharge"] is seen["products"]["carrier_discharge"]
+    # the door renders the SHEET it just filled, and holds there
+    assert seen["review"]["param_sheet"].workflow == "telemac_do_sag"
 
 
 @pytest.mark.asyncio
 async def test_a_cancelled_review_refuses_before_the_solve(monkeypatch, tmp_path):
     monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path / "persistence"))
-    from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag
+    from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag
     from trid3nt_server.workflows.telemac.solving import solve as solve_mod
 
     order: list[str] = []

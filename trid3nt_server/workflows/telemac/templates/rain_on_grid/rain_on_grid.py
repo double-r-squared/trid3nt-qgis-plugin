@@ -36,10 +36,7 @@ from trid3nt_server.workflows.telemac.modules.telemac2d import (
     Runoff,
 )
 from trid3nt_server.workflows.telemac.products.rain_on_grid import RainOnGridProducts
-from trid3nt_server.workflows.telemac.solving.solve import (
-    compute_class,
-    solve_rain_on_grid,
-)
+from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import (
     DOC,
     NLCD_NATIVE_RESOLUTION_M,
@@ -55,6 +52,7 @@ __all__ = ["ANSWER", "DATA", "PARAMS", "STEERING", "build_hydrograph_chart",
 
 _HELPERS = "trid3nt_server.workflows.telemac.helpers"
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
+_SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 
 _CODE = "TELEMAC_ROG_PARAMS_INVALID"
 
@@ -191,7 +189,7 @@ class STEERING(T2D):
     #: Manning per land cover, as zones and the laws they index. The law is the
     #: one the outlet's rating curve was derived under, stated once.
     friction = Friction(law=Ref("settled.friction_law"),
-                        manning_per_node=Ref("settled.node_manning"))
+                        manning_per_node=Ref("infiltration.node_manning"))
 
     #: The storm at every wet node, and the engine's own SCS-CN infiltration
     #: under it. A constant design rate stops when the rain window closes so the
@@ -199,7 +197,8 @@ class STEERING(T2D):
     #: its own dry tail and states no window.
     rain = Rain(mm_per_day=Ref("settled.rain_mm_per_day"), tracers=0,
                 hours=Ref("settled.rain_hours"))
-    runoff = Runoff(node_xy=Ref("settled.node_xy"), cn2=Ref("settled.node_cn2"),
+    runoff = Runoff(node_xy=Ref("settled.node_xy"),
+                    cn2=Ref("infiltration.node_cn2"),
                     antecedent_moisture=Ref("settled.antecedent_moisture"),
                     initial_abstraction=Ref("settled.initial_abstraction"))
     hyetograph = Hyetograph(blocks=Ref("settled.hyetograph_blocks"),
@@ -344,7 +343,7 @@ telemac_rain_on_grid = register_workflow(
                             "output_interval_min": ParamRef("output_interval_min")}),
         results=(_RESULT,),
         steering_file=_STEERING_FILE, prefix="telemac_rog",
-        dispatch=solve_rain_on_grid, compute_class=P.compute_class,
+        dispatch=f"{_SOLVING}.solve_rain_on_grid", compute_class=P.compute_class,
         read=lambda run: RainOnGridProducts.flood_depth(
             run=run, solve=run).named("flood_depth"),
         chart=("rain_on_grid_outlet_hydrograph", build_hydrograph_chart),

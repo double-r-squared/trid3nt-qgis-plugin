@@ -31,7 +31,9 @@ CORRECT END OF RUN
 """
 
 #: The sheet's own pulse: 8 m3/s x 100 mg/L x 300 s = 240 kg injected.
-_SHEET = {"source_q_m3s": 8.0, "dye_conc_mgl": 100.0, "pulse_window_s": 300.0}
+#: What the run PUT IN: 8 m3/s of 100 mg/L over a 300 s window, in kilograms.
+#: The deposit fraction is measured against this rather than an assumed load.
+_INJECTED = 240.0
 
 
 def test_the_closure_is_read_from_the_final_block_only():
@@ -54,30 +56,30 @@ def test_a_residual_that_rounds_to_negative_zero_reads_as_zero():
     listing = _LISTING.replace("60.00000", "-0.1E-12")
     net = R.gaia_mass_balance(listing)["sediment_net_bed_mass_kg"]
     assert net == 0.0 and math.copysign(1.0, net) == 1.0
-    stats = R.sediment_scalars(listing_text=listing, sheet=_SHEET)
+    stats = R.sediment_scalars(listing_text=listing, injected_kg=_INJECTED)
     fraction = stats["sediment_deposit_fraction"]
     assert fraction == 0.0 and math.copysign(1.0, fraction) == 1.0
 
 
 def test_the_deposit_fraction_compares_the_net_bed_against_the_sheet_pulse():
-    stats = R.sediment_scalars(listing_text=_LISTING, sheet=_SHEET)
+    stats = R.sediment_scalars(listing_text=_LISTING, injected_kg=_INJECTED)
     assert stats["sediment_injected_kg"] == 240.0
     assert stats["sediment_deposit_fraction"] == 0.25
 
 
 def test_a_net_gain_past_the_injection_clamps_rather_than_reading_over_one():
     listing = _LISTING.replace("60.00000", "600.0000")
-    assert R.sediment_scalars(listing_text=listing,
-                              sheet=_SHEET)["sediment_deposit_fraction"] == 1.0
+    assert R.sediment_scalars(
+        listing_text=listing,
+        injected_kg=_INJECTED)["sediment_deposit_fraction"] == 1.0
 
 
 def test_a_single_class_bed_reports_no_sorting_at_all():
     """Sorting is structurally impossible on one class, so no spread is claimed."""
-    stats = R.sediment_scalars(listing_text=_LISTING, sheet=_SHEET)
+    stats = R.sediment_scalars(listing_text=_LISTING, injected_kg=_INJECTED)
     assert "sediment_n_classes" not in stats
-    graded = R.sediment_scalars(
-        listing_text=_LISTING,
-        sheet={**_SHEET, "sediment_gradation": [[50.0, 0.4], [400.0, 0.6]]})
+    graded = R.sediment_scalars(listing_text=_LISTING, injected_kg=_INJECTED,
+                                n_classes=2)
     assert graded["sediment_n_classes"] == 2
 
 

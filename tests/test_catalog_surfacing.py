@@ -122,7 +122,7 @@ def _os_environ() -> dict:
 #: rather than absorbed; the arms never shrink it, only the declarable POOL.
 #: +1 as telemac_rain_on_grid unparked onto the declared-outlet mechanism;
 #: +1 as mesh_op landed as the runtime face of the mesh recipe.
-_REGISTRY_SIZE = 168
+_REGISTRY_SIZE = 171
 
 
 # --------------------------------------------------------------------------- #

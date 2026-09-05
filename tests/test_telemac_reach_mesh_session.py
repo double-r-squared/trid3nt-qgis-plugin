@@ -7,18 +7,17 @@ the mesh was BUILT at rather than the edge that was asked for.
 
 What is pinned here:
 
-  1. SHEET BYTE-PARITY - the whole sheet, field by field, against a dumper that
-     restates it from the inputs rather than reading it back off the writer. The
-     refactor moved the mesh OUT of the solve and changed nothing the sheet says;
-     both reach shapes (a dye tracer and a DO sag) are checked.
+  1. WHAT THE MESH MEASURED, field by field, against a dumper that restates it
+     from the inputs rather than reading it back off the settle. The refactor
+     moved the mesh OUT of the solve and changed nothing the run states; both
+     reach shapes (a mid-reach release and a top-of-reach outfall) are checked.
   2. The dt SEAM HAS A READER - a mesh artifact measured finer than the ask
      tightens the sheet's timestep, and one measured at the ask leaves it alone.
-  3. The CASE the worker is handed - which engine, which authored file, which
-     results are the success convention, and the facts the server states - the
-     outflow stage DERIVED as a normal depth over the reach the accepted mesh
-     measures at its declared roles, and the refusals a mesh record missing its
-     topology or its bed raises rather than letting the worker mesh one of its
-     own.
+  3. What the worker is handed - the facts only the server measured, the mesh
+     under the names the deck states, the outflow stage DERIVED as a normal depth
+     over the reach the accepted mesh measures at its declared roles, and the
+     refusals a mesh record missing its topology or its bed raises rather than
+     letting the worker mesh one of its own.
 """
 
 from __future__ import annotations
@@ -44,10 +43,11 @@ _DO_SAG = {"effluent_bod_mgl": 250.0, "effluent_q_m3s": 1.0,
 _CENTERLINE = {"type": "LineString",
                "coordinates": [[-124.13, 40.50], [-124.07, 40.50]]}
 
-#: The sheet both parity cases are written from. Held apart from the expected
-#: sheet so the dumper below restates the sheet from the ASK rather than from
-#: anything the writer produced.
-_SHEET = {"reach_length_km": 6.0, "sim_duration_s": 3600.0}
+#: The ask both parity cases are settled from. Held apart from the expected
+#: record so the dumper below restates it from the ASK rather than from anything
+#: the settle produced. The reach LENGTH is the navigate's, not the settle's:
+#: what reaches this seam is the accepted mesh the chain already cut.
+_SHEET = {"sim_duration_s": 3600.0, "mesh_resolution_m": 14.0}
 
 
 #: The BOUNDARY the stood-in mesh declares, and the bed it carries at it. The
@@ -93,7 +93,7 @@ def _mesh_record(*, min_edge_m: float | None = None,
 
 
 @pytest.fixture()
-def writer(monkeypatch, tmp_path):
+def settle(monkeypatch, tmp_path):
     """``assemble_reach`` with its world-reads stood in for.
 
     The AUTHORING is real: the files are written into a temp run directory by the
@@ -142,179 +142,154 @@ def writer(monkeypatch, tmp_path):
         asm_mod, "_write_manifest",
         lambda case, run_tag, **_kw: f"s3://cache/telemac/{run_tag}/manifest.json")
 
-    async def _write(**kwargs):
-        return await asm_mod.assemble_reach(centerline=_CENTERLINE, **kwargs)
+    async def _settle(**kwargs):
+        return await asm_mod.settle_reach(centerline=_CENTERLINE,
+                                          reach_polygon=None, **kwargs)
 
-    return _write
+    return _settle
 
 
 # --------------------------------------------------------------------------- #
-# 1. Sheet byte-parity: the dumper, then the writer against it.
+# 1. What the mesh measured: the dumper, then the settle against it.
 # --------------------------------------------------------------------------- #
-def _expected_sheet(*, mesh_size_m: float, time_step_s: float,
-                   do_sag: bool) -> dict:
-    """The sheet this ask MEANS, restated from the ask.
+def _expected_settled(*, mesh_size_m: float, time_step_s: float,
+                      do_sag: bool) -> dict:
+    """What this ask MEANS, restated from the ask.
 
-    Independent of the writer on purpose: a parity check that read the writer's
-    own output back would pass for any refactor, including one that changed what
-    the sheet says.
+    Independent of the settle on purpose: a parity check that read its own
+    output back would pass for any refactor, including one that changed what the
+    run states.
     """
-    sheet = {
+    return {
         "name": "eel",
+        "title": "eel REACH",
         "seed_lon": -124.1,
         "seed_lat": 40.5,
-        "nav_direction": "DM",
-        "distance_km": _SHEET["reach_length_km"],
         "bed_source": "cop-dem-glo-30",
         "mesh_size_m": mesh_size_m,
         "time_step_s": time_step_s,
-        "dye_conc_mgl": 100.0,
-        # The outfall sits at the TOP of the reach it seeded; a dye release walks
-        # to whatever fraction the sheet asked for.
-        "spill_frac": 0.02 if do_sag else 0.25,
-        "pulse_window_s": 300.0,
-        "source_q_m3s": 8.0,
+        # The outfall sits at the TOP of the reach it seeded; a mid-reach release
+        # walks to whatever fraction the ask stated.
+        "spill_fraction": 0.02 if do_sag else 0.25,
         "inflow_q_m3s": _CARRIER["m3s"],
         "duration_s": _SHEET["sim_duration_s"],
+        "friction_law": 3,
+        "friction_coefficient": 33.0,
+        "graphic_period": 200,
+        "liquid_boundary_order": ["outflow", "inflow"],
+        "liquid_boundary_prescribes": ["elevation", "flowrate"],
     }
-    if do_sag:
-        sheet.update({
-            "substance_class": "do_sag",
-            "decay_law": 1,
-            "decay_coef": 2.0,
-            "do_sag_effluent_bod_mgl": _DO_SAG["effluent_bod_mgl"],
-            "do_sag_effluent_q_m3s": _DO_SAG["effluent_q_m3s"],
-            "do_sag_effluent_do_mgl": _DO_SAG["effluent_do_mgl"],
-            "do_sag_upstream_do_mgl": _DO_SAG["upstream_do_mgl"],
-            "do_sat_mgl": _DO_SAG["saturation_mgl"],
-            "do_water_temp_c": _DO_SAG["water_temp_c"],
-            "do_k1_per_day": _DO_SAG["k1_per_day"],
-            "do_k2_per_day": _DO_SAG["k2_per_day"],
-            "do_k2_formula": _DO_SAG["k2_formula"],
-            "do_standard_mgl": _DO_SAG["standard_mgl"],
-        })
-    return sheet
+
+
+def _measured(settled: dict) -> dict:
+    return {key: settled[key] for key in _expected_settled(
+        mesh_size_m=0.0, time_step_s=0.0, do_sag=False)}
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("substance,do_sag_config,do_sag", [
-    ("dye", None, False),
-    ("sewage", _DO_SAG, True),
-])
-async def test_the_sheet_is_byte_identical_on_an_accepted_mesh(
-        writer, substance, do_sag_config, do_sag):
-    """Routing the mesh through a session changed the sheet in NO field.
-
-    The artifact reports the edge the ask named, so the mesh contributes nothing
-    to the timestep here and the sheet is the one this ask always wrote.
-    """
-    out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=14.0),
-                       carrier_discharge=_CARRIER, substance=substance,
-                       do_sag_config=do_sag_config, **_SHEET)
-    assert out["sheet"] == _expected_sheet(mesh_size_m=14.0, time_step_s=0.7,
-                                         do_sag=do_sag)
+@pytest.mark.parametrize("spill_fraction,do_sag", [(0.25, False), (0.02, True)])
+async def test_what_the_run_measures_is_unchanged_on_an_accepted_mesh(
+        settle, spill_fraction, do_sag):
+    """Routing the mesh through a session changed what the run measures in NO
+    field. The artifact reports the edge the ask named, so the mesh contributes
+    nothing to the timestep here."""
+    out = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=14.0),
+                       carrier_discharge=_CARRIER, spill_fraction=spill_fraction,
+                       marker_label="Outfall" if do_sag else "Release point",
+                       **_SHEET)
+    assert _measured(out) == _expected_settled(mesh_size_m=14.0, time_step_s=0.7,
+                                               do_sag=do_sag)
 
 
 @pytest.mark.asyncio
-async def test_a_run_with_no_measured_mesh_writes_the_same_sheet(writer):
+async def test_a_run_with_no_measured_mesh_measures_the_same_reach(settle):
     """No probes to read -> the requested edge decides dt, exactly as before."""
-    out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(),
-                       carrier_discharge=_CARRIER, substance="dye", **_SHEET)
-    assert out["sheet"] == _expected_sheet(mesh_size_m=14.0, time_step_s=0.7,
-                                         do_sag=False)
+    out = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(),
+                       carrier_discharge=_CARRIER, **_SHEET)
+    assert _measured(out) == _expected_settled(mesh_size_m=14.0, time_step_s=0.7,
+                                               do_sag=False)
 
 
 # --------------------------------------------------------------------------- #
 # 2. The dt seam has a reader.
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_a_refined_mesh_tightens_the_run_timestep(writer):
+async def test_a_refined_mesh_tightens_the_run_timestep(settle):
     """Refine at the gate and the run's dt follows the mesh, not the ask.
 
     The stability criterion is a statement about the mesh that exists. A mesh
     measured at 7 m under a 14 m ask is twice as fine, and a run that kept
     quoting the ask would run it at twice the stable step.
     """
-    asked = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=14.0),
-                         carrier_discharge=_CARRIER, substance="dye", **_SHEET)
-    refined = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=7.0),
-                           carrier_discharge=_CARRIER, substance="dye", **_SHEET)
-    assert asked["sheet"]["time_step_s"] == 0.7
-    assert refined["sheet"]["time_step_s"] == 0.35
-    # DS-3: the EDGE the sheet records is the one the mesh was MEASURED at, so the
+    asked = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=14.0),
+                         carrier_discharge=_CARRIER, **_SHEET)
+    refined = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=7.0),
+                           carrier_discharge=_CARRIER, **_SHEET)
+    assert asked["time_step_s"] == 0.7
+    assert refined["time_step_s"] == 0.35
+    # DS-3: the EDGE the run records is the one the mesh was MEASURED at, so the
     # granularity the run is judged on and the step it is solved at are one fact.
-    assert asked["sheet"]["mesh_size_m"] == 14.0
-    assert refined["sheet"]["mesh_size_m"] == 7.0
+    assert asked["mesh_size_m"] == 14.0
+    assert refined["mesh_size_m"] == 7.0
 
 
 # --------------------------------------------------------------------------- #
-# 3. The CASE, and the refusals an unaccepted mesh raises.
+# 3. What the worker is handed, and the refusals an unaccepted mesh raises.
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_the_case_names_the_engine_the_authored_file_and_the_results(writer):
-    out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
-                       carrier_discharge=_CARRIER, substance="dye", **_SHEET)
-    assert out["case"]["module"] == "telemac2d"
-    assert out["case"]["steering"] == "t2d_river.cas"
-    assert out["case"]["results"] == ["r2d_river.slf", "restart_river.slf"]
-    assert out["mesh_id"] == "M01"
-
-
-@pytest.mark.asyncio
-async def test_the_server_facts_carry_what_only_the_server_measured(writer):
+async def test_the_server_facts_carry_what_only_the_server_measured(settle):
     """A fact re-derived in the container is a second answer that can disagree
     with the first, so the worker copies these into its metrics verbatim.
 
-    ``result_slf`` is one of them: the author wrote the RESULTS FILE
-    statement, so the name is the server's and the container measures the file it
-    names rather than deciding which file the run produced.
+    ``result_slf`` is one of them: the deck states the RESULTS FILE, so the name
+    is the server's and the container measures the file it names rather than
+    deciding which file the run produced.
     """
-    out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
-                       carrier_discharge=_CARRIER, substance="dye", **_SHEET)
-    assert out["case"]["server_facts"] == {
+    out = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
+                       carrier_discharge=_CARRIER, **_SHEET)
+    assert out["server_facts"] == {
         "utm_epsg": 32610, "bbox": [-124.2, 40.4, -124.0, 40.6],
-        "npoin": 539, "nelem": 902, "mesh_size_m": 8.0,
+        "npoin": 539, "nelem": 902, "mesh_size_m": 8.0, "name": "eel",
+        "duration_s": 3600.0, "time_step_s": 0.4,
         "result_slf": "r2d_river.slf", "bed_source": "cop-dem-glo-30"}
-    assert out["case"]["server_facts"]["result_slf"] in out["case"]["results"]
 
 
 @pytest.mark.asyncio
-async def test_the_mesh_travels_under_the_names_the_run_states(writer):
+async def test_the_mesh_travels_under_the_names_the_deck_states(settle):
     """The npz stopped travelling: what the worker is handed is the geometry pair
-    steering file's own GEOMETRY / BOUNDARY CONDITIONS lines name."""
-    out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
-                       carrier_discharge=_CARRIER, substance="dye", **_SHEET)
-    staged = {row["dest"]: row["gs_uri"] for row in out["inputs"]}
-    assert staged["river.slf"] == "s3://m/M01/river.slf"
-    assert staged["river.cli"] == "s3://m/M01/river.cli"
-    assert "t2d_river.cas" in staged
-    assert not [d for d in staged if d.endswith(".npz")]
+    the deck's own GEOMETRY / BOUNDARY CONDITIONS statements name."""
+    out = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
+                       carrier_discharge=_CARRIER, **_SHEET)
+    staged = {row["dest"]: row["gs_uri"] for row in out["mesh_inputs"]}
+    assert staged == {"river.slf": "s3://m/M01/river.slf",
+                      "river.cli": "s3://m/M01/river.cli"}
 
 
 @pytest.mark.asyncio
-async def test_the_run_prescribes_in_the_order_the_mesh_MEASURED(writer, tmp_path):
-    """The contour walk does not start at the inflow. A file authored inflow-first
+async def test_the_run_prescribes_in_the_order_the_mesh_MEASURED(settle):
+    """The contour walk does not start at the inflow. A deck written inflow-first
     would put the discharge on the downstream cap and drive the reach backwards."""
-    out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
-                       carrier_discharge=_CARRIER, substance="dye", **_SHEET)
-    cas = (tmp_path / f"telemac-{out['run_tag']}" / "t2d_river.cas").read_text()
-    flowrates = next(ln for ln in cas.splitlines()
-                     if ln.startswith("PRESCRIBED FLOWRATES"))
-    assert flowrates.split("=")[1].strip() == "0.0;12.0"
+    from trid3nt_server.workflows.telemac.modules import T2D
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
+
+    out = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
+                       carrier_discharge=_CARRIER, **_SHEET)
+    slots, _files = T2D.COMPOSITES["boundaries"].expand(
+        Boundaries(measured=out, tracers=[0.0]))
+    assert slots["PRESCRIBED_FLOWRATES"] == [0.0, 12.0]
 
 
 @pytest.mark.asyncio
-async def test_a_mesh_record_with_no_topology_refuses_rather_than_remeshing(writer):
+async def test_a_mesh_record_with_no_topology_refuses_rather_than_remeshing(settle):
     with pytest.raises(TelemacDyeScenarioError) as excinfo:
-        await writer(reach=_REACH, seed=_SEED,
+        await settle(reach=_REACH, seed=_SEED,
                      mesh=_mesh_record(min_edge_m=8.0, topology_uri=None),
-                     carrier_discharge=_CARRIER, substance="dye", **_SHEET)
+                     carrier_discharge=_CARRIER, **_SHEET)
     assert excinfo.value.error_code == "TELEMAC_MESH_NOT_ACCEPTED"
 
 
 @pytest.mark.asyncio
-async def test_the_outflow_stage_is_a_normal_depth_over_the_MEASURED_reach(
-        writer, tmp_path):
+async def test_the_outflow_stage_is_a_normal_depth_over_the_MEASURED_reach(settle):
     """The stage stands on the ground the geometry file carries, at the depth
     that ground conveys this run's own flow at.
 
@@ -323,29 +298,27 @@ async def test_the_outflow_stage_is_a_normal_depth_over_the_MEASURED_reach(
     over the 6 km the mesh was built along. A stage read from anything else - a
     plane fitted beside the mesh, a declared depth restated from the ask - would
     put the water somewhere the solve's own bathymetry does not agree with, so
-    the file states every input and the number can be checked against the mesh.
+    the run states every input the number was derived from.
     """
-    out = await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
-                       carrier_discharge=_CARRIER, substance="dye", **_SHEET)
-    cas = (tmp_path / f"telemac-{out['run_tag']}" / "t2d_river.cas").read_text()
-    elevations = next(ln for ln in cas.splitlines()
-                      if ln.startswith("PRESCRIBED ELEVATIONS"))
-    assert elevations.split("=")[1].strip() == "10.593;0.0"
-    assert "/  Measured bed: inflow 12.000 m, outflow 10.200 m" in cas
-    assert "/  Friction slope 0.000300 = 1.800 m over 6000 m" in cas
-    assert "/  outflow stage = 10.593 m: normal depth 0.393 m over the" in cas
-    assert "/  measured outflow section for 12 m3/s at Strickler 33" in cas
+    out = await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
+                       carrier_discharge=_CARRIER, **_SHEET)
+    assert out["outflow_stage_m"] == 10.593
+    assert out["depth_m"] == 0.393
+    assert out["normal"] == {
+        "stage_m": 10.593185, "depth_m": 0.393185, "slope": 0.0003,
+        "drop_m": 1.8, "length_m": 6000.0, "law": "Strickler",
+        "coefficient": 33.0, "q_m3s": 12.0}
 
 
 @pytest.mark.asyncio
 async def test_a_mesh_with_no_painted_bed_refuses_rather_than_inventing_a_stage(
-        writer, monkeypatch):
+        settle, monkeypatch):
     """A bedless mesh has no ground for a stage to be measured from."""
     monkeypatch.setattr(asm_mod, "read_accepted_mesh_nodes",
                         lambda _uri, utm_epsg=None: (None, None, None, None))
     with pytest.raises(TelemacDyeScenarioError) as excinfo:
-        await writer(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
-                     carrier_discharge=_CARRIER, substance="dye", **_SHEET)
+        await settle(reach=_REACH, seed=_SEED, mesh=_mesh_record(min_edge_m=8.0),
+                     carrier_discharge=_CARRIER, **_SHEET)
     assert excinfo.value.error_code == "TELEMAC_MESH_BED_UNMEASURED"
 
 

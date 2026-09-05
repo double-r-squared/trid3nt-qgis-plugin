@@ -238,10 +238,11 @@ def _offline_cas_parse(monkeypatch: pytest.MonkeyPatch) -> None:
                 for name, module in steering.items()
                 if (Path(rundir) / name).is_file()}
 
-    # Only the AUTHOR's binding: the gate's own module keeps its real function so
-    # its tests exercise it with the container boundary stubbed one level lower.
+    # Only the SERIALIZER's binding: the gate's own module keeps its real
+    # function so its tests exercise it with the container boundary stubbed one
+    # level lower.
     monkeypatch.setattr(
-        "trid3nt_server.workflows.telemac.authoring.author.validate_authored_steering",
+        "trid3nt_server.workflows.telemac.authoring.serializer.validate_authored_steering",
         _parsed)
 
 

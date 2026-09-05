@@ -112,19 +112,16 @@ def test_question_class_coercions_abstain_without_a_signal() -> None:
     so abstaining changes the row's PROVENANCE, never its value.
     """
     from trid3nt_server.workflows.telemac.agitation.agitation_mode import agitation_mode
-    from trid3nt_server.workflows.telemac.helpers.substance import substance_class
     from trid3nt_server.workflows.telemac.stratified_flow.flow_mode import flow_mode
 
     bare = {"location": "Lake Michigan"}
     assert flow_mode()(bare) == {}
     assert agitation_mode()(bare) == {}
-    assert substance_class()(bare) == {}
 
 
 @pytest.mark.parametrize(("tool_name", "location", "param", "expected"), [
     ("telemac3d_stratified_flow", "Lake Mead", "flow_mode", "stratification"),
     ("artemis_harbor_agitation", "Marquette Harbor", "wave_mode", "diffraction"),
-    ("telemac_river_dye", "the Wabash River", "substance", "dye"),
 ])
 def test_abstention_keeps_the_value_and_corrects_the_basis(
         tool_name: str, location: str, param: str, expected: str) -> None:

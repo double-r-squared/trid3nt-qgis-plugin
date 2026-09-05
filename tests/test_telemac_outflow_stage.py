@@ -22,8 +22,8 @@ import math
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring import author as A
 from trid3nt_server.workflows.telemac.authoring import assembler as D
+from trid3nt_server.workflows.telemac.helpers import uniform_flow as U
 from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 
 #: A trapezoid: 40 m bed at 97 m, banks rising 3 m over 10 m either side.
@@ -32,8 +32,9 @@ _REACH = {"bed_top_m": 100.0, "bed_drop_m": 3.0, "reach_length_m": 1000.0,
           "outflow_section": _SECTION}
 
 
-def _stage(**sheet):
-    return A._normal_depth_stage(A._Sheet({"inflow_q_m3s": 50.0, **sheet}), _REACH)
+def _stage(**over):
+    return U.normal_depth_stage(_REACH, **{"law": 3, "coefficient": 33.0,
+                                           "discharge_q": 50.0, **over})
 
 
 # --------------------------------------------------------------------------- #
@@ -94,7 +95,7 @@ def test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge():
     upstream at the roughness the run writes.
     """
     derived = _stage()
-    area, perimeter = A._wetted([tuple(p) for p in _SECTION], derived["stage_m"])
+    area, perimeter = U._wetted([tuple(p) for p in _SECTION], derived["stage_m"])
     conveyed = (derived["coefficient"] * area * (area / perimeter) ** (2.0 / 3.0)
                 * math.sqrt(derived["slope"]))
     assert conveyed == pytest.approx(50.0, rel=1e-3)
@@ -108,28 +109,30 @@ def test_the_friction_slope_is_the_measured_fall_over_the_measured_length():
 def test_a_bigger_discharge_stands_higher_in_the_same_channel():
     """The discrimination the 2 m default could not make: the level is a property
     of the reach and the flow through it."""
-    assert _stage(inflow_q_m3s=250.0)["stage_m"] > _stage()["stage_m"]
+    assert _stage(discharge_q=250.0)["stage_m"] > _stage()["stage_m"]
 
 
 def test_a_flatter_reach_stands_higher_for_the_same_flow():
     flat = dict(_REACH, bed_drop_m=0.3)
-    steep = A._normal_depth_stage(A._Sheet({"inflow_q_m3s": 50.0}), _REACH)
-    ponded = A._normal_depth_stage(A._Sheet({"inflow_q_m3s": 50.0}), flat)
+    steep = U.normal_depth_stage(_REACH, law=3, coefficient=33.0,
+                                 discharge_q=50.0)
+    ponded = U.normal_depth_stage(flat, law=3, coefficient=33.0,
+                                  discharge_q=50.0)
     assert ponded["stage_m"] > steep["stage_m"]
 
 
 def test_strickler_and_its_reciprocal_manning_derive_the_same_stage():
     """One law through two coefficients. A stage that moved when the sheet merely
     restated its roughness would mean the conveyance read the number wrong."""
-    strickler = _stage(friction_law=3, friction_coefficient=33.0)
-    manning = _stage(friction_law=4, friction_coefficient=1.0 / 33.0)
+    strickler = _stage(law=3, coefficient=33.0)
+    manning = _stage(law=4, coefficient=1.0 / 33.0)
     assert manning["stage_m"] == pytest.approx(strickler["stage_m"], abs=1e-3)
     assert manning["law"] == "Manning" and strickler["law"] == "Strickler"
 
 
 def test_a_chezy_run_derives_under_chezys_own_conveyance():
-    derived = _stage(friction_law=2, friction_coefficient=60.0)
-    area, perimeter = A._wetted([tuple(p) for p in _SECTION], derived["stage_m"])
+    derived = _stage(law=2, coefficient=60.0)
+    area, perimeter = U._wetted([tuple(p) for p in _SECTION], derived["stage_m"])
     assert (60.0 * area * math.sqrt(area / perimeter * derived["slope"])
             == pytest.approx(50.0, rel=1e-3))
 
@@ -139,8 +142,9 @@ def test_the_section_closes_vertically_at_its_own_end_points():
     spreading into ground the mesh does not hold - so a flat face is a rectangle
     and every discharge has a depth."""
     flat = dict(_REACH, outflow_section=[[0.0, 97.0], [60.0, 97.0]])
-    derived = A._normal_depth_stage(A._Sheet({"inflow_q_m3s": 50.0}), flat)
-    area, perimeter = A._wetted([(0.0, 97.0), (60.0, 97.0)], derived["stage_m"])
+    derived = U.normal_depth_stage(flat, law=3, coefficient=33.0,
+                                   discharge_q=50.0)
+    area, perimeter = U._wetted([(0.0, 97.0), (60.0, 97.0)], derived["stage_m"])
     depth = derived["stage_m"] - 97.0
     assert area == pytest.approx(60.0 * depth)
     assert perimeter == pytest.approx(60.0 + 2.0 * depth)
@@ -157,92 +161,17 @@ def test_the_section_closes_vertically_at_its_own_end_points():
         ({"reach_length_m": 0.0}, {}, "TELEMAC_OUTFLOW_SLOPE_UNMEASURED"),
         ({"outflow_section": [[0.0, 97.0]]}, {},
          "TELEMAC_OUTFLOW_SECTION_UNMEASURED"),
-        ({}, {"friction_law": 5}, "TELEMAC_OUTFLOW_FRICTION_UNREADABLE"),
-        ({}, {"inflow_q_m3s": 0.0}, "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE"),
-        ({}, {"friction_coefficient": 0.0}, "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE"),
+        ({}, {"law": 5}, "TELEMAC_OUTFLOW_FRICTION_UNREADABLE"),
+        ({}, {"discharge_q": 0.0}, "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE"),
+        ({}, {"coefficient": 0.0}, "TELEMAC_OUTFLOW_STAGE_UNDERIVABLE"),
     ],
 )
 def test_an_input_the_stage_cannot_be_derived_from_refuses_by_name(reach, sheet, code):
-    with pytest.raises(A.SteeringAuthorError) as exc:
-        A._normal_depth_stage(A._Sheet({"inflow_q_m3s": 50.0, **sheet}),
-                              dict(_REACH, **reach))
+    with pytest.raises(U.UniformFlowError) as exc:
+        U.normal_depth_stage(dict(_REACH, **reach),
+                             **{"law": 3, "coefficient": 33.0,
+                                "discharge_q": 50.0, **sheet})
     assert exc.value.error_code == code
-
-
-# --------------------------------------------------------------------------- #
-# What the steering file says about it.
-# --------------------------------------------------------------------------- #
-def _cas(tmp_path, **sheet) -> str:
-    A.author_reach(
-        tmp_path, sheet={"name": "reach", "inflow_q_m3s": 50.0,
-                         "duration_s": 600.0, "time_step_s": 1.0, **sheet},
-        geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
-        steering="t2d_river.cas", liquid_boundary_order=("inflow", "outflow"),
-        liquid_boundary_prescribes=("flowrate", "elevation"),
-        bed=_REACH, source_utm=(500.0, 0.0))
-    return (tmp_path / "t2d_river.cas").read_text()
-
-
-def test_the_run_states_the_stage_and_every_input_it_was_derived_from(tmp_path):
-    """A prescribed level a reader cannot check against the geometry file is a
-    number to be taken on faith."""
-    cas = _cas(tmp_path)
-    assert "/  Friction slope 0.003000 = 3.000 m over 1000 m" in cas
-    assert "normal depth 0.792 m over the" in cas
-    assert "/  measured outflow section for 50 m3/s at Strickler 33" in cas
-    assert "PRESCRIBED ELEVATIONS           = 0.0;97.792" in cas
-
-
-def test_the_run_starts_at_the_depth_its_own_outflow_stage_is_derived_as(tmp_path):
-    """The initial surface is that SAME normal depth, laid bed-parallel - the
-    uniform flow the outflow stage is the downstream end of - so a fresh reach
-    opens at its own equilibrium instead of draining a blanket depth into that
-    boundary. The 2 m blanket is gone: nothing here is a declared depth."""
-    cas = _cas(tmp_path)
-    assert "INITIAL CONDITIONS              = 'CONSTANT DEPTH'" in cas
-    assert "INITIAL DEPTH                   = 0.792" in cas
-    assert "PRESCRIBED ELEVATIONS           = 0.0;97.792" in cas
-    assert "/  initial condition = that SAME normal depth 0.792 m, bed-parallel," \
-        in cas
-
-
-def test_the_start_is_bed_parallel_rather_than_level_with_the_outlet(tmp_path):
-    """A constant ELEVATION at the outlet stage would dry every node above it,
-    the flowrate face among them, and the stage is derived ONLY on a reach that
-    falls - so the horizontal reading of it is refused by its own precondition.
-    A depth is stated instead, and the surface slopes with the bed."""
-    cas = _cas(tmp_path)
-    assert "INITIAL CONDITIONS              = 'CONSTANT ELEVATION'" not in cas
-    assert "INITIAL ELEVATION" not in cas
-
-
-def test_a_different_friction_slope_moves_the_start_and_the_boundary_together(
-        tmp_path):
-    """ONE derivation. A flatter reach conveys the same discharge deeper, and the
-    depth the run starts at rises with the level it is held to - because the
-    normal depth is read once and written at both ends."""
-    steep = _cas(tmp_path)
-    (tmp_path / "flat").mkdir()
-    A.author_reach(
-        tmp_path / "flat",
-        sheet={"name": "reach", "inflow_q_m3s": 50.0, "duration_s": 600.0,
-               "time_step_s": 1.0},
-        geometry="mesh.slf", boundary="mesh.cli", results="r2d.slf",
-        steering="t2d_river.cas", liquid_boundary_order=("inflow", "outflow"),
-        liquid_boundary_prescribes=("flowrate", "elevation"),
-        bed={**_REACH, "bed_top_m": 97.75, "bed_drop_m": 0.75},
-        source_utm=(500.0, 0.0))
-    cas = (tmp_path / "flat" / "t2d_river.cas").read_text()
-    assert "INITIAL DEPTH                   = 0.792" in steep
-    assert "INITIAL DEPTH                   = 1.192" in cas
-    assert "PRESCRIBED ELEVATIONS           = 0.0;98.192" in cas
-
-
-def test_the_stage_is_derived_at_the_roughness_the_run_goes_on_to_write(tmp_path):
-    cas = _cas(tmp_path, friction_law=4, friction_coefficient=0.05)
-    assert "LAW OF BOTTOM FRICTION          = 4" in cas
-    assert "FRICTION COEFFICIENT            = 0.05" in cas
-    assert "at Manning 0.05" in cas
 
 
 # --------------------------------------------------------------------------- #
@@ -253,7 +182,7 @@ _OUTLET_SECTION = [[0.0, 12.0], [5.0, 10.0], [15.0, 10.0], [20.0, 12.0]]
 
 
 def _curve(**over):
-    return A.derive_rating_curve(_OUTLET_SECTION, **{
+    return U.derive_rating_curve(_OUTLET_SECTION, **{
         "law": 4, "coefficient": 0.05, "slope": 0.02,
         "q_ceiling_m3s": 51.0, **over})
 
@@ -276,11 +205,10 @@ def test_every_point_is_the_normal_depth_the_reachs_own_stage_would_be():
     """ONE derivation, two callers. A stage on the curve is the stage the reach's
     machinery solves for that same discharge over that same section."""
     q, z = _curve()["rows"][10]
-    reach = A._normal_depth_stage(
-        A._Sheet({"inflow_q_m3s": q, "friction_law": 4,
-                  "friction_coefficient": 0.05}),
+    reach = U.normal_depth_stage(
         {"bed_top_m": 30.0, "bed_drop_m": 20.0, "reach_length_m": 1000.0,
-         "outflow_section": _OUTLET_SECTION})
+         "outflow_section": _OUTLET_SECTION},
+        law=4, coefficient=0.05, discharge_q=q)
     assert reach["stage_m"] == pytest.approx(z, abs=1e-3)
 
 
@@ -291,26 +219,31 @@ def test_every_point_is_the_normal_depth_the_reachs_own_stage_would_be():
     ({"law": 5}, "TELEMAC_OUTFLOW_FRICTION_UNREADABLE"),
 ])
 def test_an_input_the_outlet_cannot_measure_refuses_by_name(over, code):
-    with pytest.raises(A.SteeringAuthorError) as excinfo:
+    with pytest.raises(U.UniformFlowError) as excinfo:
         _curve(**over)
     assert excinfo.value.error_code == code
 
 
 def test_a_section_of_one_point_is_no_channel_to_derive_a_curve_over():
-    with pytest.raises(A.SteeringAuthorError) as excinfo:
-        A.derive_rating_curve([[0.0, 10.0]], law=4, coefficient=0.05,
+    with pytest.raises(U.UniformFlowError) as excinfo:
+        U.derive_rating_curve([[0.0, 10.0]], law=4, coefficient=0.05,
                               slope=0.02, q_ceiling_m3s=51.0)
     assert excinfo.value.error_code == "TELEMAC_OUTFLOW_SECTION_UNMEASURED"
 
 
-def test_the_curve_file_is_written_in_the_engines_own_block_format(tmp_path):
+def test_the_curve_file_is_written_in_the_engines_own_block_format():
     """``read_fic_curves.f`` reads a header naming the boundary, a units line it
     skips, then two columns until a blank; under Q(n) the first column is the
-    discharge."""
-    A.write_stage_discharge_curve(tmp_path, A.ROG_RATING, boundary=2,
-                                  rows=[(0.0, 10.0), (51.0, 11.3)],
-                                  note="derived Z(Q)")
-    lines = (tmp_path / A.ROG_RATING).read_text().splitlines()
+    discharge. The file is the RATING composite's, beside the two keywords that
+    name it."""
+    from trid3nt_server.workflows.telemac.modules import T2D
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Rating
+
+    slots, files = T2D.COMPOSITES["rating"].expand(
+        Rating(at_boundary=2, of_boundaries=3,
+               rows=[(0.0, 10.0), (51.0, 11.3)], note="derived Z(Q)"))
+    assert slots["STAGE_DISCHARGE_CURVES"] == [0, 1, 0]
+    lines = files["rog_rating.txt"].splitlines()
     assert lines[0].startswith("#")
     assert lines[1] == "Q(2) Z(2)"
     assert lines[2] == "m3/s m"

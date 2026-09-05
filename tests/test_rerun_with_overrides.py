@@ -68,9 +68,10 @@ def test_the_cut_is_the_first_node_the_override_reaches():
 
     cut, keep = reuse_plan(wf.plan, wf.data, ("k1_per_day",))
     assert labels[cut] == "waqtel"
-    # the meshed river, the mid-reach seed and the National Water Model discharge
-    # are all upstream of the physics block, so a rate override inherits them
-    assert labels[:cut] == ["draw", "reach", "seed", "carrier_discharge"]
+    # the mid-reach seed, the National Water Model discharge and the MESH itself
+    # are all upstream of the process block, so a rate override inherits them
+    assert labels[:cut] == ["reach", "seed", "carrier_discharge", "mesh",
+                            "measure_mesh_coverage"]
     # the whole domain CHAIN is upstream of the physics too - the navigated
     # mainstem, its ends, the mapped water, the reach cut between them and the
     # terrain the mesh's bed is painted from
@@ -78,16 +79,19 @@ def test_the_cut_is_the_first_node_the_override_reaches():
                               "mapped_water", "reach_polygon", "dem"})
 
 
-def test_a_mesh_override_cuts_later_than_a_physics_one():
+def test_a_mesh_override_cuts_earlier_than_a_physics_one():
+    """The mesh is built BEFORE the sheet is filled - that is what lets the
+    canvas show it while the run is still held - so re-asking the edge length
+    cuts further back than re-asking a rate the process block reads."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     wf = TOOL_REGISTRY["telemac_do_sag"].fn.workflow
     physics, _ = reuse_plan(wf.plan, wf.data, ("k1_per_day",))
     mesh, _ = reuse_plan(wf.plan, wf.data, ("mesh_resolution_m",))
-    assert mesh > physics
+    assert mesh < physics
     # the edge length is the MESH's ask, so the cut lands on the mesh step: the
-    # mesh is rebuilt and the steering file follows it, rather than the steering
-    # file alone being re-authored around a mesh nobody re-cut.
+    # mesh is rebuilt and the sheet is filled from it, rather than a deck being
+    # re-filled around a mesh nobody re-cut.
     assert [n.label for n in _nodes(wf)][mesh] == "mesh"
 
 

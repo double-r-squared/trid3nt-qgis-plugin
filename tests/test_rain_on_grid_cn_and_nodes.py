@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.workflows.mesh.shared.nodes import reproject_nodes_to_utm
-from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
+from trid3nt_server.workflows.telemac.templates.rain_on_grid.cn_infiltration import (
     CNInfiltrationError,
     RunoffPathDecision,
     landcover_cn_manning,

@@ -16,10 +16,7 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.telemac.authoring.assembler import (
-    _class_files,
-    _write_manifest,
-)
+from trid3nt_server.workflows.telemac.authoring.assembler import _write_manifest
 
 
 class _FakeS3:
@@ -81,53 +78,58 @@ def test_writing_the_manifest_requires_a_cache_bucket(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# What a class must produce, and what comes back.
+# What a QUESTION must produce, declared on the door it hands its sheet to.
 # --------------------------------------------------------------------------- #
+def _door(name: str):
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    return TOOL_REGISTRY[name].fn.workflow.plan_decl
+
+
 def test_a_plain_tracer_run_must_produce_its_result_and_its_restart():
-    results, outputs = _class_files("tracer", dredging=False)
-    assert results == ["r2d_river.slf", "restart_river.slf"]
-    assert "restart_river.slf" in outputs
-    assert "full_listing.log" in outputs
-    # the mesh the run was handed comes back with it, so a solved run stays
-    # readable from its own prefix
-    assert {"river.slf", "river.cli", "t2d_river.cas"} <= set(outputs)
+    """Only an UNCOUPLED run drives the stepped arm, so only one is asked for
+    the perfect-restart record a continuation reads."""
+    assert _door("telemac_river_dye").results == ("r2d_river.slf",
+                                                  "restart_river.slf")
 
 
-def test_sediment_must_produce_the_gaia_result_and_brings_its_steering_back():
-    """A coupled class runs the launcher whole, so it is asked for no restart."""
-    results, outputs = _class_files("sediment", dredging=False)
-    assert results == ["r2d_river.slf", "gaia_river.slf"]
-    assert "restart_river.slf" not in outputs
-    assert "gaia_river.cas" in outputs
-    assert "nestor.act" not in outputs
-
-
-def test_a_dredging_run_brings_the_nestor_rule_back():
-    _results, outputs = _class_files("sediment", dredging=True)
-    assert {"nestor.act", "nestor.pol", "nestor.ref"} <= set(outputs)
+def test_sediment_must_produce_the_gaia_result_and_is_asked_for_no_restart():
+    """A coupled class runs the module's own launcher whole."""
+    for name in ("telemac_river_scour", "telemac_river_sediment_plume"):
+        assert _door(name).results == ("r2d_river.slf", "gaia_river.slf"), name
 
 
 def test_oil_must_produce_the_track_the_slick_is_read_from():
     """The slick and the particle snapshots are built on the SERVER off this
     track, so neither is a file the worker is asked to write."""
-    results, outputs = _class_files("oil", dredging=False)
-    assert results == ["r2d_river.slf", "restart_river.slf", "drogues.txt"]
-    assert "oil_spill.txt" in outputs
-    assert "slick.geojson" not in outputs and "particles.json" not in outputs
+    assert _door("telemac_river_oil_spill").results == (
+        "r2d_river.slf", "restart_river.slf", "drogues.txt")
 
 
-@pytest.mark.parametrize("substance_class", ["decay", "do_sag"])
-def test_a_waqtel_run_brings_the_forcing_it_applied_back(substance_class):
-    results, outputs = _class_files(substance_class, dredging=False)
-    assert results == ["r2d_river.slf"]
-    assert "t2d_river.waqtel" in outputs
+def test_a_waqtel_run_asks_only_for_the_carriers_own_result():
+    assert _door("telemac_do_sag").results == ("r2d_river.slf",)
 
 
 def test_no_reach_run_declares_a_bed_cog_output():
-    """The node-lattice bed COG is dead; nothing may name it as an output."""
-    for substance_class in ("tracer", "do_sag", "sediment", "oil"):
-        _results, outputs = _class_files(substance_class, dredging=False)
-        assert "bed_bathymetry.tif" not in outputs
+    """The node-lattice bed COG is dead; nothing may name it as a result."""
+    for name in ("telemac_river_dye", "telemac_do_sag", "telemac_river_scour",
+                 "telemac_river_oil_spill", "telemac_river_sediment_plume"):
+        assert "bed_bathymetry.tif" not in _door(name).results
+
+
+def test_only_an_uncoupled_question_can_be_continued_at_all():
+    """The couplings run the engine's own launcher, whole-process, unstepped, so
+    a continuation of one is a fresh run wearing a continuation's name. The
+    refusal is STRUCTURAL now: a coupled template declares no such row."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    def _rows(name):
+        return {p.name for p in TOOL_REGISTRY[name].fn.workflow.params}
+
+    assert "continue_from" in _rows("telemac_river_dye")
+    for coupled in ("telemac_do_sag", "telemac_river_scour",
+                    "telemac_river_sediment_plume"):
+        assert "continue_from" not in _rows(coupled), coupled
 
 
 # --------------------------------------------------------------------------- #
@@ -210,37 +212,14 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
     assert exc.value.error_code == "TELEMAC_CONTINUATION_UNREADABLE"
 
 
-def test_the_classes_that_couple_state_which_module_they_couple_with():
-    from trid3nt_server.workflows.telemac.authoring.assembler import _CLASS_COUPLING
+def test_the_case_names_the_module_the_DECK_says_it_couples_with():
+    """WHICH runner can drive a coupled case is read off the deck's own COUPLING
+    WITH rather than a second table beside it."""
+    from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL, fill
 
-    assert _CLASS_COUPLING == {"decay": "waqtel", "do_sag": "waqtel",
-                               "sediment": "gaia"}
-    assert "tracer" not in _CLASS_COUPLING and "oil" not in _CLASS_COUPLING
-
-
-@pytest.mark.parametrize("substance,coupled", [("sewage", "WAQTEL"),
-                                               ("sand", "GAIA")])
-def test_a_coupled_reach_refuses_to_be_continued_and_says_why(substance, coupled):
-    """The couplings run the engine's own launcher, whole-process, unstepped.
-
-    The refusal is server-side, before anything is authored or staged: the run
-    that would come back is a fresh one wearing a continuation's name.
-    """
-    import asyncio
-
-    from trid3nt_server.workflows.telemac.authoring.assembler import assemble_reach
-    from trid3nt_server.workflows.telemac.helpers.errors import (
-        TelemacDyeScenarioInputError,
-    )
-
-    with pytest.raises(TelemacDyeScenarioInputError) as exc:
-        asyncio.run(assemble_reach(
-            reach={"slug": "r", "name": "R"}, seed={"lon": -124.0, "lat": 40.0},
-            mesh={"min_edge_m": 14.0, "element_count": 10, "artifact": None},
-            centerline=None, carrier_discharge={"m3s": 50.0},
-            substance=substance,
-            continue_from="s3://runs/PREV/r2d_river.slf"))
-    assert coupled in str(exc.value)
+    coupled = fill(T2D, coupling=[WAQTEL.decay(law=1, coefficient=2.0)])
+    assert dict(coupled.resolved())["COUPLING WITH"] == "WAQTEL"
+    assert "COUPLING WITH" not in dict(fill(T2D, DURATION=600.0).resolved())
 
 
 def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):

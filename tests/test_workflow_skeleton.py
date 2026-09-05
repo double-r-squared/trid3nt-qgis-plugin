@@ -244,8 +244,9 @@ def test_an_unknown_physics_member_is_refused_while_the_plan_is_built():
     ops = _telemac()
     mesh = _reach_mesh()
     with pytest.raises(PlanValidationError) as ei:
-        ops.author(mesh=mesh, physics=Physics("tracer", not_an_author_field=1.0),
-                   forcing=Forcing(carrier=Ref("carrier_discharge")))
+        ops.author(mesh=mesh,
+                   physics=Physics("harbor_agitation", not_an_author_field=1.0),
+                   forcing=Forcing())
     assert "not_an_author_field" in str(ei.value)
 
 
@@ -254,7 +255,7 @@ def test_an_unknown_physics_PROCESS_is_refused_rather_than_authored():
     mesh = _reach_mesh()
     with pytest.raises(PlanValidationError) as ei:
         ops.author(mesh=mesh, physics=Physics("magnetohydrodynamics"),
-                   forcing=Forcing(carrier=Ref("carrier_discharge")))
+                   forcing=Forcing())
     assert "magnetohydrodynamics" in str(ei.value)
 
 
@@ -263,12 +264,12 @@ def test_the_mesh_recipe_reaches_the_author_under_the_engine_s_own_names():
     ONE agnostic size word is the only thing that crosses between them."""
     ops = _telemac()
     mesh = _reach_mesh(resolution_m=100.0)
-    authored = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
-                          forcing=Forcing(carrier=Ref("carrier_discharge"),
-                                          rain=None))
+    authored = ops.author(mesh=mesh, physics=Physics("harbor_agitation",
+                                                     wave_period_s=8.0),
+                          forcing=Forcing())
     assert authored.name == "run" and authored.stage == "author"
     assert authored.kwargs["mesh_resolution_m"] == 100.0
-    assert authored.kwargs["carrier_discharge"] == Ref("carrier_discharge")
+    assert authored.kwargs["wave_period_s"] == 8.0
 
 
 def test_the_plan_reads_a_data_name_off_the_templates_own_body():
@@ -318,11 +319,13 @@ def test_a_required_author_field_no_slot_covers_refuses_at_plan_construction():
     only then does assemble_reach die on a TypeError - minutes and three network
     round-trips after the declaration that was already wrong.
     """
-    ops = _telemac()
-    mesh = _reach_mesh()
+    from trid3nt_server.workflows.telemac.workflow import _refuse_uncovered_fields
+
+    def _writer(*, aoi, carrier_discharge):
+        raise AssertionError("never called")
+
     with pytest.raises(PlanValidationError) as ei:
-        ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
-                   forcing=Forcing())
+        _refuse_uncovered_fields({"aoi": Ref("aoi")}, _writer, "probe")
     message = str(ei.value)
     assert "carrier_discharge" in message
     assert "requires" in message
@@ -332,9 +335,9 @@ def test_the_covered_declaration_still_authors():
     """The guard refuses a HOLE, not every plan: the cohort shape still passes."""
     ops = _telemac()
     mesh = _reach_mesh()
-    authored = ops.author(mesh=mesh, physics=Physics("tracer", substance="dye"),
-                          forcing=Forcing(carrier=Ref("carrier_discharge")))
-    assert authored.kwargs["carrier_discharge"] == Ref("carrier_discharge")
+    authored = ops.author(mesh=mesh, physics=Physics("harbor_agitation"),
+                          forcing=Forcing())
+    assert authored.kwargs["aoi"] == Ref("aoi")
 
 
 # --- (6) the EngineOps four are must-fill at REGISTRATION ------------------- #
@@ -514,16 +517,19 @@ def test_a_mesh_recipe_is_frozen_all_the_way_down():
 
 # --- every TELEMAC template declares its mesh through the one tool ----------- #
 _TEMPLATES = (
-    ("telemac_river_dye", "trid3nt_server.workflows.telemac.river_dye.river_dye",
-     "om2d"),
-    ("telemac_do_sag", "trid3nt_server.workflows.telemac.do_sag.do_sag",
-     "om2d"),
     ("artemis_harbor_agitation",
      "trid3nt_server.workflows.telemac.agitation.agitation", "reg_grid"),
     ("telemac3d_stratified_flow",
      "trid3nt_server.workflows.telemac.stratified_flow.stratified_flow", "reg_grid"),
     ("telemac_rain_on_grid",
-     "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid", "om2d"),
+     "trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid", "om2d"),
+)
+
+#: Where a recipe is DECLARED. The five river templates list the shared river
+#: part rather than each freezing a triangulation of their own.
+_RECIPES = (
+    *((path, mesher) for _n, path, mesher in _TEMPLATES),
+    ("trid3nt_server.workflows.telemac.templates.shared.river", "om2d"),
 )
 
 
@@ -533,9 +539,9 @@ def _template(module_path: str):
     return importlib.import_module(module_path)
 
 
-@pytest.mark.parametrize("name,module_path,mesher", _TEMPLATES)
-def test_a_template_declares_its_mesh_as_a_frozen_recipe(name, module_path, mesher):
-    """The ask is a value, not a build: importing a template meshes nothing."""
+@pytest.mark.parametrize("module_path,mesher", _RECIPES)
+def test_a_declared_mesh_is_a_frozen_recipe(module_path, mesher):
+    """The ask is a value, not a build: importing a declaration meshes nothing."""
     from trid3nt_server.workflows.mesh.tool import MeshRecipe
 
     mesh = _template(module_path).MESH
@@ -548,28 +554,28 @@ def test_the_run_the_template_authors_reads_the_declared_mesh_fields(
         name, module_path, mesher):
     """Every author ask carries the sizing the template declared, under the
     author's own name for it - which is the whole of what the mesh declaration
-    owes the author step."""
+    owes the author step. A FLIPPED template reads it on the settle instead, and
+    under the mesher's own word for it."""
     module = _template(module_path)
     workflow = getattr(module, name).workflow
-    author = [n for n in workflow.plan_decl(workflow)
-              if getattr(n, "stage", "") == "author"]
-    assert len(author) == 1
-    assert "mesh_resolution_m" in author[0].kwargs
-
-
-def test_the_reach_templates_carry_the_reach_shape_into_the_author():
-    """The stretch still reaches the reach writer, off the physics block.
-
-    It rides the physics block rather than the mesh ask: the mesher is handed a
-    polygon the chain measured, while the sheet still states the stretch it asked
-    for."""
-    module = _template("trid3nt_server.workflows.telemac.river_dye.river_dye")
-    workflow = module.telemac_river_dye.workflow
     authored = [n for n in workflow.plan_decl(workflow)
-                if getattr(n, "stage", "") == "author"][0]
-    for field in ("reach_length_km", "mesh_resolution_m"):
-        assert field in authored.kwargs
-    assert authored.kwargs["reach"] == Ref("reach")
+                if getattr(n, "stage", "") == "author"]
+    assert len(authored) in (1, 2)
+    assert any("mesh_resolution_m" in step.kwargs for step in authored)
+
+
+def test_the_reach_templates_carry_the_reach_shape_into_the_settle():
+    """The stretch reaches the run through the CHAIN that cut it, and the settle
+    reads the accepted mesh: the mesher is handed a polygon the chain measured,
+    while the reach the run was navigated for is the row that named it."""
+    module = _template("trid3nt_server.workflows.telemac.templates.river_dye.river_dye")
+    workflow = module.telemac_river_dye.workflow
+    settled = next(n for n in workflow.plan_decl(workflow)
+                   if getattr(n, "name", "") == "settled")
+    assert settled.kwargs["mesh"] == Ref("mesh")
+    assert settled.kwargs["reach"] == Ref("reach")
+    # A placeholder refuses ``==`` by design, so the read is named by its name.
+    assert settled.kwargs["mesh_resolution_m"].name == "mesh_resolution_m"
 
 
 def test_the_catchment_mesh_step_carries_the_whole_recipe():
@@ -581,7 +587,7 @@ def test_the_catchment_mesh_step_carries_the_whole_recipe():
     is in the recipe. The extent is the CHAIN's product - the delineated basin -
     so the mesher triangulates a domain another tool measured, and the channel
     network it is refined TOWARD is named by a sizing op."""
-    module = _template("trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid")
+    module = _template("trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid")
     workflow = module.telemac_rain_on_grid.workflow
     mesh_step = [n for n in workflow.plan_decl(workflow)
                  if getattr(n, "stage", "") == "mesh"][0]

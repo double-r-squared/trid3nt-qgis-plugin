@@ -23,6 +23,7 @@ from __future__ import annotations
 import inspect
 import logging
 from dataclasses import dataclass, field
+from importlib import import_module
 from typing import Any, Callable, Mapping, Sequence
 
 from trid3nt_contracts.common import SyntheticInput
@@ -50,7 +51,7 @@ from trid3nt_server.workflows.telemac.authoring.stratified import (
     Stratified,
     write_stratified_case,
 )
-from trid3nt_server.workflows.telemac.modules import SlotRefused
+from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 from trid3nt_server.workflows.telemac.modules.sheet import Sheet
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
 from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
@@ -95,9 +96,9 @@ class Door:
     #: What the run directory calls the deck, and where the staged files live.
     steering_file: str
     prefix: str
-    #: The dispatch the staged run goes to. WHICH box entry is the template's,
-    #: not the sheet's.
-    dispatch: Callable[..., Any]
+    #: The dispatch the staged run goes to, by the path it is resolved at CALL
+    #: time. WHICH box entry is the template's, not the sheet's.
+    dispatch: str
     #: The reader that publishes the solved file: ``(run) -> Step``.
     read: Callable[[Any], Step]
     #: This question's own producers: what the WORLD gives, before the run is
@@ -118,6 +119,11 @@ class Door:
     def __call__(self, ops: Workflow) -> list[Any]:
         """The step sequence: the world, then fill, then run, then the reader."""
         read = self.read(Ref("solve"))
+        # Every producer the body may READ, under the name it names it by. A
+        # body states what it will hold; this is where the fill finds it.
+        produced = {step.name: Ref(step.name)
+                    for step in (*self.produce, *self.derive)
+                    if step.name} | {"settled": Ref("settled")}
         if self.chart is not None:
             read = read.chart(self.chart[0], builder=self.chart[1])
         return [
@@ -128,7 +134,7 @@ class Door:
             *self.derive,
             Step(runner=f"{_TELEMAC}.workflow.fill_sheet", stage="author",
                  self_gating=True,
-                 kwargs={"steering": self.steering, "settled": Ref("settled"),
+                 kwargs={"steering": self.steering, "produced": produced,
                          "params": {prm.name: ParamRef(prm.name)
                                     for prm in ops.params},
                          "slots": dict(self.slots), "workflow": ops.name,
@@ -145,7 +151,7 @@ class Door:
         ]
 
 
-async def fill_sheet(*, steering: type, settled: Mapping[str, Any],
+async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
                      params: Mapping[str, Any], slots: Mapping[str, Any],
                      workflow: str, title: str,
                      input_mode: str | None) -> Sheet:
@@ -160,13 +166,13 @@ async def fill_sheet(*, steering: type, settled: Mapping[str, Any],
     # value stands. That is not the same as a body asserting None, which IS the
     # statement that this run says nothing about the keyword.
     stated = {name: value for name, value in slots.items() if value is not None}
-    sheet = fill_slots(steering, produced={"settled": settled},
-                       params=dict(params), **stated)
+    sheet = fill_slots(steering, produced=dict(produced), params=dict(params),
+                       **stated)
     revised = await _review(sheet, workflow=workflow, title=title,
                             input_mode=input_mode)
     if revised:
-        sheet = fill_slots(sheet, produced={"settled": settled},
-                           params=dict(params), **revised)
+        sheet = fill_slots(sheet, produced=dict(produced), params=dict(params),
+                           **revised)
     logger.info("telemac sheet filled: %s states %d keywords, %d open",
                 sheet.body.__name__, len(sheet.filled), len(sheet.open()))
     return sheet
@@ -174,7 +180,7 @@ async def fill_sheet(*, steering: type, settled: Mapping[str, Any],
 
 async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
                     results: Sequence[str], steering: str, prefix: str,
-                    dispatch: Callable[..., Any], meta: Mapping[str, Any],
+                    dispatch: str, meta: Mapping[str, Any],
                     compute_class: Any) -> dict[str, Any]:
     """A complete sheet: serialize, stage, hand it to the box -> the run handle.
 
@@ -182,11 +188,13 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
     must write, the mesh it was handed, the deck it read, and every file a
     composite named beside it. Nothing is listed that the run does not carry.
     """
+    module, _, attribute = str(dispatch).rpartition(".")
+    to_the_box = getattr(import_module(module), attribute)
     coupled = dict(sheet.resolved()).get("COUPLING WITH")
     outputs = [*results, *(row["dest"] for row in settled["mesh_inputs"]),
                steering, *_ALWAYS_READABLE, *sorted(sheet.files)]
     handle = await run_sheet_(
-        sheet, dispatch=dispatch, mesh_inputs=settled["mesh_inputs"],
+        sheet, dispatch=to_the_box, mesh_inputs=settled["mesh_inputs"],
         outputs=outputs, results=list(results), prefix=prefix,
         server_facts=settled["server_facts"], steering=steering,
         compute_class=compute_class,
@@ -220,17 +228,24 @@ async def _review(sheet: Sheet, *, workflow: str, title: str,
                            door="user", basis="derived", editable=True,
                            source_badge="open: the dictionary gives it no default")
              for slot in sheet.open()]
-    entries = [SyntheticInput(param=row.name, value=row.value, basis=row.basis,
-                              note=row.source_badge) for row in rows if row.value
-               is not None and not row.advanced]
+    # A provenance row carries ONE value, so a keyword whose value is a list is
+    # narrated as the list it is rather than dropped.
+    entries = [SyntheticInput(
+                   param=row.name, basis=row.basis, note=row.source_badge,
+                   value=(row.value if isinstance(row.value, (int, float, str, bool))
+                          else "; ".join(str(v) for v in row.value)))
+               for row in rows if row.value is not None and not row.advanced]
     outcome = await gate_input_review(
         tool_name=workflow, mode=input_mode, entries=entries, params={},
         param_sheet=ParamSheet(workflow=workflow,
                                title=title or f"Review the {workflow} sheet",
                                rows=rows))
     if not outcome.proceed:
-        raise SlotRefused(outcome.cancel_reason
-                          or f"{workflow} was cancelled at the sheet review.")
+        # A DECLINED review is the user's answer, not a defect in the sheet, so
+        # it carries the cancel code every gate in the tree refuses under.
+        raise TelemacDyeScenarioError(
+            "USER_INPUT_CANCELLED",
+            outcome.cancel_reason or f"{workflow} was cancelled at the review.")
     return {name: value for name, value in outcome.params.items()
             if name in sheet.body.CATALOG or name in sheet.body.COMPOSITES}
 

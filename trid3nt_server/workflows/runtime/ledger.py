@@ -19,11 +19,12 @@ import json
 import logging
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Mapping
 
 from trid3nt_server.persistence import DEFAULT_DATABASE, FileMCPClient
 
-__all__ = ["LedgerRecord", "StepLedger", "invocation_key", "records_from_docs"]
+__all__ = ["LedgerRecord", "StepLedger", "inputs_digest", "invocation_key",
+           "records_from_docs"]
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.ledger")
 
@@ -56,6 +57,40 @@ def invocation_key(workflow: str, values: dict[str, Any],
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
 
 
+def inputs_digest(value: Any) -> str:
+    """A STABLE digest of what a node was handed, across processes.
+
+    A value with a ``uri`` is that uri - the artifact is the input, not the
+    object that wraps it - a model is its own dump, and anything that states
+    neither contributes only its type. Contributing less is the safe direction:
+    it replays a record the inputs may have moved under only where the move is
+    invisible to every reader, and the artifact probe still gates the replay.
+    """
+    return hashlib.sha256(
+        json.dumps(_stable(value), sort_keys=True, default=str
+                   ).encode("utf-8")).hexdigest()[:16]
+
+
+def _stable(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Mapping):
+        return {str(k): _stable(v) for k, v in sorted(value.items(),
+                                                      key=lambda kv: str(kv[0]))}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_stable(v) for v in value]
+    uri = getattr(value, "uri", None)
+    if isinstance(uri, str):
+        return {"uri": uri}
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        try:
+            return _stable(dump(mode="json"))
+        except Exception:  # noqa: BLE001 - an undumpable model states its type
+            pass
+    return {"is": f"{type(value).__module__}.{type(value).__name__}"}
+
+
 @dataclass(frozen=True, slots=True)
 class LedgerRecord:
     """One completed node: what ran, what it produced, and the domain it left behind."""
@@ -64,6 +99,11 @@ class LedgerRecord:
     node: str
     runner: str
     completed_at: str
+    #: A digest of the RESOLVED inputs this node ran on. A rerun inherits a
+    #: record only where they are unchanged, so the first producer whose inputs
+    #: moved is the cut and everything downstream of it re-executes with it.
+    #: Empty means a record written before the key existed, which never replays.
+    inputs_key: str = ""
     result_kind: str = "none"
     result: Any = None
     result_type: str | None = None
@@ -115,11 +155,20 @@ class StepLedger:
         return cls(key=key, workflow=workflow, records=records,
                    data_records=data_records, existed=existed, _client=client)
 
-    def replay_for(self, index: int, node: str) -> LedgerRecord | None:
-        """The cached record for this node position, when the plan still matches."""
+    def replay_for(self, index: int, node: str,
+                   inputs_key: str) -> LedgerRecord | None:
+        """The cached record for this node, when the plan AND its inputs match.
+
+        Position and label say the plan is the same plan; the inputs key says
+        the work would be the same work. A record whose inputs moved is not a
+        record of this run - replaying it would report an artifact produced from
+        values nobody is asking about any more.
+        """
         for rec in self.records:
             if rec.index == index:
-                return rec if rec.node == node else None
+                if rec.node != node or not rec.inputs_key:
+                    return None
+                return rec if rec.inputs_key == inputs_key else None
         return None
 
     def replay_data(self, name: str) -> LedgerRecord | None:

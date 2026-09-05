@@ -84,10 +84,6 @@ _DEFAULT_GRAPHIC_PERIOD = 200
 #: is what holds the source node off the inflow face rather than on it.
 DO_SAG_OUTFALL_FRAC = 0.02
 
-#: How far past the last simulated instant a forcing series runs, so the engine's
-#: time interpolation never reads off the end of it.
-_SERIES_TAIL_S = 100.0
-
 
 # --------------------------------------------------------------------------- #
 # The staging flow.
@@ -177,6 +173,36 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
             "result_basename": result_basename}
 
 
+def _mesh_field(mesh: Mapping[str, Any], name: str, *,
+                missing: Callable[[str], Exception]) -> str:
+    """One field of the ACCEPTED mesh's record, or the refusal that names it.
+
+    A mesh record missing any of them refuses: falling through would solve on a
+    mesh nobody accepted, under the accepted mesh's name.
+    """
+    uri = (mesh or {}).get(name)
+    if not uri:
+        raise missing(
+            f"the mesh for this run carries no {name}, so the accepted mesh "
+            f"cannot be staged (mesh record: {sorted((mesh or {}))}).")
+    return str(uri)
+
+
+def _reach_section_unmeasured(message: str) -> Exception:
+    return TelemacDyeScenarioError("TELEMAC_MESH_SECTION_UNMEASURED", message)
+
+
+def _outlet_section_unmeasured(message: str) -> Exception:
+    return RainOnGridError(message,
+                           error_code="TELEMAC_ROG_OUTLET_SECTION_UNMEASURED")
+
+
+def _reach_mesh_missing(message: str) -> Exception:
+    return TelemacDyeScenarioError("TELEMAC_MESH_NOT_ACCEPTED", message)
+
+
+def _catchment_mesh_missing(message: str) -> Exception:
+    return RainOnGridError(message, error_code="TELEMAC_ROG_MESH_NOT_ACCEPTED")
 
 
 
@@ -683,9 +709,9 @@ async def settle_reach(
         "graphic_period": _graphic_period(output_interval_min, time_step_s),
         "duration_s": duration_s,
         "start_time_s": start_time_s,
-        # The horizon every forcing series is written over, past the last
-        # simulated instant so the time interpolation never reads off the end.
-        "until_s": start_time_s + duration_s + _SERIES_TAIL_S,
+        # The last simulated instant. A series composite writes its own tail
+        # past this, so the tail is stated once - where the series is.
+        "until_s": start_time_s + duration_s,
         "friction_law": law,
         "friction_coefficient": float(normal["coefficient"]),
         "depth_m": round(float(normal["depth_m"]), 3),
@@ -850,16 +876,23 @@ async def settle_catchment(
         "time_step_s": float(time_step_s),
         "graphic_period": _graphic_period(output_interval_min, time_step_s),
         "rain_mm_per_day": float(rain["intensity_mm_per_hr"]) * 24.0,
-        "rain_hours": (None if rain.get("rain_duration_s") is None
-                       else float(rain["rain_duration_s"]) / 3600.0),
+        # The rain window is stated only when it CLOSES inside the run: a storm
+        # that outlasts the horizon never stops, and a keyword saying so would
+        # be an end nothing reaches. The recession limb is what the window is
+        # for, so a storm that produces none states nothing.
+        "rain_hours": (float(rain["rain_duration_s"]) / 3600.0
+                       if rain.get("rain_duration_s") is not None
+                       and 0.0 < float(rain["rain_duration_s"]) < duration_s
+                       else None),
         "antecedent_moisture": int(infiltration["amc_condition"]),
         "initial_abstraction": 1,
         "friction_law": _ROG_FRICTION_LAW,
+        # The mesh's own coordinates, which nothing else on the run carries.
+        # The per-node curve numbers and roughnesses are the INFILTRATION step's
+        # and are read where they were produced - carrying them again here would
+        # be the same field on the run twice.
         "node_xy": [[round(float(x), 3), round(float(y), 3)]
                     for x, y in points_utm[:, :2]],
-        "node_cn2": [round(float(v), 3) for v in infiltration["node_cn2"]],
-        "node_manning": [round(float(v), 4)
-                         for v in infiltration["node_manning"]],
         "hyetograph_blocks": ([[float(t), float(mm)] for t, mm in rain["blocks"]]
                               if decision.time_varying else None),
         "outlet_boundary": outlet_boundary,

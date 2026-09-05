@@ -169,8 +169,17 @@ def test_a_ref_that_names_nothing_refuses_rather_than_binding_to_none():
 
 
 def test_a_ref_reading_a_field_that_is_not_there_refuses():
-    with pytest.raises(SlotRefused, match="carries no value"):
+    with pytest.raises(SlotRefused, match="names no such field"):
         fill(T2D, produced={"mesh": {}}, GEOMETRY_FILE=Ref("mesh.geometry"))
+
+
+def test_a_ref_reading_a_field_the_row_holds_as_nothing_states_nothing():
+    """A row that HOLDS a field as nothing is answering: no wind was asked for,
+    this run continues nothing. The composite reading it expands to no keyword at
+    all, which is a different thing from naming a field nobody produced."""
+    sheet = fill(T2D, produced={"mesh": {"geometry": None}},
+                 GEOMETRY_FILE=Ref("mesh.geometry"))
+    assert sheet.resolved() == ()
 
 
 def test_a_fill_that_reads_itself_in_a_cycle_refuses_naming_it():
@@ -615,3 +624,77 @@ def test_every_wrapper_binds_its_own_outputs_and_claims_no_other_s():
     assert not WAQTEL.OUTPUTS
     for wrapper in (T2D, GAIA, WAQTEL):
         assert all(callable(output.read) for output in wrapper.OUTPUTS.values())
+
+
+# -- the flip: one template per question, and the door's own review ----------- #
+
+#: The eight questions the surface answers. Six run on the fill/run door; the two
+#: open-water fronts still declare a plan and are Stage 3's.
+_FLIPPED = ("telemac_river_dye", "telemac_river_oil_spill", "telemac_river_scour",
+            "telemac_river_sediment_plume", "telemac_do_sag",
+            "telemac_rain_on_grid")
+
+
+def _bodies():
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    for name in _FLIPPED:
+        plan = TOOL_REGISTRY[name].fn.workflow.plan
+        fill_step = next(s for s in plan.declared() if s.label == "sheet")
+        yield name, fill_step.kwargs["steering"]
+
+
+def test_a_structural_fork_is_a_template_and_never_a_switch():
+    """Four questions release something into the same reach and each fills
+    DIFFERENT slots for it. The arity of the carrier's own tracer surface moves
+    with the fork, which is why each body states it rather than a composite
+    owning it out of sight."""
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries
+
+    measured = {"inflow_q_m3s": 50.0, "outflow_stage_m": 97.8,
+                "liquid_boundary_order": ["inflow", "outflow"],
+                "liquid_boundary_prescribes": ["flowrate", "elevation"]}
+    arity = {}
+    for name, body in _bodies():
+        stated = body.ASSERTED.get("boundaries")
+        if stated is None:
+            continue
+        slots, _files = T2D.COMPOSITES["boundaries"].expand(
+            Boundaries(measured=measured, tracers=[0.0] * len(stated["tracers"])))
+        arity[name] = len(slots["PRESCRIBED_TRACERS_VALUES"])
+    assert arity == {"telemac_river_dye": 2, "telemac_river_oil_spill": 2,
+                     "telemac_river_scour": 2,
+                     "telemac_river_sediment_plume": 4, "telemac_do_sag": 8}
+
+
+def test_no_flipped_body_branches_on_anything():
+    """A body is DATA. A template that switched on a resolved value would be two
+    questions wearing one name, which is the fork this stage exists to end."""
+    for _name, body in _bodies():
+        for key, value in body.ASSERTED.items():
+            assert not callable(value), f"{body.__name__}.{key} is code"
+
+
+def test_the_review_is_the_doors_view_and_never_a_step_of_its_own():
+    """The sheet is state; the door renders what fill returned and HOLDS. A gate
+    in front of it would edit a sheet the door never reads."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    for name in _FLIPPED:
+        plan = TOOL_REGISTRY[name].fn.workflow.plan
+        assert [s.label for s in plan.declared() if hasattr(s, "kind")] == [], name
+        assert [s.label for s in plan.declared() if s.self_gating] == ["sheet"], name
+
+
+def test_the_reach_body_is_written_at_the_derivation_it_was_solved_for():
+    """ONE normal depth: the level the outflow is held to and the depth the run
+    opens at are the same number, read off the same producer, so the initial free
+    surface and the prescribed boundary agree by construction."""
+    from trid3nt_server.workflows.telemac.templates.shared.river import RIVER
+
+    assert RIVER.ASSERTED["INITIAL_DEPTH"] == Ref("settled.depth_m")
+    assert RIVER.ASSERTED["FRICTION_COEFFICIENT"] == Ref("settled.friction_coefficient")
+    for _name, body in _bodies():
+        stated = body.ASSERTED.get("boundaries")
+        if stated is not None:
+            assert stated["measured"] == Ref("settled")

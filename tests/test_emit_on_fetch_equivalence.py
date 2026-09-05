@@ -37,7 +37,7 @@ _FAMILY_INPUTS: dict[str, dict[str, object]] = {
     "rain_on_grid": {
         # The bed, the channel network and the land cover are DECLARED artifacts
         # over the registered fetchers, so the purpose rides the declaration.
-        "file": "telemac/rain_on_grid/rain_on_grid.py",
+        "file": "telemac/templates/rain_on_grid/rain_on_grid.py",
         "fetches": [
             ('tool("fetch_dem"', "mesh bed"),
             ('tool("fetch_river_geometry"', "river geometry"),

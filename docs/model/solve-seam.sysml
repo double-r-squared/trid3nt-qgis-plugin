@@ -57,9 +57,18 @@ package SolveSeam {
         */
     }
 
-    part def SteeringAuthor {
+    part def Serializer {
         doc /*
-        The steering files themselves - every keyword the run is solved under.
+        The steering files themselves - every keyword the run is solved under,
+        written by telapy against the engine's own dictionary from the sheet a
+        template filled. There is no second writer of the format.
+        */
+    }
+
+    part def UniformFlow {
+        doc /*
+        The depth a measured section conveys a flow at. ONE derivation, read as a
+        reach's outflow stage and as a catchment outlet's whole Z(Q) curve.
         */
     }
 
@@ -361,14 +370,20 @@ package SolveSeam {
         port meshIn : MeshIn;
     }
 
-    part steeringStatements : SteeringAuthor {
+    part steeringStatements : Serializer {
         doc /*
-        It is a second block rather than part of the assembler because a number
-        the steering file DERIVES has to be derived beside the literals it must
-        agree with: the outflow stage is a normal depth at the roughness the
-        very next statement writes.
+        code: trid3nt_server/workflows/telemac/authoring/serializer.py
+        */
+    }
 
-        code: trid3nt_server/workflows/telemac/authoring/author.py
+    part uniformFlow : UniformFlow {
+        doc /*
+        It is its own block rather than part of the assembler because the number
+        it derives has to be derived beside the roughness the deck goes on to
+        write, and because two families read the same derivation: a reach reads
+        it at one discharge, a catchment outlet reads it swept over a range.
+
+        code: trid3nt_server/workflows/telemac/helpers/uniform_flow.py
         */
     }
 
@@ -812,7 +827,7 @@ package SolveSeam {
         "tests/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses";
 
     satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by assembler;
-    satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by steeringStatements;
+    satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by uniformFlow;
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
         "tests/test_telemac_outflow_stage.py::test_the_rating_curve_starts_dry_and_ends_at_the_stated_ceiling";
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
@@ -828,7 +843,7 @@ package SolveSeam {
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
         "tests/test_telemac_outflow_stage.py::test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area";
 
-    satisfy requirement OutflowStageIsNormalDepth by steeringStatements;
+    satisfy requirement OutflowStageIsNormalDepth by uniformFlow;
     satisfy requirement OutflowStageIsNormalDepth by assembler;
     verify requirement OutflowStageIsNormalDepth by
         "tests/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge";
@@ -844,16 +859,11 @@ package SolveSeam {
         "tests/test_telemac_outflow_stage.py::test_strickler_and_its_reciprocal_manning_derive_the_same_stage";
     verify requirement OutflowStageIsNormalDepth by
         "tests/test_telemac_outflow_stage.py::test_an_input_the_stage_cannot_be_derived_from_refuses_by_name";
+
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_run_states_the_stage_and_every_input_it_was_derived_from";
+        "tests/test_telemac_module_surface.py::test_the_reach_body_is_written_at_the_derivation_it_was_solved_for";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_run_starts_at_the_depth_its_own_outflow_stage_is_derived_as";
-    verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_start_is_bed_parallel_rather_than_level_with_the_outlet";
-    verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_a_different_friction_slope_moves_the_start_and_the_boundary_together";
-    verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_stage_is_derived_at_the_roughness_the_run_goes_on_to_write";
+        "tests/test_telemac_outflow_stage.py::test_a_flatter_reach_stands_higher_for_the_same_flow";
 
     satisfy requirement MetricsAlways by workerEntrypoint;
     verify requirement MetricsAlways by

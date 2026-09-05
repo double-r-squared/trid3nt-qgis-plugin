@@ -116,6 +116,22 @@ package SteeringSurface {
         */
     }
 
+    part def Door {
+        doc /*
+        What a template hands its declarations to instead of a plan: it names
+        the world the sheet is filled FROM, the STEERING body itself, and the
+        wrapper output that publishes the solved file. It decides nothing - the
+        sequence it builds is the same for every question.
+        */
+    }
+
+    part def SharedBody {
+        doc /*
+        A body several templates LIST as a part, carrying the slot assertions,
+        the data chain and the mesh recipe they share.
+        */
+    }
+
     part def Stager {
         doc /*
         An authored run directory becomes a staged run: everything uploaded
@@ -347,6 +363,18 @@ package SteeringSurface {
         port stageIn : StageIn;
     }
 
+    part door : Door {
+        doc /*
+        code: trid3nt_server/workflows/telemac/workflow.py
+        */
+    }
+
+    part sharedBody : SharedBody {
+        doc /*
+        code: trid3nt_server/workflows/telemac/templates/shared/river.py
+        */
+    }
+
     // ----------------------------------------------------------------- //
     // Hops
     // ----------------------------------------------------------------- //
@@ -493,6 +521,27 @@ package SteeringSurface {
         */
     }
 
+    requirement def OneTemplatePerQuestion {
+        doc /*
+        A structural fork of the deck is a TEMPLATE, never a switch on a param.
+        A tracer, an oil slick, a moving bed and a settling class fill DIFFERENT
+        slots, and the arity of the carrier's own tracer surface moves with the
+        fork - so each body states that surface itself rather than letting a
+        composite own a carrier slot out of sight. What varies WITHIN one
+        question is a composite that states nothing when it is given nothing.
+        */
+    }
+
+    requirement def ReviewIsTheDoorsView {
+        doc /*
+        The sheet is STATE. The review is how the door renders what fill
+        returned - the set slots with their provenance and the mandatory ones
+        still open - and it HOLDS there until the user runs; an edit is another
+        fill. No gate concept survives in the plan: a card in front of the door
+        would revise a sheet the door never reads.
+        */
+    }
+
     requirement def RunIsHeld {
         doc /*
         Nothing executes until the user runs. Fill produces a sheet and no work
@@ -501,10 +550,6 @@ package SteeringSurface {
         started on an unanswered mandatory slot fails inside Fortran minutes
         later, blaming a keyword rather than the gap.
 
-        The module surface never reaches the writer it replaces: while both
-        stand, the substrate is dark beside it, not entangled with it.
-
-        forbid: trid3nt_server.workflows.telemac.modules -> trid3nt_server.workflows.telemac.authoring.author
         */
     }
 
@@ -578,6 +623,21 @@ package SteeringSurface {
     verify requirement CompositesLiveInWrappers by
         "tests/test_telemac_module_surface.py::test_a_coupled_body_is_checked_against_its_own_module_s_dictionary";
 
+    satisfy requirement OneTemplatePerQuestion by door;
+    verify requirement OneTemplatePerQuestion by
+        "tests/test_telemac_module_surface.py::test_a_structural_fork_is_a_template_and_never_a_switch";
+    verify requirement OneTemplatePerQuestion by
+        "tests/test_telemac_module_surface.py::test_no_flipped_body_branches_on_anything";
+    verify requirement OneTemplatePerQuestion by
+        "tests/test_door_dissolution.py::test_all_templates_registered_and_callable";
+
+    satisfy requirement ReviewIsTheDoorsView by door;
+    verify requirement ReviewIsTheDoorsView by
+        "tests/test_telemac_module_surface.py::test_the_review_is_the_doors_view_and_never_a_step_of_its_own";
+    verify requirement ReviewIsTheDoorsView by
+        "tests/test_declarative_library.py::test_do_sag_declares_no_gate_in_front_of_its_self_gating_review";
+
+    satisfy requirement SharedBodyHasTwoUsers by sharedBody;
     satisfy requirement SharedBodyHasTwoUsers by sheet;
     verify requirement SharedBodyHasTwoUsers by
         "tests/test_telemac_module_surface.py::test_every_shared_body_has_at_least_two_users";

@@ -33,7 +33,6 @@ from trid3nt_server.workflows.telemac.helpers.water_quality import WaqtelO2
 from trid3nt_server.workflows.telemac.modules import T2D, WAQTEL
 from trid3nt_server.workflows.telemac.modules.telemac2d import Boundaries, Release
 from trid3nt_server.workflows.telemac.products.products import Products
-from trid3nt_server.workflows.telemac.solving.solve import solve_reach
 from trid3nt_server.workflows.telemac.templates.do_sag.declarations import (
     ACCEPTS, DOC, PARAMS, PARAMS as P,
 )
@@ -46,6 +45,8 @@ from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
 __all__ = ["ANSWER", "DATA", "PARAMS", "STEERING", "build_sag_chart",
            "telemac_do_sag"]
+
+_SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 
 #: What the run directory calls this deck.
 _STEERING_FILE = "t2d_river.cas"
@@ -239,7 +240,7 @@ telemac_do_sag = register_workflow(
                             marker_label="Outfall"),
         results=(river.RESULT,),
         steering_file=_STEERING_FILE, prefix="telemac",
-        dispatch=solve_reach, compute_class=S.compute_class,
+        dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
         meta={"substance": "effluent", "substance_class": "do_sag"},
         read=lambda run: Products.dissolved_oxygen(
             run=run, solve=run, process=Ref("waqtel"),

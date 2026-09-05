@@ -32,10 +32,12 @@ from trid3nt_server.workflows.mesh.tool import (
 # --------------------------------------------------------------------------- #
 # 1. Every template's mesh step carries the whole ask.
 # --------------------------------------------------------------------------- #
+#: Every declared recipe in the tree, at the body that declares it. The five
+#: river templates LIST the shared river part rather than each freezing a
+#: triangulation of their own, so the reach recipe is pinned once, where it is.
 _TEMPLATES = (
-    "trid3nt_server.workflows.telemac.river_dye.river_dye",
-    "trid3nt_server.workflows.telemac.do_sag.do_sag",
-    "trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid",
+    "trid3nt_server.workflows.telemac.templates.shared.river",
+    "trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid",
     "trid3nt_server.workflows.telemac.agitation.agitation",
     "trid3nt_server.workflows.telemac.stratified_flow.stratified_flow",
 )
@@ -94,7 +96,7 @@ def test_a_step_override_replaces_a_param_and_leaves_the_program_alone(dotted):
 # --------------------------------------------------------------------------- #
 def test_two_entries_of_one_op_survive_the_trip_in_order():
     """Two distance-sizing lines refine two corridors, so both must arrive."""
-    from trid3nt_server.workflows.telemac.rain_on_grid import rain_on_grid as template
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid import rain_on_grid as template
 
     declared = template.MESH.appending(
         mesh_op("distance_sizing_from_line_function", line_file="/tmp/second.geojson",
