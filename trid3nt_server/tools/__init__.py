@@ -619,15 +619,18 @@ from .search.web_fetch import web_fetch  # noqa: E402,F401
 # NHDArea banks is the polygon om2d triangulates - so the two end faces are the
 # transects the inflow and the outflow are prescribed on. The edge length is an
 # explicit sheet value on both.
-from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - reach tracer/morphodynamics front (engine=telemac, tier=template)
-from trid3nt_server.workflows.telemac.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401 - reach dissolved-oxygen front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - reach tracer/morphodynamics front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401 - reach dissolved-oxygen front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.river_oil_spill.river_oil_spill import telemac_river_oil_spill as _telemac_river_oil_spill  # noqa: E402,F401 - reach oil-slick front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.river_scour.river_scour import telemac_river_scour as _telemac_river_scour  # noqa: E402,F401 - reach mobile-bed front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.river_sediment_plume.river_sediment_plume import telemac_river_sediment_plume as _telemac_river_sediment_plume  # noqa: E402,F401 - reach suspended-sediment front (engine=telemac, tier=template)
 # telemac_rain_on_grid TEMPLATE (engine="telemac", tier="template"), workflows/
 # telemac/rain_on_grid/: the CATCHMENT front. Its domain is chained the same way
 # the reach fronts' is - delineate_watershed at the pour point -> combine with the
 # channel network -> om2d over the basin - and its one liquid boundary is declared
 # on the mesh ask at the delineation's snapped pour point, so the outlet
 # hydrograph is the flux through the nodes that role landed on.
-from trid3nt_server.workflows.telemac.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401 - catchment rainfall-runoff front (engine=telemac, tier=template)
+from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401 - catchment rainfall-runoff front (engine=telemac, tier=template)
 # TOMBSTONE: tomawac_wave_field - the TOMAWAC spectral-wave front is rebuilt at rung 4.
 # artemis_harbor_agitation TEMPLATE (engine="telemac", tier="template"),
 # workflows/telemac/agitation/: the ARTEMIS phase-resolving elliptic mild-slope

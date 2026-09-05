@@ -51,9 +51,6 @@ _GAIA_FIELDS: tuple[tuple[str, str, int], ...] = (
     ("CUMULATED LOST MASS", "sediment_mass_lost_kg", 8),
 )
 
-#: mg/L -> kg/m3, which is the unit GAIA's source keyword reads.
-_MGL_TO_KGM3 = 1.0e-3
-
 
 def gaia_mass_balance(listing_text: str) -> dict[str, Any]:
     """GAIA's own closure out of the solver listing - deposited/eroded/net/lost kg.
@@ -118,34 +115,28 @@ def surface_d50_spread(gaia_slf: str | Path) -> dict[str, Any]:
                 round(float(microns.max() - microns.min()), 1)}
 
 
-def sediment_scalars(*, listing_text: str, sheet: Mapping[str, Any],
+def sediment_scalars(*, listing_text: str, injected_kg: float,
+                     n_classes: int = 1,
                      gaia_slf: str | Path | None = None) -> dict[str, Any]:
     """Every sediment number a GAIA run reports, off its own listing and result.
 
-    The INJECTED mass is the sheet's own pulse - discharge x concentration x
-    window - so the deposit fraction compares what settled against what was put
-    in rather than against an assumed load. The fraction is clamped into [0, 1]:
-    a net bed gain larger than the injection is measurement noise on a
-    supply-limited run, not more sediment than was released.
+    ``injected_kg`` is the run's own pulse - discharge x concentration x window -
+    so the deposit fraction compares what settled against what was put in rather
+    than against an assumed load. The fraction is clamped into [0, 1]: a net bed
+    gain larger than the injection is measurement noise on a supply-limited run,
+    not more sediment than was released.
+
+    A SORTED bed needs a mixture to sort, so the surface-grading spread is
+    reported only where the run declared two classes or more.
     """
     stats = gaia_mass_balance(listing_text)
-    injected = round(
-        float(sheet.get("source_q_m3s", 8.0))
-        * max(float(sheet.get("dye_conc_mgl", 100.0)) * _MGL_TO_KGM3, 0.0)
-        * float(sheet.get("pulse_window_s", 300.0)), 3)
-    stats["sediment_injected_kg"] = injected
+    stats["sediment_injected_kg"] = round(float(injected_kg), 3)
     net = stats.get("sediment_net_bed_mass_kg")
-    if net is not None and injected > 0.0:
+    if net is not None and injected_kg > 0.0:
         stats["sediment_deposit_fraction"] = round(
-            min(max(float(net) / injected, 0.0), 1.0), 4)
-    from ..authoring.author import normalize_gradation
-
-    classes = normalize_gradation(sheet.get("sediment_gradation") or ())
-    # A SORTED bed needs a mixture to sort: a single class is uniform by
-    # construction, so the spread is only meaningful - and only reported - when
-    # the sheet declared two classes or more.
-    if len(classes) >= 2:
-        stats["sediment_n_classes"] = len(classes)
+            min(max(float(net) / float(injected_kg), 0.0), 1.0), 4)
+    if n_classes >= 2:
+        stats["sediment_n_classes"] = n_classes
         if gaia_slf is not None:
             try:
                 stats.update(surface_d50_spread(gaia_slf))

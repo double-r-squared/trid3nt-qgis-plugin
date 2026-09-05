@@ -266,13 +266,19 @@ def _read(ref: Ref, produced: Mapping[str, Any],
         raise SlotRefused(
             f"Ref({ref.path!r}) names neither a producer of this fill "
             f"({sorted(produced)}) nor a slot already on the sheet.")
+    _missing = object()
     for part in ref.tail:
-        found = (base.get(part) if isinstance(base, Mapping)
-                 else getattr(base, part, None))
-        if found is None:
+        found = (base.get(part, _missing) if isinstance(base, Mapping)
+                 else getattr(base, part, _missing))
+        if found is _missing:
             raise SlotRefused(
-                f"Ref({ref.path!r}) reads {part!r} off {ref.root}, which carries "
-                "no value for it.")
+                f"Ref({ref.path!r}) reads {part!r} off {ref.root}, which names "
+                "no such field.")
+        # A field the row HOLDS as nothing states nothing: a wind nobody asked
+        # for, a previous run this one does not continue. That is an answer, and
+        # the composite reading it expands to no keyword at all.
+        if found is None:
+            return None
         base = found
     return base
 
@@ -312,5 +318,12 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
         results=list(results), outputs=list(outputs),
         mesh_inputs=list(mesh_inputs), prefix=prefix, sheet=sheet.state(),
         result_basename=list(results)[0], server_facts=server_facts,
+        # The engine compiles the DIRECTORY its FORTRAN FILE statement names, so
+        # the manifest channel carries the same word the deck does rather than a
+        # second derivation of it.
+        user_fortran=dict(sheet.resolved()).get("FORTRAN FILE"),
         coupling=coupling, continue_from=continue_from)
-    return await dispatch(run=staged, compute_class=compute_class)
+    # The staged run and the box's answer are ONE handle: the reader needs both
+    # what was staged and what came back, and two results would make the caller
+    # carry the join.
+    return {**staged, **await dispatch(run=staged, compute_class=compute_class)}

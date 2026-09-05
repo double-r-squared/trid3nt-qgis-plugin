@@ -137,7 +137,12 @@ class Slot:
             # dictionary spells a tracer choice as T*, kSi, T1*, and telapy's
             # own reader is what knows those spellings. It reads the written
             # file back, and that round trip is the gate.
-            return [self._typed(item) for item in value]
+            #
+            # A late-bound read INSIDE the list passes through for the same
+            # reason it does outside one: a body states what it will hold, and
+            # the fill that substitutes the value is what the value is checked at.
+            return [item if isinstance(item, (Ref, ParamRef)) else self._typed(item)
+                    for item in value]
         value = self._typed(value)
         if self.choices and not self.multi_select and str(value) not in self.choices:
             raise SlotRefused(

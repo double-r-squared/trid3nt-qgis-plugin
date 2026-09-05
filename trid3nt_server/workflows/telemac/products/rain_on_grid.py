@@ -109,7 +109,7 @@ def _provenance(run: Mapping[str, Any]) -> list[SyntheticInput]:
             consequence="physics", note=str(run["runoff_reason"])),
         SyntheticInput(
             param="mesh_domain",
-            value=f"{run['catchment'].get('element_count') or 0} elements over "
+            value=f"{run.get('mesh_element_count') or 0} elements over "
                   f"{float(run.get('area_km2') or 0.0):.3g} km2",
             basis="derived", consequence="numerical",
             real_source_if_any=str(run.get("domain_source") or "") or None,
@@ -201,7 +201,7 @@ def _honesty_note(run: Mapping[str, Any], metrics: Mapping[str, Any],
         + "Planning-grade rainfall-runoff SCREENING: TELEMAC-2D shallow water over a "
         f"{float(run.get('area_km2') or 0.0):.3g} km2 catchment delineated at the "
         f"pour point and triangulated at {float(spacing):g} m minimum edge "
-        f"({run['catchment'].get('element_count') or 0} elements), infiltrating by "
+        f"({run.get('mesh_element_count') or 0} elements), infiltrating by "
         "the SCS curve-number method with per-node curve numbers from land cover. "
         "Driven by "
         + str(rain["note"]).rstrip(".").split(" - ")[0]
@@ -234,7 +234,6 @@ async def publish_rain_on_grid_products(*, run: dict[str, Any],
     emitter = current_emitter()
     run_id, utm_epsg = solve["run_id"], int(solve["utm_epsg"])
     metrics = dict(solve.get("metrics") or {})
-    catchment = run["catchment"]
     name = str(run["domain_name"])
 
     slf_path = await asyncio.to_thread(
@@ -274,13 +273,13 @@ async def publish_rain_on_grid_products(*, run: dict[str, Any],
         "rain_intensity_mm_per_hr": float(run["rain"]["intensity_mm_per_hr"]),
         "outlet_hydrograph_t_s": list(hydrograph.get("t_s") or ()) or None,
         "outlet_hydrograph_q_m3s": list(hydrograph.get("q_m3s") or ()) or None,
-        "mesh_node_count": int(catchment.get("node_count") or 0) or None,
-        "mesh_element_count": int(catchment.get("element_count") or 0) or None,
+        "mesh_node_count": int(run.get("mesh_node_count") or 0) or None,
+        "mesh_element_count": int(run.get("mesh_element_count") or 0) or None,
         "mesh_size_m": float(run["mesh_size_m"]),
         "mesh_resolution_label": (
             f"catchment TIN, {float(run['mesh_size_m']):g} m minimum edge to "
             f"{float(run['mesh_max_edge_m']):g} m, refined toward the channel "
-            f"network ({catchment.get('element_count') or 0} elements)"),
+            f"network ({run.get('mesh_element_count') or 0} elements)"),
         "catchment_provenance": str(run.get("domain_source") or ""),
         "catchment_name": name,
         "domain_bbox": [float(v) for v in run["lonlat_bounds"]],

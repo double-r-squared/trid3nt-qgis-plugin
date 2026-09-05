@@ -115,7 +115,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
     """
     return [
         FormGate(title="Review the prescribed column and the wind"),
-        *ops.acquire_domain(location=P.location, bbox=P.bbox, shape="open_water",
+        *ops.acquire_domain(location=P.location, bbox=P.bbox,
                             aoi_half_deg=_BASIN_HALF_DEG, aoi_name="aoi",
                             code_prefix="TELEMAC3D"),
         ops.author(mesh=MESH, physics=PHYSICS,

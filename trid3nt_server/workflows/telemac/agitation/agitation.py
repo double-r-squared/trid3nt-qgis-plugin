@@ -134,7 +134,7 @@ def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design
     """
     return [
         FormGate(title="Review the incident wave and the structure"),
-        *ops.acquire_domain(location=P.location, bbox=P.bbox, shape="open_water",
+        *ops.acquire_domain(location=P.location, bbox=P.bbox,
                             aoi_half_deg=_HARBOR_HALF_DEG, aoi_name="aoi",
                             code_prefix="ARTEMIS"),
         ops.author(mesh=MESH, physics=PHYSICS,

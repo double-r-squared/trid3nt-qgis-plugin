@@ -1,0 +1,12 @@
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
+telemac_river_dye:
+- run a TELEMAC-2D shallow-water solve with an advected dye tracer over a real river reach
+- a dye plume moving downstream through the river channel with the current, animated
+- watch a dye plume travel downstream and dilute as it moves down the river
+- how far downstream does a chemical spill in the river travel and what is its peak concentration
+- surface-water contaminant transport down the river channel from a point-source spill
+- sewage / E.coli effluent released into the river, decaying as it travels downstream
+- bacterial die-off of a wastewater discharge as the plume moves down the reach
+- how does sustained wind set up a water-surface slope or drive circulation on a wide reach or lake
+- wind-driven setup and circulation on a broad river reach, embayment or lake surface

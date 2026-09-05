@@ -1,0 +1,9 @@
+# Template routing phrasings (door dissolution, ADR 0094): walked into the main
+# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
+telemac_river_sediment_plume:
+- a sediment / silt slurry spilled into the river, settling and depositing on the bed
+- prescribed upstream sediment supply rate depositing downstream, reservoir-inflow sedimentation
+- how a continuous incoming sediment load settles and deposits along the river bed downstream
+- a suspended sediment plume released into the reach, how far does it travel before it settles out
+- turbidity plume from a construction or dredging discharge settling onto the river bed
+- where does injected fine sand or silt deposit downstream of the release point

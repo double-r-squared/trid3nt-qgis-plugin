@@ -1,42 +1,46 @@
-"""What was spilled: the substance CLASS and the modules its class arms.
+"""What was released, and what its class arms under the hydrodynamic solve.
 
-Four classes ride one solve: a conservative dye tracer (the default), an
-oil-family slick, a first-order WAQTEL decay, and GAIA sediment (with the
-erodible-bed, graded-mixture and NESTOR-dredging variants layered on it).
-
-The keyword vocabularies are shared between classification and the auto-arm so
-the two gates route off the SAME words and cannot disagree - an erodible bed
-that classified as a tracer would couple nothing and only LOOK morphodynamic.
+A question is a TEMPLATE now, so nothing here classifies a word into a family.
+What survives is the two things a template still asks: the literature die-off a
+named decaying substance carries, and the GAIA sediment body a bed question
+couples the solve with. Both are values the composites on the wrappers expand;
+what decides which SHAPE a sediment body takes is the shape of the value the ask
+carried, which is why it is resolved in a producer rather than asserted in a
+body.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
+
+from trid3nt_server.workflows.runtime import Step
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.helpers.substance")
 
 __all__ = [
     "DECAY_SUBSTANCE_PRESETS",
-    "DREDGE_KEYWORDS",
-    "GRADATION_KEYWORDS",
     "GRADATION_PRESETS",
+    "GRAIN_UM_MAX",
+    "GRAIN_UM_MIN",
     "OIL_SUBSTANCE_PRESETS",
-    "SCOUR_KEYWORDS",
-    "SEDIMENT_SUBSTANCE_PRESETS",
-    "arm_sediment_modules",
-    "classify_substance",
-    "resolve_decay_law",
+    "SEDIMENT_DENSITY_KGM3",
+    "Decay",
+    "SedimentBed",
+    "SuspendedClass",
+    "oil_preset",
+    "resolve_decay",
     "resolve_gradation",
-    "resolve_grain",
+    "resolve_sediment_bed",
+    "resolve_suspended_class",
     "sanitize_substance",
-    "substance_class",
 ]
 
+_HELPERS = "trid3nt_server.workflows.telemac.helpers"
 
-#: Oil-family substances ALSO run the TELEMAC oil-spill module (floating particle
-#: slick + the dissolved fraction in the tracer). Matched as substrings; generic
-#: ``oil`` is LAST so the specific fuels win.
+#: Oil-family substances, as the module preset each names. Matched as
+#: substrings; generic ``oil`` is LAST so the specific fuels win.
 OIL_SUBSTANCE_PRESETS: dict[str, str] = {
     "diesel": "diesel",
     "gasoline": "diesel",
@@ -48,14 +52,13 @@ OIL_SUBSTANCE_PRESETS: dict[str, str] = {
     "oil": "light_crude",
 }
 
-#: First-order DECAY class: the run couples WAQTEL with WATER QUALITY PROCESS =
-#: 17, whose nametrac branch applies a decay SINK to the existing dye tracer - no
-#: new tracer, no postprocess or contract change. ``law``: 1 = T90 bacterial
-#: die-off (coef = T90 hours), 2 = first-order (k in h^-1), 3 = first-order (k in
-#: d^-1), per telemac2d.dico LAW OF TRACERS DEGRADATION. Bacterial keywords carry
-#: T90 ~ 2 h (daylight-freshwater fecal-coliform die-off, a narrated literature
-#: default). Period-stripped variants are listed because the substance sanitize
-#: drops the periods.
+#: First-order DECAY presets. The coupling applies a decay SINK to the tracer the
+#: carrier already runs - no new tracer - so the law and its coefficient are the
+#: whole statement. ``law``: 1 = T90 bacterial die-off (coef = T90 hours), 2 =
+#: first-order k in h^-1, 3 = first-order k in d^-1, per the dictionary's LAW OF
+#: TRACERS DEGRADATION. Bacterial keywords carry T90 ~ 2 h, the daylight
+#: freshwater fecal-coliform die-off, which is a narrated literature default and
+#: never a measured observation.
 DECAY_SUBSTANCE_PRESETS: dict[str, dict[str, float]] = {
     "sewage": {"law": 1, "coef": 2.0},
     "e. coli": {"law": 1, "coef": 2.0},
@@ -73,51 +76,8 @@ DECAY_SUBSTANCE_PRESETS: dict[str, dict[str, float]] = {
     "half-life": {"law": 2, "coef": 0.35},
 }
 
-#: GAIA SEDIMENT class: the run couples GAIA, which appends one suspended class
-#: as a second tracer and writes gaia_river.slf CUMUL BED EVOL. ``grain_size`` is
-#: the default d50 in microns for the type - a demo default the ``grain_size_um``
-#: param overrides, never a measured site value (no bed-composition fetcher
-#: exists). All types are modeled NON-cohesive, so ``mud`` is a very-fine NCO
-#: approximation and is narrated as one.
-SEDIMENT_SUBSTANCE_PRESETS: dict[str, dict[str, float | str]] = {
-    "sediment-laden runoff": {"type": "silt", "grain_size": 20.0},
-    "sediment": {"type": "sand", "grain_size": 200.0},
-    "sand": {"type": "sand", "grain_size": 200.0},
-    "silt": {"type": "silt", "grain_size": 20.0},
-    "mud": {"type": "mud", "grain_size": 8.0},
-    "slurry": {"type": "sand", "grain_size": 200.0},
-    "tailings": {"type": "silt", "grain_size": 30.0},
-}
-
-#: SCOUR / EROSION / mobile-bed vocabulary: a real erodible bed with active
-#: bedload, so the bed scours and re-deposits (GAIA erodible-bed path).
-SCOUR_KEYWORDS: tuple[str, ...] = (
-    "scour", "erosion", "erod", "bedload", "bed load", "degradation",
-    "bed lowering", "mobile bed", "morpholog", "aggrad", "degrade",
-)
-
-#: GRADED / MIXED-GRAIN vocabulary: a mixture of grain sizes that SORTS.
-#: Distinct from scour - scour is single-grain bed lowering, grading is
-#: multi-class differential mobility (armoring / downstream fining).
-GRADATION_KEYWORDS: tuple[str, ...] = (
-    "graded", "gradation", "mixed grain", "mixed-grain", "multi-grain",
-    "multigrain", "multi-class", "multiclass", "grain size distribution",
-    "grain-size distribution", "sorting", "segregat", "armor", "armour",
-    "poorly sorted", "well sorted", "well graded", "well-graded", "bimodal",
-    "fining", "sediment mixture", "grain mixture",
-)
-
-#: DREDGING vocabulary (NESTOR): an ENGINEERED dig/dump intervention against
-#: siltation, not a natural transport process.
-DREDGE_KEYWORDS: tuple[str, ...] = (
-    "dredg", "maintenance dredging", "channel maintenance", "spoil",
-    "disposal placement", "shoaling", "navigation channel depth",
-    "keep the channel", "maintain the channel", "silt up", "silting",
-    "infill the channel", "dig and dump", "dig-and-dump",
-)
-
 #: Named demo gradations (d50 in microns, initial fraction) - honest demo mixes,
-#: never a measured site sieve curve. The worker renormalizes the fractions.
+#: never a measured site sieve curve. The fractions are renormalized on use.
 GRADATION_PRESETS: dict[str, list[list[float]]] = {
     "graded_sand": [[100.0, 0.34], [400.0, 0.33], [1000.0, 0.33]],
     "poorly_sorted": [[80.0, 0.4], [300.0, 0.3], [1200.0, 0.3]],
@@ -125,17 +85,21 @@ GRADATION_PRESETS: dict[str, list[list[float]]] = {
     "fine_coarse_sand": [[120.0, 0.5], [800.0, 0.5]],
 }
 
-#: The label the author reads. Sanitized to alnum + separators because it
+#: The grain-size window GAIA's transport formulae are authored for, in microns.
+#: ONE constant, and the declared ``grain_size_um`` bounds read the same two
+#: numbers from here rather than restating them: a gradation arrives as a LIST,
+#: which no per-value door can police.
+GRAIN_UM_MIN, GRAIN_UM_MAX = 5.0, 2000.0
+
+#: Quartz density, which is what every non-cohesive class here is made of.
+SEDIMENT_DENSITY_KGM3 = 2650.0
+
+#: mg/L -> kg/m3, the unit GAIA's own source keyword reads.
+_MGL_TO_KGM3 = 1.0e-3
+
+#: The label a run narrates itself by. Sanitized to alnum + separators because it
 #: travels onto the manifest and into layer narration.
 _SUBSTANCE_MAX_CHARS = 24
-
-
-#: The grain-size window GAIA's transport formulae are authored for, in microns.
-#: It MIRRORS river_dye's declared ``grain_size_um`` bounds and exists because a
-#: gradation curve arrives as a list, which no per-value door can police. ONE
-#: constant, two clamp sites: the declaration and both clamps must read the same
-#: two numbers from here, never restate them.
-GRAIN_UM_MIN, GRAIN_UM_MAX = 5.0, 2000.0
 
 
 def sanitize_substance(value: Any, *, limit: int = _SUBSTANCE_MAX_CHARS,
@@ -146,14 +110,22 @@ def sanitize_substance(value: Any, *, limit: int = _SUBSTANCE_MAX_CHARS,
     return kept[:limit] or default
 
 
+def oil_preset(named: Any) -> str:
+    """The oil preset a named fuel runs under; light crude when unnamed."""
+    word = sanitize_substance(named, default="")
+    for key, preset in OIL_SUBSTANCE_PRESETS.items():
+        if key in word:
+            return preset
+    return "light_crude"
+
+
 def resolve_gradation(spec: list | str | None) -> list[list[float]] | None:
-    """Coerce a gradation arg to a clean ``[[d50_um, fraction], ...]`` list.
+    """A gradation ask -> a clean fine-to-coarse ``[[d50_um, fraction], ...]``.
 
     Accepts a :data:`GRADATION_PRESETS` key, an explicit list of pairs (or
     ``{'d50_um','fraction'}`` dicts), or None. A surviving list of >= 2 classes is
-    what arms the multi-class run; a 1-class list collapses to None (nothing to
-    sort). Mirrors the worker's own normalization so the tool and the author
-    agree on what counts as a usable gradation.
+    a MIXTURE; a shorter one is not something that can sort, so it collapses to
+    None and the single-class bed stands.
     """
     if spec is None:
         return None
@@ -173,8 +145,7 @@ def resolve_gradation(spec: list | str | None) -> list[list[float]] | None:
                 um = float(item.get("d50_um"))
                 fr = float(item.get("fraction", 0.0))
             else:
-                um = float(item[0])
-                fr = float(item[1])
+                um, fr = float(item[0]), float(item[1])
         except (TypeError, ValueError, IndexError, KeyError):
             continue
         if not (um > 0.0) or fr < 0.0:
@@ -182,126 +153,124 @@ def resolve_gradation(spec: list | str | None) -> list[list[float]] | None:
         out.append([min(max(um, GRAIN_UM_MIN), GRAIN_UM_MAX), fr])
     if len(out) < 2:
         return None
-    out.sort(key=lambda p: p[0])
-    return out[:6]
+    out.sort(key=lambda pair: pair[0])
+    out = out[:6]
+    total = sum(fr for _um, fr in out)
+    equal = 1.0 / len(out)
+    return [[um, (fr / total if total > 0.0 else equal)] for um, fr in out]
 
 
-def classify_substance(substance: str) -> tuple[str, str | dict[str, float] | None]:
-    """Route a substance string to its TELEMAC class + the class payload.
+def Decay(*, substance: Any, half_life_hours: Any,  # noqa: N802
+          rate_per_day: Any) -> Step:
+    """The tracer degradation this run couples, or nothing at all."""
+    return Step(runner=f"{_HELPERS}.substance.resolve_decay", stage="prep",
+                kwargs={"substance": substance, "half_life_hours": half_life_hours,
+                        "rate_per_day": rate_per_day})
 
-    Order matters: oil first, then decay, then sediment (grain names OR the
-    scour/grading vocabularies), else the conservative tracer - so ``oil`` stays
-    oil, ``sewage`` stays decay, ``sand`` and ``scour`` are sediment, and a bare
-    ``dye`` stays a tracer.
+
+async def resolve_decay(*, substance: Any, half_life_hours: float | None,
+                        rate_per_day: float | None) -> dict[str, Any]:
+    """The WAQTEL degradation coupling -> ``{"coupling": [...] }`` or nothing.
+
+    An explicit half-life switches to first-order law 2 (k = ln2/hl, in h^-1) and
+    an explicit per-day rate to law 3; a named decaying substance carries its own
+    narrated literature default. Nothing named and nothing stated is NO decay,
+    and the composite reading this expands to no keyword at all.
     """
-    s = str(substance or "dye").strip().lower()
-    for key, preset in OIL_SUBSTANCE_PRESETS.items():
-        if key in s:
-            return "oil", preset
-    for key, params in DECAY_SUBSTANCE_PRESETS.items():
-        if key in s:
-            return "decay", dict(params)
-    for key, params in SEDIMENT_SUBSTANCE_PRESETS.items():
-        if key in s:
-            return "sediment", dict(params)
-    if any(w in s for w in SCOUR_KEYWORDS) or any(w in s for w in GRADATION_KEYWORDS):
-        return "sediment", {"type": "sand", "grain_size": 200.0}
-    return "tracer", None
+    from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-
-def arm_sediment_modules(
-    substance: str,
-    *,
-    erodible_bed: bool | None,
-    sediment_gradation: list | str | None,
-    dredging: bool | None,
-) -> tuple[bool, list[list[float]] | None, bool]:
-    """Decide which GAIA modules the ask arms. Returns ``(erodible, gradation, dredging)``.
-
-    Unset flags auto-arm from the substance vocabulary; an explicit True/False
-    always wins. A graded mixture and a NESTOR dig rule both need a MOBILE bed to
-    act on, so either one forces the erodible bed.
-    """
-    s = str(substance or "").lower()
-    erodible = (bool(erodible_bed) if erodible_bed is not None
-                else any(w in s for w in SCOUR_KEYWORDS))
-
-    gradation = resolve_gradation(sediment_gradation)
-    if gradation is None and any(w in s for w in GRADATION_KEYWORDS):
-        gradation = list(GRADATION_PRESETS["graded_sand"])
-    if gradation:
-        erodible = True
-
-    dredge = (bool(dredging) if dredging is not None
-              else any(w in s for w in DREDGE_KEYWORDS))
-    if dredge:
-        erodible = True
-    return erodible, gradation, dredge
-
-
-def resolve_decay_law(payload: Any, half_life_hours: float | None,
-                      rate_per_day: float | None) -> tuple[int, float]:
-    """The WAQTEL degradation law + coefficient for a decaying substance.
-
-    The class preset supplies a narrated literature default; an explicit
-    half-life switches to first-order law 2 (k = ln2/hl, h^-1) and an explicit
-    per-day rate to law 3. These are USER parameters with narrated defaults -
-    never fabricated observations.
-    """
-    import math
-
-    law, coef = 1, 2.0
-    if isinstance(payload, dict):
-        law = int(payload.get("law", 1))
-        coef = float(payload.get("coef", 2.0))
     if half_life_hours is not None and float(half_life_hours) > 0.0:
-        return 2, round(math.log(2.0) / float(half_life_hours), 6)
-    if rate_per_day is not None and float(rate_per_day) > 0.0:
-        return 3, round(float(rate_per_day), 6)
-    return law, coef
+        law, coef = 2, round(math.log(2.0) / float(half_life_hours), 6)
+    elif rate_per_day is not None and float(rate_per_day) > 0.0:
+        law, coef = 3, round(float(rate_per_day), 6)
+    else:
+        word = sanitize_substance(substance, default="")
+        preset = next((dict(v) for k, v in DECAY_SUBSTANCE_PRESETS.items()
+                       if k in word), None)
+        if preset is None:
+            return {"coupling": None, "note": "no decay was named or stated"}
+        law, coef = int(preset["law"]), float(preset["coef"])
+    logger.info("telemac decay coupling: law=%d coef=%.4g", law, coef)
+    return {"coupling": [WAQTEL.decay(law=law, coefficient=coef)],
+            "law": law, "coefficient": coef,
+            "note": f"first-order tracer degradation, law {law} coefficient {coef:g}"}
 
 
-def resolve_grain(payload: Any, sediment_type: str | None,
-                  grain_size_um: float | None) -> tuple[str, float]:
-    """The sediment type + d50 (microns) the sheet carries, params overriding presets."""
-    sed_type, sed_grain_um = "sand", 200.0
-    if isinstance(payload, dict):
-        sed_grain_um = float(payload.get("grain_size", 200.0))
-        sed_type = str(payload.get("type", "sand"))
-    if sediment_type is not None and str(sediment_type).strip():
-        sed_type = sanitize_substance(sediment_type, limit=8, default=sed_type)
-    if grain_size_um is not None:
-        sed_grain_um = float(grain_size_um)
-    return sed_type, float(min(max(sed_grain_um, GRAIN_UM_MIN), GRAIN_UM_MAX))
+def SedimentBed(*, gradation: Any, grain_size_um: Any,  # noqa: N802
+                bed_thickness_m: Any, bedload_formula: Any,
+                morphological_factor: Any, dredging: Any,
+                injected: Any) -> Step:
+    """The erodible bed this run scours, in the shape the ask carried."""
+    return Step(runner=f"{_HELPERS}.substance.resolve_sediment_bed", stage="prep",
+                kwargs={"gradation": gradation, "grain_size_um": grain_size_um,
+                        "bed_thickness_m": bed_thickness_m,
+                        "bedload_formula": bedload_formula,
+                        "morphological_factor": morphological_factor,
+                        "dredging": dredging, "injected": injected})
 
 
-def substance_class() -> Any:
-    """A coercion reconciling ``substance`` with a separately-named ``contaminant``.
+async def resolve_sediment_bed(*, gradation: Any, grain_size_um: float,
+                               bed_thickness_m: float, bedload_formula: int,
+                               morphological_factor: float,
+                               dredging: Any, injected: dict[str, Any]
+                               ) -> dict[str, Any]:
+    """The GAIA body the bed is solved as -> the coupling and what it injected.
 
-    Models split intent across the two fields - ``substance="dye"`` AND
-    ``contaminant="crude oil"`` - so an oil spill silently ran the tracer class.
-    Any NON-tracer contaminant class wins over a tracer-class substance.
-
-    NEITHER field supplied leaves NO row. A coercion's output merges into the
-    door-1 supplied sheet, so emitting the tracer default here would resolve it
-    through the USER door and report the template's own default as "supplied on
-    this invocation". Abstaining lets the declared default seat through its own
-    door with its own basis.
+    A MIXTURE and a single class are two shapes of one value, not two questions:
+    both scour the same bed with the same formula, and the mixture additionally
+    SORTS under a hiding factor. Which one this run is comes from the shape of
+    the gradation the ask carried.
     """
+    from trid3nt_server.workflows.telemac.modules import GAIA
+    from trid3nt_server.workflows.telemac.modules.gaia import Dredging
 
-    def _coerce(args: Any) -> dict[str, Any]:
-        supplied = sanitize_substance(args.get("substance"), default="")
-        substance = supplied or sanitize_substance(None)
-        contaminant = args.get("contaminant")
-        if contaminant:
-            cont = sanitize_substance(contaminant, default="")
-            if cont and classify_substance(substance)[0] == "tracer" \
-                    and classify_substance(cont)[0] != "tracer":
-                logger.info("substance %r is tracer-class but contaminant %r is "
-                            "%s-family - classifying by contaminant", substance, cont,
-                            classify_substance(cont)[0])
-                return {"substance": cont}
-        return {"substance": supplied} if supplied else {}
+    classes = resolve_gradation(gradation)
+    dig = (None if not dredging else
+           Dredging(action=dredging["action"], polygon=dredging["polygon"],
+                    surface_ref=dredging["surface_ref"]))
+    common = dict(geometry="river.slf", boundary="river.cli",
+                  density=SEDIMENT_DENSITY_KGM3,
+                  thickness_m=max(float(bed_thickness_m), 0.01),
+                  formula=int(bedload_formula),
+                  morphological_factor=max(float(morphological_factor), 1.0),
+                  dredging=dig)
+    body = (GAIA.graded(classes=[(um, fr) for um, fr in classes], **common)
+            if classes else GAIA.erodible(d50_um=float(grain_size_um), **common))
+    logger.info("telemac sediment bed: %s classes, dredging=%s",
+                len(classes) if classes else 1, dig is not None)
+    return {"coupling": [body], "n_classes": len(classes) if classes else 1,
+            "injected_kg": _injected_kg(injected)}
 
-    _coerce.__name__ = "substance_class"
-    return _coerce
+
+def SuspendedClass(*, grain_size_um: Any, concentration_mgl: Any,  # noqa: N802
+                   injected: Any) -> Step:
+    """The one settling class this run carries over a bed with no stock."""
+    return Step(runner=f"{_HELPERS}.substance.resolve_suspended_class", stage="prep",
+                kwargs={"grain_size_um": grain_size_um,
+                        "concentration_mgl": concentration_mgl,
+                        "injected": injected})
+
+
+async def resolve_suspended_class(*, grain_size_um: float,
+                                  concentration_mgl: float,
+                                  injected: dict[str, Any]) -> dict[str, Any]:
+    """The GAIA suspension body -> the coupling and what it injected."""
+    from trid3nt_server.workflows.telemac.modules import GAIA
+
+    body = GAIA.suspended(
+        geometry="river.slf", boundary="river.cli",
+        d50_um=float(grain_size_um), density=SEDIMENT_DENSITY_KGM3,
+        concentration_kgm3=max(float(concentration_mgl) * _MGL_TO_KGM3, 0.0))
+    return {"coupling": [body], "n_classes": 1,
+            "injected_kg": _injected_kg(injected)}
+
+
+def _injected_kg(injected: dict[str, Any]) -> float:
+    """What the pulse PUT IN: discharge x concentration x window, in kilograms.
+
+    The deposit fraction is measured against this rather than against an assumed
+    load, so it is the run's own statement of what it released.
+    """
+    return round(float(injected["q_m3s"])
+                 * max(float(injected["concentration_mgl"]) * _MGL_TO_KGM3, 0.0)
+                 * float(injected["window_s"]), 3)

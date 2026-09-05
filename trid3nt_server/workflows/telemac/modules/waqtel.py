@@ -17,7 +17,6 @@ so a binding here would claim a file that does not exist.
 
 from __future__ import annotations
 
-from types import MappingProxyType
 from typing import Any, Mapping
 
 from .module import Module
@@ -75,9 +74,8 @@ def _body(process: int, **slots: Any) -> Mapping[str, Any]:
     mappings: a late-bound read inside a coupled body is bound by the carrier's
     fill before the composite ever expands it.
     """
-    return MappingProxyType({"module": "waqtel", "steering": STEERING_FILENAME,
-                             "process": process,
-                             "slots": MappingProxyType(dict(slots))})
+    return {"module": "waqtel", "steering": STEERING_FILENAME,
+            "process": process, "slots": dict(slots)}
 
 
 WAQTEL = _Waqtel

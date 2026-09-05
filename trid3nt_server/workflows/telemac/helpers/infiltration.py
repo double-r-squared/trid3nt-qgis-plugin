@@ -50,7 +50,7 @@ async def node_infiltration_fields(*, mesh: dict[str, Any],
     the field is written against the numbering the geometry file carries, so a
     curve number lands on the node it was sampled for.
     """
-    from trid3nt_server.workflows.telemac.rain_on_grid.cn_infiltration import (
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.cn_infiltration import (
         amc_condition_for, landcover_cn_manning, node_curve_numbers,
     )
 

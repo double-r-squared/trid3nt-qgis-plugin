@@ -21,13 +21,6 @@ _HELPERS = "trid3nt_server.workflows.telemac.helpers"
 
 
 class PARAMS:
-    location = Param(
-        door=doors.QUESTION, optional=True, consequence="aoi",
-        desc="Place name near the discharge, geocoded to the reach")
-    bbox = Param(
-        door=doors.USER, optional=True, consequence="aoi",
-        type=tuple[float, float, float, float] | list[float] | str,
-        desc="Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326, instead of a place")
     outfall_coords = Param(
         door=doors.USER, optional=True, consequence="scenario",
         user_lever=True, type=tuple[float, float] | list[float],
@@ -105,31 +98,6 @@ class PARAMS:
         desc="Target element edge length the reach is triangulated at; where the "
              "sag bottoms out is a local feature and moves with the element that "
              "resolves it")
-    output_interval_min = Param(
-        door=doors.USER, optional=True, bounds=(0.1, 1440.0),
-        units="min", consequence="numerical",
-        desc="Result-writing cadence; unset keeps the steering file's own period")
-    discharge_m3s = Param(
-        door=doors.USER, optional=True, units="m^3/s",
-        bounds=(0.01, 1.0e5), consequence="physics", user_lever=True,
-        desc="Steady carrier discharge; unset resolves from the NOAA National "
-             "Water Model at the reach")
-    event_time = Param(
-        door=doors.QUESTION, optional=True, consequence="scenario",
-        derived_when_absent=(
-            "the carrier discharge is read at the MOST RECENT published NWM "
-            "cycle"),
-        desc="The storm/event moment to read the carrier discharge cycle at - "
-             "from phrasing like 'during last Tuesday's storm'; an ISO date "
-             "or datetime (e.g. '2026-08-20' or '2026-08-20T06:00:00Z'). "
-             "Unset reads the most recent published NWM cycle. The NWM PDS "
-             "bucket retains only the last ~30 days of history; a deeper "
-             "request refuses typed rather than silently reading a "
-             "different cycle.")
-    compute_class = Param(
-        door=doors.CONSTANT, default="medium",
-        consequence="numerical", desc="Solve sizing class")
-
 
 DOC = dict(
     summary="DISSOLVED-OXYGEN SAG below a discharge in a river (US TMDL / permit question).",

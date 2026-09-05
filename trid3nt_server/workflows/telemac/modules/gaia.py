@@ -17,7 +17,6 @@ from, the surface grading a graded bed sorts into, and the sediment balance.
 
 from __future__ import annotations
 
-from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 from ..products.postprocess_telemac import postprocess_telemac_deposition
@@ -128,13 +127,16 @@ def Dredging(*, action: Any, polygon: Any, surface_ref: Any  # noqa: N802
     the surface reference is what each node's chainage and design grade are
     interpolated from - so a run naming two of them is a run NESTOR cannot read.
     """
-    return MappingProxyType({"action": action, "polygon": polygon,
-                             "surface_ref": surface_ref})
+    return {"action": action, "polygon": polygon,
+            "surface_ref": surface_ref}
 
 
 def _dredging(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                  Mapping[str, Any]]:
     """The NESTOR value -> the keywords it means and the files they name."""
+    if not value["action"]:
+        # No dig was cut, so this run states no dredging at all.
+        return ({}, {})
     return ({"NESTOR": True, "NESTOR_ACTION_FILE": ACTION_FILENAME,
              "NESTOR_POLYGON_FILE": POLYGON_FILENAME,
              "NESTOR_SURFACE_REFERENCE_FILE": SURFACE_REF_FILENAME},
@@ -150,8 +152,8 @@ def _metres(micron: Any) -> float:
 
 def _body(slots: Mapping[str, Any]) -> Mapping[str, Any]:
     """One coupled body, as the carrier's ``coupling`` composite reads it."""
-    return MappingProxyType({"module": "gaia", "steering": STEERING_FILENAME,
-                             "slots": MappingProxyType(dict(slots))})
+    return {"module": "gaia", "steering": STEERING_FILENAME,
+            "slots": dict(slots)}
 
 
 GAIA = _Gaia

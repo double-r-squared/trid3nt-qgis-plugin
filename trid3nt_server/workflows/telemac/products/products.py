@@ -59,11 +59,12 @@ def _release_provenance(run: dict[str, Any]) -> SyntheticInput:
     the domain never reaches this step - the pre-flight refuses it - so the row
     can never read "user" over a relocated release.
     """
-    sheet = run["sheet"]
-    lon, lat = sheet.get("release_lon"), sheet.get("release_lat")
+    lon, lat = (run.get("release_lon"), run.get("release_lat")) \
+        if run.get("release_user_supplied") else (None, None)
     if lon is None or lat is None:
         return SyntheticInput(
-            param="release_point", value=f"spill_fraction {sheet.get('spill_frac')}",
+            param="release_point",
+            value=f"spill_fraction {run.get('spill_fraction')}",
             basis="derived", consequence="scenario",
             real_source_if_any="NHDPlus flowline centerline",
             note="no release point was supplied; the source sits at spill_fraction "
@@ -102,7 +103,7 @@ def _bed_provenance(run: dict[str, Any]) -> SyntheticInput:
     was: a GLO-30 bed and the 3DEP one the ladder fell to are different physics
     and the layer has to be able to say which it got.
     """
-    source = str(run["sheet"].get("bed_source") or "staged")
+    source = str(run.get("bed_source") or "staged")
     return SyntheticInput(
         param="mesh_bed", value=source, basis="fetched", consequence="physics",
         real_source_if_any=source,
@@ -248,8 +249,9 @@ async def _fold_sediment_products(peak: TelemacDyeLayerURI, *, run_id: str,
     gaia_path = await asyncio.to_thread(_download_artifact, run_id, "gaia_river.slf")
     listing = await asyncio.to_thread(_listing_text, run_id)
     stats = await asyncio.to_thread(
-        sediment_scalars, listing_text=listing, sheet=run["sheet"],
-        gaia_slf=gaia_path)
+        sediment_scalars, listing_text=listing,
+        injected_kg=float(run["sediment_injected_kg"]),
+        n_classes=int(run.get("sediment_n_classes") or 1), gaia_slf=gaia_path)
     net = stats.get("sediment_net_bed_mass_kg")
     peak = peak.model_copy(update={
         "deposited_mass_kg": max(float(net), 0.0) if net is not None else None,

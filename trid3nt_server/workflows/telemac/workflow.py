@@ -1,66 +1,257 @@
-"""``TelemacWorkflow`` - the TELEMAC engine facade.
+"""The TELEMAC door: fill, then run - and the facade the un-flipped fronts use.
 
-Four operations, and nothing else. Behind them sit the four shared trees -
-``authoring/``, ``solving/``, ``products/``, ``helpers/`` - carrying the reach
-front (geocode, flowline, seed, the assembled run, the reach solve, the
-per-deliverable readers) and the open-water front (an AOI, a regular grid over
-it, one worker section, one result SELAFIN). The facade is what stays still while
-those move.
+TWO ACTS ON ONE SHEET. ``fill`` sets slots, expands the composites the wrapper
+registered, binds every producer the template named, and hands back what the
+sheet now says; it is repeatable, it decides nothing, and it renders the sheet as
+the card the run is HELD on. ``run`` is the other act and it is explicit: a
+complete sheet is serialized into the engine's own steering files, the run
+directory is staged, and the box receives it.
 
-The MESH is not one of the four: a template declares its mesh ask as a
-``tool.build_mesh`` block beside PHYSICS and FORCING, and ``author`` reads the
-fields the authors know by their own names.
+:class:`Door` is what a template hands over instead of a plan. It names the world
+the sheet is filled FROM - the domain, the mesh recipe, the producers this
+question needs - the STEERING body itself, and the wrapper OUTPUT that publishes
+the solved file. The sequence it builds is the same for every question, which is
+what a template no longer has to write down.
 
-WHAT VARIES BETWEEN TEMPLATES is the declared PHYSICS PROCESS, and one table
-(:data:`_PROCESSES`) says what each process means end to end - which author
-serializes it, which solve dispatches it, which reader publishes it. A process
-the facade does not know REFUSES at plan construction rather than solving into a
-reader that cannot describe the result.
-
-Named by ENGINE only. A domain qualifier here would weld a domain assumption into
-the engine; the domain arrives through ``acquire_domain``'s slots.
+``TelemacWorkflow`` still realizes the four operations for the two fronts that
+have not been flipped - harbour agitation and stratified flow. Those are Stage
+3's, and :data:`_PROCESSES` dies with them.
 """
 
 from __future__ import annotations
 
 import inspect
-from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+import logging
+from dataclasses import dataclass, field
+from typing import Any, Callable, Mapping, Sequence
+
+from trid3nt_contracts.common import SyntheticInput
+from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
 from trid3nt_server.workflows.runtime import (
     DataRef,
     Forcing,
+    ParamRef,
     Physics,
     PlanValidationError,
     Ref,
+    RunMode,
     Step,
     Workflow,
 )
+from trid3nt_server.workflows.mesh.step import MeshStep
 from trid3nt_server.workflows.shared.aoi import AcquireAoi
 from trid3nt_server.workflows.telemac.authoring.agitation import (
     Agitation,
     write_agitation_case,
-)
-from trid3nt_server.workflows.telemac.authoring.assembler import (
-    Assemble,
-    assemble_rain_on_grid,
-    assemble_reach,
 )
 from trid3nt_server.workflows.telemac.authoring.open_water import SolveOpenWater
 from trid3nt_server.workflows.telemac.authoring.stratified import (
     Stratified,
     write_stratified_case,
 )
-from trid3nt_server.workflows.telemac.helpers.catchment import AcquireCatchment
-from trid3nt_server.workflows.telemac.helpers.forcing import CarrierDischarge
-from trid3nt_server.workflows.telemac.helpers.reach import Geocode, ReachSeed
-from trid3nt_server.workflows.telemac.products.products import Products
-from trid3nt_server.workflows.telemac.products.rain_on_grid import RainOnGridProducts
-from trid3nt_server.workflows.telemac.solving.solve import Solve, SolveRainOnGrid
+from trid3nt_server.workflows.telemac.modules import SlotRefused
+from trid3nt_server.workflows.telemac.modules.sheet import Sheet
+from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
+from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
 
-__all__ = ["TelemacWorkflow", "mesh_sheet_fields"]
+logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
+
+__all__ = ["Door", "TelemacWorkflow", "fill_sheet", "mesh_sheet_fields",
+           "run_sheet"]
+
+_TELEMAC = "trid3nt_server.workflows.telemac"
+
+#: What a reader may open on any run, past the files the engine is required to
+#: write: the mesh it solved on, the deck it read, the listing and the metrics.
+_ALWAYS_READABLE = ("full_listing.log", "telemac_metrics.json")
 
 
+# --------------------------------------------------------------------------- #
+# The door.
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True, slots=True)
+class Door:
+    """What a template hands over: the world, the sheet, and how it is read.
+
+    Called by the skeleton at registration, it returns the step sequence - the
+    domain, the mesh, this question's own producers, the two acts on the sheet,
+    and the wrapper output that publishes the solved file. Nothing here decides
+    anything: every value it carries is the template's own declaration.
+    """
+
+    #: The STEERING body: the module wrapper plus the parts and slots this
+    #: question asserts.
+    steering: type
+    #: The step that MEASURES what the sheet is filled from, named ``settled``.
+    settle: Step
+    #: The steps that establish the modelled world, and what the mesh is built
+    #: over - the name one of them was ``.named()`` by.
+    domain: tuple[Step, ...]
+    mesh: Any
+    mesh_on: str
+    #: The engine files this run has to write for it to have solved anything.
+    results: tuple[str, ...]
+    #: What the run directory calls the deck, and where the staged files live.
+    steering_file: str
+    prefix: str
+    #: The dispatch the staged run goes to. WHICH box entry is the template's,
+    #: not the sheet's.
+    dispatch: Callable[..., Any]
+    #: The reader that publishes the solved file: ``(run) -> Step``.
+    read: Callable[[Any], Step]
+    #: This question's own producers: what the WORLD gives, before the run is
+    #: settled, and what the SETTLED run gives, after it.
+    produce: tuple[Step, ...] = ()
+    derive: tuple[Step, ...] = ()
+    #: Slot values the fill sets that the body cannot state - a value the canvas
+    #: or another producer answers, under the identifier it fills.
+    slots: Mapping[str, Any] = field(default_factory=dict)
+    #: Constants the reader needs that no keyword carries: what was released, and
+    #: which product family publishes it.
+    meta: Mapping[str, Any] = field(default_factory=dict)
+    chart: tuple[str, Callable[..., Any]] | None = None
+    compute_class: Any = None
+    #: The title the card carries when the run is held for review.
+    review_title: str = ""
+
+    def __call__(self, ops: Workflow) -> list[Any]:
+        """The step sequence: the world, then fill, then run, then the reader."""
+        read = self.read(Ref("solve"))
+        if self.chart is not None:
+            read = read.chart(self.chart[0], builder=self.chart[1])
+        return [
+            *self.domain,
+            MeshStep.build(mesh=self.mesh, name=Ref(self.mesh_on)).named("mesh"),
+            *self.produce,
+            self.settle.named("settled"),
+            *self.derive,
+            Step(runner=f"{_TELEMAC}.workflow.fill_sheet", stage="author",
+                 self_gating=True,
+                 kwargs={"steering": self.steering, "settled": Ref("settled"),
+                         "params": {prm.name: ParamRef(prm.name)
+                                    for prm in ops.params},
+                         "slots": dict(self.slots), "workflow": ops.name,
+                         "title": self.review_title,
+                         "input_mode": RunMode}).named("sheet"),
+            Step(runner=f"{_TELEMAC}.workflow.run_sheet", stage="solve",
+                 consequential=True,
+                 kwargs={"sheet": Ref("sheet"), "settled": Ref("settled"),
+                         "results": list(self.results),
+                         "steering": self.steering_file, "prefix": self.prefix,
+                         "dispatch": self.dispatch, "meta": dict(self.meta),
+                         "compute_class": self.compute_class}).named("solve"),
+            read,
+        ]
+
+
+async def fill_sheet(*, steering: type, settled: Mapping[str, Any],
+                     params: Mapping[str, Any], slots: Mapping[str, Any],
+                     workflow: str, title: str,
+                     input_mode: str | None) -> Sheet:
+    """Set the body's slots against what the run measured -> the sheet, HELD.
+
+    The producers have already run, so the canvas shows the mesh and the release
+    before anything is filled. What comes back is every filled slot with its
+    provenance and every mandatory slot still open - and in ``user_gated`` that
+    IS the card: the sheet is shown, an edit is another fill, and the run waits.
+    """
+    # A slot the caller did not override is not a statement: the body's own
+    # value stands. That is not the same as a body asserting None, which IS the
+    # statement that this run says nothing about the keyword.
+    stated = {name: value for name, value in slots.items() if value is not None}
+    sheet = fill_slots(steering, produced={"settled": settled},
+                       params=dict(params), **stated)
+    revised = await _review(sheet, workflow=workflow, title=title,
+                            input_mode=input_mode)
+    if revised:
+        sheet = fill_slots(sheet, produced={"settled": settled},
+                           params=dict(params), **revised)
+    logger.info("telemac sheet filled: %s states %d keywords, %d open",
+                sheet.body.__name__, len(sheet.filled), len(sheet.open()))
+    return sheet
+
+
+async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
+                    results: Sequence[str], steering: str, prefix: str,
+                    dispatch: Callable[..., Any], meta: Mapping[str, Any],
+                    compute_class: Any) -> dict[str, Any]:
+    """A complete sheet: serialize, stage, hand it to the box -> the run handle.
+
+    What a reader may later OPEN is the sheet's own answer: the files the engine
+    must write, the mesh it was handed, the deck it read, and every file a
+    composite named beside it. Nothing is listed that the run does not carry.
+    """
+    coupled = dict(sheet.resolved()).get("COUPLING WITH")
+    outputs = [*results, *(row["dest"] for row in settled["mesh_inputs"]),
+               steering, *_ALWAYS_READABLE, *sorted(sheet.files)]
+    handle = await run_sheet_(
+        sheet, dispatch=dispatch, mesh_inputs=settled["mesh_inputs"],
+        outputs=outputs, results=list(results), prefix=prefix,
+        server_facts=settled["server_facts"], steering=steering,
+        compute_class=compute_class,
+        coupling=None if not coupled else str(coupled).split(";")[0].lower(),
+        continue_from=settled.get("continue_from"))
+    return {**settled, **dict(meta), **handle}
+
+
+#: How a slot's PROVENANCE reads on the card: which door served the value, and
+#: what the badge says beside it. The card is a view of the sheet, so the row's
+#: name is the keyword's own identifier and an edit of it is another fill.
+_PROVENANCE_DOORS: Mapping[str, tuple[str, str]] = {
+    "template": ("scenario", "derived"),
+    "fill": ("user", "user"),
+}
+
+
+async def _review(sheet: Sheet, *, workflow: str, title: str,
+                  input_mode: str | None) -> dict[str, Any]:
+    """Show the filled sheet and HOLD -> the slot edits the user submitted.
+
+    The card is the door's VIEW of the sheet rather than a step of its own: the
+    set slots and the open mandatory ones are what a run is reviewed on, and
+    submitting an edited sheet IS the approval, because the whole of it was on
+    screen. In ``auto`` nothing is shown and nothing waits.
+    """
+    from trid3nt_server.gates.input_review import gate_input_review
+
+    rows = [_slot_row(name, row) for name, row in sheet.filled.items()]
+    rows += [ParamSheetRow(name=slot.identifier, value=None, desc=slot.desc[:512],
+                           door="user", basis="derived", editable=True,
+                           source_badge="open: the dictionary gives it no default")
+             for slot in sheet.open()]
+    entries = [SyntheticInput(param=row.name, value=row.value, basis=row.basis,
+                              note=row.source_badge) for row in rows if row.value
+               is not None and not row.advanced]
+    outcome = await gate_input_review(
+        tool_name=workflow, mode=input_mode, entries=entries, params={},
+        param_sheet=ParamSheet(workflow=workflow,
+                               title=title or f"Review the {workflow} sheet",
+                               rows=rows))
+    if not outcome.proceed:
+        raise SlotRefused(outcome.cancel_reason
+                          or f"{workflow} was cancelled at the sheet review.")
+    return {name: value for name, value in outcome.params.items()
+            if name in sheet.body.CATALOG or name in sheet.body.COMPOSITES}
+
+
+def _slot_row(name: str, row: Any) -> ParamSheetRow:
+    """One filled slot, as the card renders it."""
+    door, basis = _PROVENANCE_DOORS.get(row.provenance, ("derived", "derived"))
+    value = row.value if isinstance(row.value, (int, float, str, bool, list)) \
+        else str(row.value)
+    return ParamSheetRow(
+        name=name, value=value, desc=row.slot.desc[:512], door=door, basis=basis,
+        source_badge=row.provenance,
+        # A slot the template or a part settled is inspectable rather than the
+        # question, so it folds away; what a producer measured and what a fill
+        # set are the rows a review is actually about.
+        advanced=row.provenance not in ("fill",) and row.slot.level > 0)
+
+
+# --------------------------------------------------------------------------- #
+# The facade the un-flipped fronts still run on. Stage 3 takes it.
+# --------------------------------------------------------------------------- #
 @dataclass(frozen=True, slots=True)
 class _Process:
     """One declared physics process, end to end.
@@ -68,55 +259,21 @@ class _Process:
     The facade routes on ``Physics.process``, and this is what it routes TO: the
     author step that serializes it, the writer whose real signature the slots are
     checked against in both directions, the solve that dispatches it, and the
-    reader that turns the solved file into the question's deliverable. Adding a
-    TELEMAC domain is a row here plus its two runners - never a branch in the four
-    operations.
+    reader that turns the solved file into the question's deliverable.
     """
 
-    #: What the author calls the acquired domain (``reach`` / ``aoi`` /
-    #: ``catchment``).
     domain_kw: str
-    #: The plan value that domain keyword takes. It is the PROCESS's, not the
-    #: template's: a reach reads the acquired reach, an open-water domain its AOI,
-    #: a catchment the built mesh, and no template chooses otherwise.
     domain_ref: Any
     author: Callable[..., Step]
     writer: Callable[..., Any]
     solve: Callable[..., Step]
     read: Callable[..., Step]
-    #: Forcing slot member -> the author's own keyword for it.
     forcing_fields: Mapping[str, str]
-    #: Extra plan-value fields this process's writer always takes.
     extra_fields: Mapping[str, Any] = None  # type: ignore[assignment]
-
-
-def _reach_solve(*, compute_class: Any) -> Step:
-    return Solve.telemac(run=Ref("run"), compute_class=compute_class)
 
 
 def _open_water_solve(*, compute_class: Any) -> Step:
     return SolveOpenWater.telemac(run=Ref("run"), compute_class=compute_class)
-
-
-def _rain_on_grid_solve(*, compute_class: Any) -> Step:
-    return SolveRainOnGrid.telemac(run=Ref("run"), compute_class=compute_class)
-
-
-def _read_rain_on_grid(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
-    return RainOnGridProducts.flood_depth(
-        run=Ref("run"), solve=solve).named("flood_depth")
-
-
-def _read_dye(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
-    return Products.dye(run=Ref("run"), solve=solve,
-                        carrier_discharge=forcing.values.get("carrier")).named("plume")
-
-
-def _read_dissolved_oxygen(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
-    return Products.dissolved_oxygen(
-        run=Ref("run"), solve=solve,
-        process=physics.values.get("do_sag_config"),
-        carrier_discharge=forcing.values.get("carrier")).named("do_field")
 
 
 def _read_agitation(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
@@ -127,41 +284,13 @@ def _read_stratified(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
     return Stratified.products(run=Ref("run"), solve=solve).named("column")
 
 
-#: Plan-value fields every reach author takes: the seed the one centerline was
-#: navigated from, that CENTERLINE itself, the ACCEPTED mesh the solve runs on,
-#: and the mapped water the reach was cut from - which a dredge field is cut out
-#: of. All four are chain products rather than sheet values, so none can be
-#: declared. The centerline is named here so the run reads the SAME line the
-#: section was cut between and the mesh was built over.
-_REACH_EXTRA: Mapping[str, Any] = {"seed": Ref("seed"), "mesh": Ref("mesh"),
-                                   "centerline": Ref("centerline"),
-                                   "reach_polygon": Ref("reach_polygon")}
-
 #: The agitation author always reads the run's MESH slot: the domain a phase-
 #: resolving solve runs on is the caller's to author, and an author that read the
 #: slot only sometimes would answer the grid question on the runs that filled it.
 _AGITATION_EXTRA: Mapping[str, Any] = {"supplied_mesh": DataRef("mesh")}
 
-_REACH_FORCING: Mapping[str, str] = {"carrier": "carrier_discharge", "rain": "rain"}
-_RAIN_FORCING: Mapping[str, str] = {"rain": "rain"}
-
-#: The known TELEMAC physics processes. See :class:`_Process`.
+#: The TELEMAC physics processes still declared as plans. See :class:`_Process`.
 _PROCESSES: dict[str, _Process] = {
-    "tracer": _Process(
-        domain_kw="reach", domain_ref=Ref("reach"),
-        author=Assemble.reach, writer=assemble_reach,
-        solve=_reach_solve, read=_read_dye, forcing_fields=_REACH_FORCING,
-        extra_fields=_REACH_EXTRA),
-    "morphodynamics": _Process(
-        domain_kw="reach", domain_ref=Ref("reach"),
-        author=Assemble.reach, writer=assemble_reach,
-        solve=_reach_solve, read=_read_dye, forcing_fields=_REACH_FORCING,
-        extra_fields=_REACH_EXTRA),
-    "waqtel_o2": _Process(
-        domain_kw="reach", domain_ref=Ref("reach"),
-        author=Assemble.reach, writer=assemble_reach,
-        solve=_reach_solve, read=_read_dissolved_oxygen,
-        forcing_fields=_REACH_FORCING, extra_fields=_REACH_EXTRA),
     "harbor_agitation": _Process(
         domain_kw="aoi", domain_ref=Ref("aoi"),
         author=Agitation.case, writer=write_agitation_case,
@@ -171,94 +300,37 @@ _PROCESSES: dict[str, _Process] = {
         domain_kw="aoi", domain_ref=Ref("aoi"),
         author=Stratified.case, writer=write_stratified_case,
         solve=_open_water_solve, read=_read_stratified, forcing_fields={}),
-    "rainfall_runoff": _Process(
-        domain_kw="catchment", domain_ref=Ref("mesh"),
-        author=Assemble.rain_on_grid, writer=assemble_rain_on_grid,
-        solve=_rain_on_grid_solve, read=_read_rain_on_grid,
-        forcing_fields=_RAIN_FORCING,
-        # The infiltration SURFACE is a mesh-node field, so it is a step result the
-        # author reads rather than a value the sheet carries - the same shape as
-        # the reach family's mid-reach seed.
-        extra_fields={"infiltration": Ref("infiltration")}),
 }
 
 #: Recipe params a TELEMAC author reads, under the name that writer knows each
 #: by. Only the AGNOSTIC params can appear here: an op is a call on a mesh library
-#: and means nothing to a steering file. The sheet records what the mesh ask asked
-#: FOR, and the mesher answers for what it built.
+#: and means nothing to a steering file.
 _MESH_SHEET_PARAMS: Mapping[str, str] = {
     "resolution_m": "mesh_resolution_m",
 }
 
-#: Which domain SHAPES ``acquire_domain`` knows, and what each one is for. A
-#: reach is a corridor along a flowline; an open-water domain is a grid over an
-#: AOI; a catchment is the terrain that drains to one point. The shape is the
-#: template's declaration, never inferred from which slots happen to be filled.
-_SHAPES = ("reach", "open_water", "catchment")
-
 
 class TelemacWorkflow(Workflow):
-    """TELEMAC: the reach and open-water pipelines behind five operations."""
+    """TELEMAC: the fill/run door, and the open-water pipeline behind the four."""
 
     engine = "telemac2d"
     solve_step = "solve"
 
     # -- 1. acquire -------------------------------------------------------- #
 
-    def acquire_domain(self, *, location: Any, bbox: Any, shape: str = "reach",
-                       rivers: Any = None, discharge: Any = None,
-                       event_time: Any = None, pour_point: Any = None,
-                       seed_coords: Any = None,
+    def acquire_domain(self, *, location: Any, bbox: Any,
                        aoi_half_deg: float | tuple[float, float] = 0.06,
                        aoi_name: str = "aoi",
                        code_prefix: str = "TELEMAC") -> tuple[Step, ...]:
-        """The steps that establish the modeled world and its resolved state.
+        """The AOI an OPEN-WATER domain is solved over, and nothing else.
 
-        Three domain SHAPES, declared rather than inferred:
-
-        * ``reach`` - place -> reach centre -> the seed -> the carrier discharge
-          AT that seed. Three steps because the modeled world is not established
-          until the flow that carries everything through it is: the seed is the
-          point the discharge is read at, so it cannot be declared independently
-          of the reach. ``seed_coords`` pins that seed - a template whose ask
-          names where the substance enters the water is naming which stretch to
-          model, and the one centerline is navigated from there.
-        * ``open_water`` - place or extent -> the AOI, and nothing else. A lake
-          fetch and a harbour basin are bounded by the ask itself; there is no
-          flowline to find and no carrier to resolve.
-        * ``catchment`` - the OUTLET first, then the analysis window around it.
-          The basin's shape is the terrain's answer rather than the geocoder's, so
-          a place bbox cannot bound it: the AOI is derived from the pour point
-          unless the caller drew one.
-
-        New acquisition inputs arrive as keywords WITH DEFAULTS, so a template
-        that does not want one is untouched.
+        A lake fetch and a harbour basin are bounded by the ask itself; there is
+        no flowline to find and no carrier to resolve. A reach and a catchment
+        establish their own world in the template that asks for one.
         """
-        if shape not in _SHAPES:
-            raise PlanValidationError(
-                f"acquire_domain shape {shape!r} is not a TELEMAC domain shape "
-                f"(known: {list(_SHAPES)}).")
-        if shape == "catchment":
-            if isinstance(aoi_half_deg, (list, tuple)):
-                raise PlanValidationError(
-                    "a catchment AOI is a SQUARE buffer around the outlet, so "
-                    "aoi_half_deg is one number; a (dlon, dlat) pair describes a "
-                    "domain whose shape the ask decides, which a catchment's is not.")
-            return (AcquireCatchment(location=location, bbox=bbox,
-                                     pour_point=pour_point, half_deg=aoi_half_deg,
-                                     default_name=aoi_name,
-                                     code_prefix=code_prefix).named("aoi"),)
-        if shape == "open_water":
-            return (AcquireAoi(location=location, bbox=bbox, half_deg=aoi_half_deg,
-                               default_name=aoi_name,
-                               code_prefix=code_prefix).named("aoi"),)
-        return (
-            Geocode.reach(location, bbox).named("reach"),
-            ReachSeed(reach=Ref("reach"), rivers=rivers,
-                      supplied=seed_coords).named("seed"),
-            CarrierDischarge(seed=Ref("seed"), explicit=discharge,
-                             event_time=event_time).named("carrier_discharge"),
-        )
+        return (AcquireAoi(location=location, bbox=bbox, half_deg=aoi_half_deg,
+                           default_name=aoi_name,
+                           code_prefix=code_prefix).named("aoi"),)
 
     # -- 2. author --------------------------------------------------------- #
 
@@ -288,10 +360,9 @@ class TelemacWorkflow(Workflow):
     def solve(self, *, compute_class: Any, physics: Physics) -> Step:
         """Dispatch the staged run to the worker the declared process runs on.
 
-        ``physics`` is the process SELECTOR and is required: it must never default,
-        because a template that forgot to name its physics would otherwise dispatch
-        an agitation or stratified run to the wrong solver silently. A missing
-        selector must raise, not fall back.
+        ``physics`` is the process SELECTOR and is required: it must never
+        default, because a template that forgot to name its physics would
+        otherwise dispatch to the wrong solver silently.
         """
         if physics is None:
             raise PlanValidationError(
@@ -321,9 +392,9 @@ class TelemacWorkflow(Workflow):
 def _is_mesh_recipe(value: Any) -> bool:
     """Is ``value`` a frozen ``tool.build_mesh`` recipe?
 
-    Imported where it is asked rather than at module scope: the mesh tool registers
-    itself into the tool registry, which imports the templates that import this
-    facade, and a module-level import would close that circle.
+    Imported where it is asked rather than at module scope: the mesh tool
+    registers itself into the tool registry, which imports the templates that
+    import this facade, and a module-level import would close that circle.
     """
     from trid3nt_server.workflows.mesh.tool import MeshRecipe
 
@@ -337,8 +408,8 @@ def mesh_sheet_fields(mesh: Any) -> dict[str, Any]:
     None would override the author's own default with nothing, and "the template
     did not ask" is what absence means.
     """
-    return {field: getattr(mesh, name)
-            for name, field in _MESH_SHEET_PARAMS.items()
+    return {field_name: getattr(mesh, name)
+            for name, field_name in _MESH_SHEET_PARAMS.items()
             if getattr(mesh, name, None) is not None}
 
 
@@ -351,13 +422,10 @@ def _refuse_uncovered_fields(fields: Mapping[str, Any], writer: Callable[..., An
                              process: str) -> None:
     """The slots and the author's signature must AGREE, in both directions.
 
-    The signature check has to run both ways or it only catches half the disease.
     An UNKNOWN key vanishes - the run is authored without it and answers a
     different question than the template declared. A MISSING required key is the
     mirror image and costs more: the plan builds, the acquire stage geocodes and
-    fetches, and only then does the writer die on a TypeError, several minutes and
-    three network round-trips after the declaration that was already wrong. Both
-    are refused HERE, while the plan value is being built.
+    fetches, and only then does the writer die on a TypeError.
     """
     signature = inspect.signature(writer).parameters
     accepted = set(signature)
@@ -376,7 +444,5 @@ def _refuse_uncovered_fields(fields: Mapping[str, Any], writer: Callable[..., An
     if missing:
         raise PlanValidationError(
             f"the {process!r} declaration covers no {missing}, which "
-            f"{writer.__name__} requires (required: {required}). Declare the slot "
-            "member that carries it - a Forcing without a `carrier`, for instance, "
-            "leaves `carrier_discharge` unfilled."
+            f"{writer.__name__} requires (required: {required})."
         )

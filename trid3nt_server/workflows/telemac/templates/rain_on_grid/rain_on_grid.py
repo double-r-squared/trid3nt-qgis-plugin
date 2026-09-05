@@ -1,14 +1,4 @@
-"""Engine template ``telemac_rain_on_grid`` - TELEMAC-2D rainfall-runoff on a
-delineated watershed.
-
-The recipe on one page: the declared data, the binding blocks, ``plan(ops)``, the
-ANSWER fields and the chart function. The declared params and the model-facing
-prose are one file over in ``declarations.py``. Everything else - normalizing the
-wire args, resolving the doors, walking the plan, persisting the products - is the
-skeleton (``workflows/runtime/workflow.py``); the catchment mechanism is the TELEMAC
-facade's one assembler (``workflows/telemac/authoring/assembler.py``) over the
-chained delineation and the one mesh step. See
-``docs/design/declarative-workflows.md``.
+"""Engine template ``telemac_rain_on_grid`` - a storm over a delineated watershed.
 
 THE QUESTION: how much RUNOFF a storm produces from a WATERSHED, and where the
 water stands while it drains. A design storm or a real hourly hyetograph falls on
@@ -21,9 +11,8 @@ Applicability envelope (Godara, Bruland and Alfredsen 2024, Front. Water
 6:1384205): rain-on-grid reproduces SINGLE-STORM flash-flood events (~10-20 h) in
 small steep catchments. Multi-peak and sustained rain-on-snow are NOT reproduced -
 infiltrated water is permanently lost, so there is no subsurface return flow and
-no inter-peak baseflow.
-TELEMAC-2D's triangular mesh is stable on steep terrain where a structured grid is
-not, which is the paper's own finding against HEC-RAS.
+no inter-peak baseflow. TELEMAC-2D's triangular mesh is stable on steep terrain
+where a structured grid is not, which is the paper's own finding against HEC-RAS.
 """
 
 from __future__ import annotations
@@ -32,34 +21,57 @@ from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata, ResolutionSpec
 
-from trid3nt_server.workflows.runtime import (
-    DrawGate,
-    Forcing,
-    FormGate,
-    Physics,
-    Ref,
-    register_workflow,
-    user_input,
-)
-from trid3nt_server.workflows.mesh.step import MeshStep
+from trid3nt_server.workflows.runtime import ParamRef, Ref, register_workflow, user_input
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
-from trid3nt_server.workflows.telemac.rain_on_grid.declarations import (
+from trid3nt_server.workflows.shared.aoi import AcquireAoi
+from trid3nt_server.workflows.telemac.authoring.assembler import settle_catchment
+from trid3nt_server.workflows.telemac.helpers.catchment import AcquireCatchment
+from trid3nt_server.workflows.telemac.helpers.infiltration import Infiltration
+from trid3nt_server.workflows.telemac.modules import T2D
+from trid3nt_server.workflows.telemac.modules.telemac2d import (
+    Friction,
+    Hyetograph,
+    Rain,
+    Rating,
+    Runoff,
+)
+from trid3nt_server.workflows.telemac.products.rain_on_grid import RainOnGridProducts
+from trid3nt_server.workflows.telemac.solving.solve import (
+    compute_class,
+    solve_rain_on_grid,
+)
+from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import (
     DOC,
     NLCD_NATIVE_RESOLUTION_M,
     PARAMS,
     PARAMS as P,
     POUR_POINT_BUFFER_DEG,
 )
-from trid3nt_server.workflows.telemac.helpers.infiltration import Infiltration
-from trid3nt_server.workflows.telemac.solving.solve import compute_class
-from trid3nt_server.workflows.telemac.workflow import TelemacWorkflow
+from trid3nt_server.workflows.runtime import Step
+from trid3nt_server.workflows.telemac.workflow import Door, TelemacWorkflow
 
-__all__ = ["ANSWER", "DATA", "PARAMS", "build_hydrograph_chart", "plan",
+__all__ = ["ANSWER", "DATA", "PARAMS", "STEERING", "build_hydrograph_chart",
            "telemac_rain_on_grid"]
 
 _HELPERS = "trid3nt_server.workflows.telemac.helpers"
+_AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
 _CODE = "TELEMAC_ROG_PARAMS_INVALID"
+
+#: The names the run directory holds a catchment's files under - the deck's own
+#: GEOMETRY / BOUNDARY CONDITIONS / RESULTS statements.
+_GEOMETRY = "rog.slf"
+_BOUNDARY = "rog.cli"
+_RESULT = "r2d_rog.slf"
+_STEERING_FILE = "t2d_rog.cas"
+
+#: Where the image BAKES the RAINDEF=3 copy of the engine's own
+#: ``runoff_scs_cn.f``. The installed source hardcodes ``RAINDEF=1`` as a
+#: compile-time PARAMETER, which no steering keyword can reach, so a
+#: time-varying gross hyetograph needs the engine's own user-fortran door. The
+#: patch is made ONCE at build time and the run STAGES it; a constant-rain run
+#: names nothing here and stages nothing.
+RAINDEF3_USER_FORTRAN = "/opt/trid3nt/user_fortran/raindef3"
 
 
 #: What the run consumes from the world. Every world-read is declared here rather
@@ -97,25 +109,11 @@ class DATA:
                  bbox=Ref("aoi.bbox"), dem_uri=Ref("dem.uri"))
 
 
-# -- the binding blocks --------------------------------------------------- #
-# What the run IS, declared as frozen values above the recipe that assembles
-# them. Every member is a late-bound read (P.<param> / DATA.<row> / Ref) that the
-# interpreter substitutes against the approved sheet, so the blocks are
-# process-lifetime constants and the plan is a pure assembly of them.
-
-PHYSICS = Physics("rainfall_runoff",
-                  time_step_s=P.time_step_s,
-                  output_interval_min=P.output_interval_min)
-
-FORCING = Forcing(rain=DATA.rain)
-
 #: The MESH RECIPE, frozen at declaration and building nothing at import. The
 #: extent is the CHAIN's product - the delineated basin - so the mesher
 #: triangulates a domain another tool measured rather than delineating one
 #: itself, and the channel network the mesh is refined TOWARD is named by the
-#: sizing op rather than folded into the domain. The sheet reads the finest edge
-#: only to record what was ASKED for; what the mesh was BUILT at comes back on
-#: the mesh step.
+#: sizing op rather than folded into the domain.
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
@@ -147,8 +145,8 @@ MESH = tool.build_mesh(
         #
         # A subcritical outlet needs ONE fact from outside, and the RATING CURVE
         # role is where it comes from: the quad prescribes a water LEVEL and the
-        # authoring derives the Z(Q) that level is read off - a normal depth over
-        # the section this face cuts, swept over the flow range the storm can
+        # run derives the Z(Q) that level is read off - a normal depth over the
+        # section this face cuts, swept over the flow range the storm can
         # produce - so the outlet rises and falls with the hydrograph. The
         # all-KSORT free exit is not the alternative: it is well-posed only while
         # the normal velocity leaves, and propin_telemac2d.f refuses an entering
@@ -160,33 +158,63 @@ MESH = tool.build_mesh(
 )
 
 
-def plan(ops):  # noqa: ANN001, ANN201 - the declared plan value, per the design doc
-    """The rainfall-runoff recipe. Pure and STATIC: it reads no value, it names them.
+class STEERING(T2D):
+    """The deck: rain at every node, infiltration under it, one outlet below."""
 
-    The gates come FIRST so every step and every producer downstream of them runs
-    on the approved sheet. The pour point in particular: it decides which basin is
-    delineated at all, so a run that resolved it after the mesh would have meshed
-    a catchment the review never saw.
-    """
-    return [
-        FormGate(title="Review the storm, the catchment and the mesh band"),
-        DrawGate(param="pour_point", geometry="point",
-                 prompt="Click the catchment OUTLET the runoff drains to"),
-        *ops.acquire_domain(location=P.location, bbox=P.bbox, shape="catchment",
-                            pour_point=P.pour_point,
-                            aoi_half_deg=POUR_POINT_BUFFER_DEG,
-                            aoi_name="watershed", code_prefix="TELEMAC_ROG"),
-        MeshStep.build(mesh=MESH, name=Ref("aoi")).named("mesh"),
-        Infiltration.fields(mesh=Ref("mesh"), landcover=DATA.landcover,
-                            curve_number=P.curve_number,
-                            steep_slope_correction=P.steep_slope_correction,
-                            antecedent_moisture=P.antecedent_moisture
-                            ).named("infiltration"),
-        ops.author(mesh=MESH, physics=PHYSICS, forcing=FORCING),
-        ops.solve(compute_class=P.compute_class, physics=PHYSICS),
-        ops.read(Ref("solve"), physics=PHYSICS, forcing=FORCING)
-           .chart("rain_on_grid_outlet_hydrograph", builder=build_hydrograph_chart),
-    ]
+    GEOMETRY_FILE = _GEOMETRY
+    BOUNDARY_CONDITIONS_FILE = _BOUNDARY
+    RESULTS_FILE = _RESULT
+    TITLE = Ref("settled.title")
+
+    VARIABLES_FOR_GRAPHIC_PRINTOUTS = "U,V,H,S,B"
+    GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
+    LISTING_PRINTOUT_PERIOD = Ref("settled.graphic_period")
+    DURATION = Ref("settled.duration_s")
+    TIME_STEP = P.time_step_s
+
+    # The catchment starts DRY, which is the dictionary's own initial condition,
+    # and it carries no tracer: the outlet hydrograph is the product.
+    TYPE_OF_ADVECTION = [1, 5]
+    SUPG_OPTION = [0, 0]
+    MASS_LUMPING_ON_H = 1.0
+    CONTINUITY_CORRECTION = True
+    SOLVER = 1
+    SOLVER_ACCURACY = 1.0e-6
+    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER = 200
+    IMPLICITATION_FOR_DEPTH = 0.6
+    IMPLICITATION_FOR_VELOCITY = 0.6
+    # An overland sheet is thin and its free surface follows the ground, so the
+    # gradient the engine reads has to be compatible with the bed it runs over.
+    FREE_SURFACE_GRADIENT_COMPATIBILITY = 0.9
+    MASS_BALANCE = True
+
+    #: Manning per land cover, as zones and the laws they index. The law is the
+    #: one the outlet's rating curve was derived under, stated once.
+    friction = Friction(law=Ref("settled.friction_law"),
+                        manning_per_node=Ref("settled.node_manning"))
+
+    #: The storm at every wet node, and the engine's own SCS-CN infiltration
+    #: under it. A constant design rate stops when the rain window closes so the
+    #: catchment drains and the recession limb appears; a real hyetograph brings
+    #: its own dry tail and states no window.
+    rain = Rain(mm_per_day=Ref("settled.rain_mm_per_day"), tracers=0,
+                hours=Ref("settled.rain_hours"))
+    runoff = Runoff(node_xy=Ref("settled.node_xy"), cn2=Ref("settled.node_cn2"),
+                    antecedent_moisture=Ref("settled.antecedent_moisture"),
+                    initial_abstraction=Ref("settled.initial_abstraction"))
+    hyetograph = Hyetograph(blocks=Ref("settled.hyetograph_blocks"),
+                            until_s=Ref("settled.duration_s"),
+                            fortran=RAINDEF3_USER_FORTRAN)
+
+    #: The DERIVED stage-discharge curve the outlet holds. ``bord.f`` reads it at
+    #: every prescribed-depth boundary whose entry is 1, interpolates the
+    #: elevation against that boundary's own measured flux and relaxes the depth
+    #: toward it, so the outlet level rises and falls with the storm instead of
+    #: standing at the boundary file's zero.
+    rating = Rating(at_boundary=Ref("settled.rating.at_boundary"),
+                    of_boundaries=Ref("settled.rating.of_boundaries"),
+                    rows=Ref("settled.rating.rows"),
+                    note=Ref("settled.rating.note"))
 
 
 #: The run's ANSWER, as the numbers a reader has to be able to check. Persisted
@@ -289,7 +317,38 @@ _ROG_METADATA = AtomicToolMetadata(
 
 
 telemac_rain_on_grid = register_workflow(
-    TelemacWorkflow, _ROG_METADATA, PARAMS, plan,
+    TelemacWorkflow, _ROG_METADATA, PARAMS,
+    Door(
+        steering=STEERING,
+        # The OUTLET first, then the analysis window around it: the basin's shape
+        # is the terrain's answer rather than the geocoder's, so a place bbox
+        # cannot bound it.
+        domain=(AcquireCatchment(location=P.location, bbox=P.bbox,
+                                 pour_point=P.pour_point,
+                                 half_deg=POUR_POINT_BUFFER_DEG,
+                                 default_name="watershed",
+                                 code_prefix="TELEMAC_ROG").named("aoi"),),
+        mesh=MESH, mesh_on="aoi",
+        produce=(Infiltration.fields(
+            mesh=Ref("mesh"), landcover=DATA.landcover,
+            curve_number=P.curve_number,
+            steep_slope_correction=P.steep_slope_correction,
+            antecedent_moisture=P.antecedent_moisture).named("infiltration"),),
+        settle=Step(runner=f"{_AUTHORING}.assembler.settle_catchment",
+                    stage="author",
+                    kwargs={"catchment": Ref("mesh"),
+                            "infiltration": Ref("infiltration"),
+                            "rain": DATA.rain,
+                            "time_step_s": ParamRef("time_step_s"),
+                            "mesh_resolution_m": ParamRef("mesh_min_edge_m"),
+                            "output_interval_min": ParamRef("output_interval_min")}),
+        results=(_RESULT,),
+        steering_file=_STEERING_FILE, prefix="telemac_rog",
+        dispatch=solve_rain_on_grid, compute_class=P.compute_class,
+        read=lambda run: RainOnGridProducts.flood_depth(
+            run=run, solve=run).named("flood_depth"),
+        chart=("rain_on_grid_outlet_hydrograph", build_hydrograph_chart),
+        review_title="Review the storm, the catchment and the mesh band"),
     data=DATA,
     answer=ANSWER,
     provenance=(("rain_event", "rain_event_note"),

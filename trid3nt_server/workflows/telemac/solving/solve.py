@@ -127,10 +127,12 @@ async def solve_reach(*, run: dict[str, Any],
     from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
     from trid3nt_server.workflows.telemac.run_telemac import TELEMAC_SOLVER_NAME
 
-    sheet = run["sheet"]
+    # What the server already knows and the worker cannot learn from the files
+    # it is handed. The wait is bounded off the deck's own horizon and step.
+    facts = run["case"]["server_facts"]
     manifest_uri = run["manifest_uri"]
     logger.info("telemac dispatching run_tag=%s reach=%s -> %s",
-                run["run_tag"], sheet["name"], manifest_uri)
+                run["run_tag"], facts["name"], manifest_uri)
 
     emitter = current_emitter()
     handle = run_solver(solver=TELEMAC_SOLVER_NAME, model_setup_uri=manifest_uri,
@@ -148,8 +150,8 @@ async def solve_reach(*, run: dict[str, Any],
         grid_resolution_m=None, active_cell_count=None, vcpus=None, eta_seconds=None))
 
     wait_s = max(_MIN_WAIT_S, estimate_telemac_solve_seconds(
-        MESH_NODE_CAP, float(sheet["duration_s"]),
-        float(sheet["time_step_s"])) * _WAIT_HEADROOM)
+        MESH_NODE_CAP, float(facts["duration_s"]),
+        float(facts["time_step_s"])) * _WAIT_HEADROOM)
     run_result = None
     try:
         run_result = await wait_for_completion(handle, timeout_s=wait_s)
@@ -260,13 +262,14 @@ async def solve_rain_on_grid(*, run: dict[str, Any],
 
     from ..authoring.open_water import dispatch_and_wait
 
+    facts = run["case"]["server_facts"]
     logger.info("rog dispatching run_tag=%s catchment=%s -> %s",
-                run["run_tag"], run["domain_name"], run["manifest_uri"])
+                run["run_tag"], facts["name"], run["manifest_uri"])
     run_result, batch_run_id = await dispatch_and_wait(
         solver=_telemac_solver_name(), manifest_uri=run["manifest_uri"],
         compute_class=compute_class, label="rain_on_grid",
-        timeout_s=_ROG_TIMEOUT_S, grid_resolution_m=run.get("mesh_size_m"),
-        active_cell_count=run["catchment"].get("element_count"))
+        timeout_s=_ROG_TIMEOUT_S, grid_resolution_m=facts.get("mesh_size_m"),
+        active_cell_count=facts.get("nelem"))
     if run_result is None or run_result.status != "complete":
         raise RainOnGridError(
             "the rain-on-grid solve did not complete "
@@ -279,7 +282,7 @@ async def solve_rain_on_grid(*, run: dict[str, Any],
         "run_id": batch_run_id,
         "uri": (f"s3://{_get_runs_bucket()}/{batch_run_id}/"
                 f"{run['result_basename']}"),
-        "utm_epsg": int(run["utm_epsg"]), "metrics": metrics,
+        "utm_epsg": int(facts["utm_epsg"]), "metrics": metrics,
         "started_at": _run_start_iso(run_result),
     }
 
