@@ -3640,3 +3640,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   optional features within one question are composites that state
   nothing when given nothing (decay, dredging, hyetograph vs constant
   rate). The tool surface grows 5 -> 7; routing picks the template.
+  STAGE 2 RULING, SEDIMENT (NATE 2026-09-04): the one-template-per-
+  question rule holds at EVERY level - river_sediment splits into
+  river_scour (RIVER + SEDIMENT bed: bedload, morphology, gradation as
+  a shape, the dredging composite) and river_sediment_plume (RIVER +
+  a suspended class from a source); every carrier slot visible in its
+  own body; EIGHT templates. Sequencing accepted under standing law:
+  Stage 2 deletes the reach + rain-on-grid half of the plan language
+  and the _setter_envelope orphan; Plan/Step/Gate/FormGate/DrawGate/
+  _PROCESSES/slots.py die at Stage 3 with agitation + stratified_flow
+  (DELETION_LEDGER rows with that condition). Engine defaults stay
+  UNWRITTEN even where the spec's illustrative snippet showed them.
