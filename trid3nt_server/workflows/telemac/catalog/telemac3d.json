@@ -3,6 +3,7 @@
   "keywords": [
     {
       "keyword": "TITLE",
+      "identifier": "TITLE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -19,6 +20,7 @@
     },
     {
       "keyword": "PARALLEL PROCESSORS",
+      "identifier": "PARALLEL_PROCESSORS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -35,6 +37,7 @@
     },
     {
       "keyword": "CHECKING THE MESH",
+      "identifier": "CHECKING_THE_MESH",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -47,10 +50,11 @@
       "is_file": false,
       "default": false,
       "level": 0,
-      "mnemo": "CHECK\\_MESH"
+      "mnemo": "CHECK_MESH"
     },
     {
       "keyword": "MAXIMUM NUMBER OF BOUNDARIES",
+      "identifier": "MAXIMUM_NUMBER_OF_BOUNDARIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -67,6 +71,7 @@
     },
     {
       "keyword": "MAXIMUM NUMBER OF TRACERS",
+      "identifier": "MAXIMUM_NUMBER_OF_TRACERS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -83,6 +88,7 @@
     },
     {
       "keyword": "MAXIMUM NUMBER OF SOURCES",
+      "identifier": "MAXIMUM_NUMBER_OF_SOURCES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -99,6 +105,7 @@
     },
     {
       "keyword": "MAXIMUM NUMBER OF BOUNDARIES ON THE BED",
+      "identifier": "MAXIMUM_NUMBER_OF_BOUNDARIES_ON_THE_BED",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -115,6 +122,7 @@
     },
     {
       "keyword": "VECTOR LENGTH",
+      "identifier": "VECTOR_LENGTH",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -131,6 +139,7 @@
     },
     {
       "keyword": "GEOMETRY FILE",
+      "identifier": "GEOMETRY_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -142,12 +151,13 @@
       ],
       "is_file": true,
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DGEO)\\%NAME",
+      "mnemo": "T3D_FILES(T3DGEO)%NAME",
       "file_role": "input",
       "file_mandatory": true
     },
     {
       "keyword": "GEOMETRY FILE FORMAT",
+      "identifier": "GEOMETRY_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -165,10 +175,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DGEO)\\%FMT"
+      "mnemo": "T3D_FILES(T3DGEO)%FMT"
     },
     {
       "keyword": "BOUNDARY CONDITIONS FILE",
+      "identifier": "BOUNDARY_CONDITIONS_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -180,12 +191,13 @@
       ],
       "is_file": true,
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DCLI)\\%NAME",
+      "mnemo": "T3D_FILES(T3DCLI)%NAME",
       "file_role": "input",
       "file_mandatory": true
     },
     {
       "keyword": "BINARY BOUNDARY DATA FILE",
+      "identifier": "BINARY_BOUNDARY_DATA_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -198,12 +210,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DBND)\\%NAME",
+      "mnemo": "T3D_FILES(T3DBND)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "BINARY BOUNDARY DATA FILE FORMAT",
+      "identifier": "BINARY_BOUNDARY_DATA_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -221,10 +234,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DBND)\\%FMT"
+      "mnemo": "T3D_FILES(T3DBND)%FMT"
     },
     {
       "keyword": "FORTRAN FILE",
+      "identifier": "FORTRAN_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -237,12 +251,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DFORT)\\%NAME",
+      "mnemo": "T3D_FILES(T3DFORT)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "BOTTOM TOPOGRAPHY FILE",
+      "identifier": "BOTTOM_TOPOGRAPHY_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -255,12 +270,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DFON)\\%NAME",
+      "mnemo": "T3D_FILES(T3DFON)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "NUMBER OF BOTTOM SMOOTHINGS",
+      "identifier": "NUMBER_OF_BOTTOM_SMOOTHINGS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -277,6 +293,7 @@
     },
     {
       "keyword": "BOTTOM SMOOTHINGS AFTER USER MODIFICATIONS",
+      "identifier": "BOTTOM_SMOOTHINGS_AFTER_USER_MODIFICATIONS",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -289,10 +306,11 @@
       "is_file": false,
       "default": true,
       "level": 0,
-      "mnemo": "LISFON\\_AFTER"
+      "mnemo": "LISFON_AFTER"
     },
     {
       "keyword": "FORMATTED DATA FILE 1",
+      "identifier": "FORMATTED_DATA_FILE_1",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -305,12 +323,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DFO1)\\%NAME",
+      "mnemo": "T3D_FILES(T3DFO1)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "FORMATTED DATA FILE 2",
+      "identifier": "FORMATTED_DATA_FILE_2",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -323,12 +342,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DFO2)\\%NAME",
+      "mnemo": "T3D_FILES(T3DFO2)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "BINARY DATA FILE 1",
+      "identifier": "BINARY_DATA_FILE_1",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -341,12 +361,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DBI1)\\%NAME",
+      "mnemo": "T3D_FILES(T3DBI1)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "BINARY DATA FILE 1 FORMAT",
+      "identifier": "BINARY_DATA_FILE_1_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -364,10 +385,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DBI1)\\%FMT"
+      "mnemo": "T3D_FILES(T3DBI1)%FMT"
     },
     {
       "keyword": "BINARY DATA FILE 2",
+      "identifier": "BINARY_DATA_FILE_2",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -380,12 +402,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DBI2)\\%NAME",
+      "mnemo": "T3D_FILES(T3DBI2)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "REFERENCE FILE",
+      "identifier": "REFERENCE_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -398,12 +421,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DREF)\\%NAME",
+      "mnemo": "T3D_FILES(T3DREF)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "REFERENCE FILE FORMAT",
+      "identifier": "REFERENCE_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -421,10 +445,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DREF)\\%FMT"
+      "mnemo": "T3D_FILES(T3DREF)%FMT"
     },
     {
       "keyword": "TIME SERIES COORDINATES FILE",
+      "identifier": "TIME_SERIES_COORDINATES_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -437,12 +462,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DCOO)\\%NAME",
+      "mnemo": "T3D_FILES(T3DCOO)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "3D RESULT FILE",
+      "identifier": "RD_RESULT_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -455,12 +481,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DRES)\\%NAME",
+      "mnemo": "T3D_FILES(T3DRES)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "3D RESULT FILE FORMAT",
+      "identifier": "RD_RESULT_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -478,10 +505,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DRES)\\%FMT"
+      "mnemo": "T3D_FILES(T3DRES)%FMT"
     },
     {
       "keyword": "2D RESULT FILE",
+      "identifier": "ED_RESULT_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -494,12 +522,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DHYD)\\%NAME",
+      "mnemo": "T3D_FILES(T3DHYD)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "2D RESULT FILE FORMAT",
+      "identifier": "ED_RESULT_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -517,10 +546,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DHYD)\\%FMT"
+      "mnemo": "T3D_FILES(T3DHYD)%FMT"
     },
     {
       "keyword": "RESULT FILE IN LONGITUDE-LATITUDE",
+      "identifier": "RESULT_FILE_IN_LONGITUDE_LATITUDE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -533,10 +563,11 @@
       "is_file": false,
       "default": true,
       "level": 1,
-      "mnemo": "KEEP\\_LONLAT"
+      "mnemo": "KEEP_LONLAT"
     },
     {
       "keyword": "VARIABLES FOR 3D GRAPHIC PRINTOUTS",
+      "identifier": "VARIABLES_FOR_3D_GRAPHIC_PRINTOUTS",
       "type": "STRING",
       "size": 1,
       "unbounded": true,
@@ -581,12 +612,13 @@
         "VS": "Stokes velocity along y axis (m/s)",
         "WS": "Stokes velocity along z axis (m/s)",
         "CSO2": "oxygen saturation concentration (mgO2/l)",
-        "O2SAT": "percentage of oxygen saturation (\\%)"
+        "O2SAT": "percentage of oxygen saturation (%)"
       },
       "mnemo": "SORT3D"
     },
     {
       "keyword": "VARIABLES FOR 2D GRAPHIC PRINTOUTS",
+      "identifier": "VARIABLES_FOR_2D_GRAPHIC_PRINTOUTS",
       "type": "STRING",
       "size": 1,
       "unbounded": true,
@@ -641,12 +673,13 @@
         "TASURFi": "conc of tracer i at the surface, i is the tracer number",
         "TASURF*": "concentration of tracers at the surface from 1 to 9",
         "CSO2": "depth averaged oxygen saturation concentration (mgO2/l)",
-        "O2SAT": "depth averaged percentage of oxygen saturation (\\%)"
+        "O2SAT": "depth averaged percentage of oxygen saturation (%)"
       },
       "mnemo": "SORT2D"
     },
     {
       "keyword": "GRAPHIC PRINTOUT PERIOD",
+      "identifier": "GRAPHIC_PRINTOUT_PERIOD",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -663,6 +696,7 @@
     },
     {
       "keyword": "NUMBER OF FIRST TIME STEP FOR GRAPHIC PRINTOUTS",
+      "identifier": "NUMBER_OF_FIRST_TIME_STEP_FOR_GRAPHIC_PRINTOUTS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -679,6 +713,7 @@
     },
     {
       "keyword": "NUMBER OF PRIVATE ARRAYS",
+      "identifier": "NUMBER_OF_PRIVATE_ARRAYS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -695,6 +730,7 @@
     },
     {
       "keyword": "NUMBER OF 2D PRIVATE ARRAYS",
+      "identifier": "NUMBER_OF_2D_PRIVATE_ARRAYS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -711,6 +747,7 @@
     },
     {
       "keyword": "NAMES OF 2D PRIVATE VARIABLES",
+      "identifier": "NAMES_OF_2D_PRIVATE_VARIABLES",
       "type": "STRING",
       "size": 4,
       "unbounded": false,
@@ -722,10 +759,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "NAMES\\_PRIVE2D"
+      "mnemo": "NAMES_PRIVE2D"
     },
     {
       "keyword": "FORMATTED RESULTS FILE",
+      "identifier": "FORMATTED_RESULTS_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -738,12 +776,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DRFO)\\%NAME",
+      "mnemo": "T3D_FILES(T3DRFO)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "BINARY RESULTS FILE",
+      "identifier": "BINARY_RESULTS_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -756,12 +795,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DRBI)\\%NAME",
+      "mnemo": "T3D_FILES(T3DRBI)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "FORMATTED RESULTS FILE 1",
+      "identifier": "FORMATTED_RESULTS_FILE_1",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -774,12 +814,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DRF1)\\%NAME",
+      "mnemo": "T3D_FILES(T3DRF1)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "FORMATTED RESULTS FILE 2",
+      "identifier": "FORMATTED_RESULTS_FILE_2",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -792,12 +833,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DRF2)\\%NAME",
+      "mnemo": "T3D_FILES(T3DRF2)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "FORMATTED RESULTS FILE 3",
+      "identifier": "FORMATTED_RESULTS_FILE_3",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -810,12 +852,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DRF3)\\%NAME",
+      "mnemo": "T3D_FILES(T3DRF3)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "FORMATTED RESULTS FILE 4",
+      "identifier": "FORMATTED_RESULTS_FILE_4",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -828,12 +871,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DRF4)\\%NAME",
+      "mnemo": "T3D_FILES(T3DRF4)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "FORMATTED RESULTS FILE 5",
+      "identifier": "FORMATTED_RESULTS_FILE_5",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -846,12 +890,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DRF5)\\%NAME",
+      "mnemo": "T3D_FILES(T3DRF5)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "FORMATTED RESULTS FILE 6",
+      "identifier": "FORMATTED_RESULTS_FILE_6",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -864,12 +909,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DRF6)\\%NAME",
+      "mnemo": "T3D_FILES(T3DRF6)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "2D TIME SERIES FILE",
+      "identifier": "ED_TIME_SERIES_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -882,12 +928,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DHI2)\\%NAME",
+      "mnemo": "T3D_FILES(T3DHI2)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "2D TIME SERIES FILE FORMAT",
+      "identifier": "ED_TIME_SERIES_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -905,10 +952,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DHI2)\\%FMT"
+      "mnemo": "T3D_FILES(T3DHI2)%FMT"
     },
     {
       "keyword": "3D TIME SERIES FILE",
+      "identifier": "RD_TIME_SERIES_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -921,12 +969,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DHI3)\\%NAME",
+      "mnemo": "T3D_FILES(T3DHI3)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "3D TIME SERIES FILE FORMAT",
+      "identifier": "RD_TIME_SERIES_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -944,10 +993,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DHI3)\\%FMT"
+      "mnemo": "T3D_FILES(T3DHI3)%FMT"
     },
     {
       "keyword": "LISTING PRINTOUT",
+      "identifier": "LISTING_PRINTOUT",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -964,6 +1014,7 @@
     },
     {
       "keyword": "MASS-BALANCE",
+      "identifier": "MASS_BALANCE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -980,6 +1031,7 @@
     },
     {
       "keyword": "INFORMATION ABOUT MASS-BALANCE FOR EACH LISTING PRINTOUT",
+      "identifier": "INFORMATION_ABOUT_MASS_BALANCE_FOR_EACH_LISTING_PRINTOUT",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -996,6 +1048,7 @@
     },
     {
       "keyword": "LISTING PRINTOUT PERIOD",
+      "identifier": "LISTING_PRINTOUT_PERIOD",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1012,6 +1065,7 @@
     },
     {
       "keyword": "NUMBER OF FIRST TIME STEP FOR LISTING PRINTOUTS",
+      "identifier": "NUMBER_OF_FIRST_TIME_STEP_FOR_LISTING_PRINTOUTS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1028,6 +1082,7 @@
     },
     {
       "keyword": "SECTIONS INPUT FILE",
+      "identifier": "SECTIONS_INPUT_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1040,12 +1095,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES\\%ADR(T3DSEC)",
+      "mnemo": "T3D_FILES%ADR(T3DSEC)",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "SECTIONS OUTPUT FILE",
+      "identifier": "SECTIONS_OUTPUT_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1058,12 +1114,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES\\%ADR(T3DSEO)",
+      "mnemo": "T3D_FILES%ADR(T3DSEO)",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "PRINTING CUMULATED FLOWRATES",
+      "identifier": "PRINTING_CUMULATED_FLOWRATES",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1080,6 +1137,7 @@
     },
     {
       "keyword": "COMPATIBLE COMPUTATION OF FLUXES",
+      "identifier": "COMPATIBLE_COMPUTATION_OF_FLUXES",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1096,6 +1154,7 @@
     },
     {
       "keyword": "PREVIOUS COMPUTATION FILE",
+      "identifier": "PREVIOUS_COMPUTATION_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1108,12 +1167,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DPRE)\\%NAME",
+      "mnemo": "T3D_FILES(T3DPRE)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "PREVIOUS COMPUTATION FILE FORMAT",
+      "identifier": "PREVIOUS_COMPUTATION_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1131,10 +1191,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DPRE)\\%FMT"
+      "mnemo": "T3D_FILES(T3DPRE)%FMT"
     },
     {
       "keyword": "RECORD NUMBER FOR RESTART",
+      "identifier": "RECORD_NUMBER_FOR_RESTART",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1147,10 +1208,11 @@
       "is_file": false,
       "default": -1,
       "level": 1,
-      "mnemo": "START\\_RECORD"
+      "mnemo": "START_RECORD"
     },
     {
       "keyword": "INITIAL TIME SET TO ZERO",
+      "identifier": "INITIAL_TIME_SET_TO_ZERO",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1167,6 +1229,7 @@
     },
     {
       "keyword": "RESTART FILE",
+      "identifier": "RESTART_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1179,12 +1242,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DRST)\\%NAME",
+      "mnemo": "T3D_FILES(T3DRST)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "RESTART FILE FORMAT",
+      "identifier": "RESTART_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1202,10 +1266,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DRST)\\%FMT"
+      "mnemo": "T3D_FILES(T3DRST)%FMT"
     },
     {
       "keyword": "RESTART FILE PRINTOUT PERIOD",
+      "identifier": "RESTART_FILE_PRINTOUT_PERIOD",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1222,6 +1287,7 @@
     },
     {
       "keyword": "RECORD NUMBER IN RESTART FILE",
+      "identifier": "RECORD_NUMBER_IN_RESTART_FILE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1234,10 +1300,11 @@
       "is_file": false,
       "default": -1,
       "level": 2,
-      "mnemo": "RESTART\\_RECORD"
+      "mnemo": "RESTART_RECORD"
     },
     {
       "keyword": "USE MAXIMUM VALUES FROM PREVIOUS COMPUTATION FILE",
+      "identifier": "USE_MAXIMUM_VALUES_FROM_PREVIOUS_COMPUTATION_FILE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1250,10 +1317,11 @@
       "is_file": false,
       "default": true,
       "level": 2,
-      "mnemo": "MAX\\_PREV"
+      "mnemo": "MAX_PREV"
     },
     {
       "keyword": "FILE FOR 2D CONTINUATION",
+      "identifier": "FILE_FOR_2D_CONTINUATION",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1266,12 +1334,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DS2D)\\%NAME",
+      "mnemo": "T3D_FILES(T3DS2D)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "FILE FOR 2D CONTINUATION FORMAT",
+      "identifier": "FILE_FOR_2D_CONTINUATION_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1289,10 +1358,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DS2D)\\%FMT"
+      "mnemo": "T3D_FILES(T3DS2D)%FMT"
     },
     {
       "keyword": "DEBUGGER",
+      "identifier": "DEBUGGER",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1309,6 +1379,7 @@
     },
     {
       "keyword": "TIME STEP",
+      "identifier": "TIME_STEP",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1325,6 +1396,7 @@
     },
     {
       "keyword": "NUMBER OF TIME STEPS",
+      "identifier": "NUMBER_OF_TIME_STEPS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1341,6 +1413,7 @@
     },
     {
       "keyword": "DURATION",
+      "identifier": "DURATION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1357,6 +1430,7 @@
     },
     {
       "keyword": "ORIGINAL DATE OF TIME",
+      "identifier": "ORIGINAL_DATE_OF_TIME",
       "type": "INTEGER",
       "size": 3,
       "unbounded": false,
@@ -1377,6 +1451,7 @@
     },
     {
       "keyword": "ORIGINAL HOUR OF TIME",
+      "identifier": "ORIGINAL_HOUR_OF_TIME",
       "type": "INTEGER",
       "size": 3,
       "unbounded": false,
@@ -1397,6 +1472,7 @@
     },
     {
       "keyword": "INITIAL TIME",
+      "identifier": "INITIAL_TIME",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1413,6 +1489,7 @@
     },
     {
       "keyword": "SPHERICAL COORDINATES",
+      "identifier": "SPHERICAL_COORDINATES",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1429,6 +1506,7 @@
     },
     {
       "keyword": "SPATIAL PROJECTION TYPE",
+      "identifier": "SPATIAL_PROJECTION_TYPE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1450,6 +1528,7 @@
     },
     {
       "keyword": "LATITUDE OF ORIGIN POINT",
+      "identifier": "LATITUDE_OF_ORIGIN_POINT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1466,6 +1545,7 @@
     },
     {
       "keyword": "LONGITUDE OF ORIGIN POINT",
+      "identifier": "LONGITUDE_OF_ORIGIN_POINT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1482,6 +1562,7 @@
     },
     {
       "keyword": "NORTH",
+      "identifier": "NORTH",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1498,6 +1579,7 @@
     },
     {
       "keyword": "NUMBER OF HORIZONTAL LEVELS",
+      "identifier": "NUMBER_OF_HORIZONTAL_LEVELS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1514,6 +1596,7 @@
     },
     {
       "keyword": "MESH TRANSFORMATION",
+      "identifier": "MESH_TRANSFORMATION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1530,6 +1613,7 @@
     },
     {
       "keyword": "MESH STRETCHING COEFFICIENTS",
+      "identifier": "MESH_STRETCHING_COEFFICIENTS",
       "type": "REAL",
       "size": 2,
       "unbounded": false,
@@ -1545,10 +1629,11 @@
         1.83
       ],
       "level": 2,
-      "mnemo": "TRANSF\\_COEF"
+      "mnemo": "TRANSF_COEF"
     },
     {
       "keyword": "MINIMUM VOLUME OF 3D ELEMENTS",
+      "identifier": "MINIMUM_VOLUME_OF_3D_ELEMENTS",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1561,10 +1646,11 @@
       "is_file": false,
       "default": 1e-06,
       "level": 0,
-      "mnemo": "MINIMUM\\_VOLUME"
+      "mnemo": "MINIMUM_VOLUME"
     },
     {
       "keyword": "MINIMUM DISTANCE BETWEEN PLANES CLOSE TO THE BOTTOM",
+      "identifier": "MINIMUM_DISTANCE_BETWEEN_PLANES_CLOSE_TO_THE_BOTTOM",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1577,10 +1663,11 @@
       "is_file": false,
       "default": 0.2,
       "level": 1,
-      "mnemo": "DISMIN\\_BOT"
+      "mnemo": "DISMIN_BOT"
     },
     {
       "keyword": "MINIMUM DISTANCE BETWEEN PLANES CLOSE TO THE FREE SURFACE",
+      "identifier": "MINIMUM_DISTANCE_BETWEEN_PLANES_CLOSE_TO_THE_FREE_SURFACE",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1593,10 +1680,11 @@
       "is_file": false,
       "default": 0.2,
       "level": 1,
-      "mnemo": "DISMIN\\_SUR"
+      "mnemo": "DISMIN_SUR"
     },
     {
       "keyword": "THRESHOLD HEIGHT BEFORE CRUSHED ELEMENTS",
+      "identifier": "THRESHOLD_HEIGHT_BEFORE_CRUSHED_ELEMENTS",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1609,10 +1697,11 @@
       "is_file": false,
       "default": 0.0,
       "level": 1,
-      "mnemo": "MIN\\_DZ"
+      "mnemo": "MIN_DZ"
     },
     {
       "keyword": "NUMBER OF TRACER FOR AMR",
+      "identifier": "NUMBER_OF_TRACER_FOR_AMR",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1625,10 +1714,11 @@
       "is_file": false,
       "default": 1,
       "level": 0,
-      "mnemo": "ITRAC\\_AMR"
+      "mnemo": "ITRAC_AMR"
     },
     {
       "keyword": "NUMBER OF SUB ITERATIONS FOR NON LINEARITIES",
+      "identifier": "NUMBER_OF_SUB_ITERATIONS_FOR_NON_LINEARITIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1645,6 +1735,7 @@
     },
     {
       "keyword": "ZERO",
+      "identifier": "ZERO",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1661,6 +1752,7 @@
     },
     {
       "keyword": "ADVECTION STEP",
+      "identifier": "ADVECTION_STEP",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1677,6 +1769,7 @@
     },
     {
       "keyword": "TREATMENT OF FLUXES AT THE BOUNDARIES",
+      "identifier": "TREATMENT_OF_FLUXES_AT_THE_BOUNDARIES",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -1696,6 +1789,7 @@
     },
     {
       "keyword": "SUPG OPTION",
+      "identifier": "SUPG_OPTION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": true,
@@ -1712,6 +1806,7 @@
     },
     {
       "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR ADVECTION SCHEMES",
+      "identifier": "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_ADVECTION_SCHEMES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1728,6 +1823,7 @@
     },
     {
       "keyword": "NUMBER OF SUB-STEPS OF DISTRIBUTIVE SCHEMES",
+      "identifier": "NUMBER_OF_SUB_STEPS_OF_DISTRIBUTIVE_SCHEMES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1740,10 +1836,11 @@
       "is_file": false,
       "default": 1,
       "level": 2,
-      "mnemo": "NSP\\_DIST"
+      "mnemo": "NSP_DIST"
     },
     {
       "keyword": "NUMBER OF CORRECTIONS OF DISTRIBUTIVE SCHEMES",
+      "identifier": "NUMBER_OF_CORRECTIONS_OF_DISTRIBUTIVE_SCHEMES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1756,10 +1853,11 @@
       "is_file": false,
       "default": 1,
       "level": 2,
-      "mnemo": "NCO\\_DIST"
+      "mnemo": "NCO_DIST"
     },
     {
       "keyword": "MASS-LUMPING FOR DIFFUSION",
+      "identifier": "MASS_LUMPING_FOR_DIFFUSION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1776,6 +1874,7 @@
     },
     {
       "keyword": "NON-HYDROSTATIC VERSION",
+      "identifier": "NON_HYDROSTATIC_VERSION",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1792,6 +1891,7 @@
     },
     {
       "keyword": "ELEMENTS MASKED BY USER",
+      "identifier": "ELEMENTS_MASKED_BY_USER",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1808,6 +1908,7 @@
     },
     {
       "keyword": "GRAVITY ACCELERATION",
+      "identifier": "GRAVITY_ACCELERATION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1824,6 +1925,7 @@
     },
     {
       "keyword": "AVERAGE WATER DENSITY",
+      "identifier": "AVERAGE_WATER_DENSITY",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1840,6 +1942,7 @@
     },
     {
       "keyword": "LAW OF BOTTOM FRICTION",
+      "identifier": "LAW_OF_BOTTOM_FRICTION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1864,6 +1967,7 @@
     },
     {
       "keyword": "FRICTION COEFFICIENT FOR THE BOTTOM",
+      "identifier": "FRICTION_COEFFICIENT_FOR_THE_BOTTOM",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1880,6 +1984,7 @@
     },
     {
       "keyword": "LAW OF FRICTION ON LATERAL BOUNDARIES",
+      "identifier": "LAW_OF_FRICTION_ON_LATERAL_BOUNDARIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1904,6 +2009,7 @@
     },
     {
       "keyword": "FRICTION COEFFICIENT FOR LATERAL SOLID BOUNDARIES",
+      "identifier": "FRICTION_COEFFICIENT_FOR_LATERAL_SOLID_BOUNDARIES",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1920,6 +2026,7 @@
     },
     {
       "keyword": "CORIOLIS",
+      "identifier": "CORIOLIS",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1936,6 +2043,7 @@
     },
     {
       "keyword": "CORIOLIS COEFFICIENT",
+      "identifier": "CORIOLIS_COEFFICIENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1952,6 +2060,7 @@
     },
     {
       "keyword": "WIND",
+      "identifier": "WIND",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1968,6 +2077,7 @@
     },
     {
       "keyword": "OPTION FOR WIND",
+      "identifier": "OPTION_FOR_WIND",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1989,6 +2099,7 @@
     },
     {
       "keyword": "WIND VELOCITY ALONG X",
+      "identifier": "WIND_VELOCITY_ALONG_X",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2001,10 +2112,11 @@
       "is_file": false,
       "default": 0.0,
       "level": 0,
-      "mnemo": "CST\\_WINDX"
+      "mnemo": "CST_WINDX"
     },
     {
       "keyword": "WIND VELOCITY ALONG Y",
+      "identifier": "WIND_VELOCITY_ALONG_Y",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2017,10 +2129,11 @@
       "is_file": false,
       "default": 0.0,
       "level": 0,
-      "mnemo": "CST\\_WINDY"
+      "mnemo": "CST_WINDY"
     },
     {
       "keyword": "COEFFICIENT OF WIND INFLUENCE",
+      "identifier": "COEFFICIENT_OF_WIND_INFLUENCE",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2037,6 +2150,7 @@
     },
     {
       "keyword": "COEFFICIENT OF WIND INFLUENCE VARYING WITH WIND SPEED",
+      "identifier": "COEFFICIENT_OF_WIND_INFLUENCE_VARYING_WITH_WIND_SPEED",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2053,6 +2167,7 @@
     },
     {
       "keyword": "THRESHOLD DEPTH FOR WIND",
+      "identifier": "THRESHOLD_DEPTH_FOR_WIND",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2069,6 +2184,7 @@
     },
     {
       "keyword": "AIR PRESSURE",
+      "identifier": "AIR_PRESSURE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2085,6 +2201,7 @@
     },
     {
       "keyword": "VALUE OF ATMOSPHERIC PRESSURE",
+      "identifier": "VALUE_OF_ATMOSPHERIC_PRESSURE",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2097,10 +2214,11 @@
       "is_file": false,
       "default": 100000.0,
       "level": 0,
-      "mnemo": "CST\\_PATMOS"
+      "mnemo": "CST_PATMOS"
     },
     {
       "keyword": "RAIN OR EVAPORATION",
+      "identifier": "RAIN_OR_EVAPORATION",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2117,6 +2235,7 @@
     },
     {
       "keyword": "RAIN OR EVAPORATION IN MM PER DAY",
+      "identifier": "RAIN_OR_EVAPORATION_IN_MM_PER_DAY",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2129,10 +2248,11 @@
       "is_file": false,
       "default": 0.0,
       "level": 0,
-      "mnemo": "CST\\_RAIN"
+      "mnemo": "CST_RAIN"
     },
     {
       "keyword": "ASCII ATMOSPHERIC DATA FILE",
+      "identifier": "ASCII_ATMOSPHERIC_DATA_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -2145,12 +2265,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3ATMA)\\%NAME",
+      "mnemo": "T3D_FILES(T3ATMA)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "BINARY ATMOSPHERIC DATA FILE",
+      "identifier": "BINARY_ATMOSPHERIC_DATA_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -2163,12 +2284,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3ATMB)\\%NAME",
+      "mnemo": "T3D_FILES(T3ATMB)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "BINARY ATMOSPHERIC DATA FILE FORMAT",
+      "identifier": "BINARY_ATMOSPHERIC_DATA_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -2186,10 +2308,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3ATMB)\\%FMT"
+      "mnemo": "T3D_FILES(T3ATMB)%FMT"
     },
     {
       "keyword": "FREE FORMAT FOR ATMOSPHERIC DATA FILE",
+      "identifier": "FREE_FORMAT_FOR_ATMOSPHERIC_DATA_FILE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2202,10 +2325,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "FREE\\_ATMO"
+      "mnemo": "FREE_ATMO"
     },
     {
       "keyword": "AIR TEMPERATURE",
+      "identifier": "AIR_TEMPERATURE",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2218,10 +2342,11 @@
       "is_file": false,
       "default": 20.0,
       "level": 0,
-      "mnemo": "CST\\_TAIR"
+      "mnemo": "CST_TAIR"
     },
     {
       "keyword": "CLOUD COVER",
+      "identifier": "CLOUD_COVER",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2234,10 +2359,11 @@
       "is_file": false,
       "default": 5.0,
       "level": 0,
-      "mnemo": "CST\\_CLDC"
+      "mnemo": "CST_CLDC"
     },
     {
       "keyword": "SOLAR RADIATION",
+      "identifier": "SOLAR_RADIATION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2250,10 +2376,11 @@
       "is_file": false,
       "default": 160.0,
       "level": 0,
-      "mnemo": "CST\\_RAY3"
+      "mnemo": "CST_RAY3"
     },
     {
       "keyword": "RELATIVE HUMIDITY",
+      "identifier": "RELATIVE_HUMIDITY",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2266,10 +2393,11 @@
       "is_file": false,
       "default": 50.0,
       "level": 0,
-      "mnemo": "CST\\_HREL"
+      "mnemo": "CST_HREL"
     },
     {
       "keyword": "PRESSURE UNIT",
+      "identifier": "PRESSURE_UNIT",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2286,10 +2414,11 @@
         "1": "Pa (SI)",
         "2": "hPa"
       },
-      "mnemo": "PRESSURE\\_UNIT"
+      "mnemo": "PRESSURE_UNIT"
     },
     {
       "keyword": "SOURCES FILE",
+      "identifier": "SOURCES_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -2302,12 +2431,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DVEF)\\%NAME",
+      "mnemo": "T3D_FILES(T3DVEF)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "GLOBAL NUMBERS OF SOURCE NODES",
+      "identifier": "GLOBAL_NUMBERS_OF_SOURCE_NODES",
       "type": "INTEGER",
       "size": 2,
       "unbounded": false,
@@ -2323,6 +2453,7 @@
     },
     {
       "keyword": "TYPE OF SOURCES",
+      "identifier": "TYPE_OF_SOURCES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2343,6 +2474,7 @@
     },
     {
       "keyword": "ABSCISSAE OF SOURCES",
+      "identifier": "ABSCISSAE_OF_SOURCES",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2358,6 +2490,7 @@
     },
     {
       "keyword": "ORDINATES OF SOURCES",
+      "identifier": "ORDINATES_OF_SOURCES",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2373,6 +2506,7 @@
     },
     {
       "keyword": "ELEVATIONS OF SOURCES",
+      "identifier": "ELEVATIONS_OF_SOURCES",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2388,6 +2522,7 @@
     },
     {
       "keyword": "WATER DISCHARGE OF SOURCES",
+      "identifier": "WATER_DISCHARGE_OF_SOURCES",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2403,6 +2538,7 @@
     },
     {
       "keyword": "VELOCITIES OF THE SOURCES ALONG X",
+      "identifier": "VELOCITIES_OF_THE_SOURCES_ALONG_X",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2418,6 +2554,7 @@
     },
     {
       "keyword": "VELOCITIES OF THE SOURCES ALONG Y",
+      "identifier": "VELOCITIES_OF_THE_SOURCES_ALONG_Y",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2433,6 +2570,7 @@
     },
     {
       "keyword": "VELOCITIES OF THE SOURCES ALONG Z",
+      "identifier": "VELOCITIES_OF_THE_SOURCES_ALONG_Z",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2448,6 +2586,7 @@
     },
     {
       "keyword": "WAVE DRIVEN CURRENTS",
+      "identifier": "WAVE_DRIVEN_CURRENTS",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2464,6 +2603,7 @@
     },
     {
       "keyword": "RECORD NUMBER IN WAVE FILE",
+      "identifier": "RECORD_NUMBER_IN_WAVE_FILE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2480,6 +2620,7 @@
     },
     {
       "keyword": "PRESCRIBED ELEVATIONS",
+      "identifier": "PRESCRIBED_ELEVATIONS",
       "type": "REAL",
       "size": 10,
       "unbounded": true,
@@ -2495,6 +2636,7 @@
     },
     {
       "keyword": "PRESCRIBED FLOWRATES",
+      "identifier": "PRESCRIBED_FLOWRATES",
       "type": "REAL",
       "size": 10,
       "unbounded": true,
@@ -2510,6 +2652,7 @@
     },
     {
       "keyword": "PRESCRIBED VELOCITIES",
+      "identifier": "PRESCRIBED_VELOCITIES",
       "type": "REAL",
       "size": 10,
       "unbounded": true,
@@ -2525,6 +2668,7 @@
     },
     {
       "keyword": "LIQUID BOUNDARIES FILE",
+      "identifier": "LIQUID_BOUNDARIES_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -2537,12 +2681,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DIMP)\\%NAME",
+      "mnemo": "T3D_FILES(T3DIMP)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "VELOCITY PROFILES",
+      "identifier": "VELOCITY_PROFILES",
       "type": "INTEGER",
       "size": 2,
       "unbounded": false,
@@ -2565,6 +2710,7 @@
     },
     {
       "keyword": "VELOCITY VERTICAL PROFILES",
+      "identifier": "VELOCITY_VERTICAL_PROFILES",
       "type": "INTEGER",
       "size": 2,
       "unbounded": false,
@@ -2585,6 +2731,7 @@
     },
     {
       "keyword": "STAGE-DISCHARGE CURVES",
+      "identifier": "STAGE_DISCHARGE_CURVES",
       "type": "INTEGER",
       "size": 10,
       "unbounded": true,
@@ -2596,10 +2743,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "STA\\_DIS\\_CURVES"
+      "mnemo": "STA_DIS_CURVES"
     },
     {
       "keyword": "STAGE-DISCHARGE CURVES FILE",
+      "identifier": "STAGE_DISCHARGE_CURVES_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -2612,12 +2760,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DPAR)\\%NAME",
+      "mnemo": "T3D_FILES(T3DPAR)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "STAGE-DISCHARGE CURVES RELAXATION COEFFICIENT",
+      "identifier": "STAGE_DISCHARGE_CURVES_RELAXATION_COEFFICIENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2630,10 +2779,11 @@
       "is_file": false,
       "default": 0.02,
       "level": 2,
-      "mnemo": "RELAX\\_STA\\_DIS"
+      "mnemo": "RELAX_STA_DIS"
     },
     {
       "keyword": "OPTION FOR LIQUID BOUNDARIES",
+      "identifier": "OPTION_FOR_LIQUID_BOUNDARIES",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -2653,6 +2803,7 @@
     },
     {
       "keyword": "TURBULENCE REGIME FOR THE BOTTOM",
+      "identifier": "TURBULENCE_REGIME_FOR_THE_BOTTOM",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2674,6 +2825,7 @@
     },
     {
       "keyword": "TURBULENCE REGIME FOR LATERAL SOLID BOUNDARIES",
+      "identifier": "TURBULENCE_REGIME_FOR_LATERAL_SOLID_BOUNDARIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2694,6 +2846,7 @@
     },
     {
       "keyword": "BOUNDARY CONDITION ON THE BOTTOM",
+      "identifier": "BOUNDARY_CONDITION_ON_THE_BOTTOM",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2710,10 +2863,11 @@
         "1": "LOG LAW FOR VELOCITIES ON BOTTOM",
         "2": "NO SLIP FOR VELOCITIES ON BOTTOM"
       },
-      "mnemo": "BC\\_BOTTOM"
+      "mnemo": "BC_BOTTOM"
     },
     {
       "keyword": "VELOCITY PROJECTED ON SOLID LATERAL BOUNDARIES",
+      "identifier": "VELOCITY_PROJECTED_ON_SOLID_LATERAL_BOUNDARIES",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2730,6 +2884,7 @@
     },
     {
       "keyword": "VELOCITY PROJECTED ON BOTTOM",
+      "identifier": "VELOCITY_PROJECTED_ON_BOTTOM",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2746,6 +2901,7 @@
     },
     {
       "keyword": "OPEN BOUNDARY CONDITIONS ON THE BED",
+      "identifier": "OPEN_BOUNDARY_CONDITIONS_ON_THE_BED",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2762,6 +2918,7 @@
     },
     {
       "keyword": "PRESCRIBED FLOWRATES ON THE BED",
+      "identifier": "PRESCRIBED_FLOWRATES_ON_THE_BED",
       "type": "REAL",
       "size": 10,
       "unbounded": true,
@@ -2789,6 +2946,7 @@
     },
     {
       "keyword": "OPTION FOR SOFT BOUNDARIES",
+      "identifier": "OPTION_FOR_SOFT_BOUNDARIES",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -2805,10 +2963,11 @@
         "1": "Method 1. Proportional to the speed",
         "2": "Method 2. Proportional to the square of speed"
       },
-      "mnemo": "OPT\\_SOFT"
+      "mnemo": "OPT_SOFT"
     },
     {
       "keyword": "COEFFICIENT FOR SOFT BOUNDARIES",
+      "identifier": "COEFFICIENT_FOR_SOFT_BOUNDARIES",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2820,10 +2979,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "COEF\\_SOFT"
+      "mnemo": "COEF_SOFT"
     },
     {
       "keyword": "INITIAL CONDITIONS",
+      "identifier": "INITIAL_CONDITIONS",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -2849,6 +3009,7 @@
     },
     {
       "keyword": "INITIAL ELEVATION",
+      "identifier": "INITIAL_ELEVATION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2865,6 +3026,7 @@
     },
     {
       "keyword": "INITIAL DEPTH",
+      "identifier": "INITIAL_DEPTH",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2881,6 +3043,7 @@
     },
     {
       "keyword": "MATRIX STORAGE",
+      "identifier": "MATRIX_STORAGE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2901,6 +3064,7 @@
     },
     {
       "keyword": "MASS-LUMPING FOR DEPTH",
+      "identifier": "MASS_LUMPING_FOR_DEPTH",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2917,6 +3081,7 @@
     },
     {
       "keyword": "HYDROSTATIC INCONSISTENCY FILTER",
+      "identifier": "HYDROSTATIC_INCONSISTENCY_FILTER",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2933,6 +3098,7 @@
     },
     {
       "keyword": "ELEMENT",
+      "identifier": "ELEMENT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -2949,6 +3115,7 @@
     },
     {
       "keyword": "SOLVER FOR PROPAGATION",
+      "identifier": "SOLVER_FOR_PROPAGATION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2971,10 +3138,11 @@
         "7": "gmres",
         "8": "direct solver"
       },
-      "mnemo": "SLVPRO\\%SLV"
+      "mnemo": "SLVPRO%SLV"
     },
     {
       "keyword": "ACCURACY FOR PROPAGATION",
+      "identifier": "ACCURACY_FOR_PROPAGATION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2987,10 +3155,11 @@
       "is_file": false,
       "default": 1e-08,
       "level": 0,
-      "mnemo": "SLVPRO\\%EPS"
+      "mnemo": "SLVPRO%EPS"
     },
     {
       "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR PROPAGATION",
+      "identifier": "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_PROPAGATION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3003,10 +3172,11 @@
       "is_file": false,
       "default": 200,
       "level": 0,
-      "mnemo": "SLVPRO\\%NITMAX"
+      "mnemo": "SLVPRO%NITMAX"
     },
     {
       "keyword": "PRECONDITIONING FOR PROPAGATION",
+      "identifier": "PRECONDITIONING_FOR_PROPAGATION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3032,10 +3202,11 @@
         "21": "diagonal condensed and Crout",
         "34": "diagonal and direct solver on the vertical"
       },
-      "mnemo": "SLVPRO\\%PRECON"
+      "mnemo": "SLVPRO%PRECON"
     },
     {
       "keyword": "OPTION OF SOLVER FOR PROPAGATION",
+      "identifier": "OPTION_OF_SOLVER_FOR_PROPAGATION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3048,10 +3219,11 @@
       "is_file": false,
       "default": 5,
       "level": 0,
-      "mnemo": "SLVPRO\\%KRYLOV"
+      "mnemo": "SLVPRO%KRYLOV"
     },
     {
       "keyword": "INITIAL GUESS FOR DEPTH",
+      "identifier": "INITIAL_GUESS_FOR_DEPTH",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3073,6 +3245,7 @@
     },
     {
       "keyword": "LINEARIZED PROPAGATION",
+      "identifier": "LINEARIZED_PROPAGATION",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -3089,6 +3262,7 @@
     },
     {
       "keyword": "MEAN DEPTH FOR LINEARIZATION",
+      "identifier": "MEAN_DEPTH_FOR_LINEARIZATION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3105,6 +3279,7 @@
     },
     {
       "keyword": "SCHEME FOR ADVECTION OF DEPTH",
+      "identifier": "SCHEME_FOR_ADVECTION_OF_DEPTH",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3121,6 +3296,7 @@
     },
     {
       "keyword": "SCHEME FOR ADVECTION OF VELOCITIES",
+      "identifier": "SCHEME_FOR_ADVECTION_OF_VELOCITIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": true,
@@ -3147,6 +3323,7 @@
     },
     {
       "keyword": "FREE SURFACE GRADIENT COMPATIBILITY",
+      "identifier": "FREE_SURFACE_GRADIENT_COMPATIBILITY",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3163,6 +3340,7 @@
     },
     {
       "keyword": "BYPASS VOID VOLUMES",
+      "identifier": "BYPASS_VOID_VOLUMES",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -3179,6 +3357,7 @@
     },
     {
       "keyword": "MASS-LUMPING FOR VELOCITIES",
+      "identifier": "MASS_LUMPING_FOR_VELOCITIES",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3195,6 +3374,7 @@
     },
     {
       "keyword": "SCHEME OPTION FOR ADVECTION OF VELOCITIES",
+      "identifier": "SCHEME_OPTION_FOR_ADVECTION_OF_VELOCITIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": true,
@@ -3207,10 +3387,11 @@
       "is_file": false,
       "default": 4,
       "level": 1,
-      "mnemo": "OPTADV\\_VI"
+      "mnemo": "OPTADV_VI"
     },
     {
       "keyword": "OPTION FOR CHARACTERISTICS",
+      "identifier": "OPTION_FOR_CHARACTERISTICS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3231,6 +3412,7 @@
     },
     {
       "keyword": "NUMBER OF GAUSS POINTS FOR WEAK CHARACTERISTICS",
+      "identifier": "NUMBER_OF_GAUSS_POINTS_FOR_WEAK_CHARACTERISTICS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3247,6 +3429,7 @@
     },
     {
       "keyword": "MASS-LUMPING FOR WEAK CHARACTERISTICS",
+      "identifier": "MASS_LUMPING_FOR_WEAK_CHARACTERISTICS",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3263,6 +3446,7 @@
     },
     {
       "keyword": "SCHEME FOR DIFFUSION OF VELOCITIES",
+      "identifier": "SCHEME_FOR_DIFFUSION_OF_VELOCITIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3283,6 +3467,7 @@
     },
     {
       "keyword": "SOLVER FOR DIFFUSION OF VELOCITIES",
+      "identifier": "SOLVER_FOR_DIFFUSION_OF_VELOCITIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3305,10 +3490,11 @@
         "7": "gmres",
         "8": "direct solver"
       },
-      "mnemo": "SLVDVI\\%SLV"
+      "mnemo": "SLVDVI%SLV"
     },
     {
       "keyword": "ACCURACY FOR DIFFUSION OF VELOCITIES",
+      "identifier": "ACCURACY_FOR_DIFFUSION_OF_VELOCITIES",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3321,10 +3507,11 @@
       "is_file": false,
       "default": 1e-08,
       "level": 0,
-      "mnemo": "SLVDVI\\%EPS"
+      "mnemo": "SLVDVI%EPS"
     },
     {
       "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR DIFFUSION OF VELOCITIES",
+      "identifier": "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_DIFFUSION_OF_VELOCITIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3337,10 +3524,11 @@
       "is_file": false,
       "default": 60,
       "level": 0,
-      "mnemo": "SLVDVI\\%NITMAX"
+      "mnemo": "SLVDVI%NITMAX"
     },
     {
       "keyword": "PRECONDITIONING FOR DIFFUSION OF VELOCITIES",
+      "identifier": "PRECONDITIONING_FOR_DIFFUSION_OF_VELOCITIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3366,10 +3554,11 @@
         "21": "diagonal condensed and Crout",
         "34": "diagonal and direct solver on the vertical"
       },
-      "mnemo": "SLVDVI\\%PRECON"
+      "mnemo": "SLVDVI%PRECON"
     },
     {
       "keyword": "OPTION OF SOLVER FOR DIFFUSION OF VELOCITIES",
+      "identifier": "OPTION_OF_SOLVER_FOR_DIFFUSION_OF_VELOCITIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3382,10 +3571,11 @@
       "is_file": false,
       "default": 5,
       "level": 0,
-      "mnemo": "SLVDVI\\%KRYLOV"
+      "mnemo": "SLVDVI%KRYLOV"
     },
     {
       "keyword": "IMPLICITATION FOR DIFFUSION",
+      "identifier": "IMPLICITATION_FOR_DIFFUSION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3402,6 +3592,7 @@
     },
     {
       "keyword": "SOLVER FOR PPE",
+      "identifier": "SOLVER_FOR_PPE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3424,10 +3615,11 @@
         "7": "gmres",
         "8": "direct solver"
       },
-      "mnemo": "SLVPOI\\%SLV"
+      "mnemo": "SLVPOI%SLV"
     },
     {
       "keyword": "ACCURACY FOR PPE",
+      "identifier": "ACCURACY_FOR_PPE",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3440,10 +3632,11 @@
       "is_file": false,
       "default": 1e-08,
       "level": 0,
-      "mnemo": "SLVPOI\\%EPS"
+      "mnemo": "SLVPOI%EPS"
     },
     {
       "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR PPE",
+      "identifier": "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_PPE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3456,10 +3649,11 @@
       "is_file": false,
       "default": 100,
       "level": 0,
-      "mnemo": "SLVPOI\\%NITMAX"
+      "mnemo": "SLVPOI%NITMAX"
     },
     {
       "keyword": "PRECONDITIONING FOR PPE",
+      "identifier": "PRECONDITIONING_FOR_PPE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3485,10 +3679,11 @@
         "21": "diagonal condensed and Crout",
         "34": "diagonal and direct solver on the vertical"
       },
-      "mnemo": "SLVPOI\\%PRECON"
+      "mnemo": "SLVPOI%PRECON"
     },
     {
       "keyword": "OPTION OF SOLVER FOR PPE",
+      "identifier": "OPTION_OF_SOLVER_FOR_PPE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3501,10 +3696,11 @@
       "is_file": false,
       "default": 5,
       "level": 0,
-      "mnemo": "SLVPOI\\%KRYLOV"
+      "mnemo": "SLVPOI%KRYLOV"
     },
     {
       "keyword": "DYNAMIC PRESSURE IN WAVE EQUATION",
+      "identifier": "DYNAMIC_PRESSURE_IN_WAVE_EQUATION",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -3521,6 +3717,7 @@
     },
     {
       "keyword": "DYNAMIC BOUNDARY CONDITION",
+      "identifier": "DYNAMIC_BOUNDARY_CONDITION",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -3537,6 +3734,7 @@
     },
     {
       "keyword": "CONTINUITY CORRECTION ON OPEN BOUNDARIES",
+      "identifier": "CONTINUITY_CORRECTION_ON_OPEN_BOUNDARIES",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -3553,6 +3751,7 @@
     },
     {
       "keyword": "IMPLICITATION FOR DEPTH",
+      "identifier": "IMPLICITATION_FOR_DEPTH",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3569,6 +3768,7 @@
     },
     {
       "keyword": "IMPLICITATION FOR VELOCITIES",
+      "identifier": "IMPLICITATION_FOR_VELOCITIES",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3585,6 +3785,7 @@
     },
     {
       "keyword": "TIDAL FLATS",
+      "identifier": "TIDAL_FLATS",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -3601,6 +3802,7 @@
     },
     {
       "keyword": "OPTION FOR THE TREATMENT OF TIDAL FLATS",
+      "identifier": "OPTION_FOR_THE_TREATMENT_OF_TIDAL_FLATS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3621,6 +3823,7 @@
     },
     {
       "keyword": "TREATMENT OF NEGATIVE DEPTHS",
+      "identifier": "TREATMENT_OF_NEGATIVE_DEPTHS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3638,10 +3841,11 @@
         "1": "SMOOTHING",
         "2": "FLUX CONTROL"
       },
-      "mnemo": "OPT\\_HNEG"
+      "mnemo": "OPT_HNEG"
     },
     {
       "keyword": "TREATMENT ON TIDAL FLATS FOR VELOCITIES",
+      "identifier": "TREATMENT_ON_TIDAL_FLATS_FOR_VELOCITIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3662,6 +3866,7 @@
     },
     {
       "keyword": "THRESHOLD FOR VISCOSITY CORRECTION ON TIDAL FLATS",
+      "identifier": "THRESHOLD_FOR_VISCOSITY_CORRECTION_ON_TIDAL_FLATS",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3678,6 +3883,7 @@
     },
     {
       "keyword": "MINIMAL VALUE FOR DEPTH",
+      "identifier": "MINIMAL_VALUE_FOR_DEPTH",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3694,6 +3900,7 @@
     },
     {
       "keyword": "BINARY DATABASE 1 FOR TIDE",
+      "identifier": "BINARY_DATABASE_1_FOR_TIDE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -3706,12 +3913,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DBB1)",
+      "mnemo": "T3D_FILES(T3DBB1)",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "BINARY DATABASE 2 FOR TIDE",
+      "identifier": "BINARY_DATABASE_2_FOR_TIDE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -3724,12 +3932,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DBB2)",
+      "mnemo": "T3D_FILES(T3DBB2)",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "VELOCITIES IN BINARY DATABASE 2 FOR TIDE",
+      "identifier": "VELOCITIES_IN_BINARY_DATABASE_2_FOR_TIDE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -3742,10 +3951,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "VIT\\_IN\\_T3DBB2"
+      "mnemo": "VIT_IN_T3DBB2"
     },
     {
       "keyword": "GEOGRAPHIC SYSTEM",
+      "identifier": "GEOGRAPHIC_SYSTEM",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3771,6 +3981,7 @@
     },
     {
       "keyword": "ZONE NUMBER IN GEOGRAPHIC SYSTEM",
+      "identifier": "ZONE_NUMBER_IN_GEOGRAPHIC_SYSTEM",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3787,6 +3998,7 @@
     },
     {
       "keyword": "LAMBERT 93 CONVERSION FILE",
+      "identifier": "LAMBERT_93_CONVERSION_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -3799,12 +4011,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DL93)",
+      "mnemo": "T3D_FILES(T3DL93)",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "COEFFICIENT TO CALIBRATE SEA LEVEL",
+      "identifier": "COEFFICIENT_TO_CALIBRATE_SEA_LEVEL",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3821,6 +4034,7 @@
     },
     {
       "keyword": "GLOBAL NUMBER OF THE POINT TO CALIBRATE HIGH WATER",
+      "identifier": "GLOBAL_NUMBER_OF_THE_POINT_TO_CALIBRATE_HIGH_WATER",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3837,6 +4051,7 @@
     },
     {
       "keyword": "MINOR CONSTITUENTS INFERENCE",
+      "identifier": "MINOR_CONSTITUENTS_INFERENCE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -3853,6 +4068,7 @@
     },
     {
       "keyword": "INITIAL VELOCITIES COMPUTED BY TPXO",
+      "identifier": "INITIAL_VELOCITIES_COMPUTED_BY_TPXO",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -3865,10 +4081,11 @@
       "is_file": false,
       "default": true,
       "level": 1,
-      "mnemo": "VITINI\\_TPXO"
+      "mnemo": "VITINI_TPXO"
     },
     {
       "keyword": "MINIMUM DEPTH TO COMPUTE TIDAL VELOCITIES INITIAL CONDITIONS",
+      "identifier": "MINIMUM_DEPTH_TO_COMPUTE_TIDAL_VELOCITIES_INITIAL_CONDITIONS",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -3881,10 +4098,11 @@
       "is_file": false,
       "default": 0.1,
       "level": 1,
-      "mnemo": "HMIN\\_VIT\\_IC"
+      "mnemo": "HMIN_VIT_IC"
     },
     {
       "keyword": "ATMOSPHERIC PRESSURE AT TIDAL BOUNDARIES",
+      "identifier": "ATMOSPHERIC_PRESSURE_AT_TIDAL_BOUNDARIES",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -3901,6 +4119,7 @@
     },
     {
       "keyword": "TIDE GENERATING FORCE",
+      "identifier": "TIDE_GENERATING_FORCE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -3917,6 +4136,7 @@
     },
     {
       "keyword": "OPTION FOR TIDAL BOUNDARY CONDITIONS",
+      "identifier": "OPTION_FOR_TIDAL_BOUNDARY_CONDITIONS",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -3938,10 +4158,11 @@
         "6": "Astronomical neap tide",
         "7": "Real tide (methodology before 2010)"
       },
-      "mnemo": "BND\\_TIDE"
+      "mnemo": "BND_TIDE"
     },
     {
       "keyword": "TIDAL DATA BASE",
+      "identifier": "TIDAL_DATA_BASE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -3964,6 +4185,7 @@
     },
     {
       "keyword": "HARMONIC CONSTANTS FILE",
+      "identifier": "HARMONIC_CONSTANTS_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -3976,12 +4198,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DHAR)\\%NAME",
+      "mnemo": "T3D_FILES(T3DHAR)%NAME",
       "file_role": "input/output",
       "file_mandatory": false
     },
     {
       "keyword": "TIDAL MODEL FILE",
+      "identifier": "TIDAL_MODEL_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -3994,12 +4217,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DTID)",
+      "mnemo": "T3D_FILES(T3DTID)",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "TIDAL MODEL FILE FORMAT",
+      "identifier": "TIDAL_MODEL_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -4017,10 +4241,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "T3D\\_FILES(T3DTID)\\%FMT"
+      "mnemo": "T3D_FILES(T3DTID)%FMT"
     },
     {
       "keyword": "ASCII DATABASE FOR TIDE",
+      "identifier": "ASCII_DATABASE_FOR_TIDE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -4033,12 +4258,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DBDD)",
+      "mnemo": "T3D_FILES(T3DBDD)",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "COEFFICIENT TO CALIBRATE TIDAL RANGE",
+      "identifier": "COEFFICIENT_TO_CALIBRATE_TIDAL_RANGE",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -4055,6 +4281,7 @@
     },
     {
       "keyword": "COEFFICIENT TO CALIBRATE TIDAL VELOCITIES",
+      "identifier": "COEFFICIENT_TO_CALIBRATE_TIDAL_VELOCITIES",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -4071,6 +4298,7 @@
     },
     {
       "keyword": "LOCAL NUMBER OF THE POINT TO CALIBRATE HIGH WATER",
+      "identifier": "LOCAL_NUMBER_OF_THE_POINT_TO_CALIBRATE_HIGH_WATER",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4087,6 +4315,7 @@
     },
     {
       "keyword": "MINIMUM DEPTH TO COMPUTE TIDAL VELOCITIES BOUNDARY CONDITIONS",
+      "identifier": "MINIMUM_DEPTH_TO_COMPUTE_TIDAL_VELOCITIES_BOUNDARY_CONDITIONS",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -4099,10 +4328,11 @@
       "is_file": false,
       "default": 0.1,
       "level": 1,
-      "mnemo": "HMIN\\_VIT\\_BC"
+      "mnemo": "HMIN_VIT_BC"
     },
     {
       "keyword": "MAXIMUM NUMBER OF DROGUES",
+      "identifier": "MAXIMUM_NUMBER_OF_DROGUES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4115,10 +4345,11 @@
       "is_file": false,
       "default": 0,
       "level": 0,
-      "mnemo": "NFLOT\\_MAX"
+      "mnemo": "NFLOT_MAX"
     },
     {
       "keyword": "ASCII DROGUES FILE",
+      "identifier": "ASCII_DROGUES_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -4131,12 +4362,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DFLO)\\%NAME",
+      "mnemo": "T3D_FILES(T3DFLO)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "BINARY DROGUES FILE",
+      "identifier": "BINARY_DROGUES_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -4149,12 +4381,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DBLO)\\%NAME",
+      "mnemo": "T3D_FILES(T3DBLO)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "DROGUES FILE FORMAT",
+      "identifier": "DROGUES_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -4171,10 +4404,11 @@
         "BKBINPCL",
         "TECPLOT"
       ],
-      "mnemo": "T3D\\_FILES(T3DBLO)\\%FMT"
+      "mnemo": "T3D_FILES(T3DBLO)%FMT"
     },
     {
       "keyword": "PRINTOUT PERIOD FOR DROGUES",
+      "identifier": "PRINTOUT_PERIOD_FOR_DROGUES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4191,6 +4425,7 @@
     },
     {
       "keyword": "OIL SPILL STEERING FILE",
+      "identifier": "OIL_SPILL_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -4203,12 +4438,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DMIG)\\%NAME",
+      "mnemo": "T3D_FILES(T3DMIG)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "STOCHASTIC DIFFUSION MODEL",
+      "identifier": "STOCHASTIC_DIFFUSION_MODEL",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4229,6 +4465,7 @@
     },
     {
       "keyword": "NUMBER OF CULVERTS",
+      "identifier": "NUMBER_OF_CULVERTS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4245,6 +4482,7 @@
     },
     {
       "keyword": "CULVERTS DATA FILE",
+      "identifier": "CULVERTS_DATA_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -4257,12 +4495,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DBUS)\\%NAME",
+      "mnemo": "T3D_FILES(T3DBUS)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "OPTION FOR CULVERTS",
+      "identifier": "OPTION_FOR_CULVERTS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4279,6 +4518,7 @@
     },
     {
       "keyword": "HORIZONTAL TURBULENCE MODEL",
+      "identifier": "HORIZONTAL_TURBULENCE_MODEL",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4303,6 +4543,7 @@
     },
     {
       "keyword": "VERTICAL TURBULENCE MODEL",
+      "identifier": "VERTICAL_TURBULENCE_MODEL",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4329,6 +4570,7 @@
     },
     {
       "keyword": "COEFFICIENT FOR HORIZONTAL DIFFUSION OF VELOCITIES",
+      "identifier": "COEFFICIENT_FOR_HORIZONTAL_DIFFUSION_OF_VELOCITIES",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -4345,6 +4587,7 @@
     },
     {
       "keyword": "COEFFICIENT FOR VERTICAL DIFFUSION OF VELOCITIES",
+      "identifier": "COEFFICIENT_FOR_VERTICAL_DIFFUSION_OF_VELOCITIES",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -4361,6 +4604,7 @@
     },
     {
       "keyword": "MIXING LENGTH MODEL",
+      "identifier": "MIXING_LENGTH_MODEL",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4377,6 +4621,7 @@
     },
     {
       "keyword": "DAMPING FUNCTION",
+      "identifier": "DAMPING_FUNCTION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4393,6 +4638,7 @@
     },
     {
       "keyword": "PRANDTL NUMBER",
+      "identifier": "PRANDTL_NUMBER",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -4409,6 +4655,7 @@
     },
     {
       "keyword": "KARMAN CONSTANT",
+      "identifier": "KARMAN_CONSTANT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -4425,6 +4672,7 @@
     },
     {
       "keyword": "GOTM STEERING FILE",
+      "identifier": "GOTM_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -4437,12 +4685,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DGTM)\\%NAME",
+      "mnemo": "T3D_FILES(T3DGTM)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "FICTITIOUS BED LEVEL",
+      "identifier": "FICTITIOUS_BED_LEVEL",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -4459,6 +4708,7 @@
     },
     {
       "keyword": "OPTION FOR THE BOUNDARY CONDITIONS OF K-EPSILON",
+      "identifier": "OPTION_FOR_THE_BOUNDARY_CONDITIONS_OF_K_EPSILON",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4479,6 +4729,7 @@
     },
     {
       "keyword": "VERTICAL VELOCITY DERIVATIVES",
+      "identifier": "VERTICAL_VELOCITY_DERIVATIVES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4495,6 +4746,7 @@
     },
     {
       "keyword": "SCHEME FOR ADVECTION OF K-EPSILON",
+      "identifier": "SCHEME_FOR_ADVECTION_OF_K_EPSILON",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4521,6 +4773,7 @@
     },
     {
       "keyword": "SCHEME OPTION FOR ADVECTION OF K-EPSILON",
+      "identifier": "SCHEME_OPTION_FOR_ADVECTION_OF_K_EPSILON",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4533,10 +4786,11 @@
       "is_file": false,
       "default": 4,
       "level": 1,
-      "mnemo": "OPTADV\\_KE"
+      "mnemo": "OPTADV_KE"
     },
     {
       "keyword": "SCHEME FOR DIFFUSION OF K-EPSILON",
+      "identifier": "SCHEME_FOR_DIFFUSION_OF_K_EPSILON",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4557,6 +4811,7 @@
     },
     {
       "keyword": "SOLVER FOR DIFFUSION OF K-EPSILON",
+      "identifier": "SOLVER_FOR_DIFFUSION_OF_K_EPSILON",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4579,10 +4834,11 @@
         "7": "gmres",
         "8": "direct solver"
       },
-      "mnemo": "SLVDKE\\%SLV"
+      "mnemo": "SLVDKE%SLV"
     },
     {
       "keyword": "ACCURACY FOR DIFFUSION OF K-EPSILON",
+      "identifier": "ACCURACY_FOR_DIFFUSION_OF_K_EPSILON",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -4595,10 +4851,11 @@
       "is_file": false,
       "default": 1e-08,
       "level": 0,
-      "mnemo": "SLVDKE\\%EPS"
+      "mnemo": "SLVDKE%EPS"
     },
     {
       "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR DIFFUSION OF K-EPSILON",
+      "identifier": "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_DIFFUSION_OF_K_EPSILON",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4611,10 +4868,11 @@
       "is_file": false,
       "default": 200,
       "level": 0,
-      "mnemo": "SLVDKE\\%NITMAX"
+      "mnemo": "SLVDKE%NITMAX"
     },
     {
       "keyword": "PRECONDITIONING FOR DIFFUSION OF K-EPSILON",
+      "identifier": "PRECONDITIONING_FOR_DIFFUSION_OF_K_EPSILON",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4640,10 +4898,11 @@
         "21": "diagonal condensed and Crout",
         "34": "diagonal and direct solver on the vertical"
       },
-      "mnemo": "SLVDKE\\%PRECON"
+      "mnemo": "SLVDKE%PRECON"
     },
     {
       "keyword": "OPTION OF SOLVER FOR DIFFUSION OF K-EPSILON",
+      "identifier": "OPTION_OF_SOLVER_FOR_DIFFUSION_OF_K_EPSILON",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4656,10 +4915,11 @@
       "is_file": false,
       "default": 5,
       "level": 0,
-      "mnemo": "SLVDKE\\%KRYLOV"
+      "mnemo": "SLVDKE%KRYLOV"
     },
     {
       "keyword": "TREATMENT ON TIDAL FLATS FOR K-EPSILON",
+      "identifier": "TREATMENT_ON_TIDAL_FLATS_FOR_K_EPSILON",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4680,6 +4940,7 @@
     },
     {
       "keyword": "NUMBER OF TRACERS",
+      "identifier": "NUMBER_OF_TRACERS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4696,6 +4957,7 @@
     },
     {
       "keyword": "NAMES OF TRACERS",
+      "identifier": "NAMES_OF_TRACERS",
       "type": "STRING",
       "size": 2,
       "unbounded": true,
@@ -4711,6 +4973,7 @@
     },
     {
       "keyword": "VALUES OF TRACERS IN THE RAIN",
+      "identifier": "VALUES_OF_TRACERS_IN_THE_RAIN",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -4726,6 +4989,7 @@
     },
     {
       "keyword": "VALUE OF THE TRACERS AT THE SOURCES",
+      "identifier": "VALUE_OF_THE_TRACERS_AT_THE_SOURCES",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -4741,6 +5005,7 @@
     },
     {
       "keyword": "DENSITY LAW",
+      "identifier": "DENSITY_LAW",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4757,6 +5022,7 @@
     },
     {
       "keyword": "STANDARD VALUES FOR TRACERS",
+      "identifier": "STANDARD_VALUES_FOR_TRACERS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -4772,6 +5038,7 @@
     },
     {
       "keyword": "BETA EXPANSION COEFFICIENT FOR TRACERS",
+      "identifier": "BETA_EXPANSION_COEFFICIENT_FOR_TRACERS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -4787,6 +5054,7 @@
     },
     {
       "keyword": "PRESCRIBED TRACERS VALUES",
+      "identifier": "PRESCRIBED_TRACERS_VALUES",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -4802,6 +5070,7 @@
     },
     {
       "keyword": "TRACERS VERTICAL PROFILES",
+      "identifier": "TRACERS_VERTICAL_PROFILES",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -4817,14 +5086,15 @@
         "0": "User defined (with tracers values)",
         "1": "Constant",
         "2": "Constant or Rouse if sediment",
-        "3": " \"Normalized Rouse profile and imposed conc",
-        "4": " \"Modified Rouse profile accounting for molecular viscosity",
-        "5": " \"Normalized user defined profile and imposed concentration"
+        "3": "'Normalized Rouse profile and imposed conc",
+        "4": "'Modified Rouse profile accounting for molecular viscosity",
+        "5": "'Normalized user defined profile and imposed concentration"
       },
       "mnemo": "VERPROTRA"
     },
     {
       "keyword": "INITIAL VALUES OF TRACERS",
+      "identifier": "INITIAL_VALUES_OF_TRACERS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -4840,6 +5110,7 @@
     },
     {
       "keyword": "SCHEME FOR ADVECTION OF TRACERS",
+      "identifier": "SCHEME_FOR_ADVECTION_OF_TRACERS",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -4865,6 +5136,7 @@
     },
     {
       "keyword": "SCHEME OPTION FOR ADVECTION OF TRACERS",
+      "identifier": "SCHEME_OPTION_FOR_ADVECTION_OF_TRACERS",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -4876,10 +5148,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "OPTADV\\_TR"
+      "mnemo": "OPTADV_TR"
     },
     {
       "keyword": "SCHEME FOR DIFFUSION OF TRACERS",
+      "identifier": "SCHEME_FOR_DIFFUSION_OF_TRACERS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -4900,6 +5173,7 @@
     },
     {
       "keyword": "SOLVER FOR DIFFUSION OF TRACERS",
+      "identifier": "SOLVER_FOR_DIFFUSION_OF_TRACERS",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -4921,10 +5195,11 @@
         "7": "gmres",
         "8": "direct solver"
       },
-      "mnemo": "SLVDTA(ITRAC)\\%SLV"
+      "mnemo": "SLVDTA(ITRAC)%SLV"
     },
     {
       "keyword": "ACCURACY FOR DIFFUSION OF TRACERS",
+      "identifier": "ACCURACY_FOR_DIFFUSION_OF_TRACERS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -4936,10 +5211,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "SLVDTA(ITRAC)\\%EPS"
+      "mnemo": "SLVDTA(ITRAC)%EPS"
     },
     {
       "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR DIFFUSION OF TRACERS",
+      "identifier": "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_DIFFUSION_OF_TRACERS",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -4951,10 +5227,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "SLVDTA(ITRAC)\\%NITMAX"
+      "mnemo": "SLVDTA(ITRAC)%NITMAX"
     },
     {
       "keyword": "PRECONDITIONING FOR DIFFUSION OF TRACERS",
+      "identifier": "PRECONDITIONING_FOR_DIFFUSION_OF_TRACERS",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -4979,10 +5256,11 @@
         "21": "diagonal condensed and Crout",
         "34": "diagonal and direct solver on the vertical"
       },
-      "mnemo": "SLVDTA(ITRAC)\\%PRECON"
+      "mnemo": "SLVDTA(ITRAC)%PRECON"
     },
     {
       "keyword": "OPTION OF SOLVER FOR DIFFUSION OF TRACERS",
+      "identifier": "OPTION_OF_SOLVER_FOR_DIFFUSION_OF_TRACERS",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -4994,10 +5272,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "SLVDTA(ITRAC)\\%KRYLOV"
+      "mnemo": "SLVDTA(ITRAC)%KRYLOV"
     },
     {
       "keyword": "TREATMENT ON TIDAL FLATS FOR TRACERS",
+      "identifier": "TREATMENT_ON_TIDAL_FLATS_FOR_TRACERS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5018,6 +5297,7 @@
     },
     {
       "keyword": "COEFFICIENT FOR HORIZONTAL DIFFUSION OF TRACERS",
+      "identifier": "COEFFICIENT_FOR_HORIZONTAL_DIFFUSION_OF_TRACERS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -5033,6 +5313,7 @@
     },
     {
       "keyword": "COEFFICIENT FOR VERTICAL DIFFUSION OF TRACERS",
+      "identifier": "COEFFICIENT_FOR_VERTICAL_DIFFUSION_OF_TRACERS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -5048,6 +5329,7 @@
     },
     {
       "keyword": "SEDIMENT",
+      "identifier": "SEDIMENT",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -5060,10 +5342,11 @@
       "is_file": false,
       "default": false,
       "level": 0,
-      "mnemo": "S3D\\_SEDI"
+      "mnemo": "S3D_SEDI"
     },
     {
       "keyword": "DENSITY OF THE SEDIMENT",
+      "identifier": "DENSITY_OF_THE_SEDIMENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5076,10 +5359,11 @@
       "is_file": false,
       "default": 2650.0,
       "level": 1,
-      "mnemo": "S3D\\_RHOS"
+      "mnemo": "S3D_RHOS"
     },
     {
       "keyword": "TIME STEP FOR CONSOLIDATION",
+      "identifier": "TIME_STEP_FOR_CONSOLIDATION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5092,10 +5376,11 @@
       "is_file": false,
       "default": 1200.0,
       "level": 1,
-      "mnemo": "S3D\\_DTC"
+      "mnemo": "S3D_DTC"
     },
     {
       "keyword": "COHESIVE SEDIMENT",
+      "identifier": "COHESIVE_SEDIMENT",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -5108,10 +5393,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "S3D\\_SEDCO"
+      "mnemo": "S3D_SEDCO"
     },
     {
       "keyword": "SHIELDS PARAMETER",
+      "identifier": "SHIELDS_PARAMETER",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5124,10 +5410,11 @@
       "is_file": false,
       "default": 0.047,
       "level": 1,
-      "mnemo": "S3D\\_AC"
+      "mnemo": "S3D_AC"
     },
     {
       "keyword": "MIXED SEDIMENT",
+      "identifier": "MIXED_SEDIMENT",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -5140,10 +5427,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "S3D\\_MIXTE"
+      "mnemo": "S3D_MIXTE"
     },
     {
       "keyword": "NUMBER OF SEDIMENT BED LAYERS",
+      "identifier": "NUMBER_OF_SEDIMENT_BED_LAYERS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5156,10 +5444,11 @@
       "is_file": false,
       "default": 1,
       "level": 2,
-      "mnemo": "S3D\\_NCOUCH"
+      "mnemo": "S3D_NCOUCH"
     },
     {
       "keyword": "READ CRITICAL BED SHEAR STRESS PER LAYER",
+      "identifier": "READ_CRITICAL_BED_SHEAR_STRESS_PER_LAYER",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -5172,10 +5461,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "S3D\\_READ\\_TOCE"
+      "mnemo": "S3D_READ_TOCE"
     },
     {
       "keyword": "SEDIMENTOLOGICAL RESULT FILE",
+      "identifier": "SEDIMENTOLOGICAL_RESULT_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -5188,12 +5478,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(S3D\\_T3DSED)\\%NAME",
+      "mnemo": "T3D_FILES(S3D_T3DSED)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "SEDIMENTOLOGICAL RESULT FILE BINARY",
+      "identifier": "SEDIMENTOLOGICAL_RESULT_FILE_BINARY",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -5211,10 +5502,11 @@
         "IBM",
         "I3E"
       ],
-      "mnemo": "S3D\\_BIRSED"
+      "mnemo": "S3D_BIRSED"
     },
     {
       "keyword": "PREVIOUS COMPUTATION SEDIMENTOLOGICAL FILE",
+      "identifier": "PREVIOUS_COMPUTATION_SEDIMENTOLOGICAL_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -5227,12 +5519,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "T3D\\_FILES(T3DSUS)\\%NAME",
+      "mnemo": "T3D_FILES(T3DSUS)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "MEAN DIAMETER OF THE SEDIMENT",
+      "identifier": "MEAN_DIAMETER_OF_THE_SEDIMENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5245,10 +5538,11 @@
       "is_file": false,
       "default": 0.01,
       "level": 1,
-      "mnemo": "S3D\\_D50"
+      "mnemo": "S3D_D50"
     },
     {
       "keyword": "RATIO BETWEEN SKIN FRICTION AND MEAN DIAMETER",
+      "identifier": "RATIO_BETWEEN_SKIN_FRICTION_AND_MEAN_DIAMETER",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5261,10 +5555,11 @@
       "is_file": false,
       "default": 3.0,
       "level": 1,
-      "mnemo": "S3D\\_KSPRATIO"
+      "mnemo": "S3D_KSPRATIO"
     },
     {
       "keyword": "SKIN FRICTION CORRECTION",
+      "identifier": "SKIN_FRICTION_CORRECTION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5277,10 +5572,11 @@
       "is_file": false,
       "default": 0,
       "level": 2,
-      "mnemo": "S3D\\_ICR"
+      "mnemo": "S3D_ICR"
     },
     {
       "keyword": "INITIAL PERCENTAGE OF NON COHESIVE SEDIMENT",
+      "identifier": "INITIAL_PERCENTAGE_OF_NON_COHESIVE_SEDIMENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5293,10 +5589,11 @@
       "is_file": false,
       "default": 0.0,
       "level": 2,
-      "mnemo": "S3D\\_PVSNCO0"
+      "mnemo": "S3D_PVSNCO0"
     },
     {
       "keyword": "MUD CONCENTRATIONS PER LAYER",
+      "identifier": "MUD_CONCENTRATIONS_PER_LAYER",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -5308,10 +5605,11 @@
       ],
       "is_file": false,
       "level": 2,
-      "mnemo": "S3D\\_CONC\\_LAYER"
+      "mnemo": "S3D_CONC_LAYER"
     },
     {
       "keyword": "CRITICAL EROSION SHEAR STRESS OF THE MUD LAYERS",
+      "identifier": "CRITICAL_EROSION_SHEAR_STRESS_OF_THE_MUD_LAYERS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -5323,10 +5621,11 @@
       ],
       "is_file": false,
       "level": 2,
-      "mnemo": "S3D\\_TOCE\\_LAYER"
+      "mnemo": "S3D_TOCE_LAYER"
     },
     {
       "keyword": "INITIAL THICKNESS OF SEDIMENT LAYERS",
+      "identifier": "INITIAL_THICKNESS_OF_SEDIMENT_LAYERS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -5338,10 +5637,11 @@
       ],
       "is_file": false,
       "level": 2,
-      "mnemo": "S3D\\_ES\\_LAYER"
+      "mnemo": "S3D_ES_LAYER"
     },
     {
       "keyword": "SOLVER FOR DIFFUSION OF THE SEDIMENT",
+      "identifier": "SOLVER_FOR_DIFFUSION_OF_THE_SEDIMENT",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5364,10 +5664,11 @@
         "7": "gmres",
         "8": "direct solver"
       },
-      "mnemo": "S3D\\_SLVDSE\\%SLV"
+      "mnemo": "S3D_SLVDSE%SLV"
     },
     {
       "keyword": "ACCURACY FOR DIFFUSION OF SEDIMENT",
+      "identifier": "ACCURACY_FOR_DIFFUSION_OF_SEDIMENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5380,10 +5681,11 @@
       "is_file": false,
       "default": 1e-08,
       "level": 0,
-      "mnemo": "S3D\\_SLVDSE\\%EPS"
+      "mnemo": "S3D_SLVDSE%EPS"
     },
     {
       "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR DIFFUSION OF SEDIMENT",
+      "identifier": "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_DIFFUSION_OF_SEDIMENT",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5396,10 +5698,11 @@
       "is_file": false,
       "default": 60,
       "level": 0,
-      "mnemo": "S3D\\_SLVDSE\\%NITMAX"
+      "mnemo": "S3D_SLVDSE%NITMAX"
     },
     {
       "keyword": "PRECONDITIONING FOR DIFFUSION OF THE SEDIMENT",
+      "identifier": "PRECONDITIONING_FOR_DIFFUSION_OF_THE_SEDIMENT",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5425,10 +5728,11 @@
         "21": "diagonal condensed and Crout",
         "34": "diagonal and direct solver on the vertical"
       },
-      "mnemo": "S3D\\_SLVDSE\\%PRECON"
+      "mnemo": "S3D_SLVDSE%PRECON"
     },
     {
       "keyword": "OPTION OF SOLVER FOR DIFFUSION OF THE SEDIMENT",
+      "identifier": "OPTION_OF_SOLVER_FOR_DIFFUSION_OF_THE_SEDIMENT",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5441,10 +5745,11 @@
       "is_file": false,
       "default": 5,
       "level": 0,
-      "mnemo": "S3D\\_SLVDSE\\%KRYLOV"
+      "mnemo": "S3D_SLVDSE%KRYLOV"
     },
     {
       "keyword": "THRESHOLD FOR SEDIMENT FLUX CORRECTION ON TIDAL FLATS",
+      "identifier": "THRESHOLD_FOR_SEDIMENT_FLUX_CORRECTION_ON_TIDAL_FLATS",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5457,10 +5762,11 @@
       "is_file": false,
       "default": 0.2,
       "level": 0,
-      "mnemo": "S3D\\_HSED"
+      "mnemo": "S3D_HSED"
     },
     {
       "keyword": "CRITICAL SHEAR STRESS FOR DEPOSITION",
+      "identifier": "CRITICAL_SHEAR_STRESS_FOR_DEPOSITION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5473,10 +5779,11 @@
       "is_file": false,
       "default": 0.2,
       "level": 1,
-      "mnemo": "S3D\\_TOCD"
+      "mnemo": "S3D_TOCD"
     },
     {
       "keyword": "NON COHESIVE BED POROSITY",
+      "identifier": "NON_COHESIVE_BED_POROSITY",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5489,10 +5796,11 @@
       "is_file": false,
       "default": 0.4,
       "level": 1,
-      "mnemo": "S3D\\_XKV"
+      "mnemo": "S3D_XKV"
     },
     {
       "keyword": "EROSION COEFFICIENT",
+      "identifier": "EROSION_COEFFICIENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5505,10 +5813,11 @@
       "is_file": false,
       "default": 0.002,
       "level": 1,
-      "mnemo": "S3D\\_MPART"
+      "mnemo": "S3D_MPART"
     },
     {
       "keyword": "CONSTANT SEDIMENT SETTLING VELOCITY",
+      "identifier": "CONSTANT_SEDIMENT_SETTLING_VELOCITY",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5521,10 +5830,11 @@
       "is_file": false,
       "default": 0.01,
       "level": 1,
-      "mnemo": "S3D\\_WCHU0"
+      "mnemo": "S3D_WCHU0"
     },
     {
       "keyword": "SETTLING VELOCITY OF SANDS",
+      "identifier": "SETTLING_VELOCITY_OF_SANDS",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5537,10 +5847,11 @@
       "is_file": false,
       "default": 0.0,
       "level": 2,
-      "mnemo": "S3D\\_WCS0"
+      "mnemo": "S3D_WCS0"
     },
     {
       "keyword": "ADVECTION-DIFFUSION SCHEME WITH SETTLING VELOCITY",
+      "identifier": "ADVECTION_DIFFUSION_SCHEME_WITH_SETTLING_VELOCITY",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5553,10 +5864,11 @@
       "is_file": false,
       "default": 0,
       "level": 1,
-      "mnemo": "S3D\\_SETDEP"
+      "mnemo": "S3D_SETDEP"
     },
     {
       "keyword": "HINDERED SETTLING",
+      "identifier": "HINDERED_SETTLING",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -5569,10 +5881,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "S3D\\_HINDER"
+      "mnemo": "S3D_HINDER"
     },
     {
       "keyword": "WEAK SOIL CONCENTRATION FOR MUD",
+      "identifier": "WEAK_SOIL_CONCENTRATION_FOR_MUD",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5585,10 +5898,11 @@
       "is_file": false,
       "default": 0.0,
       "level": 1,
-      "mnemo": "S3D\\_CGEL"
+      "mnemo": "S3D_CGEL"
     },
     {
       "keyword": "THRESHOLD CONCENTRATION FOR HINDERED SETTLING",
+      "identifier": "THRESHOLD_CONCENTRATION_FOR_HINDERED_SETTLING",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5601,10 +5915,11 @@
       "is_file": false,
       "default": 0.0,
       "level": 1,
-      "mnemo": "S3D\\_CINI"
+      "mnemo": "S3D_CINI"
     },
     {
       "keyword": "HINDERED SETTLING FORMULA",
+      "identifier": "HINDERED_SETTLING_FORMULA",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5617,10 +5932,11 @@
       "is_file": false,
       "default": 1,
       "level": 1,
-      "mnemo": "S3D\\_HIND\\_TYPE"
+      "mnemo": "S3D_HIND_TYPE"
     },
     {
       "keyword": "REFERENCE CONCENTRATION FORMULA",
+      "identifier": "REFERENCE_CONCENTRATION_FORMULA",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5633,10 +5949,11 @@
       "is_file": false,
       "default": 1,
       "level": 2,
-      "mnemo": "S3D\\_ICQ"
+      "mnemo": "S3D_ICQ"
     },
     {
       "keyword": "FLOCCULATION",
+      "identifier": "FLOCCULATION",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -5649,10 +5966,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "S3D\\_FLOC"
+      "mnemo": "S3D_FLOC"
     },
     {
       "keyword": "FLOCCULATION FORMULA",
+      "identifier": "FLOCCULATION_FORMULA",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5665,10 +5983,11 @@
       "is_file": false,
       "default": 1,
       "level": 1,
-      "mnemo": "S3D\\_FLOC\\_TYPE"
+      "mnemo": "S3D_FLOC_TYPE"
     },
     {
       "keyword": "FLOCCULATION COEFFICIENT",
+      "identifier": "FLOCCULATION_COEFFICIENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5681,10 +6000,11 @@
       "is_file": false,
       "default": 0.3,
       "level": 1,
-      "mnemo": "S3D\\_TURBA"
+      "mnemo": "S3D_TURBA"
     },
     {
       "keyword": "COEFFICIENT RELATIVE TO FLOC DESTRUCTION",
+      "identifier": "COEFFICIENT_RELATIVE_TO_FLOC_DESTRUCTION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5697,10 +6017,11 @@
       "is_file": false,
       "default": 0.09,
       "level": 1,
-      "mnemo": "S3D\\_TURBB"
+      "mnemo": "S3D_TURBB"
     },
     {
       "keyword": "BED LAYERS THICKNESS",
+      "identifier": "BED_LAYERS_THICKNESS",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5713,10 +6034,11 @@
       "is_file": false,
       "default": 0.005,
       "level": 1,
-      "mnemo": "S3D\\_EPAI0"
+      "mnemo": "S3D_EPAI0"
     },
     {
       "keyword": "MAXIMUM CONCENTRATION OF THE CONSOLIDATED MUD",
+      "identifier": "MAXIMUM_CONCENTRATION_OF_THE_CONSOLIDATED_MUD",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -5729,10 +6051,11 @@
       "is_file": false,
       "default": 500.0,
       "level": 1,
-      "mnemo": "S3D\\_CFMAX"
+      "mnemo": "S3D_CFMAX"
     },
     {
       "keyword": "RESIDENCE TIME FOR MUD",
+      "identifier": "RESIDENCE_TIME_FOR_MUD",
       "type": "REAL",
       "size": 30,
       "unbounded": false,
@@ -5744,10 +6067,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "S3D\\_TREST(S3D\\_NCOUCH)"
+      "mnemo": "S3D_TREST(S3D_NCOUCH)"
     },
     {
       "keyword": "CONSOLIDATION",
+      "identifier": "CONSOLIDATION",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -5760,10 +6084,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "S3D\\_TASSE"
+      "mnemo": "S3D_TASSE"
     },
     {
       "keyword": "CONSOLIDATION MODEL",
+      "identifier": "CONSOLIDATION_MODEL",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5776,10 +6101,11 @@
       "is_file": false,
       "default": 1,
       "level": 2,
-      "mnemo": "S3D\\_ITASS"
+      "mnemo": "S3D_ITASS"
     },
     {
       "keyword": "COUPLING WITH",
+      "identifier": "COUPLING_WITH",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -5807,6 +6133,7 @@
     },
     {
       "keyword": "TOMAWAC STEERING FILE",
+      "identifier": "TOMAWAC_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -5823,6 +6150,7 @@
     },
     {
       "keyword": "COUPLING PERIOD FOR TOMAWAC",
+      "identifier": "COUPLING_PERIOD_FOR_TOMAWAC",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5835,10 +6163,11 @@
       "is_file": false,
       "default": 1,
       "level": 0,
-      "mnemo": "PERCOU\\_WAC"
+      "mnemo": "PERCOU_WAC"
     },
     {
       "keyword": "BOTTOM FRICTION DUE TO WAVES",
+      "identifier": "BOTTOM_FRICTION_DUE_TO_WAVES",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -5851,10 +6180,11 @@
       "is_file": false,
       "default": false,
       "level": 0,
-      "mnemo": "BOT\\_MOMENT"
+      "mnemo": "BOT_MOMENT"
     },
     {
       "keyword": "WATER QUALITY PROCESS",
+      "identifier": "WATER_QUALITY_PROCESS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5871,6 +6201,7 @@
     },
     {
       "keyword": "WAQTEL STEERING FILE",
+      "identifier": "WAQTEL_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -5887,6 +6218,7 @@
     },
     {
       "keyword": "DELWAQ STEERING FILE",
+      "identifier": "DELWAQ_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -5899,12 +6231,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DL11)\\%NAME",
+      "mnemo": "T3D_FILES(T3DL11)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "DELWAQ PRINTOUT PERIOD",
+      "identifier": "DELWAQ_PRINTOUT_PERIOD",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -5921,6 +6254,7 @@
     },
     {
       "keyword": "EXCHANGES BETWEEN NODES DELWAQ FILE",
+      "identifier": "EXCHANGES_BETWEEN_NODES_DELWAQ_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -5933,12 +6267,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DDL6)\\%NAME",
+      "mnemo": "T3D_FILES(T3DDL6)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "NODES DISTANCES DELWAQ FILE",
+      "identifier": "NODES_DISTANCES_DELWAQ_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -5951,12 +6286,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DDL7)\\%NAME",
+      "mnemo": "T3D_FILES(T3DDL7)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "BOTTOM SURFACES DELWAQ FILE",
+      "identifier": "BOTTOM_SURFACES_DELWAQ_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -5969,12 +6305,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DDL5)\\%NAME",
+      "mnemo": "T3D_FILES(T3DDL5)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "VOLUMES DELWAQ FILE",
+      "identifier": "VOLUMES_DELWAQ_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -5987,12 +6324,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DDL1)\\%NAME",
+      "mnemo": "T3D_FILES(T3DDL1)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "EXCHANGE AREAS DELWAQ FILE",
+      "identifier": "EXCHANGE_AREAS_DELWAQ_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -6005,12 +6343,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DDL2)\\%NAME",
+      "mnemo": "T3D_FILES(T3DDL2)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "VERTICAL FLUXES DELWAQ FILE",
+      "identifier": "VERTICAL_FLUXES_DELWAQ_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -6023,12 +6362,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DDL3)\\%NAME",
+      "mnemo": "T3D_FILES(T3DDL3)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "VELOCITY DELWAQ FILE",
+      "identifier": "VELOCITY_DELWAQ_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -6041,12 +6381,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DDL9)\\%NAME",
+      "mnemo": "T3D_FILES(T3DDL9)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "DIFFUSIVITY DELWAQ FILE",
+      "identifier": "DIFFUSIVITY_DELWAQ_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -6059,12 +6400,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DL10)\\%NAME",
+      "mnemo": "T3D_FILES(T3DL10)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "TEMPERATURE DELWAQ FILE",
+      "identifier": "TEMPERATURE_DELWAQ_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -6077,12 +6419,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DDL8)\\%NAME",
+      "mnemo": "T3D_FILES(T3DDL8)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "SALINITY DELWAQ FILE",
+      "identifier": "SALINITY_DELWAQ_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -6095,12 +6438,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "T3D\\_FILES(T3DDL4)\\%NAME",
+      "mnemo": "T3D_FILES(T3DDL4)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "GAIA STEERING FILE",
+      "identifier": "GAIA_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -6117,6 +6461,7 @@
     },
     {
       "keyword": "KHIONE STEERING FILE",
+      "identifier": "KHIONE_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -6133,6 +6478,7 @@
     },
     {
       "keyword": "AD NUMBER OF DERIVATIVES",
+      "identifier": "AD_NUMBER_OF_DERIVATIVES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -6149,6 +6495,7 @@
     },
     {
       "keyword": "AD NAMES OF DERIVATIVES",
+      "identifier": "AD_NAMES_OF_DERIVATIVES",
       "type": "STRING",
       "size": 2,
       "unbounded": false,
@@ -6160,10 +6507,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "NAME\\_ADVAR"
+      "mnemo": "NAME_ADVAR"
     },
     {
       "keyword": "AD NUMBER OF DIRECTIONS",
+      "identifier": "AD_NUMBER_OF_DIRECTIONS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -6176,10 +6524,11 @@
       "is_file": false,
       "default": 1,
       "level": 1,
-      "mnemo": "AD\\_NUMOFDIR"
+      "mnemo": "AD_NUMOFDIR"
     },
     {
       "keyword": "AD SYMBOLIC LINEAR SOLVER",
+      "identifier": "AD_SYMBOLIC_LINEAR_SOLVER",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -6192,10 +6541,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "AD\\_SYMBLINSOLV"
+      "mnemo": "AD_SYMBLINSOLV"
     },
     {
       "keyword": "AD LINEAR SOLVER RESET DERIVATIVES",
+      "identifier": "AD_LINEAR_SOLVER_RESET_DERIVATIVES",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -6208,10 +6558,11 @@
       "is_file": false,
       "default": true,
       "level": 1,
-      "mnemo": "AD\\_LINSOLV\\_RESETDERIV"
+      "mnemo": "AD_LINSOLV_RESETDERIV"
     },
     {
       "keyword": "AD LINEAR SOLVER DERIVATIVE CONVERGENCE",
+      "identifier": "AD_LINEAR_SOLVER_DERIVATIVE_CONVERGENCE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -6224,10 +6575,11 @@
       "is_file": false,
       "default": true,
       "level": 1,
-      "mnemo": "AD\\_LINSOLV\\_DERIVATIVE\\_CONVERGENCE"
+      "mnemo": "AD_LINSOLV_DERIVATIVE_CONVERGENCE"
     },
     {
       "keyword": "PARTITIONING TOOL",
+      "identifier": "PARTITIONING_TOOL",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -6250,6 +6602,7 @@
     },
     {
       "keyword": "STEERING FILE",
+      "identifier": "STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -6268,6 +6621,7 @@
     },
     {
       "keyword": "DICTIONARY",
+      "identifier": "DICTIONARY",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -6286,6 +6640,7 @@
     },
     {
       "keyword": "CONCATENATE PARTEL OUTPUT",
+      "identifier": "CONCATENATE_PARTEL_OUTPUT",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -6298,7 +6653,7 @@
       "is_file": false,
       "default": false,
       "level": 0,
-      "mnemo": "CONCAT\\_PARTEL"
+      "mnemo": "CONCAT_PARTEL"
     }
   ]
 }

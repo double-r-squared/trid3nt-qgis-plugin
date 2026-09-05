@@ -3,6 +3,7 @@
   "keywords": [
     {
       "keyword": "WAQ CASE TITLE",
+      "identifier": "WAQ_CASE_TITLE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -19,6 +20,7 @@
     },
     {
       "keyword": "PARALLEL PROCESSORS",
+      "identifier": "PARALLEL_PROCESSORS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -35,6 +37,7 @@
     },
     {
       "keyword": "GEOMETRY FILE",
+      "identifier": "GEOMETRY_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -47,12 +50,13 @@
       "is_file": true,
       "default": "",
       "level": 2,
-      "mnemo": "WAQ\\_FILES(WAQGEO)%NAME",
+      "mnemo": "WAQ_FILES(WAQGEO)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "GEOMETRY FILE FORMAT",
+      "identifier": "GEOMETRY_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -70,10 +74,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "WAQ\\_FILES(WAQGEO)%FMT"
+      "mnemo": "WAQ_FILES(WAQGEO)%FMT"
     },
     {
       "keyword": "BOUNDARY CONDITIONS FILE",
+      "identifier": "BOUNDARY_CONDITIONS_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -85,12 +90,13 @@
       ],
       "is_file": true,
       "level": 1,
-      "mnemo": "WAQ\\_FILES(WAQCLI)%NAME",
+      "mnemo": "WAQ_FILES(WAQCLI)%NAME",
       "file_role": "input",
       "file_mandatory": true
     },
     {
       "keyword": "FORTRAN FILE",
+      "identifier": "FORTRAN_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -109,6 +115,7 @@
     },
     {
       "keyword": "HYDRODYNAMIC FILE",
+      "identifier": "HYDRODYNAMIC_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -121,12 +128,13 @@
       "is_file": true,
       "default": "",
       "level": 2,
-      "mnemo": "WAQ\\_FILES(WAQHYD)%NAME",
+      "mnemo": "WAQ_FILES(WAQHYD)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "HYDRODYNAMIC FILE FORMAT",
+      "identifier": "HYDRODYNAMIC_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -144,10 +152,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "WAQ\\_FILES(WAQHYD)%FMT"
+      "mnemo": "WAQ_FILES(WAQHYD)%FMT"
     },
     {
       "keyword": "REFERENCE FILE",
+      "identifier": "REFERENCE_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -160,12 +169,13 @@
       "is_file": true,
       "default": "",
       "level": 2,
-      "mnemo": "WAQ\\_FILES(WAQREF)%NAME",
+      "mnemo": "WAQ_FILES(WAQREF)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "REFERENCE FILE FORMAT",
+      "identifier": "REFERENCE_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -183,10 +193,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "WAQ\\_FILES(WAQREF)%FMT"
+      "mnemo": "WAQ_FILES(WAQREF)%FMT"
     },
     {
       "keyword": "AED2 STEERING FILE",
+      "identifier": "AED2_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -199,12 +210,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "WAQ\\_FILES(WAQAED2)",
+      "mnemo": "WAQ_FILES(WAQAED2)",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "AED2 PHYTOPLANKTON STEERING FILE",
+      "identifier": "AED2_PHYTOPLANKTON_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -217,12 +229,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "WAQ\\_FILES(WAQAED2P)",
+      "mnemo": "WAQ_FILES(WAQAED2P)",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "AED2 ZOOPLANKTON STEERING FILE",
+      "identifier": "AED2_ZOOPLANKTON_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -235,12 +248,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "WAQ\\_FILES(WAQAED2Z)",
+      "mnemo": "WAQ_FILES(WAQAED2Z)",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "AED2 PATHOGEN STEERING FILE",
+      "identifier": "AED2_PATHOGEN_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -253,12 +267,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "WAQ\\_FILES(WAQAED2PT)",
+      "mnemo": "WAQ_FILES(WAQAED2PT)",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "AED2 BIVALVE STEERING FILE",
+      "identifier": "AED2_BIVALVE_STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -271,12 +286,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "WAQ\\_FILES(WAQAED2B)",
+      "mnemo": "WAQ_FILES(WAQAED2B)",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "RESULTS FILE",
+      "identifier": "RESULTS_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -288,12 +304,13 @@
       ],
       "is_file": true,
       "level": 1,
-      "mnemo": "WAQ\\_FILES(WAQRES)%NAME",
+      "mnemo": "WAQ_FILES(WAQRES)%NAME",
       "file_role": "output",
       "file_mandatory": true
     },
     {
       "keyword": "RESULTS FILE FORMAT",
+      "identifier": "RESULTS_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -311,10 +328,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "WAQ\\_FILES(WAQRES)%FMT"
+      "mnemo": "WAQ_FILES(WAQRES)%FMT"
     },
     {
       "keyword": "WATER QUALITY PRINTOUT PERIOD",
+      "identifier": "WATER_QUALITY_PRINTOUT_PERIOD",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -331,6 +349,7 @@
     },
     {
       "keyword": "VARIABLES FOR WAQ PRINTOUTS",
+      "identifier": "VARIABLES_FOR_WAQ_PRINTOUTS",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -351,6 +370,7 @@
     },
     {
       "keyword": "MASS-BALANCE",
+      "identifier": "MASS_BALANCE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -367,6 +387,7 @@
     },
     {
       "keyword": "WAQ VARIABLES TO BE PRINTED",
+      "identifier": "WAQ_VARIABLES_TO_BE_PRINTED",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -383,6 +404,7 @@
     },
     {
       "keyword": "DEBUGGER",
+      "identifier": "DEBUGGER",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -399,6 +421,7 @@
     },
     {
       "keyword": "WATER DENSITY",
+      "identifier": "WATER_DENSITY",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -415,6 +438,7 @@
     },
     {
       "keyword": "KINEMATIC WATER VISCOSITY",
+      "identifier": "KINEMATIC_WATER_VISCOSITY",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -431,6 +455,7 @@
     },
     {
       "keyword": "DISPERSION ALONG THE FLOW",
+      "identifier": "DISPERSION_ALONG_THE_FLOW",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -447,6 +472,7 @@
     },
     {
       "keyword": "DISPERSION ACROSS THE FLOW",
+      "identifier": "DISPERSION_ACROSS_THE_FLOW",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -463,6 +489,7 @@
     },
     {
       "keyword": "EVAPORATION RATE",
+      "identifier": "EVAPORATION_RATE",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -479,6 +506,7 @@
     },
     {
       "keyword": "METHOD OF COMPUTATION OF RAY EXTINCTION COEFFICIENT",
+      "identifier": "METHOD_OF_COMPUTATION_OF_RAY_EXTINCTION_COEFFICIENT",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -500,6 +528,7 @@
     },
     {
       "keyword": "SECCHI DEPTH",
+      "identifier": "SECCHI_DEPTH",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -516,6 +545,7 @@
     },
     {
       "keyword": "LIGHT EXTINCTION COEFFICIENT",
+      "identifier": "LIGHT_EXTINCTION_COEFFICIENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -532,6 +562,7 @@
     },
     {
       "keyword": "WATER TEMPERATURE",
+      "identifier": "WATER_TEMPERATURE",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -548,6 +579,7 @@
     },
     {
       "keyword": "WATER SALINITY",
+      "identifier": "WATER_SALINITY",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -564,6 +596,7 @@
     },
     {
       "keyword": "VEGETAL RESPIRATION R",
+      "identifier": "VEGETAL_RESPIRATION_R",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -580,6 +613,7 @@
     },
     {
       "keyword": "CONSTANT OF DEGRADATION OF ORGANIC LOAD K1",
+      "identifier": "CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -596,6 +630,7 @@
     },
     {
       "keyword": "CONSTANT OF NITRIFICATION KINETIC K4",
+      "identifier": "CONSTANT_OF_NITRIFICATION_KINETIC_K4",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -612,6 +647,7 @@
     },
     {
       "keyword": "BENTHIC DEMAND",
+      "identifier": "BENTHIC_DEMAND",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -628,6 +664,7 @@
     },
     {
       "keyword": "PHOTOSYNTHESIS P",
+      "identifier": "PHOTOSYNTHESIS_P",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -644,6 +681,7 @@
     },
     {
       "keyword": "O2 SATURATION DENSITY OF WATER (CS)",
+      "identifier": "O2_SATURATION_DENSITY_OF_WATER__CS_",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -660,6 +698,7 @@
     },
     {
       "keyword": "FORMULA FOR COMPUTING K2",
+      "identifier": "FORMULA_FOR_COMPUTING_K2",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -676,6 +715,7 @@
     },
     {
       "keyword": "K2 REAERATION COEFFICIENT",
+      "identifier": "K2_REAERATION_COEFFICIENT",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -692,6 +732,7 @@
     },
     {
       "keyword": "FORMULA FOR COMPUTING CS",
+      "identifier": "FORMULA_FOR_COMPUTING_CS",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -714,6 +755,7 @@
     },
     {
       "keyword": "MAXIMUM ALGAL GROWTH RATE AT 20C",
+      "identifier": "MAXIMUM_ALGAL_GROWTH_RATE_AT_20C",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -730,6 +772,7 @@
     },
     {
       "keyword": "ALGAL TOXICITY COEFFICIENTS",
+      "identifier": "ALGAL_TOXICITY_COEFFICIENTS",
       "type": "REAL",
       "size": 2,
       "unbounded": false,
@@ -749,6 +792,7 @@
     },
     {
       "keyword": "VEGETAL TURBIDITY COEFFICIENT WITHOUT PHYTO",
+      "identifier": "VEGETAL_TURBIDITY_COEFFICIENT_WITHOUT_PHYTO",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -765,6 +809,7 @@
     },
     {
       "keyword": "PARAMETER OF CALIBRATION OF SMITH FORMULA",
+      "identifier": "PARAMETER_OF_CALIBRATION_OF_SMITH_FORMULA",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -781,6 +826,7 @@
     },
     {
       "keyword": "SUNSHINE FLUX DENSITY ON WATER SURFACE",
+      "identifier": "SUNSHINE_FLUX_DENSITY_ON_WATER_SURFACE",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -797,6 +843,7 @@
     },
     {
       "keyword": "CONSTANT OF HALF-SATURATION WITH PHOSPHATE",
+      "identifier": "CONSTANT_OF_HALF_SATURATION_WITH_PHOSPHATE",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -813,6 +860,7 @@
     },
     {
       "keyword": "CONSTANT OF HALF-SATURATION WITH NITROGEN",
+      "identifier": "CONSTANT_OF_HALF_SATURATION_WITH_NITROGEN",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -829,6 +877,7 @@
     },
     {
       "keyword": "RESPIRATION RATE OF ALGAL BIOMASS",
+      "identifier": "RESPIRATION_RATE_OF_ALGAL_BIOMASS",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -845,6 +894,7 @@
     },
     {
       "keyword": "COEFFICIENTS OF ALGAL MORTALITY AT 20C",
+      "identifier": "COEFFICIENTS_OF_ALGAL_MORTALITY_AT_20C",
       "type": "REAL",
       "size": 2,
       "unbounded": false,
@@ -864,6 +914,7 @@
     },
     {
       "keyword": "PROPORTION OF PHOSPHORUS WITHIN PHYTO CELLS",
+      "identifier": "PROPORTION_OF_PHOSPHORUS_WITHIN_PHYTO_CELLS",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -880,6 +931,7 @@
     },
     {
       "keyword": "PERCENTAGE OF PHOSPHORUS ASSIMILABLE IN DEAD PHYTO",
+      "identifier": "PERCENTAGE_OF_PHOSPHORUS_ASSIMILABLE_IN_DEAD_PHYTO",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -896,6 +948,7 @@
     },
     {
       "keyword": "RATE OF TRANSFORMATION OF POR TO PO4",
+      "identifier": "RATE_OF_TRANSFORMATION_OF_POR_TO_PO4",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -912,6 +965,7 @@
     },
     {
       "keyword": "RATE OF TRANSFORMATION OF NOR TO NO3",
+      "identifier": "RATE_OF_TRANSFORMATION_OF_NOR_TO_NO3",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -928,6 +982,7 @@
     },
     {
       "keyword": "PROPORTION OF NITROGEN WITHIN PHYTO CELLS",
+      "identifier": "PROPORTION_OF_NITROGEN_WITHIN_PHYTO_CELLS",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -944,6 +999,7 @@
     },
     {
       "keyword": "PERCENTAGE OF NITROGEN ASSIMILABLE IN DEAD PHYTO",
+      "identifier": "PERCENTAGE_OF_NITROGEN_ASSIMILABLE_IN_DEAD_PHYTO",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -960,6 +1016,7 @@
     },
     {
       "keyword": "SEDIMENTATION VELOCITY OF ORGANIC PHOSPHORUS",
+      "identifier": "SEDIMENTATION_VELOCITY_OF_ORGANIC_PHOSPHORUS",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -976,6 +1033,7 @@
     },
     {
       "keyword": "SEDIMENTATION VELOCITY OF NON ALGAL NITROGEN",
+      "identifier": "SEDIMENTATION_VELOCITY_OF_NON_ALGAL_NITROGEN",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -992,6 +1050,7 @@
     },
     {
       "keyword": "CONSUMED OXYGEN BY NITRIFICATION",
+      "identifier": "CONSUMED_OXYGEN_BY_NITRIFICATION",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1008,6 +1067,7 @@
     },
     {
       "keyword": "CONSTANT FOR THE NITRIFICATION KINETIC K520",
+      "identifier": "CONSTANT_FOR_THE_NITRIFICATION_KINETIC_K520",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1024,6 +1084,7 @@
     },
     {
       "keyword": "CONSTANT OF DEGRADATION OF ORGANIC LOAD K120",
+      "identifier": "CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K120",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1040,6 +1101,7 @@
     },
     {
       "keyword": "SEDIMENTATION VELOCITY OF ORGANIC LOAD",
+      "identifier": "SEDIMENTATION_VELOCITY_OF_ORGANIC_LOAD",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1056,6 +1118,7 @@
     },
     {
       "keyword": "OXYGEN PRODUCED BY PHOTOSYNTHESIS",
+      "identifier": "OXYGEN_PRODUCED_BY_PHOTOSYNTHESIS",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1072,6 +1135,7 @@
     },
     {
       "keyword": "FORMULA FOR COMPUTING RS",
+      "identifier": "FORMULA_FOR_COMPUTING_RS",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1088,6 +1152,7 @@
     },
     {
       "keyword": "WEIR REAERATION COEFFICIENT RS",
+      "identifier": "WEIR_REAERATION_COEFFICIENT_RS",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1104,6 +1169,7 @@
     },
     {
       "keyword": "COEFFICIENTS A AND B FOR RS FORMULA",
+      "identifier": "COEFFICIENTS_A_AND_B_FOR_RS_FORMULA",
       "type": "REAL",
       "size": 2,
       "unbounded": false,
@@ -1123,6 +1189,7 @@
     },
     {
       "keyword": "SEDIMENTATION CRITICAL STRESS",
+      "identifier": "SEDIMENTATION_CRITICAL_STRESS",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1139,6 +1206,7 @@
     },
     {
       "keyword": "SEDIMENT SETTLING VELOCITY",
+      "identifier": "SEDIMENT_SETTLING_VELOCITY",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1151,10 +1219,11 @@
       "is_file": false,
       "default": 6e-06,
       "level": 1,
-      "mnemo": "VITCHU\\_WAQ"
+      "mnemo": "VITCHU_WAQ"
     },
     {
       "keyword": "CRITICAL STRESS OF RESUSPENSION",
+      "identifier": "CRITICAL_STRESS_OF_RESUSPENSION",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1171,6 +1240,7 @@
     },
     {
       "keyword": "EROSION RATE",
+      "identifier": "EROSION_RATE",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1187,6 +1257,7 @@
     },
     {
       "keyword": "KINETIC EXCHANGE MODEL",
+      "identifier": "KINETIC_EXCHANGE_MODEL",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1203,10 +1274,11 @@
         "1": "KINETIC MODEL 1",
         "2": "KINETIC MODEL 2"
       },
-      "mnemo": "KIN\\_MICROPOL"
+      "mnemo": "KIN_MICROPOL"
     },
     {
       "keyword": "CONSTANT OF DESORPTION KINETIC",
+      "identifier": "CONSTANT_OF_DESORPTION_KINETIC",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1223,6 +1295,7 @@
     },
     {
       "keyword": "COEFFICIENT OF DISTRIBUTION",
+      "identifier": "COEFFICIENT_OF_DISTRIBUTION",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1239,6 +1312,7 @@
     },
     {
       "keyword": "EXPONENTIAL DESINTEGRATION CONSTANT",
+      "identifier": "EXPONENTIAL_DESINTEGRATION_CONSTANT",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1255,6 +1329,7 @@
     },
     {
       "keyword": "CONSTANT OF DESORPTION KINETIC 2",
+      "identifier": "CONSTANT_OF_DESORPTION_KINETIC_2",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1271,6 +1346,7 @@
     },
     {
       "keyword": "COEFFICIENT OF DISTRIBUTION 2",
+      "identifier": "COEFFICIENT_OF_DISTRIBUTION_2",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1287,6 +1363,7 @@
     },
     {
       "keyword": "WATER SPECIFIC HEAT",
+      "identifier": "WATER_SPECIFIC_HEAT",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1299,10 +1376,11 @@
       "is_file": false,
       "default": 4180.0,
       "level": 1,
-      "mnemo": "CP\\_EAU"
+      "mnemo": "CP_EAU"
     },
     {
       "keyword": "COEFFICIENTS FOR CALIBRATING ATMOSPHERIC RADIATION",
+      "identifier": "COEFFICIENTS_FOR_CALIBRATING_ATMOSPHERIC_RADIATION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1319,6 +1397,7 @@
     },
     {
       "keyword": "COEFFICIENT OF CLOUDING RATE",
+      "identifier": "COEFFICIENT_OF_CLOUDING_RATE",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1331,10 +1410,11 @@
       "is_file": false,
       "default": 0.17,
       "level": 1,
-      "mnemo": "COEF\\_K"
+      "mnemo": "COEF_K"
     },
     {
       "keyword": "COEFFICIENTS FOR CALIBRATING SURFACE WATER RADIATION",
+      "identifier": "COEFFICIENTS_FOR_CALIBRATING_SURFACE_WATER_RADIATION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1347,10 +1427,11 @@
       "is_file": false,
       "default": 0.97,
       "level": 1,
-      "mnemo": "EMI\\_EAU"
+      "mnemo": "EMI_EAU"
     },
     {
       "keyword": "AIR SPECIFIC HEAT",
+      "identifier": "AIR_SPECIFIC_HEAT",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1363,10 +1444,11 @@
       "is_file": false,
       "default": 1005.0,
       "level": 1,
-      "mnemo": "CP\\_AIR"
+      "mnemo": "CP_AIR"
     },
     {
       "keyword": "COEFFICIENTS OF AERATION FORMULA",
+      "identifier": "COEFFICIENTS_OF_AERATION_FORMULA",
       "type": "REAL",
       "size": 2,
       "unbounded": false,
@@ -1386,6 +1468,7 @@
     },
     {
       "keyword": "ATMOSPHERE-WATER EXCHANGE MODEL",
+      "identifier": "ATMOSPHERE_WATER_EXCHANGE_MODEL",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1407,6 +1490,7 @@
     },
     {
       "keyword": "COEFFICIENT TO CALIBRATE THE ATMOSPHERE-WATER EXCHANGE MODEL",
+      "identifier": "COEFFICIENT_TO_CALIBRATE_THE_ATMOSPHERE_WATER_EXCHANGE_MODEL",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1419,10 +1503,11 @@
       "is_file": false,
       "default": 0.0025,
       "level": 2,
-      "mnemo": "C\\_ATMOS"
+      "mnemo": "C_ATMOS"
     },
     {
       "keyword": "FORMULA OF ATMOSPHERIC RADIATION",
+      "identifier": "FORMULA_OF_ATMOSPHERIC_RADIATION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1441,10 +1526,11 @@
         "3": "BRUTSAERT (1975)",
         "4": "YAJIMA TONO DAM (2014)"
       },
-      "mnemo": "IRAY\\_ATM"
+      "mnemo": "IRAY_ATM"
     },
     {
       "keyword": "LIGHTNESS OF THE SKY",
+      "identifier": "LIGHTNESS_OF_THE_SKY",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1460,12 +1546,13 @@
       "choices": {
         "1": "VERY BRIGHT, PURE SKY",
         "2": "MODERATELY BRIGHT SKY",
-        "3": "FOGGY LIKE THE SKY OF INDUSTRIAL AREA "
+        "3": "FOGGY LIKE THE SKY OF INDUSTRIAL AREA"
       },
       "mnemo": "ISKYTYPE"
     },
     {
       "keyword": "SOLAR RADIATION READ IN METEO FILE",
+      "identifier": "SOLAR_RADIATION_READ_IN_METEO_FILE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1482,6 +1569,7 @@
     },
     {
       "keyword": "LAW OF TRACERS DEGRADATION",
+      "identifier": "LAW_OF_TRACERS_DEGRADATION",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -1508,6 +1596,7 @@
     },
     {
       "keyword": "COEFFICIENT 1 FOR LAW OF TRACERS DEGRADATION",
+      "identifier": "COEFFICIENT_1_FOR_LAW_OF_TRACERS_DEGRADATION",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -1523,6 +1612,7 @@
     },
     {
       "keyword": "STEERING FILE",
+      "identifier": "STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1541,6 +1631,7 @@
     },
     {
       "keyword": "DICTIONARY",
+      "identifier": "DICTIONARY",
       "type": "STRING",
       "size": 1,
       "unbounded": false,

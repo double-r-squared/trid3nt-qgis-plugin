@@ -41,8 +41,17 @@ def test_every_exposed_module_has_a_committed_catalog():
         for slot in catalog["keywords"]:
             assert slot["type"] in ("INTEGER", "REAL", "LOGICAL", "STRING")
             assert slot["help"] and slot["keyword"]
+            assert slot["identifier"].isidentifier()
             assert len(slot["rubrique"]) == 3
             assert slot["is_file"] == ("file_role" in slot)
+
+
+def test_the_help_carries_no_markup_into_the_surface():
+    """A slot's desc is what a reader is given, so no LaTeX may survive in it."""
+    extractor = _extractor()
+    for path in extractor.catalog_dir().glob("*.json"):
+        assert "\\" not in path.read_text(), (
+            f"{path.name} still carries LaTeX; widen de_latex in the extractor")
 
 
 def test_the_committed_catalog_is_what_the_image_says_today(tmp_path):

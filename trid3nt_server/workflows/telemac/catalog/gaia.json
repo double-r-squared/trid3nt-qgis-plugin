@@ -3,6 +3,7 @@
   "keywords": [
     {
       "keyword": "TITLE",
+      "identifier": "TITLE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -19,6 +20,7 @@
     },
     {
       "keyword": "RELEASE",
+      "identifier": "RELEASE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -35,6 +37,7 @@
     },
     {
       "keyword": "DICTIONARY",
+      "identifier": "DICTIONARY",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -53,6 +56,7 @@
     },
     {
       "keyword": "PARALLEL PROCESSORS",
+      "identifier": "PARALLEL_PROCESSORS",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -69,6 +73,7 @@
     },
     {
       "keyword": "NUMBER OF PRIVATE ARRAYS",
+      "identifier": "NUMBER_OF_PRIVATE_ARRAYS",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -85,6 +90,7 @@
     },
     {
       "keyword": "ORIGIN COORDINATES",
+      "identifier": "ORIGIN_COORDINATES",
       "type": "INTEGER",
       "size": 2,
       "unbounded": false,
@@ -100,10 +106,11 @@
         0
       ],
       "level": 0,
-      "mnemo": "I\\_ORIG,J\\_ORIG"
+      "mnemo": "I_ORIG,J_ORIG"
     },
     {
       "keyword": "DEBUGGER",
+      "identifier": "DEBUGGER",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -120,6 +127,7 @@
     },
     {
       "keyword": "OPTION FOR THE TREATMENT OF TIDAL FLATS",
+      "identifier": "OPTION_FOR_THE_TREATMENT_OF_TIDAL_FLATS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -136,6 +144,7 @@
     },
     {
       "keyword": "NESTOR",
+      "identifier": "NESTOR",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -152,6 +161,7 @@
     },
     {
       "keyword": "NESTOR ACTION FILE",
+      "identifier": "NESTOR_ACTION_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -164,12 +174,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(SINACT)%NAME",
+      "mnemo": "GAI_FILES(SINACT)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "NESTOR POLYGON FILE",
+      "identifier": "NESTOR_POLYGON_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -182,12 +193,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(SINPOL)%NAME",
+      "mnemo": "GAI_FILES(SINPOL)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "NESTOR RESTART FILE",
+      "identifier": "NESTOR_RESTART_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -200,12 +212,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(SINRST)%NAME",
+      "mnemo": "GAI_FILES(SINRST)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "NESTOR SURFACE REFERENCE FILE",
+      "identifier": "NESTOR_SURFACE_REFERENCE_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -218,12 +231,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(SINREF)%NAME",
+      "mnemo": "GAI_FILES(SINREF)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "CHECKING THE MESH",
+      "identifier": "CHECKING_THE_MESH",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -236,10 +250,11 @@
       "is_file": false,
       "default": false,
       "level": 0,
-      "mnemo": "CHECK\\_MESH"
+      "mnemo": "CHECK_MESH"
     },
     {
       "keyword": "MAXIMUM NUMBER OF BOUNDARIES",
+      "identifier": "MAXIMUM_NUMBER_OF_BOUNDARIES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -256,6 +271,7 @@
     },
     {
       "keyword": "FLUXLINE INPUT FILE",
+      "identifier": "FLUXLINE_INPUT_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -268,12 +284,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(GAIFLX)%NAME",
+      "mnemo": "GAI_FILES(GAIFLX)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "CONTROL SECTIONS",
+      "identifier": "CONTROL_SECTIONS",
       "type": "INTEGER",
       "size": 3,
       "unbounded": false,
@@ -289,6 +306,7 @@
     },
     {
       "keyword": "CLASSES SHIELDS PARAMETERS",
+      "identifier": "CLASSES_SHIELDS_PARAMETERS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -308,6 +326,7 @@
     },
     {
       "keyword": "MINIMAL VALUE OF THE WATER HEIGHT",
+      "identifier": "MINIMAL_VALUE_OF_THE_WATER_HEIGHT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -324,6 +343,7 @@
     },
     {
       "keyword": "TIDAL FLATS",
+      "identifier": "TIDAL_FLATS",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -340,6 +360,7 @@
     },
     {
       "keyword": "SECONDARY CURRENTS",
+      "identifier": "SECONDARY_CURRENTS",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -356,6 +377,7 @@
     },
     {
       "keyword": "SECONDARY CURRENTS FILE",
+      "identifier": "SECONDARY_CURRENTS_FILE",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -372,6 +394,7 @@
     },
     {
       "keyword": "NUMBER OF LAYERS FOR INITIAL STRATIFICATION",
+      "identifier": "NUMBER_OF_LAYERS_FOR_INITIAL_STRATIFICATION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -388,6 +411,7 @@
     },
     {
       "keyword": "EFFECT OF WAVES",
+      "identifier": "EFFECT_OF_WAVES",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -404,6 +428,7 @@
     },
     {
       "keyword": "TYPE OF WAVES",
+      "identifier": "TYPE_OF_WAVES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -416,10 +441,11 @@
       "is_file": false,
       "default": 2,
       "level": 1,
-      "mnemo": "TYPE\\_HOULE"
+      "mnemo": "TYPE_HOULE"
     },
     {
       "keyword": "TRIGONOMETRICAL CONVENTION IN WAVE FILE",
+      "identifier": "TRIGONOMETRICAL_CONVENTION_IN_WAVE_FILE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -432,10 +458,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "CONV\\_WAVES"
+      "mnemo": "CONV_WAVES"
     },
     {
       "keyword": "VECTOR LENGTH",
+      "identifier": "VECTOR_LENGTH",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -452,6 +479,7 @@
     },
     {
       "keyword": "STEERING FILE",
+      "identifier": "STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -470,6 +498,7 @@
     },
     {
       "keyword": "GEOMETRY FILE FORMAT",
+      "identifier": "GEOMETRY_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -487,10 +516,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "GAI\\_FILES(GAIGEO)\\%FMT"
+      "mnemo": "GAI_FILES(GAIGEO)%FMT"
     },
     {
       "keyword": "GEOMETRY FILE",
+      "identifier": "GEOMETRY_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -502,12 +532,13 @@
       ],
       "is_file": true,
       "level": 1,
-      "mnemo": "GAI\\_FILES(GAIGEO)%NAME",
+      "mnemo": "GAI_FILES(GAIGEO)%NAME",
       "file_role": "input",
       "file_mandatory": true
     },
     {
       "keyword": "NAMES OF PRIVATE VARIABLES",
+      "identifier": "NAMES_OF_PRIVATE_VARIABLES",
       "type": "STRING",
       "size": 2,
       "unbounded": true,
@@ -519,10 +550,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "NAMES\\_PRIVE"
+      "mnemo": "NAMES_PRIVE"
     },
     {
       "keyword": "BEDLOAD BOUNDARIES FILE",
+      "identifier": "BEDLOAD_BOUNDARIES_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -535,12 +567,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(GAILIQ)%NAME",
+      "mnemo": "GAI_FILES(GAILIQ)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "RESULTS FILE FORMAT",
+      "identifier": "RESULTS_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -558,10 +591,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "GAI\\_FILES(GAIRES)\\%FMT"
+      "mnemo": "GAI_FILES(GAIRES)%FMT"
     },
     {
       "keyword": "RESULTS FILE",
+      "identifier": "RESULTS_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -573,12 +607,13 @@
       ],
       "is_file": true,
       "level": 1,
-      "mnemo": "GAI\\_FILES(GAIRES)%NAME",
+      "mnemo": "GAI_FILES(GAIRES)%NAME",
       "file_role": "output",
       "file_mandatory": true
     },
     {
       "keyword": "VARIABLES TO BE PRINTED",
+      "identifier": "VARIABLES_TO_BE_PRINTED",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -626,6 +661,7 @@
     },
     {
       "keyword": "LISTING PRINTOUT PERIOD",
+      "identifier": "LISTING_PRINTOUT_PERIOD",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -642,6 +678,7 @@
     },
     {
       "keyword": "MASS-BALANCE",
+      "identifier": "MASS_BALANCE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -658,6 +695,7 @@
     },
     {
       "keyword": "SECTIONS OUTPUT FILE",
+      "identifier": "SECTIONS_OUTPUT_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -670,12 +708,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(GAISEO)%NAME",
+      "mnemo": "GAI_FILES(GAISEO)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "C-VSM RESULTS FILE",
+      "identifier": "C_VSM_RESULTS_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -688,12 +727,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(VSPRES)\\%NAME",
+      "mnemo": "GAI_FILES(VSPRES)%NAME",
       "file_role": "output",
       "file_mandatory": true
     },
     {
       "keyword": "C-VSM RESULTS FILE FORMAT",
+      "identifier": "C_VSM_RESULTS_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -711,10 +751,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "GAI\\_FILES(VSPRES)\\%FMT"
+      "mnemo": "GAI_FILES(VSPRES)%FMT"
     },
     {
       "keyword": "TIME SERIES FILE",
+      "identifier": "TIME_SERIES_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -727,12 +768,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "GAI\\_FILES(GAIHI2)\\%NAME",
+      "mnemo": "GAI_FILES(GAIHI2)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "TIME SERIES FILE FORMAT",
+      "identifier": "TIME_SERIES_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -750,10 +792,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "GAI\\_FILES(GAIHI2)\\%FMT"
+      "mnemo": "GAI_FILES(GAIHI2)%FMT"
     },
     {
       "keyword": "REFERENCE FILE FORMAT",
+      "identifier": "REFERENCE_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -771,10 +814,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "GAI\\_FILES(GAIREF)\\%FMT"
+      "mnemo": "GAI_FILES(GAIREF)%FMT"
     },
     {
       "keyword": "WAVE FILE FORMAT",
+      "identifier": "WAVE_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -792,10 +836,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "GAI\\_FILES(GAICOU)\\%FMT"
+      "mnemo": "GAI_FILES(GAICOU)%FMT"
     },
     {
       "keyword": "FORTRAN FILE",
+      "identifier": "FORTRAN_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -814,6 +859,7 @@
     },
     {
       "keyword": "BOUNDARY CONDITIONS FILE",
+      "identifier": "BOUNDARY_CONDITIONS_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -825,12 +871,13 @@
       ],
       "is_file": true,
       "level": 1,
-      "mnemo": "GAI\\_FILES(GAILIM)%NAME",
+      "mnemo": "GAI_FILES(GAILIM)%NAME",
       "file_role": "input",
       "file_mandatory": true
     },
     {
       "keyword": "WAVE FILE",
+      "identifier": "WAVE_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -843,12 +890,13 @@
       "is_file": true,
       "default": "",
       "level": 2,
-      "mnemo": "GAI\\_FILES(GAICOU)%NAME",
+      "mnemo": "GAI_FILES(GAICOU)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "REFERENCE FILE",
+      "identifier": "REFERENCE_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -861,12 +909,13 @@
       "is_file": true,
       "default": "",
       "level": 2,
-      "mnemo": "GAI\\_FILES(GAIREF)%NAME",
+      "mnemo": "GAI_FILES(GAIREF)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "BOTTOM TOPOGRAPHY FILE",
+      "identifier": "BOTTOM_TOPOGRAPHY_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -879,12 +928,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(GAIFON)%NAME",
+      "mnemo": "GAI_FILES(GAIFON)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "SECTIONS INPUT FILE",
+      "identifier": "SECTIONS_INPUT_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -897,12 +947,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(GAISEC)%NAME",
+      "mnemo": "GAI_FILES(GAISEC)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "TIME SERIES COORDINATES FILE",
+      "identifier": "TIME_SERIES_COORDINATES_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -915,12 +966,13 @@
       "is_file": true,
       "default": "",
       "level": 0,
-      "mnemo": "GAI\\_FILES(GAICOO)\\%NAME",
+      "mnemo": "GAI_FILES(GAICOO)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "PREVIOUS SEDIMENTOLOGICAL COMPUTATION FILE FORMAT",
+      "identifier": "PREVIOUS_SEDIMENTOLOGICAL_COMPUTATION_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -938,10 +990,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "GAI\\_FILES(GAIPRE)\\%FMT"
+      "mnemo": "GAI_FILES(GAIPRE)%FMT"
     },
     {
       "keyword": "PREVIOUS SEDIMENTOLOGICAL COMPUTATION FILE",
+      "identifier": "PREVIOUS_SEDIMENTOLOGICAL_COMPUTATION_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -954,12 +1007,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(GAIPRE)%NAME",
+      "mnemo": "GAI_FILES(GAIPRE)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "SPINUP TIME FOR BED UPDATING",
+      "identifier": "SPINUP_TIME_FOR_BED_UPDATING",
       "type": "REAL",
       "size": 1,
       "unbounded": true,
@@ -972,10 +1026,11 @@
       "is_file": false,
       "default": 0.0,
       "level": 2,
-      "mnemo": "SPINUP\\_TIME"
+      "mnemo": "SPINUP_TIME"
     },
     {
       "keyword": "RECORD NUMBER FOR RESTART",
+      "identifier": "RECORD_NUMBER_FOR_RESTART",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -988,10 +1043,11 @@
       "is_file": false,
       "default": -1,
       "level": 0,
-      "mnemo": "START\\_RECORD"
+      "mnemo": "START_RECORD"
     },
     {
       "keyword": "RESTART FILE",
+      "identifier": "RESTART_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1004,12 +1060,13 @@
       "is_file": true,
       "default": "",
       "level": 1,
-      "mnemo": "GAI\\_FILES(GAIRST)\\%NAME",
+      "mnemo": "GAI_FILES(GAIRST)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "RESTART FILE FORMAT",
+      "identifier": "RESTART_FILE_FORMAT",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1027,10 +1084,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "GAI\\_FILES(GAIRST)\\%FMT"
+      "mnemo": "GAI_FILES(GAIRST)%FMT"
     },
     {
       "keyword": "RESTART FILE PRINTOUT PERIOD",
+      "identifier": "RESTART_FILE_PRINTOUT_PERIOD",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1047,6 +1105,7 @@
     },
     {
       "keyword": "RECORD NUMBER IN RESTART FILE",
+      "identifier": "RECORD_NUMBER_IN_RESTART_FILE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1059,10 +1118,11 @@
       "is_file": false,
       "default": -1,
       "level": 2,
-      "mnemo": "RESTART\\_RECORD"
+      "mnemo": "RESTART_RECORD"
     },
     {
       "keyword": "VARIABLES FOR GRAPHIC PRINTOUTS",
+      "identifier": "VARIABLES_FOR_GRAPHIC_PRINTOUTS",
       "type": "STRING",
       "size": 1,
       "unbounded": true,
@@ -1123,6 +1183,7 @@
     },
     {
       "keyword": "PRESCRIBED SOLID DISCHARGES",
+      "identifier": "PRESCRIBED_SOLID_DISCHARGES",
       "type": "REAL",
       "size": 2,
       "unbounded": false,
@@ -1138,6 +1199,7 @@
     },
     {
       "keyword": "CLASSES IMPOSED SOLID DISCHARGES DISTRIBUTION",
+      "identifier": "CLASSES_IMPOSED_SOLID_DISCHARGES_DISTRIBUTION",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -1149,10 +1211,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "RATIO\\_DEBIMP"
+      "mnemo": "RATIO_DEBIMP"
     },
     {
       "keyword": "INITIAL SUSPENDED SEDIMENTS CONCENTRATION VALUES",
+      "identifier": "INITIAL_SUSPENDED_SEDIMENTS_CONCENTRATION_VALUES",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -1172,6 +1235,7 @@
     },
     {
       "keyword": "PRESCRIBED SUSPENDED SEDIMENTS CONCENTRATION VALUES",
+      "identifier": "PRESCRIBED_SUSPENDED_SEDIMENTS_CONCENTRATION_VALUES",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -1187,6 +1251,7 @@
     },
     {
       "keyword": "VERTICAL PROFILES OF SUSPENDED SEDIMENTS",
+      "identifier": "VERTICAL_PROFILES_OF_SUSPENDED_SEDIMENTS",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -1202,13 +1267,14 @@
         "0": "User defined",
         "1": "Constant",
         "2": "Constant or Rouse if sediment",
-        "3": " \"Normalized Rouse profile and imposed conc",
-        "4": " \"Modified Rouse profile accounting for molecular viscosity"
+        "3": "'Normalized Rouse profile and imposed conc",
+        "4": "'Modified Rouse profile accounting for molecular viscosity"
       },
       "mnemo": "VERPROSED"
     },
     {
       "keyword": "SUSPENDED SEDIMENTS CONCENTRATION VALUES AT THE SOURCES",
+      "identifier": "SUSPENDED_SEDIMENTS_CONCENTRATION_VALUES_AT_THE_SOURCES",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -1224,6 +1290,7 @@
     },
     {
       "keyword": "SCHEME FOR ADVECTION OF SUSPENDED SEDIMENTS",
+      "identifier": "SCHEME_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -1254,6 +1321,7 @@
     },
     {
       "keyword": "SCHEME OPTION FOR ADVECTION OF SUSPENDED SEDIMENTS",
+      "identifier": "SCHEME_OPTION_FOR_ADVECTION_OF_SUSPENDED_SEDIMENTS",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -1269,10 +1337,11 @@
         4
       ],
       "level": 1,
-      "mnemo": "OPTADV\\_SED"
+      "mnemo": "OPTADV_SED"
     },
     {
       "keyword": "SCHEME FOR DIFFUSION OF SUSPENDED SEDIMENTS IN 3D",
+      "identifier": "SCHEME_FOR_DIFFUSION_OF_SUSPENDED_SEDIMENTS_IN_3D",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1293,6 +1362,7 @@
     },
     {
       "keyword": "SOLVER FOR DIFFUSION OF SUSPENSION",
+      "identifier": "SOLVER_FOR_DIFFUSION_OF_SUSPENSION",
       "type": "INTEGER",
       "size": 2,
       "unbounded": true,
@@ -1318,10 +1388,11 @@
         "7": "gmres",
         "8": "direct solver"
       },
-      "mnemo": "SLVSED(I)\\%SLV"
+      "mnemo": "SLVSED(I)%SLV"
     },
     {
       "keyword": "SOLVER OPTION FOR DIFFUSION OF SUSPENSION",
+      "identifier": "SOLVER_OPTION_FOR_DIFFUSION_OF_SUSPENSION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1334,10 +1405,11 @@
       "is_file": false,
       "default": 5,
       "level": 2,
-      "mnemo": "SLVSED(I)\\%KRYLOV"
+      "mnemo": "SLVSED(I)%KRYLOV"
     },
     {
       "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR SOLVER FOR SUSPENSION",
+      "identifier": "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER_FOR_SUSPENSION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1350,10 +1422,11 @@
       "is_file": false,
       "default": 60,
       "level": 2,
-      "mnemo": "SLVSED(I)\\%NITMAX"
+      "mnemo": "SLVSED(I)%NITMAX"
     },
     {
       "keyword": "ACCURACY FOR DIFFUSION OF SUSPENSION",
+      "identifier": "ACCURACY_FOR_DIFFUSION_OF_SUSPENSION",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1366,10 +1439,11 @@
       "is_file": false,
       "default": 1e-08,
       "level": 1,
-      "mnemo": "SLVSED\\%EPS"
+      "mnemo": "SLVSED%EPS"
     },
     {
       "keyword": "PRECONDITIONING FOR DIFFUSION OF SUSPENSION",
+      "identifier": "PRECONDITIONING_FOR_DIFFUSION_OF_SUSPENSION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1395,10 +1469,11 @@
         "21": "diagonal condensed and Crout",
         "34": "diagonal and direct solver on the vertical"
       },
-      "mnemo": "SLVSED(I)\\%PRECON"
+      "mnemo": "SLVSED(I)%PRECON"
     },
     {
       "keyword": "FINITE VOLUME SCHEME FOR SUSPENDED SEDIMENTS DIFFUSION",
+      "identifier": "FINITE_VOLUME_SCHEME_FOR_SUSPENDED_SEDIMENTS_DIFFUSION",
       "type": "INTEGER",
       "size": 2,
       "unbounded": false,
@@ -1419,10 +1494,11 @@
         "2": "two points flux",
         "3": "reconstructed two points flux"
       },
-      "mnemo": "MVIST\\_SED"
+      "mnemo": "MVIST_SED"
     },
     {
       "keyword": "ADVECTION-DIFFUSION SCHEME WITH SETTLING VELOCITY",
+      "identifier": "ADVECTION_DIFFUSION_SCHEME_WITH_SETTLING_VELOCITY",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1439,6 +1515,7 @@
     },
     {
       "keyword": "HINDERED SETTLING",
+      "identifier": "HINDERED_SETTLING",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1455,6 +1532,7 @@
     },
     {
       "keyword": "HINDERED SETTLING FORMULA",
+      "identifier": "HINDERED_SETTLING_FORMULA",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1467,10 +1545,11 @@
       "is_file": false,
       "default": 1,
       "level": 1,
-      "mnemo": "HIND\\_TYPE"
+      "mnemo": "HIND_TYPE"
     },
     {
       "keyword": "WEAK SOIL CONCENTRATION FOR MUD",
+      "identifier": "WEAK_SOIL_CONCENTRATION_FOR_MUD",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1487,6 +1566,7 @@
     },
     {
       "keyword": "THRESHOLD CONCENTRATION FOR HINDERED SETTLING",
+      "identifier": "THRESHOLD_CONCENTRATION_FOR_HINDERED_SETTLING",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1503,6 +1583,7 @@
     },
     {
       "keyword": "FLOCCULATION",
+      "identifier": "FLOCCULATION",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1519,6 +1600,7 @@
     },
     {
       "keyword": "FLOCCULATION FORMULA",
+      "identifier": "FLOCCULATION_FORMULA",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1531,10 +1613,11 @@
       "is_file": false,
       "default": 1,
       "level": 1,
-      "mnemo": "FLOC\\_TYPE"
+      "mnemo": "FLOC_TYPE"
     },
     {
       "keyword": "FLOCCULATION COEFFICIENT",
+      "identifier": "FLOCCULATION_COEFFICIENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1551,6 +1634,7 @@
     },
     {
       "keyword": "COEFFICIENT RELATIVE TO FLOC DESTRUCTION",
+      "identifier": "COEFFICIENT_RELATIVE_TO_FLOC_DESTRUCTION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1567,6 +1651,7 @@
     },
     {
       "keyword": "ZERO",
+      "identifier": "ZERO",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1583,6 +1668,7 @@
     },
     {
       "keyword": "FINITE VOLUMES",
+      "identifier": "FINITE_VOLUMES",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -1599,6 +1685,7 @@
     },
     {
       "keyword": "MATRIX-VECTOR PRODUCT",
+      "identifier": "MATRIX_VECTOR_PRODUCT",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1615,6 +1702,7 @@
     },
     {
       "keyword": "MATRIX STORAGE",
+      "identifier": "MATRIX_STORAGE",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1635,6 +1723,7 @@
     },
     {
       "keyword": "UPWINDING FOR BEDLOAD",
+      "identifier": "UPWINDING_FOR_BEDLOAD",
       "type": "REAL",
       "size": null,
       "unbounded": false,
@@ -1651,6 +1740,7 @@
     },
     {
       "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR POSITIVE THICKNESS",
+      "identifier": "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_POSITIVE_THICKNESS",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1667,6 +1757,7 @@
     },
     {
       "keyword": "BED ROUGHNESS PREDICTOR OPTION",
+      "identifier": "BED_ROUGHNESS_PREDICTOR_OPTION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1683,6 +1774,7 @@
     },
     {
       "keyword": "AD NUMBER OF DERIVATIVES",
+      "identifier": "AD_NUMBER_OF_DERIVATIVES",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1699,6 +1791,7 @@
     },
     {
       "keyword": "AD NAMES OF DERIVATIVES",
+      "identifier": "AD_NAMES_OF_DERIVATIVES",
       "type": "STRING",
       "size": 2,
       "unbounded": false,
@@ -1710,10 +1803,11 @@
       ],
       "is_file": false,
       "level": 1,
-      "mnemo": "NAME\\_ADVAR"
+      "mnemo": "NAME_ADVAR"
     },
     {
       "keyword": "AD NUMBER OF DIRECTIONS",
+      "identifier": "AD_NUMBER_OF_DIRECTIONS",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1726,10 +1820,11 @@
       "is_file": false,
       "default": 1,
       "level": 1,
-      "mnemo": "AD\\_NUMOFDIR"
+      "mnemo": "AD_NUMOFDIR"
     },
     {
       "keyword": "AD SYMBOLIC LINEAR SOLVER",
+      "identifier": "AD_SYMBOLIC_LINEAR_SOLVER",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1742,10 +1837,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "AD\\_SYMBLINSOLV"
+      "mnemo": "AD_SYMBLINSOLV"
     },
     {
       "keyword": "AD LINEAR SOLVER RESET DERIVATIVES",
+      "identifier": "AD_LINEAR_SOLVER_RESET_DERIVATIVES",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1758,10 +1854,11 @@
       "is_file": false,
       "default": true,
       "level": 1,
-      "mnemo": "AD\\_LINSOLV\\_RESETDERIV"
+      "mnemo": "AD_LINSOLV_RESETDERIV"
     },
     {
       "keyword": "AD LINEAR SOLVER DERIVATIVE CONVERGENCE",
+      "identifier": "AD_LINEAR_SOLVER_DERIVATIVE_CONVERGENCE",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1774,10 +1871,11 @@
       "is_file": false,
       "default": true,
       "level": 1,
-      "mnemo": "AD\\_LINSOLV\\_DERIVATIVE\\_CONVERGENCE"
+      "mnemo": "AD_LINSOLV_DERIVATIVE_CONVERGENCE"
     },
     {
       "keyword": "CLASSES SEDIMENT DENSITY",
+      "identifier": "CLASSES_SEDIMENT_DENSITY",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -1797,6 +1895,7 @@
     },
     {
       "keyword": "LAYERS NON COHESIVE BED POROSITY",
+      "identifier": "LAYERS_NON_COHESIVE_BED_POROSITY",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -1816,6 +1915,7 @@
     },
     {
       "keyword": "WATER VISCOSITY",
+      "identifier": "WATER_VISCOSITY",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1832,6 +1932,7 @@
     },
     {
       "keyword": "SETTLING LAG",
+      "identifier": "SETTLING_LAG",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1844,10 +1945,11 @@
       "is_file": false,
       "default": false,
       "level": 2,
-      "mnemo": "SET\\_LAG"
+      "mnemo": "SET_LAG"
     },
     {
       "keyword": "CLASSES SETTLING VELOCITIES",
+      "identifier": "CLASSES_SETTLING_VELOCITIES",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -1867,6 +1969,7 @@
     },
     {
       "keyword": "SUSPENSION FOR ALL SANDS",
+      "identifier": "SUSPENSION_FOR_ALL_SANDS",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1879,10 +1982,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "SUSP\\_SAND"
+      "mnemo": "SUSP_SAND"
     },
     {
       "keyword": "EQUILIBRIUM INFLOW CONCENTRATION",
+      "identifier": "EQUILIBRIUM_INFLOW_CONCENTRATION",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -1895,10 +1999,11 @@
       "is_file": false,
       "default": false,
       "level": 2,
-      "mnemo": "IMP\\_INFLOW\\_C"
+      "mnemo": "IMP_INFLOW_C"
     },
     {
       "keyword": "SUSPENSION TRANSPORT FORMULA FOR ALL SANDS",
+      "identifier": "SUSPENSION_TRANSPORT_FORMULA_FOR_ALL_SANDS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1915,6 +2020,7 @@
     },
     {
       "keyword": "CORRECTION ON CONVECTION VELOCITY",
+      "identifier": "CORRECTION_ON_CONVECTION_VELOCITY",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -1927,10 +2033,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "CORR\\_CONV"
+      "mnemo": "CORR_CONV"
     },
     {
       "keyword": "CLASSES CRITICAL SHEAR STRESS FOR MUD DEPOSITION",
+      "identifier": "CLASSES_CRITICAL_SHEAR_STRESS_FOR_MUD_DEPOSITION",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -1946,10 +2053,11 @@
         1000.0
       ],
       "level": 2,
-      "mnemo": "TOCD\\_MUD0"
+      "mnemo": "TOCD_MUD0"
     },
     {
       "keyword": "LAYERS PARTHENIADES CONSTANT",
+      "identifier": "LAYERS_PARTHENIADES_CONSTANT",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -1969,6 +2077,7 @@
     },
     {
       "keyword": "COEFFICIENT FOR DIFFUSION OF SUSPENDED SEDIMENTS",
+      "identifier": "COEFFICIENT_FOR_DIFFUSION_OF_SUSPENDED_SEDIMENTS",
       "type": "REAL",
       "size": 1,
       "unbounded": true,
@@ -1985,6 +2094,7 @@
     },
     {
       "keyword": "COEFFICIENT FOR HORIZONTAL DIFFUSION OF SUSPENDED SEDIMENTS",
+      "identifier": "COEFFICIENT_FOR_HORIZONTAL_DIFFUSION_OF_SUSPENDED_SEDIMENTS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2000,6 +2110,7 @@
     },
     {
       "keyword": "COEFFICIENT FOR VERTICAL DIFFUSION OF SUSPENDED SEDIMENTS",
+      "identifier": "COEFFICIENT_FOR_VERTICAL_DIFFUSION_OF_SUSPENDED_SEDIMENTS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2015,6 +2126,7 @@
     },
     {
       "keyword": "CLASSES SEDIMENT DIAMETERS",
+      "identifier": "CLASSES_SEDIMENT_DIAMETERS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2034,6 +2146,7 @@
     },
     {
       "keyword": "CLASSES HIDING FACTOR",
+      "identifier": "CLASSES_HIDING_FACTOR",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2053,6 +2166,7 @@
     },
     {
       "keyword": "CLASSES INITIAL FRACTION",
+      "identifier": "CLASSES_INITIAL_FRACTION",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2072,6 +2186,7 @@
     },
     {
       "keyword": "ACTIVE LAYER THICKNESS",
+      "identifier": "ACTIVE_LAYER_THICKNESS",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -2088,6 +2203,7 @@
     },
     {
       "keyword": "HIDING FACTOR FORMULA",
+      "identifier": "HIDING_FACTOR_FORMULA",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -2104,6 +2220,7 @@
     },
     {
       "keyword": "CONSTANT ACTIVE LAYER THICKNESS",
+      "identifier": "CONSTANT_ACTIVE_LAYER_THICKNESS",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2116,10 +2233,11 @@
       "is_file": false,
       "default": true,
       "level": 2,
-      "mnemo": "CONST\\_ALAYER"
+      "mnemo": "CONST_ALAYER"
     },
     {
       "keyword": "LAYERS INITIAL THICKNESS",
+      "identifier": "LAYERS_INITIAL_THICKNESS",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2131,10 +2249,11 @@
       ],
       "is_file": false,
       "level": 2,
-      "mnemo": "SED\\_THICK"
+      "mnemo": "SED_THICK"
     },
     {
       "keyword": "D90 SAND DIAMETER FOR ONLY ONE CLASS",
+      "identifier": "D90_SAND_DIAMETER_FOR_ONLY_ONE_CLASS",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2151,6 +2270,7 @@
     },
     {
       "keyword": "RATIO BETWEEN SKIN FRICTION AND MEAN DIAMETER",
+      "identifier": "RATIO_BETWEEN_SKIN_FRICTION_AND_MEAN_DIAMETER",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2167,6 +2287,7 @@
     },
     {
       "keyword": "SKIN FRICTION CORRECTION",
+      "identifier": "SKIN_FRICTION_CORRECTION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2183,6 +2304,7 @@
     },
     {
       "keyword": "FORMULA FOR SLOPE EFFECT",
+      "identifier": "FORMULA_FOR_SLOPE_EFFECT",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2199,6 +2321,7 @@
     },
     {
       "keyword": "FRICTION ANGLE OF THE SEDIMENT",
+      "identifier": "FRICTION_ANGLE_OF_THE_SEDIMENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2215,6 +2338,7 @@
     },
     {
       "keyword": "FORMULA FOR DEVIATION",
+      "identifier": "FORMULA_FOR_DEVIATION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2231,6 +2355,7 @@
     },
     {
       "keyword": "PARAMETER FOR DEVIATION",
+      "identifier": "PARAMETER_FOR_DEVIATION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2247,6 +2372,7 @@
     },
     {
       "keyword": "SEDIMENT SLIDE",
+      "identifier": "SEDIMENT_SLIDE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2263,6 +2389,7 @@
     },
     {
       "keyword": "SLOPE EFFECT",
+      "identifier": "SLOPE_EFFECT",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -2279,6 +2406,7 @@
     },
     {
       "keyword": "BETA",
+      "identifier": "BETA",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2295,6 +2423,7 @@
     },
     {
       "keyword": "COMPUTE BED ROUGHNESS AT SEDIMENT SCALE",
+      "identifier": "COMPUTE_BED_ROUGHNESS_AT_SEDIMENT_SCALE",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -2311,6 +2440,7 @@
     },
     {
       "keyword": "SECONDARY CURRENTS ALPHA COEFFICIENT",
+      "identifier": "SECONDARY_CURRENTS_ALPHA_COEFFICIENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2327,6 +2457,7 @@
     },
     {
       "keyword": "MORPHOLOGICAL FACTOR",
+      "identifier": "MORPHOLOGICAL_FACTOR",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2343,6 +2474,7 @@
     },
     {
       "keyword": "OUTPUT TIME ACCORDING TO MORPHOLOGICAL FACTOR",
+      "identifier": "OUTPUT_TIME_ACCORDING_TO_MORPHOLOGICAL_FACTOR",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2355,10 +2487,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "OUTPUT\\_MOFAC"
+      "mnemo": "OUTPUT_MOFAC"
     },
     {
       "keyword": "MINIMUM DEPTH FOR BEDLOAD",
+      "identifier": "MINIMUM_DEPTH_FOR_BEDLOAD",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2371,10 +2504,11 @@
       "is_file": false,
       "default": 0.01,
       "level": 1,
-      "mnemo": "HMIN\\_BEDLOAD"
+      "mnemo": "HMIN_BEDLOAD"
     },
     {
       "keyword": "BED LOAD FOR ALL SANDS",
+      "identifier": "BED_LOAD_FOR_ALL_SANDS",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2391,6 +2525,7 @@
     },
     {
       "keyword": "BED-LOAD TRANSPORT FORMULA FOR ALL SANDS",
+      "identifier": "BED_LOAD_TRANSPORT_FORMULA_FOR_ALL_SANDS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2407,6 +2542,7 @@
     },
     {
       "keyword": "B VALUE FOR THE BIJKER FORMULA",
+      "identifier": "B_VALUE_FOR_THE_BIJKER_FORMULA",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2423,6 +2559,7 @@
     },
     {
       "keyword": "MPM COEFFICIENT",
+      "identifier": "MPM_COEFFICIENT",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -2438,6 +2575,7 @@
     },
     {
       "keyword": "BED MODEL",
+      "identifier": "BED_MODEL",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -2450,10 +2588,11 @@
       "is_file": false,
       "default": 1,
       "level": 1,
-      "mnemo": "BED\\_MODEL"
+      "mnemo": "BED_MODEL"
     },
     {
       "keyword": "CLASSES TYPE OF SEDIMENT",
+      "identifier": "CLASSES_TYPE_OF_SEDIMENT",
       "type": "STRING",
       "size": 2,
       "unbounded": true,
@@ -2465,10 +2604,11 @@
       ],
       "is_file": false,
       "level": 0,
-      "mnemo": "TYPE\\_SED"
+      "mnemo": "TYPE_SED"
     },
     {
       "keyword": "NUMBER OF LAYERS OF THE CONSOLIDATION MODEL",
+      "identifier": "NUMBER_OF_LAYERS_OF_THE_CONSOLIDATION_MODEL",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -2481,10 +2621,11 @@
       "is_file": false,
       "default": 1,
       "level": 2,
-      "mnemo": "NCOUCH\\_TASS"
+      "mnemo": "NCOUCH_TASS"
     },
     {
       "keyword": "LAYERS MASS TRANSFER",
+      "identifier": "LAYERS_MASS_TRANSFER",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2496,10 +2637,11 @@
       ],
       "is_file": false,
       "level": 2,
-      "mnemo": "TRANS\\_MASS0"
+      "mnemo": "TRANS_MASS0"
     },
     {
       "keyword": "LAYERS MUD CONCENTRATION",
+      "identifier": "LAYERS_MUD_CONCENTRATION",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2511,10 +2653,11 @@
       ],
       "is_file": false,
       "level": 2,
-      "mnemo": "CONC\\_MUD0"
+      "mnemo": "CONC_MUD0"
     },
     {
       "keyword": "LAYERS CRITICAL EROSION SHEAR STRESS OF THE MUD",
+      "identifier": "LAYERS_CRITICAL_EROSION_SHEAR_STRESS_OF_THE_MUD",
       "type": "REAL",
       "size": 2,
       "unbounded": true,
@@ -2530,10 +2673,11 @@
         1.0
       ],
       "level": 2,
-      "mnemo": "TOCE\\_MUD0"
+      "mnemo": "TOCE_MUD0"
     },
     {
       "keyword": "VERTICAL GRAIN SORTING MODEL",
+      "identifier": "VERTICAL_GRAIN_SORTING_MODEL",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -2550,6 +2694,7 @@
     },
     {
       "keyword": "C-VSM MAXIMUM SECTIONS",
+      "identifier": "C_VSM_MAXIMUM_SECTIONS",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -2562,10 +2707,11 @@
       "is_file": false,
       "default": 200,
       "level": 2,
-      "mnemo": "PRO\\_MAX\\_MAX"
+      "mnemo": "PRO_MAX_MAX"
     },
     {
       "keyword": "C-VSM FULL PRINTOUT PERIOD",
+      "identifier": "C_VSM_FULL_PRINTOUT_PERIOD",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -2582,6 +2728,7 @@
     },
     {
       "keyword": "C-VSM PRINTOUT SELECTION",
+      "identifier": "C_VSM_PRINTOUT_SELECTION",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -2598,6 +2745,7 @@
     },
     {
       "keyword": "ACTIVE LAYER THICKNESS FORMULA",
+      "identifier": "ACTIVE_LAYER_THICKNESS_FORMULA",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -2610,7 +2758,7 @@
       "is_file": false,
       "default": 0,
       "level": 2,
-      "mnemo": "ALT\\_MODEL"
+      "mnemo": "ALT_MODEL"
     }
   ]
 }

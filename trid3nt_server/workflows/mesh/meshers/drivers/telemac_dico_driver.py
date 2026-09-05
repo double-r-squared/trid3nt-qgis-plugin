@@ -19,11 +19,13 @@ every apostrophe swapped to a double quote by the dictionary reader.
 
 from __future__ import annotations
 
+import importlib
 import json
 import re
 import sys
 
 sys.path.insert(0, "/opt/conda/opentelemac/scripts/python3")
+sys.path.insert(0, "/opt/conda/opentelemac/scripts/python3/eficas")
 
 from execution.telemac_cas import get_dico  # noqa: E402
 from execution.telemac_dico import TelemacDico  # noqa: E402
@@ -94,10 +96,24 @@ def _size(info: dict) -> tuple[int | None, bool]:
     return info.get("TAILLE"), bool(_UNBOUNDED.intersection(shown))
 
 
-def _slot(keyword: str, info: dict) -> dict:
+def identifiers(module: str) -> dict:
+    """The module's own keyword -> identifier map, as eficas ships it.
+
+    The identifiers a class body writes keywords under are the image's, not a
+    spelling rule guessed at from the keywords: hyphens and parentheses become
+    underscores too, and one TOMAWAC keyword carries a trailing space the map is
+    keyed without.
+    """
+    eficas = importlib.import_module(module + "_dicoCasEnToCata")
+    return {engine: cata
+            for cata, engine in eficas.dicoCataToEngTelemac.items()}
+
+
+def _slot(keyword: str, identifier: str, info: dict) -> dict:
     """One dictionary entry, trimmed to what a slot is filled and refused by."""
     size, unbounded = _size(info)
     row: dict = {"keyword": keyword,
+                 "identifier": identifier,
                  "type": _TYPES.get(info["TYPE"], info["TYPE"]),
                  "size": size,
                  "unbounded": unbounded,
@@ -108,6 +124,14 @@ def _slot(keyword: str, info: dict) -> dict:
                        ("CHOIX1", "choices"), ("MNEMO", "mnemo")):
         if key in info:
             row[field] = info[key]
+    # A choice's LABEL and the Fortran mnemonic are prose out of the same
+    # dictionary and carry the same markup; a choice's VALUE is what gets
+    # written to the deck and is never touched.
+    if isinstance(row.get("choices"), dict):
+        row["choices"] = {value: de_latex(label)
+                          for value, label in row["choices"].items()}
+    if isinstance(row.get("mnemo"), str):
+        row["mnemo"] = de_latex(row["mnemo"])
     if row["is_file"]:
         submit = str(info["SUBMIT"]).split(";")
         row["file_role"] = _ROLES.get(submit[4], submit[4])
@@ -118,8 +142,10 @@ def _slot(keyword: str, info: dict) -> dict:
 def extract(module: str) -> dict:
     """A module's whole keyword surface, in the dictionary's own order."""
     dico = TelemacDico(get_dico(module))
+    named = identifiers(module)
     return {"module": module,
-            "keywords": [_slot(k, v) for k, v in dico.data.items()]}
+            "keywords": [_slot(k, named[k.strip()], v)
+                         for k, v in dico.data.items()]}
 
 
 def main() -> int:

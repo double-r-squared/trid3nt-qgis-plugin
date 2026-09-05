@@ -3,6 +3,7 @@
   "keywords": [
     {
       "keyword": "GEOMETRY FILE",
+      "identifier": "GEOMETRY_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -20,6 +21,7 @@
     },
     {
       "keyword": "TITLE",
+      "identifier": "TITLE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -36,6 +38,7 @@
     },
     {
       "keyword": "DEBUGGER",
+      "identifier": "DEBUGGER",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -52,6 +55,7 @@
     },
     {
       "keyword": "VECTOR LENGTH",
+      "identifier": "VECTOR_LENGTH",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -68,6 +72,7 @@
     },
     {
       "keyword": "MATRIX STORAGE",
+      "identifier": "MATRIX_STORAGE",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -89,6 +94,7 @@
     },
     {
       "keyword": "MATRIX-VECTOR PRODUCT",
+      "identifier": "MATRIX_VECTOR_PRODUCT",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -105,6 +111,7 @@
     },
     {
       "keyword": "GRAPHIC PRINTOUT PERIOD",
+      "identifier": "GRAPHIC_PRINTOUT_PERIOD",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -121,6 +128,7 @@
     },
     {
       "keyword": "LISTING PRINTOUT PERIOD",
+      "identifier": "LISTING_PRINTOUT_PERIOD",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -137,6 +145,7 @@
     },
     {
       "keyword": "MAXIMUM NUMBER OF ITERATIONS FOR SOLVER",
+      "identifier": "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_SOLVER",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -149,10 +158,11 @@
       "is_file": false,
       "default": 60000,
       "level": 2,
-      "mnemo": "SLVART\\%NITMAX"
+      "mnemo": "SLVART%NITMAX"
     },
     {
       "keyword": "NUMBER OF PERIODS",
+      "identifier": "NUMBER_OF_PERIODS",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -169,6 +179,7 @@
     },
     {
       "keyword": "BOTTOM TOPOGRAPHY SMOOTHING",
+      "identifier": "BOTTOM_TOPOGRAPHY_SMOOTHING",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -185,6 +196,7 @@
     },
     {
       "keyword": "INITIAL WATER LEVEL",
+      "identifier": "INITIAL_WATER_LEVEL",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -201,6 +213,7 @@
     },
     {
       "keyword": "PRECONDITIONING",
+      "identifier": "PRECONDITIONING",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -220,10 +233,11 @@
         "5": "absolute value diagonal preconditioning",
         "7": "Crout preconditioning"
       },
-      "mnemo": "SLVART\\%PRECON"
+      "mnemo": "SLVART%PRECON"
     },
     {
       "keyword": "SOLVER",
+      "identifier": "SOLVER",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -247,10 +261,11 @@
         "8": "direct",
         "9": "parallel direct (MUMPS)"
       },
-      "mnemo": "SLVART\\%SLV"
+      "mnemo": "SLVART%SLV"
     },
     {
       "keyword": "SOLVER OPTION",
+      "identifier": "SOLVER_OPTION",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -263,10 +278,11 @@
       "is_file": false,
       "default": 3,
       "level": 2,
-      "mnemo": "SLVART\\%KRYLOV"
+      "mnemo": "SLVART%KRYLOV"
     },
     {
       "keyword": "PEAK PERIOD",
+      "identifier": "PEAK_PERIOD",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -283,6 +299,7 @@
     },
     {
       "keyword": "GAMMA",
+      "identifier": "GAMMA",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -299,6 +316,7 @@
     },
     {
       "keyword": "MONODIRECTIONAL RANDOM WAVE",
+      "identifier": "MONODIRECTIONAL_RANDOM_WAVE",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -315,6 +333,7 @@
     },
     {
       "keyword": "MULTIDIRECTIONAL RANDOM WAVE",
+      "identifier": "MULTIDIRECTIONAL_RANDOM_WAVE",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -331,6 +350,7 @@
     },
     {
       "keyword": "PERIOD SCANNING",
+      "identifier": "PERIOD_SCANNING",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -347,6 +367,7 @@
     },
     {
       "keyword": "SOLVER ACCURACY",
+      "identifier": "SOLVER_ACCURACY",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -359,10 +380,11 @@
       "is_file": false,
       "default": 0.0001,
       "level": 2,
-      "mnemo": "SLVART\\%EPS"
+      "mnemo": "SLVART%EPS"
     },
     {
       "keyword": "INITIAL DEPTH",
+      "identifier": "INITIAL_DEPTH",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -379,6 +401,7 @@
     },
     {
       "keyword": "WAVE PERIOD",
+      "identifier": "WAVE_PERIOD",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -395,6 +418,7 @@
     },
     {
       "keyword": "GRAVITY ACCELERATION",
+      "identifier": "GRAVITY_ACCELERATION",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -411,6 +435,7 @@
     },
     {
       "keyword": "INITIAL CONDITIONS",
+      "identifier": "INITIAL_CONDITIONS",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -434,6 +459,7 @@
     },
     {
       "keyword": "NUMBER OF DIRECTIONS",
+      "identifier": "NUMBER_OF_DIRECTIONS",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -450,6 +476,7 @@
     },
     {
       "keyword": "DIRECTION OF WAVE PROPAGATION",
+      "identifier": "DIRECTION_OF_WAVE_PROPAGATION",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -466,6 +493,7 @@
     },
     {
       "keyword": "ZERO",
+      "identifier": "ZERO",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -478,10 +506,11 @@
       "is_file": false,
       "default": 1e-12,
       "level": 13,
-      "mnemo": "SLVART\\%ZERO"
+      "mnemo": "SLVART%ZERO"
     },
     {
       "keyword": "BEGINNING PERIOD FOR PERIOD SCANNING",
+      "identifier": "BEGINNING_PERIOD_FOR_PERIOD_SCANNING",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -498,6 +527,7 @@
     },
     {
       "keyword": "ENDING PERIOD FOR PERIOD SCANNING",
+      "identifier": "ENDING_PERIOD_FOR_PERIOD_SCANNING",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -514,6 +544,7 @@
     },
     {
       "keyword": "STEP FOR PERIOD SCANNING",
+      "identifier": "STEP_FOR_PERIOD_SCANNING",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -530,6 +561,7 @@
     },
     {
       "keyword": "MINIMUM ANGLE OF PROPAGATION",
+      "identifier": "MINIMUM_ANGLE_OF_PROPAGATION",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -546,6 +578,7 @@
     },
     {
       "keyword": "MAXIMUM ANGLE OF PROPAGATION",
+      "identifier": "MAXIMUM_ANGLE_OF_PROPAGATION",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -562,6 +595,7 @@
     },
     {
       "keyword": "S EXPONENT",
+      "identifier": "S_EXPONENT",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -578,6 +612,7 @@
     },
     {
       "keyword": "LISTING PRINTOUT",
+      "identifier": "LISTING_PRINTOUT",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -594,6 +629,7 @@
     },
     {
       "keyword": "INFORMATIONS ABOUT SOLVER",
+      "identifier": "INFORMATIONS_ABOUT_SOLVER",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -610,6 +646,7 @@
     },
     {
       "keyword": "VARIABLES FOR GRAPHIC PRINTOUTS",
+      "identifier": "VARIABLES_FOR_GRAPHIC_PRINTOUTS",
       "type": "STRING",
       "size": 1,
       "unbounded": true,
@@ -654,6 +691,7 @@
     },
     {
       "keyword": "VARIABLES TO BE PRINTED",
+      "identifier": "VARIABLES_TO_BE_PRINTED",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -698,6 +736,7 @@
     },
     {
       "keyword": "FORTRAN FILE",
+      "identifier": "FORTRAN_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -716,6 +755,7 @@
     },
     {
       "keyword": "STEERING FILE",
+      "identifier": "STEERING_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -734,6 +774,7 @@
     },
     {
       "keyword": "BOUNDARY CONDITIONS FILE",
+      "identifier": "BOUNDARY_CONDITIONS_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -745,12 +786,13 @@
       ],
       "is_file": true,
       "level": 1,
-      "mnemo": "ART\\_FILES(ARTCLI)\\%NAME",
+      "mnemo": "ART_FILES(ARTCLI)%NAME",
       "file_role": "input",
       "file_mandatory": true
     },
     {
       "keyword": "RESULTS FILE",
+      "identifier": "RESULTS_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -763,12 +805,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(ARTRES)\\%NAME",
+      "mnemo": "ART_FILES(ARTRES)%NAME",
       "file_role": "output",
       "file_mandatory": true
     },
     {
       "keyword": "BOTTOM TOPOGRAPHY FILE",
+      "identifier": "BOTTOM_TOPOGRAPHY_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -781,12 +824,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(ARTFON)\\%NAME",
+      "mnemo": "ART_FILES(ARTFON)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "BINARY DATA FILE 1",
+      "identifier": "BINARY_DATA_FILE_1",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -799,12 +843,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(ARTBI1)\\%NAME",
+      "mnemo": "ART_FILES(ARTBI1)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "BINARY DATA FILE 2",
+      "identifier": "BINARY_DATA_FILE_2",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -817,12 +862,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(ARTBI2)\\%NAME",
+      "mnemo": "ART_FILES(ARTBI2)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "FORMATTED DATA FILE 1",
+      "identifier": "FORMATTED_DATA_FILE_1",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -835,12 +881,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(ARTFO1)\\%NAME",
+      "mnemo": "ART_FILES(ARTFO1)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "FORMATTED DATA FILE 2",
+      "identifier": "FORMATTED_DATA_FILE_2",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -853,12 +900,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(ARTFO2)\\%NAME",
+      "mnemo": "ART_FILES(ARTFO2)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "BINARY RESULTS FILE",
+      "identifier": "BINARY_RESULTS_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -871,12 +919,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(ARTRBI)\\%NAME",
+      "mnemo": "ART_FILES(ARTRBI)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "FORMATTED RESULTS FILE",
+      "identifier": "FORMATTED_RESULTS_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -889,12 +938,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(ARTRFO)\\%NAME",
+      "mnemo": "ART_FILES(ARTRFO)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "SUB-ITERATIONS ACCURACY FOR DISSIPATION",
+      "identifier": "SUB_ITERATIONS_ACCURACY_FOR_DISSIPATION",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -911,6 +961,7 @@
     },
     {
       "keyword": "SUB-ITERATIONS ACCURACY FOR CURRENT",
+      "identifier": "SUB_ITERATIONS_ACCURACY_FOR_CURRENT",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -927,6 +978,7 @@
     },
     {
       "keyword": "SUB-ITERATIONS ACCURACY FOR TETAP",
+      "identifier": "SUB_ITERATIONS_ACCURACY_FOR_TETAP",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -943,6 +995,7 @@
     },
     {
       "keyword": "BREAKING",
+      "identifier": "BREAKING",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -959,6 +1012,7 @@
     },
     {
       "keyword": "CURRENT",
+      "identifier": "CURRENT",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -975,6 +1029,7 @@
     },
     {
       "keyword": "AUTOMATIC TETAP CALCULATION",
+      "identifier": "AUTOMATIC_TETAP_CALCULATION",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -991,6 +1046,7 @@
     },
     {
       "keyword": "AUTOMATIC CALCULATION OF PHASE",
+      "identifier": "AUTOMATIC_CALCULATION_OF_PHASE",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -1007,6 +1063,7 @@
     },
     {
       "keyword": "REFERENCE WATER DEPTH FOR AUTOMATIC PHASE",
+      "identifier": "REFERENCE_WATER_DEPTH_FOR_AUTOMATIC_PHASE",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1023,6 +1080,7 @@
     },
     {
       "keyword": "PHASE REFERENCE COORDINATES",
+      "identifier": "PHASE_REFERENCE_COORDINATES",
       "type": "REAL",
       "size": 2,
       "unbounded": false,
@@ -1038,10 +1096,11 @@
         0.0
       ],
       "level": 1,
-      "mnemo": "X\\_PHREF,Y\\_PHREF"
+      "mnemo": "X_PHREF,Y_PHREF"
     },
     {
       "keyword": "KDALLY",
+      "identifier": "KDALLY",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1058,6 +1117,7 @@
     },
     {
       "keyword": "BREAKING LAW",
+      "identifier": "BREAKING_LAW",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1071,13 +1131,14 @@
       "default": 1,
       "level": 1,
       "choices": {
-        "1": "BATTJES \\& JANSSEN",
+        "1": "BATTJES & JANSSEN",
         "2": "DALLY"
       },
       "mnemo": "IBREAK"
     },
     {
       "keyword": "MAXIMUM OF SUB-ITERATIONS",
+      "identifier": "MAXIMUM_OF_SUB_ITERATIONS",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1094,6 +1155,7 @@
     },
     {
       "keyword": "DISSIPATION RELAXATION",
+      "identifier": "DISSIPATION_RELAXATION",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1110,6 +1172,7 @@
     },
     {
       "keyword": "MAXIMUM OF SUB-ITERATIONS FOR TETAP",
+      "identifier": "MAXIMUM_OF_SUB_ITERATIONS_FOR_TETAP",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1126,6 +1189,7 @@
     },
     {
       "keyword": "RELAXATION ON TETAP",
+      "identifier": "RELAXATION_ON_TETAP",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1142,6 +1206,7 @@
     },
     {
       "keyword": "ALPHA",
+      "identifier": "ALPHA",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1158,6 +1223,7 @@
     },
     {
       "keyword": "GAMMAS",
+      "identifier": "GAMMAS",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1174,6 +1240,7 @@
     },
     {
       "keyword": "GDALLY",
+      "identifier": "GDALLY",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1190,6 +1257,7 @@
     },
     {
       "keyword": "FRICTION",
+      "identifier": "FRICTION",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -1206,6 +1274,7 @@
     },
     {
       "keyword": "FLUID KINEMATIC VISCOSITY",
+      "identifier": "FLUID_KINEMATIC_VISCOSITY",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1222,6 +1291,7 @@
     },
     {
       "keyword": "DIAMETER90",
+      "identifier": "DIAMETER90",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1238,6 +1308,7 @@
     },
     {
       "keyword": "DIAMETER50",
+      "identifier": "DIAMETER50",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1254,6 +1325,7 @@
     },
     {
       "keyword": "SEDIMENT SPECIFIC WEIGHT",
+      "identifier": "SEDIMENT_SPECIFIC_WEIGHT",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1270,6 +1342,7 @@
     },
     {
       "keyword": "FLUID SPECIFIC MASS",
+      "identifier": "FLUID_SPECIFIC_MASS",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1286,6 +1359,7 @@
     },
     {
       "keyword": "HYDRAULIC REGIME IMPOSED",
+      "identifier": "HYDRAULIC_REGIME_IMPOSED",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -1302,6 +1376,7 @@
     },
     {
       "keyword": "SKIN ROUGHNESS ONLY",
+      "identifier": "SKIN_ROUGHNESS_ONLY",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -1318,6 +1393,7 @@
     },
     {
       "keyword": "WAVE HEIGHTS SMOOTHING",
+      "identifier": "WAVE_HEIGHTS_SMOOTHING",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -1334,6 +1410,7 @@
     },
     {
       "keyword": "VALIDATION",
+      "identifier": "VALIDATION",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1350,6 +1427,7 @@
     },
     {
       "keyword": "HYDRAULIC REGIME TYPE",
+      "identifier": "HYDRAULIC_REGIME_TYPE",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1372,6 +1450,7 @@
     },
     {
       "keyword": "BOTTOM FRICTION LAW",
+      "identifier": "BOTTOM_FRICTION_LAW",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1386,12 +1465,13 @@
       "level": 1,
       "choices": {
         "1": "Kostense formulation integrating Ue calculation (1986)",
-        "2": "Putnam \\& Johnson formulation (1949)"
+        "2": "Putnam & Johnson formulation (1949)"
       },
       "mnemo": "FORMFR"
     },
     {
       "keyword": "FRICTION FACTOR IMPOSED",
+      "identifier": "FRICTION_FACTOR_IMPOSED",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -1408,6 +1488,7 @@
     },
     {
       "keyword": "FRICTION FACTOR",
+      "identifier": "FRICTION_FACTOR",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1424,6 +1505,7 @@
     },
     {
       "keyword": "FRICTION COEFFICIENT",
+      "identifier": "FRICTION_COEFFICIENT",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1440,6 +1522,7 @@
     },
     {
       "keyword": "RIPPLES COEFFICIENT",
+      "identifier": "RIPPLES_COEFFICIENT",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1456,6 +1539,7 @@
     },
     {
       "keyword": "MINIMUM SPECTRAL PERIOD",
+      "identifier": "MINIMUM_SPECTRAL_PERIOD",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1472,6 +1556,7 @@
     },
     {
       "keyword": "MAXIMUM SPECTRAL PERIOD",
+      "identifier": "MAXIMUM_SPECTRAL_PERIOD",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1488,6 +1573,7 @@
     },
     {
       "keyword": "ORIGINAL DATE OF TIME",
+      "identifier": "ORIGINAL_DATE_OF_TIME",
       "type": "INTEGER",
       "size": 3,
       "unbounded": false,
@@ -1508,6 +1594,7 @@
     },
     {
       "keyword": "ORIGINAL HOUR OF TIME",
+      "identifier": "ORIGINAL_HOUR_OF_TIME",
       "type": "INTEGER",
       "size": 3,
       "unbounded": false,
@@ -1528,6 +1615,7 @@
     },
     {
       "keyword": "NUMBER OF PRIVATE VARIABLES",
+      "identifier": "NUMBER_OF_PRIVATE_VARIABLES",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1544,6 +1632,7 @@
     },
     {
       "keyword": "PARALLEL PROCESSORS",
+      "identifier": "PARALLEL_PROCESSORS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1560,6 +1649,7 @@
     },
     {
       "keyword": "PARTITIONING TOOL",
+      "identifier": "PARTITIONING_TOOL",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1581,6 +1671,7 @@
     },
     {
       "keyword": "ORIGIN COORDINATES",
+      "identifier": "ORIGIN_COORDINATES",
       "type": "INTEGER",
       "size": 2,
       "unbounded": false,
@@ -1596,10 +1687,11 @@
         0
       ],
       "level": 2,
-      "mnemo": "I\\_ORIG,J\\_ORIG"
+      "mnemo": "I_ORIG,J_ORIG"
     },
     {
       "keyword": "REFERENCE FILE",
+      "identifier": "REFERENCE_FILE",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -1612,12 +1704,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(ARTREF)\\%NAME",
+      "mnemo": "ART_FILES(ARTREF)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "GEOMETRY FILE FORMAT",
+      "identifier": "GEOMETRY_FILE_FORMAT",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -1635,10 +1728,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "ART\\_FILES(ARTGEO)\\%FMT"
+      "mnemo": "ART_FILES(ARTGEO)%FMT"
     },
     {
       "keyword": "RESULTS FILE FORMAT",
+      "identifier": "RESULTS_FILE_FORMAT",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -1656,10 +1750,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "ART\\_FILES(ARTRES)\\%FMT"
+      "mnemo": "ART_FILES(ARTRES)%FMT"
     },
     {
       "keyword": "REFERENCE FILE FORMAT",
+      "identifier": "REFERENCE_FILE_FORMAT",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -1677,10 +1772,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "ART\\_FILES(ARTREF)\\%FMT"
+      "mnemo": "ART_FILES(ARTREF)%FMT"
     },
     {
       "keyword": "BINARY DATA FILE 1 FORMAT",
+      "identifier": "BINARY_DATA_FILE_1_FORMAT",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -1698,10 +1794,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "ART\\_FILES(ARTBI1)\\%FMT"
+      "mnemo": "ART_FILES(ARTBI1)%FMT"
     },
     {
       "keyword": "BINARY DATA FILE 2 FORMAT",
+      "identifier": "BINARY_DATA_FILE_2_FORMAT",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -1719,10 +1816,11 @@
         "SERAFIND",
         "MED"
       ],
-      "mnemo": "ART\\_FILES(ARTBI2)\\%FMT"
+      "mnemo": "ART_FILES(ARTBI2)%FMT"
     },
     {
       "keyword": "RAPIDLY VARYING TOPOGRAPHY",
+      "identifier": "RAPIDLY_VARYING_TOPOGRAPHY",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1745,6 +1843,7 @@
     },
     {
       "keyword": "CHECKING THE MESH",
+      "identifier": "CHECKING_THE_MESH",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -1757,10 +1856,11 @@
       "is_file": false,
       "default": false,
       "level": 1,
-      "mnemo": "CHECK\\_MESH"
+      "mnemo": "CHECK_MESH"
     },
     {
       "keyword": "FREE SURFACE ANIMATION",
+      "identifier": "FREE_SURFACE_ANIMATION",
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
@@ -1777,6 +1877,7 @@
     },
     {
       "keyword": "AMPLITUDE AND PHASE FILE",
+      "identifier": "AMPLITUDE_AND_PHASE_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -1789,12 +1890,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(ARTAMP)\\%NAME",
+      "mnemo": "ART_FILES(ARTAMP)%NAME",
       "file_role": "output",
       "file_mandatory": false
     },
     {
       "keyword": "AMPLITUDE AND PHASE FILE FORMAT",
+      "identifier": "AMPLITUDE_AND_PHASE_FILE_FORMAT",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -1807,10 +1909,11 @@
       "is_file": false,
       "default": "SERAFIN ",
       "level": 2,
-      "mnemo": "ART\\_FILES(ARTAMP)\\%FMT"
+      "mnemo": "ART_FILES(ARTAMP)%FMT"
     },
     {
       "keyword": "FREE SURFACE FILE",
+      "identifier": "FREE_SURFACE_FILE",
       "type": "STRING",
       "size": 0,
       "unbounded": false,
@@ -1827,6 +1930,7 @@
     },
     {
       "keyword": "FREE SURFACE FILE FORMAT",
+      "identifier": "FREE_SURFACE_FILE_FORMAT",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -1843,6 +1947,7 @@
     },
     {
       "keyword": "FIRST TIME IN THE FREE SURFACE FILE",
+      "identifier": "FIRST_TIME_IN_THE_FREE_SURFACE_FILE",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1859,6 +1964,7 @@
     },
     {
       "keyword": "TIME STEP",
+      "identifier": "TIME_STEP",
       "type": "REAL",
       "size": 1,
       "unbounded": false,
@@ -1875,6 +1981,7 @@
     },
     {
       "keyword": "NUMBER OF TIME STEPS",
+      "identifier": "NUMBER_OF_TIME_STEPS",
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
@@ -1891,6 +1998,7 @@
     },
     {
       "keyword": "NESTING WITHIN TOMAWAC OUTER MODEL",
+      "identifier": "NESTING_WITHIN_TOMAWAC_OUTER_MODEL",
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
@@ -1912,6 +2020,7 @@
     },
     {
       "keyword": "INSTANT FOR READING TOMAWAC SPECTRUM",
+      "identifier": "INSTANT_FOR_READING_TOMAWAC_SPECTRUM",
       "type": "REAL",
       "size": 0,
       "unbounded": false,
@@ -1928,6 +2037,7 @@
     },
     {
       "keyword": "TOMAWAC OUTER SPECTRAL FILE",
+      "identifier": "TOMAWAC_OUTER_SPECTRAL_FILE",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -1940,12 +2050,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(WACSPE)\\%NAME",
+      "mnemo": "ART_FILES(WACSPE)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "TOMAWAC OUTER SPECTRAL FILE FORMAT",
+      "identifier": "TOMAWAC_OUTER_SPECTRAL_FILE_FORMAT",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -1958,10 +2069,11 @@
       "is_file": false,
       "default": "SERAFIN ",
       "level": 2,
-      "mnemo": "ART\\_FILES(WACSPE)\\%FMT"
+      "mnemo": "ART_FILES(WACSPE)%FMT"
     },
     {
       "keyword": "TOMAWAC OUTER RESULT FILE",
+      "identifier": "TOMAWAC_OUTER_RESULT_FILE",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -1974,12 +2086,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(WACRES)\\%NAME",
+      "mnemo": "ART_FILES(WACRES)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "TOMAWAC OUTER RESULT FILE FORMAT",
+      "identifier": "TOMAWAC_OUTER_RESULT_FILE_FORMAT",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -1992,10 +2105,11 @@
       "is_file": false,
       "default": "SERAFIN ",
       "level": 2,
-      "mnemo": "ART\\_FILES(WACRES)\\%FMT"
+      "mnemo": "ART_FILES(WACRES)%FMT"
     },
     {
       "keyword": "TOMAWAC LIQUID BOUNDARY FILE",
+      "identifier": "TOMAWAC_LIQUID_BOUNDARY_FILE",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -2008,12 +2122,13 @@
       "is_file": true,
       "default": " ",
       "level": 1,
-      "mnemo": "ART\\_FILES(WACLQD)\\%NAME",
+      "mnemo": "ART_FILES(WACLQD)%NAME",
       "file_role": "input",
       "file_mandatory": false
     },
     {
       "keyword": "TOMAWAC LIQUID BOUNDARY FILE FORMAT",
+      "identifier": "TOMAWAC_LIQUID_BOUNDARY_FILE_FORMAT",
       "type": "STRING",
       "size": null,
       "unbounded": false,
@@ -2026,10 +2141,11 @@
       "is_file": false,
       "default": "SERAFIN ",
       "level": 2,
-      "mnemo": "ART\\_FILES(WACLQD)\\%FMT"
+      "mnemo": "ART_FILES(WACLQD)%FMT"
     },
     {
       "keyword": "COORDINATES OF THE REFERENCE F SPECTRUM",
+      "identifier": "COORDINATES_OF_THE_REFERENCE_F_SPECTRUM",
       "type": "REAL",
       "size": 2,
       "unbounded": false,
@@ -2045,10 +2161,11 @@
         -99999.9
       ],
       "level": 1,
-      "mnemo": "X\\_SFREF,Y\\_SFREF"
+      "mnemo": "X_SFREF,Y_SFREF"
     },
     {
       "keyword": "DICTIONARY",
+      "identifier": "DICTIONARY",
       "type": "STRING",
       "size": 1,
       "unbounded": false,
@@ -2067,6 +2184,7 @@
     },
     {
       "keyword": "CONCATENATE PARTEL OUTPUT",
+      "identifier": "CONCATENATE_PARTEL_OUTPUT",
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
@@ -2079,7 +2197,7 @@
       "is_file": false,
       "default": false,
       "level": 0,
-      "mnemo": "CONCAT\\_PARTEL"
+      "mnemo": "CONCAT_PARTEL"
     }
   ]
 }
