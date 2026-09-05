@@ -3651,3 +3651,41 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   _PROCESSES/slots.py die at Stage 3 with agitation + stratified_flow
   (DELETION_LEDGER rows with that condition). Engine defaults stay
   UNWRITTEN even where the spec's illustrative snippet showed them.
+
+- MODULE SURFACE, STAGE 2 LANDED (2026-09-05, commits 989fbf04 / 7520c99d /
+  085b4241 / 444ed0f8): the six 2D questions are TEMPLATES over the module
+  wrappers. A template declares a STEERING body of raw keywords, the parts it
+  lists, the DATA chain and the MESH recipe, and hands them to the fill/run
+  door; plan(ops), Physics, Forcing, FormGate and DrawGate are gone from all
+  six. templates/shared/river.py is the PART the five river templates list and
+  carries what they share - the chain, the mesh recipe, the acquire steps, the
+  settle, the rows every river run declares, and every former hardcoded literal
+  of the reach deck. The review moved onto the DOOR: the sheet is state, the
+  card is a view of what fill returned, and the run is held there.
+  DECK PARITY, measured against the pre-wave writer regenerated from 0a31eb42^
+  for the same case: 46->38, 51->43, 47->39, 47->39, 48->40, 41->32 keywords,
+  and EVERY difference is either a keyword whose stated value is the
+  dictionary's own or the two source values that now state what the SOURCES FILE
+  states at t0. Net -1,134 server Python over the twenty files the slice
+  replaced, while the tool surface went 5 templates -> 8.
+  SIX LIVE CANARIES to status=ok with FULL house packets (PASS, clean
+  code-staleness): river_dye 91.0 mg/L peak; river_oil_spill 90.8 mg/L
+  dissolved; river_scour 5.21 mm scour / 1.64 mm deposition; sediment_plume
+  0.697 deposited fraction; do_sag 6.75 mgO2/l at 1196 m; rain_on_grid 4.23
+  m3/s peak, 3.56 m max depth, continuity 5e-15.
+  TWO FINDINGS FOR NATE, measured, not fixed:
+  (1) NESTOR's surface-reference fence does not fit a MEANDERING reach. A
+  dredged run refuses inside the module - "Some field nodes are not overlaped by
+  profiles" at 1 km, "Profiles must not intersect or touch, fit profile 5" at
+  2 km - because the fence's half-width is half the cut dig field's own largest
+  extent (~135 m on a ~200 m station) while consecutive profiles sit ~130 m
+  apart, so they cross on any bend tighter than that. The three NESTOR files DO
+  reach the run and the module reads all three; what fails is its own geometric
+  precondition. Candidate directions (both DESIGN, unstarted): size the fence
+  spacing off the LOCAL curvature rather than the field width, or make the dig
+  station length a declared param so a narrow field can be asked for.
+  (2) A 600 s screening scour run reports deposited_mass_kg 0.0 and
+  deposit_fraction 0.0 while the bed itself moved (5.21 mm down, 1.64 mm up over
+  507 of 907 nodes): GAIA's own listing balance closes at zero to the precision
+  it prints over that window. The scalars are the listing's; the map is the
+  file's. Naming it rather than papering over it.
