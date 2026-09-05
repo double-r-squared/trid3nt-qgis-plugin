@@ -3666,7 +3666,7 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   for the same case: 46->38, 51->43, 47->39, 47->39, 48->40, 41->32 keywords,
   and EVERY difference is either a keyword whose stated value is the
   dictionary's own or the two source values that now state what the SOURCES FILE
-  states at t0. Net -1,134 server Python over the twenty files the slice
+  states at t0. Net -1,080 server Python over the twenty files the slice
   replaced, while the tool surface went 5 templates -> 8.
   SIX LIVE CANARIES to status=ok with FULL house packets (PASS, clean
   code-staleness): river_dye 91.0 mg/L peak; river_oil_spill 90.8 mg/L
