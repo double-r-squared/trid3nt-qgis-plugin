@@ -108,10 +108,7 @@ T2D.outputs(fields=read_selafin,                <span class="c"># the module's o
 <p>A template package stays what it is: the recipe file, <code>declarations.py</code>, <code>corpus.yaml</code>. Its recipe file now carries a STEERING body of raw keywords, spelled as identifiers by the mechanical spaces-to-underscores map the image itself ships (eficas <code>&lt;module&gt;_dicoCasEnToCata.py</code>). Every hardcoded author literal becomes a visible assertion here, or an engine default by omission.</p>
 <pre><span class="c"># templates/shared/river.py - a shared body: a PART the river templates list</span>
 <span class="k">class</span> RIVER(T2D):
-    TIDAL_FLATS = <span class="k">True</span>
-    OPTION_FOR_THE_TREATMENT_OF_TIDAL_FLATS = <span class="n">1</span>
-    TREATMENT_OF_NEGATIVE_DEPTHS = <span class="n">2</span>
-    SOLVER_ACCURACY = <span class="n">1e-6</span>
+    SOLVER_ACCURACY = <span class="n">1e-6</span>                                <span class="c"># an engine default (tidal flats, negative depths) stays UNWRITTEN</span>
     INITIAL_CONDITIONS = <span class="s">"CONSTANT DEPTH"</span>
     GEOMETRY_FILE = MESH                                  <span class="c"># a file slot, filled by the recipe</span>
     BOUNDARY_CONDITIONS_FILE = MESH.boundaries
@@ -133,7 +130,7 @@ T2D.outputs(fields=read_selafin,                <span class="c"># the module's o
     wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
     coupling = [WAQTEL.decay(half_life_h=P.decay_half_life_hours)]</pre>
 <p>THE COMPOSITION LAW (amended 2026-09-04, rev 1b): a shared body is a PART a template lists, never a parent it extends. It lives in <code>templates/shared/</code>, is named for what it is (<code>river</code>, <code>catchment</code>, <code>basin</code> - never <code>reach</code>), is created only when a good portion of a template is shared, and must have at least two users (one user folds back into its template; the suite checks). Parts merge in the listed order; a keyword set by two parts REFUSES by name unless the template settles it itself; a template's own assertion beats any part. Per-slot provenance names the part, so composed context is visible at the use site: a keyword that means something else in a new setting is seen, not assumed. The same mechanism serves a fill-time bundle.</p>
-<p>ONE TEMPLATE PER QUESTION (rev 1b): a structural fork of the deck - tracer, oil and sediment fill DIFFERENT slots, not different values - is a different template, never a switch on a param. <code>river_dye</code> = RIVER + TRACER; <code>river_oil_spill</code> = RIVER + OIL; <code>river_sediment</code> = RIVER + SEDIMENT (+ the dredging composite); <code>do_sag</code> = RIVER + O2. Bodies are static and read no resolved value. Optional features within one question are composites that state nothing when given nothing (a decay rate, dredging, a hyetograph versus a constant rate). The tool surface is seven templates; routing picks the template.</p>
+<p>ONE TEMPLATE PER QUESTION (rev 1b): a structural fork of the deck - tracer, oil and sediment fill DIFFERENT slots, not different values - is a different template, never a switch on a param. <code>river_dye</code> = RIVER + TRACER; <code>river_oil_spill</code> = RIVER + OIL; <code>river_scour</code> = RIVER + SEDIMENT bed (bedload, morphology, gradation as a shape, the dredging composite); <code>river_sediment_plume</code> = RIVER + a suspended class from a source; <code>do_sag</code> = RIVER + O2. The rule holds at every level: a fork that fills different slots is a template, never a composite that owns a carrier slot. Bodies are static and read no resolved value. Optional features within one question are composites that state nothing when given nothing (a decay rate, dredging, a hyetograph versus a constant rate). The tool surface is eight templates; routing picks the template.</p>
 <p>PARAMS are unchanged in shape (<code>Param(desc=..., default=..., bounds=..., units=...)</code>); a slot's <code>desc</code> is the dico's help, so a raw keyword reads to the LLM and the human exactly the way a Param does. <code>Physics(...)</code> and <code>Forcing(...)</code> no longer exist; a forcing series is a file-slot producer.</p>
 
 <h2>5. Fill, then run</h2>
@@ -188,7 +185,7 @@ flowchart LR
   modules/               telemac2d.py telemac3d.py artemis.py waqtel.py gaia.py            (catalog + composites + outputs)
   templates/
     shared/              river.py  catchment.py (only if a good portion is shared)
-    river_dye/  river_oil_spill/  river_sediment/  do_sag/  rain_on_grid/  agitation/  stratified_flow/
+    river_dye/  river_oil_spill/  river_scour/  river_sediment_plume/  do_sag/  rain_on_grid/  agitation/  stratified_flow/
   authoring/             assembler.py serializer.py cas_validate.py                        (everything the box receives)
   solving/               solve.py run_telemac.py
   products/              postprocess_telemac.py products.py run_reads.py rain_on_grid.py result_reader.py results_mesh_seam.py streeter_phelps.py
