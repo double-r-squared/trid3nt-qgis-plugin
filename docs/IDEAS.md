@@ -3689,3 +3689,22 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   507 of 907 nodes): GAIA's own listing balance closes at zero to the precision
   it prints over that window. The scalars are the listing's; the map is the
   file's. Naming it rather than papering over it.
+  STAGE 3 RULINGS (NATE 2026-09-05): (a) OPEN-WATER DOMAINS - agitation
+  and stratified_flow RE-DECLARE onto om2d over the AOI (real geometry
+  from the shoreline, the triangle pair + topology + set_bed the frozen
+  recipe already writes); the reg_grid declaration was decorative (the
+  worker laid its own lattice); the worker's wet-mask / node-cap /
+  marching-cell / grid code is SUPERSEDED, not ported; the acceptance's
+  reg_grid variant becomes an om2d variant. (b) ARTEMIS ANALYTIC
+  CLASSES (resonance, shoal, idealized diffraction - authored geometry
+  that IS the physics) are PARKED to the rung-4 artemis rematch as
+  future V&V templates over authored geometry (one template per
+  question); DELETION_LEDGER row with that condition; the parked G1-G3
+  resonance findings ride with them. Post-solve measurement in the
+  worker scripts moves to products/ (worker doctrine). STAGE 2 DESIGN
+  FINDINGS FOR NATE (reported by the wave, not fixed): (1) NESTOR's
+  surface-reference fence does not fit a meandering reach (profiles
+  ~130 m apart vs a ~135 m fence half-width; the dredged scour canary
+  refuses inside the module); (2) a 600 s screening scour run reports
+  zero deposited mass while the bed moved (GAIA's listing balance
+  prints zero at its precision over that window).
