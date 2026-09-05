@@ -743,6 +743,7 @@
         "RESULTS FILES"
       ],
       "is_file": false,
+      "multi_select": true,
       "default": "U;V;H;B",
       "level": 0,
       "choices": {
@@ -1329,6 +1330,7 @@
         "LISTING"
       ],
       "is_file": false,
+      "multi_select": true,
       "default": " ",
       "level": 1,
       "choices": {
@@ -6581,6 +6583,7 @@
         ""
       ],
       "is_file": false,
+      "multi_select": true,
       "default": "",
       "level": 1,
       "choices": [

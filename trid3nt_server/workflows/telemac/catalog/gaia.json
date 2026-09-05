@@ -624,6 +624,7 @@
         ""
       ],
       "is_file": false,
+      "multi_select": true,
       "default": "",
       "level": 2,
       "choices": {
@@ -1133,6 +1134,7 @@
         ""
       ],
       "is_file": false,
+      "multi_select": true,
       "default": "U;V;H;S;B;R;E",
       "level": 1,
       "choices": {

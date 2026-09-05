@@ -2733,6 +2733,7 @@
         "RESULTS"
       ],
       "is_file": false,
+      "multi_select": true,
       "default": "HM0;DMOY",
       "level": 0,
       "choices": {

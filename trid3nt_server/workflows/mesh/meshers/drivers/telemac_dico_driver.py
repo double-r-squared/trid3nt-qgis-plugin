@@ -11,10 +11,13 @@ Config key: ``modules`` - the module names whose dictionary is read. Emits one
 ``telemac_dico_stats.json`` carrying the count each module contributed.
 
 The table is TRIMMED: what a slot needs to be filled and refused, and nothing
-the eficas GUI needs. The two normalizations the dictionaries themselves force
-are done here so no consumer repeats them - the stray French type spellings
-(``ENTIER``, ``REEL``), and the help text, which arrives LaTeX-marked and with
-every apostrophe swapped to a double quote by the dictionary reader.
+the eficas GUI needs. Everything a consumer would otherwise have to work out for
+itself is resolved HERE, where the engine's own answer is at hand - the stray
+French type spellings (``ENTIER``, ``REEL``); the help text, which arrives
+LaTeX-marked and with every apostrophe swapped to a double quote by the
+dictionary reader; the identifier a class body writes each keyword under, from
+the map eficas ships; and the keywords whose one value is a separator-joined
+selection, from telapy's own list of them.
 """
 
 from __future__ import annotations
@@ -27,14 +30,16 @@ import sys
 sys.path.insert(0, "/opt/conda/opentelemac/scripts/python3")
 sys.path.insert(0, "/opt/conda/opentelemac/scripts/python3/eficas")
 
-from execution.telemac_cas import get_dico  # noqa: E402
+from execution.telemac_cas import SPECIAL, get_dico  # noqa: E402
 from execution.telemac_dico import TelemacDico  # noqa: E402
 
 #: French type spellings that survive in a handful of keywords.
 _TYPES = {"ENTIER": "INTEGER", "REEL": "REAL"}
 
-#: APPARENCE values that mark a keyword's list as OPEN-ENDED. Every other
-#: TAILLE above one is a fixed tuple of that width.
+#: APPARENCE values that mark a keyword's list as OPEN-ENDED - TAILLE is then
+#: the width the dictionary allocated, not the width a value must have. TAILLE
+#: itself is the ARITY: at one, the value is a single value however open its
+#: choices are.
 _UNBOUNDED = frozenset(("LIST", "DYNLIST", "DYNLIST2"))
 
 #: The SUBMIT field's read/write segment -> what the file is to the run.
@@ -120,6 +125,11 @@ def _slot(keyword: str, identifier: str, info: dict) -> dict:
                  "help": de_latex(info.get("AIDE1") or info.get("AIDE") or ""),
                  "rubrique": info["RUBRIQUE1"],
                  "is_file": "SUBMIT" in info}
+    # telapy's own list of the keywords whose ONE value is a separator-joined
+    # SELECTION from the choices ('U,V,H'), read from telapy rather than
+    # transcribed: its reader is what judges these, and it judges them by name.
+    if keyword.strip() in SPECIAL:
+        row["multi_select"] = True
     for key, field in (("DEFAUT1", "default"), ("NIVEAU", "level"),
                        ("CHOIX1", "choices"), ("MNEMO", "mnemo")):
         if key in info:

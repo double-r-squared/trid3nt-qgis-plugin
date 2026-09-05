@@ -578,6 +578,7 @@
         "RESULTS"
       ],
       "is_file": false,
+      "multi_select": true,
       "default": "Z,U,V,W",
       "level": 0,
       "choices": {
@@ -629,6 +630,7 @@
         "RESULTS"
       ],
       "is_file": false,
+      "multi_select": true,
       "default": "U,V,H,B",
       "level": 0,
       "choices": {
@@ -6116,6 +6118,7 @@
         ""
       ],
       "is_file": false,
+      "multi_select": true,
       "default": "",
       "level": 0,
       "choices": [

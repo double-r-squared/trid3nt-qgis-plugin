@@ -657,6 +657,7 @@
         "RESULTS"
       ],
       "is_file": false,
+      "multi_select": true,
       "default": "HS,PHAS,ZS,ZF",
       "level": 1,
       "choices": {
@@ -702,6 +703,7 @@
         "LISTING"
       ],
       "is_file": false,
+      "multi_select": true,
       "default": " ",
       "level": 2,
       "choices": {
