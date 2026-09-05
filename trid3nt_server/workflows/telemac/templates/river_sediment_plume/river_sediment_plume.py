@@ -210,7 +210,10 @@ telemac_river_sediment_plume = register_workflow(
         results=(river.RESULT, RESULT_FILENAME),
         steering_file=_STEERING_FILE, prefix="telemac",
         dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
+        # The bed holds NO stock, so nothing erodes: the reader publishes the
+        # deposition alone and claims no scour.
         meta={"substance": "suspended sediment", "substance_class": "sediment",
+              "erodible_bed": False,
               "sediment_injected_kg": Ref("sediment.injected_kg"),
               "sediment_n_classes": Ref("sediment.n_classes")},
         read=lambda run: Products.dye(
