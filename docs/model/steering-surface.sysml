@@ -465,11 +465,31 @@ package SteeringSurface {
         */
     }
 
-    requirement def SharedBodyHasTwoExtenders {
+    requirement def SharedBodyHasTwoUsers {
         doc /*
         A shared body exists because a good portion is shared, which means at
-        least two templates extend it. One extender folds back into its
+        least two templates LIST it as a part. One user folds back into its
         template; a body with one is an indirection, not a sharing.
+        */
+    }
+
+    requirement def CompositionNotInheritance {
+        doc /*
+        A body reuses another body by listing it, never by extending it. Parts
+        merge in the listed order and per-slot provenance names the part, so a
+        keyword that means something else in a new setting is seen rather than
+        inherited into silence; a keyword two parts both set refuses by name
+        unless the template settles it itself.
+        */
+    }
+
+    requirement def BodiesAreStatic {
+        doc /*
+        A body reads no value a fill produced. Its assertions are data, fixed
+        when the module is imported - a literal the dictionary checked, or a
+        description of a read the fill substitutes later - so two fills of the
+        same body start from the same statement and a body cannot branch on what
+        a run resolved.
         */
     }
 
@@ -527,9 +547,9 @@ package SteeringSurface {
     satisfy requirement EverythingOverridable by sheet;
     satisfy requirement EverythingOverridable by canvasGate;
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_resolution_order_is_engine_then_shared_body_then_template_then_fill";
+        "tests/test_telemac_module_surface.py::test_resolution_order_is_engine_then_the_parts_then_template_then_fill";
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_an_inherited_slot_says_which_body_asserted_it";
+        "tests/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
     verify requirement EverythingOverridable by
         "tests/test_telemac_module_surface.py::test_a_fill_is_repeatable_and_the_later_one_stands";
     verify requirement EverythingOverridable by
@@ -558,9 +578,25 @@ package SteeringSurface {
     verify requirement CompositesLiveInWrappers by
         "tests/test_telemac_module_surface.py::test_a_coupled_body_is_checked_against_its_own_module_s_dictionary";
 
-    satisfy requirement SharedBodyHasTwoExtenders by sheet;
-    verify requirement SharedBodyHasTwoExtenders by
-        "tests/test_telemac_module_surface.py::test_every_shared_body_has_at_least_two_extenders";
+    satisfy requirement SharedBodyHasTwoUsers by sheet;
+    verify requirement SharedBodyHasTwoUsers by
+        "tests/test_telemac_module_surface.py::test_every_shared_body_has_at_least_two_users";
+
+    satisfy requirement CompositionNotInheritance by sheet;
+    verify requirement CompositionNotInheritance by
+        "tests/test_telemac_module_surface.py::test_a_body_is_reused_by_composition_and_never_by_extension";
+    verify requirement CompositionNotInheritance by
+        "tests/test_telemac_module_surface.py::test_the_parts_merge_in_the_listed_order";
+    verify requirement CompositionNotInheritance by
+        "tests/test_telemac_module_surface.py::test_a_keyword_two_parts_both_set_refuses_unless_the_template_settles_it";
+    verify requirement CompositionNotInheritance by
+        "tests/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
+
+    satisfy requirement BodiesAreStatic by sheet;
+    verify requirement BodiesAreStatic by
+        "tests/test_telemac_module_surface.py::test_a_body_is_static_and_no_fill_changes_what_it_asserts";
+    verify requirement BodiesAreStatic by
+        "tests/test_telemac_module_surface.py::test_a_param_a_body_reads_binds_from_the_sheet_the_invocation_resolved";
 
     satisfy requirement RunIsHeld by sheet;
     satisfy requirement RunIsHeld by serializer;

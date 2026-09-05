@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.workflows.runtime import Ref
+from trid3nt_server.workflows.runtime import ParamRef, Ref
 from trid3nt_server.workflows.telemac.modules import (
     Sheet,
     SheetIncomplete,
@@ -191,12 +191,13 @@ def test_an_engine_default_is_never_written_into_the_deck():
     assert sheet.resolved() == (("DURATION", 600.0),)
 
 
-def test_resolution_order_is_engine_then_shared_body_then_template_then_fill():
+def test_resolution_order_is_engine_then_the_parts_then_template_then_fill():
     class RIVER(T2D):
         LAW_OF_BOTTOM_FRICTION = 3
         TIDAL_FLATS = True
 
-    class DYE(RIVER):
+    class DYE(T2D):
+        parts = [RIVER]
         LAW_OF_BOTTOM_FRICTION = 4
 
     rows = fill(DYE, TIDAL_FLATS=False).state()["filled"]
@@ -206,16 +207,86 @@ def test_resolution_order_is_engine_then_shared_body_then_template_then_fill():
         "keyword": "TIDAL FLATS", "value": False, "provenance": "fill"}
 
 
-def test_an_inherited_slot_says_which_body_asserted_it():
+def test_a_composed_slot_says_which_part_asserted_it():
     class RIVER(T2D):
         TIDAL_FLATS = True
 
-    class DYE(RIVER):
+    class DYE(T2D):
+        parts = [RIVER]
         DURATION = 600.0
 
     rows = fill(DYE).state()["filled"]
-    assert rows["TIDAL_FLATS"]["provenance"] == "shared body RIVER"
+    assert rows["TIDAL_FLATS"]["provenance"] == "part RIVER"
     assert rows["DURATION"]["provenance"] == "template"
+
+
+def test_the_parts_merge_in_the_listed_order():
+    class RIVER(T2D):
+        SOLVER = 1
+
+    class TRACER(T2D):
+        NUMBER_OF_TRACERS = 1
+
+    class DYE(T2D):
+        parts = [RIVER, TRACER]
+
+    assert [p.__name__ for p in DYE.PARTS] == ["RIVER", "TRACER"]
+    rows = fill(DYE).state()["filled"]
+    assert rows["SOLVER"]["provenance"] == "part RIVER"
+    assert rows["NUMBER_OF_TRACERS"]["provenance"] == "part TRACER"
+
+
+def test_a_keyword_two_parts_both_set_refuses_unless_the_template_settles_it():
+    class RIVER(T2D):
+        SOLVER = 1
+
+    class SURGE(T2D):
+        SOLVER = 3
+
+    with pytest.raises(SlotRefused) as caught:
+        class BOTH(T2D):
+            parts = [RIVER, SURGE]
+    assert "SOLVER" in str(caught.value)
+
+    class SETTLED(T2D):
+        parts = [RIVER, SURGE]
+        SOLVER = 2
+
+    assert fill(SETTLED).state()["filled"]["SOLVER"]["value"] == 2
+
+
+def test_a_body_is_reused_by_composition_and_never_by_extension():
+    class RIVER(T2D):
+        SOLVER = 1
+
+    with pytest.raises(SlotRefused) as caught:
+        class DYE(RIVER):
+            DURATION = 600.0
+    assert "parts = [RIVER]" in str(caught.value)
+
+
+def test_a_body_is_static_and_no_fill_changes_what_it_asserts():
+    """A body reads no resolved value: its assertions are fixed when the module
+    is imported, so two fills of the same body start from the same statement."""
+    class RIVER(T2D):
+        SOLVER = 1
+        DURATION = ParamRef("sim_duration_s")
+
+    before = dict(RIVER.ASSERTED)
+    fill(RIVER, params={"sim_duration_s": 600.0})
+    fill(RIVER, params={"sim_duration_s": 7200.0}, SOLVER=3)
+    assert dict(RIVER.ASSERTED) == before
+
+
+def test_a_param_a_body_reads_binds_from_the_sheet_the_invocation_resolved():
+    class RIVER(T2D):
+        DURATION = ParamRef("sim_duration_s")
+        VELOCITY_DIFFUSIVITY = ParamRef("velocity_diffusivity")
+
+    sheet = fill(RIVER, params={"sim_duration_s": 600.0,
+                                "velocity_diffusivity": None})
+    # The unset param states NOTHING, so the dictionary's own diffusivity stands.
+    assert sheet.resolved() == (("DURATION", 600.0),)
 
 
 def test_a_fill_is_repeatable_and_the_later_one_stands():
@@ -340,8 +411,8 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
 
 # -- the shared-body law ------------------------------------------------------ #
 
-def test_every_shared_body_has_at_least_two_extenders():
-    """One extender folds back into its template; a body is created when a good
+def test_every_shared_body_has_at_least_two_users():
+    """One user folds back into its template; a body is created when a good
     portion is shared. The guard fires the moment a body gains its first file."""
     shared = (Path(__file__).resolve().parents[1] / "trid3nt_server" / "workflows"
               / "telemac" / "templates" / "shared")
@@ -351,9 +422,9 @@ def test_every_shared_body_has_at_least_two_extenders():
         if body.name == "__init__.py":
             continue
         name = body.stem
-        extenders = [p for p in shared.parent.rglob("*.py")
-                     if p != body and f"shared.{name} import" in p.read_text()]
-        assert len(extenders) >= 2, f"{name} has {len(extenders)} extenders"
+        users = [p for p in shared.parent.rglob("*.py")
+                 if p != body and f"shared.{name} import" in p.read_text()]
+        assert len(users) >= 2, f"{name} has {len(users)} users"
 
 
 # -- the wrappers' own composites --------------------------------------------- #

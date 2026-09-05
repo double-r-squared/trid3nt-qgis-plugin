@@ -11,8 +11,8 @@ sheet is handed to it; then the sheet is serialized into the engine's own
 steering file, the run directory is staged, and the box receives it.
 
 Resolution order, lowest to highest: the engine default (never written - the
-dictionary supplies it), a shared body, the template, the fill. At most two
-opinion layers exist and both are templates.
+dictionary supplies it), the listed parts in order, the template, the fill. At
+most two opinion layers exist and both are templates.
 """
 
 from __future__ import annotations
@@ -22,10 +22,10 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Sequence
 
-from trid3nt_server.workflows.runtime import Ref
+from trid3nt_server.workflows.runtime import ParamRef, Ref
 from trid3nt_server.workflows.runtime.plan import declared_reads
 
-from .module import Module, Slot, SlotRefused
+from .module import Slot, SlotRefused
 
 __all__ = ["Filled", "Sheet", "SheetIncomplete", "draw", "fill", "run"]
 
@@ -102,7 +102,7 @@ def _in_catalog_order(body: type,
 
 
 def fill(source: type | Sheet, *, produced: Mapping[str, Any] | None = None,
-         **slots: Any) -> Sheet:
+         params: Mapping[str, Any] | None = None, **slots: Any) -> Sheet:
     """Set slots on a body or on a sheet already filled -> the sheet that results.
 
     Repeatable: an edit is another fill. A keyword the module does not have, and
@@ -122,7 +122,7 @@ def fill(source: type | Sheet, *, produced: Mapping[str, Any] | None = None,
     filled = dict(standing)
     files: dict[str, Any] = dict(source.files) if isinstance(source, Sheet) else {}
     for name, (value, provenance) in _in_ref_order(pending):
-        value = _bind(value, produced or {}, filled)
+        value = _bind(value, produced or {}, params or {}, filled)
         if value is None:
             # NOTHING is what None states. No keyword's value is None, so the
             # one thing it can mean is "this run does not state this" - a wind
@@ -170,11 +170,11 @@ async def draw(source: type | Sheet, name: str, *, geometry: str = "point",
 
 def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],
                                              dict[str, tuple[Any, str]]]:
-    """What is on the sheet before this fill: the body's chain, or a sheet.
+    """What is on the sheet before this fill: the body's parts, or a sheet.
 
-    A body's own assertions are the TEMPLATE layer; anything it inherited is the
-    SHARED BODY that asserted it, named on the row - the same keyword can mean
-    something else in a new setting, and inherited context never hides. A
+    The body's own assertions are the TEMPLATE layer and beat every part; each
+    part's assertions are the PART's, named on the row - the same keyword can
+    mean something else in a new setting, and composed context never hides. A
     composite assertion, and one carrying a late-bound read, are PENDING rather
     than filled: neither is a value until the fill binds it.
     """
@@ -182,14 +182,11 @@ def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],
         return source.body, dict(source.filled), {}
     standing: dict[str, Filled] = {}
     pending: dict[str, tuple[Any, str]] = {}
-    for ancestor in reversed(source.__mro__):
-        if not issubclass(ancestor, Module) or not ancestor.ASSERTED:
-            continue
-        provenance = ("template" if ancestor is source
-                      else f"shared body {ancestor.__name__}")
-        for name, value in ancestor.ASSERTED.items():
+    for body in (*source.PARTS, source):
+        provenance = ("template" if body is source else f"part {body.__name__}")
+        for name, value in body.ASSERTED.items():
             slot = source.CATALOG.get(name)
-            if slot is None or value is None or any(declared_reads(value, Ref)):
+            if slot is None or value is None or _late(value):
                 pending[name] = (value, provenance)
                 standing.pop(name, None)
             else:
@@ -197,6 +194,19 @@ def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],
                                         provenance=provenance)
                 pending.pop(name, None)
     return source, standing, pending
+
+
+def _late(value: Any) -> bool:
+    """Does ``value`` still hold a read? Then it is not a value until fill binds it.
+
+    Walked rather than tested with ``any``: a placeholder refuses its own truth
+    value, which is what keeps a description from being read as data anywhere
+    else, and this is a place that counts them rather than reading one.
+    """
+    for kind in (Ref, ParamRef):
+        for _found in declared_reads(value, kind):
+            return True
+    return False
 
 
 def _in_ref_order(pending: Mapping[str, tuple[Any, str]],
@@ -221,15 +231,27 @@ def _in_ref_order(pending: Mapping[str, tuple[Any, str]],
     return ordered
 
 
-def _bind(value: Any, produced: Mapping[str, Any],
+def _bind(value: Any, produced: Mapping[str, Any], params: Mapping[str, Any],
           filled: Mapping[str, Filled]) -> Any:
-    """Substitute every late-bound read in ``value`` with what it names."""
+    """Substitute every late-bound read in ``value`` with what it names.
+
+    Two namespaces, because a body states both: a PARAM read is the sheet the
+    invocation resolved, and a Ref is a producer of this fill or a slot already
+    on it. Neither is a value while the body is being read - that is what makes
+    the body static - and both become one here.
+    """
+    if isinstance(value, ParamRef):
+        if value.name not in params:
+            raise SlotRefused(
+                f"ParamRef({value.name!r}) names no declared param of this fill "
+                f"({sorted(params)}).")
+        return params[value.name]
     if isinstance(value, Ref):
         return _read(value, produced, filled)
     if isinstance(value, Mapping):
-        return {k: _bind(v, produced, filled) for k, v in value.items()}
+        return {k: _bind(v, produced, params, filled) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
-        return type(value)(_bind(v, produced, filled) for v in value)
+        return type(value)(_bind(v, produced, params, filled) for v in value)
     return value
 
 

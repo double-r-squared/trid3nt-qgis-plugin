@@ -7,11 +7,19 @@ help. The wrapper is that catalog, and nothing else that opines - it is the
 analog of the engine's own defaults. Variance lives in templates, which stay
 Python because people read them.
 
-A class body extending a wrapper (or extending another body) asserts raw
-keywords under the identifiers the image itself spells them by. A keyword the
-module does not have, and a value the dictionary does not take, refuse BY NAME
-at import; the sheet the body fills records per slot WHERE its value came from,
-so nothing inherited or derived hides behind a number.
+A class body extending a wrapper asserts raw keywords under the identifiers the
+image itself spells them by. A keyword the module does not have, and a value the
+dictionary does not take, refuse BY NAME at import; the sheet the body fills
+records per slot WHERE its value came from, so nothing composed or derived hides
+behind a number.
+
+A body reuses another body by COMPOSITION - `parts = [RIVER, TRACER]` - never by
+extending it. Parts merge in the listed order, the body's own assertion beats
+every part, and a keyword two parts both set refuses by name unless the body
+settles it. Provenance names the part, so a keyword that means something else in
+a new setting is seen at the use site. Bodies are STATIC: every assertion is data
+fixed at import - a literal, or a description of a read the fill substitutes -
+so a body never branches on a value a run resolved.
 
 Two acts, and only two. `fill` is repeatable and decides nothing. `run` is
 explicit, on a complete sheet, and it is where execution stops being held.

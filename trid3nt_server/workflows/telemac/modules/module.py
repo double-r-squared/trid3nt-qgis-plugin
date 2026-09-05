@@ -10,11 +10,19 @@ the analog of the engine's own defaults - and it carries the two other things a
 wrapper holds: COMPOSITES, where one value stands for several slots and the file
 they name, and OUTPUTS, where the module's results are bound to their readers.
 
-A class body extending a module (or extending another body) asserts slots under
-the identifiers the image itself spells them by. A name the module has no
-keyword for refuses at IMPORT time, naming the nearest keyword it does have; a
-value of the wrong type, the wrong length or outside the dictionary's own
-choices refuses there too, naming what the dictionary allows.
+A class body extending a module asserts slots under the identifiers the image
+itself spells them by. A name the module has no keyword for refuses at IMPORT
+time, naming the nearest keyword it does have; a value of the wrong type, the
+wrong length or outside the dictionary's own choices refuses there too, naming
+what the dictionary allows.
+
+A body reuses another body by COMPOSITION: ``parts = [RIVER, TRACER]`` lists the
+shared bodies this one is made of, merged in the listed order, and a keyword two
+parts both set refuses by name unless this body settles it itself. A body never
+extends another body - what a part asserts stays visible as the part's, so a
+keyword that means something else in a new setting is seen rather than inherited
+into silence. Every assertion is DATA, fixed when the module is imported: a body
+reads no value any fill produced.
 """
 
 from __future__ import annotations
@@ -27,7 +35,7 @@ from pathlib import Path
 from types import FunctionType, MappingProxyType
 from typing import Any, Callable, Mapping
 
-from trid3nt_server.workflows.runtime import DeclarativeError, Ref
+from trid3nt_server.workflows.runtime import DeclarativeError, ParamRef, Ref
 
 __all__ = [
     "Composite",
@@ -57,8 +65,8 @@ UNSET = _Unset()
 
 #: Class attributes a wrapper carries that are never keyword assertions.
 _RESERVED = frozenset((
-    "MODULE", "CATALOG", "COMPOSITES", "OUTPUTS", "ASSERTED", "composites",
-    "outputs", "slot",
+    "MODULE", "CATALOG", "COMPOSITES", "OUTPUTS", "ASSERTED", "PARTS", "parts",
+    "composites", "outputs", "slot",
 ))
 
 
@@ -108,8 +116,12 @@ class Slot:
         return self.engine_default is UNSET and not self.is_list
 
     def check(self, value: Any) -> Any:
-        """``value`` as this slot takes it, or the refusal that says why not."""
-        if isinstance(value, Ref):
+        """``value`` as this slot takes it, or the refusal that says why not.
+
+        A late-bound READ passes through: a body states what it will hold, and
+        the fill that substitutes the value is what the value is checked at.
+        """
+        if isinstance(value, (Ref, ParamRef)):
             return value
         if self.is_list:
             if not isinstance(value, (list, tuple)):
@@ -204,8 +216,8 @@ class _Body(type):
     """The metaclass every wrapper and every body extending one is made by.
 
     Calling :class:`Module` builds the wrapper class for a module; every other
-    class this creates is a BODY, and its namespace is checked against that
-    module's catalog while the module is still being imported.
+    class this creates is a BODY, and its namespace and its parts are checked
+    against that module's catalog while the module is still being imported.
     """
 
     def __call__(cls, *args: str) -> type:
@@ -227,8 +239,57 @@ class _Body(type):
         catalog = namespace.get("CATALOG") or getattr(cls, "CATALOG", None)
         if catalog is None or "CATALOG" in namespace:
             return cls
+        _refuse_extended_body(cls, bases)
+        cls.PARTS = _parts(cls, namespace.get("parts", ()))
         cls.ASSERTED = MappingProxyType(_asserted(cls, namespace, catalog))
+        _refuse_unsettled(cls)
         return cls
+
+
+def _refuse_extended_body(cls: type, bases: tuple) -> None:
+    """A body extends the WRAPPER. Reuse between bodies is composition.
+
+    Subclassing a body would put its assertions on this one's chain under this
+    one's name, and per-slot provenance could then only say "inherited". A part
+    keeps its own name on every row it fills.
+    """
+    for base in bases:
+        if getattr(base, "ASSERTED", None):
+            raise SlotRefused(
+                f"{cls.__name__} extends {base.__name__}, which is a body. A body "
+                f"extends its module's wrapper; to reuse {base.__name__}, list it: "
+                f"parts = [{base.__name__}].")
+
+
+def _parts(cls: type, declared: Any) -> tuple[type, ...]:
+    """The shared bodies this one is made of, flattened in the listed order."""
+    flat: list[type] = []
+    for part in declared:
+        if not (isinstance(part, type) and getattr(part, "MODULE", "") == cls.MODULE):
+            raise SlotRefused(
+                f"{cls.__name__} lists {part!r} as a part; a part is a body of "
+                f"the same module ({cls.MODULE}).")
+        for member in (*part.PARTS, part):
+            if member not in flat:
+                flat.append(member)
+    return tuple(flat)
+
+
+def _refuse_unsettled(cls: type) -> None:
+    """A keyword two parts both set is settled by this body, or it refuses.
+
+    Merging in the listed order would let the second part win silently, and the
+    reader of the later template would have no way to see that the first part
+    said something else about the same keyword.
+    """
+    seen: dict[str, str] = {}
+    for part in cls.PARTS:
+        for key in part.ASSERTED:
+            if key in seen and key not in cls.ASSERTED:
+                raise SlotRefused(
+                    f"{cls.__name__} lists {seen[key]} and {part.__name__}, which "
+                    f"both set {key}; settle it on {cls.__name__} or drop one part.")
+            seen[key] = part.__name__
 
 
 def _asserted(cls: type, namespace: Mapping[str, Any],
@@ -283,6 +344,8 @@ class Module(metaclass=_Body):
     CATALOG: Mapping[str, Slot] = MappingProxyType({})
     COMPOSITES: Mapping[str, Composite] = MappingProxyType({})
     OUTPUTS: Mapping[str, Output] = MappingProxyType({})
+    #: The shared bodies this one is made of, in the order they merge.
+    PARTS: tuple[type, ...] = ()
     #: What THIS body asserts - empty on a wrapper, by law.
     ASSERTED: Mapping[str, Any] = MappingProxyType({})
 
