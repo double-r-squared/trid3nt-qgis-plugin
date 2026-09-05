@@ -27,7 +27,7 @@ from trid3nt_server.workflows.runtime.plan import declared_reads
 
 from .module import Module, Slot, SlotRefused
 
-__all__ = ["Filled", "Sheet", "SheetIncomplete", "fill", "run"]
+__all__ = ["Filled", "Sheet", "SheetIncomplete", "draw", "fill", "run"]
 
 
 class SheetIncomplete(SlotRefused):
@@ -134,6 +134,29 @@ def fill(source: type | Sheet, *, produced: Mapping[str, Any] | None = None,
                               provenance=provenance)
     return Sheet(body=body, filled=MappingProxyType(filled),
                  files=MappingProxyType(files))
+
+
+async def draw(source: type | Sheet, name: str, *, geometry: str = "point",
+               prompt: str = "") -> Sheet:
+    """Ask for ONE value on the canvas -> the sheet with it filled.
+
+    A fill, reached through the canvas rather than through an argument. It rides
+    the SAME gate a typed value rides, so the drawn vocabulary and the typed
+    vocabulary cannot drift: what comes back has passed the one set of
+    normalizers, and what comes back as nothing is a typed refusal naming the
+    slot that stayed empty. Nothing is invented on a decline.
+    """
+    from trid3nt_server.gates.draw_input import gate_draw_input
+
+    body = source.body if isinstance(source, Sheet) else source
+    outcome = await gate_draw_input(tool_name=body.MODULE, param=name,
+                                    geometry=geometry, prompt=prompt)
+    if not outcome.drawn:
+        raise SlotRefused(
+            f"{body.MODULE} needs {name!r} drawn on the canvas "
+            f"({prompt or geometry}), and {outcome.reason}. It is not invented - "
+            "supply the value explicitly or draw it.")
+    return fill(source, **{name: outcome.value})
 
 
 def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],

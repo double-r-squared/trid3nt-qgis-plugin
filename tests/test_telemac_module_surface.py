@@ -21,6 +21,7 @@ from trid3nt_server.workflows.telemac.modules import (
     SheetIncomplete,
     SlotRefused,
     T2D,
+    draw,
     fill,
     load_catalog,
     run,
@@ -237,6 +238,36 @@ def test_a_composite_lives_on_the_wrapper_and_may_not_shadow_a_keyword():
 def test_a_composite_the_wrapper_never_registered_refuses_by_name():
     with pytest.raises(SlotRefused, match="no keyword 'releases'"):
         fill(T2D, releases=[{"x": 1.0, "y": 2.0}])
+
+
+# -- the canvas ask ----------------------------------------------------------- #
+
+def test_a_drawn_point_is_a_fill(monkeypatch):
+    from trid3nt_server.gates import draw_input
+
+    module = Module("telemac2d")
+    module.composites(release=lambda point: (
+        {"ABSCISSAE_OF_SOURCES": [point[0]], "ORDINATES_OF_SOURCES": [point[1]]},
+        {}))
+
+    async def _drawn(*, tool_name, param, geometry, prompt):
+        assert (tool_name, param, geometry) == ("telemac2d", "release", "point")
+        return draw_input.DrawOutcome(value=(407561.831, 4483518.635))
+
+    monkeypatch.setattr(draw_input, "gate_draw_input", _drawn)
+    sheet = asyncio.run(draw(module, "release", prompt="where does it enter?"))
+    assert sheet.state()["filled"]["ABSCISSAE_OF_SOURCES"]["value"] == [407561.831]
+
+
+def test_a_canvas_that_answers_nothing_refuses_and_invents_nothing(monkeypatch):
+    from trid3nt_server.gates import draw_input
+
+    async def _declined(**_kwargs):
+        return draw_input.DrawOutcome(reason="there is no live map session to draw on")
+
+    monkeypatch.setattr(draw_input, "gate_draw_input", _declined)
+    with pytest.raises(SlotRefused, match="no live map session"):
+        asyncio.run(draw(T2D, "GEOMETRY_FILE"))
 
 
 # -- run is held -------------------------------------------------------------- #

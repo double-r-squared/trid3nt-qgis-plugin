@@ -7,10 +7,10 @@ The machinery is in ``module.py`` (what a slot and a wrapper are) and
 from __future__ import annotations
 
 from .module import Composite, Module, Output, Slot, SlotRefused, load_catalog
-from .sheet import Filled, Sheet, SheetIncomplete, fill, run
+from .sheet import Filled, Sheet, SheetIncomplete, draw, fill, run
 from .telemac2d import T2D
 
 __all__ = [
     "Composite", "Filled", "Module", "Output", "Sheet", "SheetIncomplete",
-    "Slot", "SlotRefused", "T2D", "fill", "load_catalog", "run",
+    "Slot", "SlotRefused", "T2D", "draw", "fill", "load_catalog", "run",
 ]

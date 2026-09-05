@@ -108,6 +108,14 @@ package SteeringSurface {
         */
     }
 
+    part def CanvasGate {
+        doc /*
+        The canvas ask: one value drawn on the map, or a typed reason there is
+        none. It is the same gate a typed value passes through, so the drawn
+        vocabulary and the typed vocabulary cannot drift.
+        */
+    }
+
     part def Stager {
         doc /*
         An authored run directory becomes a staged run: everything uploaded
@@ -131,6 +139,8 @@ package SteeringSurface {
     port def ParseIn;
     port def StageOut;
     port def StageIn;
+    port def DrawOut;
+    port def DrawIn;
 
     // ----------------------------------------------------------------- //
     // Interfaces - the seam contracts, by their real key names
@@ -215,6 +225,18 @@ package SteeringSurface {
         item error : String [0..1];
     }
 
+    interface def DrawnValue {
+        doc /*
+        What the canvas gave back. ``drawn`` is the honest terminal: no live
+        session, a decline, or a wait that ran out all come back with a
+        ``reason`` and no ``value``, and the sheet turns that into a refusal
+        naming the slot that stayed empty rather than inventing a geometry.
+        */
+        item value : Any;
+        item reason : String [0..1];
+        item drawn : Boolean;
+    }
+
     interface def StageRequest {
         doc /*
         What a complete sheet hands the stager. The run directory is already
@@ -281,6 +303,14 @@ package SteeringSurface {
         port surfaceIn : SurfaceIn;
         port deckOut : DeckOut;
         port stageOut : StageOut;
+        port drawIn : DrawIn;
+    }
+
+    part canvasGate : CanvasGate {
+        doc /*
+        code: trid3nt_server/gates/draw_input.py
+        */
+        port drawOut : DrawOut;
     }
 
     part serializer : Serializer {
@@ -350,6 +380,9 @@ package SteeringSurface {
     interface runStaged : StageRequest
         connect sheet.stageOut to stager.stageIn;
 
+    interface canvasAnswered : DrawnValue
+        connect canvasGate.drawOut to sheet.drawIn;
+
     // ----------------------------------------------------------------- //
     // The laws this seam is governed by
     // ----------------------------------------------------------------- //
@@ -405,6 +438,10 @@ package SteeringSurface {
         plain assignment. Two dye releases is a longer list, not a new template.
         A fill is repeatable, so an edit is another fill, and the row says which
         layer answered.
+
+        A value drawn on the canvas is a fill like any other, reached through
+        the same gate a typed value rides. A canvas that answers nothing refuses
+        by name; nothing is invented from a decline.
         */
     }
 
@@ -485,12 +522,17 @@ package SteeringSurface {
 
     satisfy requirement EverythingOverridable by wrapper;
     satisfy requirement EverythingOverridable by sheet;
+    satisfy requirement EverythingOverridable by canvasGate;
     verify requirement EverythingOverridable by
         "tests/test_telemac_module_surface.py::test_resolution_order_is_engine_then_shared_body_then_template_then_fill";
     verify requirement EverythingOverridable by
         "tests/test_telemac_module_surface.py::test_an_inherited_slot_says_which_body_asserted_it";
     verify requirement EverythingOverridable by
         "tests/test_telemac_module_surface.py::test_a_fill_is_repeatable_and_the_later_one_stands";
+    verify requirement EverythingOverridable by
+        "tests/test_telemac_module_surface.py::test_a_drawn_point_is_a_fill";
+    verify requirement EverythingOverridable by
+        "tests/test_telemac_module_surface.py::test_a_canvas_that_answers_nothing_refuses_and_invents_nothing";
 
     satisfy requirement CatalogMatchesImage by catalogExtractor;
     verify requirement CatalogMatchesImage by
