@@ -231,7 +231,7 @@ telemac_river_scour = register_workflow(
             bed_thickness_m=P.bed_thickness_m,
             bedload_formula=P.bedload_formula,
             morphological_factor=P.morphological_factor,
-            dredging=Ref("settled.dredging"),
+            settled=Ref("settled"),
             injected={"q_m3s": R.source_q_m3s,
                       "concentration_mgl": P.tracer_concentration_mgl,
                       "window_s": R.spill_duration_s}).named("sediment"),),

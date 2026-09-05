@@ -457,10 +457,11 @@ async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
         except Exception as exc:  # noqa: BLE001 - a bonus map never voids the run
             logger.warning("sediment deposition unexpected failure (%s)", exc)
     elif substance_class == "oil":
-        from ..helpers.substance import classify_substance
-
+        # The preset is the RUN's own: the deck was written against it and the
+        # slick is drawn from the particles it produced, so reading it off the
+        # run is reading what solved rather than re-deciding it here.
         await _emit_oil_slick(peak, run_id=run_id, reach_name=reach_name,
-                              oil_preset=classify_substance(substance)[1],
+                              oil_preset=run["oil_preset"],
                               utm_epsg=utm_epsg, emitter=emitter)
 
     if emitter is not None and peak.bbox:

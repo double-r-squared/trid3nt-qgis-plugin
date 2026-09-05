@@ -768,9 +768,10 @@ async def settle_reach(
         from ..helpers.oil import oil_inputs
         from ..helpers.substance import oil_preset
 
+        preset = oil_preset(oil["preset"])
         settled["oil"] = {
-            **oil_inputs(preset=oil_preset(oil["preset"]),
-                         release_step=int(oil["release_step"]),
+            "preset": preset,
+            **oil_inputs(preset=preset, release_step=int(oil["release_step"]),
                          x=source_utm[0], y=source_utm[1]),
             # The write cadence is asked for in SECONDS; the only thing that
             # turns seconds into steps is the step this run is solved at.
@@ -907,7 +908,11 @@ async def settle_catchment(
         "runoff_path": decision.path,
         "runoff_reason": decision.reason,
         "rain": dict(rain),
-        "infiltration": {"amc_condition": int(infiltration["amc_condition"])},
+        # The infiltration surface's own record, WITHOUT the per-node fields:
+        # those are that step's and are read where they were produced, so the
+        # run does not carry the same field twice.
+        "infiltration": {key: value for key, value in infiltration.items()
+                         if not key.startswith("node_")},
         "hyetograph_total_mm": (round(sum(float(mm) for _t, mm in rain["blocks"]), 4)
                                 if decision.time_varying else None),
         "mesh_node_count": int(catchment.get("node_count") or 0),

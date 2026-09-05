@@ -198,21 +198,26 @@ async def resolve_decay(*, substance: Any, half_life_hours: float | None,
 
 def SedimentBed(*, gradation: Any, grain_size_um: Any,  # noqa: N802
                 bed_thickness_m: Any, bedload_formula: Any,
-                morphological_factor: Any, dredging: Any,
+                morphological_factor: Any, settled: Any,
                 injected: Any) -> Step:
-    """The erodible bed this run scours, in the shape the ask carried."""
+    """The erodible bed this run scours, in the shape the ask carried.
+
+    It reads the SETTLED run rather than the dredge fields inside it: whether a
+    dredge rule was cut at all is this producer's question, and a ref to a field
+    the run holds as nothing is refused at binding.
+    """
     return Step(runner=f"{_HELPERS}.substance.resolve_sediment_bed", stage="prep",
                 kwargs={"gradation": gradation, "grain_size_um": grain_size_um,
                         "bed_thickness_m": bed_thickness_m,
                         "bedload_formula": bedload_formula,
                         "morphological_factor": morphological_factor,
-                        "dredging": dredging, "injected": injected})
+                        "settled": settled, "injected": injected})
 
 
 async def resolve_sediment_bed(*, gradation: Any, grain_size_um: float,
                                bed_thickness_m: float, bedload_formula: int,
                                morphological_factor: float,
-                               dredging: Any, injected: dict[str, Any]
+                               settled: dict[str, Any], injected: dict[str, Any]
                                ) -> dict[str, Any]:
     """The GAIA body the bed is solved as -> the coupling and what it injected.
 
@@ -225,6 +230,7 @@ async def resolve_sediment_bed(*, gradation: Any, grain_size_um: float,
     from trid3nt_server.workflows.telemac.modules.gaia import Dredging
 
     classes = resolve_gradation(gradation)
+    dredging = settled.get("dredging")
     dig = (None if not dredging else
            Dredging(action=dredging["action"], polygon=dredging["polygon"],
                     surface_ref=dredging["surface_ref"]))

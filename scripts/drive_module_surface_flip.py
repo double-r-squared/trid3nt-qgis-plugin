@@ -46,12 +46,25 @@ REACH = {
 CATCHMENT = {
     "location": "Otto, North Carolina",
     "pour_point": [-83.40402, 35.05746],
-    "design_storm_mm_per_hr": 25.0,
+    # A basin that ALREADY holds water sheds what falls on it, which is what
+    # makes this canary's peak depth a picture rather than a flat zero: at
+    # AMC-II a forested Coweeta headwater infiltrates a screening storm almost
+    # entirely, and a proof whose flagship raster is all zeros discriminates
+    # nothing.
+    "design_storm_mm_per_hr": 60.0,
     "storm_duration_hr": 1.0,
-    "sim_duration_hr": 2.0,
-    "mesh_min_edge_m": 60.0,
-    "mesh_max_edge_m": 260.0,
-    "input_mode": "auto",
+    "sim_duration_hr": 3.0,
+    "antecedent_moisture": "wet",
+    # The band the Coweeta basin has been meshed and solved at: coarser than
+    # this the channel corridor thins to a strip whose boundary walk leaves a
+    # lone liquid node, which the engine's own numbering refuses.
+    "mesh_min_edge_m": 25.0,
+    "mesh_max_edge_m": 200.0,
+    # A catchment's infiltration levers have no data source of their own, so law
+    # 9 refuses to run them on a labeled default with nobody to approve it. The
+    # door's own review is the surface that approval happens on, which is what
+    # this canary also proves.
+    "input_mode": "user_gated",
 }
 
 CANARIES: dict[str, dict] = {
@@ -59,11 +72,16 @@ CANARIES: dict[str, dict] = {
     "telemac_river_oil_spill": {**REACH, "oil_type": "crude",
                                 "oil_concentration_mgl": 100.0,
                                 "n_drogues": 100, "oil_release_step": 60},
-    # the dredging rule rides ON the mobile bed, which is what makes this canary
-    # the one that proves the NESTOR files reach the run
     "telemac_river_scour": {**REACH, "tracer_concentration_mgl": 100.0,
-                            "grain_size_um": 200.0, "dredging": True,
-                            "dredge_volume_m3": 200.0},
+                            "grain_size_um": 200.0},
+    # The dredging rule rides ON the same mobile bed, and it is its own canary
+    # because NESTOR's surface-reference fence is what a dredged run adds: every
+    # field node has to lie between two of its profiles, and consecutive
+    # profiles must not cross.
+    "telemac_river_scour_dredged": {**REACH, "reach_length_km": 2.0,
+                                    "tracer_concentration_mgl": 100.0,
+                                    "grain_size_um": 200.0, "dredging": True,
+                                    "dredge_volume_m3": 200.0},
     "telemac_river_sediment_plume": {**REACH, "sediment_concentration_mgl": 100.0,
                                      "grain_size_um": 200.0},
     "telemac_do_sag": {"location": LOCATION, "reach_length_km": 1.0,
@@ -84,6 +102,9 @@ ANSWERS: dict[str, tuple[str, ...]] = {
     "telemac_river_scour": ("max_scour_mm", "max_deposition_mm",
                             "deposited_mass_kg", "deposit_fraction",
                             "active_frames", "mesh_size_m"),
+    "telemac_river_scour_dredged": ("max_scour_mm", "max_deposition_mm",
+                                    "deposited_mass_kg", "deposit_fraction",
+                                    "active_frames", "mesh_size_m"),
     "telemac_river_sediment_plume": ("dye_cmax_mgl", "max_deposition_mm",
                                      "deposited_mass_kg", "deposit_fraction",
                                      "active_frames", "mesh_size_m"),
@@ -110,15 +131,19 @@ def _compact(evidence: dict) -> dict:
     return {**evidence, "layers": layers}
 
 
-def _drive(tool: str, timeout: float, out_dir: str) -> dict:
-    args = {k: v for k, v in CANARIES[tool].items() if v is not None}
+def _drive(name: str, timeout: float, out_dir: str) -> dict:
+    """One canary. The NAME is the canary's; the TOOL is what it invokes."""
+    tool = name.removesuffix("_dredged")
+    args = {k: v for k, v in CANARIES[name].items() if v is not None}
     ev = run_live(LiveRun(
         tool=tool, args=args,
-        case_title=f"canary: {tool} (module surface flip, coarse)",
-        answers=GateAnswers(confirm="proceed"),
+        case_title=f"canary: {name} (module surface flip, coarse)",
+        answers=GateAnswers(confirm="proceed",
+                            require_form=args.get("input_mode") == "user_gated"),
         timeout_s=timeout, cleanup_case=True))
     metrics = ev.metrics or {}
     report = {
+        "canary": name,
         "tool": tool,
         "args": args,
         "tool_status": ev.tool_status,
@@ -131,11 +156,11 @@ def _drive(tool: str, timeout: float, out_dir: str) -> dict:
         "product_uris": ev.product_uris,
         "product_errors": ev.product_errors,
         "charts_emitted": ev.charts,
-        "answer": {field: metrics.get(field) for field in ANSWERS[tool]},
+        "answer": {field: metrics.get(field) for field in ANSWERS[name]},
         "detail": ev.detail,
     }
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, f"{tool}_coarse_evidence.json")
+    path = os.path.join(out_dir, f"{name}_coarse_evidence.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump({"report": report, "evidence": _compact(ev.as_dict())}, fh,
                   indent=2, default=str)

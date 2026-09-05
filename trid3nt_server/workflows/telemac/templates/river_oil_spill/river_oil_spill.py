@@ -213,7 +213,8 @@ telemac_river_oil_spill = register_workflow(
         results=(river.RESULT, river.RESTART, _DROGUES),
         steering_file=_STEERING_FILE, prefix="telemac",
         dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
-        meta={"substance": "oil", "substance_class": "oil"},
+        meta={"substance": "oil", "substance_class": "oil",
+              "oil_preset": Ref("settled.oil.preset")},
         read=lambda run: Products.dye(
             run=run, solve=run,
             carrier_discharge=Ref("carrier_discharge")).named("slick"),

@@ -676,14 +676,22 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
         raise PacketError(f"{variant!r} is not a proof variant; the four are "
                           f"{list(VARIANTS)}")
     directory = Path(proof_dir(template, variant, create=not check and not out_dir))
-    if not directory.is_dir():
-        raise PacketError(f"no proof directory at {directory}")
     if out_dir:
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
     else:
+        # The proof folder is the packet's home only when the packet LANDS
+        # there. A lane rendering into a scratch directory owes the same
+        # checklist and names its own evidence, so a template with no folder in
+        # the frozen tree is not a gap in the run being proved.
+        if not directory.is_dir():
+            raise PacketError(f"no proof directory at {directory}")
         out = directory
     stem = stem_for(template, variant)
+    if evidence is None and not directory.is_dir():
+        raise PacketError(
+            f"no evidence JSON named and no proof directory at {directory} to "
+            "find one in; pass --evidence.")
     evidence_path = Path(evidence) if evidence else find_evidence(directory, stem)
     if not evidence_path.is_file():
         raise PacketError(f"no evidence JSON at {evidence_path}")

@@ -210,6 +210,34 @@ PROOF_ANIMATIONS: dict[str, tuple[ProofAnimation, ...]] = {
             reason="the plume IS the tracer concentration; it BUILDS as the dye "
                    "arrives, so the peak frame is the answer."),
     ),
+    "telemac_river_oil_spill": (
+        ProofAnimation(
+            variable="DYE", units="mg/L", quantity="dye_concentration",
+            mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="peak",
+            reason="the mesh result carries the DISSOLVED fraction, and it "
+                   "BUILDS as the release arrives; the floating slick is the "
+                   "particle layer beside it, not a field on this mesh."),
+    ),
+    # The bed is what a mobile-bed run MOVES, and it moves on the carrier's own
+    # result: GAIA writes the evolution back into BOTTOM every coupled step.
+    "telemac_river_scour": (
+        ProofAnimation(
+            variable="BOTTOM", units="m", quantity="bed_elevation",
+            still="final",
+            reason="the answer is where the bed ENDED UP, so the still is the "
+                   "final frame - the peak frame is the bed the run started "
+                   "from, which shows the reader nothing the run did. It is not "
+                   "masked on depth: a bed that scours is a bed, wet or not."),
+    ),
+    "telemac_river_sediment_plume": (
+        ProofAnimation(
+            variable="NCOH SEDIMENT", units="kg/m3",
+            quantity="suspended_sediment_concentration",
+            mask_var="WATER DEPTH", mask_threshold=WET_TOL_M, still="peak",
+            reason="the plume IS the suspended class GAIA carries as the "
+                   "carrier's second tracer; it BUILDS as the pulse arrives and "
+                   "settles out behind it, so the peak frame is the answer."),
+    ),
     "telemac_do_sag": (
         ProofAnimation(
             variable="DISSOLVED O2", units="mgO2/l", quantity="dissolved_oxygen",
