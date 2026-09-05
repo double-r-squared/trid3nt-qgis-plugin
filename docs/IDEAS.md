@@ -3626,3 +3626,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   sheet is state only; the fill/run door renders the returned sheet as
   the card and holds until run; no gate concept survives in the
   interpreter - the card is a view, not a step.
+  STAGE 2 RULINGS (NATE 2026-09-04): (a) COMPOSITION, NOT INHERITANCE
+  for shared template bodies - a shared body is a PART a template
+  lists (parts = [RIVER, ...]); parts merge in the listed order; a
+  keyword set by two parts REFUSES by name unless the template settles
+  it; provenance names the part; the same mechanism serves a fill-time
+  bundle; the "two extenders" rule becomes "two users". (b) ONE
+  TEMPLATE PER QUESTION - a structural fork of the deck (tracer / oil /
+  sediment fill DIFFERENT slots, not different values) is a different
+  template, never a switch: river_dye = RIVER + TRACER, river_oil_spill
+  = RIVER + OIL, river_sediment = RIVER + SEDIMENT (+ dredging),
+  do_sag = RIVER + O2; bodies are static and read no resolved value;
+  optional features within one question are composites that state
+  nothing when given nothing (decay, dredging, hyetograph vs constant
+  rate). The tool surface grows 5 -> 7; routing picks the template.

@@ -24,7 +24,7 @@
 </style>
 
 <h1>The Module Surface</h1>
-<p class="rev">rev 1a &middot; 2026-09-04 &middot; amended in place after Stage 0 (the apostrophe caveat, the de-LaTeX set) &middot; the module-surface wave's spec, per the rulings of docs/IDEAS.md "MODULE SURFACE RULED" - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the mesh recipe (docs/specs/mesh-recipe.html), the emission fold, the worker's engine-room contract, the data seam.</p>
+<p class="rev">rev 1b &middot; 2026-09-04 &middot; amended in place after Stage 0 (the apostrophe caveat, the de-LaTeX set) and Stage 2 (composition over inheritance; one template per question) &middot; the module-surface wave's spec, per the rulings of docs/IDEAS.md "MODULE SURFACE RULED" - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the mesh recipe (docs/specs/mesh-recipe.html), the emission fold, the worker's engine-room contract, the data seam.</p>
 
 <h2>1. The principle</h2>
 <p>A workflow is a wrapper around a TELEMAC module, exposing the module's FULL keyword surface. The engine already publishes that surface: every module's dico names each keyword, its type, its allowed values, its default and its help text. We stop transcribing it by hand into f-strings and comments. The wrapper is the engine's catalog and NOTHING ELSE that opines; variance lives in templates, which stay Python because they are read by people. Every knob is reachable at invocation. Simple system, complex work.</p>
@@ -105,7 +105,7 @@ T2D.outputs(fields=read_selafin,                <span class="c"># the module's o
 
 <h2>4. Templates and shared bodies</h2>
 <p>A template package stays what it is: the recipe file, <code>declarations.py</code>, <code>corpus.yaml</code>. Its recipe file now carries a STEERING body of raw keywords, spelled as identifiers by the mechanical spaces-to-underscores map the image itself ships (eficas <code>&lt;module&gt;_dicoCasEnToCata.py</code>). Every hardcoded author literal becomes a visible assertion here, or an engine default by omission.</p>
-<pre><span class="c"># templates/shared/river.py - a shared body, extended by river_dye and do_sag</span>
+<pre><span class="c"># templates/shared/river.py - a shared body: a PART the river templates list</span>
 <span class="k">class</span> RIVER(T2D):
     TIDAL_FLATS = <span class="k">True</span>
     OPTION_FOR_THE_TREATMENT_OF_TIDAL_FLATS = <span class="n">1</span>
@@ -119,7 +119,8 @@ T2D.outputs(fields=read_selafin,                <span class="c"># the module's o
     INITIAL_DEPTH = derived.normal_depth()
 
 <span class="c"># templates/river_dye/river_dye.py</span>
-<span class="k">class</span> STEERING(RIVER):                                  <span class="c"># every inherited slot overridable here</span>
+<span class="k">class</span> STEERING(T2D):
+    parts = [RIVER, TRACER]                               <span class="c"># composed in this order; a keyword two parts set refuses unless settled here</span>
     DURATION = P.sim_duration_s
     GRAPHIC_PRINTOUT_PERIOD = derived.steps(P.output_interval_min)
     LAW_OF_BOTTOM_FRICTION = P.friction_law
@@ -130,7 +131,8 @@ T2D.outputs(fields=read_selafin,                <span class="c"># the module's o
                         conc=P.dye_concentration_mgl, window_s=P.spill_duration_s)]
     wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
     coupling = [WAQTEL.decay(half_life_h=P.decay_half_life_hours)]</pre>
-<p>THE INHERITANCE LAW: a shared body lives in <code>templates/shared/</code>, is named for what it is (<code>river</code>, <code>catchment</code>, <code>basin</code> - never <code>reach</code>), is created only when a good portion of a template is shared, and must have at least two extenders (one extender folds back into its template; the suite checks). Every inherited slot is overridable by plain attribute override. Per-slot provenance on the sheet keeps inherited context visible: a keyword that means something else in a new setting is seen, not assumed.</p>
+<p>THE COMPOSITION LAW (amended 2026-09-04, rev 1b): a shared body is a PART a template lists, never a parent it extends. It lives in <code>templates/shared/</code>, is named for what it is (<code>river</code>, <code>catchment</code>, <code>basin</code> - never <code>reach</code>), is created only when a good portion of a template is shared, and must have at least two users (one user folds back into its template; the suite checks). Parts merge in the listed order; a keyword set by two parts REFUSES by name unless the template settles it itself; a template's own assertion beats any part. Per-slot provenance names the part, so composed context is visible at the use site: a keyword that means something else in a new setting is seen, not assumed. The same mechanism serves a fill-time bundle.</p>
+<p>ONE TEMPLATE PER QUESTION (rev 1b): a structural fork of the deck - tracer, oil and sediment fill DIFFERENT slots, not different values - is a different template, never a switch on a param. <code>river_dye</code> = RIVER + TRACER; <code>river_oil_spill</code> = RIVER + OIL; <code>river_sediment</code> = RIVER + SEDIMENT (+ the dredging composite); <code>do_sag</code> = RIVER + O2. Bodies are static and read no resolved value. Optional features within one question are composites that state nothing when given nothing (a decay rate, dredging, a hyetograph versus a constant rate). The tool surface is seven templates; routing picks the template.</p>
 <p>PARAMS are unchanged in shape (<code>Param(desc=..., default=..., bounds=..., units=...)</code>); a slot's <code>desc</code> is the dico's help, so a raw keyword reads to the LLM and the human exactly the way a Param does. <code>Physics(...)</code> and <code>Forcing(...)</code> no longer exist; a forcing series is a file-slot producer.</p>
 
 <h2>5. Fill, then run</h2>
@@ -185,7 +187,7 @@ flowchart LR
   modules/               telemac2d.py telemac3d.py artemis.py waqtel.py gaia.py            (catalog + composites + outputs)
   templates/
     shared/              river.py  catchment.py (only if a good portion is shared)
-    river_dye/  do_sag/  rain_on_grid/  agitation/  stratified_flow/
+    river_dye/  river_oil_spill/  river_sediment/  do_sag/  rain_on_grid/  agitation/  stratified_flow/
   authoring/             assembler.py serializer.py cas_validate.py                        (everything the box receives)
   solving/               solve.py run_telemac.py
   products/              postprocess_telemac.py products.py run_reads.py rain_on_grid.py result_reader.py results_mesh_seam.py streeter_phelps.py
@@ -193,7 +195,7 @@ flowchart LR
 <p>Strays homed as shown; <code>release_point</code>/<code>release_layer</code> move into the releases composite where they expand keywords. Every directory-map README rewrites in the same commit (the stale "seven templates" and "five solver names" lines go). <code>tools/__init__.py</code> imports repoint.</p>
 
 <h2>9. The model extension (the standing reminder)</h2>
-<p><code>docs/model/solve-seam.sysml</code> bindings move with the files (assembler, steeringStatements becomes the serializer, manifestStager, launcherArm, resultReader). A new <code>steering-surface</code> block set models Catalog, Slot, Module, Composite, Output, Sheet, Serializer, with requirements and verify allocations: KeywordNamesAreRaw, EverySlotDescribed, EngineDefaultSurfaced, WrapperHasNoOpinion, EverythingOverridable, CatalogMatchesImage, CompositesLiveInWrappers, SharedBodyHasTwoExtenders, RunIsHeld. This is the runtime plane's first modeled seam; the planes index updates; views regenerate; seeded breaks prove each rule fires.</p>
+<p><code>docs/model/solve-seam.sysml</code> bindings move with the files (assembler, steeringStatements becomes the serializer, manifestStager, launcherArm, resultReader). A new <code>steering-surface</code> block set models Catalog, Slot, Module, Composite, Output, Sheet, Serializer, with requirements and verify allocations: KeywordNamesAreRaw, EverySlotDescribed, EngineDefaultSurfaced, WrapperHasNoOpinion, EverythingOverridable, CatalogMatchesImage, CompositesLiveInWrappers, SharedBodyHasTwoUsers, BodiesAreStatic, RunIsHeld. This is the runtime plane's first modeled seam; the planes index updates; views regenerate; seeded breaks prove each rule fires.</p>
 
 <h2>10. Stage 0 - the proof matrix (before anything is built)</h2>
 <table>
@@ -221,7 +223,7 @@ flowchart LR
 <tr><td>deck parity</td><td>the five canaries' authored decks vs today's: every difference is a named literal-to-assertion move; all five solve to status=ok</td></tr>
 <tr><td>the surface</td><td>two releases live; raw keyword fill live; bare-module sheet; unknown keyword and bad choice refused by name; provenance shown on every filled slot</td></tr>
 <tr><td>dissolution</td><td>grep zero: f-string keyword writers outside the serializer; <code>.cas</code> authoring in <code>workers/</code>; <code>plan(ops)</code>, <code>FormGate</code>, <code>DrawGate</code>, <code>_PROCESSES</code>, <code>physics_registry</code></td></tr>
-<tr><td>catalog</td><td>drift audit green against the image; shared bodies have two extenders</td></tr>
+<tr><td>catalog</td><td>drift audit green against the image; shared bodies have two users; no body reads a resolved value</td></tr>
 <tr><td>model + suite + packets</td><td>steering-surface checked green; seeded breaks fire; five slices zero; full interrogated packets delivered on every acceptance run</td></tr>
 </table>
 
