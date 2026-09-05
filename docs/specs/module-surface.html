@@ -34,13 +34,13 @@
 <table>
 <tr><th>source</th><th>meaning</th><th>shown as</th></tr>
 <tr><td>engine default</td><td>unset; the dico's DEFAUT value stands</td><td>greyed, with the value</td></tr>
-<tr><td>shared body</td><td>a template body this template extends asserts it</td><td><code>river.py</code></td></tr>
+<tr><td>shared body</td><td>a part this template lists asserts it</td><td><code>river.py</code></td></tr>
 <tr><td>template</td><td>this template asserts it (a literal or a param)</td><td><code>river_dye</code></td></tr>
 <tr><td>fill</td><td>set at invocation: a param value, a canvas click, or a raw keyword</td><td><code>edited</code></td></tr>
 <tr><td>producer</td><td>a file slot filled by the mesh recipe, a data row, a helper, or a composite</td><td><code>mesh recipe</code>, <code>releases</code></td></tr>
 <tr><td>derived</td><td>measured by the assembler off the accepted artifact (boundary order, normal-depth stage, Z(Q))</td><td><code>derived</code></td></tr>
 </table>
-<p>Resolution order, lowest to highest: engine default, shared body, template, fill. At most two opinion layers exist and both are templates. A slot not in the module's catalog refuses by name at import time (template) or at fill time (invocation); a value outside the dico's choices refuses naming the choices.</p>
+<p>Resolution order, lowest to highest: engine default, the listed parts in order, template, fill. At most two opinion layers exist and both are templates. A slot not in the module's catalog refuses by name at import time (template) or at fill time (invocation); a value outside the dico's choices refuses naming the choices.</p>
 <div class="scroll">
 <pre class="mermaid">
 classDiagram
@@ -71,7 +71,8 @@ classDiagram
     class Template {
       STEERING : slot assertions
       PARAMS, DATA, MESH
-      extends : Template | Module
+      parts : SharedBody[*]
+      extends : Module
     }
     class Sheet {
       slots : keyword to (value, provenance)
@@ -81,7 +82,7 @@ classDiagram
     Module --> Composite : one value fills several slots
     Module --> Output : how each output is read
     Template --> Module : extends (no opinion below)
-    Template --> Template : extends (shared body)
+    Template --> Template : parts (composed in order)
     Sheet --> Template : filled from
     Sheet --> Module : or bare, engine defaults
 </pre>
