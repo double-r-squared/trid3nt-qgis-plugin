@@ -24,13 +24,13 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Mapping
 
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.cas_validate")
 
-__all__ = ["CasParseError", "validate_authored_steering"]
+__all__ = ["CasParseError", "run_cas_driver", "validate_authored_steering"]
 
 _TELEMAC_IMAGE_DEFAULT = "trid3nt-local/telemac:latest"
 _INCONTAINER_SCRIPT = "telemac_cas_driver.py"
@@ -41,6 +41,31 @@ class CasParseError(RuntimeError):
     """An authored steering file does not parse against its own dictionary."""
 
     error_code = "TELEMAC_CAS_PARSE_FAILED"
+
+
+def run_cas_driver(rundir: Path | str, config: Mapping[str, Any], *,
+                   what: str) -> None:
+    """Shell the steering driver over ``rundir``. The ONE door to the image.
+
+    Both directions of the steering format go through it - telapy writes, the
+    DAMOCLES reader reads back - so there is one argv, one timeout and one
+    refusal that carries the container's own words.
+    """
+    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or _TELEMAC_IMAGE_DEFAULT
+    name = "telemac_cas_config.json"
+    (Path(rundir) / name).write_text(json.dumps(dict(config)))
+    argv = [
+        "docker", "run", "--rm", "--network", "none",
+        "-v", f"{drivers_dir()}:/drivers:ro", "-v", f"{rundir}:/data",
+        image, "python",
+        f"/drivers/{_INCONTAINER_SCRIPT}", f"/data/{name}", "/data"]
+    logger.info("telemac cas driver: %s", " ".join(argv))
+    cp = subprocess.run(argv, capture_output=True, text=True,
+                        timeout=_CONTAINER_TIMEOUT_S)
+    if cp.returncode != 0:
+        raise CasParseError(
+            f"could not {what} (rc={cp.returncode}):\n"
+            f"{cp.stdout[-2000:]}\n{cp.stderr[-2000:]}")
 
 
 def validate_authored_steering(rundir: Path | str,
@@ -56,22 +81,8 @@ def validate_authored_steering(rundir: Path | str,
                if (rundir / name).is_file()}
     if not present:
         return {}
-    image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or _TELEMAC_IMAGE_DEFAULT
-    config = "telemac_cas_config.json"
-    (rundir / config).write_text(json.dumps({"steering": present}))
-    argv = [
-        "docker", "run", "--rm", "--network", "none",
-        "-v", f"{drivers_dir()}:/drivers:ro", "-v", f"{rundir}:/data",
-        image, "python",
-        f"/drivers/{_INCONTAINER_SCRIPT}", f"/data/{config}", "/data"]
-    logger.info("telemac cas parse: %s", " ".join(argv))
-    cp = subprocess.run(argv, capture_output=True, text=True,
-                        timeout=_CONTAINER_TIMEOUT_S)
-    if cp.returncode != 0:
-        raise CasParseError(
-            f"the authored steering files {sorted(present)} could not be read "
-            f"by the engine's own parser (rc={cp.returncode}):\n"
-            f"{cp.stdout[-2000:]}\n{cp.stderr[-2000:]}")
+    run_cas_driver(rundir, {"steering": present},
+                   what=f"read the authored steering files {sorted(present)}")
     rows = json.loads((rundir / "telemac_cas_stats.json").read_text())
     failed = {name: row for name, row in rows.items() if not row.get("ok")}
     if failed:

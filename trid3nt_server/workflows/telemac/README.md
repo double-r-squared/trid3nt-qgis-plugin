@@ -26,6 +26,7 @@ else it uses is the facade's or the shared trees'.
 | folder | what it is |
 | --- | --- |
 | `catalog/` | The engine's own keyword dictionaries, one JSON per exposed module - generated in-image by `scripts/extract_telemac_catalog.py`, committed, never hand edited, compared back against the image by the suite. |
+| `modules/` | One wrapper per exposed module - its catalog, its composites, its outputs, and nothing that opines - plus the sheet a body fills and the two acts on it, fill and run. See its own README. |
 | `authoring/` | Everything the box receives: the ONE assembler, the steering-file writers it summons, the DAMOCLES parse that gates them. See its own README. |
 | `solving/` | The run, dispatched: stage the manifest, hand it to the solve seam, wait, surface the gates. See its own README. |
 | `products/` | What a solved run is answered with: the postprocessors, the reach and catchment deliverables, the run's own files read on the server. See its own README. |

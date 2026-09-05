@@ -26,7 +26,8 @@ is staged.
 | `agitation.py` | The ARTEMIS case and its deliverable: a swell at the mouth, an agitation field inside. |
 | `assembler.py` | The approved sheet plus the accepted mesh to the run directory the box receives - the one flow, for a reach and for a catchment alike. |
 | `author.py` | The sheet, serialized into TELEMAC's own steering files, in the liquid-boundary order the mesh measured. |
-| `cas_validate.py` | Every authored steering file, parsed by the engine's own reader against its own dictionary before anything is staged. |
+| `cas_validate.py` | The ONE door to the image for the steering format, in both directions: telapy writes, the engine's own reader reads back, and every authored file is parsed against its own dictionary before anything is staged. |
 | `oil_templates/` | The user-fortran source an oil-class run compiles into its steering file. |
+| `serializer.py` | A sheet of raw keywords, written by telapy as the engine's own steering file and read straight back by the engine's own parser. The module surface's writer; it stands beside `author.py` until the templates flip. |
 | `open_water.py` | The open-water front of the AOI templates: the case section, the one manifest writer, the dispatch, the bed the domain is solved on. |
 | `stratified.py` | The TELEMAC-3D case and its deliverable: a water column in, its vertical structure out. |

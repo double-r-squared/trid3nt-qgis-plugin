@@ -56,7 +56,8 @@ from ..helpers.substance import (
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.assembler")
 
-__all__ = ["Assemble", "assemble_rain_on_grid", "assemble_reach"]
+__all__ = ["Assemble", "assemble_rain_on_grid", "assemble_reach",
+           "new_rundir", "stage_run"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
 
@@ -217,37 +218,63 @@ async def _assemble(family: str, *, sheet: Mapping[str, Any],
     staged file it restarts from. Both are absent on a run that has neither.
     """
     recipe = _RECIPES[family]
-    run_tag = new_ulid()
-    rundir = _run_directory(run_tag)
+    run_tag, rundir = new_rundir()
     written = await asyncio.to_thread(partial(
         recipe.author, rundir, sheet=sheet, geometry=recipe.geometry,
         boundary=recipe.boundary, results=recipe.result,
         steering=recipe.steering, **dict(author_kwargs)))
-    # Every file the author wrote, under its path INSIDE the run directory: the
-    # oil module's user fortran is a directory the engine compiles, so the walk
-    # is recursive and the manifest dest carries the same relative path.
+    staged = await stage_run(
+        rundir, run_tag, module=recipe.module, steering=recipe.steering,
+        results=results, outputs=outputs, mesh_inputs=mesh_inputs,
+        prefix=recipe.prefix, sheet=sheet, server_facts=server_facts,
+        result_basename=recipe.result,
+        # The engine compiles the DIRECTORY the steering file names, so the
+        # manifest channel carries the same directory the author wrote into.
+        user_fortran=written.get("user_fortran"),
+        coupling=coupling, continue_from=continue_from)
+    logger.info("telemac %s staged run_tag=%s -> %s", family, run_tag,
+                staged["manifest_uri"])
+    return {**staged, "written": dict(written)}
+
+
+def new_rundir() -> tuple[str, Path]:
+    """A fresh run tag and the directory the run is authored into."""
+    run_tag = new_ulid()
+    return run_tag, _run_directory(run_tag)
+
+
+async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
+                    results: list[str], outputs: list[str],
+                    mesh_inputs: list[dict[str, str]], prefix: str,
+                    sheet: Mapping[str, Any], server_facts: Mapping[str, Any],
+                    result_basename: str, user_fortran: str | None = None,
+                    coupling: str | None = None,
+                    continue_from: str | None = None) -> dict[str, Any]:
+    """An authored run directory -> the staged run the box receives.
+
+    Everything the authoring wrote is uploaded beside the mesh the solve runs on,
+    and the manifest that names the case is written LAST - so a manifest exists
+    only for a run whose every file is already where the launcher will look.
+    """
+    # Every file the authoring wrote, under its path INSIDE the run directory:
+    # the oil module's user fortran is a directory the engine compiles, so the
+    # walk is recursive and the manifest dest carries the same relative path.
     authored = sorted(str(p.relative_to(rundir))
                       for p in rundir.rglob("*") if p.is_file())
     inputs = [*mesh_inputs,
               *await asyncio.to_thread(_upload_authored, rundir, run_tag,
-                                       authored, recipe.prefix)]
+                                       authored, prefix)]
     case = case_section(
-        module=recipe.module, steering=recipe.steering, results=results,
-        # The engine compiles the DIRECTORY the steering file names, so the
-        # manifest channel carries the same directory the author wrote into.
-        user_fortran=written.get("user_fortran"),
-        coupling=coupling, continue_from=continue_from,
-        server_facts=server_facts)
+        module=module, steering=steering, results=results,
+        user_fortran=user_fortran, coupling=coupling,
+        continue_from=continue_from, server_facts=server_facts)
     manifest_uri = await asyncio.to_thread(
         _write_manifest, case, run_tag, outputs=outputs, inputs=inputs,
-        prefix=recipe.prefix)
-    logger.info("telemac %s staged run_tag=%s steering=%s results=%s authored=%s "
-                "-> %s", family, run_tag, recipe.steering, results, authored,
-                manifest_uri)
+        prefix=prefix)
     return {"run_tag": run_tag, "rundir": str(rundir), "sheet": dict(sheet),
             "case": case, "manifest_uri": manifest_uri, "authored": authored,
-            "written": dict(written), "outputs": outputs, "inputs": inputs,
-            "result_basename": recipe.result}
+            "outputs": outputs, "inputs": inputs,
+            "result_basename": result_basename}
 
 
 def _mesh_field(mesh: Mapping[str, Any], name: str, *,
