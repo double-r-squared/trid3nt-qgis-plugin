@@ -3617,3 +3617,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (b) HELP TEXT - the de-LaTeX widens to the measured token set (line
   breaks, CommentBlock wrappers, \tel*, escaped underscores, the math
   tail rendered as words); the catalog re-extracts and re-commits.
+  STAGE 1 RULINGS (NATE 2026-09-04): (a) LEDGER KEY under fill/run - a
+  record is keyed by the SLOT it fills + a hash of the producer's
+  RESOLVED INPUTS; rerun walks producers in dependency order and
+  inherits every record whose inputs are unchanged; the first changed
+  producer is the cut; the plan-node index dies with the node list.
+  (b) THE REVIEW lives on the DOOR as how fill's result is shown: the
+  sheet is state only; the fill/run door renders the returned sheet as
+  the card and holds until run; no gate concept survives in the
+  interpreter - the card is a view, not a step.
