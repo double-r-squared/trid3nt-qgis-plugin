@@ -10,8 +10,8 @@ Plane: **workflow**. System: **runtime -> assembler**. One seam of the system of
 flowchart LR
     canvasGate["CanvasGate<br/>trid3nt_server/gates/draw_input.py"]
     catalogExtractor["Catalog<br/>trid3nt_server/workflows/mesh/meshers/drivers/telemac_dico_driver.py"]
-    composite["Composite<br/>trid3nt_server/workflows/telemac/modules/module.py"]
-    output["Output<br/>trid3nt_server/workflows/telemac/modules/module.py"]
+    composite["Composite<br/>trid3nt_server/workflows/telemac/modules/telemac2d.py"]
+    output["Output<br/>trid3nt_server/workflows/telemac/modules/telemac2d.py"]
     serializer["Serializer<br/>trid3nt_server/workflows/telemac/authoring/serializer.py"]
     sheet["Sheet<br/>trid3nt_server/workflows/telemac/modules/sheet.py"]
     slot["Slot<br/>trid3nt_server/workflows/telemac/modules/module.py"]
@@ -127,7 +127,7 @@ What the wrapper offers a body and a fill: the module it wraps, its whole keywor
 | requirement | satisfied by | verified by |
 | --- | --- | --- |
 | **CatalogMatchesImage** | `catalogExtractor` | `tests/test_telemac_catalog_drift.py::test_the_committed_catalog_is_what_the_image_says_today`<br/>`tests/test_telemac_catalog_drift.py::test_every_exposed_module_has_a_committed_catalog` |
-| **CompositesLiveInWrappers** | `composite`, `wrapper` | `tests/test_telemac_module_surface.py::test_a_composite_becomes_several_slots_and_the_file_they_name`<br/>`tests/test_telemac_module_surface.py::test_a_composite_lives_on_the_wrapper_and_may_not_shadow_a_keyword`<br/>`tests/test_telemac_module_surface.py::test_a_composite_the_wrapper_never_registered_refuses_by_name` |
+| **CompositesLiveInWrappers** | `composite`, `wrapper` | `tests/test_telemac_module_surface.py::test_a_composite_becomes_several_slots_and_the_file_they_name`<br/>`tests/test_telemac_module_surface.py::test_a_composite_lives_on_the_wrapper_and_may_not_shadow_a_keyword`<br/>`tests/test_telemac_module_surface.py::test_a_composite_the_wrapper_never_registered_refuses_by_name`<br/>`tests/test_telemac_module_surface.py::test_a_release_becomes_the_source_keywords_and_the_series_they_name`<br/>`tests/test_telemac_module_surface.py::test_a_coupling_states_only_what_the_carrier_names_it_by`<br/>`tests/test_telemac_module_surface.py::test_a_coupled_body_is_checked_against_its_own_module_s_dictionary` |
 | **EngineDefaultSurfaced** | `slot`, `sheet` | `tests/test_telemac_module_surface.py::test_the_engine_default_is_on_the_slot_or_the_slot_is_a_question`<br/>`tests/test_telemac_module_surface.py::test_an_engine_default_is_never_written_into_the_deck`<br/>`tests/test_telemac_module_surface.py::test_the_bare_sheet_asks_the_three_questions_the_engine_has_no_answer_for` |
 | **EverySlotDescribed** | `catalogExtractor`, `slot` | `tests/test_telemac_module_surface.py::test_every_slot_carries_the_dictionary_s_own_name_and_help`<br/>`tests/test_telemac_catalog_drift.py::test_the_help_carries_no_markup_into_the_surface` |
 | **EverythingOverridable** | `wrapper`, `sheet`, `canvasGate` | `tests/test_telemac_module_surface.py::test_resolution_order_is_engine_then_shared_body_then_template_then_fill`<br/>`tests/test_telemac_module_surface.py::test_an_inherited_slot_says_which_body_asserted_it`<br/>`tests/test_telemac_module_surface.py::test_a_fill_is_repeatable_and_the_later_one_stands`<br/>`tests/test_telemac_module_surface.py::test_a_drawn_point_is_a_fill`<br/>`tests/test_telemac_module_surface.py::test_a_canvas_that_answers_nothing_refuses_and_invents_nothing` |

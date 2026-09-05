@@ -284,14 +284,17 @@ package SteeringSurface {
 
     part composite : Composite {
         doc /*
-        code: trid3nt_server/workflows/telemac/modules/module.py
+        The composites are the WRAPPER's, so they live in the wrapper files -
+        one value standing for the keyword group the module reads it as. The
+        coupled modules carry their own beside them (waqtel.py, gaia.py).
+        code: trid3nt_server/workflows/telemac/modules/telemac2d.py
         */
         port surfaceOut : SurfaceOut;
     }
 
     part output : Output {
         doc /*
-        code: trid3nt_server/workflows/telemac/modules/module.py
+        code: trid3nt_server/workflows/telemac/modules/telemac2d.py
         */
         port surfaceOut : SurfaceOut;
     }
@@ -548,6 +551,12 @@ package SteeringSurface {
         "tests/test_telemac_module_surface.py::test_a_composite_lives_on_the_wrapper_and_may_not_shadow_a_keyword";
     verify requirement CompositesLiveInWrappers by
         "tests/test_telemac_module_surface.py::test_a_composite_the_wrapper_never_registered_refuses_by_name";
+    verify requirement CompositesLiveInWrappers by
+        "tests/test_telemac_module_surface.py::test_a_release_becomes_the_source_keywords_and_the_series_they_name";
+    verify requirement CompositesLiveInWrappers by
+        "tests/test_telemac_module_surface.py::test_a_coupling_states_only_what_the_carrier_names_it_by";
+    verify requirement CompositesLiveInWrappers by
+        "tests/test_telemac_module_surface.py::test_a_coupled_body_is_checked_against_its_own_module_s_dictionary";
 
     satisfy requirement SharedBodyHasTwoExtenders by sheet;
     verify requirement SharedBodyHasTwoExtenders by

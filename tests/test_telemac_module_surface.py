@@ -66,9 +66,34 @@ def test_the_engine_default_is_on_the_slot_or_the_slot_is_a_question():
 
 
 def test_a_wrapper_asserts_nothing_and_has_no_hook_to():
-    assert dict(T2D.ASSERTED) == {}
-    assert not hasattr(T2D, "defaults")
+    """Every EXPOSED wrapper, not one built for the test: a wrapper that gains
+    composites and outputs is still the analog of the engine's own defaults, and
+    the moment one of them carries a value of its own the law is gone."""
+    from trid3nt_server.workflows.telemac.modules import WRAPPERS
+
+    for wrapper in WRAPPERS.values():
+        assert dict(wrapper.ASSERTED) == {}, wrapper.MODULE
+        assert not hasattr(wrapper, "defaults")
     assert not hasattr(Module, "defaults")
+
+
+def test_a_body_s_own_code_and_private_names_are_never_assertions():
+    """A wrapper carries its coupled-body constructors and its own helpers. A
+    keyword's value is DATA, and no dictionary spells a keyword with a leading
+    underscore, so both are the body's rather than the module's."""
+    class BODY(T2D):
+        _MINE = "not a keyword"
+        DURATION = 600.0
+
+        @staticmethod
+        def helper():
+            return None
+
+        @classmethod
+        def other(cls):
+            return None
+
+    assert dict(BODY.ASSERTED) == {"DURATION": 600.0}
 
 
 def test_a_wrapper_is_a_declaration_and_refuses_to_be_a_value():
@@ -236,8 +261,8 @@ def test_a_composite_lives_on_the_wrapper_and_may_not_shadow_a_keyword():
 
 
 def test_a_composite_the_wrapper_never_registered_refuses_by_name():
-    with pytest.raises(SlotRefused, match="no keyword 'releases'"):
-        fill(T2D, releases=[{"x": 1.0, "y": 2.0}])
+    with pytest.raises(SlotRefused, match="no keyword 'tides'"):
+        fill(T2D, tides=[{"x": 1.0, "y": 2.0}])
 
 
 # -- the canvas ask ----------------------------------------------------------- #
@@ -329,3 +354,193 @@ def test_every_shared_body_has_at_least_two_extenders():
         extenders = [p for p in shared.parent.rglob("*.py")
                      if p != body and f"shared.{name} import" in p.read_text()]
         assert len(extenders) >= 2, f"{name} has {len(extenders)} extenders"
+
+
+# -- the wrappers' own composites --------------------------------------------- #
+
+def _one_release(**over):
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Release
+
+    return Release(**{"at": (407561.831, 4483518.635), "q": 8.0,
+                      "tracers": [100.0], "window_s": 120.0,
+                      "until_s": 600.0, **over})
+
+
+def test_a_release_becomes_the_source_keywords_and_the_series_they_name():
+    slots, files = T2D.COMPOSITES["releases"].expand([_one_release()])
+    assert dict(slots) == {
+        "ABSCISSAE_OF_SOURCES": [407561.831],
+        "ORDINATES_OF_SOURCES": [4483518.635],
+        "WATER_DISCHARGE_OF_SOURCES": [8.0],
+        "VALUES_OF_THE_TRACERS_AT_THE_SOURCES": [100.0],
+        "SOURCES_FILE": "river_sources.txt"}
+    assert files["river_sources.txt"].splitlines() == [
+        "#", "T Q(1) TR(1,1)", "s m3/s mg/l",
+        "0.000 8 100", "120.000 8 100", "120.100 0 0", "700.000 0 0"]
+
+
+def test_the_source_allocation_is_the_engine_s_until_a_run_needs_more():
+    """The dictionary already allows for twenty sources. Restating that number
+    would put an opinion in the deck; exceeding it in silence would drop every
+    source past it."""
+    allowed = int(T2D.slot("MAXIMUM_NUMBER_OF_SOURCES").engine_default)
+    few, _ = T2D.COMPOSITES["releases"].expand([_one_release()] * allowed)
+    many, _ = T2D.COMPOSITES["releases"].expand([_one_release()] * (allowed + 1))
+    assert "MAXIMUM_NUMBER_OF_SOURCES" not in few
+    assert many["MAXIMUM_NUMBER_OF_SOURCES"] == allowed + 1
+
+
+def test_two_releases_are_one_longer_list_in_one_order():
+    slots, files = T2D.COMPOSITES["releases"].expand([
+        _one_release(at=(1.0, 2.0), q=3.0, tracers=[10.0]),
+        _one_release(at=(4.0, 5.0), q=6.0, tracers=[20.0], window_s=None)])
+    assert slots["ABSCISSAE_OF_SOURCES"] == [1.0, 4.0]
+    assert slots["ORDINATES_OF_SOURCES"] == [2.0, 5.0]
+    assert slots["WATER_DISCHARGE_OF_SOURCES"] == [3.0, 6.0]
+    assert slots["VALUES_OF_THE_TRACERS_AT_THE_SOURCES"] == [10.0, 20.0]
+    rows = files["river_sources.txt"].splitlines()
+    assert rows[1] == "T Q(1) Q(2) TR(1,1) TR(2,1)"
+    # The second release never closes, so its columns hold past the first's step.
+    assert rows[-1].split()[1:] == ["0", "6", "0", "20"]
+
+
+def test_a_permitted_discharge_holds_flat_for_the_whole_run():
+    """A permitted discharge does not pulse: two rows, the second past the last
+    simulated instant, so the time interpolation never reads off the end."""
+    _, files = T2D.COMPOSITES["releases"].expand(
+        [_one_release(window_s=None, tracers=[0.0, 2.0, 250.0, 0.0])])
+    rows = files["river_sources.txt"].splitlines()
+    assert rows[1] == "T Q(1) TR(1,1) TR(1,2) TR(1,3) TR(1,4)"
+    assert rows[3:] == ["0.000 8 0 2 250 0", "700.000 8 0 2 250 0"]
+
+
+def test_a_wind_from_the_north_drives_the_water_south():
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Wind
+
+    slots, _ = T2D.COMPOSITES["wind"].expand(Wind(speed_mps=4.0, from_deg=0.0))
+    assert slots["WIND"] is True and slots["OPTION_FOR_WIND"] == 1
+    assert round(slots["WIND_VELOCITY_ALONG_X"], 9) == 0.0
+    assert round(slots["WIND_VELOCITY_ALONG_Y"], 9) == -4.0
+    assert "COEFFICIENT_OF_WIND_INFLUENCE" not in slots
+    east, _ = T2D.COMPOSITES["wind"].expand(Wind(speed_mps=4.0, from_deg=270.0))
+    assert round(east["WIND_VELOCITY_ALONG_X"], 9) == 4.0
+
+
+def test_a_continuation_reads_the_previous_file_at_the_precision_it_was_written():
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Continuation
+
+    slots, _ = T2D.COMPOSITES["continue_from"].expand(
+        Continuation(previous="previous.slf"))
+    assert slots == {"PREVIOUS_COMPUTATION_FILE": "previous.slf",
+                     "PREVIOUS_COMPUTATION_FILE_FORMAT": "SERAFIND"}
+
+
+def test_rain_carries_one_value_per_tracer():
+    """DAMOCLES requires a rainwater concentration per tracer, and rainwater
+    carries none of them - which is the array a hand-written deck gets wrong the
+    moment a coupling adds a tracer behind the dye."""
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Rain
+
+    slots, _ = T2D.COMPOSITES["rain"].expand(Rain(mm_per_day=3.5, tracers=4))
+    assert slots["VALUES_OF_TRACERS_IN_THE_RAIN"] == [0.0, 0.0, 0.0, 0.0]
+    assert "DURATION_OF_RAIN_OR_EVAPORATION_IN_HOURS" not in slots
+    windowed, _ = T2D.COMPOSITES["rain"].expand(
+        Rain(mm_per_day=156.72, tracers=0, hours=24.0))
+    assert windowed["DURATION_OF_RAIN_OR_EVAPORATION_IN_HOURS"] == 24.0
+    # A run with no tracers states no rainwater concentrations at all: an empty
+    # list is a keyword with nothing after it, not the absence of one.
+    assert "VALUES_OF_TRACERS_IN_THE_RAIN" not in windowed
+
+
+def test_a_value_of_none_states_nothing_and_the_engine_default_stands():
+    class QUIET(T2D):
+        wind = None
+        FRICTION_COEFFICIENT = None
+        DURATION = 600.0
+
+    state = fill(QUIET).state()
+    assert list(state["filled"]) == ["DURATION"]
+    assert fill(QUIET, DURATION=None).state()["filled"] == {}
+
+
+# -- the coupled modules ------------------------------------------------------ #
+
+def test_a_coupling_states_only_what_the_carrier_names_it_by():
+    from trid3nt_server.workflows.telemac.modules import WAQTEL
+
+    slots, files = T2D.COMPOSITES["coupling"].expand(
+        [WAQTEL.decay(law=1, coefficient=2.0)])
+    assert slots == {"COUPLING_WITH": "WAQTEL",
+                     "WAQTEL_STEERING_FILE": "t2d_river.waqtel",
+                     "WATER_QUALITY_PROCESS": 17}
+    # The body's own slots are WAQTEL's, not the carrier's: they go to WAQTEL's
+    # own deck, checked against WAQTEL's own dictionary.
+    assert files["t2d_river.waqtel"]["module"] == "waqtel"
+    assert dict(files["t2d_river.waqtel"]["slots"]) == {
+        "LAW_OF_TRACERS_DEGRADATION": [1],
+        "COEFFICIENT_1_FOR_LAW_OF_TRACERS_DEGRADATION": [2.0]}
+
+
+def test_a_coupled_body_is_checked_against_its_own_module_s_dictionary():
+    from trid3nt_server.workflows.telemac.modules import WAQTEL
+
+    body = WAQTEL.o2(water_temp_c=20.0, k1_per_day=0.3, k2_per_day=0.9,
+                     k2_formula=0, saturation_mgl=9.0)
+    sheet = fill(WAQTEL, **dict(body["slots"]))
+    assert dict(sheet.resolved())["O2 SATURATION DENSITY OF WATER (CS)"] == 9.0
+    with pytest.raises(SlotRefused, match="is REAL"):
+        fill(WAQTEL, WATER_TEMPERATURE="warm")
+
+
+def test_the_gaia_classes_lists_are_four_of_one_length():
+    """The four parallel CLASSES lists are written from ONE gradation, so they
+    cannot disagree about how many classes there are."""
+    from trid3nt_server.workflows.telemac.modules import GAIA
+
+    body = GAIA.graded(geometry="river.slf", boundary="river.cli",
+                       classes=[(63.0, 0.4), (200.0, 0.35), (600.0, 0.25)],
+                       density=2650.0, thickness_m=5.0, formula=1,
+                       morphological_factor=10.0)
+    slots = dict(body["slots"])
+    assert {len(slots[k]) for k in (
+        "CLASSES_TYPE_OF_SEDIMENT", "CLASSES_SEDIMENT_DIAMETERS",
+        "CLASSES_SEDIMENT_DENSITY", "CLASSES_INITIAL_FRACTION")} == {3}
+    assert slots["CLASSES_SEDIMENT_DIAMETERS"] == pytest.approx(
+        [63.0e-6, 200.0e-6, 600.0e-6])
+    assert slots["HIDING_FACTOR_FORMULA"] == 1
+
+
+def test_dredging_names_every_nestor_file_or_none_of_them():
+    """NESTOR reads all three on every action, so a run naming two of them is a
+    run it cannot read."""
+    from trid3nt_server.workflows.telemac.modules import GAIA
+    from trid3nt_server.workflows.telemac.modules.gaia import Dredging
+
+    body = GAIA.erodible(geometry="river.slf", boundary="river.cli",
+                         d50_um=200.0, density=2650.0, thickness_m=5.0,
+                         formula=1, morphological_factor=10.0,
+                         dredging=Dredging(action="A", polygon="P",
+                                           surface_ref="R"))
+    sheet = fill(GAIA, **dict(body["slots"]))
+    written = dict(sheet.resolved())
+    assert written["NESTOR"] is True
+    assert sorted(sheet.files) == ["nestor.act", "nestor.pol", "nestor.ref"]
+    plain = fill(GAIA, **dict(GAIA.erodible(
+        geometry="river.slf", boundary="river.cli", d50_um=200.0,
+        density=2650.0, thickness_m=5.0, formula=1,
+        morphological_factor=10.0)["slots"]))
+    assert "NESTOR" not in dict(plain.resolved())
+    assert not plain.files
+
+
+def test_every_wrapper_binds_its_own_outputs_and_claims_no_other_s():
+    """WAQTEL writes no result file of its own - the oxygen field is a carrier
+    tracer - so it binds nothing, which is the honest reading of a module that
+    publishes nothing."""
+    from trid3nt_server.workflows.telemac.modules import GAIA, WAQTEL
+
+    assert sorted(T2D.OUTPUTS) == ["dissolved_oxygen", "dye", "flood_depth"]
+    assert sorted(GAIA.OUTPUTS) == ["deposition", "mass_balance", "surface_d50"]
+    assert not WAQTEL.OUTPUTS
+    for wrapper in (T2D, GAIA, WAQTEL):
+        assert all(callable(output.read) for output in wrapper.OUTPUTS.values())

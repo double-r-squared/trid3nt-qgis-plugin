@@ -24,7 +24,7 @@ import json
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from types import MappingProxyType
+from types import FunctionType, MappingProxyType
 from typing import Any, Callable, Mapping
 
 from trid3nt_server.workflows.runtime import DeclarativeError, Ref
@@ -237,7 +237,7 @@ def _asserted(cls: type, namespace: Mapping[str, Any],
     composites = getattr(cls, "COMPOSITES", {})
     asserted: dict[str, Any] = {}
     for key, value in namespace.items():
-        if key.startswith("__") or key in _RESERVED or isinstance(value, classmethod):
+        if key.startswith("_") or key in _RESERVED or _is_method(value):
             continue
         if key in composites:
             asserted[key] = value
@@ -247,8 +247,19 @@ def _asserted(cls: type, namespace: Mapping[str, Any],
             raise SlotRefused(
                 f"{cls.__name__} asserts {key!r}, which {cls.MODULE} has no "
                 f"keyword for.{_nearest(key, catalog, composites)}")
-        asserted[key] = slot.check(value)
+        # None is not a value any keyword takes, so the one thing it can mean is
+        # that this body states nothing here and the dictionary's default stands.
+        asserted[key] = None if value is None else slot.check(value)
     return asserted
+
+
+def _is_method(value: Any) -> bool:
+    """Is this namespace entry the body's own code rather than a slot's value?
+
+    A keyword's value is data. A body that carries a coupled-body constructor or
+    a shared helper is carrying code, and no dictionary spells a keyword as one.
+    """
+    return isinstance(value, (classmethod, staticmethod, FunctionType))
 
 
 def _nearest(key: str, catalog: Mapping[str, Slot],

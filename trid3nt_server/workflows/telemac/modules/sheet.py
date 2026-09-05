@@ -107,7 +107,9 @@ def fill(source: type | Sheet, *, produced: Mapping[str, Any] | None = None,
 
     Repeatable: an edit is another fill. A keyword the module does not have, and
     a value the dictionary does not take, refuse BY NAME rather than reaching the
-    engine as a line nobody can account for.
+    engine as a line nobody can account for. A value of None states nothing at
+    all, so the dictionary's default stands and the deck stays silent about a
+    choice nobody made.
     """
     body, standing, pending = _standing(source)
     catalog = body.CATALOG
@@ -121,6 +123,13 @@ def fill(source: type | Sheet, *, produced: Mapping[str, Any] | None = None,
     files: dict[str, Any] = dict(source.files) if isinstance(source, Sheet) else {}
     for name, (value, provenance) in _in_ref_order(pending):
         value = _bind(value, produced or {}, filled)
+        if value is None:
+            # NOTHING is what None states. No keyword's value is None, so the
+            # one thing it can mean is "this run does not state this" - a wind
+            # nobody asked for, a coupling this class does not run - and the
+            # dictionary's default is what the engine then reads.
+            filled.pop(name, None)
+            continue
         if name in composites:
             expanded, named = composites[name].expand(value)
             for key, item in expanded.items():
@@ -180,7 +189,7 @@ def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],
                       else f"shared body {ancestor.__name__}")
         for name, value in ancestor.ASSERTED.items():
             slot = source.CATALOG.get(name)
-            if slot is None or any(declared_reads(value, Ref)):
+            if slot is None or value is None or any(declared_reads(value, Ref)):
                 pending[name] = (value, provenance)
                 standing.pop(name, None)
             else:
