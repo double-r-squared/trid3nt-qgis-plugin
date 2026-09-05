@@ -24,7 +24,7 @@
 </style>
 
 <h1>The Module Surface</h1>
-<p class="rev">rev 1 &middot; 2026-09-04 &middot; the module-surface wave's spec, per the rulings of docs/IDEAS.md "MODULE SURFACE RULED" - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the mesh recipe (docs/specs/mesh-recipe.html), the emission fold, the worker's engine-room contract, the data seam.</p>
+<p class="rev">rev 1a &middot; 2026-09-04 &middot; amended in place after Stage 0 (the apostrophe caveat, the de-LaTeX set) &middot; the module-surface wave's spec, per the rulings of docs/IDEAS.md "MODULE SURFACE RULED" - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the mesh recipe (docs/specs/mesh-recipe.html), the emission fold, the worker's engine-room contract, the data seam.</p>
 
 <h2>1. The principle</h2>
 <p>A workflow is a wrapper around a TELEMAC module, exposing the module's FULL keyword surface. The engine already publishes that surface: every module's dico names each keyword, its type, its allowed values, its default and its help text. We stop transcribing it by hand into f-strings and comments. The wrapper is the engine's catalog and NOTHING ELSE that opines; variance lives in templates, which stay Python because they are read by people. Every knob is reachable at invocation. Simple system, complex work.</p>
@@ -155,7 +155,7 @@ flowchart LR
 <p>A bare module run is the same sheet with nothing pre-filled: engine defaults plus the mandatory slots. "Filled by a template and edited, or filled by hand" is one mechanism.</p>
 
 <h2>6. The serializer</h2>
-<p>One function for every module: resolve the sheet, assign each keyword into telapy's <code>TelemacCas</code> (in-image, the existing driver pattern), write, re-parse. The re-parse is where the dico's choices are enforced; <code>cas_validate</code>'s round trip stays as that gate. Two measured caveats are handled inside the serializer, nowhere else: file keywords are assigned through <code>cas.values[...]</code> (telapy's <code>set()</code> demands the file exist), and apostrophes in string values are escaped as <code>''</code> (telapy's <code>write()</code> would corrupt them silently). The engine reads the written file; there is no second serialization path.</p>
+<p>One function for every module: resolve the sheet, assign each keyword into telapy's <code>TelemacCas</code> (in-image, the existing driver pattern), write, re-parse. The re-parse is where the dico's choices are enforced; <code>cas_validate</code>'s round trip stays as that gate. Two measured caveats are handled inside the serializer, nowhere else: file keywords are assigned through <code>cas.values[...]</code> (telapy's <code>set()</code> demands the file exist), and string values are handed to telapy as a <code>str</code> subclass whose <code>__repr__</code> is the engine's own form - a single-quote delimiter with <code>''</code> inside - because telapy's <code>write()</code> formats with <code>repr()</code> and Python's repr switches to a double-quote delimiter the engine cannot read (Stage 0 measured all four spellings against the box; only <code>'Nate''s reach'</code> runs). telapy still writes the file; only the delimiter is ours. The engine reads the written file; there is no second serialization path.</p>
 <pre><span class="k">def</span> serialize(module, sheet, rundir):
     cas = TelemacCas(path, get_dico(module.name), access=<span class="s">"w"</span>)
     <span class="k">for</span> keyword, value <span class="k">in</span> sheet.resolved():        <span class="c"># engine defaults are NOT written; the dico supplies them</span>
@@ -198,7 +198,7 @@ flowchart LR
 <h2>10. Stage 0 - the proof matrix (before anything is built)</h2>
 <table>
 <tr><th>check</th><th>pass =</th></tr>
-<tr><td>catalog extraction in-image for six modules, trimmed (help de-LaTeXed, quotes unswapped, ENTIER/REEL normalized, APPARENCE marks unbounded lists, SUBMIT marks files)</td><td>six JSONs; the drift audit compares equal</td></tr>
+<tr><td>catalog extraction in-image for six modules, trimmed (help de-LaTeXed to plain text - itemize/item/telkey/telfile, line breaks, CommentBlock wrappers, \tel*, escaped underscores and the small math tail all rendered as words; quotes unswapped; ENTIER/REEL normalized; APPARENCE marks unbounded lists; SUBMIT marks files)</td><td>six JSONs; the drift audit compares equal</td></tr>
 <tr><td><code>TelemacCas</code> writes the CURRENT river_dye deck from a dict (both caveats handled)</td><td>the engine runs it to status=ok</td></tr>
 <tr><td>the bare telemac2d sheet renders</td><td>mandatory slots named with meaning; every other slot shows its engine default</td></tr>
 </table>

@@ -3609,3 +3609,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   natural moment; do not let it drop); interpreter = inventory first,
   rerun-needed pieces move under the sheet, plan-step machinery
   deletes, ambiguity DESIGN-STOPs. The wave is GO.
+  STAGE 0 RULINGS (NATE 2026-09-04): (a) APOSTROPHES - the serializer
+  hands telapy a str subclass whose __repr__ is the engine's own form
+  ('...' with '' inside); telapy's write() stays the writer, only the
+  delimiter is ours (measured: double-quoted strings crash DAMOCLES;
+  the current f-string author already writes Coeur d'Alene unescaped).
+  (b) HELP TEXT - the de-LaTeX widens to the measured token set (line
+  breaks, CommentBlock wrappers, \tel*, escaped underscores, the math
+  tail rendered as words); the catalog re-extracts and re-commits.
