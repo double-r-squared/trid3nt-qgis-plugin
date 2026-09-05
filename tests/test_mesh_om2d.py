@@ -533,7 +533,8 @@ def test_the_drivers_live_in_the_product_tree_beside_their_callers():
 
     names = {p.name for p in drivers_dir().glob("*_driver.py")}
     assert names == {"om2d_driver.py", "selafin_cli_driver.py",
-                     "telemac_cas_driver.py", "telemac_result_driver.py"}
+                     "telemac_cas_driver.py", "telemac_dico_driver.py",
+                     "telemac_result_driver.py"}
     assert "sandbox" not in str(drivers_dir())
 
 
