@@ -38,15 +38,44 @@ _UNBOUNDED = frozenset(("LIST", "DYNLIST", "DYNLIST2"))
 #: The SUBMIT field's read/write segment -> what the file is to the run.
 _ROLES = {"LIT": "input", "ECR": "output", "ECRLIT": "input/output"}
 
+#: The engine's own name macros, which carry the sentence's subject.
+_NAMES = {"tel": "TELEMAC", "tomawac": "TOMAWAC", "waqtel": "WAQTEL",
+          "gaia": "GAIA", "khione": "KHIONE", "nestor": "NESTOR",
+          "artemis": "ARTEMIS", "stbtel": "STBTEL"}
+
+#: The math tail the help text reaches for, each rendered as its own word.
+_MATH = ("alpha", "delta", "epsilon", "gamma", "Gamma", "mu", "nu", "omega",
+         "Omega", "rho", "sin", "sqrt", "tau", "theta")
+
 _LATEX = (
-    (re.compile(r"\\(?:begin|end)\{itemize\}"), " "),
+    # a hard line break and a forced space are whitespace
+    (re.compile(r"\\\\|\\ "), " "),
+    # environment wrappers; the text they wrap IS the help
+    (re.compile(r"\\(?:begin|end)\{[A-Za-z]+\}(?:\{[^{}]*\})?"), " "),
     (re.compile(r"\\item\b"), " "),
+    # the cross-reference macros are their argument
     (re.compile(r"\\tel(?:key|file)\{([^{}]*)\}"), r"\1"),
+    (re.compile(r"\\telemac\{([^{}]*)\}"),
+     lambda m: "TELEMAC-" + m.group(1).upper()),
+    (re.compile(r"\\(" + "|".join(_NAMES) + r")(?![A-Za-z])"),
+     lambda m: _NAMES[m.group(1)]),
+    # accents and font switches are their argument
+    (re.compile(r"\\(?:tilde|vec|ddot|rm|mathrm)\{([^{}]*)\}"), r"\1"),
+    # the math tail as words
+    (re.compile(r"\^\{\\circ\}"), "deg"),
+    (re.compile(r"\\ldots"), "..."),
+    (re.compile(r"\\times"), "x"),
+    (re.compile(r"\\(" + "|".join(_MATH) + r")(?![A-Za-z])"), r"\1"),
+    # escaped punctuation is the punctuation
+    (re.compile(r"\\([_%&])"), r"\1"),
+    # sub/superscripts and the inline-math delimiters go, their content stays
+    (re.compile(r"([\^_])\{([^{}]*)\}"), r"\1\2"),
+    (re.compile(r"[${}]"), ""),
 )
 
 
 def de_latex(help_text: str) -> str:
-    """The dictionary's help as prose.
+    """The dictionary's help as prose - plain words, no markup left.
 
     The dictionary reader replaces every apostrophe inside a string with a
     double quote (a DAMOCLES string is single-quoted, so an apostrophe arrives

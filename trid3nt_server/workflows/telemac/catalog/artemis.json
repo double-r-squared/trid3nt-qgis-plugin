@@ -286,7 +286,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Used with option MONODIRECTIONAL RANDOM WAVE = YES or MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the $\\gamma$ value tor the JONSWAP wave energy spectrum: GAMMA = 1: Pierson-Moskowitz, GAMMA = 3.3: mean JONSWAP spectrum (default value).",
+      "help": "Used with option MONODIRECTIONAL RANDOM WAVE = YES or MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the gamma value tor the JONSWAP wave energy spectrum: GAMMA = 1: Pierson-Moskowitz, GAMMA = 3.3: mean JONSWAP spectrum (default value).",
       "rubrique": [
         "BOUNDARY CONDITIONS",
         "RANDOM WAVE",
@@ -398,7 +398,7 @@
       "type": "REAL",
       "size": 1,
       "unbounded": false,
-      "help": "Sets the value of the acceleration due to gravity in m/s$^2$.",
+      "help": "Sets the value of the acceleration due to gravity in m/s^2.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "",
@@ -453,7 +453,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Fixes the direction towards the incident waves at boundaries go to. It is counted in degrees and positively in the trigonometric sense relatively to the $x$ axis. This value is prescribed as a constant value along all the wave incident type boundaries. If one wants to specify a non uniform value, the user has to specify the value TETAB in the subroutine BORH.",
+      "help": "Fixes the direction towards the incident waves at boundaries go to. It is counted in degrees and positively in the trigonometric sense relatively to the x axis. This value is prescribed as a constant value along all the wave incident type boundaries. If one wants to specify a non uniform value, the user has to specify the value TETAB in the subroutine BORH.",
       "rubrique": [
         "BOUNDARY CONDITIONS",
         "MONOCHROMATIC WAVE",
@@ -533,7 +533,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Used with the option MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the minimum value (in degrees) of the directions range. It is counted positively in the trigonometric sense relatively to the $x$ axis.",
+      "help": "Used with the option MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the minimum value (in degrees) of the directions range. It is counted positively in the trigonometric sense relatively to the x axis.",
       "rubrique": [
         "BOUNDARY CONDITIONS",
         "RANDOM WAVE",
@@ -549,7 +549,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Used with the option MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the maximum value (in degrees) of the directions range. It is counted positively in the trigonometric sense relatively to the $x$ axis.",
+      "help": "Used with the option MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the maximum value (in degrees) of the directions range. It is counted positively in the trigonometric sense relatively to the x axis.",
       "rubrique": [
         "BOUNDARY CONDITIONS",
         "RANDOM WAVE",
@@ -565,7 +565,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Used with the option MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the maximum value of exponent $S$ in the Goda formula used to express the directional wave energy spreading. See GODA Y., Random Seas and Design of Maritime Structures - Univ. of Tokyo Press, 1987.",
+      "help": "Used with the option MULTIDIRECTIONAL RANDOM WAVE = YES. Fixes the maximum value of exponent S in the Goda formula used to express the directional wave energy spreading. See GODA Y., Random Seas and Design of Maritime Structures - Univ. of Tokyo Press, 1987.",
       "rubrique": [
         "BOUNDARY CONDITIONS",
         "RANDOM WAVE",
@@ -613,7 +613,7 @@
       "type": "STRING",
       "size": 1,
       "unbounded": true,
-      "help": "Names of the variables that the user wants to write in the RESULTS FILE. Separators between variable names can be choosen free. The allowable values are: HS=wave height, PHAS=wave phase, U0=velocity u (free surface at $t$ = 0), V0=velocity v (free surface at $t$ = 0), ZS=free surface elevation (at $t$ = 0), ZF=bottom elevation, HW=still water height, C=phase velocity, CG=group velocity, K=wave number, PHIR=real potential, PHII=imaginal potential, D=prive(1,1), E=prive(1,2), F=prive(1,3), G=prive(1,4), T01=first mean spectral period, T02=second mean spectral period, TM=third mean spectral period, FX=force along X, FY=force along Y, INC=wave incidence radian, QB=breaking rate, SXX=SXX stress, SXY=SXY stress, SYY=SYY stress. The user has 4 free variables at his/her disposal to create other variables by him/herself. These variables have to be computed in the CALRES subroutine, and the name that we want to attribute has to be precibed in the NOMVAR subroutine. The 4 free variable fields are: D, E, F, G which corresponds to the private arrays PRIVE(1,1), PRIVE(1,2), PRIVE(1,3) and PRIVE (1,4). Contrary to the previous variables, these are conserved all through the computation, and can be used again. Do not forget to specify the number of private arrays you want to use in the principal programme (variable NPRIV).",
+      "help": "Names of the variables that the user wants to write in the RESULTS FILE. Separators between variable names can be choosen free. The allowable values are: HS=wave height, PHAS=wave phase, U0=velocity u (free surface at t = 0), V0=velocity v (free surface at t = 0), ZS=free surface elevation (at t = 0), ZF=bottom elevation, HW=still water height, C=phase velocity, CG=group velocity, K=wave number, PHIR=real potential, PHII=imaginal potential, D=prive(1,1), E=prive(1,2), F=prive(1,3), G=prive(1,4), T01=first mean spectral period, T02=second mean spectral period, TM=third mean spectral period, FX=force along X, FY=force along Y, INC=wave incidence radian, QB=breaking rate, SXX=SXX stress, SXY=SXY stress, SYY=SYY stress. The user has 4 free variables at his/her disposal to create other variables by him/herself. These variables have to be computed in the CALRES subroutine, and the name that we want to attribute has to be precibed in the NOMVAR subroutine. The 4 free variable fields are: D, E, F, G which corresponds to the private arrays PRIVE(1,1), PRIVE(1,2), PRIVE(1,3) and PRIVE (1,4). Contrary to the previous variables, these are conserved all through the computation, and can be used again. Do not forget to specify the number of private arrays you want to use in the principal programme (variable NPRIV).",
       "rubrique": [
         "COMPUTATION ENVIRONMENT",
         "OUTPUT",
@@ -737,7 +737,7 @@
       "type": "STRING",
       "size": 1,
       "unbounded": false,
-      "help": "Name of the boundary conditions file. It is automatically built by \\stbtel or by the mesh generator MATISSE.",
+      "help": "Name of the boundary conditions file. It is automatically built by STBTEL or by the mesh generator MATISSE.",
       "rubrique": [
         "COMPUTATION ENVIRONMENT",
         "INPUT",
@@ -930,7 +930,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Fixes the accuracy requested for sub-iterations necessary to determine value of $\\theta_p$ (criterion on cos($\\theta_p$)).",
+      "help": "Fixes the accuracy requested for sub-iterations necessary to determine value of theta_p (criterion on cos(theta_p)).",
       "rubrique": [
         "BOUNDARY CONDITIONS",
         "AUTOMATIC TETAP ANGLE",
@@ -978,7 +978,7 @@
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
-      "help": "If = TRUE: automatic calculation of $\\theta_p$ (based on velocity direction).",
+      "help": "If = TRUE: automatic calculation of theta_p (based on velocity direction).",
       "rubrique": [
         "BOUNDARY CONDITIONS",
         "AUTOMATIC TETAP ANGLE",
@@ -1045,7 +1045,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Fixes the coefficient $K$ used in the formulation of the dissipation coefficient proposed by Dally et al. 1984.",
+      "help": "Fixes the coefficient K used in the formulation of the dissipation coefficient proposed by Dally et al. 1984.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1061,7 +1061,7 @@
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
-      "help": "Specifies the formulation chosen for calculating the dissipation coefficient through breaking. Only effective for monochromatic wave mode. 1: Formulation of Battjes \\& Janssen, 1978, 2: Formulation of Dally et al., 1984. In random wave mode, the formulation of B \\& J, 1978 is the only one to be used.",
+      "help": "Specifies the formulation chosen for calculating the dissipation coefficient through breaking. Only effective for monochromatic wave mode. 1: Formulation of Battjes & Janssen, 1978, 2: Formulation of Dally et al., 1984. In random wave mode, the formulation of B & J, 1978 is the only one to be used.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1113,7 +1113,7 @@
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
-      "help": "Fixes the maximum number of sub-iterations for the automatic computation of $\\theta_p$.",
+      "help": "Fixes the maximum number of sub-iterations for the automatic computation of theta_p.",
       "rubrique": [
         "BOUNDARY CONDITIONS",
         "AUTOMATIC TETAP ANGLE",
@@ -1129,7 +1129,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Fixes the relaxation coefficient used between two sub-iterations for the computation of automatic $\\theta_p$.",
+      "help": "Fixes the relaxation coefficient used between two sub-iterations for the computation of automatic theta_p.",
       "rubrique": [
         "BOUNDARY CONDITIONS",
         "AUTOMATIC TETAP ANGLE",
@@ -1145,7 +1145,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Fixes the coefficient $\\alpha$ used in the formulation of the dissipation coefficient through breaking proposed by Battjes \\& Janssen, 1978 for random waves.",
+      "help": "Fixes the coefficient alpha used in the formulation of the dissipation coefficient through breaking proposed by Battjes & Janssen, 1978 for random waves.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1161,7 +1161,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Fixes the coefficient $\\gamma_s$ used in the criterion of the critical breaking wave height. Do not confuse with coefficient $\\gamma$ used in the JONSWAP spectrum.",
+      "help": "Fixes the coefficient gamma_s used in the criterion of the critical breaking wave height. Do not confuse with coefficient gamma used in the JONSWAP spectrum.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1177,7 +1177,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Fixes the $\\Gamma$ coefficient used in the formulation of Dally et al., 1984, for the dissipation coefficient in surf-breaking. Do not confuse with the coefficient $\\gamma$ used in the JONSWAP formulae and coefficient gammas used to determine the breaking wave height criterion.",
+      "help": "Fixes the Gamma coefficient used in the formulation of Dally et al., 1984, for the dissipation coefficient in surf-breaking. Do not confuse with the coefficient gamma used in the JONSWAP formulae and coefficient gammas used to determine the breaking wave height criterion.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1209,7 +1209,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Kinematic viscosity of the fluid (water) in m$^2$/s. 1.793E-6: for a temperature of 0 C, 1.567E-6: for a temperature of 4 C, 1.237E-6: for a temperature of 12 C, 1.112E-6: for a temperature of 16 C, 1.011E-6: for a temperature of 20 C, 0.802E-6: for a temperature of 30 C, 0.661E-6: for a temperature of 40 C, 1.0E-6: default value.",
+      "help": "Kinematic viscosity of the fluid (water) in m^2/s. 1.793E-6: for a temperature of 0 C, 1.567E-6: for a temperature of 4 C, 1.237E-6: for a temperature of 12 C, 1.112E-6: for a temperature of 16 C, 1.011E-6: for a temperature of 20 C, 0.802E-6: for a temperature of 30 C, 0.661E-6: for a temperature of 40 C, 1.0E-6: default value.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1225,7 +1225,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "DIAM90 is the maximum grain diameter, in m, which defines 90 \\% of the total weight of sediment. 1.0E-3: for very coarse sand, 0.5E-3: for coarse sand, 0.25E-3: for medium sand, 0.125E-3: for fine sand, 0.062E-3: for very fine sand, 0.15E-3: default value.",
+      "help": "DIAM90 is the maximum grain diameter, in m, which defines 90 % of the total weight of sediment. 1.0E-3: for very coarse sand, 0.5E-3: for coarse sand, 0.25E-3: for medium sand, 0.125E-3: for fine sand, 0.062E-3: for very fine sand, 0.15E-3: default value.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1241,7 +1241,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "DIAM50 is the maximum grain diameter, in m, which defines 50 \\% of the total weight of sediment. Usually, we have DIAM90 = 1.5 $\\times$ DIAM50. DIAM50 is a more common value used. 0.66E-3: for very coarse sand, 0.33E-3: for coarse sand, 0.17E-3: for medium sand, 0.083E-3: for fine sand, 0.040E-3: for very fine sand, 0.10E-3: default value.",
+      "help": "DIAM50 is the maximum grain diameter, in m, which defines 50 % of the total weight of sediment. Usually, we have DIAM90 = 1.5 x DIAM50. DIAM50 is a more common value used. 0.66E-3: for very coarse sand, 0.33E-3: for coarse sand, 0.17E-3: for medium sand, 0.083E-3: for fine sand, 0.040E-3: for very fine sand, 0.10E-3: default value.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1257,7 +1257,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Sediment specific weight in kg/m$^3$.",
+      "help": "Sediment specific weight in kg/m^3.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1273,7 +1273,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Fluid specific weight (water) in kg/m$^3$.",
+      "help": "Fluid specific weight (water) in kg/m^3.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1337,7 +1337,7 @@
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
-      "help": "This option is primarily used for the validation documents. The REFERENCE FILE is then considered as a reference which the computation is going to be compared with. The comparison is made by the subroutine BIEF\\_VALIDA, which can be modified as to so as to include, for example, a comparison with an exact solution.",
+      "help": "This option is primarily used for the validation documents. The REFERENCE FILE is then considered as a reference which the computation is going to be compared with. The comparison is made by the subroutine BIEF_VALIDA, which can be modified as to so as to include, for example, a comparison with an exact solution.",
       "rubrique": [
         "COMPUTATION ENVIRONMENT",
         "INPUT",
@@ -1375,7 +1375,7 @@
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
-      "help": "Used with the option FRICTION = YES. Fixes the formulation used for bottom friction law: 1: Kostense et al., 1986, 2: Putnam \\& Johnson, 1949.",
+      "help": "Used with the option FRICTION = YES. Fixes the formulation used for bottom friction law: 1: Kostense et al., 1986, 2: Putnam & Johnson, 1949.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1395,7 +1395,7 @@
       "type": "LOGICAL",
       "size": 0,
       "unbounded": false,
-      "help": "Used with the option FRICTION = YES. If YES, enables the user to impose a friction factor, by a keyword for a constant value (see real of index 29) or by programming in the FWSPEC subroutine for non-uniform value. If NO, \\artemis automatically computes the friction factor assuming that the bottom is sandy and uses the characteristics of sediment and of motion.",
+      "help": "Used with the option FRICTION = YES. If YES, enables the user to impose a friction factor, by a keyword for a constant value (see real of index 29) or by programming in the FWSPEC subroutine for non-uniform value. If NO, ARTEMIS automatically computes the friction factor assuming that the bottom is sandy and uses the characteristics of sediment and of motion.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1427,7 +1427,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Do not confuse with the FRICTION FACTOR. Not used in \\artemis. It is let here for consistence with \\telemac{2d}.",
+      "help": "Do not confuse with the FRICTION FACTOR. Not used in ARTEMIS. It is let here for consistence with TELEMAC-2D.",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "DISSIPATION",
@@ -1621,7 +1621,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "Format of the GEOMETRY FILE. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "Format of the GEOMETRY FILE. Possible values are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "COMPUTATION ENVIRONMENT",
         "INPUT",
@@ -1642,7 +1642,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "Format of the RESULTS FILE. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "Format of the RESULTS FILE. Possible values are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "COMPUTATION ENVIRONMENT",
         "OUTPUT",
@@ -1663,7 +1663,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "REFERENCE FILE format. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "REFERENCE FILE format. Possible values are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "COMPUTATION ENVIRONMENT",
         "INPUT",
@@ -1684,7 +1684,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "BINARY DATA FILE 1 format. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "BINARY DATA FILE 1 format. Possible values are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "COMPUTATION ENVIRONMENT",
         "INPUT",
@@ -1705,7 +1705,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "BINARY DATA FILE 2 format. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "BINARY DATA FILE 2 format. Possible values are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "COMPUTATION ENVIRONMENT",
         "INPUT",
@@ -1726,7 +1726,7 @@
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
-      "help": "Extension of mild-slope equation with second order bottom effects 0: mild-slope equation, 1: gradient second order term: grad($h$)$^2$, 2: curvature second order term: laplacian($h$), 3: gradient + curvature second order terms. Model used for functions E1 and E2 expression: Chamberlain and Porter (1995).",
+      "help": "Extension of mild-slope equation with second order bottom effects 0: mild-slope equation, 1: gradient second order term: grad(h)^2, 2: curvature second order term: laplacian(h), 3: gradient + curvature second order terms. Model used for functions E1 and E2 expression: Chamberlain and Porter (1995).",
       "rubrique": [
         "PHYSICAL PARAMETERS",
         "VARYING TOPOGRAPHY",
@@ -1798,7 +1798,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "Format of the AMPLITUDE AND PHASE FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "Format of the AMPLITUDE AND PHASE FILE. Possible choices are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "COMPUTATION ENVIRONMENT",
         "OUTPUT",
@@ -1830,7 +1830,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "Format of the FREE SURFACE FILE. Possible values are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "Format of the FREE SURFACE FILE. Possible values are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "COMPUTATION ENVIRONMENT",
         "OUTPUT",
@@ -1915,7 +1915,7 @@
       "type": "REAL",
       "size": 0,
       "unbounded": false,
-      "help": "Give the instant of the \\tomawac computation at which we want to import the spectrum for \\artemis.",
+      "help": "Give the instant of the TOMAWAC computation at which we want to import the spectrum for ARTEMIS.",
       "rubrique": [
         "NESTING WITH TOMAWAC",
         "",
@@ -1931,7 +1931,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "Name of the spectral file from an outer \\tomawac wave model.",
+      "help": "Name of the spectral file from an outer TOMAWAC wave model.",
       "rubrique": [
         "NESTING WITH TOMAWAC",
         "INPUT",
@@ -1949,7 +1949,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "Format of the TOMAWAC OUTER SPECTRAL FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "Format of the TOMAWAC OUTER SPECTRAL FILE. Possible choices are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "NESTING WITH TOMAWAC",
         "INPUT",
@@ -1965,7 +1965,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "Name of a file containing the results of an outer \\tomawac wave model.",
+      "help": "Name of a file containing the results of an outer TOMAWAC wave model.",
       "rubrique": [
         "NESTING WITH TOMAWAC",
         "OUTPUT",
@@ -1983,7 +1983,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "Format of the TOMAWAC OUTER RESULT FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "Format of the TOMAWAC OUTER RESULT FILE. Possible choices are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "NESTING WITH TOMAWAC",
         "OUTPUT",
@@ -1999,7 +1999,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "Name of a file containing the liquid boundaries derived from an outer \\tomawac wave model.",
+      "help": "Name of a file containing the liquid boundaries derived from an outer TOMAWAC wave model.",
       "rubrique": [
         "NESTING WITH TOMAWAC",
         "INPUT",
@@ -2017,7 +2017,7 @@
       "type": "STRING",
       "size": null,
       "unbounded": false,
-      "help": "Format of the TOMAWAC LIQUID BOUNDARY FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "Format of the TOMAWAC LIQUID BOUNDARY FILE. Possible choices are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "NESTING WITH TOMAWAC",
         "INPUT",

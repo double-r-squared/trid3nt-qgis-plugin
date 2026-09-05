@@ -526,7 +526,7 @@
       "type": "STRING",
       "size": 1,
       "unbounded": false,
-      "help": "Variations in time of boundary conditions in bedload. Data of this file are read on channel GAI\\_FILES(GAILIQ)%LU.",
+      "help": "Variations in time of boundary conditions in bedload. Data of this file are read on channel GAI_FILES(GAILIQ)%LU.",
       "rubrique": [
         "INPUT-OUTPUT, FILES",
         "NAMES",
@@ -629,7 +629,7 @@
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
-      "help": "Determines, in number of time steps, the printout period of the 'VARIABLES TO BE PRINTED'. The results are printed out on the listing file (file cas\\_numerodeprocessus.sortie on a workstation).",
+      "help": "Determines, in number of time steps, the printout period of the 'VARIABLES TO BE PRINTED'. The results are printed out on the listing file (file cas_numerodeprocessus.sortie on a workstation).",
       "rubrique": [
         "RESULTS",
         "",
@@ -697,7 +697,7 @@
       "type": "STRING",
       "size": 1,
       "unbounded": false,
-      "help": "Format of the C-VSM RESULT FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "Format of the C-VSM RESULT FILE. Possible choices are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "RESULTS",
         "",
@@ -736,7 +736,7 @@
       "type": "STRING",
       "size": 1,
       "unbounded": false,
-      "help": "Format of the TIME SERIES FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5.",
+      "help": "Format of the TIME SERIES FILE. Possible choices are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5.",
       "rubrique": [
         "RESULTS",
         "",
@@ -834,7 +834,7 @@
       "type": "STRING",
       "size": 0,
       "unbounded": false,
-      "help": "Name of a file containing the results a previous TOMAWAC computation made on the same mesh. The wave data (wave height, wave period, wave angle ) will be given by the last record of the file. The user has to verify that both informations (wave and current data) are consistent. Remark :The wave data can also be specified in the hydrodynamic file. the user has also the possibility to give the values of the wave data in the subroutine USER\\_FORCING\\_GAIA. This is recommended for non-steady flow simulation.",
+      "help": "Name of a file containing the results a previous TOMAWAC computation made on the same mesh. The wave data (wave height, wave period, wave angle ) will be given by the last record of the file. The user has to verify that both informations (wave and current data) are consistent. Remark :The wave data can also be specified in the hydrodynamic file. the user has also the possibility to give the values of the wave data in the subroutine USER_FORCING_GAIA. This is recommended for non-steady flow simulation.",
       "rubrique": [
         "DATA FILES",
         "",
@@ -852,7 +852,7 @@
       "type": "STRING",
       "size": 0,
       "unbounded": false,
-      "help": "Name of the file used to validate the computation. This option is primarily used for the validation documents. The results of the computation will be compared with the values of this file. This file is then considered as a reference which the computation is going to be compared with. The comparison is done by the subroutine BIEF\\_VALIDA, which can be modified so as to include, for example, a comparison with an exact solution. If present in the steering file, triggers the validation step during the computation since release 9.0 without boolean keyword VALIDATION.",
+      "help": "Name of the file used to validate the computation. This option is primarily used for the validation documents. The results of the computation will be compared with the values of this file. This file is then considered as a reference which the computation is going to be compared with. The comparison is done by the subroutine BIEF_VALIDA, which can be modified so as to include, for example, a comparison with an exact solution. If present in the steering file, triggers the validation step during the computation since release 9.0 without boolean keyword VALIDATION.",
       "rubrique": [
         "DATA FILES",
         "",
@@ -1013,7 +1013,7 @@
       "type": "STRING",
       "size": 1,
       "unbounded": false,
-      "help": "Format of the RESTART FILE. Possible choices are: SERAFIN : classical single precision format in \\tel, SERAFIND: classical double precision format in \\tel, MED : MED double precision format based on HDF5. Only double precision formats ensure a perfect restart.",
+      "help": "Format of the RESTART FILE. Possible choices are: SERAFIN : classical single precision format in TELEMAC, SERAFIND: classical double precision format in TELEMAC, MED : MED double precision format based on HDF5. Only double precision formats ensure a perfect restart.",
       "rubrique": [
         "INITIAL CONDITIONS",
         "RESTART",
@@ -1212,7 +1212,7 @@
       "type": "REAL",
       "size": 2,
       "unbounded": true,
-      "help": "Values of the suspended sediments at the sources. All sources for the first suspended sediment, then all sources for the second suspended sediment, etc. For example, if there are 3 suspended sediments (SED1, SED2 and SED3) and 2 sources (S1 and S2), the following syntax is used:\\\\ S1\\_SED1;S1\\_SED2;S1\\_SED3;S2\\_SED1;S2\\_SED2;S2\\_SED3\\\\ 10.0; 10.0; 0.0; 0.0; 10.0; 10.0",
+      "help": "Values of the suspended sediments at the sources. All sources for the first suspended sediment, then all sources for the second suspended sediment, etc. For example, if there are 3 suspended sediments (SED1, SED2 and SED3) and 2 sources (S1 and S2), the following syntax is used: S1_SED1;S1_SED2;S1_SED3;S2_SED1;S2_SED2;S2_SED3 10.0; 10.0; 0.0; 0.0; 10.0; 10.0",
       "rubrique": [
         "BOUNDARY CONDITIONS",
         "SETTING",
@@ -1426,7 +1426,7 @@
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
-      "help": "Choice of the vertical scheme for diffusion and settling of sediment (only in 3D): 0: Implicit-diffusion scheme, 1: Implicit-convection scheme (Tridiagonal matrix solver), 2: set\\_fall.f",
+      "help": "Choice of the vertical scheme for diffusion and settling of sediment (only in 3D): 0: Implicit-diffusion scheme, 1: Implicit-convection scheme (Tridiagonal matrix solver), 2: set_fall.f",
       "rubrique": [
         "SEDIMENT INFO",
         "SETTLING VELOCITY",
@@ -1474,7 +1474,7 @@
       "type": "REAL",
       "size": 1,
       "unbounded": false,
-      "help": "The sediment concentration at which sediment forms a weak soil in kg/m$^3$. These values are needed when HINDERED SETTLING = YES.",
+      "help": "The sediment concentration at which sediment forms a weak soil in kg/m^3. These values are needed when HINDERED SETTLING = YES.",
       "rubrique": [
         "COHESIVE",
         "SETTLING VELOCITY",
@@ -1538,7 +1538,7 @@
       "type": "REAL",
       "size": 1,
       "unbounded": false,
-      "help": "When the influence of turbulence on the settling velocity is modelled, this coefficient traduces the formation of flocs by turbulence (coefficient $a$ of Van Leussen formula). Value to be imposed if INFLUENCE OF TURBULENCE ON SETTLING VELOCITY = YES.",
+      "help": "When the influence of turbulence on the settling velocity is modelled, this coefficient traduces the formation of flocs by turbulence (coefficient a of Van Leussen formula). Value to be imposed if INFLUENCE OF TURBULENCE ON SETTLING VELOCITY = YES.",
       "rubrique": [
         "COHESIVE",
         "SETTLING VELOCITY",
@@ -1554,7 +1554,7 @@
       "type": "REAL",
       "size": 1,
       "unbounded": false,
-      "help": "When the influence of turbulence on the settling velocity is modelled, this coefficient traduces the breaking of flocs by turbulence (coefficient $b$ of Van Leussen formula). Value to be imposed if INFLUENCE OF TURBULENCE ON SETTLING VELOCITY = YES.",
+      "help": "When the influence of turbulence on the settling velocity is modelled, this coefficient traduces the breaking of flocs by turbulence (coefficient b of Van Leussen formula). Value to be imposed if INFLUENCE OF TURBULENCE ON SETTLING VELOCITY = YES.",
       "rubrique": [
         "COHESIVE",
         "SETTLING VELOCITY",
@@ -1654,7 +1654,7 @@
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
-      "help": "Only for bedload in finite elements. Parameter for positive\\_depths. Old default value = 10 until release 8.1.",
+      "help": "Only for bedload in finite elements. Parameter for positive_depths. Old default value = 10 until release 8.1.",
       "rubrique": [
         "NUMERICAL PARAMETERS",
         "",
@@ -1902,7 +1902,7 @@
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
-      "help": "Different choice to compute the equilibrium near-bed concentration 1 : Zysderman and Fredsoe, equilibrium formula 2: Bijker method. The near bed concentration is related to the bedload . This option cannot be used without bedload transport 3: Van Rijn formula 4: Soulsby\\_van Rijn formula",
+      "help": "Different choice to compute the equilibrium near-bed concentration 1 : Zysderman and Fredsoe, equilibrium formula 2: Bijker method. The near bed concentration is related to the bedload . This option cannot be used without bedload transport 3: Van Rijn formula 4: Soulsby_van Rijn formula",
       "rubrique": [
         "NON COHESIVE",
         "SUSPENSION",
@@ -2091,7 +2091,7 @@
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
-      "help": "4 hiding factor formulas are implemented in GAIA 0: const => need to give CLASSES HIDING FACTOR 1: Egiazaroff 2: Ashida \\& Michiue : 4: Karim, Holly \\& Yang",
+      "help": "4 hiding factor formulas are implemented in GAIA 0: const => need to give CLASSES HIDING FACTOR 1: Egiazaroff 2: Ashida & Michiue : 4: Karim, Holly & Yang",
       "rubrique": [
         "NON COHESIVE",
         "BED MATERIAL",
@@ -2346,7 +2346,7 @@
       "type": "LOGICAL",
       "size": 1,
       "unbounded": false,
-      "help": "If yes the output time in the \\gaia result file will be equal to the hydrodynamic time multiplied by the morphological factor.",
+      "help": "If yes the output time in the GAIA result file will be equal to the hydrodynamic time multiplied by the morphological factor.",
       "rubrique": [
         "NON COHESIVE",
         "BEDLOAD",
@@ -2394,7 +2394,7 @@
       "type": "INTEGER",
       "size": 1,
       "unbounded": false,
-      "help": "10 bed-load or total load transport formulas are implemented in GAIA. The formula Ne3, Ne30 and Ne9 should not be used in the case of coupling with the suspension. The formula Ne4, Ne5, Ne8 and Ne9 model the transport under the combined action of currents and waves : 1 : MEYER-PETER (bed load) 2 : EINSTEIN-BROWN (bed load) 3 : ENGELUND-HANSEN + CHOLLET AND CUNGE (VERSION 5.3) 30: ENGELUND-HANSEN (total) 4 : BIJKER (bed load + suspension) 5 : SOULSBY - VAN RIJN (bed load + suspension) 6 : HUNZIKER (only for sand grading) IN THIS CASE HIDING FACTOR KEYWORD DISCARDED And Hunziker formula used 7 : VAN RIJN (bed load) 8 : BAILARD (bed load + suspension) 9 : DIBAJNIA ET WATANABE (total) 10 : WILCOCK AND CROWE (graded sediment) Users can also program other formulas (subroutine bedload\\_qb\\_user.f) setting this key word to zero : 0 : FORMULA PROGRAMMED BY USER Warning : it is not then possible to choose the option VARIABLE TIME-STEP",
+      "help": "10 bed-load or total load transport formulas are implemented in GAIA. The formula Ne3, Ne30 and Ne9 should not be used in the case of coupling with the suspension. The formula Ne4, Ne5, Ne8 and Ne9 model the transport under the combined action of currents and waves : 1 : MEYER-PETER (bed load) 2 : EINSTEIN-BROWN (bed load) 3 : ENGELUND-HANSEN + CHOLLET AND CUNGE (VERSION 5.3) 30: ENGELUND-HANSEN (total) 4 : BIJKER (bed load + suspension) 5 : SOULSBY - VAN RIJN (bed load + suspension) 6 : HUNZIKER (only for sand grading) IN THIS CASE HIDING FACTOR KEYWORD DISCARDED And Hunziker formula used 7 : VAN RIJN (bed load) 8 : BAILARD (bed load + suspension) 9 : DIBAJNIA ET WATANABE (total) 10 : WILCOCK AND CROWE (graded sediment) Users can also program other formulas (subroutine bedload_qb_user.f) setting this key word to zero : 0 : FORMULA PROGRAMMED BY USER Warning : it is not then possible to choose the option VARIABLE TIME-STEP",
       "rubrique": [
         "NON COHESIVE",
         "BEDLOAD",
@@ -2585,7 +2585,7 @@
       "type": "STRING",
       "size": 1,
       "unbounded": false,
-      "help": "Printout the C-VSM for the whole model as 3D C-VSM RESULTS FILE or / and for some nodes as C-VSM NODE FILE Give Up to 100 INTEGER numbers separated by ';' 0 = Full model .-> VSPRES N = 1,2...NPOINT; 2D-ID of a SELFIN MESH POINT ->*\\_VSP.CSV",
+      "help": "Printout the C-VSM for the whole model as 3D C-VSM RESULTS FILE or / and for some nodes as C-VSM NODE FILE Give Up to 100 INTEGER numbers separated by ';' 0 = Full model .-> VSPRES N = 1,2...NPOINT; 2D-ID of a SELFIN MESH POINT ->*_VSP.CSV",
       "rubrique": [
         "BED MATERIAL",
         "C-VSM",
@@ -2601,7 +2601,7 @@
       "type": "INTEGER",
       "size": 0,
       "unbounded": false,
-      "help": "MODEL FOR ACTIVE LAYER THICKNESS 0 = ELAY0 (Keyword: ACTIVE LAYER THICKNESS) 1 = Hunziker \\& G$\\ddot{u}$nther 2 = Fredsoe \\& Deigaard (1992) 3 = van RIJN (1993) 4 = Wong (2006) 5 = Malcherek (2003) 6 = $3*d50$ within last time steps ALT",
+      "help": "MODEL FOR ACTIVE LAYER THICKNESS 0 = ELAY0 (Keyword: ACTIVE LAYER THICKNESS) 1 = Hunziker & Gunther 2 = Fredsoe & Deigaard (1992) 3 = van RIJN (1993) 4 = Wong (2006) 5 = Malcherek (2003) 6 = 3*d50 within last time steps ALT",
       "rubrique": [
         "BED MATERIAL",
         "C-VSM",
