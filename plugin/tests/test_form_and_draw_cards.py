@@ -66,6 +66,18 @@ class ParamSheetParseTests(unittest.TestCase):
         self.assertEqual([r.name for r in sheet.basic], ["outfall", "water_temp_c"])
         self.assertEqual([r.name for r in sheet.advanced], ["sim_seconds"])
 
+    def test_a_row_carries_the_section_it_is_folded_under(self) -> None:
+        """An engine's whole keyword surface arrives as one advanced fold, so a
+        row names the dictionary section it belongs to and the card opens a
+        heading per section. A sheet that groups nothing carries an empty one."""
+        rows = [*_DEFAULT_ROWS,
+                {"name": "TIDAL_FLATS", "value": True, "desc": "Tidal flats",
+                 "door": "scenario", "basis": "default_demo",
+                 "source_badge": "engine default", "advanced": True,
+                 "group": "HYDRO"}]
+        sheet = gate.parse_param_sheet(_sheet_payload(rows=rows))
+        self.assertEqual([r.group for r in sheet.advanced], ["", "HYDRO"])
+
     def test_a_row_carries_its_declaration(self) -> None:
         sheet = gate.parse_param_sheet(_sheet_payload())
         row = sheet.rows[1]

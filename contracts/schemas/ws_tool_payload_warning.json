@@ -133,7 +133,7 @@
     },
     "ParamSheetRow": {
       "additionalProperties": false,
-      "description": "One row of the resolved param sheet the FORM CARD renders.\n\nRicher than the :class:`~trid3nt_contracts.common.SyntheticInput` line beside\nit: provenance narration needs a value and a basis, while an EDIT SURFACE also\nneeds the declaration -- what the value means (``desc``), what it may become\n(``bounds``), and how loudly to warn that editing it overrides a derivation\n(``source_badge`` + ``user_lever``).\n\nFields:\n\n- ``name`` -- the declared param name; the key the edit rides back under in\n  ``revised_args``.\n- ``value`` -- the resolved value. ``None`` means the row resolved to nothing\n  (an optional param, or one waiting on a gate).\n- ``units`` -- physical units, when applicable.\n- ``desc`` -- the param's one-line declaration; the row LABEL.\n- ``door`` -- which door served the value.\n- ``basis`` -- the provenance class (shared vocabulary with ``SyntheticInput``).\n- ``source_badge`` -- the short human phrase the card shows beside the value\n  (\"read from your prompt\" / \"derived from water_temp_c\" / \"labeled default\").\n  Rendered, never re-derived by the client from ``basis`` + ``door``.\n- ``bounds`` -- the declared ``(min, max)``; the card clamps its editor to it\n  and the server re-clamps on submit (the form is an edit surface, not a\n  bypass of the declaration).\n- ``user_lever`` -- the declaration marks this derived/constant value as one\n  the user is expected to override.\n- ``editable`` -- whether the card offers an editor. Every row is editable\n  today; editing a derived row is WARNED through ``source_badge``, not locked.\n- ``advanced`` -- render under the \"advanced\" fold (constant-door physics that\n  is inspectable but not the question).\n- ``note`` -- the resolution note (a clamp, a derivation, a conflict).",
+      "description": "One row of the resolved param sheet the FORM CARD renders.\n\nRicher than the :class:`~trid3nt_contracts.common.SyntheticInput` line beside\nit: provenance narration needs a value and a basis, while an EDIT SURFACE also\nneeds the declaration -- what the value means (``desc``), what it may become\n(``bounds``), and how loudly to warn that editing it overrides a derivation\n(``source_badge`` + ``user_lever``).\n\nFields:\n\n- ``name`` -- the declared param name; the key the edit rides back under in\n  ``revised_args``.\n- ``value`` -- the resolved value. ``None`` means the row resolved to nothing\n  (an optional param, or one waiting on a gate).\n- ``units`` -- physical units, when applicable.\n- ``desc`` -- the param's one-line declaration; the row LABEL.\n- ``door`` -- which door served the value.\n- ``basis`` -- the provenance class (shared vocabulary with ``SyntheticInput``).\n- ``source_badge`` -- the short human phrase the card shows beside the value\n  (\"read from your prompt\" / \"derived from water_temp_c\" / \"labeled default\").\n  Rendered, never re-derived by the client from ``basis`` + ``door``.\n- ``bounds`` -- the declared ``(min, max)``; the card clamps its editor to it\n  and the server re-clamps on submit (the form is an edit surface, not a\n  bypass of the declaration).\n- ``user_lever`` -- the declaration marks this derived/constant value as one\n  the user is expected to override.\n- ``editable`` -- whether the card offers an editor. Every row is editable\n  today; editing a derived row is WARNED through ``source_badge``, not locked.\n- ``advanced`` -- render under the \"advanced\" fold (constant-door physics that\n  is inspectable but not the question).\n- ``group`` -- the heading the advanced fold sorts this row under (an engine\n  dictionary's own rubrique). Empty on a sheet that groups nothing.\n- ``note`` -- the resolution note (a clamp, a derivation, a conflict).",
       "properties": {
         "advanced": {
           "default": false,
@@ -197,6 +197,12 @@
           "default": true,
           "title": "Editable",
           "type": "boolean"
+        },
+        "group": {
+          "default": "",
+          "maxLength": 120,
+          "title": "Group",
+          "type": "string"
         },
         "name": {
           "minLength": 1,

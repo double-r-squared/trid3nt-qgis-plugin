@@ -123,7 +123,8 @@ def _os_environ() -> dict:
 #: +1 as telemac_rain_on_grid unparked onto the declared-outlet mechanism;
 #: +1 as mesh_op landed as the runtime face of the mesh recipe.
 #: +1 as fetch_osm_coastline landed as the harbour-scale shoreline rung.
-_REGISTRY_SIZE = 172
+#: +1 as describe_keywords landed as the read over the module keyword catalogs.
+_REGISTRY_SIZE = 173
 
 
 # --------------------------------------------------------------------------- #

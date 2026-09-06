@@ -49,6 +49,7 @@ from .plan import (
     ParamRef,
     Plan,
     Ref,
+    RawKeywords,
     RunMode,
     Step,
     declared_reads,
@@ -113,6 +114,7 @@ async def interpret(
     data: Sequence[DataDecl] = (),
     *,
     input_mode: str | None = None,
+    keywords: Mapping[str, Any] | None = None,
     domain: Domain | None = None,
     resume: bool = True,
     supplied: Mapping[str, Any] | None = None,
@@ -131,7 +133,8 @@ async def interpret(
     begin_substeps(emitter, len(nodes))
 
     env = _Env(params=params, data={d.name: d for d in data}, results={},
-               input_mode=input_mode, ledger=ledger, resume=resume, supplied=dict(supplied or {}))
+               input_mode=input_mode, keywords=dict(keywords or {}), ledger=ledger,
+               resume=resume, supplied=dict(supplied or {}))
     out = RunResult(value=None, entries=entries, params=params)
     token = bind_domain(domain)
     notes_token = bind_notes()
@@ -265,6 +268,8 @@ class _Env:
     data: dict[str, DataDecl]
     results: dict[str, Any]
     input_mode: str | None = None
+    #: The raw keyword floor this invocation carried, by the name the caller used.
+    keywords: dict[str, Any] = field(default_factory=dict)
     ledger: StepLedger | None = None
     resume: bool = True
     artifacts: dict[str, Any] = field(default_factory=dict)
@@ -548,6 +553,8 @@ async def _bind(kwargs: dict[str, Any], env: _Env, label: str) -> dict[str, Any]
 async def _bind_value(value: Any, env: _Env) -> Any:
     if value is RunMode:
         return env.input_mode
+    if value is RawKeywords:
+        return dict(env.keywords)
     if isinstance(value, ParamRef):
         # LATE binding: the sheet a gate may have revised, not the one the plan
         # value was built from.

@@ -510,6 +510,13 @@ package SteeringSurface {
         A value drawn on the canvas is a fill like any other, reached through
         the same gate a typed value rides. A canvas that answers nothing refuses
         by name; nothing is invented from a decline.
+
+        The wire half of it is the RAW KEYWORD FLOOR every template carries: a
+        caller states the dictionary's own name and the fill sets that slot,
+        beating the template because that is what it was stated to do. A name
+        the module has no keyword for refuses naming the nearest one it does,
+        and a value outside the dictionary's choices refuses naming them - both
+        while a person can still read what they asked for.
         */
     }
 
@@ -576,6 +583,14 @@ package SteeringSurface {
         still open - and it HOLDS there until the user runs; an edit is another
         fill. No gate concept survives in the plan: a card in front of the door
         would revise a sheet the door never reads.
+
+        RULED (docs/IDEAS.md, "DESIGN STOPS RESOLVED" 2026-09-04): what is SET
+        and what is OPEN AND MANDATORY are the review; the whole rest of the
+        module folds under advanced, grouped by the dictionary's own rubrique
+        and carrying the engine default it would otherwise run on. The same
+        declaration is what the tool's own docstring names - the module, the
+        rubriques the body touches, the mandatory slots it leaves open - so the
+        prose and the card cannot claim a surface the body does not state.
         */
     }
 
@@ -612,6 +627,9 @@ package SteeringSurface {
 
     satisfy requirement EngineDefaultSurfaced by slot;
     satisfy requirement EngineDefaultSurfaced by sheet;
+    satisfy requirement EngineDefaultSurfaced by door;
+    verify requirement EngineDefaultSurfaced by
+        "tests/test_telemac_module_surface.py::test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody";
     verify requirement EngineDefaultSurfaced by
         "tests/test_telemac_module_surface.py::test_the_engine_default_is_on_the_slot_or_the_slot_is_a_question";
     verify requirement EngineDefaultSurfaced by
@@ -652,6 +670,17 @@ package SteeringSurface {
     satisfy requirement EverythingOverridable by wrapper;
     satisfy requirement EverythingOverridable by sheet;
     satisfy requirement EverythingOverridable by canvasGate;
+    satisfy requirement EverythingOverridable by door;
+    verify requirement EverythingOverridable by
+        "tests/test_telemac_module_surface.py::test_a_raw_keyword_on_the_wire_fills_the_slot_it_names";
+    verify requirement EverythingOverridable by
+        "tests/test_telemac_module_surface.py::test_a_raw_keyword_the_module_does_not_have_refuses_naming_the_nearest";
+    verify requirement EverythingOverridable by
+        "tests/test_telemac_module_surface.py::test_a_raw_keyword_value_outside_the_choices_refuses_naming_the_choices";
+    verify requirement EverythingOverridable by
+        "tests/test_telemac_module_surface.py::test_two_releases_on_the_floor_are_two_sources_in_the_deck";
+    verify requirement EverythingOverridable by
+        "tests/test_telemac_module_surface.py::test_every_template_wire_carries_the_raw_keyword_floor";
     verify requirement EverythingOverridable by
         "tests/test_telemac_module_surface.py::test_resolution_order_is_engine_then_the_parts_then_template_then_fill";
     verify requirement EverythingOverridable by
@@ -693,6 +722,10 @@ package SteeringSurface {
         "tests/test_door_dissolution.py::test_all_templates_registered_and_callable";
 
     satisfy requirement ReviewIsTheDoorsView by door;
+    verify requirement ReviewIsTheDoorsView by
+        "tests/test_telemac_module_surface.py::test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique";
+    verify requirement ReviewIsTheDoorsView by
+        "tests/test_telemac_module_surface.py::test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots";
     verify requirement ReviewIsTheDoorsView by
         "tests/test_telemac_module_surface.py::test_the_review_is_the_doors_view_and_never_a_step_of_its_own";
     verify requirement ReviewIsTheDoorsView by

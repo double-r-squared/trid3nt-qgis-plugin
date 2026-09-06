@@ -392,6 +392,8 @@ class ParamSheetRow(GraceModel):
       today; editing a derived row is WARNED through ``source_badge``, not locked.
     - ``advanced`` -- render under the "advanced" fold (constant-door physics that
       is inspectable but not the question).
+    - ``group`` -- the heading the advanced fold sorts this row under (an engine
+      dictionary's own rubrique). Empty on a sheet that groups nothing.
     - ``note`` -- the resolution note (a clamp, a derivation, a conflict).
     """
 
@@ -406,6 +408,7 @@ class ParamSheetRow(GraceModel):
     user_lever: bool = False
     editable: bool = True
     advanced: bool = False
+    group: str = Field(default="", max_length=120)
     note: str | None = None
 
     @model_validator(mode="after")

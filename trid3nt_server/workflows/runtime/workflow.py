@@ -175,10 +175,12 @@ class Workflow:
             return err
         return await self.execute(
             self._resolve(supplied), input_mode=wire.get("input_mode"),
+            keywords=wire.get("keywords"),
             resume=not bool(wire.get("restart_clean")),
             supplied=self._supplied_artifacts(wire))
 
     async def execute(self, resolving: Any, *, input_mode: str | None = None,
+                      keywords: Mapping[str, Any] | None = None,
                       resume: bool = True,
                       supplied: Mapping[str, Any] | None = None,
                       derived_from: Derivation | None = None) -> Any:
@@ -202,14 +204,15 @@ class Workflow:
             check_validity(self.validity, p, workflow=self.name)
             run = await interpret(
                 self.plan, p, self.params, self.data,
-                input_mode=input_mode, resume=resume,
+                input_mode=input_mode, keywords=keywords, resume=resume,
                 supplied=supplied_artifacts,
             )
         except asyncio.CancelledError:
             raise
         except DeclarativeError as exc:
             logger.warning("%s %s: %s", self.name, exc.error_code, exc)
-            return await self._record_failure(exc, input_mode, supplied_artifacts)
+            return await self._record_failure(exc, input_mode, keywords,
+                                              supplied_artifacts)
         except Exception as exc:  # noqa: BLE001
             if getattr(exc, "retryable", False):
                 # A retryable typed error is a GATE: the adapter harvests its
@@ -219,7 +222,7 @@ class Workflow:
             logger.exception("%s unexpected failure", self.name)
             return self._error(f"{self.error_prefix}_INTERNAL_ERROR", exc)
         return await self._publish(run, time.monotonic() - started,
-                                   input_mode=input_mode,
+                                   input_mode=input_mode, keywords=keywords,
                                    supplied=supplied_artifacts,
                                    derived_from=derived_from)
 
@@ -227,6 +230,7 @@ class Workflow:
         return await resolve_params(self.params, supplied)
 
     async def _record_failure(self, exc: DeclarativeError, input_mode: str | None,
+                              keywords: Mapping[str, Any] | None,
                               supplied: Mapping[str, Any]) -> dict[str, Any]:
         """The failure envelope, plus a handle on the work the attempt DID finish.
 
@@ -247,6 +251,7 @@ class Workflow:
         attempt = new_ulid()
         await snapshot.write_snapshot(
             run_id=attempt, workflow=self.name, input_mode=input_mode,
+            keywords=dict(keywords or {}),
             sheet=run.params.rows(), records=records,
             data_records=list(run.data_records), supplied=dict(supplied))
         envelope["run_id"] = attempt
@@ -308,6 +313,7 @@ class Workflow:
 
     async def _publish(self, run: RunResult, wall_seconds: float = 0.0, *,
                        input_mode: str | None = None,
+                       keywords: Mapping[str, Any] | None = None,
                        supplied: Mapping[str, Any] | None = None,
                        derived_from: Derivation | None = None) -> Any:
         result = run.value
@@ -342,6 +348,7 @@ class Workflow:
         # it from products that are allowed to disappear.
         await snapshot.write_snapshot(
             run_id=run_id, workflow=self.name, input_mode=input_mode,
+            keywords=dict(keywords or {}),
             sheet=run.params.rows() if run.params is not None else (),
             records=run.records, data_records=run.data_records,
             supplied=dict(supplied or {}), derived_from=derived_from)
@@ -417,11 +424,13 @@ class Workflow:
 
 # -- the registration factory --------------------------------------------- #
 
-#: Controls every workflow carries. They govern whether the run PAUSES and whether
-#: it resumes; neither is a physical value, so neither is a Param.
+#: Controls every workflow carries: whether the run PAUSES, whether it resumes,
+#: and the RAW KEYWORD floor a caller states the engine's own keywords through.
+#: None of the three is a physical value, so none of them is a Param.
 _CONTROLS: tuple[tuple[str, Any, Any], ...] = (
     ("input_mode", str | None, None),
     ("restart_clean", bool, False),
+    ("keywords", dict | None, None),
 )
 
 
@@ -502,7 +511,12 @@ def register_workflow(
         # the signature actually carries. A template declares `params=PARAMS` and
         # the factory narrows it; documenting a constant the schema does not offer
         # would be the docstring inviting a call the tool cannot take.
+        # The SHEET line is the plan's own: only the plan knows which engine
+        # surface it fills, so a template never restates it and cannot drift
+        # from what it actually declares.
+        sheet_doc = getattr(plan, "sheet_doc", None)
         doc = {**doc, "params": _wire_params(params),
+               **({} if sheet_doc is None else {"sheet": sheet_doc()}),
                **_context_doc(workflow.data, doc.get("controls", ()))}
         _run.__doc__ = render_docstring(**doc)
         _run.routing_doc = render_docstring(**doc, view="routing")  # type: ignore[attr-defined]

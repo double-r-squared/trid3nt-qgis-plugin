@@ -30,6 +30,7 @@ from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
 from trid3nt_server.workflows.runtime import (
     ParamRef,
+    RawKeywords,
     Ref,
     RunMode,
     Step,
@@ -43,7 +44,7 @@ from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
 
-__all__ = ["Door", "TelemacWorkflow", "fill_sheet", "run_sheet"]
+__all__ = ["Door", "TelemacWorkflow", "card_rows", "fill_sheet", "run_sheet"]
 
 _TELEMAC = "trid3nt_server.workflows.telemac"
 
@@ -103,6 +104,31 @@ class Door:
     #: Filled, that mesh is adopted whole; unfilled, the recipe above is the mesh.
     supplied_mesh: Any = None
 
+    def sheet_doc(self) -> str:
+        """The ENGINE SURFACE line of this template's docstring.
+
+        Which module the fill writes, the rubriques of the dictionary the body
+        actually touches, and the mandatory slots it leaves open - read off the
+        declaration itself, so the prose cannot claim a surface the body does not
+        state. Everything the line does NOT name is reached the two ways it says.
+        """
+        body = self.steering
+        stated = {name for part in (*body.PARTS, body) for name in part.ASSERTED}
+        stated |= set(self.slots)
+        touched = sorted({body.CATALOG[name].rubrique[0] for name in stated
+                          if name in body.CATALOG and body.CATALOG[name].rubrique})
+        open_required = sorted(slot.keyword for name, slot in body.CATALOG.items()
+                               if slot.is_required and name not in stated)
+        return (
+            f"Sheet: {body.MODULE}, whose dictionary has {len(body.CATALOG)} "
+            f"keywords. This template states {len(stated)} of them, under "
+            f"{', '.join(touched)}. Open mandatory slots: "
+            f"{', '.join(open_required) if open_required else 'none'}. Every "
+            f"other keyword is the engine's own default and is set on the call - "
+            f"keywords={{\"LAW OF BOTTOM FRICTION\": 4}} - after "
+            f"describe_keywords(module=\"{body.MODULE}\", query=...) names it "
+            f"with its help, its choices and that default.")
+
     def __call__(self, ops: Workflow) -> list[Any]:
         """The step sequence: the world, then fill, then run, then the reader."""
         read = self.read(Ref("solve"))
@@ -128,6 +154,7 @@ class Door:
                                     for prm in ops.params},
                          "slots": dict(self.slots), "workflow": ops.name,
                          "title": self.review_title,
+                         "keywords": RawKeywords,
                          "input_mode": RunMode}).named("sheet"),
             Step(runner=f"{_TELEMAC}.workflow.run_sheet", stage="solve",
                  consequential=True,
@@ -142,7 +169,7 @@ class Door:
 
 async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
                      params: Mapping[str, Any], slots: Mapping[str, Any],
-                     workflow: str, title: str,
+                     workflow: str, title: str, keywords: Mapping[str, Any],
                      input_mode: str | None) -> Sheet:
     """Set the body's slots against what the run measured -> the sheet, HELD.
 
@@ -150,11 +177,17 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
     before anything is filled. What comes back is every filled slot with its
     provenance and every open slot - and in ``user_gated`` that IS the card: the
     sheet is shown, an edit is another fill, and the run waits.
+
+    The invocation's RAW KEYWORD floor is filled last and therefore wins: it is
+    the caller stating the engine's own keyword, and a template value it beats is
+    the one it was stated to replace.
     """
     # A slot the caller did not override is not a statement: the body's own
     # value stands. That is not the same as a body asserting None, which IS the
     # statement that this run says nothing about the keyword.
     stated = {name: value for name, value in slots.items() if value is not None}
+    stated.update({steering.identify(name): value
+                   for name, value in (keywords or {}).items()})
     sheet = fill_slots(steering, produced=dict(produced), params=dict(params),
                        **stated)
     revised = await _review(sheet, workflow=workflow, title=title,
@@ -202,6 +235,27 @@ _PROVENANCE_DOORS: Mapping[str, tuple[str, str]] = {
 }
 
 
+def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
+    """The sheet as the card renders it: what is SET, what is OPEN, then the rest.
+
+    Three classes, in the order a reviewer reads them. Every SET slot is shown
+    with the provenance that filled it, and every OPEN MANDATORY slot is shown
+    because the run cannot begin without it. Everything else - the whole rest of
+    the module - folds under advanced, grouped by the dictionary's own rubrique
+    and carrying the engine default it will run on, so no keyword is a black box
+    and every one of them is reachable at the review.
+    """
+    rows = [_slot_row(name, row) for name, row in sheet.filled.items()]
+    rows += [_open_row(slot) for slot in sheet.required()]
+    # The advanced fold reads down the dictionary's own RUBRIQUES, and inside one
+    # down the dictionary's own order - the sections the engine's documentation
+    # is written in, rather than a flat thousand-row list.
+    rest = [slot for name, slot in sheet.body.CATALOG.items()
+            if name not in sheet.filled and not slot.is_required]
+    return rows + [_default_row(slot) for slot in
+                   sorted(rest, key=lambda slot: _group(slot))]
+
+
 async def _review(sheet: Sheet, *, workflow: str, title: str,
                   input_mode: str | None) -> dict[str, Any]:
     """Show the filled sheet and HOLD -> the slot edits the user submitted.
@@ -212,14 +266,7 @@ async def _review(sheet: Sheet, *, workflow: str, title: str,
     """
     from trid3nt_server.gates.input_review import gate_input_review
 
-    rows = [_slot_row(name, row) for name, row in sheet.filled.items()]
-    rows += [ParamSheetRow(name=slot.identifier, value=None, desc=slot.desc[:512],
-                           door="user", basis="derived", editable=True,
-                           source_badge=(
-                               "required: the dictionary marks this file OBLIG"
-                               if slot.is_required else
-                               "open: the dictionary gives it no default"))
-             for slot in sheet.open()]
+    rows = card_rows(sheet)
     # A provenance row carries ONE value, so a keyword whose value is a list is
     # narrated as the list it is rather than dropped.
     entries = [SyntheticInput(
@@ -243,17 +290,44 @@ async def _review(sheet: Sheet, *, workflow: str, title: str,
 
 
 def _slot_row(name: str, row: Any) -> ParamSheetRow:
-    """One filled slot, as the card renders it."""
+    """One SET slot, as the card renders it: the value and where it came from."""
     door, basis = _PROVENANCE_DOORS.get(row.provenance, ("derived", "derived"))
     value = row.value if isinstance(row.value, (int, float, str, bool, list)) \
         else str(row.value)
     return ParamSheetRow(
         name=name, value=value, desc=row.slot.desc[:512], door=door, basis=basis,
-        source_badge=row.provenance,
-        # A slot the template or a part settled is inspectable rather than the
-        # question, so it folds away; what a producer measured and what a fill
-        # set are the rows a review is actually about.
-        advanced=row.provenance not in ("fill",) and row.slot.level > 0)
+        source_badge=row.provenance, group=_group(row.slot))
+
+
+def _open_row(slot: Any) -> ParamSheetRow:
+    """One OPEN MANDATORY slot: an empty the run cannot begin without."""
+    return ParamSheetRow(
+        name=slot.identifier, value=None, desc=slot.desc[:512], door="user",
+        basis="derived", editable=True, group=_group(slot),
+        source_badge="required: the dictionary marks this file OBLIG")
+
+
+def _default_row(slot: Any) -> ParamSheetRow:
+    """One slot this run leaves to the engine, under the advanced fold.
+
+    The whole rest of the module is here, grouped by the dictionary's own
+    rubrique and carrying the value the engine will use: the default is SURFACED
+    rather than a black box, and every knob stays reachable at the review the
+    same way it is reachable on the call.
+    """
+    return ParamSheetRow(
+        name=slot.identifier,
+        value=None if slot.is_open else slot.engine_default,
+        desc=slot.desc[:512], door="scenario",
+        basis="default_demo" if not slot.is_open else "derived",
+        editable=True, advanced=True, group=_group(slot),
+        source_badge=("open: the dictionary gives it no default"
+                      if slot.is_open else "engine default"))
+
+
+def _group(slot: Any) -> str:
+    """The dictionary's own top-level rubrique - what the advanced fold sorts by."""
+    return slot.rubrique[0] if slot.rubrique else ""
 
 
 class TelemacWorkflow(Workflow):

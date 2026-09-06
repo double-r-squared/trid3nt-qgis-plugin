@@ -128,7 +128,8 @@ async def rerun(parent_run_id: str, overrides: Mapping[str, Any]) -> Any:
                 cut, len(inherited), sorted(reusable))
 
     return await workflow.execute(
-        child, input_mode=snap.input_mode, resume=True, supplied=snap.supplied,
+        child, input_mode=snap.input_mode, keywords=snap.keywords, resume=True,
+        supplied=snap.supplied,
         derived_from=Derivation(parent_run_id=parent_run_id,
                                 overrides=tuple(changed)))
 

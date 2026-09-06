@@ -604,6 +604,9 @@ from .meta.compose_case_report import compose_case_report  # noqa: E402,F401
 # here (importing them no longer registers a tool -- the @register_tool
 # decorator was removed).
 from .meta.list_run_frames import list_run_frames  # noqa: E402,F401
+# describe_keywords: the READ over the TELEMAC module catalogs - the way the
+# 1,300-keyword surface is reached, since no docstring budget carries it.
+from trid3nt_server.workflows.telemac.modules.describe import describe_keywords  # noqa: E402,F401
 from .meta.spatial_input_tool import spatial_input_tool  # noqa: E402,F401
 from .search.web_fetch import web_fetch  # noqa: E402,F401
 

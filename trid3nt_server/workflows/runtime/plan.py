@@ -26,6 +26,7 @@ __all__ = [
     "Plan",
     "Ref",
     "Row",
+    "RawKeywords",
     "RunMode",
     "Step",
     "body_rows",
@@ -221,6 +222,18 @@ class _RunMode:
 #: input-review gate takes ``input_mode=RunMode`` so the lever reaches it without
 #: becoming a Param - it governs whether the run pauses, it is not a physical value.
 RunMode = _RunMode()
+
+
+class _RawKeywords:
+    def __repr__(self) -> str:
+        return "RawKeywords"
+
+
+#: Declared read of the run's RAW KEYWORD floor - the ``keywords={NAME: value}``
+#: argument every wire carries. A step that fills a sheet takes
+#: ``keywords=RawKeywords`` so the floor reaches it without becoming a Param:
+#: it names the engine's own keywords, and what those mean is the dictionary's.
+RawKeywords = _RawKeywords()
 
 
 @dataclass(frozen=True, slots=True)

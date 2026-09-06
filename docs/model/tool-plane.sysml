@@ -1,6 +1,8 @@
 // plane: tool | system: code-exec
 //
-// The tool plane's first seam: the box a user-confirmed snippet runs in.
+// The tool plane's modeled seams: the box a user-confirmed snippet runs in, and
+// the read over the engine keyword catalogs a caller reaches a surface too large
+// to carry through.
 //
 // SysML v2 TEXTUAL notation, restricted to the subset the project checker
 // reads. Conventions as the other seams: ``code:`` binds a block to the module
@@ -9,9 +11,9 @@
 // forwards a contract verbatim.
 //
 // The plane holds more than this - the registry, retrieval, the processing
-// tools - and none of it is modeled here. This seam is modeled because it was
-// touched; the rest of the plane is stated as unmodeled in the index rather
-// than sketched.
+// tools - and none of it is modeled here. What is modeled is what was touched;
+// the rest of the plane is stated as unmodeled in the index rather than
+// sketched.
 
 package ToolPlane {
 
@@ -59,6 +61,13 @@ package ToolPlane {
         The engine room inside the box: staged paths opened as handles, the
         snippet executed, its result converted and bounded. It imports nothing
         from the server package - the mount is the only thing connecting them.
+        */
+    }
+
+    part def KeywordLookup {
+        doc /*
+        The read over the engine's own keyword catalogs. It answers a question in
+        words with the dictionary's entries and runs nothing.
         */
     }
 
@@ -177,6 +186,12 @@ package ToolPlane {
         port envelopeOut : EnvelopeOut;
     }
 
+    part keywordLookup : KeywordLookup {
+        doc /*
+        code: trid3nt_server/workflows/telemac/modules/describe.py
+        */
+    }
+
     part toolDispatch : ToolDispatch {
         doc /*
         code: trid3nt_server/server/dispatch/emitter.py
@@ -261,9 +276,38 @@ package ToolPlane {
         */
     }
 
+    requirement def ASurfaceTooLargeToCarryIsReached {
+        doc /*
+        A tool docstring is truncated at a thousand characters and the engine's
+        keyword surface is more than a thousand KEYWORDS, so the surface is
+        reached rather than carried: a read-only tool answers a question in words
+        out of the module's own dictionary - the keyword, its help, its labeled
+        choices, the default it has when nobody states it, its level and whether
+        it names a file - and what a caller does with what it learns is state it
+        on a fill through the raw keyword floor.
+
+        The read decides nothing and runs nothing. Its ranking is model-free and
+        deterministic, so the same question is answered the same way twice and
+        an index nobody can rebuild is never between the caller and the
+        dictionary. A module with no catalog refuses naming the ones there are.
+        */
+    }
+
     // ----------------------------------------------------------------- //
     // Allocations
     // ----------------------------------------------------------------- //
+
+    satisfy requirement ASurfaceTooLargeToCarryIsReached by keywordLookup;
+    verify requirement ASurfaceTooLargeToCarryIsReached by
+        "tests/test_describe_keywords.py::test_a_question_in_words_reaches_the_keyword_that_answers_it";
+    verify requirement ASurfaceTooLargeToCarryIsReached by
+        "tests/test_describe_keywords.py::test_a_match_carries_the_dictionary_s_own_help_choices_and_default";
+    verify requirement ASurfaceTooLargeToCarryIsReached by
+        "tests/test_describe_keywords.py::test_the_same_question_is_answered_the_same_way_twice";
+    verify requirement ASurfaceTooLargeToCarryIsReached by
+        "tests/test_describe_keywords.py::test_a_module_with_no_catalog_refuses_naming_the_ones_there_are";
+    verify requirement ASurfaceTooLargeToCarryIsReached by
+        "tests/test_describe_keywords.py::test_every_corpus_phrasing_surfaces_the_tool_model_free";
 
     satisfy requirement SandboxIsNetworkNone by sandboxBox;
     satisfy requirement SandboxIsNetworkNone by sandboxDriver;

@@ -203,6 +203,7 @@ _RECALL_FIXTURE = [
     ("how far downstream does a dye spill travel in this river",
      "telemac_river_dye"),
     ("draw the topographic contour lines from the elevation", "compute_contours"),
+    ("what telemac keyword controls the bottom friction law", "describe_keywords"),
 ]
 
 

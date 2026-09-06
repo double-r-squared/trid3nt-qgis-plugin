@@ -39,12 +39,15 @@ def render_docstring(
     params: Any,
     returns: str,
     not_for: str = "",
+    sheet: str = "",
     controls: tuple[tuple[str, str], ...] = (),
     context: tuple[tuple[str, str], ...] = (),
     view: DocstringView = "full",
 ) -> str:
     """Build the docstring: summary, routing, negative routing, params, returns.
 
+    ``sheet`` documents the ENGINE SURFACE behind the params: which module this
+    fills, the rubriques its body touches, and the mandatory slots still open.
     ``controls`` documents the run levers that are NOT params (gate mode, restart)
     - the tool accepts them, so the model has to be told they exist. ``context``
     documents the producer-less Data slots on the same wire: they take a layer the
@@ -67,6 +70,8 @@ def render_docstring(
     body = ["", "Params:"]
     for p in _ordered(params):
         body.append(f"    {p.name}: {_param_line(p)}")
+    if sheet:
+        body += ["", sheet.strip()]
     if context:
         body += ["", "Context layers:"]
         body += [f"    {name}: {line.strip()}" for name, line in context]

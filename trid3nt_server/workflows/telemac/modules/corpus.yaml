@@ -1,0 +1,9 @@
+describe_keywords:
+- what telemac keyword controls the bottom friction law
+- which steering keyword sets the turbulence model for this run
+- look up the telemac2d dictionary entry for the graphic printout period
+- what is the engine default for the tidal flats keyword
+- show me the allowed values of the advection scheme keyword
+- what keyword do i set so the solver writes results more often
+- find the artemis keyword for the incident wave period
+- list the telemac3d steering keywords about the vertical mesh

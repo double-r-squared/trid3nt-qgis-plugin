@@ -819,3 +819,149 @@ def test_every_open_water_recipe_carries_the_boundary_cleaning_chain():
     for recipe in (REACH, HARBOUR, BASIN):
         ops = [op["op"] for op in recipe_plan_value(recipe)["ops"]]
         assert [op for op in ops if op in cleaning] == list(cleaning)
+
+
+# -- the LLM surface: the raw floor, the docstring, the card ------------------ #
+
+#: Every question on the surface. All eight fill and run through the door, so all
+#: eight carry the floor, the sheet line and the card.
+_TEMPLATES = ("telemac_river_dye", "telemac_river_oil_spill", "telemac_river_scour",
+              "telemac_river_sediment_plume", "telemac_do_sag",
+              "telemac_rain_on_grid", "artemis_harbor_agitation",
+              "telemac3d_stratified_flow")
+
+
+class _STEERING(T2D):
+    """A body that states a friction law, so the floor has an opinion to beat."""
+
+    LAW_OF_BOTTOM_FRICTION = 3
+    FRICTION_COEFFICIENT = 0.03
+
+
+def _filled(**keywords):
+    """A sheet filled the way the door fills one: the body, then the raw floor."""
+    stated = {_STEERING.identify(name): value for name, value in keywords.items()}
+    return fill(_STEERING, **stated)
+
+
+def test_a_raw_keyword_on_the_wire_fills_the_slot_it_names():
+    """The dictionary's own spelling reaches the sheet, and the row says the fill
+    put it there - not the template, which said something else about it."""
+    sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
+    row = sheet.filled["LAW_OF_BOTTOM_FRICTION"]
+    assert _STEERING.ASSERTED["LAW_OF_BOTTOM_FRICTION"] == 3
+    assert row.value == 4
+    assert row.provenance == "fill"
+    assert ("LAW OF BOTTOM FRICTION", 4) in sheet.resolved()
+
+
+def test_a_raw_keyword_the_module_does_not_have_refuses_naming_the_nearest():
+    """Named back in the dictionary's own spelling, because that is the name the
+    caller was reaching for."""
+    with pytest.raises(SlotRefused) as caught:
+        T2D.identify("LAW OF BOTOM FRICTION")
+    assert "LAW OF BOTTOM FRICTION" in str(caught.value)
+
+
+def test_a_raw_keyword_value_outside_the_choices_refuses_naming_the_choices():
+    with pytest.raises(SlotRefused) as caught:
+        _filled(**{"LAW OF BOTTOM FRICTION": 9})
+    said = str(caught.value)
+    assert "MANNING" in said and "STRICKLER" in said
+
+
+def test_the_identifier_and_the_composite_name_reach_the_same_floor():
+    """One floor, three spellings of a name: the dictionary's, the identifier the
+    image spells it by, and a composite the wrapper registers."""
+    assert T2D.identify("LAW OF BOTTOM FRICTION") == "LAW_OF_BOTTOM_FRICTION"
+    assert T2D.identify("LAW_OF_BOTTOM_FRICTION") == "LAW_OF_BOTTOM_FRICTION"
+    assert T2D.identify("releases") == "releases"
+
+
+def test_two_releases_on_the_floor_are_two_sources_in_the_deck():
+    """A longer list IS the second release: one order, four arrays, two columns
+    of series - and nothing in the body changed to allow it."""
+    release = {"q": 8.0, "tracers": [100.0], "window_s": 120.0, "until_s": 600.0}
+    sheet = _filled(releases=[{**release, "at": [500.0, 1000.0]},
+                              {**release, "at": [900.0, 1100.0]}])
+    deck = dict(sheet.resolved())
+    assert deck["ABSCISSAE OF SOURCES"] == [500.0, 900.0]
+    assert deck["ORDINATES OF SOURCES"] == [1000.0, 1100.0]
+    assert deck["WATER DISCHARGE OF SOURCES"] == [8.0, 8.0]
+    assert deck["VALUES OF THE TRACERS AT THE SOURCES"] == [100.0, 100.0]
+    series = sheet.files["river_sources.txt"]
+    assert "Q(1) Q(2)" in series
+
+
+def test_every_template_wire_carries_the_raw_keyword_floor():
+    """The floor is a CONTROL, on every wire, and it reaches the fill step."""
+    import inspect
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows.runtime import RawKeywords
+
+    for name in _TEMPLATES:
+        entry = TOOL_REGISTRY[name]
+        assert "keywords" in inspect.signature(entry.fn).parameters, name
+        plan = entry.fn.workflow.plan
+        fill_step = next(s for s in plan.declared() if s.label == "sheet")
+        assert fill_step.kwargs["keywords"] is RawKeywords, name
+
+
+def test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots():
+    """The prose is READ OFF the declaration, so it cannot claim a surface the
+    body does not state, and it names the two ways past what it lists."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    for name in _TEMPLATES:
+        entry = TOOL_REGISTRY[name]
+        body = entry.fn.workflow.plan_decl.steering
+        doc = entry.fn.__doc__
+        assert f"Sheet: {body.MODULE}" in doc, name
+        assert f"dictionary has {len(body.CATALOG)} keywords" in doc, name
+        assert "Open mandatory slots:" in doc, name
+        assert "describe_keywords" in doc and "keywords=" in doc, name
+        stated = {n for part in (*body.PARTS, body) for n in part.ASSERTED}
+        stated |= set(entry.fn.workflow.plan_decl.slots)
+        for identifier in stated:
+            slot = body.CATALOG.get(identifier)
+            if slot is not None and slot.rubrique:
+                assert slot.rubrique[0] in doc, f"{name}: {slot.keyword}"
+
+
+def test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique():
+    """Set slots and open mandatory ones are the review; the whole rest of the
+    module is under advanced, grouped by the dictionary's own section and
+    carrying the engine default it will otherwise run on."""
+    from trid3nt_server.workflows.telemac.workflow import card_rows
+
+    sheet = _filled(**{"LAW OF BOTTOM FRICTION": 4})
+    rows = {row.name: row for row in card_rows(sheet)}
+    assert len(rows) == len(T2D.CATALOG)
+    assert not rows["LAW_OF_BOTTOM_FRICTION"].advanced
+    assert rows["LAW_OF_BOTTOM_FRICTION"].source_badge == "fill"
+    # The two OBLIG files this bare fill leaves open are shown, not folded.
+    for identifier in ("GEOMETRY_FILE", "BOUNDARY_CONDITIONS_FILE"):
+        assert not rows[identifier].advanced
+        assert "required" in rows[identifier].source_badge
+    folded = rows["MAXIMUM_NUMBER_OF_FRICTION_DOMAINS"]
+    assert folded.advanced and folded.value == 10
+    assert folded.source_badge == "engine default"
+    assert folded.group == "HYDRO"
+    # A section is contiguous: the fold is read down the dictionary's sections.
+    groups = [row.group for row in card_rows(sheet) if row.advanced]
+    assert len(set(groups)) == len([g for i, g in enumerate(groups)
+                                    if i == 0 or g != groups[i - 1]])
+
+
+def test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody():
+    """An engine default that does not exist is not rendered as one: the row says
+    the dictionary gives the keyword none, which is what makes a substitution
+    the engine makes visible rather than assumed."""
+    from trid3nt_server.workflows.telemac.workflow import card_rows
+
+    sheet = fill(T2D)
+    rows = {row.name: row for row in card_rows(sheet)}
+    open_row = rows["NAMES_OF_TRACERS"]
+    assert open_row.advanced and open_row.value is None
+    assert open_row.source_badge == "open: the dictionary gives it no default"

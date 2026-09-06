@@ -187,6 +187,7 @@ class ParamRow:
     user_lever: bool = False
     editable: bool = True
     advanced: bool = False
+    group: str = ""
     note: Optional[str] = None
 
     @property
@@ -280,6 +281,7 @@ def _parse_param_row(raw: dict) -> Optional[ParamRow]:
         user_lever=bool(raw.get("user_lever")),
         editable=bool(raw.get("editable", True)),
         advanced=bool(raw.get("advanced")),
+        group=str(raw.get("group") or ""),
         note=raw.get("note") if isinstance(raw.get("note"), str) else None,
     )
 

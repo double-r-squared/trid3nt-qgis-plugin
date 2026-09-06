@@ -2885,13 +2885,27 @@ class FormCard(QFrame):
     # -- rows ---------------------------------------------------------------- #
 
     def _grid(self, rows: List[gate.ParamRow]) -> QWidget:
-        """One property-grid block: label | editor | source badge, per row."""
+        """One property-grid block: label | editor | source badge, per row.
+
+        A row that names a GROUP - an engine dictionary's own rubrique - opens
+        one under its heading, so the fold that carries a whole module's keyword
+        surface is read down the sections the dictionary itself is written in.
+        """
         holder = QWidget()
         grid = QGridLayout(holder)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(2)
-        for i, row in enumerate(rows):
+        i = -1
+        heading = None
+        for row in rows:
+            i += 1
+            if row.group and row.group != heading:
+                heading = row.group
+                group_lbl = QLabel(heading)
+                group_lbl.setStyleSheet(_FORM_TITLE_STYLE)
+                grid.addWidget(group_lbl, i, 0, 1, 3)
+                i += 1
             name_lbl = QLabel(row.label)
             name_lbl.setStyleSheet(_GATE_BODY_STYLE)
             name_lbl.setToolTip(row.desc)

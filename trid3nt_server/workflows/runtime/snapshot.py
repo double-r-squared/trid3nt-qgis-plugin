@@ -64,6 +64,9 @@ class RunSnapshot:
     run_id: str
     workflow: str
     input_mode: str | None
+    #: The raw keyword floor the run was invoked with. A derivation of it states
+    #: the same keywords, or it would answer a different question than its parent.
+    keywords: dict[str, Any]
     sheet: tuple[ResolvedParam, ...]
     records: tuple[LedgerRecord, ...]
     data_records: tuple[LedgerRecord, ...]
@@ -78,6 +81,7 @@ class RunSnapshot:
 
 async def write_snapshot(*, run_id: str | None, workflow: str,
                          input_mode: str | None,
+                         keywords: Mapping[str, Any],
                          sheet: Sequence[ResolvedParam],
                          records: Sequence[LedgerRecord],
                          data_records: Sequence[LedgerRecord],
@@ -96,6 +100,7 @@ async def write_snapshot(*, run_id: str | None, workflow: str,
         "schema_version": _SCHEMA,
         "workflow": workflow,
         "input_mode": input_mode,
+        "keywords": dict(keywords),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "parent_run_id": derived_from.parent_run_id if derived_from else None,
         "sheet": [dataclasses.asdict(row) for row in sheet],
@@ -137,6 +142,7 @@ async def read_snapshot(run_id: str) -> RunSnapshot | None:
         run_id=str(raw.get("_id") or run_id),
         workflow=str(raw.get("workflow") or ""),
         input_mode=raw.get("input_mode"),
+        keywords=dict(raw.get("keywords") or {}),
         sheet=tuple(ResolvedParam(**row) for row in raw.get("sheet") or []),
         records=tuple(records_from_docs(raw.get("records"))),
         data_records=tuple(records_from_docs(raw.get("data_records"))),

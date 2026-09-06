@@ -553,7 +553,7 @@ async def _seed_parent(monkeypatch, wf, run_id: str) -> None:
                         {wf.name: _entry(wf)}, raising=False)
     _no_persist(monkeypatch)
     await snap_mod.write_snapshot(
-        run_id=run_id, workflow=wf.name, input_mode="auto",
+        run_id=run_id, workflow=wf.name, input_mode="auto", keywords={},
         sheet=resolved.rows(), records=(), data_records=(), supplied={})
 
 

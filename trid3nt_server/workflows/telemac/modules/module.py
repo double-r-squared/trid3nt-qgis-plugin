@@ -392,6 +392,27 @@ class Module(metaclass=_Body):
                 f"{_nearest(identifier, cls.CATALOG, cls.COMPOSITES)}")
         return found
 
+    @classmethod
+    def identify(cls, name: str) -> str:
+        """The identifier a caller's name is written under: RAW keyword, identifier
+        or composite. The dictionary spells the raw name, and the map from it to
+        the identifier is the catalog's own rather than a second transcription of
+        the image's spaces-and-hyphens rule. An unknown name refuses naming the
+        nearest keyword THE DICTIONARY spells, because that is the name the caller
+        was reaching for."""
+        wanted = str(name).strip()
+        by_keyword = {slot.keyword: identifier
+                      for identifier, slot in cls.CATALOG.items()}
+        if wanted in by_keyword:
+            return by_keyword[wanted]
+        if wanted in cls.CATALOG or wanted in cls.COMPOSITES:
+            return wanted
+        close = difflib.get_close_matches(
+            wanted.upper(), list(by_keyword) + list(cls.COMPOSITES), n=3)
+        raise SlotRefused(
+            f"{cls.MODULE} has no keyword {wanted!r}."
+            + (f" Did you mean {', '.join(repr(c) for c in close)}?" if close else ""))
+
 
 def _unshadowed(cls: type, registered: Mapping[str, Any]) -> list[tuple[str, Any]]:
     """Registrations whose names are the wrapper's own to give."""
