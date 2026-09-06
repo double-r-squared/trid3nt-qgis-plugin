@@ -171,3 +171,29 @@ entrypoint was unreachable and the server half it named
 The workers TOTAL is now **2,873** product (`workers/telemac/` alone, excluding
 the 34-line root `conftest.py`) and **798** test, against row 0's 46,947 /
 13,782.
+
+## Wave F - the TELEMAC deck builders leave the container (2026-09-06)
+
+| worker dir | product LOC before | product LOC after | test LOC before | test LOC after | files |
+|---|---|---|---|---|---|
+| workers/telemac/ | 2873 | **484** | 798 | **470** | 9 -> 3 |
+
+The container authors nothing. `artemis_build.py` (1,176) and
+`telemac3d_build.py` (1,002) are gone - the server writes both decks against the
+engine's own dictionary and stages them, and `entrypoint._DISPATCH` is the single
+`case` section that solves whatever was staged through the telapy child runner.
+`_supplied_mesh.py` (197) and `_staged_bed.py` (53) went with them as orphans:
+their only importers were the two builders, and both facts (the staged pair, the
+bed at the nodes) are the accepted mesh's now.
+
+The two worker tests died the same way. `tests/test_artemis_real_structure.py`
+(201) tested a barrier meshed in a local UTM frame, which the om2d `set_obstacle`
+recipe supersedes; `tests/test_telemac3d_vertical_grid.py` (219) MOVED with its
+subject to `tests/test_telemac3d_vertical_grid.py` on the server, where
+`plan_vertical_grid` now lives on the TELEMAC-3D wrapper. What remains at
+`workers/telemac/` is `entrypoint.py` (477), `__init__.py` (7) and
+`test_entrypoint.py` (470).
+
+The workers TOTAL is now **484** product (`workers/telemac/` alone, excluding the
+34-line root `conftest.py`) and **470** test, against row 0's 46,947 / 13,782 -
+a 99.0% cut in worker product Python.

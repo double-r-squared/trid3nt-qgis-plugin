@@ -389,7 +389,7 @@ package SolveSeam {
 
     part manifestStager : ManifestStager {
         doc /*
-        code: trid3nt_server/workflows/telemac/authoring/open_water.py
+        code: trid3nt_server/workflows/telemac/authoring/assembler.py
         */
         port caseIn : CaseIn;
         port caseOut : CaseOut;
