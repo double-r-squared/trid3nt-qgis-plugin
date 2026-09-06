@@ -698,3 +698,40 @@ def test_the_reach_body_is_written_at_the_derivation_it_was_solved_for():
         stated = body.ASSERTED.get("boundaries")
         if stated is not None:
             assert stated["measured"] == Ref("settled")
+
+
+def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
+    """The dictionary gives SCHEME FOR ADVECTION OF TRACERS no 3D default, so an
+    unstated deck advects the temperature by whatever the VELOCITIES are advected
+    by. The template states the scheme, the ceiling that scheme sub-iterates
+    under, and the step - each from a param, so each is overridable on the sheet
+    and each carries the basis a reader is owed."""
+    from trid3nt_server.workflows.runtime import param_rows
+    from trid3nt_server.workflows.telemac.modules import load_catalog
+    from trid3nt_server.workflows.telemac.templates.stratified_flow.declarations import (
+        PARAMS,
+    )
+    from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import (
+        STEERING,
+    )
+
+    rows = {row.name: row for row in param_rows(PARAMS)}
+    slot = load_catalog("telemac3d")["SCHEME_FOR_ADVECTION_OF_TRACERS"]
+    assert slot.engine_default is UNSET
+    scheme = rows["tracer_advection_scheme"].default
+    # The NERD family, by the engine's own naming: telemac2d's TREATMENT OF
+    # FLUXES AT THE BOUNDARIES help calls 13 and 14 "NERD", and 13 is what the
+    # telemac2d dictionary defaults this same keyword to.
+    assert str(scheme) in slot.choices
+    assert scheme in (13, 14)
+    asserted = STEERING.ASSERTED
+    assert [r.name for r in asserted["SCHEME_FOR_ADVECTION_OF_TRACERS"]] == [
+        "tracer_advection_scheme"]
+    assert asserted[
+        "MAXIMUM_NUMBER_OF_ITERATIONS_FOR_ADVECTION_SCHEMES"].name == \
+        "max_advection_iterations"
+    assert asserted["TIME_STEP"].path == "settled.time_step_s"
+    for name in ("tracer_advection_scheme", "max_advection_iterations"):
+        assert len(rows[name].desc) > 80, name
+    assert rows["time_step_s"].derived_when_absent
+

@@ -1226,7 +1226,7 @@ async def settle_basin(
     wind_direction_deg: float,
     levels: int,
     sim_duration_hours: float,
-    time_step_s: float,
+    time_step_s: float | None,
     output_interval_min: float | None,
     result_basename: str,
 ) -> dict[str, Any]:
@@ -1250,10 +1250,19 @@ async def settle_basin(
         _mesh_field(mesh, "display_uri", missing=_basin_mesh_missing))
     max_depth = float(-np.nanmin(np.asarray(node_bed, dtype=float)))
     duration_s = float(sim_duration_hours) * 3600.0
-    steps = max(1, int(round(duration_s / float(time_step_s))))
+    # The step the basin is solved at is the accepted mesh's, through the one CFL
+    # producer the reach's step comes from; a stated step is the caller's lever
+    # and stands as written.
+    derived_step = suggest_time_step_s(facts["mesh_size_m"],
+                                       mesh=mesh.get("artifact"))
+    step_s = float(time_step_s) if time_step_s is not None else derived_step
+    steps = max(1, int(round(duration_s / step_s)))
     journal_note(
         f"basin column: {facts['mesh_node_count']} nodes over a {max_depth:.1f} m "
-        f"deepest column, {levels} sigma planes over {sim_duration_hours:g} h. "
+        f"deepest column, {levels} sigma planes over {sim_duration_hours:g} h at "
+        f"{step_s:g} s "
+        f"({'stated' if time_step_s is not None else 'CFL-derived'} step; the "
+        f"mesh measures {facts['mesh_size_m']:g} m). "
         f"{topology['states']} - the water in this domain is conserved.")
     return {
         **facts,
@@ -1263,9 +1272,9 @@ async def settle_basin(
         "boundary_states": topology["states"],
         "max_depth_m": round(max_depth, 2),
         "duration_s": duration_s,
-        "time_step_s": float(time_step_s),
+        "time_step_s": step_s,
         "n_steps": steps,
-        "graphic_period": _graphic_period(output_interval_min, time_step_s),
+        "graphic_period": _graphic_period(output_interval_min, step_s),
         "listing_period": max(1, steps // 10),
         "warm_temp_c": float(warm_temp_c),
         "cold_temp_c": float(cold_temp_c),
@@ -1285,7 +1294,7 @@ async def settle_basin(
             "mesh_size_m": facts["mesh_size_m"],
             "name": facts["mesh_name"],
             "duration_s": duration_s,
-            "time_step_s": float(time_step_s),
+            "time_step_s": step_s,
             "result_slf": result_basename,
             "bed_source": facts["bed_source"]},
     }

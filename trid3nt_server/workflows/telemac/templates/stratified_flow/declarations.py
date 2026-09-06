@@ -87,9 +87,32 @@ class PARAMS:
         units="h", consequence="numerical",
         desc="Simulated duration - long enough for the column to settle or mix")
     time_step_s = Param(
-        door=doors.CONSTANT, default=20.0, bounds=(1.0, 300.0),
-        units="s", consequence="numerical",
-        desc="Solver time step")
+        door=doors.USER, optional=True, bounds=(0.2, 300.0),
+        units="s", consequence="numerical", user_lever=True,
+        derived_when_absent=(
+            "the step follows the edge the ACCEPTED mesh was BUILT at, through "
+            "the same CFL producer the river reach's step comes from - a step "
+            "asserted independently of the mesh is a stability claim about a "
+            "domain nobody measured"),
+        desc="Solver time step; unset derives it from the accepted mesh")
+    tracer_advection_scheme = Param(
+        door=doors.CONSTANT, default=13, type=int, user_lever=True,
+        consequence="numerical",
+        desc="SCHEME FOR ADVECTION OF TRACERS - the NERD family (13, 14), which "
+             "is the distributive scheme the iteration ceiling below governs and "
+             "the only one that is monotone across a thermocline. 13 is the "
+             "value the engine's own telemac2d dictionary defaults this same "
+             "keyword to; the dictionary gives the 3D one no default at all, so "
+             "unstated it falls back to the VELOCITIES scheme (5, MURD PSI), "
+             "which is what stopped a baroclinic basin at its first tracer step")
+    max_advection_iterations = Param(
+        door=doors.CONSTANT, default=50, type=int, user_lever=True,
+        consequence="numerical",
+        desc="MAXIMUM NUMBER OF ITERATIONS FOR ADVECTION SCHEMES - the ceiling "
+             "the distributive schemes 13 and 14 sub-iterate under. Stated "
+             "rather than defaulted because it is the number a run that stops on "
+             "'ITERATION NO. REACHED' is bounded by, and a reader of the deck "
+             "cannot see a ceiling the deck does not write")
     output_interval_min = Param(
         door=doors.USER, optional=True, bounds=(0.1, 1440.0),
         units="min", consequence="numerical",

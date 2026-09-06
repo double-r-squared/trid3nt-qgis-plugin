@@ -113,7 +113,9 @@ class STEERING(T3D):
     ED_RESULT_FILE = _RESULT_2D
     VARIABLES_FOR_3D_GRAPHIC_PRINTOUTS = "Z,U,V,W,TA1"
 
-    TIME_STEP = P.time_step_s
+    # The step the basin is solved at follows the edge the accepted mesh was
+    # BUILT at, through the CFL producer the river part's step comes from.
+    TIME_STEP = Ref("settled.time_step_s")
     NUMBER_OF_TIME_STEPS = Ref("settled.n_steps")
     GRAPHIC_PRINTOUT_PERIOD = Ref("settled.graphic_period")
     LISTING_PRINTOUT_PERIOD = Ref("settled.listing_period")
@@ -154,6 +156,15 @@ class STEERING(T3D):
     INITIAL_VALUES_OF_TRACERS = [0.0]
     DENSITY_LAW = 1
     AVERAGE_WATER_DENSITY = 1000.0
+
+    # HOW THE TEMPERATURE IS CARRIED, and the ceiling that carriage runs under.
+    # The dictionary gives the tracer scheme no default, so an unstated deck
+    # advects the temperature by whatever the VELOCITIES are advected by; the
+    # ceiling governs schemes 13 and 14 and nothing else, so the two are one
+    # statement and are written together.
+    SCHEME_FOR_ADVECTION_OF_TRACERS = [P.tracer_advection_scheme]
+    MAXIMUM_NUMBER_OF_ITERATIONS_FOR_ADVECTION_SCHEMES = \
+        P.max_advection_iterations
 
     #: The sigma grid that can HOLD the declared thermocline over this basin's own
     #: deepest column, or the refusal that says how many planes would.
@@ -297,7 +308,10 @@ telemac3d_stratified_flow = register_workflow(
     answer=ANSWER,
     provenance=(("wind_speed_mps", "wind_note"),
                 ("thermocline_depth_m", "thermocline_note"),
-                ("levels", "levels_note")),
+                ("levels", "levels_note"),
+                ("time_step_s", "time_step_note"),
+                ("tracer_advection_scheme", "tracer_advection_note"),
+                ("max_advection_iterations", "advection_ceiling_note")),
     # The surface-to-bottom temperature difference is read ACROSS the thermocline,
     # the steepest gradient in the domain, and the planes are what resolve it.
     sensitivity=(("stratification_dt", "gradient"),
