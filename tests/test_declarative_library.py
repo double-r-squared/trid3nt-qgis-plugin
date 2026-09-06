@@ -294,6 +294,24 @@ async def test_bounds_clamp_leaves_a_provenance_note():
 
 
 @pytest.mark.asyncio
+async def test_clamping_compares_numbers_and_does_not_retype_the_param():
+    """A row that declares int must not resolve to a float.
+
+    The clamp reads bounds as numbers, which is right; what it must not do is
+    hand back what it read. An engine keyword typed INTEGER refuses a float
+    several steps later and names the KEYWORD, so the declaration that was
+    actually violated never appears in the message.
+    """
+    declared = Param("levels", desc="d", door=doors.SCENARIO, default=13,
+                     bounds=(5.0, 30.0), type=int)
+    for supplied, expected in (({"levels": 13}, 13), ({}, 13),
+                               ({"levels": 99}, 30), ({"levels": 1}, 5)):
+        resolved = await resolve_params([declared], supplied)
+        value = resolved.value_of("levels")
+        assert value == expected and isinstance(value, int), (supplied, value)
+
+
+@pytest.mark.asyncio
 async def test_non_numeric_bounded_value_refuses_never_defaults():
     with pytest.raises(Exception) as exc:
         await resolve_params(

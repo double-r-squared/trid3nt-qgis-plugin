@@ -296,7 +296,11 @@ def _finish(param: Param, value: Any, door: str, note: str, *,
             note = (f"{note}; CLAMPED from {coerced:g} to the declared "
                     f"{'minimum' if pinned == lo else 'maximum'} {pinned:g}"
                     f"{' ' + param.units if param.units else ''}").lstrip("; ")
-        value = pinned
+        # Clamping compares numbers; it does not RETYPE the param. A row that
+        # declares int and resolves to a float states a value its own
+        # declaration says it cannot hold, and an engine keyword typed INTEGER
+        # refuses it several steps later, naming the keyword rather than this.
+        value = int(pinned) if param.type is int else pinned
     if basis is None:
         basis = "user" if door in (doors.USER, doors.GATE) else _basis(param, door)
     source = real_source if real_source is not None else param.real_source
