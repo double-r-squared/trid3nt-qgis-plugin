@@ -18,11 +18,12 @@ import logging
 from typing import Any
 
 from trid3nt_server.workflows.runtime import Step
+from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
 from trid3nt_server.workflows.mesh.tool import recipe_plan_value
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.step")
 
-__all__ = ["MeshStep", "build_declared_mesh"]
+__all__ = ["MeshStep", "build_declared_mesh", "mesh_record"]
 
 _RUNNER = "trid3nt_server.workflows.mesh.step.build_declared_mesh"
 
@@ -36,19 +37,24 @@ class MeshStep:
     GATE_LABEL: str = "build_mesh"
 
     @staticmethod
-    def build(*, mesh: Any, name: Any = None) -> Step:
-        """Build the template's declared mesh under the mesh gate.
+    def build(*, mesh: Any, name: Any = None, supplied: Any = None,
+              tool: Any = None) -> Step:
+        """Build the template's declared mesh under the mesh gate, or adopt one.
 
         ``name`` is what the session is PRESENTED as and nothing more - which
         place the mesh at the gate belongs to is a step result rather than
-        anything a frozen recipe can name.
+        anything a frozen recipe can name. ``supplied`` is the slot a caller
+        hands a built mesh in, and ``tool`` the registered name whose declared
+        mesh row that supply is checked for membership against.
         """
         return Step(runner=_RUNNER, stage="mesh",
-                    kwargs={"mesh": recipe_plan_value(mesh), "name": name})
+                    kwargs={"mesh": recipe_plan_value(mesh), "name": name,
+                            "supplied": supplied, "tool": tool})
 
 
-async def build_declared_mesh(*, mesh: dict[str, Any],
-                              name: Any = None) -> dict[str, Any]:
+async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
+                              supplied: Any = None,
+                              tool: Any = None) -> dict[str, Any]:
     """The mesh a solve runs on -> the accepted mesh's record.
 
     The recipe is rebuilt exactly as the template declared it and a session opens
@@ -56,15 +62,31 @@ async def build_declared_mesh(*, mesh: dict[str, Any],
     gate with its probes, its numbered ops and its editable layer, edited or
     reset if the user says so, and accepted. A ``reset`` therefore goes back to
     the declaration rather than past it.
+
+    A mesh SUPPLIED on the run is adopted instead, whole: it was built and
+    accepted already, so rebuilding it would be a second mesh and re-gating one
+    nobody changed would ask the same question twice. It is checked for
+    membership in the calling template's declared mesh row, so a supply outside
+    that row refuses by name rather than answering a different question.
     """
     import asyncio
 
     from trid3nt_server.emission.pipeline_emitter import current_turn_case
-    from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
     from trid3nt_server.workflows.mesh.gate import gate_mesh_build
     from trid3nt_server.workflows.mesh.session import MeshSession
-    from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value
+    from trid3nt_server.workflows.mesh.tool import (
+        recipe_from_plan_value,
+        supplied_mesh_artifact,
+    )
 
+    art = None
+    if supplied:
+        art = await asyncio.to_thread(supplied_mesh_artifact, supplied,
+                                      tool_name=str(tool or ""))
+    if art is not None:
+        logger.info("mesh supplied: %s -> %d nodes / %d elements",
+                    art.mesh_id, art.node_count, art.element_count)
+        return mesh_record(art)
     recipe = recipe_from_plan_value(mesh)
     session = await asyncio.to_thread(
         MeshSession, recipe, case_id=current_turn_case(),
@@ -73,6 +95,11 @@ async def build_declared_mesh(*, mesh: dict[str, Any],
     logger.info("mesh accepted: %s -> %d nodes / %d elements, min edge %s m",
                 art.mesh_id, art.node_count, art.element_count,
                 measured_min_edge_m(art))
+    return mesh_record(art)
+
+
+def mesh_record(art: Any) -> dict[str, Any]:
+    """One accepted mesh, as every consumer of the mesh step reads it."""
     return {
         "artifact": art,
         "mesh_id": art.mesh_id,

@@ -260,8 +260,9 @@ def test_the_registry_is_where_a_door_reads_a_templates_contract():
 def test_the_proven_mesh_rows_are_what_the_templates_declare():
     assert _RIVER_DYE.kinds("mesh") == ("unstructured_tri",)
     assert _DO_SAG.kinds("mesh") == ("unstructured_tri",)
-    assert (accepts_for(_AGITATION).kinds("mesh")
-            == ("structured_grid", "unstructured_tri"))
+    # An elliptic mild-slope solve reads a TRIANGULATION and nothing else: the
+    # lattice the worker used to lay for itself is superseded by the om2d domain.
+    assert accepts_for(_AGITATION).kinds("mesh") == ("unstructured_tri",)
 
 
 def test_a_release_is_accepted_only_where_the_reach_family_wrote_the_row():
@@ -304,6 +305,40 @@ def test_a_supplied_mesh_in_the_mesh_row_is_accepted():
     resolution = resolve_mesh(explicit=supplied, accepts=accepts_for(_AGITATION))
     assert resolution.source == "explicit"
     assert resolution.artifact is supplied
+
+
+@pytest.mark.asyncio
+async def test_a_supplied_mesh_is_adopted_instead_of_built(monkeypatch):
+    """The step that builds a mesh is the step that ADOPTS one, so a run solves
+    on the mesh it was handed rather than on a second one the recipe would make.
+
+    The session and the gate are asserted UNREACHED: a supplied mesh was built
+    and accepted already, and re-gating one nobody changed asks the same question
+    twice.
+    """
+    from trid3nt_server.workflows.mesh import gate as gate_mod
+    from trid3nt_server.workflows.mesh import session as session_mod
+    from trid3nt_server.workflows.mesh import step as mesh_step
+    from trid3nt_server.workflows.mesh import tool as tool_mod
+
+    supplied = _tri_artifact()
+
+    def _no_session(*_a, **_k):
+        raise AssertionError("a supplied mesh must not open a session")
+
+    monkeypatch.setattr(session_mod, "MeshSession", _no_session)
+    monkeypatch.setattr(gate_mod, "gate_mesh_build", _no_session)
+    monkeypatch.setattr(tool_mod, "supplied_mesh_artifact",
+                        lambda explicit, *, tool_name: supplied)
+
+    record = await mesh_step.build_declared_mesh(
+        mesh={"mesher": "om2d", "kind": "unstructured_tri", "extent": _AOI,
+              "resolution_m": 20.0, "ops": []},
+        supplied="s3://cache/mesh/01MESH/mesh.2dm", tool=_AGITATION)
+
+    assert record["artifact"] is supplied
+    assert record["slf_uri"] == supplied.slf_uri
+    assert record["node_count"] == supplied.node_count
 
 
 def test_a_template_that_declares_no_mesh_row_refuses_the_supply():
