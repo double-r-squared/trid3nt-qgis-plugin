@@ -74,3 +74,10 @@ datum - decide per case whether a stated constant offset is honest;
 (c) NATE's posture that the user refines the bed visually needs the
 bed layer's provenance card to show datum + acquisition time per
 source - if that card is missing, this rule is the only guard.
+RATIONALE (NATE 2026-09-06): DEM and satellite products are full-
+coverage for any AOI, so a fetcher can promise them; bathymetry is a
+patchwork of surveys, so the honest first question is "does anything
+cover here, and which" - an INDEX problem (a coverage map, ours or an
+existing tool), not a fetcher problem. For now ONE bed source is
+plugged in per template; the coverage-map concept is revisited once
+the module-surface wave completes.
