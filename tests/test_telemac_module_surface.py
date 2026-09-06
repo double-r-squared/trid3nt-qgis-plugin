@@ -929,6 +929,42 @@ def test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots():
                 assert slot.rubrique[0] in doc, f"{name}: {slot.keyword}"
 
 
+def test_every_required_file_is_the_template_s_own_statement():
+    """A slot the dictionary marks OBLIG is named in the BODY, never by a
+    composite. A composite's expansion is not readable until a fill runs it, so a
+    required file it filled would read as an open mandatory slot on every surface
+    that shows the declaration - the docstring and the card both."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    for name in _TEMPLATES:
+        door = TOOL_REGISTRY[name].fn.workflow.plan_decl
+        body = door.steering
+        stated = {n for part in (*body.PARTS, body) for n in part.ASSERTED}
+        stated |= set(door.slots)
+        unstated = sorted(slot.keyword for n, slot in body.CATALOG.items()
+                          if slot.is_required and n not in stated)
+        assert not unstated, f"{name} leaves {unstated} to something else"
+
+
+def test_the_artemis_forcing_composite_carries_the_file_and_not_its_name():
+    """ARTEMIS reads its forcing out of the boundary file, so the composite
+    stands for that file's ROWS; the keyword that names the file is stated beside
+    the geometry it is the boundary of."""
+    from trid3nt_server.workflows.telemac.modules.artemis import (
+        ART, BOUNDARY_FILENAME, IncidentWave,
+    )
+    from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
+        STEERING as AGITATION,
+    )
+
+    slots, files = ART.COMPOSITES["incident_wave"].expand(IncidentWave(
+        cli_text="1 1 1 0.0 0.0 0.0 0.0 lit 2 0.0 0.0 0.0 1 1\n",
+        open_nodes=[1], structure_nodes=[], height_m=1.0, reflection_coef=0.3))
+    assert slots == {}
+    assert list(files) == [BOUNDARY_FILENAME]
+    assert AGITATION.ASSERTED["BOUNDARY_CONDITIONS_FILE"] == BOUNDARY_FILENAME
+
+
 def test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique():
     """Set slots and open mandatory ones are the review; the whole rest of the
     module is under advanced, grouped by the dictionary's own section and

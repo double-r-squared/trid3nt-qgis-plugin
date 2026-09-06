@@ -67,8 +67,15 @@ def IncidentWave(*, cli_text: Any, open_nodes: Any,  # noqa: N802 - a value cons
 
 def _incident_wave(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                       Mapping[str, Any]]:
-    """The incident wave -> the boundary file that carries it, and its keyword."""
-    return ({"BOUNDARY_CONDITIONS_FILE": BOUNDARY_FILENAME},
+    """The incident wave -> the CONTENT of the boundary file that carries it.
+
+    ARTEMIS reads the forcing out of the boundary file rather than out of the
+    deck, so what this value stands for is that file's rows. The keyword that
+    NAMES the file is the template's own statement, beside the geometry it is
+    the boundary of - a file slot a composite filled would read as an open
+    mandatory slot everywhere the declaration is shown.
+    """
+    return ({},
             {BOUNDARY_FILENAME: stamp_boundary_rows(
                 str(value["cli_text"]),
                 open_nodes=value["open_nodes"],

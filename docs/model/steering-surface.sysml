@@ -637,6 +637,11 @@ package SteeringSurface {
     verify requirement EngineDefaultSurfaced by
         "tests/test_telemac_module_surface.py::test_the_bare_sheet_opens_every_keyword_the_dictionary_answers_for_nobody";
 
+    satisfy requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by door;
+    verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
+        "tests/test_telemac_module_surface.py::test_every_required_file_is_the_template_s_own_statement";
+    verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
+        "tests/test_telemac_module_surface.py::test_the_artemis_forcing_composite_carries_the_file_and_not_its_name";
     satisfy requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by slot;
     satisfy requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by sheet;
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by

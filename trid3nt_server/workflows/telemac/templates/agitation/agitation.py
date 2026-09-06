@@ -36,7 +36,11 @@ from trid3nt_server.workflows.runtime import (
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 from trid3nt_server.workflows.shared.aoi import AcquireAoi, location_or_bbox
 from trid3nt_server.workflows.telemac.authoring.assembler import HARBOUR_GEOMETRY
-from trid3nt_server.workflows.telemac.modules.artemis import ART, IncidentWave
+from trid3nt_server.workflows.telemac.modules.artemis import (
+    ART,
+    BOUNDARY_FILENAME,
+    IncidentWave,
+)
 from trid3nt_server.workflows.telemac.products.agitation import AgitationProducts
 from trid3nt_server.workflows.telemac.solving.solve import compute_class
 from trid3nt_server.workflows.telemac.templates.agitation.declarations import (
@@ -124,6 +128,7 @@ class STEERING(ART):
 
     TITLE = Ref("settled.title")
     GEOMETRY_FILE = HARBOUR_GEOMETRY
+    BOUNDARY_CONDITIONS_FILE = BOUNDARY_FILENAME
     RESULTS_FILE = _RESULT
 
     # The still water level the harbour is solved at is the dictionary's own zero,
