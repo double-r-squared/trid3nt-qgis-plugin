@@ -25,10 +25,28 @@ recipe back, and the one structured revert is reset-to-declaration.
 | `kinds.py` | The mesh KIND vocabulary: the shapes a mesher in this tree builds, and what a template may declare it accepts. |
 | `op_tool.py` | `mesh_op` - the runtime face of the word a recipe is written in: append, alter by index or remove one call on the open session's recipe, then regenerate. |
 | `recipe.py` | `MeshRecipe` - the one mesh-defining object, its editing methods, its JSON form and the plain mapping a plan step carries it as. |
-| `session.py` | `MeshSession` - the mesh under construction: it holds THE recipe, regenerates on every change, and journals the edit events to `mesh_recipe.jsonl`. |
+| `session.py` | `MeshSession` - the mesh under construction: it holds THE recipe, regenerates on every change, journals the edit events to `mesh_recipe.jsonl`, and REFUSES to freeze a boundary walk whose rings share a node. |
+| `shoreline.py` | The shoreline LADDER a box extent is cut from: `fetch_osm_coastline` at harbour scale (open ways closed into land by OSM's own land-on-the-left rule), the local GSHHG L1 shapefile as the coarse rung, and a refusal naming both when no rung resolves the ask. |
 | `step.py` | The declared MESH step: the template's frozen recipe, built under the gate, as the one step every plan puts before its author stage. |
 | `tool.py` | `build_mesh` - the router. Builds a validated recipe, and is the author word `tool.build_mesh` reaches; also the supplied-mesh resolution order. |
 | `topology.py` | The accepted topology a geometry file cannot state: which contiguous run of boundary nodes carries which declared role, written and read back. |
+
+## The shoreline the water is cut from
+
+A box extent is cut from a shoreline, and a shoreline coarser than the triangles
+asked for leaves scraps rather than a domain. The ladder in `shoreline.py` picks
+the COARSEST rung that still resolves the ask and refuses when none does:
+
+| rung | resolves | where it comes from |
+| --- | --- | --- |
+| `fetch_osm_coastline` | ~10 m | fetched per AOI from OpenStreetMap `natural=coastline`; the land polygons are derived here, by closing the open ways against the extent's own box under OSM's land-on-the-left convention |
+| `gshhg <file>` | 0.1 km (f) / 0.2 km (h) / 1 km (i) / 5 km (l) / 25 km (c) | the machine-local GSHHG L1 polygon shapefile named by **`TRID3NT_GSHHG_SHP`**, at the resolution its own filename letter states |
+
+**`TRID3NT_GSHHG_SHP`** is a machine-local dataset path, not a fetch: set it in
+`.env.local` to a GSHHG L1 polygon shapefile (`.../GSHHS_f_L1.shp` for the full
+resolution the coarse rung is meant to be). Unset, that rung states no
+resolution, is walked last, and is named in the refusal when nothing else serves
+- nothing exports it on a caller's behalf.
 
 ## Subfolders
 

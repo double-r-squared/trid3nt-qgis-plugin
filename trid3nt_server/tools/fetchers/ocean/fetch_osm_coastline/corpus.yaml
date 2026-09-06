@@ -1,0 +1,8 @@
+fetch_osm_coastline:
+- where does the land end and the water start around this harbour
+- fetch the OSM coastline for this bay
+- I need the surveyed shoreline at harbour scale
+- show me the coastline ways along this stretch of coast
+- get the land-water edge so the harbour mesh can be cut from it
+- overlay the mapped shoreline on the map
+- the coast line around this port, at street resolution

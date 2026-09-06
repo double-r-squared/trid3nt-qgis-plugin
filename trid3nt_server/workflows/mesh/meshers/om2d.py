@@ -53,6 +53,7 @@ from trid3nt_server.workflows.mesh.meshers import (
     register_mesher,
 )
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
+from trid3nt_server.workflows.mesh.shoreline import resolve_shoreline
 
 logger = logging.getLogger("trid3nt_server.workflows.mesh.meshers.om2d")
 
@@ -149,7 +150,8 @@ def build(recipe: Any) -> Mesh:
     ops = bind_ops(OM2D, recipe.ops)
     resolution_m = float(recipe.resolution_m or _DEFAULT_RESOLUTION_M)
     rundir = _rundir()
-    domain = _domain(recipe.extent, rundir)
+    notes: list[str] = []
+    domain = _domain(recipe.extent, rundir, resolution_m, notes)
 
     pre = [op for op in ops if op.phase == PRE]
     post = [op for op in ops if op.phase == POST]
@@ -158,7 +160,6 @@ def build(recipe: Any) -> Mesh:
     # bed painted on the host cannot survive a renumbering it never saw.
     split = next((i for i, op in enumerate(post)
                   if op.origin == "primitives"), len(post))
-    notes: list[str] = []
     config = {
         "bbox": list(domain.bbox),
         "shoreline_shp": (f"/shoreline/{domain.shoreline.name}"
@@ -447,7 +448,8 @@ class _Domain:
     polygon_name: str | None = None
 
 
-def _domain(extent: Any, rundir: Path) -> _Domain:
+def _domain(extent: Any, rundir: Path, resolution_m: float,
+            notes: list[str]) -> _Domain:
     """Resolve the recipe's extent into the domain the box cuts the mesh from."""
     if extent is None:
         raise MeshToolError(
@@ -456,10 +458,12 @@ def _domain(extent: Any, rundir: Path) -> _Domain:
             "declares none; give it a (min_lon, min_lat, max_lon, max_lat) box or "
             "a polygon another tool produced.")
     if isinstance(extent, (tuple, list)):
-        shoreline = _shoreline_shp()
-        source = f"GSHHG land polygons ({shoreline.name})"
-        return _Domain(bbox=_lonlat_bounds(tuple(float(v) for v in extent), source),
-                       source=source, shoreline=shoreline)
+        bbox = tuple(float(v) for v in extent)
+        served = resolve_shoreline(bbox, resolution_m, rundir)
+        notes.append(served.note)
+        source = f"{served.rung} land polygons"
+        return _Domain(bbox=_lonlat_bounds(bbox, source),
+                       source=source, shoreline=served.path)
     polygons = _polygons(op_geometry(extent))
     if not polygons:
         raise MeshToolError(
@@ -526,23 +530,6 @@ def _geometry_bounds(geometries: list[dict[str, Any]]
 
     minx, miny, maxx, maxy = unary_union([_shape(g) for g in geometries]).bounds
     return (float(minx), float(miny), float(maxx), float(maxy))
-
-
-def _shoreline_shp() -> Path:
-    """The shoreline polygons the domain is cut from, or a typed refusal.
-
-    The GSHHG shapefile is a machine-local dataset rather than a fetch: it is
-    named by env so one copy serves every mesher that needs it.
-    """
-    declared = (os.environ.get("TRID3NT_GSHHG_SHP") or "").strip()
-    path = Path(declared) if declared else None
-    if path is None or not path.exists():
-        raise MeshToolError(
-            "MESH_SHORELINE_UNAVAILABLE",
-            "the om2d mesher cuts its domain from GSHHG land polygons: set "
-            "TRID3NT_GSHHG_SHP to a GSHHG L1 polygon shapefile "
-            f"(currently {declared or 'unset'}).")
-    return path
 
 
 # --------------------------------------------------------------------------- #

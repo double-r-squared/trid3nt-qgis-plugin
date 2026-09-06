@@ -29,6 +29,7 @@ from trid3nt_server.workflows.mesh.meshers import (
     resolve_op,
 )
 from trid3nt_server.workflows.mesh.meshers import om2d as OM2D
+from trid3nt_server.workflows.mesh.shoreline import Shoreline
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 
 _AOI = (-75.80, 36.10, -75.70, 36.20)
@@ -259,6 +260,14 @@ def _stub_om2d(monkeypatch, tmp_path, *, pfix=None, stats=None,
     shoreline.write_bytes(b"shp")
     monkeypatch.setenv("TRID3NT_GSHHG_SHP", str(shoreline))
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
+    # WHICH shoreline serves is the ladder's own question, tested where the
+    # ladder is; these tests are about what the adapter does with the one it is
+    # handed, so the rung is pinned rather than climbed.
+    monkeypatch.setattr(
+        OM2D, "resolve_shoreline",
+        lambda bbox, resolution_m, rundir: Shoreline(
+            path=shoreline, rung="gshhg GSHHS_i_L1.shp",
+            note="shoreline ladder: pinned for this test"))
     monkeypatch.setattr(OM2D, "_run_op", fake_run_op)
     monkeypatch.setattr(
         "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
@@ -296,21 +305,17 @@ def test_the_one_size_word_threads_as_the_librarys_own_edge_defaults(
     assert sent["config"]["seed"] == OM2D._SEED
 
 
-def test_the_mounted_shoreline_is_the_declared_dataset(monkeypatch, tmp_path):
+def test_the_mounted_shoreline_is_the_rung_the_ladder_served(monkeypatch, tmp_path):
     sent = _stub_om2d(monkeypatch, tmp_path)
-    OM2D.build(_recipe())
+    mesh = OM2D.build(_recipe())
     assert sent["config"]["shoreline_shp"] == "/shoreline/GSHHS_i_L1.shp"
     assert sent["config"]["domain_geojson"] is None
     assert sent["shoreline_dir"].endswith("shoreline")
-
-
-def test_no_shoreline_dataset_refuses_by_naming_the_variable(monkeypatch, tmp_path):
-    monkeypatch.setenv("TRID3NT_GSHHG_SHP", str(tmp_path / "missing.shp"))
-    monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
-    with pytest.raises(MeshToolError) as excinfo:
-        OM2D.build(_recipe())
-    assert excinfo.value.error_code == "MESH_SHORELINE_UNAVAILABLE"
-    assert "TRID3NT_GSHHG_SHP" in str(excinfo.value)
+    # The rung is JOURNALLED: a domain's shape is the first thing an answer
+    # depends on, so which substrate cut it rides on the mesh.
+    provenance = mesh.meta["artifact"]["provenance"]
+    assert "gshhg GSHHS_i_L1.shp" in provenance["domain_source"]
+    assert any("shoreline ladder" in note for note in provenance["op_notes"])
 
 
 def test_a_recipe_with_no_extent_refuses_before_anything_is_staged():

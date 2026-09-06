@@ -29,6 +29,8 @@ from ..errors import router_empty_error, router_input_error, router_upstream_err
 __all__ = [
     "build_request_breakwaters",
     "parse_response_breakwaters",
+    "build_request_coastline",
+    "parse_response_coastline",
     "build_request_roads",
     "parse_response_roads",
     "build_request_pois",
@@ -660,6 +662,72 @@ def parse_response_breakwaters(
                 "osm_id": el.get("id"),
                 "name": tags.get("name"),
                 "man_made": tags.get("man_made"),
+            },
+        })
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# fetch_osm_coastline -- natural=coastline ways -> WHOLE land/water edge lines.
+#
+# The fourth member, and unclipped for the same reason the breakwater is: the
+# LAND IS ON THE LEFT of a coastline way's direction, and that is the only thing
+# that makes an open line a land/water edge. A way cut at the AOI edge loses the
+# side it was carrying at the cut, and the two sides of the box corner it ends in
+# become indistinguishable.
+#
+# A lake is deliberately absent: OSM maps inland water as natural=water polygons
+# and gives it no coastline way, so an inland box comes back with nothing rather
+# than with a shore that is not one.
+# --------------------------------------------------------------------------- #
+
+
+def _build_coastline_ql(bbox: tuple[float, float, float, float]) -> str:
+    """Overpass QL for ``natural=coastline`` ways touching ``bbox`` (``out geom``)."""
+    min_lon, min_lat, max_lon, max_lat = bbox
+    s, w, n, e = min_lat, min_lon, max_lat, max_lon
+    return (
+        f"[out:json][timeout:{_OVERPASS_QL_TIMEOUT}];"
+        f'(way["natural"="coastline"]({s},{w},{n},{e}););'
+        f"out geom;"
+    )
+
+
+@_hooks.register_hook("overpass_coastline.build_request")
+def build_request_coastline(spec: SourceSpec,
+                            params: dict[str, Any]) -> list["_hooks.RequestPlan"]:
+    """Build the coastline QL and plan one POST per mirror."""
+    bbox = tuple(float(v) for v in params["bbox"])
+    return _mirror_plans(spec, _build_coastline_ql(bbox))
+
+
+@_hooks.register_hook("overpass_coastline.parse_response")
+def parse_response_coastline(
+    spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
+) -> list[dict[str, Any]]:
+    """Project coastline ways to WHOLE LineStrings, in the direction OSM drew them.
+
+    The vertex ORDER is carried through untouched: it is what says which side is
+    land, and reversing one would put the sea where the town is. Empty is a
+    legitimate answer - an inland box has no coastline - and the consumer decides
+    what absence means.
+    """
+    out: list[dict[str, Any]] = []
+    for el in _elements(spec, bodies):
+        if not isinstance(el, dict) or el.get("type") != "way":
+            continue
+        coords = _way_coords(el.get("geometry"))
+        if len(coords) < 2:
+            continue
+        tags = el.get("tags") if isinstance(el.get("tags"), dict) else {}
+        out.append({
+            "type": "Feature",
+            "geometry": {"type": "LineString",
+                         "coordinates": [[float(x), float(y)] for x, y in coords]},
+            "properties": {
+                "osm_id": el.get("id"),
+                "name": tags.get("name"),
+                "natural": tags.get("natural"),
             },
         })
     return out

@@ -25,6 +25,7 @@ import pytest
 from trid3nt_server.workflows.mesh.meshers import MeshToolError
 from trid3nt_server.workflows.mesh.meshers import om2d as OM2D
 from trid3nt_server.workflows.mesh.meshers import reg_grid as REG_GRID
+from trid3nt_server.workflows.mesh.shoreline import Shoreline
 from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 
 _AOI = (-75.80, 36.10, -75.70, 36.20)
@@ -75,6 +76,14 @@ def _stub_om2d(monkeypatch, tmp_path, *, stats=None):
     monkeypatch.setenv("TRID3NT_GSHHG_SHP", str(shoreline))
     monkeypatch.setenv("TRID3NT_RUNS_DIR", str(tmp_path))
     monkeypatch.setattr(OM2D, "_run_op", fake_run_op)
+    # WHICH shoreline serves a box extent is the ladder's own question, tested
+    # where the ladder is; here the rung is pinned so the two paths differ in the
+    # extent alone.
+    monkeypatch.setattr(
+        OM2D, "resolve_shoreline",
+        lambda bbox, resolution_m, rundir: Shoreline(
+            path=shoreline, rung="gshhg GSHHS_i_L1.shp",
+            note="shoreline ladder: pinned for this test"))
     monkeypatch.setattr(
         "trid3nt_server.workflows.mesh.shared.selafin_cli.write_telemac_pair",
         fake_pair)
@@ -213,7 +222,7 @@ def test_the_shoreline_mesh_still_names_the_shoreline_it_was_cut_from(
                stats={"sizing_functions": ["feature_sizing_function"]})
     mesh = OM2D.build(_recipe(extent=_AOI))
     provenance = mesh.meta["artifact"]["provenance"]
-    assert provenance["domain_source"] == "GSHHG land polygons (GSHHS_i_L1.shp)"
+    assert provenance["domain_source"] == "gshhg GSHHS_i_L1.shp land polygons"
 
 
 def test_the_boundary_record_carries_the_domain_it_was_walked_on(

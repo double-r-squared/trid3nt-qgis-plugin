@@ -1,0 +1,76 @@
+schema_version: v1
+name: fetch_osm_coastline
+source_class: osm_coastline
+input_error_suffix: INPUT_INVALID
+shape: vector-fgb
+supports_global_query: false
+endpoints:
+  data:
+    url: https://overpass-api.de/api/interpreter
+  kumi:
+    url: https://overpass.kumi.systems/api/interpreter
+  coffee:
+    url: https://overpass.private.coffee/api/interpreter
+auth:
+  mode: none
+  user_agent: trid3nt/0.1 (Hazard Modeling Agent; https://github.com/double-r-squared/trid3nt-qgis-plugin;
+    agent@trid3nt.dev)
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+hooks:
+  build_request: overpass_coastline.build_request
+  parse_response: overpass_coastline.parse_response
+ingest:
+  http_source:
+    endpoint_fallback: true
+  properties:
+  - osm_id
+  - name
+  - natural
+normalize:
+  crs: EPSG:4326
+output:
+  layer_type: vector
+  ext: fgb
+  role: context
+  style:
+    kind: reference
+    geometry: line
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: per_feature
+  features_per_sq_deg: 400.0
+  kb_per_feature: 8.0
+  floor_mb: 0.02
+caveats:
+- OpenStreetMap natural=coastline ways via the Overpass API (3-mirror fallback). Global, keyless. The
+  land is on the LEFT of a coastline way's direction, which is what makes an open line a land/water
+  edge; the ways are returned WHOLE rather than clipped, because a coastline cut at the AOI edge would
+  leave the two sides indistinguishable there. An inland AOI has no coastline in OSM and returns a
+  valid 0-feature layer, not an error - a lake shore is natural=water, not natural=coastline.
+docstring: "The land-water EDGE at survey resolution: OpenStreetMap coastline ways as LineStrings.\n\
+  \n**What it does:** Queries the OpenStreetMap Overpass API for ways tagged\n``natural=coastline`` that\
+  \ touch the requested bbox and returns each one\nWHOLE, in EPSG:4326, serialized to FlatGeobuf and\
+  \ cached for 30 days.\nOSM coastline is drawn at street resolution (metres), which is one to two\n\
+  orders of magnitude finer than the global GSHHG shoreline datasets, so it\nis the rung that can describe\
+  \ a harbour, a breakwater entrance or a\nnarrow inlet. The vector renders inline on the map automatically.\n\
+  \n**When to use:**\n- The user asks where the shore runs, or wants the coastline drawn.\n- A harbour-scale\
+  \ domain has to be cut from the real land-water edge:\n  this is the shoreline rung ``build_mesh(mesher='om2d')``\
+  \ climbs to when\n  the asked triangle edge is finer than a global shoreline can describe.\n\n**When\
+  \ NOT to use:**\n- DO NOT use for a LAKE, reservoir or inland water body -- OSM maps those\n  as ``natural=water``\
+  \ polygons and they carry no coastline way at all.\n  Use ``fetch_nhd_waterbodies`` (US) for the water\
+  \ body's own polygon.\n- DO NOT use for a river bank -- ``fetch_nhd_area_water`` maps those.\n- DO\
+  \ NOT read it as bathymetry or as a tidal datum: a coastline way is a\n  line on a map with no elevation\
+  \ and no stated water level.\n\n**Parameters:**\n- ``bbox`` (tuple[float, float, float, float]): ``(min_lon,\
+  \ min_lat,\n  max_lon, max_lat)`` in EPSG:4326. Required.\n\n**Returns:** A ``LayerURI`` pointing at\
+  \ a FlatGeobuf in the cache bucket.\n``layer_type=\"vector\"``, ``role=\"context\"``, ``units=None``.\
+  \ Properties\nper feature: ``osm_id`` (int), ``name`` (str | None), ``natural`` (str).\nAn AOI OSM maps\
+  \ no coastline in returns a valid 0-feature layer -- an\ninland box is an honest answer, not an error.\n\
+  \n**Cross-tool dependencies:**\n- The harbour-scale rung of the om2d shoreline ladder; the coarse rung\n\
+  \  is the local GSHHG shapefile named by ``TRID3NT_GSHHG_SHP``.\n- Pairs with ``fetch_osm_breakwaters``\
+  \ (the structure inside the water)\n  and ``fetch_topobathy`` (the bed under it).\n- Overpass inserts\
+  \ a polite delay before each network request; cache\n  hits skip it."

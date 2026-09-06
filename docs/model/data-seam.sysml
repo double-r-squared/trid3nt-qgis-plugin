@@ -86,6 +86,15 @@ package DataSeam {
         */
     }
 
+    part def ShorelineLadder {
+        doc /*
+        The shoreline a box extent is cut from, as a ladder with a stated
+        fidelity per rung: the coarsest rung that resolves the ask serves it, a
+        rung that yields nothing hands over, and an ask no rung resolves is
+        refused by name.
+        */
+    }
+
     part def BedResultModel {
         doc /*
         The layer a bed fetch returns, with the provenance fields that are NOT
@@ -293,6 +302,18 @@ package DataSeam {
         port gapOut : GapOut;
     }
 
+    part shorelineLadder : ShorelineLadder {
+        doc /*
+        code: trid3nt_server/workflows/mesh/shoreline.py
+        */
+    }
+
+    part coastlineDeclaration : BedSourceDeclaration {
+        doc /*
+        code: trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/source.yaml
+        */
+    }
+
     part bedResultModel : BedResultModel {
         doc /*
         code: contracts/trid3nt_contracts/execution.py
@@ -438,6 +459,24 @@ package DataSeam {
         */
     }
 
+    requirement def TheShorelineIsALadderWithStatedFidelity {
+        doc /*
+        RULING 2026-09-06 (docs/IDEAS.md, "STAGE 3 RULINGS, LIVE FINDINGS", (c)):
+        a declarative OSM coastline fetcher is the HARBOUR-SCALE rung of the
+        shoreline a domain is cut from, and GSHHG at full resolution is the
+        COARSE rung; the ladder resolves the file, the rung is journaled, and an
+        ask below every rung's coverage refuses BY NAME.
+
+        A shoreline is the same kind of input as a bed and carries the same
+        obligation: a substrate coarser than the triangles asked for does not
+        produce a coarser domain, it produces scraps that touch at points, which
+        the mesh acceptance then refuses. Naming the coverage is what turns that
+        into an answer a caller can act on. The machine-local rung is named by
+        TRID3NT_GSHHG_SHP and nothing exports it on a caller's behalf: unset, it
+        states no resolution, is walked last, and is named in the refusal.
+        */
+    }
+
     requirement def ThalwegBurningIsNeverABedSource {
         doc /*
         SIGNED DECISION - thalweg and stream burning stay REJECTED as a bed
@@ -528,6 +567,20 @@ package DataSeam {
         "tests/test_bathymetry_data_seam.py::test_an_aoi_no_delivered_tile_reaches_refuses_by_name";
     verify requirement AStoppedRungNeverShips by
         "tests/test_bathymetry_data_seam.py::test_the_synthetic_slot_is_stated_as_deferred_rather_than_forgotten";
+
+    satisfy requirement TheShorelineIsALadderWithStatedFidelity by shorelineLadder;
+    satisfy requirement TheShorelineIsALadderWithStatedFidelity by
+        coastlineDeclaration;
+    verify requirement TheShorelineIsALadderWithStatedFidelity by
+        "tests/test_mesh_shoreline_ladder.py::test_a_coarse_ask_is_served_by_the_local_file_without_a_fetch";
+    verify requirement TheShorelineIsALadderWithStatedFidelity by
+        "tests/test_mesh_shoreline_ladder.py::test_a_harbour_ask_climbs_past_a_shoreline_that_cannot_describe_it";
+    verify requirement TheShorelineIsALadderWithStatedFidelity by
+        "tests/test_mesh_shoreline_ladder.py::test_an_ask_no_rung_resolves_refuses_naming_every_rung";
+    verify requirement TheShorelineIsALadderWithStatedFidelity by
+        "tests/test_mesh_shoreline_ladder.py::test_an_unset_shoreline_variable_is_named_rather_than_exported";
+    verify requirement TheShorelineIsALadderWithStatedFidelity by
+        "tests/test_mesh_shoreline_ladder.py::test_the_land_is_on_the_left_of_the_way_the_way_was_drawn";
 
     satisfy requirement ThalwegBurningIsNeverABedSource by blueTopoSource;
     satisfy requirement ThalwegBurningIsNeverABedSource by waterBodyClassifier;
