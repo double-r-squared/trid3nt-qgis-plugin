@@ -3740,3 +3740,30 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (reported, not fixed): a cold-start import race - two threads racing
   the first geopandas/shapely import poison sys.modules for the
   process's life; framework import discipline, its own hygiene row.
+  STAGE 3 RULINGS, ACCEPTANCE FINDINGS (NATE 2026-09-06): (a) HARBOUR
+  MESHING - the drawn outline WINS (the constrained-cut guard stays;
+  we never move what the user drew); the harbour recipe declares
+  set_rim_size like the basin and orders the cleaning passes BEFORE
+  the constrained obstacle punch so the guard has nothing to revert; a
+  surviving pinch refuses by name. Template declarations, no seam
+  change. (b) BED DATUM, GENERAL - every bed source states its
+  vertical datum on its source row; set_bed harmonizes to the run's
+  datum or REFUSES by name, listing the populations it measured; a
+  mosaic mixing datums is not a bed source for a water domain - the
+  NCEI mosaic splits into its two products (bathymetry on the lake
+  datum, land DEM on NAVD88), each stated. NO water-body vocabulary,
+  no new ladder class (NATE: "I smell over specialization"). Recorded
+  in REANALYZE_LEDGER. (c) THE OPEN SET - every no-default unset
+  keyword is OPEN on the sheet, lists included, each with its meaning
+  (an emptiness that means a substitution is SEEN); only the dico's
+  OBLIG files are REQUIRED at run; anything else the engine demands
+  surfaces from its own listing by name - we invent no required set.
+  BATHYMETRY POSTURE (NATE 2026-09-06, no bed-seam spec now): data is
+  assumed TRUE; the bed is VISUALLY PRESENTED to the user, who refines
+  it (interpolation, stitching) with their own tools; the source the
+  user picks is the correct one; a template that needs a bed SETS a
+  source; source rows keep their METADATA (acquisition time, datum,
+  resolution) so two sources can be stitched knowingly; LATER, a
+  sub-subsystem builds a COVERAGE MAP of all recorded bathymetry and
+  serves the source an AOI lands inside - "bathymetry is a little more
+  tricky", discussion open.

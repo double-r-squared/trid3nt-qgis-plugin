@@ -55,3 +55,22 @@ REVISIT TRIGGER: NATE's standing intent - a SIDE-BY-SIDE evaluation of
 the two views once the sheet is live, judged on which performs better
 for a human and for the model filling a sheet; the winner replaces the
 default. Backburner until fill/run has real use.
+
+## 2026-09-06 - bed datum: one stated datum per source, refuse otherwise
+DECIDED: a bed source states its vertical datum on its source row;
+set_bed harmonizes to the run's datum or refuses by name listing the
+populations it measured; a mosaic mixing datums is not a bed source
+for a water domain. General - no water-body vocabulary, no new ladder
+class. Evidence: Marquette Lower Harbor basin bed off the NCEI mosaic:
+778 nodes at -8.91..-0.10 m (lake datum) and 49 shoreline nodes at
++178..+194 m (NAVD88 land tiles), the guilty node of the failed 3D
+tracer step inside the 49; the fetcher stated no datum.
+REVISIT TRIGGER: (a) the coverage-map bed subsystem lands (all
+recorded bathymetry indexed, the source an AOI lands inside served) -
+the datum rule becomes a property of the index, and stitching two
+stated-datum sources with their acquisition times becomes a user
+tool; (b) a supported AOI where the only bed source cannot state its
+datum - decide per case whether a stated constant offset is honest;
+(c) NATE's posture that the user refines the bed visually needs the
+bed layer's provenance card to show datum + acquisition time per
+source - if that card is missing, this rule is the only guard.
