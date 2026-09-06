@@ -3708,3 +3708,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   refuses inside the module); (2) a 600 s screening scour run reports
   zero deposited mass while the bed moved (GAIA's listing balance
   prints zero at its precision over that window).
+  STAGE 3 RULINGS, 3D (NATE 2026-09-06): (a) stratified_flow = ONE
+  template over om2d - wind circulation FOLDS into stratification (the
+  baroclinic deck with wind on answers surface-downwind / return-flow-
+  at-depth off the same run; u_surface/u_bottom/depth_avg_u join the
+  ANSWER); the SALT WEDGE (a 16 m x 2 m lock channel - authored geometry
+  that IS the physics) PARKS with the ARTEMIS analytic classes under the
+  rung-4 rematch condition (condi_lock, _solve_salt_wedge,
+  benjamin_front_speed ride with it); the t3d FORTRAN composite lands
+  with the thermocline arm only; agitation's mode loses resonance/shoal.
+  (b) MESH SEAM AMENDMENT (the one frozen-seam change of this wave):
+  om2d writes the topology bundle UNCONDITIONALLY - an empty role set
+  is a recorded fact ("this basin names no liquid boundary"), the
+  reader states it, telemac3d accepts a closed basin; modeled + tested.
