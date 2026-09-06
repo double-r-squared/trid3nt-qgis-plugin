@@ -735,3 +735,23 @@ def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
         assert len(rows[name].desc) > 80, name
     assert rows["time_step_s"].derived_when_absent
 
+
+def test_every_open_water_recipe_carries_the_boundary_cleaning_chain():
+    """A domain cut from a shoreline can leave scraps that touch at points, and
+    the library's own clean passes are what remove them before the boundary is
+    walked. The reach recipe lists them; the two open-water recipes list the
+    same four, in the same order."""
+    from trid3nt_server.workflows.mesh.tool import recipe_plan_value
+    from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
+        MESH as HARBOUR,
+    )
+    from trid3nt_server.workflows.telemac.templates.shared.river import MESH as REACH
+    from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import (
+        MESH as BASIN,
+    )
+
+    cleaning = ("delete_boundary_faces", "delete_faces_connected_to_one_face",
+                "make_mesh_boundaries_traversable", "fix_mesh")
+    for recipe in (REACH, HARBOUR, BASIN):
+        ops = [op["op"] for op in recipe_plan_value(recipe)["ops"]]
+        assert [op for op in ops if op in cleaning] == list(cleaning)

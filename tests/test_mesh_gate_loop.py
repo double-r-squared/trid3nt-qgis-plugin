@@ -590,3 +590,51 @@ async def test_the_shipped_client_parses_the_card_and_its_reply_routes_home(
     replayed = _session(tmp_path / "replay")
     await mesh_gate._apply_gate_revision(replayed, revised)
     assert replayed.recipe.resolution_m == 900.0
+
+
+# --------------------------------------------------------------------------- #
+# The pinched boundary.
+# --------------------------------------------------------------------------- #
+def _pinched_mesh():
+    """Two triangles meeting at ONE node - the Point Judith defect, minimal.
+
+    The shoreline cut at an edge it cannot describe leaves scraps that touch at
+    points; each touch is a node two rings of the boundary walk both pass
+    through, which is what the harbour mesh carried 7 of.
+    """
+    import numpy as np
+
+    from trid3nt_server.workflows.mesh.meshers import Mesh
+
+    points = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0],
+                       [-1.0, 0.0], [0.0, -1.0]], dtype=float)
+    cells = np.array([[0, 1, 2], [0, 3, 4]], dtype=np.int64)
+    return Mesh(points=points, cells=cells, crs_authid="EPSG:4326",
+                bed=np.zeros(5, dtype=float),
+                meta={"lonlat_bbox": (-1.0, -1.0, 1.0, 1.0)})
+
+
+def test_accept_refuses_a_boundary_walk_whose_rings_share_a_node(tmp_path):
+    session = _session(tmp_path)
+    session._mesh = _pinched_mesh()
+    with pytest.raises(MeshToolError) as excinfo:
+        session.accept()
+    assert excinfo.value.error_code == "MESH_BOUNDARY_PINCHED"
+    message = str(excinfo.value)
+    assert "1 node(s)" in message
+    assert "nodes 0" in message
+
+
+def test_a_boundary_that_closes_once_is_accepted(tmp_path):
+    import numpy as np
+
+    from trid3nt_server.workflows.mesh.session import _pinched_boundary_nodes
+
+    mesh = _pinched_mesh()
+    square = mesh.__class__(
+        points=np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+                        dtype=float),
+        cells=np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int64),
+        crs_authid="EPSG:4326", bed=np.zeros(4, dtype=float), meta={})
+    assert _pinched_boundary_nodes(square) == []
+    assert _pinched_boundary_nodes(mesh) == [0]

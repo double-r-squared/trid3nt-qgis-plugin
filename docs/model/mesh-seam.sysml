@@ -662,6 +662,18 @@ package MeshSeam {
         */
     }
 
+    requirement def AcceptanceRefusesAPinchedBoundary {
+        doc /*
+        A mesh is FROZEN only if its boundary walk closes once through every
+        node. A node two rings both pass through has no boundary numbering: the
+        walk visits it twice while the geometry holds it once, so the successor
+        array a writer builds outruns the node count and the write either crashes
+        or classifies the wrong nodes. The acceptance names the shared nodes and
+        their count, because a crash carries none of that and a caller can act on
+        a named node.
+        */
+    }
+
     requirement def SignatureIsTheSchema {
         doc /*
         An op's name must exist in the registering mesher's namespaces and its
@@ -778,6 +790,12 @@ package MeshSeam {
         "tests/test_mesh_topology_and_bed.py::test_the_bundle_states_the_numbering_a_steering_author_reads";
     verify requirement TopologyIsWrittenForEveryMesh by
         "tests/test_mesh_topology_and_bed.py::test_an_empty_role_is_not_a_role";
+
+    satisfy requirement AcceptanceRefusesAPinchedBoundary by meshSession;
+    verify requirement AcceptanceRefusesAPinchedBoundary by
+        "tests/test_mesh_gate_loop.py::test_accept_refuses_a_boundary_walk_whose_rings_share_a_node";
+    verify requirement AcceptanceRefusesAPinchedBoundary by
+        "tests/test_mesh_gate_loop.py::test_a_boundary_that_closes_once_is_accepted";
 
     satisfy requirement SignatureIsTheSchema by mesherRegistry;
     satisfy requirement SignatureIsTheSchema by om2dAdapter;
