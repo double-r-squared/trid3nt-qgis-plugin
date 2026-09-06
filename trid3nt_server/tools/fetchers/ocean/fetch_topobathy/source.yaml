@@ -12,7 +12,7 @@ empty_error_suffix: EMPTY
 endpoints:
   data:
     url: https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/
-vertical_datum: NAVD88, metres, positive up (NOAA NCEI CUDEM 1/9 arc-second and USGS 3DEP alike; a CUDEM tile that states another datum with no documented offset refuses)
+vertical_datum: NAVD88 (metres, positive up)
 auth:
   mode: none
 params:

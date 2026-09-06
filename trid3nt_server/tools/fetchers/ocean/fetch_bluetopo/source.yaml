@@ -12,7 +12,7 @@ empty_error_suffix: COVERAGE_GAP
 endpoints:
   data:
     url: https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/
-vertical_datum: NAVD88, metres, positive up (read off each BlueTopo tile's own VERTICALDATUMWKT; a tile that states no NAVD88 refuses)
+vertical_datum: NAVD88 (metres, positive up)
 auth:
   mode: none
 params:

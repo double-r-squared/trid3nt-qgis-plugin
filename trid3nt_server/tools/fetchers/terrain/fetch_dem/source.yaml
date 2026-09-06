@@ -9,7 +9,7 @@ supports_global_query: false
 endpoints:
   data:
     url: https://elevation.nationalmap.gov/
-vertical_datum: NAVD88, metres, positive up (USGS 3DEP)
+vertical_datum: NAVD88 (metres, positive up)
 auth:
   mode: none
 params:

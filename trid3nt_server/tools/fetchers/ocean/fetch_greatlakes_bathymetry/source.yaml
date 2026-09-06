@@ -6,7 +6,7 @@ supports_global_query: false
 error_prefix: GREATLAKES_BATHYMETRY
 input_error_suffix: INPUT_INVALID
 empty_error_suffix: EMPTY
-vertical_datum: each Great Lake's own Low Water Datum (LWD), metres, positive up
+vertical_datum: each Great Lake's own Low Water Datum (metres, positive up)
 endpoints:
   data:
     url: https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics

@@ -567,10 +567,17 @@ def _wrap(lines: list[str]) -> str:
     return "\n".join(out)
 
 
+#: How much of a layer name reaches the panel filename. A provenance name states
+#: the source, its native cell and its vertical datum, and the whole of that plus
+#: the prefix runs past the 255-byte limit a filename has - which fails the write
+#: rather than the check it would have been part of.
+_PANEL_SLUG_CHARS = 80
+
+
 def _panel_slug(name: str) -> str:
     """Filesystem-safe slug for a layer name, used in the per-panel filename."""
     slug = re.sub(r"[^a-z0-9]+", "-", str(name or "layer").lower()).strip("-")
-    return slug or "layer"
+    return slug[:_PANEL_SLUG_CHARS].strip("-") or "layer"
 
 
 def _panel_base(out_path: Path) -> str:

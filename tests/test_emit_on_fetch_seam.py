@@ -125,9 +125,9 @@ def test_input_layer_name_shape_and_purpose():
     )
     # a source that states a vertical datum carries it onto the card, because a
     # bed the user judges is a bed they may stitch another source onto.
-    bed = _spec(source_class="3dep", vertical_datum="NAVD88, metres, positive up")
+    bed = _spec(source_class="3dep", vertical_datum="NAVD88 (metres, positive up)")
     assert input_layer_name(bed, {}, "mesh bed") == (
-        "Input: mesh bed (3dep, 3DEP 10 m, datum NAVD88, metres, positive up)"
+        "Input: mesh bed (3dep, 3DEP 10 m, datum NAVD88 (metres, positive up))"
     )
 
 
