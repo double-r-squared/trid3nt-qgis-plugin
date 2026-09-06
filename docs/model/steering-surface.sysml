@@ -452,6 +452,23 @@ package SteeringSurface {
         */
     }
 
+    requirement def ANoDefaultKeywordIsTheTemplatesToState {
+        doc /*
+        RULING 2026-09-06 (docs/IDEAS.md, "STAGE 3 RULINGS, LIVE FINDINGS", (a)):
+        a keyword the dictionary gives NO default for is a choice somebody makes.
+        Left unstated it is not silence - the engine substitutes something of its
+        own (SCHEME FOR ADVECTION OF TRACERS falls back to whatever the
+        VELOCITIES are advected by) and the deck records no choice at all, so
+        nobody can read what the run was solved under.
+
+        Such a keyword is the TEMPLATE's to state, never the wrapper's, and it
+        states three things with it: the value, the BASIS for the value where the
+        LLM and the human both read it, and a way to override it on the sheet. A
+        value the template derives rather than asserts names the producer it came
+        from, and reuses the one that already exists.
+        */
+    }
+
     requirement def WrapperHasNoOpinion {
         doc /*
         The wrapper asserts nothing and offers nowhere to. It is the analog of
@@ -581,6 +598,13 @@ package SteeringSurface {
         "tests/test_telemac_module_surface.py::test_an_engine_default_is_never_written_into_the_deck";
     verify requirement EngineDefaultSurfaced by
         "tests/test_telemac_module_surface.py::test_the_bare_sheet_asks_the_three_questions_the_engine_has_no_answer_for";
+
+    satisfy requirement ANoDefaultKeywordIsTheTemplatesToState by slot;
+    satisfy requirement ANoDefaultKeywordIsTheTemplatesToState by sheet;
+    verify requirement ANoDefaultKeywordIsTheTemplatesToState by
+        "tests/test_telemac_module_surface.py::test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling";
+    verify requirement ANoDefaultKeywordIsTheTemplatesToState by
+        "tests/test_telemac_module_surface.py::test_the_engine_default_is_on_the_slot_or_the_slot_is_a_question";
 
     satisfy requirement WrapperHasNoOpinion by wrapper;
     verify requirement WrapperHasNoOpinion by
