@@ -39,7 +39,7 @@ DEFAULT_EDGE_LENGTH_M = 60.0
 #: The bed a Great Lakes domain is painted from. The coastal CUDEM composite does
 #: not reach the lakes at all, so its own ladder refuses there; the NCEI Great
 #: Lakes collection is the lake-datum bathymetry that does.
-BED = "fetch_ncei_dem_mosaic"
+BED = "fetch_greatlakes_bathymetry"
 
 
 def lake_polygon(bbox: tuple[float, ...], out_dir: Path) -> str:

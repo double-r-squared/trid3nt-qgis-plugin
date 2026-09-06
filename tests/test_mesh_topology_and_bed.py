@@ -527,9 +527,49 @@ def test_a_dict_shaped_fetch_is_not_reported_as_unmeasured():
     calls a MEASURED provenance unmeasured."""
     as_dict = {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
                "fallback_note": None}
-    assert P._provenance("fetch_topobathy", as_dict) == (
-        "fetch_topobathy: cudem_nearshore 89%, etopo_bathy_base 11%")
+    assert P._provenance("fetch_topobathy", as_dict).startswith(
+        "fetch_topobathy: cudem_nearshore 89%, etopo_bathy_base 11% [")
     assert "UNMEASURED" not in P._provenance("fetch_topobathy", as_dict)
+
+
+def test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source():
+    """A bed the user is shown to refine is a bed they may stitch another source
+    onto, and what the two are compared on is the metadata of the rows."""
+    card = P._provenance("fetch_topobathy",
+                         {"uri": "s3://b/x.tif", "fallbacks": _ROWS_DICT,
+                          "fallback_note": None,
+                          "reference_time": "2019-06-01T00:00:00Z"})
+    assert "datum NAVD88" in card
+    assert "acquired 2019-06-01T00:00:00Z" in card
+    assert "native CUDEM" in card
+
+
+def test_a_source_row_that_states_no_datum_is_not_a_bed():
+    with pytest.raises(MeshToolError) as excinfo:
+        P._refuse_undated_source("fetch_nhd_waterbodies")
+    assert excinfo.value.error_code == "MESH_BED_DATUM_UNSTATED"
+    assert "fetch_nhd_waterbodies" in str(excinfo.value)
+    # a row that states one passes, and nothing is invented for one that is not
+    # a registered source at all.
+    P._refuse_undated_source("fetch_topobathy")
+
+
+def test_one_source_reading_on_two_datums_refuses_naming_both_populations():
+    """The Marquette basin, measured: 778 lake-datum depths and 49 shoreline
+    nodes read on the orthometric datum out of ONE mosaic."""
+    bed = np.concatenate([np.linspace(-8.91, -0.10, 778),
+                          np.linspace(178.3, 194.4, 49)])
+    with pytest.raises(MeshToolError) as excinfo:
+        P._refuse_two_datums(bed, "fetch_ncei_dem_mosaic")
+    assert excinfo.value.error_code == "MESH_BED_TWO_DATUMS"
+    said = str(excinfo.value)
+    assert "778 node(s) over -8.91 m to -0.10 m" in said
+    assert "49 node(s) over 178.30 m to 194.40 m" in said
+
+
+def test_a_bed_on_one_datum_passes_however_steep_it_is():
+    P._refuse_two_datums(np.linspace(-8.98, 0.0, 827), "one datum")
+    P._refuse_two_datums(np.linspace(-400.0, 320.0, 5000), "a whole valley")
 
 
 def test_a_fetch_that_measured_nothing_still_says_so():

@@ -1,0 +1,9 @@
+fetch_greatlakes_bathymetry:
+- give me the lake bed bathymetry for this great lakes harbour so i can mesh it
+- what is the water depth across lake superior on the noaa lake datum
+- pull the great lakes lake-datum bathymetry grid for marquette harbor
+- how deep is the lake here, i want a continuous bed surface not a station reading
+- bed elevation at my mesh nodes over a great lakes basin
+- lake michigan depth raster for a telemac basin domain over this AOI
+- noaa lake bathymetry grid, positive up in metres, on the low water datum
+- bathymetry for a lake domain, not a coastal one

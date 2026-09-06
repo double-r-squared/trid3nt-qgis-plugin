@@ -355,3 +355,40 @@ def test_the_topobathy_row_declares_the_water_body_class_it_ladders_on() -> None
         "trid3nt_server/tools/fetchers/ocean/fetch_topobathy/source.yaml"))
     param = spec.params["water_body_class"]
     assert sorted(param.values or []) == sorted(tc.WATER_BODY_CLASSES)
+
+
+# --------------------------------------------------------------------------- #
+# The datum every bed source owes, stated on its own row.
+# --------------------------------------------------------------------------- #
+#: Every source a recipe may hand ``set_bed``: the rows whose quantity IS bed
+#: elevation. Read off the tree rather than listed, so a new one joins the rule
+#: by existing rather than by somebody remembering to add it here.
+def _bed_capable_rows() -> dict:
+    from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
+
+    return {name: spec for name, spec in compose_specs_from_tree().items()
+            if spec.normalize.quantity == "elevation"}
+
+
+def test_every_bed_capable_source_row_states_its_vertical_datum() -> None:
+    rows = _bed_capable_rows()
+    assert rows, "no elevation source rows found"
+    unstated = sorted(name for name, spec in rows.items()
+                      if not spec.vertical_datum)
+    assert not unstated, (
+        f"{unstated} would paint a bed whose reference nobody carried")
+
+
+def test_the_lake_row_pins_one_product_of_the_mixed_mosaic() -> None:
+    """DEM_all merges the lake-datum grids, the NAVD88 coastal tiles, the same
+    tiles on MHW and the EGM2008 global bases under one name, so the row that
+    reads it as a bed names the ONE product it means."""
+    from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
+
+    spec = load_spec_from_path(Path(
+        "trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_bathymetry/"
+        "source.yaml"))
+    rule = spec.ingest["imageserver"]["export_query"]["mosaicRule"]
+    assert "Name='greatlakes_lakedatum'" in rule
+    assert "Low Water Datum" in (spec.vertical_datum or "")
+    assert spec.corpus, "a new source needs its retrieval phrasings"

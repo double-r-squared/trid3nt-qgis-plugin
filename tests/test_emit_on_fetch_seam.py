@@ -60,6 +60,7 @@ def _spec(
     source_class: str = "3dep",
     layer_type: str = "raster",
     native_hint: str | None = "3DEP 10 m",
+    vertical_datum: str | None = None,
 ) -> SimpleNamespace:
     """A minimal stand-in carrying only the attributes the seam reads."""
     res = ()
@@ -70,6 +71,7 @@ def _spec(
         source_class=source_class,
         output=SimpleNamespace(layer_type=layer_type),
         resolution_declarations=res,
+        vertical_datum=vertical_datum,
     )
 
 
@@ -120,6 +122,12 @@ def test_input_layer_name_shape_and_purpose():
     spec2 = _spec(native_hint=None, source_class="osm")
     assert input_layer_name(spec2, {"variable": "waterways"}, None) == (
         "Input: waterways (osm)"
+    )
+    # a source that states a vertical datum carries it onto the card, because a
+    # bed the user judges is a bed they may stitch another source onto.
+    bed = _spec(source_class="3dep", vertical_datum="NAVD88, metres, positive up")
+    assert input_layer_name(bed, {}, "mesh bed") == (
+        "Input: mesh bed (3dep, 3DEP 10 m, datum NAVD88, metres, positive up)"
     )
 
 

@@ -73,6 +73,7 @@ def _fake_spec(source_class: str) -> SimpleNamespace:
         source_class=source_class,
         resolution_declarations=[],
         output=SimpleNamespace(layer_type="raster"),
+        vertical_datum=None,
     )
 
 

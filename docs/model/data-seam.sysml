@@ -71,6 +71,14 @@ package DataSeam {
         */
     }
 
+    part def BedPainter {
+        doc /*
+        The op that puts a source's elevations onto a mesh's nodes: it asks the
+        source row for its datum before it fetches, journals what actually
+        painted, and refuses a bed that came back on two vertical references.
+        */
+    }
+
     part def BedSourceDeclaration {
         doc /*
         A bed source's declaration - its params, its hooks, its caveats and the
@@ -314,6 +322,18 @@ package DataSeam {
         */
     }
 
+    part bedPainter : BedPainter {
+        doc /*
+        code: trid3nt_server/workflows/mesh/shared/primitives.py
+        */
+    }
+
+    part lakeDeclaration : BedSourceDeclaration {
+        doc /*
+        code: trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_bathymetry/source.yaml
+        */
+    }
+
     part bedResultModel : BedResultModel {
         doc /*
         code: contracts/trid3nt_contracts/execution.py
@@ -418,6 +438,37 @@ package DataSeam {
         the whole reason this source outranks the alternatives is that its datum
         is known. The datum, the tiles, the tiers and the measured coverage ride
         on the returned layer, since none of them survives in the raster bytes.
+        */
+    }
+
+    requirement def OneSourceReadsOnOneStatedDatum {
+        doc /*
+        RULING 2026-09-06 (docs/IDEAS.md, "STAGE 3 RULINGS, ACCEPTANCE FINDINGS",
+        (b); recorded in docs/REANALYZE_LEDGER.md, "2026-09-06 - bed datum: one
+        stated datum per source, refuse otherwise"): every bed source states its
+        VERTICAL DATUM on its own source row, taken from the dataset's own
+        documentation and never inferred from the bytes - a raster carries
+        numbers, and what they are counted from is not among them. A row that
+        cannot state one carries none, and a row carrying none is refused as a
+        bed rather than painted and read later as if it were on whatever the run
+        assumed.
+
+        A mosaic that mixes datums is therefore not a bed source. The NCEI
+        DEM_all endpoint serves the lake-datum bathymetry, the NAVD88 coastal
+        tiles, the same tiles on MHW and the EGM2008 global bases merged under
+        one name, so the row that reads it as a bed pins the ONE product it
+        means and states that product's datum.
+
+        The last guard is on the painted bed itself: two vertical references out
+        of one source separate into two clouds with a gap wider than the whole
+        spread of the values on either side of it, and the refusal STATES both
+        populations, because a reader told only that the bed is wrong cannot
+        tell which half is the wrong one.
+
+        The datum rides onto the layer's provenance card beside the acquisition
+        instant and the native cell, since a bed the user is shown to refine is
+        a bed they may stitch another source onto, and that is the metadata the
+        two have to be compared on.
         */
     }
 
@@ -550,6 +601,25 @@ package DataSeam {
         "tests/test_bathymetry_data_seam.py::test_the_envelope_states_the_datum_in_provenance";
     verify requirement BedSourceStatesItsDatum by
         "tests/test_bathymetry_data_seam.py::test_the_bluetopo_spec_declares_the_delegate_hooks_and_the_result_model";
+
+    satisfy requirement OneSourceReadsOnOneStatedDatum by bedPainter;
+    satisfy requirement OneSourceReadsOnOneStatedDatum by lakeDeclaration;
+    satisfy requirement OneSourceReadsOnOneStatedDatum by coastalDeclaration;
+    satisfy requirement OneSourceReadsOnOneStatedDatum by blueTopoDeclaration;
+    verify requirement OneSourceReadsOnOneStatedDatum by
+        "tests/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum";
+    verify requirement OneSourceReadsOnOneStatedDatum by
+        "tests/test_bathymetry_data_seam.py::test_the_lake_row_pins_one_product_of_the_mixed_mosaic";
+    verify requirement OneSourceReadsOnOneStatedDatum by
+        "tests/test_mesh_topology_and_bed.py::test_a_source_row_that_states_no_datum_is_not_a_bed";
+    verify requirement OneSourceReadsOnOneStatedDatum by
+        "tests/test_mesh_topology_and_bed.py::test_one_source_reading_on_two_datums_refuses_naming_both_populations";
+    verify requirement OneSourceReadsOnOneStatedDatum by
+        "tests/test_mesh_topology_and_bed.py::test_a_bed_on_one_datum_passes_however_steep_it_is";
+    verify requirement OneSourceReadsOnOneStatedDatum by
+        "tests/test_mesh_topology_and_bed.py::test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source";
+    verify requirement OneSourceReadsOnOneStatedDatum by
+        "tests/test_emit_on_fetch_seam.py::test_input_layer_name_shape_and_purpose";
 
     satisfy requirement AStoppedRungNeverShips by waterBodyClassifier;
     satisfy requirement AStoppedRungNeverShips by coastalComposite;

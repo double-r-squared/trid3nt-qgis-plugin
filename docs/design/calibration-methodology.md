@@ -597,7 +597,7 @@ means it is queryable by anything and maintained by nobody.
 | CO-OPS water level, Michael window | `fetch_noaa_coops_tides` | registered, proven on this exact case |
 | CO-OPS astronomical prediction (surge residual) | same, `product="predictions"` | registered |
 | USGS STN HWMs, event "2018 Michael" | `fetch_high_water_marks` | registered; hook resolves the event NAME to id |
-| NOAA topobathy bed | `fetch_ncei_dem_mosaic` | registered, in the template |
+| NOAA topobathy bed | `fetch_topobathy` (US coast, NAVD88) / `fetch_greatlakes_bathymetry` (the lakes, lake datum) | registered, in the templates |
 | offshore forcing (option 1) | `fetch_gtsm_tide_surge` | registered, KEYED (Q3) |
 
 ### 5.2 What is missing, named as specs

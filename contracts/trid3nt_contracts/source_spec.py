@@ -774,6 +774,14 @@ class SourceSpec(GraceModel):
     # a source with no granularity-bearing param (the common case).
     resolution_declarations: tuple[ResolutionSpec, ...] = Field(default=())
 
+    # --- the vertical reference this source's elevations are counted from.
+    # STATED from the dataset's own documentation, never inferred from the bytes:
+    # a bed whose datum nobody carried is a bed nobody can merge, and a guess
+    # would be indistinguishable from a fact to every reader downstream. A source
+    # that cannot state ONE datum carries none (default), which is what a bed
+    # consumer refuses on rather than assuming zero.
+    vertical_datum: str | None = None
+
     # --- declared confirm gate (the gate-collapse)
     # A HEAVY raster fetcher (fetch_dem/topobathy/landcover) DECLARES its
     # resolution confirm gate here; the router synthesizes the canonical fetch

@@ -59,10 +59,13 @@ def _resolution_label(spec: SourceSpec) -> str | None:
 def input_layer_name(
     spec: SourceSpec, params: dict[str, Any], purpose: str | None
 ) -> str:
-    """Build the provenance name ``Input: <what> (<source>[, <resolution>])``.
+    """Build the provenance name ``Input: <what> (<source>[, <resolution>][, <datum>])``.
 
     ``<what>`` is the composer-supplied ``purpose`` word when present, else the
-    resolved ``variable`` / ``product`` param, else the source class.
+    resolved ``variable`` / ``product`` param, else the source class. A source
+    that states a VERTICAL DATUM carries it here: the layer is what a person is
+    shown when they judge a bed and decide whether to refine it, and an elevation
+    whose reference is not on the card cannot be stitched to another source's.
     """
     variable = params.get("variable") or params.get("product") or spec.source_class
     if isinstance(purpose, str) and purpose.strip():
@@ -73,6 +76,8 @@ def input_layer_name(
     res = _resolution_label(spec)
     if res:
         parts.append(res)
+    if spec.vertical_datum:
+        parts.append(f"datum {spec.vertical_datum}")
     return f"Input: {what} ({', '.join(parts)})"
 
 

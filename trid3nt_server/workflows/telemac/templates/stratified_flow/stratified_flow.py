@@ -96,9 +96,11 @@ MESH = tool.build_mesh(
         # THE SUBSTITUTION, declared where a reader can see it. A bed is
         # TOPOBATHY and the coastal CUDEM composite does not reach the Great
         # Lakes at all - its own ladder refuses there - so this row names the NCEI
-        # collection that carries the lake-datum bathymetry instead. Same data
-        # class, different survey, named by the row that asks for it.
-        mesh_op("set_bed", source="fetch_ncei_dem_mosaic"),
+        # bathymetry the lakes are charted on instead. Same data class, different
+        # survey, one stated datum, named by the row that asks for it: the basin
+        # is solved on the lake's own low water datum, which is where its bed is
+        # counted from and where its free surface starts.
+        mesh_op("set_bed", source="fetch_greatlakes_bathymetry"),
     ],
 )
 

@@ -1,0 +1,140 @@
+schema_version: v1
+name: fetch_greatlakes_bathymetry
+source_class: greatlakes_bathymetry
+shape: raster-cog
+supports_global_query: false
+error_prefix: GREATLAKES_BATHYMETRY
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+vertical_datum: each Great Lake's own Low Water Datum (LWD), metres, positive up
+endpoints:
+  data:
+    url: https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics
+auth:
+  mode: none
+  user_agent: trid3nt_default
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+  # The SAMPLE LATTICE, declared. The service resamples to whatever grid is
+  # asked for, so the density is the caller's fact about how finely its nodes
+  # are spaced - not a property of the data.
+  px_per_deg:
+    type: float
+    default: 1800.0
+    min: 60.0
+    max: 12000.0
+  max_px_per_side:
+    type: int
+    default: 3000
+    min: 64
+    max: 4000
+ingest:
+  access: imageserver_export
+  imageserver:
+    service: DEM_all
+    px_min: 64
+    px_per_deg: 1800.0
+    px_max: 3000
+    export_query:
+      bboxSR: '4326'
+      imageSR: '4326'
+      format: tiff
+      pixelType: F32
+      f: image
+      # THE ONE PRODUCT, pinned. DEM_all serves every NCEI-hosted DEM under one
+      # endpoint - the coastal CUDEM tiles on NAVD88, the same tiles on MHW, the
+      # ETOPO global bases on EGM2008 - so an unpinned export returns a raster
+      # carrying several vertical references at once. The mosaic rule cuts it to
+      # the lake-datum bathymetry grids, which are one dataset on one datum.
+      mosaicRule: '{"mosaicMethod":"esriMosaicNorthwest","where":"Name=''greatlakes_lakedatum''"}'
+normalize:
+  crs: EPSG:4326
+  units: meters
+  quantity: elevation
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style:
+    kind: continuous
+    ramp: gray
+    units: m
+    label: Elevation
+  emit_bbox: true
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 12.0
+  floor_mb: 0.05
+  ceil_mb: 60.0
+resolution_declarations:
+- param: px_per_deg
+  unit: px/deg
+  min_value: 60.0
+  native_hint: NCEI Great Lakes bathymetry is gridded at 3 arc-seconds (~90 m); 1800 px/deg is ~62 m
+  constraint_source: data
+  rationale: the service resamples to whatever lattice is requested, so the density is bounded by the
+    3 arc-second grid under the AOI rather than by the service
+caveats:
+- The NCEI Great Lakes bathymetric grids, referenced to each lake's own LOW WATER DATUM (LWD) - the
+  zero-depth the lake is charted and surveyed on. Positive up, so every value over water is negative.
+- The grids cover the LAKES ONLY. Land inside the requested bbox comes back as the mosaic's own zero
+  fill, which is the lake surface at LWD - not an elevation. A domain cut to the water body samples
+  bathymetry everywhere; a domain that reaches inland does not get land terrain here (fetch_dem
+  serves US land on NAVD88, and the two datums do not merge without a stated offset).
+- NCEI's own Grid Extract path publishes these soundings on MEAN SEA LEVEL instead. This tool reads
+  the DEM_all ImageServer's lake-datum grids, and the datum stated here is theirs.
+docstring: |-
+  Fetch the NOAA NCEI Great Lakes lake-datum BATHYMETRY over a bbox as a float32 GeoTIFF.
+
+  **What it does:**
+      Exports the NCEI Great Lakes bathymetric grids - the lake-bed soundings
+      NOAA charts each Great Lake on - onto the requested lattice, as a
+      single-band float32 GeoTIFF (EPSG:4326, metres, POSITIVE UP, so every
+      water value is negative). The vertical datum is each lake's own LOW WATER
+      DATUM (LWD).
+
+  **When to use:**
+      - A lake or Great Lakes harbour model that needs the BED at its own mesh
+        nodes: a stratified-flow basin, a lake circulation domain, a harbour
+        agitation domain on one of the lakes.
+      - User asks for "lake bathymetry", "how deep is Lake Superior here",
+        "the lake bed", "the depth grid for this harbour on the lake datum".
+
+  **When NOT to use:**
+      - A US OCEAN coast: use ``fetch_topobathy`` (CUDEM 1/9 arc-second merged
+        with 3DEP land, NAVD88).
+      - Land terrain: use ``fetch_dem`` (USGS 3DEP, NAVD88, 1-10 m). This grid
+        holds no land at all.
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326, over one of
+          the Great Lakes. Demo AOI (Marquette Lower Harbor, Lake Superior):
+          ``(-87.39234, 46.52812, -87.36788, 46.55021)``.
+      px_per_deg: the sample lattice, in pixels per DEGREE on both axes
+          (default 1800, about 62 m in latitude). Angular, so cells are not
+          square away from the equator - this names the grid a consumer's nodes
+          were sampled against, not a metric resolution.
+      max_px_per_side: per-axis pixel ceiling (default 3000).
+
+  **Returns:**
+      A ``LayerURI`` pointing at the cached GeoTIFF. ``layer_type="raster"``,
+      ``role="input"`` ``units="meters"``.
+
+  **Errors:**
+      - ``GREATLAKES_BATHYMETRY_INPUT_INVALID``: bad bbox (retryable=False).
+      - ``GREATLAKES_BATHYMETRY_UPSTREAM``: the ImageServer failed or returned a
+        non-TIFF body (retryable=True).
+
+  **Vertical datum:**
+      Each lake's own Low Water Datum, as NOAA documents the Great Lakes
+      Bathymetry product. It is NOT NAVD88 and NOT mean sea level: a bed on this
+      datum and a water level on an orthometric one need a stated offset before
+      they can be read together.
+
+  Cache: ``ttl_class="static-30d"``, ``source_class="greatlakes_bathymetry"``.
+  Tier-1 free. No API key. ``supports_global_query=False``.

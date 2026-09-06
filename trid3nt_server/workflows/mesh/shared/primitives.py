@@ -10,6 +10,11 @@ A bed is TOPOBATHY - the channel bottom and the sea floor. A standard DEM
 measures the water SURFACE, so painting a bed from one is a substitution: legal
 only as the author's visible declared choice (``set_bed(source=DATA.dem)``
 written into the recipe), and the journal names the row it was painted from.
+
+An elevation is counted from somewhere, and a bed whose datum nobody carried is
+a bed nobody can merge. A source ROW states its vertical datum on its own
+declaration; ``set_bed`` refuses a source row that states none, journals the one
+it does state, and refuses a painted bed that came back on two of them.
 """
 
 from __future__ import annotations
@@ -65,9 +70,9 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
     default (``nearest``). ``condition`` names the one conditioning a source is
     put through on the way in (``pit_fill``).
 
-    What ACTUALLY painted the bed - the ladder rungs that served, the note a
-    substitution carried, the row named - rides back on the mesh so the journal
-    can say it.
+    What ACTUALLY painted the bed - the ladder rungs that served, the vertical
+    datum the row states, the note a substitution carried, the row named - rides
+    back on the mesh so the journal can say it.
     """
     from trid3nt_server.workflows.mesh.shared.nodes import sample_raster_at_nodes
 
@@ -80,6 +85,7 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
     if condition:
         raster, provenance = _conditioned(raster, provenance, condition)
     bed = sample_raster_at_nodes(str(raster), lonlat, interp=str(interp))
+    _refuse_two_datums(bed, provenance)
     logger.info("set_bed: %d nodes painted from %s (%s)",
                 bed.shape[0], provenance, interp)
     return _with_meta(
@@ -206,6 +212,7 @@ def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
             "MESH_BED_UNRESOLVED",
             "set_bed was given no source, so the mesh has no elevation to carry.")
     if name in TOOL_REGISTRY:
+        _refuse_undated_source(name)
         # No ladder rung is permitted from here. Which substitutions a bed
         # tolerates is the DATA row's declaration, and a rung this op permitted on
         # the author's behalf would be a cross-dataset bed nobody wrote down.
@@ -215,16 +222,105 @@ def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
     return op_raster(source), f"bed raster supplied directly: {name}", None
 
 
+def _source_row(name: str) -> Any:
+    """The declaration behind a registered fetcher, or None where none is served."""
+    from trid3nt_server.tools.fetchers._router.registration import get_spec
+
+    return get_spec(name)
+
+
+def _refuse_undated_source(name: str) -> None:
+    """A SOURCE ROW states its vertical datum, or it is not a bed.
+
+    The bytes cannot be asked: a raster carries numbers, and what they are
+    counted from lives in the dataset's documentation. So a row that states no
+    datum is refused here rather than painted and read later as if it were on
+    whatever the run assumed.
+    """
+    spec = _source_row(name)
+    if spec is not None and not spec.vertical_datum:
+        raise MeshToolError(
+            "MESH_BED_DATUM_UNSTATED",
+            f"{name} states no vertical datum, so what its elevations are "
+            "counted from is unknown and the bed it would paint cannot be read "
+            "against anything. State the datum on the source row from the "
+            "dataset's own documentation, or name a source that does.")
+
+
+def _refuse_two_datums(bed: Any, provenance: str) -> None:
+    """One source, one datum: a bed that came back on two REFUSES by name.
+
+    A vertical datum offset is a CONSTANT, so a bed carrying two of them separates
+    into two clouds with nothing between them - a gap wider than the whole spread
+    of the values on either side of it. Real terrain, however steep, fills that
+    space. What is measured and stated is the two populations, because a reader
+    who is told only "the bed is wrong" cannot tell which half is the wrong one.
+    """
+    import numpy as np
+
+    values = np.sort(np.asarray(bed, dtype=float))
+    values = values[np.isfinite(values)]
+    if values.size < 3:
+        return
+    gaps = np.diff(values)
+    cut = int(np.argmax(gaps))
+    low, high = values[:cut + 1], values[cut + 1:]
+    spread = (low[-1] - low[0]) + (high[-1] - high[0])
+    if gaps[cut] <= spread:
+        return
+    raise MeshToolError(
+        "MESH_BED_TWO_DATUMS",
+        f"the bed painted from {provenance} holds two populations: "
+        f"{low.size} node(s) over {low[0]:.2f} m to {low[-1]:.2f} m and "
+        f"{high.size} node(s) over {high[0]:.2f} m to {high[-1]:.2f} m, with "
+        f"{gaps[cut]:.2f} m of nothing between them against {spread:.2f} m of "
+        "spread inside them. One source reads on one vertical datum; this one "
+        "did not.")
+
+
 def _provenance(name: str, layer: Any) -> str:
-    """What ACTUALLY painted the bed, from the ladder's own activation rows."""
+    """What ACTUALLY painted the bed, and on what the elevations are counted from.
+
+    The datum, the acquisition instant and the native cell ride with the name
+    because a bed the user is shown to refine is a bed they may stitch another
+    source onto, and that is the metadata the two have to be compared on.
+    """
     rows = fetch_activation_rows(layer)
-    if rows:
-        return f"{name}: " + ", ".join(
-            f"{rung} {coverage * 100:.0f}%" for rung, coverage in rows)
     note = fetch_fallback_note(layer)
-    if note:
-        return f"{name} ({note})"
-    return f"{name} (source UNMEASURED: the fetch reported no activation rows)"
+    if rows:
+        painted = f"{name}: " + ", ".join(
+            f"{rung} {coverage * 100:.0f}%" for rung, coverage in rows)
+    elif note:
+        painted = f"{name} ({note})"
+    else:
+        painted = f"{name} (source UNMEASURED: the fetch reported no activation rows)"
+    facts = [fact for fact in (_datum(name), _acquired(layer), _native_cell(name))
+             if fact]
+    return f"{painted} [{'; '.join(facts)}]" if facts else painted
+
+
+def _datum(name: str) -> str | None:
+    spec = _source_row(name)
+    return f"datum {spec.vertical_datum}" if spec is not None \
+        and spec.vertical_datum else None
+
+
+def _acquired(layer: Any) -> str | None:
+    """When the source was measured, where the layer states an instant."""
+    for field in ("reference_time", "valid_from"):
+        found = layer.get(field) if isinstance(layer, Mapping) \
+            else getattr(layer, field, None)
+        if found:
+            return f"acquired {found}"
+    return None
+
+
+def _native_cell(name: str) -> str | None:
+    spec = _source_row(name)
+    for decl in (getattr(spec, "resolution_declarations", ()) or ()):
+        if decl.native_hint:
+            return f"native {decl.native_hint}"
+    return None
 
 
 def _conditioned(raster: Path, provenance: str, condition: str) -> tuple[Path, str]:

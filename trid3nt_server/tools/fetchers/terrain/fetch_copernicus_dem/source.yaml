@@ -19,6 +19,7 @@ internal_only: true
 endpoints:
   data:
     url: "https://planetarycomputer.microsoft.com/api/stac/v1"
+vertical_datum: EGM2008 geoid, metres, positive up (Copernicus GLO-30)
 auth:
   mode: none
 
