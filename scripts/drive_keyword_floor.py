@@ -38,7 +38,7 @@ REACH = {
     "sim_duration_s": 600.0,
     "spill_duration_s": 120.0,
     "source_q_m3s": 8.0,
-    "mesh_resolution_m": 12.0,
+    "mesh_resolution_m": 14.0,
     "discharge_m3s": 2.2,
     "dye_concentration_mgl": 100.0,
     "input_mode": "auto",
@@ -57,12 +57,12 @@ def _s3():
     return _get_s3_client()
 
 
-def _bucket_of(ev) -> str:
-    for layer in ev.layers:
-        uri = str(layer.get("uri", ""))
-        if uri.startswith("s3://") and f"/{ev.run_id}/" in uri:
-            return uri[len("s3://"):].split("/", 1)[0]
-    raise SystemExit(f"no s3 layer names run {ev.run_id}; nothing to read from")
+def _bucket_of(report: dict) -> str:
+    """The prefix the run wrote to, off a product uri the harness resolved."""
+    for uri in report.get("product_uris", {}).values():
+        if str(uri).startswith("s3://"):
+            return str(uri)[len("s3://"):].split("/", 1)[0]
+    raise SystemExit(f"run {report.get('run_id')} names no product prefix")
 
 
 def _fetch(bucket: str, key: str) -> bytes:
@@ -172,18 +172,9 @@ def main() -> int:
     if "baseline" in wanted:
         print("\n=== baseline ===", flush=True)
         report = _drive("baseline", dict(REACH), ns.timeout, ns.out_dir)
-        bucket = "trid3nt-runs"
+        bucket = _bucket_of(report)
+        deck = _fetch(bucket, f"{report['run_id']}/{_DECK}")
         with open(os.path.join(ns.out_dir, "baseline_deck.cas"), "wb") as fh:
-            deck = None
-            for candidate in ("trid3nt-runs", "trid3nt-cache"):
-                try:
-                    deck = _fetch(candidate, f"{report['run_id']}/{_DECK}")
-                    bucket = candidate
-                    break
-                except Exception:  # noqa: BLE001 - the next bucket is the answer
-                    continue
-            if deck is None:
-                raise SystemExit("the baseline deck is not on either prefix")
             fh.write(deck)
         abscissae, ordinates = _deck_sources(deck.decode("utf-8", "replace"))
         first = (abscissae[0], ordinates[0])
