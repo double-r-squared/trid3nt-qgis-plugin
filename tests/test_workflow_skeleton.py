@@ -3,20 +3,19 @@
 Offline. Nothing here solves; these pin the contract in
 ``docs/design/declarative-workflows.md`` "The Workflow Skeleton" (ADR 0312):
 
-  1. the four EngineOps are ABSTRACT - an unrealized one refuses by name;
-  2. hooks have SILENT defaults, and a FILLED hook reaches the result;
-  3. the registration factory synthesizes the wire signature from the declared
+  1. hooks have SILENT defaults, and a FILLED hook reaches the result;
+  2. the registration factory synthesizes the wire signature from the declared
      params (``wire=False`` and every CONSTANT-door param stay off it, aliases and
      controls join it) and renders the docstring from that same narrowed set;
-  4. a chart builder is the FUNCTION - a dotted string is refused, no fallback;
-  5. the slot/signature check runs BOTH ways: a member the author does not
+  3. a chart builder is the FUNCTION - a dotted string is refused, no fallback;
+  4. the slot/signature check runs BOTH ways: a member the author does not
      accept, and a required member no slot covers, are both refused while the
      plan value is being BUILT;
-  6. the facade's four are MUST-FILL - a hole refuses at registration, so a
+  5. the facade's four are MUST-FILL - a hole refuses at registration, so a
      NotImplementedError never reaches a caller as an engine internal error;
-  7. a coercion's failure is triaged, not flattened: retryable propagates, typed
+  6. a coercion's failure is triaged, not flattened: retryable propagates, typed
      keeps its code, a bug in our own coercion reads as INTERNAL_ERROR;
-  8. a declaration whose wire type would be silently guessed wrong refuses.
+  7. a declaration whose wire type would be silently guessed wrong refuses.
 """
 
 from __future__ import annotations
@@ -29,32 +28,13 @@ import pytest
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.workflows.runtime import (
-    EngineOps,
-    Forcing,
     Param,
-    Physics,
     PlanValidationError,
     Ref,
     Step,
     Workflow,
     doors,
 )
-
-
-# --- (1) the four operations are abstract ----------------------------------- #
-@pytest.mark.parametrize("call", [
-    lambda ops: ops.acquire_domain(),
-    lambda ops: ops.author(mesh=None, physics=None, forcing=None),
-    lambda ops: ops.solve(),
-    lambda ops: ops.read(None),
-])
-def test_an_unrealized_engine_operation_refuses_by_name(call):
-    class BareEngine(EngineOps):
-        pass
-
-    with pytest.raises(NotImplementedError) as ei:
-        call(BareEngine())
-    assert "BareEngine" in str(ei.value)
 
 
 # --- (2) hooks: silent by default, effective when filled --------------------- #
@@ -240,38 +220,6 @@ def _reach_mesh(**params):
     return tool.build_mesh(mesher="om2d", kind="unstructured_tri", **params)
 
 
-def test_an_unknown_physics_member_is_refused_while_the_plan_is_built():
-    ops = _telemac()
-    mesh = _reach_mesh()
-    with pytest.raises(PlanValidationError) as ei:
-        ops.author(mesh=mesh,
-                   physics=Physics("harbor_agitation", not_an_author_field=1.0),
-                   forcing=Forcing())
-    assert "not_an_author_field" in str(ei.value)
-
-
-def test_an_unknown_physics_PROCESS_is_refused_rather_than_authored():
-    ops = _telemac()
-    mesh = _reach_mesh()
-    with pytest.raises(PlanValidationError) as ei:
-        ops.author(mesh=mesh, physics=Physics("magnetohydrodynamics"),
-                   forcing=Forcing())
-    assert "magnetohydrodynamics" in str(ei.value)
-
-
-def test_the_mesh_recipe_reaches_the_author_under_the_engine_s_own_names():
-    """The mesher's vocabulary is its library's; the author's is TELEMAC's, and the
-    ONE agnostic size word is the only thing that crosses between them."""
-    ops = _telemac()
-    mesh = _reach_mesh(resolution_m=100.0)
-    authored = ops.author(mesh=mesh, physics=Physics("harbor_agitation",
-                                                     wave_period_s=8.0),
-                          forcing=Forcing())
-    assert authored.name == "run" and authored.stage == "author"
-    assert authored.kwargs["mesh_resolution_m"] == 100.0
-    assert authored.kwargs["wave_period_s"] == 8.0
-
-
 def test_the_plan_reads_a_data_name_off_the_templates_own_body():
     """A read is attribute access on the template's own DATA, which is what lets a
     binding block sit at module level above the plan it feeds - and what makes a
@@ -308,73 +256,6 @@ def test_an_undeclared_data_name_refuses_at_registration_saying_it_is_a_data_nam
     message = str(ei.value)
     assert "DataRef('terain') names no declared Data" in message
     assert "Declared Data: ['terrain']" in message
-
-
-# --- (5b) a REQUIRED author field no slot covers is refused at construction -- #
-def test_a_required_author_field_no_slot_covers_refuses_at_plan_construction():
-    """The mirror of the unknown-member check, and the more expensive half.
-
-    A Forcing with no ``carrier`` leaves ``carrier_discharge`` unfilled. Without
-    this the plan builds, the geocode + flowline + discharge fetches all run, and
-    only then does assemble_reach die on a TypeError - minutes and three network
-    round-trips after the declaration that was already wrong.
-    """
-    from trid3nt_server.workflows.telemac.workflow import _refuse_uncovered_fields
-
-    def _writer(*, aoi, carrier_discharge):
-        raise AssertionError("never called")
-
-    with pytest.raises(PlanValidationError) as ei:
-        _refuse_uncovered_fields({"aoi": Ref("aoi")}, _writer, "probe")
-    message = str(ei.value)
-    assert "carrier_discharge" in message
-    assert "requires" in message
-
-
-def test_the_covered_declaration_still_authors():
-    """The guard refuses a HOLE, not every plan: the cohort shape still passes."""
-    ops = _telemac()
-    mesh = _reach_mesh()
-    authored = ops.author(mesh=mesh, physics=Physics("harbor_agitation"),
-                          forcing=Forcing())
-    assert authored.kwargs["aoi"] == Ref("aoi")
-
-
-# --- (6) the EngineOps four are must-fill at REGISTRATION ------------------- #
-def test_registration_refuses_a_facade_with_an_unrealized_operation():
-    """The design doc promises the library refuses to register a template that
-    leaves a must-fill slot empty. A hole that reaches run time surfaces as a bare
-    NotImplementedError flattened into <ENGINE>_INTERNAL_ERROR - a declaration
-    defect wearing a runtime failure's clothes."""
-    from trid3nt_server.workflows.runtime import (
-        FacadeIncompleteError,
-        register_workflow,
-    )
-
-    class HalfEngine(Workflow):
-        engine = "half"
-
-        def acquire_domain(self, **slots):
-            return ()
-
-        def author(self, *, mesh, physics, forcing):
-            return Step(runner="pkg.mod.fn")
-
-    with pytest.raises(FacadeIncompleteError) as ei:
-        register_workflow(HalfEngine, _metadata("half_probe"), (),
-                          lambda o: ())
-    assert "HalfEngine" in str(ei.value)
-    assert "solve" in str(ei.value) and "read" in str(ei.value)
-
-
-def test_registration_refuses_something_that_is_not_a_facade_at_all():
-    from trid3nt_server.workflows.runtime import (
-        FacadeIncompleteError,
-        register_workflow,
-    )
-
-    with pytest.raises(FacadeIncompleteError):
-        register_workflow(object, _metadata("not_a_facade"), (), lambda o: ())
 
 
 # --- (7) a coercion's failure is triaged, never flattened ------------------- #
@@ -518,9 +399,10 @@ def test_a_mesh_recipe_is_frozen_all_the_way_down():
 # --- every TELEMAC template declares its mesh through the one tool ----------- #
 _TEMPLATES = (
     ("artemis_harbor_agitation",
-     "trid3nt_server.workflows.telemac.agitation.agitation", "reg_grid"),
+     "trid3nt_server.workflows.telemac.templates.agitation.agitation", "om2d"),
     ("telemac3d_stratified_flow",
-     "trid3nt_server.workflows.telemac.stratified_flow.stratified_flow", "reg_grid"),
+     "trid3nt_server.workflows.telemac.templates.stratified_flow"
+     ".stratified_flow", "om2d"),
     ("telemac_rain_on_grid",
      "trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid", "om2d"),
 )
@@ -547,21 +429,6 @@ def test_a_declared_mesh_is_a_frozen_recipe(module_path, mesher):
     mesh = _template(module_path).MESH
     assert isinstance(mesh, MeshRecipe)
     assert mesh.mesher == mesher
-
-
-@pytest.mark.parametrize("name,module_path,mesher", _TEMPLATES)
-def test_the_run_the_template_authors_reads_the_declared_mesh_fields(
-        name, module_path, mesher):
-    """Every author ask carries the sizing the template declared, under the
-    author's own name for it - which is the whole of what the mesh declaration
-    owes the author step. A FLIPPED template reads it on the settle instead, and
-    under the mesher's own word for it."""
-    module = _template(module_path)
-    workflow = getattr(module, name).workflow
-    authored = [n for n in workflow.plan_decl(workflow)
-                if getattr(n, "stage", "") == "author"]
-    assert len(authored) in (1, 2)
-    assert any("mesh_resolution_m" in step.kwargs for step in authored)
 
 
 def test_the_reach_templates_carry_the_reach_shape_into_the_settle():
@@ -591,7 +458,7 @@ def test_the_catchment_mesh_step_carries_the_whole_recipe():
     workflow = module.telemac_rain_on_grid.workflow
     mesh_step = [n for n in workflow.plan_decl(workflow)
                  if getattr(n, "stage", "") == "mesh"][0]
-    assert set(mesh_step.kwargs) == {"mesh", "name"}
+    assert set(mesh_step.kwargs) == {"mesh", "name", "supplied", "tool"}
     ask = mesh_step.kwargs["mesh"]
     assert ask["mesher"] == "om2d"
     assert set(ask) == {"mesher", "kind", "extent", "resolution_m", "ops"}

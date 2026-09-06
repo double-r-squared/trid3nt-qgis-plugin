@@ -419,7 +419,7 @@ class ParamSheetRow(GraceModel):
 
 
 class ParamSheet(GraceModel):
-    """The resolved param sheet a declared ``FormGate`` presents for review.
+    """The resolved sheet a step reviewing its own inputs presents.
 
     The rows arrive in RENDER order (question-bearing first, ``advanced`` last) --
     the server owns the ordering because it owns the doors. The user's edits ride
@@ -533,7 +533,7 @@ class PayloadWarningEnvelopePayload(GraceModel):
     #: what-was-approved == what-ran. None on ordinary payload / cost / mesh
     #: gates -- fully back-compatible.
     synthetic_inputs: list[SyntheticInput] | None = None
-    #: OPTIONAL resolved param SHEET (the declarative FormGate's card). When
+    #: OPTIONAL resolved param SHEET - the self-reviewing step's card. When
     #: present the client renders an editable property grid -- one row per declared
     #: param, with its source badge, declared bounds and advanced fold -- instead of
     #: the plain provenance table. Submit rides back as ``narrow_scope`` +

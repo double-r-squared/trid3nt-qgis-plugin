@@ -102,7 +102,7 @@
     },
     "ParamSheet": {
       "additionalProperties": false,
-      "description": "The resolved param sheet a declared ``FormGate`` presents for review.\n\nThe rows arrive in RENDER order (question-bearing first, ``advanced`` last) --\nthe server owns the ordering because it owns the doors. The user's edits ride\nback on the existing ``tool-payload-confirmation``\n(``decision=\"narrow_scope\"`` + ``revised_args`` keyed by ``row.name``), and a\nsubmit-with-edits IS the approval: the sheet was fully visible, so there is\nnothing left to re-present.",
+      "description": "The resolved sheet a step reviewing its own inputs presents.\n\nThe rows arrive in RENDER order (question-bearing first, ``advanced`` last) --\nthe server owns the ordering because it owns the doors. The user's edits ride\nback on the existing ``tool-payload-confirmation``\n(``decision=\"narrow_scope\"`` + ``revised_args`` keyed by ``row.name``), and a\nsubmit-with-edits IS the approval: the sheet was fully visible, so there is\nnothing left to re-present.",
       "properties": {
         "rows": {
           "items": {

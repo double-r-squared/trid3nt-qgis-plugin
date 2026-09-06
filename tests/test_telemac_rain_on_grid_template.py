@@ -1,8 +1,6 @@
-"""Offline unit tests for the telemac_rain_on_grid engine template - migrated onto
-the declarative skeleton (PARAMS + DATA + ``plan(ops)``; see
-``docs/design/declarative-workflows.md``).
+"""Offline unit tests for the telemac_rain_on_grid engine template.
 
-No solver / no network: registration shape, the declared plan sequence, the
+No solver / no network: registration shape, the declared step sequence, the
 wire-signature door contract, and the pure step/chart helpers only. Live
 end-to-end (mesh acquisition + solve + depth COG) is proven on Coweeta Creek NC by
 scripts/sandbox/telemac/rog_coweeta_live.py (docs/proof/templates/
@@ -134,29 +132,6 @@ def test_constant_door_params_off_wire_scenario_and_user_ones_present():
     # the build door, not through a template's own context slot - a second
     # resolver inside a model template is the silent-adoption defect D-9 forbids.
     assert "mesh" not in wire
-
-
-@pytest.mark.asyncio
-async def test_pour_point_is_never_invented_in_auto_mode():
-    """pour_point is REQUIRED (door=USER, not optional) and its own DrawGate
-    refuses typed in auto mode rather than falling back to a centroid nobody
-    chose - unlike an OPTIONAL draw-gated param, whose absence just derives."""
-    from trid3nt_server.workflows.runtime import DrawGate, param_rows
-    from trid3nt_server.workflows.runtime.errors import GateRefusedError
-    from trid3nt_server.workflows.runtime.interpreter import _run_draw_gate
-    from trid3nt_server.workflows.runtime.resolver import resolve_params
-    from trid3nt_server.workflows.telemac.templates.rain_on_grid.declarations import PARAMS
-
-    declared = param_rows(PARAMS)
-    pour_point_param = next(p for p in declared if p.name == "pour_point")
-    assert pour_point_param.optional is not True
-
-    sheet = await resolve_params(declared, {"bbox": [-83.47, 35.02, -83.36, 35.10]})
-    gate = DrawGate(param="pour_point", geometry="point",
-                    prompt="Click the catchment OUTLET the runoff drains to")
-    with pytest.raises(GateRefusedError, match="never invented"):
-        await _run_draw_gate(gate, sheet, declared, input_mode=None,
-                             tool_name="telemac_rain_on_grid")
 
 
 # ===========================================================================
@@ -377,8 +352,9 @@ async def test_a_supplied_pour_point_derives_the_aoi_from_it_not_a_geocoded_bbox
 
 @pytest.mark.asyncio
 async def test_acquire_catchment_never_invents_a_pour_point():
-    """Unreachable through the declared plan (the DrawGate refuses first); stated
-    here anyway because a missing outlet must never fall back to a centroid."""
+    """Unreachable through the declared sequence (a required USER param with no
+    default refuses first); stated here anyway because a missing outlet must never
+    fall back to a centroid."""
     from trid3nt_server.workflows.telemac.helpers.catchment import acquire_catchment
     from trid3nt_server.workflows.telemac.helpers.errors import RainOnGridError
 

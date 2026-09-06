@@ -26,9 +26,7 @@ from trid3nt_server.emission.pipeline_emitter import (
     emit_chart_payloads,
     substep,
 )
-from trid3nt_server.gates.draw_input import gate_draw_input
 from trid3nt_server.gates.input_review import (
-    gate_input_review,
     physics_refusal_reason,
     resolve_input_gate_mode,
 )
@@ -43,22 +41,19 @@ from .errors import (
     ParamRefLeakedError,
     StepFailedError,
 )
-from .form import build_param_sheet
 from .journal import bind_notes, drain_notes
 from .ledger import LedgerRecord, StepLedger, inputs_digest, invocation_key
 from .params import Param, ResolvedParams
 from .plan import (
     ChartSpec,
-    Gate,
     ParamRef,
     Plan,
     Ref,
     RunMode,
     Step,
-    When,
     declared_reads,
 )
-from .resolver import provenance_entries, rederive_revised, reseat_revised
+from .resolver import provenance_entries
 from .validate import validate_plan
 
 __all__ = ["PlanNode", "RunResult", "expand_plan", "interpret"]
@@ -101,13 +96,7 @@ class RunResult:
 
 @dataclass(frozen=True, slots=True)
 class PlanNode:
-    """One ledger-tracked execution unit.
-
-    ``guards`` are the indices of the ``When`` nodes whose bodies enclose it. Every
-    declared node is numbered, guarded or not, so an index means the same thing
-    whichever way the branches fall - which is what lets the ledger replay a run
-    that took a different branch than the attempt before it.
-    """
+    """One ledger-tracked execution unit: a step, or a chart built from one."""
 
     index: int
     label: str
@@ -115,7 +104,6 @@ class PlanNode:
     kind: str
     step: Step
     spec: Any = None
-    guards: tuple[int, ...] = ()
 
 
 async def interpret(
@@ -149,30 +137,10 @@ async def interpret(
     notes_token = bind_notes()
     final_index = _final_recordable_index(nodes)
     first_step = next((n.index for n in nodes if n.kind == "step"), None)
-    reviewed = any(n.kind == "gate" and n.step.kind == "form" for n in nodes)
-    self_reviewed = any(n.kind != "gate" and n.step.self_gating for n in nodes)
-    #: Which guarded branches fired, by the ``When`` node's index. A node whose
-    #: guard is absent or False is SKIPPED - and so is everything it would have
-    #: pulled, which is what makes an unfired branch cost no fetch.
-    taken: dict[int, bool] = {}
+    self_reviewed = any(n.step.self_gating for n in nodes)
     try:
         for node in nodes:
-            if any(not taken.get(g, False) for g in node.guards):
-                continue
-            if node.kind == "when":
-                taken[node.index] = bool(await _bind_value(node.spec, env))
-                logger.info("plan %s branch %s -> %s", plan.name, node.label,
-                            taken[node.index])
-                continue
-            if node.kind == "gate":
-                revision = await _run_gate(node.step, env.params, declared_params,
-                                           out.entries, input_mode=input_mode,
-                                           tool_name=plan.name)
-                if revision is not None:
-                    await _reseat_after_gate(env, revision, plan, input_mode, out)
-                    ledger = env.ledger
-                continue
-            if node.index == first_step and not reviewed:
+            if node.index == first_step:
                 # Law 9 fires before the FIRST step, not the first CONSEQUENTIAL
                 # one: an invented physics value poisons the prep work as surely as
                 # the solve, and a plan that tags nothing consequential would
@@ -252,9 +220,8 @@ async def interpret(
 
 
 def _final_recordable_index(nodes: Sequence[PlanNode]) -> int | None:
-    """The LAST node whose completion is ledgered - gates and branches leave none."""
-    return max((n.index for n in nodes if n.kind not in ("gate", "when")),
-               default=None)
+    """The LAST node whose completion is ledgered."""
+    return max((n.index for n in nodes), default=None)
 
 
 def _carry_notes(exc: BaseException, notes: Sequence[str]) -> None:
@@ -282,34 +249,14 @@ def _note_aux_failure(out: RunResult, plan_name: str, node: PlanNode,
 
 
 def expand_plan(plan: Plan) -> tuple[PlanNode, ...]:
-    """Number EVERY declared node, guarded ones included, in declaration order."""
+    """Number every declared node, in declaration order - a step, then its charts."""
     nodes: list[PlanNode] = []
-    _expand_into(nodes, plan.steps, ())
-    return tuple(nodes)
-
-
-def _expand_into(nodes: list[PlanNode], declared: tuple[Any, ...],
-                 guards: tuple[int, ...]) -> None:
-    for node in declared:
-        i = len(nodes)
-        if isinstance(node, When):
-            nodes.append(PlanNode(i, node.label, "declarative.when", "when",
-                               _WHEN_STEP, node.condition, guards))
-            _expand_into(nodes, node.body, guards + (i,))
-            continue
-        if isinstance(node, Gate):
-            nodes.append(PlanNode(i, node.label, node.runner, "gate", node,
-                               guards=guards))
-            continue
-        nodes.append(PlanNode(i, node.label, node.runner, "step", node, guards=guards))
+    for node in plan.steps:
+        nodes.append(PlanNode(len(nodes), node.label, node.runner, "step", node))
         for spec in node.charts:
             nodes.append(PlanNode(len(nodes), f"{node.label}.chart:{spec.name}",
-                               spec.builder_path, "chart", node, spec, guards))
-
-
-#: A ``When`` node carries no work of its own; ``PlanNode.step`` is typed as a Step
-#: and this stands in so the branch marker fits the same list.
-_WHEN_STEP = Step(runner="declarative.when")
+                                  spec.builder_path, "chart", node, spec))
+    return tuple(nodes)
 
 
 @dataclass
@@ -332,61 +279,6 @@ class _Env:
     data_records: list[LedgerRecord] = field(default_factory=list)
 
 
-async def _reseat_after_gate(env: _Env, revision: "_Revision", plan: Plan,
-                             input_mode: str | None, out: RunResult) -> None:
-    """Adopt an approved revision: new sheet, stale data evicted, ledger re-keyed."""
-    env.params, out.entries, out.params = (revision.params, revision.entries,
-                                           revision.params)
-    _evict_revised_data(env, revision.changed)
-    # The attempt under the OLD key belongs to a run that continued somewhere
-    # else. Leaving it behind orphans a document nobody can ever resume from, and
-    # its records were computed from the very values the review replaced.
-    if env.ledger is not None:
-        await env.ledger.clear()
-    # The approved sheet is a DIFFERENT invocation: re-key so a replay can only
-    # ever come from an attempt at these values. Reaping the old key is what makes
-    # that a MOVE rather than a fork - including its `data:` records.
-    env.ledger = await StepLedger.load(
-        invocation_key(plan.name, env.params.values_dict(), input_mode=input_mode),
-        plan.name)
-
-
-def _evict_revised_data(env: _Env, changed: Sequence[str]) -> None:
-    """Drop artifacts produced from params the review changed - and their dependents.
-
-    A producer's kwargs carry the ``ParamRef``/``Ref`` reads it makes, so "did this
-    artifact consume a revised value" is a question the plan value can answer. One
-    fetched before the gate against the pre-review sheet is stale by construction;
-    keeping it would run the approved params over the un-approved world.
-    """
-    stale = _data_consuming(env.data, changed)
-    evicted = sorted(n for n in stale if env.artifacts.pop(n, None) is not None)
-    if evicted:
-        logger.info("input review revised %s; evicting produced data %s so it is "
-                    "re-produced against the approved sheet",
-                    sorted(changed), evicted)
-
-
-def _data_consuming(data: Mapping[str, DataDecl],
-                    changed: Sequence[str]) -> set[str]:
-    """Every declared Data that reads a changed param, transitively through Data."""
-    revised = set(changed)
-    stale: set[str] = set()
-    for _ in range(len(data) + 1):
-        grew = False
-        for name, decl in data.items():
-            if name in stale:
-                continue
-            kwargs = dict(decl.producer_kwargs)
-            if any(r.name in revised for r in _param_refs(kwargs)) or \
-                    any(r.root in revised or r.root in stale for r in _refs(kwargs)):
-                stale.add(name)
-                grew = True
-        if not grew:
-            break
-    return stale
-
-
 def _data_step_label(name: str) -> str:
     return f"data:{name}"
 
@@ -394,9 +286,8 @@ def _data_step_label(name: str) -> str:
 async def _produce(env: _Env, decl: DataDecl) -> Any:
     """Satisfy one declared artifact, ON DEMAND - when a step that reads it runs.
 
-    Demand-pulled rather than fetched up front, which is what makes a branch that
-    does not fire cost nothing: the producer behind a ``When``-guarded consumer is
-    never reached.
+    Demand-pulled rather than fetched up front, so a declared artifact nothing
+    reads costs no fetch.
     """
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
@@ -561,138 +452,20 @@ async def _run_chart(node: PlanNode, env: _Env) -> Any:
     return {"chart": spec.name, "emitted": True}
 
 
-#: One code for law 9 whether the refusal came from a declared form gate or from
-#: the gateless floor below, so callers route on the reason and not on the shape of
-#: the plan that hit it.
+#: The one code law 9 refuses under, so callers route on the reason rather than on
+#: the shape of the plan that hit it.
 _PHYSICS_INPUT_REQUIRED = "PHYSICS_INPUT_REQUIRED"
 
 
-@dataclass(frozen=True, slots=True)
-class _Revision:
-    """What a form gate's approved edits changed: the sheet, its provenance, the names."""
-
-    params: ResolvedParams
-    entries: list[SyntheticInput]
-    #: Every row the revision moved - the user's own edits AND the derived rows
-    #: that re-derived because of them. This is what dependent data is evicted on.
-    changed: tuple[str, ...]
-
-
-async def _run_gate(gate: Gate, params: ResolvedParams, declared: Sequence[Param],
-                    entries: list[SyntheticInput], *, input_mode: str | None,
-                    tool_name: str) -> _Revision | None:
-    """Run one declared gate. Returns the REVISED sheet when the user answered it.
-
-    What was approved is what runs: the form gate's outcome carries the user's
-    edits, and they are re-seated through the resolver (declared bounds still
-    apply) so the steps after the gate read the approved values, not the ones the
-    sheet held when the plan value was built. Derivations then re-run over the
-    approved sheet, so a derived row never contradicts the value it derives from.
-    A drawn value takes exactly the same path - the card differs, the seating does
-    not.
-    """
-    if gate.kind == "draw":
-        return await _run_draw_gate(gate, params, declared, input_mode=input_mode,
-                                    tool_name=tool_name)
-    outcome = await gate_input_review(
-        tool_name=tool_name, mode=input_mode, entries=entries,
-        params=params.values_dict(),
-        param_sheet=build_param_sheet(tool_name, gate.prompt, declared, params),
-    )
-    if outcome.cancelled or not outcome.proceed:
-        # The gate refuses for TWO reasons, and callers route on them differently:
-        # law 9 (a physics value nobody approved) shares its code with the gateless
-        # floor, so a refusal reads the same whether a form card was declared.
-        law_nine = str(outcome.cancel_reason or "").startswith(
-            _PHYSICS_INPUT_REQUIRED)
-        raise GateRefusedError(
-            f"{tool_name} {outcome.cancel_reason or 'input review not approved'}; "
-            "the plan did not run.",
-            error_code=_PHYSICS_INPUT_REQUIRED if law_nine else "INPUT_REVIEW_CANCELLED",
-        )
-    undeclared = sorted(set(outcome.params or {}) - {p.name for p in declared})
-    if undeclared:
-        logger.warning("%s: the input review revised %s, which this workflow "
-                       "declares no param for; those edits cannot be seated",
-                       tool_name, undeclared)
-    return await _seat(declared, params, outcome.params or {},
-                       note="revised at input review", tool_name=tool_name,
-                       what="input review")
-
-
-async def _run_draw_gate(gate: Gate, params: ResolvedParams,
-                         declared: Sequence[Param], *, input_mode: str | None,
-                         tool_name: str) -> _Revision | None:
-    """Ask for ONE param on the canvas; ``None`` when nothing needed asking.
-
-    A value already on the sheet answers the gate - the user passed it, so there
-    is nothing to draw.
-
-    Otherwise the two modes differ on what an OPTIONAL param means. ``auto``
-    never asks: an optional param's ``derived_when_absent`` describes its own
-    absence, and a required one refuses typed rather than being invented.
-    ``user_gated`` ASKS in both cases, because declaring the gate is the request
-    to ask and the whole point of the mode is that the user gets to answer. What
-    differs is the DECLINE: an optional param falls back to its declared absence,
-    a required one refuses.
-    """
-    row = params.row(gate.param or "")
-    if row is not None and row.value is not None:
-        return None
-    target = next((p for p in declared if p.name == gate.param), None)
-    optional = target is not None and target.optional
-    if resolve_input_gate_mode(input_mode) != "user_gated":
-        if optional:
-            return None
-        raise GateRefusedError(
-            f"{tool_name} needs {gate.param!r}: {gate.prompt or 'draw it on the canvas'}. "
-            "In auto mode it must be passed explicitly - it is never invented."
-        )
-    outcome = await gate_draw_input(
-        tool_name=tool_name, param=gate.param or "", geometry=gate.geometry or "point",
-        prompt=gate.prompt,
-    )
-    if not outcome.drawn:
-        if optional:
-            logger.info("%s: the draw gate for %r was not answered (%s); the "
-                        "declared absence stands", tool_name, gate.param,
-                        outcome.reason)
-            return None
-        raise GateRefusedError(
-            f"{tool_name} needs {gate.param!r} drawn on the canvas "
-            f"({gate.prompt or gate.geometry}), and {outcome.reason}. It is not "
-            "invented - supply the value explicitly or draw it and re-run."
-        )
-    return await _seat(declared, params, {gate.param: outcome.value},
-                       note="drawn on the canvas", tool_name=tool_name,
-                       what="draw gate")
-
-
-async def _seat(declared: Sequence[Param], params: ResolvedParams,
-                answered: Mapping[str, Any], *, note: str, tool_name: str,
-                what: str) -> _Revision | None:
-    """Seat a gate's answer through the GATE door and re-derive what reads it."""
-    revised, changed = reseat_revised(declared, params, answered, note=note)
-    if not changed:
-        return None
-    revised, rederived, conflicts = await rederive_revised(declared, revised, changed)
-    for conflict in conflicts:
-        logger.info("%s: %s", tool_name, conflict)
-    logger.info("%s: the %s set %s; re-seated through the GATE door%s",
-                tool_name, what, changed,
-                f"; re-derived {rederived}" if rederived else "")
-    return _Revision(params=revised, entries=provenance_entries(revised, declared),
-                     changed=tuple(changed) + tuple(rederived))
-
-
 def _refuse_missing_required(params: ResolvedParams, tool_name: str) -> None:
-    """Door 6, at the last honest moment: no gate filled these, so refuse typed."""
+    """The last honest moment: nothing filled these, so refuse typed."""
     missing = [r for r in params.rows() if r.required_missing]
     if not missing:
         return
     raise GateRefusedError(
         f"{tool_name} cannot run: " + "; ".join(
-            f"{r.name} was not supplied and has no door to come through" for r in missing
+            f"{r.name} was not supplied and has no door to come through"
+            for r in missing
         ) + ". Supply the values explicitly - they are never invented."
     )
 
@@ -700,18 +473,13 @@ def _refuse_missing_required(params: ResolvedParams, tool_name: str) -> None:
 def _refuse_invented_physics(entries: Sequence[SyntheticInput], tool_name: str,
                              input_mode: str | None, *,
                              self_reviewed: bool) -> None:
-    """Law 9, for a plan whose declared rows no form card will present.
-
-    A plan that declares a ``FormGate`` refuses through the gate; one that does not
-    (because its step reviews its own inputs) still may not run a physics value
-    that fell back to an invented default with nobody to approve it.
+    """Law 9: a physics value nobody approved never reaches a solve.
 
     The exemption keys on a REVIEW SURFACE, not on a session. Approval needs a card
-    to happen on, and only two things put one in front of the user: the plan's own
-    ``FormGate`` (whose caller skips this floor entirely) or a ``self_gating`` step
-    that runs its own input review. A live session with neither is a session that
-    will never be asked, so it refuses like a headless one - an emitter is where a
-    card COULD be shown, never evidence that one was.
+    to happen on, and one thing puts one in front of the user: a ``self_gating``
+    step that runs its own input review. A live session without one is a session
+    that will never be asked, so it refuses like a headless one - an emitter is
+    where a card COULD be shown, never evidence that one was.
 
     So: refuse in auto mode; refuse in user_gated mode with no emitter (nobody to
     approve); refuse in user_gated mode with an emitter but no review surface

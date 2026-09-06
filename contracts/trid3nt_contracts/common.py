@@ -216,9 +216,8 @@ class EngineRunArgsMixin(GraceModel):
         the same 24.
       - ``advanced_physics``: an OPTIONAL per-engine physics-overrides dict
         (default ``None`` = no overrides = current behavior). The convention the
-        audit's "physics-toggle exposure" pattern uses; the registry that
-        validates the keys is ``physics_registry.PHYSICS_REGISTRY`` (STEP 2),
-        wired into the deck builders in STEP 3.
+        audit's "physics-toggle exposure" pattern uses; what validates the keys
+        is the engine's own keyword catalog.
 
     DEFAULT-OFF GUARANTEE: every field defaults to today's behavior, so a model
     that does NOT set them serializes + behaves byte-identically. A model adopts

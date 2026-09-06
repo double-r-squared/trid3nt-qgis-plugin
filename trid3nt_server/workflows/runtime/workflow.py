@@ -4,10 +4,10 @@ A template file declares a workflow; :class:`Workflow` IS one. The skeleton owns
 everything that never varies between questions - the normalize -> resolve ->
 interpret spine, the post + publish stages, the typed error envelope, the chart
 HOOK and its persistence, the answer artifact, and the registration factory - and
-the engine facade (:class:`EngineOps`, realized as ``TelemacWorkflow`` and
-friends) realizes exactly four operations. The mechanics behind the invariants -
-gate cards, chart building and emission, solve supervision, ledger + resume, the
-leak guard - are the interpreter's, and stay there.
+an engine subtype (``TelemacWorkflow``) declares the two facts a run of that
+engine is recorded under. The mechanics behind the invariants - gate cards, chart
+building and emission, solve supervision, ledger + resume, the leak guard - are
+the interpreter's, and stay there.
 
 The skeleton COMPOSES the library; it does not reimplement it. Gates, ledger,
 binding and the leak guard all live in ``interpreter.py`` and stay there - the
@@ -40,8 +40,7 @@ from .validate import validate_plan
 from .validity import Validity, check_validity, refuse_undeclared_reads
 from .interpreter import RunResult, interpret
 
-__all__ = ["EngineOps", "FacadeIncompleteError",
-           "Workflow", "WireArgsError", "register_workflow"]
+__all__ = ["Workflow", "WireArgsError", "register_workflow"]
 
 logger = logging.getLogger("trid3nt_server.workflows.runtime.workflow")
 
@@ -50,64 +49,6 @@ class WireArgsError(DeclarativeError):
     """The wire arguments cannot be coerced into a sheet the workflow can run."""
 
     error_code = "WIRE_ARGS_INVALID"
-
-
-class FacadeIncompleteError(DeclarativeError):
-    """A registered workflow's facade leaves one of the EngineOps four unrealized.
-
-    An AUTHORING error, refused at registration (import) time: a facade with a hole
-    in it would otherwise run until the plan reached the missing operation and then
-    surface the raw ``NotImplementedError`` to the model as an
-    ``<ENGINE>_INTERNAL_ERROR`` - a declaration defect wearing a runtime failure's
-    clothes.
-    """
-
-    error_code = "FACADE_INCOMPLETE"
-
-
-class EngineOps:
-    """The engine facade: four operations, and nothing else.
-
-    The facade's value is STABILITY - the interface never changes while the
-    mechanisms behind it (steering writers, result readers) evolve freely.
-    Facades are named by engine only; a domain qualifier in the name would weld a
-    domain assumption into the engine, and domain shape arrives through
-    ``acquire_domain``'s slots instead.
-
-    Meshing is NOT one of the four: a mesh ask is a declaration block
-    (``tool.build_mesh``) the template writes beside DATA and PARAMS, and ``author``
-    consumes it. A mesh built by one mesher feeds several engines, so it stands
-    outside any one engine's facade.
-    """
-
-    #: The solver family a plan built by this facade records.
-    engine: str = ""
-
-    #: What ``solve`` NAMES its step. The skeleton reads the run prefix off that
-    #: step when the result carries none, and a facade that renamed its solve would
-    #: otherwise lose the run id to a literal guess. Declared, never assumed.
-    solve_step: str = ""
-
-    #: The operations a facade must realize to be registrable.
-    MUST_FILL: tuple[str, ...] = ("acquire_domain", "author", "solve", "read")
-
-    def acquire_domain(self, **slots: Any) -> tuple[Step, ...]:
-        """The steps that establish the modeled world and its resolved state."""
-        raise NotImplementedError(f"{type(self).__name__} realizes no acquire_domain.")
-
-    def author(self, *, mesh: Any, physics: Any, forcing: Any) -> Step:
-        """Serialize the mesh ask + physics + forcing into the engine's own
-        steering files.
-        """
-        raise NotImplementedError(f"{type(self).__name__} realizes no author.")
-
-    def solve(self, **slots: Any) -> Step:
-        """The declared solve: which image, which limits, which sizing class."""
-        raise NotImplementedError(f"{type(self).__name__} realizes no solve.")
-
-    def read(self, run: Any, **slots: Any) -> Step:
-        """Read the solve's raw output into the question's published deliverable."""
-        raise NotImplementedError(f"{type(self).__name__} realizes no read.")
 
 
 def _provenance_row(row: str | tuple[str, str]) -> tuple[str, str]:
@@ -129,17 +70,20 @@ def _provenance_row(row: str | tuple[str, str]) -> tuple[str, str]:
     return (pair[0], pair[1])
 
 
-class Workflow(EngineOps):
+class Workflow:
     """The universal skeleton. A template declares; this runs.
 
-    Stage sequence (``plan.STAGES``): acquire -> prep -> mesh -> gates -> author ->
-    solve -> post -> publish. The declared plan expresses the first six; the
+    A workflow declares TWO facts about the engine behind it - the solver family a
+    run of it records, and what its solve step is NAMED, which is where the
+    skeleton reads the run prefix from when a result carries none. Everything else
+    a question needs is the Door it hands over.
+
+    The declared Door expresses the world, the mesh, the fill and the run; the
     skeleton's own body is post + publish, plus the normalize/resolve/interpret
     spine in front of them.
 
     HOOKS have SILENT defaults: an unfilled hook does nothing, and no engine
-    subtype ever restates one. ABSTRACT SLOTS must be filled: the physics the
-    template declares and the :class:`EngineOps` four.
+    subtype ever restates one.
 
     The contract also names a sensor/context-layer hook. It is deliberately NOT
     here: the steps that fetch inputs already emit their own through the one
@@ -147,6 +91,14 @@ class Workflow(EngineOps):
     double-emission the input-surfacing guard exists to catch. It arrives with
     the emission-unification wave, where the seam is the single home.
     """
+
+    #: The solver family a run of this workflow records.
+    engine: str = ""
+
+    #: What the SOLVE step is NAMED. The skeleton reads the run prefix off that
+    #: step when the result carries none, and a workflow that renamed its solve
+    #: would otherwise lose the run id to a literal guess. Declared, never assumed.
+    solve_step: str = ""
 
     def __init__(self, *, metadata: Any, params: Any,
                  plan: Callable[..., Any], data: Any = (),
@@ -500,10 +452,6 @@ def register_workflow(
     in ``extra_args``), so the model-facing schema is generated from the same
     declaration the run resolves.
 
-    The facade is checked for HOLES first: the EngineOps four are must-fill slots,
-    and registration is the last moment an unfilled one is still an authoring
-    error rather than a mid-run failure.
-
     THE CONSTANT DOOR AND THE WIRE. A CONSTANT-door param is absent from the
     synthesized signature and from the model-facing docstring's param list, so the
     model is never offered it and cannot fill it. That is the whole of the
@@ -525,7 +473,6 @@ def register_workflow(
     """
     from trid3nt_server.tools import register_tool
 
-    _refuse_incomplete_facade(facade)
     params = param_rows(params)
     workflow = facade(metadata=metadata, params=params, plan=plan, data=data,
                       answer=answer, provenance=provenance,
@@ -567,29 +514,6 @@ def register_workflow(
         return _run
     register_kwargs.setdefault("idempotent_hint", False)
     return register_tool(metadata, **register_kwargs)(_run)
-
-
-def _refuse_incomplete_facade(facade: type[Workflow]) -> None:
-    """A facade with an unrealized operation never reaches a caller as a run failure.
-
-    The design contract calls the EngineOps four must-fill slots and promises the
-    library refuses to register a template that leaves one empty; this is that
-    refusal. Without it the hole surfaces mid-run - after the geocode, the fetches
-    and possibly the solve - as a bare ``NotImplementedError`` flattened into an
-    ``<ENGINE>_INTERNAL_ERROR``, which tells the reader a runtime broke when in
-    fact the declaration was never complete.
-    """
-    if not (isinstance(facade, type) and issubclass(facade, EngineOps)):
-        raise FacadeIncompleteError(
-            f"{facade!r} is not an EngineOps facade; register_workflow takes the "
-            "facade CLASS (e.g. TelemacWorkflow).")
-    unfilled = [op for op in EngineOps.MUST_FILL
-                if getattr(facade, op, None) is getattr(EngineOps, op)]
-    if unfilled:
-        raise FacadeIncompleteError(
-            f"{facade.__name__} realizes no {unfilled} - the EngineOps four are "
-            "must-fill. Implement them on the facade, or register against one that "
-            "does.")
 
 
 def _context_doc(data: Sequence[DataDecl],

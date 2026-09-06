@@ -233,7 +233,7 @@ class ResolvedParam:
 class ResolvedParams:
     """The resolved param sheet - what the RUN reads, never what the plan reads.
 
-    A plan is a static value built before any sheet exists (``plan(ops)``, with
+    A plan is a static value built before any sheet exists (the Door, with
     ``PARAMS.<name>`` describing each read), so nothing here is reachable at
     plan-construction time. What this class serves is the interpreter binding a
     ref, the gate machinery re-seating an approval, and the

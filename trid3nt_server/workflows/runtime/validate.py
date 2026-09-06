@@ -1,6 +1,6 @@
 """The plan validator - runs BEFORE any execution.
 
-Ref integrity, modifier legality and gate placement, all as typed refusals.
+Ref integrity and modifier legality, as typed refusals.
 """
 
 from __future__ import annotations
@@ -9,8 +9,8 @@ from typing import Any, Iterable, Sequence
 
 from .data import DataDecl
 from .errors import PlanValidationError
-from .params import Param, doors, refuse_duplicate_params
-from .plan import DataRef, Gate, ParamRef, Plan, Ref, When, declared_reads
+from .params import Param, refuse_duplicate_params
+from .plan import DataRef, ParamRef, Plan, Ref, declared_reads
 
 __all__ = ["validate_plan"]
 
@@ -26,8 +26,6 @@ def validate_plan(plan: Plan, params: Sequence[Param],
     param_names = {p.name for p in params}
     data_names = {d.name for d in data}
     _check_duplicate_names(plan)
-    _check_gate_declarations(plan, {p.name: p for p in params})
-    _check_when_conditions(plan, param_names, data_names)
     _check_refs(plan, param_names, data_names)
     _check_param_refs(plan, param_names)
     _check_data_refs(data, param_names, data_names, plan)
@@ -45,112 +43,20 @@ def _check_duplicate_names(plan: Plan) -> None:
         seen.add(step.name)
 
 
-def _check_gate_declarations(plan: Plan, params: dict[str, Param]) -> None:
-    form_gates = 0
-    consequential_seen: str | None = None
-    self_gating = next((s.label for s in plan.declared()
-                        if not isinstance(s, Gate) and s.self_gating), None)
-    for step in plan.declared():
-        if isinstance(step, Gate):
-            if step.kind == "form" and self_gating is not None:
-                raise PlanValidationError(
-                    f"plan {plan.name!r}: step {self_gating!r} reviews its own inputs, "
-                    "so the plan must not declare a FormGate in front of it - the "
-                    "composite's own review IS the review, and a second card's edits "
-                    "would land on a sheet the composite never reads."
-                )
-            if consequential_seen is not None:
-                raise PlanValidationError(
-                    f"plan {plan.name!r}: gate {step.label!r} is placed AFTER the "
-                    f"consequential step {consequential_seen!r} - a gate that cannot "
-                    "change the run is a dead gate."
-                )
-            if step.kind == "form":
-                form_gates += 1
-                if form_gates > 1:
-                    raise PlanValidationError(
-                        f"plan {plan.name!r}: more than one FormGate; the param sheet "
-                        "is reviewed once."
-                    )
-            else:
-                target = params.get(step.param or "")
-                if target is None:
-                    raise PlanValidationError(
-                        f"plan {plan.name!r}: DrawGate names undeclared param "
-                        f"{step.param!r}."
-                    )
-                if target.door != doors.USER:
-                    raise PlanValidationError(
-                        f"plan {plan.name!r}: DrawGate param {target.name!r} is "
-                        f"door={target.door}; a drawn value comes through the USER door."
-                    )
-        elif step.consequential and consequential_seen is None:
-            consequential_seen = step.label
-
-    declared = plan.declared()
-    if declared and isinstance(declared[-1], Gate):
-        raise PlanValidationError(
-            f"plan {plan.name!r}: gate {declared[-1].label!r} is the LAST node of the "
-            "plan - nothing runs after it, so there is nothing its answer could "
-            "change. A gate that cannot change the run is a dead gate."
-        )
-
-
-def _check_when_conditions(plan: Plan, param_names: set[str],
-                           data_names: set[str]) -> None:
-    """Every branch condition must be a read that RESOLVES when the branch is reached.
-
-    A ``When`` is decided by the interpreter, after the gates - so a form gate
-    revising the very value a branch reads is the point, not a contradiction. What
-    is still refusable is a condition that names nothing: an undeclared param, an
-    undeclared Data, or a step that is not visible on this branch (declared later,
-    or named inside a sibling branch that may not fire).
-    """
-    _check_when_scope(plan.name, plan.steps, param_names, data_names, set())
-
-
-def _check_when_scope(plan_name: str, nodes: tuple[Any, ...], param_names: set[str],
-                      data_names: set[str], visible: set[str]) -> None:
-    local = set(visible)
-    for node in nodes:
-        if isinstance(node, When):
-            cond = node.condition
-            if isinstance(cond, ParamRef):
-                if cond.name not in param_names:
-                    raise PlanValidationError(
-                        f"plan {plan_name!r}: When branches on ParamRef({cond.name!r}), "
-                        "which is not a declared param."
-                    )
-            else:
-                _resolve_root(plan_name, node.label, cond, param_names, data_names,
-                              local)
-            _check_when_scope(plan_name, node.body, param_names, data_names, local)
-            continue
-        if node.name is not None:
-            local.add(node.name)
-
-
 def _check_refs(plan: Plan, param_names: set[str], data_names: set[str]) -> None:
-    _check_refs_in_scope(plan.name, plan.steps, param_names, data_names, set())
+    """Ref integrity, in DECLARATION ORDER.
 
-
-def _check_refs_in_scope(plan_name: str, nodes: tuple[Any, ...], param_names: set[str],
-                         data_names: set[str], visible: set[str]) -> None:
-    """Ref integrity with BRANCH SCOPING.
-
-    A step named inside a ``When`` body is only visible inside that body: the
-    branch may not be taken, so a Ref to it from outside is a runtime
-    REF_UNRESOLVED waiting to happen, not a valid plan.
+    A step may read a param, a declared Data, or a step named BEFORE it: the
+    sequence is what makes a read resolvable, so a ref to a step declared later is
+    a runtime REF_UNRESOLVED waiting to happen rather than a valid plan.
     """
-    local = set(visible)
-    for node in nodes:
-        if isinstance(node, When):
-            _check_refs_in_scope(plan_name, node.body, param_names, data_names, local)
-            continue
+    visible: set[str] = set()
+    for node in plan.steps:
         for ref in _walk_refs(dict(node.kwargs)):
-            _resolve_root(plan_name, node.label, ref, param_names, data_names, local)
+            _resolve_root(plan.name, node.label, ref, param_names, data_names,
+                          visible)
         if node.name is not None:
-            local.add(node.name)
+            visible.add(node.name)
 
 
 def _check_param_refs(plan: Plan, param_names: set[str]) -> None:
@@ -221,7 +127,7 @@ def _resolve_root(plan_name: str, step_label: str, ref: Ref, param_names: set[st
     raise PlanValidationError(
         f"plan {plan_name!r} step {step_label!r}: Ref({ref.path!r}) resolves to "
         "nothing - it is not a declared param, not a declared Data, and not a step "
-        "named earlier on this branch."
+        "named earlier in the sequence."
     )
 
 
