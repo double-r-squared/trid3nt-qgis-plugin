@@ -28,6 +28,10 @@ logger = logging.getLogger("trid3nt_server.workflows.mesh.shared.selafin_cli")
 
 __all__ = ["write_telemac_pair"]
 
+#: What the driver writes when it refuses in its own words: the code and the
+#: reason, from the one walk that decides the boundary numbering.
+_REFUSAL_FILE = "selafin_cli_refusal.json"
+
 _TELEMAC_IMAGE_DEFAULT = "trid3nt-local/telemac:latest"
 _INCONTAINER_SCRIPT = "selafin_cli_driver.py"
 _CONTAINER_TIMEOUT_S = 1800
@@ -77,6 +81,12 @@ def _run_driver(rundir: Path, config: Mapping[str, Any]) -> dict[str, Any]:
     logger.info("selafin_cli write: %s", " ".join(argv))
     cp = subprocess.run(argv, capture_output=True, text=True,
                         timeout=_CONTAINER_TIMEOUT_S)
+    document = rundir / _REFUSAL_FILE
+    if document.exists():
+        # The refusal the WALK wrote: only the process that ran it knows which
+        # rings came back, so its own words are re-raised rather than re-derived.
+        read = json.loads(document.read_text())
+        raise MeshToolError(str(read["code"]), str(read["message"]))
     if cp.returncode != 0:
         raise MeshToolError(
             "MESH_TELAPY_FAILED",

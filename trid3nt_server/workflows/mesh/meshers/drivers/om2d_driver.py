@@ -301,7 +301,8 @@ class _Build:
             # edges are where the water simply continues past the ask.
             self.domain_rings = [[(xmin, ymin), (xmax, ymin), (xmax, ymax),
                                   (xmin, ymax), (xmin, ymin)]]
-            self.active.append("shoreline_sdf(GSHHG)")
+            self.active.append(
+                f"shoreline_sdf({cfg['shoreline_shp'].rsplit('/', 1)[-1]})")
 
     # -- the environment a pre op's unstated parameters are filled from ---- #
     def environment(self) -> dict:

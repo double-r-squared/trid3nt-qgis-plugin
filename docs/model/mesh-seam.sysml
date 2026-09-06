@@ -662,15 +662,20 @@ package MeshSeam {
         */
     }
 
-    requirement def AcceptanceRefusesAPinchedBoundary {
+    requirement def APinchedBoundaryIsRefusedByName {
         doc /*
-        A mesh is FROZEN only if its boundary walk closes once through every
-        node. A node two rings both pass through has no boundary numbering: the
-        walk visits it twice while the geometry holds it once, so the successor
-        array a writer builds outruns the node count and the write either crashes
-        or classifies the wrong nodes. The acceptance names the shared nodes and
-        their count, because a crash carries none of that and a caller can act on
-        a named node.
+        A mesh becomes a geometry pair only if the walk that NUMBERS its boundary
+        visits every node once. IPOBO is a permutation of 1..NPTFR, so a node two
+        rings both pass through would need two positions and gets the second, and
+        the successor array built from the contour lengths then outruns the
+        boundary itself.
+
+        The walk that decides this is the engine's own, inside the image: a
+        host-side walk of the same cells returns different rings, so nothing
+        outside that process can measure it. The refusal is therefore written
+        WHERE the walk runs, naming the shared nodes and their count, and travels
+        back as a document the host re-raises typed - never as the index error
+        that named nothing.
         */
     }
 
@@ -791,11 +796,13 @@ package MeshSeam {
     verify requirement TopologyIsWrittenForEveryMesh by
         "tests/test_mesh_topology_and_bed.py::test_an_empty_role_is_not_a_role";
 
-    satisfy requirement AcceptanceRefusesAPinchedBoundary by meshSession;
-    verify requirement AcceptanceRefusesAPinchedBoundary by
-        "tests/test_mesh_gate_loop.py::test_accept_refuses_a_boundary_walk_whose_rings_share_a_node";
-    verify requirement AcceptanceRefusesAPinchedBoundary by
-        "tests/test_mesh_gate_loop.py::test_a_boundary_that_closes_once_is_accepted";
+    satisfy requirement APinchedBoundaryIsRefusedByName by selafinCliDriver;
+    verify requirement APinchedBoundaryIsRefusedByName by
+        "tests/test_telemac_boundary_contract.py::test_a_walk_whose_rings_share_a_node_refuses_naming_them";
+    verify requirement APinchedBoundaryIsRefusedByName by
+        "tests/test_telemac_boundary_contract.py::test_a_walk_that_visits_every_node_once_states_nothing";
+    verify requirement APinchedBoundaryIsRefusedByName by
+        "tests/test_telemac_boundary_contract.py::test_the_host_re_raises_the_walks_own_refusal_typed";
 
     satisfy requirement SignatureIsTheSchema by mesherRegistry;
     satisfy requirement SignatureIsTheSchema by om2dAdapter;

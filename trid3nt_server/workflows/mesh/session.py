@@ -50,9 +50,6 @@ logger = logging.getLogger("trid3nt_server.workflows.mesh.session")
 
 __all__ = ["MeshSession", "mesh_digest", "replay_recipe"]
 
-#: How many pinched nodes the refusal spells out before it counts the rest.
-_NAMED_PINCH_NODES = 12
-
 
 class MeshSession:
     """A mesh being built: edit the recipe, probe, reset, accept."""
@@ -208,13 +205,11 @@ class MeshSession:
         would run, beside the facts only the MESHER knows - what painted its bed,
         which stretch it opened - which ride in on the mesh's own ``meta``.
 
-        A PINCHED boundary is refused here, by name. A domain whose boundary walk
-        touches itself has no permutation of 1..NPTFR to be numbered by, so every
-        writer downstream of this point either crashes on it or classifies the
-        wrong nodes; naming the nodes is the answer a caller can act on.
+        A mesh whose boundary walk does not close once through every node never
+        reaches here: the walk that numbers the boundary refuses it by name, in
+        the process that runs it.
         """
         mesh = self.mesh
-        _refuse_pinched_boundary(mesh)
         declared = dict(mesh.meta.get("artifact") or {})
         # The counts are already read through the mesh's own properties; passing
         # them again would name one field twice.
@@ -487,45 +482,6 @@ def _area_km2(points: Any, cells: Any, scale: tuple[float, float]) -> float:
         b = xy[cells[:, i + 1]] - origin
         twice += a[:, 0] * b[:, 1] - b[:, 0] * a[:, 1]
     return float(np.abs(twice).sum() / 2.0 / 1.0e6)
-
-
-def _pinched_boundary_nodes(mesh: Mesh) -> list[int]:
-    """The boundary nodes more than one ring of the walk passes through.
-
-    A closed boundary walk visits every node once, so a boundary node sits on
-    exactly two boundary edges. A node on more than two is where two rings TOUCH
-    - the domain is pinched to a point there - and it is the same node that a
-    boundary numbering would have to give two positions to.
-    """
-    if not mesh.has_cells:
-        return []
-    cells = np.asarray(mesh.cells, dtype=np.int64)
-    edges, counts = _unique_edges(cells)
-    boundary = edges[counts == 1]
-    if not boundary.size:
-        return []
-    nodes, degrees = np.unique(boundary.reshape(-1), return_counts=True)
-    return [int(n) for n in nodes[degrees > 2]]
-
-
-def _refuse_pinched_boundary(mesh: Mesh) -> None:
-    """Refuse a mesh whose boundary rings share nodes, naming them."""
-    shared = _pinched_boundary_nodes(mesh)
-    if not shared:
-        return
-    named = ", ".join(str(n) for n in shared[:_NAMED_PINCH_NODES])
-    more = ("" if len(shared) <= _NAMED_PINCH_NODES
-            else f" (and {len(shared) - _NAMED_PINCH_NODES} more)")
-    raise MeshToolError(
-        "MESH_BOUNDARY_PINCHED",
-        f"{len(shared)} node(s) of this mesh's boundary lie on more than one "
-        f"ring of the boundary walk - nodes {named}{more} - so the domain is "
-        "pinched to a point there and TELEMAC has no boundary numbering for it: "
-        "the walk visits such a node twice while the geometry holds it once. It "
-        "is a domain the shoreline cut into pieces that touch rather than a mesh "
-        "defect: cut the domain from a shoreline that resolves the ask "
-        "(a coarse shoreline at a fine edge is what produces the scraps), or "
-        "narrow the extent to the water body the question is about.")
 
 
 def _boundary_loops(boundary: Any) -> int:

@@ -113,6 +113,56 @@ def _load(path: str):
     return x, y, ikle, (bottom if bottom.shape[0] == x.shape[0] else None)
 
 
+class _Refusal(Exception):
+    """A typed refusal the HOST re-raises under its own code.
+
+    The one thing only THIS process knows is what the engine's own boundary walk
+    returned, so the refusal about that walk is written here and travels back as
+    a document rather than as a return code the host has to guess a meaning for.
+    """
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.document = {"code": code, "message": message}
+
+
+#: How many shared nodes the refusal spells out before it counts the rest.
+_NAMED_PINCH_NODES = 12
+
+
+def _refuse_shared_ring_nodes(contours) -> None:
+    """Refuse a walk whose rings share nodes, naming them and how many there are.
+
+    IPOBO is a permutation of 1..NPTFR: every boundary node carries exactly one
+    position. A node two rings both walk through would need two, gets the second,
+    and the successor array built from the contour lengths is then longer than
+    the boundary itself - which is an index error several functions later and a
+    silently misnumbered boundary if it were not. The walk that decides this is
+    the engine's own, so nothing outside this process can measure it: a host-side
+    walk of the same cells returns different rings.
+    """
+    seen: dict = {}
+    for ring in contours:
+        for node in ring:
+            seen[int(node)] = seen.get(int(node), 0) + 1
+    shared = sorted(node for node, count in seen.items() if count > 1)
+    if not shared:
+        return
+    rows = sum(len(ring) for ring in contours)
+    named = ", ".join(str(n) for n in shared[:_NAMED_PINCH_NODES])
+    more = ("" if len(shared) <= _NAMED_PINCH_NODES
+            else f" (and {len(shared) - _NAMED_PINCH_NODES} more)")
+    raise _Refusal(
+        "MESH_BOUNDARY_PINCHED",
+        f"the boundary walk returned {len(contours)} rings over {rows} rows but "
+        f"only {len(seen)} distinct nodes: {len(shared)} node(s) - {named}{more} "
+        "- lie on more than one ring, so the domain is pinched to a point there "
+        "and has no IPOBO permutation to be numbered by. It is a domain the "
+        "extent cut into pieces that touch rather than a mesh defect: cut it "
+        "from a shoreline that resolves the ask, or narrow the extent to the "
+        "water body the question is about.")
+
+
 def _boundary(x, y, ikle):
     """pretel's own boundary walk -> ``(ipobo, contours)``, which agree by construction.
 
@@ -130,6 +180,7 @@ def _boundary(x, y, ikle):
 
     _, pbounds = get_ipobo(x, y, np.asarray(ikle, dtype=np.int32), debug=False)
     contours = [[int(n) for n in ring] for ring in pbounds]
+    _refuse_shared_ring_nodes(contours)
     ipobo = np.zeros(len(x), dtype=np.int32)
     position = 0
     for ring in contours:
@@ -385,7 +436,13 @@ def write_pair(cfg: dict) -> dict:
 def main() -> int:
     cfg = json.load(open(sys.argv[1]))
     out = sys.argv[2].rstrip("/")
-    stats = write_pair(cfg)
+    try:
+        stats = write_pair(cfg)
+    except _Refusal as refusal:
+        json.dump(refusal.document,
+                  open(out + "/selafin_cli_refusal.json", "w"), indent=2)
+        print("SELAFIN_CLI_REFUSED", json.dumps(refusal.document))
+        return 3
     json.dump(stats, open(out + "/selafin_cli_stats.json", "w"), indent=2)
     print("SELAFIN_CLI_OK", json.dumps(stats))
     return 0
