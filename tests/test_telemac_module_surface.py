@@ -768,6 +768,38 @@ def test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling():
     assert rows["time_step_s"].derived_when_absent
 
 
+def test_every_open_water_recipe_sizes_the_domain_rim_it_meshes():
+    """Nothing else sizes the rim: every sizing function measures the SHORELINE,
+    and an AOI's own box is not one, so an undeclared rim comes back an order of
+    magnitude past the size word and the band where it meets the shoreline
+    triangulates into slivers. The op runs after the sizing and before the
+    gradation that grades the step in."""
+    from trid3nt_server.workflows.mesh.tool import recipe_plan_value
+    from trid3nt_server.workflows.telemac.templates.agitation.agitation import (
+        MESH as HARBOUR,
+    )
+    from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import (
+        MESH as BASIN,
+    )
+
+    for recipe in (HARBOUR, BASIN):
+        ops = [op["op"] for op in recipe_plan_value(recipe)["ops"]]
+        assert "set_rim_size" in ops
+        sizing = [i for i, op in enumerate(ops)
+                  if op.endswith("_sizing_function")]
+        gradation = [i for i, op in enumerate(ops)
+                     if op == "enforce_mesh_gradation"]
+        rim = ops.index("set_rim_size")
+        assert all(i < rim for i in sizing)
+        assert all(i > rim for i in gradation)
+    # No edge is stated on either, so both lock the rim at the recipe's own
+    # size word rather than at a metre value one of them invented.
+    for recipe in (HARBOUR, BASIN):
+        entry = next(op for op in recipe_plan_value(recipe)["ops"]
+                     if op["op"] == "set_rim_size")
+        assert not entry["kwargs"]
+
+
 def test_every_open_water_recipe_carries_the_boundary_cleaning_chain():
     """A domain cut from a shoreline can leave scraps that touch at points, and
     the library's own clean passes are what remove them before the boundary is

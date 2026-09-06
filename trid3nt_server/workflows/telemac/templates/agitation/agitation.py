@@ -83,6 +83,8 @@ class DATA:
 #: structure is punched out of the water with its outline locked in FIRST, and
 #: the shoreline sizing is built over the domain that leaves - so the band around
 #: the cut is graded rather than a discontinuity the triangulator has to absorb.
+#: The domain's own rim is sized between the two, which is where the one op that
+#: measures it belongs: after the sizing, before the gradation that grades it in.
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
@@ -91,6 +93,13 @@ MESH = tool.build_mesh(
     ops=[
         mesh_op("set_obstacle", geometry=Ref("barrier")),
         mesh_op("feature_sizing_function"),
+        # THE RIM IS THE ASK'S TO SIZE. Nothing else sizes it: every sizing
+        # function measures the shoreline, and the AOI's own box is not one, so
+        # an undeclared rim comes back an order of magnitude past the size word
+        # and the band where it meets the shoreline triangulates into slivers.
+        # No edge is stated, so the rim is locked at the recipe's own size word -
+        # the value the basin's rim is sized at.
+        mesh_op("set_rim_size"),
         mesh_op("enforce_mesh_gradation", gradation=P.mesh_grade),
         mesh_op("delete_boundary_faces"),
         mesh_op("delete_faces_connected_to_one_face"),
