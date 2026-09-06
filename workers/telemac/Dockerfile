@@ -98,12 +98,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /data
 
-# Build-time smoke: the entrypoint and both in-worker builders import under the
-# activated env, the four telapy classes a case may name resolve, each builder's
-# config maps through the one strict gate, every one of those four carries the
-# per-step call the runner's loop drives, and the baked user fortran is on disk.
-# A path/import/pin mistake surfaces at BUILD time instead of mid-solve, and so
-# does a telapy that stopped exposing the step the loop is written against.
+# Build-time smoke: the entrypoint imports under the activated env, the four
+# telapy classes a case may name resolve, every one of them carries the per-step
+# call the runner's loop drives, the dispatch is the ONE case section, and the
+# baked user fortran is on disk. A path/import/pin mistake surfaces at BUILD time
+# instead of mid-solve, and so does a telapy that stopped exposing the step the
+# loop is written against.
 RUN python -c "\
 import sys, pathlib;\
 sys.path.insert(0, '/opt/trid3nt/workers/telemac');\
@@ -112,17 +112,13 @@ from telapy.api.t2d import Telemac2d;\
 from telapy.api.t3d import Telemac3d;\
 from telapy.api.wac import Tomawac;\
 from telapy.api.art import Artemis;\
-import artemis_build as A, telemac3d_build as T;\
-agitation = E._strict_section('agitation', {'wave_mode': 'resonance', 'wave_period_s': 32.0}, E._config_fields(A.ArtemisConfig));\
-stratified = E._strict_section('stratified', {'flow_mode': 'wind_circulation', 'nplan': 11}, E._config_fields(T.Telemac3dConfig));\
-assert A.ArtemisConfig(**agitation).wave_period_s == 32.0;\
-assert T.Telemac3dConfig(**stratified).nplan == 11;\
 assert sorted(E._MODULES) == ['artemis', 'telemac2d', 'telemac3d', 'tomawac'];\
+assert sorted(E._DISPATCH) == ['case'], E._DISPATCH;\
 assert all(callable(getattr(c, 'run_one_time_step', None)) for c in (Telemac2d, Telemac3d, Tomawac, Artemis));\
 assert pathlib.Path('/opt/trid3nt/user_fortran/raindef3/runoff_scs_cn.f').is_file();\
 assert E._measure_ntimestep(pathlib.Path('/tmp'), '') == {};\
 assert E._measure_ntimestep(pathlib.Path('/tmp'), 'nothing_here.slf') == {};\
-print('telemac worker OK: parser', E._PARSER_VERSION, '| telapy modules step-capable, config maps and baked raindef3 all present')"
+print('telemac worker OK: parser', E._PARSER_VERSION, '| telapy modules step-capable, one case dispatch and baked raindef3 all present')"
 
 # The frame-count reader, exercised on a REAL SELAFIN written in this image. The
 # guard above proves it stays quiet on nothing; this proves it can count, which

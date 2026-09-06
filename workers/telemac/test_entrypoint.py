@@ -45,7 +45,7 @@ def test_the_parser_stamp_is_the_unified_one():
     """The stamp travels with the case contract, so an image built against an
     older one reads as a drifted version rather than as a manifest whose keys
     silently did nothing."""
-    assert E._PARSER_VERSION == "telemac-unified-2"
+    assert E._PARSER_VERSION == "telemac-case-3"
 
 
 def test_the_four_engines_a_case_may_name_come_from_telapy():
@@ -54,8 +54,10 @@ def test_the_four_engines_a_case_may_name_come_from_telapy():
                for path, _cls in E._MODULES.values())
 
 
-def test_the_dispatch_is_one_table_of_three_sections():
-    assert set(E._DISPATCH) == {"case", "agitation", "stratified"}
+def test_the_dispatch_is_the_one_section_a_manifest_may_name():
+    """The container authors nothing, so there is one runnable section and a
+    manifest naming any other is a refusal rather than a second builder."""
+    assert set(E._DISPATCH) == {"case"}
 
 
 # --------------------------------------------------------------------------- #

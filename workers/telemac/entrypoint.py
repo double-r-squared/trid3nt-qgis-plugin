@@ -6,15 +6,11 @@ dispatch, and writes ``telemac_metrics.json`` back into the same directory. The
 container does no network and no object-store I/O: everything it reads arrives
 staged, and the supervisor uploads everything it wrote.
 
-A manifest names exactly one runnable section:
-
-  * ``case`` - the authored run. A steering file is a record and the server
-    wrote it, so
-    what reaches the worker is which engine, which steering file, and which
-    result files must exist for the run to have happened.
-  * ``agitation`` / ``stratified`` - the two builders that still author their own
-    domain in-container. They run behind this dispatch unchanged and are never
-    extended; each is superseded by a ``case`` as it is rebuilt server-side.
+A manifest names exactly ONE runnable section, ``case``: the authored run. A
+steering file is a record and the server wrote it, so what reaches the worker is
+which engine, which steering file, and which result files must exist for the run
+to have happened. There is no second section and no builder here - the container
+authors nothing.
 
 A ``case`` solves in a CHILD process. A Fortran STOP kills the process it runs
 in, and the metrics file is the only channel the server has for reading what went
@@ -35,7 +31,6 @@ that returns zero without writing its result has not solved anything.
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import importlib
 import json
 import logging
@@ -69,7 +64,7 @@ _LISTING_TAIL_CHARS = 4000
 #: Bump on a manifest-contract change. The stamp is named in the strict-gate
 #: refusal, so a stale image surfaces as a drifted version rather than as a knob
 #: that silently did nothing.
-_PARSER_VERSION = "telemac-unified-2"
+_PARSER_VERSION = "telemac-case-3"
 
 #: Wall-clock bound on ONE solve, and the environment knob that states it. A
 #: wedged Fortran process holds the run directory forever and the supervisor sees
@@ -143,10 +138,6 @@ def _strict_section(section: str, body: Any, valid: Collection[str], *,
     return clean
 
 
-def _config_fields(cls: Any) -> frozenset[str]:
-    return frozenset(f.name for f in dataclasses.fields(cls))
-
-
 def _write_metrics(data_dir: Path, payload: dict[str, Any]) -> Path:
     path = data_dir / METRICS_FILENAME
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -205,8 +196,13 @@ def _step_count(study: Any) -> int:
     The count is the model's, read the way the engine reads it: a finite-volume
     run advances its whole time loop inside one call, so it counts as one step
     and a module whose steering has no equation keyword counts its steps plainly.
+    A module with no time loop AT ALL - an elliptic steady solve - reports no step
+    count, and one call IS its whole run.
     """
-    steps = int(study.get("MODEL.NTIMESTEPS"))
+    try:
+        steps = int(study.get("MODEL.NTIMESTEPS"))
+    except Exception:  # noqa: BLE001 -- no step keyword => a steady solve, one call
+        return 1
     try:
         equation = str(study.get("MODEL.EQUATION"))
     except Exception:  # noqa: BLE001 -- no equation keyword => not finite volume
@@ -379,44 +375,9 @@ def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]
     return metrics
 
 
-def _solve_agitation(data_dir: Path, body: Any,
-                     run_id: str | None) -> dict[str, Any]:
-    """The ARTEMIS harbour-agitation builder, behind the one dispatch."""
-    import artemis_build as A  # noqa: WPS433 -- worker payload
-
-    clean = _strict_section("agitation", body, _config_fields(A.ArtemisConfig),
-                            drop=("workdir", "mode"))
-    for key in ("bbox", "breakwater"):
-        if clean.get(key) is not None:
-            clean[key] = tuple(float(v) for v in clean[key])
-    clean["workdir"] = str(data_dir)
-    return {"module": "artemis",
-            **A.solve(A.ArtemisConfig(**clean), str(data_dir), run_id=run_id)}
-
-
-def _solve_stratified(data_dir: Path, body: Any,
-                      run_id: str | None) -> dict[str, Any]:
-    """The TELEMAC-3D stratified builder, behind the one dispatch."""
-    import telemac3d_build as T  # noqa: WPS433 -- worker payload
-
-    clean = _strict_section("stratified", body,
-                            _config_fields(T.Telemac3dConfig),
-                            drop=("workdir", "mode"))
-    if clean.get("bbox") is not None:
-        clean["bbox"] = tuple(float(v) for v in clean["bbox"])
-    clean["workdir"] = str(data_dir)
-    return {"module": "telemac3d",
-            **T.solve(T.Telemac3dConfig(**clean), str(data_dir),
-                      run_id=run_id)}
-
-
 #: Manifest section -> what runs it. The section a manifest carries IS the
 #: routing decision; a manifest that names none of them is a refusal.
-_DISPATCH = {
-    "case": _solve_case,
-    "agitation": _solve_agitation,
-    "stratified": _solve_stratified,
-}
+_DISPATCH = {"case": _solve_case}
 
 
 def _build_argv_parser() -> argparse.ArgumentParser:
