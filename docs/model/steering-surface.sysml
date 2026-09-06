@@ -687,6 +687,8 @@ package SteeringSurface {
     verify requirement EverythingOverridable by
         "tests/test_telemac_module_surface.py::test_every_template_wire_carries_the_raw_keyword_floor";
     verify requirement EverythingOverridable by
+        "tests/test_telemac_module_surface.py::test_a_floor_that_is_not_a_mapping_refuses_by_name";
+    verify requirement EverythingOverridable by
         "tests/test_telemac_module_surface.py::test_resolution_order_is_engine_then_the_parts_then_template_then_fill";
     verify requirement EverythingOverridable by
         "tests/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";

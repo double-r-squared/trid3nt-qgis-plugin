@@ -893,6 +893,20 @@ def test_two_releases_on_the_floor_are_two_sources_in_the_deck():
     assert "Q(1) Q(2)" in series
 
 
+def test_a_floor_that_is_not_a_mapping_refuses_by_name():
+    """The floor is a mapping of keyword to value. Anything else is named as the
+    argument it is, rather than raising out of the fill and blaming a step."""
+    import asyncio
+
+    from trid3nt_server.workflows.telemac.workflow import fill_sheet
+
+    with pytest.raises(SlotRefused) as caught:
+        asyncio.run(fill_sheet(steering=T2D, produced={}, params={}, slots={},
+                               workflow="probe", title="", input_mode="auto",
+                               keywords='{"LAW OF BOTTOM FRICTION": 4}'))
+    assert "mapping" in str(caught.value) and "got str" in str(caught.value)
+
+
 def test_every_template_wire_carries_the_raw_keyword_floor():
     """The floor is a CONTROL, on every wire, and it reaches the fill step."""
     import inspect

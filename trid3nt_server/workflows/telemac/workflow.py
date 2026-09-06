@@ -38,6 +38,7 @@ from trid3nt_server.workflows.runtime import (
 )
 from trid3nt_server.workflows.mesh.step import MeshStep
 from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
+from trid3nt_server.workflows.telemac.modules.module import SlotRefused
 from trid3nt_server.workflows.telemac.modules.sheet import Sheet
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
 from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
@@ -186,6 +187,14 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
     # value stands. That is not the same as a body asserting None, which IS the
     # statement that this run says nothing about the keyword.
     stated = {name: value for name, value in slots.items() if value is not None}
+    if keywords and not isinstance(keywords, Mapping):
+        # A floor that arrived as anything but a mapping is a caller error worth
+        # naming: the alternative is an attribute error from inside the fill,
+        # blaming a step rather than the argument.
+        raise SlotRefused(
+            f"keywords takes a mapping of the engine's own keyword names to "
+            f"values, e.g. {{\"LAW OF BOTTOM FRICTION\": 4}}; got "
+            f"{type(keywords).__name__}.")
     stated.update({steering.identify(name): value
                    for name, value in (keywords or {}).items()})
     sheet = fill_slots(steering, produced=dict(produced), params=dict(params),
