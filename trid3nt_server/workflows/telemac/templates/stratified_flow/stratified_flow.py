@@ -128,6 +128,16 @@ class STEERING(T3D):
     # states is that the elevation is CONSTANT rather than what it is.
     INITIAL_CONDITIONS = "CONSTANT ELEVATION"
 
+    # The ONE pair that cannot be left to the dictionary, measured both ways:
+    # LECDON stops on "THE LAW OF BOTTOM FRICTION 5 IS ASKED / GIVE THE
+    # CORRESPONDING FRICTION COEFFICIENT" when only the law is defaulted, and on
+    # "NO FRICTION LAW IS PRESCRIBED!" when only the coefficient is written. It
+    # reads the two jointly and takes neither half from the dictionary once the
+    # other exists. Both values ARE the dictionary's own; what the engine demands
+    # is that they be written.
+    LAW_OF_BOTTOM_FRICTION = 5
+    FRICTION_COEFFICIENT_FOR_THE_BOTTOM = 0.01
+
     # The diffusivities a screening basin is stable under. The dictionary's own
     # 1e-6 is molecular; a basin at these scales is not solved at molecular
     # viscosity, and the tracer pair has no default at all.
