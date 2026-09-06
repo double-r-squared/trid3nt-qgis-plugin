@@ -43,21 +43,32 @@ def test_a_bundle_that_states_no_prescription_per_boundary_refuses(tmp_path):
         T.read_topology(str(path))
 
 
-def test_a_bundle_with_no_roles_on_its_boundary_refuses(tmp_path):
-    """A mesh nobody classified is a mesh no reach run can be authored against."""
-    path = tmp_path / T.TOPOLOGY_FILENAME
-    path.write_text(json.dumps({"roles": {}, "liquid_boundary_order": []}))
-    with pytest.raises(ValueError, match="no roles"):
-        T.read_topology(str(path))
+def test_a_bundle_naming_no_liquid_boundary_states_the_closed_basin(tmp_path):
+    """A closed basin is an ANSWER. The bundle is written for every mesh, and the
+    reader says the boundary is solid wall rather than leaving the caller to read
+    an absence."""
+    path = T.write_topology(tmp_path, roles={}, liquid_boundary_order=[],
+                            liquid_boundary_prescribes=[])
+    read = T.read_topology(str(path))
+    assert read["roles"] == {} and read["liquid_boundary_order"] == []
+    assert "names no liquid boundary" in read["states"]
+
+
+def test_the_bundle_states_the_numbering_a_steering_author_reads(tmp_path):
+    path = T.write_topology(tmp_path, roles={"open": [1]},
+                            liquid_boundary_order=["open"],
+                            liquid_boundary_prescribes=["elevation"])
+    assert T.read_topology(str(path))["states"] == (
+        "1 liquid boundary, numbered 1=open")
 
 
 def test_an_empty_role_is_not_a_role(tmp_path):
+    """A role naming no node is dropped rather than counted: nothing carries it."""
     path = tmp_path / T.TOPOLOGY_FILENAME
     path.write_text(json.dumps({"roles": {"inflow": []},
                                 "liquid_boundary_order": ["inflow"],
                                 "liquid_boundary_prescribes": ["flowrate"]}))
-    with pytest.raises(ValueError):
-        T.read_topology(str(path))
+    assert T.read_topology(str(path))["roles"] == {}
 
 
 # --------------------------------------------------------------------------- #

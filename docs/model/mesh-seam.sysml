@@ -372,9 +372,11 @@ package MeshSeam {
 
     interface def TopologyBundle {
         doc /*
-        The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid
-        boundary refuses, because a steering file cannot be authored against a
-        boundary with no role on it.
+        The mesher's answers a SELAFIN cannot hold, written for EVERY mesh. A
+        bundle naming no liquid boundary is a recorded fact - a closed basin has
+        no stretch its water crosses - and ``states`` is the sentence the reader
+        says it in, so a caller that needed a role refuses about the role rather
+        than about a file that is not there.
 
         constructor: write_topology
         */
@@ -650,6 +652,16 @@ package MeshSeam {
         */
     }
 
+    requirement def TopologyIsWrittenForEveryMesh {
+        doc /*
+        The bundle rides beside every accepted mesh, whatever its boundary
+        carries. An absent bundle and a bundle naming no liquid boundary read
+        alike to a caller, and only one of them is an answer: a closed basin
+        states that its whole boundary is solid wall, and a reader that needed a
+        role refuses in its own words about the role it needed.
+        */
+    }
+
     requirement def SignatureIsTheSchema {
         doc /*
         An op's name must exist in the registering mesher's namespaces and its
@@ -757,6 +769,15 @@ package MeshSeam {
         "tests/test_mesh_topology_and_bed.py::test_a_node_two_declared_faces_both_claim_refuses";
     verify requirement BoundaryRolesAreContiguousRuns by
         "tests/test_mesh_topology_and_bed.py::test_a_face_the_mesh_never_reaches_refuses_rather_than_going_unprescribed";
+
+    satisfy requirement TopologyIsWrittenForEveryMesh by om2dAdapter;
+    satisfy requirement TopologyIsWrittenForEveryMesh by topologyWriter;
+    verify requirement TopologyIsWrittenForEveryMesh by
+        "tests/test_mesh_topology_and_bed.py::test_a_bundle_naming_no_liquid_boundary_states_the_closed_basin";
+    verify requirement TopologyIsWrittenForEveryMesh by
+        "tests/test_mesh_topology_and_bed.py::test_the_bundle_states_the_numbering_a_steering_author_reads";
+    verify requirement TopologyIsWrittenForEveryMesh by
+        "tests/test_mesh_topology_and_bed.py::test_an_empty_role_is_not_a_role";
 
     satisfy requirement SignatureIsTheSchema by mesherRegistry;
     satisfy requirement SignatureIsTheSchema by om2dAdapter;

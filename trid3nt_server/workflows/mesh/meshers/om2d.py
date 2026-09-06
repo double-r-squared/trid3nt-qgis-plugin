@@ -763,13 +763,14 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
     probes["liquid_boundary_roles"] = lb_order
     probes["liquid_boundary_prescribes"] = lb_prescribes
     probes["boundary_nodes_written"] = int(pair["stats"].get("nptfr", 0))
-    if roles:
-        # The three facts a SELAFIN cannot state - which stretch carries which
-        # role, the order the solver will number them in, and what each one's
-        # written code quad prescribes - ride beside it.
-        files["topology_uri"] = str(write_topology(
-            rundir, roles=roles, liquid_boundary_order=lb_order,
-            liquid_boundary_prescribes=lb_prescribes))
+    # The three facts a SELAFIN cannot state - which stretch carries which role,
+    # the order the solver will number them in, and what each one's written code
+    # quad prescribes - ride beside it, on EVERY mesh. A closed basin names no
+    # liquid boundary, and that is a fact its reader states rather than an
+    # absence the reader has to interpret.
+    files["topology_uri"] = str(write_topology(
+        rundir, roles=roles, liquid_boundary_order=lb_order,
+        liquid_boundary_prescribes=lb_prescribes))
     artifact = {**dict(mesh.meta.get("artifact") or {}),
                 "open_boundary_info": info}
     if notes:

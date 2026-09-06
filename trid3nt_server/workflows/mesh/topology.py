@@ -63,16 +63,17 @@ def write_topology(rundir: Path | str, *, roles: Mapping[str, Sequence[int]],
 def read_topology(uri: str) -> dict[str, Any]:
     """Read a topology bundle from an ``s3://`` uri or a local path.
 
-    A bundle that names no liquid boundary REFUSES: a mesh whose boundary carries
-    no role is a mesh no reach steering file can be authored against, and
-    returning empty sets would put the refusal downstream where the cause is no
-    longer visible.
+    A bundle naming NO liquid boundary is a recorded fact, not a gap: a closed
+    basin - a lake solved for its vertical structure - has no stretch of its
+    boundary the water crosses, and the bundle states that. ``states`` carries the
+    sentence, so a reader that needs a role refuses in its own words about the
+    role it needed rather than about an absent file.
 
-    A bundle that states no PRESCRIPTION per boundary refuses for the same
-    reason. It was numbered by the superseded row-order rule, which disagrees
-    with the engine's own numbering on any domain whose south-west corner falls
-    on a liquid face, and a steering file authored against it prescribes into
-    codes that never read it. There is no repair short of rebuilding the mesh.
+    A bundle that states no PRESCRIPTION per boundary DOES refuse. It was numbered
+    by the superseded row-order rule, which disagrees with the engine's own
+    numbering on any domain whose south-west corner falls on a liquid face, and a
+    steering file authored against it prescribes into codes that never read it.
+    There is no repair short of rebuilding the mesh.
     """
     if uri.startswith("s3://"):
         from trid3nt_server.tools.cache import read_object_bytes_s3
@@ -84,11 +85,6 @@ def read_topology(uri: str) -> dict[str, Any]:
              for r, nodes in (doc.get("roles") or {}).items() if nodes}
     order = [str(r) for r in (doc.get("liquid_boundary_order") or [])]
     prescribes = [str(p) for p in (doc.get("liquid_boundary_prescribes") or [])]
-    if not roles or not order:
-        raise ValueError(
-            f"the topology bundle at {uri} names {sorted(roles)} roles across "
-            f"{len(order)} liquid boundaries; a steering file cannot be "
-            "authored against a boundary with no roles on it")
     if len(prescribes) != len(order):
         raise ValueError(
             f"the topology bundle at {uri} states what {len(prescribes)} of its "
@@ -96,4 +92,10 @@ def read_topology(uri: str) -> dict[str, Any]:
             "the boundary numbering was measured by the engine's own rule, so "
             "rebuild the mesh rather than author a steering file against it")
     return {"roles": roles, "liquid_boundary_order": order,
-            "liquid_boundary_prescribes": prescribes}
+            "liquid_boundary_prescribes": prescribes,
+            "states": ("this domain names no liquid boundary; its whole boundary "
+                       "is solid wall"
+                       if not order else
+                       f"{len(order)} liquid boundar"
+                       f"{'y' if len(order) == 1 else 'ies'}, numbered "
+                       f"{', '.join(f'{i}={r}' for i, r in enumerate(order, 1))}")}

@@ -205,7 +205,7 @@ One entry of the ops list: a function NAME and its kwargs. The name is VERBATIM 
 
 ### `TopologyBundle`
 
-The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid boundary refuses, because a steering file cannot be authored against a boundary with no role on it.
+The mesher's answers a SELAFIN cannot hold, written for EVERY mesh. A bundle naming no liquid boundary is a recorded fact - a closed basin has no stretch its water crosses - and ``states`` is the sentence the reader says it in, so a caller that needed a role refuses about the role rather than about a file that is not there.
 
 | item | type | required |
 | --- | --- | --- |
@@ -225,6 +225,7 @@ The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid boundary r
 | **SignatureIsTheSchema** | `mesherRegistry`, `om2dAdapter` | `tests/test_mesh_meshers.py::test_an_op_a_mesher_never_registered_is_refused_by_name`<br/>`tests/test_mesh_om2d.py::test_an_unknown_op_refuses_with_the_nearest_names`<br/>`tests/test_mesh_om2d.py::test_the_wrapper_registers_the_librarys_own_names_tagged_by_phase`<br/>`tests/test_mesh_om2d.py::test_a_library_op_records_the_note_that_its_kwargs_bound_elsewhere`<br/>`tests/test_mesh_om2d.py::test_a_required_parameter_the_domain_cannot_supply_refuses_by_name` |
 | **TheBoxNeverImportsTheServer** | `om2dBox`, `selafinCliDriver`, `telemacCasDriver`, `telemacResultDriver` | `tests/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/test_mesh_om2d.py::test_the_drivers_live_in_the_product_tree_beside_their_callers` |
 | **TheMeshFrontIsEngineAgnostic** | `meshRouter`, `meshGate`, `mesherRegistry` | `tests/test_model_conformance.py::test_the_model_conforms_to_the_tree`<br/>`tests/test_mesh_gate_loop.py::test_no_mesher_has_card_code_of_its_own`<br/>`tests/test_build_mesh_tool.py::test_reg_grid_conforms_with_a_near_empty_default_recipe` |
+| **TopologyIsWrittenForEveryMesh** | `om2dAdapter`, `topologyWriter` | `tests/test_mesh_topology_and_bed.py::test_a_bundle_naming_no_liquid_boundary_states_the_closed_basin`<br/>`tests/test_mesh_topology_and_bed.py::test_the_bundle_states_the_numbering_a_steering_author_reads`<br/>`tests/test_mesh_topology_and_bed.py::test_an_empty_role_is_not_a_role` |
 
 ## What each requirement says
 
@@ -236,3 +237,4 @@ The mesher's answers a SELAFIN cannot hold. A bundle naming no liquid boundary r
 - **SignatureIsTheSchema** - An op's name must exist in the registering mesher's namespaces and its kwargs must bind to the REAL callable's signature. There is no schema of ours beside the library's: a function this process cannot import has no signature to bind against here, so it passes through with a journaled note and the driver that runs it binds against the real one. An unknown name is refused with the nearest matches rather than ignored.
 - **TheBoxNeverImportsTheServer** - The mesh library runs in a GPL-isolated image with no network and nothing of this server in it. A driver that reached into the server package would be running our defaults, our fetches and our opinions inside a box whose whole point is that it holds only the library. The rule is written over the DIRECTORY every shipped driver lives in, so it holds for the engine drivers beside the mesh box for the same reason: each one is executed inside an image where nothing of this server exists to import.
 - **TheMeshFrontIsEngineAgnostic** - A mesh is a mesh. The three params every mesher means the same thing by are the whole of the generalization, and an engine's vocabulary enters only as an op. A mesh module that imported an engine's workflows would be a second place a mesh gets built, and the mesh a human approved and the mesh a solver ran on would be two objects that happen to agree.
+- **TopologyIsWrittenForEveryMesh** - The bundle rides beside every accepted mesh, whatever its boundary carries. An absent bundle and a bundle naming no liquid boundary read alike to a caller, and only one of them is an answer: a closed basin states that its whole boundary is solid wall, and a reader that needed a role refuses in its own words about the role it needed.
