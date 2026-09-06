@@ -136,7 +136,7 @@ def test_only_an_uncoupled_question_can_be_continued_at_all():
 # ONE manifest writer, and the CASE section it carries.
 # --------------------------------------------------------------------------- #
 def test_the_case_section_names_the_engine_the_file_and_the_results():
-    from trid3nt_server.workflows.telemac.authoring.open_water import case_section
+    from trid3nt_server.workflows.telemac.authoring.assembler import case_section
 
     case = case_section(
         module="telemac2d", steering="t2d_river.cas",
@@ -167,7 +167,7 @@ def test_the_case_section_names_the_engine_the_file_and_the_results():
 
 def test_a_continued_case_names_the_staged_file_it_restarts_from():
     """Absent on a fresh run, so a present key is always a real continuation."""
-    from trid3nt_server.workflows.telemac.authoring.open_water import case_section
+    from trid3nt_server.workflows.telemac.authoring.assembler import case_section
 
     fresh = case_section(module="telemac2d", steering="t2d_river.cas",
                          results=[], server_facts={})
@@ -224,7 +224,7 @@ def test_the_case_names_the_module_the_DECK_says_it_couples_with():
 
 def test_the_one_writer_stages_every_front_under_its_own_prefix(monkeypatch):
     import trid3nt_server.workflows.solver.solver as solver_mod
-    from trid3nt_server.workflows.telemac.authoring.open_water import stage_telemac_manifest
+    from trid3nt_server.workflows.telemac.authoring.assembler import stage_telemac_manifest
 
     fake = _FakeS3()
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: fake)

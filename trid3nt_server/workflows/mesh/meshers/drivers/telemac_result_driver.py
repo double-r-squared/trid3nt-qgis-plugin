@@ -14,9 +14,11 @@ instants, and one ``v<i>`` array per variable, shaped ``(frames, nodes)``).
 
 The 3D quantities are the ones read: a 2D file reports the same numbers under
 them, and a 3D file reports every plane, which is the shape its own postprocess
-is handed. Variable names arrive as the engine states them, WITHOUT the unit the
-record stores alongside - splitting the two is exactly the format knowledge this
-driver exists to keep on the engine's side.
+is handed. The 2D shape rides beside them - ``nplan``, ``npoin2``, ``nelem2`` and
+``ikle2`` - because a 3D field is a stack of planes over that mesh and only this
+reader knows how tall the stack is. Variable names arrive as the engine states
+them, WITHOUT the unit the record stores alongside - splitting the two is exactly
+the format knowledge this driver exists to keep on the engine's side.
 """
 
 from __future__ import annotations
@@ -41,6 +43,7 @@ def read_result(slf: str, out: str) -> dict:
         arrays = {"x": np.asarray(res.meshx, dtype="float64"),
                   "y": np.asarray(res.meshy, dtype="float64"),
                   "ikle": np.asarray(res.ikle3, dtype="int64"),
+                  "ikle2": np.asarray(res.ikle2, dtype="int64"),
                   "times": np.asarray(res.times, dtype="float64")}
         for index, name in enumerate(varnames):
             frames = [np.asarray(res.get_data_value(name, record),
@@ -52,6 +55,11 @@ def read_result(slf: str, out: str) -> dict:
         return {"varnames": varnames, "npoin": int(res.npoin3),
                 "nelem": int(res.nelem3), "x_origin": int(res.x_orig),
                 "y_origin": int(res.y_orig), "ntimestep": int(res.ntimestep),
+                # The VERTICAL shape, which only the engine's own reader knows: a
+                # 3D field arrives flat over NPOIN3 and is a column stack of NPLAN
+                # planes over the 2D mesh, bottom plane first.
+                "nplan": int(res.nplan), "npoin2": int(res.npoin2),
+                "nelem2": int(res.nelem2),
                 "fields": FIELDS_NAME}
     finally:
         res.close()

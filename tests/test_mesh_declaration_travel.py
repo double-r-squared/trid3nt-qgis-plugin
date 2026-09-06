@@ -38,8 +38,8 @@ from trid3nt_server.workflows.mesh.tool import (
 _TEMPLATES = (
     "trid3nt_server.workflows.telemac.templates.shared.river",
     "trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid",
-    "trid3nt_server.workflows.telemac.agitation.agitation",
-    "trid3nt_server.workflows.telemac.stratified_flow.stratified_flow",
+    "trid3nt_server.workflows.telemac.templates.agitation.agitation",
+    "trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow",
 )
 
 

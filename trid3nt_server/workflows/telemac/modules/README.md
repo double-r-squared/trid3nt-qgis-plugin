@@ -32,3 +32,5 @@ explicit, on a complete sheet, and it is where execution stops being held.
 | `module.py` | What a slot, a wrapper, a composite and an output ARE, and the catalog loader that makes a wrapper out of `catalog/<module>.json`. |
 | `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the mandatory slots still open - and `fill` / `run`. |
 | `telemac2d.py` | The TELEMAC-2D wrapper. |
+| `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a stratified run is initialized from, and the wind. |
+| `artemis.py` | The ARTEMIS wrapper: the incident wave, which the module reads out of the boundary file rather than the deck, so the composite restamps the pair the mesh recipe wrote. |

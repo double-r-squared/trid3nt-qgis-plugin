@@ -50,7 +50,9 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
     """A result file -> its mesh and per-variable time series::
 
         {"varnames": [str], "npoin": int, "nelem": int,
-         "x": ndarray(npoin), "y": ndarray(npoin), "ikle": ndarray(nelem, ndp),
+         "x": ndarray(npoin2), "y": ndarray(npoin2), "ikle": ndarray(nelem, ndp),
+         "nplan": int, "npoin2": int, "nelem2": int,
+         "ikle2": ndarray(nelem2, 3),
          "x_origin": int, "y_origin": int,
          "times": ndarray(nframes),
          "data": {varname: ndarray(nframes, npoin)}}
@@ -77,9 +79,16 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
             "varnames": varnames,
             "npoin": int(meta["npoin"]),
             "nelem": int(meta["nelem"]),
+            # The vertical shape a 3D result carries. A 3D field is flat over
+            # NPOIN3 and is NPLAN planes stacked over the 2D mesh, bottom first;
+            # a 2D file reports one plane and the same mesh twice.
+            "nplan": int(meta.get("nplan", 1)),
+            "npoin2": int(meta.get("npoin2", meta["npoin"])),
+            "nelem2": int(meta.get("nelem2", meta["nelem"])),
             "x": fields["x"],
             "y": fields["y"],
             "ikle": fields["ikle"],
+            "ikle2": fields["ikle2"] if "ikle2" in fields else fields["ikle"],
             "x_origin": int(meta["x_origin"]),
             "y_origin": int(meta["y_origin"]),
             "times": fields["times"],

@@ -342,7 +342,7 @@ def ReviewResolvedInputs(*, carrier_discharge: Any,  # noqa: N802
 
     ``self_gating``: the review is over values no plan-level form can show,
     because they do not exist until the fetch that produced them has run. A plan
-    that declares this step may not also declare a FormGate - the validator
+    that declares this step reviews its inputs there - the validator
     refuses it, because a second card's edits would land on a sheet this review
     never reads.
     """

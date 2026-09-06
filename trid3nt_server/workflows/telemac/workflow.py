@@ -1,4 +1,4 @@
-"""The TELEMAC door: fill, then run - and the facade the un-flipped fronts use.
+"""The TELEMAC door: fill, then run.
 
 TWO ACTS ON ONE SHEET. ``fill`` sets slots, expands the composites the wrapper
 registered, binds every producer the template named, and hands back what the
@@ -13,14 +13,13 @@ question needs - the STEERING body itself, and the wrapper OUTPUT that publishes
 the solved file. The sequence it builds is the same for every question, which is
 what a template no longer has to write down.
 
-``TelemacWorkflow`` still realizes the four operations for the two fronts that
-have not been flipped - harbour agitation and stratified flow. Those are Stage
-3's, and :data:`_PROCESSES` dies with them.
+``TelemacWorkflow`` is what the skeleton records the engine and the solve step
+under; every question this engine answers is a Door, so it declares those two
+facts and realizes nothing else.
 """
 
 from __future__ import annotations
 
-import inspect
 import logging
 from dataclasses import dataclass, field
 from importlib import import_module
@@ -30,27 +29,13 @@ from trid3nt_contracts.common import SyntheticInput
 from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
 from trid3nt_server.workflows.runtime import (
-    DataRef,
-    Forcing,
     ParamRef,
-    Physics,
-    PlanValidationError,
     Ref,
     RunMode,
     Step,
     Workflow,
 )
 from trid3nt_server.workflows.mesh.step import MeshStep
-from trid3nt_server.workflows.shared.aoi import AcquireAoi
-from trid3nt_server.workflows.telemac.authoring.agitation import (
-    Agitation,
-    write_agitation_case,
-)
-from trid3nt_server.workflows.telemac.authoring.open_water import SolveOpenWater
-from trid3nt_server.workflows.telemac.authoring.stratified import (
-    Stratified,
-    write_stratified_case,
-)
 from trid3nt_server.workflows.telemac.helpers.errors import TelemacDyeScenarioError
 from trid3nt_server.workflows.telemac.modules.sheet import Sheet
 from trid3nt_server.workflows.telemac.modules.sheet import fill as fill_slots
@@ -58,8 +43,7 @@ from trid3nt_server.workflows.telemac.modules.sheet import run as run_sheet_
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.workflow")
 
-__all__ = ["Door", "TelemacWorkflow", "fill_sheet", "mesh_sheet_fields",
-           "run_sheet"]
+__all__ = ["Door", "TelemacWorkflow", "fill_sheet", "run_sheet"]
 
 _TELEMAC = "trid3nt_server.workflows.telemac"
 
@@ -115,6 +99,9 @@ class Door:
     compute_class: Any = None
     #: The title the card carries when the run is held for review.
     review_title: str = ""
+    #: The DATA slot a caller may hand a built mesh in instead of the recipe.
+    #: Filled, that mesh is adopted whole; unfilled, the recipe above is the mesh.
+    supplied_mesh: Any = None
 
     def __call__(self, ops: Workflow) -> list[Any]:
         """The step sequence: the world, then fill, then run, then the reader."""
@@ -128,7 +115,9 @@ class Door:
             read = read.chart(self.chart[0], builder=self.chart[1])
         return [
             *self.domain,
-            MeshStep.build(mesh=self.mesh, name=Ref(self.mesh_on)).named("mesh"),
+            MeshStep.build(mesh=self.mesh, name=Ref(self.mesh_on),
+                           supplied=self.supplied_mesh,
+                           tool=ops.name).named("mesh"),
             *self.produce,
             self.settle.named("settled"),
             *self.derive,
@@ -264,200 +253,8 @@ def _slot_row(name: str, row: Any) -> ParamSheetRow:
         advanced=row.provenance not in ("fill",) and row.slot.level > 0)
 
 
-# --------------------------------------------------------------------------- #
-# The facade the un-flipped fronts still run on. Stage 3 takes it.
-# --------------------------------------------------------------------------- #
-@dataclass(frozen=True, slots=True)
-class _Process:
-    """One declared physics process, end to end.
-
-    The facade routes on ``Physics.process``, and this is what it routes TO: the
-    author step that serializes it, the writer whose real signature the slots are
-    checked against in both directions, the solve that dispatches it, and the
-    reader that turns the solved file into the question's deliverable.
-    """
-
-    domain_kw: str
-    domain_ref: Any
-    author: Callable[..., Step]
-    writer: Callable[..., Any]
-    solve: Callable[..., Step]
-    read: Callable[..., Step]
-    forcing_fields: Mapping[str, str]
-    extra_fields: Mapping[str, Any] = None  # type: ignore[assignment]
-
-
-def _open_water_solve(*, compute_class: Any) -> Step:
-    return SolveOpenWater.telemac(run=Ref("run"), compute_class=compute_class)
-
-
-def _read_agitation(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
-    return Agitation.products(run=Ref("run"), solve=solve).named("agitation")
-
-
-def _read_stratified(*, solve: Any, physics: Physics, forcing: Forcing) -> Step:
-    return Stratified.products(run=Ref("run"), solve=solve).named("column")
-
-
-#: The agitation author always reads the run's MESH slot: the domain a phase-
-#: resolving solve runs on is the caller's to author, and an author that read the
-#: slot only sometimes would answer the grid question on the runs that filled it.
-_AGITATION_EXTRA: Mapping[str, Any] = {"supplied_mesh": DataRef("mesh")}
-
-#: The TELEMAC physics processes still declared as plans. See :class:`_Process`.
-_PROCESSES: dict[str, _Process] = {
-    "harbor_agitation": _Process(
-        domain_kw="aoi", domain_ref=Ref("aoi"),
-        author=Agitation.case, writer=write_agitation_case,
-        solve=_open_water_solve, read=_read_agitation, forcing_fields={},
-        extra_fields=_AGITATION_EXTRA),
-    "stratified_3d": _Process(
-        domain_kw="aoi", domain_ref=Ref("aoi"),
-        author=Stratified.case, writer=write_stratified_case,
-        solve=_open_water_solve, read=_read_stratified, forcing_fields={}),
-}
-
-#: Recipe params a TELEMAC author reads, under the name that writer knows each
-#: by. Only the AGNOSTIC params can appear here: an op is a call on a mesh library
-#: and means nothing to a steering file.
-_MESH_SHEET_PARAMS: Mapping[str, str] = {
-    "resolution_m": "mesh_resolution_m",
-}
-
-
 class TelemacWorkflow(Workflow):
-    """TELEMAC: the fill/run door, and the open-water pipeline behind the four."""
+    """TELEMAC: the two facts the skeleton records a run of this engine under."""
 
     engine = "telemac2d"
     solve_step = "solve"
-
-    # -- 1. acquire -------------------------------------------------------- #
-
-    def acquire_domain(self, *, location: Any, bbox: Any,
-                       aoi_half_deg: float | tuple[float, float] = 0.06,
-                       aoi_name: str = "aoi",
-                       code_prefix: str = "TELEMAC") -> tuple[Step, ...]:
-        """The AOI an OPEN-WATER domain is solved over, and nothing else.
-
-        A lake fetch and a harbour basin are bounded by the ask itself; there is
-        no flowline to find and no carrier to resolve. A reach and a catchment
-        establish their own world in the template that asks for one.
-        """
-        return (AcquireAoi(location=location, bbox=bbox, half_deg=aoi_half_deg,
-                           default_name=aoi_name,
-                           code_prefix=code_prefix).named("aoi"),)
-
-    # -- 2. author --------------------------------------------------------- #
-
-    def author(self, *, mesh: Any, physics: Physics, forcing: Forcing) -> Step:
-        """Serialize the mesh ask + physics + forcing into the process's run."""
-        if not _is_mesh_recipe(mesh):
-            raise PlanValidationError(
-                "author needs the template's MESH recipe (tool.build_mesh(...)), "
-                f"got {type(mesh).__name__}.")
-        if not isinstance(physics, Physics):
-            raise PlanValidationError(
-                f"author needs a Physics slot, got {type(physics).__name__}.")
-        if not isinstance(forcing, Forcing):
-            raise PlanValidationError(
-                f"author needs a Forcing slot, got {type(forcing).__name__}.")
-        process = self._process(physics)
-        fields: dict[str, Any] = {process.domain_kw: process.domain_ref}
-        fields.update(dict(process.extra_fields or {}))
-        fields.update(mesh_sheet_fields(mesh))
-        fields.update(_translate(forcing.values, process.forcing_fields))
-        fields.update(physics.values)
-        _refuse_uncovered_fields(fields, process.writer, physics.process)
-        return process.author(**fields).named("run")
-
-    # -- 3. solve ---------------------------------------------------------- #
-
-    def solve(self, *, compute_class: Any, physics: Physics) -> Step:
-        """Dispatch the staged run to the worker the declared process runs on.
-
-        ``physics`` is the process SELECTOR and is required: it must never
-        default, because a template that forgot to name its physics would
-        otherwise dispatch to the wrong solver silently.
-        """
-        if physics is None:
-            raise PlanValidationError(
-                "solve needs the physics process that selects the worker; "
-                f"none was named (known: {sorted(_PROCESSES)}).")
-        return self._process(physics).solve(compute_class=compute_class).named("solve")
-
-    # -- 4. read ----------------------------------------------------------- #
-
-    def read(self, run: Any, *, physics: Physics, forcing: Forcing) -> Step:
-        """The published deliverable the declared physics process asks for."""
-        return self._process(physics).read(solve=run, physics=physics, forcing=forcing)
-
-    # -- routing ----------------------------------------------------------- #
-
-    @staticmethod
-    def _process(physics: Any) -> _Process:
-        name = getattr(physics, "process", "")
-        found = _PROCESSES.get(name)
-        if found is None:
-            raise PlanValidationError(
-                f"TELEMAC models no physics process {name!r} "
-                f"(known: {sorted(_PROCESSES)}).")
-        return found
-
-
-def _is_mesh_recipe(value: Any) -> bool:
-    """Is ``value`` a frozen ``tool.build_mesh`` recipe?
-
-    Imported where it is asked rather than at module scope: the mesh tool
-    registers itself into the tool registry, which imports the templates that
-    import this facade, and a module-level import would close that circle.
-    """
-    from trid3nt_server.workflows.mesh.tool import MeshRecipe
-
-    return isinstance(value, MeshRecipe)
-
-
-def mesh_sheet_fields(mesh: Any) -> dict[str, Any]:
-    """The declared mesh recipe, as the keywords a TELEMAC author reads.
-
-    A param the template did not declare is ABSENT rather than ``None``: passing
-    None would override the author's own default with nothing, and "the template
-    did not ask" is what absence means.
-    """
-    return {field_name: getattr(mesh, name)
-            for name, field_name in _MESH_SHEET_PARAMS.items()
-            if getattr(mesh, name, None) is not None}
-
-
-def _translate(values: Mapping[str, Any], table: Mapping[str, str]) -> dict[str, Any]:
-    """Rename slot members onto the author's own keyword names."""
-    return {table.get(k, k): v for k, v in values.items()}
-
-
-def _refuse_uncovered_fields(fields: Mapping[str, Any], writer: Callable[..., Any],
-                             process: str) -> None:
-    """The slots and the author's signature must AGREE, in both directions.
-
-    An UNKNOWN key vanishes - the run is authored without it and answers a
-    different question than the template declared. A MISSING required key is the
-    mirror image and costs more: the plan builds, the acquire stage geocodes and
-    fetches, and only then does the writer die on a TypeError.
-    """
-    signature = inspect.signature(writer).parameters
-    accepted = set(signature)
-    unknown = sorted(set(fields) - accepted)
-    if unknown:
-        raise PlanValidationError(
-            f"the {process!r} declaration names {unknown}, which "
-            f"{writer.__name__} does not accept (accepted: {sorted(accepted)})."
-        )
-    required = sorted(
-        name for name, prm in signature.items()
-        if prm.kind is inspect.Parameter.KEYWORD_ONLY
-        and prm.default is inspect.Parameter.empty
-    )
-    missing = [name for name in required if name not in fields]
-    if missing:
-        raise PlanValidationError(
-            f"the {process!r} declaration covers no {missing}, which "
-            f"{writer.__name__} requires (required: {required})."
-        )

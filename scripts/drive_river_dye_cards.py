@@ -2,10 +2,10 @@
 """Live driver: a user_gated ``telemac_river_dye`` answered through the CARDS.
 
 The FORM card's live proof, and the release point's. ``telemac_river_dye``
-declares a ``FormGate`` over its own param sheet and a ``DrawGate`` for the
-release point, so this run exercises both:
+reviews its own filled sheet on the door and asks for the release point on the
+canvas, so this run exercises both:
 
-  * the FORM card fires with the resolved sheet and ONE row is edited
+  * the SHEET card fires with the filled sheet and ONE row is edited
     (``dye_concentration_mgl``), and the run's persisted metrics have to show the
     edited value reached the physics;
   * the DRAW card is answered with a real point, and the run has to AGREE with

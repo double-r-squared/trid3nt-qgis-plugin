@@ -306,7 +306,6 @@ def test_a_run_with_no_persisted_history_draws_no_chart():
 # ===========================================================================
 def test_the_sequence_validates_and_holds_the_run_after_the_fill():
     from trid3nt_server.workflows.runtime import validate_plan
-    from trid3nt_server.workflows.runtime.plan import Gate
 
     wf = _workflow()
     pl = wf.plan
@@ -316,9 +315,8 @@ def test_the_sequence_validates_and_holds_the_run_after_the_fill():
     assert [s.label for s in steps] == [
         "reach", "seed", "carrier_discharge", "mesh", "measure_mesh_coverage",
         "decay", "settled", "sheet", "solve", "plume"]
-    # NO gate: the review is the door's view of the sheet it just filled, so the
-    # run is HELD there rather than in front of a step that has not run.
-    assert not any(isinstance(s, Gate) for s in steps)
+    # The review is the door's VIEW of the sheet it just filled, so the run is
+    # held on the fill itself rather than in front of a step that has not run.
     assert [s.label for s in steps if s.self_gating] == ["sheet"]
     assert steps[0].rebinds_domain          # the geocode binds the reach AOI
     assert steps[-2].consequential          # the run is the consequential node
@@ -395,7 +393,7 @@ def _install_step_mocks(captured: dict):
         captured["seed_uri"] = uri
         return (-114.31, 42.58)  # a mid-reach point on the Snake
 
-    async def _fake_mesh(*, mesh, name=None):
+    async def _fake_mesh(*, mesh, name=None, supplied=None, tool=None):
         """The mesh session stands in: this chain test is about the chain.
 
         The artifact reports the edge the ask named, so the mesh contributes
@@ -509,8 +507,9 @@ def _install_step_mocks(captured: dict):
                          "product": "analysis_assim", "layer": None}),
         patch.object(solve_mod, "read_run_metrics",
                      lambda rid: {"utm_epsg": 32611}),
-        patch.object(prod_mod, "download_result_selafin",
-                     lambda rid: "/tmp/telemac/does-not-matter.slf"),
+        patch.object(prod_mod, "download_result",
+                     lambda rid, basename, error_code=None:
+                     "/tmp/telemac/does-not-matter.slf"),
         patch.object(prod_mod, "_publish_peak_layer", _fake_publish),
         patch.object(pp_mod, "postprocess_telemac", _fake_postprocess),
         patch.object(seam_mod, "publish_results_mesh_via_seam", _amock(0)),

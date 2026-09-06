@@ -636,22 +636,21 @@ from trid3nt_server.workflows.telemac.templates.river_sediment_plume.river_sedim
 from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401 - catchment rainfall-runoff front (engine=telemac, tier=template)
 # TOMBSTONE: tomawac_wave_field - the TOMAWAC spectral-wave front is rebuilt at rung 4.
 # artemis_harbor_agitation TEMPLATE (engine="telemac", tier="template"),
-# workflows/telemac/agitation/: the ARTEMIS phase-resolving elliptic mild-slope
-# (Berkhoff) harbour-agitation engine. ONE question-class tool, three
-# modes (diffraction / resonance / shoal); real Great Lakes lake-datum bathymetry
-# with a schematic breakwater, or an idealized analytic domain. Physics proven
-# through the baked artemis binary; the phase-resolving complement to the TOMAWAC
-# spectral tier.
-from trid3nt_server.workflows.telemac.agitation.agitation import artemis_harbor_agitation as _artemis_harbor_agitation  # noqa: E402,F401 - ARTEMIS agitation front (engine=telemac, tier=template)
+# workflows/telemac/templates/agitation/: the ARTEMIS phase-resolving elliptic
+# mild-slope (Berkhoff) engine, asked ONE question - does the declared structure
+# shelter the water behind it. The domain is cut from the real shoreline over the
+# AOI with the structure punched out conformally and every deep boundary stretch
+# designated open; the bed is surveyed topobathy. The phase-resolving complement
+# to the TOMAWAC spectral tier.
+from trid3nt_server.workflows.telemac.templates.agitation.agitation import artemis_harbor_agitation as _artemis_harbor_agitation  # noqa: E402,F401 - ARTEMIS agitation front (engine=telemac, tier=template)
 # TOMBSTONE: coastal_tidal_surge - the coastal tidal/surge front is rebuilt at rung 4.
 # telemac3d_stratified_flow TEMPLATE (engine="telemac", tier="template"),
-# workflows/telemac/stratified_flow/: the TELEMAC-3D three-dimensional baroclinic
-# Navier-Stokes engine - the one genuinely NEW solver leg in the family.
-# ONE question-class tool, three modes (stratification / wind_circulation /
-# salt_wedge); real Great Lakes lake-datum bathymetry (thermal / wind modes) or an
-# idealized closed basin. Physics proven through the baked telemac3d binary; the 3D
-# refinement tier that unblocks the AED2 lake-ecology + dune-migration STOPs.
-from trid3nt_server.workflows.telemac.stratified_flow.stratified_flow import telemac3d_stratified_flow as _telemac3d_stratified_flow  # noqa: E402,F401 - TELEMAC-3D stratified front (engine=telemac, tier=template)
+# workflows/telemac/templates/stratified_flow/: the TELEMAC-3D baroclinic engine,
+# asked ONE question - what the column does over the depth a 2D model averages
+# away. The domain is the water body's own mapped polygon cut to the AOI, which
+# is a CLOSED basin; the same run carries the thermocline that survives and the
+# surface-downwind / return-flow-at-depth velocities the wind drives.
+from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import telemac3d_stratified_flow as _telemac3d_stratified_flow  # noqa: E402,F401 - TELEMAC-3D stratified front (engine=telemac, tier=template)
 # build_mesh: the one mesh router. A RECIPE - three mesher-agnostic params plus an
 # ordered list of verbatim calls on the wrapped mesh library and on the shared
 # primitives; declared in a template it is a frozen lazy ask, called standalone it

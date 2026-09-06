@@ -95,71 +95,6 @@ def test_every_telemac_spec_declares_no_network():
 
 
 # --------------------------------------------------------------------------- #
-# Staged bed: a real domain with no bed refuses rather than solving on nothing
-# --------------------------------------------------------------------------- #
-
-
-def test_a_real_domain_with_no_staged_bed_refuses():
-    """The worker holds no fetcher any more, so a missing bed is a STAGING fault.
-
-    Left unchecked it would surface as whatever the builder does with an absent
-    file, several minutes later, wearing the solver's name.
-    """
-    from trid3nt_server.workflows.telemac.authoring.open_water import (
-        OpenWaterError,
-        staged_bed_inputs,
-    )
-
-    with pytest.raises(OpenWaterError, match="no bed raster was staged"):
-        staged_bed_inputs(None, real=True, section="agitation")
-    with pytest.raises(OpenWaterError):
-        staged_bed_inputs({"uri": None}, real=True, section="stratified")
-
-
-def test_an_idealized_domain_stages_nothing():
-    """A Berkhoff shoal samples nothing, so it must not demand a raster."""
-    from trid3nt_server.workflows.telemac.authoring.open_water import staged_bed_inputs
-
-    assert staged_bed_inputs(None, real=False, section="agitation") == []
-
-
-def test_a_staged_bed_becomes_one_manifest_input_row():
-    from trid3nt_server.workflows.telemac.authoring.open_water import (
-        STAGED_BED_DEST,
-        staged_bed_inputs,
-    )
-
-    rows = staged_bed_inputs({"uri": "s3://c/bed.tif"}, real=True, section="agitation")
-    assert rows == [{"gs_uri": "s3://c/bed.tif", "dest": STAGED_BED_DEST}]
-
-
-# --------------------------------------------------------------------------- #
-# Which domains solve on a fetched bed
-# --------------------------------------------------------------------------- #
-
-
-@pytest.mark.parametrize("mode,expected", [("diffraction", True),
-                                           ("resonance", False),
-                                           ("shoal", False)])
-def test_only_a_real_geography_mode_takes_the_fetched_bed(mode, expected):
-    """A verification domain's bed is authored by the physics, whatever is asked."""
-    from trid3nt_server.workflows.telemac.authoring.open_water import solves_on_real_bed
-
-    assert solves_on_real_bed("noaa_greatlakes",
-                              lon=-87.38, lat=46.54, mode=mode,
-                              real_bed_modes=("diffraction",)) is expected
-
-
-def test_an_auto_lake_bed_is_real_only_inside_the_covered_lakes():
-    from trid3nt_server.workflows.telemac.authoring.open_water import solves_on_real_bed
-
-    assert solves_on_real_bed("auto",
-                              lon=-87.1, lat=46.95) is True      # Superior
-    assert solves_on_real_bed("auto",
-                              lon=-95.0, lat=39.0) is False      # Kansas
-
-
-# --------------------------------------------------------------------------- #
 # Code provenance: which code made this run, and has it moved
 # --------------------------------------------------------------------------- #
 
@@ -246,34 +181,6 @@ def test_an_engine_that_never_moved_is_not_reported_as_drift_unknown():
     assert staleness(code_sha=head, engine="telemac", code_dirty=False) is None
 
 
-# --------------------------------------------------------------------------- #
-# The bed spec's sample lattice
-# --------------------------------------------------------------------------- #
-
-
-def test_the_bed_spec_reproduces_each_builder_lattice_exactly():
-    """px_per_deg is ANGULAR on both axes - a metric cell would not reproduce it.
-
-    The three builders asked for 1200 / 1800 / 3000 px per degree with three
-    different caps, and the sampled node values (and therefore the physics) follow
-    the grid the request asks for.
-    """
-    import numpy as np
-
-    from trid3nt_server.tools.fetchers._router.executors.raster_cog import (
-        _imageserver_size,
-    )
-
-    for bbox, ppd, cap in (((-85.02, 29.69, -84.90, 29.80), 1800.0, 3000),
-                           ((-87.60, 46.70, -86.60, 47.20), 1200.0, 2000),
-                           ((-87.392, 46.528, -87.368, 46.550), 3000.0, 2500)):
-        want = (int(np.clip(round((bbox[2] - bbox[0]) * ppd), 64, cap)),
-                int(np.clip(round((bbox[3] - bbox[1]) * ppd), 64, cap)))
-        got = _imageserver_size(bbox, {"px_per_deg": ppd, "px_min": 64,
-                                       "px_max": cap})
-        assert got == want, (bbox, ppd)
-
-
 def test_the_bed_spec_is_registered_and_declares_a_fixed_service():
     """One mosaic, so the service is on the spec rather than a param nobody varies."""
     from trid3nt_server.tools.fetchers._router.registration import get_spec
@@ -284,24 +191,3 @@ def test_the_bed_spec_is_registered_and_declares_a_fixed_service():
     assert spec.ingest["imageserver"]["service"] == "DEM_all"
     assert spec.output.role == "input"
     assert spec.output.style == {"kind": "continuous", "ramp": "gray", "units": "m", "label": "Elevation"}
-
-
-# --------------------------------------------------------------------------- #
-# ARTEMIS: the steering file is the only authority on a structure
-# --------------------------------------------------------------------------- #
-
-
-def test_the_artemis_worker_holds_no_schematic_breakwater():
-    """The branch that meshed a barrier nobody asked for is GONE from the source.
-
-    Asserted on the text because the branch's whole failure mode was being
-    unreachable from any run a caller can write: no test could reach it either,
-    which is how it survived so long.
-    """
-    source = (Path(__file__).resolve().parents[1]
-              / "workers" / "telemac" / "artemis_build.py").read_text()
-    assert "demo_bw" not in source
-    assert "schematic demo breakwater" not in source
-    # The idealized Sommerfeld domain keeps its DECLARED barrier params; what
-    # died is inventing one on the real-bathymetry path.
-    assert "breakwater_tip_x_m" in source

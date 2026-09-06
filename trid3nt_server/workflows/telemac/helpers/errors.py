@@ -11,6 +11,7 @@ from __future__ import annotations
 from trid3nt_server.workflows.runtime import DeclarativeError
 
 __all__ = [
+    "OpenWaterError",
     "RainOnGridError",
     "TelemacDyeScenarioError",
     "TelemacDyeScenarioInputError",
@@ -120,3 +121,15 @@ class RainOnGridError(DeclarativeError):
     """A rain-on-grid catchment could not be acquired, staged, solved or read."""
 
     error_code = "TELEMAC_ROG_FAILED"
+
+
+class OpenWaterError(DeclarativeError):
+    """An AOI-domain TELEMAC run could not be staged, solved or read.
+
+    The harbour and the basin share it, because what can go wrong before the
+    engine starts is the same for both: a mesh nobody accepted, a manifest that
+    could not be written, a solve that did not complete, a result that did not
+    come back.
+    """
+
+    error_code = "TELEMAC_OPEN_WATER_FAILED"

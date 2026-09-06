@@ -21,6 +21,7 @@ resolves is the template's.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from pathlib import Path
@@ -35,9 +36,9 @@ from trid3nt_server.workflows.mesh.shared.nodes import (
 )
 from trid3nt_server.workflows.mesh.topology import RATING_CURVE_ROLE, read_topology
 
-from .open_water import OpenWaterError, case_section, stage_telemac_manifest
 from ..helpers.catchment import mesh_nodes
 from ..helpers.errors import (
+    OpenWaterError,
     RainOnGridError,
     TelemacDyeScenarioError,
     TelemacDyeScenarioInputError,
@@ -47,7 +48,18 @@ from ..helpers.uniform_flow import normal_depth_stage
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.authoring.assembler")
 
-__all__ = ["new_rundir", "settle_catchment", "settle_reach", "stage_run"]
+__all__ = ["BASIN_BOUNDARY", "BASIN_GEOMETRY", "HARBOUR_GEOMETRY",
+           "case_section", "new_rundir", "settle_basin", "settle_catchment",
+           "settle_harbour", "settle_reach", "stage_run",
+           "stage_telemac_manifest"]
+
+#: The names the run directory holds an open-water domain's staged geometry
+#: under - the decks' own GEOMETRY / BOUNDARY CONDITIONS statements. A harbour
+#: stages the geometry alone: its boundary file is RESTAMPED as the incident wave
+#: and is written beside the deck rather than staged from the mesh.
+HARBOUR_GEOMETRY = "harbour.slf"
+BASIN_GEOMETRY = "basin.slf"
+BASIN_BOUNDARY = "basin.cli"
 
 #: What a continued run's PREVIOUS COMPUTATION FILE is called in the run
 #: directory. The engine reads a file, not a URI, so the previous run's restart
@@ -88,6 +100,73 @@ DO_SAG_OUTFALL_FRAC = 0.02
 # --------------------------------------------------------------------------- #
 # The staging flow.
 # --------------------------------------------------------------------------- #
+def case_section(*, module: str, steering: str, results: list[str],
+                 server_facts: Mapping[str, Any], user_fortran: str | None = None,
+                 coupling: str | None = None,
+                 continue_from: str | None = None) -> dict[str, Any]:
+    """The CASE a worker runs: which engine, which file, what it must produce.
+
+    ``module`` names the engine binary, ``steering`` the authored file it reads,
+    and ``results`` every file that must exist for the run to have succeeded.
+    ``coupling`` names the module the steering file couples the solve with, because
+    which
+    runner can drive a coupled case is not the same question for every module and
+    the worker decides on this word. ``continue_from`` is the staged name of the
+    previous run's results the steering file restarts from, present only on a
+    continued
+    run.
+
+    ``server_facts`` is what the SERVER already knows and the worker cannot learn
+    from the files it is handed - the UTM zone, the bbox, the node and element
+    counts, the edge the mesh was measured at, which dataset the bed came from.
+    The worker copies it into its metrics VERBATIM: a fact re-derived in the
+    container is a second answer that can disagree with the first.
+    """
+    return {"module": module, "steering": steering,
+            **({"user_fortran": user_fortran} if user_fortran else {}),
+            **({"coupling": coupling} if coupling else {}),
+            **({"continue_from": continue_from} if continue_from else {}),
+            "results": list(results), "server_facts": dict(server_facts)}
+
+
+def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
+                           run_tag: str, outputs: list[str],
+                           inputs: list[dict[str, str]] | None = None,
+                           prefix: str | None = None,
+                           extra: Mapping[str, Any] | None = None) -> str:
+    """Write the worker manifest to the cache bucket and return its ``s3://`` URI.
+
+    THE manifest writer for the whole family. ``section`` is the key the worker's
+    ENTRYPOINT dispatches on. ``prefix`` is where the manifest is STAGED, and it
+    is not always the same word - the harbour module answers to ``agitation``
+    inside the document while its manifests live under ``artemis/``. Collapsing
+    the two into one name is how a manifest lands somewhere the worker looks and
+    carries a key it does not read, which is a silent fall-through rather than an
+    error.
+
+    ``inputs`` is what the launcher stages into the run directory before the
+    container starts, ``{gs_uri, dest}`` per entry. It carries everything these
+    domains used to fetch for themselves, which is why the worker needs no
+    network. An authored run's section is ``case`` - see :func:`case_section`.
+    """
+    cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
+    if not cache_bucket:
+        raise OpenWaterError(
+            "TRID3NT_CACHE_BUCKET must be set to stage the TELEMAC manifest.",
+            error_code="TELEMAC_STAGING_FAILED")
+    from trid3nt_server.workflows.solver.solver import _get_s3_client
+
+    manifest = {section: dict(config), "run_id": run_tag,
+                "inputs": list(inputs or []), "telemac_args": [],
+                "outputs": list(outputs), **dict(extra or {})}
+    key = f"{prefix or section}/{run_tag}/manifest.json"
+    _get_s3_client().put_object(
+        Bucket=cache_bucket, Key=key,
+        Body=json.dumps(manifest, indent=2).encode("utf-8"),
+        ContentType="application/json")
+    return f"s3://{cache_bucket}/{key}"
+
+
 def _run_directory(run_tag: str) -> Path:
     rundir = Path(os.environ.get("TRID3NT_RUNS_DIR", "/tmp")) / f"telemac-{run_tag}"
     rundir.mkdir(parents=True, exist_ok=True)
@@ -946,3 +1025,285 @@ async def settle_catchment(
             "result_slf": "r2d_rog.slf",
             "bed_source": bed_source},
     }
+
+
+# --------------------------------------------------------------------------- #
+# Open water: what an accepted AOI mesh measures before a keyword is set.
+# --------------------------------------------------------------------------- #
+def _mesh_facts(mesh: Mapping[str, Any], *,
+                missing: Callable[[str], Exception]) -> dict[str, Any]:
+    """The accepted mesh's own record, as every open-water sheet reads it.
+
+    One reader, because a harbour and a basin differ in what they DO with the
+    mesh and not in what the mesh is: the counts, the edge band, the zone, the
+    bed's provenance and the boundary the pair writer numbered are the artifact's
+    own answers and neither template gets to restate them.
+    """
+    artifact = mesh.get("artifact")
+    utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
+    if not utm_epsg:
+        raise missing(
+            "the accepted mesh names no projected zone, so nothing solved on it "
+            "can be georeferenced.")
+    probes = dict(getattr(artifact, "probes", None) or {})
+    edges = dict(probes.get("edge_length_m") or {})
+    provenance = dict(mesh.get("provenance") or {})
+    name = str(getattr(artifact, "name", None) or "domain")
+    return {
+        "mesh_name": name,
+        "utm_epsg": utm_epsg,
+        "mesh_node_count": int(mesh.get("node_count") or 0),
+        "mesh_element_count": int(mesh.get("element_count") or 0),
+        "mesh_size_m": float(edges.get("median") or mesh.get("min_edge_m") or 0.0),
+        "mesh_edge_min_m": float(edges.get("min") or 0.0),
+        "mesh_edge_max_m": float(edges.get("max") or 0.0),
+        "bed_source": str(provenance.get("bed_source") or "staged"),
+        "lonlat_bounds": [float(v)
+                          for v in (getattr(artifact, "bbox", None) or ())],
+    }
+
+
+def _boundary_file(mesh: Mapping[str, Any], *,
+                   missing: Callable[[str], Exception]) -> tuple[str, list[int]]:
+    """The pair's own ``.cli`` text, and the boundary nodes it numbers, in rank order.
+
+    The file the mesh recipe wrote from this geometry's IPOBO is the ONE record of
+    the boundary walk, so a run that restamps it reads the walk back rather than
+    re-deriving one that would classify different nodes.
+    """
+    from trid3nt_server.tools.cache import read_object_bytes_s3
+
+    uri = _mesh_field(mesh, "cli_uri", missing=missing)
+    text = (read_object_bytes_s3(uri).decode("utf-8") if uri.startswith("s3://")
+            else Path(uri).read_text(encoding="utf-8"))
+    rows: list[tuple[int, int]] = []
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) >= 3:
+            rows.append((int(parts[-1]), int(parts[-2])))
+    if not rows:
+        raise missing(f"the accepted mesh's boundary file {uri} holds no rows.")
+    rows.sort()
+    return text, [node - 1 for _rank, node in rows]
+
+
+def _nodes_near(segments: Any, points_utm: Any, candidates: Sequence[int],
+                tolerance_m: float) -> list[int]:
+    """The candidate nodes lying within ``tolerance_m`` of any declared segment.
+
+    The cut is conformal, so a structure face sits ON the declared line rather
+    than a lattice step away from it; the tolerance is one element edge, which is
+    the distance a node can be from a line it was meshed onto.
+    """
+    import numpy as np
+
+    segs = np.asarray(segments, dtype=float).reshape(-1, 4)
+    picked = np.asarray(candidates, dtype=np.int64)
+    if segs.shape[0] == 0 or picked.size == 0:
+        return []
+    px = points_utm[picked, 0][:, None]
+    py = points_utm[picked, 1][:, None]
+    x0, y0, x1, y1 = segs[:, 0], segs[:, 1], segs[:, 2], segs[:, 3]
+    dx, dy = x1 - x0, y1 - y0
+    length2 = np.maximum(dx * dx + dy * dy, 1e-12)
+    t = np.clip(((px - x0) * dx + (py - y0) * dy) / length2, 0.0, 1.0)
+    distance = np.hypot(px - (x0 + t * dx), py - (y0 + t * dy)).min(axis=1)
+    return [int(n) for n in picked[distance <= float(tolerance_m)]]
+
+
+def _harbour_mesh_missing(message: str) -> Exception:
+    return OpenWaterError(message, error_code="ARTEMIS_MESH_NOT_ACCEPTED")
+
+
+def _basin_mesh_missing(message: str) -> Exception:
+    return OpenWaterError(message, error_code="TELEMAC3D_MESH_NOT_ACCEPTED")
+
+
+async def settle_harbour(
+    *,
+    mesh: dict[str, Any],
+    structure: Any = None,
+    wave_period_s: float,
+    wave_height_m: float,
+    wave_direction_deg: float,
+    reflection_coef: float,
+    result_basename: str,
+) -> dict[str, Any]:
+    """What the accepted harbour mesh measures -> what the agitation sheet is filled from.
+
+    Three measurements, every one off the artifact itself: the boundary walk the
+    pair writer numbered, which stretch of it the mesh designated liquid, and
+    which of its solid faces the declared structure runs along. A wave forced at a
+    boundary derived beside the mesh would enter a domain the solver never sees.
+
+    A mesh naming no liquid boundary REFUSES here: a prescribed incident wave has
+    no edge to enter a closed basin through, and the bundle says so in its own
+    words.
+    """
+    from trid3nt_server.workflows.shared.supplied_geometry import supplied_polylines
+
+    facts = _mesh_facts(mesh, missing=_harbour_mesh_missing)
+    utm_epsg = int(facts["utm_epsg"])
+    topology = read_topology(_mesh_field(mesh, "topology_uri",
+                                         missing=_harbour_mesh_missing))
+    open_nodes = [int(n) for n in (topology["roles"].get("open") or ())]
+    if not open_nodes:
+        raise OpenWaterError(
+            "the accepted mesh designates no liquid boundary, so a prescribed "
+            f"incident wave has no edge to enter the domain through: {topology['states']}. "
+            "Name an open stretch on the mesh (identify_ocean_boundary_sections) "
+            "before solving a wave on it.",
+            error_code="ARTEMIS_MESH_CLOSED")
+    cli_text, boundary_nodes = _boundary_file(mesh, missing=_harbour_mesh_missing)
+    points_utm, _cells, node_bed, _lonlat = await asyncio.to_thread(
+        read_accepted_mesh_nodes,
+        _mesh_field(mesh, "display_uri", missing=_harbour_mesh_missing))
+
+    polylines = await asyncio.to_thread(
+        supplied_polylines, structure, label="structure",
+        code="ARTEMIS_STRUCTURE_INVALID") or []
+    segments = await asyncio.to_thread(
+        _segments_utm, polylines, utm_epsg) if polylines else []
+    # A structure face WINS a contested node: a barrier that imposed the incident
+    # wave would radiate the sheltering away from inside the lee.
+    solid = [n for n in boundary_nodes if n not in set(open_nodes)]
+    structure_nodes = _nodes_near(segments, points_utm, solid,
+                                  float(facts["mesh_size_m"]) * 1.5)
+    contested = _nodes_near(segments, points_utm, open_nodes,
+                            float(facts["mesh_size_m"]) * 1.5)
+    structure_nodes = sorted(set(structure_nodes) | set(contested))
+    open_nodes = [n for n in open_nodes if n not in set(structure_nodes)]
+
+    import numpy as np
+
+    journal_note(
+        f"harbour boundary: {len(boundary_nodes)} boundary nodes, "
+        f"{len(open_nodes)} of them the designated liquid edge the "
+        f"{wave_height_m:g} m incident wave enters through, "
+        f"{len(structure_nodes)} on the declared structure and reflecting "
+        f"{reflection_coef:g} of it; every other face is the absorbing shore. "
+        f"{topology['states']}.")
+    return {
+        **facts,
+        "title": f"ARTEMIS AGITATION {facts['mesh_name']}",
+        "domain_name": facts["mesh_name"],
+        "domain_slug": _slug(facts["mesh_name"]),
+        "cli_text": cli_text,
+        "open_nodes": open_nodes,
+        "structure_nodes": structure_nodes,
+        "structure_segments": [[float(v) for v in seg] for seg in segments],
+        "boundary_nodes": len(boundary_nodes),
+        "open_boundary_nodes": len(open_nodes),
+        "structure_boundary_nodes": len(structure_nodes),
+        "boundary_states": topology["states"],
+        "wave_period_s": float(wave_period_s),
+        "wave_height_m": float(wave_height_m),
+        "wave_direction_deg": float(wave_direction_deg),
+        "reflection_coef": float(reflection_coef),
+        "max_depth_m": round(float(-np.nanmin(node_bed)), 2),
+        "mesh_inputs": [
+            {"gs_uri": _mesh_field(mesh, "slf_uri", missing=_harbour_mesh_missing),
+             "dest": HARBOUR_GEOMETRY}],
+        "server_facts": {
+            "utm_epsg": utm_epsg,
+            "bbox": [round(float(v), 6) for v in facts["lonlat_bounds"]],
+            "npoin": facts["mesh_node_count"],
+            "nelem": facts["mesh_element_count"],
+            "mesh_size_m": facts["mesh_size_m"],
+            "name": facts["mesh_name"],
+            "result_slf": result_basename,
+            "bed_source": facts["bed_source"]},
+    }
+
+
+async def settle_basin(
+    *,
+    mesh: dict[str, Any],
+    warm_temp_c: float,
+    cold_temp_c: float,
+    thermocline_depth_m: float,
+    wind_speed_mps: float,
+    wind_direction_deg: float,
+    levels: int,
+    sim_duration_hours: float,
+    time_step_s: float,
+    output_interval_min: float | None,
+    result_basename: str,
+) -> dict[str, Any]:
+    """What the accepted basin mesh measures -> what the 3D sheet is filled from.
+
+    The one measurement a vertical grid cannot be planned without is the DEEPEST
+    column the mesh carries: the near-surface layer a sigma grid achieves is set
+    over that column, so a plan made against a shallower one would be a grid that
+    cannot hold the declared thermocline where the thermocline actually is.
+
+    A basin naming no liquid boundary is what a lake IS. The bundle says so and
+    this records the sentence rather than refusing it.
+    """
+    import numpy as np
+
+    facts = _mesh_facts(mesh, missing=_basin_mesh_missing)
+    topology = read_topology(_mesh_field(mesh, "topology_uri",
+                                         missing=_basin_mesh_missing))
+    _points, _cells, node_bed, _lonlat = await asyncio.to_thread(
+        read_accepted_mesh_nodes,
+        _mesh_field(mesh, "display_uri", missing=_basin_mesh_missing))
+    max_depth = float(-np.nanmin(np.asarray(node_bed, dtype=float)))
+    duration_s = float(sim_duration_hours) * 3600.0
+    steps = max(1, int(round(duration_s / float(time_step_s))))
+    journal_note(
+        f"basin column: {facts['mesh_node_count']} nodes over a {max_depth:.1f} m "
+        f"deepest column, {levels} sigma planes over {sim_duration_hours:g} h. "
+        f"{topology['states']} - the water in this domain is conserved.")
+    return {
+        **facts,
+        "title": f"TELEMAC3D STRATIFIED {facts['mesh_name']}",
+        "domain_name": facts["mesh_name"],
+        "domain_slug": _slug(facts["mesh_name"]),
+        "boundary_states": topology["states"],
+        "max_depth_m": round(max_depth, 2),
+        "duration_s": duration_s,
+        "time_step_s": float(time_step_s),
+        "n_steps": steps,
+        "graphic_period": _graphic_period(output_interval_min, time_step_s),
+        "listing_period": max(1, steps // 10),
+        "warm_temp_c": float(warm_temp_c),
+        "cold_temp_c": float(cold_temp_c),
+        "thermocline_depth_m": float(thermocline_depth_m),
+        "wind_speed_mps": float(wind_speed_mps),
+        "wind_direction_deg": float(wind_direction_deg),
+        "mesh_inputs": [
+            {"gs_uri": _mesh_field(mesh, "slf_uri", missing=_basin_mesh_missing),
+             "dest": BASIN_GEOMETRY},
+            {"gs_uri": _mesh_field(mesh, "cli_uri", missing=_basin_mesh_missing),
+             "dest": BASIN_BOUNDARY}],
+        "server_facts": {
+            "utm_epsg": int(facts["utm_epsg"]),
+            "bbox": [round(float(v), 6) for v in facts["lonlat_bounds"]],
+            "npoin": facts["mesh_node_count"],
+            "nelem": facts["mesh_element_count"],
+            "mesh_size_m": facts["mesh_size_m"],
+            "name": facts["mesh_name"],
+            "duration_s": duration_s,
+            "time_step_s": float(time_step_s),
+            "result_slf": result_basename,
+            "bed_source": facts["bed_source"]},
+    }
+
+
+def _segments_utm(polylines: Sequence[Any], utm_epsg: int) -> list[list[float]]:
+    """Declared lon/lat polylines -> their segments in the mesh's own zone."""
+    from pyproj import Transformer
+
+    forward = Transformer.from_crs(4326, int(utm_epsg), always_xy=True)
+    out: list[list[float]] = []
+    for line in polylines:
+        points = [forward.transform(float(lon), float(lat)) for lon, lat in line]
+        out += [[points[i][0], points[i][1], points[i + 1][0], points[i + 1][1]]
+                for i in range(len(points) - 1)]
+    return out
+
+
+def _slug(name: str) -> str:
+    """A name as the run prefix and the layer titles spell it."""
+    return "".join(c if c.isalnum() else "_" for c in str(name).lower()).strip("_")

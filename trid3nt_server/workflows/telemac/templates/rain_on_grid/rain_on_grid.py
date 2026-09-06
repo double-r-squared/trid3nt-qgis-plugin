@@ -343,7 +343,7 @@ telemac_rain_on_grid = register_workflow(
                             "output_interval_min": ParamRef("output_interval_min")}),
         results=(_RESULT,),
         steering_file=_STEERING_FILE, prefix="telemac_rog",
-        dispatch=f"{_SOLVING}.solve_rain_on_grid", compute_class=P.compute_class,
+        dispatch=f"{_SOLVING}.solve_case", compute_class=P.compute_class,
         read=lambda run: RainOnGridProducts.flood_depth(
             run=run, solve=run).named("flood_depth"),
         chart=("rain_on_grid_outlet_hydrograph", build_hydrograph_chart),

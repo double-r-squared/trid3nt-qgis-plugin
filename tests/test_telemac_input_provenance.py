@@ -103,30 +103,3 @@ def test_compute_class_abstains_when_absent(args: dict) -> None:
     from trid3nt_server.workflows.telemac.solving.solve import compute_class
 
     assert compute_class()(args) == {}
-
-
-def test_question_class_coercions_abstain_without_a_signal() -> None:
-    """The mode coercions read the ask; with nothing to read they emit nothing.
-
-    Each declares the same fall-through class as its template's declared default,
-    so abstaining changes the row's PROVENANCE, never its value.
-    """
-    from trid3nt_server.workflows.telemac.agitation.agitation_mode import agitation_mode
-    from trid3nt_server.workflows.telemac.stratified_flow.flow_mode import flow_mode
-
-    bare = {"location": "Lake Michigan"}
-    assert flow_mode()(bare) == {}
-    assert agitation_mode()(bare) == {}
-
-
-@pytest.mark.parametrize(("tool_name", "location", "param", "expected"), [
-    ("telemac3d_stratified_flow", "Lake Mead", "flow_mode", "stratification"),
-    ("artemis_harbor_agitation", "Marquette Harbor", "wave_mode", "diffraction"),
-])
-def test_abstention_keeps_the_value_and_corrects_the_basis(
-        tool_name: str, location: str, param: str, expected: str) -> None:
-    """Same resolved class as before the fix; a QUESTION door and a labeled basis."""
-    _, sheet = _resolve_bare(tool_name, location)
-    row = sheet.row(param)
-    assert row.value == expected
-    assert (row.door, row.basis) == ("question", "default_demo")

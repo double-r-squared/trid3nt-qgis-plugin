@@ -22,18 +22,18 @@ from typing import Any
 
 from trid3nt_server.workflows.runtime import Step
 
-from ..helpers.errors import RainOnGridError, TelemacDyeScenarioError
+from ..helpers.errors import OpenWaterError, TelemacDyeScenarioError
 from ..helpers.reach import MESH_NODE_CAP, estimate_telemac_solve_seconds
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.solving.solve")
 
 __all__ = [
     "Solve",
-    "SolveRainOnGrid",
     "compute_class",
-    "download_result_selafin",
+    "dispatch_and_wait",
+    "download_result",
     "read_run_metrics",
-    "solve_rain_on_grid",
+    "solve_case",
     "solve_reach",
 ]
 
@@ -45,12 +45,70 @@ _SOLVING = "trid3nt_server.workflows.telemac.solving"
 _MIN_WAIT_S = 1800.0
 _WAIT_HEADROOM = 1.5
 
-#: Wall-clock ceiling on one rain-on-grid solve. A real catchment is tens of
-#: thousands of elements over hours of simulated time at a 3 s step, which is an
-#: HOURS-class solve. The number is a bound on the wait, not an estimate of the
-#: run: it exists so a wedged container becomes a typed failure instead of a
-#: daemon that never returns.
-_ROG_TIMEOUT_S = 86400.0
+#: Wall-clock ceiling on one authored case. A real catchment is tens of thousands
+#: of elements over hours of simulated time at a 3 s step, which is an HOURS-class
+#: solve. The number is a bound on the wait, not an estimate of the run: it exists
+#: so a wedged container becomes a typed failure instead of a daemon that never
+#: returns.
+_CASE_TIMEOUT_S = 86400.0
+
+
+async def dispatch_and_wait(*, solver: str, manifest_uri: str, compute_class: str,
+                           label: str, timeout_s: float,
+                           grid_resolution_m: float | None = None,
+                           active_cell_count: int | None = None) -> tuple[Any, str]:
+    """Dispatch a staged manifest, drive the cards, wait, and hand back the result.
+
+    The supervision dance every TELEMAC front performs identically: mint the
+    dispatch and sim cards, bind the emitter so the worker's own progress reaches
+    them, poll to completion, and route the terminal card whichever way the run
+    ends - CANCELLED included, which is the clause a hand-copied version drops.
+    Returns ``(run_result, batch_run_id)`` and judges nothing: what a non-complete
+    status MEANS is the caller's typed error to raise, because the code it carries
+    is the caller's contract.
+    """
+    from trid3nt_server.emission.pipeline_emitter import (
+        current_emitter,
+        mint_dispatch_and_sim_cards,
+        route_sim_terminal,
+    )
+    from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
+    from trid3nt_server.workflows.solver.solver import (
+        EmitterBinding,
+        run_solver,
+        set_emitter_binding,
+        wait_for_completion,
+    )
+
+    emitter = current_emitter()
+    handle = run_solver(solver=solver, model_setup_uri=manifest_uri,
+                        compute_class=compute_class)
+    run_id = handle.run_id
+    sim_step_id = await mint_dispatch_and_sim_cards(
+        emitter=emitter, solver=solver, handle=handle, compute_class=compute_class)
+    if emitter is not None and sim_step_id is not None:
+        set_emitter_binding(EmitterBinding(emitter=emitter, step_id=sim_step_id))
+    progress = asyncio.ensure_future(drive_live_solve_progress(
+        emitter=emitter, run_id=run_id, solver=solver,
+        grid_resolution_m=grid_resolution_m, active_cell_count=active_cell_count,
+        vcpus=None, eta_seconds=None))
+
+    run_result = None
+    try:
+        run_result = await wait_for_completion(handle, timeout_s=timeout_s)
+    except asyncio.CancelledError:
+        logger.info("telemac %s solve cancelled awaiting solver", label)
+        await route_sim_terminal(emitter, sim_step_id, run_result=None)
+        raise
+    finally:
+        progress.cancel()
+        try:
+            await progress
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
+        set_emitter_binding(None)
+    await route_sim_terminal(emitter, sim_step_id, run_result=run_result)
+    return run_result, (getattr(run_result, "run_id", None) or run_id)
 
 
 def read_run_metrics(run_id: str) -> dict[str, Any]:
@@ -75,13 +133,17 @@ def read_run_metrics(run_id: str) -> dict[str, Any]:
         return {}
 
 
-def download_result_selafin(run_id: str) -> str:
-    """Download ``r2d_river.slf`` to a local path the postprocess can read.
+def download_result(run_id: str, basename: str, *,
+                    error_code: str = "TELEMAC_OUTPUT_MISSING") -> str:
+    """Download one of a run's result files to a local path a postprocess reads.
+
+    ONE downloader for every question, because what a run wrote is under the run
+    prefix whatever wrote it, and the only thing that varies is which file the
+    reader wants and what its absence is called.
 
     The UTM zone is NOT re-read here: it is the server's own measurement, carried
-    through the worker's metrics and already on the solve result. Reading it a
-    second time from the same file was a second answer that could disagree with
-    the first.
+    through the run's metrics and already on the solve result. Reading it a second
+    time from the same file was a second answer that could disagree with the first.
     """
     from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
@@ -89,19 +151,18 @@ def download_result_selafin(run_id: str) -> str:
     )
 
     runs_bucket = _get_runs_bucket()
-    slf_key = f"{run_id}/r2d_river.slf"
-    slf_path = str(Path(tempfile.mkdtemp(prefix=f"telemac-dye-{run_id}-"))
-                   / "r2d_river.slf")
+    local = str(Path(tempfile.mkdtemp(prefix=f"telemac-{run_id}-")) / basename)
     try:
-        resp = _get_s3_client().get_object(Bucket=runs_bucket, Key=slf_key)
-        with open(slf_path, "wb") as fh:
-            fh.write(resp["Body"].read())
+        body = _get_s3_client().get_object(
+            Bucket=runs_bucket, Key=f"{run_id}/{basename}")["Body"].read()
+        with open(local, "wb") as fh:
+            fh.write(body)
     except Exception as exc:  # noqa: BLE001
-        raise TelemacDyeScenarioError(
-            "TELEMAC_DYE_OUTPUT_MISSING",
-            f"TELEMAC run {run_id} completed but s3://{runs_bucket}/{slf_key} "
-            f"was not downloadable: {exc}") from exc
-    return slf_path
+        raise OpenWaterError(
+            f"TELEMAC run {run_id} completed but s3://{runs_bucket}/{run_id}/"
+            f"{basename} was not downloadable: {exc}",
+            error_code=error_code) from exc
+    return local
 
 
 async def solve_reach(*, run: dict[str, Any],
@@ -248,35 +309,38 @@ def compute_class() -> Any:
     return _coerce
 
 
-async def solve_rain_on_grid(*, run: dict[str, Any],
-                             compute_class: str = "medium") -> dict[str, Any]:
-    """Dispatch the staged catchment to the worker and wait.
+async def solve_case(*, run: dict[str, Any],
+                     compute_class: str = "medium") -> dict[str, Any]:
+    """Dispatch the staged case to the worker and wait -> the run handle.
 
-    The returned ``uri`` is the result SELAFIN under the run prefix - what a
-    ledger replay probes, so a resumed rerun can only skip the solve while the
-    solved artifact is still there. The UTM zone comes from the ASSEMBLER rather
-    than from the worker's metrics: this mesh is projected agent-side, so the zone
-    is a fact the template already knows and the worker never learns.
+    ONE dispatch for every run authored on a mesh this server built: the manifest
+    was written by the assembler, so what happens here is dispatch and supervision
+    alone, and WHICH question it answers is a fact the run already carries.
+
+    The returned ``uri`` is the result SELAFIN under the run prefix - what a ledger
+    replay probes, so a resumed rerun can only skip the solve while the solved
+    artifact is still there. The UTM zone comes from the ASSEMBLER rather than
+    from the worker's metrics: the mesh is projected agent-side, so the zone is a
+    fact the template already knows and the worker never learns.
     """
     from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
-    from ..authoring.open_water import dispatch_and_wait
-
     facts = run["case"]["server_facts"]
-    logger.info("rog dispatching run_tag=%s catchment=%s -> %s",
+    label = str(facts["name"])
+    logger.info("telemac case dispatching run_tag=%s name=%s -> %s",
                 run["run_tag"], facts["name"], run["manifest_uri"])
     run_result, batch_run_id = await dispatch_and_wait(
         solver=_telemac_solver_name(), manifest_uri=run["manifest_uri"],
-        compute_class=compute_class, label="rain_on_grid",
-        timeout_s=_ROG_TIMEOUT_S, grid_resolution_m=facts.get("mesh_size_m"),
+        compute_class=compute_class, label=label,
+        timeout_s=_CASE_TIMEOUT_S, grid_resolution_m=facts.get("mesh_size_m"),
         active_cell_count=facts.get("nelem"))
     if run_result is None or run_result.status != "complete":
-        raise RainOnGridError(
-            "the rain-on-grid solve did not complete "
+        raise OpenWaterError(
+            f"the {label} solve did not complete "
             f"(status={getattr(run_result, 'status', None)}, "
             f"error_code={getattr(run_result, 'error_code', None)}): "
             f"{getattr(run_result, 'error_message', '') or ''}",
-            error_code="TELEMAC_ROG_RUN_FAILED")
+            error_code="TELEMAC_RUN_FAILED")
     metrics = await asyncio.to_thread(read_run_metrics, batch_run_id)
     return {
         "run_id": batch_run_id,
@@ -300,15 +364,5 @@ class Solve:
     def telemac(*, run: Any, compute_class: Any) -> Step:
         """Dispatch the staged reach to the TELEMAC worker and wait for the result."""
         return Step(runner=f"{_SOLVING}.solve.solve_reach", stage="solve",
-                    kwargs={"run": run, "compute_class": compute_class},
-                    consequential=True)
-
-
-class SolveRainOnGrid:
-    """The rain-on-grid solve step. The plan's consequential node."""
-
-    @staticmethod
-    def telemac(*, run: Any, compute_class: Any) -> Step:
-        return Step(runner=f"{_SOLVING}.solve.solve_rain_on_grid", stage="solve",
                     kwargs={"run": run, "compute_class": compute_class},
                     consequential=True)

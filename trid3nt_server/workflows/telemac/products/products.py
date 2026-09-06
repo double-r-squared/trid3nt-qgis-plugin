@@ -41,7 +41,7 @@ from trid3nt_server.workflows.runtime import Step
 from trid3nt_server.emission.publish import PublishLayerError, publish_layer
 
 from ..helpers.errors import TelemacDyeScenarioError
-from ..solving.solve import download_result_selafin
+from ..solving.solve import download_result
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.products.products")
 
@@ -409,7 +409,9 @@ async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
     reach_name, substance = run["reach_name"], run["substance"]
     substance_class = run["substance_class"]
     product = _substance_product(substance_class)
-    slf_path = await asyncio.to_thread(download_result_selafin, run_id)
+    slf_path = await asyncio.to_thread(
+        download_result, run_id, run["result_basename"],
+        error_code="TELEMAC_DYE_OUTPUT_MISSING")
 
     try:
         layers, metrics = await asyncio.to_thread(
@@ -504,7 +506,9 @@ async def publish_do_products(*, run: dict[str, Any], solve: dict[str, Any],
     emitter = current_emitter()
     run_id, utm_epsg = solve["run_id"], int(solve["utm_epsg"])
     reach_name = run["reach_name"]
-    slf_path = await asyncio.to_thread(download_result_selafin, run_id)
+    slf_path = await asyncio.to_thread(
+        download_result, run_id, run["result_basename"],
+        error_code="TELEMAC_DYE_OUTPUT_MISSING")
     try:
         layers, metrics = await asyncio.to_thread(
             postprocess_telemac_do, slf_path, run_id=run_id, utm_epsg=utm_epsg,

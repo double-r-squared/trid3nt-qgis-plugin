@@ -14,4 +14,4 @@ worker gate.
 | file | what it is |
 | --- | --- |
 | `__init__.py` | The door. Consumers import the module they mean. |
-| `solve.py` | Dispatch, wait, surface: the plan's only consequential node - one per authored family - and the compute class it is dispatched under. |
+| `solve.py` | Dispatch, wait, surface: the run's only consequential node, the ONE downloader every question reads its result back through, and the compute class it is dispatched under. |

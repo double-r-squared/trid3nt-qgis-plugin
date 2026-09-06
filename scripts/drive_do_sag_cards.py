@@ -7,9 +7,8 @@ in ``trid3nt_server.testing``.
 
   * the DRAW card is answered with a real outfall point on the Eel River reach
     (the USGS Scotia gage), so the release is a USER value, not a derived seed;
-  * ``telemac_do_sag`` declares NO FormGate - its reach step reviews its own
-    inputs - so the card that fires is the composite's plain input review, and
-    the driver answers it as a proceed.
+  * ``telemac_do_sag`` reviews its own filled sheet on the door, so the card
+    that fires is that review, and the driver answers it as a proceed.
 
 The evidence is the run's OWN artifacts under its prefix (``chart_spec.json``,
 ``metrics.json``). Nothing here is rederived.

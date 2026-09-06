@@ -17,3 +17,5 @@ nothing.
 | `products.py` | A solved reach to its map layers, its scalars and its chart spec, each substance class leading with its own product. |
 | `rain_on_grid.py` | A solved catchment to its peak-depth envelope and the outlet hydrograph the engine measured it by. |
 | `run_reads.py` | What a solved run's own files say, read on the server: GAIA's closure out of the listing, the slick out of the drogues track. |
+| `agitation.py` | A solved harbour to its Kd field: the sheltering the structure buys, the transect through its own shadow strip, and the dispersion the period and depth imply. |
+| `stratified.py` | A solved basin to its water column: the planes at the deepest column, the profile the run started from and ended at, and the surface-downwind / return-flow-at-depth pair the same baroclinic run answers. |

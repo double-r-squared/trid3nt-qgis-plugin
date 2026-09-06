@@ -217,9 +217,7 @@ async def publish_rain_on_grid_products(*, run: dict[str, Any],
                                         ) -> TelemacRainOnGridLayerURI:
     """Postprocess the solved catchment into its published layers + scalars."""
     from trid3nt_server.emission.pipeline_emitter import current_emitter
-    from trid3nt_server.workflows.telemac.authoring.open_water import (
-        download_open_water_result,
-    )
+    from trid3nt_server.workflows.telemac.solving.solve import download_result
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         postprocess_telemac_wse,
     )
@@ -237,7 +235,7 @@ async def publish_rain_on_grid_products(*, run: dict[str, Any],
     name = str(run["domain_name"])
 
     slf_path = await asyncio.to_thread(
-        download_open_water_result, run_id, run["result_basename"],
+        download_result, run_id, run["result_basename"],
         error_code="TELEMAC_ROG_OUTPUT_MISSING")
     try:
         layers, pmetrics = await asyncio.to_thread(

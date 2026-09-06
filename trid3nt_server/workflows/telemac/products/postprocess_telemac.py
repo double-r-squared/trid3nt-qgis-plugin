@@ -1966,134 +1966,65 @@ _KD_WET_FLOOR: float = 1e-3
 
 
 def postprocess_artemis(
-    slf_path: str | Path,
     *,
     run_id: str,
-    utm_epsg: int | None,
+    utm_epsg: int,
+    x: Any,
+    y: Any,
+    ikle: Any,
+    hs: Any,
     incident_hs_m: float,
-    request_bbox: Sequence[float] | None = None,
     reach_name: str = "harbor_agitation",
-    wave_mode: str = "diffraction",
     runs_bucket: str | None = None,
     target_ground_res_m: float = 20.0,
 ) -> tuple[list[ArtemisAgitationLayerURI], dict[str, Any]]:
-    """Rasterize a solved ARTEMIS agitation field into ONE Kd (Hs/H0) COG.
+    """The solved agitation field -> ONE Kd (Hs/H0) COG on the map.
 
-    Reads ``slf_path`` (the single-frame ``agit_field.slf`` the worker re-emits),
-    picks the ``WAVE HEIGHT`` variable, normalizes it by the incident wave height
-    ``incident_hs_m`` to the dimensionless agitation coefficient Kd = Hs/H0,
-    reprojects the mesh nodes ``utm_epsg`` -> EPSG:4326 (real-bathy path) or keeps
-    the local metres frame (idealized analytic path, ``utm_epsg`` None), rasterizes
+    ``hs`` is the WAVE HEIGHT the solve wrote at the mesh's own nodes and ``x`` /
+    ``y`` their coordinates in the mesh's UTM zone - a mesh authored over the AOI
+    carries TRUE eastings and northings, so the reprojection to 4326 is the whole
+    of the georeferencing and there is no origin to add back.
 
-    Georeferencing (real-bathy path): the worker meshes in a LOCAL UTM frame whose
-    origin is the AOI SW corner -- it subtracts ``(x0m, y0m) = min-easting,
-    min-northing`` from every node so the SELAFIN float32 coordinates keep sub-metre
-    precision (a raw UTM easting ~4e5 loses ~0.03 m of precision in float32). Those
-    LOCAL metres (x in [0, Lx], y in [0, Ly]) are what the result mesh carries, so
-    this postprocess MUST add the same origin offset back before the UTM->4326
-    inverse or the field georeferences to the UTM-zone origin (near lon -91, lat 0)
-    instead of the real harbour. The offset is reconstructed sub-mm from
-    ``request_bbox`` SW corner (the exact value the mesh builder subtracted:
-    ``Transformer(4326->utm_epsg).transform(min_lon, min_lat)``).
-    Kd onto an adaptive grid clipped to the wet domain, writes + uploads ONE COG
-    (``artemis_agitation.tif``), and returns ``([ArtemisAgitationLayerURI], metrics)``.
+    The field is drawn by the solver's own P1 representation over the element
+    table rather than by a nearest-node halo: an authored mesh spaces its offshore
+    nodes hundreds of metres apart, and a halo sized for the harbour publishes a
+    lattice of isolated pixels out there instead of a field.
 
-    Honesty floor (invariant 1): every agitation scalar is plain arithmetic over
-    the Hs field -- no LLM. The COG carries a phase-resolving-screening label.
+    Honesty floor: every agitation scalar is plain arithmetic over the Hs field.
+    The COG carries a phase-resolving-screening label.
 
-    Raises ``PostprocessTelemacError`` on any read / rasterize / COG failure.
+    Raises ``PostprocessTelemacError`` on any rasterize / COG failure.
     """
-    try:
-        import numpy as np
-        from pyproj import Transformer  # noqa: F401
-    except Exception as exc:  # noqa: BLE001
-        raise PostprocessTelemacError(
-            "TELEMAC_DEPENDENCY_MISSING",
-            message=f"numpy/pyproj unavailable for ARTEMIS postprocess: {exc}",
-        ) from exc
-
-    slf = Path(slf_path)
-    try:
-        mesh = read_selafin(slf)
-    except Exception as exc:  # noqa: BLE001
-        raise PostprocessTelemacError(
-            "TELEMAC_OUTPUT_READ_FAILED",
-            message=f"could not parse SELAFIN {slf.name}: {exc}",
-            details={"slf": str(slf)},
-        ) from exc
-
     import numpy as np
 
-    hs_var = None
-    for v in mesh["varnames"]:
-        u = v.strip().upper()
-        if "WAVE HEIGHT" in u or u in ("HS", "HM0"):
-            hs_var = v
-            break
-    if hs_var is None or mesh["data"].get(hs_var) is None or mesh["data"][hs_var].size == 0:
-        raise PostprocessTelemacError(
-            "TELEMAC_OUTPUT_EMPTY",
-            message=f"no WAVE HEIGHT field in {slf.name} (vars={mesh['varnames']})",
-            details={"slf": str(slf), "varnames": mesh["varnames"]},
-        )
-
-    hs = np.asarray(mesh["data"][hs_var])[-1]      # single-frame agitation field
+    hs = np.asarray(hs, dtype="float64")
     h0 = max(float(incident_hs_m), 1e-6)
     kd = hs / h0
-    x_m = np.asarray(mesh["x"])
-    y_m = np.asarray(mesh["y"])
     finite = np.isfinite(kd)
     kd_max = float(np.nanmax(kd[finite])) if finite.any() else 0.0
     if kd_max < _KD_WET_FLOOR:
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_EMPTY",
-            message=f"Kd never exceeded {_KD_WET_FLOOR} anywhere in {slf.name} "
-            f"(peak {kd_max:.4g}) -- a dry/zero-agitation solve?",
+            message=f"Kd never exceeded {_KD_WET_FLOOR} anywhere in the solved "
+                    f"field (peak {kd_max:.4g}) -- a dry/zero-agitation solve?",
             details={"kd_max": kd_max},
         )
 
-    # real-bathy: reproject UTM -> 4326; idealized analytic: keep the local metres
-    # frame (utm_epsg None) and stamp a placeholder projected CRS the way the WSE
-    # local-frame path does, so the COG still renders on the map.
-    if utm_epsg is not None:
-        from pyproj import Transformer
-        # Add back the LOCAL-frame origin the worker subtracted (AOI SW corner in
-        # UTM) so the local mesh metres become TRUE UTM before the inverse to
-        # 4326. Without the bbox the offset is unknown and the field would land at
-        # the zone origin -- a georef bug, so it refuses rather than guessing.
-        x0m, y0m = _local_mesh_origin(
-            request_bbox, int(utm_epsg), required=True,
-            context="postprocess_artemis")
-        back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
-        lon, lat = back.transform(x_m + x0m, y_m + y0m)
-        lon = np.asarray(lon)
-        lat = np.asarray(lat)
-        dst_crs = "EPSG:4326"
-        pad = 0.0009
-    else:
-        lon, lat = x_m, y_m         # local metres, rendered in a placeholder frame
-        dst_crs = f"EPSG:{_LOCAL_FRAME_EPSG}"
-        pad = max(2.0, float(target_ground_res_m))
+    from pyproj import Transformer
 
+    back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
+    lon, lat = back.transform(np.asarray(x, dtype="float64"),
+                              np.asarray(y, dtype="float64"))
+    lon = np.asarray(lon)
+    lat = np.asarray(lat)
+    pad = 0.0009
     bbox = (float(lon.min() - pad), float(lat.min() - pad),
             float(lon.max() + pad), float(lat.max() + pad))
-    if utm_epsg is not None:
-        shape = _grid_shape(bbox, target_ground_res_m)
-        clip_dist = 2.0 * max((bbox[2] - bbox[0]) / shape[1],
-                              (bbox[3] - bbox[1]) / shape[0])
-    else:
-        import math
-        w_m = bbox[2] - bbox[0]
-        h_loc = bbox[3] - bbox[1]
-        res_loc = max(float(target_ground_res_m), _nn_spacing_m(x_m, y_m) * 0.5)
-        ncols = min(max(int(round(w_m / res_loc)), TELEMAC_MIN_PX_PER_SIDE), TELEMAC_MAX_PX_PER_SIDE)
-        nrows = min(max(int(round(h_loc / res_loc)), TELEMAC_MIN_PX_PER_SIDE), TELEMAC_MAX_PX_PER_SIDE)
-        shape = (nrows, ncols)
-        clip_dist = 2.0 * _nn_spacing_m(x_m, y_m)
+    shape = _grid_shape(bbox, target_ground_res_m)
 
     try:
-        grid = _rasterize_nodes_to_grid(
-            lon, lat, kd, bbox, shape, clip_dist, wet_floor=_KD_WET_FLOOR)
+        grid = _rasterize_mesh_to_grid(lon, lat, ikle, kd, bbox, shape,
+                                       wet_floor=_KD_WET_FLOOR)
     except Exception as exc:  # noqa: BLE001
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_READ_FAILED",
@@ -2105,7 +2036,7 @@ def postprocess_artemis(
     transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], shape[1], shape[0])
     try:
         cog = cog_io.write_cog_4326_from_grid(
-            grid, src_crs=dst_crs, src_transform=transform,
+            grid, src_crs="EPSG:4326", src_transform=transform,
             reproject=False, crs_roundtrip_guard=True,
             dst_suffix="_artemis_agitation.tif",
         )
@@ -2127,7 +2058,7 @@ def postprocess_artemis(
     # legend vmax: a robust cap at the 99.5th percentile of the wet field so a
     # single spurious hotspot (a coastline reflection / focus caustic) does not
     # wash the readable 0..~2 agitation range off the ramp. The layer's kd_max
-    # metric still carries the TRUE peak (invariant 1); this only styles the COG.
+    # metric still carries the TRUE peak; this only styles the COG.
     kd_wet = kd[finite & (kd > _KD_WET_FLOOR)]
     kd_p995 = float(np.percentile(kd_wet, 99.5)) if kd_wet.size else kd_max
     vmax = round(max(min(kd_max, max(kd_p995, 1.0)), 1.0), 3)
@@ -2153,133 +2084,73 @@ def postprocess_artemis(
         fallback_note=honesty,
         kd_max=round(kd_max, 3),
         hs_max_m=round(float(np.nanmax(hs[finite])), 4) if finite.any() else None,
-        wave_mode=wave_mode,
+        wave_mode="diffraction",
     )
     metrics: dict[str, Any] = {
-        "hs_var": hs_var.strip(),
         "kd_max": round(kd_max, 3),
-        "wave_mode": wave_mode,
-        "npoin": int(mesh["npoin"]),
-        "nelem": int(mesh["nelem"]),
-        "utm_epsg": utm_epsg,
+        "npoin": int(np.asarray(x).shape[0]),
+        "utm_epsg": int(utm_epsg),
         "bbox": list(bbox),
-        "crs": dst_crs,
+        "valid_pixel_fraction": round(
+            float(np.isfinite(grid).sum()) / float(max(grid.size, 1)), 4),
         "honesty_label": honesty,
     }
-    logger.info(
-        "postprocess_artemis run_id=%s hs_var=%s kd_max=%.3g mode=%s -> %s",
-        run_id, hs_var.strip(), kd_max, wave_mode, uri,
-    )
+    logger.info("postprocess_artemis run_id=%s kd_max=%.3g -> %s",
+                run_id, kd_max, uri)
     return [layer], metrics
-
-
-#: Placeholder projected EPSG the idealized analytic agitation COG is stamped with
-#: (its coordinates are in local metres, no real georeferencing) so the raster
-#: still renders on the map -- mirrors the WSE local-frame placeholder pattern.
-_LOCAL_FRAME_EPSG: int = 3857
 
 
 # --------------------------------------------------------------------------- #
 # TELEMAC-3D stratified / 3D-hydrodynamics (surface + bottom layer COGs, 0241).
 # --------------------------------------------------------------------------- #
-def _rasterize_t3d_field(
-    slf_path, *, run_id, utm_epsg, dest_filename, dst_suffix, log_label,
-    runs_bucket, target_ground_res_m, domain_bbox=None,
+def _rasterize_t3d_plane(
+    x, y, ikle, node_vals, *, run_id, utm_epsg, dest_filename, dst_suffix,
+    log_label, runs_bucket, target_ground_res_m,
 ):
-    """Read a single-frame re-emitted 2D SELAFIN (surface OR bottom layer),
-    rasterize its one field to a 4326 (or local-frame placeholder) COG, upload it,
-    and return ``(uri, bbox, node_min, node_max, node_mean, valid_frac)``
-    (``valid_frac`` = the fraction of output pixels carrying a value, the number
-    that separates a FIELD from a dot lattice). NO value masking
-    (temperature / velocity can be negative and valid) -- only NaN-clipped.
+    """One sigma plane of the solved column -> a 4326 COG, uploaded.
 
-    ``domain_bbox`` is the 4326 AOI the real-lake grid was built over. The 3D build
-    lays its mesh with node 0 at that AOI's SW corner, so the re-emitted layer
-    SELAFINs carry LOCAL metres; without the corner they reproject as ABSOLUTE UTM
-    and both COGs land at the zone's false origin, thousands of km from the lake.
-    The idealized basin records no bbox and has no corner to add."""
+    Returns ``(uri, bbox, node_min, node_max, node_mean, valid_frac)``, where
+    ``valid_frac`` is the fraction of output pixels carrying a value - the number
+    that separates a FIELD from a dot lattice. NO value masking: a temperature or
+    a velocity can be negative and valid, so only non-finite nodes are dropped.
+
+    The nodes carry TRUE eastings and northings - an authored mesh is projected
+    into its own UTM zone - so the reprojection to 4326 is the whole of the
+    georeferencing and there is no origin to add back.
+    """
     import numpy as np
 
-    slf = Path(slf_path)
-    try:
-        mesh = read_selafin(slf)
-    except Exception as exc:  # noqa: BLE001
-        raise PostprocessTelemacError(
-            "TELEMAC_OUTPUT_READ_FAILED",
-            message=f"could not parse TELEMAC-3D layer SELAFIN {slf.name}: {exc}",
-            details={"slf": str(slf)},
-        ) from exc
-
-    varnames = mesh["varnames"]
-    fvar = None
-    for v in varnames:                                  # the single re-emitted var
-        if mesh["data"].get(v) is not None and mesh["data"][v].size:
-            fvar = v
-            break
-    if fvar is None:
-        raise PostprocessTelemacError(
-            "TELEMAC_OUTPUT_EMPTY",
-            message=f"no field in {slf.name} (vars={varnames})",
-            details={"slf": str(slf), "varnames": varnames},
-        )
-    node_vals = np.asarray(mesh["data"][fvar])[-1]      # single frame
-    x = np.asarray(mesh["x"])
-    y = np.asarray(mesh["y"])
+    node_vals = np.asarray(node_vals, dtype="float64")
     finite = np.isfinite(node_vals)
     if not finite.any():
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_EMPTY",
-            message=f"TELEMAC-3D layer {slf.name} carried no finite values",
-            details={"slf": str(slf)},
+            message=f"the {log_label} plane carried no finite values",
+            details={"run_id": run_id},
         )
     node_min = float(np.nanmin(node_vals[finite]))
     node_max = float(np.nanmax(node_vals[finite]))
     node_mean = float(np.nanmean(node_vals[finite]))
 
-    if utm_epsg is not None:
-        # real-bathy path: reproject the mesh nodes UTM -> 4326 here and write the
-        # COG directly in 4326 (already-4326 direct path, guard on).
-        from pyproj import Transformer
-        x_org, y_org = _local_mesh_origin(domain_bbox, int(utm_epsg))
-        back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
-        lon, lat = back.transform(x + x_org, y + y_org)
-        lon = np.asarray(lon)
-        lat = np.asarray(lat)
-        src_crs = "EPSG:4326"
-        reproject = False
-        guard = True
-        pad = 0.0009
-        bbox = (float(lon.min() - pad), float(lat.min() - pad),
-                float(lon.max() + pad), float(lat.max() + pad))
-        shape = _grid_shape(bbox, target_ground_res_m)
-    else:
-        # idealized path: the coords are LOCAL METRES with no real georeferencing.
-        # Treat them as the placeholder projected frame (EPSG:3857) + WARP to 4326
-        # so the COG carries valid lon/lat bounds (a small placeholder box) and
-        # still renders on the map -- mirrors the WSE/ARTEMIS local-frame intent
-        # but via the reproject path (a direct-write would tag local metres as
-        # 4326 and trip the projected-coordinate guard).
-        lon, lat = x, y                                 # local metres
-        src_crs = f"EPSG:{_LOCAL_FRAME_EPSG}"
-        reproject = True
-        guard = False
-        pad = max(2.0, float(target_ground_res_m))
-        bbox = (float(lon.min() - pad), float(lat.min() - pad),
-                float(lon.max() + pad), float(lat.max() + pad))
-        nn = _nn_spacing_m(x, y)
-        res_loc = max(float(target_ground_res_m), nn * 0.5)
-        w_m = bbox[2] - bbox[0]
-        h_m = bbox[3] - bbox[1]
-        ncols = min(max(int(round(w_m / res_loc)), TELEMAC_MIN_PX_PER_SIDE), TELEMAC_MAX_PX_PER_SIDE)
-        nrows = min(max(int(round(h_m / res_loc)), TELEMAC_MIN_PX_PER_SIDE), TELEMAC_MAX_PX_PER_SIDE)
-        shape = (nrows, ncols)
+    from pyproj import Transformer
+
+    back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
+    lon, lat = back.transform(np.asarray(x, dtype="float64"),
+                              np.asarray(y, dtype="float64"))
+    lon = np.asarray(lon)
+    lat = np.asarray(lat)
+    pad = 0.0009
+    bbox = (float(lon.min() - pad), float(lat.min() - pad),
+            float(lon.max() + pad), float(lat.max() + pad))
+    shape = _grid_shape(bbox, target_ground_res_m)
 
     try:
-        # barycentric over the RESULT triangulation: an open-water 3D grid spaces
-        # its nodes ~1 km apart, so a nearest-node halo published ~2% valid pixels
-        # (a dot lattice). The element fill is the solver's own P1 representation.
+        # barycentric over the RESULT triangulation: an open-water mesh spaces its
+        # offshore nodes hundreds of metres apart, so a nearest-node halo publishes
+        # a lattice of isolated pixels instead of a field. The element fill is the
+        # solver's own P1 representation.
         grid = _rasterize_mesh_to_grid(
-            lon, lat, mesh["ikle"], node_vals, bbox, shape, wet_floor=-1e30)
+            lon, lat, ikle, node_vals, bbox, shape, wet_floor=-1e30)
     except Exception as exc:  # noqa: BLE001
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_READ_FAILED",
@@ -2293,8 +2164,8 @@ def _rasterize_t3d_field(
     transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], shape[1], shape[0])
     try:
         cog = cog_io.write_cog_4326_from_grid(
-            grid, src_crs=src_crs, src_transform=transform,
-            reproject=reproject, crs_roundtrip_guard=guard, dst_suffix=dst_suffix,
+            grid, src_crs="EPSG:4326", src_transform=transform,
+            reproject=False, crs_roundtrip_guard=True, dst_suffix=dst_suffix,
         )
     except CogIoError as exc:
         raise _reraise_cogio(exc) from exc
@@ -2313,98 +2184,76 @@ def _rasterize_t3d_field(
 
 
 def postprocess_telemac3d(
-    surface_slf_path: str | Path,
-    bottom_slf_path: str | Path,
     *,
     run_id: str,
-    utm_epsg: int | None,
-    worker_metrics: dict[str, Any] | None = None,
+    utm_epsg: int,
+    x: Any,
+    y: Any,
+    ikle: Any,
+    surface: Any,
+    bottom: Any,
+    measured: dict[str, Any],
     reach_name: str = "stratified_flow",
-    flow_mode: str = "stratification",
     runs_bucket: str | None = None,
     target_ground_res_m: float = 40.0,
 ) -> tuple[list[Telemac3dLayerURI], dict[str, Any]]:
-    """Rasterize the TELEMAC-3D surface + bottom layers into two COGs.
+    """The solved column's top and bed planes -> the PAIR of COGs on the map.
 
-    Reads the two single-frame re-emitted 2D SELAFINs (``t3d_surface.slf`` /
-    ``t3d_bottom.slf`` the worker writes from the 3D result's top / bed sigma
-    planes), rasterizes each to a COG (real-bathy reproject ``utm_epsg`` -> 4326,
-    or the local-metres placeholder frame for the idealized path), and returns
-    ``([surface_layer, bottom_layer], metrics)``. The discriminating scalar
-    fields (stratification_dt / u_surface / u_bottom / front_speed_mps / ...)
-    come from ``worker_metrics`` (computed off the full 3D column in the worker -
-    the agent venv has no TELEMAC), folded onto BOTH layers so the agent narrates
-    typed numbers (invariant 1). The full-column time evolution plays from the
-    TELEMAC-3D result SELAFIN mesh sibling via ``TELEMAC3D_STRATIFICATION_STYLE``.
+    TWO LAYERS, ONE ANSWER: the contrast between the surface and the bottom is the
+    whole reason to go 3D, and a single depth-averaged map is exactly what this
+    refuses. ``measured`` carries the scalars read off the same 3D field the two
+    planes were taken from, so the narrated numbers and the rasters are one
+    measurement.
 
-    Honesty floor (invariant 1): every 3D scalar is plain arithmetic over the
-    SELAFIN field -- no LLM. The COG carries an idealized/screening label.
+    Honesty floor: every 3D scalar is plain arithmetic over the solved field. The
+    COGs carry a screening label.
 
-    Raises ``PostprocessTelemacError`` on any read / rasterize / COG failure.
+    Raises ``PostprocessTelemacError`` on any rasterize / COG failure.
     """
-    try:
-        import numpy as np  # noqa: F401
-        from pyproj import Transformer  # noqa: F401
-    except Exception as exc:  # noqa: BLE001
-        raise PostprocessTelemacError(
-            "TELEMAC_DEPENDENCY_MISSING",
-            message=f"numpy/pyproj unavailable for TELEMAC-3D postprocess: {exc}",
-        ) from exc
+    units = measured.get("variable_units") or ""
+    var_label = measured.get("variable_label") or "Surface field"
+    metric = float(measured.get("stratification_metric") or 0.0)
 
-    wm = dict(worker_metrics or {})
-    units = wm.get("variable_units") or ""
-    var_label = wm.get("variable_label") or "Surface field"
-    metric = float(wm.get("stratification_metric") or 0.0)
-
-    s_uri, s_bbox, s_min, s_max, s_mean, s_frac = _rasterize_t3d_field(
-        surface_slf_path, run_id=run_id, utm_epsg=utm_epsg,
+    s_uri, s_bbox, s_min, s_max, s_mean, s_frac = _rasterize_t3d_plane(
+        x, y, ikle, surface, run_id=run_id, utm_epsg=utm_epsg,
         dest_filename="telemac3d_surface.tif", dst_suffix="_t3d_surface.tif",
         log_label="TELEMAC-3D surface COG", runs_bucket=runs_bucket,
-        target_ground_res_m=target_ground_res_m, domain_bbox=wm.get("bbox"))
-    b_uri, b_bbox, b_min, b_max, b_mean, b_frac = _rasterize_t3d_field(
-        bottom_slf_path, run_id=run_id, utm_epsg=utm_epsg,
+        target_ground_res_m=target_ground_res_m)
+    b_uri, b_bbox, b_min, b_max, b_mean, b_frac = _rasterize_t3d_plane(
+        x, y, ikle, bottom, run_id=run_id, utm_epsg=utm_epsg,
         dest_filename="telemac3d_bottom.tif", dst_suffix="_t3d_bottom.tif",
         log_label="TELEMAC-3D bottom COG", runs_bucket=runs_bucket,
-        target_ground_res_m=target_ground_res_m, domain_bbox=wm.get("bbox"))
+        target_ground_res_m=target_ground_res_m)
 
-    # shared diverging/continuous legend over the combined surface+bottom range so
-    # the two layers read on ONE ramp (the surface-vs-bottom contrast is the point).
+    # shared legend over the combined surface+bottom range so the two layers read
+    # on ONE ramp: the surface-vs-bottom contrast is the point.
     lo = round(min(s_min, b_min), 5)
     hi = round(max(s_max, b_max), 5)
     if hi <= lo:
         hi = lo + 1e-3
-    # a signed field (velocity) reads on a diverging ramp centered on 0; a strictly
-    # positive field (temperature / salinity) reads on a sequential ramp.
+    # a signed field (velocity) reads on a diverging ramp centred on 0; a strictly
+    # positive field (temperature) reads on a sequential ramp.
     signed = lo < 0.0 < hi
     vext = round(max(abs(lo), abs(hi)), 5)
-    legend_common = dict(units=units or None, label=f"{var_label} ({units})" if units else var_label)
+    legend_common = dict(
+        units=units or None,
+        label=f"{var_label} ({units})" if units else var_label)
 
     honesty = (
-        "TELEMAC-3D 3D-hydrodynamics screening: the surface + bottom layers of a "
-        f"{flow_mode} field (the vertical structure a 2D depth-averaging cannot "
-        "resolve). A planning-grade idealized/prescribed-forcing field, not a "
-        "calibrated site study."
+        "TELEMAC-3D vertical-structure screening: the surface and bottom planes of "
+        "a baroclinic field (what a 2D depth-averaging cannot resolve). A "
+        "planning-grade prescribed-forcing field, not a calibrated site study."
+        # The run carries no surface heat exchange, so nothing can remove heat.
+        " The run carries NO surface heat exchange: heat is CONSERVED, so a "
+        "falling surface temperature is the warm layer MIXING DOWNWARD, not the "
+        "lake cooling."
     )
-    if flow_mode == "stratification":
-        # the run has no THERMIC / no met forcing, so nothing can remove heat
-        honesty += (
-            " The run carries NO surface heat exchange: heat is CONSERVED, so a "
-            "falling surface temperature is the warm layer MIXING DOWNWARD, not "
-            "the lake cooling."
-        )
-    vlabel = wm.get("vertical_resolution_label")
-    if vlabel:
-        honesty += f" Vertical fidelity: {vlabel}."
-    if wm.get("n_clamped_nodes"):
-        honesty += (
-            f" {int(wm['n_clamped_nodes'])} grid nodes the DEM reports as land or "
-            "sub-threshold shallows were clamped wet for solver stability and read "
-            "NoData in these rasters."
-        )
+    if measured.get("vertical_resolution_label"):
+        honesty += f" Vertical fidelity: {measured['vertical_resolution_label']}."
 
     style = TELEMAC3D_SIGNED_STYLE if signed else TELEMAC3D_STRATIFICATION_STYLE
 
-    def _mk(uri, bbox, role, is_surface, node_mean):
+    def _mk(uri, bbox, role, is_surface):
         legend = presets.legend_key(
             style, value_range=((-vext, vext) if signed else (lo, hi)),
             **legend_common)
@@ -2421,57 +2270,42 @@ def postprocess_telemac3d(
             legend=legend,
             fallback_note=honesty,
             stratification_metric=metric,
-            flow_mode=flow_mode,
+            flow_mode="stratification",
             variable_label=var_label,
             variable_units=units or None,
-            stratification_dt=wm.get("stratification_dt"),
-            u_surface=wm.get("u_surface"),
-            u_bottom=wm.get("u_bottom"),
-            depth_avg_u=wm.get("depth_avg_u"),
-            front_speed_mps=wm.get("front_speed_mps"),
-            benjamin_speed_mps=wm.get("benjamin_speed_mps"),
-            surface_value_mean=wm.get("surface_value_mean"),
-            bottom_value_mean=wm.get("bottom_value_mean"),
-            nplan=wm.get("nplan"),
-            non_hydrostatic=wm.get("non_hydrostatic"),
-            wind_speed_mps=wm.get("wind_speed_mps"),
-            mesh_size_m=wm.get("dx_m"),
-            mesh_resolution_label=(
-                f"{'real NOAA lake bathy' if utm_epsg is not None else 'idealized'} "
-                f"grid {wm.get('dx_m', target_ground_res_m):g} m x {wm.get('nplan', '?')} planes"
-                + (" (coarsened under node budget)" if wm.get("coarsened") else "")
-                # vertical resolution is a DECLARED fact alongside horizontal dx_m
-                + (f", near-surface layer {wm['vertical_dz_surface_m']:g} m"
-                   if wm.get("vertical_dz_surface_m") is not None else "")),
+            stratification_dt=measured.get("stratification_dt"),
+            u_surface=measured.get("u_surface"),
+            u_bottom=measured.get("u_bottom"),
+            depth_avg_u=measured.get("depth_avg_u"),
+            surface_value_mean=round(s_mean, 5),
+            bottom_value_mean=round(b_mean, 5),
+            nplan=measured.get("nplan"),
+            wind_speed_mps=measured.get("wind_speed_mps"),
+            mesh_size_m=measured.get("mesh_size_m"),
+            mesh_resolution_label=measured.get("mesh_resolution_label"),
         )
 
-    surface_layer = _mk(s_uri, s_bbox, "primary", True, s_mean)
-    bottom_layer = _mk(b_uri, b_bbox, "context", False, b_mean)
+    surface_layer = _mk(s_uri, s_bbox, "primary", True)
+    bottom_layer = _mk(b_uri, b_bbox, "context", False)
 
     metrics: dict[str, Any] = {
-        "flow_mode": flow_mode,
         "stratification_metric": metric,
         "variable_label": var_label,
         "variable_units": units,
         "surface_value_range": [s_min, s_max],
         "bottom_value_range": [b_min, b_max],
+        "surface_value_mean": round(s_mean, 5),
+        "bottom_value_mean": round(b_mean, 5),
         "utm_epsg": utm_epsg,
         "surface_bbox": list(s_bbox),
         "surface_valid_pixel_fraction": round(s_frac, 4),
         "bottom_valid_pixel_fraction": round(b_frac, 4),
-        "vertical_dz_surface_m": wm.get("vertical_dz_surface_m"),
-        "vertical_dz_uniform_m": wm.get("vertical_dz_uniform_m"),
-        "mesh_transformation": wm.get("mesh_transformation"),
-        "mesh_stretching_coefficients": wm.get("mesh_stretching_coefficients"),
-        "thermocline_delta_m": wm.get("thermocline_delta_m"),
-        "n_clamped_nodes": wm.get("n_clamped_nodes"),
-        "column_heat_drift_frac": wm.get("column_heat_drift_frac"),
         "honesty_label": honesty,
     }
     logger.info(
-        "postprocess_telemac3d run_id=%s mode=%s metric=%.4g surf=[%.3g,%.3g] "
+        "postprocess_telemac3d run_id=%s metric=%.4g surf=[%.3g,%.3g] "
         "bot=[%.3g,%.3g] valid_px=%.1f%%/%.1f%% -> %s , %s",
-        run_id, flow_mode, metric, s_min, s_max, b_min, b_max,
+        run_id, metric, s_min, s_max, b_min, b_max,
         100.0 * s_frac, 100.0 * b_frac, s_uri, b_uri,
     )
     return [surface_layer, bottom_layer], metrics

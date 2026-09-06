@@ -199,7 +199,7 @@ def _build_review_envelope(
 
     The provenance is rendered into ``recommendation`` (so a client with no rich
     renderer still surfaces the table) AND carried structured on
-    ``synthetic_inputs`` (for the narration seam). A declared FormGate adds
+    ``synthetic_inputs`` (for the narration seam). A step reviewing its own adds
     ``param_sheet`` -- the resolved sheet as an EDIT SURFACE, which is what the
     plugin's form card renders. The ``narrow_scope`` option is the "provide
     values" action -- a reply with ``revised_args`` carries the edits.
