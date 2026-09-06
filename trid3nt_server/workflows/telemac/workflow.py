@@ -315,11 +315,14 @@ def _default_row(slot: Any) -> ParamSheetRow:
     rather than a black box, and every knob stays reachable at the review the
     same way it is reachable on the call.
     """
+    # A slot the dictionary answers for carries a DEFAULT basis; one it answers
+    # for nobody carries the same basis the open mandatory rows do, because there
+    # is no default there to call one.
     return ParamSheetRow(
         name=slot.identifier,
         value=None if slot.is_open else slot.engine_default,
         desc=slot.desc[:512], door="scenario",
-        basis="default_demo" if not slot.is_open else "derived",
+        basis="derived" if slot.is_open else "default_demo",
         editable=True, advanced=True, group=_group(slot),
         source_badge=("open: the dictionary gives it no default"
                       if slot.is_open else "engine default"))
