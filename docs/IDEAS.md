@@ -3721,3 +3721,22 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   om2d writes the topology bundle UNCONDITIONALLY - an empty role set
   is a recorded fact ("this basin names no liquid boundary"), the
   reader states it, telemac3d accepts a closed basin; modeled + tested.
+  STAGE 3 RULINGS, LIVE FINDINGS (NATE 2026-09-06): (a) 3D TRACER
+  NUMERICS - the stratified template ASSERTS the NERD advection scheme
+  (label verified against the catalog), a TIME STEP DERIVED from the
+  mesh (the river part's CFL producer), and the iteration ceiling,
+  each with a basis string, each overridable on the sheet; the wrapper
+  stays silent. (b) PINCHED DOMAINS - the mesh acceptance gate REFUSES a
+  boundary walk whose rings share nodes, naming the shared nodes (a
+  crash is below the honesty floor, not a seam change); the agitation
+  and stratified recipes carry the boundary-cleaning ops the river
+  recipe already lists. (c) HARBOUR-SCALE SHORELINE - a declarative OSM
+  coastline / water-polygon fetcher (the Overpass source already in
+  the substrate; corpus + model-free retrieval check first) is the
+  harbour-scale rung; GSHHG FULL resolution the coarse rung; refuse
+  below coverage by name. ENVIRONMENT FACT for NATE: TRID3NT_GSHHG_SHP
+  is unset in .env.local, so every shoreline-cut om2d run refuses on a
+  fresh daemon - set it (the agent exported it per run only). QUEUED
+  (reported, not fixed): a cold-start import race - two threads racing
+  the first geopandas/shapely import poison sys.modules for the
+  process's life; framework import discipline, its own hygiene row.
