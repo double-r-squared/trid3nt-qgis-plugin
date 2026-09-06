@@ -3,12 +3,18 @@
 FILL is repeatable and decides nothing: it sets slots, expands the composites the
 wrapper registered, binds every late-bound read in dependency order, and hands
 back what the sheet now says - every filled slot with its PROVENANCE, and every
-mandatory slot still open, carrying the meaning and the choices that would
-answer it. Nothing runs.
+OPEN slot, carrying the meaning and the choices that would answer it. Nothing
+runs.
 
-RUN is the other act, and it is explicit. Execution is HELD until a complete
-sheet is handed to it; then the sheet is serialized into the engine's own
-steering file, the run directory is staged, and the box receives it.
+OPEN and REQUIRED are two different statements. Open is the whole set the
+dictionary gives no default for, lists included: it is what this run leaves to
+the engine, and it is informational. Required is the dictionary's own OBLIG
+files, and it is the only thing a run refuses on.
+
+RUN is the other act, and it is explicit. Execution is HELD until a sheet whose
+required slots are answered is handed to it; then the sheet is serialized into
+the engine's own steering file, the run directory is staged, and the box
+receives it.
 
 Resolution order, lowest to highest: the engine default (never written - the
 dictionary supplies it), the listed parts in order, the template, the fill. At
@@ -31,7 +37,7 @@ __all__ = ["Filled", "Sheet", "SheetIncomplete", "draw", "fill", "run"]
 
 
 class SheetIncomplete(SlotRefused):
-    """A run was asked for on a sheet whose mandatory slots are not all filled."""
+    """A run was asked for on a sheet whose REQUIRED slots are not all filled."""
 
     error_code = "TELEMAC_SHEET_INCOMPLETE"
 
@@ -61,14 +67,18 @@ class Sheet:
         return self.body.MODULE
 
     def open(self) -> tuple[Slot, ...]:
-        """The mandatory slots nothing has answered yet.
+        """Every keyword the dictionary gives no default for and nothing has set.
 
-        Mandatory IS "the dictionary gives it no default", so an open slot
-        carries its meaning and its choices and no engine default to grey out -
-        there is none, which is exactly why it has to be answered.
+        Informational and COMPLETE: an open slot carries its meaning and its
+        choices and no engine default to grey out - there is none - so what the
+        reader sees is the whole of what this run leaves to the engine.
         """
         return tuple(slot for name, slot in self.body.CATALOG.items()
-                     if slot.mandatory and name not in self.filled)
+                     if slot.is_open and name not in self.filled)
+
+    def required(self) -> tuple[Slot, ...]:
+        """The open slots a run cannot begin without: the dictionary's OBLIG files."""
+        return tuple(slot for slot in self.open() if slot.is_required)
 
     def resolved(self) -> tuple[tuple[str, Any], ...]:
         """``(keyword, value)`` for everything the deck states, in catalog order.
@@ -90,7 +100,7 @@ class Sheet:
             "files": sorted(self.files),
             "open": [{"keyword": slot.keyword, "identifier": slot.identifier,
                       "desc": slot.desc, "type": slot.type,
-                      "choices": slot.choices}
+                      "choices": slot.choices, "required": slot.is_required}
                      for slot in self.open()],
         }
 
@@ -292,9 +302,10 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
               continue_from: str | None = None) -> Any:
     """A complete sheet: serialize, stage, hand it to the box.
 
-    The sheet is checked FIRST. A mandatory slot the engine has no default for is
-    a question nobody answered, and a run started on one fails inside Fortran
-    several minutes later, naming a keyword rather than the gap.
+    The sheet is checked FIRST, against the REQUIRED slots only - the files the
+    dictionary marks OBLIG. Everything else the engine wants it asks for by name
+    in its own listing, and a required set invented here would refuse runs the
+    engine would have taken.
 
     WHICH box entry the staged run goes to is the caller's, not this function's:
     the sequence is what is held here, and a module surface that picked a
@@ -305,12 +316,12 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
     from ..authoring.assembler import new_rundir, stage_run
     from ..authoring.serializer import serialize
 
-    still_open = sheet.open()
-    if still_open:
+    unanswered = sheet.required()
+    if unanswered:
         raise SheetIncomplete(
             f"{sheet.module} cannot run: "
             + "; ".join(f"{slot.keyword} ({slot.desc[:60]})"
-                        for slot in still_open))
+                        for slot in unanswered))
     run_tag, rundir = new_rundir()
     written = await asyncio.to_thread(serialize, sheet, rundir, steering=steering)
     staged = await stage_run(

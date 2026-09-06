@@ -89,6 +89,21 @@ def _build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
             "-v", f"{rundir}:/data", "-w", "/data", _telemac_image(), *args]
 
 
+def _why(metrics: dict[str, Any], fallback: str) -> str:
+    """Why the run stopped, with the engine's own demand named where it made one.
+
+    A sheet refuses only on the dictionary's OBLIG files; every other keyword the
+    engine will not start without, the engine asks for by name in its listing.
+    Carrying that sentence out is what keeps this side from inventing a required
+    set the Fortran never agreed to.
+    """
+    from .products.run_reads import engine_demand
+
+    said = str(metrics.get("error") or fallback)
+    demand = engine_demand(str(metrics.get("listing_tail") or ""))
+    return f"{said} - the engine asked for: {demand}" if demand else said
+
+
 def _classify(label: str) -> Callable[[Path, int], tuple[str, int, str | None,
                                                          dict[str, Any]]]:
     """The exit classifier for one leg -> ``(status, exit_code, error, extra)``.
@@ -110,13 +125,11 @@ def _classify(label: str) -> Callable[[Path, int], tuple[str, int, str | None,
                            label, path, exc)
         extra = {k: v for k, v in metrics.items() if k in _COMPLETION_METRIC_KEYS}
         if exit_code != 0:
-            return ("error", exit_code,
-                    metrics.get("error")
-                    or f"{label} exited with non-zero code {exit_code}", extra)
+            return ("error", exit_code, _why(
+                metrics, f"{label} exited with non-zero code {exit_code}"), extra)
         if metrics and not bool(metrics.get("correct_end")):
-            return ("error", 2,
-                    metrics.get("error")
-                    or f"{label} did not reach CORRECT END OF RUN", extra)
+            return ("error", 2, _why(
+                metrics, f"{label} did not reach CORRECT END OF RUN"), extra)
         return "ok", 0, None, extra
     return classify_exit
 

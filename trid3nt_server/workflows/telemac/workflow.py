@@ -148,8 +148,8 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
 
     The producers have already run, so the canvas shows the mesh and the release
     before anything is filled. What comes back is every filled slot with its
-    provenance and every mandatory slot still open - and in ``user_gated`` that
-    IS the card: the sheet is shown, an edit is another fill, and the run waits.
+    provenance and every open slot - and in ``user_gated`` that IS the card: the
+    sheet is shown, an edit is another fill, and the run waits.
     """
     # A slot the caller did not override is not a statement: the body's own
     # value stands. That is not the same as a body asserting None, which IS the
@@ -162,8 +162,9 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
     if revised:
         sheet = fill_slots(sheet, produced=dict(produced), params=dict(params),
                            **revised)
-    logger.info("telemac sheet filled: %s states %d keywords, %d open",
-                sheet.body.__name__, len(sheet.filled), len(sheet.open()))
+    logger.info("telemac sheet filled: %s states %d keywords, %d open "
+                "(%d required)", sheet.body.__name__, len(sheet.filled),
+                len(sheet.open()), len(sheet.required()))
     return sheet
 
 
@@ -206,16 +207,18 @@ async def _review(sheet: Sheet, *, workflow: str, title: str,
     """Show the filled sheet and HOLD -> the slot edits the user submitted.
 
     The card is the door's VIEW of the sheet rather than a step of its own: the
-    set slots and the open mandatory ones are what a run is reviewed on, and
-    submitting an edited sheet IS the approval, because the whole of it was on
-    screen. In ``auto`` nothing is shown and nothing waits.
+    set slots and the open ones are what a run is reviewed on, and submitting
+    an edited sheet IS the approval, because the whole of it was on screen. In ``auto`` nothing is shown and nothing waits.
     """
     from trid3nt_server.gates.input_review import gate_input_review
 
     rows = [_slot_row(name, row) for name, row in sheet.filled.items()]
     rows += [ParamSheetRow(name=slot.identifier, value=None, desc=slot.desc[:512],
                            door="user", basis="derived", editable=True,
-                           source_badge="open: the dictionary gives it no default")
+                           source_badge=(
+                               "required: the dictionary marks this file OBLIG"
+                               if slot.is_required else
+                               "open: the dictionary gives it no default"))
              for slot in sheet.open()]
     # A provenance row carries ONE value, so a keyword whose value is a list is
     # narrated as the list it is rather than dropped.

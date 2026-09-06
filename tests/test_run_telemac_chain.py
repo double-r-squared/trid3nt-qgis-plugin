@@ -121,6 +121,28 @@ def test_classify_exit_folds_the_listing_tail_a_failed_run_carries(tmp_path):
     assert "PLANTE" in extra["listing_tail"]
 
 
+def test_classify_exit_names_the_keyword_lecdon_asked_for(tmp_path):
+    """The sheet refuses only on the dictionary's OBLIG files; everything else
+    the engine will not start without, it demands by name in its own listing,
+    and that sentence is what reaches the caller."""
+    _write_metrics(
+        tmp_path, correct_end=False,
+        listing_tail=" THE FOLLOWING KEYWORD IS MANDATORY:\n"
+                     " GEOMETRY FILE (FICHIER DE GEOMETRIE)\n"
+                     "\n PLANTE: PROGRAM STOPPED AFTER AN ERROR\n",
+    )
+    _status, _code, err, _extra = T._classify(T.TELEMAC_SOLVER_NAME)(tmp_path, 1)
+    assert "the engine asked for" in err
+    assert "GEOMETRY FILE (FICHIER DE GEOMETRIE)" in err
+
+
+def test_classify_exit_invents_no_demand_where_the_engine_made_none(tmp_path):
+    _write_metrics(tmp_path, correct_end=False,
+                   listing_tail=" MURD3D: ITERATION NO. REACHED 100 , STOP.\n")
+    _status, _code, err, _extra = T._classify(T.TELEMAC_SOLVER_NAME)(tmp_path, 1)
+    assert "the engine asked for" not in err
+
+
 def test_classify_exit_missing_metrics_falls_back_to_exit_code(tmp_path):
     # No metrics file at all -> trust the process exit code (clean -> ok).
     status, code, err, extra = T._classify(T.TELEMAC_SOLVER_NAME)(tmp_path, 0)

@@ -452,6 +452,26 @@ package SteeringSurface {
         */
     }
 
+    requirement def TheOpenSetIsCompleteAndRequiredIsTheObligFiles {
+        doc /*
+        RULING 2026-09-06 (docs/IDEAS.md, "STAGE 3 RULINGS, ACCEPTANCE FINDINGS",
+        (c)): the sheet states two different things and never conflates them.
+
+        OPEN is every keyword the dictionary gives no default for and nothing has
+        set - LISTS INCLUDED. A list the dictionary writes no DEFAUT for is empty
+        until something states it, and an emptiness the engine substitutes for is
+        exactly what a reader has to be able to see. The set is informational and
+        COMPLETE; it refuses nothing.
+
+        REQUIRED is the dictionary's own OBLIG files, and it is the only thing a
+        run refuses on. Which OTHER keyword a particular deck cannot run without
+        is the engine's to say: LECDON demands it by name in the listing, and
+        that sentence is carried out to the caller. A required set invented here
+        would refuse runs the engine would have taken, and inventing one is the
+        thing this requirement forbids.
+        */
+    }
+
     requirement def ANoDefaultKeywordIsTheTemplatesToState {
         doc /*
         RULING 2026-09-06 (docs/IDEAS.md, "STAGE 3 RULINGS, LIVE FINDINGS", (a)):
@@ -563,10 +583,10 @@ package SteeringSurface {
         doc /*
         Nothing executes until the user runs. Fill produces a sheet and no work
         beyond the producers the canvas shows; run is the separate, explicit act
-        - and it refuses an incomplete sheet BY NAME first, because a run
-        started on an unanswered mandatory slot fails inside Fortran minutes
-        later, blaming a keyword rather than the gap.
-
+        - and it refuses a sheet whose REQUIRED slots are unanswered BY NAME
+        first, because a run started without the files the dictionary marks
+        OBLIG fails inside Fortran minutes later, blaming a keyword rather than
+        the gap.
         */
     }
 
@@ -597,7 +617,24 @@ package SteeringSurface {
     verify requirement EngineDefaultSurfaced by
         "tests/test_telemac_module_surface.py::test_an_engine_default_is_never_written_into_the_deck";
     verify requirement EngineDefaultSurfaced by
-        "tests/test_telemac_module_surface.py::test_the_bare_sheet_asks_the_three_questions_the_engine_has_no_answer_for";
+        "tests/test_telemac_module_surface.py::test_the_bare_sheet_opens_every_keyword_the_dictionary_answers_for_nobody";
+
+    satisfy requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by slot;
+    satisfy requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by sheet;
+    verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
+        "tests/test_telemac_module_surface.py::test_the_bare_sheet_opens_every_keyword_the_dictionary_answers_for_nobody";
+    verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
+        "tests/test_telemac_module_surface.py::test_a_defaulted_oblig_file_is_not_a_question_the_sheet_asks";
+    verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
+        "tests/test_telemac_module_surface.py::test_the_open_row_says_whether_the_run_cannot_begin_without_it";
+    verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
+        "tests/test_telemac_module_surface.py::test_run_does_not_refuse_an_open_keyword_the_engine_may_yet_default";
+    verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
+        "tests/test_telemac_run_reads.py::test_the_engine_s_own_demand_is_read_by_name_out_of_the_listing";
+    verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
+        "tests/test_run_telemac_chain.py::test_classify_exit_names_the_keyword_lecdon_asked_for";
+    verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
+        "tests/test_run_telemac_chain.py::test_classify_exit_invents_no_demand_where_the_engine_made_none";
 
     satisfy requirement ANoDefaultKeywordIsTheTemplatesToState by slot;
     satisfy requirement ANoDefaultKeywordIsTheTemplatesToState by sheet;
@@ -686,7 +723,7 @@ package SteeringSurface {
     satisfy requirement RunIsHeld by serializer;
     satisfy requirement RunIsHeld by stager;
     verify requirement RunIsHeld by
-        "tests/test_telemac_module_surface.py::test_run_refuses_an_incomplete_sheet_naming_what_is_open";
+        "tests/test_telemac_module_surface.py::test_run_refuses_an_incomplete_sheet_naming_the_required_file";
     verify requirement RunIsHeld by
         "tests/test_telemac_module_surface.py::test_run_serializes_then_stages_then_dispatches";
     verify requirement RunIsHeld by

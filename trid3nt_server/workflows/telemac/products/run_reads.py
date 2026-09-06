@@ -23,6 +23,7 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.products.run_reads"
 
 __all__ = [
     "continuity_rel_error",
+    "engine_demand",
     "gaia_mass_balance",
     "oil_slick_features",
     "outlet_hydrograph",
@@ -50,6 +51,38 @@ _GAIA_FIELDS: tuple[tuple[str, str, int], ...] = (
     ("CUMULATED BED EVOLUTIONS", "sediment_net_bed_mass_kg", 6),
     ("CUMULATED LOST MASS", "sediment_mass_lost_kg", 8),
 )
+
+
+#: How LECDON asks for a keyword it will not start without. The engine names the
+#: keyword itself, on the line the phrase opens or on the ones under it, so what
+#: reaches a reader is the engine's own sentence rather than a set this code
+#: decided a run needs.
+_LECDON_DEMAND = re.compile(
+    r"IS MANDATORY|GIVE THE KEY-?WORDS?|GIVE THE CORRESPONDING|GIVE A VALUE"
+    r"|NO FRICTION LAW IS PRESCRIBED")
+#: Where a demand block ends: the banner the engine stops under.
+_PLANTE = "PLANTE:"
+#: How many lines under a demand carry its keyword names.
+_DEMAND_LINES = 6
+
+
+def engine_demand(listing_text: str) -> str | None:
+    """What the engine ASKED FOR before it stopped, in its own words.
+
+    A keyword the dictionary gives no default for is open on the sheet, not
+    required: only the engine knows which of them THIS deck cannot run without,
+    and LECDON says so by name. That sentence is what a caller gets back.
+    """
+    lines = [line.rstrip() for line in (listing_text or "").splitlines()]
+    starts = [i for i, line in enumerate(lines) if _LECDON_DEMAND.search(line)]
+    if not starts:
+        return None
+    block: list[str] = []
+    for line in lines[starts[-1]:starts[-1] + _DEMAND_LINES]:
+        if not line.strip() or _PLANTE in line:
+            break
+        block.append(line.strip())
+    return "; ".join(block) or None
 
 
 def gaia_mass_balance(listing_text: str) -> dict[str, Any]:

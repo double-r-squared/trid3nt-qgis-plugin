@@ -60,7 +60,7 @@ def test_the_identifier_is_the_keyword_and_nothing_invented():
 
 def test_the_engine_default_is_on_the_slot_or_the_slot_is_a_question():
     friction = T2D.slot("LAW_OF_BOTTOM_FRICTION")
-    assert friction.engine_default is UNSET and friction.mandatory
+    assert friction.engine_default is UNSET and friction.is_open
     assert T2D.slot("TIDAL_FLATS").engine_default is True
     assert T2D.slot("INITIAL_CONDITIONS").engine_default == "ZERO ELEVATION"
 
@@ -190,9 +190,32 @@ def test_a_fill_that_reads_itself_in_a_cycle_refuses_naming_it():
 
 # -- the sheet ---------------------------------------------------------------- #
 
-def test_the_bare_sheet_asks_the_three_questions_the_engine_has_no_answer_for():
-    assert [slot.keyword for slot in fill(T2D).open()] == [
-        "GEOMETRY FILE", "BOUNDARY CONDITIONS FILE", "LAW OF BOTTOM FRICTION"]
+def test_the_bare_sheet_opens_every_keyword_the_dictionary_answers_for_nobody():
+    """The OPEN set is complete - lists included - because a list the dictionary
+    writes no default for is an emptiness the engine substitutes something for,
+    and the reader has to be able to see it. REQUIRED is the OBLIG files."""
+    sheet = fill(T2D)
+    assert len(sheet.open()) == 29
+    opened = {slot.keyword for slot in sheet.open()}
+    assert {"GEOMETRY FILE", "BOUNDARY CONDITIONS FILE", "LAW OF BOTTOM FRICTION",
+            "NAMES OF TRACERS"} <= opened
+    assert [slot.keyword for slot in sheet.required()] == [
+        "GEOMETRY FILE", "BOUNDARY CONDITIONS FILE"]
+
+
+def test_a_defaulted_oblig_file_is_not_a_question_the_sheet_asks():
+    """The dictionary marks STEERING FILE, DICTIONARY and RESULTS FILE OBLIG and
+    then answers all three itself, so none of them is open and none is required:
+    a default IS an answer wherever it stands."""
+    for identifier in ("STEERING_FILE", "DICTIONARY", "RESULTS_FILE"):
+        slot = T2D.slot(identifier)
+        assert slot.file_mandatory and not slot.is_open and not slot.is_required
+
+
+def test_the_open_row_says_whether_the_run_cannot_begin_without_it():
+    rows = {row["keyword"]: row["required"] for row in fill(T2D).state()["open"]}
+    assert rows["GEOMETRY FILE"] is True
+    assert rows["LAW OF BOTTOM FRICTION"] is False
 
 
 def test_an_engine_default_is_never_written_into_the_deck():
@@ -377,13 +400,22 @@ def test_a_canvas_that_answers_nothing_refuses_and_invents_nothing(monkeypatch):
 
 # -- run is held -------------------------------------------------------------- #
 
-def test_run_refuses_an_incomplete_sheet_naming_what_is_open():
+def test_run_refuses_an_incomplete_sheet_naming_the_required_file():
     async def _never(**_kwargs):
         raise AssertionError("nothing dispatches on an incomplete sheet")
 
-    with pytest.raises(SheetIncomplete, match="LAW OF BOTTOM FRICTION"):
+    with pytest.raises(SheetIncomplete, match="GEOMETRY FILE"):
         asyncio.run(run(fill(T2D), dispatch=_never, mesh_inputs=(), outputs=(),
                         results=("r2d.slf",), prefix="telemac", server_facts={}))
+
+
+def test_run_does_not_refuse_an_open_keyword_the_engine_may_yet_default():
+    """LAW OF BOTTOM FRICTION has no engine default and is not an OBLIG file, so
+    it is OPEN and never REQUIRED: which decks cannot run without it is LECDON's
+    to say, from its own listing, by name."""
+    sheet = fill(T2D, GEOMETRY_FILE="geo.slf", BOUNDARY_CONDITIONS_FILE="geo.cli")
+    assert not sheet.required()
+    assert "LAW_OF_BOTTOM_FRICTION" in {slot.identifier for slot in sheet.open()}
 
 
 def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):

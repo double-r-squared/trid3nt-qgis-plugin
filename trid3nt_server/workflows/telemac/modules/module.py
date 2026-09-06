@@ -105,15 +105,27 @@ class Slot:
         return (self.size or 1) > 1
 
     @property
-    def mandatory(self) -> bool:
-        """A slot that has to be answered: the dictionary gives it no default.
+    def is_open(self) -> bool:
+        """The dictionary gives this keyword no default, so nothing answers it.
 
-        A LIST keyword is never one of them. The dictionary writes no DEFAUT for
-        a list because its default is EMPTY - no sources, no tracers, no control
-        sections - which is an answer, and calling it a question would put thirty
-        keywords nobody asked about in front of a reader.
+        Lists included. A list the dictionary writes no DEFAUT for is empty until
+        something states it, and an emptiness that means a substitution - the
+        engine advecting a tracer by whatever the velocities are advected by -
+        is a fact a reader has to be able to see.
         """
-        return self.engine_default is UNSET and not self.is_list
+        return self.engine_default is UNSET
+
+    @property
+    def is_required(self) -> bool:
+        """The engine will not start without this one: an OBLIG file, undefaulted.
+
+        The dictionary's OBLIG mark is the only statement anywhere about what a
+        run cannot begin without, so it is the only thing a run refuses on. What
+        else the engine demands, it demands from its own listing - LECDON names
+        the keyword - and inventing a required set here would be this code
+        guessing at the Fortran's conditions.
+        """
+        return self.is_file and self.file_mandatory and self.is_open
 
     def check(self, value: Any) -> Any:
         """``value`` as this slot takes it, or the refusal that says why not.

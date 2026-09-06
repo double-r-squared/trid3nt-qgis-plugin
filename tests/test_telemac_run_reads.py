@@ -308,3 +308,27 @@ def test_an_unmeasurable_result_costs_the_run_nothing():
         PR._journal_wetted_fraction({"dye_cmax_mgl": 1.0})
     finally:
         assert drain_notes(token) == []
+
+
+#: How LECDON asks, verbatim from the image's own lecdon_telemac3d.F: the phrase
+#: opens the block and the keyword names stand under it.
+_DEMAND = """
+ THE LAW OF BOTTOM FRICTION  5 IS ASKED
+ GIVE THE CORRESPONDING FRICTION COEFFICIENT
+
+ PLANTE: PROGRAM STOPPED AFTER AN ERROR
+"""
+
+
+def test_the_engine_s_own_demand_is_read_by_name_out_of_the_listing():
+    assert R.engine_demand(_DEMAND) == "GIVE THE CORRESPONDING FRICTION COEFFICIENT"
+    assert R.engine_demand(
+        " THE FOLLOWING KEYWORD IS MANDATORY:\n"
+        " BOUNDARY CONDITIONS FILE (FICHIER DES CONDITIONS AUX LIMITES)\n"
+    ) == ("THE FOLLOWING KEYWORD IS MANDATORY:; "
+          "BOUNDARY CONDITIONS FILE (FICHIER DES CONDITIONS AUX LIMITES)")
+
+
+def test_a_listing_that_demanded_nothing_reads_as_nothing():
+    assert R.engine_demand(" MURD3D: ITERATION NO. REACHED 100 , STOP.") is None
+    assert R.engine_demand("") is None
