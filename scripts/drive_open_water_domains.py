@@ -22,6 +22,7 @@ Usage: drive_open_water_domains.py --out-dir D [--only NAME ...] [--timeout 3600
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import sys
@@ -103,15 +104,17 @@ def supplied_harbour_mesh(structure_uri: str, work: Path) -> str:
 
     footprint = _footprint(structure_uri,
                            float(HARBOUR.get("barrier_width_m") or 20.0))
-    ask = recipe_plan_value(MESH)
-    bound = json.loads(json.dumps(ask, default=str))
+    # Copied rather than round-tripped through JSON: a recipe holds late-bound
+    # reads, and a ref refuses to render itself as a value at plan-construction
+    # time - which is the whole point of it being a ref.
+    bound = copy.deepcopy(recipe_plan_value(MESH))
     bound["extent"] = list(HARBOUR_AOI)
     bound["resolution_m"] = HARBOUR["mesh_min_edge_m"]
     for entry in bound["ops"]:
         if entry["op"] == "set_obstacle":
             entry["kwargs"]["geometry"] = footprint
         if entry["op"] == "enforce_mesh_gradation":
-            entry["kwargs"].setdefault("gradation", 0.15)
+            entry["kwargs"]["gradation"] = HARBOUR.get("mesh_grade", 0.15)
         if entry["op"] == "identify_ocean_boundary_sections":
             entry["kwargs"]["depth_threshold"] = HARBOUR["open_depth_threshold_m"]
     session = MeshSession(recipe_from_plan_value(bound), case_id=None,
