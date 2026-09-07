@@ -202,6 +202,20 @@ telemac_river_sediment_plume = register_workflow(
         derive=(SuspendedClass(
             grain_size_um=P.grain_size_um,
             concentration_mgl=P.sediment_concentration_mgl,
+            # Zyserman-Fredsoe, out of the suspension formulas GAIA offers, is
+            # the one written for the fine non-cohesive class this plume carries.
+            transport_formula=3,
+            # The character-of-the-flow scheme, which is what a pulse advected
+            # over a bed with no stock needs; the dictionary's own upwind pair is
+            # for a resident concentration field.
+            advection_scheme=[1],
+            # What this question reads off GAIA's own result: the bed evolution
+            # and the erosion/deposition split, with no grading to print because
+            # one class cannot sort.
+            printouts="B,E",
+            # The listing's own sediment balance, which the deposited fraction is
+            # read from.
+            mass_balance=True,
             injected={"q_m3s": R.source_q_m3s,
                       "concentration_mgl": P.sediment_concentration_mgl,
                       "window_s": R.spill_duration_s}).named("sediment"),),

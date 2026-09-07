@@ -123,15 +123,16 @@ def test_a_coupled_reach_submits_the_coupled_modules_steering_too(tmp_path,
     """Each file is read against the dictionary of the module that reads it."""
     from trid3nt_server.workflows.telemac.modules import GAIA, T2D, WAQTEL, fill
 
-    o2 = fill(T2D, coupling=[WAQTEL.o2(water_temp_c=20.0, k1_per_day=0.3,
-                                       k2_per_day=0.9, k2_formula=0,
-                                       saturation_mgl=9.0)])
+    o2 = fill(T2D, coupling=[WAQTEL.o2(
+        water_temp_c=20.0, salinity_ppt=0.0, k1_per_day=0.3, k4_per_day=0.0,
+        k2_per_day=0.9, k2_formula=0, saturation_mgl=9.0, benthic_demand=0.0,
+        photosynthesis_p=0.0, respiration_r=0.0)])
     assert _submitted(monkeypatch, tmp_path / "o2", o2) == {
         "t2d_river.cas": "telemac2d", "t2d_river.waqtel": "waqtel"}
 
     bed = fill(T2D, coupling=[GAIA.erodible(
         geometry="river.slf", boundary="river.cli", d50_um=200.0,
         density=2650.0, thickness_m=5.0, formula=1,
-        morphological_factor=10.0)])
+        morphological_factor=10.0, printouts="B,E", mass_balance=True)])
     assert _submitted(monkeypatch, tmp_path / "sed", bed) == {
         "t2d_river.cas": "telemac2d", "gaia_river.cas": "gaia"}

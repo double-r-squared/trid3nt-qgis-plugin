@@ -496,6 +496,15 @@ package SteeringSurface {
         reads it. A defaults hook here would put an opinion in the one place
         nobody would think to look for one, and it would be inherited by every
         template silently.
+
+        A COUPLED BODY is on the wrapper too, and a constant inside one is the
+        same opinion by a longer route: it is not a class body, so the frozen
+        ASSERTED never sees it, and every template that names the body inherits
+        it. What a coupled body states is what its caller handed in. The only
+        values it may repeat across two calls sharing no argument are the file
+        the wrapper names, the transport mode the body IS, a slot the dictionary
+        states no default for, and the dictionary's own default at this body's
+        own class count.
         */
     }
 
@@ -701,6 +710,8 @@ package SteeringSurface {
         "tests/test_telemac_module_surface.py::test_a_wrapper_asserts_nothing_and_has_no_hook_to";
     verify requirement WrapperHasNoOpinion by
         "tests/test_telemac_module_surface.py::test_a_wrapper_is_a_declaration_and_refuses_to_be_a_value";
+    verify requirement WrapperHasNoOpinion by
+        "tests/test_telemac_module_surface.py::test_a_coupled_body_states_only_what_its_caller_handed_it";
 
     satisfy requirement EverythingOverridable by wrapper;
     satisfy requirement EverythingOverridable by sheet;

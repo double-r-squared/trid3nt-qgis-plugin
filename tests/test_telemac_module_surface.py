@@ -676,11 +676,104 @@ def test_a_coupling_states_only_what_the_carrier_names_it_by():
         "COEFFICIENT_1_FOR_LAW_OF_TRACERS_DEGRADATION": [2.0]}
 
 
+#: Two calls of every coupled body, with no argument value shared between them.
+#: A slot that comes back the SAME from both is a value the caller did not hand
+#: in, which is the wrapper speaking for itself.
+_COUPLED_CALLS = {
+    ("waqtel", "decay"): ({"law": 1, "coefficient": 0.2},
+                          {"law": 2, "coefficient": 0.7}),
+    ("waqtel", "o2"): (
+        {"water_temp_c": 20.0, "salinity_ppt": 0.0, "k1_per_day": 0.3,
+         "k4_per_day": 0.0, "k2_per_day": 0.9, "k2_formula": 0,
+         "saturation_mgl": 9.0, "benthic_demand": 0.0, "photosynthesis_p": 0.0,
+         "respiration_r": 0.0},
+        {"water_temp_c": 11.5, "salinity_ppt": 33.0, "k1_per_day": 0.44,
+         "k4_per_day": 0.35, "k2_per_day": 1.7, "k2_formula": 2,
+         "saturation_mgl": 11.2, "benthic_demand": 0.1,
+         "photosynthesis_p": 1.0, "respiration_r": 0.06}),
+    ("gaia", "graded"): (
+        {"geometry": "a.slf", "boundary": "a.cli",
+         "classes": [(63.0, 0.4), (200.0, 0.6)], "density": 2650.0,
+         "thickness_m": 5.0, "formula": 1, "hiding_factor_formula": 1,
+         "morphological_factor": 10.0, "printouts": "B,E,D50",
+         "mass_balance": True},
+        {"geometry": "b.slf", "boundary": "b.cli",
+         "classes": [(90.0, 0.5), (400.0, 0.3), (900.0, 0.2)],
+         "density": 2400.0, "thickness_m": 1.5, "formula": 3,
+         "hiding_factor_formula": 0, "morphological_factor": 4.0,
+         "printouts": "B,E", "mass_balance": False}),
+    ("gaia", "erodible"): (
+        {"geometry": "a.slf", "boundary": "a.cli", "d50_um": 200.0,
+         "density": 2650.0, "thickness_m": 5.0, "formula": 1,
+         "morphological_factor": 10.0, "printouts": "B,E",
+         "mass_balance": True},
+        {"geometry": "b.slf", "boundary": "b.cli", "d50_um": 90.0,
+         "density": 2400.0, "thickness_m": 1.5, "formula": 3,
+         "morphological_factor": 4.0, "printouts": "B,E,D50",
+         "mass_balance": False}),
+    ("gaia", "suspended"): (
+        {"geometry": "a.slf", "boundary": "a.cli", "d50_um": 30.0,
+         "density": 2650.0, "concentration_kgm3": 0.25, "transport_formula": 3,
+         "advection_scheme": [1], "printouts": "B,E", "mass_balance": True},
+        {"geometry": "b.slf", "boundary": "b.cli", "d50_um": 12.0,
+         "density": 2400.0, "concentration_kgm3": 0.75, "transport_formula": 2,
+         "advection_scheme": [5], "printouts": "B,E,D50",
+         "mass_balance": False}),
+}
+
+#: The two keywords a sediment body ARMS by being the body it is: a shape named
+#: for bedload that did not arm bedload would be a shape that does nothing.
+_TRANSPORT_ARMING = ("BED_LOAD_FOR_ALL_SANDS", "SUSPENSION_FOR_ALL_SANDS")
+
+
+def test_a_coupled_body_states_only_what_its_caller_handed_it():
+    """A coupled body is on the WRAPPER, so a constant inside one is a wrapper
+    opinion that reaches every template naming the body - and ASSERTED, which is
+    a class body, never sees it. Called twice with no argument in common, the
+    only values allowed to repeat are the file the wrapper names, the transport
+    mode the body IS, a slot the dictionary states no default for, and the
+    dictionary's own default at this body's class count."""
+    from trid3nt_server.workflows.telemac.modules import WRAPPERS
+
+    opinions = []
+    for (module, body), (first, second) in _COUPLED_CALLS.items():
+        wrapper = WRAPPERS[module]
+        catalog = load_catalog(module)
+        one = dict(getattr(wrapper, body)(**first)["slots"])
+        two = dict(getattr(wrapper, body)(**second)["slots"])
+        shared = ({_hashable(v) for v in first.values()}
+                  & {_hashable(v) for v in second.values()})
+        assert not shared, f"{module}.{body} calls share {shared}"
+        for identifier, value in one.items():
+            slot = catalog.get(identifier)
+            if slot is None or _hashable(value) != _hashable(two.get(identifier)):
+                continue
+            if slot.is_file or identifier in _TRANSPORT_ARMING:
+                continue
+            if slot.engine_default is UNSET or slot.engine_default is None:
+                continue
+            if (isinstance(value, list) and isinstance(slot.engine_default, list)
+                    and value == list(slot.engine_default)[:len(value)]):
+                continue
+            opinions.append(f"{module}.{body} states {slot.keyword} = {value!r}")
+    assert not opinions, (
+        "a coupled body speaks for itself; hand the value in from the template "
+        "that wants it: " + "; ".join(opinions))
+
+
+def _hashable(value):
+    if isinstance(value, (list, tuple)):
+        return tuple(_hashable(item) for item in value)
+    return value
+
+
 def test_a_coupled_body_is_checked_against_its_own_module_s_dictionary():
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
-    body = WAQTEL.o2(water_temp_c=20.0, k1_per_day=0.3, k2_per_day=0.9,
-                     k2_formula=0, saturation_mgl=9.0)
+    body = WAQTEL.o2(water_temp_c=20.0, salinity_ppt=0.0, k1_per_day=0.3,
+                     k4_per_day=0.0, k2_per_day=0.9, k2_formula=0,
+                     saturation_mgl=9.0, benthic_demand=0.0,
+                     photosynthesis_p=0.0, respiration_r=0.0)
     sheet = fill(WAQTEL, **dict(body["slots"]))
     assert dict(sheet.resolved())["O2 SATURATION DENSITY OF WATER (CS)"] == 9.0
     with pytest.raises(SlotRefused, match="is REAL"):
@@ -695,7 +788,8 @@ def test_the_gaia_classes_lists_are_four_of_one_length():
     body = GAIA.graded(geometry="river.slf", boundary="river.cli",
                        classes=[(63.0, 0.4), (200.0, 0.35), (600.0, 0.25)],
                        density=2650.0, thickness_m=5.0, formula=1,
-                       morphological_factor=10.0)
+                       hiding_factor_formula=1, morphological_factor=10.0,
+                       printouts="B,E,D50", mass_balance=True)
     slots = dict(body["slots"])
     assert {len(slots[k]) for k in (
         "CLASSES_TYPE_OF_SEDIMENT", "CLASSES_SEDIMENT_DIAMETERS",
@@ -714,6 +808,7 @@ def test_dredging_names_every_nestor_file_or_none_of_them():
     body = GAIA.erodible(geometry="river.slf", boundary="river.cli",
                          d50_um=200.0, density=2650.0, thickness_m=5.0,
                          formula=1, morphological_factor=10.0,
+                         printouts="B,E", mass_balance=True,
                          dredging=Dredging(action="A", polygon="P",
                                            surface_ref="R"))
     sheet = fill(GAIA, **dict(body["slots"]))
@@ -723,7 +818,8 @@ def test_dredging_names_every_nestor_file_or_none_of_them():
     plain = fill(GAIA, **dict(GAIA.erodible(
         geometry="river.slf", boundary="river.cli", d50_um=200.0,
         density=2650.0, thickness_m=5.0, formula=1,
-        morphological_factor=10.0)["slots"]))
+        morphological_factor=10.0, printouts="B,E",
+        mass_balance=True)["slots"]))
     assert "NESTOR" not in dict(plain.resolved())
     assert not plain.files
 

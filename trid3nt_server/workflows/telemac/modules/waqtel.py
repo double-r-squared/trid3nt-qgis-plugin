@@ -5,10 +5,10 @@ template names one of the bodies here; the body's slots serialize into WAQTEL's
 own steering file, and the carrier's COUPLING WITH, WAQTEL STEERING FILE and
 WATER QUALITY PROCESS land on the carrier's sheet where the engine reads them.
 
-The bodies assert what the PROCESS needs stated and nothing else. Every keyword
-they leave unsaid is the dictionary's default, which is the wrapper's whole
-position - a body that restated a default would be an opinion wearing a
-requirement's clothes.
+A body here states only what its CALLER handed it. Every keyword it leaves
+unsaid is the dictionary's default, which is the wrapper's whole position - a
+constant written in here would be an opinion wearing a requirement's clothes,
+and it would reach every template that ever names the body.
 
 WAQTEL binds no OUTPUTS. It writes no result file of its own: the oxygen and the
 organic load are tracers on the carrier's result, read by the carrier's reader,
@@ -45,26 +45,32 @@ class _Waqtel(Module("waqtel")):  # type: ignore[misc]
                      COEFFICIENT_1_FOR_LAW_OF_TRACERS_DEGRADATION=[coefficient])
 
     @classmethod
-    def o2(cls, *, water_temp_c: Any, k1_per_day: Any, k2_per_day: Any,
-           k2_formula: Any, saturation_mgl: Any) -> Mapping[str, Any]:
-        """The dissolved-oxygen SAG (process 2) - the Streeter-Phelps pair.
+    def o2(cls, *, water_temp_c: Any, salinity_ppt: Any, k1_per_day: Any,
+           k4_per_day: Any, k2_per_day: Any, k2_formula: Any,
+           saturation_mgl: Any, benthic_demand: Any, photosynthesis_p: Any,
+           respiration_r: Any) -> Mapping[str, Any]:
+        """The dissolved-oxygen balance (process 2), as the caller states it.
 
-        Deoxygenation balanced by surface reaeration, and nothing else: the
-        eutrophication and benthic sources are zeroed and nitrification is off,
-        so the modelled curve is the closed form the question is asked against.
-        A zero formula for K2 reads the constant reaeration coefficient instead
-        of computing one from the modelled velocity and depth, and a zero formula
-        for CS reads the constant saturation stated here.
+        Every term the process reads is an argument: the water it runs in, the
+        two Streeter-Phelps rates and the formula K2 is read under, the
+        saturation the deficit is measured against, and the three sources -
+        nitrification, benthic demand, photosynthesis less respiration - a
+        template either asks for or zeroes. Which of them this run is about is
+        the template's statement, not this wrapper's.
+
+        FORMULA FOR COMPUTING CS is left unwritten, so the dictionary's own
+        reads the constant saturation the caller states rather than computing
+        one.
         """
         return _body(
-            2, WATER_TEMPERATURE=water_temp_c, WATER_SALINITY=0.0,
+            2, WATER_TEMPERATURE=water_temp_c, WATER_SALINITY=salinity_ppt,
             CONSTANT_OF_DEGRADATION_OF_ORGANIC_LOAD_K1=k1_per_day,
-            CONSTANT_OF_NITRIFICATION_KINETIC_K4=0.0,
+            CONSTANT_OF_NITRIFICATION_KINETIC_K4=k4_per_day,
             FORMULA_FOR_COMPUTING_K2=k2_formula,
             K2_REAERATION_COEFFICIENT=k2_per_day,
-            FORMULA_FOR_COMPUTING_CS=0,
             O2_SATURATION_DENSITY_OF_WATER__CS_=saturation_mgl,
-            BENTHIC_DEMAND=0.0, PHOTOSYNTHESIS_P=0.0, VEGETAL_RESPIRATION_R=0.0)
+            BENTHIC_DEMAND=benthic_demand, PHOTOSYNTHESIS_P=photosynthesis_p,
+            VEGETAL_RESPIRATION_R=respiration_r)
 
 
 def _body(process: int, **slots: Any) -> Mapping[str, Any]:

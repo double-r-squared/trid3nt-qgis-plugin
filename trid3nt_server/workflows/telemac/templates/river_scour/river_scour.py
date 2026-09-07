@@ -78,6 +78,11 @@ _DREDGE_END_FRAC = 0.95
 _DREDGE_RATE_M_PER_S = 5.0e-4
 
 
+#: The variables GAIA prints, as the two shapes of this question read them.
+_PRINTOUTS = "B,E"
+_MIXTURE_PRINTOUTS = "B,E,D50"
+
+
 class _OWN:
     """What this question reads past the reach chain every river run reads."""
 
@@ -230,7 +235,19 @@ telemac_river_scour = register_workflow(
             gradation=P.sediment_gradation, grain_size_um=P.grain_size_um,
             bed_thickness_m=P.bed_thickness_m,
             bedload_formula=P.bedload_formula,
+            # The classes of a MIXTURE shelter each other, and formula 1 is the
+            # engine's own Egiazaroff hiding factor; a single class hides behind
+            # nothing and never reads it.
+            hiding_factor_formula=1,
             morphological_factor=P.morphological_factor,
+            # What this question reads off GAIA's own result: the bed evolution
+            # and the erosion/deposition split. A sorted mixture additionally
+            # prints the SURFACE D50 the grading answer is measured from, which a
+            # single class has none of.
+            printouts=_PRINTOUTS, mixture_printouts=_MIXTURE_PRINTOUTS,
+            # The listing's own sediment balance, which the deposited-mass answer
+            # is read from.
+            mass_balance=True,
             settled=Ref("settled"),
             injected={"q_m3s": R.source_q_m3s,
                       "concentration_mgl": P.tracer_concentration_mgl,

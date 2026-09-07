@@ -198,8 +198,9 @@ async def resolve_decay(*, substance: Any, half_life_hours: float | None,
 
 def SedimentBed(*, gradation: Any, grain_size_um: Any,  # noqa: N802
                 bed_thickness_m: Any, bedload_formula: Any,
-                morphological_factor: Any, settled: Any,
-                injected: Any) -> Step:
+                hiding_factor_formula: Any, morphological_factor: Any,
+                printouts: Any, mixture_printouts: Any, mass_balance: Any,
+                settled: Any, injected: Any) -> Step:
     """The erodible bed this run scours, in the shape the ask carried.
 
     It reads the SETTLED run rather than the dredge fields inside it: whether a
@@ -210,13 +211,20 @@ def SedimentBed(*, gradation: Any, grain_size_um: Any,  # noqa: N802
                 kwargs={"gradation": gradation, "grain_size_um": grain_size_um,
                         "bed_thickness_m": bed_thickness_m,
                         "bedload_formula": bedload_formula,
+                        "hiding_factor_formula": hiding_factor_formula,
                         "morphological_factor": morphological_factor,
+                        "printouts": printouts,
+                        "mixture_printouts": mixture_printouts,
+                        "mass_balance": mass_balance,
                         "settled": settled, "injected": injected})
 
 
 async def resolve_sediment_bed(*, gradation: Any, grain_size_um: float,
                                bed_thickness_m: float, bedload_formula: int,
+                               hiding_factor_formula: int,
                                morphological_factor: float,
+                               printouts: str, mixture_printouts: str,
+                               mass_balance: bool,
                                settled: dict[str, Any], injected: dict[str, Any]
                                ) -> dict[str, Any]:
     """The GAIA body the bed is solved as -> the coupling and what it injected.
@@ -239,9 +247,12 @@ async def resolve_sediment_bed(*, gradation: Any, grain_size_um: float,
                   thickness_m=max(float(bed_thickness_m), 0.01),
                   formula=int(bedload_formula),
                   morphological_factor=max(float(morphological_factor), 1.0),
-                  dredging=dig)
-    body = (GAIA.graded(classes=[(um, fr) for um, fr in classes], **common)
-            if classes else GAIA.erodible(d50_um=float(grain_size_um), **common))
+                  mass_balance=bool(mass_balance), dredging=dig)
+    body = (GAIA.graded(classes=[(um, fr) for um, fr in classes],
+                        hiding_factor_formula=int(hiding_factor_formula),
+                        printouts=str(mixture_printouts), **common)
+            if classes else GAIA.erodible(d50_um=float(grain_size_um),
+                                          printouts=str(printouts), **common))
     logger.info("telemac sediment bed: %s classes, dredging=%s",
                 len(classes) if classes else 1, dig is not None)
     return {"coupling": [body], "n_classes": len(classes) if classes else 1,
@@ -249,16 +260,23 @@ async def resolve_sediment_bed(*, gradation: Any, grain_size_um: float,
 
 
 def SuspendedClass(*, grain_size_um: Any, concentration_mgl: Any,  # noqa: N802
-                   injected: Any) -> Step:
+                   transport_formula: Any, advection_scheme: Any,
+                   printouts: Any, mass_balance: Any, injected: Any) -> Step:
     """The one settling class this run carries over a bed with no stock."""
     return Step(runner=f"{_HELPERS}.substance.resolve_suspended_class", stage="prep",
                 kwargs={"grain_size_um": grain_size_um,
                         "concentration_mgl": concentration_mgl,
+                        "transport_formula": transport_formula,
+                        "advection_scheme": advection_scheme,
+                        "printouts": printouts, "mass_balance": mass_balance,
                         "injected": injected})
 
 
 async def resolve_suspended_class(*, grain_size_um: float,
                                   concentration_mgl: float,
+                                  transport_formula: int,
+                                  advection_scheme: Any, printouts: str,
+                                  mass_balance: bool,
                                   injected: dict[str, Any]) -> dict[str, Any]:
     """The GAIA suspension body -> the coupling and what it injected."""
     from trid3nt_server.workflows.telemac.modules import GAIA
@@ -266,7 +284,10 @@ async def resolve_suspended_class(*, grain_size_um: float,
     body = GAIA.suspended(
         geometry="river.slf", boundary="river.cli",
         d50_um=float(grain_size_um), density=SEDIMENT_DENSITY_KGM3,
-        concentration_kgm3=max(float(concentration_mgl) * _MGL_TO_KGM3, 0.0))
+        concentration_kgm3=max(float(concentration_mgl) * _MGL_TO_KGM3, 0.0),
+        transport_formula=int(transport_formula),
+        advection_scheme=[int(v) for v in advection_scheme],
+        printouts=str(printouts), mass_balance=bool(mass_balance))
     return {"coupling": [body], "n_classes": 1,
             "injected_kg": _injected_kg(injected)}
 

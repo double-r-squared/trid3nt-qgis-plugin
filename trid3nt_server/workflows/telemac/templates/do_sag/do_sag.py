@@ -90,12 +90,19 @@ class STEERING(T2D):
                         window_s=None, until_s=Ref("settled.until_s"))]
 
     #: Deoxygenation balanced by surface reaeration, and nothing else: the
-    #: modelled curve is the closed form the question is asked against.
+    #: modelled curve is the closed form the question is asked against, so this
+    #: run states FRESH water and zeroes the three sources the closed form has
+    #: no term for - nitrification, benthic demand, and photosynthesis less
+    #: respiration.
     coupling = [WAQTEL.o2(water_temp_c=Ref("waqtel.water_temp_c"),
+                          salinity_ppt=0.0,
                           k1_per_day=Ref("waqtel.k1_per_day"),
+                          k4_per_day=0.0,
                           k2_per_day=Ref("waqtel.k2_per_day"),
                           k2_formula=Ref("waqtel.k2_formula"),
-                          saturation_mgl=Ref("waqtel.saturation_mgl"))]
+                          saturation_mgl=Ref("waqtel.saturation_mgl"),
+                          benthic_demand=0.0, photosynthesis_p=0.0,
+                          respiration_r=0.0)]
 
 
 #: The run's ANSWER, as the numbers a reader has to be able to check. Persisted
