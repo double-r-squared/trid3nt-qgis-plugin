@@ -132,6 +132,12 @@ def fill(source: type | Sheet, *, produced: Mapping[str, Any] | None = None,
     filled = dict(standing)
     files: dict[str, Any] = dict(source.files) if isinstance(source, Sheet) else {}
     for name, (value, provenance) in _in_ref_order(pending):
+        if _measured(value) and provenance != "fill":
+            # A template states WHICH measurement this slot takes; the number
+            # itself is the accepted artifact's - the boundary walk, the normal
+            # depth, the time step the mesh's own CFL allows. Badging it
+            # "template" would hide that nobody wrote it down.
+            provenance = "derived"
         value = _bind(value, produced or {}, params or {}, filled)
         if value is None:
             # NOTHING is what None states. No keyword's value is None, so the
@@ -204,6 +210,18 @@ def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],
                                         provenance=provenance)
                 pending.pop(name, None)
     return source, standing, pending
+
+
+def _measured(value: Any) -> bool:
+    """Is this assertion a read of something the run MEASURED?
+
+    A ``Ref`` names a producer's result or a slot already resolved, so what it
+    resolves to was measured off the accepted artifact rather than written by an
+    author. A ``ParamRef`` is the invocation's own answer and is not this.
+    """
+    for _found in declared_reads(value, Ref):
+        return True
+    return False
 
 
 def _late(value: Any) -> bool:

@@ -254,6 +254,41 @@ def test_a_composed_slot_says_which_part_asserted_it():
     assert rows["DURATION"]["provenance"] == "template"
 
 
+def test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it():
+    """A body states WHICH measurement a slot takes; the number is the accepted
+    artifact's. Badging it template or part would say an author wrote a value
+    nobody wrote down - the boundary walk, the normal depth, the CFL time step
+    and the stage-discharge curve are all measured, and the card has to say so.
+    A declared PARAM is not this: it is the invocation's own answer."""
+    class RIVER(T2D):
+        TIDAL_FLATS = Ref("settled.tidal_flats")
+
+    class DYE(T2D):
+        parts = [RIVER]
+        TIME_STEP = Ref("settled.time_step_s")
+        DURATION = ParamRef("sim_duration_s")
+        SOLVER = 1
+
+    rows = fill(DYE, produced={"settled": {"tidal_flats": True,
+                                           "time_step_s": 2.5}},
+                params={"sim_duration_s": 600.0}).state()["filled"]
+    assert rows["TIDAL_FLATS"]["provenance"] == "derived"
+    assert rows["TIME_STEP"]["provenance"] == "derived"
+    assert rows["DURATION"]["provenance"] == "template"
+    assert rows["SOLVER"]["provenance"] == "template"
+
+
+def test_a_measured_value_a_fill_overrides_still_reads_as_the_users():
+    """The user's own edit beats the measurement, and the badge says the user."""
+    class DYE(T2D):
+        TIME_STEP = Ref("settled.time_step_s")
+
+    sheet = fill(DYE, produced={"settled": {"time_step_s": 2.5}})
+    assert sheet.state()["filled"]["TIME_STEP"]["provenance"] == "derived"
+    edited = fill(sheet, TIME_STEP=1.0).state()["filled"]["TIME_STEP"]
+    assert edited["value"] == 1.0 and edited["provenance"] == "fill"
+
+
 def test_the_parts_merge_in_the_listed_order():
     class RIVER(T2D):
         SOLVER = 1

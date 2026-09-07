@@ -581,6 +581,26 @@ package SteeringSurface {
         */
     }
 
+    requirement def ProvenanceNamesTheLayerThatAnswered {
+        doc /*
+        RULING 2026-09-06 (docs/IDEAS.md, "CONFORMANCE RULINGS": D2, a derived
+        provenance badge): a filled slot says which of the six layers answered
+        it. Engine default is ABSENCE - the slot is not on the sheet at all and
+        the card badges it under the advanced fold. The other five are on the
+        row: a shared body names itself, a template names itself, a fill names
+        the user, a composite names the producer that expanded it, and a value
+        the RUN MEASURED reads DERIVED.
+
+        Derived is not the same statement as template. A body states WHICH
+        measurement a slot takes - the boundary walk the accepted mesh reported,
+        the normal depth of the reach, the time step the mesh's own CFL allows,
+        the stage-discharge curve fitted to the outlet - and the number itself
+        is the artifact's. Badging it template would say an author wrote a value
+        nobody wrote down. A declared PARAM is the invocation's own answer and
+        stays the template's.
+        */
+    }
+
     requirement def BodiesAreStatic {
         doc /*
         A body reads no value a fill produced. Its assertions are data, fixed
@@ -803,6 +823,15 @@ package SteeringSurface {
     verify requirement CompositionNotInheritance by
         "tests/test_telemac_module_surface.py::test_a_keyword_two_parts_both_set_refuses_unless_the_template_settles_it";
     verify requirement CompositionNotInheritance by
+        "tests/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
+
+    satisfy requirement ProvenanceNamesTheLayerThatAnswered by sheet;
+    satisfy requirement ProvenanceNamesTheLayerThatAnswered by door;
+    verify requirement ProvenanceNamesTheLayerThatAnswered by
+        "tests/test_telemac_module_surface.py::test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it";
+    verify requirement ProvenanceNamesTheLayerThatAnswered by
+        "tests/test_telemac_module_surface.py::test_a_measured_value_a_fill_overrides_still_reads_as_the_users";
+    verify requirement ProvenanceNamesTheLayerThatAnswered by
         "tests/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
 
     satisfy requirement BodiesAreStatic by sheet;

@@ -11,7 +11,10 @@ A class body extending a wrapper asserts raw keywords under the identifiers the
 image itself spells them by. A keyword the module does not have, and a value the
 dictionary does not take, refuse BY NAME at import; the sheet the body fills
 records per slot WHERE its value came from, so nothing composed or derived hides
-behind a number.
+behind a number. Six layers can answer, and the badge names which: the engine
+default by ABSENCE, then a part, the template, a producer a composite expanded,
+the user's own fill - and `derived`, for a value the run MEASURED off the
+accepted artifact where the body only named which measurement to take.
 
 A COMPOSITE expands one value into the keywords that value IS: the arming
 keyword its input implies, the slots its value literally fills, the file it
