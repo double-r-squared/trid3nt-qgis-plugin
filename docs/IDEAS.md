@@ -3809,3 +3809,37 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   data assumed true; no threshold on values; the rim gets its real
   water. The 46 zero-depth rim nodes were the chart datum, not a
   coverage gap (the survey covers 100% of the water).
+
+- MODULE SURFACE WAVE CLOSED (2026-09-07, re-verifier VERDICT CLEAN at
+  42b9795e/f594a08b): the catalog (six dicos, drift-audited), opinion-
+  free wrappers (catalog + composites + outputs), eight static templates
+  by composition (river_dye, river_oil_spill, river_scour,
+  river_sediment_plume, do_sag, rain_on_grid, agitation,
+  stratified_flow) over one river part, fill + run + describe_keywords,
+  the serializer over telapy, the plan language gone, the worker
+  authoring nothing, artemis/telemac3d on om2d, the general datum rule,
+  the observed lake level as a DATA row. NINE canaries live with
+  interrogated packets, all DELIVERED. LOC HONEST: -3,777 over the
+  seven named areas against the spec's -7,000..-8,500 - MISSED (~54% of
+  the low end): the interpreter's rerun half survives by ruling, the
+  composites are code moved not deleted, eight templates where the
+  spec counted five. QUEUED from the re-verifier (reported, not fixed):
+  F1 river_oil_spill does not reproduce (100 drogues placed non-
+  deterministically - needs a stated seed or a tolerance, NATE's call);
+  F2 the composite-literal guard misses negative literals (ast.UnaryOp)
+  - mechanical; F3 stratified PACKET_NOTES contradict the run (3000 m /
+  one hour / "calm" vs 32.94 m / five hours / 6 m/s wind) - mechanical;
+  F4 column_heat_drift_frac and boundary_states measured but never
+  persisted - mechanical; F5 the bottom-temperature preset name drifts
+  to "Surface temperature" - mechanical; F6 river_scour's bed panel
+  legends +/-0.84 mm against max_scour 5.21 (a single bullseye, no
+  note) - the one-scale law's honest consequence, note it; F7 kd_max is
+  a seaward-rim standing wave, the sheltering ratio is the answer -
+  packet wording; F8 test_provider_config_empty_values_do_not_clobber
+  reads ambient env (not hermetic) - mechanical; F9 the canvas frames
+  the whole lake (global-bbox policy, pre-existing). Also still open
+  for NATE: the NESTOR profile fence on meandering reaches; short-run
+  GAIA deposition printing zero; the cold-start geopandas import race;
+  TRID3NT_GSHHG_SHP in .env.local; the bathymetry coverage-map concept
+  (REANALYZE_LEDGER); TOMAWAC at the rung-4 rematch; pyEMU calibration
+  spec (three questions pending).
