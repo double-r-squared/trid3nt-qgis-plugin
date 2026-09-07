@@ -3767,3 +3767,31 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   sub-subsystem builds a COVERAGE MAP of all recorded bathymetry and
   serves the source an AOI lands inside - "bathymetry is a little more
   tricky", discussion open.
+  CONFORMANCE RULINGS (NATE 2026-09-06, docs/validation/module-surface-
+  conformance.md read; deviations D1-D8): (a) D7 THE TWO-POPULATIONS
+  BED GUARD IS DELETED with its test - the stated datum on the source
+  row is the guard; a mixed raster cannot reach the bed step; the
+  population test guessed wrong about terrain (one outlier node in 907
+  blocked three templates) - REANALYZE_LEDGER entry. (b) D3 A COMPOSITE
+  MAY SET ONLY WHAT ITS VALUE'S PRESENCE DEFINES - the arming keyword
+  its input implies (WIND = YES when wind is given) and the slots its
+  value literally fills; a CHOICE among alternatives (restart format,
+  runoff model, wind option) is a template assertion or the engine
+  default - the three choice literals move out of the carrier
+  composites. (c) D8a ONE NUMBER for "on the structure": the obstacle's
+  half-width defines it for the settle AND the cut; a boundary node is
+  solid exactly when it lies on the punched outline. (d) D8b A WATER
+  DOMAIN IS CLIPPED TO THE BED'S MEASURED FOOTPRINT (the intersection
+  of the water polygon and the bed raster's valid-data footprint,
+  journaled with the clipped area) - a water domain has no bed where
+  nobody measured; the stratified template ASSERTS SCHEME OPTION FOR
+  ADVECTION OF TRACERS with the basis that the dictionary's compiled
+  default (4) is rejected by the engine's own murd3d_pos (1 and 2
+  available). MECHANICAL under existing rulings: D1 the coupled
+  wrappers' opinion values (WAQTEL's five constants, GAIA's printout
+  list) move into template parts; D2 a "derived" provenance badge; D4
+  the substance switch in products/ becomes outputs bindings; D5 the
+  serializer's third caveat (logicals as YES/NO) into the spec; D6
+  three stale FormGate comments; the spec's LOC expectation corrected
+  to the measured -4,267 (rev 1c). The LOC promise was MISSED and is
+  stated as such.

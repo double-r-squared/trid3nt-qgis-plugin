@@ -81,3 +81,22 @@ cover here, and which" - an INDEX problem (a coverage map, ours or an
 existing tool), not a fetcher problem. For now ONE bed source is
 plugged in per template; the coverage-map concept is revisited once
 the module-surface wave completes.
+
+## 2026-09-06 - the two-populations bed guard deleted
+DECIDED: `_refuse_two_datums` (the post-paint heuristic that cut the
+sorted bed at its largest gap and refused "two clouds") is DELETED
+with its test. The stated vertical datum on every bed source row is
+the guard: a raster mixing datums cannot reach the bed step because
+no registered source states two. Evidence: the heuristic refused the
+Scotia reach on ONE node at 44.95 m against 906 at 13.00-26.30 m
+(real high ground the mesh touched), blocking river_oil_spill,
+river_scour and river_sediment_plume; the same reach at 14 m edge
+passed - resolution-dependent. It guessed about terrain and guessed
+wrong; with the datum rule landed it had no remaining job.
+REVISIT TRIGGER: (a) a bed source that states one datum but is
+measured to carry two (a stitched product whose metadata lies) - then
+a population test returns as a MEASURED check with a minimum cloud
+size and a stated gap-to-spread ratio, never as a guess; (b) the
+coverage-map bed subsystem lands and stitches sources - the seam
+between two sources is exactly where a cloud test would fire, so the
+stitch must carry the datum per source, not re-derive it.
