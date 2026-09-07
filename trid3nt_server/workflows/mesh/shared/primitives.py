@@ -85,7 +85,6 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
     if condition:
         raster, provenance = _conditioned(raster, provenance, condition)
     bed = sample_raster_at_nodes(str(raster), lonlat, interp=str(interp))
-    _refuse_two_datums(bed, provenance)
     logger.info("set_bed: %d nodes painted from %s (%s)",
                 bed.shape[0], provenance, interp)
     return _with_meta(
@@ -245,37 +244,6 @@ def _refuse_undated_source(name: str) -> None:
             "counted from is unknown and the bed it would paint cannot be read "
             "against anything. State the datum on the source row from the "
             "dataset's own documentation, or name a source that does.")
-
-
-def _refuse_two_datums(bed: Any, provenance: str) -> None:
-    """One source, one datum: a bed that came back on two REFUSES by name.
-
-    A vertical datum offset is a CONSTANT, so a bed carrying two of them separates
-    into two clouds with nothing between them - a gap wider than the whole spread
-    of the values on either side of it. Real terrain, however steep, fills that
-    space. What is measured and stated is the two populations, because a reader
-    who is told only "the bed is wrong" cannot tell which half is the wrong one.
-    """
-    import numpy as np
-
-    values = np.sort(np.asarray(bed, dtype=float))
-    values = values[np.isfinite(values)]
-    if values.size < 3:
-        return
-    gaps = np.diff(values)
-    cut = int(np.argmax(gaps))
-    low, high = values[:cut + 1], values[cut + 1:]
-    spread = (low[-1] - low[0]) + (high[-1] - high[0])
-    if gaps[cut] <= spread:
-        return
-    raise MeshToolError(
-        "MESH_BED_TWO_DATUMS",
-        f"the bed painted from {provenance} holds two populations: "
-        f"{low.size} node(s) over {low[0]:.2f} m to {low[-1]:.2f} m and "
-        f"{high.size} node(s) over {high[0]:.2f} m to {high[-1]:.2f} m, with "
-        f"{gaps[cut]:.2f} m of nothing between them against {spread:.2f} m of "
-        "spread inside them. One source reads on one vertical datum; this one "
-        "did not.")
 
 
 def _provenance(name: str, layer: Any) -> str:

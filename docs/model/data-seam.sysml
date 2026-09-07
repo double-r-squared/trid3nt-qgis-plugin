@@ -459,11 +459,10 @@ package DataSeam {
         one name, so the row that reads it as a bed pins the ONE product it
         means and states that product's datum.
 
-        The last guard is on the painted bed itself: two vertical references out
-        of one source separate into two clouds with a gap wider than the whole
-        spread of the values on either side of it, and the refusal STATES both
-        populations, because a reader told only that the bed is wrong cannot
-        tell which half is the wrong one.
+        The stated datum is the WHOLE guard. A post-paint population test over
+        the elevations is not one: real terrain puts an outlier as far from its
+        neighbours as a datum offset does, so such a test reads the shape of the
+        ground rather than the reference it is counted from.
 
         The datum rides onto the layer's provenance card beside the acquisition
         instant and the native cell, since a bed the user is shown to refine is
@@ -612,10 +611,6 @@ package DataSeam {
         "tests/test_bathymetry_data_seam.py::test_the_lake_row_pins_one_product_of_the_mixed_mosaic";
     verify requirement OneSourceReadsOnOneStatedDatum by
         "tests/test_mesh_topology_and_bed.py::test_a_source_row_that_states_no_datum_is_not_a_bed";
-    verify requirement OneSourceReadsOnOneStatedDatum by
-        "tests/test_mesh_topology_and_bed.py::test_one_source_reading_on_two_datums_refuses_naming_both_populations";
-    verify requirement OneSourceReadsOnOneStatedDatum by
-        "tests/test_mesh_topology_and_bed.py::test_a_bed_on_one_datum_passes_however_steep_it_is";
     verify requirement OneSourceReadsOnOneStatedDatum by
         "tests/test_mesh_topology_and_bed.py::test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source";
     verify requirement OneSourceReadsOnOneStatedDatum by

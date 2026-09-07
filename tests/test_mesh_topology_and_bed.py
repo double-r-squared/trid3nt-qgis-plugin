@@ -554,24 +554,6 @@ def test_a_source_row_that_states_no_datum_is_not_a_bed():
     P._refuse_undated_source("fetch_topobathy")
 
 
-def test_one_source_reading_on_two_datums_refuses_naming_both_populations():
-    """The Marquette basin, measured: 778 lake-datum depths and 49 shoreline
-    nodes read on the orthometric datum out of ONE mosaic."""
-    bed = np.concatenate([np.linspace(-8.91, -0.10, 778),
-                          np.linspace(178.3, 194.4, 49)])
-    with pytest.raises(MeshToolError) as excinfo:
-        P._refuse_two_datums(bed, "fetch_ncei_dem_mosaic")
-    assert excinfo.value.error_code == "MESH_BED_TWO_DATUMS"
-    said = str(excinfo.value)
-    assert "778 node(s) over -8.91 m to -0.10 m" in said
-    assert "49 node(s) over 178.30 m to 194.40 m" in said
-
-
-def test_a_bed_on_one_datum_passes_however_steep_it_is():
-    P._refuse_two_datums(np.linspace(-8.98, 0.0, 827), "one datum")
-    P._refuse_two_datums(np.linspace(-400.0, 320.0, 5000), "a whole valley")
-
-
 def test_a_fetch_that_measured_nothing_still_says_so():
     empty = {"uri": "s3://b/x.tif", "fallbacks": [], "fallback_note": None}
     assert "UNMEASURED" in P._provenance("fetch_topobathy", empty)
