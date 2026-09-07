@@ -3795,3 +3795,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   three stale FormGate comments; the spec's LOC expectation corrected
   to the measured -4,267 (rev 1c). The LOC promise was MISSED and is
   stated as such.
+  REMEDY RULINGS (NATE 2026-09-06): (a) "ON THE STRUCTURE" RATIFIED as
+  landed - one number the user sets (the obstacle half-width) measured
+  to the accepted mesh's own placement precision (its edge length, a
+  property of the mesh, not a second tolerance); boundary roles settle
+  as contiguous runs (FRONT2's own rule); the previously green om2d
+  harbour run had solved with the breakwater as ABSORBING shore (zero
+  structure nodes matched) - both arms now reflect (clapotis visible).
+  (b) LAKE LEVEL - the stratified template sets INITIAL ELEVATION from
+  the OBSERVED lake level: a fetched DATA row (NOAA CO-OPS Great Lakes
+  water-level gauges publish relative to the same chart datum the
+  bathymetry uses) at the event time, as discharge does for a river;
+  data assumed true; no threshold on values; the rim gets its real
+  water. The 46 zero-depth rim nodes were the chart datum, not a
+  coverage gap (the survey covers 100% of the water).
