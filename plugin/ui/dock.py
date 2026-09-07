@@ -2406,8 +2406,8 @@ class Trid3ntDock(QDockWidget):
             )
             return
         # One envelope, two renderers, chosen by what the payload CARRIES: a
-        # declared FormGate sends a param sheet, and a sheet is an editable
-        # property grid, not a paragraph of provenance text.
+        # param sheet is an editable property grid, not a paragraph of
+        # provenance text.
         sheet = gate.parse_param_sheet(payload)
         if sheet is not None:
             card = FormCard(warning, sheet, self._on_gate_decision)

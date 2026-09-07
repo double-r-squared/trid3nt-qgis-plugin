@@ -160,7 +160,7 @@ def parse_payload_warning(payload: dict) -> Optional[PayloadWarning]:
 
 
 # --------------------------------------------------------------------------- #
-# The param SHEET -- the declarative FormGate's card.
+# The param SHEET -- the card an input review is rendered as.
 # --------------------------------------------------------------------------- #
 #
 # Contract source of truth (mirrored EXACTLY, not paraphrased):

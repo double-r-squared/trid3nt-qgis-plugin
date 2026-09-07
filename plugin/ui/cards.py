@@ -267,8 +267,8 @@ _SPATIAL_PICK_LABEL = {
     "polyline": "Draw a line on the map",
 }
 
-#: The FORM card (the declarative FormGate's param sheet). Its own accent so an
-#: input REVIEW never reads as the amber payload/resolution gate beside it.
+#: The FORM card, which renders a param sheet. Its own accent so an input
+#: REVIEW never reads as the amber payload/resolution gate beside it.
 _FORM_CARD_STYLE = (
     "QFrame#formcard { border: 1px solid #a78bfa; border-radius: 8px; "
     "background-color: rgba(167, 139, 250, 7%); }"

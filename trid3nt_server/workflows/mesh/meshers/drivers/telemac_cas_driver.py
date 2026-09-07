@@ -16,13 +16,15 @@ Two config keys, either or both:
              file carrying the keyword count it parsed, or the parse error and
              the keyword it names.
 
-``TelemacCas`` is the only writer of the steering format, and two measured
-caveats are handled around it. A file keyword is assigned through ``values``
-because telapy's ``set()`` demands the file already exist. And a string is
-handed over as :class:`_EngineString`, whose ``repr`` is the form DAMOCLES
-reads: Python's own repr switches to a double-quote delimiter as soon as the
-value holds an apostrophe, and a double-quoted string derails the parse on the
-first space inside it.
+``TelemacCas`` is the only writer of the steering format, and three measured
+caveats are handled around it, here and nowhere else. A FILE keyword is assigned
+through ``values`` because telapy's ``set()`` demands the file already exist. A
+STRING is handed over as :class:`_EngineString`, whose ``repr`` is the form
+DAMOCLES reads: Python's own repr switches to a double-quote delimiter as soon
+as the value holds an apostrophe, and a double-quoted string derails the parse
+on the first space inside it. A LOGICAL is handed over as
+:class:`_EngineLogical`, because telapy formats every value with ``repr`` and
+``repr(True)`` is ``True``, which the dictionary reader does not answer to.
 
 The parse runs with the file existence check OFF. A steering file is validated at
 AUTHORING time, before anything is staged, so the geometry and boundary files it
