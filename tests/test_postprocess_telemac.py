@@ -51,6 +51,53 @@ def test_the_peak_layer_handle_carries_the_product_that_wrote_it():
     assert not any(" " in handle for handle in handles)
 
 
+def _reach_result(telemac_result, varnames, fields):
+    """A tiny solved reach: one cluster of wet nodes, two frames."""
+    x = [0.0, 120.0, 0.0, 120.0, 60.0]
+    y = [0.0, 0.0, 110.0, 110.0, 55.0]
+    ikle = [[0, 1, 4], [1, 3, 4], [2, 3, 4], [0, 2, 4]]
+    depth = np.full(5, 2.0)
+    data = {"WATER DEPTH": [depth, depth],
+            **{name: [np.asarray(f, dtype=float), np.asarray(f, dtype=float)]
+               for name, f in fields.items()}}
+    return telemac_result(varnames=["WATER DEPTH", *varnames], x=x, y=y,
+                          ikle=ikle, times=[0.0, 60.0], data=data)
+
+
+def _postprocessed(monkeypatch, tmp_path, telemac_result, *, product,
+                   varnames, fields):
+    from trid3nt_server.workflows.shared import cog_io
+
+    _reach_result(telemac_result, varnames, fields)
+    monkeypatch.setattr(cog_io, "upload_cog",
+                        lambda *a, **k: "s3://runs/RID/peak.tif")
+    return P.postprocess_telemac(
+        tmp_path / "r2d_river.slf", run_id="TESTPP0000000000000000AAA",
+        utm_epsg=32610, reach_name="a reach", product=product)
+
+
+def test_the_product_picks_the_tracer_and_the_units_it_is_carried_in(
+        monkeypatch, tmp_path, telemac_result):
+    """A GAIA coupled run writes the suspended load as a SECOND tracer beside the
+    dye companion, in g/l where the dye and the whole surface speak mg/L. The
+    product says which variable its field lands in, so the reader picks that one
+    and scales it - a silent 1000x otherwise passes every structural check."""
+    from trid3nt_contracts.telemac_contracts import TELEMAC_SUBSTANCE_PRODUCTS as T
+
+    fields = {"DYE": np.full(5, 4.0), "NCOH SEDIMENT1": np.full(5, 0.25)}
+    dye, _ = _postprocessed(monkeypatch, tmp_path, telemac_result,
+                            product=T["tracer"], varnames=list(fields),
+                            fields=fields)
+    sediment, _ = _postprocessed(monkeypatch, tmp_path, telemac_result,
+                                 product=T["sediment"], varnames=list(fields),
+                                 fields=fields)
+    assert dye[0].dye_cmax_mgl == pytest.approx(4.0)
+    assert dye[0].quantity == "dye_concentration"
+    assert sediment[0].dye_cmax_mgl == pytest.approx(250.0)   # 0.25 g/l -> mg/L
+    assert sediment[0].quantity == "suspended_sediment_concentration"
+    assert sediment[0].layer_id != dye[0].layer_id
+
+
 def test_grid_shape_floor_and_aspect():
     # a tiny AOI floors to the minimum per side.
     nrows, ncols = P._grid_shape((-114.31, 42.57, -114.305, 42.575), P.TELEMAC_TARGET_GROUND_RES_M)

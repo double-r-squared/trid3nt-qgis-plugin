@@ -471,7 +471,8 @@ def postprocess_telemac(
     # mg/L (x1000) so the concentration COG + cmax are in mg/L like the dye - a
     # silent 1000x error otherwise passes every structural check.
     _du = dye_var.strip().upper()
-    if _prefer_sed and ("SEDIMENT" in _du or _du.startswith(("NCOH", "COH", "CS"))):
+    if (product.mesh_group != "DYE"
+            and ("SEDIMENT" in _du or _du.startswith(("NCOH", "COH", "CS")))):
         dye = dye * 1000.0
     times = np.asarray(mesh["times"])
     x_utm = np.asarray(mesh["x"])
