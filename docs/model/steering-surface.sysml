@@ -619,6 +619,12 @@ package SteeringSurface {
         fork - so each body states that surface itself rather than letting a
         composite own a carrier slot out of sight. What varies WITHIN one
         question is a composite that states nothing when it is given nothing.
+
+        The rule holds on the READING side too (RULING 2026-09-06, "CONFORMANCE
+        RULINGS": D4). Each template NAMES the reader its question needs, out of
+        the module's own OUTPUTS bindings; a single publisher branching on a
+        substance-class string put the fork back in the products, one level down
+        from where a person reads it.
         */
     }
 
@@ -788,6 +794,10 @@ package SteeringSurface {
         "tests/test_telemac_module_surface.py::test_no_flipped_body_branches_on_anything";
     verify requirement OneTemplatePerQuestion by
         "tests/test_door_dissolution.py::test_all_templates_registered_and_callable";
+    verify requirement OneTemplatePerQuestion by
+        "tests/test_telemac_module_surface.py::test_every_template_names_the_reader_its_own_question_needs";
+    verify requirement OneTemplatePerQuestion by
+        "tests/test_postprocess_telemac.py::test_the_peak_layer_handle_carries_the_product_that_wrote_it";
 
     satisfy requirement ReviewIsTheDoorsView by door;
     verify requirement ReviewIsTheDoorsView by

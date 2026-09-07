@@ -21,7 +21,7 @@ def test_pick_dye_var():
     assert P._pick_dye_var(["VELOCITY U", "WATER DEPTH"]) is None
 
 
-def test_no_substance_class_but_the_dye_one_publishes_a_dye_named_product():
+def test_only_the_dye_product_publishes_a_dye_named_raster():
     """The product's NAME must not assert more than the field carries: an oil run
     advects the same passive tracer a dye run does, and a sediment run's tracer is
     a suspended grain load. Neither may reach the store as ``telemac_dye_peak``."""
@@ -40,13 +40,15 @@ def test_no_substance_class_but_the_dye_one_publishes_a_dye_named_product():
     assert len({(p.style["ramp"], p.style["label"]) for p in T.values()}) == 2
 
 
-def test_the_peak_layer_handle_carries_the_class_that_produced_it():
-    """Two classes on one reach publish different rasters; a shared handle would
+def test_the_peak_layer_handle_carries_the_product_that_wrote_it():
+    """Two questions on one reach publish different rasters; a shared handle would
     register one over the other."""
-    dye = P.peak_layer_id("RID", "tracer")
-    assert dye == P.peak_layer_id("RID", "")           # an unnamed class IS dye
-    assert dye != P.peak_layer_id("RID", "sediment")
-    assert " " not in P.peak_layer_id("RID", "sediment")
+    from trid3nt_contracts.telemac_contracts import TELEMAC_SUBSTANCE_PRODUCTS as T
+
+    handles = {P.peak_layer_id("RID", product) for product in T.values()}
+    assert len(handles) == 3          # tracer and decay publish the one dye field
+    assert P.peak_layer_id("RID", T["tracer"]) != P.peak_layer_id("RID", T["sediment"])
+    assert not any(" " in handle for handle in handles)
 
 
 def test_grid_shape_floor_and_aspect():

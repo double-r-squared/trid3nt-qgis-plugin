@@ -22,7 +22,13 @@ import math
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
-from ..products.products import publish_do_products, publish_dye_products
+from ..products.products import (
+    publish_do_products,
+    publish_dye_products,
+    publish_oil_products,
+    publish_scour_products,
+    publish_sediment_plume_products,
+)
 from ..products.rain_on_grid import publish_rain_on_grid_products
 from .module import Module
 
@@ -491,5 +497,8 @@ T2D.composites(releases=_releases, wind=_wind, continue_from=_continue_from,
                boundaries=_boundaries, runoff=_runoff, friction=_friction,
                rating=_rating, hyetograph=_hyetograph,
                time_origin=_time_origin)
-T2D.outputs(dye=publish_dye_products, dissolved_oxygen=publish_do_products,
+T2D.outputs(dye=publish_dye_products, oil_slick=publish_oil_products,
+            scour=publish_scour_products,
+            sediment_plume=publish_sediment_plume_products,
+            dissolved_oxygen=publish_do_products,
             flood_depth=publish_rain_on_grid_products)

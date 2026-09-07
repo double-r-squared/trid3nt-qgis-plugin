@@ -248,7 +248,7 @@ telemac_do_sag = register_workflow(
         results=(river.RESULT,),
         steering_file=_STEERING_FILE, prefix="telemac",
         dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
-        meta={"substance": "effluent", "substance_class": "do_sag"},
+        meta={"substance": "effluent"},
         read=lambda run: Products.dissolved_oxygen(
             run=run, solve=run, process=Ref("waqtel"),
             carrier_discharge=Ref("carrier_discharge")).named("do_field"),

@@ -865,7 +865,9 @@ def test_every_wrapper_binds_its_own_outputs_and_claims_no_other_s():
     publishes nothing."""
     from trid3nt_server.workflows.telemac.modules import GAIA, WAQTEL
 
-    assert sorted(T2D.OUTPUTS) == ["dissolved_oxygen", "dye", "flood_depth"]
+    assert sorted(T2D.OUTPUTS) == [
+        "dissolved_oxygen", "dye", "flood_depth", "oil_slick", "scour",
+        "sediment_plume"]
     assert sorted(GAIA.OUTPUTS) == ["deposition", "mass_balance", "surface_d50"]
     assert not WAQTEL.OUTPUTS
     for wrapper in (T2D, GAIA, WAQTEL):
@@ -1134,6 +1136,27 @@ def test_every_template_wire_carries_the_raw_keyword_floor():
         plan = entry.fn.workflow.plan
         fill_step = next(s for s in plan.declared() if s.label == "sheet")
         assert fill_step.kwargs["keywords"] is RawKeywords, name
+
+
+def test_every_template_names_the_reader_its_own_question_needs():
+    """The reader is an OUTPUTS binding a template names, never one publisher
+    branching on a class string. Two questions that publish different fields -
+    a dye, a slick, a scoured bed, a deposited plume - name different readers,
+    and the runner each names is the module's own bound output."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    readers = {}
+    for name in _TEMPLATES:
+        door = TOOL_REGISTRY[name].fn.workflow.plan_decl
+        readers[name] = door.read(None).runner
+    assert len(set(readers.values())) == len(readers), readers
+    bound = {f"{fn.__module__}.{fn.__name__}"
+             for wrapper in (T2D,) for fn in
+             (output.read for output in wrapper.OUTPUTS.values())}
+    for name in ("telemac_river_dye", "telemac_river_oil_spill",
+                 "telemac_river_scour", "telemac_river_sediment_plume",
+                 "telemac_do_sag", "telemac_rain_on_grid"):
+        assert readers[name] in bound, f"{name} reads {readers[name]}"
 
 
 def test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots():

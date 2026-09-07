@@ -251,7 +251,7 @@ telemac_river_dye = register_workflow(
         results=(river.RESULT, river.RESTART),
         steering_file=_STEERING_FILE, prefix="telemac",
         dispatch=f"{_SOLVING}.solve_reach", compute_class=S.compute_class,
-        meta={"substance": "dye", "substance_class": "tracer"},
+        meta={"substance": "dye"},
         read=lambda run: Products.dye(
             run=run, solve=run,
             carrier_discharge=Ref("carrier_discharge")).named("plume"),

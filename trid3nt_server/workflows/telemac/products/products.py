@@ -136,13 +136,6 @@ def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
     ]
 
 
-def _substance_product(substance_class: str) -> SubstanceProduct:
-    """The declared class's transported-field product; the dye row when unnamed."""
-    return TELEMAC_SUBSTANCE_PRODUCTS.get(
-        str(substance_class or "tracer").lower(),
-        TELEMAC_SUBSTANCE_PRODUCTS["tracer"])
-
-
 def _honesty_note(location_name: str, substance: str) -> str:
     surrogate = ""
     if substance and substance != "dye":
@@ -163,7 +156,7 @@ def _honesty_note(location_name: str, substance: str) -> str:
 
 def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
                         location_name: str, mesh_meta: dict[str, Any],
-                        substance: str, substance_class: str,
+                        substance: str, product: SubstanceProduct,
                         synthetic_inputs: list[SyntheticInput]) -> TelemacDyeLayerURI:
     """Publish the peak COG through the one styling chokepoint and enrich narration.
 
@@ -177,8 +170,8 @@ def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
     update = {**mesh_meta, "synthetic_inputs": list(synthetic_inputs)}
     if raw_peak.layer_type != "raster" or not raw_peak.uri.startswith(("gs://", "s3://")):
         return raw_peak.model_copy(update={"fallback_note": honesty, **update})
-    layer_id = peak_layer_id(run_id, substance_class)
-    style = raw_peak.style or _substance_product(substance_class).style
+    layer_id = peak_layer_id(run_id, product)
+    style = raw_peak.style or product.style
     try:
         published_uri = publish_layer(
             layer_uri=raw_peak.uri, layer_id=layer_id, style=style)
@@ -393,9 +386,17 @@ def _journal_wetted_fraction(metrics: dict[str, Any]) -> None:
         "reach at this discharge - a measured heuristic, not a verdict.")
 
 
-async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
-                               carrier_discharge: dict[str, Any]) -> TelemacDyeLayerURI:
-    """Postprocess the solved reach into its published layers + narration scalars."""
+async def _publish_transported_field(*, run: dict[str, Any], solve: dict[str, Any],
+                                     carrier_discharge: dict[str, Any],
+                                     product: SubstanceProduct
+                                     ) -> TelemacDyeLayerURI:
+    """The peak field every transported-substance question publishes.
+
+    ``product`` is the reader's own: which tracer variable the run wrote the
+    field into, the COG it uploads, the style that draws it and the noun the
+    layer is named with. Each question's reader names one and nothing here
+    chooses between them.
+    """
     from trid3nt_server.emission.pipeline_emitter import current_emitter
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         postprocess_telemac,
@@ -407,8 +408,6 @@ async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
     emitter = current_emitter()
     run_id, utm_epsg = solve["run_id"], int(solve["utm_epsg"])
     reach_name, substance = run["reach_name"], run["substance"]
-    substance_class = run["substance_class"]
-    product = _substance_product(substance_class)
     slf_path = await asyncio.to_thread(
         download_result, run_id, run["result_basename"],
         error_code="TELEMAC_DYE_OUTPUT_MISSING")
@@ -416,7 +415,7 @@ async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
     try:
         layers, metrics = await asyncio.to_thread(
             postprocess_telemac, slf_path, run_id=run_id, utm_epsg=utm_epsg,
-            reach_name=reach_name, substance_class=substance_class)
+            reach_name=reach_name, product=product)
         _journal_wetted_fraction(metrics)
     finally:
         Path(slf_path).unlink(missing_ok=True)
@@ -434,7 +433,7 @@ async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
     }
     peak = await asyncio.to_thread(
         _publish_peak_layer, raw_peak, run_id, run["location_name"], mesh_meta,
-        substance, substance_class, _provenance(solve, carrier_discharge, run))
+        substance, product, _provenance(solve, carrier_discharge, run))
 
     # EMIT-ON-SOLVE: outputs.json carries the peak entry (the whole-run record)
     # plus the SELAFIN mesh entry, and the seam owns publication of the temporal
@@ -446,32 +445,83 @@ async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
         mesh_epsg=utm_epsg, reach_name=reach_name,
         reference_time=solve.get("started_at"))
 
-    logger.info("telemac reach complete run_id=%s reach=%s class=%s cmax_mgl=%.4g "
+    logger.info("telemac reach complete run_id=%s reach=%s field=%s cmax_mgl=%.4g "
                 "plume_reach_m=%s active_frames=%s peak_uri=%s", run_id, reach_name,
-                substance_class, peak.dye_cmax_mgl, peak.plume_reach_m,
+                product.quantity, peak.dye_cmax_mgl, peak.plume_reach_m,
                 peak.active_frames, peak.uri)
-
-    if substance_class == "sediment":
-        try:
-            peak = await _fold_sediment_products(
-                peak, run_id=run_id, utm_epsg=utm_epsg, reach_name=reach_name,
-                run=run, erodible=bool(run.get("erodible_bed")), emitter=emitter)
-        except Exception as exc:  # noqa: BLE001 - a bonus map never voids the run
-            logger.warning("sediment deposition unexpected failure (%s)", exc)
-    elif substance_class == "oil":
-        # The preset is the RUN's own: the deck was written against it and the
-        # slick is drawn from the particles it produced, so reading it off the
-        # run is reading what solved rather than re-deciding it here.
-        await _emit_oil_slick(peak, run_id=run_id, reach_name=reach_name,
-                              oil_preset=run["oil_preset"],
-                              utm_epsg=utm_epsg, emitter=emitter)
-
     if emitter is not None and peak.bbox:
         try:
             await emitter.emit_map_command("zoom-to", {"bbox": list(peak.bbox)})
         except Exception as exc:  # noqa: BLE001
             logger.warning("telemac zoom-to failed: %s", exc)
     return peak
+
+
+async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
+                               carrier_discharge: dict[str, Any]) -> TelemacDyeLayerURI:
+    """The CONSERVATIVE tracer's peak field. Nothing rides behind it."""
+    return await _publish_transported_field(
+        run=run, solve=solve, carrier_discharge=carrier_discharge,
+        product=TELEMAC_SUBSTANCE_PRODUCTS["tracer"])
+
+
+async def publish_oil_products(*, run: dict[str, Any], solve: dict[str, Any],
+                               carrier_discharge: dict[str, Any]) -> TelemacDyeLayerURI:
+    """The dissolved oil tracer's peak field, plus the SLICK the drogues drew.
+
+    The preset is the RUN's own: the deck was written against it and the slick is
+    drawn from the particles it produced, so reading it off the run is reading
+    what solved rather than re-deciding it here.
+    """
+    from trid3nt_server.emission.pipeline_emitter import current_emitter
+
+    peak = await _publish_transported_field(
+        run=run, solve=solve, carrier_discharge=carrier_discharge,
+        product=TELEMAC_SUBSTANCE_PRODUCTS["oil"])
+    await _emit_oil_slick(peak, run_id=solve["run_id"], reach_name=run["reach_name"],
+                          oil_preset=run["oil_preset"],
+                          utm_epsg=int(solve["utm_epsg"]), emitter=current_emitter())
+    return peak
+
+
+async def publish_scour_products(*, run: dict[str, Any], solve: dict[str, Any],
+                                 carrier_discharge: dict[str, Any]) -> TelemacDyeLayerURI:
+    """The suspended load's peak field, plus the bed a real stock ERODED into."""
+    return await _publish_sediment(run=run, solve=solve,
+                                   carrier_discharge=carrier_discharge,
+                                   erodible=True)
+
+
+async def publish_sediment_plume_products(
+        *, run: dict[str, Any], solve: dict[str, Any],
+        carrier_discharge: dict[str, Any]) -> TelemacDyeLayerURI:
+    """The suspended load's peak field, plus what DEPOSITED out of it.
+
+    The bed holds no stock, so nothing erodes and the deposition map claims no
+    scour.
+    """
+    return await _publish_sediment(run=run, solve=solve,
+                                   carrier_discharge=carrier_discharge,
+                                   erodible=False)
+
+
+async def _publish_sediment(*, run: dict[str, Any], solve: dict[str, Any],
+                            carrier_discharge: dict[str, Any],
+                            erodible: bool) -> TelemacDyeLayerURI:
+    """The sediment field, and GAIA's own bed products folded onto it."""
+    from trid3nt_server.emission.pipeline_emitter import current_emitter
+
+    peak = await _publish_transported_field(
+        run=run, solve=solve, carrier_discharge=carrier_discharge,
+        product=TELEMAC_SUBSTANCE_PRODUCTS["sediment"])
+    try:
+        return await _fold_sediment_products(
+            peak, run_id=solve["run_id"], utm_epsg=int(solve["utm_epsg"]),
+            reach_name=run["reach_name"], run=run, erodible=erodible,
+            emitter=current_emitter())
+    except Exception as exc:  # noqa: BLE001 - a bonus map never voids the run
+        logger.warning("sediment deposition unexpected failure (%s)", exc)
+        return peak
 
 
 def _do_sag_provenance(carrier_discharge: dict[str, Any] | None) -> list[SyntheticInput]:
@@ -569,8 +619,31 @@ class Products:
 
     @staticmethod
     def dye(*, run: Any, solve: Any, carrier_discharge: Any) -> Step:
-        """The dye/oil/sediment deliverables: peak COG, results mesh, class extras."""
+        """The conservative tracer: peak COG + results mesh."""
         return Step(runner=f"{_PRODUCTS}.products.publish_dye_products", stage="publish",
+                    kwargs={"run": run, "solve": solve,
+                            "carrier_discharge": carrier_discharge})
+
+    @staticmethod
+    def oil_slick(*, run: Any, solve: Any, carrier_discharge: Any) -> Step:
+        """The dissolved oil tracer, plus the slick its drogues drew."""
+        return Step(runner=f"{_PRODUCTS}.products.publish_oil_products", stage="publish",
+                    kwargs={"run": run, "solve": solve,
+                            "carrier_discharge": carrier_discharge})
+
+    @staticmethod
+    def scour(*, run: Any, solve: Any, carrier_discharge: Any) -> Step:
+        """The suspended load, plus the bed a real sediment stock eroded into."""
+        return Step(runner=f"{_PRODUCTS}.products.publish_scour_products",
+                    stage="publish",
+                    kwargs={"run": run, "solve": solve,
+                            "carrier_discharge": carrier_discharge})
+
+    @staticmethod
+    def sediment_plume(*, run: Any, solve: Any, carrier_discharge: Any) -> Step:
+        """The suspended load, plus what deposited out of it onto a bed with no stock."""
+        return Step(runner=f"{_PRODUCTS}.products.publish_sediment_plume_products",
+                    stage="publish",
                     kwargs={"run": run, "solve": solve,
                             "carrier_discharge": carrier_discharge})
 

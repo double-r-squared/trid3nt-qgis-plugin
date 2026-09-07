@@ -12,9 +12,9 @@ COG animation group): the TELEMAC result IS a native, time-stepped MDAL mesh --
 QGIS's MDAL provider opens the ``.slf`` directly and animates its DYE dataset
 group with ZERO new render code. So this postprocess emits ONLY the PEAK
 concentration COG (``layers[0]``, role ``"primary"``, named and styled by the
-declared SUBSTANCE CLASS's own row in ``TELEMAC_SUBSTANCE_PRODUCTS`` - a
-dye-named product outside the dye class asserts a field the run did not carry, so
-each class names its own) as the map anchor + narration carrier; the time
+PRODUCT the template's own reader handed in - a dye-named product over a
+sediment run asserts a field the run did not carry, so each question names its
+own) as the map anchor + narration carrier; the time
 animation rides the result SELAFIN, published as a ``layer_type="mesh"`` layer by
 the emit-on-solve seam (the composer writes ``outputs.json`` with a ``kind="mesh"``
 entry for ``r2d_river.slf``; ADR 0283). No per-frame COGs are written -- the mesh
@@ -49,7 +49,7 @@ from trid3nt_contracts.telemac_contracts import (
     TELEMAC_DO_STYLE,
     TELEMAC_DYE_STYLE,
     TELEMAC_MAX_DEPTH_STYLE,
-    TELEMAC_SUBSTANCE_PRODUCTS,
+    SubstanceProduct,
     TELEMAC_WAVE_STYLE,
     TELEMAC_WSE_STYLE,
     ArtemisAgitationLayerURI,
@@ -155,20 +155,20 @@ class PostprocessTelemacError(RuntimeError):
         self.details: dict[str, Any] = dict(details or {})
 
 
-def _pick_dye_var(varnames: list[str], *, prefer_sediment: bool = False) -> str | None:
+def _pick_dye_var(varnames: list[str], *, mesh_group: str = "DYE") -> str | None:
     """The tracer variable name to rasterize, or None.
 
-    Default (dye / decay runs): case-insensitive DYE, else a T-prefixed tracer
-    (mirrors the worker entrypoint's tracer-sanity selection).
+    ``mesh_group`` is the SELAFIN variable the PRODUCT declares its field lands
+    in. ``DYE`` is the plain tracer pick: case-insensitive DYE, else a
+    T-prefixed tracer (mirrors the worker entrypoint's tracer-sanity selection).
 
-    ``prefer_sediment=True`` (GAIA sediment coupled run): the suspended sediment
-    concentration rides as a SECOND telemac2d tracer, landing in
-    ``r2d_river.slf`` as ``NCOH SEDIMENT1`` (g/l == kg/m3) alongside the
-    required DYE companion. Pick that sediment tracer (a name carrying
-    SEDIMENT / NCOH / COH), so the concentration COG is the SEDIMENT ribbon,
-    not the conservative dye reference. Falls back to the dye pick when no
-    sediment-named var is present (an uncoupled rerun)."""
-    if prefer_sediment:
+    A GAIA sediment coupled run declares ``NCOH SEDIMENT1``: the suspended
+    concentration rides as a SECOND telemac2d tracer (g/l == kg/m3) alongside
+    the required DYE companion, so the sediment-named var is picked and the
+    concentration COG is the SEDIMENT ribbon rather than the conservative dye
+    reference. Falls back to the dye pick when no sediment-named var is present
+    (an uncoupled rerun)."""
+    if mesh_group != "DYE":
         for v in varnames:
             u = v.strip().upper()
             if "SEDIMENT" in u or u.startswith(("NCOH", "COH", "CS")):
@@ -377,16 +377,13 @@ def _reraise_cogio(exc: CogIoError) -> "PostprocessTelemacError":
     )
 
 
-def peak_layer_id(run_id: str, substance_class: str) -> str:
+def peak_layer_id(run_id: str, product: SubstanceProduct) -> str:
     """The transported-field layer's handle, spelled once for producer and publisher.
 
-    The class is in the handle because the COG is: two runs of the same reach
-    under different classes publish different products, and a shared handle would
-    make one overwrite the other's registration.
+    The PRODUCT's own noun is in the handle because the COG is: two runs of the
+    same reach publishing different fields would otherwise share a handle and one
+    would overwrite the other's registration.
     """
-    product = TELEMAC_SUBSTANCE_PRODUCTS.get(
-        str(substance_class or "tracer").lower(),
-        TELEMAC_SUBSTANCE_PRODUCTS["tracer"])
     return f"telemac-{product.noun.replace(' ', '-')}-peak-{run_id}"
 
 
@@ -399,7 +396,7 @@ def postprocess_telemac(
     run_id: str,
     utm_epsg: int,
     reach_name: str = "river_dye",
-    substance_class: str = "tracer",
+    product: SubstanceProduct,
     dye_units: str = "mg/L",
     runs_bucket: str | None = None,
     target_ground_res_m: float = TELEMAC_TARGET_GROUND_RES_M,
@@ -409,8 +406,8 @@ def postprocess_telemac(
     Reads ``slf_path`` (``r2d_river.slf``), extracts the tracer, computes the
     per-node peak over time, reprojects the mesh nodes ``utm_epsg`` -> EPSG:4326,
     rasterizes the peak onto an adaptive 4326 grid clipped to the channel, writes
-    + uploads ONE COG to the runs bucket under the DECLARED SUBSTANCE CLASS's own
-    basename (``TELEMAC_SUBSTANCE_PRODUCTS``), and returns
+    + uploads ONE COG to the runs bucket under the ``product``'s own basename,
+    and returns
     ``([TelemacDyeLayerURI], metrics)``. The time animation is served separately
     from the SELAFIN mesh sibling that ``open_case_in_qgis`` discovers next to
     this COG (this postprocess writes NO per-frame COGs).
@@ -422,10 +419,10 @@ def postprocess_telemac(
         utm_epsg: the SELAFIN mesh CRS EPSG (the reach UTM zone; from
             ``telemac_metrics.json``'s ``utm_epsg``). SELAFIN carries no CRS.
         reach_name: echoed into the layer name.
-        substance_class: which declared class this run is - it picks the tracer
-            variable, the COG basename, the published quantity, the style preset
-            and the noun the layer is named with. A class this table does not
-            know IS dye.
+        product: the transported-field product this run publishes - the tracer
+            variable it reads, the COG basename it uploads under, the quantity,
+            the style preset and the noun the layer is named with. The reader
+            that was bound to this template names it.
         dye_units: concentration units label (default mg/L).
         runs_bucket: optional override for the runs bucket name.
         target_ground_res_m: target ground resolution (m/px) for the COG.
@@ -456,14 +453,7 @@ def postprocess_telemac(
             details={"slf": str(slf)},
         ) from exc
 
-    product = TELEMAC_SUBSTANCE_PRODUCTS.get(
-        str(substance_class or "tracer").lower(),
-        TELEMAC_SUBSTANCE_PRODUCTS["tracer"])
-    # GAIA sediment coupled run: pick the SUSPENDED SEDIMENT tracer (NCOH
-    # SEDIMENT1, g/l == kg/m3) that GAIA appends beside the dye companion, so this
-    # COG is the sediment concentration ribbon, not the conservative dye.
-    _prefer_sed = str(substance_class or "tracer").lower() == "sediment"
-    dye_var = _pick_dye_var(mesh["varnames"], prefer_sediment=_prefer_sed)
+    dye_var = _pick_dye_var(mesh["varnames"], mesh_group=product.mesh_group)
     if dye_var is None or mesh["data"].get(dye_var) is None or mesh["data"][dye_var].size == 0:
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_EMPTY",
@@ -600,7 +590,7 @@ def postprocess_telemac(
         "study."
     )
     layer = TelemacDyeLayerURI(
-        layer_id=peak_layer_id(run_id, substance_class),
+        layer_id=peak_layer_id(run_id, product),
         name=f"Peak {product.noun} concentration ({reach_name})",
         layer_type="raster",
         uri=uri,

@@ -260,11 +260,10 @@ telemac_river_scour = register_workflow(
         # A MOBILE bed is what this question is: the reader publishes the bed
         # evolution both ways round it and reports the scour half, which a
         # supply-limited plume has none of.
-        meta={"substance": "sediment", "substance_class": "sediment",
-              "erodible_bed": True,
+        meta={"substance": "sediment",
               "sediment_injected_kg": Ref("sediment.injected_kg"),
               "sediment_n_classes": Ref("sediment.n_classes")},
-        read=lambda run: Products.dye(
+        read=lambda run: Products.scour(
             run=run, solve=run,
             carrier_discharge=Ref("carrier_discharge")).named("bed"),
         chart=("bed_evolution", build_bed_chart),

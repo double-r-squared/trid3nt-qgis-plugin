@@ -15,7 +15,7 @@ nothing.
 | --- | --- |
 | `__init__.py` | The door. Consumers import the module they mean. |
 | `postprocess_telemac.py` | A solved result's fields to the map products: the peak field, the rasterized grids, the animated frames. |
-| `products.py` | A solved reach to its map layers, its scalars and its chart spec, each substance class leading with its own product. |
+| `products.py` | A solved reach to its map layers, its scalars and its chart spec: one reader per question, bound as the module's own output, each naming the product it publishes. |
 | `rain_on_grid.py` | A solved catchment to its peak-depth envelope and the outlet hydrograph the engine measured it by. |
 | `run_reads.py` | What a solved run's own files say, read on the server: GAIA's closure out of the listing, the slick out of the drogues track. |
 | `agitation.py` | A solved harbour to its Kd field: the sheltering the structure buys, the transect through its own shadow strip, and the dispersion the period and depth imply. |
