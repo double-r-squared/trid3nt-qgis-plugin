@@ -13,6 +13,13 @@ dictionary does not take, refuse BY NAME at import; the sheet the body fills
 records per slot WHERE its value came from, so nothing composed or derived hides
 behind a number.
 
+A COMPOSITE expands one value into the keywords that value IS: the arming
+keyword its input implies, the slots its value literally fills, the file it
+writes. It states nothing else. A choice among the alternatives the dictionary
+offers - which wind option, which restart format, which runoff model - is the
+TEMPLATE's assertion where the template needs a non-default, and the engine's own
+default by omission where it does not.
+
 A body reuses another body by COMPOSITION - `parts = [RIVER, TRACER]` - never by
 extending it. Parts merge in the listed order, the body's own assertion beats
 every part, and a keyword two parts both set refuses by name unless the body

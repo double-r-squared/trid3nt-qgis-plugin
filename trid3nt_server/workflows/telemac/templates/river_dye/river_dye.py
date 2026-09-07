@@ -115,6 +115,11 @@ class STEERING(T2D):
                         window_s=R.spill_duration_s,
                         until_s=Ref("settled.until_s"))]
 
+    #: The restart this deck is read at. A continuation reads the last record of
+    #: a RESTART FILE, which the engine writes in double precision, so the
+    #: single-precision default would read a double file as a single one.
+    PREVIOUS_COMPUTATION_FILE_FORMAT = "SERAFIND"
+
     #: The three optional forcings. Each states NOTHING when it was given
     #: nothing: no wind speed is no wind, no resolved rate is no rain, and a run
     #: that continues nothing states its own initial conditions.

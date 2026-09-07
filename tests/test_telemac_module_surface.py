@@ -359,6 +359,62 @@ def test_a_composite_becomes_several_slots_and_the_file_they_name():
     assert state["files"] == ["river_sources.txt"]
 
 
+def test_a_composite_sets_only_what_its_value_s_presence_defines():
+    """A composite expands a value into the keywords that value IS. A literal
+    the value does not carry is an opinion, and the two literals a presence does
+    define are the arming boolean its input implies and the name of the file the
+    composite itself writes. Anything else - a choice among the alternatives the
+    dictionary offers - is the template's to assert, where a person reads it."""
+    modules = Path(
+        "trid3nt_server/workflows/telemac/modules").resolve()
+    found = []
+    for module in _EXPOSED:
+        source = (modules / f"{module}.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        catalog = load_catalog(module)
+        constants = {
+            node.targets[0].id: node.value.value
+            for node in tree.body
+            if isinstance(node, ast.Assign) and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and isinstance(node.value, ast.Constant)}
+        expanders = {
+            keyword.value.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "composites"
+            for keyword in node.keywords
+            if isinstance(keyword.value, ast.Name)}
+        for node in tree.body:
+            if not (isinstance(node, ast.FunctionDef) and node.name in expanders):
+                continue
+            for mapping in ast.walk(node):
+                if not isinstance(mapping, ast.Dict):
+                    continue
+                for key, value in zip(mapping.keys, mapping.values):
+                    if not (isinstance(key, ast.Constant)
+                            and isinstance(key.value, str)):
+                        continue
+                    slot = catalog.get(key.value)
+                    if slot is None:
+                        continue
+                    if isinstance(value, ast.Constant):
+                        literal = value.value
+                    elif isinstance(value, ast.Name) and value.id in constants:
+                        literal = constants[value.id]
+                    else:
+                        continue
+                    if slot.is_file or (slot.type == "LOGICAL"
+                                        and isinstance(literal, bool)):
+                        continue
+                    found.append(f"{module}.py:{value.lineno} {node.name} sets "
+                                 f"{slot.keyword} to {literal!r}")
+    assert not found, (
+        "a composite states a value its input does not carry; assert it on the "
+        "template that wants it: " + "; ".join(found))
+
+
 def test_a_composite_lives_on_the_wrapper_and_may_not_shadow_a_keyword():
     module = Module("telemac2d")
     with pytest.raises(SlotRefused, match="may not shadow"):
@@ -532,7 +588,10 @@ def test_a_wind_from_the_north_drives_the_water_south():
     from trid3nt_server.workflows.telemac.modules.telemac2d import Wind
 
     slots, _ = T2D.COMPOSITES["wind"].expand(Wind(speed_mps=4.0, from_deg=0.0))
-    assert slots["WIND"] is True and slots["OPTION_FOR_WIND"] == 1
+    # WIND arms what the value's presence implies; WHICH of the engine's three
+    # wind options reads it is not this composite's to say, and the one a
+    # constant speed and direction are read under is the dictionary's own.
+    assert slots["WIND"] is True and "OPTION_FOR_WIND" not in slots
     assert round(slots["WIND_VELOCITY_ALONG_X"], 9) == 0.0
     assert round(slots["WIND_VELOCITY_ALONG_Y"], 9) == -4.0
     assert "COEFFICIENT_OF_WIND_INFLUENCE" not in slots
@@ -540,13 +599,35 @@ def test_a_wind_from_the_north_drives_the_water_south():
     assert round(east["WIND_VELOCITY_ALONG_X"], 9) == 4.0
 
 
-def test_a_continuation_reads_the_previous_file_at_the_precision_it_was_written():
+def test_a_continuation_names_the_file_and_leaves_its_format_to_the_template():
+    """The file is what the value IS; the FORMAT it is read at is a choice among
+    the three the dictionary offers, and river_dye states the double-precision
+    one because a restart file is what it continues from."""
     from trid3nt_server.workflows.telemac.modules.telemac2d import Continuation
+    from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import (
+        STEERING,
+    )
 
     slots, _ = T2D.COMPOSITES["continue_from"].expand(
         Continuation(previous="previous.slf"))
-    assert slots == {"PREVIOUS_COMPUTATION_FILE": "previous.slf",
-                     "PREVIOUS_COMPUTATION_FILE_FORMAT": "SERAFIND"}
+    assert slots == {"PREVIOUS_COMPUTATION_FILE": "previous.slf"}
+    assert STEERING.ASSERTED["PREVIOUS_COMPUTATION_FILE_FORMAT"] == "SERAFIND"
+
+
+def test_a_curve_number_field_names_no_model_and_the_template_does():
+    """The field is the SCS model's input, and four rainfall-runoff models read
+    the same rain: which one runs is rain_on_grid's assertion, not the
+    composite's."""
+    from trid3nt_server.workflows.telemac.modules.telemac2d import Runoff
+    from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import (
+        STEERING,
+    )
+
+    slots, _ = T2D.COMPOSITES["runoff"].expand(
+        Runoff(node_xy=[(0.0, 0.0)], cn2=[74.0],
+               antecedent_moisture=2, initial_abstraction=1))
+    assert "RAINFALL_RUNOFF_MODEL" not in slots
+    assert STEERING.ASSERTED["RAINFALL_RUNOFF_MODEL"] == 1
 
 
 def test_rain_carries_one_value_per_tracer():

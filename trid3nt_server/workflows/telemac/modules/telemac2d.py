@@ -181,7 +181,7 @@ def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any
     speed = float(value["speed_mps"])
     theta = math.radians(float(value["from_deg"]))
     drag = value.get("drag")
-    return ({"WIND": True, "OPTION_FOR_WIND": 1,
+    return ({"WIND": True,
              "WIND_VELOCITY_ALONG_X": -speed * math.sin(theta),
              "WIND_VELOCITY_ALONG_Y": -speed * math.cos(theta),
              **({} if drag is None else
@@ -190,21 +190,19 @@ def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any
 
 def _continue_from(value: Mapping[str, Any]
                    ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    """The previous computation, and the precision it has to be read at.
+    """The previous computation this run starts from.
 
     Naming a previous computation file IS the continuation from release 9.0 - the
     boolean that used to arm it left the dictionary - and the engine then reads
     that file's last record as the initial state, so the file's own
-    initial-condition statements go unread. The file named is a RESTART FILE,
-    which the engine writes in DOUBLE precision; the format keyword defaults to
-    single, and reading a double file as a single one is not a restart that means
-    anything.
+    initial-condition statements go unread. The FORMAT that file is read at is a
+    choice among three the dictionary offers, so a template asserting a
+    non-default one states it beside the file it writes.
     """
     if not value["previous"]:
         # This run continues nothing, so it states its own initial conditions.
         return ({}, {})
-    return ({"PREVIOUS_COMPUTATION_FILE": str(value["previous"]),
-             "PREVIOUS_COMPUTATION_FILE_FORMAT": "SERAFIND"}, {})
+    return ({"PREVIOUS_COMPUTATION_FILE": str(value["previous"])}, {})
 
 
 def _oil(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -359,7 +357,9 @@ def _runoff(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     """The curve-number field -> the runoff keywords and the scatter they name.
 
     The scatter points ARE the mesh nodes, so the interpolation the engine does
-    onto them is an identity.
+    onto them is an identity. WHICH rainfall-runoff model reads them is a choice
+    among the four the dictionary offers, so the template that wants one states
+    it; a curve-number field is the SCS model's input either way.
     """
     import numpy as np
 
@@ -371,8 +371,7 @@ def _runoff(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     rows = ["#X Y CN2 (curve number, AMC-II)",
             *(f"{a:.3f} {b:.3f} {c:.3f}"
               for (a, b), c in zip(xy[:, :2], cn2))]
-    return ({"RAINFALL_RUNOFF_MODEL": 1,
-             "ANTECEDENT_MOISTURE_CONDITIONS": int(value["antecedent_moisture"]),
+    return ({"ANTECEDENT_MOISTURE_CONDITIONS": int(value["antecedent_moisture"]),
              "OPTION_FOR_INITIAL_ABSTRACTION_RATIO": int(
                  value["initial_abstraction"]),
              "FORMATTED_DATA_FILE_2": CN_MAP_FILENAME},

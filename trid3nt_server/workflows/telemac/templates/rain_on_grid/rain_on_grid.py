@@ -191,6 +191,10 @@ class STEERING(T2D):
     friction = Friction(law=Ref("settled.friction_law"),
                         manning_per_node=Ref("infiltration.node_manning"))
 
+    #: The SCS Curve Number method, out of the four rainfall-runoff models the
+    #: engine offers, is what the curve-number field below is a field FOR.
+    RAINFALL_RUNOFF_MODEL = 1
+
     #: The storm at every wet node, and the engine's own SCS-CN infiltration
     #: under it. A constant design rate stops when the rain window closes so the
     #: catchment drains and the recession limb appears; a real hyetograph brings

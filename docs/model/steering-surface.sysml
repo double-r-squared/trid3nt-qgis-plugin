@@ -537,6 +537,23 @@ package SteeringSurface {
         */
     }
 
+    requirement def CompositesSetOnlyPresence {
+        doc /*
+        RULING 2026-09-06 (docs/IDEAS.md, "CONFORMANCE RULINGS", (b)): a
+        composite expands a value into the keywords that value IS. Two literals
+        a presence defines: the ARMING keyword the input implies (WIND = YES
+        when a wind is given) and the NAME of the file the composite itself
+        writes. A CHOICE among the alternatives the dictionary offers - the
+        restart format, the runoff model, the wind option - is not one of them:
+        a composite picking it puts an opinion in the one place a reader of the
+        template would not look, and inherits it into every template that ever
+        passes the composite a value.
+
+        Such a choice is the TEMPLATE's assertion where the template needs a
+        non-default, and the engine's own default by omission where it does not.
+        */
+    }
+
     requirement def SharedBodyHasTwoUsers {
         doc /*
         A shared body exists because a good portion is shared, which means at
@@ -750,6 +767,17 @@ package SteeringSurface {
         "tests/test_telemac_module_surface.py::test_the_review_is_the_doors_view_and_never_a_step_of_its_own";
     verify requirement ReviewIsTheDoorsView by
         "tests/test_declarative_library.py::test_do_sag_declares_no_gate_in_front_of_its_self_gating_review";
+
+    satisfy requirement CompositesSetOnlyPresence by composite;
+    satisfy requirement CompositesSetOnlyPresence by wrapper;
+    verify requirement CompositesSetOnlyPresence by
+        "tests/test_telemac_module_surface.py::test_a_composite_sets_only_what_its_value_s_presence_defines";
+    verify requirement CompositesSetOnlyPresence by
+        "tests/test_telemac_module_surface.py::test_a_wind_from_the_north_drives_the_water_south";
+    verify requirement CompositesSetOnlyPresence by
+        "tests/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_leaves_its_format_to_the_template";
+    verify requirement CompositesSetOnlyPresence by
+        "tests/test_telemac_module_surface.py::test_a_curve_number_field_names_no_model_and_the_template_does";
 
     satisfy requirement SharedBodyHasTwoUsers by sharedBody;
     satisfy requirement SharedBodyHasTwoUsers by sheet;
