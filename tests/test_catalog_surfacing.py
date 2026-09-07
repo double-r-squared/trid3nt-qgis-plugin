@@ -124,7 +124,7 @@ def _os_environ() -> dict:
 #: +1 as mesh_op landed as the runtime face of the mesh recipe.
 #: +1 as fetch_osm_coastline landed as the harbour-scale shoreline rung.
 #: +1 as describe_keywords landed as the read over the module keyword catalogs.
-_REGISTRY_SIZE = 173
+_REGISTRY_SIZE = 174
 
 
 # --------------------------------------------------------------------------- #
@@ -138,7 +138,7 @@ def test_default_config_identity():
     # The roster PIN: a tool that leaves the registry has to be noticed, so the
     # arms assert the same number and a silent drop fails four tests at once.
     assert r["registry_size"] == _REGISTRY_SIZE
-    assert r["n_specs"] == 107  # shoreline ladder +fetch_osm_coastline; ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water; ADR 0317 +fetch_greatlakes_bathymetry; TELEMAC wave B +fetch_osm_breakwaters; ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged-dataset specs); ADR 0297 +fetch_groundwater_recharge (staged-dataset spec); ADR 0112 +nwm_streamflow (fetcher finale); ADR 0203 +fetch_aorc_precip +fetch_lter_records; bathymetry seam +fetch_bluetopo
+    assert r["n_specs"] == 108  # the lake level +fetch_greatlakes_water_level; shoreline ladder +fetch_osm_coastline; ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water; ADR 0317 +fetch_greatlakes_bathymetry; TELEMAC wave B +fetch_osm_breakwaters; ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged-dataset specs); ADR 0297 +fetch_groundwater_recharge (staged-dataset spec); ADR 0112 +nwm_streamflow (fetcher finale); ADR 0203 +fetch_aorc_precip +fetch_lter_records; bathymetry seam +fetch_bluetopo
     # They stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
     assert r["any_spec_in_declarable"] is True
@@ -169,7 +169,7 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
     # + ADR 0076 wfigs record fold; + ADR 0077 movebank keyed-CSV fold; + ADR 0079
     # quick-folds firms / noaa_sst / sentinel1; + ADR 0080 STAC-composite trio
     # landsat / sentinel2 / naip; + ADR 0081 fault_sources constant-cache fold).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 106  # shoreline ladder +fetch_osm_coastline; ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water leave the arm-ON pool too; ADR 0317 +fetch_greatlakes_bathymetry; TELEMAC wave B +fetch_osm_breakwaters leaves the arm-ON pool too; ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity; ADR 0297 +fetch_groundwater_recharge; ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool; bathymetry seam +fetch_bluetopo
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 107  # the lake level +fetch_greatlakes_water_level; shoreline ladder +fetch_osm_coastline; ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water leave the arm-ON pool too; ADR 0317 +fetch_greatlakes_bathymetry; TELEMAC wave B +fetch_osm_breakwaters leaves the arm-ON pool too; ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity; ADR 0297 +fetch_groundwater_recharge; ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool; bathymetry seam +fetch_bluetopo
     # Still searchable + rankable so a search hit can gate-expand it.
     assert r["gridmet_in_index"] is True
     assert r["gridmet_ranked_top25"] is True
@@ -275,7 +275,7 @@ def test_arm3_specs_leave_pool_and_source_param():
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
     # -70, not -71: fetch_copernicus_dem is tier="internal" (already out of the pool).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 106  # shoreline ladder +fetch_osm_coastline; ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water leave the arm-ON pool too; ADR 0317 +fetch_greatlakes_bathymetry; TELEMAC wave B +fetch_osm_breakwaters leaves the arm-ON pool too; ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity; ADR 0297 +fetch_groundwater_recharge; ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool; bathymetry seam +fetch_bluetopo
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 107  # the lake level +fetch_greatlakes_water_level; shoreline ladder +fetch_osm_coastline; ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water leave the arm-ON pool too; ADR 0317 +fetch_greatlakes_bathymetry; TELEMAC wave B +fetch_osm_breakwaters leaves the arm-ON pool too; ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity; ADR 0297 +fetch_groundwater_recharge; ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool; bathymetry seam +fetch_bluetopo
     assert r["gridmet_in_index"] is True
     # fetch_from_catalog exposes the source branch under Arm 3 (like Arm 1).
     assert r["ffc_params"] == ["entry_id", "params", "source", "_extra_ignored"]
@@ -304,7 +304,7 @@ def test_stratum_index_is_source_scoped(_stratum):
         if getattr(TOOL_REGISTRY[n].metadata, "tier", "general") != "internal"
     }
     assert set(idx.tool_names) == model_facing
-    assert len(idx.tool_names) == 106  # 107 specs minus the internal copernicus seam (ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water) (TELEMAC wave B +fetch_osm_breakwaters) (ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity) (ADR 0297 +fetch_groundwater_recharge) (ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records) (bathymetry seam +fetch_bluetopo)
+    assert len(idx.tool_names) == 107  # 108 specs minus the internal copernicus seam (the lake level +fetch_greatlakes_water_level) (ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water) (TELEMAC wave B +fetch_osm_breakwaters) (ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity) (ADR 0297 +fetch_groundwater_recharge) (ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records) (bathymetry seam +fetch_bluetopo)
 
 
 def test_stratum_activates_on_data_ask_enum_rank_order(_stratum):

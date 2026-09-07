@@ -86,6 +86,15 @@ package DataSeam {
         */
     }
 
+    part def FreeSurfaceReader {
+        doc /*
+        The producer that turns an observed water level into the elevation a run
+        opens at: it picks the gauge nearest the AOI, takes the reading, and
+        compares the two source rows' stated datums before the number is used
+        as an elevation over that bed.
+        */
+    }
+
     part def CoastalComposite {
         doc /*
         The CUDEM-first coastal topo-bathy composite: the row's original
@@ -334,6 +343,18 @@ package DataSeam {
         */
     }
 
+    part lakeLevelDeclaration : BedSourceDeclaration {
+        doc /*
+        code: trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_water_level/source.yaml
+        */
+    }
+
+    part freeSurfaceReader : FreeSurfaceReader {
+        doc /*
+        code: trid3nt_server/workflows/telemac/templates/stratified_flow/lake_level.py
+        */
+    }
+
     part bedResultModel : BedResultModel {
         doc /*
         code: contracts/trid3nt_contracts/execution.py
@@ -471,6 +492,29 @@ package DataSeam {
         */
     }
 
+    requirement def AFreeSurfaceAndABedShareOneStatedDatum {
+        doc /*
+        RULING 2026-09-06 (docs/IDEAS.md, "REMEDY RULINGS" (b)): a water body's
+        LEVEL is an observation, fetched the way a river's discharge is - the
+        nearest gauge to the AOI, at the day the run is about - and the run's
+        free surface opens at it. Data is assumed true; nothing thresholds the
+        reading.
+
+        WHAT MAKES THE ARITHMETIC LEGAL is that both documents state their zero.
+        The gauge row and the bed row each state a vertical datum, and the
+        subtraction between a level and an elevation is only defined when the
+        two statements agree. Two rows stating different zeros, with no offset
+        stated anywhere, REFUSE BY NAME - both names and both datums - rather
+        than adding numbers that are not on one axis. A row stating none refuses
+        for the reason OneSourceReadsOnOneStatedDatum already gives.
+
+        Left at the dictionary's own zero the free surface sits ON the chart
+        datum, which is where the bed is counted from, so the rim of a surveyed
+        basin carries no water at all. Clipping that rim away would be a
+        threshold on values; giving it its real water is the observation.
+        */
+    }
+
     requirement def AStoppedRungNeverShips {
         doc /*
         SIGNED DECISION - load-bearing unverified items are verified live before
@@ -588,6 +632,18 @@ package DataSeam {
         "tests/test_bathymetry_data_seam.py::test_a_partial_bluetopo_cover_is_reported_as_a_gap_not_a_whole_bed";
     verify requirement SubstitutionIsDeclared by
         "tests/test_fallback_ladder.py::test_declared_rung_fills_the_gap_and_splits_coverage";
+
+    satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeLevelDeclaration;
+    satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeDeclaration;
+    satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by freeSurfaceReader;
+    verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
+        "tests/test_open_water_domains.py::test_the_level_is_the_nearest_gauges_last_reading";
+    verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
+        "tests/test_open_water_domains.py::test_a_level_and_a_bed_on_two_datums_refuse_by_name";
+    verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
+        "tests/test_open_water_domains.py::test_water_no_gauge_watches_refuses_rather_than_opening_at_the_datum";
+    verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
+        "tests/test_open_water_domains.py::test_the_thermocline_is_stated_below_the_water_top_not_the_datum";
 
     satisfy requirement BedSourceStatesItsDatum by blueTopoSource;
     satisfy requirement BedSourceStatesItsDatum by blueTopoDeclaration;

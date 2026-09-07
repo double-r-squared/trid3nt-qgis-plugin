@@ -24,4 +24,4 @@ dredging rule, a wind, a hyetograph against a constant rate.
 | `do_sag/` | `telemac_do_sag` - an outfall's BOD load to the dissolved-oxygen sag downstream. |
 | `rain_on_grid/` | `telemac_rain_on_grid` - a storm over a catchment to the outlet hydrograph; `cn_infiltration.py` is its SCS curve-number infiltration. |
 | `agitation/` | `artemis_harbor_agitation` - swell at the harbour mouth to the agitation field behind a declared structure (ARTEMIS); `barrier.py` turns that structure's centreline into the footprint the mesh subtracts. |
-| `stratified_flow/` | `telemac3d_stratified_flow` - a lake's water column to its vertical structure, wind circulation read off the same baroclinic run (TELEMAC-3D). |
+| `stratified_flow/` | `telemac3d_stratified_flow` - a lake's water column to its vertical structure, wind circulation read off the same baroclinic run (TELEMAC-3D); `measured_bed.py` clips the water to the part the survey sounded, and `lake_level.py` reads the free surface the basin opens at off the gauge that watches it. |

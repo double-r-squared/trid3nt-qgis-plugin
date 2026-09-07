@@ -61,6 +61,12 @@ _SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 #: RESULT FILE statements. The 3D file is the answer; the 2D file is the depth
 #: average the question exists to refuse, written because the engine's own
 #: printouts read it.
+#: The two documents the free surface arithmetic is done between, named once so
+#: the rows that fetch them and the step that compares their stated datums cannot
+#: drift apart.
+_BED = "fetch_greatlakes_bathymetry"
+_GAUGE = "fetch_greatlakes_water_level"
+
 _RESULT_3D = "res3d_basin.slf"
 _RESULT_2D = "res2d_basin.slf"
 _STEERING_FILE = "t3d_basin.cas"
@@ -75,7 +81,8 @@ class DATA:
 
     THE BED IS FETCHED HERE, once, because two things read it: the clip that
     narrows the water to the part anybody sounded, and the paint that gives every
-    node its elevation.
+    node its elevation. THE LEVEL is fetched beside it because a bed alone does
+    not say where the water top is.
     """
 
     water = tool("fetch_nhd_waterbodies", bbox=Ref("aoi.bbox"))
@@ -86,7 +93,15 @@ class DATA:
     # are charted on instead. Same data class, different survey, one stated
     # datum: the basin is solved on the lake's own low water datum, which is
     # where its bed is counted from and where its free surface starts.
-    bed = tool("fetch_greatlakes_bathymetry", bbox=Ref("aoi.bbox"))
+    bed = tool(_BED, bbox=Ref("aoi.bbox"))
+    # THE DAY the level is read over, and the gauges that watched it. A lake has
+    # a level and the run opens at it: the free surface is an OBSERVATION here,
+    # the way the carrier discharge is on a river, and it is read on the SAME
+    # datum the bed above is charted on.
+    day = tool(f"{_TEMPLATE}.lake_level.reading_day",
+               event_time=ParamRef("event_time"))
+    level = tool(_GAUGE, bbox=Ref("aoi.bbox"), start_date=Ref("day.date"),
+                 end_date=Ref("day.date"))
 
 
 #: The MESH RECIPE, frozen at declaration and building nothing at import. The
@@ -136,9 +151,11 @@ class STEERING(T3D):
     # basin-scale column buys nothing the hydrostatic one does not already show.
     NON_HYDROSTATIC_VERSION = False
 
-    # The free surface starts flat at the dictionary's own zero, so what this
-    # states is that the elevation is CONSTANT rather than what it is.
+    # THE FREE SURFACE the basin opens at: flat, and at the level the gauge
+    # OBSERVED. The dictionary's own zero is the chart datum, which is where the
+    # bed is counted from - a lake left there has no water on its rim at all.
     INITIAL_CONDITIONS = "CONSTANT ELEVATION"
+    INITIAL_ELEVATION = Ref("lake_level.elevation_m")
 
     # The ONE pair that cannot be left to the dictionary, measured both ways:
     # LECDON stops on "THE LAW OF BOTTOM FRICTION 5 IS ASKED / GIVE THE
@@ -192,7 +209,8 @@ class STEERING(T3D):
     #: condition hook because no keyword carries a non-uniform tracer field.
     column = Column(levels=P.levels, max_depth_m=Ref("settled.max_depth_m"),
                     thermocline_depth_m=P.thermocline_depth_m,
-                    warm_c=P.warm_temp_c, cold_c=P.cold_temp_c)
+                    warm_c=P.warm_temp_c, cold_c=P.cold_temp_c,
+                    surface_m=Ref("lake_level.elevation_m"))
     #: The wind that decides whether the difference survives. A calm run states
     #: nothing here at all.
     wind = Wind(speed_mps=P.wind_speed_mps, from_deg=P.wind_direction_deg)
@@ -309,6 +327,14 @@ telemac3d_stratified_flow = register_workflow(
                      kwargs={"polygon": DATA.mapped,
                              "bed": DATA.bed}).named("basin"),),
         mesh=MESH, mesh_on="aoi",
+        # The level the basin opens at, before it is settled: the deepest column
+        # the vertical grid is planned over is the free surface MINUS the bed,
+        # so the surface has to exist before the mesh is measured.
+        produce=(Step(runner=f"{_TEMPLATE}.lake_level.observed_lake_level",
+                      stage="acquire",
+                      kwargs={"level": DATA.level, "gauge_source": _GAUGE,
+                              "bed_source": _BED,
+                              "aoi": Ref("aoi")}).named("lake_level"),),
         settle=Step(runner=f"{_AUTHORING}.assembler.settle_basin",
                     stage="author",
                     kwargs={"mesh": Ref("mesh"),
@@ -321,7 +347,9 @@ telemac3d_stratified_flow = register_workflow(
                             "sim_duration_hours": ParamRef("sim_duration_hours"),
                             "time_step_s": ParamRef("time_step_s"),
                             "output_interval_min": ParamRef("output_interval_min"),
+                            "surface_m": Ref("lake_level.elevation_m"),
                             "domain_note": Ref("basin.note"),
+                            "level_note": Ref("lake_level.note"),
                             "result_basename": _RESULT_3D}),
         results=(_RESULT_3D, _RESULT_2D),
         steering_file=_STEERING_FILE, prefix="telemac3d",
@@ -332,7 +360,8 @@ telemac3d_stratified_flow = register_workflow(
         review_title="Review the prescribed column, the wind and the mesh"),
     data=DATA,
     answer=ANSWER,
-    provenance=(("wind_speed_mps", "wind_note"),
+    provenance=(("lake_level_m", "lake_level_note"),
+                ("wind_speed_mps", "wind_note"),
                 ("thermocline_depth_m", "thermocline_note"),
                 ("levels", "levels_note"),
                 ("time_step_s", "time_step_note"),

@@ -1262,7 +1262,9 @@ async def settle_basin(
     sim_duration_hours: float,
     time_step_s: float | None,
     output_interval_min: float | None,
+    surface_m: float,
     domain_note: str = "",
+    level_note: str = "",
     result_basename: str,
 ) -> dict[str, Any]:
     """What the accepted basin mesh measures -> what the 3D sheet is filled from.
@@ -1270,7 +1272,9 @@ async def settle_basin(
     The one measurement a vertical grid cannot be planned without is the DEEPEST
     column the mesh carries: the near-surface layer a sigma grid achieves is set
     over that column, so a plan made against a shallower one would be a grid that
-    cannot hold the declared thermocline where the thermocline actually is.
+    cannot hold the declared thermocline where the thermocline actually is. A
+    column is the FREE SURFACE minus the bed, and both are on the one datum the
+    level producer already refused to mix.
 
     A basin naming no liquid boundary is what a lake IS. The bundle says so and
     this records the sentence rather than refusing it.
@@ -1283,7 +1287,8 @@ async def settle_basin(
     _points, _cells, node_bed, _lonlat = await asyncio.to_thread(
         read_accepted_mesh_nodes,
         _mesh_field(mesh, "display_uri", missing=_basin_mesh_missing))
-    max_depth = float(-np.nanmin(np.asarray(node_bed, dtype=float)))
+    max_depth = float(surface_m) - float(np.nanmin(np.asarray(node_bed,
+                                                              dtype=float)))
     duration_s = float(sim_duration_hours) * 3600.0
     # The step the basin is solved at is the accepted mesh's, through the one CFL
     # producer the reach's step comes from; a stated step is the caller's lever
@@ -1294,12 +1299,14 @@ async def settle_basin(
     steps = max(1, int(round(duration_s / step_s)))
     journal_note(
         f"basin column: {facts['mesh_node_count']} nodes over a {max_depth:.1f} m "
-        f"deepest column, {levels} sigma planes over {sim_duration_hours:g} h at "
+        f"deepest column below a {float(surface_m):.3f} m free surface, "
+        f"{levels} sigma planes over {sim_duration_hours:g} h at "
         f"{step_s:g} s "
         f"({'stated' if time_step_s is not None else 'CFL-derived'} step; the "
         f"mesh measures {facts['mesh_size_m']:g} m). "
         f"{topology['states']} - the water in this domain is conserved."
-        + (f" {domain_note}" if domain_note else ""))
+        + (f" {domain_note}" if domain_note else "")
+        + (f" {level_note}" if level_note else ""))
     return {
         **facts,
         "title": f"TELEMAC3D STRATIFIED {facts['mesh_name']}",
@@ -1307,6 +1314,8 @@ async def settle_basin(
         "domain_slug": _slug(facts["mesh_name"]),
         "boundary_states": topology["states"],
         "max_depth_m": round(max_depth, 2),
+        "surface_m": round(float(surface_m), 3),
+        "level_note": level_note,
         "duration_s": duration_s,
         "time_step_s": step_s,
         "n_steps": steps,

@@ -78,6 +78,16 @@ class PARAMS:
         desc="Triangle edge the basin interior is meshed at; the 3D node count is "
              "this mesh's nodes times the sigma levels")
 
+    event_time = Param(
+        door=doors.QUESTION, optional=True, consequence="scenario",
+        derived_when_absent=(
+            "the lake level is the most recent reading the gauge has published "
+            "today"),
+        desc="The day the basin's OBSERVED lake level is read at the nearest "
+             "CO-OPS gauge - from phrasing like 'during last Tuesday's blow'; "
+             "an ISO date (e.g. '2026-09-05'). The run opens at the level that "
+             "day closed on, so this is what makes a past event replayable")
+
     # -- the window (the advanced fold) ------------------------------------- #
     # CONSTANT, not SCENARIO: the window is a settling time, not a scenario. The
     # answer is the column's SETTLED state, so this is "long enough". The user
@@ -162,7 +172,9 @@ DOC = dict(
     returns=(
         "On success a `Telemac3dLayerURI` (a `LayerURI` subtype) - the "
         "SURFACE-layer temperature COG, with the BOTTOM companion emitted beside "
-        "it. It carries `stratification_metric` / `stratification_dt`, the "
+        "it. It carries `lake_level_m` - the OBSERVED level the basin opened at, "
+        "on the same datum its bed is charted on, with the gauge named in "
+        "`lake_level_note` - `stratification_metric` / `stratification_dt`, the "
         "`u_surface` / `u_bottom` / `depth_avg_u` triple the same run drove, and "
         "the vertical `profile_*` arrays; narrate those typed numbers. The run "
         "exchanges NO heat with the atmosphere, so a falling surface temperature "

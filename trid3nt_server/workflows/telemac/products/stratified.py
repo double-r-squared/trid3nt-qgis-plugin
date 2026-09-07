@@ -123,7 +123,11 @@ def _measure(result: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
     final = vertical_profile(temperature_final, column)
     initial = (vertical_profile(temperature_init, column)
                if temperature_init is not None else final)
-    column_depth = float(-np.asarray(elevation)[0][column])
+    # SURFACE minus BED at the column the profile is read from, off the solved
+    # elevations: the free surface is the level the basin opened at, not the
+    # datum, so a depth counted from zero would be the wrong column.
+    column_depth = float(np.asarray(elevation)[-1][column]
+                         - np.asarray(elevation)[0][column])
     dt_final = float(final[-1] - final[0])
     heat_initial = float(np.trapezoid(initial, sigma))
     heat_final = float(np.trapezoid(final, sigma))
@@ -200,11 +204,18 @@ def _provenance(run: dict[str, Any], measured: dict[str, Any]
             note=(f"{vertical} - the 3D degree of freedom a 2D model has "
                   "none of")),
         SyntheticInput(
+            param="lake_level_m", value=run.get("surface_m"), units="m",
+            basis="fetched", consequence="physics",
+            real_source_if_any="fetch_greatlakes_water_level (NOAA CO-OPS)",
+            note=str(run.get("level_note")
+                     or "the observed level the basin's free surface opened at")),
+        SyntheticInput(
             param="mesh_bed", value=str(run.get("bed_source") or "staged"),
             basis="fetched", consequence="physics",
             real_source_if_any=str(run.get("bed_source") or None) or None,
             note="the elevation every node of the basin carries; the solve reads "
-                 "it as the bathymetry the column stands over"),
+                 "it as the bathymetry the column stands over, on the same datum "
+                 "the level above is counted from"),
         SyntheticInput(
             param="mesh_domain",
             value=f"{run['mesh_name']} ({run['mesh_node_count']} nodes / "

@@ -489,6 +489,29 @@ package SteeringSurface {
         */
     }
 
+    requirement def ATemplateNumberIsMetToTheMeshsPrecision {
+        doc /*
+        RATIFIED 2026-09-06 (docs/IDEAS.md, "REMEDY RULINGS" (a)): a template
+        declares ONE number for a physical thing - the obstacle half-width says
+        where the cut is - and the deck's own statement about that thing is read
+        off the same number. Two numbers would let the cut and the deck disagree
+        about where a structure is.
+
+        What a node is MEASURED AGAINST is that number's outline plus the
+        ACCEPTED MESH'S OWN EDGE. The edge is a property of the mesh - what a
+        relaxation places a node on a locked outline to - and not a second
+        tolerance the template gets to pick. Measured both ways on the same
+        harbour: a band sized off the element edge ALONE sat entirely inside the
+        cut, matched zero boundary nodes, and the run solved with its breakwater
+        as absorbing shore; an equality at the half-width exactly halved a
+        population sitting 9-11 m off a 20 m structure.
+
+        A value derived that way is DERIVED on the sheet, not template: the
+        template says which measurement the slot takes, and the number is the
+        accepted artifact's.
+        */
+    }
+
     requirement def WrapperHasNoOpinion {
         doc /*
         The wrapper asserts nothing and offers nowhere to. It is the analog of
@@ -834,6 +857,15 @@ package SteeringSurface {
         "tests/test_telemac_module_surface.py::test_a_keyword_two_parts_both_set_refuses_unless_the_template_settles_it";
     verify requirement CompositionNotInheritance by
         "tests/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
+
+    satisfy requirement ATemplateNumberIsMetToTheMeshsPrecision by door;
+    satisfy requirement ATemplateNumberIsMetToTheMeshsPrecision by sheet;
+    verify requirement ATemplateNumberIsMetToTheMeshsPrecision by
+        "tests/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width";
+    verify requirement ATemplateNumberIsMetToTheMeshsPrecision by
+        "tests/test_open_water_domains.py::test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline";
+    verify requirement ATemplateNumberIsMetToTheMeshsPrecision by
+        "tests/test_open_water_domains.py::test_a_lone_node_between_two_of_another_kind_is_not_a_face";
 
     satisfy requirement ProvenanceNamesTheLayerThatAnswered by sheet;
     satisfy requirement ProvenanceNamesTheLayerThatAnswered by door;

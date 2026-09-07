@@ -206,11 +206,18 @@ def _vertical_grid(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
 
 
 def Column(*, levels: Any, max_depth_m: Any,  # noqa: N802
-           thermocline_depth_m: Any, warm_c: Any, cold_c: Any) -> Mapping[str, Any]:
-    """The water column this run OPENS with: warm over cold, joined at a depth."""
+           thermocline_depth_m: Any, warm_c: Any, cold_c: Any,
+           surface_m: Any) -> Mapping[str, Any]:
+    """The water column this run OPENS with: warm over cold, joined at a depth.
+
+    ``surface_m`` is the elevation the free surface stands at, because the
+    thermocline is stated as a depth BELOW THE WATER TOP and the hook below has
+    only the node's elevation to work from.
+    """
     return MappingProxyType({"levels": levels, "max_depth_m": max_depth_m,
                              "thermocline_depth_m": thermocline_depth_m,
-                             "warm_c": warm_c, "cold_c": cold_c})
+                             "warm_c": warm_c, "cold_c": cold_c,
+                             "surface_m": surface_m})
 
 
 def _column(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
@@ -227,7 +234,8 @@ def _column(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     return ({"FORTRAN_FILE": USER_FORTRAN_DIR},
             {_CONDI_SOURCE: _condi_thermocline(
                 float(value["thermocline_depth_m"]), float(value["warm_c"]),
-                float(value["cold_c"]), float(plan["thermocline_delta_m"]))})
+                float(value["cold_c"]), float(plan["thermocline_delta_m"]),
+                float(value["surface_m"]))})
 
 
 _CONDI_HEAD = """!                   ****************************
@@ -246,19 +254,19 @@ _CONDI_TAIL = """      RETURN
 
 
 def _condi_thermocline(depth_m: float, warm_c: float, cold_c: float,
-                       delta_m: float) -> str:
+                       delta_m: float, surface_m: float) -> str:
     """A warm epilimnion over a cold hypolimnion, joined by a tanh thermocline.
 
     ``T = Tc + (Tw - Tc) * 0.5 * (1 - TANH((DPTH - DTHERM)/DELTA))``. ``Z`` is the
-    bed-referenced elevation the engine's own ``CALCOT`` populates before this
-    hook, so the depth below the surface is ``-Z``. The tanh is resolved whenever
-    DELTA is at least twice the near-surface layer, and the column anomaly then
-    converges - which is why ``delta_m`` comes from the grid plan and never from a
-    literal.
+    elevation the engine's own ``CALCOT`` populates before this hook, on the same
+    datum the free surface was initialized on, so the depth below the water top is
+    ``ZS - Z``. The tanh is resolved whenever DELTA is at least twice the
+    near-surface layer, and the column anomaly then converges - which is why
+    ``delta_m`` comes from the grid plan and never from a literal.
     """
     return (_CONDI_HEAD
             + "      DO I3=1,NPOIN3\n"
-              "        DPTH=-Z(I3)\n"
+            + f"        DPTH={surface_m:.4f}D0-Z(I3)\n"
             + f"        TA%ADR(1)%P%R(I3)={cold_c:.4f}D0+"
               f"({warm_c - cold_c:.4f}D0)*0.5D0*\n"
             + f"     &    (1.D0-TANH((DPTH-{depth_m:.4f}D0)/{delta_m:.4f}D0))\n"

@@ -131,3 +131,80 @@ def test_the_basin_reads_the_same_survey_it_was_clipped_to(tmp_path):
     set_bed = next(op for op in MESH.ops if op.fn == "set_bed")
     assert repr(basin.kwargs["bed"]) == repr(DATA.bed) == "DataRef('bed')"
     assert repr(set_bed.kwargs["source"]) == repr(DATA.bed)
+
+
+# -- the basin: the level it opens at ----------------------------------------- #
+
+def _gauges(tmp_path, rows):
+    """A gauge layer as the CO-OPS fetch returns one: points carrying a series."""
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    path = tmp_path / "gauges.fgb"
+    gpd.GeoDataFrame(
+        [{"station_id": sid, "station_name": name,
+          "time_series_csv": series} for sid, name, _lon, _lat, series in rows],
+        geometry=[Point(lon, lat) for _sid, _name, lon, lat, _series in rows],
+        crs=4326).to_file(path, driver="FlatGeobuf")
+    return str(path)
+
+
+_SERIES = "2026-09-05T23:48Z,0.346000\n2026-09-05T23:54Z,0.291000"
+
+
+def test_the_level_is_the_nearest_gauges_last_reading(tmp_path):
+    """Two gauges on one lake: the one the AOI is at answers, and the level is
+    the last sample it published in the window rather than a mean of it."""
+    from trid3nt_server.workflows.telemac.templates.stratified_flow.lake_level import (
+        _observed,
+    )
+
+    reading = _observed(
+        _gauges(tmp_path, [("9099018", "Marquette C.G.", -87.378, 46.545, _SERIES),
+                           ("9099044", "Ontonagon", -89.324, 46.874,
+                            "2026-09-05T23:54Z,9.900000")]),
+        "fetch_greatlakes_water_level", "fetch_greatlakes_bathymetry",
+        {"lon": -87.380, "lat": 46.539})
+    assert reading["elevation_m"] == pytest.approx(0.291)
+    assert reading["station_id"] == "9099018"
+    assert "offset between them is 0.000 m" in reading["note"]
+
+
+def test_a_level_and_a_bed_on_two_datums_refuse_by_name(tmp_path):
+    """The stated datum is the whole arithmetic: a gauge on one zero and a bed on
+    another are not two numbers on one axis, and adding them is the refusal."""
+    from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
+    from trid3nt_server.workflows.telemac.templates.stratified_flow.lake_level import (
+        _observed,
+    )
+
+    with pytest.raises(OpenWaterError) as excinfo:
+        _observed(_gauges(tmp_path, [("9099018", "Marquette C.G.", -87.378,
+                                      46.545, _SERIES)]),
+                  "fetch_greatlakes_water_level", "fetch_topobathy",
+                  {"lon": -87.380, "lat": 46.539})
+    assert excinfo.value.error_code == "TELEMAC3D_DATUMS_DIFFER"
+    assert "NAVD88" in str(excinfo.value)
+
+
+def test_water_no_gauge_watches_refuses_rather_than_opening_at_the_datum(tmp_path):
+    """A lake nobody measures the level of does not get zero: zero IS the chart
+    datum, which is the dry rim this row exists to give water."""
+    from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
+    from trid3nt_server.workflows.telemac.templates.stratified_flow.lake_level import (
+        _observed,
+    )
+
+    with pytest.raises(OpenWaterError) as excinfo:
+        _observed(_gauges(tmp_path, []), "fetch_greatlakes_water_level",
+                  "fetch_greatlakes_bathymetry", {"lon": -87.38, "lat": 46.54})
+    assert excinfo.value.error_code == "TELEMAC3D_LAKE_IS_UNGAUGED"
+
+
+def test_the_thermocline_is_stated_below_the_water_top_not_the_datum():
+    """The hook has only the node's elevation, so a free surface the run opened
+    above the datum has to enter the depth the thermocline is placed at."""
+    from trid3nt_server.workflows.telemac.modules.telemac3d import _condi_thermocline
+
+    assert "DPTH=0.2910D0-Z(I3)" in _condi_thermocline(
+        8.0, 18.0, 6.0, 1.5, 0.291)

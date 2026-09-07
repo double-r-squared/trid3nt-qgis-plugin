@@ -1,0 +1,135 @@
+schema_version: v1
+name: fetch_greatlakes_water_level
+source_class: greatlakes_water_level
+error_prefix: GREATLAKES_WATER_LEVEL
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: EMPTY
+shape: station-timeseries-fgb
+supports_global_query: false
+# The zero these readings are counted from, stated from the API's own datum
+# field rather than assumed: the station metadata endpoint lists exactly ONE
+# datum for a Great Lakes gauge, GL_LWD. The wording is the Great Lakes
+# bathymetry row's, character for character, because a level and a bed can only
+# be read together when what they are counted from is the same statement.
+vertical_datum: each Great Lake's own Low Water Datum (metres, positive up)
+endpoints:
+  catalog:
+    url: "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json"
+    query: {type: waterlevels, units: metric, format: json}
+  data:
+    url_template: "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+params:
+  bbox:       {type: bbox, required: true, quantize: round_6dp}
+  start_date: {type: iso_date, required: true}
+  end_date:   {type: iso_date, required: true, max_range_days: 31}
+gates:
+  max_stations: 20
+ingest:
+  station_catalog: {lat_key: lat, lon_key: lng, id_key: id, name_key: name, rows_key: stations}
+  per_station:
+    request:
+      # THE DATUM, asked for by name. MSL and NAVD are refused by the API for
+      # these stations ("There is no MSL for the station: 9099018"), so the
+      # request cannot silently return a level on another reference.
+      datum: LWD
+      time_zone: gmt
+      interval: h
+      units: metric
+      application: trid3nt
+      begin_date: "{start:%Y%m%d}"
+      end_date: "{end:%Y%m%d}"
+      station: "{id}"
+      product: water_level
+      format: json
+    rows_key: [data]
+    time_key: t
+    value_key: v
+    time_normalize: iso8601z
+    time_series_csv: true
+    scalars: [wl_min_m, wl_max_m, wl_mean_m, n_timesteps, time_start, time_end]
+normalize:
+  crs: "EPSG:4326"
+  units: "m (LWD)"
+  datum: LWD
+  quantity: water_level
+output:
+  layer_type: vector
+  ext: fgb
+  role: input
+  style:
+    kind: reference
+    geometry: point
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:
+  model: per_station
+  kb_per_station_per_day: 8.0
+  overhead_kb: 0.5
+  stations_per_sq_deg: 2.0
+  floor_mb: 0.01
+caveats:
+- The Great Lakes water-level gauges only - about 50 stations across the five lakes and their
+  connecting channels. A bbox holding none returns GREATLAKES_WATER_LEVEL_EMPTY (retryable=false)
+  rather than a level from another basin.
+- The datum is each lake's own LOW WATER DATUM, which is the same zero the NCEI Great Lakes
+  bathymetric grids are charted on, so a level from here and a bed from fetch_greatlakes_bathymetry
+  are counted from one statement and need no offset between them.
+- An OCEAN coast station has no LWD at all; this tool asks for that datum by name, so a coastal
+  bbox comes back empty rather than on a different reference. For US ocean tide levels use
+  fetch_noaa_coops_tides (MLLW).
+- The service publishes six-minute samples for these gauges whatever interval is asked for, so a
+  one-day window carries a few hundred rows per station.
+docstring: |-
+  Fetch the OBSERVED Great Lakes water level at NOAA CO-OPS gauges as a FlatGeobuf.
+
+  **What it does:**
+      Retrieves the observed water-level record from the NOAA CO-OPS Data API
+      for every Great Lakes gauge in a bbox, on each lake's own LOW WATER DATUM
+      (LWD) - the same zero the NCEI Great Lakes bathymetric grids are charted
+      on. One Point feature per station carrying the full record inline as
+      ``time_series_csv``, plus min / max / mean.
+
+  **When to use:**
+      - The lake's SURFACE ELEVATION for a model that stands on lake-datum
+        bathymetry: the initial free surface of a lake or harbour basin.
+      - User asks "how high is Lake Superior / Michigan / Erie right now", "what
+        was the lake level during that storm", "the observed water level at this
+        Great Lakes harbour".
+
+  **When NOT to use:**
+      - A US OCEAN coast (tides, MLLW) -> ``fetch_noaa_coops_tides``.
+      - River discharge -> ``fetch_noaa_nwm_streamflow`` or the USGS gauges.
+      - The lake BED -> ``fetch_greatlakes_bathymetry``.
+
+  **Parameters:**
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326 over one of the
+          Great Lakes. Demo AOI (Marquette Lower Harbor, Lake Superior):
+          ``(-87.39234, 46.52812, -87.36788, 46.55021)`` -> station 9099018.
+      start_date: ISO ``YYYY-MM-DD``, inclusive.
+      end_date: ISO ``YYYY-MM-DD``, inclusive; at most 31 days from the start.
+
+  **Returns:**
+      A ``LayerURI`` pointing at the cached FlatGeobuf. One Point per station
+      with ``station_id``, ``station_name``, ``lon`` / ``lat``, ``datum``
+      (``"LWD"``), ``time_start`` / ``time_end``, ``n_timesteps``,
+      ``wl_min_m`` / ``wl_max_m`` / ``wl_mean_m`` and ``time_series_csv``
+      (``"iso,value_m"`` rows). ``layer_type="vector"``, ``units="m (LWD)"``.
+
+  **Errors:**
+      - ``GREATLAKES_WATER_LEVEL_INPUT_INVALID``: bad bbox or dates (retryable=False).
+      - ``GREATLAKES_WATER_LEVEL_UPSTREAM``: the API failed (retryable=True).
+      - ``GREATLAKES_WATER_LEVEL_EMPTY``: no Great Lakes gauge in the bbox, or
+        none published for the window (retryable=False).
+
+  **Vertical datum:**
+      Each lake's own Low Water Datum. The station metadata endpoint lists
+      exactly one datum for these gauges, ``GL_LWD``, and this tool asks the
+      data endpoint for it by name. It is NOT NAVD88, NOT IGLD85 and NOT mean
+      sea level; a level here and an orthometric elevation need a stated offset
+      before they can be read together.
+
+  Cache: ``ttl_class="dynamic-1h"``, ``source_class="greatlakes_water_level"``.
+  Tier-1 free. No API key. ``supports_global_query=False``.
