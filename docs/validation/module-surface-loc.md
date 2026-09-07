@@ -5,7 +5,10 @@ counted - it is data the image publishes), BEFORE at `09eea8b2` (the commit that
 resolved the design stops, immediately ahead of Stage 1) and AFTER at
 `7837e056`, the close of the lake-level remedy. Every number here was measured
 off the tree at those two points, not estimated, and the areas are the seven the
-spec's section 7 named.
+spec's section 7 named. The templates row and the three totals it feeds were
+re-measured on 2026-09-06 and corrected by two lines: the row read 4,847 where
+`git ls-tree` + `wc -l` over the tracked `.py` reads 4,849, so the wave's net is
+-3,777, not -3,779.
 
 ## The seven areas
 
@@ -15,23 +18,23 @@ spec's section 7 named.
 | `workflows/runtime/` | 6,742 | 5,658 | **-1,084** | the plan-step half of `interpreter.py` (1,189 -> 975), `plan.py`'s gates (461 -> 353), `validate.py`, `workflow.py`'s `EngineOps`; `slots.py`, `form.py` and the `_setter_envelope.py` orphan (440) delete outright. The rerun machinery survives, which is why this is not the spec's ~2,600. |
 | `telemac/workflow.py` | 382 | 349 | **-33** | the four `ops.*` realizations, `_PROCESSES`, `_MESH_SHEET_PARAMS` and `_refuse_uncovered_fields` die; the `Door` a template hands over, the two acts and the card view are what stand. |
 | `telemac/modules/` | 0 | 2,219 | **+2,219** | NEW: `module.py` (424) is what a slot and a wrapper are, `sheet.py` (358) the two acts and the provenance a row carries, `describe.py` (184) the read over the catalog, and five wrappers (1,203) holding catalog, composites and outputs. |
-| `telemac/templates/` | 3,038 | 4,847 | **+1,809** | the five plan-writing declarations at the telemac root become eight template packages plus `shared/river.py` (401). Every keyword the author hardcoded is a visible assertion here, and so is every value the coupled wrappers used to choose. |
+| `telemac/templates/` | 3,038 | 4,849 | **+1,811** | the five plan-writing declarations at the telemac root become eight template packages plus `shared/river.py` (401). Every keyword the author hardcoded is a visible assertion here, and so is every value the coupled wrappers used to choose. |
 | `workers/telemac/` | 3,839 | 954 | **-2,885** | `artemis_build.py` (1,176), `telemac3d_build.py` (1,002) and `_supplied_mesh.py` (197) die: the worker authors nothing. What is left is the entrypoint and its test. |
 | `shared/physics_registry.py` | 753 | 0 | **-753** | the hand-transcribed keyword table; the catalog is the keyword table now. |
-| **total** | **19,351** | **15,572** | **-3,779** | |
+| **total** | **19,351** | **15,574** | **-3,777** | |
 
 ## The honest net against the promise
 
 The spec's section 7 expected "of order -7,000 to -8,500 Python across server +
-worker". Measured over the seven areas it named, the wave delivers **-3,779**.
+worker". Measured over the seven areas it named, the wave delivers **-3,777**.
 The promise is NOT met, and the two places it was over-counted are measurable:
 
 - `runtime/` gave up 1,084 of the ~2,600 the spec assigned it. The Stage 1
   inventory ruled the rerun machinery survives under the sheet, so the ledger,
   the snapshot, the journal and the derive/reuse half of `rerun/` never became
   deletable. This was ruled, not missed.
-- the surface itself costs 4,028 that the spec's table did not carry as a line
-  (`modules/` +2,219 and the templates' +1,809). The catalog moved the keyword
+- the surface itself costs 4,030 that the spec's table did not carry as a line
+  (`modules/` +2,219 and the templates' +1,811). The catalog moved the keyword
   table out of Python into generated data, but the wrapper, the sheet and the
   eight STEERING bodies are new Python and the spec's arithmetic did not add
   them back.
@@ -68,13 +71,13 @@ one shared body (D4), which is the same code said once per question.
 ## What the lake-level remedy moved, against the conformance close
 
 Recomputed after `docs/IDEAS.md` "REMEDY RULINGS" (a) and (b) landed. The total
-went from -4,032 to **-3,779**: this leg is +253 net.
+went from -4,032 to **-3,777**: this leg is +255 net.
 
 | area | after the conformance remedy | after the lake level | delta | why |
 | --- | ---: | ---: | ---: | --- |
 | `telemac/authoring/` | 1,536 | 1,545 | +9 | the basin settle takes the free surface and measures the deepest column as surface minus bed, and journals the level beside the domain. |
 | `telemac/modules/` | 2,211 | 2,219 | +8 | the column composite carries the surface elevation, so the initial-condition hook places the thermocline below the water top rather than below the datum. |
-| `telemac/templates/` | 4,611 | 4,847 | +236 | `stratified_flow/lake_level.py` (the day, the nearest gauge, the reading, the datum comparison), the two DATA rows and the produce step that reads them. |
+| `telemac/templates/` | 4,611 | 4,849 | +238 | `stratified_flow/lake_level.py` (the day, the nearest gauge, the reading, the datum comparison), the two DATA rows and the produce step that reads them. |
 
 Outside the seven areas and outside the Python count: the new source row
 `trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_water_level/`
