@@ -18,7 +18,7 @@ from trid3nt_server.workflows.solver.solver import (
     LOCAL_SOLVER_SPEC_REGISTRY,
     SOLVER_WORKFLOW_REGISTRY,
 )
-from trid3nt_server.workflows.telemac import run_telemac as T
+from trid3nt_server.workflows.telemac.solving import run_telemac as T
 
 
 def test_telemac_registered_in_solver_workflow_registry():

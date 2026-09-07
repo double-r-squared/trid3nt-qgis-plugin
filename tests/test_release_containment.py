@@ -18,7 +18,7 @@ import json
 
 import pytest
 
-from trid3nt_server.workflows.telemac.release_point import (
+from trid3nt_server.workflows.telemac.helpers.release_point import (
     contain_release_point,
     domain_polygon_of,
 )
@@ -155,7 +155,7 @@ def _mesh_holding(x_from: float, x_to: float, monkeypatch):
 
 
 def test_a_derived_release_inside_the_mesh_is_left_where_it_was(monkeypatch):
-    from trid3nt_server.workflows.telemac.release_point import derive_release_on_mesh
+    from trid3nt_server.workflows.telemac.helpers.release_point import derive_release_on_mesh
 
     mesh = _mesh_holding(0.0, 1000.0, monkeypatch)
     (_lon, _lat), note = derive_release_on_mesh(
@@ -167,7 +167,7 @@ def test_a_derived_release_above_the_meshed_stretch_walks_downstream(monkeypatch
     """The centerline runs on past what the mapped banks left; the station has to
     be inside the triangulation or the solver stops with the source outside the
     domain."""
-    from trid3nt_server.workflows.telemac.release_point import derive_release_on_mesh
+    from trid3nt_server.workflows.telemac.helpers.release_point import derive_release_on_mesh
 
     mesh = _mesh_holding(400.0, 1000.0, monkeypatch)
     _lonlat, note = derive_release_on_mesh(
@@ -178,7 +178,7 @@ def test_a_derived_release_above_the_meshed_stretch_walks_downstream(monkeypatch
 
 
 def test_a_centerline_the_mesh_never_holds_refuses(monkeypatch):
-    from trid3nt_server.workflows.telemac.release_point import derive_release_on_mesh
+    from trid3nt_server.workflows.telemac.helpers.release_point import derive_release_on_mesh
 
     mesh = _mesh_holding(5000.0, 6000.0, monkeypatch)
     with pytest.raises(TelemacDyeScenarioError):
@@ -195,7 +195,7 @@ _NODES = [[0.0, 0.0], [100.0, 0.0], [200.0, 0.0], [300.0, 0.0]]
 
 
 def _snap(point, wet):
-    from trid3nt_server.workflows.telemac.release_point import snap_release_to_wetted
+    from trid3nt_server.workflows.telemac.helpers.release_point import snap_release_to_wetted
 
     return snap_release_to_wetted(point, node_xy=_NODES, wet=wet,
                                   state="a stand-in initial state")

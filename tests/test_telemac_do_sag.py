@@ -16,7 +16,7 @@ import pytest
 
 from tests.reach_chain import install_reach_chain
 
-from trid3nt_server.workflows.telemac.streeter_phelps import (
+from trid3nt_server.workflows.telemac.products.streeter_phelps import (
     sp_critical_point,
     sp_do_profile,
 )

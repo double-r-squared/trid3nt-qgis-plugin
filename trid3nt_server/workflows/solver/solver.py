@@ -248,7 +248,7 @@ PROGRESS_TERMINAL: int = 100
 #: ``workflow_name`` come from the backend sentinel
 #: (``LOCAL_DOCKER_WORKFLOW_NAME`` / ``LOCAL_EXEC_WORKFLOW_NAME``), not from this
 #: value. Every entry is now contributed at import by the engine that owns it
-#: (``workflows/telemac/run_telemac.py`` registers the TELEMAC solvers beside
+#: (``workflows/telemac/solving/run_telemac.py`` registers the TELEMAC solvers beside
 #: their ``LocalSolverSpec``), so a solver named here without a spec behind it
 #: cannot happen: the two land together or not at all.
 SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {}

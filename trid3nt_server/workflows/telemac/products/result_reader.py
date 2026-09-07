@@ -29,7 +29,7 @@ from typing import Any
 
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.result_reader")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.products.result_reader")
 
 __all__ = ["SelafinReadError", "read_selafin"]
 

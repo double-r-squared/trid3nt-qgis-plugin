@@ -577,7 +577,7 @@ from trid3nt_server.workflows.runtime.rerun import rerun_workflow  # noqa: E402,
 from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 # -- engine templates: tier=template members are ordinary retrieval-pool tools,
 # registered by their own @register_tool in the workflow-composer block below and
-# callable DIRECTLY. The solver-seam module workflows/telemac/run_telemac.py
+# callable DIRECTLY. The solver-seam module workflows/telemac/solving/run_telemac.py
 # (WorkflowError classes, solver specs) is separate; the templates import it.
 
 # -- discovery (dataset/tool retrieval) --

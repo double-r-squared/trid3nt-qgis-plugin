@@ -400,7 +400,7 @@ async def publish_dye_products(*, run: dict[str, Any], solve: dict[str, Any],
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         postprocess_telemac,
     )
-    from trid3nt_server.workflows.telemac.results_mesh_seam import (
+    from trid3nt_server.workflows.telemac.products.results_mesh_seam import (
         publish_results_mesh_via_seam,
     )
 

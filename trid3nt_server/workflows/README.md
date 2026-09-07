@@ -18,7 +18,7 @@ speak it.
 | --- | --- |
 | `runtime/` | The declarative library - the value types, the six doors, the validator, the interpreter, the skeleton and the run's records. See below. |
 | `mesh/` | The one mesh front: router, meshers, session, gate, artifact. Has its own map. |
-| `shared/` | Engine-agnostic seams the live engines need: AOI acquisition, the tide series, COG io, animation frames, the publish/manifest seams, solve progress, supplied geometry, run products. |
+| `shared/` | Engine-agnostic seams the live engines need: AOI acquisition, the tide series, COG io, the layer-uri record, the publish/manifest seams, solve progress, supplied geometry, run products. |
 | `solver/` | Solve dispatch and what came back: `solver.py` (the box), `code_provenance.py` (which code produced a run), `diagnostics/` (the one `read_run_diagnostics` dispatcher plus its per-engine parsers), `corpus.yaml` (routing phrasings). |
 | `telemac/` | The TELEMAC engine: the module wrappers, eight templates over them, and the fill/run door. Has its own map. |
 
@@ -40,7 +40,6 @@ speak it.
 | `rerun/` | The rerun-with-overrides primitive: derive a run from a run (`derive.py`), what it inherits (`reuse.py`), and the tool door onto it (`rerun_workflow.py`). |
 | `resolution.py` | Resolution sensitivity: which answers a coarse mesh reads wrong, and which way. |
 | `resolver.py` | The param resolver: the six doors in order, with bounds clamping and a provenance row per resolution. |
-| `_setter_envelope.py` | Shared machinery for the pre-migration parameter setters. |
 | `snapshot.py` | The run snapshot: what a finished run leaves behind so a child run can derive from it. |
 | `temporal.py` | The declared temporal transforms - `.resample(...)` and `.normalize(units=...)` - and the conversions behind them. |
 | `user_input.py` | The user-input species: clicks, sketches and typed values, normalized once. |

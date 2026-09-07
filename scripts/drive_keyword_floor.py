@@ -92,7 +92,7 @@ def _second_point(bucket: str, run_id: str, first: tuple[float, float]
     """
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.result_reader import read_selafin
+    from trid3nt_server.workflows.telemac.products.result_reader import read_selafin
 
     with tempfile.TemporaryDirectory(prefix="floor-") as scratch:
         path = os.path.join(scratch, _RESULT)

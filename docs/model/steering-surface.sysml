@@ -605,6 +605,19 @@ package SteeringSurface {
         */
     }
 
+    requirement def TheSteeringFormatHasOneWriter {
+        doc /*
+        telapy writes the steering file and the serializer is the only thing
+        that hands it a sheet. A keyword spelled and assigned in a string
+        anywhere else is a second author of the format, and a second author is
+        what the surface replaced: the hand-written one wrote the deck line by
+        line and its comments were the only description a keyword had.
+
+        The gate is over the dictionary's own names, so a new writer is caught
+        by what it spells rather than by a list of files somebody keeps.
+        */
+    }
+
     // ----------------------------------------------------------------- //
     // Allocations
     // ----------------------------------------------------------------- //
@@ -768,4 +781,9 @@ package SteeringSurface {
         "tests/test_telemac_module_surface.py::test_run_serializes_then_stages_then_dispatches";
     verify requirement RunIsHeld by
         "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+
+    satisfy requirement TheSteeringFormatHasOneWriter by serializer;
+    satisfy requirement TheSteeringFormatHasOneWriter by steeringDriver;
+    verify requirement TheSteeringFormatHasOneWriter by
+        "tests/test_telemac_module_surface.py::test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck";
 }

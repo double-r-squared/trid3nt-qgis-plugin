@@ -16,7 +16,7 @@ from typing import Any
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.release_layer")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.helpers.release_layer")
 
 __all__ = ["publish_release_point"]
 

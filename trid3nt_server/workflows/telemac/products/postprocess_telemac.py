@@ -65,7 +65,7 @@ from trid3nt_server.emission import presets
 from trid3nt_server.workflows.shared import cog_io
 from trid3nt_server.workflows.shared.cog_io import CogIoError
 from trid3nt_server.workflows.shared.cog_io import RUNS_BUCKET_DEFAULT
-from trid3nt_server.workflows.telemac.result_reader import read_selafin
+from trid3nt_server.workflows.telemac.products.result_reader import read_selafin
 
 from .run_reads import wetted_fraction
 
@@ -1387,7 +1387,7 @@ def _streeter_phelps_overlay(curve_x, curve_do, curve_bod, *, velocity_mps,
     """
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.streeter_phelps import sp_do_profile
+    from trid3nt_server.workflows.telemac.products.streeter_phelps import sp_do_profile
 
     if k1_per_day is None or k2_per_day is None:
         return 0, [], "no deoxygenation/reaeration rates were carried to the read"

@@ -3,7 +3,8 @@
 The pieces a TELEMAC family reaches for that are neither the run it authors, the
 solve it dispatches, nor the deliverable it publishes: where the reach or the
 catchment is, what falls on it and flows through it, what soaks in, what was
-spilled, what chemistry runs, and how each of those refuses.
+spilled and where it is allowed to enter the water, what chemistry runs, and how
+each of those refuses.
 
 Nothing here decides what question is being asked. A declaration names the
 helper it wants and what feeds it.
@@ -17,6 +18,8 @@ helper it wants and what feeds it.
 | `errors.py` | The pipelines' typed failures, each with the code the envelope carries. |
 | `forcing.py` | Declared forcing DATA: net rain and evaporation, the storm a catchment is driven by, and the carrier discharge resolved at the reach. |
 | `infiltration.py` | The infiltration surface: per-node curve numbers and Manning n, sampled from land cover at the mesh's own nodes. |
+| `release_point.py` | Where a release is allowed to be - inside the domain, on the river, in water - the refusal when a supplied point is not, and where a derived one is settled inside the accepted mesh. |
+| `release_layer.py` | That release point published as a context layer on the canvas. |
 | `reach.py` | The reach front of every river plan: geocode, seed, flowline, banks coverage, mesh coverage, the CFL timestep law. |
 | `dredging.py` | NESTOR: the fields a maintenance dredge acts on, the actions it takes and the grade it digs to - as the CONTENT of the three files the module reads together. |
 | `oil.py` | The oil module's own preset, and the per-run Fortran this run's release is compiled into. |

@@ -24,7 +24,7 @@ from typing import Any
 
 from trid3nt_contracts.execution import LayerURI
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.results_mesh_seam")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.products.results_mesh_seam")
 
 __all__ = ["publish_results_mesh_via_seam"]
 

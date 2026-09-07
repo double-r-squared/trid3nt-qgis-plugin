@@ -186,7 +186,7 @@ async def solve_reach(*, run: dict[str, Any],
         route_sim_terminal,
     )
     from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
-    from trid3nt_server.workflows.telemac.run_telemac import TELEMAC_SOLVER_NAME
+    from trid3nt_server.workflows.telemac.solving.run_telemac import TELEMAC_SOLVER_NAME
 
     # What the server already knows and the worker cannot learn from the files
     # it is handed. The wait is bounded off the deck's own horizon and step.
@@ -352,7 +352,7 @@ async def solve_case(*, run: dict[str, Any],
 
 
 def _telemac_solver_name() -> str:
-    from trid3nt_server.workflows.telemac.run_telemac import TELEMAC_SOLVER_NAME
+    from trid3nt_server.workflows.telemac.solving.run_telemac import TELEMAC_SOLVER_NAME
 
     return TELEMAC_SOLVER_NAME
 

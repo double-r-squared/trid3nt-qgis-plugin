@@ -225,7 +225,7 @@ async def publish_rain_on_grid_products(*, run: dict[str, Any],
         continuity_rel_error,
         outlet_hydrograph,
     )
-    from trid3nt_server.workflows.telemac.results_mesh_seam import (
+    from trid3nt_server.workflows.telemac.products.results_mesh_seam import (
         publish_results_mesh_via_seam,
     )
 

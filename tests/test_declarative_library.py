@@ -980,7 +980,7 @@ async def test_a_replayed_artifact_comes_back_as_the_artifact_not_as_a_mapping()
     is refused for having been cut from one.
     """
     from trid3nt_server.workflows.mesh.artifact import MeshArtifact, measured_min_edge_m
-    from trid3nt_server.workflows.telemac.release_point import domain_polygon_of
+    from trid3nt_server.workflows.telemac.helpers.release_point import domain_polygon_of
 
     plan = Plan("mesh_replay_w", None, (
         Step(runner=f"{_HERE}.stub_mesh_step").named("mesh"),

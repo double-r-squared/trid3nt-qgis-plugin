@@ -87,7 +87,7 @@ def test_every_telemac_spec_declares_no_network():
     Note the reach spec also serves the rain-on-grid catchment, so this one line
     is what puts BOTH remaining legs behind the denied network.
     """
-    import trid3nt_server.workflows.telemac.run_telemac  # noqa: F401
+    import trid3nt_server.workflows.telemac.solving.run_telemac  # noqa: F401
     from trid3nt_server.workflows.solver.solver import LOCAL_SOLVER_SPEC_REGISTRY
 
     for name in ("artemis_agitation", "telemac3d_strat", "telemac_river_dye"):

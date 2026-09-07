@@ -259,7 +259,7 @@ async def publish_agitation_products(*, run: dict[str, Any],
     """The solved harbour -> its published Kd layer, its scalars and its curve."""
     import numpy as np
 
-    from ..result_reader import read_selafin
+    from .result_reader import read_selafin
     from .postprocess_telemac import postprocess_artemis
 
     run_id = solve["run_id"]

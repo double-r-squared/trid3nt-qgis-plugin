@@ -128,7 +128,7 @@ def surface_d50_spread(gaia_slf: str | Path) -> dict[str, Any]:
     """
     import numpy as np
 
-    from trid3nt_server.workflows.telemac.result_reader import read_selafin
+    from trid3nt_server.workflows.telemac.products.result_reader import read_selafin
 
     slf = read_selafin(str(gaia_slf))
     picked = next((v for v in slf["varnames"]

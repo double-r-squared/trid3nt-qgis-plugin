@@ -239,7 +239,7 @@ async def publish_stratified_products(*, run: dict[str, Any],
     """
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
-    from ..result_reader import read_selafin
+    from .result_reader import read_selafin
     from .postprocess_telemac import postprocess_telemac3d
 
     emitter = current_emitter()

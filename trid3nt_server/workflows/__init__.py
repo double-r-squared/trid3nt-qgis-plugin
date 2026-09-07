@@ -21,6 +21,6 @@ from __future__ import annotations
 
 # Import the workflow modules so their @register_tool decorators fire at
 # package import time and the LLM-facing wrappers land in TOOL_REGISTRY.
-from .telemac import run_telemac as _run_telemac  # noqa: F401  -- registers the TELEMAC local-docker solve specs (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); the LLM templates are imported by tools/__init__.py
+from .telemac.solving import run_telemac as _run_telemac  # noqa: F401  -- registers the TELEMAC local-docker solve specs (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); the LLM templates are imported by tools/__init__.py
 
 __all__: list[str] = []

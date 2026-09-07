@@ -404,7 +404,7 @@ package SolveSeam {
 
     part launcherArm : LauncherArm {
         doc /*
-        code: trid3nt_server/workflows/telemac/run_telemac.py
+        code: trid3nt_server/workflows/telemac/solving/run_telemac.py
         */
         port metricsIn : MetricsIn;
         port completionOut : CompletionOut;
@@ -444,7 +444,7 @@ package SolveSeam {
 
     part resultReader : ResultReader {
         doc /*
-        code: trid3nt_server/workflows/telemac/result_reader.py
+        code: trid3nt_server/workflows/telemac/products/result_reader.py
         */
         port fieldsOut : FieldsOut;
     }
@@ -649,7 +649,7 @@ package SolveSeam {
         worker's number, and converting it would make the cross-check agree
         with itself.
 
-        forbid: trid3nt_server.workflows.telemac.result_reader -> struct
+        forbid: trid3nt_server.workflows.telemac.products.result_reader -> struct
         forbid: trid3nt_server.workflows.telemac.products.postprocess_telemac -> struct
         forbid: trid3nt_server.workflows.telemac.products.run_reads -> struct
         forbid: trid3nt_server.workflows.telemac.authoring.assembler -> struct

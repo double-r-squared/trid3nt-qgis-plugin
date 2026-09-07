@@ -97,7 +97,7 @@ def _why(metrics: dict[str, Any], fallback: str) -> str:
     Carrying that sentence out is what keeps this side from inventing a required
     set the Fortran never agreed to.
     """
-    from .products.run_reads import engine_demand
+    from ..products.run_reads import engine_demand
 
     said = str(metrics.get("error") or fallback)
     demand = engine_demand(str(metrics.get("listing_tail") or ""))

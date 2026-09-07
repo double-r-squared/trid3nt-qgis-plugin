@@ -362,8 +362,8 @@ def test_an_unknown_data_row_is_an_attribute_error_at_the_line_that_wrote_it():
 def _install_step_mocks(captured: dict):
     from trid3nt_server.workflows.solver import solver as solver_mod
     from trid3nt_server.workflows.telemac.products import postprocess_telemac as pp_mod
-    from trid3nt_server.workflows.telemac import release_layer as rel_mod
-    from trid3nt_server.workflows.telemac import results_mesh_seam as seam_mod
+    from trid3nt_server.workflows.telemac.helpers import release_layer as rel_mod
+    from trid3nt_server.workflows.telemac.products import results_mesh_seam as seam_mod
     from trid3nt_server.workflows.shared import run_products as products_mod
     from trid3nt_server.workflows.telemac.products import products as prod_mod
     from trid3nt_server.workflows.mesh import step as mesh_step

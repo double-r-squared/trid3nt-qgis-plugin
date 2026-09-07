@@ -25,7 +25,7 @@ from trid3nt_server.workflows.telemac.helpers.errors import (
     TelemacReleaseOutsideDomainError,
 )
 
-logger = logging.getLogger("trid3nt_server.workflows.telemac.release_point")
+logger = logging.getLogger("trid3nt_server.workflows.telemac.helpers.release_point")
 
 __all__ = ["ContainedRelease", "contain_release_point", "derive_release_on_mesh",
            "domain_polygon_of", "snap_release_to_wetted"]

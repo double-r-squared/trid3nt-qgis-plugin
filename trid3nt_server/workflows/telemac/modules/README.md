@@ -30,7 +30,11 @@ explicit, on a complete sheet, and it is where execution stops being held.
 | --- | --- |
 | `__init__.py` | The door: the wrappers, and the two acts. |
 | `module.py` | What a slot, a wrapper, a composite and an output ARE, and the catalog loader that makes a wrapper out of `catalog/<module>.json`. |
-| `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the mandatory slots still open - and `fill` / `run`. |
-| `telemac2d.py` | The TELEMAC-2D wrapper. |
+| `sheet.py` | The sheet - filled slots with their provenance, the files a composite named, the slots still open - and `fill` / `run`. |
+| `describe.py` | `describe_keywords` - the read over a module's catalog, which is how the whole keyword surface is reached rather than carried in a docstring. |
+| `corpus.yaml` | The routing phrasings that reach `describe_keywords`. |
+| `telemac2d.py` | The TELEMAC-2D wrapper: the releases, wind, rain, friction, rating, hyetograph, time-origin and coupling groups, and the fields and mass-balance outputs. |
 | `telemac3d.py` | The TELEMAC-3D wrapper: the vertical grid keyword pair and its refusal, the water column a stratified run is initialized from, and the wind. |
 | `artemis.py` | The ARTEMIS wrapper: the incident wave, which the module reads out of the boundary file rather than the deck, so the composite restamps the pair the mesh recipe wrote. |
+| `waqtel.py` | The WAQTEL wrapper: the coupled bodies a carrier names, whose slots serialize into WAQTEL's own steering file while the coupling keywords land on the carrier's sheet. |
+| `gaia.py` | The GAIA wrapper: the sediment bodies a carrier names and the NESTOR dredging composite, coupled the same way. |

@@ -383,7 +383,7 @@ def _continuation_state(uri: str) -> dict[str, Any]:
     import numpy as np
 
     from trid3nt_server.workflows.solver.solver import _download_object
-    from trid3nt_server.workflows.telemac.result_reader import read_selafin
+    from trid3nt_server.workflows.telemac.products.result_reader import read_selafin
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         _DEPTH_VAR_KEYS, TELEMAC_WSE_WET_DEPTH_M,
     )
@@ -497,7 +497,7 @@ async def _settle_release(
     at t0; a bankfull domain at low flow has mapped river that is dry ground when
     the run opens, and a source released onto it discharges into the bed.
     """
-    from trid3nt_server.workflows.telemac.release_point import (
+    from trid3nt_server.workflows.telemac.helpers.release_point import (
         contain_release_point, derive_release_on_mesh, domain_polygon_of,
         snap_release_to_wetted,
     )
@@ -697,7 +697,7 @@ async def settle_reach(
     SAME declared scenario evaluated over the stretch of one absolute clock this
     run covers.
     """
-    from trid3nt_server.workflows.telemac.release_layer import publish_release_point
+    from trid3nt_server.workflows.telemac.helpers.release_layer import publish_release_point
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
     release_pair = coerce_lonlat_point(release_coords)

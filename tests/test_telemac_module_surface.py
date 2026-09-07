@@ -9,8 +9,10 @@ nobody wrote.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -1015,3 +1017,72 @@ def test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody()
     open_row = rows["NAMES_OF_TRACERS"]
     assert open_row.advanced and open_row.value is None
     assert open_row.source_badge == "open: the dictionary gives it no default"
+
+
+# -- the steering format has ONE writer -------------------------------------- #
+
+
+#: The two modules that write the steering format: the serializer resolves the
+#: sheet into decks, and the in-image driver hands each keyword to telapy.
+_STEERING_WRITERS = (
+    "trid3nt_server/workflows/telemac/authoring/serializer.py",
+    "trid3nt_server/workflows/mesh/meshers/drivers/telemac_cas_driver.py",
+)
+
+
+def _keyword_writer_lines(path: Path, keywords: set[str]) -> list[tuple[int, str]]:
+    """Every string CONSTANT in ``path`` that spells a raw keyword and assigns it.
+
+    A docstring is prose about a keyword and never a deck line, so the module,
+    class and function docstrings are read past; what remains is a literal the
+    module could write into a file.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    prose = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                             ast.AsyncFunctionDef)) and node.body:
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) \
+                    and isinstance(first.value.value, str):
+                prose.add(id(first.value))
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+            continue
+        if id(node) in prose:
+            continue
+        for match in _ASSIGNS_A_KEYWORD.finditer(node.value):
+            if match.group("keyword") in keywords:
+                found.append((node.lineno, match.group("keyword")))
+    return found
+
+
+#: A deck line: a raw keyword at the head of a line, then the format's own
+#: assignment. This is the shape the hand-written author wrote and the shape a
+#: second writer would take again.
+_ASSIGNS_A_KEYWORD = re.compile(
+    r"(?m)^\s*(?P<keyword>[A-Z][A-Z0-9 ,'()/.+\-]*[A-Z0-9)])\s*[:=]")
+
+
+def test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck():
+    """No module outside the two writers spells a keyword and assigns it.
+
+    telapy writes the steering format and the serializer is the only thing that
+    hands it a sheet. A keyword formatted into a string anywhere else is a second
+    author of the format - which is what the surface replaced - and it is caught
+    here by the dictionary's own names rather than by a list somebody maintains.
+    """
+    keywords = {slot.keyword for module in _EXPOSED + ("tomawac",)
+                for slot in load_catalog(module).values()}
+    offenders = {}
+    for tree_root in (Path("trid3nt_server"), Path("workers")):
+        for path in sorted(tree_root.rglob("*.py")):
+            if path.as_posix() in _STEERING_WRITERS:
+                continue
+            lines = _keyword_writer_lines(path, keywords)
+            if lines:
+                offenders[path.as_posix()] = lines
+    assert not offenders, (
+        "a keyword is spelled and assigned outside the serializer and its "
+        f"driver, which is a second writer of the steering format: {offenders}")

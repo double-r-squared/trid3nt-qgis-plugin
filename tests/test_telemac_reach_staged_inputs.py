@@ -187,7 +187,7 @@ def test_the_continuation_starts_where_the_restart_file_says_it_does(monkeypatch
     asked for, so a server that derived the instant would author the extended
     scenario over the wrong stretch of clock.
     """
-    import trid3nt_server.workflows.telemac.result_reader as reader
+    import trid3nt_server.workflows.telemac.products.result_reader as reader
     from trid3nt_server.workflows.telemac.authoring.assembler import (
         _continuation_state,
     )

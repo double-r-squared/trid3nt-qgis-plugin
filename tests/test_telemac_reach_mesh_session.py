@@ -102,7 +102,7 @@ def settle(monkeypatch, tmp_path):
     """
     import numpy as np
 
-    from trid3nt_server.workflows.telemac import release_layer as rel_mod
+    from trid3nt_server.workflows.telemac.helpers import release_layer as rel_mod
 
     async def _publish(*_a, **_kw):
         return False
