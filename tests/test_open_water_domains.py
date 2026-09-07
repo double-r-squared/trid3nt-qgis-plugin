@@ -28,21 +28,40 @@ def test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width():
 
 
 def test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline():
-    """The water inside the footprint was removed, so a boundary node can only be
-    within the half-width if it stands on the cut. A band wider than the cut
-    reaches into open water and calls it solid."""
+    """The water inside the footprint was removed, so a boundary node is on the
+    cut when it stands at the half-width - to the precision a relaxation places
+    a node on a locked outline, which is the mesh's own edge. Point Judith,
+    measured: 176 boundary nodes at 9-11 m off a 20 m structure and nothing at
+    all between 11 and 12 m, so an equality at 10.000 m halves one population."""
     from trid3nt_server.workflows.telemac.authoring.assembler import _nodes_near
 
-    # one 200 m centreline segment, cut 20 m wide: the outline runs at 10 m.
+    # one 200 m centreline segment, cut 20 m wide on a 5 m mesh: the outline runs
+    # at 10 m and a node sits on it to within an edge.
+    band = 20.0 / 2.0 + 5.0
     segments = [[0.0, 0.0, 200.0, 0.0]]
-    points = np.array([[100.0, 10.0],     # on the outline
-                       [100.0, -9.5],     # on the outline, the other face
-                       [100.0, 26.0],     # open water an element edge away
+    points = np.array([[100.0, 10.4],     # on the outline, an edge's slack out
+                       [100.0, -9.6],     # on it, the other face
+                       [100.0, 40.0],     # open water well off the cut
                        [400.0, 0.0]])     # past the end of the structure
-    assert _nodes_near(segments, points, [0, 1, 2, 3], 10.0) == [0, 1]
-    # the band the arm used to run under - 1.5 element edges at a 25 m mesh -
-    # swallows the open-water node, which is the FRONT2 refusal.
-    assert 2 in _nodes_near(segments, points, [0, 1, 2, 3], 37.5)
+    assert _nodes_near(segments, points, [0, 1, 2, 3], band) == [0, 1]
+    assert _nodes_near(segments, points, [0, 1, 2, 3], 10.0) == [1]
+
+
+def test_a_lone_node_between_two_of_another_kind_is_not_a_face():
+    """front2.f refuses "a solid point between two liquid points" and the reverse
+    by name, so the walk settles them: a role is a RUN, and a single node whose
+    two neighbours agree with each other is theirs."""
+    from trid3nt_server.workflows.telemac.authoring.assembler import _settled_walk
+
+    walk = [10, 11, 12, 13, 14, 15, 16, 17]
+    structure, liquid = _settled_walk(
+        walk, structure={10, 11, 13, 14}, liquid={12, 15, 16, 17})
+    assert structure == [10, 11, 12, 13, 14]      # the hole at 12 closes
+    assert liquid == [15, 16, 17]
+    # and a lone structure node inside a liquid run goes the other way.
+    structure, liquid = _settled_walk(
+        walk, structure={13}, liquid={10, 11, 12, 14, 15, 16, 17})
+    assert structure == []
 
 
 # -- the basin: clipped to what was measured ---------------------------------- #

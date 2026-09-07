@@ -1106,6 +1106,34 @@ def _nodes_near(segments: Any, points_utm: Any, candidates: Sequence[int],
     return [int(n) for n in picked[distance <= float(tolerance_m)]]
 
 
+def _settled_walk(walk: Sequence[int], structure: set[int], liquid: set[int]
+                  ) -> tuple[list[int], list[int]]:
+    """The two roles as RUNS of the boundary walk, not as scatters of nodes.
+
+    A node standing alone between two of another kind is not a face. front2.f
+    says so itself - it refuses "a solid point between two liquid points" and
+    the reverse by name - so a lone node whose two walk neighbours agree with
+    each other and not with it takes their role. Settled until nothing moves,
+    because closing one hole can expose the next.
+
+    The structure wins where the two overlap, so an ambiguity here reads the
+    same way the stamp reads it.
+    """
+    order = [int(n) for n in walk]
+    kind = ["structure" if n in structure else
+            ("liquid" if n in liquid else "shore") for n in order]
+    for _pass in range(len(order)):
+        moved = False
+        for i in range(1, len(kind) - 1):
+            if kind[i - 1] == kind[i + 1] != kind[i]:
+                kind[i] = kind[i - 1]
+                moved = True
+        if not moved:
+            break
+    return ([n for n, k in zip(order, kind) if k == "structure"],
+            [n for n, k in zip(order, kind) if k == "liquid"])
+
+
 def _harbour_mesh_missing(message: str) -> Exception:
     return OpenWaterError(message, error_code="ARTEMIS_MESH_NOT_ACCEPTED")
 
@@ -1163,21 +1191,21 @@ async def settle_harbour(
         code="ARTEMIS_STRUCTURE_INVALID") or []
     segments = await asyncio.to_thread(
         _segments_utm, polylines, utm_epsg) if polylines else []
-    # ONE NUMBER decides what is ON the structure, and it is the one the mesher
+    # ONE NUMBER decides where the structure is, and it is the one the mesher
     # punched with: the footprint is the centreline buffered by HALF the declared
-    # width, so a boundary node stands on the punched outline exactly when it is
-    # within that half-width of the centreline - the water inside the footprint
-    # was removed, so there is no other way for a boundary node to be there. A
-    # looser band reaches past the cut and calls open water solid, which is the
-    # lone solid node between two liquid ones that ARTEMIS refuses in FRONT2.
-    half_width_m = float(structure_width_m) / 2.0
+    # width, so the punched outline stands at that half-width and the water
+    # inside it was removed. What a boundary node is measured against is that
+    # outline plus the mesh's OWN edge, because a relaxation places a node on a
+    # locked outline to within the edge it was built at - measured on this
+    # harbour, the outline holds one population of nodes at 9-11 m off a 20 m
+    # structure with nothing at all between 11 and 12 m, so an equality at
+    # 10.000 m cuts that one population in half.
     # A structure face WINS a contested node: a barrier that imposed the incident
     # wave would radiate the sheltering away from inside the lee.
-    solid = [n for n in boundary_nodes if n not in set(open_nodes)]
-    structure_nodes = sorted(set(
-        _nodes_near(segments, points_utm, solid, half_width_m))
-        | set(_nodes_near(segments, points_utm, open_nodes, half_width_m)))
-    open_nodes = [n for n in open_nodes if n not in set(structure_nodes)]
+    band_m = float(structure_width_m) / 2.0 + float(facts["mesh_size_m"])
+    on_structure = set(_nodes_near(segments, points_utm, boundary_nodes, band_m))
+    structure_nodes, open_nodes = _settled_walk(
+        boundary_nodes, on_structure, set(open_nodes) - on_structure)
 
     import numpy as np
 

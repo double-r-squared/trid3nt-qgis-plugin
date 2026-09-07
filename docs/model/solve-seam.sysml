@@ -768,11 +768,24 @@ package SolveSeam {
         the half-width of the centreline, and there is no other way for a
         boundary node to be there.
 
-        Two numbers let the two disagree. A band sized off the element edge
-        reaches past the cut, stamps solid on open water and leaves one solid
-        node between two liquid ones, which ARTEMIS refuses in FRONT2 - measured
-        on the supplied-mesh acceptance arm, which would not solve while the
-        same structure on the same AOI solved through the recipe.
+        Two numbers let the two disagree. A band sized off the element edge ALONE
+        was measured at 7.7 m against a 10 m cut on the om2d arm: it sat entirely
+        inside the footprint, took ZERO boundary nodes, and the harbour solved
+        with its breakwater as absorbing shore - the sheltering answer read off a
+        structure the deck never stated.
+
+        What a node is measured against is the outline plus the mesh's OWN edge,
+        because a relaxation places a node on a locked outline to within the edge
+        it was built at. Point Judith, measured: 176 boundary nodes at 9-11 m off
+        a 20 m structure with nothing at all between 11 and 12 m, so an equality
+        at 10.000 m cuts one population in half and alternates along the walk.
+
+        And the two roles settle as RUNS, not as scatters of nodes: front2.f
+        refuses "a solid point between two liquid points" and the reverse by
+        name, so a lone node whose two walk neighbours agree with each other
+        takes their role. This is the mesh seam's own
+        BoundaryRolesAreContiguousRuns, applied where the harbour settle was
+        deciding node by node.
         */
     }
 
@@ -867,6 +880,8 @@ package SolveSeam {
         "tests/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width";
     verify requirement OneNumberDefinesTheStructure by
         "tests/test_open_water_domains.py::test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline";
+    verify requirement OneNumberDefinesTheStructure by
+        "tests/test_open_water_domains.py::test_a_lone_node_between_two_of_another_kind_is_not_a_face";
 
     satisfy requirement AWaterDomainIsClippedToItsMeasuredBed by basinDomainClip;
     verify requirement AWaterDomainIsClippedToItsMeasuredBed by
