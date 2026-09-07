@@ -250,6 +250,9 @@ artemis_harbor_agitation = register_workflow(
         settle=Step(runner=f"{_AUTHORING}.assembler.settle_harbour",
                     stage="author",
                     kwargs={"mesh": Ref("mesh"), "structure": DATA.structure,
+                            # The width the footprint above was cut at: what the
+                            # mesher removed is what the deck calls solid.
+                            "structure_width_m": ParamRef("barrier_width_m"),
                             "wave_period_s": ParamRef("wave_period_s"),
                             "wave_height_m": ParamRef("wave_height_m"),
                             "wave_direction_deg": ParamRef("wave_direction_deg"),

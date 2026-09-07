@@ -1089,12 +1089,7 @@ def _boundary_file(mesh: Mapping[str, Any], *,
 
 def _nodes_near(segments: Any, points_utm: Any, candidates: Sequence[int],
                 tolerance_m: float) -> list[int]:
-    """The candidate nodes lying within ``tolerance_m`` of any declared segment.
-
-    The cut is conformal, so a structure face sits ON the declared line rather
-    than a lattice step away from it; the tolerance is one element edge, which is
-    the distance a node can be from a line it was meshed onto.
-    """
+    """The candidate nodes lying within ``tolerance_m`` of any declared segment."""
     import numpy as np
 
     segs = np.asarray(segments, dtype=float).reshape(-1, 4)
@@ -1123,6 +1118,7 @@ async def settle_harbour(
     *,
     mesh: dict[str, Any],
     structure: Any = None,
+    structure_width_m: float,
     wave_period_s: float,
     wave_height_m: float,
     wave_direction_deg: float,
@@ -1133,8 +1129,11 @@ async def settle_harbour(
 
     Three measurements, every one off the artifact itself: the boundary walk the
     pair writer numbered, which stretch of it the mesh designated liquid, and
-    which of its solid faces the declared structure runs along. A wave forced at a
+    which of its faces stand on the punched structure. A wave forced at a
     boundary derived beside the mesh would enter a domain the solver never sees.
+
+    ``structure_width_m`` is the width the mesher cut the footprint at, so the
+    same number decides what the cut removed and what the deck calls solid.
 
     A mesh naming no liquid boundary REFUSES here: a prescribed incident wave has
     no edge to enter a closed basin through, and the bundle says so in its own
@@ -1164,14 +1163,20 @@ async def settle_harbour(
         code="ARTEMIS_STRUCTURE_INVALID") or []
     segments = await asyncio.to_thread(
         _segments_utm, polylines, utm_epsg) if polylines else []
+    # ONE NUMBER decides what is ON the structure, and it is the one the mesher
+    # punched with: the footprint is the centreline buffered by HALF the declared
+    # width, so a boundary node stands on the punched outline exactly when it is
+    # within that half-width of the centreline - the water inside the footprint
+    # was removed, so there is no other way for a boundary node to be there. A
+    # looser band reaches past the cut and calls open water solid, which is the
+    # lone solid node between two liquid ones that ARTEMIS refuses in FRONT2.
+    half_width_m = float(structure_width_m) / 2.0
     # A structure face WINS a contested node: a barrier that imposed the incident
     # wave would radiate the sheltering away from inside the lee.
     solid = [n for n in boundary_nodes if n not in set(open_nodes)]
-    structure_nodes = _nodes_near(segments, points_utm, solid,
-                                  float(facts["mesh_size_m"]) * 1.5)
-    contested = _nodes_near(segments, points_utm, open_nodes,
-                            float(facts["mesh_size_m"]) * 1.5)
-    structure_nodes = sorted(set(structure_nodes) | set(contested))
+    structure_nodes = sorted(set(
+        _nodes_near(segments, points_utm, solid, half_width_m))
+        | set(_nodes_near(segments, points_utm, open_nodes, half_width_m)))
     open_nodes = [n for n in open_nodes if n not in set(structure_nodes)]
 
     import numpy as np
@@ -1180,7 +1185,8 @@ async def settle_harbour(
         f"harbour boundary: {len(boundary_nodes)} boundary nodes, "
         f"{len(open_nodes)} of them the designated liquid edge the "
         f"{wave_height_m:g} m incident wave enters through, "
-        f"{len(structure_nodes)} on the declared structure and reflecting "
+        f"{len(structure_nodes)} standing on the {structure_width_m:g} m "
+        f"structure footprint and reflecting "
         f"{reflection_coef:g} of it; every other face is the absorbing shore. "
         f"{topology['states']}.")
     return {
@@ -1228,6 +1234,7 @@ async def settle_basin(
     sim_duration_hours: float,
     time_step_s: float | None,
     output_interval_min: float | None,
+    domain_note: str = "",
     result_basename: str,
 ) -> dict[str, Any]:
     """What the accepted basin mesh measures -> what the 3D sheet is filled from.
@@ -1263,7 +1270,8 @@ async def settle_basin(
         f"{step_s:g} s "
         f"({'stated' if time_step_s is not None else 'CFL-derived'} step; the "
         f"mesh measures {facts['mesh_size_m']:g} m). "
-        f"{topology['states']} - the water in this domain is conserved.")
+        f"{topology['states']} - the water in this domain is conserved."
+        + (f" {domain_note}" if domain_note else ""))
     return {
         **facts,
         "title": f"TELEMAC3D STRATIFIED {facts['mesh_name']}",

@@ -54,6 +54,7 @@ __all__ = ["ANSWER", "DATA", "MESH", "PARAMS", "STEERING",
            "build_profile_chart", "telemac3d_stratified_flow"]
 
 _AUTHORING = "trid3nt_server.workflows.telemac.authoring"
+_TEMPLATE = "trid3nt_server.workflows.telemac.templates.stratified_flow"
 _SOLVING = "trid3nt_server.workflows.telemac.solving.solve"
 
 #: What the run directory holds the run's files under - the deck's own 3D and 2D
@@ -71,20 +72,32 @@ class DATA:
     NHD answers with WHOLE features, so a harbour question comes back holding the
     whole of the lake; the domain is the part of it the question is about, and the
     narrowing is the CHAIN's rather than the mesher's.
+
+    THE BED IS FETCHED HERE, once, because two things read it: the clip that
+    narrows the water to the part anybody sounded, and the paint that gives every
+    node its elevation.
     """
 
     water = tool("fetch_nhd_waterbodies", bbox=Ref("aoi.bbox"))
-    basin = tool("section", polygon=water, within=Ref("aoi.bbox"))
+    mapped = tool("section", polygon=water, within=Ref("aoi.bbox"))
+    # THE SUBSTITUTION, declared where a reader can see it. A bed is TOPOBATHY
+    # and the coastal CUDEM composite does not reach the Great Lakes at all - its
+    # own ladder refuses there - so this row names the NCEI bathymetry the lakes
+    # are charted on instead. Same data class, different survey, one stated
+    # datum: the basin is solved on the lake's own low water datum, which is
+    # where its bed is counted from and where its free surface starts.
+    bed = tool("fetch_greatlakes_bathymetry", bbox=Ref("aoi.bbox"))
 
 
 #: The MESH RECIPE, frozen at declaration and building nothing at import. The
-#: extent is the CHAIN's product - the mapped water body cut to the AOI - so the
-#: mesher triangulates a domain another tool measured. No stretch of its boundary
-#: is designated liquid, which is what a lake IS.
+#: extent is the CHAIN's product - the mapped water body cut to the AOI and then
+#: to the part of it the bed survey actually sounded - so the mesher triangulates
+#: a domain another tool measured. No stretch of its boundary is designated
+#: liquid, which is what a lake IS.
 MESH = tool.build_mesh(
     mesher="om2d",
     kind="unstructured_tri",
-    extent=Ref("basin"),
+    extent=Ref("basin.domain"),
     resolution_m=P.mesh_min_edge_m,
     ops=[
         mesh_op("set_rim_size"),
@@ -93,14 +106,9 @@ MESH = tool.build_mesh(
         mesh_op("laplacian2"),
         mesh_op("make_mesh_boundaries_traversable"),
         mesh_op("fix_mesh", delete_unused=True),
-        # THE SUBSTITUTION, declared where a reader can see it. A bed is
-        # TOPOBATHY and the coastal CUDEM composite does not reach the Great
-        # Lakes at all - its own ladder refuses there - so this row names the NCEI
-        # bathymetry the lakes are charted on instead. Same data class, different
-        # survey, one stated datum, named by the row that asks for it: the basin
-        # is solved on the lake's own low water datum, which is where its bed is
-        # counted from and where its free surface starts.
-        mesh_op("set_bed", source="fetch_greatlakes_bathymetry"),
+        # The SAME survey the domain was clipped to, so no node can land where
+        # the clip said nothing was measured.
+        mesh_op("set_bed", source=DATA.bed),
     ],
 )
 
@@ -167,6 +175,13 @@ class STEERING(T3D):
     SCHEME_FOR_ADVECTION_OF_TRACERS = [P.tracer_advection_scheme]
     MAXIMUM_NUMBER_OF_ITERATIONS_FOR_ADVECTION_SCHEMES = \
         P.max_advection_iterations
+    # AND UNDER WHICH OPTION. The dictionary's own default here is 4, implicit,
+    # and murd3d_pos answers to 1 and 2 only - an unstated deck loops "UNKNOWN
+    # OPTION IN MURD3D_POS: 4 / OPTION 1 TAKEN INSTEAD" and stops on the explicit
+    # option's own iteration ceiling. 2 is the predictor-corrector, which the
+    # dictionary's own help calls the faster of the two where there are no tidal
+    # flats; a closed lake basin has none.
+    SCHEME_OPTION_FOR_ADVECTION_OF_TRACERS = [2]
 
     #: The sigma grid that can HOLD the declared thermocline over this basin's own
     #: deepest column, or the refusal that says how many planes would.
@@ -284,7 +299,15 @@ telemac3d_stratified_flow = register_workflow(
         steering=STEERING,
         domain=(AcquireAoi(location=P.location, bbox=P.bbox,
                            half_deg=BASIN_HALF_DEG, default_name="basin",
-                           code_prefix="TELEMAC3D").named("aoi"),),
+                           code_prefix="TELEMAC3D").named("aoi"),
+                # The water the question is about, and then the part of it the
+                # bed survey sounded: a water domain has no bed where nobody
+                # measured, and meshing the difference builds elements the bed
+                # painter has nothing to give.
+                Step(runner=f"{_TEMPLATE}.measured_bed.basin_on_measured_bed",
+                     stage="prep",
+                     kwargs={"polygon": DATA.mapped,
+                             "bed": DATA.bed}).named("basin"),),
         mesh=MESH, mesh_on="aoi",
         settle=Step(runner=f"{_AUTHORING}.assembler.settle_basin",
                     stage="author",
@@ -298,6 +321,7 @@ telemac3d_stratified_flow = register_workflow(
                             "sim_duration_hours": ParamRef("sim_duration_hours"),
                             "time_step_s": ParamRef("time_step_s"),
                             "output_interval_min": ParamRef("output_interval_min"),
+                            "domain_note": Ref("basin.note"),
                             "result_basename": _RESULT_3D}),
         results=(_RESULT_3D, _RESULT_2D),
         steering_file=_STEERING_FILE, prefix="telemac3d",

@@ -57,6 +57,13 @@ package SolveSeam {
         */
     }
 
+    part def WaterDomainClip {
+        doc /*
+        The water a question is asked about, narrowed to the part of it a bed
+        survey actually sounded, before anything is triangulated.
+        */
+    }
+
     part def Serializer {
         doc /*
         The steering files themselves - every keyword the run is solved under,
@@ -368,6 +375,12 @@ package SolveSeam {
         port serverFactsOut : ServerFactsOut;
         port topologyIn : TopologyIn;
         port meshIn : MeshIn;
+    }
+
+    part basinDomainClip : WaterDomainClip {
+        doc /*
+        code: trid3nt_server/workflows/telemac/templates/stratified_flow/measured_bed.py
+        */
     }
 
     part steeringStatements : Serializer {
@@ -744,6 +757,47 @@ package SolveSeam {
         */
     }
 
+    requirement def OneNumberDefinesTheStructure {
+        doc /*
+        RULING 2026-09-06 (docs/IDEAS.md, "CONFORMANCE RULINGS": D8a): the
+        declared structure's HALF-WIDTH is what the mesher removes water inside
+        and what the deck calls solid. A survey maps a breakwater as a
+        centreline, the recipe punches the centreline buffered by half the
+        declared width, and the water inside that footprint is gone - so a
+        boundary node stands on the punched outline exactly when it lies within
+        the half-width of the centreline, and there is no other way for a
+        boundary node to be there.
+
+        Two numbers let the two disagree. A band sized off the element edge
+        reaches past the cut, stamps solid on open water and leaves one solid
+        node between two liquid ones, which ARTEMIS refuses in FRONT2 - measured
+        on the supplied-mesh acceptance arm, which would not solve while the
+        same structure on the same AOI solved through the recipe.
+        */
+    }
+
+    requirement def AWaterDomainIsClippedToItsMeasuredBed {
+        doc /*
+        RULING 2026-09-06 (docs/IDEAS.md, "CONFORMANCE RULINGS": D8b): a water
+        domain is the mapped water polygon INTERSECT the bed raster's valid-data
+        footprint. A mapped polygon says where the water is; a survey says where
+        its floor was sounded, and the two disagree over an arm or a slip - so
+        meshing the difference builds elements the bed painter has nothing to
+        give. A water domain has no bed where nobody measured.
+
+        The footprint is measured from the raster's own MASK, never from a
+        threshold on its values: a nodata cell and a cell sounded at zero depth
+        are different statements and only the mask tells them apart. The clip is
+        journaled with the area it kept against the area the polygon mapped,
+        beside the node count of the mesh built on it. A clip that meets nothing
+        REFUSES by name - the answer to "the survey does not reach this water"
+        is a bed that does, never a domain nobody sounded.
+
+        ONE fetch serves both readers: the clip and the paint read the same
+        survey, or a node lands where the clip said nothing was measured.
+        */
+    }
+
     requirement def BoundaryCodesMatchTheSteering {
         doc /*
         A TELEMAC boundary states itself TWICE - as a (LIHBOR, LIUBOR, LIVBOR,
@@ -807,6 +861,20 @@ package SolveSeam {
     // ----------------------------------------------------------------- //
     // Allocations
     // ----------------------------------------------------------------- //
+
+    satisfy requirement OneNumberDefinesTheStructure by assembler;
+    verify requirement OneNumberDefinesTheStructure by
+        "tests/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width";
+    verify requirement OneNumberDefinesTheStructure by
+        "tests/test_open_water_domains.py::test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline";
+
+    satisfy requirement AWaterDomainIsClippedToItsMeasuredBed by basinDomainClip;
+    verify requirement AWaterDomainIsClippedToItsMeasuredBed by
+        "tests/test_open_water_domains.py::test_the_basin_is_the_water_the_survey_actually_sounded";
+    verify requirement AWaterDomainIsClippedToItsMeasuredBed by
+        "tests/test_open_water_domains.py::test_water_the_survey_never_reached_refuses_rather_than_meshing";
+    verify requirement AWaterDomainIsClippedToItsMeasuredBed by
+        "tests/test_open_water_domains.py::test_the_basin_reads_the_same_survey_it_was_clipped_to";
 
     satisfy requirement BoundaryCodesMatchTheSteering by topologyWriter;
     satisfy requirement BoundaryCodesMatchTheSteering by assembler;
