@@ -1,8 +1,7 @@
-"""Unit tests for EngineRunArgsMixin + output_quantities (STEP 2; ADDITIVE).
+"""Unit tests for EngineRunArgsMixin.
 
-Pins the DEFAULT-OFF mixin (temporal_mode alias normalizer, output_frames=24,
-advanced_physics=None) and the declarative OutputQuantitySpec / FieldResult /
-registry resolver.
+Pins the DEFAULT-OFF mixin: the temporal_mode alias normalizer,
+output_frames=24, advanced_physics=None.
 """
 
 from __future__ import annotations
@@ -12,15 +11,6 @@ from pydantic import ValidationError
 
 from trid3nt_contracts import EngineRunArgsMixin, TemporalMode  # __init__ export
 from trid3nt_contracts.common import EngineRunArgsMixin as Mixin
-from trid3nt_contracts.output_quantities import (
-    OUTPUT_QUANTITIES,
-    OUTPUT_REGISTRY_SCHEMA_VERSION,
-    OutputQuantitySpec,
-    RasterField,
-    ScalarField,
-    TimeseriesField,
-    get_output_registry,
-)
 
 
 # --------------------------------------------------------------------------- #
@@ -93,56 +83,3 @@ def test_mixin_forbids_extra_keys() -> None:
     # Inherits GraceModel extra="forbid" - a stray key is a defect, not dropped.
     with pytest.raises(ValidationError):
         Mixin(bogus_key=1)
-
-
-# --------------------------------------------------------------------------- #
-# output_quantities registry + resolver
-# --------------------------------------------------------------------------- #
-def test_registry_schema_version_is_one() -> None:
-    assert OUTPUT_REGISTRY_SCHEMA_VERSION == 1
-
-
-def test_step3_engines_populated_others_empty() -> None:
-    # STEP 3: the four migrated engines (modflow / landlab / openquake / swmm)
-    # carry declarative OutputQuantitySpec rows; SFINCS / GeoClaw / SWAN stay
-    # EMPTY (STEP 0 / STEP 4). The DECLARATIVE half (no reader) lives in the
-    # contract; the reader is bound agent-side.
-    for engine in ("modflow", "landlab", "openquake", "swmm"):
-        specs = OUTPUT_QUANTITIES[engine]
-        assert specs, f"{engine} should be populated in STEP 3"
-        # contracts ship the declarative half only -- readers are bound agent-side.
-        assert all(s.reader is None for s in specs), (
-            f"{engine} scaffold rows must not carry a reader in the contract"
-        )
-        # at least one NEW (default_on) published quantity per migrated engine.
-        assert any(s.default_on for s in specs)
-    for engine in ("sfincs", "geoclaw", "swan"):
-        assert OUTPUT_QUANTITIES[engine] == (), f"{engine} should stay empty"
-
-
-def test_get_output_registry_known_and_unknown() -> None:
-    assert get_output_registry("sfincs") == ()
-    assert get_output_registry("SFINCS") == ()  # case-insensitive
-    assert get_output_registry("does-not-exist") == ()
-    # a migrated engine resolves its populated tuple (case-insensitive).
-    assert get_output_registry("MODFLOW") == get_output_registry("modflow")
-    assert len(get_output_registry("modflow")) >= 1
-
-
-def test_output_quantity_spec_is_frozen() -> None:
-    # quantity_id IS the style key -- the style contract owns quantity -> preset,
-    # so no spec field names a preset or a colormap.
-    spec = OutputQuantitySpec(quantity_id="q", kind="raster", name="Q")
-    assert spec.default_on is False  # DEFAULT-OFF
-    assert spec.role == "primary" and spec.reader is None
-    with pytest.raises(Exception):
-        spec.quantity_id = "mutated"  # frozen dataclass
-
-
-def test_field_result_variants_construct() -> None:
-    rf = RasterField(grid=[[1.0]], src_crs="EPSG:4326", src_transform=None)
-    assert rf.reproject is False and rf.metrics == {}
-    tf = TimeseriesField(n_steps=3, read_step=lambda i: rf, peak=rf)
-    assert tf.quantity_label == "Flood depth"
-    sf = ScalarField(values={"x": 1})
-    assert sf.values == {"x": 1}
