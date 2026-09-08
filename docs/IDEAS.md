@@ -3876,3 +3876,22 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   registered tool (compute_model_residuals, folded) is MIRRORED to the
   attic after the wave; movement ecology and the processing tree stay
   untouched pending the processing discussion.
+  LEAN SWEEP, DELETES STAGE RESOLUTIONS (orchestrator under standing
+  law 2026-09-08 - NATE may override): (1) D4's map-command sub-clause
+  - the seven args models with no producer and no consumer
+  (RemoveLayer, SetLayerVisibility/Opacity/Order, StartAnimation,
+  StopAnimation, InvalidateTiles) are cut and the MapCommand Literal
+  narrows to load-layer + zoom-to (the same "old web vocabulary beside
+  the live one" class NATE ruled for ws.py); LoadLayerArgs +
+  MapTemporal STAY as the executable pin of the LayerURI alignment
+  invariant (a live contract, not dead code; its fossil wms_url field
+  goes); SetTemporalConfigArgs stays on its existing WMS-T ledger row
+  until that row's condition is met. (2) D2 compute_model_residuals
+  KEPT - the fold gate failed both halves (the survivors do not
+  reproduce ME/RMSE in the observation's units and produce no
+  residual layer); it is a registered tool and stays live. (3) D10
+  merc_render KEPT - the staleness evidence was FALSE (five live
+  importers via sys.path.insert, two on the flagship render path);
+  ledgered as refuted. LESSON for inventories: a dotted-path grep
+  misses sys.path imports - check both. (4) The testing/ driver arms
+  keyed on deleted wire strings are queued as a hygiene row.
