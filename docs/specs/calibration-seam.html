@@ -24,7 +24,7 @@
 </style>
 
 <h1>The Calibration Seam</h1>
-<p class="rev">rev 1 &middot; 2026-09-08 &middot; the calibration wave's spec, per docs/IDEAS.md "CALIBRATION SPEC SHAPED" (2026-09-08) and the plan NATE approved the same day - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the module surface (docs/specs/module-surface.html), the mesh recipe, the emission fold, the rerun path (ADR 0319). Answers the question docs/design/calibration-methodology.md (2026-08-26, unsigned) left open: the proposer is PEST++, not an in-house driver; that document's coastal case is a later case on this seam.</p>
+<p class="rev">rev 1a &middot; 2026-09-08 &middot; amended in place: OPERA DSWx joins the observation sources (the WOfS family) &middot; the calibration wave's spec, per docs/IDEAS.md "CALIBRATION SPEC SHAPED" (2026-09-08) and the plan NATE approved the same day - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the module surface (docs/specs/module-surface.html), the mesh recipe, the emission fold, the rerun path (ADR 0319). Answers the question docs/design/calibration-methodology.md (2026-08-26, unsigned) left open: the proposer is PEST++, not an in-house driver; that document's coastal case is a later case on this seam.</p>
 
 <h2>1. The principle</h2>
 <p>A calibration sits between a finished run and its rerun. The user declares WHICH declared params may vary, within bounds, and WHICH fetched observations are compared to WHICH outputs. PEST++ (USGS) proposes; pyEMU builds its interface; our forward run is the existing rerun path; the result is a PROPOSED fill the user confirms. We own no loop mathematics, no run management, no optimizer. Every calibrated value is labeled as such wherever it is read.</p>
@@ -80,11 +80,12 @@ flowchart LR
 </table>
 
 <h2>5. Observation sources (the substrate, general purpose)</h2>
-<p>An Observe row reads any fetched series. Two exist and one is added; all are ordinary fetchers usable for anything, not calibration machinery.</p>
+<p>An Observe row reads any fetched series or extent. Three kinds of observation, all ordinary fetchers usable for anything, not calibration machinery: a POINT over time (a gauge), a PROFILE every ~21 days (SWOT), an EXTENT on a date (DSWx).</p>
 <table>
 <tr><th>source</th><th>gives</th><th>datum / units</th><th>status</th></tr>
 <tr><td><code>fetch_usgs_nwis_gauges</code> (hydrograph mode)</td><td>discharge and stage series at a gauge</td><td>cfs / ft, no datum needed for discharge</td><td>exists</td></tr>
 <tr><td><code>fetch_noaa_coops_tides</code>, <code>fetch_greatlakes_water_level</code></td><td>water level series at a station</td><td>MLLW / LWD stated</td><td>exist</td></tr>
+<tr><td><code>fetch_opera_dswx</code> (NEW, declarative)</td><td>NASA OPERA Dynamic Surface Water eXtent: per-scene observed water mask at 30 m, global, 2023-, from Harmonized Landsat-Sentinel (optical) and Sentinel-1 (radar, sees through cloud during an event); the modern member of the WOfS / JRC family for an event window - JRC (already fetched) gives multi-year occurrence, not a date</td><td>a mask, no height; the scene date stated on the row; the Sentinel-1 variant is the one to use during a cloudy event</td><td>this wave, one source.yaml over NASA's Earthdata STAC collections on the fetcher pattern; the new-tool law before acceptance; pairs against a run's inundation extent through the existing flood-extent skill tool; Stage 0 confirms a scene over the chosen basin's storm window</td></tr>
 <tr><td><code>fetch_swot_river_timeseries</code>, <code>fetch_swot_lake_timeseries</code> (NEW, declarative)</td><td>SWOT (NASA/CNES altimetry, 2022-): per-reach and per-node water surface elevation, width and slope along the SWORD river database; lake elevation, area and storage change - a ~21-day repeat; rivers wider than ~100 m</td><td>EGM2008 stated on the row; elevation ~10 cm, width ~15%; the discharge field is a MODEL estimate and is labeled derived</td><td>this wave, via PO.DAAC's Hydrocron time-series API (reach or lake id + window, CSV) on the source.yaml pattern with zero code; the new-tool law before acceptance; Stage 0 confirms the API serves the Eel reach</td></tr>
 </table>
 <p>A 21-day repeat cannot see a storm hydrograph: rain_on_grid stays on the gauge. SWOT's place is the water-surface PROFILE along a reach (what constrains friction and bed on a wide river, gauged or not) and lake levels where no station exists. Its datum arithmetic is the datum rule's, unchanged.</p>
@@ -133,12 +134,13 @@ docs/model/calibration-seam.sysml   Recipe, Interface, ForwardRun, Proposal, Con
 <tr><td>rerun_workflow headless: rain_on_grid parent -> child with curve_number overridden</td><td>the mesh inherited (replay stated); the hydrograph read; wall measured; the equal-value refusal reproduced</td></tr>
 <tr><td>the gauge answers</td><td>a hydrograph in the storm window for the chosen basin, station named</td></tr>
 <tr><td>Hydrocron serves a SWOT reach series for the Eel reach</td><td>CSV with WSE/width/slope and the datum field</td></tr>
+<tr><td>Earthdata STAC serves an OPERA DSWx scene over the chosen basin in its storm window</td><td>a water-mask COG with its scene date; the Sentinel-1 collection answers too</td></tr>
 </table>
 
 <h2>11. Stages</h2>
 <table>
 <tr><th>stage</th><th>lands</th></tr>
-<tr><td>1 levers + observation rows</td><td>manning_multiplier, the abstraction Param, DATA.gauge, the station-layer hydrograph; the two SWOT fetchers under the new-tool law</td></tr>
+<tr><td>1 levers + observation rows</td><td>manning_multiplier, the abstraction Param, DATA.gauge, the station-layer hydrograph; the two SWOT fetchers and the OPERA DSWx fetcher under the new-tool law</td></tr>
 <tr><td>2 the seam</td><td>the calibration tree, calibrate/confirm on the tool surface, the sensitivity pass, budget statement, contracts + card + plugin bump, the model</td></tr>
 <tr><td>3 live proof</td><td>the first case: baseline, sensitivity table, ies 50 x 3 on the coarse mesh, the proposal card, confirm -> rerun with provenance calibrated, FULL packet with observed-vs-modeled before/after and the posterior band; glm on the same case for comparison</td></tr>
 <tr><td>4 close</td><td>conformance table; IDEAS entry; the methodology doc marked superseded for the first case; packets delivered</td></tr>

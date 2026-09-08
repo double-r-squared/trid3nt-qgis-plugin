@@ -3953,3 +3953,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   fetched series (SWOT WSE assimilation into hydrodynamic models is
   established practice - TELEMAC-2D Garonne/Sacramento studies).
   Spec: docs/specs/calibration-seam.html rev 1 for NATE's read.
+  WOfS FAMILY (NATE 2026-09-08): WOfS itself is Australia/Africa only;
+  its global cousin JRC Global Surface Water is already fetched
+  (multi-year occurrence); the EVENT-WINDOW member is NASA OPERA DSWx
+  (per-scene 30 m water mask, HLS optical + Sentinel-1 radar, global,
+  2023-) - ADDED as a declarative fetch source (fetch_opera_dswx over
+  Earthdata STAC) and to the calibration spec's observation table as
+  the EXTENT observation (pairs with the flood-extent skill tool). The
+  three observation kinds: a point over time (gauge), a profile every
+  ~21 days (SWOT), an extent on a date (DSWx). Spec rev 1a.
