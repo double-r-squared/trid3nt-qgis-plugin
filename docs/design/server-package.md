@@ -42,8 +42,6 @@ server/
 │   ├── adapter.py               StreamEvent union + provider-neutral genai-types helpers
 │   ├── persistence.py           Cases/sessions/users persistence -- FilePersistence only
 │   │                            (the DynamoDB backend was removed; local-only build)
-│   ├── secrets_handler.py       per-Case secret vault -- one local file-vault
-│   │                            (`file-vault://...`; GCP/AWS cloud vault backends removed)
 │   ├── auth_handshake.py        local WS connect handshake -- anonymous users + the
 │   │                            fixed local single-user id; no IdP, no token verification
 │   ├── tools/                   the tool registry + atomic/composer/engine tools
