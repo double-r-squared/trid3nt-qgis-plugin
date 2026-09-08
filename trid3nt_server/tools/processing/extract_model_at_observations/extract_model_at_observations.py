@@ -677,29 +677,30 @@ def _nearest_wet_sample(
     Returns ``(value, pixel_distance)``; ``(nan, inf)`` if none is found in the
     window. Used when the exact-cell bilinear sample lands on nodata (a dry
     cell at the observation location -- common at a shoreline HWM).
+
+    Ties go to the first cell in row-major order, which is what ``argmin`` over
+    the clipped window returns and what the scan it replaced kept.
     """
     inv = ~transform
     col, row = inv * (x, y)
     ci, ri = int(math.floor(col)), int(math.floor(row))
     h, w = band.shape
-    best_val = float("nan")
-    best_d = float("inf")
-    for dr in range(-radius_px, radius_px + 1):
-        rr = ri + dr
-        if rr < 0 or rr >= h:
-            continue
-        for dc in range(-radius_px, radius_px + 1):
-            cc = ci + dc
-            if cc < 0 or cc >= w:
-                continue
-            v = band[rr, cc]
-            if not math.isfinite(v):
-                continue
-            d = math.hypot((cc + 0.5) - col, (rr + 0.5) - row)
-            if d < best_d:
-                best_d = d
-                best_val = float(v)
-    return best_val, best_d
+    r0, r1 = max(0, ri - radius_px), min(h, ri + radius_px + 1)
+    c0, c1 = max(0, ci - radius_px), min(w, ci + radius_px + 1)
+    if r0 >= r1 or c0 >= c1:
+        return float("nan"), float("inf")
+
+    window = band[r0:r1, c0:c1]
+    dr = (np.arange(r0, r1, dtype=np.float64) + 0.5 - row)[:, None]
+    dc = (np.arange(c0, c1, dtype=np.float64) + 0.5 - col)[None, :]
+    dist = np.where(np.isfinite(window), np.hypot(dc, dr), np.inf)
+    flat = int(np.argmin(dist))
+    if not np.isfinite(dist.flat[flat]):
+        return float("nan"), float("inf")
+    wr, wc = divmod(flat, c1 - c0)
+    return float(window.flat[flat]), math.hypot(
+        (c0 + wc + 0.5) - col, (r0 + wr + 0.5) - row
+    )
 
 
 # ---------------------------------------------------------------------------

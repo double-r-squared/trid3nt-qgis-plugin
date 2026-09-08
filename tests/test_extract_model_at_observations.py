@@ -596,3 +596,35 @@ def test_quantity_match_depth_vs_depth_no_conversion(tmp_path, monkeypatch) -> N
     gdf = gpd.read_file(result.uri)
     assert float(gdf["observed"].iloc[0]) == pytest.approx(3.2, abs=1e-4)
     assert "ground_elev_m" not in gdf.columns
+
+
+def test_nearest_wet_window_keeps_the_first_cell_of_a_tie() -> None:
+    """Two wet cells equidistant from the point: the row-major first one wins."""
+    import math
+
+    import numpy as np
+    from affine import Affine
+
+    from trid3nt_server.tools.processing.extract_model_at_observations.extract_model_at_observations import (  # noqa: E501
+        _nearest_wet_sample,
+    )
+
+    transform = Affine(1.0, 0.0, 0.0, 0.0, -1.0, 4.0)
+    band = np.full((4, 4), np.nan)
+    # Both cells sit exactly one pixel from the centre of cell (2, 2).
+    band[1, 2] = 7.0
+    band[2, 1] = 9.0
+    value, dist = _nearest_wet_sample(band, transform, 2.5, 1.5, 3)
+    assert value == 7.0
+    assert dist == pytest.approx(1.0)
+
+    # Clipped window: a point outside the raster still reaches the nearest cell.
+    band2 = np.full((4, 4), np.nan)
+    band2[0, 0] = 3.0
+    value2, dist2 = _nearest_wet_sample(band2, transform, -2.5, 6.5, 4)
+    assert value2 == 3.0
+    assert dist2 == pytest.approx(math.hypot(3.0, 3.0))
+
+    # No wet cell in the window at all.
+    value3, dist3 = _nearest_wet_sample(np.full((4, 4), np.nan), transform, 2.5, 1.5, 2)
+    assert math.isnan(value3) and math.isinf(dist3)
