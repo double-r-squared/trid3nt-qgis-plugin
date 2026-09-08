@@ -12,7 +12,7 @@ This module defines:
 - ``ErrorCode``: the A.6 SCREAMING_SNAKE_CASE error-code enum.
 
 Invariants this module is responsible for:
-- **9. No cost theater.** ``ConfirmationRequestPayload`` carries no cost field.
+- **9. No cost theater.** no payload in this module carries a cost field.
 - **8. Cancellation is first-class.** ``cancelled`` is a distinct ``state`` in
   ``pipeline-state`` step states, separate from ``failed``.
 """
@@ -40,12 +40,9 @@ __all__ = [
     "DrawnGeometry",
     "UserMessagePayload",
     "CancelPayload",
-    "ConfirmResponsePayload",
     "SessionResumePayload",
     # client -> agent (A.4b)
     "SpatialInputResponsePayload",
-    "DisambiguationResponsePayload",
-    "ClarificationResponsePayload",
     # agent -> client (A.4)
     "AgentMessageChunkPayload",
     "AgentThinkingChunkPayload",
@@ -59,30 +56,18 @@ __all__ = [
     "SolveProgressPayload",
     "ToolIoPayload",
     "MapCommandPayload",
-    "ConfirmationRequestPayload",
     "SessionStateStatus",
     "SessionStatePayload",
     "ErrorPayload",
-    "LocationResolvedPayload",
     "ReferenceLayer",
     "SuggestedView",
     "SpatialInputRequestPayload",
-    "DisambiguationCandidate",
-    "DisambiguationRequestPayload",
-    "ClarificationOption",
-    "ClarificationRequestPayload",
-    # agent -> client (sprint-08 forward-looking)
-    "RecoveryChoiceOption",
-    "RecoveryChoicePayload",
     # auto/ask modes -- tool-selection picker (Stage 3, 2026-07-22)
     "ToolChoiceMode",
     "ToolCandidatesReason",
     "ToolCandidate",
     "ToolCandidatesPayload",
     "ToolChoicePayload",
-    # client -> agent (sprint-08 forward-looking)
-    "RecoveryChoice",
-    "RecoveryChoiceResponsePayload",
     # map-command args (A.4)
     "LoadLayerArgs",
     "RemoveLayerArgs",
@@ -309,15 +294,6 @@ class CancelPayload(GraceModel):
     reason: str | None = None
 
 
-class ConfirmResponsePayload(GraceModel):
-    """``confirm-response`` (A.3): user response to a confirmation-request."""
-
-    MESSAGE_TYPE: ClassVar[str] = "confirm-response"
-
-    request_id: ULIDStr
-    approved: bool
-
-
 class SessionResumePayload(GraceModel):
     """``session-resume`` (A.3): resume an existing session (id in envelope)."""
 
@@ -440,26 +416,6 @@ def _validate_spatial_input_feature_collection(
                     f"LineString with >= 2 positions"
                 )
     return fc
-
-
-class DisambiguationResponsePayload(GraceModel):
-    """``disambiguation-response`` (A.4b): user chose a candidate, or cancelled."""
-
-    MESSAGE_TYPE: ClassVar[str] = "disambiguation-response"
-
-    request_id: ULIDStr
-    candidate_id: str | None = None
-    cancelled: bool = False
-
-
-class ClarificationResponsePayload(GraceModel):
-    """``clarification-response`` (A.4b): user chose an option, or cancelled."""
-
-    MESSAGE_TYPE: ClassVar[str] = "clarification-response"
-
-    request_id: ULIDStr
-    option_id: str | None = None
-    cancelled: bool = False
 
 
 # =========================================================================== #
@@ -823,22 +779,6 @@ class MapCommandPayload(GraceModel):
     args: dict = Field(default_factory=dict)
 
 
-class ConfirmationRequestPayload(GraceModel):
-    """``confirmation-request`` (A.4): agent needs user approval.
-
-    No cost field anywhere (invariant 9 / A.4): surfacing approximate cost is
-    worse than none.
-    """
-
-    MESSAGE_TYPE: ClassVar[str] = "confirmation-request"
-
-    request_id: ULIDStr
-    title: str
-    description: str
-    estimated_duration_seconds: int | None = None
-    default_timeout_seconds: int = 60
-
-
 SessionStateStatus = Literal["active", "max_turns_reached"]
 """Status of the session at the moment a ``session-state`` envelope is sent.
 
@@ -883,25 +823,6 @@ class ErrorPayload(GraceModel):
     message: str
     retryable: bool = False
     retry_after_seconds: int | None = None
-
-
-class LocationResolvedPayload(GraceModel):
-    """``location-resolved`` (A.4): a meaningful location was resolved.
-
-    Emitted as a side effect of resolution-producing tools; the client
-    auto-snaps the map to ``bbox``.
-    """
-
-    MESSAGE_TYPE: ClassVar[str] = "location-resolved"
-
-    resolved_id: ULIDStr
-    label: str
-    bbox: BBox
-    granularity: Literal["country", "region", "state", "city", "facility", "bbox"]
-    source: Literal[
-        "news_extraction", "user_prompt", "disambiguation", "geocoding", "tool_result"
-    ]
-    animate: bool = True
 
 
 # spatial-input-request (A.4) ------------------------------------------------ #
@@ -956,146 +877,6 @@ class SpatialInputRequestPayload(GraceModel):
     suggested_view: SuggestedView | None = None
     reference_layers: list[ReferenceLayer] = Field(default_factory=list)
     default_timeout_seconds: int = 300
-
-
-# disambiguation-request (A.4) ----------------------------------------------- #
-
-
-class DisambiguationCandidate(GraceModel):
-    """One enumerated candidate for an ambiguous entity."""
-
-    id: str
-    label: str
-    bbox: BBox
-    context: str | None = None
-
-
-class DisambiguationRequestPayload(GraceModel):
-    """``disambiguation-request`` (A.4): pick one of several candidates."""
-
-    MESSAGE_TYPE: ClassVar[str] = "disambiguation-request"
-
-    request_id: ULIDStr
-    title: str
-    description: str
-    candidates: list[DisambiguationCandidate]
-    default_timeout_seconds: int = 120
-
-
-# clarification-request (A.4) ------------------------------------------------ #
-
-
-class ClarificationOption(GraceModel):
-    """One substantively-different path the agent could take. ``description``
-    is required (A.4): it shows the user what each path produces."""
-
-    id: str
-    label: str
-    description: str
-
-
-class ClarificationRequestPayload(GraceModel):
-    """``clarification-request`` (A.4): choose between different response paths."""
-
-    MESSAGE_TYPE: ClassVar[str] = "clarification-request"
-
-    request_id: ULIDStr
-    question: str
-    options: list[ClarificationOption] = Field(min_length=2, max_length=4)
-    default_timeout_seconds: int = 60
-
-
-# =========================================================================== #
-# recovery-choice + recovery-choice-response (sprint-08 — substrate)
-# =========================================================================== #
-# Forward-looking — §3.10 deny/retry/chat recovery gate. The web-client
-# implementation follows the existing `request_clarification` modal pattern; the
-# response carries the user's selection (`deny` | `retry` | `chat`) and, when
-# `choice == "chat"`, the focused free-text the user typed to nudge the agent.
-#
-# Routing: only emitted for "recoverable" error classes (transient
-# upstream, recoverable-with-context). Substrate-integrity / user-initiated /
-# budget-overrun error codes fail closed without gating.
-
-
-#: The three actions a recovery-choice modal can return.
-RecoveryChoiceOption = Literal["deny", "retry", "chat"]
-
-
-class RecoveryChoicePayload(GraceModel):
-    """``recovery-choice`` (A.4 — sprint-08 amendment).
-
-    Agent emits this when an atomic-tool step fails with a *recoverable*
-    error class (routing table). The client renders a small
-    out-of-chat modal (mirrors the §F.3 popup discipline) offering the user
-    deny / retry / chat actions.
-
-    Fields:
-
-    - ``request_id`` — ULID identifying the gate; the response carries it back.
-    - ``failed_step_id`` — the ULID of the pipeline step the gate is about.
-      The client surfaces this so the user knows which step is being decided.
-    - ``error_code`` — SCREAMING_SNAKE_CASE code that the failed
-      step's PipelineStepSummary carried. Open set (regex-validated shape).
-    - ``error_message`` — short human-readable explanation (e.g. ``"USGS 3DEP
-      returned HTTP 503 — service unavailable"``). Capped at 512 chars to
-      mirror the PipelineStepSummary discipline.
-    - ``context`` — short free-text describing what the agent was doing when
-      the step failed (e.g. ``"fetching DEM at Fort Myers bbox for flood
-      scenario"``). Helps the user pick the right action.
-    - ``options`` — non-empty subset of {``"deny"``, ``"retry"``, ``"chat"``}.
-      The routing table  may narrow this (e.g. omit ``"retry"`` for
-      ``GEOCODE_NO_MATCH`` where retry is futile). The client renders one
-      button per option.
-    - ``ttl_seconds`` — gate validity (seconds since envelope ``ts``); on
-      expiry the gate becomes a typed failure (``CONFIRMATION_TIMEOUT``-style
-      error from the agent). Default 300s per the SRS example.
-
-    No cost field anywhere (Invariant 9).
-    """
-
-    MESSAGE_TYPE: ClassVar[str] = "recovery-choice"
-
-    request_id: ULIDStr
-    failed_step_id: ULIDStr
-    error_code: str  # SCREAMING_SNAKE_CASE per A.6 (open set)
-    error_message: str = Field(max_length=512)
-    context: str = Field(max_length=512)
-    options: list[RecoveryChoiceOption] = Field(min_length=1, max_length=3)
-    ttl_seconds: int = Field(default=300, ge=1)
-
-
-#: The user's selection from a ``recovery-choice`` modal.
-RecoveryChoice = Literal["deny", "retry", "chat"]
-
-
-class RecoveryChoiceResponsePayload(GraceModel):
-    """``recovery-choice-response`` (A.4b — sprint-08 amendment).
-
-    User has picked one of the three actions OR cancelled the gate.
-
-    Fields:
-
-    - ``request_id`` — matches the originating ``recovery-choice`` request.
-    - ``choice`` — ``"deny"`` / ``"retry"`` / ``"chat"`` OR None when the user
-      cancelled. (Cancellation rare; modeled the same way as the existing
-      ``clarification-response`` / ``disambiguation-response`` shapes.)
-    - ``chat_text`` — populated only when ``choice == "chat"``; carries the
-      focused single-line nudge the user typed. Capped at 4096 chars.
-    - ``cancelled`` — set to True when the user explicitly dismissed the modal.
-
-    Cross-shape discipline (lightweight — full enforcement is the consumer's
-    responsibility, matching the existing A.4b response shapes): ``chat_text``
-    SHOULD be populated when ``choice == "chat"`` and SHOULD be None
-    otherwise; the agent service validates at receipt time.
-    """
-
-    MESSAGE_TYPE: ClassVar[str] = "recovery-choice-response"
-
-    request_id: ULIDStr
-    choice: RecoveryChoice | None = None
-    chat_text: str | None = Field(default=None, max_length=4096)
-    cancelled: bool = False
 
 
 # =========================================================================== #
@@ -1212,13 +993,8 @@ class ToolChoicePayload(GraceModel):
 CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
     UserMessagePayload.MESSAGE_TYPE: UserMessagePayload,
     CancelPayload.MESSAGE_TYPE: CancelPayload,
-    ConfirmResponsePayload.MESSAGE_TYPE: ConfirmResponsePayload,
     SessionResumePayload.MESSAGE_TYPE: SessionResumePayload,
     SpatialInputResponsePayload.MESSAGE_TYPE: SpatialInputResponsePayload,
-    DisambiguationResponsePayload.MESSAGE_TYPE: DisambiguationResponsePayload,
-    ClarificationResponsePayload.MESSAGE_TYPE: ClarificationResponsePayload,
-    # sprint-08
-    RecoveryChoiceResponsePayload.MESSAGE_TYPE: RecoveryChoiceResponsePayload,
     # auto/ask modes -- the picker reply (Stage 3, 2026-07-22)
     ToolChoicePayload.MESSAGE_TYPE: ToolChoicePayload,
 }
@@ -1259,15 +1035,9 @@ AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
     SolveProgressPayload.MESSAGE_TYPE: SolveProgressPayload,
     ToolIoPayload.MESSAGE_TYPE: ToolIoPayload,
     MapCommandPayload.MESSAGE_TYPE: MapCommandPayload,
-    ConfirmationRequestPayload.MESSAGE_TYPE: ConfirmationRequestPayload,
     SessionStatePayload.MESSAGE_TYPE: SessionStatePayload,
     ErrorPayload.MESSAGE_TYPE: ErrorPayload,
-    LocationResolvedPayload.MESSAGE_TYPE: LocationResolvedPayload,
     SpatialInputRequestPayload.MESSAGE_TYPE: SpatialInputRequestPayload,
-    DisambiguationRequestPayload.MESSAGE_TYPE: DisambiguationRequestPayload,
-    ClarificationRequestPayload.MESSAGE_TYPE: ClarificationRequestPayload,
-    # sprint-08
-    RecoveryChoicePayload.MESSAGE_TYPE: RecoveryChoicePayload,
     # auto/ask modes -- the picker request (Stage 3, 2026-07-22)
     ToolCandidatesPayload.MESSAGE_TYPE: ToolCandidatesPayload,
 }

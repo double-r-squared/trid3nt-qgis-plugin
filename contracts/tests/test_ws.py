@@ -137,11 +137,6 @@ def test_cancel_message(session_id: str) -> None:
     assert dumped["type"] == "cancel"
 
 
-def test_confirm_response(session_id: str) -> None:
-    payload = ws.ConfirmResponsePayload(request_id=new_ulid(), approved=True)
-    _roundtrip_idempotent(_wrap(payload, session_id))
-
-
 def test_session_resume_empty_payload(session_id: str) -> None:
     payload = ws.SessionResumePayload()
     dumped = _roundtrip_idempotent(_wrap(payload, session_id))
@@ -337,16 +332,6 @@ def test_spatial_input_response_one_position_line_rejected() -> None:
         ws.SpatialInputResponsePayload(
             request_id=new_ulid(), geometry_type="vector_draw", features=fc
         )
-
-
-def test_disambiguation_response(session_id: str) -> None:
-    payload = ws.DisambiguationResponsePayload(request_id=new_ulid(), candidate_id="cand-1")
-    _roundtrip_idempotent(_wrap(payload, session_id))
-
-
-def test_clarification_response(session_id: str) -> None:
-    payload = ws.ClarificationResponsePayload(request_id=new_ulid(), option_id="opt-a")
-    _roundtrip_idempotent(_wrap(payload, session_id))
 
 
 # --------------------------------------------------------------------------- #
@@ -663,29 +648,6 @@ def test_map_command_args_registry_covers_every_command() -> None:
 # --- the rest of A.4 messages ---------------------------------------------- #
 
 
-def test_confirmation_request_has_no_cost_field(session_id: str) -> None:
-    """Invariant 9: no cost field anywhere on confirmation messages."""
-    payload = ws.ConfirmationRequestPayload(
-        request_id=new_ulid(),
-        title="Run SFINCS for Hurricane Ian",
-        description="This will execute the storm-surge solver.",
-        estimated_duration_seconds=600,
-    )
-    dumped = _roundtrip_idempotent(_wrap(payload, session_id))
-    payload_keys = set(dumped["payload"].keys())
-    assert not any("cost" in k.lower() for k in payload_keys)
-    # And the model itself rejects an attempt to add one
-    with pytest.raises(ValidationError):
-        ws.ConfirmationRequestPayload.model_validate(
-            {
-                "request_id": new_ulid(),
-                "title": "x",
-                "description": "x",
-                "estimated_cost_usd": 4.20,
-            }
-        )
-
-
 def test_session_state_payload(session_id: str) -> None:
     payload = ws.SessionStatePayload(
         chat_history=[{"role": "user", "content": "hi"}],
@@ -704,17 +666,6 @@ def test_error_payload_uses_a6_codes(session_id: str) -> None:
 def test_error_payload_unknown_code_rejected() -> None:
     with pytest.raises(ValidationError):
         ws.ErrorPayload(error_code="totally_made_up", message="x")  # type: ignore[arg-type]
-
-
-def test_location_resolved(session_id: str) -> None:
-    payload = ws.LocationResolvedPayload(
-        resolved_id=new_ulid(),
-        label="Fort Myers, FL",
-        bbox=(-82.0, 26.5, -81.8, 26.7),
-        granularity="city",
-        source="geocoding",
-    )
-    _roundtrip_idempotent(_wrap(payload, session_id))
 
 
 def test_spatial_input_request(session_id: str) -> None:
@@ -749,40 +700,6 @@ def test_spatial_input_request_unknown_mode_rejected() -> None:
             title="x",
             description="d",
         )
-
-
-def test_disambiguation_request(session_id: str) -> None:
-    payload = ws.DisambiguationRequestPayload(
-        request_id=new_ulid(),
-        title="Which Springfield?",
-        description="Multiple matches found.",
-        candidates=[
-            ws.DisambiguationCandidate(id="a", label="Springfield, IL", bbox=(-89.7, 39.7, -89.6, 39.9)),
-            ws.DisambiguationCandidate(id="b", label="Springfield, MA", bbox=(-72.7, 42.0, -72.4, 42.2)),
-        ],
-    )
-    _roundtrip_idempotent(_wrap(payload, session_id))
-
-
-def test_clarification_request_requires_2_to_4_options(session_id: str) -> None:
-    with pytest.raises(ValidationError):
-        ws.ClarificationRequestPayload(
-            request_id=new_ulid(),
-            question="x?",
-            options=[ws.ClarificationOption(id="a", label="A", description="A path")],  # only one
-        )
-
-
-def test_clarification_request_ok(session_id: str) -> None:
-    payload = ws.ClarificationRequestPayload(
-        request_id=new_ulid(),
-        question="Model the storm surge or the pluvial flooding?",
-        options=[
-            ws.ClarificationOption(id="surge", label="Storm surge", description="SFINCS with surge BC"),
-            ws.ClarificationOption(id="pluvial", label="Pluvial", description="SFINCS with rainfall BC"),
-        ],
-    )
-    _roundtrip_idempotent(_wrap(payload, session_id))
 
 
 # --------------------------------------------------------------------------- #
@@ -919,11 +836,8 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
     minimal_factories = {
         "user-message": lambda: ws.UserMessagePayload(text="hi"),
         "cancel": lambda: ws.CancelPayload(),
-        "confirm-response": lambda: ws.ConfirmResponsePayload(request_id=new_ulid(), approved=True),
         "session-resume": lambda: ws.SessionResumePayload(),
         "spatial-input-response": lambda: ws.SpatialInputResponsePayload(request_id=new_ulid(), cancelled=True),
-        "disambiguation-response": lambda: ws.DisambiguationResponsePayload(request_id=new_ulid(), cancelled=True),
-        "clarification-response": lambda: ws.ClarificationResponsePayload(request_id=new_ulid(), cancelled=True),
         "agent-message-chunk": lambda: ws.AgentMessageChunkPayload(message_id=new_ulid(), delta="x"),
             "agent-thinking-chunk": lambda: ws.AgentThinkingChunkPayload(message_id=new_ulid(), delta="x"),
         "tool-call-start": lambda: ws.ToolCallStartPayload(
@@ -936,46 +850,10 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
         ),
         "pipeline-state": lambda: ws.PipelineStatePayload(pipeline_id=new_ulid()),
         "map-command": lambda: ws.MapCommandPayload(command="invalidate-tiles", args={}),
-        "confirmation-request": lambda: ws.ConfirmationRequestPayload(
-            request_id=new_ulid(), title="x", description="x"
-        ),
         "session-state": lambda: ws.SessionStatePayload(),
         "error": lambda: ws.ErrorPayload(error_code="INTERNAL_ERROR", message="x"),
-        "location-resolved": lambda: ws.LocationResolvedPayload(
-            resolved_id=new_ulid(),
-            label="x",
-            bbox=(-1.0, -1.0, 1.0, 1.0),
-            granularity="city",
-            source="geocoding",
-        ),
         "spatial-input-request": lambda: ws.SpatialInputRequestPayload(
             request_id=new_ulid(), mode="point", title="t", description="d"
-        ),
-        "disambiguation-request": lambda: ws.DisambiguationRequestPayload(
-            request_id=new_ulid(),
-            title="t",
-            description="d",
-            candidates=[ws.DisambiguationCandidate(id="a", label="A", bbox=(-1.0, -1.0, 1.0, 1.0))],
-        ),
-        "clarification-request": lambda: ws.ClarificationRequestPayload(
-            request_id=new_ulid(),
-            question="q?",
-            options=[
-                ws.ClarificationOption(id="a", label="A", description="a"),
-                ws.ClarificationOption(id="b", label="B", description="b"),
-            ],
-        ),
-        # sprint-08 — + §F.1.2 Mode 2
-        "recovery-choice": lambda: ws.RecoveryChoicePayload(
-            request_id=new_ulid(),
-            failed_step_id=new_ulid(),
-            error_code="UPSTREAM_API_ERROR",
-            error_message="x",
-            context="x",
-            options=["deny", "retry", "chat"],
-        ),
-        "recovery-choice-response": lambda: ws.RecoveryChoiceResponsePayload(
-            request_id=new_ulid(), choice="retry"
         ),
         # — §F.3 per-Case secrets envelopes (OQ-0100-WS-REGISTRY-WIRING)
         "secret-add": lambda: ws.SecretAddEnvelopePayload(

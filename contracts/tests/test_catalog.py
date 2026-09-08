@@ -1,31 +1,19 @@
-"""Round-trip + negative tests for the Mode 1 CatalogEntry, the new
-collections (D.11 ``catalog_entries`` + D.12 ``catalog_audit_log``), and the
-four new envelopes (sprint-08 — + §F.1.2 Mode 2).
+"""Round-trip + negative tests for the Mode 1 CatalogEntry and the new
+collections (D.11 ``catalog_entries`` + D.12 ``catalog_audit_log``).
 
-Test count for this job (≥6 new tests required per the kickoff):
-
-1. ``test_catalog_entry_mode1_roundtrip_idempotent`` — Tier-1 + Tier-2 entries
-   round-trip through JSON serialize→deserialize→re-serialize, byte-identical.
-2. ``test_catalog_entry_credential_tier_validator`` — cross-field rule rejects
+1. ``test_catalog_entry_mode1_roundtrip_idempotent`` - Tier-1 + Tier-2 entries
+   round-trip through JSON serialize->deserialize->re-serialize, byte-identical.
+2. ``test_catalog_entry_credential_tier_validator`` - cross-field rule rejects
    tier-1+secret-ref and tier-2/3-without-secret-ref combinations.
-3. ``test_catalog_entry_document_inherits_catalog_entry`` — D.11 collection
+3. ``test_catalog_entry_document_inherits_catalog_entry`` - D.11 collection
    document is a CatalogEntry; round-trips through MongoDB dump kwargs.
-4. ``test_catalog_audit_log_document_roundtrip`` — D.12 audit-log document
+4. ``test_catalog_audit_log_document_roundtrip`` - D.12 audit-log document
    round-trips with ULID ``_id`` aliasing + every event_type literal accepted.
-5. ``test_recovery_choice_envelope_roundtrip`` — ``recovery-choice`` +
-   ``recovery-choice-response`` shapes round-trip; options subset rule.
-6. ``test_offer_catalog_addition_envelope_roundtrip`` — §F.1.2 Mode 2
-   ``offer-catalog-addition`` + ``catalog-addition-response`` shapes round-trip
-   with probe findings + suggested entry edits.
-7. ``test_new_envelopes_in_payload_registries`` — all four new payloads are
-   registered in the ``ALL_PAYLOADS`` / direction-specific registries.
-8. ``test_json_schema_export_includes_new_contracts_and_is_idempotent`` —
-   ``catalog_entry.json`` + four new ``ws_*.json`` + audit-log + entry-doc
-   schemas are exported, and a second export is byte-identical.
-9. ``test_catalog_entry_no_cost_field_invariant9`` — Invariant 9 negative
+5. ``test_json_schema_export_includes_new_contracts_and_is_idempotent`` -
+   ``catalog_entry.json`` + audit-log + entry-doc schemas are exported, and a
+   second export is byte-identical.
+6. ``test_catalog_entry_no_cost_field_invariant9`` - Invariant 9 negative
    control: ``cost_usd`` / ``estimated_cost`` extra fields are rejected.
-10. ``test_recovery_choice_options_must_be_known_actions`` — options field
-    is a closed Literal subset.
 """
 
 from __future__ import annotations
@@ -37,7 +25,6 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from trid3nt_contracts import ws
 from trid3nt_contracts.catalog import CatalogEntry
 from trid3nt_contracts.collections import (
     CATALOG_AUDIT_LOG_INDEXES,
@@ -48,10 +35,6 @@ from trid3nt_contracts.collections import (
 )
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.export_schemas import export
-from trid3nt_contracts.ws import (
-    RecoveryChoicePayload,
-    RecoveryChoiceResponsePayload,
-)
 
 
 # --------------------------------------------------------------------------- #
@@ -242,90 +225,7 @@ def test_catalog_audit_log_document_roundtrip(event_type: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 5. recovery-choice + recovery-choice-response
-# --------------------------------------------------------------------------- #
-
-
-def test_recovery_choice_envelope_roundtrip() -> None:
-    """envelopes round-trip; chat-text + cancelled cases work."""
-    # recovery-choice (agent -> client)
-    req = RecoveryChoicePayload(
-        request_id=new_ulid(),
-        failed_step_id=new_ulid(),
-        error_code="UPSTREAM_API_ERROR",
-        error_message="USGS 3DEP returned HTTP 503 — service unavailable",
-        context="fetching DEM at Fort Myers bbox for flood scenario",
-        options=["deny", "retry", "chat"],
-        ttl_seconds=300,
-    )
-    a = req.model_dump(mode="json")
-    text_a = json.dumps(a, sort_keys=True)
-    b = RecoveryChoicePayload.model_validate(json.loads(text_a)).model_dump(mode="json")
-    assert text_a == json.dumps(b, sort_keys=True)
-    assert req.MESSAGE_TYPE == "recovery-choice"
-
-    # Empty options list rejected (gate must offer at least one action).
-    bad = a.copy()
-    bad["options"] = []
-    with pytest.raises(ValidationError):
-        RecoveryChoicePayload.model_validate(bad)
-
-    # narrowing — single-option gate (e.g. GEOCODE_NO_MATCH -> chat only)
-    narrowed = RecoveryChoicePayload(
-        request_id=new_ulid(),
-        failed_step_id=new_ulid(),
-        error_code="GEOCODE_NO_MATCH",
-        error_message="No geocoding match for the supplied place name",
-        context="resolving 'Fort Myers'",
-        options=["chat"],
-        ttl_seconds=300,
-    )
-    assert narrowed.options == ["chat"]
-
-    # recovery-choice-response (client -> agent)
-    resp = RecoveryChoiceResponsePayload(
-        request_id=req.request_id,
-        choice="chat",
-        chat_text="try the WCS endpoint instead of WMS",
-    )
-    assert resp.MESSAGE_TYPE == "recovery-choice-response"
-    text_r = json.dumps(resp.model_dump(mode="json"), sort_keys=True)
-    restored = RecoveryChoiceResponsePayload.model_validate(json.loads(text_r))
-    assert restored.chat_text == "try the WCS endpoint instead of WMS"
-
-    # Cancellation path: no choice, cancelled=True
-    cancel = RecoveryChoiceResponsePayload(
-        request_id=req.request_id, choice=None, chat_text=None, cancelled=True
-    )
-    assert cancel.cancelled is True
-    assert cancel.choice is None
-
-
-# --------------------------------------------------------------------------- #
-# 6. Payload registries
-# --------------------------------------------------------------------------- #
-
-
-def test_new_envelopes_in_payload_registries() -> None:
-    """The recovery-choice payloads land in ALL_PAYLOADS with correct direction.
-
-    The §F.1.2 Mode 2 offer-catalog-addition / catalog-addition-response
-    envelopes were cut (endpoint additions are hand-authored; discovery exists).
-    """
-    assert "recovery-choice" in ws.AGENT_TO_CLIENT_PAYLOADS
-    assert "recovery-choice-response" in ws.CLIENT_TO_AGENT_PAYLOADS
-
-    # And aggregated:
-    for t in ("recovery-choice", "recovery-choice-response"):
-        assert t in ws.ALL_PAYLOADS, f"{t} missing from ALL_PAYLOADS"
-
-    # The cut Mode 2 envelopes are absent from every registry.
-    for t in ("offer-catalog-addition", "catalog-addition-response"):
-        assert t not in ws.ALL_PAYLOADS, f"{t} should have been cut"
-
-
-# --------------------------------------------------------------------------- #
-# 8. JSON Schema export includes new contracts + is idempotent
+# 5. JSON Schema export includes new contracts + is idempotent
 # --------------------------------------------------------------------------- #
 
 
@@ -336,8 +236,6 @@ def test_json_schema_export_includes_new_contracts_and_is_idempotent(tmp_path: P
         "catalog_entry.json",
         "catalog_entry_document.json",
         "catalog_audit_log_document.json",
-        "ws_recovery_choice.json",
-        "ws_recovery_choice_response.json",
     ]
     for stem in expected:
         assert (tmp_path / stem).exists(), f"missing exported schema: {stem}"
@@ -349,7 +247,7 @@ def test_json_schema_export_includes_new_contracts_and_is_idempotent(tmp_path: P
 
 
 # --------------------------------------------------------------------------- #
-# 9. Invariant 9 (no cost theater) negative control
+# 6. Invariant 9 (no cost theater) negative control
 # --------------------------------------------------------------------------- #
 
 
@@ -362,27 +260,3 @@ def test_catalog_entry_no_cost_field_invariant9() -> None:
             CatalogEntry.model_validate(bad)
 
 
-# --------------------------------------------------------------------------- #
-# 10. RecoveryChoiceOption closed Literal
-# --------------------------------------------------------------------------- #
-
-
-def test_recovery_choice_options_must_be_known_actions() -> None:
-    """Unknown action strings in options are rejected by the Literal."""
-    base = RecoveryChoicePayload(
-        request_id=new_ulid(),
-        failed_step_id=new_ulid(),
-        error_code="UPSTREAM_API_ERROR",
-        error_message="x",
-        context="x",
-        options=["deny", "retry", "chat"],
-        ttl_seconds=300,
-    ).model_dump(mode="json")
-    bad = {**base, "options": ["deny", "frobnicate"]}
-    with pytest.raises(ValidationError):
-        RecoveryChoicePayload.model_validate(bad)
-
-    # Response side: unknown choice value also rejected
-    bad_resp = {"request_id": new_ulid(), "choice": "frobnicate"}
-    with pytest.raises(ValidationError):
-        RecoveryChoiceResponsePayload.model_validate(bad_resp)

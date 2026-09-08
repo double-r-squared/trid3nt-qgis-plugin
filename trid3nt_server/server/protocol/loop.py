@@ -697,15 +697,6 @@ def _make_handler(settings: ModelSettings):
                                     else 0,
                                 )
 
-                    elif msg_type in (
-                        "confirm-response",
-                        "disambiguation-response",
-                        "clarification-response",
-                    ):
-                        # Scaffolding only -- no triggers yet. Log and
-                        # acknowledge without acting.
-                        logger.info("noop M1 message_type=%s", msg_type)
-
                     else:
                         await _send_error(
                             websocket,
