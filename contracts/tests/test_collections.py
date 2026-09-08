@@ -1,4 +1,4 @@
-"""Round-trip + negative tests for the five MongoDB collections."""
+"""Round-trip + negative tests for the MongoDB collections."""
 
 from __future__ import annotations
 
@@ -11,14 +11,12 @@ from trid3nt_contracts.collections import (
     ARTICLES_VECTOR_INDEX,
     EMBEDDING_DIMENSIONS_DEFAULT,
     EMBEDDING_MODEL_DEFAULT,
-    EVENTS_VECTOR_INDEX,
     MONGO_DUMP_KWARGS,
     RUNS_VECTOR_INDEX,
     SESSIONS_TTL,
     VECTOR_INDEXES,
     ArticleDocument,
     ChatMessage,
-    EventDocument,
     MapView,
     PipelineSnapshot,
     PipelineStepSummary,
@@ -30,14 +28,6 @@ from trid3nt_contracts.collections import (
     UserSpatialInput,
 )
 from trid3nt_contracts.common import new_ulid
-from trid3nt_contracts.event import (
-    ClaimSet,
-    EventLocation,
-    EventProvenance,
-    HurricaneIntensity,
-    IntensityIndicators,
-    NumericClaim,
-)
 
 
 def _project_doc() -> ProjectDocument:
@@ -163,47 +153,6 @@ def test_article_doc_roundtrip() -> None:
     _doc_roundtrip_idempotent(doc)
 
 
-def test_event_doc_is_event_metadata_shape() -> None:
-    article_id = new_ulid()
-    doc = EventDocument(
-        event_id=new_ulid(),
-        event_type="hurricane",
-        confidence=0.92,
-        location=EventLocation(
-            bbox=(-82.6, 26.4, -81.7, 27.0),
-            place_name="Fort Myers, FL",
-        ),
-        time_range={"start": "2022-09-28T00:00:00Z", "end": "2022-09-30T00:00:00Z"},
-        time_classification="past",
-        intensity=IntensityIndicators(
-            hurricane=HurricaneIntensity(
-                saffir_simpson=ClaimSet(
-                    claims=[
-                        NumericClaim(
-                            value=4.0,
-                            unit="category",
-                            source_type="agency",
-                            source_id="a",
-                            source_url="https://example.com",
-                            reporting_time="2026-06-05T12:00:00Z",
-                        )
-                    ],
-                    consensus_value=4.0,
-                )
-            )
-        ),
-        provenance=EventProvenance(article_ids=[article_id], primary_article_id=article_id),
-        extracted_at="2026-06-05T12:00:00Z",
-        extractor_version="hep-extractor-v0.1.0",
-    )
-    dumped_a = doc.model_dump(mode="json")
-    text_a = json.dumps(dumped_a, sort_keys=True)
-    doc_b = EventDocument.model_validate(json.loads(text_a))
-    dumped_b = doc_b.model_dump(mode="json")
-    text_b = json.dumps(dumped_b, sort_keys=True)
-    assert text_a == text_b
-
-
 def test_session_doc_with_pipeline_history_cancelled() -> None:
     doc = SessionDocument(
         id=new_ulid(),
@@ -264,8 +213,8 @@ def test_session_doc_with_pipeline_history_cancelled() -> None:
 # --- Vector index + TTL configs (D.6, D.8) --------------------------------- #
 
 
-def test_vector_indexes_cover_runs_articles_events() -> None:
-    assert set(VECTOR_INDEXES.keys()) == {"runs", "articles", "events"}
+def test_vector_indexes_cover_runs_and_articles() -> None:
+    assert set(VECTOR_INDEXES.keys()) == {"runs", "articles"}
     for spec in VECTOR_INDEXES.values():
         assert spec["type"] == "vectorSearch"
         # The default dim is the documented constant; OQ-7 surfaces the
@@ -298,14 +247,6 @@ def test_articles_vector_index_filters_on_extraction_status() -> None:
         f["path"] for f in ARTICLES_VECTOR_INDEX["fields"] if f["type"] == "filter"
     ]
     assert "extraction_status" in filter_paths
-
-
-def test_events_vector_index_filters_on_event_type_and_time_classification() -> None:
-    filter_paths = [
-        f["path"] for f in EVENTS_VECTOR_INDEX["fields"] if f["type"] == "filter"
-    ]
-    assert "event_type" in filter_paths
-    assert "time_classification" in filter_paths
 
 
 def test_sessions_ttl_config() -> None:

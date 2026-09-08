@@ -153,7 +153,7 @@ class GraceModel(BaseModel):
 
 
 class TimeRange(GraceModel):
-    """A UTC start/end interval. Shared by AssessmentEnvelope and EventMetadata."""
+    """A UTC start/end interval."""
 
     start: UTCDatetime
     end: UTCDatetime

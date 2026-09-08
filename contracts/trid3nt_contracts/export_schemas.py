@@ -18,21 +18,16 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from . import catalog, collections, envelope, event, execution, tool_registry, ws
+from . import catalog, collections, envelope, execution, tool_registry, ws
 
 # (filename stem, model) for every top-level contract we export.
 _EXPORTS: list[tuple[str, type[BaseModel]]] = [
     #
     ("assessment_envelope", envelope.AssessmentEnvelope),
-    #
-    ("event_metadata", event.EventMetadata),
-    ("claim_set", event.ClaimSet),
-    ("numeric_claim", event.NumericClaim),
     # collections
     ("project_document", collections.ProjectDocument),
     ("run_document", collections.RunDocument),
     ("article_document", collections.ArticleDocument),
-    ("event_document", collections.EventDocument),
     ("session_document", collections.SessionDocument),
     # sprint-08 additions (Mode 1 catalog substrate, §F.1.2)
     ("catalog_entry_document", collections.CatalogEntryDocument),

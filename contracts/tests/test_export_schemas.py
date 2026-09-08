@@ -18,13 +18,9 @@ def test_export_writes_one_file_per_top_level_contract(tmp_path: Path) -> None:
     # Spot checks across appendices
     expected_others = [
         "assessment_envelope",
-        "event_metadata",
-        "claim_set",
-        "numeric_claim",
         "project_document",
         "run_document",
         "article_document",
-        "event_document",
         "session_document",
         "catalog_entry",
         # sprint-08 — Mode 1 catalog substrate

@@ -5,7 +5,6 @@ Single source of truth for every type that crosses a specialist boundary:
 - ``envelope``: AssessmentEnvelope + flood subtype.
 - ``impact_envelope``: ImpactEnvelope - Pelicun post-processor output
   contract (c).
-- ``event``: EventMetadata + ClaimSet/NumericClaim + intensity union.
 - ``collections``: the five MongoDB collection schemas + vector index configs
   + TTL config.
 - ``catalog``: CatalogEntry - the public_hazard_catalog.yaml entry.
@@ -31,7 +30,6 @@ from . import (
     collections,
     envelope,
     errors,
-    event,
     execution,
     gate_spec,
     impact_envelope,
@@ -105,7 +103,6 @@ __all__ = [
     "envelope",
     "impact_envelope",
     "errors",
-    "event",
     "collections",
     "catalog",
     "case",

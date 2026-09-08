@@ -33,7 +33,6 @@ from pydantic import ConfigDict, Field, field_validator
 
 from .catalog import CatalogEntry
 from .common import GraceModel, ULIDStr, UTCDatetime
-from .event import EventMetadata
 from .execution import LegendKey
 
 #: SCREAMING_SNAKE_CASE error-code pattern.
@@ -51,7 +50,6 @@ __all__ = [
     "UserSpatialInput",
     "RunDocument",
     "ArticleDocument",
-    "EventDocument",
     "ChatMessage",
     "ToolCallSummary",
     "PipelineStepSummary",
@@ -66,7 +64,6 @@ __all__ = [
     "EMBEDDING_DIMENSIONS_DEFAULT",
     "RUNS_VECTOR_INDEX",
     "ARTICLES_VECTOR_INDEX",
-    "EVENTS_VECTOR_INDEX",
     "VECTOR_INDEXES",
     "SESSIONS_TTL",
     "CATALOG_ENTRIES_INDEXES",
@@ -273,21 +270,6 @@ class ArticleDocument(DocModel):
 
 
 # --------------------------------------------------------------------------- #
-# D.5 events  (the collection schema *is* EventMetadata)
-# --------------------------------------------------------------------------- #
-
-
-class EventDocument(EventMetadata):
-    """``events`` (D.5): an EventMetadata document. ``event_id`` is the ``_id``.
-
-    The collection schema *is* the ``EventMetadata`` schema; no
-    wrapper fields are added. The Mongo ``_id`` is ``event_id`` (a ULID); the
-    write path sets ``_id = event_id`` at insert time. We do not alias here to
-    keep ``EventMetadata`` a single shape across wire and storage.
-    """
-
-
-# --------------------------------------------------------------------------- #
 # D.6 sessions
 # --------------------------------------------------------------------------- #
 
@@ -449,13 +431,11 @@ def _vector_index(name: str, *filter_paths: str) -> dict[str, Any]:
 
 RUNS_VECTOR_INDEX = _vector_index("runs_embedding_vsi", "hazard_type", "run_type")
 ARTICLES_VECTOR_INDEX = _vector_index("articles_embedding_vsi", "extraction_status")
-EVENTS_VECTOR_INDEX = _vector_index("events_embedding_vsi", "event_type", "time_classification")
 
-#: The three Atlas Vector Search indexes (the minimum useful set, D.8).
+#: The Atlas Vector Search indexes (the minimum useful set, D.8).
 VECTOR_INDEXES: dict[str, dict[str, Any]] = {
     "runs": RUNS_VECTOR_INDEX,
     "articles": ARTICLES_VECTOR_INDEX,
-    "events": EVENTS_VECTOR_INDEX,
 }
 
 
