@@ -10,10 +10,7 @@ suite proves:
    - an over-threshold FeatureCollection is topology-preserving-simplified +
      capped, lighter on the wire, and TAGGED with a ``DensifyMeta`` so the
      degradation is surfaced honestly (never a silent drop).
-2. ``vector_tiles.build_pmtiles`` produces a real, valid PMTiles+MVT artifact
-   (the preferred path, env-gated OFF until an HTTP serving face exists), and
-   ``vector_tiles_enabled`` defaults OFF.
-3. The emitter choke point (``pipeline_emitter._read_vector_uri_as_geojson`` ->
+2. The emitter choke point (``pipeline_emitter._read_vector_uri_as_geojson`` ->
    ``add_loaded_layer`` -> ``emit_session_state``) emits a SIMPLIFIED inline FC
    plus the ``vector_density`` wire tag for a dense vector, while a small vector
    stays inline unchanged with NO tag.
@@ -21,10 +18,8 @@ suite proves:
 
 from __future__ import annotations
 
-import gzip
 import json
 import math
-import tempfile
 from typing import Any
 
 import pytest
@@ -36,11 +31,8 @@ from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
 from trid3nt_server.tools import vector_tiles
 from trid3nt_server.tools.vector_tiles import (
     DENSE_VECTOR_THRESHOLD,
-    MAX_INLINE_FEATURES,
     DensifyMeta,
-    build_pmtiles,
     densify_if_needed,
-    vector_tiles_enabled,
 )
 
 
@@ -217,69 +209,7 @@ def test_non_dict_input_is_passthrough() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 2. build_pmtiles — preferred path artifact (gate stays OFF by default)
-# --------------------------------------------------------------------------- #
-
-
-def test_vector_tiles_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("TRID3NT_VECTOR_TILES_ENABLED", raising=False)
-    monkeypatch.delenv("TRID3NT_VECTOR_TILES_BASE_URL", raising=False)
-    assert vector_tiles_enabled() is False
-    # Even opted-in, no serving base => still OFF.
-    monkeypatch.setenv("TRID3NT_VECTOR_TILES_ENABLED", "1")
-    assert vector_tiles_enabled() is False
-    monkeypatch.setenv("TRID3NT_VECTOR_TILES_BASE_URL", "https://tiles.example/")
-    assert vector_tiles_enabled() is True
-
-
-def test_build_pmtiles_produces_valid_archive() -> None:
-    # The PMTiles build/round-trip path depends on optional deps (pmtiles +
-    # mapbox_vector_tile + mercantile) that are env-gated OFF by default and may
-    # be absent from a given venv (e.g. the SSM file-swap deploy does not pip-
-    # install). Skip gracefully rather than hard-fail when they are missing.
-    pytest.importorskip("pmtiles")
-    pytest.importorskip("mapbox_vector_tile")
-    pytest.importorskip("mercantile")
-    fc = _polygon_fc(600)
-    data = build_pmtiles(fc, layer_name="buildings", min_zoom=10, max_zoom=13)
-    # PMTiles magic header.
-    assert data[:7] == b"PMTiles"
-    assert len(data) > 0
-
-    # Round-trips through the pmtiles reader with the expected zoom range +
-    # MVT tile type, and at least one tile decodes to gzip-compressed bytes.
-    from pmtiles.reader import MmapSource, Reader  # type: ignore[import-not-found]
-    from pmtiles.tile import TileType  # type: ignore[import-not-found]
-
-    with tempfile.NamedTemporaryFile(suffix=".pmtiles", delete=True) as f:
-        f.write(data)
-        f.flush()
-        with open(f.name, "rb") as fh:
-            reader = Reader(MmapSource(fh))
-            header = reader.header()
-            assert header["min_zoom"] == 10
-            assert header["max_zoom"] == 13
-            assert header["tile_type"] == TileType.MVT
-            # Grab one tile by walking the zoom range; assert it is gzip MVT.
-            got_tile = False
-            for z in range(10, 14):
-                import mercantile  # type: ignore[import-not-found]
-
-                for t in mercantile.tiles(-122.0, 37.0, -121.9, 37.1, [z]):
-                    raw = reader.get(t.z, t.x, t.y)
-                    if raw:
-                        # gzip magic.
-                        assert raw[:2] == b"\x1f\x8b"
-                        gzip.decompress(raw)  # must not raise
-                        got_tile = True
-                        break
-                if got_tile:
-                    break
-            assert got_tile
-
-
-# --------------------------------------------------------------------------- #
-# 3. Emitter choke-point integration (the real F94 fix path)
+# 2. Emitter choke-point integration
 # --------------------------------------------------------------------------- #
 
 

@@ -1,73 +1,30 @@
-"""Dense-vector handling for the inline-GeoJSON emit path (F94).
+"""Dense-vector handling for the inline-GeoJSON emit path.
 
-OSM building footprints - thousands of
-polygons — were attached to ``session-state`` as a single raw inline-GeoJSON
-``FeatureCollection`` (the ``pipeline_emitter.add_loaded_layer`` path).
-The browser then (a) downloaded the whole FC over the WebSocket, (b) parsed it,
-and (c) handed every full-resolution polygon to MapLibre, which re-tiles the
-ENTIRE collection on the main thread. With dense footprints this made the app
-"considerably more laggy."
-
-This module is the single decision + transform seam the choke point
-(``pipeline_emitter._read_vector_uri_as_geojson``) calls on every vector
-FeatureCollection before it is attached for the client. The contract:
+A dense vector layer - thousands of OSM building-footprint polygons - attached
+to ``session-state`` as one raw inline-GeoJSON ``FeatureCollection`` is
+expensive to ship and expensive to draw. This module is the single decision +
+transform seam the choke point (``pipeline_emitter._read_vector_uri_as_geojson``)
+calls on every vector FeatureCollection before it is attached for the client:
 
     densify_if_needed(fc) -> (fc_out, meta)
 
 - ``feature_count <= THRESHOLD``  -> the FC is returned UNCHANGED; ``meta`` is
-  ``None``. The legacy inline path is byte-for-byte preserved for small layers
-  (NWS alerts, a handful of WDPA polygons, a panther occurrence set, ...).
-- ``feature_count >  THRESHOLD``  -> the FC is made cheap to ship AND cheap to
-  draw, and ``meta`` records exactly what was done so the layer can be TAGGED
-  (surfaced + logged), never silently degraded ([[feedback_data_source_fallback_norm]]).
+  ``None``. The inline path is byte-for-byte preserved for small layers.
+- ``feature_count >  THRESHOLD``  -> every geometry is Douglas-Peucker
+  simplified with ``preserve_topology`` (shared edges stay shared; no slivers
+  or holes) at a tolerance scaled to the layer's own extent, and the feature
+  list is capped at ``MAX_INLINE_FEATURES``, keeping the LARGEST features by
+  bbox area so the map stays representative rather than arbitrarily clipped.
+  ``meta`` records ``simplified`` / ``capped`` / original-vs-emitted counts so
+  the layer is TAGGED, never silently degraded.
 
-Two strategies, selected at runtime:
-
-1. **Vector tiles (PREFERRED, env-gated OFF until a serving face exists).**
-   When ``TRID3NT_VECTOR_TILES_ENABLED=1`` *and* a tile-serving base URL is
-   configured (``TRID3NT_VECTOR_TILES_BASE_URL``), ``build_pmtiles`` slices the
-   FC into a PMTiles archive of Mapbox Vector Tiles, writes it to the object
-   store, and the choke point emits a vector-tile ``LayerURI`` instead of inline
-   GeoJSON — MapLibre then fetches only the tiles in view. The full PMTiles+MVT
-   build is implemented and unit-tested here; the gate stays OFF by default
-   because this AWS deployment has no client-reachable HTTP face for the
-   ``s3://`` PMTiles object yet (TiTiler only serves raster ``/cog`` tiles; the
-   client never reaches ``s3://`` directly — Invariant 5). A follow-up infra
-   job that stands up a PMTiles range-serving origin (CloudFront over the runs
-   bucket, or an agent ``/vector-tiles/`` proxy) flips this on with no code
-   change here.
-
-2. **Topology-preserving simplification + feature cap (HONEST FALLBACK,
-   ACTIVE).** This ships today and directly fixes the reported lag with NO new
-   serving infra:
-     - every geometry is Douglas-Peucker simplified with ``preserve_topology``
-       (shared edges stay shared; no slivers/holes) at a tolerance scaled to the
-       layer's own extent, cutting vertex count (≈70 % wire-byte reduction on
-       real footprints) so both the WebSocket payload and MapLibre's
-       main-thread tiling get dramatically lighter;
-     - the feature list is capped at ``MAX_INLINE_FEATURES`` so MapLibre never
-       draws an unbounded count; the cap keeps the LARGEST features (by bbox
-       area) so the map stays representative rather than arbitrarily clipped;
-     - ``meta`` records ``simplified`` / ``capped`` / original-vs-emitted counts
-       so the choke point can stamp the wire layer and the LayerPanel can show a
-       "simplified for performance" affordance.
-
-Style is untouched: the simplified FC is the same geometry families
-(point/line/polygon) the existing Map.tsx vector styling already paints, so no
-client styling changes are needed for the fallback path.
-
-Invariants preserved:
-- 1 (Determinism): simplification only DROPS vertices / DROPS whole features;
-  it never invents a coordinate. Tiling re-projects received coordinates only.
-- 5 (Tier separation): the helper writes to the object store the agent already
-  owns; it never hands the client a ``gs://`` / ``s3://`` URL — the choke point
-  is responsible for emitting a client-reachable URL only when the serving face
-  is configured.
+Simplification only DROPS vertices or DROPS whole features; it never invents a
+coordinate. The simplified FC carries the same geometry families as the input,
+so no styling changes with it.
 """
 
 from __future__ import annotations
 
-import io
 import logging
 import os
 from dataclasses import dataclass
@@ -80,9 +37,6 @@ __all__ = [
     "MAX_INLINE_FEATURES",
     "DensifyMeta",
     "densify_if_needed",
-    "vector_tiles_enabled",
-    "build_pmtiles",
-    "write_pmtiles_to_object_store",
 ]
 
 
@@ -342,155 +296,6 @@ def _simplify_and_cap(fc: dict[str, Any]) -> tuple[dict[str, Any], bool, bool, i
 
     fc_out = {"type": "FeatureCollection", "features": out_features}
     return fc_out, any_simplified, capped, len(out_features)
-
-
-# --------------------------------------------------------------------------- #
-# Vector tiles (PREFERRED) — full PMTiles+MVT builder, env-gated
-# --------------------------------------------------------------------------- #
-
-def vector_tiles_enabled() -> bool:
-    """True only when the tiled path is BOTH opted-in and has a serving face.
-
-    Default OFF: this AWS deployment has no client-reachable HTTP origin for an
-    ``s3://`` PMTiles object yet. A follow-up infra job sets both env vars to
-    flip the choke point onto the tiled path with no code change here.
-    """
-    enabled = os.environ.get("TRID3NT_VECTOR_TILES_ENABLED", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    has_base = bool(os.environ.get("TRID3NT_VECTOR_TILES_BASE_URL", "").strip())
-    return enabled and has_base
-
-
-def build_pmtiles(
-    fc: dict[str, Any],
-    *,
-    layer_name: str = "vector",
-    min_zoom: int = 6,
-    max_zoom: int = 14,
-    extent: int = 4096,
-) -> bytes:
-    """Slice a GeoJSON FeatureCollection into a PMTiles archive of MVT tiles.
-
-    Pure (no I/O). Returns the PMTiles bytes. Raises ``ImportError`` if the
-    tiling toolchain is missing and ``ValueError`` if the FC has no bounds. The
-    caller decides whether to write the bytes to the object store.
-
-    Coordinates are taken as EPSG:4326 lon/lat (the inline path's CRS); each web
-    mercator tile clips the geometry and ``mapbox_vector_tile.encode`` quantizes
-    into the tile's 4096-unit extent. Tiles are gzip-compressed per the PMTiles
-    header so MapLibre's pmtiles protocol decompresses transparently.
-    """
-    import gzip
-
-    import mercantile  # type: ignore[import-not-found]
-    import mapbox_vector_tile as mvt  # type: ignore[import-not-found]
-    from shapely.geometry import box, shape  # type: ignore[import-not-found]
-    from pmtiles.tile import (  # type: ignore[import-not-found]
-        Compression,
-        TileType,
-        zxy_to_tileid,
-    )
-    from pmtiles.writer import Writer  # type: ignore[import-not-found]
-
-    parsed: list[tuple[dict[str, Any], Any]] = []
-    for f in fc.get("features") or []:
-        if not isinstance(f, dict) or not f.get("geometry"):
-            continue
-        try:
-            g = shape(f["geometry"])
-        except Exception:  # noqa: BLE001
-            continue
-        if not g.is_empty:
-            parsed.append((f.get("properties") or {}, g))
-
-    bounds = _fc_bounds([g for _, g in parsed])
-    if bounds is None:
-        raise ValueError("build_pmtiles: FeatureCollection has no usable geometry")
-    minx, miny, maxx, maxy = bounds
-
-    buf = io.BytesIO()
-    writer = Writer(buf)
-    n_tiles = 0
-    for z in range(min_zoom, max_zoom + 1):
-        for t in mercantile.tiles(minx, miny, maxx, maxy, [z]):
-            tb = mercantile.bounds(t)
-            clip = box(tb.west, tb.south, tb.east, tb.north)
-            tile_features: list[dict[str, Any]] = []
-            for props, g in parsed:
-                if not g.intersects(clip):
-                    continue
-                cg = g.intersection(clip)
-                if cg.is_empty:
-                    continue
-                tile_features.append({"geometry": cg, "properties": props})
-            if not tile_features:
-                continue
-            encoded = mvt.encode(
-                [{"name": layer_name, "features": tile_features}],
-                default_options={
-                    "quantize_bounds": (tb.west, tb.south, tb.east, tb.north),
-                    "extents": extent,
-                },
-            )
-            writer.write_tile(zxy_to_tileid(t.z, t.x, t.y), gzip.compress(encoded))
-            n_tiles += 1
-
-    header = {
-        "tile_type": TileType.MVT,
-        "tile_compression": Compression.GZIP,
-        "min_zoom": min_zoom,
-        "max_zoom": max_zoom,
-        "min_lon_e7": int(minx * 1e7),
-        "min_lat_e7": int(miny * 1e7),
-        "max_lon_e7": int(maxx * 1e7),
-        "max_lat_e7": int(maxy * 1e7),
-        "center_zoom": min_zoom,
-        "center_lon_e7": int((minx + maxx) / 2 * 1e7),
-        "center_lat_e7": int((miny + maxy) / 2 * 1e7),
-    }
-    metadata = {
-        "vector_layers": [{"id": layer_name, "description": layer_name}],
-    }
-    writer.finalize(header, metadata)
-    logger.info(
-        "vector_tiles: built PMTiles features=%d tiles=%d bytes=%d z=%d-%d",
-        len(parsed),
-        n_tiles,
-        buf.tell(),
-        min_zoom,
-        max_zoom,
-    )
-    return buf.getvalue()
-
-
-def write_pmtiles_to_object_store(pmtiles_bytes: bytes, key: str) -> str:
-    """Write PMTiles bytes to the runs/cache bucket; return the ``s3://`` URI.
-
-    Mirrors ``publish_layer._write_overview_cog``'s S3 path. Used only when the
-    tiled path is enabled. The choke point converts this object-store URI to a
-    client-reachable URL via the (future) serving face; this helper never hands
-    the client a bucket URI directly (Invariant 5).
-    """
-
-    bucket = (
-        os.environ.get("TRID3NT_RUNS_BUCKET")
-        or os.environ.get("TRID3NT_CACHE_BUCKET")
-        or "trid3nt-runs"
-    )
-    from trid3nt_server.workflows.solver.solver import _get_s3_client
-
-    s3 = _get_s3_client()
-    s3.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=pmtiles_bytes,
-        ContentType="application/vnd.pmtiles",
-    )
-    return f"s3://{bucket}/{key}"
 
 
 # --------------------------------------------------------------------------- #
