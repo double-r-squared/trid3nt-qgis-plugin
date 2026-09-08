@@ -264,12 +264,22 @@ async def test_pad_m_expands_the_bbox_by_a_distance_not_a_fraction() -> None:
     finally:
         os.unlink(path)
 
-    # 3 km of latitude is 3000/111320 deg; the longitude pad is that over
-    # cos(40.5 deg), so the window grows MORE in longitude degrees than in
-    # latitude ones - which is what keeps the pad the same distance on both axes.
-    dy = 3000.0 / 111_320.0
-    assert result["min_lat"] == pytest.approx(40.49 - dy, abs=1e-9)
-    assert result["max_lat"] == pytest.approx(40.51 + dy, abs=1e-9)
+    # The pad is asserted as the GROUND DISTANCE it claims to be, walked off the
+    # layer's own edge - not as a degree count, which is what makes it a distance.
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
+    assert geod.inv(-124.16, 40.49, -124.16, result["min_lat"])[2] == pytest.approx(
+        3000.0, abs=1.0
+    )
+    assert geod.inv(-124.16, 40.51, -124.16, result["max_lat"])[2] == pytest.approx(
+        3000.0, abs=1.0
+    )
+    assert geod.inv(-124.16, 40.50, result["min_lon"], 40.50)[2] == pytest.approx(
+        3000.0, abs=1.0
+    )
+    # The same 3 km costs MORE degrees of longitude at 40.5 N than of latitude.
+    dy = result["max_lat"] - 40.51
     assert (-124.16 - result["min_lon"]) > dy
     assert (result["max_lon"] - (-124.04)) > dy
     assert result["pad_m"] == pytest.approx(3000.0)

@@ -412,10 +412,14 @@ def _cell_size_m(dem_src: Any) -> tuple[float, float]:
         geographic = False
     if not geographic:
         return res_x, res_y
+    from pyproj import Geod
+
     bounds = dem_src.bounds
     lat_c = 0.5 * (bounds.bottom + bounds.top)
-    dx = res_x * 111_320.0 * max(math.cos(math.radians(lat_c)), 0.01)
-    dy = res_y * 110_540.0
+    lon_c = 0.5 * (bounds.left + bounds.right)
+    geod = Geod(ellps="WGS84")
+    dx = geod.inv(lon_c, lat_c, lon_c + res_x, lat_c)[2]
+    dy = geod.inv(lon_c, lat_c - 0.5 * res_y, lon_c, lat_c + 0.5 * res_y)[2]
     return dx, dy
 
 

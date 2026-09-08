@@ -320,10 +320,9 @@ def _apply_pad(
     return (minx, miny, maxx, maxy)
 
 
-#: Metres per degree of latitude, and the floor the longitude scaling takes at
-#: high latitude so a pad near the pole stays a finite number of degrees.
-_M_PER_DEG_LAT = 111_320.0
-_COS_FLOOR = 0.15
+#: The pad is capped at a quarter turn per axis: at high latitude a metre pad is
+#: a large number of degrees of longitude, and past this it is the whole parallel.
+_PAD_MAX_DEG = 90.0
 
 
 def _apply_pad_m(
@@ -333,14 +332,21 @@ def _apply_pad_m(
 
     A DISTANCE rather than a fraction, because what a query window has to reach
     past its subject is a distance: a channel a kilometre off the centreline is
-    the same kilometre whether the reach is one km long or fifty.
+    the same kilometre whether the reach is one km long or fifty. The degrees
+    that distance buys are geodesic, walked west and north from the bbox with
+    ``pyproj.Geod.fwd``, so the longitude pad widens with latitude as it should.
     """
+    from pyproj import Geod
+
     minx, miny, maxx, maxy = bbox
     if pad_m <= 0.0:
         return bbox
-    dy = pad_m / _M_PER_DEG_LAT
+    geod = Geod(ellps="WGS84")
     mid_lat = 0.5 * (miny + maxy)
-    dx = pad_m / (_M_PER_DEG_LAT * max(_COS_FLOOR, math.cos(math.radians(mid_lat))))
+    west_lon, _, _ = geod.fwd(minx, mid_lat, 270.0, pad_m)
+    _, south_lat, _ = geod.fwd(minx, miny, 180.0, pad_m)
+    dx = min(_PAD_MAX_DEG, abs(minx - west_lon))
+    dy = min(_PAD_MAX_DEG, abs(miny - south_lat))
     return (max(-180.0, minx - dx), max(-90.0, miny - dy),
             min(180.0, maxx + dx), min(90.0, maxy + dy))
 

@@ -693,14 +693,23 @@ def test_the_water_is_queried_over_the_centerline_padded_by_a_stated_distance(
     captured: dict = {}
     _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho")
 
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
     asked = captured["water_bbox"]
-    # 3 km of latitude in degrees. The straight test stretch has zero height, so
-    # the tool's own degenerate-layer floor (0.001 deg) rides under the pad; the
-    # window still reaches the full stated distance on every side.
-    dy = 3000.0 / 111_320.0
-    floor = 0.001
-    assert dy <= (CENTERLINE_BBOX[1] - asked[1]) <= dy + floor
-    assert dy <= (asked[3] - CENTERLINE_BBOX[3]) <= dy + floor
+    # The window is asserted in METRES, the unit the row states the pad in. The
+    # straight test stretch has zero height, so the tool's own degenerate-layer
+    # floor (0.001 deg) rides under the pad; the window still reaches the full
+    # 3 km on every side, and at most the floor further.
+    lon = CENTERLINE_BBOX[0]
+    floor_m = geod.inv(lon, CENTERLINE_BBOX[1], lon, CENTERLINE_BBOX[1] - 0.001)[2]
+    south_m = geod.inv(lon, CENTERLINE_BBOX[1], lon, asked[1])[2]
+    north_m = geod.inv(lon, CENTERLINE_BBOX[3], lon, asked[3])[2]
+    # A decimetre of slack on a 3 km pad: the pad is one degree offset applied to
+    # BOTH edges, and a degree is a slightly different distance at each of them.
+    slack_m = 0.1
+    assert 3000.0 <= south_m <= 3000.0 + floor_m + slack_m
+    assert 3000.0 <= north_m <= 3000.0 + floor_m + slack_m
     # The pad is a DISTANCE: the same 3 km costs more degrees of longitude at
     # 40.5 N than it does of latitude.
     assert (CENTERLINE_BBOX[0] - asked[0]) > (asked[3] - CENTERLINE_BBOX[3])

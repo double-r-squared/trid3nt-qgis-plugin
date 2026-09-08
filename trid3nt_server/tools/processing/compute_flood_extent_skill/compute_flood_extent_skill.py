@@ -323,12 +323,16 @@ def _pixel_area_km2_grid(transform: Any, crs: Any, shape: tuple[int, int]) -> np
     px_w = abs(transform.a)
     px_h = abs(transform.e)
     if crs is not None and crs.is_geographic:
+        from pyproj import Geod
+
         row_idx = np.arange(height, dtype=np.float64)
         # latitude at the center of each row
         lat = transform.f + (row_idx + 0.5) * transform.e
-        km_per_deg_lat = 111.32
-        km_per_deg_lon = 111.32 * np.cos(np.radians(lat))
-        row_area_km2 = (px_h * km_per_deg_lat) * (px_w * km_per_deg_lon)
+        geod = Geod(ellps="WGS84")
+        lon0 = np.full(lat.shape, transform.c)
+        cell_w_m = geod.inv(lon0, lat, lon0 + px_w, lat)[2]
+        cell_h_m = geod.inv(lon0, lat - 0.5 * px_h, lon0, lat + 0.5 * px_h)[2]
+        row_area_km2 = cell_w_m * cell_h_m / 1.0e6
         return np.repeat(row_area_km2[:, np.newaxis], width, axis=1)
     # Projected CRS: assume linear (meter) units -- the repo-wide convention
     # for every projected CRS this tool is exercised against.

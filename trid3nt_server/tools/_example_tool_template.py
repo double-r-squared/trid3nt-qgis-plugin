@@ -20,7 +20,6 @@ ASCII only. No emojis, no typographic dashes.
 
 from __future__ import annotations
 
-import math
 import os
 from typing import Any
 
@@ -83,21 +82,22 @@ def example_bbox_area(
     label: str = "area of interest",
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Estimate the ground area of a bounding box in square kilometres.
+    """Measure the ground area of a bounding box in square kilometres.
 
-    **What it does:** Computes an approximate planar ground area for a lon/lat
-    bounding box using an equirectangular (cosine-latitude) approximation. This
-    is a COPY-ME EXAMPLE tool that ships with the repo to demonstrate the atomic
-    tool authoring pattern; it does no network I/O and mutates nothing.
+    **What it does:** Computes the geodesic area of a lon/lat bounding box on the
+    WGS84 ellipsoid via ``pyproj.Geod``. This is a COPY-ME EXAMPLE tool that
+    ships with the repo to demonstrate the atomic tool authoring pattern; it does
+    no network I/O and mutates nothing.
 
     **When to use:**
     - "roughly how many square kilometres does this box cover?"
     - a quick area sanity-check on a drawn or derived area of interest.
 
     **When NOT to use:**
-    - For an authoritative area of an admin polygon -> fetch the boundary and use
-      a projected-CRS area calculation, not this planar estimate.
-    - For anything you would report to a user as exact -- this is an example.
+    - For the area of an admin polygon -> fetch the boundary and measure THAT
+      geometry; a bounding box is not the shape.
+    - On a bbox spanning more than half the globe, where a lon/lat rectangle's
+      ring is degenerate on the ellipsoid.
 
     **Parameters:**
     - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
@@ -127,13 +127,19 @@ def example_bbox_area(
             "example_bbox_area: bbox must be non-degenerate with max > min on both axes"
         )
 
-    km_per_deg_lat = 111.32
-    mid_lat_rad = math.radians((min_lat + max_lat) / 2.0)
-    km_per_deg_lon = 111.32 * math.cos(mid_lat_rad)
+    # Geodesic on the WGS84 ellipsoid. The bbox ring is densified first: pyproj
+    # joins consecutive vertices with GEODESICS, and a rectangle's top and bottom
+    # edges are PARALLELS, so a long undensified edge cuts the corner poleward.
+    import shapely
+    from pyproj import Geod
 
-    width_km = (max_lon - min_lon) * km_per_deg_lon
-    height_km = (max_lat - min_lat) * km_per_deg_lat
-    area_km2 = abs(width_km * height_km)
+    geod = Geod(ellps="WGS84")
+    mid_lat = 0.5 * (min_lat + max_lat)
+    ring = shapely.segmentize(shapely.box(min_lon, min_lat, max_lon, max_lat), 1.0)
+
+    width_km = geod.inv(min_lon, mid_lat, max_lon, mid_lat)[2] / 1000.0
+    height_km = geod.inv(min_lon, min_lat, min_lon, max_lat)[2] / 1000.0
+    area_km2 = abs(geod.geometry_area_perimeter(ring)[0]) / 1.0e6
 
     return {
         "label": label,
@@ -141,7 +147,7 @@ def example_bbox_area(
         "width_km": round(width_km, 3),
         "height_km": round(height_km, 3),
         "area_km2": round(area_km2, 3),
-        "method": "equirectangular cosine-latitude approximation (example tool)",
+        "method": "geodesic on WGS84 (pyproj.Geod)",
     }
 
 

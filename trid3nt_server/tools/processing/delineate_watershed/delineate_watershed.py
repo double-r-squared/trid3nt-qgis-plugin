@@ -158,11 +158,15 @@ def _cell_area_km2(grid: Any) -> float:
     if not geographic:
         # pysheds' crs is a pyproj CRS; a projected grid is already meters.
         return (res_x * res_y) / 1.0e6
+    from pyproj import Geod
+
     x0, y0 = grid.affine * (0, 0)
     x1, y1 = grid.affine * (grid.shape[1], grid.shape[0])
     lat_c = 0.5 * (y0 + y1)
-    dx_m = res_x * 111_320.0 * max(math.cos(math.radians(lat_c)), 0.01)
-    dy_m = res_y * 110_540.0
+    lon_c = 0.5 * (x0 + x1)
+    geod = Geod(ellps="WGS84")
+    dx_m = geod.inv(lon_c, lat_c, lon_c + res_x, lat_c)[2]
+    dy_m = geod.inv(lon_c, lat_c - 0.5 * res_y, lon_c, lat_c + 0.5 * res_y)[2]
     return (dx_m * dy_m) / 1.0e6
 
 # ---------------------------------------------------------------------------

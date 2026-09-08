@@ -88,10 +88,12 @@ def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
 
     min_lon, min_lat, max_lon, max_lat = bbox
     mid_lat = 0.5 * (min_lat + max_lat)
-    m_per_deg_lon = 111_320.0 * max(0.05, math.cos(math.radians(mid_lat)))
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
     long_axis_m = max(
-        (max_lon - min_lon) * m_per_deg_lon,
-        (max_lat - min_lat) * 111_320.0,
+        geod.inv(min_lon, mid_lat, max_lon, mid_lat)[2],
+        geod.inv(min_lon, min_lat, min_lon, max_lat)[2],
     )
     budget_res = int(math.ceil(long_axis_m / _PIXEL_BUDGET))
     effective_res = max(effective_res, budget_res)

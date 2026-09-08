@@ -320,14 +320,18 @@ def _sample_topobathy_density(
 
     # Native OUTPUT pixel density: convert the source cell to metres (the output grid
     # is metric EPSG:32616 at the finest source cell), then px per square degree.
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
+    m_per_deg_lon = geod.inv(cx - 0.5, cy, cx + 0.5, cy)[2]
+    m_per_deg_lat = geod.inv(cx, cy - 0.5, cx, cy + 0.5)[2]
     if src_is_geographic:
-        mid = math.radians(cy)
-        res_m = min(res_deg_x * 111320.0 * math.cos(mid), res_deg_y * 110540.0)
+        res_m = min(res_deg_x * m_per_deg_lon, res_deg_y * m_per_deg_lat)
     else:
         res_m = min(res_deg_x, res_deg_y)  # already metric
     res_m = max(res_m, 0.5)
-    px_x_per_deg = 111320.0 * math.cos(math.radians(cy)) / res_m
-    px_y_per_deg = 110540.0 / res_m
+    px_x_per_deg = m_per_deg_lon / res_m
+    px_y_per_deg = m_per_deg_lat / res_m
     px_per_sq_deg = px_x_per_deg * px_y_per_deg
     return SampledDensity(bytes_per_px=bytes_per_px, px_per_sq_deg=px_per_sq_deg)
 

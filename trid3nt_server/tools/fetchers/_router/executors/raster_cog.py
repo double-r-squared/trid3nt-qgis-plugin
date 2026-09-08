@@ -1328,8 +1328,6 @@ def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
     ``_fix_nlcd_background_transparency`` at the pixel level. A missing coverage /
     non-TIFF body -> typed UPSTREAM.
     """
-    import math
-
     import numpy as np
     import rasterio
     from rasterio.io import MemoryFile
@@ -1356,10 +1354,14 @@ def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
     # the bbox at the effective resolution, clamped to the MRLC ~4000 px/axis cap.
     min_lon, min_lat, max_lon, max_lat = bbox
     mid_lat = 0.5 * (min_lat + max_lat)
-    m_per_deg_lon = 111_320.0 * math.cos(math.radians(mid_lat))
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
     max_px = int(w.get("max_px", 4000))
-    width_px = max(16, min(max_px, int(round((max_lon - min_lon) * m_per_deg_lon / res_m))))
-    height_px = max(16, min(max_px, int(round((max_lat - min_lat) * 111_320.0 / res_m))))
+    width_m = geod.inv(min_lon, mid_lat, max_lon, mid_lat)[2]
+    height_m = geod.inv(min_lon, min_lat, min_lon, max_lat)[2]
+    width_px = max(16, min(max_px, int(round(width_m / res_m))))
+    height_px = max(16, min(max_px, int(round(height_m / res_m))))
 
     endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
     wcs_url = endpoint.url or endpoint.url_template or ""
@@ -1548,8 +1550,6 @@ def _imageserver_size(bbox: tuple[float, float, float, float], ingest: dict[str,
     Otherwise the metric sizing applies: m/degree at the bbox midpoint latitude
     rounded to ``native_cell_m``. Both clamp per axis to ``px_min`` / ``px_max``.
     """
-    import math
-
     px_min = int(ingest.get("px_min", 16))
     px_max = int(ingest.get("px_max", 4096))
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -1561,9 +1561,11 @@ def _imageserver_size(bbox: tuple[float, float, float, float], ingest: dict[str,
         return width_px, height_px
     cell_m = float(ingest.get("native_cell_m", 30.0))
     mid_lat = 0.5 * (min_lat + max_lat)
-    m_per_deg_lon = 111_320.0 * math.cos(math.radians(mid_lat))
-    width_m = (max_lon - min_lon) * m_per_deg_lon
-    height_m = (max_lat - min_lat) * 111_320.0
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
+    width_m = geod.inv(min_lon, mid_lat, max_lon, mid_lat)[2]
+    height_m = geod.inv(min_lon, min_lat, min_lon, max_lat)[2]
     width_px = max(px_min, min(px_max, int(round(width_m / cell_m))))
     height_px = max(px_min, min(px_max, int(round(height_m / cell_m))))
     return width_px, height_px

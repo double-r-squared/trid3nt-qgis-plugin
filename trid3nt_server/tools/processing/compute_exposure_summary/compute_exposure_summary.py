@@ -231,13 +231,19 @@ def _footprint_area_km2(
         cell_m2 = abs(transform.a * transform.e - transform.b * transform.d)
         return float(wet.sum()) * cell_m2 / 1e6
 
+    from pyproj import Geod
+
     dx_deg = abs(transform.a)
     dy_deg = abs(transform.e)
     rows = np.arange(wet.shape[0], dtype=np.float64) + 0.5
     row_lats = transform.f + rows * transform.e  # row-center latitudes
-    row_cell_m2 = (
-        dx_deg * 111_320.0 * np.cos(np.radians(row_lats)) * (dy_deg * 110_540.0)
-    )
+    geod = Geod(ellps="WGS84")
+    lon0 = np.full(row_lats.shape, transform.c)
+    row_cell_w_m = geod.inv(lon0, row_lats, lon0 + dx_deg, row_lats)[2]
+    row_cell_h_m = geod.inv(
+        lon0, row_lats - 0.5 * dy_deg, lon0, row_lats + 0.5 * dy_deg
+    )[2]
+    row_cell_m2 = row_cell_w_m * row_cell_h_m
     wet_per_row = wet.sum(axis=1).astype(np.float64)
     return float((wet_per_row * row_cell_m2).sum() / 1e6)
 

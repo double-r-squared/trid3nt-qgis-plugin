@@ -29,7 +29,6 @@ these helpers must never touch the asyncio loop.
 from __future__ import annotations
 
 import logging
-import math
 import threading
 import time
 from typing import Any
@@ -253,9 +252,11 @@ def bbox_pixel_dims(
     """
     min_lon, min_lat, max_lon, max_lat = bbox
     mid_lat = 0.5 * (min_lat + max_lat)
-    m_per_deg_lon = 111_320.0 * max(0.05, math.cos(math.radians(mid_lat)))
-    width_m = max(0.0, max_lon - min_lon) * m_per_deg_lon
-    height_m = max(0.0, max_lat - min_lat) * 111_320.0
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
+    width_m = geod.inv(min_lon, mid_lat, max(min_lon, max_lon), mid_lat)[2]
+    height_m = geod.inv(min_lon, min_lat, min_lon, max(min_lat, max_lat))[2]
     width_px = max(px_min, min(px_max, int(round(width_m / native_cell_m)) or px_min))
     height_px = max(px_min, min(px_max, int(round(height_m / native_cell_m)) or px_min))
     return width_px, height_px

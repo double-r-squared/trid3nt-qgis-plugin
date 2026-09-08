@@ -629,18 +629,26 @@ def _reconcile_datum(
 # ---------------------------------------------------------------------------
 
 
-def _meters_per_unit(crs: Any, lat_deg: float) -> float:
-    """Approximate metres per CRS linear unit for a nearest-cell tolerance.
+def _m_per_deg_lat(lat_deg: float) -> float:
+    """Geodesic metres in one degree of latitude centred on ``lat_deg``."""
+    from pyproj import Geod
 
-    Projected metre CRS -> 1.0; geographic degrees -> ~111320 m/deg (latitude
-    scaling on the lon axis is folded into the pixel search window, so this is
-    a deliberately conservative single scalar). Used ONLY to size the
-    nearest-wet-cell search radius; the tolerance is stated in the alignment
-    block so the approximation is transparent.
+    lat = max(-89.5, min(89.5, float(lat_deg)))
+    return float(Geod(ellps="WGS84").inv(0.0, lat - 0.5, 0.0, lat + 0.5)[2])
+
+
+def _meters_per_unit(crs: Any, lat_deg: float) -> float:
+    """Metres per CRS linear unit for a nearest-cell tolerance.
+
+    Projected metre CRS -> 1.0; geographic degrees -> the geodesic length of one
+    degree of latitude AT ``lat_deg`` (a single scalar for both axes: the
+    longitude foreshortening is folded into the pixel search window). Used ONLY
+    to size the nearest-wet-cell search radius; the tolerance is stated in the
+    alignment block so the approximation is transparent.
     """
     try:
         if crs is not None and crs.is_geographic:
-            return 111320.0
+            return _m_per_deg_lat(lat_deg)
     except Exception:  # noqa: BLE001
         pass
     return 1.0
@@ -1180,7 +1188,10 @@ def _pair_timeseries(
         except ValueError:
             return None
 
-    tol_deg = station_tolerance_m / 111320.0
+    # Degrees of latitude the tolerance buys at the observations' own latitude.
+    # The comparison below is a planar degree distance, so the longitude axis
+    # is under-scaled by 1/cos(lat) - the pairing loop's own approximation.
+    tol_deg = station_tolerance_m / _m_per_deg_lat(float(obs_pts.geometry.y.mean()))
     rows: list[dict[str, Any]] = []
     dropped: list[dict[str, Any]] = []
     any_nearest = False

@@ -156,9 +156,15 @@ def round_bbox_to_resolution(
     )
 
 def _bbox_area_km2(bbox: tuple[float, float, float, float]) -> float:
-    """Approximate area of a small WGS84 bbox in square kilometers."""
-    min_lon, min_lat, max_lon, max_lat = bbox
-    mid_lat = 0.5 * (min_lat + max_lat)
-    dlat_km = (max_lat - min_lat) * 111.320
-    dlon_km = (max_lon - min_lon) * 111.320 * math.cos(math.radians(mid_lat))
-    return abs(dlat_km * dlon_km)
+    """Geodesic area of a WGS84 bbox in square kilometres.
+
+    The ring is densified before measuring: pyproj joins consecutive vertices
+    with geodesics, and a bbox's top and bottom edges are PARALLELS, so a long
+    undensified edge cuts the corner poleward. A bbox spanning more than half
+    the globe is degenerate as a ring and is not measurable this way.
+    """
+    import shapely
+    from pyproj import Geod
+
+    ring = shapely.segmentize(shapely.box(*bbox), 1.0)
+    return abs(Geod(ellps="WGS84").geometry_area_perimeter(ring)[0]) / 1.0e6

@@ -349,7 +349,7 @@ summary, then `**What it does:**`, `**When to use:**`, `**When NOT to use:**`,
 ## The complete minimal tool, end to end
 
 `trid3nt_server/tools/_example_tool_template.py` is a full,
-working, copy-me tool: `example_bbox_area`, a dependency-free planar area compute
+working, copy-me tool: `example_bbox_area`, a geodesic (pyproj.Geod) area compute
 that returns a dict. It shows metadata (a `cacheable=False` / `live-no-cache`
 compute), the `**_extra_ignored` signature, a front-loaded routing docstring, the
 typed error convention, and `@register_tool`. It ships gated behind
