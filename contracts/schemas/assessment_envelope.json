@@ -627,7 +627,7 @@
     },
     "TimeRange": {
       "additionalProperties": false,
-      "description": "A UTC start/end interval. Shared by AssessmentEnvelope and EventMetadata.",
+      "description": "A UTC start/end interval.",
       "properties": {
         "end": {
           "format": "date-time",
