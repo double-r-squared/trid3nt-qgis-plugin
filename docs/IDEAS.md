@@ -3909,3 +3909,20 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   a read-only probe first (qgis_process on the daemon host, providers,
   help JSON shape, one headless run, the retrieval comparison), then a
   spec in plan mode. 36 processing packages / 23,551 LOC today.
+
+- CALIBRATION SPEC SHAPED (NATE 2026-09-08, spec to follow in plan
+  mode): pyEMU + PEST++ as the outer loop on the daemon side; the
+  fill/run door is the forward-run command; each forward run a box
+  launch. FIRST CASE: rain_on_grid outlet hydrograph vs a USGS gauge
+  (curve number + Manning n). METHOD: both pestpp-ies and pestpp-glm
+  exposed on the recipe, ies the DEFAULT, a sensitivity pass first.
+  SPATIAL parameters (pilot-point friction fields, per-zone curve
+  numbers) are SPECCED and PARKED behind the scalar case. The result
+  of a calibration is a PROPOSED fill (revised slots with provenance
+  "calibrated by <method>, phi before/after, posterior range") the
+  user confirms before a rerun - never auto-applied. Exposed the way
+  the mesh recipe exposes oceanmesh: verbatim pyEMU calls in a
+  calibration recipe. Everything the recipe needs already exists:
+  fetched gauge series (DATA rows), outputs read at a point, the
+  ledger keyed by resolved inputs (a friction change does not
+  rebuild the mesh).
