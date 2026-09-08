@@ -3926,3 +3926,22 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   fetched gauge series (DATA rows), outputs read at a point, the
   ledger keyed by resolved inputs (a friction change does not
   rebuild the mesh).
+  LEAN SWEEP, LIBRARY STAGE RESOLUTIONS (orchestrator under standing
+  law 2026-09-08 - NATE may override; each narrows scope, none widens):
+  L8 (QgsBlockingNetworkRequest in the plugin) DEFERRED with a ledger
+  condition - plugin/README.md:204-225 commits the plugin to stdlib-
+  only testability and qgis is not importable in venvs/agent (~36
+  tests would move to the Qt harness tier); the trade is NATE's, same
+  as L10. L11 (pyproj geodesy) lands on the MEASUREMENT sites only
+  (~12) with _example_tool_template.py fixed first; the router's
+  cache-key quantizer (round_bbox_to_resolution) and the mesh-
+  generation sites (grid_geometry, om2d) are EXCLUDED - a geodesic
+  quantizer moves every cache key and two byte-identical twin
+  contracts; ledger rows with conditions. L12 REJECTED as written
+  (radius clamped to 12 px bounds the loop; an EDT over a 5000^2 band
+  costs more) - replaced by the exact-parity numpy vectorization of
+  the window. L5, L9, L13, L14 GO as measured (L5 proven byte- and
+  pixel-identical; L13's fifth site refuted - a prose heuristic, not a
+  bbox test; L14 gated on the registered-param enumeration). ALSO
+  QUEUED: shapely, pyproj, scipy, xarray are undeclared load-bearing
+  dependencies - pin them the way httpx/PyYAML/tenacity/aiohttp were.
