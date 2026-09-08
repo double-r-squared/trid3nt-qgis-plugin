@@ -232,6 +232,21 @@ dependencies = [
     # RDB/GeoJSON parsers. Pinned exactly: the OGC-API surface + tabular schemas
     # evolve, so a floating pin risks silent column/endpoint drift.
     "dataretrieval==1.2.0",
+    # Dependency hygiene (lean sweep section 3): these four are imported
+    # directly by product code but were previously undeclared, present only
+    # transitively. Pinned at the versions already installed in venvs/agent.
+    # httpx: the fetcher transport layer (15 server importers); was supplied
+    # transitively by openai / google-genai / dataretrieval.
+    "httpx==0.28.1",
+    # PyYAML: 7 server importers; was supplied transitively by hydromt /
+    # landlab / owslib.
+    "PyYAML==6.0.3",
+    # tenacity: retry loop consolidation target (L6); was supplied
+    # transitively by google-genai.
+    "tenacity==9.1.4",
+    # aiohttp: HTTP server replacement target (L1); was supplied
+    # transitively by aiobotocore / s3fs / async-retriever.
+    "aiohttp==3.14.1",
     # Consumed verbatim from contracts/ in this repo (editable install).
     "trid3nt-contracts>=0.1,<0.2",
 ]
