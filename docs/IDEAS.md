@@ -4027,3 +4027,27 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   solutions (the processing ruling). TIMING: a read-only scope census
   now, rulings, then the move wave right after the sweep closes and
   BEFORE the calibration wave.
+  SCOPE CENSUS RULED (NATE 2026-09-08, docs/validation/scope-census.md):
+  TO THE SCOPE ATTIC: biodiversity (7 fetchers) + movement ecology (2
+  tools) as ruled, PLUS the DEMOGRAPHIC group (cdc_svi, census_acs,
+  ejscreen, lehd_jobs). STAY IN for now: infrastructure (HIFLD x2, EPA
+  FRS), seismic/volcano (earthquakes has the board's highest live use),
+  air quality (the smoke forecast's observation counterpart), the
+  population trio, field boundaries, POIs, OpenFEMA. HOOKS CO-LOCATE:
+  each fetcher's hook moves into its own package (fetchers/<group>/
+  <spec>/hooks.py) and the loader tree-walks them like source.yaml and
+  corpus.yaml - a re-mount is a directory copy with ZERO shared-code
+  edits; gated by "registered count unchanged" (174) before any move.
+  THE ATTIC: ~/Documents/trid3nt-scope-attic, mirrored paths, a
+  per-package MANIFEST (registration lines, tests, corpus, credentials
+  rows, required shared subsystems, expected registry size after
+  re-mount); TESTS TRAVEL with the package (mixed test files get their
+  sections extracted into the package); PROOFS STAY FROZEN in docs/
+  proof and are cited by path. Ledger gains the status token
+  SCOPE-ATTIC(<sha>). The re-mount contract is REHEARSED once (on
+  movement_ecology) with the transcript attached, then reverted. The
+  SYSTEM_PROMPT's worked precursor->tool example (biodiversity) is
+  replaced by a flood-zone pair with a before/after retrieval table.
+  TIMING: the move wave runs right after the lean sweep closes,
+  before calibration. Projected: registered tools 174 -> 161; product
+  py -3,800; tests -1,800; fetcher yaml -1,500.
