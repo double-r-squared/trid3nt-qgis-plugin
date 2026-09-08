@@ -220,5 +220,4 @@ docstring: |-
   FR-AS-11 surface decides whether to retry, clarify, or fall back.
 
   Source-tier: FR-HEP-2 Tier 1 (USACE is the regulatory authority for
-  the NID). Claims derived from this tool should be marked
-  ``source_authority_tier=1`` in any ``ClaimSet`` aggregation.
+  the NID).
