@@ -3865,3 +3865,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   NATE: "processing is more of a sandbox thing... its usefulness
   dissolves when we use an off-the-shelf MCP"; no fold, no hoist until
   ruled. (d) MOVEMENT ECOLOGY scope: explanation requested; unruled.
+  AMENDED (NATE 2026-09-08): A REGISTERED TOOL IS INVOKED AT RUNTIME -
+  "no static caller" is NOT staleness for a tool; usage evidence is the
+  telemetry log + corpus + workflow rows, and even zero recorded use is
+  "not asked yet", not "useless". THE DEFAULT FOR A CAPABILITY IS THE
+  ATTIC (~/Documents/trid3nt-attic, path mirrored, ledger row with the
+  attic path), NEVER DELETE. Delete is for code with NO PATH to it:
+  unregistered functions with no caller, contracts for engines not in
+  the tree, the retired web protocol. The lean-sweep batch's one
+  registered tool (compute_model_residuals, folded) is MIRRORED to the
+  attic after the wave; movement ecology and the processing tree stay
+  untouched pending the processing discussion.
