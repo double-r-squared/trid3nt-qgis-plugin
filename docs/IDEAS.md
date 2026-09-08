@@ -3945,3 +3945,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   bbox test; L14 gated on the registered-param enumeration). ALSO
   QUEUED: shapely, pyproj, scipy, xarray are undeclared load-bearing
   dependencies - pin them the way httpx/PyYAML/tenacity/aiohttp were.
+  SWOT (NATE 2026-09-08): SWOT is ADDED AS A FETCH SOURCE, general
+  purpose - fetch_swot_river_timeseries (per-reach/node WSE, width,
+  slope on SWORD) and fetch_swot_lake_timeseries via PO.DAAC Hydrocron,
+  declarative, EGM2008 stated, the discharge field labeled derived;
+  the calibration recipe consumes it as an Observe row like any
+  fetched series (SWOT WSE assimilation into hydrodynamic models is
+  established practice - TELEMAC-2D Garonne/Sacramento studies).
+  Spec: docs/specs/calibration-seam.html rev 1 for NATE's read.

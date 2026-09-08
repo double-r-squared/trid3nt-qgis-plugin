@@ -1,0 +1,155 @@
+<title>The Calibration Seam</title>
+<style>
+  :root { --bg: #ffffff; --fg: #111111; --line: #999999; --code-bg: #f4f4f4;
+          --kw: #0000cc; --str: #a31515; --com: #008000; --num: #098658; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  }
+  :root[data-theme="dark"] { --bg: #1b1b1b; --fg: #e6e6e6; --line: #666666; --code-bg: #2a2a2a;
+          --kw: #569cd6; --str: #ce9178; --com: #6a9955; --num: #b5cea8; }
+  body { background: var(--bg); color: var(--fg); font-family: serif; line-height: 1.4; margin: 0 auto; max-width: 60em; padding: 1.5em 1em 4em; }
+  h1 { font-size: 1.6em; border-bottom: 1px solid var(--line); padding-bottom: .2em; }
+  h2 { font-size: 1.25em; border-bottom: 1px solid var(--line); padding-bottom: .15em; margin-top: 1.8em; }
+  code, pre { font-family: monospace; font-size: .95em; }
+  code { background: var(--code-bg); padding: 0 .25em; }
+  pre:not(.mermaid) { background: var(--code-bg); border: 1px solid var(--line); border-left: 4px solid var(--line); padding: .6em .8em; overflow-x: auto; }
+  .k { color: var(--kw); font-weight: bold; } .s { color: var(--str); } .c { color: var(--com); font-style: italic; } .n { color: var(--num); }
+  table { border-collapse: collapse; margin: .8em 0; }
+  th, td { border: 1px solid var(--line); padding: .3em .6em; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .scroll { overflow-x: auto; }
+  .rev { font-size: .85em; }
+  p { max-width: 72ch; }
+</style>
+
+<h1>The Calibration Seam</h1>
+<p class="rev">rev 1 &middot; 2026-09-08 &middot; the calibration wave's spec, per docs/IDEAS.md "CALIBRATION SPEC SHAPED" (2026-09-08) and the plan NATE approved the same day - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the module surface (docs/specs/module-surface.html), the mesh recipe, the emission fold, the rerun path (ADR 0319). Answers the question docs/design/calibration-methodology.md (2026-08-26, unsigned) left open: the proposer is PEST++, not an in-house driver; that document's coastal case is a later case on this seam.</p>
+
+<h2>1. The principle</h2>
+<p>A calibration sits between a finished run and its rerun. The user declares WHICH declared params may vary, within bounds, and WHICH fetched observations are compared to WHICH outputs. PEST++ (USGS) proposes; pyEMU builds its interface; our forward run is the existing rerun path; the result is a PROPOSED fill the user confirms. We own no loop mathematics, no run management, no optimizer. Every calibrated value is labeled as such wherever it is read.</p>
+
+<h2>2. The recipe: verbatim library calls over three rows</h2>
+<pre><span class="c"># templates/rain_on_grid/rain_on_grid.py - the template gains a calibration recipe (data, like MESH)</span>
+CALIBRATE = tool.calibrate(
+    vary=[Vary(P.curve_number, bounds=(<span class="n">30</span>, <span class="n">100</span>)),
+          Vary(P.manning_multiplier, bounds=(<span class="n">0.5</span>, <span class="n">2.0</span>), transform=<span class="s">"log"</span>)],
+    observe=[Observe(output=<span class="s">"outlet_hydrograph"</span>, series=DATA.gauge, weight=<span class="n">1.0</span>)],
+    method=<span class="s">"ies"</span>,                                      <span class="c"># ies | glm | sweep</span>
+    ops=[cal_op(<span class="s">"pst_from_parnames_obsnames"</span>),         <span class="c"># pyEMU names, verbatim</span>
+         cal_op(<span class="s">"ParameterEnsemble.from_gaussian_draw"</span>, num_reals=<span class="n">50</span>),
+         cal_op(<span class="s">"pestpp-ies"</span>, noptmax=<span class="n">3</span>)],
+)</pre>
+<table>
+<tr><th>row</th><th>is</th><th>constraint</th></tr>
+<tr><td><code>Vary</code></td><td>a DECLARED Param (never a raw keyword) with bounds and an optional transform</td><td>declared params enter the invocation key and carry bounds; a raw keyword does neither - a keyword-only variation can REPLAY the parent's solve, so the recipe refuses it by name</td></tr>
+<tr><td><code>Observe</code></td><td>an OUTPUT the run publishes (a hydrograph, a station series) paired with a fetched SERIES (any DATA row that carries <code>time_series_csv</code>) and a weight</td><td>units and datum reconciled by the pairing tool's own rules; a series that states neither refuses by name</td></tr>
+<tr><td><code>ops</code></td><td>the pyEMU and PEST++ calls, by their own names, in order</td><td>signature-is-the-schema; unknown names refuse naming the library's</td></tr>
+<tr><td><code>method</code></td><td>which PEST++ executable runs the loop</td><td>ies (ensemble, default), glm (Jacobian, single fit), sweep (a parameter grid)</td></tr>
+</table>
+
+<h2>3. Three acts, all thin</h2>
+<div class="scroll">
+<pre class="mermaid">
+flowchart LR
+    RUN["a finished run<br/>(sheet + outputs)"] --> SENS["sensitivity pass<br/>pestpp-glm Jacobian -> pyemu.Schur<br/>which knobs the observations constrain<br/>refuse by name when none"]
+    SENS --> LOOP["the ruled method as a subprocess<br/>pestpp-ies | glm | swp<br/>serial by default; workers = a lever"]
+    LOOP -- "each forward run" --> FWD["forward_run.py (drive lane)<br/>read the parameter file PEST++ wrote<br/>rerun_workflow(parent, overrides)<br/>read the output, pair, write sim.csv"]
+    FWD --> LOOP
+    LOOP --> PROP["Proposal<br/>per param: posterior median + range<br/>phi before/after; the output band"]
+    PROP --> CARD["the card: CURRENT | PROPOSED<br/>provenance 'calibrated by pestpp-ies'"]
+    CARD -- "the user confirms" --> RERUN["rerun_workflow(parent, overrides=proposal)<br/>slots carry basis 'calibrated'"]
+</pre>
+</div>
+<table>
+<tr><th>act</th><th>contract</th></tr>
+<tr><td><code>calibrate(run_id, recipe)</code></td><td>builds the PEST++ interface with pyEMU (control file, a parameters template, an instruction file over <code>sim.csv</code>), stages a work dir, states the RUN BUDGET up front (runs x the measured forward wall) and refuses <code>BudgetExceeded</code> by name, runs the sensitivity pass, then the method. Serial by default; <code>workers</code> starts PEST++ worker processes (run ids and rundirs are ULIDs, so concurrency is a host-resource decision only).</td></tr>
+<tr><td><code>forward_run.py</code></td><td>the model command PEST++ calls: a DRIVE-LANE script that reads the parameter file, calls <code>rerun_workflow(parent, overrides={param: value})</code> (never a container of its own - the ADR 0319 grep is a standing test), maps an override EQUAL to the parent's value onto the parent's own result (the rerun path refuses an inert override; a Jacobian base run or a resampled equal draw is that case), reads the output, pairs it against the pinned observation on the observation's own stamps, DELETES then writes <code>sim.csv</code> so a failed run is a failed run, and journals one field, <code>objective</code>.</td></tr>
+<tr><td><code>Proposal</code> + <code>confirm</code></td><td>the record: per varied param the posterior median and range, phi before and after, the posterior band of the observed output, the method and its settings. Rendered on the card as a PROPOSED column beside CURRENT; nothing is applied. <code>confirm(proposal)</code> is one more rerun whose varied slots carry provenance <code>calibrated by &lt;method&gt;</code> and basis <code>calibrated</code>.</td></tr>
+</table>
+
+<h2>4. The first case and its levers</h2>
+<p>rain_on_grid, the outlet hydrograph against the nearest USGS gauge downstream of the pour point, on a gauged basin the substrate can fetch (measured at Stage 0; Otto NC if its gauge answers, else the nearest that does).</p>
+<table>
+<tr><th>lever</th><th>today</th><th>this wave</th></tr>
+<tr><td>curve number</td><td>a declared Param (30-100, physics)</td><td>unchanged; the first Vary</td></tr>
+<tr><td>Manning n</td><td>NO lever: per-node n from the land-cover class table, one friction zone per distinct value</td><td><code>manning_multiplier</code>: a SCENARIO Param (default 1.0, bounds, physics) applied to the class table before the zones build; the second Vary. Per-class vectors and pilot points: see &sect;9</td></tr>
+<tr><td>initial abstraction ratio</td><td>a hardcoded literal</td><td>an optional Param; engine default by omission</td></tr>
+<tr><td>the gauge</td><td>no template reads one</td><td><code>DATA.gauge = tool("fetch_usgs_nwis_gauges", mode="hydrograph", ...)</code>, the nearest station chosen the way the lake level chooses one; units stated (cfs to m3/s at the pairing)</td></tr>
+<tr><td>the modeled output at the gauge</td><td>the outlet hydrograph read from the engine's listing; no nearest-node probe exists</td><td>published as a station layer carrying <code>time_series_csv</code>, so the existing pairing tool's time-series mode pairs it; a SELAFIN nearest-node probe is PARKED (&sect;9)</td></tr>
+</table>
+
+<h2>5. Observation sources (the substrate, general purpose)</h2>
+<p>An Observe row reads any fetched series. Two exist and one is added; all are ordinary fetchers usable for anything, not calibration machinery.</p>
+<table>
+<tr><th>source</th><th>gives</th><th>datum / units</th><th>status</th></tr>
+<tr><td><code>fetch_usgs_nwis_gauges</code> (hydrograph mode)</td><td>discharge and stage series at a gauge</td><td>cfs / ft, no datum needed for discharge</td><td>exists</td></tr>
+<tr><td><code>fetch_noaa_coops_tides</code>, <code>fetch_greatlakes_water_level</code></td><td>water level series at a station</td><td>MLLW / LWD stated</td><td>exist</td></tr>
+<tr><td><code>fetch_swot_river_timeseries</code>, <code>fetch_swot_lake_timeseries</code> (NEW, declarative)</td><td>SWOT (NASA/CNES altimetry, 2022-): per-reach and per-node water surface elevation, width and slope along the SWORD river database; lake elevation, area and storage change - a ~21-day repeat; rivers wider than ~100 m</td><td>EGM2008 stated on the row; elevation ~10 cm, width ~15%; the discharge field is a MODEL estimate and is labeled derived</td><td>this wave, via PO.DAAC's Hydrocron time-series API (reach or lake id + window, CSV) on the source.yaml pattern with zero code; the new-tool law before acceptance; Stage 0 confirms the API serves the Eel reach</td></tr>
+</table>
+<p>A 21-day repeat cannot see a storm hydrograph: rain_on_grid stays on the gauge. SWOT's place is the water-surface PROFILE along a reach (what constrains friction and bed on a wide river, gauged or not) and lake levels where no station exists. Its datum arithmetic is the datum rule's, unchanged.</p>
+
+<h2>6. The card and the words</h2>
+<table>
+<tr><th>surface</th><th>change</th></tr>
+<tr><td><code>ParamSheetRow</code></td><td>gains <code>proposed</code>; <code>note</code> carries phi before/after and the posterior range; the plugin card renders the column (plugin version bump)</td></tr>
+<tr><td><code>InputBasis</code></td><td>gains <code>calibrated</code> (a first-class basis, the methodology's Q7 answered)</td></tr>
+<tr><td>sheet provenance</td><td><code>calibrated by pestpp-ies</code> is a provenance string; the door map gains its row so it never renders as derived</td></tr>
+<tr><td>the journal</td><td>every forward run appends one field, <code>objective</code>; no packet per iteration; the confirmed rerun ships the full packet</td></tr>
+</table>
+
+<h2>7. Dependencies and where the loop runs</h2>
+<p>PEST++ is not on PyPI: its binaries land in <code>bin/</code> through <code>scripts/fetch_binaries.sh</code> with a sha256 (the mf6 precedent). pyEMU installs into the daemon's venv once the pandas pin that blocks it leaves: that pin exists for hydromt-sfincs, an engine no longer in the tree (a lean-sweep row; the fallback is pyEMU 1.4). The PEST++ master is a daemon subprocess in a work dir under the runs directory; the 60 s sandbox is not the master. Two venvs are OUT of spec unless the pin cannot go.</p>
+
+<h2>8. Layout and model</h2>
+<pre>trid3nt_server/workflows/calibration/
+  README.md
+  recipe.py        Vary, Observe, cal_op rows; the recipe object
+  interface.py     the pyEMU calls by name -> the PEST++ work dir
+  forward_run.py   the drive-lane model command
+  proposal.py      the record, the journal field, confirm
+  refusals.py      ungauged, datum/units unstated, unidentifiable, budget, keyword-only
+docs/model/calibration-seam.sysml   Recipe, Interface, ForwardRun, Proposal, Confirm
+  requirements: LoopConsumesRerun, ProposalNeverAutoApplied, VariedParamsAreDeclared,
+                EqualValueIsTheParent, EveryCalibratedValueLabeled, BudgetStatedUpFront,
+                ObservationsStateUnitsAndDatum</pre>
+
+<h2>9. Out of spec, in place</h2>
+<table>
+<tr><th>item</th><th>status</th></tr>
+<tr><td>spatial parameters: pilot-point friction fields and per-zone curve numbers as a composite over the zones file via <code>PstFrom.add_parameters(par_type="pilotpoints")</code></td><td>SPECCED here, PARKED behind the scalar case (NATE 2026-09-08)</td></tr>
+<tr><td>a nearest-node SELAFIN probe for a gauge or SWOT node away from a boundary</td><td>parked; the river and coastal cases need it</td></tr>
+<tr><td>the coastal flagship, time-varying wind, open boundaries</td><td>the methodology doc's Q1-Q6, unchanged, later</td></tr>
+<tr><td>SWOT bathymetry inversion</td><td>the research doc's family; waits on the coverage-map subsystem</td></tr>
+<tr><td>the holdout guard (methodology 6.2)</td><td>stated on the packet this wave; a second event as holdout when one exists</td></tr>
+</table>
+
+<h2>10. Stage 0 - proofs (a failed cell stops its slice)</h2>
+<table>
+<tr><th>check</th><th>pass =</th></tr>
+<tr><td>hydromt-sfincs and its pandas pin leave pyproject (evidence: no sfincs code in the tree); pyEMU installs</td><td>import pyemu; else pyEMU 1.4 with the reason stated</td></tr>
+<tr><td>PEST++ binaries via fetch_binaries.sh with sha256</td><td>pestpp-ies, pestpp-glm, pestpp-swp answer --version</td></tr>
+<tr><td>a two-parameter toy through pyEMU + pestpp-glm + pestpp-ies in serial</td><td>phi decreases; the posterior ensemble reads back</td></tr>
+<tr><td>rerun_workflow headless: rain_on_grid parent -> child with curve_number overridden</td><td>the mesh inherited (replay stated); the hydrograph read; wall measured; the equal-value refusal reproduced</td></tr>
+<tr><td>the gauge answers</td><td>a hydrograph in the storm window for the chosen basin, station named</td></tr>
+<tr><td>Hydrocron serves a SWOT reach series for the Eel reach</td><td>CSV with WSE/width/slope and the datum field</td></tr>
+</table>
+
+<h2>11. Stages</h2>
+<table>
+<tr><th>stage</th><th>lands</th></tr>
+<tr><td>1 levers + observation rows</td><td>manning_multiplier, the abstraction Param, DATA.gauge, the station-layer hydrograph; the two SWOT fetchers under the new-tool law</td></tr>
+<tr><td>2 the seam</td><td>the calibration tree, calibrate/confirm on the tool surface, the sensitivity pass, budget statement, contracts + card + plugin bump, the model</td></tr>
+<tr><td>3 live proof</td><td>the first case: baseline, sensitivity table, ies 50 x 3 on the coarse mesh, the proposal card, confirm -> rerun with provenance calibrated, FULL packet with observed-vs-modeled before/after and the posterior band; glm on the same case for comparison</td></tr>
+<tr><td>4 close</td><td>conformance table; IDEAS entry; the methodology doc marked superseded for the first case; packets delivered</td></tr>
+</table>
+
+<h2>12. Acceptance (the wave's bar)</h2>
+<table>
+<tr><th>gate</th><th>test</th></tr>
+<tr><td>one run path</td><td>grep zero <code>docker run</code> and zero solve dispatch in the calibration tree; the seeded break fires</td></tr>
+<tr><td>the hazards</td><td>a keyword-only Vary refuses by name; a declared-param variation produces a distinct solve; an equal-value override resolves to the parent (tests)</td></tr>
+<tr><td>the loop live</td><td>phi decreases on the first case; the proposal names every varied slot with its provenance; the budget statement matches the measured runs; a full packet</td></tr>
+<tr><td>the words</td><td>every calibrated slot reads <code>calibrated</code> on the card, the journal and the packet</td></tr>
+<tr><td>model + suite</td><td>calibration-seam checked green; seeded breaks fire; five slices + contracts + plugin at zero; push on clean</td></tr>
+</table>
