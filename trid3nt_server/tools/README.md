@@ -41,7 +41,6 @@ registry and the cache shim are the two seams they all pass through.
 | `_router/emit_on_fetch.py` | Surfacing a fetched INPUT as a `role=context` layer through the emission seam. |
 | `_router/errors.py` | The router's typed-error hierarchy over the shared fetch bases. |
 | `_router/shape_classifier.py` | The one classifier for what shape a response came back in. |
-| `_router/stratified.py` | The stratified data pool the router reads a pooled source through. |
 | `_router/executors/` | How a request is actually run: HTTP JSON, raster COG, vector FlatGeobuf, zipped vector, station timeseries, library delegates, animation frames. |
 | `_router/hooks/` | Per-source `build_request` / `parse_response` overrides - one file per source that needs more than the spec can declare. |
 | `_router/transforms/` | Post-fetch shaping: `fan_out`, `join`, `tiled_mosaic`. |

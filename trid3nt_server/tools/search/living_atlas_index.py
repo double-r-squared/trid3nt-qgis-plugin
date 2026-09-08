@@ -2,8 +2,7 @@
 
 Reuses the SAME machinery as the tool-discovery index (``search_tools``'s
 ``_tokenize`` / ``_TypoTolerantBM25`` / ``_select_dense_backend`` /
-``_reciprocal_rank_fusion``) -- exactly how ``_router/stratified.py`` reuses it for
-the (gated) source pool -- but runs it over the Living Atlas catalog ENTRIES
+``_reciprocal_rank_fusion``) -- but runs it over the Living Atlas catalog ENTRIES
 (title + snippet + tags), not the tool registry.
 
 Two-pool structure (NATE's rule): a SEPARATE index per curation stratum, built

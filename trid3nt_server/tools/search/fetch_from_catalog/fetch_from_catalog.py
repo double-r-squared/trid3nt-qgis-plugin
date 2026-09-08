@@ -34,8 +34,7 @@ __all__ = ["fetch_from_catalog"]
 logger = logging.getLogger("trid3nt_server.tools.search.fetch_from_catalog.fetch_from_catalog")
 
 #: Catalog-surfacing arms that route via a spec-served ``source`` name
-#: (experiments/catalog_surfacing/DESIGN.md): Design 1 (card-carried) and Design 3
-#: (stratified-pool composed fetcher; docs/specs/stratified-pools.md) both dispatch
+#: (experiments/catalog_surfacing/DESIGN.md): arms 1 and 3 both dispatch
 #: ``fetch_from_catalog(source=..., params=...)`` -> ``router.route``. Read at import
 #: so the registered tool exposes a ``source`` param ONLY under those arms; DEFAULT
 #: config keeps the exact entry_id-only signature + docstring. Each arm runs in its

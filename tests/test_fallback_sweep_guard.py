@@ -87,13 +87,11 @@ def test_registration_refuses_a_cross_dataset_endpoint_fallback(specs):
 def test_the_spec_card_key_says_what_the_mechanism_is():
     """``fallback`` on a card is ambiguous between a mirror hop and a ladder
     rung; the model reads this text and must not conflate them."""
-    from trid3nt_server.tools.fetchers._router import registration, stratified
+    from trid3nt_server.tools.fetchers._router import registration
 
     card_src = inspect.getsource(registration.spec_card)
     assert '"endpoint_fallback": list(spec.endpoint_fallback)' in card_src
     assert '"fallback": list(spec.fallback)' not in card_src
-    render_src = inspect.getsource(stratified)
-    assert "same-data endpoint mirrors" in render_src
 
 
 # --------------------------------------------------------------------------- #

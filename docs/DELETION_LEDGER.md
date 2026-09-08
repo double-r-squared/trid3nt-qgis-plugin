@@ -108,7 +108,7 @@ until DELETED (with the commit hash) - never silently dropped (NATE
 | Cloud Run Jobs submitter binding | agent/tools/meta/passthroughs.py | REJECTED - NOT dead GCP code: `set_worker_submitter`/`_WORKER_SUBMITTER` is the LIVE on-box qgis_process substrate seam (main.py binds `_default_qgis_process_submitter` = local docker/subprocess runner at startup; read by qgis_discovery; covered by test_qgis_discovery + test_main_startup). Only the "Cloud Run Jobs" docstring wording was stale/misleading GCP-era prose - corrected to describe the on-box lane (ADR 0064). The binding stays. | REJECTED 2026-07-31 | ADR 0064 / 2026-07-31 inspection |
 | compute_blended_composite | processing/ | QGIS-native per-layer blend modes verified to cover the product need | QUEUED | 0057 conflict (3) |
 | fetch_copernicus_dem ambient declaration | declarable pool | wave 11 item 0 (absorption into fetch_dem; internal seam stays) | CONDITION-MET (wave-11 ADR 0059: tier="internal" -- declaration removed from the declarable pool AND search index; the spec/seam is retained + registry-resolvable by design, so this is a declaration removal, not a py deletion; awaiting commit) | NATE 2026-07-31 |
-| TRID3NT_CATALOG_ARM flag scaffolding (arms 1-3) | _router/stratified.py + flags | capable-model re-run decides: rollout -> baseline per-source declarations die instead; no-rollout decision -> scaffolding dies | QUEUED | ADR 0050/0055-era |
+| TRID3NT_CATALOG_ARM flag scaffolding (arms 1-3) | _router/stratified.py + flags | capable-model re-run decides: rollout -> baseline per-source declarations die instead; no-rollout decision -> scaffolding dies | ATTICKED for the module (lean sweep Q2, 2026-09-08): `~/Documents/trid3nt-attic/trid3nt_server/tools/fetchers/_router/stratified.py` + `~/Documents/trid3nt-attic/docs/specs/stratified-pools.md`, paths mirrored, so the arm-3 decision stays available without the module sitting in the live tree. The FLAGS stay: `catalog_arm()` still honors "1"/"2"/"3", and arm 3 keeps the half that is wired - the tier=catalog pool exclusion plus the `fetch_from_catalog(source=...)` passthrough. Proven to degrade honestly rather than traceback: under `TRID3NT_CATALOG_ARM=3` the registry loads (172 tools, 107 tier=catalog, declarable 64), `fetch_gridmet` is pool-excluded yet still resolvable BY NAME, and `fetch_from_catalog` still exposes its `source` param. `experiments/` is gitignored (local-only, not product), and its five arm-3 import sites now route through a local `experiments/catalog_surfacing/_arm3.load_stratified` that raises a `SystemExit` naming the module and the attic path instead of an ImportError traceback. | ADR 0050/0055-era -> lean-sweep-inventory.md section 6 Q2 |
 | 14+ per-source ambient declarations | declarable pool | Design-3-class arm ADVANCES on a capable model | QUEUED | pools architecture |
 | grace2_* identifiers | repo-wide | Layer B dual-read rename executes | QUEUED | rebrand scope |
 | env-var credential paths (as co-equal) | credentials resolution | QGIS store + broker ship; env demotes to last-resort (NOT deleted - demoted) | DEMOTED (ADR 0062: resolver order = session cache -> env fallback; env is the headless/dev floor, never co-equal, never deleted) | chop-plan direction |
@@ -2407,7 +2407,7 @@ different measurement from a dead module, and it gets its own pass.
   was pinning a seam nothing routes through. `trid3nt_server/tools/README.md`
   loses the row in the same commit.
 
-ROW NOT EXECUTED - the sweep's premise is false, reported instead:
+ROW NOT EXECUTED at the time - the sweep's premise was false, reported instead:
 - `trid3nt_server/tools/fetchers/_router/stratified.py` (328) STAYS. The sweep
   measured "0 prod importers" over `trid3nt_server/ workers/ plugin/ scripts/
   contracts/` and never looked in `experiments/`, where the catalog-surfacing
@@ -2417,6 +2417,24 @@ ROW NOT EXECUTED - the sweep's premise is false, reported instead:
   (`docs/specs/stratified-pools.md`) still in the tree. Deleting it breaks a
   concluded experiment's reproducibility, which is a methodology call, not a
   staleness call. Its two test consumers stay with it.
+
+- SUPERSEDED (lean sweep Q2, 2026-09-08): ATTICKED, not deleted, which answers
+  the reproducibility objection this row raised. The module and its spec sit at
+  `~/Documents/trid3nt-attic/trid3nt_server/tools/fetchers/_router/stratified.py`
+  and `~/Documents/trid3nt-attic/docs/specs/stratified-pools.md` with their paths
+  mirrored, so a re-drive is a copy-back rather than a re-authoring. The
+  `experiments/` tree this row cited is GITIGNORED - local scratch, not product -
+  so it never entered the sweep's denominator; its five arm-3 import sites were
+  pointed at a local guard that refuses by name with the attic path. The two test
+  consumers die with the module: `test_catalog_surfacing.py` loses the `_stratum` fixture and its five
+  mechanism tests (the arm-3 PREREQUISITE test stays - it is the pool-exclusion
+  behavior that survives), `test_fallback_sweep_guard.py` loses the stratified
+  half of `test_the_spec_card_key_says_what_the_mechanism_is` and keeps the
+  `spec_card` half. Reference sweep to zero in the live tree:
+  `tools/README.md`, `_router/registration.py`, `search/living_atlas_index.py`,
+  `search/fetch_from_catalog/fetch_from_catalog.py`,
+  `docs/design/fallback-audit.md`. ADRs 0050/0072/0117/0299 keep their mentions -
+  they are the historical record of the decision.
 
 ## The QGIS passthrough and discovery pair leave (test cull, scope 4, 2026-08-31)
 

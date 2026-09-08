@@ -98,9 +98,9 @@ structurally unreachable, six of them because `select_executor` never routes the
 spec to `vector_fgb` in the first place.
 
 The HARM was real but inverted: `registration.spec_card` projected all nine lists
-verbatim and `stratified.py` rendered them into the composed fetcher declaration
-the model reads, so the model was told eight sources have fallbacks that no code
-path could provide. A promise nothing can keep is the same failure as a silent
+verbatim and the arm-3 pool renderer (since atticked) put them into the composed
+fetcher declaration the model reads, so the model was told eight sources have
+fallbacks that no code path could provide. A promise nothing can keep is the same failure as a silent
 swap, told from the other side.
 
 RESOLVED: the eight dead lists are deleted (ledger), the field is renamed
