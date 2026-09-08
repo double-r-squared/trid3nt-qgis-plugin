@@ -11,7 +11,7 @@ It yields the SAME ``StreamEvent`` union the Gemini/Bedrock adapters yield
 (``TextDeltaEvent`` / ``FunctionCallEvent`` / ``UsageMetadataEvent``), so
 ``server.py``'s dispatch loop, the per-turn validator, the PipelineEmitter, and
 the web UI are all untouched -- this is a drop-in third provider on the existing
-``MODEL_PROVIDER`` seam (next to ``bedrock_adapter.stream_bedrock``).
+``MODEL_PROVIDER`` seam (next to ``openai_adapter.stream_openai``).
 
 The transcript is a list of TURNS. Each turn optionally emits assistant text and
 optionally ONE tool call. The adapter selects which turn to emit by counting the
@@ -310,7 +310,7 @@ async def stream_scripted(
 ) -> AsyncIterator[StreamEvent]:
     """Replay one transcript turn as ``StreamEvent``s (no model call, no cost).
 
-    Mirrors the ``stream_bedrock`` keyword signature so it is a drop-in on the
+    Mirrors the ``stream_openai`` keyword signature so it is a drop-in on the
     ``MODEL_PROVIDER`` switch. ``tool_declarations`` / ``system_prompt`` / ``model``
     are accepted for signature parity and intentionally ignored (the transcript
     is authored, not generated).

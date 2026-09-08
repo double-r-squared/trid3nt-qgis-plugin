@@ -4,21 +4,19 @@ The `trid3nt_server` package: a Python application that serves the
 Appendix-A WebSocket protocol, hosts the tool registry (native Python
 FunctionTools -- fetchers, discovery, processing, hazard-simulation
 workflows), runs the multi-turn generation loop against a **pluggable LLM
-provider** (local Ollama or any OpenAI-compatible endpoint by default;
-Bedrock retained as an option), streams replies, propagates cancellation,
+provider** (local Ollama or any OpenAI-compatible endpoint by default,
+Anthropic as an option), streams replies, propagates cancellation,
 and enforces the determinism boundary (Invariant 1) and confirmation-before-
 consequence hooks (Invariant 9).
 
-> **Provider note.** This service began on Vertex AI / Gemini (`adapter.py`),
-> then gained an AWS Bedrock path (`bedrock_adapter.py`). TRID3NT Local's
-> live default is `MODEL_PROVIDER=openai` -> `openai_adapter.py`, which
-> speaks the OpenAI-compatible `chat/completions` streaming API against
-> Ollama (default), vLLM, llama.cpp, LM Studio, OpenAI, Groq, DeepSeek, or
-> OpenRouter. `bedrock_adapter.py` is kept as one option of the same
-> pluggable-LLM seam (`MODEL_PROVIDER=bedrock`) for anyone pointing this repo
-> at a cloud account; `MODEL_PROVIDER=scripted` (aliases `replay`/`fake`)
-> replays a canned transcript for zero-cost deterministic tests. The Vertex
-> generation path in `adapter.py` is retired; only the provider-neutral
+> **Provider note.** The live default is `MODEL_PROVIDER=openai` ->
+> `openai_adapter.py`, which speaks the OpenAI-compatible `chat/completions`
+> streaming API against Ollama (default), vLLM, llama.cpp, LM Studio, OpenAI,
+> Groq, DeepSeek, or OpenRouter. `MODEL_PROVIDER=anthropic` selects the
+> first-party Messages API path; `MODEL_PROVIDER=scripted` (aliases
+> `replay`/`fake`) replays a canned transcript for zero-cost deterministic
+> tests. The Vertex generation path in `adapter.py` is retired; only the
+> provider-neutral
 > `google.genai.types` shapes it holds are still used -- every adapter yields
 > the same `StreamEvent` union, so `server.py`'s dispatch loop, validator,
 > emitter, and UI are untouched by the provider choice. See
@@ -36,8 +34,8 @@ server/
 │   ├── __init__.py
 │   ├── main.py                entry point (`trid3nt-server` -> run())
 │   ├── server.py               Appendix-A WebSocket server (asyncio + websockets)
-│   ├── openai_adapter.py       OpenAI-compatible chat/completions loop (local default)
-│   ├── bedrock_adapter.py      AWS Bedrock Converse loop (optional provider) + cachePoint
+│   ├── openai_adapter.py       OpenAI-compatible chat/completions loop (default provider)
+│   ├── anthropic_adapter.py    Anthropic Messages API loop (optional provider)
 │   ├── scripted_adapter.py     MODEL_PROVIDER=scripted -- canned-transcript replay, no LLM call
 │   ├── adapter.py               StreamEvent union + provider-neutral genai-types helpers
 │   ├── persistence.py           Cases/sessions/users persistence -- FilePersistence only
@@ -86,9 +84,9 @@ reference.
 
 - `openai_adapter.py` round-trip (streamed `agent-message-chunk` deltas,
   terminal `done: true` frame) against Ollama or any OpenAI-compatible
-  endpoint; `bedrock_adapter.py` carries the same `cachePoint` prompt-caching
-  behavior on Anthropic models when `MODEL_PROVIDER=bedrock` is selected
-  instead.
+  endpoint; `anthropic_adapter.py` carries the same prompt-caching behavior
+  through `cache_control` breakpoints when `MODEL_PROVIDER=anthropic` is
+  selected instead.
 - `cancel` interrupts in-flight generation and the in-flight solver run
   (local docker container / subprocess), and emits cancelled `pipeline-state`
   (Invariant 8).

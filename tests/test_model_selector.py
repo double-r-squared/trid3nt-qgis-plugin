@@ -1,14 +1,9 @@
-"""Tests for the in-chat model selector feature (NATE 2026-06-17).
+"""Tests for the in-chat model selector.
 
 Covers:
-  1. ``model_supports_cache`` helper — Anthropic-only allowlist (True for Claude,
-     False for Nova / DeepSeek-R1 / any non-Anthropic id).
-  2. ``_build_converse_kwargs`` per-model cachePoint gate:
-       - DeepSeek-R1 AND Nova → NO cachePoint even when env is ON.
-       - Claude Sonnet 4.6 → cachePoint present when env is ON.
-       - Env=OFF → no cachePoint regardless of model.
-  3. ``emit_tool_call_event`` persists ``model_id`` in the local JSONL file.
-  4. ``_aggregate_records`` produces a ``by_model`` section with per-model stats.
+  1. ``emit_tool_call_event`` persists ``model_id`` in the local JSONL file.
+  2. ``_aggregate_records`` produces a ``by_model`` section with per-model stats.
+  3. ``resolve_selected_model`` validates the per-turn id the client sends.
 """
 
 from __future__ import annotations
@@ -17,144 +12,16 @@ import asyncio
 import json
 import os
 import tempfile
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.adapters import bedrock_adapter as ba
 from trid3nt_server.adapters import model_selection as ms
 from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
 from trid3nt_server.server.protocol.catalog_http import _aggregate_records, _normalize_record
 
 # ---------------------------------------------------------------------------
-# Helpers shared across tests
-# ---------------------------------------------------------------------------
-
-_SYS = "You are TRID3NT. " * 60  # large static system prompt
-
-_BEDROCK_TOOL = {"toolSpec": {"name": "fetch_dem", "inputSchema": {"json": {}}}}
-
-
-@pytest.fixture(autouse=True)
-def _stub_converters(monkeypatch):
-    """Stub out the genai→Bedrock converters so tests only exercise the
-    cachePoint-gating logic, not the conversion of contract objects."""
-    monkeypatch.setattr(ba, "contents_to_bedrock_messages", lambda c: ([], []))
-    monkeypatch.setattr(
-        ba,
-        "tool_declarations_to_bedrock_tools",
-        lambda t: [dict(_BEDROCK_TOOL)] if t else [],
-    )
-
-
-def _has_cache_point(items: list) -> bool:
-    return bool(items) and isinstance(items[-1], dict) and "cachePoint" in items[-1]
-
-
-def _tools():
-    return ["<one declaration>"]  # truthy; converter stubbed above
-
-
-# ---------------------------------------------------------------------------
-# 1. model_supports_cache helper
-# ---------------------------------------------------------------------------
-
-
-def test_model_supports_cache_true_for_claude():
-    assert ba.model_supports_cache("us.anthropic.claude-sonnet-4-6") is True
-
-
-def test_model_supports_cache_true_for_claude_haiku():
-    assert ba.model_supports_cache("us.anthropic.claude-haiku-4-5") is True
-
-
-def test_model_supports_cache_false_for_nova_lite():
-    # cachePoint is an Anthropic-family feature; Nova REJECTS it (live error:
-    # "extraneous key [cachePoint] is not permitted"). Allowlist semantics.
-    assert ba.model_supports_cache("us.amazon.nova-lite-v1:0") is False
-
-
-def test_model_supports_cache_false_for_nova_pro():
-    assert ba.model_supports_cache("us.amazon.nova-pro-v1:0") is False
-
-
-def test_model_supports_cache_false_for_deepseek():
-    assert ba.model_supports_cache("us.deepseek.r1-v1:0") is False
-
-
-def test_model_supports_cache_false_for_unknown_model():
-    # Allowlist: an UNKNOWN (non-Anthropic) model id defaults to NO cache. The
-    # earlier "unknown -> assume supported" default wrongly enabled cachePoint
-    # for Nova and broke every non-Sonnet model — flipped to Anthropic-only.
-    assert ba.model_supports_cache("us.some.future-model-v1:0") is False
-
-
-def test_model_supports_cache_true_for_future_claude_profile():
-    # Provider substring match covers future Claude profile ids without an edit.
-    assert ba.model_supports_cache("us.anthropic.claude-opus-4-8") is True
-
-
-# ---------------------------------------------------------------------------
-# 2. _build_converse_kwargs per-model cachePoint gate
-# ---------------------------------------------------------------------------
-
-
-def test_deepseek_no_cachepoint_even_when_env_on(monkeypatch):
-    """DeepSeek-R1 must produce NO cachePoint regardless of BEDROCK_PROMPT_CACHE."""
-    monkeypatch.delenv("BEDROCK_PROMPT_CACHE", raising=False)  # env default = ON
-    kw = ba._build_converse_kwargs([], _tools(), _SYS, "us.deepseek.r1-v1:0")
-
-    # system block must NOT end with cachePoint
-    assert not _has_cache_point(kw["system"])
-    # tool list must NOT end with cachePoint
-    assert not _has_cache_point(kw["toolConfig"]["tools"])
-
-
-def test_claude_has_cachepoint_when_env_on(monkeypatch):
-    """Claude Sonnet 4.6 must produce cachePoints when BEDROCK_PROMPT_CACHE is ON."""
-    monkeypatch.delenv("BEDROCK_PROMPT_CACHE", raising=False)
-    kw = ba._build_converse_kwargs([], _tools(), _SYS, "us.anthropic.claude-sonnet-4-6")
-
-    assert _has_cache_point(kw["system"])
-    assert _has_cache_point(kw["toolConfig"]["tools"])
-
-
-def test_nova_no_cachepoint_even_when_env_on(monkeypatch):
-    """Amazon Nova Pro must produce NO cachePoint regardless of the env flag.
-
-    Regression for NATE's live error: selecting Nova Pro threw
-    "Malformed input request: #/toolConfig/tools/93: extraneous key
-    [cachePoint] is not permitted". Nova rejects cachePoint, so it must never
-    be added for a Nova request even with BEDROCK_PROMPT_CACHE ON.
-    """
-    monkeypatch.delenv("BEDROCK_PROMPT_CACHE", raising=False)  # env default = ON
-    kw = ba._build_converse_kwargs([], _tools(), _SYS, "us.amazon.nova-pro-v1:0")
-
-    assert not _has_cache_point(kw["system"])
-    assert not _has_cache_point(kw["toolConfig"]["tools"])
-
-
-def test_claude_no_cachepoint_when_env_off(monkeypatch):
-    """Global env switch overrides model capability — env OFF = no cachePoint."""
-    monkeypatch.setenv("BEDROCK_PROMPT_CACHE", "0")
-    kw = ba._build_converse_kwargs([], _tools(), _SYS, "us.anthropic.claude-sonnet-4-6")
-
-    assert not _has_cache_point(kw["system"])
-    assert not _has_cache_point(kw["toolConfig"]["tools"])
-
-
-def test_deepseek_no_cachepoint_when_env_off_too(monkeypatch):
-    """Both conditions false: env OFF + no model support. Result is still no cachePoint."""
-    monkeypatch.setenv("BEDROCK_PROMPT_CACHE", "0")
-    kw = ba._build_converse_kwargs([], _tools(), _SYS, "us.deepseek.r1-v1:0")
-
-    assert not _has_cache_point(kw["system"])
-    assert not _has_cache_point(kw["toolConfig"]["tools"])
-
-
-# ---------------------------------------------------------------------------
-# 3. emit_tool_call_event persists model_id in the local JSONL record
+# 1. emit_tool_call_event persists model_id in the local JSONL record
 # ---------------------------------------------------------------------------
 
 
@@ -216,7 +83,7 @@ async def test_emit_model_id_none_is_stored_as_null():
 
 
 # ---------------------------------------------------------------------------
-# 4. _aggregate_records produces a by_model section
+# 2. _aggregate_records produces a by_model section
 # ---------------------------------------------------------------------------
 
 
@@ -330,29 +197,13 @@ def test_aggregate_empty_records_by_model_is_empty_list():
 
 
 # ---------------------------------------------------------------------------
-# 5. resolve_selected_model - provider-aware validation (F2, live-feedback
-#    2026-07-08: local hot-swap). Cloud (bedrock/default) keeps the Bedrock
-#    allowlist byte-identical; MODEL_PROVIDER=openai passes local ids verbatim.
+# 3. resolve_selected_model - the per-turn model id the client sends
 # ---------------------------------------------------------------------------
 
 
 def test_resolve_none_is_silent_default(monkeypatch):
     monkeypatch.delenv("MODEL_PROVIDER", raising=False)
     assert ms.resolve_selected_model(None) == (None, None)
-
-
-def test_resolve_bedrock_known_id_passes(monkeypatch):
-    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
-    got, notice = ms.resolve_selected_model("us.anthropic.claude-sonnet-4-6")
-    assert got == "us.anthropic.claude-sonnet-4-6"
-    assert notice is None
-
-
-def test_resolve_bedrock_unknown_id_falls_back_with_notice(monkeypatch):
-    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
-    got, notice = ms.resolve_selected_model("qwen3:8b-16k")
-    assert got is None
-    assert notice is not None and "qwen3:8b-16k" in notice
 
 
 def test_resolve_openai_provider_passes_local_id_verbatim(monkeypatch):
@@ -373,12 +224,13 @@ def test_resolve_openai_provider_none_still_silent(monkeypatch):
     assert ms.resolve_selected_model(None) == (None, None)
 
 
-def test_resolve_openai_provider_bedrock_id_passes_through_to_adapter_guard(
+def test_resolve_openai_provider_foreign_id_passes_through_to_adapter_guard(
     monkeypatch,
 ):
-    """A stale Bedrock id is passed through here; openai_adapter.openai_model
-    ignores Bedrock-shaped ids (falls back to TRID3NT_OPENAI_MODEL), so the
-    guard lives at the adapter boundary, not in resolve."""
+    """An id shaped for another provider passes through here;
+    openai_adapter.openai_model ignores it (falls back to
+    TRID3NT_OPENAI_MODEL), so the guard lives at the adapter boundary, not in
+    resolve."""
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     got, notice = ms.resolve_selected_model("us.anthropic.claude-sonnet-4-6")
     assert got == "us.anthropic.claude-sonnet-4-6"

@@ -1,7 +1,7 @@
 """Upstream-provider discipline (LANE CORE, 2026-07-22 -- NATE hard rule:
 never internalize an upstream failure).
 
-Both adapters classify transient provider errors (429 / 5xx / timeouts /
+The adapters classify transient provider errors (429 / 5xx / timeouts /
 connection drops / provider overload) as upstream, log the VERBATIM provider
 error, retry with exponential backoff (env TRID3NT_PROVIDER_RETRIES /
 TRID3NT_PROVIDER_BACKOFF_S, Retry-After honored), and on exhaustion raise the
@@ -16,7 +16,6 @@ Offline: mocked clients + a mock clock (captured sleep waits); no network.
 from __future__ import annotations
 
 import json
-import time
 from dataclasses import dataclass, field
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -218,97 +217,6 @@ class TestOpenAIProviderDiscipline:
             == "upstream_provider"
         )
         assert classify_provider_error_class(RuntimeError("bug")) == "internal"
-
-
-# ---------------------------------------------------------------------------
-# Bedrock adapter
-# ---------------------------------------------------------------------------
-
-
-def _client_error(code: str, status: int = 400):
-    from botocore.exceptions import ClientError
-
-    return ClientError(
-        {
-            "Error": {"Code": code, "Message": f"{code} verbatim message"},
-            "ResponseMetadata": {"HTTPStatusCode": status},
-        },
-        "ConverseStream",
-    )
-
-
-class TestBedrockProviderDiscipline:
-    def test_transient_classification(self):
-        from botocore.exceptions import ReadTimeoutError
-        from trid3nt_server.adapters.bedrock_adapter import _is_transient_bedrock_error
-
-        assert _is_transient_bedrock_error(_client_error("ThrottlingException", 429))
-        assert _is_transient_bedrock_error(
-            _client_error("ServiceUnavailableException", 503)
-        )
-        assert _is_transient_bedrock_error(_client_error("SomeNewError", 502))
-        assert _is_transient_bedrock_error(
-            ReadTimeoutError(endpoint_url="https://bedrock")
-        )
-        # Non-transient request rejections:
-        assert not _is_transient_bedrock_error(
-            _client_error("ValidationException", 400)
-        )
-        assert not _is_transient_bedrock_error(
-            _client_error("AccessDeniedException", 403)
-        )
-
-    def test_transient_retry_then_success(self, monkeypatch):
-        from trid3nt_server.adapters.bedrock_adapter import _converse_stream_with_retry
-
-        monkeypatch.setattr(time, "sleep", lambda _s: None)
-        sentinel = {"stream": []}
-        client = MagicMock()
-        client.converse_stream = MagicMock(
-            side_effect=[_client_error("ThrottlingException", 429), sentinel]
-        )
-        result = _converse_stream_with_retry(client, {"modelId": "m"})
-        assert result is sentinel
-        assert client.converse_stream.call_count == 2
-
-    def test_exhaustion_raises_typed_upstream_error(self, monkeypatch):
-        from trid3nt_server.adapters.bedrock_adapter import _converse_stream_with_retry
-
-        monkeypatch.setenv("TRID3NT_PROVIDER_RETRIES", "1")
-        monkeypatch.setattr(time, "sleep", lambda _s: None)
-        exc = _client_error("ThrottlingException", 429)
-        client = MagicMock()
-        client.converse_stream = MagicMock(side_effect=[exc, exc, exc])
-        with pytest.raises(UpstreamProviderError) as ei:
-            _converse_stream_with_retry(client, {"modelId": "m"})
-        err = ei.value
-        assert err.provider == "AWS Bedrock"
-        assert err.attempts == 2
-        assert "ThrottlingException verbatim message" in err.detail
-        assert client.converse_stream.call_count == 2
-
-    def test_non_transient_fails_fast_unchanged(self, monkeypatch):
-        from botocore.exceptions import ClientError
-        from trid3nt_server.adapters.bedrock_adapter import _converse_stream_with_retry
-
-        monkeypatch.setattr(time, "sleep", lambda _s: None)
-        client = MagicMock()
-        client.converse_stream = MagicMock(
-            side_effect=_client_error("ValidationException", 400)
-        )
-        with pytest.raises(ClientError):
-            _converse_stream_with_retry(client, {"modelId": "m"})
-        assert client.converse_stream.call_count == 1
-
-    def test_bedrock_error_class_classification(self):
-        assert (
-            classify_provider_error_class(_client_error("ThrottlingException", 429))
-            == "upstream_provider"
-        )
-        assert (
-            classify_provider_error_class(_client_error("ValidationException", 400))
-            == "provider_request"
-        )
 
 
 # ---------------------------------------------------------------------------

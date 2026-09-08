@@ -1,7 +1,7 @@
 """OpenAI-compatible LLM provider adapter (offline/local build -- GAP 1).
 
 ``MODEL_PROVIDER=openai`` selects this path. It accepts the SAME inputs that
-``bedrock_adapter.stream_bedrock`` accepts -- a ``list[genai_types.Content]``
+``adapter.stream_events_with_contents`` accepts -- a ``list[genai_types.Content]``
 history + a list of ``genai_types.FunctionDeclaration`` tool specs + a system
 prompt -- converts them to OpenAI chat-completions wire shapes at the boundary,
 and yields the SAME ``StreamEvent`` union (``TextDeltaEvent`` /
@@ -30,14 +30,14 @@ Design notes:
        per turn if the genai id is absent).
      - function_response Part -> ``"tool"`` message with matching ``tool_call_id``
        and JSON-serialised content; ids are resolved by pairing arrivals in order
-       (mirroring the bedrock_adapter queue strategy).
+       (a producer thread feeding an asyncio queue).
      - Consecutive same-role messages are coalesced to satisfy the OpenAI API
        requirement that roles alternate (or at minimum that tool-result sequences
        form a legal run).
 
   2. FunctionDeclaration[] -> OpenAI tools[]
      - ``_genai_schema_to_json_schema`` converts genai uppercase enum types to
-       lowercase JSON Schema (mirrors bedrock_adapter._genai_schema_to_json_schema).
+       lowercase JSON Schema (see adapters/tool_schema.py).
      - The same sanitisation pass is applied: empty parameters -> object with
        ``{}``, non-object top-level schema -> wrapped in object.
 
@@ -225,7 +225,7 @@ def openai_model(session_model: str | None = None) -> str:
 
 # ---------------------------------------------------------------------------
 # Schema conversion: genai FunctionDeclaration -> OpenAI tools[]
-# (mirrors bedrock_adapter._genai_schema_to_json_schema / tool_declarations_to_bedrock_tools)
+# (see adapters/tool_schema.py for the shared converter)
 # ---------------------------------------------------------------------------
 
 _TYPE_MAP = {
@@ -257,9 +257,9 @@ _TYPE_MAP = {
 # schema) description. Setting TRID3NT_OPENAI_TOOL_DESC_CAP=0 disables ALL
 # slimming (the single kill switch -- restores the legacy [:1000] behavior);
 # TRID3NT_OPENAI_PARAM_DESC_CAP=0 disables only the param-level cap.
-# Truncation is word-boundary with a trailing "..." marker. bedrock_adapter
-# and adapter.py are deliberately NOT touched -- cloud models keep the full
-# descriptions.
+# Truncation is word-boundary with a trailing "..." marker. The slimming is
+# LOCAL-path only; adapter.py's declarations are deliberately NOT touched, so
+# cloud models keep the full descriptions.
 
 TOOL_DESC_CAP_DEFAULT = 600
 PARAM_DESC_CAP_DEFAULT = 200
@@ -477,7 +477,7 @@ def contents_to_openai_messages(
     tool_call_id is harvested from fc.id; when absent (legacy Gemini history),
     a stable deterministic id ``"call_{counter}"`` is minted. function_response
     ids are resolved by pairing with the preceding function_call by arrival order
-    (same FIFO queue strategy as bedrock_adapter.contents_to_bedrock_messages).
+    (a FIFO queue pairs each tool result with the call that produced it).
 
     ``show_thinking`` (NATE live-feedback 2026-07-08, local build): when True
     any ``/no_think`` directive inside TRID3NT_OPENAI_EXTRA_SYSTEM is dropped
@@ -598,7 +598,7 @@ def contents_to_openai_messages(
 #: LANE CORE (2026-07-22, upstream-provider discipline): the retry count and
 #: backoff now EXTEND to the cross-provider envs ``TRID3NT_PROVIDER_RETRIES``
 #: (default 3) / ``TRID3NT_PROVIDER_BACKOFF_S`` (exponential base, default 5.0
-#: -- see ``adapter.provider_backoff_wait``), shared with bedrock_adapter. The
+#: -- see ``adapter.provider_backoff_wait``), shared across adapters. The
 #: legacy openai-specific envs stay honored as fallbacks so an existing local
 #: .env keeps working. Read at CALL time (env injection without re-import).
 _RATE_LIMIT_MAX_WAIT_S = float(os.environ.get("TRID3NT_OPENAI_RATE_LIMIT_MAX_WAIT_S", "45"))
@@ -946,7 +946,7 @@ async def stream_openai(
 ) -> AsyncIterator[StreamEvent]:
     """Stream one OpenAI-compatible turn, yielding the ``StreamEvent`` union.
 
-    Mirrors ``bedrock_adapter.stream_bedrock``: one call == one model round.
+    One call == one model round.
     The dispatch loop in ``server.py`` appends function_call + function_response
     Contents and re-calls until no tool calls remain.
 

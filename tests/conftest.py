@@ -131,8 +131,8 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> InMemoryS3Client:
 def _default_scripted_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     """Default the model provider to ``scripted`` for the agent test suite.
 
-    GCP/Vertex is decommissioned and its generate path is removed; the RUNTIME
-    default is ``bedrock`` (``bedrock_adapter.model_provider``). The agent-loop
+    The RUNTIME default is ``openai``
+    (``adapters.model_selection.model_provider``). The agent-loop
     tests fake model turns through the scripted fake-provider seam (the
     ``fake_llm`` fixture installs a call-sequenced turn source and pins
     ``MODEL_PROVIDER=scripted`` itself; this autouse default covers the tests

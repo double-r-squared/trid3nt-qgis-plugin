@@ -7,7 +7,7 @@ models. The browser cannot reach Ollama (:11434) directly, so the agent's
     {"models": [{"id": "...", "label": "..."}, ...], "default": "..."|null}
 
 Covered here:
-  - CLOUD posture: route ABSENT (404) unless MODEL_PROVIDER=openai;
+  - route ABSENT (404) unless the active provider is openai;
   - 200 with the mapped model list, configured default moved first;
   - upstream (Ollama) unreachable -> honest 502, never a fabricated success;
   - ``_ollama_tags_url`` derivation from TRID3NT_OPENAI_BASE_URL.
@@ -75,18 +75,18 @@ def _dispatch() -> _FakeWriter:
 
 
 # ---------------------------------------------------------------------------
-# Route gating (cloud posture identical: 404 like any unknown path)
+# Route gating (404 like any unknown path off the openai provider)
 # ---------------------------------------------------------------------------
 
 
-def test_route_absent_when_provider_unset(monkeypatch):
-    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+def test_route_absent_when_provider_is_not_openai(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "anthropic")
     writer = _dispatch()
     assert _status(bytes(writer.buffer)) == 404
 
 
-def test_route_absent_when_provider_bedrock(monkeypatch):
-    monkeypatch.setenv("MODEL_PROVIDER", "bedrock")
+def test_route_absent_when_provider_is_scripted(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "scripted")
     writer = _dispatch()
     assert _status(bytes(writer.buffer)) == 404
 

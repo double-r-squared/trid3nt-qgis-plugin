@@ -207,9 +207,9 @@ class UserMessagePayload(GraceModel):
     MESSAGE_TYPE: ClassVar[str] = "user-message"
 
     text: str
-    # In-chat model selector (NATE 2026-06-17): optional Bedrock model id
-    # chosen by the user before submitting.  ``None`` means "use the server
-    # default" (``BEDROCK_MODEL_ID`` env / ``bedrock_adapter.bedrock_model_id()``).
+    # In-chat model selector: optional model id chosen by the user before
+    # submitting. ``None`` means "use the server default" (whatever the active
+    # provider adapter resolves).
     # The client sends this on every user-message so the agent can hot-swap the
     # model between turns without a session restart.
     model_id: str | None = None

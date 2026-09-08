@@ -459,7 +459,7 @@ async def stream_anthropic(
 ) -> AsyncIterator[StreamEvent]:
     """Stream one Messages API turn, yielding the ``StreamEvent`` union.
 
-    Mirrors ``bedrock_adapter.stream_bedrock``: one call == one model round.
+    Mirrors ``openai_adapter.stream_openai``: one call == one model round.
     The turn loop appends function_call + function_response Contents and
     re-calls until no tool calls remain.
 

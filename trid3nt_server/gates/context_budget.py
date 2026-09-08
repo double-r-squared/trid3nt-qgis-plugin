@@ -418,7 +418,6 @@ def _reset_num_ctx_cache_for_tests() -> None:
 WINDOW_SOURCE_OLLAMA_SHOW = "ollama:/api/show"
 WINDOW_SOURCE_OPENROUTER_MODELS = "openrouter:/models.context_length"
 WINDOW_SOURCE_ANTHROPIC_MODELS = "anthropic:/v1/models.max_input_tokens"
-WINDOW_SOURCE_BEDROCK_TABLE = "bedrock:maintained-table"
 WINDOW_SOURCE_NAME_SUFFIX = "model-name-suffix"
 WINDOW_SOURCE_ENV = "env:TRID3NT_CONTEXT_WINDOW"
 WINDOW_SOURCE_FALLBACK = "conservative-default"
@@ -430,7 +429,6 @@ _DISCOVERED_SOURCES = frozenset(
         WINDOW_SOURCE_OLLAMA_SHOW,
         WINDOW_SOURCE_OPENROUTER_MODELS,
         WINDOW_SOURCE_ANTHROPIC_MODELS,
-        WINDOW_SOURCE_BEDROCK_TABLE,
         WINDOW_SOURCE_NAME_SUFFIX,
         WINDOW_SOURCE_ENV,
     }
@@ -558,14 +556,6 @@ async def _resolve_window_tokens(
         tokens = await model_discovery.anthropic_max_input_tokens(model_name)
         if tokens:
             return tokens, WINDOW_SOURCE_ANTHROPIC_MODELS
-        return None
-
-    if provider == "bedrock":
-        from trid3nt_server.adapters.bedrock_adapter import bedrock_context_window
-
-        tokens = bedrock_context_window(model_name)
-        if tokens:
-            return tokens, WINDOW_SOURCE_BEDROCK_TABLE
         return None
 
     return None
@@ -1320,7 +1310,6 @@ __all__ = [
     "looks_like_context_overflow_error",
     "plan_turn",
     "WINDOW_SOURCE_ANTHROPIC_MODELS",
-    "WINDOW_SOURCE_BEDROCK_TABLE",
     "WINDOW_SOURCE_ENV",
     "WINDOW_SOURCE_FALLBACK",
     "WINDOW_SOURCE_NAME_SUFFIX",

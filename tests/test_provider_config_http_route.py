@@ -4,7 +4,7 @@
 Two features, both offline (no live network, no live agent):
 
 Feature 3 -- POST /api/provider-config:
-  - CLOUD posture: route ABSENT (404) unless MODEL_PROVIDER=openai;
+  - route ABSENT (404) unless the active provider is openai;
   - a well-formed body updates os.environ[TRID3NT_OPENAI_*] and returns
     {"ok", "model", "base_url_host"} -- the effect the openai adapter reads at
     the next call (no restart);
@@ -128,18 +128,18 @@ def _dispatch(path: str, body: bytes) -> _FakeWriter:
 
 
 # ---------------------------------------------------------------------------
-# Route gating (cloud posture identical: 404 like any unknown path)
+# Route gating (404 like any unknown path off the openai provider)
 # ---------------------------------------------------------------------------
 
 
-def test_provider_config_absent_when_provider_unset(monkeypatch):
-    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+def test_provider_config_absent_when_provider_is_not_openai(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "anthropic")
     writer = _dispatch("/api/provider-config", b'{"model":"x"}')
     assert _status(bytes(writer.buffer)) == 404
 
 
-def test_provider_config_absent_when_provider_bedrock(monkeypatch):
-    monkeypatch.setenv("MODEL_PROVIDER", "bedrock")
+def test_provider_config_absent_when_provider_is_scripted(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "scripted")
     writer = _dispatch("/api/provider-config", b'{"model":"x"}')
     assert _status(bytes(writer.buffer)) == 404
 

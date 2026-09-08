@@ -276,14 +276,10 @@ def _make_handler(settings: ModelSettings):
                         # session default; None means "keep whatever was last
                         # chosen" (or the env default if never set).
                         #
-                        # VALIDATE before use: a stale client (or a removed /
-                        # access-disabled / non-tool-capable id) must NEVER reach
-                        # ConverseStream -- an invalid id throws a raw
-                        # ValidationException ("provided model identifier is
-                        # invalid"). resolve_selected_model maps an unknown id to
-                        # None (use the capable default) and returns a notice we
-                        # log; the turn then runs on the default rather than
-                        # crashing.
+                        # VALIDATE before use: resolve_selected_model maps an
+                        # unknown id to None (use the capable default) and
+                        # returns a notice we log; the turn then runs on the
+                        # default rather than crashing.
                         if um.model_id is not None:
                             from trid3nt_server.adapters.model_selection import (
                                 resolve_selected_model as _resolve_selected_model,
@@ -818,12 +814,8 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     host = os.environ.get("TRID3NT_AGENT_HOST", host)
     settings = load_settings()
     # Log the ACTUAL active provider + its real model, never the settings
-    # default. Under MODEL_PROVIDER=openai this prints the OpenAI model; under
-    # bedrock the Bedrock model id; scripted/replay/fake fall back to the
-    # settings model.
-    from trid3nt_server.adapters.bedrock_adapter import (
-        bedrock_model_id as _active_default_model_id,
-    )
+    # default. Under MODEL_PROVIDER=openai this prints the OpenAI model;
+    # scripted/replay/fake fall back to the settings model.
     from trid3nt_server.adapters.model_selection import (
         model_provider as _active_model_provider,
     )
@@ -832,8 +824,6 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     if _active_provider == "openai":
         from trid3nt_server.adapters import openai_adapter as _active_oa
         _active_model = _active_oa.openai_model(None)
-    elif _active_provider == "bedrock":
-        _active_model = _active_default_model_id()
     else:
         _active_model = settings.model
     logger.info(

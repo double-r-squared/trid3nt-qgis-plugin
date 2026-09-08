@@ -13,7 +13,7 @@ The variables below are the complete shipped file, grouped by concern.
 
 | Variable | Shipped value | What it does |
 |----------|---------------|--------------|
-| `MODEL_PROVIDER` | `openai` | Selects the adapter in the provider dispatch seam. `openai` routes turns through `openai_adapter.py` (any OpenAI-compatible chat/completions endpoint with streaming tool calls). The cloud build uses `bedrock`. |
+| `MODEL_PROVIDER` | `openai` | Selects the adapter in the provider dispatch seam. `openai` routes turns through `openai_adapter.py` (any OpenAI-compatible chat/completions endpoint with streaming tool calls). `anthropic` routes them through the first-party Messages API. |
 | `TRID3NT_OPENAI_BASE_URL` | `http://127.0.0.1:11434/v1` | The OpenAI-compatible endpoint. Default is local Ollama. Point it at vLLM, llama.cpp server, LM Studio, or a cloud API (OpenAI, Groq, DeepSeek, OpenRouter) to swap the model without touching code. |
 | `TRID3NT_OPENAI_MODEL` | `qwen3:8b-16k` | Model name passed to the endpoint. The default is a locally-created Ollama variant of `qwen3:8b` with `num_ctx 16384` -- see [Models](models.md). |
 | `TRID3NT_OPENAI_API_KEY` | `not-needed` | Bearer token for the endpoint. Ollama ignores it, but the OpenAI client requires a non-empty value; set a real key when pointing at a cloud API. |

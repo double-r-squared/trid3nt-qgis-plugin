@@ -17,7 +17,6 @@ surface the turn engine drives regardless of backend.
 - `tool_schema.py` -- `genai_schema_to_json_schema`, the one conversion from
   the genai `Schema` IR to the plain JSON Schema every provider wire format
   wants.
-- `bedrock_adapter.py` -- the AWS Bedrock Converse path.
 - `anthropic_adapter.py` -- the first-party Anthropic Messages API path
   (`stream_anthropic`, `anthropic_model`, `anthropic_api_key`), selected by
   `MODEL_PROVIDER=anthropic`. Claude Sonnet 5 by default
@@ -49,8 +48,7 @@ instead of defining provider logic themselves.
 
 The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME, never hardcoded.
 `gates/context_budget.discover_context_window` resolves it per
-`(provider, model)` through the resolvers above (Bedrock alone needs a
-maintained table, and logs a WARNING saying so), then an operator pin, then a
+`(provider, model)` through the resolvers above, then an operator pin, then a
 conservative default with a warning; `ContextWindow.source` records which.
 
 History management is CLIENT-SIDE and the strategy lives in ONE place --

@@ -5,11 +5,9 @@ representation (``Content`` / ``Part`` / ``FunctionCall`` / ``FunctionDeclaratio
 builders) every provider adapter shares. This module owns those genai-typed
 shapes and the multi-turn function_call -> function_response loop; the actual
 model call is delegated at ``stream_events_with_contents`` to the provider
-adapter selected by ``MODEL_PROVIDER`` (bedrock default; anthropic / openai /
-scripted).
-The legacy raw google-genai / Vertex ``generate_content_stream`` client path is
-decommissioned and removed -- an unsupported ``MODEL_PROVIDER`` raises
-``UnsupportedModelProviderError`` rather than silently emitting an empty turn.
+adapter selected by ``MODEL_PROVIDER`` (openai default; anthropic / scripted).
+An unsupported ``MODEL_PROVIDER`` raises ``UnsupportedModelProviderError``
+rather than silently emitting an empty turn.
 
 Model selection:
   ``TRID3NT_GEMINI_MODEL`` env override, defaulting to ``DEFAULT_VERTEX_MODEL``
@@ -82,7 +80,7 @@ class ThinkingDeltaEvent:
     surfaces qwen3-family thinking as ``delta.reasoning`` chunks. The
     openai_adapter yields these as ``ThinkingDeltaEvent`` so the server can
     forward them live to the web as ``agent-thinking-chunk`` envelopes (greyed
-    foldable block). Never emitted by the Bedrock / Vertex / scripted paths;
+    foldable block). Never emitted by the Anthropic / scripted paths;
     the server loop must tolerate + may drop them (user toggle off).
     """
     delta: str
@@ -140,8 +138,8 @@ class UsageMetadataEvent:
     # Per-turn telemetry (LANE CORE, 2026-07-22): reasoning-channel tokens where
     # the provider reports them (OpenAI-compatible
     # ``usage.completion_tokens_details.reasoning_tokens``). ``None`` when the
-    # provider does not report the figure (Bedrock Converse metering carries no
-    # reasoning split) -- absent is tolerated, NEVER fabricated.
+    # provider does not report the figure -- absent is tolerated, NEVER
+    # fabricated.
     reasoning_token_count: int | None = None
 
 
@@ -152,8 +150,8 @@ class CompactionStartEvent:
     model's discovered window) or reactive (the send was clipped, or the
     provider rejected it as too long).
 
-    Yielded by EVERY live provider path -- OpenAI-compatible, Anthropic, and
-    Bedrock -- since all three share the one budget seam. ``server.py``'s
+    Yielded by EVERY live provider path -- OpenAI-compatible and Anthropic --
+    since both share the one budget seam. ``server.py``'s
     dispatch loop mints a durable running card ("Compacting conversation...")
     the instant this arrives (``pipeline_emitter.mint_compaction_card``),
     animated on the wire and persisted so it survives a Case reopen. Carries
@@ -195,7 +193,7 @@ StreamEvent = (
 # Upstream-provider discipline (LANE CORE, 2026-07-22 -- NATE hard rule:
 # never internalize an upstream failure).
 #
-# Both provider adapters (openai_adapter / bedrock_adapter) classify TRANSIENT
+# The provider adapters (openai_adapter / anthropic_adapter) classify TRANSIENT
 # provider errors (HTTP 429, 5xx, timeouts, connection drops, provider-reported
 # overload) as ``error_class="upstream_provider"``, log the provider's VERBATIM
 # error, and retry with exponential backoff. On exhaustion they raise
@@ -221,7 +219,7 @@ class UpstreamProviderError(RuntimeError):
     exhaustion (429 / 5xx / timeout / connection drop / provider overload).
 
     ``provider`` names the upstream provider for the user-facing narration
-    (e.g. ``"AWS Bedrock"`` / ``"openrouter.ai (openai-compatible)"``);
+    (e.g. ``"openrouter.ai (openai-compatible)"``);
     ``detail`` carries the provider's VERBATIM last error string (honesty
     floor: never paraphrased away); ``attempts`` is the total number of
     request attempts made (1 original + retries). ``error_class`` is the
@@ -244,11 +242,9 @@ class UnsupportedModelProviderError(RuntimeError):
     """``MODEL_PROVIDER`` names a provider the dispatch does not support.
 
     The provider dispatch in ``stream_events_with_contents`` is EXPLICIT:
-    scripted/replay/fake, bedrock, anthropic, and openai each have a branch.
-    Any OTHER
-    value -- including the decommissioned ``vertex``/``gemini`` google-genai
-    generate path (removed) and the empty default -- raises this (never a
-    silent fall-through), so a typo or a decommissioned provider fails loudly.
+    scripted/replay/fake, anthropic, and openai each have a branch. Any OTHER
+    value -- the empty default included -- raises this (never a silent
+    fall-through), so a typo or a decommissioned provider fails loudly.
     """
 
     error_class = "internal"
@@ -301,7 +297,7 @@ def classify_provider_error_class(exc: BaseException) -> str:
         request (auth / bad request / not found / validation). Fail-fast class.
       - ``"internal"`` -- everything else (a genuine bug in our own code).
 
-    Optional-dependency imports are defensive: openai / botocore may be absent
+    Optional-dependency imports are defensive: openai / anthropic may be absent
     on a build where that provider path is dormant.
     """
     if isinstance(exc, UpstreamProviderError) or getattr(exc, "error_class", None) == "upstream_provider":
@@ -355,31 +351,6 @@ def classify_provider_error_class(exc: BaseException) -> str:
                 if _is_transient_anthropic_error(exc)
                 else "provider_request"
             )
-    except ImportError:
-        pass
-    except Exception:  # noqa: BLE001 -- classification must never raise
-        pass
-
-    # Bedrock / botocore path (optional dep).
-    try:
-        from botocore.exceptions import (  # noqa: WPS433
-            BotoCoreError,
-            ClientError,
-            ConnectionError as BotoConnectionError,
-        )
-
-        if isinstance(exc, ClientError):
-            from .bedrock_adapter import _is_transient_bedrock_error
-
-            return (
-                "upstream_provider"
-                if _is_transient_bedrock_error(exc)
-                else "provider_request"
-            )
-        if isinstance(exc, (BotoConnectionError,)):
-            return "upstream_provider"
-        if isinstance(exc, BotoCoreError):
-            return "internal"
     except ImportError:
         pass
     except Exception:  # noqa: BLE001 -- classification must never raise
@@ -1251,7 +1222,7 @@ def load_settings() -> ModelSettings:
     """Resolve model settings from the environment.
 
     - ``TRID3NT_GEMINI_MODEL`` (default: ``DEFAULT_VERTEX_MODEL``) -- the
-      display/telemetry model id. The active provider (bedrock/openai) resolves
+      display/telemetry model id. The active provider resolves
       the real model it calls; this is only the fallback label for the
       scripted/replay path.
     """
@@ -2697,7 +2668,7 @@ def build_user_text_content(text: str) -> genai_types.Content:
     live user message (adapter.py line 1245) -- factored out so the multi-turn
     loop can append a corrective user turn (e.g. the empty-completion retry
     nudge) to ``contents`` without server.py hand-rolling google.genai types.
-    Bedrock's Converse boundary maps a ``user`` text Content to a ``user``
+    Every provider boundary maps a ``user`` text Content to a ``user``
     message; the scripted adapter ignores content bodies -- so this is safe on
     every provider path that consumes ``contents``.
     """
@@ -2734,7 +2705,7 @@ async def stream_events(
 
     Args:
         client: accepted for signature parity and ignored -- the provider
-            adapters (bedrock / openai / scripted) open their own client at the
+            adapters (openai / anthropic / scripted) open their own client at the
             boundary. Pass ``None``.
         model: model identifier string (e.g. ``"gemini-2.5-pro"``).
         user_text: the user's message text.
@@ -2780,7 +2751,7 @@ async def stream_events_with_contents(
     adapter only. When True the adapter omits the ``/no_think`` system suffix
     (TRID3NT_OPENAI_EXTRA_SYSTEM) for this round so the model's reasoning
     channel is generated and surfaced as ``ThinkingDeltaEvent``s. Ignored by
-    the Bedrock / Vertex / scripted paths.
+    the Anthropic / scripted paths.
 
     This is the primitive the multi-turn loop driver in ``server.py`` uses.
     Each call corresponds to exactly one provider round -- the driver appends
@@ -2788,10 +2759,8 @@ async def stream_events_with_contents(
     re-calls this until the model emits no further function calls (only text →
     terminal turn). ``stream_events`` (the user-text variant) delegates here
     after building ``contents`` via ``build_contents_from_history``. Dispatch is
-    an EXPLICIT provider switch (scripted/replay/fake, bedrock, anthropic,
-    openai); any
-    other ``MODEL_PROVIDER`` (including the decommissioned vertex/gemini
-    google-genai generate path) raises ``UnsupportedModelProviderError``.
+    an EXPLICIT provider switch (scripted/replay/fake, anthropic, openai); any
+    other ``MODEL_PROVIDER`` raises ``UnsupportedModelProviderError``.
 
     Provider-side prompt cache: when ``model_cache_ref`` is provided, the
     request is built WITHOUT ``tools[]`` and WITHOUT ``tool_config`` -- the
@@ -2806,32 +2775,17 @@ async def stream_events_with_contents(
     PipelineEmitter, and pipe ``cached_content_token_count`` into the
     tool-call telemetry record.
     """
-    # model-provider switch. When MODEL_PROVIDER=bedrock,
-    # delegate to the Bedrock Converse adapter -- it converts the genai contents +
-    # tool declarations at the boundary and yields the SAME StreamEvent union, so
-    # the server.py dispatch loop, validator, emitter, and UI are untouched.
-    # model_cache_ref is a Gemini-only fast-path and does not apply here.
-    from .bedrock_adapter import stream_bedrock
+    # model-provider switch. Every adapter converts the genai contents + tool
+    # declarations at its own boundary and yields the SAME StreamEvent union, so
+    # the dispatch loop, validator, emitter, and UI are untouched.
     from .model_selection import model_provider
     from .scripted_adapter import model_provider_is_scripted, stream_scripted
 
     # MODEL_PROVIDER=scripted (aliases replay/fake): replay a canned transcript of
     # tool calls with NO model call -- the zero-cost deterministic test/dev
-    # sandbox. Intercept BEFORE the bedrock check (model_provider() would not be
-    # "bedrock", so it must not fall through to the Vertex client path). Yields
-    # the same StreamEvent union, so the dispatch loop is untouched.
+    # sandbox. Intercepted FIRST so it never reaches a provider client.
     if model_provider_is_scripted():
         async for _ev in stream_scripted(
-            contents=contents,
-            tool_declarations=tool_declarations,
-            system_prompt=system_prompt,
-            model=model_id,
-        ):
-            yield _ev
-        return
-
-    if model_provider() == "bedrock":
-        async for _ev in stream_bedrock(
             contents=contents,
             tool_declarations=tool_declarations,
             system_prompt=system_prompt,
@@ -2870,17 +2824,14 @@ async def stream_events_with_contents(
             yield _ev
         return
 
-    # Provider dispatch is EXPLICIT -- scripted/replay/fake, bedrock, and openai
-    # each returned above. Anything else (including the decommissioned
-    # ``vertex``/``gemini`` google-genai generate path, now removed, and the
-    # empty default) is unsupported: raise a TYPED error instead of a silent
-    # empty turn. ``google.genai.types`` stays imported as the load-bearing IR
-    # (Content / Part / FunctionCall builders), but there is no longer a
-    # ``generate_content_stream`` client path to fall through to.
+    # Provider dispatch is EXPLICIT -- scripted/replay/fake, anthropic and openai
+    # each returned above. Anything else is unsupported: raise a TYPED error
+    # instead of a silent empty turn. ``google.genai.types`` stays imported as
+    # the load-bearing IR (Content / Part / FunctionCall builders), but there is
+    # no ``generate_content_stream`` client path to fall through to.
     raise UnsupportedModelProviderError(
         f"MODEL_PROVIDER={model_provider()!r} is not supported. Valid providers: "
-        "scripted/replay/fake, bedrock, anthropic, openai. The vertex/gemini "
-        "google-genai generate path is decommissioned and removed."
+        "scripted/replay/fake, anthropic, openai."
     )
 
 

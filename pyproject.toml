@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "trid3nt-server"
 version = "0.1.0"
-description = "Agent service: AWS Bedrock Converse agent loop, Appendix-A WebSocket server, S3/DynamoDB persistence, AWS Batch solver dispatch."
+description = "Agent service: the pluggable-LLM agent loop, Appendix-A WebSocket server, file-backed persistence, local solver dispatch."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -13,9 +13,8 @@ authors = [{ name = "Nate Almanza" }]
 
 # Pin upper bounds loosely; ADK + genai SDK evolve fast — verify with `pip show`.
 dependencies = [
-    # sprint-14-aws (job-0286): AWS Bedrock Converse provider for the agent
-    # loop (MODEL_PROVIDER=bedrock). google-genai stays until the GCP->AWS
-    # migration completes and the Vertex path is retired.
+    # S3-compatible object I/O: the cached-fetch store, user-layer ingest and
+    # the public-bucket fetchers all speak S3 (MinIO locally).
     "boto3>=1.40,<2",
     # sprint-14-aws (job-0296): Cognito ID-token (JWKS/RS256) verification in
     # auth_handshake.cognito_verify. [crypto] pulls cryptography for RSAAlgorithm.
@@ -28,9 +27,9 @@ dependencies = [
     # google-cloud-storage DROPPED with the GCP publish-path excision (the Cloud Run
     # PyQGIS worker dispatch branch in the raster publish path is gone; rasters
     # publish as raw s3/MinIO COGs the QGIS plugin reads via /vsicurl/).
-    # google-genai is KEPT (carve-out): bedrock_adapter speaks the genai_types
-    # Content/FunctionDeclaration contract that it converts to the Bedrock
-    # Converse API — removing it breaks the live Bedrock path.
+    # google-genai is KEPT (carve-out): its ``types`` package is the
+    # Content/FunctionDeclaration IR every provider adapter converts from at
+    # its own boundary — removing it breaks every live provider path.
     "google-genai>=2.8,<3",
     # job-0033 M4 Stage C: data-fetch atomic tools.
     # py3dep wraps the USGS 3DEP DEM service (CONUS DEM at 10/30m); pulls in
@@ -204,8 +203,8 @@ dependencies = [
     # offline/local build (GAP 1 -- trid3nt-local offline-architecture.md):
     # openai is the client for ANY OpenAI-compatible chat.completions endpoint
     # (Ollama, vLLM, llama.cpp, LM Studio, OpenAI, Groq, DeepSeek, OpenRouter).
-    # Dormant unless MODEL_PROVIDER=openai is selected; zero impact on the live
-    # Bedrock path. AsyncOpenAI + streaming tool-call support requires >= 1.40.
+    # The live default provider. AsyncOpenAI + streaming tool-call support
+    # requires >= 1.40.
     "openai>=1.40",
     # MODEL_PROVIDER=anthropic: the official Anthropic SDK backs
     # adapters/anthropic_adapter.py (Claude Sonnet 5 by default). Dormant

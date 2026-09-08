@@ -1,5 +1,5 @@
 """Per-model context-budget seam: runtime window discovery, the ONE shared
-trim strategy, cache-prefix survival, and the provider-overflow retry.
+trim strategy, cache-prefix survival, and overflow classification.
 
 The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME -- never a
 hardcoded constant. These tests pin that property from both directions: a
@@ -8,16 +8,15 @@ degrades to a LOUD conservative fallback rather than a silent guess.
 
 Covers:
   1. Discovery matrix -- OpenRouter ``context_length``, Anthropic
-     ``max_input_tokens``, the Bedrock maintained table, Ollama's runtime
-     ``num_ctx``, the ``-<N>k`` name suffix, the env pin, and ABSENT metadata
-     on every one of them.
+     ``max_input_tokens``, Ollama's runtime ``num_ctx``, the ``-<N>k`` name
+     suffix, the env pin, and ABSENT metadata on every one of them.
   2. ``plan_turn`` -- the single strategy seam: the system prompt and tool
      contracts are never trim candidates, and the terminal user message plus
      the case-state note (the pending-confirmation spine) always survive.
   3. Cache-prefix preservation -- trimming rewrites only the conversation, so
-     the Anthropic ``cache_control`` / Bedrock ``cachePoint`` breakpoints keep
-     a byte-identical prefix across a compacted turn.
-  4. Overflow classification + the trim-and-retry-once path.
+     the Anthropic ``cache_control`` breakpoints keep a byte-identical prefix
+     across a compacted turn.
+  4. Overflow classification -- which provider 400 means "too long".
 
 Run:
     python3 -m pytest tests/test_context_window_discovery.py -q
@@ -26,7 +25,6 @@ Run:
 from __future__ import annotations
 
 import logging
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -37,7 +35,6 @@ from trid3nt_server.gates.context_budget import (
     CONTEXT_WINDOW_FALLBACK_DEFAULT,
     ContextWindow,
     WINDOW_SOURCE_ANTHROPIC_MODELS,
-    WINDOW_SOURCE_BEDROCK_TABLE,
     WINDOW_SOURCE_ENV,
     WINDOW_SOURCE_FALLBACK,
     WINDOW_SOURCE_NAME_SUFFIX,
@@ -222,19 +219,6 @@ async def test_discovery_anthropic_models_endpoint():
         window = await discover_context_window("anthropic", "claude-sonnet-5")
     assert window.tokens == 200_000
     assert window.source == WINDOW_SOURCE_ANTHROPIC_MODELS
-
-
-@pytest.mark.asyncio
-async def test_discovery_bedrock_maintained_table_is_last_resort_and_loud(caplog):
-    """Bedrock publishes NO runtime window fact, so the table is the source --
-    and every read of it must say so at WARNING."""
-    with caplog.at_level(logging.WARNING):
-        window = await discover_context_window(
-            "bedrock", "us.anthropic.claude-sonnet-4-6"
-        )
-    assert window.tokens == 200_000
-    assert window.source == WINDOW_SOURCE_BEDROCK_TABLE
-    assert any("MAINTAINED TABLE" in r.getMessage() for r in caplog.records)
 
 
 @pytest.mark.asyncio
@@ -521,31 +505,8 @@ def test_anthropic_cache_prefix_is_byte_identical_across_a_trim():
     assert len(trimmed["messages"]) < len(full["messages"])
 
 
-def test_bedrock_cache_points_survive_a_trim():
-    from trid3nt_server.adapters.bedrock_adapter import _build_converse_kwargs
-
-    system = "You are TRID3NT." + " spec" * 500
-    decls = _decls()
-    long_history = long_alternating_history()
-
-    full = _build_converse_kwargs(
-        long_history, decls, system, "us.anthropic.claude-sonnet-4-6"
-    )
-    plan = plan_turn(long_history, window=_window(4096), phase="proactive")
-    assert plan.compacted is True
-    trimmed = _build_converse_kwargs(
-        plan.contents, decls, system, "us.anthropic.claude-sonnet-4-6"
-    )
-
-    assert full["system"] == trimmed["system"]
-    assert full["toolConfig"] == trimmed["toolConfig"]
-    assert full["system"][-1] == {"cachePoint": {"type": "default"}}
-    assert full["toolConfig"]["tools"][-1] == {"cachePoint": {"type": "default"}}
-    assert len(trimmed["messages"]) < len(full["messages"])
-
-
 # ---------------------------------------------------------------------------
-# 4. Overflow classification + retry
+# 4. Overflow classification
 # ---------------------------------------------------------------------------
 
 
@@ -581,85 +542,3 @@ def test_non_overflow_errors_are_not_reclassified(message):
 
 def test_overflow_classifier_tolerates_none():
     assert looks_like_context_overflow_error(None) is False
-
-
-@pytest.mark.asyncio
-async def test_bedrock_overflow_trims_and_retries_once_then_succeeds():
-    """A 400 overflow is logged verbatim, the history is trimmed HARDER, and
-    the request is resent exactly once."""
-    from trid3nt_server.adapters import bedrock_adapter
-    from trid3nt_server.adapters.adapter import (
-        CompactionCompleteEvent,
-        CompactionStartEvent,
-        TextDeltaEvent,
-    )
-
-    calls: list[dict[str, Any]] = []
-
-    class _Overflow(Exception):
-        pass
-
-    def _fake_converse(client: Any, kwargs: dict[str, Any]) -> Any:
-        calls.append(kwargs)
-        if len(calls) == 1:
-            raise _Overflow(
-                "ValidationException: Input is too long for requested model."
-            )
-        return {
-            "stream": [
-                {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"text": "ok"}}}
-            ]
-        }
-
-    contents = long_alternating_history()
-
-    with (
-        patch.object(bedrock_adapter, "_bedrock_client", return_value=object()),
-        patch.object(bedrock_adapter, "_converse_stream_with_retry", _fake_converse),
-        patch.object(
-            bedrock_adapter, "_is_transient_bedrock_error", return_value=False
-        ),
-    ):
-        events = [
-            e
-            async for e in bedrock_adapter.stream_bedrock(
-                contents, _decls(), "sys", "us.anthropic.claude-sonnet-4-6"
-            )
-        ]
-
-    assert len(calls) == 2, "exactly one retry after the overflow"
-    # The retry carried FEWER messages than the rejected request.
-    assert len(calls[1]["messages"]) < len(calls[0]["messages"])
-    # The cacheable prefix was rebuilt byte-identically across the retry.
-    assert calls[0]["system"] == calls[1]["system"]
-    assert calls[0]["toolConfig"] == calls[1]["toolConfig"]
-    # The user saw the compaction, and the turn produced real output.
-    assert any(isinstance(e, CompactionStartEvent) for e in events)
-    assert any(isinstance(e, CompactionCompleteEvent) for e in events)
-    assert any(isinstance(e, TextDeltaEvent) and e.delta == "ok" for e in events)
-
-
-@pytest.mark.asyncio
-async def test_bedrock_second_overflow_is_an_honest_typed_error():
-    """Trim, retry once, then STOP -- surfaced as the dedicated
-    CONTEXT_WINDOW_EXCEEDED envelope, never the provider-unavailable bucket."""
-    from trid3nt_server.adapters import bedrock_adapter
-    from trid3nt_server.gates.context_budget import ContextWindowExceededError
-
-    def _always_overflow(client: Any, kwargs: dict[str, Any]) -> Any:
-        raise Exception("Input is too long for requested model.")
-
-    contents = long_alternating_history()
-
-    with (
-        patch.object(bedrock_adapter, "_bedrock_client", return_value=object()),
-        patch.object(bedrock_adapter, "_converse_stream_with_retry", _always_overflow),
-        patch.object(
-            bedrock_adapter, "_is_transient_bedrock_error", return_value=False
-        ),
-        pytest.raises(ContextWindowExceededError),
-    ):
-        async for _ in bedrock_adapter.stream_bedrock(
-            contents, _decls(), "sys", "us.anthropic.claude-sonnet-4-6"
-        ):
-            pass

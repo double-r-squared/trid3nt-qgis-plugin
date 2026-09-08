@@ -162,7 +162,7 @@ async def _stream_model_reply(
     )
 
     # No model client is constructed here -- every live provider adapter
-    # (bedrock / openai / scripted) opens its own client at the boundary and
+    # (openai / anthropic / scripted) opens its own client at the boundary and
     # ignores ``client``. Provider resolved once here and reused by the cache
     # guard below.
     from trid3nt_server.adapters.model_selection import model_provider as _model_provider
@@ -173,16 +173,12 @@ async def _stream_model_reply(
     # rows for DEFAULT-model turns are tagged with the real model instead of
     # collapsing into the "unknown" bucket in the by_model accuracy slice. On
     # the openai/OpenRouter path this applies openai_model's own precedence
-    # (selection -> TRID3NT_OPENAI_MODEL); on bedrock, the selection or the
-    # configured default. Best-effort -- a resolution error must never break
-    # the turn, so fall back to the raw selection.
+    # (selection -> TRID3NT_OPENAI_MODEL). Best-effort -- a resolution error
+    # must never break the turn, so fall back to the raw selection.
     try:
         if _provider == "openai":
             from trid3nt_server.adapters import openai_adapter as _oa  # noqa: WPS433
             _effective_model = _oa.openai_model(model_id)
-        elif _provider == "bedrock":
-            from trid3nt_server.adapters.bedrock_adapter import bedrock_model_id as _bmid  # noqa: WPS433
-            _effective_model = model_id or _bmid()
         else:
             _effective_model = model_id
     except Exception:  # noqa: BLE001 -- telemetry tag only, never fatal
@@ -199,8 +195,8 @@ async def _stream_model_reply(
     # the Case's monotonic visible set so a once-visible tool never leaves within
     # a Case, and subset TOOL_REGISTRY to the result before build_tool_declarations.
     # Any retrieval error / empty result FAILS OPEN to the full registry, logged.
-    # The cachePoint TAIL is inserted downstream by bedrock_adapter (after tools),
-    # so subsetting the dict here preserves it. K is the only lever
+    # The adapter inserts its own cache breakpoints downstream (after tools),
+    # so subsetting the dict here preserves them. K is the only lever
     # (TRID3NT_TOOL_RETRIEVAL_K).
     #
     # DEFAULT declarable set: the full registry MINUS tier=catalog/internal
@@ -380,8 +376,8 @@ async def _stream_model_reply(
         )
     tool_decls = build_tool_declarations(_retrieval_registry)
 
-    # Prompt caching is the adapter's own concern (Bedrock uses ``cachePoint``
-    # markers); there is no separate cached-content fast-path, so this is always
+    # Prompt caching is the adapter's own concern (its provider's own
+    # breakpoints); there is no separate cached-content fast-path, so this is always
     # ``None``. The field is retained for the ``cache-status`` envelope payload
     # (``_emit_cache_status``) which reports cache-hit metrics.
     state.model_cache_ref = None

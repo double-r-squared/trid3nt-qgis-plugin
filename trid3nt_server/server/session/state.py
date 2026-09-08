@@ -234,9 +234,9 @@ class SessionState:
     visible_tools: set[str] = field(default_factory=set)
     # Per-session provider-side prompt-cache handle, reported through the
     # ``cache-status`` envelope. Provider-neutral: the adapter owns whatever
-    # concrete cache mechanism its provider uses. The Bedrock path caches via
-    # its own ``cachePoint`` markers (reported through ``UsageMetadataEvent``),
-    # so no per-session handle is tracked there and this stays ``None``.
+    # concrete cache mechanism its provider uses. Every live path caches via
+    # its own in-request breakpoints (reported through ``UsageMetadataEvent``),
+    # so no per-session handle is tracked and this stays ``None``.
     model_cache_ref: str | None = None
     # Per-session circuit breaker. Tracks consecutive failures per tool;
     # trips after TRID3NT_CIRCUIT_THRESHOLD (default 3) consecutive failures,
@@ -277,12 +277,11 @@ class SessionState:
     gate_decisions_this_turn: dict[tuple[str, str], dict[str, Any]] = field(
         default_factory=dict
     )
-    # In-chat model selector: the Bedrock model id chosen by the user for
-    # the current turn. Updated on every ``user-message`` that carries a
-    # non-None ``model_id``; persists across turns so consecutive messages
-    # without one inherit the last-chosen model. ``None`` means "use the
-    # server default" (``bedrock_adapter.bedrock_model_id()``). Only
-    # consulted when MODEL_PROVIDER=bedrock; ignored on the Vertex path.
+    # In-chat model selector: the model id chosen by the user for the current
+    # turn. Updated on every ``user-message`` that carries a non-None
+    # ``model_id``; persists across turns so consecutive messages without one
+    # inherit the last-chosen model. ``None`` means "use the server default"
+    # (the active adapter's own model resolver).
     selected_model: str | None = None
 
     # ------------------------------------------------------------------ #
