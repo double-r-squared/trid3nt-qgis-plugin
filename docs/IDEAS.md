@@ -3843,3 +3843,25 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   TRID3NT_GSHHG_SHP in .env.local; the bathymetry coverage-map concept
   (REANALYZE_LEDGER); TOMAWAC at the rung-4 rematch; pyEMU calibration
   spec (three questions pending).
+
+- LEAN SWEEP RULED (NATE 2026-09-08, inventory docs/validation/
+  lean-sweep-inventory.md): (a) THE MECHANICAL BATCH IS GO, in order -
+  dependency pins first as a standalone commit (httpx, PyYAML,
+  tenacity, aiohttp), then the twelve DELETE-now rows with their tests
+  and ledger rows (compute_model_residuals FOLDS under the two-gate
+  recipe, kept if the residual point layer cannot be reproduced;
+  combine is LEDGERED with the condition "delete unless a mesh recipe
+  reads CombinedGeometryLayerURI"), then ledger hygiene (7 conditions
+  MET flipped, 48 stale fetcher-fold snapshots collapsed, L336
+  overturned, L303 re-homed onto the plugin, L356/L534 re-scoped),
+  then the low-risk library rows L5 L8 L9 L11 L12 L13 L14 each its own
+  commit with golden re-baselines where accuracy changes. (b) WEB-ERA
+  CUTS, all four as recommended: the Bedrock Converse path DELETED
+  after its six live helpers are lifted into a provider-neutral
+  module; the arm-3 stratified router ATTICKED with its spec; the
+  impact envelope DELETED at both ends; the 373 lines of dead message
+  kinds in contracts ws.py DELETED (the old web-client vocabulary
+  beside the live gate vocabulary). (c) PROCESSING: UNDER DISCUSSION -
+  NATE: "processing is more of a sandbox thing... its usefulness
+  dissolves when we use an off-the-shelf MCP"; no fold, no hoist until
+  ruled. (d) MOVEMENT ECOLOGY scope: explanation requested; unruled.
