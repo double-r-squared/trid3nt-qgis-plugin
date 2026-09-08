@@ -3895,3 +3895,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   ledgered as refuted. LESSON for inventories: a dotted-path grep
   misses sys.path imports - check both. (4) The testing/ driver arms
   keyed on deleted wire strings are queued as a hygiene row.
+  PROCESSING RULED, HELD (NATE 2026-09-08): processing rebuilds THE
+  WORKFLOW WAY - one generic process tool over the QGIS Processing
+  catalog (the algorithm registry is the dico; qgis_process is the
+  runner) + a describe lookup; zero per-algorithm code; a template may
+  name a platform algorithm as a DATA row like any helper. THE KEEP
+  RULE: a tool stays live if a template summons it or a user would use
+  it to shape or narrow a simulation (delineate_watershed, section,
+  endpoints, compute_layer_bounds, the model-vs-observation trio, the
+  hydrology pair); everything else goes to the ATTIC with its tests,
+  returnable as sandbox library code; nothing is hard-baked into a
+  template. HELD behind the PEST++ calibration spec; when it resumes:
+  a read-only probe first (qgis_process on the daemon host, providers,
+  help JSON shape, one headless run, the retrieval comparison), then a
+  spec in plan mode. 36 processing packages / 23,551 LOC today.
