@@ -1,8 +1,7 @@
 # trid3nt-contracts
 
 Shared contracts for this system — the WebSocket protocol, the `AssessmentEnvelope`,
-`EventMetadata` + `ClaimSet`/`NumericClaim`, the five MongoDB collection schemas,
-`CatalogEntry`, and the solver-execution shapes
+the MongoDB collection schemas, `CatalogEntry`, and the solver-execution shapes
 (`ModelSetup`/`RunResult`/`ExecutionHandle`/`LayerURI`).
 
 Single source of truth for every type that crosses a specialist boundary:
@@ -18,8 +17,7 @@ report rather than being edited in place).
 | `common` | `GraceModel`, `ULIDStr`, `BBox`, `TimeRange`, datetime + UTC serialization | A.1, B.7, D.7 |
 | `ws` | WebSocket envelope + every A.3/A.4/A.4b message type + A.6 error codes | Appendix A, FR-AS-5 |
 | `envelope` | `AssessmentEnvelope`, supporting types, `FloodPayload` + `FloodMetrics` | Appendix B, FR-TA-1, FR-AS-7 |
-| `event` | `EventMetadata`, `EventLocation`, intensity discriminated union, `NumericClaim` + `ClaimSet` | Appendix C, FR-HEP-5, Decision M |
-| `collections` | Five MongoDB collection models + vector index configs + TTL config | Appendix D, FR-MP-5, Decision F/L |
+| `collections` | The MongoDB collection models + vector index configs + TTL config | Appendix D, FR-MP-5, Decision F/L |
 | `catalog` | `CatalogEntry` for `public_hazard_catalog.yaml` | FR-PHC-2 |
 | `execution` | `ModelSetup`, `RunResult`, `ExecutionHandle` (Cloud Workflows execution-id cancellation seam), `LayerURI` | FR-TA-2, FR-CE-2/3, FR-AS-6 |
 | `tool_metadata` | Tool-docstring conventions + `tool_category` vocabulary (convention only; `agent` owns the registry code) | FR-TA-3, FR-AS-3 |
@@ -44,14 +42,12 @@ pytest contracts/tests -v
 ```
 
 Every WebSocket message type (Appendix A.3, A.4, A.4b), the
-`AssessmentEnvelope`, every per-event-type `IntensityIndicators` payload, every
-`MongoDB` collection, `CatalogEntry`, and every solver-execution shape is
-exercised through a real `JSON -> model -> JSON` round-trip with idempotence
-checks. Negative controls include: bare-float intensity rejection (Decision M),
-wrong-subtype-for-`hazard_type` rejection, missing-bbox-and-place_name
-rejection, no-cost-field assertions on `confirmation-request` /
-`RunDocument` / `FloodMetrics`, invalid ULID rejection, inverted-bbox
-rejection, and the discriminated-union dispatcher invariant on `EventMetadata`.
+`AssessmentEnvelope`, every `MongoDB` collection, `CatalogEntry`, and every
+solver-execution shape is exercised through a real `JSON -> model -> JSON`
+round-trip with idempotence checks. Negative controls include:
+missing-bbox-and-place_name rejection, no-cost-field assertions on
+`RunDocument` / `FloodMetrics`, invalid ULID rejection, and inverted-bbox
+rejection.
 
 ## Regenerate JSON Schemas
 

@@ -9,8 +9,8 @@ Entry shape (flat, role-free -- NATE ruling): ``{kind, quantity, name, uri,
 t?, units?}``. The wrapper carries the version marker:
 ``{schema_version, engine, run_id, entries: [...]}``.
 
-TWO surfaces, ONE ``schema_version`` gate (the ``publish_manifest`` /
-``output_quantities`` precedent, forced by the deploy boundary: the WORKER
+TWO surfaces, ONE ``schema_version`` gate (the ``publish_manifest``
+precedent, forced by the deploy boundary: the WORKER
 images ship ``workers/**`` but NOT ``contracts``; the AGENT ships
 ``contracts`` but NOT ``workers``):
 

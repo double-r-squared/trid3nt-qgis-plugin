@@ -316,11 +316,7 @@ def densify_if_needed(
       ship AND lighter for MapLibre to draw, with the degradation recorded so
       the choke point can tag the wire layer honestly.
 
-    The tiled path is intentionally NOT taken here (it returns an object-store
-    URI, not an inline FC, which the choke point must emit as a vector
-    ``LayerURI``); ``vector_tiles_enabled`` + ``build_pmtiles`` are exposed so
-    the choke point can opt into it once a serving face exists. This function is
-    the inline-FC transform — always safe, always renders.
+    This function is the inline-FC transform — always safe, always renders.
     """
     if not isinstance(fc, dict):
         return fc, None

@@ -673,8 +673,7 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
     - User asks to "model flooding in Fort Myers, FL" or "show wildfires near
       Los Angeles" -- convert the place name to a bbox before calling spatial
       fetch tools.
-    - The agent needs to translate a textual event location from the Hazard
-      Event Pipeline (``EventMetadata.location_name``) into a usable bbox.
+    - The agent needs to translate a textual event location into a usable bbox.
     - Any workflow step that starts from a city, county, neighborhood, or
       named geographic feature rather than coordinates.
 
