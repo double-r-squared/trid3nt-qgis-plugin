@@ -120,6 +120,65 @@ def test_reproject_path_warps_to_4326(tmp_path: Path) -> None:
         cog_io.safe_unlink(cog)
 
 
+def test_reproject_lands_on_the_default_transform_grid(tmp_path: Path) -> None:
+    # The warp must land on calculate_default_transform's grid, pixel for pixel,
+    # with the rasterio warp as the reference (the rioxarray writer is only a
+    # different spelling of it).
+    from rasterio.warp import calculate_default_transform, reproject
+
+    grid = (np.random.RandomState(7).rand(64, 48) * 10).astype("float32")
+    grid[10:20, 10:20] = np.nan
+    src_transform = rasterio.transform.from_origin(500000.0, 2900000.0, 30.0, 30.0)
+    src_bounds = rasterio.transform.array_bounds(64, 48, src_transform)
+    transform, width, height = calculate_default_transform(
+        "EPSG:32617", "EPSG:4326", 48, 64, *src_bounds
+    )
+    reference = np.full((height, width), np.nan, dtype="float32")
+    reproject(
+        source=grid, destination=reference,
+        src_transform=src_transform, src_crs="EPSG:32617", src_nodata=float("nan"),
+        dst_transform=transform, dst_crs="EPSG:4326", dst_nodata=float("nan"),
+        resampling=Resampling.bilinear,
+    )
+
+    cog = cog_io.write_cog_4326_from_grid(
+        grid,
+        src_crs="EPSG:32617",
+        src_transform=src_transform,
+        reproject=True,
+        resampling=Resampling.bilinear,
+        crs_roundtrip_guard=True,
+    )
+    try:
+        with rasterio.open(cog) as ds:
+            assert (ds.width, ds.height) == (width, height)
+            assert tuple(ds.transform) == tuple(transform)
+            assert np.array_equal(ds.read(1), reference, equal_nan=True)
+    finally:
+        cog_io.safe_unlink(cog)
+
+
+def test_reproject_file_retags_a_valued_nodata_as_nan(tmp_path: Path) -> None:
+    # A source tagged nodata=-9999 warps to the NaN-tagged destination profile
+    # every engine shim reads back.
+    src = tmp_path / "field_nodata.tif"
+    grid = np.array([[1.0, -9999.0], [3.0, 4.0]], dtype="float32")
+    src_transform = rasterio.transform.from_origin(500000.0, 2900000.0, 30.0, 30.0)
+    with rasterio.open(
+        src, "w", driver="GTiff", width=2, height=2, count=1, dtype="float32",
+        crs="EPSG:32617", transform=src_transform, nodata=-9999.0,
+    ) as dst:
+        dst.write(grid, 1)
+
+    out_cog, _ = cog_io.reproject_cog_file_to_4326(src)
+    try:
+        with rasterio.open(out_cog) as ds:
+            assert np.isnan(ds.nodata)
+            assert not (ds.read(1) == -9999.0).any()
+    finally:
+        cog_io.safe_unlink(out_cog)
+
+
 def test_crs_guard_rejects_mistagged_geographic(tmp_path: Path) -> None:
     # A grid tagged EPSG:4326 but with PROJECTED-metre bounds (|x| > 360) must
     # trip the guard (the mistagged-raster bug). Build it directly to force the

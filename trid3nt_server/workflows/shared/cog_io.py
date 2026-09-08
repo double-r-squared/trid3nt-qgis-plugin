@@ -256,6 +256,72 @@ def _run_crs_roundtrip_guard(
 # --------------------------------------------------------------------------- #
 # Grid -> EPSG:4326 COG (covers SWMM / MODFLOW / GeoClaw / OpenQuake).
 # --------------------------------------------------------------------------- #
+DST_CRS = "EPSG:4326"
+
+
+def _named_tmp(suffix: str) -> str:
+    """A non-deleting NamedTemporaryFile name (the engines all used this idiom)."""
+    import tempfile
+
+    return tempfile.NamedTemporaryFile(suffix=suffix, delete=False).name
+
+
+def _write_4326_cog(
+    arr: Any,
+    *,
+    src_crs: Any,
+    src_transform: Any,
+    reproject: bool,
+    resampling: Any,
+    src_nodata: float,
+    dst_suffix: str,
+) -> Path:
+    """Write a float32 2D array to an EPSG:4326 COG, warping when asked.
+
+    The destination grid is ``calculate_default_transform``'s and is handed to
+    rioxarray explicitly: rioxarray otherwise re-derives the source affine from
+    its coordinate arrays, which perturbs the pixel size in the last float bit
+    and changes the written bytes. NaN is the destination no-data whatever the
+    source tags, matching the profile every engine shim already expects.
+    """
+    import numpy as np  # type: ignore[import-not-found]
+    import rasterio  # type: ignore[import-not-found]
+    import rioxarray  # type: ignore[import-not-found]  # noqa: F401  (.rio accessor)
+    import xarray as xr  # type: ignore[import-not-found]
+
+    da = (
+        xr.DataArray(np.asarray(arr, dtype="float32"), dims=("y", "x"))
+        .rio.write_crs(src_crs)
+        .rio.write_transform(src_transform)
+        .rio.write_nodata(src_nodata)
+    )
+    if reproject:
+        from rasterio.warp import (  # type: ignore[import-not-found]
+            calculate_default_transform,
+        )
+
+        height, width = da.shape
+        transform, out_w, out_h = calculate_default_transform(
+            src_crs,
+            DST_CRS,
+            width,
+            height,
+            *rasterio.transform.array_bounds(height, width, src_transform),
+        )
+        da = da.rio.reproject(
+            DST_CRS,
+            transform=transform,
+            shape=(out_h, out_w),
+            resampling=resampling,
+            nodata=float("nan"),
+        )
+    dst_cog = Path(_named_tmp(dst_suffix))
+    da.rio.write_nodata(float("nan")).rio.to_raster(
+        dst_cog, driver="COG", dtype="float32", compress="LZW"
+    )
+    return dst_cog
+
+
 def write_cog_4326_from_grid(
     grid: Any,
     *,
@@ -265,7 +331,6 @@ def write_cog_4326_from_grid(
     resampling: Any | None = None,
     mask: Callable[[Any], Any] | None = None,
     crs_roundtrip_guard: bool = False,
-    src_suffix: str = "_src.tif",
     dst_suffix: str = "_4326.tif",
 ) -> Path:
     """Write a 2D ``grid`` to an EPSG:4326 COG, optionally reprojecting.
@@ -274,24 +339,22 @@ def write_cog_4326_from_grid(
 
     - ``reproject=False`` (GeoClaw / OpenQuake): the grid is ALREADY in EPSG:4326
       (``src_crs`` must be ``"EPSG:4326"`` and ``src_transform`` the ``from_bounds``
-      affine). The COG is written directly with the 4326 profile - NO warp.
+      affine). The COG is written directly - NO warp.
     - ``reproject=True`` (SWMM / MODFLOW): the grid is in a projected CRS
-      (``src_crs`` + ``src_transform``). A source GTiff is staged in ``src_crs``,
-      then warped to EPSG:4326 via ``calculate_default_transform`` + ``reproject``
-      using ``resampling`` (caller declares ``nearest`` vs ``bilinear``).
+      (``src_crs`` + ``src_transform``) and is warped to EPSG:4326 using
+      ``resampling`` (caller declares ``nearest`` vs ``bilinear``).
 
     ``mask`` (declared per engine) is applied to the float32 array before write
     (e.g. mask-below-floor for the plume / OpenQuake; identity for the seepage /
     already-masked SWMM/GeoClaw grids). ``crs_roundtrip_guard`` runs the
-    TiTiler-wedge guard after the write (SWMM/GeoClaw on; MODFLOW/OpenQuake off,
-    byte-identical to their pre-refactor behavior).
+    TiTiler-wedge guard after the write (SWMM/GeoClaw on; MODFLOW/OpenQuake off).
 
     Raises :class:`CogIoError` (stage ``DEPENDENCY`` / ``WRITE`` / ``REPROJECT`` /
     ``CRS_MISMATCH``). Returns the staged COG path.
     """
     try:
         import numpy as np  # type: ignore[import-not-found]
-        import rasterio  # type: ignore[import-not-found]
+        from rasterio.warp import Resampling  # type: ignore[import-not-found]
     except Exception as exc:  # noqa: BLE001
         raise CogIoError(
             "DEPENDENCY", message=f"numpy/rasterio unavailable: {exc}"
@@ -300,113 +363,29 @@ def write_cog_4326_from_grid(
     arr = np.asarray(grid, dtype="float32")
     if mask is not None:
         arr = np.asarray(mask(arr), dtype="float32")
-    height, width = arr.shape
 
-    dst_crs = "EPSG:4326"
-
-    # --- already-4326 direct-write path (no warp) -------------------------- #
-    if not reproject:
-        dst_cog = Path(_named_tmp(dst_suffix))
-        try:
-            profile = {
-                "driver": "COG",
-                "crs": dst_crs,
-                "transform": src_transform,
-                "width": width,
-                "height": height,
-                "count": 1,
-                "dtype": "float32",
-                "nodata": float("nan"),
-                "compress": "LZW",
-            }
-            with rasterio.open(dst_cog, "w", **profile) as dst:
-                dst.write(arr, 1)
-        except Exception as exc:  # noqa: BLE001
-            safe_unlink(dst_cog)
+    try:
+        dst_cog = _write_4326_cog(
+            arr,
+            src_crs=src_crs,
+            src_transform=src_transform,
+            reproject=reproject,
+            resampling=Resampling.nearest if resampling is None else resampling,
+            src_nodata=float("nan"),
+            dst_suffix=dst_suffix,
+        )
+    except Exception as exc:  # noqa: BLE001
+        if reproject:
             raise CogIoError(
-                "WRITE", message=f"COG write failed: {exc}"
+                "REPROJECT",
+                message=f"projected -> EPSG:4326 reprojection failed: {exc}",
+                details={"src_crs": src_crs},
             ) from exc
-        if crs_roundtrip_guard:
-            try:
-                _run_crs_roundtrip_guard(dst_cog, dst_crs=dst_crs)
-            except CogIoError:
-                safe_unlink(dst_cog)
-                raise
-        return dst_cog
-
-    # --- projected -> 4326 warp path --------------------------------------- #
-    from rasterio.warp import (  # type: ignore[import-not-found]
-        Resampling,
-        calculate_default_transform,
-    )
-    from rasterio.warp import reproject as _warp_reproject
-
-    if resampling is None:
-        resampling = Resampling.nearest
-
-    src_tmp = Path(_named_tmp(src_suffix))
-    try:
-        with rasterio.open(
-            src_tmp,
-            "w",
-            driver="GTiff",
-            width=width,
-            height=height,
-            count=1,
-            dtype="float32",
-            crs=src_crs,
-            transform=src_transform,
-            nodata=float("nan"),
-        ) as dst:
-            dst.write(arr, 1)
-    except Exception as exc:  # noqa: BLE001
-        safe_unlink(src_tmp)
-        raise CogIoError(
-            "WRITE",
-            message=f"source COG write failed: {exc}",
-            details={"src_crs": src_crs},
-        ) from exc
-
-    dst_cog = Path(_named_tmp(dst_suffix))
-    try:
-        with rasterio.open(src_tmp) as src:
-            transform, out_w, out_h = calculate_default_transform(
-                src.crs, dst_crs, src.width, src.height, *src.bounds
-            )
-            profile = {
-                "driver": "COG",
-                "crs": dst_crs,
-                "transform": transform,
-                "width": out_w,
-                "height": out_h,
-                "count": 1,
-                "dtype": "float32",
-                "nodata": float("nan"),
-                "compress": "LZW",
-            }
-            with rasterio.open(dst_cog, "w", **profile) as dst:
-                _warp_reproject(
-                    source=rasterio.band(src, 1),
-                    destination=rasterio.band(dst, 1),
-                    src_transform=src.transform,
-                    src_crs=src.crs,
-                    dst_transform=transform,
-                    dst_crs=dst_crs,
-                    resampling=resampling,
-                )
-    except Exception as exc:  # noqa: BLE001
-        safe_unlink(dst_cog)
-        raise CogIoError(
-            "REPROJECT",
-            message=f"projected -> EPSG:4326 reprojection failed: {exc}",
-            details={"src_crs": src_crs},
-        ) from exc
-    finally:
-        safe_unlink(src_tmp)
+        raise CogIoError("WRITE", message=f"COG write failed: {exc}") from exc
 
     if crs_roundtrip_guard:
         try:
-            _run_crs_roundtrip_guard(dst_cog, dst_crs=dst_crs)
+            _run_crs_roundtrip_guard(dst_cog, dst_crs=DST_CRS)
         except CogIoError:
             safe_unlink(dst_cog)
             raise
@@ -426,9 +405,8 @@ def reproject_cog_file_to_4326(
     """Reproject a metric-CRS COG FILE to EPSG:4326 (the Landlab worker-field path).
 
     Unlike :func:`write_cog_4326_from_grid`, the SOURCE is an existing single-band
-    COG on disk (the Batch worker's field output), not an in-memory array. Warps
-    to EPSG:4326 via ``calculate_default_transform`` + ``reproject`` (default
-    ``Resampling.nearest`` - preserve the NaN no-data without smearing). When
+    COG on disk (the Batch worker's field output), not an in-memory array. Default
+    resampling is ``nearest`` - preserve the NaN no-data without smearing. When
     ``crs_roundtrip_guard`` is set (the default) the TiTiler-wedge guard runs and
     its bounds become the returned zoom-to bbox; otherwise the bbox is read via
     :func:`cog_bbox_4326`.
@@ -438,11 +416,7 @@ def reproject_cog_file_to_4326(
     """
     try:
         import rasterio  # type: ignore[import-not-found]
-        from rasterio.warp import (  # type: ignore[import-not-found]
-            Resampling,
-            calculate_default_transform,
-        )
-        from rasterio.warp import reproject as _warp_reproject
+        from rasterio.warp import Resampling  # type: ignore[import-not-found]
     except Exception as exc:  # noqa: BLE001
         raise CogIoError(
             "DEPENDENCY", message=f"rasterio unavailable for COG reproject: {exc}"
@@ -455,48 +429,27 @@ def reproject_cog_file_to_4326(
             details={"src_cog": str(src_cog)},
         )
 
-    if resampling is None:
-        resampling = Resampling.nearest
-
-    dst_cog = Path(_named_tmp(dst_suffix))
-    dst_crs = "EPSG:4326"
-    try:
-        with rasterio.open(src_cog) as src:
-            if src.crs is None:
-                raise CogIoError(
-                    "READ",
-                    message=f"field COG {src_cog} carries no CRS tag",
-                    details={"src_cog": str(src_cog)},
-                )
-            transform, width, height = calculate_default_transform(
-                src.crs, dst_crs, src.width, src.height, *src.bounds
+    with rasterio.open(src_cog) as src:
+        if src.crs is None:
+            raise CogIoError(
+                "READ",
+                message=f"field COG {src_cog} carries no CRS tag",
+                details={"src_cog": str(src_cog)},
             )
-            profile = {
-                "driver": "COG",
-                "crs": dst_crs,
-                "transform": transform,
-                "width": width,
-                "height": height,
-                "count": 1,
-                "dtype": "float32",
-                "nodata": float("nan"),
-                "compress": "LZW",
-            }
-            with rasterio.open(dst_cog, "w", **profile) as dst:
-                _warp_reproject(
-                    source=rasterio.band(src, 1),
-                    destination=rasterio.band(dst, 1),
-                    src_transform=src.transform,
-                    src_crs=src.crs,
-                    dst_transform=transform,
-                    dst_crs=dst_crs,
-                    resampling=resampling,
-                )
-    except CogIoError:
-        safe_unlink(dst_cog)
-        raise
+        band, src_crs, src_transform = src.read(1), src.crs, src.transform
+        src_nodata = float("nan") if src.nodata is None else float(src.nodata)
+
+    try:
+        dst_cog = _write_4326_cog(
+            band,
+            src_crs=src_crs,
+            src_transform=src_transform,
+            reproject=True,
+            resampling=Resampling.nearest if resampling is None else resampling,
+            src_nodata=src_nodata,
+            dst_suffix=dst_suffix,
+        )
     except Exception as exc:  # noqa: BLE001
-        safe_unlink(dst_cog)
         raise CogIoError(
             "REPROJECT",
             message=f"projected-metres -> EPSG:4326 reprojection failed: {exc}",
@@ -506,20 +459,13 @@ def reproject_cog_file_to_4326(
     bbox: tuple[float, float, float, float] | None
     if crs_roundtrip_guard:
         try:
-            bbox = _run_crs_roundtrip_guard(dst_cog, dst_crs=dst_crs)
+            bbox = _run_crs_roundtrip_guard(dst_cog, dst_crs=DST_CRS)
         except CogIoError:
             safe_unlink(dst_cog)
             raise
     else:
         bbox = cog_bbox_4326(dst_cog)
     return dst_cog, bbox
-
-
-def _named_tmp(suffix: str) -> str:
-    """A non-deleting NamedTemporaryFile name (the engines all used this idiom)."""
-    import tempfile
-
-    return tempfile.NamedTemporaryFile(suffix=suffix, delete=False).name
 
 
 # --------------------------------------------------------------------------- #
