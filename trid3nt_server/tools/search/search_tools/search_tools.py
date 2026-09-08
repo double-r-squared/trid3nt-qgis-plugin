@@ -17,10 +17,7 @@ Implementation choices (stage 2):
 - **Dense retrieval** is opportunistic:
     1. If `sentence-transformers` is importable, encode with the
        `all-MiniLM-L6-v2` checkpoint (384-dim).
-    2. Else if Vertex AI creds are present (`GOOGLE_GENAI_USE_VERTEXAI=1` or
-       a default `vertexai` client builds), call `text-embedding-005` for
-       both the index and the query.
-    3. Else fall back to a deterministic hashed token-count vector (cosine-
+    2. Else fall back to a deterministic hashed token-count vector (cosine-
        comparable but lexical only -- the BM25 signal carries the load in
        this degraded mode).
 - **Fusion**: Reciprocal Rank Fusion (RRF, k=60) interleaves BM25 ranking
@@ -198,7 +195,7 @@ class _DiscoverIndex:
       embed the query at search time. Must match the modality used to build
       ``dense_matrix``.
     - ``backend_name``: identifier for the dense backend
-      (``"sentence_transformers"`` / ``"vertex"`` / ``"hashed"`` / ``None``).
+      (``"sentence_transformers"`` / ``"hashed"`` / ``None``).
     - ``tiers``: per-tool routing tier (``"general"`` / ``"template"``), parallel
       to ``tool_names``. Read by ``_lexical_reinforcement``. Engine templates
       index as ordinary pool members; tier=internal is the only tier still
@@ -357,8 +354,8 @@ def _wrap_hashed_encode_with_expansion(encode_fn: Any, vocabulary: frozenset) ->
     The hashed backend is purely lexical (token hash counts), so it is as
     typo-blind as BM25; expanding the token list before hashing applies the
     same fix. Installed as ``dense_encode_fn`` AFTER the index matrix is
-    built from the raw documents. Real embedding backends
-    (sentence-transformers / Vertex) keep the raw text unchanged -- they are
+    built from the raw documents. A real embedding backend
+    (sentence-transformers) keeps the raw text unchanged -- it is
     subword-tolerant and must not be fed a synthetic token join.
     """
 
@@ -524,54 +521,11 @@ def _try_sentence_transformers_backend() -> tuple[Any, Any, str] | None:
     return _encode, _np, "sentence_transformers"
 
 
-def _try_vertex_backend() -> tuple[Any, Any, str] | None:
-    """Try to load Vertex AI ``text-embedding-005`` backend.
-
-    Returns ``(encode_fn, np_module, backend_name)`` or ``None`` if Vertex
-    creds aren't available. Avoid live calls at import time -- defer to first
-    ``encode_fn``.
-    """
-    try:
-        import numpy as _np  # noqa: F401
-    except Exception:
-        return None
-    use_vertex = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in (
-        "1",
-        "true",
-        "yes",
-    )
-    if not use_vertex:
-        return None
-    try:
-        from vertexai.language_models import TextEmbeddingModel  # type: ignore[import-not-found]
-    except Exception:
-        return None
-
-    model_holder: dict[str, Any] = {}
-
-    def _encode(texts: list[str]) -> Any:
-        import numpy as _np
-
-        if "model" not in model_holder:
-            logger.info("loading Vertex AI text-embedding-005 (first call)")
-            model_holder["model"] = TextEmbeddingModel.from_pretrained("text-embedding-005")
-        embeddings = model_holder["model"].get_embeddings(texts)
-        arr = _np.asarray([e.values for e in embeddings], dtype="float32")
-        # L2-normalize for cosine via dot product.
-        norms = _np.linalg.norm(arr, axis=1, keepdims=True)
-        norms[norms == 0.0] = 1.0
-        return arr / norms
-
-    import numpy as _np
-
-    return _encode, _np, "vertex"
-
-
 def _try_hashed_backend() -> tuple[Any, Any, str] | None:
     """Final-fallback "dense" backend: hashed token-count vectors (256-dim).
 
     Lexical-only -- produces near-duplicate signal to BM25 -- but lets the
-    hybrid-fusion path stay live even without sentence-transformers / Vertex.
+    hybrid-fusion path stay live even without sentence-transformers.
     Tests that rely on dense-vector shape (not semantic correctness) pass.
     """
     try:
@@ -598,7 +552,6 @@ def _select_dense_backend() -> tuple[Any, Any, str] | None:
     """Pick the best-available dense backend, in priority order."""
     for builder in (
         _try_sentence_transformers_backend,
-        _try_vertex_backend,
         _try_hashed_backend,
     ):
         try:
@@ -1212,9 +1165,9 @@ async def search_tools(
     a narrow shortlist of atomic tools to call next, rather than scanning the
     full 70+ tool surface. Hybrid retrieval ranks tools by BM25 over the
     audited docstring + synthetic example-query corpus, fused with a
-    dense-embedding similarity (sentence-transformers all-MiniLM-L6-v2 or
-    Vertex text-embedding-005 when available, else hashed token vector as a
-    deterministic fallback) via reciprocal rank fusion (RRF, k=60).
+    dense-embedding similarity (sentence-transformers all-MiniLM-L6-v2 when
+    available, else hashed token vector as a deterministic fallback) via
+    reciprocal rank fusion (RRF, k=60).
 
     Do NOT use this for: enumerating EVERY atomic tool the agent has (the
     live tool registry is the authoritative inventory); deciding whether to
