@@ -3981,3 +3981,19 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   branches, stashes or resets in the shared tree - history is read
   with git show / git log / git diff, and a bisect runs in a throwaway
   `git worktree add`. Baked into every wave prompt.
+  FETCHER FOLD, SECOND HALF (NATE 2026-09-08): after the calibration
+  wave, ONE read-only census over all 108 fetcher specs with TWO
+  lenses - rasters/grids: odc-stac + xarray (the STAC FOLD ruling);
+  vectors + the US hydrology stack: GDAL's own OGR drivers via pyogrio
+  (WFS with paging, OGC API Features, ESRI query URLs as GeoJSON, CSV/
+  GeoJSON over HTTP, GeoParquet/FlatGeobuf with bbox pushdown), OSMnx
+  for Overpass (replaces the 733-line hook + buildings), pyesridump
+  where ESRI object-id chunking bites, and HyRiver (pynhd, py3dep,
+  pygeohydro, pydaymet/pygridmet) for NLDI/NHD, 3DEP, NWIS, NLCD,
+  SSURGO, NID, WBD, gridMET/Daymet - the domain's own library holds
+  the knowledge, the spec names what to fetch. The census sorts every
+  spec by protocol family and library coverage with its hook's LOC
+  and the retry/provenance trade per library (the verbatim-upstream-
+  error norm needs the same Stage 0 proof as GDAL); NATE rules per
+  family; the fold wave follows. Provenance facts (datum, resolution,
+  acquisition time) stay on the source row whatever library fetches.
