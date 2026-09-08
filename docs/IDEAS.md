@@ -3997,3 +3997,33 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   error norm needs the same Stage 0 proof as GDAL); NATE rules per
   family; the fold wave follows. Provenance facts (datum, resolution,
   acquisition time) stay on the source row whatever library fetches.
+
+- SCOPE RULED: HYDRO AND EARTH-SURFACE SYSTEMS (NATE 2026-09-08):
+  TRID3NT is MAINLY MODELING - the core is hydro and earth-based
+  systems (flood, landslide, tsunami, fire, coastal, groundwater,
+  water quality, sediment) around the engines; the tree is slimmed
+  to that. TWO ATTICS from here: ~/Documents/trid3nt-attic for what
+  was REPLACED (superseded, not coming back in that form) and a NEW
+  SCOPE ATTIC nearby for what is SOUND but outside the core, moved
+  INTACT with its tests so it returns as a clean EXTENSION. STAYS IN
+  (ruled): all hydrology, ocean/coastal, terrain, soils/snow, the
+  precipitation/weather forcing and observations, water hazards
+  (flood zones, dams, levees, high-water marks), water imagery;
+  FLOOD CONSEQUENCE (buildings, NSI, roads, exposure summary, depth-
+  damage, building density); WEATHER IMAGERY (GOES animations, blend,
+  slider, lightning); POST-FIRE HYDROLOGY and wildfire (debris flow,
+  LANDFIRE, burn severity, fire detections/perimeters/fuels, smoke);
+  tsunami events and MODIS LST. GOES TO THE SCOPE ATTIC: biodiversity
+  (the seven fetchers) + movement ecology (the two tools) - returnable
+  as an extension for cross-discipline questions ("given this flood,
+  what wildlife is affected"); the demographic socioeconomic set,
+  air quality, and the seismic/facility/infrastructure rows are the
+  BORDERLINE the census sorts with consumers named (an in-scope tool
+  reading an out-of-scope source keeps the source). DESIGN NOTE
+  (NATE, speculative): the fetcher subsystem is a STANDALONE solution
+  that themed systems import; macro systems for non-hydro themes
+  un-attic their bits when warranted (the categorical model
+  revisited). Raster and QGIS computation fold into platform
+  solutions (the processing ruling). TIMING: a read-only scope census
+  now, rulings, then the move wave right after the sweep closes and
+  BEFORE the calibration wave.
