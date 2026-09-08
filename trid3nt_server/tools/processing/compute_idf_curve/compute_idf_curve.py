@@ -49,7 +49,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.tools import register_tool
 from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as _df
 from trid3nt_server.tools.cache import read_through
-from trid3nt_server.tools.processing.charts_common import build_chart_payload
+from trid3nt_server.emission.charts import build_chart_payload
 
 __all__ = [
     "compute_idf_curve",

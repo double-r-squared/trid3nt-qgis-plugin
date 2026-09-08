@@ -7,7 +7,7 @@ into the case artifacts dir (the ``open_case_in_qgis`` output convention:
     1. Title + generation date + Case id.
     2. AOI bbox (EPSG:4326) when the Case carries one.
     3. Layers: one row per loaded layer with key stats -- raster min/max/mean
-       + valid-cell count (via the shared ``charts_common``
+       + valid-cell count (via the shared ``emission.charts``
        ``_summarize_raster`` / ``_summarize_vector`` helpers, called
        directly on the staged artifact so no cache write happens), vector
        feature count + leading numeric attributes.
@@ -133,12 +133,12 @@ def _layer_stats_line(layer: dict[str, Any], tmpdir: str) -> str:
     """One honest stats fragment for a layer (never raises).
 
     Reuses the shared layer-stats machinery directly
-    (``charts_common._materialize_uri`` + ``_summarize_raster`` /
+    (``emission.charts._materialize_uri`` + ``_summarize_raster`` /
     ``_summarize_vector``; relocated there from the retired ``analytical_qa``
     module by the ``spatial_query`` fold) on the staged artifact -- same
     numbers, without routing the report through the cache bucket.
     """
-    from trid3nt_server.tools.processing.charts_common import (
+    from trid3nt_server.emission.charts import (
         _layer_type,
         _materialize_uri,
         _summarize_raster,

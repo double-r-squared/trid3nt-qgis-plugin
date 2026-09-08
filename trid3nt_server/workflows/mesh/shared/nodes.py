@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from trid3nt_server.tools.processing._geometry_common import utm_epsg_for
+from trid3nt_server.workflows.shared.geometry import utm_epsg_for
 
 __all__ = [
     "MeshNodeError",
@@ -205,7 +205,7 @@ def read_centerline_utm(source: Any, utm_epsg: int, *,
     from shapely.geometry import shape as _shape
     from shapely.ops import linemerge
 
-    from trid3nt_server.tools.processing._geometry_common import (
+    from trid3nt_server.workflows.shared.geometry import (
         flatten_geometries, read_geometry_doc,
     )
 

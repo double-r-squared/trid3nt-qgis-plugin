@@ -153,7 +153,7 @@ def _stations(level: Any) -> Any:
     import geopandas as gpd
 
     from trid3nt_server.tools.cache import read_object_bytes_s3
-    from trid3nt_server.tools.processing._geometry_common import source_uri
+    from trid3nt_server.workflows.shared.geometry import source_uri
     from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
 
     uri = str(source_uri(level) or "").strip()

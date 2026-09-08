@@ -239,7 +239,7 @@ def build_profile_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     final = getattr(result, "profile_values", None)
     if not sigma or not final or len(sigma) != len(final):
         return None
-    from trid3nt_server.tools.processing.charts_common import build_chart_payload
+    from trid3nt_server.emission.charts import build_chart_payload
 
     units = getattr(result, "variable_units", None) or ""
     label = getattr(result, "variable_label", None) or "Field"

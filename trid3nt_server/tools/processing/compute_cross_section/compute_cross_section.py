@@ -67,7 +67,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.processing.charts_common import build_chart_payload
+from trid3nt_server.emission.charts import build_chart_payload
 
 __all__ = [
     "compute_cross_section",

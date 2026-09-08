@@ -48,7 +48,7 @@ def op_raster(source: Any) -> Path:
     system.
     """
     from trid3nt_server.tools.cache import read_object_bytes_s3
-    from trid3nt_server.tools.processing._geometry_common import source_uri
+    from trid3nt_server.workflows.shared.geometry import source_uri
 
     uri = str(source_uri(source) or "").strip()
     if not uri:
@@ -80,7 +80,7 @@ def op_geometry(source: Any) -> dict[str, Any]:
     remembering to write it.
     """
     from trid3nt_server.tools.cache import read_object_bytes_s3
-    from trid3nt_server.tools.processing._geometry_common import source_uri
+    from trid3nt_server.workflows.shared.geometry import source_uri
 
     resolved = source_uri(source)
     if isinstance(resolved, Mapping):

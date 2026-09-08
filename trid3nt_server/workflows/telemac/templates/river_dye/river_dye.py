@@ -160,7 +160,7 @@ def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     peak_t = getattr(result, "dye_peak_time_s", None)
     if not times or not values or cmax is None or peak_t is None:
         return None
-    from trid3nt_server.tools.processing.charts_common import build_chart_payload
+    from trid3nt_server.emission.charts import build_chart_payload
 
     where = params.get("location") or getattr(result, "name", None) or "the reach"
     substance = params.get("decaying_substance") or "dye"

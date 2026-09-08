@@ -132,7 +132,7 @@ def build_plume_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     cmax = getattr(result, "dye_cmax_mgl", None)
     if not times or not values or cmax is None:
         return None
-    from trid3nt_server.tools.processing.charts_common import build_chart_payload
+    from trid3nt_server.emission.charts import build_chart_payload
 
     where = params.get("location") or getattr(result, "name", None) or "the reach"
     units = TELEMAC_DYE_STYLE["units"]

@@ -203,7 +203,7 @@ def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
     would put every query out of bounds and read its fill value as depth.
     """
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.tools.processing._geometry_common import source_uri
+    from trid3nt_server.workflows.shared.geometry import source_uri
 
     name = str(source_uri(source) or "").strip()
     if not name:

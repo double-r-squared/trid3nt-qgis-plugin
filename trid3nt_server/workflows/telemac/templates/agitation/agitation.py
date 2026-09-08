@@ -169,7 +169,7 @@ def build_agitation_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     kd = getattr(result, "agitation_curve_kd", None)
     if not xs or not kd or len(xs) != len(kd):
         return None
-    from trid3nt_server.tools.processing.charts_common import build_chart_payload
+    from trid3nt_server.emission.charts import build_chart_payload
 
     sheltered = getattr(result, "kd_sheltered", None)
     exposed = getattr(result, "kd_exposed", None)

@@ -191,7 +191,7 @@ def contain_release_point(*, point: tuple[float, float], domain: Any,
     from pyproj import Transformer
 
     from trid3nt_server.workflows.mesh.inputs import op_geometry
-    from trid3nt_server.tools.processing._geometry_common import utm_epsg_for
+    from trid3nt_server.workflows.shared.geometry import utm_epsg_for
 
     lon, lat = float(point[0]), float(point[1])
     polygons = _geometries(op_geometry(domain), ("Polygon", "MultiPolygon"))

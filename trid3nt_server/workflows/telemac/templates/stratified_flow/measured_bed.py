@@ -45,7 +45,7 @@ def _clip(polygon: Any, bed: Any) -> dict[str, Any]:
     from shapely.geometry import mapping, shape
     from shapely.ops import unary_union
 
-    from trid3nt_server.tools.processing._geometry_common import (
+    from trid3nt_server.workflows.shared.geometry import (
         flatten_geometries,
         read_geometry_doc,
     )

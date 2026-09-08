@@ -1,6 +1,6 @@
 """``generate_chart``: the ONE generic interactive-chart primitive.
 
-Wraps ``charts_common.build_chart_payload`` so the LLM can render ANY
+Wraps ``emission.charts.build_chart_payload`` so the LLM can render ANY
 Vega-Lite v5 chart (histogram, time series, damage-state bars, choropleth
 class breaks, scatter, heatmap, ...) from a caller-composed spec. It replaces
 the four fixed-shape ``generate_*`` chart tools: the SHAPE of the chart is now
@@ -24,7 +24,7 @@ from typing import Any
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.processing.charts_common import (
+from trid3nt_server.emission.charts import (
     ChartToolError,
     _MAX_ROWS,
     _layer_type,

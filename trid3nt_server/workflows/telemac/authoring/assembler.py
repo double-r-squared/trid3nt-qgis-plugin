@@ -421,7 +421,7 @@ def _to_utm(source: Any, utm_epsg: int) -> Any:
     from shapely.geometry import shape as _shape
     from shapely.ops import transform as _transform, unary_union
 
-    from trid3nt_server.tools.processing._geometry_common import (
+    from trid3nt_server.workflows.shared.geometry import (
         flatten_geometries, read_geometry_doc,
     )
 

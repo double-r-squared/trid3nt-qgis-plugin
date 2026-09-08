@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.processing.charts_common import (
+from trid3nt_server.emission.charts import (
     build_hydrograph_overlay_chart,
 )
 from trid3nt_server.tools.processing.compute_skill_metrics.compute_skill_metrics import (

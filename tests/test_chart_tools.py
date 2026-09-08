@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.processing.charts_common import (
+from trid3nt_server.emission.charts import (
     ChartToolError,
     _MAX_ROWS,
     build_chart_payload,

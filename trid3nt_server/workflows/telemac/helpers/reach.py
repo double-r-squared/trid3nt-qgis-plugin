@@ -417,7 +417,7 @@ def _covered_fraction(water: Any, centerline: Any) -> float:
     from shapely.geometry import shape
     from shapely.ops import transform as _transform, unary_union
 
-    from trid3nt_server.tools.processing._geometry_common import (
+    from trid3nt_server.workflows.shared.geometry import (
         source_uri, utm_epsg_for,
     )
 

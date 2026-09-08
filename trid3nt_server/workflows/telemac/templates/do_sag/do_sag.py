@@ -132,7 +132,7 @@ def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
         return None
     std = float(getattr(result, "do_standard_mgl", None) or 5.0)
 
-    from trid3nt_server.tools.processing.charts_common import build_chart_payload
+    from trid3nt_server.emission.charts import build_chart_payload
 
     # The layer's own declared units, so the chart's axis and the legend cannot
     # disagree about what this field is measured in.

@@ -150,7 +150,7 @@ def build_bed_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     values = getattr(result, "dye_curve_cmax_mgl", None)
     if not times or not values:
         return None
-    from trid3nt_server.tools.processing.charts_common import build_chart_payload
+    from trid3nt_server.emission.charts import build_chart_payload
 
     where = params.get("location") or getattr(result, "name", None) or "the reach"
     scour = getattr(result, "max_scour_mm", None)

@@ -27,7 +27,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.processing.charts_common import is_chart_emission_result
+from trid3nt_server.emission.charts import is_chart_emission_result
 from trid3nt_server.tools.processing.compute_cross_section.compute_cross_section import (
     CrossSectionError,
     _resolve_line_coords,

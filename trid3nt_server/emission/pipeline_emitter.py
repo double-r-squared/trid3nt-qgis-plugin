@@ -261,7 +261,7 @@ async def emit_chart_payloads(payloads: Any) -> None:
     chart:
 
         from trid3nt_server.emission.pipeline_emitter import emit_chart_payloads
-        from trid3nt_server.tools.processing.charts_common import build_budget_partition_chart
+        from trid3nt_server.emission.charts import build_budget_partition_chart
         chart = build_budget_partition_chart(budget_partition_m3_day=part)
         await emit_chart_payloads(chart)
 

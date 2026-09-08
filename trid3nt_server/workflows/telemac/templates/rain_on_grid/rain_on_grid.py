@@ -248,7 +248,7 @@ def build_hydrograph_chart(*, result: Any, params: Any) -> dict[str, Any] | None
     flows = getattr(result, "outlet_hydrograph_q_m3s", None)
     if not times or not flows or len(times) != len(flows):
         return None
-    from trid3nt_server.tools.processing.charts_common import build_chart_payload
+    from trid3nt_server.emission.charts import build_chart_payload
 
     values = [{"t_h": float(t) / 3600.0, "q_m3s": float(q)}
               for t, q in zip(times, flows)]

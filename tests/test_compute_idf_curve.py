@@ -31,7 +31,7 @@ import pytest
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.processing.compute_idf_curve import compute_idf_curve as idf_mod
 from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as df_mod
-from trid3nt_server.tools.processing.charts_common import is_chart_emission_result
+from trid3nt_server.emission.charts import is_chart_emission_result
 from trid3nt_server.tools.processing.compute_idf_curve.compute_idf_curve import (
     IdfCurveInputError,
     IdfCurveNoCoverageError,

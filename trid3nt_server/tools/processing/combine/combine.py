@@ -22,7 +22,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.processing._geometry_common import (
+from trid3nt_server.workflows.shared.geometry import (
     GeometryReadError,
     flatten_geometries,
     read_geometry_doc,
