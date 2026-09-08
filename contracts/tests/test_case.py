@@ -164,7 +164,6 @@ def test_case_chat_message_roundtrip() -> None:
                 "command": "load-layer",
                 "args": {
                     "layer_id": "run-01HX-flood-depth",
-                    "wms_url": "https://qgis.example.com/wms?MAP=01HX.qgs",
                 },
             },
             {

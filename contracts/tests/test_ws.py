@@ -612,7 +612,6 @@ def test_pipeline_step_substep_index_rejects_non_positive() -> None:
 def test_map_command_load_layer_args_roundtrip(session_id: str) -> None:
     args = ws.LoadLayerArgs(
         layer_id="run-01HX-flood-depth",
-        wms_url="https://qgis.example.com/wms?MAP=01HX.qgs",
         temporal=ws.MapTemporal(
             start="2026-06-05T00:00:00Z", end="2026-06-05T06:00:00Z", step_seconds=300
         ),
@@ -630,11 +629,6 @@ def test_map_command_zoom_to_bbox_args(session_id: str) -> None:
     args = ws.ZoomToArgs(bbox=(-82.5, 26.4, -81.7, 26.9))
     payload = ws.MapCommandPayload(command="zoom-to", args=args.model_dump(mode="json"))
     _roundtrip_idempotent(_wrap(payload, session_id))
-
-
-def test_map_command_set_layer_opacity_clamped() -> None:
-    with pytest.raises(ValidationError):
-        ws.SetLayerOpacityArgs(layer_id="x", opacity=1.5)
 
 
 def test_map_command_args_registry_covers_every_command() -> None:
@@ -849,7 +843,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             call_id=new_ulid(), error_code="GENERIC", message="x"
         ),
         "pipeline-state": lambda: ws.PipelineStatePayload(pipeline_id=new_ulid()),
-        "map-command": lambda: ws.MapCommandPayload(command="invalidate-tiles", args={}),
+        "map-command": lambda: ws.MapCommandPayload(command="zoom-to", args={}),
         "session-state": lambda: ws.SessionStatePayload(),
         "error": lambda: ws.ErrorPayload(error_code="INTERNAL_ERROR", message="x"),
         "spatial-input-request": lambda: ws.SpatialInputRequestPayload(

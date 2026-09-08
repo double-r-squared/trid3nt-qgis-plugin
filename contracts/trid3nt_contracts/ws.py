@@ -70,15 +70,8 @@ __all__ = [
     "ToolChoicePayload",
     # map-command args (A.4)
     "LoadLayerArgs",
-    "RemoveLayerArgs",
-    "SetLayerVisibilityArgs",
-    "SetLayerOpacityArgs",
-    "SetLayerOrderArgs",
     "ZoomToArgs",
     "SetTemporalConfigArgs",
-    "StartAnimationArgs",
-    "StopAnimationArgs",
-    "InvalidateTilesArgs",
     "MapTemporal",
     # registry
     "CLIENT_TO_AGENT_PAYLOADS",
@@ -692,30 +685,7 @@ class LoadLayerArgs(GraceModel):
     COMMAND: ClassVar[str] = "load-layer"
 
     layer_id: str
-    wms_url: str
     temporal: MapTemporal | None = None
-
-
-class RemoveLayerArgs(GraceModel):
-    COMMAND: ClassVar[str] = "remove-layer"
-    layer_id: str
-
-
-class SetLayerVisibilityArgs(GraceModel):
-    COMMAND: ClassVar[str] = "set-layer-visibility"
-    layer_id: str
-    visible: bool
-
-
-class SetLayerOpacityArgs(GraceModel):
-    COMMAND: ClassVar[str] = "set-layer-opacity"
-    layer_id: str
-    opacity: float = Field(ge=0.0, le=1.0)
-
-
-class SetLayerOrderArgs(GraceModel):
-    COMMAND: ClassVar[str] = "set-layer-order"
-    layer_ids: list[str]  # ordered, top to bottom
 
 
 class ZoomToArgs(GraceModel):
@@ -732,34 +702,10 @@ class SetTemporalConfigArgs(GraceModel):
     current: UTCDatetime | None = None
 
 
-class StartAnimationArgs(GraceModel):
-    COMMAND: ClassVar[str] = "start-animation"
-    layer_id: str
-    speed: Literal[0.5, 1, 2, 5, 10] | None = None
-
-
-class StopAnimationArgs(GraceModel):
-    COMMAND: ClassVar[str] = "stop-animation"
-    layer_id: str
-
-
-class InvalidateTilesArgs(GraceModel):
-    COMMAND: ClassVar[str] = "invalidate-tiles"
-    layer_id: str | None = None  # omit to invalidate all
-
-
 # map-command command vocabulary (open enum).
 MapCommand = Literal[
     "load-layer",
-    "remove-layer",
-    "set-layer-visibility",
-    "set-layer-opacity",
-    "set-layer-order",
     "zoom-to",
-    "set-temporal-config",
-    "start-animation",
-    "stop-animation",
-    "invalidate-tiles",
 ]
 
 
@@ -768,9 +714,7 @@ class MapCommandPayload(GraceModel):
 
     ``args`` is the command-specific args object (one of the ``*Args`` models
     above). It is kept as a ``dict`` at the envelope level; the consumer
-    validates it against the matching ``*Args`` model by ``command``. This is
-    intentional: ten near-identical sibling top-level types would create churn
-    (A.7 rationale).
+    validates it against the matching ``*Args`` model by ``command``.
     """
 
     MESSAGE_TYPE: ClassVar[str] = "map-command"
@@ -1090,13 +1034,5 @@ ALL_PAYLOADS: dict[str, type[GraceModel]] = {
 # map-command command -> args model
 MAP_COMMAND_ARGS: dict[str, type[GraceModel]] = {
     LoadLayerArgs.COMMAND: LoadLayerArgs,
-    RemoveLayerArgs.COMMAND: RemoveLayerArgs,
-    SetLayerVisibilityArgs.COMMAND: SetLayerVisibilityArgs,
-    SetLayerOpacityArgs.COMMAND: SetLayerOpacityArgs,
-    SetLayerOrderArgs.COMMAND: SetLayerOrderArgs,
     ZoomToArgs.COMMAND: ZoomToArgs,
-    SetTemporalConfigArgs.COMMAND: SetTemporalConfigArgs,
-    StartAnimationArgs.COMMAND: StartAnimationArgs,
-    StopAnimationArgs.COMMAND: StopAnimationArgs,
-    InvalidateTilesArgs.COMMAND: InvalidateTilesArgs,
 }

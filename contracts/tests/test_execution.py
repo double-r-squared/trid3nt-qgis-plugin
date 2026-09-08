@@ -73,7 +73,7 @@ def test_run_result_status_supports_cancelled() -> None:
 
 def test_layer_uri_maps_field_for_field_onto_load_layer_args() -> None:
     """The visualization seam: LayerURI -> map-command load-layer with no
-    translation beyond plumbing the WMS URL."""
+    translation beyond plumbing layer_id."""
     layer = LayerURI(
         layer_id="run-01HX-flood-depth",
         name="Flood depth (m)",
@@ -89,7 +89,6 @@ def test_layer_uri_maps_field_for_field_onto_load_layer_args() -> None:
     )
     args = LoadLayerArgs(
         layer_id=layer.layer_id,
-        wms_url="https://qgis.example.com/wms?MAP=01HX.qgs",
         temporal=MapTemporal(
             start=layer.temporal.start,
             end=layer.temporal.end,

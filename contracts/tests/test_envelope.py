@@ -204,13 +204,12 @@ def test_result_layer_aligns_with_load_layer_args() -> None:
     )
     args = LoadLayerArgs(
         layer_id=rl.layer_id,
-        wms_url="https://qgis.example.com/wms?MAP=01HX.qgs",
         temporal={
             "start": rl.temporal.model_dump(mode="json")["start"],
             "end": rl.temporal.model_dump(mode="json")["end"],
             "step_seconds": rl.temporal.step_seconds,
         },
     )
-    # No transformations required beyond plumbing the WMS URL — the visualization
+    # No transformations required beyond plumbing layer_id -- the visualization
     # seam holds.
     assert args.layer_id == rl.layer_id
