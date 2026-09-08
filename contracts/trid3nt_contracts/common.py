@@ -298,8 +298,8 @@ class SyntheticInput(GraceModel):
     Records WHERE a single physical parameter used in a run came from so the
     agent can narrate provenance instead of inventing phrasing, and so a demo
     default is never mistaken for site-derived data (the input-provenance audit
-    gate, structured half). Carried by the result-envelope contracts (base
-    ``LayerURI.synthetic_inputs`` + ``ImpactEnvelope.synthetic_inputs``); ADDITIVE
+    gate, structured half). Carried by the result-envelope contracts
+    (``LayerURI.synthetic_inputs``); ADDITIVE
     and default-empty so templates populate the list incrementally - an empty
     list means "no declared provenance", never "all real".
 

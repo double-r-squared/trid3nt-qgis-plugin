@@ -2063,15 +2063,6 @@ class Trid3ntDock(QDockWidget):
             # store it for the settings/secrets state (minimal honest
             # handling; raw keys never ride here).
             self._on_secrets_list(data)
-        elif kind == "impact-envelope":
-            # LANE A (2026-07-23): Pelicun portfolio damage/loss aggregates --
-            # render a compact summary note in chat (every number a structured
-            # aggregate, Invariant 1).
-            summary = gate.parse_impact_envelope(data)
-            if summary is not None:
-                lines = gate.impact_summary_lines(summary)
-                self._ensure_pending().add_note("Impact summary:\n" + "\n".join(lines))
-                self._scroll_to_bottom()
         elif kind == "case-open":
             self._on_case_open_event(data)
         elif kind == "case-list":

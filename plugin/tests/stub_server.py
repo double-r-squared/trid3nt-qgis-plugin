@@ -406,23 +406,6 @@ SPATIAL_INPUT_VECTOR_ROW: dict[str, Any] = {
     "purpose": "aoi",
 }
 
-STUB_IMPACT_ID = "01STUBIMPACTRUNAAAAAAAAAAA"
-
-# An impact-envelope payload -- the ImpactEnvelope shape (contracts
-# impact_envelope.py). Emitted as a fire-and-forget side effect (mirrors the
-# live server's _maybe_emit_impact_envelope on compute_impact_envelope);
-# n_structures_total is the key signal. Triggered by "impact" in the text.
-IMPACT_ENVELOPE_ROW: dict[str, Any] = {
-    "schema_version": "v1",
-    "pelicun_run_id": STUB_IMPACT_ID,
-    "n_structures_total": 1840,
-    "n_structures_damaged": 612,
-    "n_structures_destroyed": 47,
-    "expected_loss_usd": 12_400_000.0,
-    "loss_percentile_95_usd": 21_800_000.0,
-    "impact_area_km2": 8.3,
-}
-
 # Persisted chat_history rows the select rehydration replays (CaseChatMessage
 # subset). LANE PLUGIN (2026-07-22): the second agent row carries the
 # persisted "thinking" field (Lane CORE row-model addition -- the reasoning
@@ -741,23 +724,6 @@ class StubAgentServer:
                     await send(
                         "spatial-input-request", row, case_id=case_id
                     )
-                    continue
-                if "impact" in text:
-                    # impact-envelope side effect (LANE A): a fire-and-forget
-                    # emission mid-turn; the turn completes normally after.
-                    await send(
-                        "impact-envelope", IMPACT_ENVELOPE_ROW, case_id=case_id
-                    )
-                    await send(
-                        "agent-message-chunk",
-                        {
-                            "message_id": "m-impact",
-                            "delta": "Assessed 1,840 structures.",
-                            "done": True,
-                        },
-                        case_id=case_id,
-                    )
-                    await send("turn-complete", {}, case_id=case_id)
                     continue
                 if "which-tool-timeout" in text:
                     # fail-open twin: the live server emits the

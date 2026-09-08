@@ -14,7 +14,6 @@ The lighter five are fire-and-forget side effects the dock now renders:
 
   * code-exec-result  (the run outcome after an approved code-exec-request).
   * secrets-list      (the per-user/per-Case secret roster).
-  * impact-envelope   (Pelicun portfolio damage/loss aggregates).
   * (chart-emission + solve-progress were already classified/rendered by a
     prior lane -- covered in test_charts / the SimCard harness -- so this file
     does not re-cover them.)
@@ -45,7 +44,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 from plugin.net import trid3nt_client as tc  # noqa: E402
 from plugin.ui import gate  # noqa: E402
 from stub_server import (  # noqa: E402
-    IMPACT_ENVELOPE_ROW,
     REGION_CHOICE_REQUEST_ROW,
     SPATIAL_INPUT_BBOX_ROW,
     SPATIAL_INPUT_POINT_ROW,
@@ -240,32 +238,6 @@ class TestSecretsListParsing(unittest.TestCase):
 
 
 # =========================================================================== #
-# impact-envelope -- pure logic
-# =========================================================================== #
-
-
-class TestImpactEnvelopeParsing(unittest.TestCase):
-    def test_parse_fields(self):
-        s = gate.parse_impact_envelope(IMPACT_ENVELOPE_ROW)
-        self.assertEqual(s.n_structures_total, 1840)
-        self.assertEqual(s.n_structures_damaged, 612)
-        self.assertEqual(s.expected_loss_usd, 12_400_000.0)
-
-    def test_parse_malformed_is_none(self):
-        # n_structures_total is the ImpactEnvelope key signal.
-        self.assertIsNone(gate.parse_impact_envelope({"expected_loss_usd": 1.0}))
-        self.assertIsNone(gate.parse_impact_envelope(None))
-
-    def test_summary_lines(self):
-        s = gate.parse_impact_envelope(IMPACT_ENVELOPE_ROW)
-        lines = gate.impact_summary_lines(s)
-        joined = "\n".join(lines)
-        self.assertIn("1,840", joined)
-        self.assertIn("612 damaged", joined)
-        self.assertIn("$12.4M", joined)
-
-
-# =========================================================================== #
 # Wire round trips against the stub
 # =========================================================================== #
 
@@ -414,15 +386,6 @@ class TestSecretsListRoundTrip(_RoundTripBase):
         self.assertNotIn("SECRET123", roster_ev.data.get("secrets", [{}])[0].get(
             "vault_ref", ""
         ))
-        self._await_kind("turn-complete")
-
-
-class TestImpactEnvelopeRoundTrip(_RoundTripBase):
-    def test_classified_not_raw(self):
-        self.client.send_chat("assess the impact over the AOI")
-        ev = self._await_kind("impact-envelope")
-        s = gate.parse_impact_envelope(ev.data)
-        self.assertEqual(s.n_structures_total, 1840)
         self._await_kind("turn-complete")
 
 

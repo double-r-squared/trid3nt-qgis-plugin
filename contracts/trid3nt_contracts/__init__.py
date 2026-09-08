@@ -3,8 +3,6 @@
 Single source of truth for every type that crosses a specialist boundary:
 - ``ws``: WebSocket protocol - envelope + every message type.
 - ``envelope``: AssessmentEnvelope + flood subtype.
-- ``impact_envelope``: ImpactEnvelope - Pelicun post-processor output
-  contract (c).
 - ``collections``: the five MongoDB collection schemas + vector index configs
   + TTL config.
 - ``catalog``: CatalogEntry - the public_hazard_catalog.yaml entry.
@@ -31,7 +29,6 @@ from . import (
     errors,
     execution,
     gate_spec,
-    impact_envelope,
     payload_warning,
     publish_manifest,
     region_choice,
@@ -94,7 +91,6 @@ __all__ = [
     "auth",
     "ws",
     "envelope",
-    "impact_envelope",
     "errors",
     "collections",
     "catalog",

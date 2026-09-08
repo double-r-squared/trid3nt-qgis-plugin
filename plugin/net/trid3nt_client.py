@@ -2013,12 +2013,6 @@ class AgentClient:
             # the settings/secrets state. Previously fell through to "raw"
             # (the credential round trip already emits one on secret-add).
             return AgentEvent("secrets-list", payload)
-        if etype == "impact-envelope":
-            # Pelicun portfolio damage/loss aggregates (contracts
-            # impact_envelope.ImpactEnvelope) emitted IN ADDITION to the
-            # function_response. The dock renders a compact summary note in
-            # chat. Previously fell through to "raw" and was dropped.
-            return AgentEvent("impact-envelope", payload)
         if etype == "case-list":
             cases = parse_case_list(payload)
             # Mirror of the last_session_state stash above: the startup

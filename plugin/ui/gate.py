@@ -41,7 +41,6 @@ __all__ = [
     "CodeExecResult",
     "CredentialRequest",
     "GateDecision",
-    "ImpactSummary",
     "PayloadWarning",
     "RegionCandidate",
     "RegionChoiceRequest",
@@ -53,14 +52,12 @@ __all__ = [
     "code_exec_result_chip",
     "code_exec_result_lines",
     "credential_note_lines",
-    "impact_summary_lines",
     "parse_code_exec_result",
     "parse_credential_request",
     "estimate_cells",
     "estimate_eta_seconds",
     "estimate_frames",
     "parse_code_exec_request",
-    "parse_impact_envelope",
     "parse_payload_warning",
     "parse_region_choice",
     "parse_secrets_list",
@@ -1344,98 +1341,4 @@ def secrets_list_lines(secrets: list) -> list:
         scope = "this Case" if row.case_id else "all Cases"
         line = f"{row.display} ({row.provider}) -- {scope}"
         lines.append(line)
-    return lines
-
-
-# --------------------------------------------------------------------------- #
-# impact-envelope -- Pelicun portfolio damage/loss aggregates (compact note).
-# --------------------------------------------------------------------------- #
-#
-# Contract source of truth: ``contracts/trid3nt_contracts/impact_envelope.py``
-# (``ImpactEnvelope``): ``n_structures_total`` (the key signal the server keys
-# emission on) / ``n_structures_damaged`` / ``n_structures_destroyed`` /
-# ``expected_loss_usd`` / ``loss_percentile_95_usd`` / ``impact_area_km2`` /
-# population fields (may be None for MS_BUILDINGS inventory). Emitted IN
-# ADDITION to the function_response; the plugin renders a compact summary note
-# in chat (Invariant 1: every number is a structured aggregate, never prose).
-
-
-@dataclass
-class ImpactSummary:
-    """Parsed ``impact-envelope`` payload (defensive; raw kept)."""
-
-    n_structures_total: int
-    n_structures_damaged: Optional[int] = None
-    n_structures_destroyed: Optional[int] = None
-    expected_loss_usd: Optional[float] = None
-    loss_percentile_95_usd: Optional[float] = None
-    impact_area_km2: Optional[float] = None
-    raw: dict = field(default_factory=dict)
-
-
-def _opt_int(value) -> Optional[int]:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float) and value.is_integer():
-        return int(value)
-    return None
-
-
-def _opt_float(value) -> Optional[float]:
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
-    return None
-
-
-def parse_impact_envelope(payload: dict) -> Optional[ImpactSummary]:
-    """Parse a raw ``impact-envelope`` payload dict; None when the envelope is
-    unusable -- no top-level ``n_structures_total`` (the ImpactEnvelope key
-    signal the server keys emission on)."""
-    if not isinstance(payload, dict):
-        return None
-    total = _opt_int(payload.get("n_structures_total"))
-    if total is None:
-        return None
-    return ImpactSummary(
-        n_structures_total=total,
-        n_structures_damaged=_opt_int(payload.get("n_structures_damaged")),
-        n_structures_destroyed=_opt_int(payload.get("n_structures_destroyed")),
-        expected_loss_usd=_opt_float(payload.get("expected_loss_usd")),
-        loss_percentile_95_usd=_opt_float(payload.get("loss_percentile_95_usd")),
-        impact_area_km2=_opt_float(payload.get("impact_area_km2")),
-        raw=payload,
-    )
-
-
-def _fmt_usd(value: float) -> str:
-    """Compact USD -- ``$1.2M`` / ``$340K`` / ``$1,250`` (a latency-free
-    aggregate, not a cost estimate; Invariant 9 governs COST fields, this is a
-    modeled loss)."""
-    if value >= 1_000_000:
-        return f"${value / 1_000_000:.1f}M"
-    if value >= 1_000:
-        return f"${value / 1_000:.0f}K"
-    return f"${value:,.0f}"
-
-
-def impact_summary_lines(summary: ImpactSummary) -> list:
-    """The compact in-chat summary note lines -- every number is a structured
-    aggregate off the envelope (Invariant 1, never prose)."""
-    lines = [f"Structures assessed: {summary.n_structures_total:,}"]
-    dmg_bits = []
-    if summary.n_structures_damaged is not None:
-        dmg_bits.append(f"{summary.n_structures_damaged:,} damaged")
-    if summary.n_structures_destroyed is not None:
-        dmg_bits.append(f"{summary.n_structures_destroyed:,} destroyed")
-    if dmg_bits:
-        lines.append("  ".join(dmg_bits))
-    if summary.expected_loss_usd is not None:
-        loss = f"Expected loss: {_fmt_usd(summary.expected_loss_usd)}"
-        if summary.loss_percentile_95_usd is not None:
-            loss += f" (P95 {_fmt_usd(summary.loss_percentile_95_usd)})"
-        lines.append(loss)
-    if summary.impact_area_km2 is not None:
-        lines.append(f"Impact area: {summary.impact_area_km2:g} km2")
     return lines
