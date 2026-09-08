@@ -3962,3 +3962,22 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the EXTENT observation (pairs with the flood-extent skill tool). The
   three observation kinds: a point over time (gauge), a profile every
   ~21 days (SWOT), an extent on a date (DSWx). Spec rev 1a.
+  STAC FOLD (NATE 2026-09-08): odc-stac + xarray absorb the raster and
+  gridded fetcher machinery - one stac-raster executor (~200 LOC;
+  odc.stac.load -> xarray -> rioxarray COG; spec fields collection/
+  assets/bands/resolution) LANDS IN THE CALIBRATION WAVE'S STAGE 1 with
+  OPERA DSWx as its first consumer (zero hook code); THE MIGRATION of
+  the existing raster/gridded hooks (3DEP, Copernicus, topobathy,
+  BlueTopo, landcover, JRC; HRRR/AORC/gridMET/CHIRPS/MRMS over Zarr/
+  NetCDF via xarray) is the NEXT lean wave, hook by hook, measured
+  (estimate 4,500-6,000 of 32,686 fetcher LOC); the 56 vector specs
+  are outside it. THE TRADE stated and gated: GDAL's retry config +
+  rasterio's error channel must meet the Retry-After + verbatim-
+  upstream-error norm (a Stage 0 cell), else signed reads only. Two
+  new deps: odc-stac, odc-geo. Spec rev 1b.
+  TREE LAW (2026-09-08, after an agent bisected two red plugin tests
+  by `git checkout <commit>` in the SHARED checkout, detaching HEAD
+  under a running session): NO agent checks out a commit, switches
+  branches, stashes or resets in the shared tree - history is read
+  with git show / git log / git diff, and a bisect runs in a throwaway
+  `git worktree add`. Baked into every wave prompt.

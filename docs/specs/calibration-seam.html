@@ -24,7 +24,7 @@
 </style>
 
 <h1>The Calibration Seam</h1>
-<p class="rev">rev 1a &middot; 2026-09-08 &middot; amended in place: OPERA DSWx joins the observation sources (the WOfS family) &middot; the calibration wave's spec, per docs/IDEAS.md "CALIBRATION SPEC SHAPED" (2026-09-08) and the plan NATE approved the same day - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the module surface (docs/specs/module-surface.html), the mesh recipe, the emission fold, the rerun path (ADR 0319). Answers the question docs/design/calibration-methodology.md (2026-08-26, unsigned) left open: the proposer is PEST++, not an in-house driver; that document's coastal case is a later case on this seam.</p>
+<p class="rev">rev 1b &middot; 2026-09-08 &middot; amended in place: OPERA DSWx joins the observation sources (the WOfS family); the odc-stac raster executor rides in Stage 1 &middot; the calibration wave's spec, per docs/IDEAS.md "CALIBRATION SPEC SHAPED" (2026-09-08) and the plan NATE approved the same day - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the module surface (docs/specs/module-surface.html), the mesh recipe, the emission fold, the rerun path (ADR 0319). Answers the question docs/design/calibration-methodology.md (2026-08-26, unsigned) left open: the proposer is PEST++, not an in-house driver; that document's coastal case is a later case on this seam.</p>
 
 <h2>1. The principle</h2>
 <p>A calibration sits between a finished run and its rerun. The user declares WHICH declared params may vary, within bounds, and WHICH fetched observations are compared to WHICH outputs. PEST++ (USGS) proposes; pyEMU builds its interface; our forward run is the existing rerun path; the result is a PROPOSED fill the user confirms. We own no loop mathematics, no run management, no optimizer. Every calibrated value is labeled as such wherever it is read.</p>
@@ -90,6 +90,10 @@ flowchart LR
 </table>
 <p>A 21-day repeat cannot see a storm hydrograph: rain_on_grid stays on the gauge. SWOT's place is the water-surface PROFILE along a reach (what constrains friction and bed on a wide river, gauged or not) and lake levels where no station exists. Its datum arithmetic is the datum rule's, unchanged.</p>
 
+<h2>5a. The STAC raster executor (rides in this wave; the migration is the next lean wave)</h2>
+<p>A raster served through a STAC catalog is loaded by <code>odc.stac.load(items, bbox, crs, resolution, chunks)</code> into an xarray and written by rioxarray as a COG. The fetcher tree's raster executor carries a hand-written VRT parser and a windowed multi-tile mosaic, and about forty per-source hooks carry tile ladders, mosaicking, reprojection and subsetting the library does in one call. THIS WAVE lands ONE executor, <code>stac-raster</code> (~200 LOC), and the spec fields it reads (<code>collection</code>, <code>assets</code>, <code>bands</code>, <code>resolution</code>, the catalog endpoint, the signing or token hook), with OPERA DSWx as its first consumer - the new fetcher adds zero hook code. odc-stac and odc-geo are the two new dependencies (xarray, rioxarray, dask, zarr, pystac-client are already declared).</p>
+<p>THE TRADE, stated: the fetcher transport owns retries, honors Retry-After and logs upstream errors verbatim; odc-stac reads through GDAL, which brings its own retry configuration and error channel. Stage 0 proves that a throttled or failing read under GDAL's retry settings logs the upstream message verbatim through rasterio's error channel; a failed cell holds the executor to signed reads only. THE MIGRATION of the existing raster and gridded hooks (3DEP, Copernicus, the topobathy ladder, BlueTopo, land cover, JRC, HRRR/AORC/gridMET/CHIRPS/MRMS over Zarr and NetCDF via <code>xarray.open_zarr</code>/<code>open_dataset</code>) is the NEXT lean wave, hook by hook, measured (estimate 4,500-6,000 LOC); the 56 vector specs are outside it.</p>
+
 <h2>6. The card and the words</h2>
 <table>
 <tr><th>surface</th><th>change</th></tr>
@@ -134,13 +138,14 @@ docs/model/calibration-seam.sysml   Recipe, Interface, ForwardRun, Proposal, Con
 <tr><td>rerun_workflow headless: rain_on_grid parent -> child with curve_number overridden</td><td>the mesh inherited (replay stated); the hydrograph read; wall measured; the equal-value refusal reproduced</td></tr>
 <tr><td>the gauge answers</td><td>a hydrograph in the storm window for the chosen basin, station named</td></tr>
 <tr><td>Hydrocron serves a SWOT reach series for the Eel reach</td><td>CSV with WSE/width/slope and the datum field</td></tr>
-<tr><td>Earthdata STAC serves an OPERA DSWx scene over the chosen basin in its storm window</td><td>a water-mask COG with its scene date; the Sentinel-1 collection answers too</td></tr>
+<tr><td>Earthdata STAC serves an OPERA DSWx scene over the chosen basin in its storm window, loaded through odc.stac.load</td><td>a water-mask COG with its scene date; the Sentinel-1 collection answers too</td></tr>
+<tr><td>a throttled or failing GDAL read under the retry settings</td><td>the upstream message logged verbatim through rasterio's error channel; else the executor holds to signed reads</td></tr>
 </table>
 
 <h2>11. Stages</h2>
 <table>
 <tr><th>stage</th><th>lands</th></tr>
-<tr><td>1 levers + observation rows</td><td>manning_multiplier, the abstraction Param, DATA.gauge, the station-layer hydrograph; the two SWOT fetchers and the OPERA DSWx fetcher under the new-tool law</td></tr>
+<tr><td>1 levers + observation rows</td><td>manning_multiplier, the abstraction Param, DATA.gauge, the station-layer hydrograph; the stac-raster executor with OPERA DSWx as its first consumer; the two SWOT fetchers; all under the new-tool law</td></tr>
 <tr><td>2 the seam</td><td>the calibration tree, calibrate/confirm on the tool surface, the sensitivity pass, budget statement, contracts + card + plugin bump, the model</td></tr>
 <tr><td>3 live proof</td><td>the first case: baseline, sensitivity table, ies 50 x 3 on the coarse mesh, the proposal card, confirm -> rerun with provenance calibrated, FULL packet with observed-vs-modeled before/after and the posterior band; glm on the same case for comparison</td></tr>
 <tr><td>4 close</td><td>conformance table; IDEAS entry; the methodology doc marked superseded for the first case; packets delivered</td></tr>
