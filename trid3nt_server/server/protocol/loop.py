@@ -285,7 +285,7 @@ def _make_handler(settings: ModelSettings):
                         # log; the turn then runs on the default rather than
                         # crashing.
                         if um.model_id is not None:
-                            from trid3nt_server.adapters.bedrock_adapter import (
+                            from trid3nt_server.adapters.model_selection import (
                                 resolve_selected_model as _resolve_selected_model,
                             )
 
@@ -822,8 +822,10 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # bedrock the Bedrock model id; scripted/replay/fake fall back to the
     # settings model.
     from trid3nt_server.adapters.bedrock_adapter import (
-        model_provider as _active_model_provider,
         bedrock_model_id as _active_default_model_id,
+    )
+    from trid3nt_server.adapters.model_selection import (
+        model_provider as _active_model_provider,
     )
 
     _active_provider = _active_model_provider()

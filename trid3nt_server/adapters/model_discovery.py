@@ -24,7 +24,7 @@ logger = logging.getLogger("trid3nt_server.adapters.model_discovery")
 def _local_models_route_enabled() -> bool:
     """The /api/local-models route exists only for the OpenAI-compatible provider."""
     try:
-        from .bedrock_adapter import model_provider
+        from .model_selection import model_provider
 
         return model_provider() == "openai"
     except Exception:  # noqa: BLE001 -- import fault -> route absent

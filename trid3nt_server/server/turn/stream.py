@@ -165,7 +165,7 @@ async def _stream_model_reply(
     # (bedrock / openai / scripted) opens its own client at the boundary and
     # ignores ``client``. Provider resolved once here and reused by the cache
     # guard below.
-    from trid3nt_server.adapters.bedrock_adapter import model_provider as _model_provider
+    from trid3nt_server.adapters.model_selection import model_provider as _model_provider
 
     _provider = _model_provider()
     # #225 per-model telemetry: resolve the EFFECTIVE model that actually

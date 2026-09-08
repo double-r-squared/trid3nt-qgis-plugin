@@ -427,8 +427,8 @@ async def test_dispatch_routes_to_anthropic(monkeypatch):
 
 
 def test_selected_model_passes_through_on_anthropic(monkeypatch):
-    from trid3nt_server.adapters import bedrock_adapter as ba
+    from trid3nt_server.adapters import model_selection as ms
 
     monkeypatch.setenv("MODEL_PROVIDER", "anthropic")
-    assert ba.resolve_selected_model("claude-opus-5") == ("claude-opus-5", None)
-    assert ba.resolve_selected_model("local-default") == (None, None)
+    assert ms.resolve_selected_model("claude-opus-5") == ("claude-opus-5", None)
+    assert ms.resolve_selected_model("local-default") == (None, None)

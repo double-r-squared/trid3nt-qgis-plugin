@@ -23,6 +23,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.adapters import bedrock_adapter as ba
+from trid3nt_server.adapters import model_selection as ms
 from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
 from trid3nt_server.server.protocol.catalog_http import _aggregate_records, _normalize_record
 
@@ -337,26 +338,26 @@ def test_aggregate_empty_records_by_model_is_empty_list():
 
 def test_resolve_none_is_silent_default(monkeypatch):
     monkeypatch.delenv("MODEL_PROVIDER", raising=False)
-    assert ba.resolve_selected_model(None) == (None, None)
+    assert ms.resolve_selected_model(None) == (None, None)
 
 
 def test_resolve_bedrock_known_id_passes(monkeypatch):
     monkeypatch.delenv("MODEL_PROVIDER", raising=False)
-    got, notice = ba.resolve_selected_model("us.anthropic.claude-sonnet-4-6")
+    got, notice = ms.resolve_selected_model("us.anthropic.claude-sonnet-4-6")
     assert got == "us.anthropic.claude-sonnet-4-6"
     assert notice is None
 
 
 def test_resolve_bedrock_unknown_id_falls_back_with_notice(monkeypatch):
     monkeypatch.delenv("MODEL_PROVIDER", raising=False)
-    got, notice = ba.resolve_selected_model("qwen3:8b-16k")
+    got, notice = ms.resolve_selected_model("qwen3:8b-16k")
     assert got is None
     assert notice is not None and "qwen3:8b-16k" in notice
 
 
 def test_resolve_openai_provider_passes_local_id_verbatim(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
-    assert ba.resolve_selected_model("qwen3:8b-16k") == ("qwen3:8b-16k", None)
+    assert ms.resolve_selected_model("qwen3:8b-16k") == ("qwen3:8b-16k", None)
 
 
 def test_resolve_openai_provider_local_default_placeholder_maps_to_default(
@@ -364,12 +365,12 @@ def test_resolve_openai_provider_local_default_placeholder_maps_to_default(
 ):
     """The legacy 'local-default' web placeholder = 'use the server default'."""
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
-    assert ba.resolve_selected_model("local-default") == (None, None)
+    assert ms.resolve_selected_model("local-default") == (None, None)
 
 
 def test_resolve_openai_provider_none_still_silent(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
-    assert ba.resolve_selected_model(None) == (None, None)
+    assert ms.resolve_selected_model(None) == (None, None)
 
 
 def test_resolve_openai_provider_bedrock_id_passes_through_to_adapter_guard(
@@ -379,6 +380,6 @@ def test_resolve_openai_provider_bedrock_id_passes_through_to_adapter_guard(
     ignores Bedrock-shaped ids (falls back to TRID3NT_OPENAI_MODEL), so the
     guard lives at the adapter boundary, not in resolve."""
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
-    got, notice = ba.resolve_selected_model("us.anthropic.claude-sonnet-4-6")
+    got, notice = ms.resolve_selected_model("us.anthropic.claude-sonnet-4-6")
     assert got == "us.anthropic.claude-sonnet-4-6"
     assert notice is None

@@ -2811,7 +2811,8 @@ async def stream_events_with_contents(
     # tool declarations at the boundary and yields the SAME StreamEvent union, so
     # the server.py dispatch loop, validator, emitter, and UI are untouched.
     # model_cache_ref is a Gemini-only fast-path and does not apply here.
-    from .bedrock_adapter import model_provider, stream_bedrock
+    from .bedrock_adapter import stream_bedrock
+    from .model_selection import model_provider
     from .scripted_adapter import model_provider_is_scripted, stream_scripted
 
     # MODEL_PROVIDER=scripted (aliases replay/fake): replay a canned transcript of

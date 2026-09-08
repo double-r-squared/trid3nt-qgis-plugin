@@ -53,7 +53,7 @@ from .adapter import (
     provider_backoff_wait,
     provider_retries,
 )
-from .bedrock_adapter import _genai_schema_to_json_schema
+from .tool_schema import genai_schema_to_json_schema
 from trid3nt_server.gates.context_budget import (
     ContextWindowExceededError,
     discover_context_window,
@@ -160,7 +160,7 @@ def tool_declarations_to_anthropic_tools(
         dumped = decl.model_dump(mode="json", exclude_none=True)
         params = dumped.get("parameters")
         schema = (
-            _genai_schema_to_json_schema(params)
+            genai_schema_to_json_schema(params)
             if params
             else {"type": "object", "properties": {}}
         )

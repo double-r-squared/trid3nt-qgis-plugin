@@ -10,7 +10,14 @@ surface the turn engine drives regardless of backend.
   `build_contents_from_history`, `build_tool_declarations`,
   `MAX_TURN_ITERATIONS`, `UsageMetadataEvent`, error classification. Reuses
   `google.genai.types` as the Content/Part containment layer.
-- `bedrock_adapter.py` -- the default cloud provider (`model_provider`).
+- `model_selection.py` -- provider + per-turn model resolution, owned by no
+  one provider: `model_provider()` reads `MODEL_PROVIDER` at call time, and
+  `resolve_selected_model()` validates a client-supplied model id before it
+  can reach a provider API.
+- `tool_schema.py` -- `genai_schema_to_json_schema`, the one conversion from
+  the genai `Schema` IR to the plain JSON Schema every provider wire format
+  wants.
+- `bedrock_adapter.py` -- the AWS Bedrock Converse path.
 - `anthropic_adapter.py` -- the first-party Anthropic Messages API path
   (`stream_anthropic`, `anthropic_model`, `anthropic_api_key`), selected by
   `MODEL_PROVIDER=anthropic`. Claude Sonnet 5 by default

@@ -49,6 +49,7 @@ from .adapter import (
     provider_backoff_wait,
     provider_retries,
 )
+from .tool_schema import genai_schema_to_json_schema
 from trid3nt_server.gates.context_budget import (
     ContextWindowExceededError,
     discover_context_window,
@@ -189,67 +190,9 @@ def model_supports_cache(model_id: str) -> bool:
     return "anthropic" in mid or "claude" in mid
 
 
-def resolve_selected_model(requested: str | None) -> tuple[str | None, str | None]:
-    """Validate a user-requested model id against the selectable allowlist.
-
-    Returns ``(effective_model_id, notice)`` where:
-      - ``effective_model_id`` is ``requested`` when it is a known-good
-        selectable id, else ``None`` (meaning "use the server default", so the
-        caller falls back to ``bedrock_model_id()``).
-      - ``notice`` is ``None`` on the happy path, or a short, user-facing
-        sentence explaining the fall-back when ``requested`` is non-empty but
-        not selectable.  The server surfaces this honestly instead of letting an
-        invalid id reach ConverseStream (which throws a raw ValidationException).
-
-    ``requested is None`` is the normal "no explicit choice" case and returns
-    ``(None, None)`` -- silent default, no notice.
-
-    MODEL_PROVIDER=openai (the TRID3NT local build -- F2, live-feedback
-    2026-07-08): the selectable set is whatever the local runtime serves (the
-    web lists it live via the agent's ``/api/local-models`` endpoint), NOT the
-    Bedrock allowlist, so the id passes through verbatim. Safety still holds:
-    ``openai_adapter.openai_model`` ignores a Bedrock-shaped id (falls back to
-    ``TRID3NT_OPENAI_MODEL``), and a model the runtime does not have raises the
-    runtime's own honest error rather than a fabricated success. The legacy
-    ``"local-default"`` placeholder id (the pre-F2 web registry entry, possibly
-    persisted in localStorage) maps to ``None`` -- "use the server default".
-    The cloud (bedrock) validation path below is byte-identical.
-    """
-    if requested is None:
-        return None, None
-    if model_provider() == "anthropic":
-        # The Messages API validates the id itself (a wrong one is a 404), and
-        # ``anthropic_adapter.anthropic_model`` ignores an id shaped for another
-        # provider, so pass it through rather than gate on the Bedrock allowlist.
-        return (None, None) if requested == "local-default" else (requested, None)
-    if model_provider() == "openai":
-        if requested == "local-default":
-            return None, None
-        return requested, None
-    if requested in SELECTABLE_MODEL_IDS:
-        return requested, None
-    return (
-        None,
-        (
-            f"The requested model '{requested}' is not available, so this turn "
-            "is running on the default model."
-        ),
-    )
-
 # Match the Gemini per-request config (adapter.py:GenerateContentConfig).
 _DEFAULT_TEMPERATURE = 0.7
 _DEFAULT_MAX_TOKENS = 8192
-
-
-def model_provider() -> str:
-    """Resolve the active model provider (``bedrock`` default).
-
-    GCP/Vertex is decommissioned: the agent runs on Amazon Bedrock. The
-    ``MODEL_PROVIDER`` seam is retained -- only the default flips from ``vertex``
-    to ``bedrock`` -- so an explicit override is still honored. Read at call time
-    so an ECS / systemd env injection takes effect without re-import.
-    """
-    return (os.environ.get("MODEL_PROVIDER") or "bedrock").strip().lower()
 
 
 def bedrock_model_id() -> str:
@@ -466,19 +409,6 @@ def _bedrock_client():
 # Tool-spec conversion: genai FunctionDeclaration -> Bedrock toolConfig
 # --------------------------------------------------------------------------- #
 
-# genai Schema ``type`` is an uppercase enum (STRING/OBJECT/...); JSON Schema
-# (what Bedrock's inputSchema.json wants) is lowercase.
-_TYPE_MAP = {
-    "STRING": "string",
-    "NUMBER": "number",
-    "INTEGER": "integer",
-    "BOOLEAN": "boolean",
-    "ARRAY": "array",
-    "OBJECT": "object",
-    "TYPE_UNSPECIFIED": "string",
-}
-
-
 def _ensure_messages_start_with_user(
     messages: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -512,37 +442,6 @@ def _ensure_messages_start_with_user(
     return messages[idx:]
 
 
-def _genai_schema_to_json_schema(node: Any) -> dict[str, Any]:
-    """Recursively convert a genai-dumped Schema dict to JSON Schema."""
-    if not isinstance(node, dict):
-        return {"type": "string"}
-    out: dict[str, Any] = {}
-    raw_type = node.get("type")
-    if raw_type is not None:
-        t = raw_type.value if hasattr(raw_type, "value") else str(raw_type)
-        out["type"] = _TYPE_MAP.get(t.upper(), t.lower())
-    if node.get("description"):
-        out["description"] = node["description"]
-    if node.get("enum"):
-        out["enum"] = list(node["enum"])
-    if node.get("format"):
-        out["format"] = node["format"]
-    props = node.get("properties")
-    if isinstance(props, dict):
-        out["properties"] = {
-            k: _genai_schema_to_json_schema(v) for k, v in props.items()
-        }
-    items = node.get("items")
-    if items is not None:
-        out["items"] = _genai_schema_to_json_schema(items)
-    if node.get("required"):
-        out["required"] = list(node["required"])
-    # Bedrock requires object schemas to at least declare type=object.
-    if out.get("type") == "object" and "properties" not in out:
-        out["properties"] = {}
-    return out
-
-
 def tool_declarations_to_bedrock_tools(
     tool_declarations: list[genai_types.FunctionDeclaration] | None,
 ) -> list[dict[str, Any]]:
@@ -552,7 +451,7 @@ def tool_declarations_to_bedrock_tools(
         dumped = decl.model_dump(mode="json", exclude_none=True)
         params = dumped.get("parameters")
         if params:
-            schema = _genai_schema_to_json_schema(params)
+            schema = genai_schema_to_json_schema(params)
         else:
             schema = {"type": "object", "properties": {}}
         if schema.get("type") != "object":
