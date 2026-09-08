@@ -159,11 +159,15 @@ def _read_geodataframe(local_path: str):  # type: ignore[return]
 def _summarize_raster(local_path: str) -> dict[str, Any]:
     """Open a single-band raster and compute summary statistics + histogram.
 
-    Relocated verbatim from the retired ``analytical_qa`` module (the DuckDB
+    Relocated from the retired ``analytical_qa`` module (the DuckDB
     ``spatial_query`` fold): ``compose_case_report`` reuses this machinery for
     its per-layer stats lines, so it lives on here alongside the other
     URI/layer helpers this module already mirrors. Raises ``ChartToolError``
     (LAYER_OPEN_FAILED) instead of the retired ``AnalyticalQAError``.
+
+    The read is rasterio's masked read, so GDAL's own validity - the nodata
+    value AND any mask or alpha band - decides which pixels count. NaN is
+    masked on top of that: a raster can carry NaN fill without tagging it.
     """
     try:
         import rasterio
@@ -172,8 +176,7 @@ def _summarize_raster(local_path: str) -> dict[str, Any]:
 
     try:
         with rasterio.open(local_path) as src:
-            data = src.read(1).astype(np.float64)
-            nodata = src.nodata
+            band = src.read(1, masked=True).astype(np.float64)
             units = (
                 src.tags().get("units")
                 or (src.units[0] if src.units else None)
@@ -184,13 +187,7 @@ def _summarize_raster(local_path: str) -> dict[str, Any]:
             f"Could not open raster {local_path!r}: {exc}",
         ) from exc
 
-    # Build valid-pixel mask.
-    if nodata is not None and not (isinstance(nodata, float) and math.isnan(nodata)):
-        valid = (data != nodata) & ~np.isnan(data)
-    else:
-        valid = ~np.isnan(data)
-
-    pixels = data[valid]
+    pixels = np.ma.masked_invalid(band).compressed()
     count = int(pixels.size)
 
     if count == 0:
@@ -205,71 +202,60 @@ def _summarize_raster(local_path: str) -> dict[str, Any]:
             "units": units,
         }
 
-    mn = float(np.min(pixels))
-    mx = float(np.max(pixels))
-    mu = float(np.mean(pixels))
-    total = float(np.sum(pixels))
-
-    # 10-bin histogram over the valid-pixel range.
     hist, bin_edges = np.histogram(pixels, bins=10)
-    distribution = [
-        {
-            "bin_start": float(bin_edges[i]),
-            "bin_end": float(bin_edges[i + 1]),
-            "count": int(hist[i]),
-        }
-        for i in range(len(hist))
-    ]
 
     return {
         "layer_type": "raster",
         "count": count,
-        "min": mn,
-        "max": mx,
-        "mean": mu,
-        "sum": total,
-        "distribution": distribution,
+        "min": float(pixels.min()),
+        "max": float(pixels.max()),
+        "mean": float(pixels.mean()),
+        "sum": float(pixels.sum()),
+        "distribution": [
+            {
+                "bin_start": float(bin_edges[i]),
+                "bin_end": float(bin_edges[i + 1]),
+                "count": int(hist[i]),
+            }
+            for i in range(len(hist))
+        ],
         "units": units,
     }
 
 def _summarize_vector(local_path: str) -> dict[str, Any]:
     """Read a vector layer and compute per-attribute numeric summaries.
 
-    Relocated verbatim from the retired ``analytical_qa`` module (see
-    ``_summarize_raster`` above for the rationale).
+    Relocated from the retired ``analytical_qa`` module (see
+    ``_summarize_raster`` above for the rationale). A column with no non-null
+    values reports zeros-and-Nones rather than pandas' NaN aggregates.
     """
     gdf = _read_geodataframe(local_path)
-    feature_count = len(gdf)
-
-    attribute_summary: dict[str, Any] = {}
-    for col in gdf.columns:
-        if col in ("geometry",):
-            continue
-        series = gdf[col]
-        if not np.issubdtype(series.dtype, np.number):
-            continue
-        vals = series.dropna().values.astype(np.float64)
-        if vals.size == 0:
-            attribute_summary[col] = {
-                "count": 0,
-                "min": None,
-                "max": None,
-                "mean": None,
-                "sum": None,
-            }
-        else:
-            attribute_summary[col] = {
-                "count": int(vals.size),
-                "min": float(np.min(vals)),
-                "max": float(np.max(vals)),
-                "mean": float(np.mean(vals)),
-                "sum": float(np.sum(vals)),
-            }
+    numeric = gdf.drop(columns="geometry", errors="ignore").select_dtypes("number")
+    stats = (
+        numeric.astype(np.float64)
+        .agg(["count", "min", "max", "mean", "sum"])
+        .to_dict()
+        if len(numeric.columns)
+        else {}
+    )
 
     return {
         "layer_type": "vector",
-        "feature_count": feature_count,
-        "attribute_summary": attribute_summary,
+        "feature_count": len(gdf),
+        "attribute_summary": {
+            col: (
+                {"count": 0, "min": None, "max": None, "mean": None, "sum": None}
+                if int(agg["count"]) == 0
+                else {
+                    "count": int(agg["count"]),
+                    "min": float(agg["min"]),
+                    "max": float(agg["max"]),
+                    "mean": float(agg["mean"]),
+                    "sum": float(agg["sum"]),
+                }
+            )
+            for col, agg in stats.items()
+        },
     }
 
 def _validate_uri(uri: object, field: str) -> str:
