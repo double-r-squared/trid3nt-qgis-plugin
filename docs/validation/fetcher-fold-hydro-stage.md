@@ -97,12 +97,14 @@ The object-id read cannot do that. It also cannot finish.
 | the library's own call, all batches in one gather, 2000 ids each | HTTP 500 on the first batch, repeatably |
 | the same 2000 ids by direct POST, both `f=geojson` and `f=json` | HTTP 500, repeatably - the advertised `maxRecordCount` is not deliverable |
 | 500 ids, one batch per call, under the shim's backoff | batch 1 answers, batch 2 exhausts five attempts |
-| 1000 ids, one batch per call, 10 s pacing and four attempts with 20-40 s gaps | batches 0-2 answer, 3-5 refuse every attempt, 6 answers after a ~5 minute enforced pause, 7 answers on its fourth attempt, 8 refuses |
+| 1000 ids, one batch per call, 10 s pacing and four attempts with 20-40 s gaps | **5,894 of 9,894 in 2,198 s** (37 minutes). Batches 0-2 answered, 3-5 refused every attempt, 6 answered after a ~5 minute enforced pause, 7 on its fourth attempt, 8 refused, 9 answered. Four batches lost outright |
 
 The pattern is a client-scoped degradation with recovery: roughly three large reads,
 then minutes of refusal, then service again. It is not the format (both fail), not
 the concurrency (serialized fails), and not one poisoned feature (the same batch
-answers later).
+answers later). And patience alone does not close it: the most generous read
+measured, 37 minutes of paced requests with four attempts each, still lost four
+batches of ten.
 
 **So the ruling's bar - "a 7,892-feature bbox must come back complete" - is met by
 NEITHER the cursor nor the object-id read.** The cursor produced a silent partial;
