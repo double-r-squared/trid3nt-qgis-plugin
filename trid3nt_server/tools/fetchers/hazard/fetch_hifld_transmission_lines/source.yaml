@@ -24,8 +24,9 @@ gates:
   max_features: 30000                        # twin _MAX_TOTAL_FEATURES
 
 ingest:
-  query_template: {out_fields: "*", f: geojson, order_by: "OBJECTID ASC"}
-  pagination: {mode: result_offset, page_size: 2000}
+  access: ogr
+  ogr: {driver: ESRIJSON}
+  query_template: {out_fields: "*", order_by: "OBJECTID ASC"}
   # VOLTAGE floor only when the caller pins one (twin: VOLTAGE >= {v:g}).
   where_clauses:
     - {template: "VOLTAGE >= {min_voltage_kv:g}", require: [min_voltage_kv]}
