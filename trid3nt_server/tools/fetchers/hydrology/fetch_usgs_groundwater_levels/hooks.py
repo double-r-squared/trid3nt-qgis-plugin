@@ -1,15 +1,8 @@
-"""usgs_groundwater_levels hooks (chained_resolution enrich/0071): USGS
-Water Data OGC API groundwater monitoring wells + their latest water-level.
+"""usgs_groundwater_levels hooks: monitoring wells and their latest water level.
 
-The twin's primary+best-effort-enrichment shape folds onto the EXISTING enrich phase:
-``build_request`` resolves the spatial selector (state_code USPS->FIPS, or bbox; exactly
-one, state wins) and GETs the latest-field-measurements collection; ``parse_response``
-decodes the GeoJSON readings, raising a typed USGS_GROUNDWATER_NO_WELLS when the primary
-misses (never an empty-success layer). PHASE E (``enrich_plan`` emits one monitoring-
-locations ref for the same scope; ``enrich_merge`` joins well name / aquifer / depth by
-monitoring_location_id) is the twin's BEST-EFFORT enrichment: a failed/absent locations
-body leaves those fields blank and NEVER drops a reading. All I/O stays router-owned.
-"""
+``build_request`` resolves the spatial selector -- state or bbox, exactly one, state
+winning -- and GETs the latest-measurements collection; a primary that misses raises a
+typed no-wells error. The enrich phase joins well metadata and NEVER drops a reading."""
 
 from __future__ import annotations
 

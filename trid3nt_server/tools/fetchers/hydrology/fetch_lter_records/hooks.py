@@ -1,28 +1,8 @@
 """fetch_lter_records hooks: LTER / EDI environmental data records.
 
-A generic reader for the long-term ecological / hydrologic station records the US
-LTER network publishes on the Environmental Data Initiative (EDI) repository. Given
-a PASTA package id (e.g. ``knb-lter-cwt.3037/19``) and an optional entity selector,
-it returns a parsed time-series dict for one CSV/TSV data entity of the package.
-
-ACCESS: EDI's native PASTA REST API returns HTTP 403 anonymously from
-this environment. The identical EML metadata + data objects are mirrored PUBLICLY
-by DataONE (``cn.dataone.org/cn/v2/resolve/<encoded-PASTA-PID>``), which redirects
-to the member-node copy; a credentialed EDI pull would hit the identical bytes. So
-every fetch goes through the DataONE ``resolve`` endpoint (redirect-followed by the
-router transport).
-
-Two phases over the shared router transport:
-- resolve (PRE-cache-key): ``resolve_build`` -> the package's EML metadata request;
-  ``resolve_parse`` -> pick the entity, extract its data-object URL + delimiter +
-  header rows + column units, merged into params so the resolved entity is part of
-  the cache key.
-- record: ``build_request`` -> the entity's data-object request; ``build_record``
-  -> parse the delimited table into the time-series dict (window-filtered, per-column
-  peak/min/mean + units).
-
-All hooks are PURE compute over already-fetched bodies (the router owns the sockets).
-"""
+Given a package id and an optional entity selector, returns a parsed time-series dict
+for one delimited data entity. The resolve phase picks the entity and merges its URL,
+delimiter, header rows and column units into params, so it is part of the cache key."""
 
 from __future__ import annotations
 
@@ -53,12 +33,9 @@ def _dataone_resolve_url(pasta_pid: str) -> str:
 
 
 def _parse_package_id(sc: str, package_id: str) -> tuple[str, str, str]:
-    """``scope.identifier.revision`` -> ``(scope, identifier, revision)``.
-
-    Accepts both the ``scope.id.rev`` and the ``scope.id/rev`` spellings (the
-    revision joined by ``.`` or ``/``); the scope may contain hyphens but not the
-    final two dot-separated fields. Raises a typed INPUT error on a malformed id.
-    """
+    """``scope.identifier.revision`` to its three parts, accepting the revision joined
+    by either ``.`` or ``/``. The scope may contain hyphens but not the final two
+    dot-separated fields; a malformed id raises a typed INPUT error."""
     raw = (package_id or "").strip().replace("/", ".")
     parts = raw.rsplit(".", 2)
     if len(parts) != 3 or not parts[1] or not parts[2]:
@@ -98,12 +75,9 @@ def _interpret_delimiter(raw: str | None) -> str:
 
 
 def _entity_blocks(xml: str) -> list[dict[str, Any]]:
-    """Extract the package's data entities from EML: name, data URL, delimiter, units.
-
-    Order-preserving over the EML entity elements. Each block carries ``kind``,
-    ``name``, ``url`` (PASTA data PID), ``delimiter``, ``skip`` (numHeaderLines),
-    ``columns`` (attributeName order), and ``units`` (attributeName -> unit string).
-    """
+    """Extract the package's data entities from EML, order-preserving over the entity
+    elements. Each block carries ``kind``, ``name``, ``url``, ``delimiter``, ``skip``,
+    ``columns`` in attribute order, and ``units`` keyed by attribute name."""
     blocks: list[dict[str, Any]] = []
     for tag in _ENTITY_TAGS:
         for m in re.finditer(rf"<{tag}\b.*?</{tag}>", xml, re.S):

@@ -1,44 +1,24 @@
-"""NOAA National Water Model streamflow delegate hooks: the ``fetch_noaa_nwm_streamflow`` fold.
+"""NOAA National Water Model streamflow delegate hooks.
 
-THE FETCHER-FINALE ENDGAME (the LAST coded data-fetcher). ``fetch_noaa_nwm_streamflow``
-is a MULTI-SOURCE COMPOSITE: resolve the NWM S3 channel_rt key ->
-download the whole-object netCDF -> an xarray ``{feature_id: streamflow}`` LOOKUP DICT
-+ an NLDI 5x5-grid spatial sample (25 point-snap requests) -> COMIDs + per-reach NLDI
-geometry (up to 500 requests) + a ``feature_id`` JOIN -> a point FlatGeobuf.
-STOP-RULED a fold because "no router MODE fetches-a-lookup-dict + spatially-samples-a-2nd
--API + joins". The finale resolves that: the composite is expressed as ORDINARY delegate
-socket I/O (the topobathy / storm_tracks precedent) -- the delegate hook
-OWNS the S3 read, the NLDI sampling rounds, AND the in-delegate join, exactly as the twin
-did. No new executor machinery is added for one source (the bar); the join is
-plain in-process computation, and each NLDI probe is an independent best-effort request
-(no transport-layer coalescing/retry semantics the delegate cannot reach), so the delegate
-shape hits NO wall. ``fetch_noaa_nwm_streamflow`` folds onto a ``library_delegate`` VECTOR
-source (``shape: vector-fgb``, ``ingest.access: library_delegate``):
+A MULTI-SOURCE COMPOSITE expressed as ordinary delegate socket I/O: the delegate hook
+owns the object read, the spatial-sampling rounds and the in-process join, so no
+executor machinery is added for one source."""
 
-  * ``nwm_streamflow.validate`` (delegate_validate) -- the CONUS-intersect gate (the
-    twin's own (-130, 20, -60, 55) NHDPlus domain, more generous than the generic
-    conus_only gate), the ``short_range`` cross-param rule (forecast_hour >= 1), and the
-    ``valid_time`` ISO parse -- shape checks the declarative param surface cannot express,
-    raised pre-cache / pre-network as ``NWMStreamflowInputError``.
-  * ``nwm_streamflow.read`` (delegate) -- OWN every round: resolve the NWM cycle key,
-    download the channel_rt netCDF, parse the ``{feature_id: streamflow}`` lookup, sample
-    the 5x5 NLDI grid for bbox COMIDs, fetch each reach's geometry, JOIN streamflow +
-    geometry -> point GeoJSON features (props ``feature_id`` / ``streamflow_cms`` /
-    ``valid_time`` / ``product``, the SFINCS-adapter + river_dye consumed shape) for the
-    shared ``vector_fgb`` serializer, and RECORD the fetch-time provenance (the resolved
-    NWM reference time + reach count + NLDI sample stats) via the channel.
-  * ``nwm_streamflow.envelope`` -- the twin's exact ``nwm-streamflow-{product}-{seed}``
-    layer_id + ``NWM streamflow -- <product> (<latest|valid_time>[ +fNNN])`` name (seed
-    recomputed deterministically from the validated params) plus the reference-time /
-    reach-count / NLDI-sample provenance replayed from the channel (a pre-channel cache
-    object -> the declared defaults hold, byte-identical to the twin's cache-hit shape).
-
-The ``NWMStreamflow*Error`` classes live HERE (their stable importable home now that the
-coded twin is deleted). Their base is ``FetchError`` so ``library_delegate.invoke`` passes
-them through unchanged (its ``except FetchError: raise`` passthrough), preserving
-the pinned ``error_code`` (``NWM_STREAMFLOW_INPUT_ERROR`` / ``_UPSTREAM_ERROR`` /
-``_NOT_AVAILABLE`` / ``_EMPTY``) through the delegate wrapper.
-"""
+# THE SHAPE. Resolve the NWM channel_rt key, download the whole-object netCDF, build an
+# xarray ``{feature_id: streamflow}`` lookup, sample a 5x5 NLDI grid for the bbox's
+# COMIDs, fetch each reach's geometry, join on feature_id, and hand point features to
+# the shared vector serializer. Each probe is an independent best-effort request, and
+# the join is plain in-process computation.
+#
+# ``validate`` is the pre-cache gate the declarative param surface cannot express: the
+# CONUS intersect over this source's own domain envelope, the short-range cross-param
+# rule, and the valid_time parse. ``read`` also RECORDS the fetch-time provenance --
+# the resolved reference time, the reach count, the sample stats -- through the
+# channel, which ``envelope`` replays; a cache object written before that channel
+# existed falls to the declared defaults.
+#
+# The ``NWMStreamflow*Error`` classes live HERE, and their base is ``FetchError`` so
+# the delegate wrapper's passthrough preserves each pinned ``error_code``.
 
 from __future__ import annotations
 
@@ -110,19 +90,16 @@ class NWMStreamflowNotAvailableError(NWMStreamflowError):
 
 
 class NWMStreamflowEmptyError(NWMStreamflowError):
-    """No NHDPlus reaches discovered inside the requested bbox.
-
-    Either the bbox falls in an area with no NHDPlus coverage (offshore,
-    ungauged headwater) or NLDI returned no snapped COMIDs for any sample
-    point in the 5x5 grid.
-    """
+    """No NHDPlus reaches discovered inside the requested bbox: either the area has no
+    NHDPlus coverage -- offshore, an ungauged headwater -- or no sample point in the
+    grid snapped to a COMID."""
 
     error_code = "NWM_STREAMFLOW_EMPTY"
     retryable = False
 
 
 # ---------------------------------------------------------------------------
-# Constants (twin-identical).
+# Constants.
 # ---------------------------------------------------------------------------
 
 #: NOAA NWM public S3 bucket (open access, no auth).
@@ -181,18 +158,14 @@ def estimate_payload_mb(
 
 
 # ---------------------------------------------------------------------------
-# bbox + date helpers (twin-identical; NWMStreamflowInputError-typed).
+# bbox and date helpers, all raising NWMStreamflowInputError.
 # ---------------------------------------------------------------------------
 
 
 def _validate_conus_bbox(bbox: tuple[float, float, float, float]) -> None:
-    """Raise ``NWMStreamflowInputError`` unless the bbox intersects the NWM CONUS domain.
-
-    The router's generic bbox validation already stamps ``NWM_STREAMFLOW_INPUT_ERROR``
-    for shape / range / degenerate / non-finite bboxes (via ``error_prefix=NWM_STREAMFLOW``);
-    this hook adds the CONUS-intersect gate over the twin's own more-generous domain
-    envelope (distinct from the generic gridmet-bounds conus_only gate).
-    """
+    """Raise unless the bbox intersects the NWM CONUS domain. The router's generic
+    validation already covered shape, range and degeneracy; this adds the intersect
+    gate over this source's own domain envelope, which is wider than the shared one."""
     min_lon, min_lat, max_lon, max_lat = bbox
     if max_lon < _CONUS_BBOX[0] or min_lon > _CONUS_BBOX[2]:
         raise NWMStreamflowInputError(
@@ -349,11 +322,9 @@ def _resolve_nwm_key(
 
 
 def _nldi_snap_point(lon: float, lat: float) -> int | None:
-    """Snap (lon, lat) to nearest NHDPlus reach via NLDI; return COMID or None.
-
-    Errors are swallowed silently and return None so a failed sample point
-    doesn't abort the whole bbox discovery (the twin's contract).
-    """
+    """Snap (lon, lat) to the nearest NHDPlus reach and return its COMID, or None. An
+    error returns None rather than raising, so one failed sample point never aborts the
+    whole bbox discovery."""
     url = f"{_NLDI_BASE}/linked-data/comid/position?coords=POINT({lon}%20{lat})"
     try:
         body = _http_get(url, timeout=_NLDI_TIMEOUT).decode("utf-8")
@@ -396,11 +367,9 @@ def _nldi_get_reach_geometry(comid: int) -> list[tuple[float, float]] | None:
 
 
 def _discover_comids_in_bbox(bbox: tuple[float, float, float, float]) -> list[int]:
-    """Sample a 5x5 grid inside bbox, snap each point to NHDPlus, dedupe.
-
-    Returns a list of COMIDs (NHDPlus v2.1 identifiers). Capped at
-    ``_MAX_REACHES`` so even a dense urban bbox cannot exhaust NLDI.
-    """
+    """Sample a 5x5 grid inside the bbox, snap each point to NHDPlus and dedupe to a
+    COMID list, capped at ``_MAX_REACHES`` so a dense urban bbox cannot exhaust the
+    upstream service."""
     west, south, east, north = bbox
     found: set[int] = set()
     for i in range(_NLDI_SAMPLE_GRID):
@@ -493,14 +462,9 @@ def _fetch_nwm_features(
     valid_time_dt: _dt.datetime | None,
     forecast_hour: int,
 ) -> tuple[list[dict[str, Any]], _dt.datetime, int]:
-    """End-to-end: NWM channel_rt + NLDI bbox sample -> (GeoJSON point features,
-    resolved valid_time, discovered-COMID count).
-
-    OWNS every network round (the sanctioned delegate socket impurity):
-    resolve + download the netCDF, parse the {feature_id: streamflow} lookup, sample
-    the 5x5 NLDI grid, fetch reach geometry, and JOIN in-process. Honest-empty is a
-    typed ``NWMStreamflowEmptyError`` (no fabricated layer), never a header-only FGB.
-    """
+    """End-to-end to ``(features, resolved valid_time, discovered-COMID count)``. OWNS
+    every network round: resolve and download the netCDF, parse the streamflow lookup,
+    sample the grid, fetch reach geometry, join. Empty is a typed error."""
     # 1. Resolve + download the NWM netCDF.
     key, resolved_valid_time = _resolve_nwm_key(product, valid_time_dt, forecast_hour)
     url = f"{_S3_BASE}/{key}"
@@ -598,13 +562,9 @@ def _fetch_nwm_features(
 
 @register_hook("nwm_streamflow.validate")
 def validate_nwm_streamflow(spec: Any, params: dict[str, Any]) -> None:
-    """Pre-cache input gate: CONUS-intersect, short_range fhour rule, valid_time parse.
-
-    The router's generic param validation (enum ``product`` membership, ``bbox``
-    shape/range, ``forecast_hour`` int range [0, 18]) has already run; this hook adds
-    the cross-param + domain checks it cannot express, all typed
-    ``NWMStreamflowInputError`` (``NWM_STREAMFLOW_INPUT_ERROR``).
-    """
+    """Pre-cache input gate: the CONUS intersect, the short-range forecast-hour rule and
+    the valid_time parse. The router's generic param validation already ran; these are
+    the cross-param and domain checks it cannot express."""
     product = params.get("product", "analysis_assim")
     forecast_hour = int(params.get("forecast_hour", 0) or 0)
     if product == "short_range" and forecast_hour == 0:
@@ -616,7 +576,7 @@ def validate_nwm_streamflow(spec: Any, params: dict[str, Any]) -> None:
     if bbox is not None:
         _validate_conus_bbox(tuple(float(v) for v in bbox))
     # Parse valid_time pre-cache so a bad ISO string fails as a typed input error
-    # BEFORE the cache key / network (the twin parsed it in its body pre-fetch).
+    # BEFORE the cache key and any network call.
     _parse_valid_time(params.get("valid_time"))
 
 
@@ -651,7 +611,7 @@ def read_nwm_streamflow(
 
 
 # ---------------------------------------------------------------------------
-# HOOK: envelope -- twin layer_id/name + reference-time/reach provenance replay.
+# HOOK: envelope -- layer_id and name, plus the reference-time and reach provenance.
 # ---------------------------------------------------------------------------
 
 
@@ -663,7 +623,7 @@ def envelope_nwm_streamflow(
     data: bytes | None,
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build the twin's exact layer_id / name + the fetch-time provenance."""
+    """Build the layer_id and name, plus the fetch-time provenance."""
     product = str(params.get("product", "analysis_assim"))
     forecast_hour = int(params.get("forecast_hour", 0) or 0)
     valid_time = params.get("valid_time")

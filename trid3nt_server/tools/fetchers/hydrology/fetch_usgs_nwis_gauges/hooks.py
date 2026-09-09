@@ -1,27 +1,8 @@
-"""USGS NWIS stream-gauge hooks: the last flood-seam twin fold.
+"""USGS NWIS stream-gauge hooks: the mode switch and the parse fallback.
 
-fetch_usgs_nwis_gauges has two blockers the declarative surface could not carry,
-both resolved here as PURE hooks over the ``http_json`` parse_fallback executor:
-
-1. OUTPUT-SCHEMA switch by temporal-window presence. The FGB property schema is
-   5-field (latest instantaneous) OR 12-field (a full discharge hydrograph with an
-   inline ``time_series_csv``). ``usgs_nwis.resolve`` (pre_resolve) derives a
-   ``_mode`` param (instantaneous / hydrograph) pre-cache-key; ``properties_by_param``
-   pins the per-mode column schema and ``units_by_param``
-   the per-mode stamps -- one declarative switch keyed on the derived mode.
-
-2. The IV WaterML-JSON -> Site-service RDB cross-parser FALLBACK. In instantaneous
-   mode ``usgs_nwis.build_request`` emits an ORDERED [IV, Site] plan pair; the
-   parse_fallback executor tries them in order, and ``usgs_nwis.parse`` self-detects
-   the payload (JSON body -> IV parse; RDB text -> Site parse) so a 404/empty IV body
-   degrades to the Site locations. Hydrograph mode emits [IV-window] only (the Site
-   service has no readings). All-empty -> the honest NWIS_GAUGES_NO_STATIONS.
-
-The spatial-selector cross-param gate (state_code XOR bbox, state wins, the ~25 deg^2
-bbox area cap) and the temporal-window resolver (period-wins, both-or-neither dates,
-120-day cap) also live in ``usgs_nwis.resolve`` -- the twin's body validation,
-reproduced pre-cache / pre-network.
-"""
+``resolve`` derives a ``_mode`` param pre-cache-key, so the declarative surface can pin
+a per-mode column schema and units; ``build_request`` emits an ORDERED plan pair and
+``parse`` self-detects each body, so an empty primary degrades to the second."""
 
 from __future__ import annotations
 
@@ -65,7 +46,7 @@ _VALID_STATE_CODES: frozenset[str] = frozenset(
 
 
 def _resolve_window(sc: str, sfx: str, start_date: Any, end_date: Any, period: Any):
-    """The twin's ``_resolve_window``: None | ISO period str | (start, end) dates."""
+    """Resolve the window: None, an ISO period string, or a (start, end) date pair."""
     if period is not None and str(period).strip() != "":
         p = str(period).strip().upper()
         if not re.fullmatch(r"P(?:\d+[YMWD])*(?:T(?:\d+[HMS])+)?", p) or p == "P":
@@ -98,12 +79,9 @@ def _resolve_window(sc: str, sfx: str, start_date: Any, end_date: Any, period: A
 
 @register_hook("usgs_nwis.resolve")
 def resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
-    """Resolve the spatial selector + temporal window + ``_mode`` (pure, pre-cache-key).
-
-    Merged into params BEFORE read_through so the resolved selector / window / mode
-    enter the cache key and the executor + LayerURI stamps read them. Raises the twin's
-    typed INPUT_ERROR / BBOX_TOO_LARGE on a bad selector, pre-network.
-    """
+    """Resolve the spatial selector, temporal window and mode, pure and pre-cache-key,
+    so all three enter the cache key and the LayerURI stamps. A bad selector raises a
+    typed input or bbox-too-large error pre-network."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
     state_code = params.get("state_code")
@@ -144,7 +122,7 @@ def resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
         "window": list(window) if isinstance(window, tuple) else window,
         "_mode": mode,
         # Collapse the raw temporal params into the resolved window for the cache key
-        # (the twin keys on the resolved window only, not period-vs-dates form).
+        # The key carries the resolved window only, not the period-vs-dates form.
         "start_date": None,
         "end_date": None,
         "period": None,
@@ -200,7 +178,7 @@ def _feature(lon: float, lat: float, props: dict[str, Any]) -> dict[str, Any]:
 
 
 def _parse_iv_json(sc: str, raw: bytes) -> list[dict[str, Any]]:
-    """Latest-instantaneous IV WaterML-JSON -> 5-field Point features (twin parity)."""
+    """Latest-instantaneous IV WaterML-JSON to 5-field Point features."""
     if not raw:
         return []
     try:
@@ -259,7 +237,7 @@ def _parse_iv_json(sc: str, raw: bytes) -> list[dict[str, Any]]:
 
 
 def _parse_iv_json_window(sc: str, raw: bytes) -> list[dict[str, Any]]:
-    """Windowed IV WaterML-JSON -> 12-field hydrograph Point features (twin parity)."""
+    """Windowed IV WaterML-JSON to 12-field hydrograph Point features."""
     if not raw:
         return []
     try:
@@ -368,12 +346,9 @@ def _parse_site_rdb(sc: str, raw: bytes) -> list[dict[str, Any]]:
 
 @register_hook("usgs_nwis.parse")
 def parse_response(spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]) -> list[dict[str, Any]]:
-    """Self-detecting decode of ONE body (parse_fallback calls this per plan).
-
-    A JSON body ({...}) is an IV WaterML-JSON payload (window parser in hydrograph
-    mode, latest parser otherwise); anything else is a Site-service RDB body. An
-    empty body ([] -> triggers the executor's next plan / honest NO_STATIONS).
-    """
+    """Self-detecting decode of ONE body, called per plan: a JSON body is an IV
+    WaterML-JSON payload and anything else is a Site-service RDB body. An empty body
+    returns ``[]``, which advances the executor to the next plan."""
     sc = spec.error_code_prefix
     body = bodies[0] if bodies else b""
     stripped = body.lstrip()

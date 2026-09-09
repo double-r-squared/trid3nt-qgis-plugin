@@ -1,14 +1,8 @@
-"""``fetch_jrc_global_surface_water`` colormap hook (raster-modes wave).
+"""jrc_global_surface_water: the per-band colormap hook.
 
-The ONE irreducible per-source step for the jrc-gsw fold: a per-band GDAL color
-table that is a PURE function of the ``band`` param (never reads the fetched array,
-does no I/O). The ``mosaic`` render's serializer bakes the returned
-``{value:(r,g,b,a)}`` table into the emitted uint8 COG's band-1 palette so
-``publish_layer`` colorizes directly from the embedded ramp, independent of the
-single-band TiTiler style registry. The ramp math is carried VERBATIM from the twin
-``_band_colormap`` (white->deep-blue occurrence/recurrence, a 12-step seasonality
-ramp, a red->white->blue diverging change ramp).
-"""
+A per-band GDAL color table that is a PURE function of the ``band`` param: it never
+reads the fetched array and does no I/O. The mosaic serializer bakes it into the emitted
+COG's band-1 palette, so the layer colorizes with no style-registry row."""
 
 from __future__ import annotations
 
@@ -73,12 +67,9 @@ def _change_colormap() -> dict[int, tuple[int, int, int, int]]:
 
 @register_hook("jrc_global_surface_water.colormap")
 def colormap(spec: SourceSpec, params: dict[str, Any]) -> dict[int, tuple[int, int, int, int]]:
-    """Return the per-band GDAL color table for the resolved ``band`` param.
-
-    The band was validated by the router's enum param gate pre-network, so an
-    unknown value raises the source's typed BAND_INVALID input error (defensive:
-    the router never reaches here with an out-of-set band).
-    """
+    """The per-band GDAL color table for the resolved ``band``. The router's enum gate
+    already validated it pre-network, so the out-of-set raise here is defence in
+    depth."""
     band = params.get("band")
     if band in ("occurrence", "recurrence"):
         return _blue_ramp_colormap(nodata=0, vmax=100)

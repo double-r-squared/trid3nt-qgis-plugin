@@ -1,14 +1,8 @@
-"""nws_river_forecast hooks (chained-resolution mode): NWS/NWPS river
-forecast gauges + bounded per-gauge threshold / stageflow enrichment.
+"""nws_river_forecast hooks: NWPS river-forecast gauges, with bounded enrichment.
 
-The main fetch is a gauges-by-bbox list GET (or a single-gauge detail GET when
-``gauge_id`` is given). ``parse_response`` decodes the gauges into Point features.
-Two bounded, best-effort per-gauge enrichments then run: ``include_thresholds``
-chases each gauge's flood-category threshold stages (bbox mode; free in gauge_id
-mode), ``include_series`` chases each gauge's ``/stageflow`` observed+forecast
-series + forecast crest. A per-gauge detail that fails keeps its gauge with None
-detail (never fabricated, never silently dropped). All I/O stays router-owned.
-"""
+The main fetch lists gauges by bbox, or reads one gauge's detail when ``gauge_id`` is
+given. Two bounded best-effort enrichments chase each gauge's flood-category thresholds
+and its observed and forecast series; a failure keeps its gauge with None detail."""
 
 from __future__ import annotations
 

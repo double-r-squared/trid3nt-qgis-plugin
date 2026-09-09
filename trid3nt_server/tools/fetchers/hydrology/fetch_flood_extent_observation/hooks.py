@@ -1,18 +1,8 @@
-"""flood_extent_observation hooks (landcover + flood-extent wave).
+"""flood_extent_observation hooks: the two per-source steps.
 
-The irreducible per-source steps the declarative categorical_tile_grid access
-mode cannot carry:
-- ``pre_resolve`` -- the LANCE NRT dir-walk that resolves ``date`` (or None ->
-  latest) to the ``(year, doy)`` the tile URLs template on, run BEFORE
-  read_through so the resolved day enters the cache key (a date=None request must
-  not forever serve the first-cached day).
-- ``envelope`` -- the POST-EMIT class-breakdown / flood-area / caveats / legend
-  read back from the produced categorical COG (-> FloodExtentObservationResult).
-
-Everything else -- the per-tile GET + first-valid uint8 mosaic + palette COG,
-transport, retry, cache, payload gate, LayerURI -- is the shared router (the
-categorical_tile_grid mode + array_to_cog_bytes).
-"""
+``pre_resolve`` turns ``date`` (or None, meaning latest) into the ``(year, doy)`` the
+tile URLs template on, BEFORE read_through so a latest request cannot forever serve the
+first-cached day; ``envelope`` reads the class breakdown and legend off the COG."""
 
 from __future__ import annotations
 
@@ -47,7 +37,7 @@ MCDWD_CLASSES: dict[int, str] = {
 NODATA = 255
 
 #: 10-degree geographic tiles, 4800 px (~0.00208333 deg cell) -- the flood-area
-#: cell size (the envelope's km^2 conversion, twin ``_CELL_DEG``).
+#: cell size, for the envelope's km^2 conversion.
 _CELL_DEG = 10.0 / 4800.0
 
 _CAVEATS = [
@@ -94,7 +84,7 @@ def _list_dir_names(spec: SourceSpec, url: str) -> list[str]:
 
 
 def _latest_available(spec: SourceSpec) -> tuple[int, int]:
-    """Newest available ``(year, day_of_year)`` in the NRT archive (twin parity)."""
+    """Newest available ``(year, day_of_year)`` in the NRT archive."""
     years = [int(n) for n in _list_dir_names(spec, _LANCE_API + "/")]
     if not years:
         raise router_empty_error(
@@ -115,11 +105,9 @@ def _latest_available(spec: SourceSpec) -> tuple[int, int]:
 
 @_hooks.register_hook("flood_extent_observation.pre_resolve")
 def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
-    """Resolve ``date`` (ISO ``YYYY-MM-DD``) -> ``{year, doy}``; None -> latest.
-
-    Merged into params by ``route()`` BEFORE read_through so the resolved day enters
-    the cache key. A given date is a pure parse; None triggers the dir-walk.
-    """
+    """Resolve ``date`` to ``{year, doy}``, or walk to the latest when it is None. The
+    result merges into params BEFORE read_through, so the resolved day enters the cache
+    key rather than a request for "latest"."""
     date = params.get("date")
     if date is None or not str(date).strip():
         year, doy = _latest_available(spec)
@@ -141,7 +129,7 @@ def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _summarize_cog(data: bytes, bbox: tuple[float, float, float, float]) -> dict[str, Any]:
-    """Class breakdown + flood area from the produced categorical COG (twin parity)."""
+    """Class breakdown and flood area, read off the produced categorical COG."""
     import numpy as np
     import rasterio
     from rasterio.io import MemoryFile

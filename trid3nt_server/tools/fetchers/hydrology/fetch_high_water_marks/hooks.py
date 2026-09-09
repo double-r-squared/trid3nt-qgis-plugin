@@ -1,26 +1,7 @@
-"""usgs_stn_hwm: USGS STN flood high-water marks through pygeohydro, + the envelope.
+"""usgs_stn_hwm: USGS STN flood high-water marks through pygeohydro.
 
-``pygeohydro.STNFloodEventData`` owns the STN service - the accepted query-parameter
-set, the request, the decode, and the geo-referencing of each mark. Four things it
-does not own ride here.
-
-THE STATE DERIVATION. STN has no server-side bbox filter, so an AOI with no named
-event is fetched by the US STATE(S) the bbox overlaps and clipped afterwards; an AOI
-overlapping no state, with no event, is the honest input error (STN is US +
-territories only).
-
-THE EVENT RESOLVE. The client publishes no event list, so a named flood event is
-still resolved to its ``event_id`` over the router's own transport
-(``resolve_build`` / ``resolve_parse``, substring match) - and the resolve runs
-pre-cache-key, so a name query and its id query collapse to one entry.
-
-THE QUANTITY STAMP AND THE HONEST EMPTY. ``elev_ft`` is a WATER-SURFACE ELEVATION
-above the mark's stated vertical datum, not a depth above ground, and every feature
-says so. An AOI with no marks is a typed error, never a fabricated empty layer.
-
-THE ENVELOPE. The post-emit quality/type/datum breakdown read back from the produced
-FGB is product contract, not fetch code.
-"""
+The library owns the service -- the query-parameter set, the request, the decode, the
+geo-referencing of each mark -- and four things it does not own ride here."""
 
 from __future__ import annotations
 
@@ -53,7 +34,7 @@ _CAVEATS = [
 ]
 
 # Generous (~0.5 deg pad) per-state bboxes -- self-contained (a hook must not
-# import router internals; the asos twin that once owned this table is folded).
+# import router internals).
 _STATE_BBOX: dict[str, tuple[float, float, float, float]] = {
     "AL": (-88.6, 30.1, -84.8, 35.0), "AK": (-180.0, 51.2, -129.9, 71.4),
     "AZ": (-114.9, 31.3, -109.0, 37.0), "AR": (-94.7, 33.0, -89.6, 36.5),
@@ -161,11 +142,9 @@ def resolve_parse(
 
 
 def _query_params(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
-    """The STN filter: Event when one resolved, else the overlapping States.
-
-    After the bbox clip a State filter cannot add an in-AOI mark to an event-scoped
-    query (the bbox is a subset of the overlapping states), so the two are exclusive.
-    """
+    """The STN filter: the Event when one resolved, else the overlapping States. After
+    the bbox clip a State filter cannot add an in-AOI mark to an event-scoped query, so
+    the two are exclusive."""
     bbox = tuple(float(v) for v in params["bbox"])
     event_id = params.get("event_id")
     if event_id is not None:

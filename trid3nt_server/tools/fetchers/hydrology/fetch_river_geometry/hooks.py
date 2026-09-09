@@ -1,12 +1,8 @@
 """river_geometry delegate: ``waterway`` ways CLIPPED to the exact bbox.
 
-Fills the WHOLE bbox - a true per-bbox query, not a seed-connected sub-network -
-and clips for the same reason the roads member does: a channel network is measured
-inside an area, so a way crossing the boundary contributes only its in-AOI runs.
-
-``ditch`` and ``drain`` are excluded from the default set: they explode feature
-counts in drained-agriculture and urban areas.
-"""
+Fills the WHOLE bbox -- a true per-bbox query, not a seed-connected sub-network -- and
+clips, because a channel network is measured inside an area. ``ditch`` and ``drain`` are
+out of the default set: they explode feature counts in drained agriculture."""
 
 from __future__ import annotations
 
@@ -43,12 +39,9 @@ _RIVER_SOURCES: frozenset[str] = frozenset({"nhdplus_hr", "osm"})
 
 
 def _resolve_waterway_classes(sc: str, sfx: str, waterway_type: Any) -> list[str]:
-    """Resolve a caller ``waterway_type`` to a validated list of OSM classes.
-
-    Accepts None (-> default), a convenience alias, a single value, a
-    comma/plus/space-joined string, or a list of values. De-dupes preserving order;
-    an unknown token is a typed non-retryable input error. Empty -> default.
-    """
+    """Resolve a caller ``waterway_type`` to a validated list of OSM classes, accepting
+    None, an alias, one value, a joined string or a list, de-duped in order. An unknown
+    token is a typed non-retryable input error."""
     if waterway_type is None:
         return list(_WATERWAY_CLASSES)
     raw_tokens: list[str] = []
@@ -105,10 +98,8 @@ def validate(spec: SourceSpec, params: dict[str, Any]) -> None:
 def delegate(
     spec: SourceSpec, params: dict[str, Any], *, timeout_s: float
 ) -> list[dict[str, Any]]:
-    """Waterway ways in the bbox as strictly-in-AOI LineStrings.
-
-    Empty is a legitimate answer - no rivers in the bbox - not an error.
-    """
+    """Waterway ways in the bbox as strictly-in-AOI LineStrings. Empty is a legitimate
+    answer -- no rivers in the bbox -- not an error."""
     classes = _resolve_waterway_classes(
         spec.error_code_prefix, spec.input_error_suffix, params.get("waterway_type"))
     gdf = overpass_features(spec, params, {"waterway": classes}, timeout_s=timeout_s)
