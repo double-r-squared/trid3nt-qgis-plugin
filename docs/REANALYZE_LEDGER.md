@@ -205,3 +205,44 @@ them, all inside that index; the layer itself is identical - 23 Points,
 same columns, dtypes, values and bounds. Read "byte-identical" there as
 "same length, value-identical, index bytes reordered". (2) The
 storm-track hook measures 1004 -> 991 lines, not 1004 -> 992.
+
+## 2026-09-09 - OSM reads through OSMnx, and what the library will not do
+DECIDED (docs/IDEAS.md FETCHER FOLD SECOND HALF, census G3): the six
+OSM rows fetch through `osmnx.features_from_bbox` rather than through
+hand-written Overpass QL. The library owns the query, the socket, the
+adaptive pre-request pause sized off the server's own `/status`, and
+the element-to-geometry decode - including the multipolygon relation
+assembly `fetch_buildings` hand-rolled and the full tag bag as frame
+columns, which is what makes its `.tags.json` sidecar free. Each row
+keeps its own vocabulary (which tag) and its own projection (clip or
+keep whole, a point or a line), because those are answers about the
+data, not fetch boilerplate.
+
+THREE things the library does not do, all measured, all carried in
+`_router/hooks/osm.py`:
+(a) MIRRORS. It holds ONE `settings.overpass_url`, so the three-mirror
+chain each source declares is ours: set, call, catch, next, restore,
+under a lock because those settings are module globals.
+(b) THE SILENT ERROR. `osmnx._http._parse_response` raises only when
+the body fails to parse as JSON, so a non-OK response carrying a valid
+JSON error envelope is RETURNED AS DATA - an honest-empty layer
+exactly where an upstream failure belongs (Stage 0 probe C3). The
+wrapped post raises on any non-OK status the library does not handle
+itself, with the status and body verbatim.
+(c) A CEILING ON THE RETRY. On a 429 or a 504 the library pauses a
+hardcoded 55 s and recurses, with no attempt limit
+(`osmnx/_overpass.py:478-486`), so a mirror that keeps refusing hangs
+the fetch forever. Measured live during this fold: with
+`overpass-api.de` out of slots, a single read sat for eight minutes
+before it was killed. Three throttled answers now end that mirror's
+turn and the chain moves on.
+
+TRADED and documented, per the ruling: the 55 s is hardcoded, not the
+server's `Retry-After`, and Overpass rarely sends one. ACCEPTED as a
+gain: the pre-request pause the pre-fold path did not take is why a
+public mirror stops answering, and it is the library being a better
+citizen than the code it replaces - at the cost of up to a minute of
+wall time per read when slots are scarce. The library's own JSON disk
+cache is DISABLED: the router owns the cache tier and the provenance
+that rides with it, and a second cache under it would age on its own
+rules.

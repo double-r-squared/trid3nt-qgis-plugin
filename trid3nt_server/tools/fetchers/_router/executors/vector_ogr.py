@@ -56,7 +56,10 @@ logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.executors.vector_ogr"
 )
 
-__all__ = ["build_query", "open_path", "fetch_from_endpoint", "fetch_features", "execute"]
+__all__ = [
+    "build_query", "open_path", "zip_urls", "fetch_from_endpoint", "fetch_features",
+    "execute",
+]
 
 #: The read policy for every driver read in this family. The retry half is the
 #: transport's own code set; GDAL's default is retry OFF.

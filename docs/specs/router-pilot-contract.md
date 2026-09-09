@@ -226,6 +226,18 @@ HTTP client rather than the transport - applied through
 `pyogrio.set_gdal_config_options`, because pyogrio links its own libgdal - and
 what that costs is ledgered in `docs/REANALYZE_LEDGER.md`.
 
+### 2.2b the OSM family  (a library delegate, not an executor)
+
+The six OSM rows declare `hooks.delegate` and read through the generic
+library-delegate seam: `_router/hooks/osm.overpass_features` calls
+`osmnx.features_from_bbox`, and each row's co-located hook holds its tag
+vocabulary and its projection. `fetch_buildings` is the exception only in where
+its result goes - its `ingest.sidecar_write.features` hook returns the slim layer
+AND the tag bag off one frame, and the `overpass_sidecar` executor writes the
+second beside the first. The mirror chain, the raised-not-returned upstream error
+and the ceiling on the library's own retry are the three things the library does
+not do; all three are ledgered.
+
 ### 2.3 station-timeseries-fgb executor
 
 Catalog-discover (`ingest.station_catalog` bbox filter, `max_stations` cap) ->
