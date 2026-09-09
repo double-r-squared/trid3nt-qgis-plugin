@@ -34,7 +34,7 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterUpstreamError,
 )
 from trid3nt_server.tools.fetchers._router.executors import library_delegate, raster_cog
-from trid3nt_server.tools.fetchers._router.hooks import worldpop
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_population import hooks as worldpop
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 POP_SPEC = load_spec_from_path(

@@ -24,7 +24,7 @@ import pytest
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
 from trid3nt_server.tools.fetchers._router.executors import vector_fgb
-from trid3nt_server.tools.fetchers._router.hooks import lehd_jobs as LH
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_lehd_jobs import hooks as LH
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 from trid3nt_server.tools.fetchers._router.transforms import join
 

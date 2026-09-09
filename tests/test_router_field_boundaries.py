@@ -18,7 +18,7 @@ import pytest
 
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import RouterInputError
-from trid3nt_server.tools.fetchers._router.hooks import field_boundaries as FB
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries import hooks as FB
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 SPEC = load_spec_from_path(

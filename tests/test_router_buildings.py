@@ -24,7 +24,7 @@ from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
 from trid3nt_server.tools.fetchers._router.executors import overpass_sidecar
 from trid3nt_server.tools.fetchers._router.executors.vector_fgb import features_to_fgb_bytes
-from trid3nt_server.tools.fetchers._router.hooks import buildings as BH
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings import hooks as BH
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 SPEC = load_spec_from_path(

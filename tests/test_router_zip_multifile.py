@@ -20,7 +20,7 @@ import pytest
 
 from trid3nt_server.tools.fetchers._router.errors import RouterError
 from trid3nt_server.tools.fetchers._router.executors import raster_cog, zip_vector
-from trid3nt_server.tools.fetchers._router.hooks import admin_boundaries as adm
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries import hooks as adm
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.tools.fetchers._router.transport import TransportNotFound

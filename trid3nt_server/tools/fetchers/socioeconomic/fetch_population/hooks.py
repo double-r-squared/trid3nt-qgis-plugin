@@ -33,8 +33,8 @@ import requests
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..errors import router_empty_error, router_input_error, router_upstream_error
-from . import register_hook
+from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
+from ..._router.hooks import register_hook
 
 __all__ = [
     "validate_population",

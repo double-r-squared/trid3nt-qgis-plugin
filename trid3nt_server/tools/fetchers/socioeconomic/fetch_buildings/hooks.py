@@ -24,8 +24,8 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from .. import hooks as _hooks
-from ..errors import router_upstream_error
+from ..._router import hooks as _hooks
+from ..._router.errors import router_upstream_error
 
 __all__ = ["build_request", "parse"]
 

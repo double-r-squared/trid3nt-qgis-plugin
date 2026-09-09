@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..errors import router_input_error
-from ..hooks import RequestPlan, register_hook
+from ..._router.errors import router_input_error
+from ..._router.hooks import RequestPlan, register_hook
 
 _TIGER_BASE = "https://www2.census.gov/geo/tiger/TIGER2024"
 _TIGER_YEAR = "2024"
