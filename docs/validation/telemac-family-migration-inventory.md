@@ -4,6 +4,13 @@ Taken at `04ab6b1c`, BEFORE any migration in this wave, so the wave is measured
 against a stated starting point rather than a remembered one. Counting rule is
 the LOC ledger's: `wc -l`, physical lines, product `.py` only.
 
+> Note (2026-09-09): the "driver today" column names five scripts that have since
+> left the tree - `proof_coastal_tidal_surge.py`, `..._registered.py`,
+> `sandbox/telemac/rog_render_proofs.py`, `sandbox/replication/rog_ballcreek*.py`
+> and `proof_artemis_composer_live.py`. The record stands verbatim as what was
+> true at the check; the dispositions are in `docs/DELETION_LEDGER.md` (the
+> 2026-08-28 fresh-start purge, and the scripts cull of 2026-09-09).
+
 ## What is already on the skeleton
 
 | template | tool name | file | LOC |

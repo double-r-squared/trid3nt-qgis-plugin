@@ -8,19 +8,6 @@
   ],
   "nodes": [
     {
-      "module": "contracts.tests",
-      "package": "contracts",
-      "path": "contracts/tests/__init__.py",
-      "loc": 0,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": true,
-      "is_script": false,
-      "is_marker": true,
-      "unresolved_calls": 0
-    },
-    {
       "module": "contracts.tests.conftest",
       "package": "contracts",
       "path": "contracts/tests/conftest.py",
@@ -401,7 +388,7 @@
       "module": "plugin.net.trid3nt_client",
       "package": "plugin",
       "path": "plugin/net/trid3nt_client.py",
-      "loc": 2148,
+      "loc": 2147,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -1204,9 +1191,9 @@
       "unresolved_calls": 111
     },
     {
-      "module": "scripts._env_guard",
+      "module": "scripts.drivers._env_guard",
       "package": "scripts",
-      "path": "scripts/_env_guard.py",
+      "path": "scripts/drivers/_env_guard.py",
       "loc": 55,
       "reachable": false,
       "test_only": false,
@@ -1217,48 +1204,9 @@
       "unresolved_calls": 7
     },
     {
-      "module": "scripts.assemble_proof_packet",
+      "module": "scripts.drivers.drive_artemis_structure_slot",
       "package": "scripts",
-      "path": "scripts/assemble_proof_packet.py",
-      "loc": 1046,
-      "reachable": false,
-      "test_only": true,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 402
-    },
-    {
-      "module": "scripts.backfill_run_journal",
-      "package": "scripts",
-      "path": "scripts/backfill_run_journal.py",
-      "loc": 166,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 64
-    },
-    {
-      "module": "scripts.code_graph",
-      "package": "scripts",
-      "path": "scripts/code_graph.py",
-      "loc": 798,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 344
-    },
-    {
-      "module": "scripts.drive_artemis_structure_slot",
-      "package": "scripts",
-      "path": "scripts/drive_artemis_structure_slot.py",
+      "path": "scripts/drivers/drive_artemis_structure_slot.py",
       "loc": 136,
       "reachable": false,
       "test_only": false,
@@ -1266,25 +1214,25 @@
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 47
+      "unresolved_calls": 48
     },
     {
-      "module": "scripts.drive_do_sag_cards",
+      "module": "scripts.drivers.drive_do_sag_cards",
       "package": "scripts",
-      "path": "scripts/drive_do_sag_cards.py",
-      "loc": 161,
+      "path": "scripts/drivers/drive_do_sag_cards.py",
+      "loc": 162,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 34
+      "unresolved_calls": 39
     },
     {
-      "module": "scripts.drive_keyword_floor",
+      "module": "scripts.drivers.drive_keyword_floor",
       "package": "scripts",
-      "path": "scripts/drive_keyword_floor.py",
+      "path": "scripts/drivers/drive_keyword_floor.py",
       "loc": 230,
       "reachable": false,
       "test_only": false,
@@ -1295,9 +1243,9 @@
       "unresolved_calls": 100
     },
     {
-      "module": "scripts.drive_lake_domain_mesh",
+      "module": "scripts.drivers.drive_lake_domain_mesh",
       "package": "scripts",
-      "path": "scripts/drive_lake_domain_mesh.py",
+      "path": "scripts/drivers/drive_lake_domain_mesh.py",
       "loc": 163,
       "reachable": false,
       "test_only": false,
@@ -1308,9 +1256,9 @@
       "unresolved_calls": 69
     },
     {
-      "module": "scripts.drive_mesh_spotcheck",
+      "module": "scripts.drivers.drive_mesh_spotcheck",
       "package": "scripts",
-      "path": "scripts/drive_mesh_spotcheck.py",
+      "path": "scripts/drivers/drive_mesh_spotcheck.py",
       "loc": 171,
       "reachable": false,
       "test_only": false,
@@ -1321,9 +1269,9 @@
       "unresolved_calls": 33
     },
     {
-      "module": "scripts.drive_module_surface_flip",
+      "module": "scripts.drivers.drive_module_surface_flip",
       "package": "scripts",
-      "path": "scripts/drive_module_surface_flip.py",
+      "path": "scripts/drivers/drive_module_surface_flip.py",
       "loc": 197,
       "reachable": false,
       "test_only": false,
@@ -1334,9 +1282,9 @@
       "unresolved_calls": 42
     },
     {
-      "module": "scripts.drive_open_water_domains",
+      "module": "scripts.drivers.drive_open_water_domains",
       "package": "scripts",
-      "path": "scripts/drive_open_water_domains.py",
+      "path": "scripts/drivers/drive_open_water_domains.py",
       "loc": 219,
       "reachable": false,
       "test_only": false,
@@ -1347,100 +1295,22 @@
       "unresolved_calls": 64
     },
     {
-      "module": "scripts.drive_river_dye_cards",
+      "module": "scripts.drivers.drive_river_dye_cards",
       "package": "scripts",
-      "path": "scripts/drive_river_dye_cards.py",
-      "loc": 271,
+      "path": "scripts/drivers/drive_river_dye_cards.py",
+      "loc": 272,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 96
+      "unresolved_calls": 101
     },
     {
-      "module": "scripts.extract_telemac_catalog",
+      "module": "scripts.drivers.proof_artemis_om2d_rematch",
       "package": "scripts",
-      "path": "scripts/extract_telemac_catalog.py",
-      "loc": 73,
-      "reachable": false,
-      "test_only": true,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 25
-    },
-    {
-      "module": "scripts.gen_tool_support_page",
-      "package": "scripts",
-      "path": "scripts/gen_tool_support_page.py",
-      "loc": 255,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 97
-    },
-    {
-      "module": "scripts.harvest_living_atlas",
-      "package": "scripts",
-      "path": "scripts/harvest_living_atlas.py",
-      "loc": 224,
-      "reachable": false,
-      "test_only": true,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 99
-    },
-    {
-      "module": "scripts.loc_report",
-      "package": "scripts",
-      "path": "scripts/loc_report.py",
-      "loc": 83,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 61
-    },
-    {
-      "module": "scripts.model_check",
-      "package": "scripts",
-      "path": "scripts/model_check.py",
-      "loc": 788,
-      "reachable": false,
-      "test_only": true,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 336
-    },
-    {
-      "module": "scripts.proof_artemis_composer_live",
-      "package": "scripts",
-      "path": "scripts/proof_artemis_composer_live.py",
-      "loc": 42,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 13
-    },
-    {
-      "module": "scripts.proof_artemis_om2d_rematch",
-      "package": "scripts",
-      "path": "scripts/proof_artemis_om2d_rematch.py",
+      "path": "scripts/drivers/proof_artemis_om2d_rematch.py",
       "loc": 383,
       "reachable": false,
       "test_only": false,
@@ -1451,9 +1321,9 @@
       "unresolved_calls": 104
     },
     {
-      "module": "scripts.proof_artemis_real_breakwater_v2",
+      "module": "scripts.drivers.proof_artemis_real_breakwater_v2",
       "package": "scripts",
-      "path": "scripts/proof_artemis_real_breakwater_v2.py",
+      "path": "scripts/drivers/proof_artemis_real_breakwater_v2.py",
       "loc": 308,
       "reachable": false,
       "test_only": false,
@@ -1464,87 +1334,100 @@
       "unresolved_calls": 165
     },
     {
-      "module": "scripts.proof_auto_emit_seam",
+      "module": "scripts.drivers.seed_showcase_cases",
       "package": "scripts",
-      "path": "scripts/proof_auto_emit_seam.py",
-      "loc": 153,
+      "path": "scripts/drivers/seed_showcase_cases.py",
+      "loc": 910,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 49
+      "unresolved_calls": 203
     },
     {
-      "module": "scripts.proof_declared_style_live",
+      "module": "scripts.instruments.code_graph",
       "package": "scripts",
-      "path": "scripts/proof_declared_style_live.py",
-      "loc": 199,
+      "path": "scripts/instruments/code_graph.py",
+      "loc": 806,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 119
+      "unresolved_calls": 349
     },
     {
-      "module": "scripts.proof_rerun_with_overrides",
+      "module": "scripts.instruments.extract_telemac_catalog",
       "package": "scripts",
-      "path": "scripts/proof_rerun_with_overrides.py",
-      "loc": 327,
+      "path": "scripts/instruments/extract_telemac_catalog.py",
+      "loc": 73,
+      "reachable": false,
+      "test_only": true,
+      "script_only": false,
+      "is_test": false,
+      "is_script": true,
+      "is_marker": false,
+      "unresolved_calls": 25
+    },
+    {
+      "module": "scripts.instruments.gen_tool_support_page",
+      "package": "scripts",
+      "path": "scripts/instruments/gen_tool_support_page.py",
+      "loc": 255,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 140
+      "unresolved_calls": 97
     },
     {
-      "module": "scripts.proof_river_dye_frames",
+      "module": "scripts.instruments.harvest_living_atlas",
       "package": "scripts",
-      "path": "scripts/proof_river_dye_frames.py",
-      "loc": 245,
+      "path": "scripts/instruments/harvest_living_atlas.py",
+      "loc": 224,
+      "reachable": false,
+      "test_only": true,
+      "script_only": false,
+      "is_test": false,
+      "is_script": true,
+      "is_marker": false,
+      "unresolved_calls": 99
+    },
+    {
+      "module": "scripts.instruments.loc_report",
+      "package": "scripts",
+      "path": "scripts/instruments/loc_report.py",
+      "loc": 87,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 129
+      "unresolved_calls": 62
     },
     {
-      "module": "scripts.proof_wave_bed_input_live",
+      "module": "scripts.instruments.model_check",
       "package": "scripts",
-      "path": "scripts/proof_wave_bed_input_live.py",
-      "loc": 94,
+      "path": "scripts/instruments/model_check.py",
+      "loc": 788,
       "reachable": false,
-      "test_only": false,
+      "test_only": true,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 27
+      "unresolved_calls": 336
     },
     {
-      "module": "scripts.proof_wave_bed_input_render",
+      "module": "scripts.instruments.qml_preset_smoke",
       "package": "scripts",
-      "path": "scripts/proof_wave_bed_input_render.py",
-      "loc": 50,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 18
-    },
-    {
-      "module": "scripts.qml_preset_smoke",
-      "package": "scripts",
-      "path": "scripts/qml_preset_smoke.py",
+      "path": "scripts/instruments/qml_preset_smoke.py",
       "loc": 217,
       "reachable": false,
       "test_only": false,
@@ -1555,61 +1438,9 @@
       "unresolved_calls": 175
     },
     {
-      "module": "scripts.render_all_layers_proof",
+      "module": "scripts.instruments.replay_canary_evidence",
       "package": "scripts",
-      "path": "scripts/render_all_layers_proof.py",
-      "loc": 896,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 427
-    },
-    {
-      "module": "scripts.render_fidelity_proof_generic",
-      "package": "scripts",
-      "path": "scripts/render_fidelity_proof_generic.py",
-      "loc": 163,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 97
-    },
-    {
-      "module": "scripts.render_run_chart_proof",
-      "package": "scripts",
-      "path": "scripts/render_run_chart_proof.py",
-      "loc": 147,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 53
-    },
-    {
-      "module": "scripts.render_selafin_animation",
-      "package": "scripts",
-      "path": "scripts/render_selafin_animation.py",
-      "loc": 913,
-      "reachable": false,
-      "test_only": true,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 337
-    },
-    {
-      "module": "scripts.replay_canary_evidence",
-      "package": "scripts",
-      "path": "scripts/replay_canary_evidence.py",
+      "path": "scripts/instruments/replay_canary_evidence.py",
       "loc": 182,
       "reachable": false,
       "test_only": false,
@@ -1620,48 +1451,48 @@
       "unresolved_calls": 90
     },
     {
-      "module": "scripts.routing_failure_split",
+      "module": "scripts.instruments.tool_sweep",
       "package": "scripts",
-      "path": "scripts/routing_failure_split.py",
-      "loc": 95,
+      "path": "scripts/instruments/tool_sweep.py",
+      "loc": 390,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 34
+      "unresolved_calls": 134
     },
     {
-      "module": "scripts.run_do_sag_direct",
+      "module": "scripts.instruments.ws_smoke",
       "package": "scripts",
-      "path": "scripts/run_do_sag_direct.py",
-      "loc": 129,
+      "path": "scripts/instruments/ws_smoke.py",
+      "loc": 283,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 59
+      "unresolved_calls": 92
     },
     {
-      "module": "scripts.run_river_dye_direct",
+      "module": "scripts.packet.assemble_proof_packet",
       "package": "scripts",
-      "path": "scripts/run_river_dye_direct.py",
-      "loc": 115,
+      "path": "scripts/packet/assemble_proof_packet.py",
+      "loc": 1046,
       "reachable": false,
-      "test_only": false,
+      "test_only": true,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 52
+      "unresolved_calls": 402
     },
     {
-      "module": "scripts.sandbox.oceanmesh.merc_render",
+      "module": "scripts.packet.merc_render",
       "package": "scripts",
-      "path": "scripts/sandbox/oceanmesh/merc_render.py",
+      "path": "scripts/packet/merc_render.py",
       "loc": 141,
       "reachable": false,
       "test_only": true,
@@ -1672,225 +1503,82 @@
       "unresolved_calls": 62
     },
     {
-      "module": "scripts.sandbox.oceanmesh.mesh_formats",
+      "module": "scripts.packet.render_all_layers_proof",
       "package": "scripts",
-      "path": "scripts/sandbox/oceanmesh/mesh_formats.py",
-      "loc": 287,
+      "path": "scripts/packet/render_all_layers_proof.py",
+      "loc": 896,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 148
+      "unresolved_calls": 420
     },
     {
-      "module": "scripts.sandbox.oceanmesh.schism_gr3",
+      "module": "scripts.packet.render_run_chart_proof",
       "package": "scripts",
-      "path": "scripts/sandbox/oceanmesh/schism_gr3.py",
-      "loc": 335,
+      "path": "scripts/packet/render_run_chart_proof.py",
+      "loc": 147,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 119
+      "unresolved_calls": 53
     },
     {
-      "module": "scripts.sandbox.pysheds_watershed.proof_watershed",
+      "module": "scripts.packet.render_selafin_animation",
       "package": "scripts",
-      "path": "scripts/sandbox/pysheds_watershed/proof_watershed.py",
-      "loc": 323,
+      "path": "scripts/packet/render_selafin_animation.py",
+      "loc": 911,
+      "reachable": false,
+      "test_only": true,
+      "script_only": false,
+      "is_test": false,
+      "is_script": true,
+      "is_marker": false,
+      "unresolved_calls": 331
+    },
+    {
+      "module": "scripts.staging.stage_groundwater_recharge",
+      "package": "scripts",
+      "path": "scripts/staging/stage_groundwater_recharge.py",
+      "loc": 554,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 136
+      "unresolved_calls": 171
     },
     {
-      "module": "scripts.sandbox.replication.ballcreek_delineate_explore",
+      "module": "scripts.staging.stage_zell_sanford_groundwater",
       "package": "scripts",
-      "path": "scripts/sandbox/replication/ballcreek_delineate_explore.py",
-      "loc": 152,
+      "path": "scripts/staging/stage_zell_sanford_groundwater.py",
+      "loc": 1153,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 62
+      "unresolved_calls": 469
     },
     {
-      "module": "scripts.sandbox.replication.edi_coweeta_coverage",
-      "package": "scripts",
-      "path": "scripts/sandbox/replication/edi_coweeta_coverage.py",
-      "loc": 187,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 50
-    },
-    {
-      "module": "scripts.sandbox.telemac.render_erodible_scour_proof",
-      "package": "scripts",
-      "path": "scripts/sandbox/telemac/render_erodible_scour_proof.py",
-      "loc": 217,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 103
-    },
-    {
-      "module": "scripts.sandbox.telemac.run_erodible_scour_direct",
-      "package": "scripts",
-      "path": "scripts/sandbox/telemac/run_erodible_scour_direct.py",
-      "loc": 34,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 6
-    },
-    {
-      "module": "scripts.seed_showcase_cases",
-      "package": "scripts",
-      "path": "scripts/seed_showcase_cases.py",
-      "loc": 921,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 208
-    },
-    {
-      "module": "scripts.stage_groundwater_recharge",
-      "package": "scripts",
-      "path": "scripts/stage_groundwater_recharge.py",
-      "loc": 552,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 166
-    },
-    {
-      "module": "scripts.stage_zell_sanford_groundwater",
-      "package": "scripts",
-      "path": "scripts/stage_zell_sanford_groundwater.py",
-      "loc": 1151,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 464
-    },
-    {
-      "module": "scripts.telemac_routing_probe",
-      "package": "scripts",
-      "path": "scripts/telemac_routing_probe.py",
-      "loc": 224,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 77
-    },
-    {
-      "module": "scripts.tool_routing_bench",
-      "package": "scripts",
-      "path": "scripts/tool_routing_bench.py",
-      "loc": 741,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 177
-    },
-    {
-      "module": "scripts.tool_routing_sweep",
-      "package": "scripts",
-      "path": "scripts/tool_routing_sweep.py",
-      "loc": 231,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 86
-    },
-    {
-      "module": "scripts.tool_sweep",
-      "package": "scripts",
-      "path": "scripts/tool_sweep.py",
-      "loc": 388,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 129
-    },
-    {
-      "module": "scripts.tool_usability_sweep",
-      "package": "scripts",
-      "path": "scripts/tool_usability_sweep.py",
-      "loc": 237,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 99
-    },
-    {
-      "module": "scripts.ws_smoke",
-      "package": "scripts",
-      "path": "scripts/ws_smoke.py",
-      "loc": 283,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": true,
-      "is_marker": false,
-      "unresolved_calls": 91
-    },
-    {
-      "module": "tests",
+      "module": "tests._fakes",
       "package": "tests",
-      "path": "tests/__init__.py",
-      "loc": 0,
+      "path": "tests/_fakes/__init__.py",
+      "loc": 137,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
-      "is_marker": true,
-      "unresolved_calls": 0
+      "is_marker": false,
+      "unresolved_calls": 43
     },
     {
       "module": "tests.audit_gemini_schema_compliance",
@@ -3729,14 +3417,14 @@
       "module": "tests.test_persistence",
       "package": "tests",
       "path": "tests/test_persistence.py",
-      "loc": 359,
+      "loc": 252,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 111
+      "unresolved_calls": 57
     },
     {
       "module": "tests.test_persistence_sessions",
@@ -3768,14 +3456,14 @@
       "module": "tests.test_pipeline_emitter",
       "package": "tests",
       "path": "tests/test_pipeline_emitter.py",
-      "loc": 1990,
+      "loc": 2016,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 351
+      "unresolved_calls": 356
     },
     {
       "module": "tests.test_pipeline_emitter_substeps",
@@ -3846,7 +3534,7 @@
       "module": "tests.test_presets",
       "package": "tests",
       "path": "tests/test_presets.py",
-      "loc": 225,
+      "loc": 228,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -3976,7 +3664,7 @@
       "module": "tests.test_publish_layer_legend",
       "package": "tests",
       "path": "tests/test_publish_layer_legend.py",
-      "loc": 351,
+      "loc": 352,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -4639,14 +4327,14 @@
       "module": "tests.test_router_overpass",
       "package": "tests",
       "path": "tests/test_router_overpass.py",
-      "loc": 462,
+      "loc": 485,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 135
+      "unresolved_calls": 139
     },
     {
       "module": "tests.test_router_population",
@@ -4912,14 +4600,14 @@
       "module": "tests.test_run_river_dye_scenario",
       "package": "tests",
       "path": "tests/test_run_river_dye_scenario.py",
-      "loc": 776,
+      "loc": 795,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 147
+      "unresolved_calls": 152
     },
     {
       "module": "tests.test_run_telemac_chain",
@@ -5094,14 +4782,14 @@
       "module": "tests.test_server_case_handlers",
       "package": "tests",
       "path": "tests/test_server_case_handlers.py",
-      "loc": 667,
+      "loc": 641,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 152
+      "unresolved_calls": 124
     },
     {
       "module": "tests.test_session_durability_jobs_bc",
@@ -5497,7 +5185,7 @@
       "module": "tests.test_telemac_rain_on_grid_template",
       "package": "tests",
       "path": "tests/test_telemac_rain_on_grid_template.py",
-      "loc": 533,
+      "loc": 531,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -5973,19 +5661,6 @@
       "is_script": false,
       "is_marker": false,
       "unresolved_calls": 32
-    },
-    {
-      "module": "tests.workflows",
-      "package": "tests",
-      "path": "tests/workflows/__init__.py",
-      "loc": 0,
-      "reachable": false,
-      "test_only": false,
-      "script_only": false,
-      "is_test": true,
-      "is_script": false,
-      "is_marker": true,
-      "unresolved_calls": 0
     },
     {
       "module": "trid3nt_contracts",
@@ -6602,20 +6277,20 @@
       "module": "trid3nt_server.emission.pipeline_emitter",
       "package": "trid3nt_server.emission",
       "path": "trid3nt_server/emission/pipeline_emitter.py",
-      "loc": 2795,
+      "loc": 2803,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 376
+      "unresolved_calls": 377
     },
     {
       "module": "trid3nt_server.emission.presets",
       "package": "trid3nt_server.emission",
       "path": "trid3nt_server/emission/presets.py",
-      "loc": 611,
+      "loc": 616,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -7460,7 +7135,7 @@
       "module": "trid3nt_server.testing.canaries",
       "package": "trid3nt_server.testing",
       "path": "trid3nt_server/testing/canaries.py",
-      "loc": 482,
+      "loc": 500,
       "reachable": false,
       "test_only": false,
       "script_only": true,
@@ -8838,7 +8513,7 @@
       "module": "trid3nt_server.tools.fetchers.hydrology.fetch_lter_records.hooks",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/hydrology/fetch_lter_records/hooks.py",
-      "loc": 372,
+      "loc": 371,
       "reachable": false,
       "test_only": true,
       "script_only": false,
@@ -11942,17 +11617,56 @@
       "unresolved_calls": 0
     },
     {
-      "module": "trid3nt_server.workflows.mesh.shared.nodes",
+      "module": "trid3nt_server.workflows.mesh.shared.formats",
       "package": "trid3nt_server.workflows",
-      "path": "trid3nt_server/workflows/mesh/shared/nodes.py",
-      "loc": 306,
+      "path": "trid3nt_server/workflows/mesh/shared/formats/__init__.py",
+      "loc": 5,
+      "reachable": true,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": true,
+      "unresolved_calls": 0
+    },
+    {
+      "module": "trid3nt_server.workflows.mesh.shared.formats.mesh_formats",
+      "package": "trid3nt_server.workflows",
+      "path": "trid3nt_server/workflows/mesh/shared/formats/mesh_formats.py",
+      "loc": 287,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 124
+      "unresolved_calls": 148
+    },
+    {
+      "module": "trid3nt_server.workflows.mesh.shared.formats.schism_gr3",
+      "package": "trid3nt_server.workflows",
+      "path": "trid3nt_server/workflows/mesh/shared/formats/schism_gr3.py",
+      "loc": 335,
+      "reachable": true,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 119
+    },
+    {
+      "module": "trid3nt_server.workflows.mesh.shared.nodes",
+      "package": "trid3nt_server.workflows",
+      "path": "trid3nt_server/workflows/mesh/shared/nodes.py",
+      "loc": 297,
+      "reachable": true,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 120
     },
     {
       "module": "trid3nt_server.workflows.mesh.shared.primitives",
@@ -13167,7 +12881,7 @@
       "module": "trid3nt_server.workflows.telemac.templates.do_sag.do_sag",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/templates/do_sag/do_sag.py",
-      "loc": 272,
+      "loc": 273,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13271,7 +12985,7 @@
       "module": "trid3nt_server.workflows.telemac.templates.river_dye.river_dye",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/templates/river_dye/river_dye.py",
-      "loc": 281,
+      "loc": 282,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13310,7 +13024,7 @@
       "module": "trid3nt_server.workflows.telemac.templates.river_oil_spill.river_oil_spill",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/templates/river_oil_spill/river_oil_spill.py",
-      "loc": 243,
+      "loc": 244,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13349,7 +13063,7 @@
       "module": "trid3nt_server.workflows.telemac.templates.river_scour.river_scour",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/templates/river_scour/river_scour.py",
-      "loc": 291,
+      "loc": 292,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13388,7 +13102,7 @@
       "module": "trid3nt_server.workflows.telemac.templates.river_sediment_plume.river_sediment_plume",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/templates/river_sediment_plume/river_sediment_plume.py",
-      "loc": 256,
+      "loc": 257,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -14774,928 +14488,564 @@
       "refs": 0
     },
     {
-      "importer": "scripts.assemble_proof_packet",
-      "imported": "trid3nt_server.emission.outputs_seam",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.assemble_proof_packet",
-      "imported": "trid3nt_server.emission.presets",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.assemble_proof_packet",
-      "imported": "trid3nt_server.testing.proof_animations",
-      "static": 4,
-      "dynamic": 0,
-      "refs": 6
-    },
-    {
-      "importer": "scripts.assemble_proof_packet",
-      "imported": "trid3nt_server.testing.proof_paths",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.assemble_proof_packet",
-      "imported": "trid3nt_server.workflows.solver.code_provenance",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.backfill_run_journal",
-      "imported": "trid3nt_server.workflows.runtime.journal",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "scripts.backfill_run_journal",
-      "imported": "trid3nt_server.workflows.solver.solver",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_contracts",
-      "static": 0,
-      "dynamic": 4,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_server",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_server.__main__",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_server.main",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_server.tools",
-      "static": 0,
-      "dynamic": 2,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_server.tools.fetchers._router.spec",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_server.tools.meta",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_server.tools.search",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_server.workflows.shared",
-      "static": 0,
-      "dynamic": 4,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_server.workflows.telemac",
-      "static": 0,
-      "dynamic": 2,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_server.workflows.telemac.authoring",
-      "static": 0,
-      "dynamic": 2,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "trid3nt_server.workflows.telemac.templates.agitation.declarations",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "workers.conftest",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.code_graph",
-      "imported": "workers.telemac.entrypoint",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.drive_artemis_structure_slot",
+      "importer": "scripts.drivers.drive_artemis_structure_slot",
       "imported": "trid3nt_server.testing",
       "static": 3,
       "dynamic": 0,
       "refs": 3
     },
     {
-      "importer": "scripts.drive_artemis_structure_slot",
+      "importer": "scripts.drivers.drive_artemis_structure_slot",
       "imported": "trid3nt_server.testing.proof_paths",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.drive_artemis_structure_slot",
+      "importer": "scripts.drivers.drive_artemis_structure_slot",
       "imported": "trid3nt_server.tools",
       "static": 1,
       "dynamic": 0,
       "refs": 0
     },
     {
-      "importer": "scripts.drive_artemis_structure_slot",
+      "importer": "scripts.drivers.drive_artemis_structure_slot",
       "imported": "trid3nt_server.workflows.shared.supplied_geometry",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.drive_do_sag_cards",
-      "imported": "scripts.render_all_layers_proof",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "scripts.drive_do_sag_cards",
+      "importer": "scripts.drivers.drive_do_sag_cards",
       "imported": "trid3nt_server.testing",
       "static": 3,
       "dynamic": 0,
       "refs": 7
     },
     {
-      "importer": "scripts.drive_do_sag_cards",
+      "importer": "scripts.drivers.drive_do_sag_cards",
       "imported": "trid3nt_server.testing.proof_paths",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.drive_keyword_floor",
+      "importer": "scripts.drivers.drive_keyword_floor",
       "imported": "trid3nt_server.testing",
       "static": 3,
       "dynamic": 0,
       "refs": 3
     },
     {
-      "importer": "scripts.drive_keyword_floor",
+      "importer": "scripts.drivers.drive_keyword_floor",
       "imported": "trid3nt_server.workflows.solver.solver",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.drive_keyword_floor",
+      "importer": "scripts.drivers.drive_keyword_floor",
       "imported": "trid3nt_server.workflows.telemac.products.result_reader",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.drive_lake_domain_mesh",
+      "importer": "scripts.drivers.drive_lake_domain_mesh",
       "imported": "trid3nt_server.tools",
       "static": 1,
       "dynamic": 0,
       "refs": 0
     },
     {
-      "importer": "scripts.drive_lake_domain_mesh",
+      "importer": "scripts.drivers.drive_lake_domain_mesh",
       "imported": "trid3nt_server.tools.cache",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.drive_lake_domain_mesh",
+      "importer": "scripts.drivers.drive_lake_domain_mesh",
       "imported": "trid3nt_server.workflows.mesh.meshers",
       "static": 2,
       "dynamic": 0,
       "refs": 2
     },
     {
-      "importer": "scripts.drive_lake_domain_mesh",
+      "importer": "scripts.drivers.drive_lake_domain_mesh",
       "imported": "trid3nt_server.workflows.mesh.recipe",
       "static": 2,
       "dynamic": 0,
       "refs": 9
     },
     {
-      "importer": "scripts.drive_mesh_spotcheck",
-      "imported": "scripts._env_guard",
+      "importer": "scripts.drivers.drive_mesh_spotcheck",
+      "imported": "scripts.drivers._env_guard",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.drive_mesh_spotcheck",
+      "importer": "scripts.drivers.drive_mesh_spotcheck",
       "imported": "trid3nt_server.tools",
       "static": 1,
       "dynamic": 0,
       "refs": 0
     },
     {
-      "importer": "scripts.drive_mesh_spotcheck",
+      "importer": "scripts.drivers.drive_mesh_spotcheck",
       "imported": "trid3nt_server.workflows.mesh.artifact",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.drive_mesh_spotcheck",
+      "importer": "scripts.drivers.drive_mesh_spotcheck",
       "imported": "trid3nt_server.workflows.mesh.meshers",
       "static": 1,
       "dynamic": 0,
       "refs": 0
     },
     {
-      "importer": "scripts.drive_module_surface_flip",
+      "importer": "scripts.drivers.drive_module_surface_flip",
       "imported": "trid3nt_server.testing",
       "static": 3,
       "dynamic": 0,
       "refs": 3
     },
     {
-      "importer": "scripts.drive_open_water_domains",
+      "importer": "scripts.drivers.drive_open_water_domains",
       "imported": "trid3nt_server.testing",
       "static": 3,
       "dynamic": 0,
       "refs": 3
     },
     {
-      "importer": "scripts.drive_open_water_domains",
+      "importer": "scripts.drivers.drive_open_water_domains",
       "imported": "trid3nt_server.tools",
       "static": 1,
       "dynamic": 0,
       "refs": 0
     },
     {
-      "importer": "scripts.drive_open_water_domains",
+      "importer": "scripts.drivers.drive_open_water_domains",
       "imported": "trid3nt_server.workflows.mesh.session",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.drive_open_water_domains",
+      "importer": "scripts.drivers.drive_open_water_domains",
       "imported": "trid3nt_server.workflows.mesh.tool",
       "static": 2,
       "dynamic": 0,
       "refs": 2
     },
     {
-      "importer": "scripts.drive_open_water_domains",
+      "importer": "scripts.drivers.drive_open_water_domains",
       "imported": "trid3nt_server.workflows.telemac.templates.agitation.agitation",
       "static": 1,
       "dynamic": 0,
       "refs": 0
     },
     {
-      "importer": "scripts.drive_open_water_domains",
+      "importer": "scripts.drivers.drive_open_water_domains",
       "imported": "trid3nt_server.workflows.telemac.templates.agitation.barrier",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.drive_river_dye_cards",
-      "imported": "scripts.render_all_layers_proof",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "scripts.drive_river_dye_cards",
+      "importer": "scripts.drivers.drive_river_dye_cards",
       "imported": "trid3nt_server.testing",
       "static": 3,
       "dynamic": 0,
       "refs": 6
     },
     {
-      "importer": "scripts.drive_river_dye_cards",
+      "importer": "scripts.drivers.drive_river_dye_cards",
       "imported": "trid3nt_server.testing.proof_paths",
       "static": 1,
       "dynamic": 0,
       "refs": 2
     },
     {
-      "importer": "scripts.extract_telemac_catalog",
-      "imported": "trid3nt_server.workflows.mesh.meshers.drivers",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.extract_telemac_catalog",
-      "imported": "trid3nt_server.workflows.mesh.meshers.drivers.telemac_dico_driver",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.proof_artemis_composer_live",
-      "imported": "trid3nt_server.tools",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.proof_artemis_om2d_rematch",
+      "importer": "scripts.drivers.proof_artemis_om2d_rematch",
       "imported": "trid3nt_server.testing.canaries",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.proof_artemis_om2d_rematch",
+      "importer": "scripts.drivers.proof_artemis_om2d_rematch",
       "imported": "trid3nt_server.testing.live_run",
       "static": 3,
       "dynamic": 0,
       "refs": 3
     },
     {
-      "importer": "scripts.proof_artemis_om2d_rematch",
+      "importer": "scripts.drivers.proof_artemis_om2d_rematch",
       "imported": "trid3nt_server.testing.proof_paths",
       "static": 2,
       "dynamic": 0,
       "refs": 2
     },
     {
-      "importer": "scripts.proof_artemis_om2d_rematch",
+      "importer": "scripts.drivers.proof_artemis_om2d_rematch",
       "imported": "trid3nt_server.tools",
       "static": 1,
       "dynamic": 0,
       "refs": 0
     },
     {
-      "importer": "scripts.proof_artemis_om2d_rematch",
+      "importer": "scripts.drivers.proof_artemis_om2d_rematch",
       "imported": "trid3nt_server.tools.cache",
       "static": 2,
       "dynamic": 0,
       "refs": 2
     },
     {
-      "importer": "scripts.proof_artemis_om2d_rematch",
+      "importer": "scripts.drivers.proof_artemis_om2d_rematch",
       "imported": "trid3nt_server.workflows.mesh.artifact",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.proof_artemis_om2d_rematch",
+      "importer": "scripts.drivers.proof_artemis_om2d_rematch",
       "imported": "trid3nt_server.workflows.mesh.session",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.proof_artemis_om2d_rematch",
+      "importer": "scripts.drivers.proof_artemis_om2d_rematch",
       "imported": "trid3nt_server.workflows.mesh.shared.nodes",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.proof_artemis_om2d_rematch",
+      "importer": "scripts.drivers.proof_artemis_om2d_rematch",
       "imported": "trid3nt_server.workflows.mesh.tool",
       "static": 2,
       "dynamic": 0,
       "refs": 11
     },
     {
-      "importer": "scripts.proof_artemis_om2d_rematch",
+      "importer": "scripts.drivers.proof_artemis_om2d_rematch",
       "imported": "trid3nt_server.workflows.solver.solver",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.proof_artemis_real_breakwater_v2",
+      "importer": "scripts.drivers.proof_artemis_real_breakwater_v2",
       "imported": "trid3nt_server.workflows.telemac.products.result_reader",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.proof_auto_emit_seam",
-      "imported": "trid3nt_contracts",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_auto_emit_seam",
-      "imported": "trid3nt_contracts.execution",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.proof_auto_emit_seam",
-      "imported": "trid3nt_server.emission.pipeline_emitter",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_auto_emit_seam",
-      "imported": "trid3nt_server.emission.publish",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.proof_auto_emit_seam",
-      "imported": "trid3nt_server.tools",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.proof_declared_style_live",
-      "imported": "trid3nt_server.emission.presets",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "scripts.proof_declared_style_live",
-      "imported": "trid3nt_server.emission.publish",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_declared_style_live",
-      "imported": "trid3nt_server.tools",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.proof_declared_style_live",
-      "imported": "trid3nt_server.tools.fetchers._router.spec",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_rerun_with_overrides",
-      "imported": "trid3nt_server.tools",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.proof_rerun_with_overrides",
-      "imported": "trid3nt_server.workflows.runtime",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_rerun_with_overrides",
-      "imported": "trid3nt_server.workflows.runtime.journal",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "scripts.proof_rerun_with_overrides",
-      "imported": "trid3nt_server.workflows.runtime.rerun",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_rerun_with_overrides",
-      "imported": "trid3nt_server.workflows.runtime.snapshot",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_rerun_with_overrides",
-      "imported": "trid3nt_server.workflows.solver.solver",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_river_dye_frames",
-      "imported": "trid3nt_contracts.telemac_contracts",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.proof_river_dye_frames",
-      "imported": "trid3nt_server.emission.publish",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_river_dye_frames",
-      "imported": "trid3nt_server.workflows.telemac.products.result_reader",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_wave_bed_input_live",
-      "imported": "scripts.render_fidelity_proof_generic",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_wave_bed_input_live",
-      "imported": "trid3nt_contracts",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.proof_wave_bed_input_live",
-      "imported": "trid3nt_server.emission.pipeline_emitter",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "scripts.proof_wave_bed_input_live",
-      "imported": "trid3nt_server.tools",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.proof_wave_bed_input_render",
-      "imported": "scripts.render_fidelity_proof_generic",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "scripts.qml_preset_smoke",
-      "imported": "trid3nt_server.emission.presets",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 14
-    },
-    {
-      "importer": "scripts.render_all_layers_proof",
-      "imported": "trid3nt_server.emission.publish",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.render_all_layers_proof",
-      "imported": "trid3nt_server.persistence",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.render_all_layers_proof",
-      "imported": "trid3nt_server.workflows.telemac.products.result_reader",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.render_run_chart_proof",
-      "imported": "plugin.ui.charts",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.render_selafin_animation",
-      "imported": "trid3nt_server.emission.presets",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "scripts.render_selafin_animation",
-      "imported": "trid3nt_server.testing.proof_paths",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "scripts.render_selafin_animation",
-      "imported": "trid3nt_server.workflows.telemac.products.result_reader",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.replay_canary_evidence",
-      "imported": "trid3nt_server.tools",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.routing_failure_split",
-      "imported": "trid3nt_server.tools",
-      "static": 1,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.routing_failure_split",
-      "imported": "trid3nt_server.tools.search.tool_retrieval",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "scripts.routing_failure_split",
-      "imported": "trid3nt_server.workflows",
-      "static": 1,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.run_do_sag_direct",
-      "imported": "trid3nt_server.tools",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.run_river_dye_direct",
-      "imported": "trid3nt_server.tools",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.sandbox.oceanmesh.mesh_formats",
-      "imported": "scripts.sandbox.oceanmesh.schism_gr3",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 4
-    },
-    {
-      "importer": "scripts.sandbox.pysheds_watershed.proof_watershed",
-      "imported": "trid3nt_server.tools",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.sandbox.pysheds_watershed.proof_watershed",
-      "imported": "trid3nt_server.tools.cache",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.sandbox.pysheds_watershed.proof_watershed",
-      "imported": "trid3nt_server.tools.processing.delineate_watershed.delineate_watershed",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.sandbox.pysheds_watershed.proof_watershed",
-      "imported": "trid3nt_server.tools.processing.extract_stream_network.extract_stream_network",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.sandbox.replication.ballcreek_delineate_explore",
-      "imported": "trid3nt_server.tools.processing._hydrology_common",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "scripts.sandbox.telemac.run_erodible_scour_direct",
-      "imported": "trid3nt_server.workflows.telemac.templates.river_dye.river_dye",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.seed_showcase_cases",
+      "importer": "scripts.drivers.seed_showcase_cases",
       "imported": "plugin.net.run_invocation",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.seed_showcase_cases",
+      "importer": "scripts.drivers.seed_showcase_cases",
       "imported": "trid3nt_contracts",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.seed_showcase_cases",
+      "importer": "scripts.drivers.seed_showcase_cases",
       "imported": "trid3nt_server.testing.ws_client",
       "static": 8,
       "dynamic": 0,
-      "refs": 5
+      "refs": 10
     },
     {
-      "importer": "scripts.stage_groundwater_recharge",
-      "imported": "scripts._env_guard",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.stage_groundwater_recharge",
-      "imported": "trid3nt_server.tools.cache",
-      "static": 1,
-      "dynamic": 0,
+      "importer": "scripts.instruments.code_graph",
+      "imported": "trid3nt_contracts",
+      "static": 0,
+      "dynamic": 4,
       "refs": 0
     },
     {
-      "importer": "scripts.stage_zell_sanford_groundwater",
-      "imported": "scripts._env_guard",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.stage_zell_sanford_groundwater",
-      "imported": "trid3nt_server.tools.cache",
-      "static": 1,
-      "dynamic": 0,
+      "importer": "scripts.instruments.code_graph",
+      "imported": "trid3nt_server",
+      "static": 0,
+      "dynamic": 1,
       "refs": 0
     },
     {
-      "importer": "scripts.telemac_routing_probe",
-      "imported": "trid3nt_server.adapters.adapter",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 2
+      "importer": "scripts.instruments.code_graph",
+      "imported": "trid3nt_server.__main__",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
     },
     {
-      "importer": "scripts.telemac_routing_probe",
-      "imported": "trid3nt_server.adapters.openai_adapter",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.telemac_routing_probe",
+      "importer": "scripts.instruments.code_graph",
       "imported": "trid3nt_server.main",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.code_graph",
+      "imported": "trid3nt_server.tools",
+      "static": 0,
+      "dynamic": 2,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.code_graph",
+      "imported": "trid3nt_server.tools.fetchers._router.spec",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.code_graph",
+      "imported": "trid3nt_server.tools.meta",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.code_graph",
+      "imported": "trid3nt_server.tools.search",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.code_graph",
+      "imported": "trid3nt_server.workflows.shared",
+      "static": 0,
+      "dynamic": 4,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.code_graph",
+      "imported": "trid3nt_server.workflows.telemac",
+      "static": 0,
+      "dynamic": 2,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.code_graph",
+      "imported": "trid3nt_server.workflows.telemac.authoring",
+      "static": 0,
+      "dynamic": 2,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.code_graph",
+      "imported": "trid3nt_server.workflows.telemac.templates.agitation.declarations",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.code_graph",
+      "imported": "workers.conftest",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.code_graph",
+      "imported": "workers.telemac.entrypoint",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.extract_telemac_catalog",
+      "imported": "trid3nt_server.workflows.mesh.meshers.drivers",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.telemac_routing_probe",
+      "importer": "scripts.instruments.extract_telemac_catalog",
+      "imported": "trid3nt_server.workflows.mesh.meshers.drivers.telemac_dico_driver",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.qml_preset_smoke",
+      "imported": "trid3nt_server.emission.presets",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 14
+    },
+    {
+      "importer": "scripts.instruments.replay_canary_evidence",
       "imported": "trid3nt_server.tools",
       "static": 1,
       "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.instruments.tool_sweep",
+      "imported": "trid3nt_server.tools",
+      "static": 2,
+      "dynamic": 1,
       "refs": 1
     },
     {
-      "importer": "scripts.telemac_routing_probe",
-      "imported": "trid3nt_server.tools.search.search_tools.search_tools",
+      "importer": "scripts.instruments.tool_sweep",
+      "imported": "trid3nt_server.workflows",
       "static": 1,
-      "dynamic": 0,
-      "refs": 1
+      "dynamic": 1,
+      "refs": 0
     },
     {
-      "importer": "scripts.telemac_routing_probe",
-      "imported": "trid3nt_server.tools.search.tool_retrieval",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.tool_routing_bench",
+      "importer": "scripts.instruments.ws_smoke",
       "imported": "trid3nt_contracts",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.tool_routing_bench",
+      "importer": "scripts.instruments.ws_smoke",
       "imported": "trid3nt_server.testing.ws_client",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 7
+    },
+    {
+      "importer": "scripts.packet.assemble_proof_packet",
+      "imported": "trid3nt_server.emission.outputs_seam",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "scripts.packet.assemble_proof_packet",
+      "imported": "trid3nt_server.emission.presets",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "scripts.packet.assemble_proof_packet",
+      "imported": "trid3nt_server.testing.proof_animations",
       "static": 4,
       "dynamic": 0,
       "refs": 6
     },
     {
-      "importer": "scripts.tool_routing_sweep",
-      "imported": "scripts.tool_routing_bench",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.tool_routing_sweep",
-      "imported": "trid3nt_server.tools",
+      "importer": "scripts.packet.assemble_proof_packet",
+      "imported": "trid3nt_server.testing.proof_paths",
       "static": 2,
-      "dynamic": 1,
+      "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.tool_routing_sweep",
-      "imported": "trid3nt_server.workflows",
-      "static": 1,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.tool_sweep",
-      "imported": "scripts._env_guard",
+      "importer": "scripts.packet.assemble_proof_packet",
+      "imported": "trid3nt_server.workflows.solver.code_provenance",
       "static": 1,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "scripts.tool_sweep",
-      "imported": "trid3nt_server.tools",
-      "static": 2,
-      "dynamic": 1,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.tool_sweep",
-      "imported": "trid3nt_server.workflows",
+      "importer": "scripts.packet.render_all_layers_proof",
+      "imported": "scripts.packet.merc_render",
       "static": 1,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.tool_usability_sweep",
-      "imported": "scripts.tool_routing_bench",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.tool_usability_sweep",
-      "imported": "scripts.tool_routing_sweep",
-      "static": 0,
-      "dynamic": 1,
-      "refs": 0
-    },
-    {
-      "importer": "scripts.ws_smoke",
-      "imported": "trid3nt_contracts",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "scripts.ws_smoke",
-      "imported": "trid3nt_server.testing.ws_client",
-      "static": 4,
       "dynamic": 0,
       "refs": 7
+    },
+    {
+      "importer": "scripts.packet.render_all_layers_proof",
+      "imported": "trid3nt_server.emission.publish",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "scripts.packet.render_all_layers_proof",
+      "imported": "trid3nt_server.persistence",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "scripts.packet.render_all_layers_proof",
+      "imported": "trid3nt_server.workflows.telemac.products.result_reader",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "scripts.packet.render_run_chart_proof",
+      "imported": "plugin.ui.charts",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.packet.render_selafin_animation",
+      "imported": "scripts.packet.merc_render",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 6
+    },
+    {
+      "importer": "scripts.packet.render_selafin_animation",
+      "imported": "trid3nt_server.emission.presets",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 3
+    },
+    {
+      "importer": "scripts.packet.render_selafin_animation",
+      "imported": "trid3nt_server.testing.proof_paths",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "scripts.packet.render_selafin_animation",
+      "imported": "trid3nt_server.workflows.telemac.products.result_reader",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "scripts.staging.stage_groundwater_recharge",
+      "imported": "trid3nt_server.tools.cache",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "scripts.staging.stage_zell_sanford_groundwater",
+      "imported": "trid3nt_server.tools.cache",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "tests._fakes",
+      "imported": "trid3nt_contracts.case",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "tests._fakes",
+      "imported": "trid3nt_contracts.common",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
     },
     {
       "importer": "tests.audit_gemini_schema_compliance",
@@ -15860,7 +15210,7 @@
     },
     {
       "importer": "tests.test_active_aoi_repair_job2",
-      "imported": "tests.test_persistence",
+      "imported": "tests._fakes",
       "static": 2,
       "dynamic": 0,
       "refs": 4
@@ -15993,14 +15343,14 @@
     },
     {
       "importer": "tests.test_animation_legend_stability",
-      "imported": "scripts.assemble_proof_packet",
+      "imported": "scripts.packet.assemble_proof_packet",
       "static": 0,
       "dynamic": 1,
       "refs": 0
     },
     {
       "importer": "tests.test_animation_legend_stability",
-      "imported": "scripts.render_selafin_animation",
+      "imported": "scripts.packet.render_selafin_animation",
       "static": 0,
       "dynamic": 1,
       "refs": 0
@@ -16112,7 +15462,7 @@
     },
     {
       "importer": "tests.test_aoi_pin_fetch_bbox_durability",
-      "imported": "tests.test_persistence",
+      "imported": "tests._fakes",
       "static": 2,
       "dynamic": 0,
       "refs": 2
@@ -16182,7 +15532,7 @@
     },
     {
       "importer": "tests.test_aoi_pin_lane_c",
-      "imported": "tests.test_persistence",
+      "imported": "tests._fakes",
       "static": 2,
       "dynamic": 0,
       "refs": 4
@@ -16371,17 +15721,10 @@
     },
     {
       "importer": "tests.test_auto_create_case_job0262",
-      "imported": "tests.test_persistence",
-      "static": 2,
+      "imported": "tests._fakes",
+      "static": 3,
       "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "tests.test_auto_create_case_job0262",
-      "imported": "tests.test_server_case_handlers",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 13
+      "refs": 16
     },
     {
       "importer": "tests.test_auto_create_case_job0262",
@@ -16749,17 +16092,10 @@
     },
     {
       "importer": "tests.test_case_history_rehydrate_f17",
-      "imported": "tests.test_persistence",
-      "static": 1,
+      "imported": "tests._fakes",
+      "static": 2,
       "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "tests.test_case_history_rehydrate_f17",
-      "imported": "tests.test_server_case_handlers",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 6
+      "refs": 7
     },
     {
       "importer": "tests.test_case_history_rehydrate_f17",
@@ -19234,7 +18570,7 @@
     },
     {
       "importer": "tests.test_layer_delete_and_reuse_job0325",
-      "imported": "tests.test_persistence",
+      "imported": "tests._fakes",
       "static": 1,
       "dynamic": 0,
       "refs": 1
@@ -19465,7 +18801,7 @@
     },
     {
       "importer": "tests.test_living_atlas",
-      "imported": "scripts.harvest_living_atlas",
+      "imported": "scripts.instruments.harvest_living_atlas",
       "static": 0,
       "dynamic": 1,
       "refs": 0
@@ -20046,7 +19382,7 @@
     },
     {
       "importer": "tests.test_model_conformance",
-      "imported": "scripts.model_check",
+      "imported": "scripts.instruments.model_check",
       "static": 0,
       "dynamic": 1,
       "refs": 0
@@ -20326,17 +19662,24 @@
     },
     {
       "importer": "tests.test_persistence",
-      "imported": "trid3nt_contracts.case",
+      "imported": "tests._fakes",
       "static": 2,
       "dynamic": 0,
-      "refs": 2
+      "refs": 17
+    },
+    {
+      "importer": "tests.test_persistence",
+      "imported": "trid3nt_contracts.case",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
     },
     {
       "importer": "tests.test_persistence",
       "imported": "trid3nt_contracts.common",
       "static": 1,
       "dynamic": 0,
-      "refs": 9
+      "refs": 8
     },
     {
       "importer": "tests.test_persistence",
@@ -20411,9 +19754,9 @@
     {
       "importer": "tests.test_pipeline_emitter",
       "imported": "trid3nt_server.emission.pipeline_emitter",
-      "static": 19,
+      "static": 20,
       "dynamic": 1,
-      "refs": 45
+      "refs": 46
     },
     {
       "importer": "tests.test_pipeline_emitter",
@@ -20459,7 +19802,7 @@
     },
     {
       "importer": "tests.test_plugin_repo_http_route",
-      "imported": "tests",
+      "imported": "tests._fakes",
       "static": 0,
       "dynamic": 1,
       "refs": 0
@@ -20553,7 +19896,7 @@
       "imported": "trid3nt_server.emission.presets",
       "static": 3,
       "dynamic": 0,
-      "refs": 59
+      "refs": 62
     },
     {
       "importer": "tests.test_probe_point",
@@ -20585,7 +19928,7 @@
     },
     {
       "importer": "tests.test_proof_basemap_credit",
-      "imported": "scripts.sandbox.oceanmesh.merc_render",
+      "imported": "scripts.packet.merc_render",
       "static": 0,
       "dynamic": 1,
       "refs": 0
@@ -22580,6 +21923,13 @@
     },
     {
       "importer": "tests.test_router_overpass",
+      "imported": "trid3nt_server.main",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "tests.test_router_overpass",
       "imported": "trid3nt_server.tools",
       "static": 1,
       "dynamic": 0,
@@ -22640,6 +21990,20 @@
       "static": 1,
       "dynamic": 0,
       "refs": 7
+    },
+    {
+      "importer": "tests.test_router_overpass",
+      "imported": "trid3nt_server.tools.search.search_tools.search_tools",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "tests.test_router_overpass",
+      "imported": "trid3nt_server.tools.search.tool_retrieval",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
     },
     {
       "importer": "tests.test_router_population",
@@ -23393,9 +22757,9 @@
     {
       "importer": "tests.test_run_river_dye_scenario",
       "imported": "trid3nt_server.workflows.runtime",
-      "static": 6,
+      "static": 8,
       "dynamic": 0,
-      "refs": 7
+      "refs": 9
     },
     {
       "importer": "tests.test_run_river_dye_scenario",
@@ -23826,10 +23190,10 @@
     },
     {
       "importer": "tests.test_server_case_handlers",
-      "imported": "tests.test_persistence",
-      "static": 2,
+      "imported": "tests._fakes",
+      "static": 3,
       "dynamic": 0,
-      "refs": 12
+      "refs": 34
     },
     {
       "importer": "tests.test_server_case_handlers",
@@ -24414,7 +23778,7 @@
     },
     {
       "importer": "tests.test_telemac_catalog_drift",
-      "imported": "scripts.extract_telemac_catalog",
+      "imported": "scripts.instruments.extract_telemac_catalog",
       "static": 0,
       "dynamic": 1,
       "refs": 0
@@ -24617,7 +23981,7 @@
     },
     {
       "importer": "tests.test_telemac_module_surface",
-      "imported": "tests",
+      "imported": "tests._fakes",
       "static": 0,
       "dynamic": 1,
       "refs": 0
@@ -25744,7 +25108,7 @@
     },
     {
       "importer": "tests.test_uri_registry",
-      "imported": "tests.test_persistence",
+      "imported": "tests._fakes",
       "static": 4,
       "dynamic": 0,
       "refs": 5
@@ -34220,11 +33584,25 @@
       "refs": 1
     },
     {
+      "importer": "trid3nt_server.workflows.mesh.shared.formats.mesh_formats",
+      "imported": "trid3nt_server.workflows.mesh.shared.formats.schism_gr3",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 4
+    },
+    {
       "importer": "trid3nt_server.workflows.mesh.shared.nodes",
       "imported": "trid3nt_server.tools.cache",
       "static": 2,
       "dynamic": 0,
       "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.workflows.mesh.shared.nodes",
+      "imported": "trid3nt_server.workflows.mesh.shared.formats.mesh_formats",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
     },
     {
       "importer": "trid3nt_server.workflows.mesh.shared.nodes",

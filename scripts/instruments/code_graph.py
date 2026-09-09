@@ -55,6 +55,11 @@ TEST_AREAS: tuple[str, ...] = ("tests", "contracts/tests")
 
 SKIP_DIR_PARTS = {"__pycache__", ".pytest_cache", "node_modules", "sandbox_tmp"}
 
+#: Subtrees this atlas must not describe. `scripts/local/` is gitignored by
+#: ruling, so a committed report that named its modules could not be reproduced
+#: from a clone.
+SKIP_SUBTREES: tuple[Path, ...] = (Path("scripts") / "local",)
+
 # ---------------------------------------------------------------------------
 # Dead-symbol whitelist. Each rule is a FALSE-POSITIVE CLASS this repo's
 # registry patterns produce, not a convenience mute. A rule that stops matching
@@ -134,6 +139,9 @@ def _module_name(rel: Path, area_root: Path, area_name: str) -> str:
 def _walk_py(root: Path) -> Iterable[Path]:
     for p in sorted(root.rglob("*.py")):
         if SKIP_DIR_PARTS & set(p.parts):
+            continue
+        rel = p.relative_to(REPO) if p.is_relative_to(REPO) else p
+        if any(rel.is_relative_to(sub) for sub in SKIP_SUBTREES):
             continue
         yield p
 

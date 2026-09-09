@@ -24,6 +24,8 @@ one reached dynamically. Treat as candidates, not verdicts.
 
 | symbol | kind | file:line | loc |
 |---|---|---|---|
+| `write_fort14` | function | trid3nt_server/workflows/mesh/shared/formats/mesh_formats.py:111 | 87 |
+| `mesh_quality_report` | function | trid3nt_server/workflows/mesh/shared/formats/mesh_formats.py:228 | 60 |
 | `serve_user_supplied_bed` | function | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py:1836 | 38 |
 | `get_session_record` | method | trid3nt_server/persistence.py:704 | 31 |
 | `scan_third_party_imports` | function | plugin/install_dependencies.py:326 | 30 |

@@ -4,11 +4,11 @@ The standing measure for every LOC report; YAML, JSON, docs/ and images never co
 """
 from __future__ import annotations
 
+import argparse
 import collections
 import io
 import os
 import subprocess
-import sys
 import tokenize
 
 STATEMENT_ENDS = {tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT, tokenize.ENCODING}
@@ -44,6 +44,10 @@ def is_test(f: str) -> bool:
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser(description="Pure-code LOC by tree and server subtree.")
+    ap.add_argument("subtrees", nargs="?", type=int, default=14,
+                    help="how many server subtrees to list (default 14)")
+    args = ap.parse_args()
     root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
     os.chdir(root)
     files = [f for f in subprocess.check_output(["git", "ls-files"], text=True).split("\n")
@@ -74,7 +78,7 @@ def main() -> int:
     v = trees["TESTS"]
     print(f"{'TESTS':<24}{pure(v):>9}{v[0]:>9}{v[3]:>9}{v[2]:>9}")
     print("\nserver subtrees (pure)")
-    for k, v in sorted(subs.items(), key=lambda kv: -pure(kv[1]))[: int(sys.argv[1]) if len(sys.argv) > 1 else 14]:
+    for k, v in sorted(subs.items(), key=lambda kv: -pure(kv[1]))[: args.subtrees]:
         print(f"{k:<24}{pure(v):>9}")
     return 0
 

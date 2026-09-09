@@ -29,7 +29,9 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   in `contracts/schemas` (regenerated, never hand-edited).
 - `plugin/` - the QGIS dock (installs as `trid3nt`). `tests/` - the
   offline suite (slices 1-4).
-  `scripts/` - drivers, smokes, image builds. `docs/` - decisions
+  `scripts/` - the entry points you type, plus `instruments/` (measure
+  + check), `packet/` (the delivery renderers), `drivers/` (the live
+  drive lane) and `staging/`. `docs/` - decisions
   (ADRs), design (feature guides), validation, proof/templates (NEVER
   delete anything there).
 
@@ -57,8 +59,11 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 3. The live stack runs on THIS box: MinIO :9000, the daemon via
    `make agent`, local docker solvers. `set -a; source .env.local;
    set +a` for env. Server changes end with daemon restart +
-   `scripts/instruments/ws_smoke.py` (all_passed) + the flood canary
-   `scripts/run_sfincs_direct.py` (status=ok). You run these yourself.
+   `scripts/instruments/ws_smoke.py` (all_passed) + one declared canary
+   through the product path,
+   `python -m trid3nt_server.testing.canaries <name>`, which exits
+   non-zero unless the run's own products were read AND its delivery
+   packet assembled. You run these yourself.
 4. Behavior-preserving refactors move code verbatim; every reference
    site (tests, monkeypatch paths, source-inspection anchors,
    parents[N] depths) moves WITH it - grep the old path to zero, clear

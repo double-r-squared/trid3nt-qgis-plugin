@@ -585,6 +585,11 @@ LayerURI-shaped dict returns as an inert blob).
   hurricane-case end-to-end validation this script does, with a recorded run.
 - Decided by: NATE (decision 3, 2026-08-25): "keep until we replace it with
   something better."
+- CLOSED 2026-09-09: the file is not in the tree and has not been since the
+  2026-08-28 fresh-start purge, which moved it to `~/Documents/trid3nt-attic`
+  with the rest of the per-engine drivers (see the purge row below). The
+  condition it was held open for is moot - the SFINCS engine it validated left
+  with it. Status: ATTIC, not QUEUED.
 
 ## The buried Overpass breakwater fetch in the ARTEMIS deck writer - DELETED 2026-08-25
 
@@ -3528,3 +3533,15 @@ alias was a bare rebinding of the name it aliased.
 Repointed with the move to `scripts/drivers/`: the module docstring's pointer at
 the `scripts/run_*_direct.py` drivers, which are now untracked under
 `scripts/local/`.
+
+## The four docs naming absent scripts - CORRECTED - 2026-09-09
+
+The scripts eval measured four places that name a script the tree does not have.
+Each is corrected here rather than carried into the reshuffle.
+
+| Where | What it named | Correction |
+|---|---|---|
+| `AGENTS.md` law 3 | `scripts/run_sfincs_direct.py` as the flood canary | The direct-call flood lane is retired and SFINCS is gone. The law now names the product path a canary actually runs on - `python -m trid3nt_server.testing.canaries <name>`, which exits non-zero unless the run's own products were read and its packet assembled. |
+| `tests/test_telemac_rain_on_grid_template.py` | `scripts/sandbox/telemac/rog_coweeta_live.py` and `rog_offline_smoke.py` as the live proof | Both went to the attic in the 2026-08-28 fresh-start purge. The live proof is the `telemac_rain_on_grid` canary and its refined variant, whose packets are the evidence. |
+| `docs/validation/telemac-family-migration-inventory.md` | five drivers in its "driver today" column | A DATED record, so the rows stay VERBATIM: a one-line dated note at the top names the five and points here. |
+| `docs/DELETION_LEDGER.md` (the `run_l2_validation_harness.py` section) | a QUEUED row for a file already gone | CLOSED in place: the file left in the 2026-08-28 purge with the rest of the per-engine drivers, and the engine it validated left with it. Status ATTIC, not QUEUED. |

@@ -2,10 +2,8 @@
 
 No solver / no network: registration shape, the declared step sequence, the
 wire-signature door contract, and the pure step/chart helpers only. Live
-end-to-end (mesh acquisition + solve + depth COG) is proven on Coweeta Creek NC by
-scripts/sandbox/telemac/rog_coweeta_live.py (docs/proof/templates/
-telemac_rain_on_grid*.png); the worker RoG run THROUGH the image by
-scripts/sandbox/telemac/rog_offline_smoke.py.
+end-to-end (mesh acquisition + solve + depth COG) is the telemac_rain_on_grid
+canary and its refined variant, whose packets are the evidence.
 """
 
 from __future__ import annotations
