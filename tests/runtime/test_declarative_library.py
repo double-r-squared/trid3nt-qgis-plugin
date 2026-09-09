@@ -47,7 +47,7 @@ from trid3nt_server.workflows.runtime import (
     validate_plan,
 )
 
-_HERE = "tests.test_declarative_library"
+_HERE = "tests.runtime.test_declarative_library"
 
 
 @contextlib.contextmanager

@@ -312,7 +312,7 @@ def test_a_malformed_validity_declaration_refuses(kwargs):
 
 
 # --- the probe workflow ------------------------------------------------------ #
-_PROBE = "tests.test_rerun_with_overrides"
+_PROBE = "tests.runtime.test_rerun_with_overrides"
 
 _STAGED: dict[str, Any] = {}
 

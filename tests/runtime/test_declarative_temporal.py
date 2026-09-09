@@ -34,7 +34,7 @@ from trid3nt_server.workflows.runtime import (
     transform_value,
 )
 
-_HERE = "tests.test_declarative_temporal"
+_HERE = "tests.runtime.test_declarative_temporal"
 _SEEN: list[dict] = []
 
 
