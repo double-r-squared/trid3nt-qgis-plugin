@@ -5,10 +5,10 @@ HyRiver's HTTP layer (``async_retriever``) has no retry, no status filter and no
 ``Retry-After`` read, and a 4xx whose body parses as JSON is RETURNED AS A VALUE -
 so an upstream refusal would otherwise reach the router as an answer and become an
 honest-looking empty layer. :func:`hyriver_call` restores the norm for pygeohydro
-and pynhd alike: an error document is raised carrying the upstream text verbatim,
-429 and 5xx back off and retry, and a ``Retry-After`` is obeyed wherever the
-provider puts one within reach, and a connection that never produced a response is
-retried the way ``transport/client.py`` retries one.
+and pynldas2 alike: an error document is raised carrying the upstream text verbatim,
+429 and 5xx back off and retry, a ``Retry-After`` is obeyed wherever the provider
+puts one within reach, and a connection that never produced a response is retried
+the way ``transport/client.py`` retries one.
 
 WITHIN REACH is measured, and it is the body only: the library reads the response
 and discards the headers, so a status integer and a ``Retry-After`` are honored
@@ -133,7 +133,7 @@ def _wait(state: RetryCallState) -> float:
 
 
 def hyriver_call(spec: SourceSpec, what: str, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
-    """Call one pygeohydro / pynhd entry point under the upstream-provider norm.
+    """Call one pygeohydro / pynldas2 entry point under the upstream-provider norm.
 
     ``what`` names the call in the error a caller reads. Anything left after the
     retries is a typed upstream error whose message is the library's text verbatim.
