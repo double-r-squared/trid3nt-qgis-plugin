@@ -444,7 +444,7 @@ tree, so it needs the wide-blast-radius scrutiny.
 | `dataretrieval_delegate.py` | 431 | ~301 | **SHRINKS ~130.** `nldi_features:320` + `_nldi_snap:295` fold to `pynhd.NLDI`; `wqp_features:183` + `_latest_results_by_site:143` stay. Its `:15-19` docstring - the library owns the socket, the router maps its typed errors - is the template for every library fold |
 | `library_delegate.py` | 165 | 165 | **STAYS.** Consumers after the fold: nwm, storm_tracks, gtsm, field_boundaries, dem, 3dep_extra, statsgo, topobathy, bluetopo, goes_satellite, population, era5, hrrr x2 |
 | `chained_resolution.py` | 205 | 205 | **STAYS.** ~12 specs use its resolve + enrich phases |
-| *(`transforms/join.py` 342)* | 342 | 0 | **TRAVELS TO THE SCOPE ATTIC** with `fetch_census_acs` + `fetch_lehd_jobs`, its only consumers. Not a fold - flag it to the move wave |
+| *(`transforms/join.py` 342)* | 342 | 0 | **STAYED in the tree** when `fetch_census_acs` + `fetch_lehd_jobs` moved (corrected 2026-09-08 after the scope-move verify: it is ledgered QUEUED at DELETION_LEDGER.md:25 - zero `join:` blocks remain across the 97 specs - and the demographic MANIFEST lists it under Requires:, so the fold wave treats it as an ORPHAN awaiting the ledger row, not as attic content), its only consumers. Not a fold - flag it to the move wave |
 | *(`transport/` 820)* | 820 | 820 | **STAYS, and it is the thing GDAL must be measured against.** `client.py:5-8`: "The retry authority lives here and nowhere else: backoff + `Retry-After` honored on 429/5xx/timeout at BLOCK granularity... **GDAL-side retries stay off everywhere - reads never touch `/vsicurl/`**." The fold inverts that sentence |
 
 ---

@@ -4137,3 +4137,35 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   precipitation source we do not fetch, one spec on HyRiver, added to
   the fold wave's hydro stage; (e) cover_statistics - overlaps two held
   processing tools, noted for the processing pass.
+
+- SCOPE-ATTIC MOVE CLOSED (2026-09-08, verifier VERDICT CLEAN at
+  d90c3dce): hooks co-located per package and tree-walked (160 hook
+  refs across 59 specs resolve; no closed list; the count gate test
+  at 161); biodiversity (7), movement ecology (2) and the demographic
+  group (4) moved INTACT to ~/Documents/trid3nt-scope-attic
+  (README + 3 packages, MANIFEST + tests + corpus each,
+  credentials.yaml); re-mount REHEARSED on movement ecology
+  (161 -> 163 and back) with the transcript; registered tools 174 ->
+  161; specs 97; retrieval top-8 unchanged for every in-scope bench
+  prompt; a live river_dye packet through the tree-walk loader at
+  HEAD; the module-surface F2-F9 tail and the sweep's doc-map residue
+  landed; plugin 0.3.22. NOTE: the wave ran to completion before the
+  opus-default ruling reached it - its rehearsal and tail stages ran
+  on sonnet; the verifier (opus) re-ran every gate. QUEUED to the
+  fold wave's prelude (reported, not fixed): (1) empty skeleton dirs
+  left where the 13 packages were (move residue; a ninth pre-
+  existing at ocean/fetch_ncei_dem_mosaic); (2) 12 live comment sites
+  explaining a shared mechanism with a departed tool as the worked
+  example (source_spec.py:91,126,448,464; router.py:304; cds.py:120;
+  firms hooks.py:6,64; openfema hooks.py:6; gates/confirm.py:38;
+  scenario_reuse.py:112; pipeline_emitter.py:332); (3) three corpus
+  rows naming atticked data (spatial_query corpus:11,28; search_tools
+  corpus:5); (4) docs/design/temporal-endpoint-inventory.md's
+  biodiversity section; (5) the ledger residue row miscounts the
+  retrieval shift (1 of 15, not 2); (6) MANIFEST/credentials.yaml
+  name PROVIDERS where the symbol is CREDENTIAL_PROVIDERS; (7)
+  docs/site/tool-support.md replays 13 departed tools and cannot be
+  regenerated without losing 5 hand-curated renames - the one stale
+  generated artifact left. CORRECTED NOW: the fetcher-fold census
+  said join.py travels to the attic; it STAYED (ledgered QUEUED, the
+  demographic MANIFEST requires it) - the census reads so.
