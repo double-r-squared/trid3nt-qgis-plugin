@@ -2,14 +2,14 @@
   "$defs": {
     "BaseMetrics": {
       "additionalProperties": false,
-      "description": "Empty base; subtype payloads carry the real metric fields.\n\nThe envelope's top-level ``metrics`` field is ``BaseMetrics`` and stays\nempty by design \u2014 real numbers live in the hazard subtype payload\n(``flood.metrics`` etc.), enforcing invariant 3.",
+      "description": "Empty base. The envelope's top-level ``metrics`` stays empty BY DESIGN:\nthe real numbers live in the hazard subtype payload, which is what keeps\nthe envelope itself hazard-agnostic.",
       "properties": {},
       "title": "BaseMetrics",
       "type": "object"
     },
     "CatalogReference": {
       "additionalProperties": false,
-      "description": "Denormalized reference to a public_hazard_catalog entry (discovery only).",
+      "description": "Denormalized reference to a curated catalog entry. Discovery only.",
       "properties": {
         "access_url": {
           "title": "Access Url",
@@ -44,7 +44,7 @@
     },
     "CriticalFacility": {
       "additionalProperties": false,
-      "description": "A flooded critical facility (invariant 1: typed, narratable number).",
+      "description": "A flooded critical facility, as typed numbers a narrative can cite.",
       "properties": {
         "category": {
           "enum": [
@@ -455,7 +455,7 @@
     },
     "Provenance": {
       "additionalProperties": false,
-      "description": "Structured provenance for a modeled or discovered envelope (invariant 7).",
+      "description": "Structured provenance: attribution is generated from these, not written.",
       "properties": {
         "article_ids": {
           "items": {
@@ -489,7 +489,7 @@
     },
     "ResultLayer": {
       "additionalProperties": false,
-      "description": "A renderable result layer.\n\nField-for-field alignable with ``map-command load-layer`` args\n(``layer_id``, ``style``, ``temporal``) so the UI renders without\ntranslation. Output formats are fixed by/: rasters COG,\nvectors FlatGeobuf/GeoParquet. ``LayerURI`` (execution.py) is the producer\nshape that maps onto this.\n\n``style`` mirrors ``LayerURI.style`` (the declared row) and ``legend``\nmirrors ``LayerURI.legend`` (that row resolved against this layer, with the\nconcrete range and the .qml the map loads).",
+      "description": "A renderable result layer.\nField-for-field alignable with the ``load-layer`` map command so a client\nrenders it without translating. Rasters are COG, vectors FlatGeobuf.",
       "properties": {
         "fallback_note": {
           "anyOf": [
@@ -649,7 +649,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "The central output structure.\n\n    For a given envelope, exactly one subtype field matching ``hazard_type`` is\n    populated; the rest are ``None``. ``envelope_type`` (modeled vs discovered)\n    is independent of ``hazard_type``.\n\n    v0.1 note: only the flood subtype is fully typed (``FloodPayload``). The\n    v0.2+/v0.3+ subtypes (groundwater/wildfire/seismic/spill) are carried as\n    permissive ``dict | None`` slots until their engines land \u2014 matching\n.6b, which states discovery payloads are a permissive dict\n    validated at the workflow layer in v0.1. See report Open Question OQ-S2.\n    ",
+  "description": "The central output structure.\nExactly one subtype field is populated - the one matching ``hazard_type`` -\nand ``envelope_type`` is independent of which hazard that is.",
   "properties": {
     "bbox": {
       "maxItems": 4,

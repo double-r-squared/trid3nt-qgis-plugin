@@ -1,28 +1,9 @@
-"""Typed AGENT-SIDE mirror of the worker's ``publish_manifest.json`` contract.
+"""Typed READER for the worker's ``publish_manifest.json``.
 
-The worker writes the manifest as a PLAIN dict (see
-``workers/_raster_postprocess/manifest.py``) because the CodeBuild
-worker context does not ship ``contracts``. This module is the AGENT's
-typed READER of that dict - two definitions, ONE ``schema_version`` gate. The
-SFINCS raster postprocess offload (Phase 4) lifts the heavy NetCDF/.mat -> COG
-conversion into the Batch worker; the worker now writes display-ready
-overview-bearing COGs + this manifest, and the agent collapses to: parse this
-manifest, build the TiTiler tile URL from each bare ``cog_uri`` + the agent-owned
-style resolution, register + persist.
-
-Design notes (deliberate divergence from ``GraceModel``):
-
-- These are TOLERANT reader models (``extra="ignore"``), NOT ``GraceModel``
-  subclasses (which ``forbid`` extras). A forward-compatible additive key the
-  worker grows must NEVER break the agent reader before the agent redeploys
-  (data-source-fallback norm). The schema_version gate is the hard compatibility
-  contract; unknown keys are ignored, missing optional keys default.
-
-- ``parse_publish_manifest(text)`` mirrors the worker's ``parse_manifest_json``:
-  it REJECTS a non-dict body, a missing schema_version, or an unknown
-  schema_version (raising ``ValueError``) - that rejection is the agent's
-  one-release FALLBACK trigger (the caller then runs the legacy on-box
-  postprocess path). A known schema_version validates into ``PublishManifest``.
+The writer emits a plain dict, so the shape has two definitions held together
+by ONE ``schema_version`` gate. The reader models are TOLERANT
+(``extra="ignore"``): an additive key the writer grows must never break a
+reader that has not redeployed yet.
 """
 
 from __future__ import annotations
@@ -40,34 +21,24 @@ __all__ = [
     "parse_publish_manifest",
 ]
 
-#: The ONE schema_version the agent reader understands. MUST stay in lockstep
-#: with ``workers/_raster_postprocess/manifest.MANIFEST_SCHEMA_VERSION``.
-#: A manifest carrying any other value is treated as "unknown" -> the agent
-#: falls back to the legacy on-box postprocess path (one-release safety).
+#: The ONE schema_version this reader understands, in lockstep with the
+#: writer's own constant. Any other value is UNKNOWN and refused, which is the
+#: caller's signal to fall back rather than to guess at the body.
 MANIFEST_SCHEMA_VERSION: int = 1
 
 
 class _ReaderModel(BaseModel):
     """Base for the tolerant manifest reader models.
-
-    ``extra="ignore"`` (NOT ``forbid``) so a forward-compatible additive key the
-    worker grows is silently dropped rather than crashing the agent before the
-    agent redeploys.
-    """
+    ``extra="ignore"``, NOT ``forbid``: an additive key the writer grows is
+    dropped rather than crashing a reader that has not redeployed."""
 
     model_config = ConfigDict(extra="ignore")
 
 
 class PublishManifestBandStats(_ReaderModel):
-    """Precomputed band-1 stats - the worker's substitute for the agent's COG
-    re-download in ``publish_layer._resolve_titiler_style_params``.
-
-    ``is_categorical`` / ``is_rgba`` short-circuit the categorical-palette and
-    RGBA/multiband passthrough guards (the agent returns empty style params for
-    those, exactly as the on-box path did). ``p2`` / ``p98`` feed the
-    GENERIC-fallback percentile rescale for a single-band continuous preset NOT
-    in the agent registry, so the agent never re-reads the COG.
-    """
+    """Precomputed band-1 stats, so style resolution never re-reads the COG.
+    ``is_categorical`` and ``is_rgba`` short-circuit to empty style params;
+    ``p2`` / ``p98`` drive the generic percentile rescale for everything else."""
 
     is_categorical: bool = False
     is_rgba: bool = False
@@ -78,44 +49,36 @@ class PublishManifestBandStats(_ReaderModel):
 
 
 class PublishManifestLayer(_ReaderModel):
-    """One ``layers[]`` entry - a single display-ready COG the agent registers.
-
-    ``cog_uri`` is a BARE ``s3://`` key. ``style`` is the declared style row for
-    the layer (kind plus parameters); a manifest that carries none takes the
-    kind's bare default. ``name`` is the EXACT grouping token ("Peak flood
-    depth" and the wave equivalents).
-
-    ``frame_no`` is the LEGACY temporal marker: the docker raster workers write
-    only non-frame entries now (their frames ride ``outputs.json``), so a
-    ``frame_no`` appears on a pre-collapse run or a producer that has not migrated.
-    """
+    """One ``layers[]`` entry - a single display-ready COG, ready to register."""
 
     layer_id_stem: str
+    #: The EXACT grouping token layers are collected under.
     name: str
     layer_type: str = "raster"
     role: str = "primary"
+    #: The declared style row - kind plus parameters. ``None`` takes the kind's
+    #: bare default rather than leaving the layer unstyled.
     style: dict[str, Any] | None = None
     units: str = ""
+    #: A BARE object-store key, not a tile URL.
     cog_uri: str
+    #: LEGACY temporal marker. Frames ride the outputs manifest now, so a value
+    #: here means a pre-collapse run or a producer that has not migrated.
     frame_no: int | None = None
     bbox: list[float] | None = None
     has_overviews: bool = True
     band_stats: PublishManifestBandStats = Field(
         default_factory=PublishManifestBandStats
     )
-    #: Per-layer metrics. On the PEAK depth layer these are the FloodMetrics
-    #: aggregates; on each wave layer they carry the WaveFieldLayerURI narration
-    #: scalars (max_hs_m / mean_tp_s / mean_dir_deg / wave_area_km2).
+    #: Per-layer metrics: the aggregates this layer's own narration cites.
+    #: The keys are the producing layer type's, not a fixed set.
     metrics: dict[str, Any] = Field(default_factory=dict)
 
 
 class PublishManifest(_ReaderModel):
-    """The full worker -> agent publish manifest (gated on ``schema_version``).
-
-    Top-level ``metrics`` carries the run's PEAK aggregates that replace the
-    in-process ``postprocess_flood`` return value the agent consumed for
-    ``FloodMetrics``.
-    """
+    """The full worker -> reader publish manifest, gated on ``schema_version``.
+    Top-level ``metrics`` carries the run's PEAK aggregates, distinct from the
+    per-layer metrics each entry carries."""
 
     schema_version: int
     engine: str = ""
@@ -128,15 +91,9 @@ class PublishManifest(_ReaderModel):
 
 
 def parse_publish_manifest(text: str | bytes) -> PublishManifest:
-    """Parse + schema-gate a ``publish_manifest.json`` body into a typed model.
-
-    Mirrors the worker's ``parse_manifest_json`` rejection rules so the agent's
-    one-release fallback trigger is unambiguous:
-
-    Raises ``ValueError`` on a non-dict body, a missing ``schema_version``, or an
-    UNKNOWN ``schema_version`` (the caller then runs the legacy on-box
-    postprocess path). A known schema_version validates into ``PublishManifest``.
-    """
+    """Parse and schema-gate a ``publish_manifest.json`` body into a typed model.
+    ``ValueError`` on a non-dict body, a missing ``schema_version`` or an unknown
+    one - that refusal is the caller's fallback trigger, never a silent parse."""
     if isinstance(text, (bytes, bytearray)):
         text = text.decode("utf-8")
     data = json.loads(text)

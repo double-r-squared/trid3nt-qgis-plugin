@@ -1,29 +1,9 @@
-"""The ``outputs.json`` emit-on-solve manifest -- writer + typed reader.
+"""The ``outputs.json`` emit-on-solve manifest - writer and typed reader.
 
-The append-only manifest a solver leg writes under its run prefix so the
-emission seam can publish entries as they land. Companion to
-``docs/design/outputs-manifest-schema.md`` (the frozen schema) and
-``docs/design/emission.md`` (the seam's folder).
-
-Entry shape (flat, role-free -- NATE ruling): ``{kind, quantity, name, uri,
-t?, units?}``. The wrapper carries the version marker:
-``{schema_version, engine, run_id, entries: [...]}``.
-
-TWO surfaces, ONE ``schema_version`` gate (the ``publish_manifest``
-precedent, forced by the deploy boundary: the WORKER
-images ship ``workers/**`` but NOT ``contracts``; the AGENT ships
-``contracts`` but NOT ``workers``):
-
-  * The WRITER half (``new_manifest`` / ``build_entry`` / ``append_entries`` /
-    ``serialize``) is PURE STDLIB -- no pydantic, no engine deps -- so it is
-    importable from BOTH the host-exec agent path (MODFLOW/SWMM run in the
-    agent process, recon gotcha #2) AND a verbatim worker mirror
-    (``workers/_raster_postprocess/outputs_manifest.py``, gated on the same
-    ``OUTPUTS_MANIFEST_SCHEMA_VERSION``). The docker-worker path imports the
-    mirror; the host-exec path imports THIS module.
-  * The READER half (``OutputEntry`` / ``OutputsManifest`` /
-    ``parse_outputs_manifest``) is tolerant pydantic (``extra="ignore"``),
-    agent-side only -- the seam's consumer.
+The append-only manifest a solver leg writes under its run prefix so entries
+publish as they land. The WRITER half is PURE STDLIB so a deploy context
+without pydantic can mirror it verbatim; the READER half is tolerant pydantic.
+Two surfaces, ONE ``schema_version`` gate.
 """
 
 from __future__ import annotations
@@ -47,15 +27,14 @@ __all__ = [
     "parse_outputs_manifest",
 ]
 
-#: The ONE schema_version both the writer and the reader understand. A worker
-#: MIRROR module gates on this exact value. Bumping it is a coordinated
-#: worker-image + agent redeploy (a worker image is pinned to one version for
-#: its whole life -- an unknown version NEVER happens on the write side).
+#: The ONE schema_version both the writer and the reader understand. Any mirror
+#: gates on this exact value, so bumping it is a coordinated redeploy of both
+#: sides; a writer is pinned to one version for its whole life.
 OUTPUTS_MANIFEST_SCHEMA_VERSION: int = 1
 
-#: The seam's routing keys (Section 1). Temporality rides ``t``, NOT a distinct
-#: kind: a ``raster`` with a ``t`` that shares a ``quantity`` with its siblings
-#: forms a temporal group; a ``raster`` with no ``t`` is a single layer.
+#: The routing keys. Temporality rides ``t``, NOT a distinct kind: a ``raster``
+#: with a ``t`` that shares a ``quantity`` with its siblings forms a temporal
+#: group, and a ``raster`` with no ``t`` is a single layer.
 OUTPUT_KINDS: frozenset[str] = frozenset({"raster", "mesh", "vector", "scalar"})
 
 #: The object basename a leg writes under its run prefix.
@@ -63,7 +42,7 @@ OUTPUTS_MANIFEST_BASENAME: str = "outputs.json"
 
 
 # --------------------------------------------------------------------------- #
-# WRITER (pure stdlib -- worker-mirrorable; NO pydantic on this path).
+# WRITER: pure stdlib, mirrorable verbatim. NO pydantic on this path.
 # --------------------------------------------------------------------------- #
 def build_entry(
     *,
@@ -79,45 +58,11 @@ def build_entry(
     reference_time: str | None = None,
     dataset_group: str | None = None,
 ) -> dict[str, Any]:
-    """Build ONE flat manifest entry dict (``{kind, quantity, name, uri, t?,
-    units?}`` plus the OPTIONAL render-hint fields ``bbox?`` / ``band_stats?`` /
-    ``crs_authid?``).
-
-    Raises ``ValueError`` on an unrecognized ``kind`` (a typed reject at write
-    time, never a silent drop -- Section 6) or a missing required field. ``t`` /
-    ``units`` are omitted from the dict (absent, not null) when ``None`` so the
-    object stays as small as the schema promises.
-
-    RENDER-HINT AMENDMENT (ADR 0280 EXECUTED, schema_version 1): ``bbox`` (the
-    per-COG EPSG:4326 ``[minlon,minlat,maxlon,maxlat]``) and ``band_stats``
-    (``{is_categorical, is_rgba, p2, p98}``) are OPTIONAL fields a producer that
-    ALREADY computed them (every docker raster worker does) writes so the seam
-    resolves the SAME bbox + rescale the register-only fast path did WITHOUT a
-    COG re-read. Absent (host-exec engines that don't precompute) the seam
-    degrades to the workflow AOI bbox + a lazy per-COG stats touch. They are the
-    minimal set the byte-equivalence bar (Section 7.1 lists bbox + band stats)
-    needs; the flat ``{kind,quantity,name,uri,t,units}`` core is unchanged and
-    still the only REQUIRED shape. All are omitted from the dict when ``None``.
-
-    CRS AMENDMENT (ADR 0283, schema_version 1): ``crs_authid`` is an OPTIONAL EPSG
-    authority id (``"EPSG:32616"``) a ``kind="mesh"`` entry carries, because a
-    SELAFIN mesh sibling carries NO CRS of its own -- the plugin's ``_add_mesh``
-    sets ``QgsMeshLayer.setCrs`` from this field (0116). It is per-run (the reach's
-    UTM zone), so it cannot live in the quantity->style registry; it rides the
-    entry. Absent for raster/vector entries (their COGs are self-describing).
-    Tolerant-read: an old producer that omits it is byte-unchanged.
-
-    ``reference_time`` is the ISO-8601 UTC instant a ``kind="mesh"`` entry's time
-    axis is measured from. A SELAFIN counts seconds from an origin it does not
-    record, so a temporal layer built from one reads its first step as 1900
-    unless the run states when it began. Like ``crs_authid`` it is per-run, so it
-    rides the entry; absent for raster/vector entries.
-
-    ``dataset_group`` is the ONE group a ``kind="mesh"`` entry's preset paints,
-    spelled the way the mesh format's own reader reports it. A results mesh
-    carries every variable the solve wrote, so the quantity it is FILED under
-    ("the model results") is not the field a reader is meant to see; this names
-    that field. Absent, the quantity stands in.
+    """Build ONE flat manifest entry dict.
+    ``ValueError`` on an unrecognized ``kind`` or a missing required field - a
+    typed reject at write time, never a silent drop. A ``None`` optional is
+    OMITTED from the dict rather than written as null, so the object stays as
+    small as the schema promises.
     """
     if kind not in OUTPUT_KINDS:
         raise ValueError(
@@ -139,14 +84,26 @@ def build_entry(
         entry["t"] = float(t)
     if units:
         entry["units"] = units
+    # Render hints, written by a producer that ALREADY computed them, so a
+    # consumer resolves the same extent and rescale without re-reading the file.
+    # Absent, the consumer falls back to the workflow AOI and a lazy stats touch.
     if bbox is not None:
         entry["bbox"] = [float(v) for v in bbox]
     if band_stats is not None:
         entry["band_stats"] = dict(band_stats)
+    # A SELAFIN mesh carries no CRS of its own, so a mesh entry states the EPSG
+    # authority id here. It is per-run - the reach's UTM zone - so it cannot
+    # live in a quantity-keyed registry. Rasters and vectors are self-describing.
     if crs_authid:
         entry["crs_authid"] = str(crs_authid)
+    # A SELAFIN counts seconds from an origin it does not record, so a temporal
+    # layer built from one reads its first step as 1900 unless the run states
+    # when it began.
     if reference_time:
         entry["reference_time"] = str(reference_time)
+    # A results mesh carries every variable the solve wrote, so the quantity the
+    # entry is FILED under is not the field a reader is meant to see. This names
+    # that field in the mesh reader's own spelling; absent, the quantity stands in.
     if dataset_group:
         entry["dataset_group"] = str(dataset_group)
     return entry
@@ -169,17 +126,10 @@ def append_entries(
     run_id: str,
     new: list[dict[str, Any]],
 ) -> str:
-    """The safe-append core (Section 2): read the current array, append, return
-    the WHOLE array serialized for one atomic-per-object PUT.
-
-    ``existing_text`` is the current ``outputs.json`` body (``None``/empty on the
-    first frame). The caller owns the object-store GET/PUT; this function owns
-    the pure array manipulation so BOTH the worker and host-exec paths share it
-    verbatim. Entries are appended in order; a prior entry is never edited or
-    removed (immutable-once-written).
-
-    Raises ``ValueError`` if ``existing_text`` carries a foreign
-    ``schema_version`` (the writer must never straddle two versions).
+    """Read the current array, append ``new``, return the WHOLE array serialized
+    for one atomic-per-object PUT. ``existing_text`` is ``None`` or empty on the
+    first frame, and the caller owns the object-store GET/PUT. ``ValueError`` on
+    a foreign ``schema_version``: a writer never straddles two versions.
     """
     if existing_text:
         if isinstance(existing_text, (bytes, bytearray)):
@@ -195,6 +145,7 @@ def append_entries(
     else:
         data = new_manifest(engine=engine, run_id=run_id)
         entries = []
+    # Append-only: a prior entry is never edited and never removed.
     entries.extend(new)
     data["schema_version"] = OUTPUTS_MANIFEST_SCHEMA_VERSION
     data["engine"] = engine
@@ -209,21 +160,16 @@ def serialize(manifest: dict[str, Any]) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# READER (tolerant pydantic -- agent-side; the seam's consumer).
+# READER: tolerant pydantic, the consuming side only.
 # --------------------------------------------------------------------------- #
 class _ReaderModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
 class OutputBandStats(_ReaderModel):
-    """Optional per-COG render stats a producer precomputed (ADR 0280 amendment).
-
-    Mirrors the register-only path's ``band_stats``: ``is_categorical`` /
-    ``is_rgba`` short-circuit the palette / composite passthroughs and
-    ``p2`` / ``p98`` feed the generic percentile rescale (an UNREGISTERED
-    quantity's neutral ramp) -- so the seam never re-reads the COG when the
-    producer already computed them.
-    """
+    """Optional per-file render stats a producer already computed.
+    ``is_categorical`` and ``is_rgba`` short-circuit the palette and composite
+    passthroughs; ``p2`` / ``p98`` drive the generic percentile rescale."""
 
     is_categorical: bool = False
     is_rgba: bool = False
@@ -232,36 +178,28 @@ class OutputBandStats(_ReaderModel):
 
 
 class OutputEntry(_ReaderModel):
-    """One ``entries[]`` row (Section 1).
-
-    ``t`` is seconds-from-run-start (``None`` for a non-temporal artifact). The
-    seam maps a bare ``t`` to Temporal-Controller stamps; the entry carries only
-    the raw physical time.
-
-    ``bbox`` (per-COG EPSG:4326) and ``band_stats`` are the OPTIONAL render-hint
-    fields (ADR 0280 EXECUTED amendment): present when the producer precomputed
-    them (docker raster workers), absent for host-exec engines (the seam then
-    uses the workflow bbox + a lazy stats touch). ``crs_authid`` is the OPTIONAL
-    EPSG authority id a ``kind="mesh"`` entry carries (ADR 0283): a SELAFIN sibling
-    has no CRS, so the seam threads this onto the mesh ``LayerURI`` for the
-    plugin's ``QgsMeshLayer.setCrs``. ``reference_time`` is its temporal twin: the
-    ISO-8601 UTC instant the mesh's seconds are counted from, threaded onto the
-    mesh ``LayerURI`` so the scrubber reads the run's own clock instead of 1900.
-    ``dataset_group`` names the ONE group a mesh entry's preset paints, in the
-    mesh reader's own spelling; absent, the quantity stands in.
-    Tolerant-read: an old producer that omits any of them is byte-unchanged.
-    """
+    """One ``entries[]`` row.
+    Tolerant-read throughout: a producer that omits any optional field is
+    byte-unchanged to a consumer that reads them."""
 
     kind: str
     quantity: str
     name: str
     uri: str
+    #: Seconds from run start, ``None`` for a non-temporal artifact. The raw
+    #: physical time only - a consumer maps it onto its own temporal stamps.
     t: float | None = None
     units: str | None = None
+    #: Render hints, present when the producer precomputed them.
     bbox: list[float] | None = None
     band_stats: OutputBandStats | None = None
+    #: A mesh entry's EPSG authority id; a SELAFIN sibling carries no CRS.
     crs_authid: str | None = None
+    #: The instant a mesh entry's seconds are counted from, so a scrubber reads
+    #: the run's own clock instead of 1900.
     reference_time: str | None = None
+    #: The ONE group a mesh entry's preset paints, in the mesh reader's own
+    #: spelling. Absent, the quantity stands in.
     dataset_group: str | None = None
 
 
@@ -275,13 +213,10 @@ class OutputsManifest(_ReaderModel):
 
 
 def parse_outputs_manifest(text: str | bytes) -> OutputsManifest:
-    """Parse + schema-gate an ``outputs.json`` body into a typed model.
-
-    Raises ``ValueError`` on a non-dict body, a missing ``schema_version``, an
-    UNKNOWN ``schema_version``, or an entry carrying a ``kind`` outside
-    ``OUTPUT_KINDS`` -- the READ-side hard reject (Section 4: fall back to
-    completion-only, never a best-guess parse). A known-version, well-kinded
-    body validates into ``OutputsManifest``.
+    """Parse and schema-gate an ``outputs.json`` body into a typed model.
+    ``ValueError`` on a non-dict body, a missing or unknown ``schema_version``,
+    or an entry whose ``kind`` is outside ``OUTPUT_KINDS`` - a hard reject the
+    caller falls back from, never a best-guess parse.
     """
     if isinstance(text, (bytes, bytearray)):
         text = text.decode("utf-8")

@@ -1,17 +1,9 @@
-"""AssessmentEnvelope and supporting types (SRS).
+"""``AssessmentEnvelope`` - the central output shape.
 
-The ``AssessmentEnvelope`` is the system's central output: what every hazard
-engine produces, what the agent narrates from, what is embedded in the ``runs``
-collection, and what feeds the UI's layer loading. One shape across in-memory
-(pydantic), wire (JSON over WebSocket), and storage (MongoDB).
-
-Invariants this module is responsible for:
-- **3. Engine registration, not modification.** The base + ``BaseMetrics`` are
-  hazard-agnostic; flood specifics live only in ``flood: FloodPayload | None``,
-  discriminated by ``hazard_type``. Exactly one subtype field is populated.
-- **1. Determinism boundary.** Every number the narrative cites is a typed field
-  on ``FloodMetrics`` (or a ``ResultLayer``), never free text.
-- **9. No cost theater.** No cost field appears anywhere in this module.
+One shape across memory (pydantic), wire (JSON) and storage. The base and
+``BaseMetrics`` are hazard-agnostic: hazard specifics live only in the subtype
+payload ``hazard_type`` selects, and every number a narrative cites is a typed
+field here rather than free text. No cost field appears anywhere.
 """
 
 from __future__ import annotations
@@ -32,11 +24,9 @@ from .common import (
 )
 
 if TYPE_CHECKING:
-    # ``LegendKey`` lives in execution.py, which imports this module
-    # (``TemporalConfig``). A runtime import here would be circular, so the
-    # ``ResultLayer.legend`` annotation is a string forward-ref pydantic
-    # resolves lazily against the ``execution`` module namespace on first
-    # validation (the package is always fully importable by then).
+    # ``LegendKey`` lives in a module that imports this one, so a runtime
+    # import here would be circular. The ``ResultLayer.legend`` annotation
+    # stays a string forward-ref, resolved lazily at first validation.
     from .execution import LegendKey
 
 __all__ = [
@@ -56,8 +46,8 @@ __all__ = [
 ]
 
 
-# Open enum: new engines register new hazards without a breaking
-# change. v0.1 ships flood as the only fully-typed subtype.
+# Open enum: a new engine registers a new hazard without a breaking change.
+# Flood is the only fully typed subtype; the rest ride permissive dicts.
 HazardType = Literal["flood", "groundwater", "wildfire", "seismic", "spill"]
 EnvelopeType = Literal["modeled", "discovered"]
 
@@ -77,9 +67,9 @@ class ForcingSummary(GraceModel):
         "news_derived",
         "user_supplied",
     ]
-    source: str  # human-readable, e.g., "NHC ATCF, Hurricane Ian"
-    parameters: dict  # forcing-specific; validated per workflow (engine-owned)
-    inputs_uri: str | None = None  # GCS URI to forcing data file, if any
+    source: str  # human-readable
+    parameters: dict  # forcing-specific; validated by the owning workflow
+    inputs_uri: str | None = None  # the forcing data file, if any
 
 
 class TemporalConfig(GraceModel):
@@ -92,27 +82,20 @@ class TemporalConfig(GraceModel):
 
 class ResultLayer(GraceModel):
     """A renderable result layer.
-
-    Field-for-field alignable with ``map-command load-layer`` args
-    (``layer_id``, ``style``, ``temporal``) so the UI renders without
-    translation. Output formats are fixed by/: rasters COG,
-    vectors FlatGeobuf/GeoParquet. ``LayerURI`` (execution.py) is the producer
-    shape that maps onto this.
-
-    ``style`` mirrors ``LayerURI.style`` (the declared row) and ``legend``
-    mirrors ``LayerURI.legend`` (that row resolved against this layer, with the
-    concrete range and the .qml the map loads).
-    """
+    Field-for-field alignable with the ``load-layer`` map command so a client
+    renders it without translating. Rasters are COG, vectors FlatGeobuf."""
 
     layer_id: str  # stable id; used in map-command messages
     name: str  # human-readable display name
     layer_type: Literal["raster", "vector"]
-    uri: str  # gs://... canonical location (COG / FlatGeobuf / GeoParquet)
-    style: dict[str, Any] | None = None  # the declared style row
+    uri: str  # canonical object-store location
+    style: dict[str, Any] | None = None  # the DECLARED style row
     temporal: TemporalConfig | None = None  # present iff layer is time-varying
     role: Literal["primary", "context", "input"]
     units: str | None = None  # e.g., "meters", "m/s", or None for categorical
-    legend: "LegendKey | None" = None  # the resolved style; None until published
+    # The declared style resolved against this layer - concrete range and the
+    # .qml the map loads. None until the layer is published.
+    legend: "LegendKey | None" = None
     # Which rungs of a declared fallback ladder produced this layer's inputs.
     # Empty means "no ladder governs this", never "nothing was substituted".
     fallbacks: list[FallbackActivation] = Field(default_factory=list)
@@ -128,7 +111,7 @@ class DataSource(GraceModel):
 
 
 class Provenance(GraceModel):
-    """Structured provenance for a modeled or discovered envelope (invariant 7)."""
+    """Structured provenance: attribution is generated from these, not written."""
 
     data_sources: list[DataSource] = Field(default_factory=list)
     article_ids: list[ULIDStr] = Field(default_factory=list)  # if news-derived
@@ -136,9 +119,9 @@ class Provenance(GraceModel):
 
 
 class CatalogReference(GraceModel):
-    """Denormalized reference to a public_hazard_catalog entry (discovery only)."""
+    """Denormalized reference to a curated catalog entry. Discovery only."""
 
-    catalog_entry_id: str  # references public_hazard_catalog.yaml entry
+    catalog_entry_id: str  # the ``CatalogEntry.id`` this came from
     title: str  # denormalized for narrative use
     agency: str  # denormalized for narrative use
     access_url: str  # the URL fetched for this layer
@@ -146,21 +129,18 @@ class CatalogReference(GraceModel):
 
 
 class BaseMetrics(GraceModel):
-    """Empty base; subtype payloads carry the real metric fields.
-
-    The envelope's top-level ``metrics`` field is ``BaseMetrics`` and stays
-    empty by design — real numbers live in the hazard subtype payload
-    (``flood.metrics`` etc.), enforcing invariant 3.
-    """
+    """Empty base. The envelope's top-level ``metrics`` stays empty BY DESIGN:
+    the real numbers live in the hazard subtype payload, which is what keeps
+    the envelope itself hazard-agnostic."""
 
 
 # --------------------------------------------------------------------------- #
-# Flood subtype — the only fully-typed subtype in v0.1
+# Flood subtype - the only fully typed one
 # --------------------------------------------------------------------------- #
 
 
 class CriticalFacility(GraceModel):
-    """A flooded critical facility (invariant 1: typed, narratable number)."""
+    """A flooded critical facility, as typed numbers a narrative can cite."""
 
     name: str
     category: Literal["school", "hospital", "fire_station", "police", "other"]
@@ -184,13 +164,13 @@ class FloodMetrics(BaseMetrics):
 
     # Affected assets, optional based on which fetchers ran
     affected_buildings_count: int | None = None
+    # Counts keyed by a depth-band label, e.g. "0.5-1m".
     affected_buildings_by_depth: dict[str, int] | None = None
-    # e.g., {"0-0.5m": 412, "0.5-1m": 251, "1-2m": 132, "2m+": 52}
     affected_critical_facilities: list[CriticalFacility] | None = None
     population_exposed: int | None = None
 
     # Solver provenance
-    solver_version: str  # e.g., "sfincs-v2.0.4"
+    solver_version: str
     grid_resolution_m: float = Field(gt=0.0)
     simulation_duration_hours: int = Field(gt=0)
 
@@ -208,36 +188,27 @@ class FloodPayload(GraceModel):
 
 class AssessmentEnvelope(GraceModel):
     """The central output structure.
-
-    For a given envelope, exactly one subtype field matching ``hazard_type`` is
-    populated; the rest are ``None``. ``envelope_type`` (modeled vs discovered)
-    is independent of ``hazard_type``.
-
-    v0.1 note: only the flood subtype is fully typed (``FloodPayload``). The
-    v0.2+/v0.3+ subtypes (groundwater/wildfire/seismic/spill) are carried as
-    permissive ``dict | None`` slots until their engines land — matching
-.6b, which states discovery payloads are a permissive dict
-    validated at the workflow layer in v0.1. See report Open Question OQ-S2.
-    """
+    Exactly one subtype field is populated - the one matching ``hazard_type`` -
+    and ``envelope_type`` is independent of which hazard that is."""
 
     schema_version: Literal["v1"] = "v1"
 
     # Identity
     envelope_id: ULIDStr
-    project_id: ULIDStr  # links to projects collection
-    session_id: ULIDStr  # links to sessions collection
+    project_id: ULIDStr
+    session_id: ULIDStr
 
     # Mode discriminator
     envelope_type: EnvelopeType
 
     # Classification
     hazard_type: HazardType
-    workflow_name: str  # e.g., "run_storm_surge_flood", "show_hazard_layer"
+    workflow_name: str
 
     # Spatial and temporal extent
     bbox: BBox
     crs: str = "EPSG:4326"
-    time_range: TimeRange | None = None  # event time; None for synthetic/discovery
+    time_range: TimeRange | None = None  # event time; None for a discovery
 
     # Forcing summary (modeled only; None for discovered)
     forcing: ForcingSummary | None = None
@@ -257,12 +228,14 @@ class AssessmentEnvelope(GraceModel):
     completed_at: UTCDatetime
     solver_run_ids: list[ULIDStr] = Field(default_factory=list)  # empty for discovered
 
-    # Subtype payloads (discriminator: hazard_type)
+    # Subtype payloads, discriminated by hazard_type. Only flood is typed; the
+    # rest stay permissive dicts, validated at the workflow layer, until their
+    # engines land and earn a model.
     flood: FloodPayload | None = None
-    groundwater: dict | None = None  # v0.2+ (permissive until engine lands)
-    wildfire: dict | None = None  # v0.2+ (permissive until engine lands)
-    seismic: dict | None = None  # v0.3+
-    spill: dict | None = None  # v0.3+
+    groundwater: dict | None = None
+    wildfire: dict | None = None
+    seismic: dict | None = None
+    spill: dict | None = None
 
     @model_validator(mode="after")
     def _exactly_one_subtype_matching_hazard(self) -> "AssessmentEnvelope":
