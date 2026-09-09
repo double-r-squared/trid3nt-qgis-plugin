@@ -118,13 +118,11 @@ def _os_environ() -> dict:
     return dict(os.environ)
 
 
-#: How many tools the registry holds. Pinned so a tool that leaves is noticed
-#: rather than absorbed; the arms never shrink it, only the declarable POOL.
-#: +1 as telemac_rain_on_grid unparked onto the declared-outlet mechanism;
-#: +1 as mesh_op landed as the runtime face of the mesh recipe.
-#: +1 as fetch_osm_coastline landed as the harbour-scale shoreline rung.
-#: +1 as describe_keywords landed as the read over the module keyword catalogs.
-_REGISTRY_SIZE = 174
+#: How many tools the registry holds. Pinned so a tool that ARRIVES or LEAVES is
+#: noticed rather than absorbed; the catalog arms never change it, they only
+#: shrink the declarable POOL. Update this number only alongside the landing or
+#: the removal that moves it.
+_REGISTRY_SIZE = 172
 
 
 # --------------------------------------------------------------------------- #

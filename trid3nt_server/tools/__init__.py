@@ -535,12 +535,10 @@ from .processing.compute_flood_depth_damage import compute_flood_depth_damage  #
 # V&V wave (lane B): flood-extent skill (raster/vector confusion).
 from .processing.compute_flood_extent_skill import compute_flood_extent_skill  # noqa: E402,F401
 from .processing.compute_hillshade import compute_hillshade  # noqa: E402,F401
-from .processing.compute_home_range_kde import compute_home_range_kde  # noqa: E402,F401
 from .processing.compute_idf_curve import compute_idf_curve  # noqa: E402,F401
 from .processing.compute_impervious_surface import compute_impervious_surface  # noqa: E402,F401
 from .processing.compute_layer_bounds import compute_layer_bounds  # noqa: E402,F401
 from .processing.compute_model_residuals import compute_model_residuals  # noqa: E402,F401
-from .processing.compute_movement_trajectory import compute_movement_trajectory  # noqa: E402,F401
 from .processing.compute_ndvi import compute_ndvi  # noqa: E402,F401
 from .processing.compute_sediment_yield import compute_sediment_yield  # noqa: E402,F401
 # V&V wave (lane B): model-fit skill-metrics wrap (spotpy).
