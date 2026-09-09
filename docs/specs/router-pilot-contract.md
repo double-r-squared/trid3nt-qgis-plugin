@@ -200,15 +200,30 @@ serialized by the same `array_to_cog_bytes`. Three renders - `float`, `mosaic`,
 are read by GDAL's own HTTP client rather than by the transport; the two norm
 clauses that costs are ledgered in `docs/REANALYZE_LEDGER.md`.
 
-### 2.2 vector-fgb executor  (incl ArcGIS paging mode)
+### 2.2 vector-fgb serializer
 
-Query -> GeoJSON/esri-json -> FlatGeobuf via `geopandas ... driver="FlatGeobuf",
-engine="pyogrio"`. `pagination.mode` selects `result_offset` (hifld/census) or
-`exceeded_transfer_limit`; the loop mirrors `_fetch_features_paginated` with the
-`max_features` cap. `esri_json_rings -> GeoJSON` normalization is an opt-in
-`ingest.esri_json: true` (NWI/EJSCREEN reuse later). ALWAYS emits a valid FGB -
-an empty result is a header-only FGB (honest-empty, never a fabricated error),
-matching hifld/census twins.
+GeoJSON features -> FlatGeobuf via `geopandas ... driver="FlatGeobuf",
+engine="pyogrio"`, plus the declarative frame normalizer every vector executor
+runs before it: `apply_column_map` (the ordered out_col -> rule projection) and
+`apply_ingest_transforms` (geometry filter, nested-JSON coercion, derived
+columns). ALWAYS emits a valid FGB - an empty result is a header-only FGB
+carrying the declared/derived schema (honest-empty, never a fabricated error).
+`build_where` turns `ingest.where_clauses` into the server-side `where=`, and
+`resolve_endpoints` picks the primary (`endpoint_select` / `endpoint_by_param`)
+and its same-dataset mirrors.
+
+### 2.2a ogr-vector executor  (a GDAL vector driver)
+
+A vector row published through a driver (`ingest.access: ogr`) reads through
+`vector_ogr.py`: `ESRIJSON` for an ArcGIS `/query` URL (the bbox is the esri
+geometry envelope in the query and the driver follows `exceededTransferLimit`
+across pages by itself), `OAPIF` for an OGC API - Features collection, `vsizip`
+for a vector member inside a remote ZIP read by range request. The driver owns
+the socket, the paging and the decode; the features it returns go through the
+same 2.2 normalizer and serializer. Like 2.1a this family reads on GDAL's own
+HTTP client rather than the transport - applied through
+`pyogrio.set_gdal_config_options`, because pyogrio links its own libgdal - and
+what that costs is ledgered in `docs/REANALYZE_LEDGER.md`.
 
 ### 2.3 station-timeseries-fgb executor
 

@@ -556,6 +556,18 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if (spec.ingest or {}).get("delegate"):
         from .executors import dataretrieval_delegate
         return dataretrieval_delegate.execute
+    # Declarative fan-out (multi-query-per-value + merge, slr_scenarios): it
+    # composes the driver read N times, so it wins over the access dispatch below.
+    if (spec.ingest or {}).get("fan_out"):
+        from .transforms import fan_out
+        return fan_out.execute
+    # A vector row published through a GDAL driver (an ArcGIS query URL, an OGC
+    # API - Features collection, a shapefile inside a remote ZIP) reads through
+    # the vector_ogr executor: the library owns the socket, the paging and the
+    # decode, so this wins over every hook-driven branch below.
+    if (spec.ingest or {}).get("access") == "ogr":
+        from .executors import vector_ogr
+        return vector_ogr.execute
     # zip_vector path: a source publishing a ZIP-wrapped multi-file vector
     # member (TIGER shapefile-ZIP) routes to the whole-object extract-read-filter
     # executor. Its build_request hook is the PURE URL planner, so this MUST win over
@@ -596,11 +608,6 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
             "this spec declares a join block but _router/transforms/join.py is not "
             "in the tree; restore it with the extension that supplies it",
         )
-    # Declarative fan-out (multi-query-per-value + merge, slr_scenarios). No-op
-    # for every prior spec (none declare ingest.fan_out).
-    if (spec.ingest or {}).get("fan_out"):
-        from .transforms import fan_out
-        return fan_out.execute
     if spec.shape == "raster-cog":
         ingest = spec.ingest or {}
         if "mosaic" in ingest or "tile_deg2" in ingest:

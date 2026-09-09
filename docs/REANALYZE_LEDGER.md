@@ -135,3 +135,41 @@ then these rows return to our transport and both clauses are met;
 cpl_http changelog); (c) a real 429 from Planetary Computer or
 Earthdata that the exponential backoff fails to clear - then the wait
 policy is the thing that has to change, not the reader.
+
+## 2026-09-09 - vectors read on GDAL's drivers, and esri-json is not geojson
+DECIDED: the ESRI `/query`, OGC API - Features and zipped-shapefile
+rows (`vector_ogr.py`) read through GDAL's own vector drivers via
+pyogrio, not through `_router/transport/`. pyogrio links its OWN
+libgdal (measured: inside `rasterio.Env(GDAL_HTTP_MAX_RETRY='99')`
+rasterio sees 99 while pyogrio sees 4), so the read policy is applied
+with `pyogrio.set_gdal_config_options` and is a second config store,
+not the raster family's.
+
+The same two clauses the STAC family trades are traded here, measured
+at Stage 0 Probe B on GDAL 3.12.4 (docs/validation/fetcher-fold-
+stage0.md): the upstream STATUS is verbatim
+(`pyogrio.errors.DataSourceError: HTTP response code: 404 / 403`) but
+the S3 XML `<Code>` body is not, and `Retry-After` is not honored
+(identical gaps 1.00 s / 2.42 s with and without the header). A THIRD
+loss is NOT accepted: an ArcGIS service answers a rejected query
+200-with-`{"error": ...}`, which the driver can only report as
+`Invalid FeatureCollection object. Missing 'features' member.`;
+`vector_ogr._verbatim_upstream` re-reads that one URL through the
+transport and surfaces the service's own message, so the honesty floor
+holds where the driver drops it.
+
+MEASURED, and the reason the ESRI rows are not byte-identical to their
+pre-fold artifacts: the driver reads `f=json`, the hooks read
+`f=geojson`, and ArcGIS's GeoJSON writer is not a lossless view of the
+same rows. On `fetch_nwi_wetlands` over a Naples, FL bbox - 2,683
+features both ways, same vertex count per feature, identical values in
+all three columns, union bounds equal to the last digit - the two
+differences are (a) coordinate precision: esri-json carries full
+float64, the GeoJSON writer rounds, max Hausdorff distance
+7.05e-10 deg (0.078 mm); (b) exterior ring winding: the GeoJSON writer
+rewinds to RFC 7946 counter-clockwise, esri rings arrive in the
+service's own clockwise order, so all 2,683 exteriors flip. Neither is
+corrected in the fold: the driver's read is the closer of the two to
+what the service holds, and no consumer of a FlatGeobuf depends on
+ring orientation. Stated here so a later pass reads a winding flip as
+this decision rather than as a regression.

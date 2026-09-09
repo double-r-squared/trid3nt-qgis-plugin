@@ -1,0 +1,281 @@
+"""ogr-vector executor: a published vector layer read through a GDAL vector driver.
+
+One access mode (``ingest.access: ogr``) over three source shapes, named by
+``ingest.ogr.driver``:
+
+- ``ESRIJSON``  an ArcGIS FeatureServer / MapServer ``/query`` URL. The bbox is
+                the esri geometry envelope in the query and the driver follows
+                ``exceededTransferLimit`` across pages by itself.
+- ``OAPIF``     an OGC API - Features landing page; the collection is the layer
+                and the bbox is pushed to the driver.
+- ``vsizip``    a vector member inside a remote ZIP, read by range request
+                through ``/vsizip//vsicurl/`` - no whole-object GET, no tmpdir.
+
+The driver owns the socket, the paging and the decode; this module owns the spec
+vocabulary (which endpoint, which where-clause, which page) and hands GeoJSON
+features to the same ``vector_fgb`` serializer every other vector row uses, so
+the declared column schema and the honest-empty header-only FGB are unchanged.
+
+READ PATH. pyogrio links its own libgdal, so the read policy is applied through
+``pyogrio.set_gdal_config_options``; a ``rasterio.Env`` does not reach it. Retries
+fire on 429/500/502/503/504 and the upstream STATUS is verbatim on
+``DataSourceError``. Two measured deviations from the transport's norm are
+ledgered for this family: GDAL discards the S3 XML ``<Code>`` body, and its
+backoff is exponential-with-jitter rather than the server's ``Retry-After``.
+
+An ArcGIS service answers a rejected query 200-with-an-error-body, which the
+driver reports as a missing ``features`` member with the upstream message gone.
+``_verbatim_upstream`` re-reads that one URL through the transport so the
+service's own message reaches the caller.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import threading
+from typing import Any
+from urllib.parse import urlencode
+
+from trid3nt_contracts.source_spec import SourceSpec
+
+from ..errors import RouterError, router_input_error, router_upstream_error
+from ..shape_classifier import classify_response
+from ..transport import TransportError, get_bytes, get_client, is_staged_uri
+from .vector_fgb import build_where, features_to_fgb_bytes, resolve_endpoints
+
+logger = logging.getLogger(
+    "trid3nt_server.tools.fetchers._router.executors.vector_ogr"
+)
+
+__all__ = ["build_query", "open_path", "fetch_from_endpoint", "fetch_features", "execute"]
+
+#: The read policy for every driver read in this family. The retry half is the
+#: transport's own code set; GDAL's default is retry OFF.
+_READ_PATH = {
+    "GDAL_HTTP_MAX_RETRY": "5",
+    "GDAL_HTTP_RETRY_DELAY": "1",
+    "GDAL_HTTP_RETRY_CODES": "429,500,502,503,504",
+    "CPL_VSIL_CURL_ALLOWED_EXTENSIONS": "",
+}
+
+#: Config options are process-global in libgdal, so a per-source header set has
+#: to be installed and withdrawn around its own read.
+_config_lock = threading.Lock()
+
+
+class _ReadPolicy:
+    """Install the read policy plus this source's headers for one driver read."""
+
+    def __init__(self, spec: SourceSpec, extra: dict[str, str]) -> None:
+        ogr = (spec.ingest or {}).get("ogr") or {}
+        headers = dict(ogr.get("headers") or {})
+        ua = headers.pop("User-Agent", None) or (spec.auth.user_agent if spec.auth else None)
+        self._opts: dict[str, str] = dict(_READ_PATH)
+        self._opts.update(extra)
+        if ua:
+            self._opts["GDAL_HTTP_USERAGENT"] = str(ua)
+        if headers:
+            self._opts["GDAL_HTTP_HEADERS"] = "\r\n".join(
+                f"{k}: {v}" for k, v in headers.items()
+            )
+
+    def __enter__(self) -> None:
+        import pyogrio
+
+        _config_lock.acquire()
+        self._prior = {k: pyogrio.get_gdal_config_option(k) for k in self._opts}
+        pyogrio.set_gdal_config_options(self._opts)
+
+    def __exit__(self, *exc: Any) -> None:
+        import pyogrio
+
+        pyogrio.set_gdal_config_options(self._prior)
+        _config_lock.release()
+
+
+# --------------------------------------------------------------------------- #
+# The read path: one URL per source shape, one driver read.
+# --------------------------------------------------------------------------- #
+
+
+def build_query(
+    spec: SourceSpec,
+    bbox: tuple[float, float, float, float] | None,
+    *,
+    where: str = "1=1",
+    endpoint: Any | None = None,
+    page_size: int | None = None,
+) -> str:
+    """The ArcGIS ``/query`` URL the ESRIJSON driver opens (no offset, no page).
+
+    ``f=json`` is what the driver reads; ``bbox=None`` omits the geometry envelope
+    (the global sweep). Paging is the driver's, so this carries no ``resultOffset``
+    - ``page_size`` pins ``resultRecordCount`` only where the caller capped the
+    sweep at its own count.
+    """
+    ingest = spec.ingest or {}
+    qt = ingest.get("query_template", {})
+    if endpoint is None:
+        endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
+    url = endpoint.url or endpoint.url_template or ""
+    if is_staged_uri(url):
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"a staged s3:// uri is not readable by the vector query executor: {url!r}",
+        )
+    q: dict[str, str] = {
+        "where": where,
+        "outFields": str(qt.get("out_fields", "*")),
+        "outSR": "4326",
+        "f": "json",
+        "returnGeometry": "true",
+    }
+    order_by = qt.get("order_by")
+    if order_by:
+        q["orderByFields"] = str(order_by)
+    if page_size is not None:
+        q["resultRecordCount"] = str(page_size)
+    if bbox is not None:
+        min_lon, min_lat, max_lon, max_lat = bbox
+        if ingest.get("geometry_envelope") == "json":
+            q["geometry"] = json.dumps({
+                "xmin": min_lon, "ymin": min_lat, "xmax": max_lon, "ymax": max_lat,
+                "spatialReference": {"wkid": 4326},
+            })
+        else:
+            q["geometry"] = f"{min_lon},{min_lat},{max_lon},{max_lat}"
+            q["inSR"] = "4326"
+        q["geometryType"] = "esriGeometryEnvelope"
+        q["spatialRel"] = "esriSpatialRelIntersects"
+    for k, v in (endpoint.query or {}).items():
+        q[str(k)] = str(v)
+    return f"{url}?{urlencode(q)}"
+
+
+def open_path(spec: SourceSpec, params: dict[str, Any], endpoint: Any, url: str) -> str:
+    """The driver-prefixed path for this source shape."""
+    driver = str(((spec.ingest or {}).get("ogr") or {}).get("driver", "ESRIJSON"))
+    if driver == "ESRIJSON":
+        return f"ESRIJSON:{url}"
+    if driver == "OAPIF":
+        return f"OAPIF:{url}"
+    if driver == "vsizip":
+        member = str(((spec.ingest or {}).get("ogr") or {}).get("member", ""))
+        return f"/vsizip/vsicurl/{url}/{member}" if member else f"/vsizip/vsicurl/{url}"
+    raise router_input_error(
+        spec.error_code_prefix, f"unknown ogr driver {driver!r}", spec.input_error_suffix
+    )
+
+
+def _verbatim_upstream(spec: SourceSpec, url: str, exc: Exception) -> RouterError:
+    """The upstream's own message for a read the driver could only call malformed.
+
+    An ArcGIS service answers a rejected query 200-with-``{"error": ...}``; the
+    driver reports a missing ``features`` member and drops the message. One plain
+    GET through the transport recovers it. Anything the classifier does not
+    recognize as an error envelope keeps the driver's own text.
+    """
+    try:
+        body, _ct, _final = get_bytes(get_client(), url)
+        verdict = classify_response(body.decode("utf-8", "replace"))
+    except (TransportError, Exception):  # noqa: BLE001 -- the driver's text stands
+        return router_upstream_error(spec.error_code_prefix, f"read failed url={url}: {exc}")
+    if verdict.kind == "error_envelope":
+        return router_upstream_error(
+            spec.error_code_prefix, f"error envelope url={url}: {verdict.error_message}"
+        )
+    return router_upstream_error(spec.error_code_prefix, f"read failed url={url}: {exc}")
+
+
+def fetch_from_endpoint(
+    spec: SourceSpec, endpoint: Any, params: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """One driver read of ONE endpoint -> GeoJSON features."""
+    import pyogrio
+
+    ingest = spec.ingest or {}
+    ogr = ingest.get("ogr") or {}
+    driver = str(ogr.get("driver", "ESRIJSON"))
+    bbox = params.get("bbox")
+    bbox = tuple(bbox) if bbox is not None else None
+    max_features = spec.gates.max_features or 30000
+    # A caller may CAP the sweep at its own count, and that is a single-shot
+    # request rather than a paging hint: the service page and the ceiling move
+    # together, so the read returns exactly the cap in server order.
+    capped = params.get("max_records")
+    page_size = int(capped) if capped is not None else None
+    if capped is not None:
+        max_features = int(capped)
+
+    read_kwargs: dict[str, Any] = {"max_features": max_features}
+    extra_config: dict[str, str] = {}
+    if driver == "ESRIJSON":
+        url = build_query(
+            spec, bbox, where=build_where(spec, params), endpoint=endpoint,
+            page_size=page_size,
+        )
+        declared_page = (ingest.get("pagination") or {}).get("page_size")
+        if page_size is None and declared_page:
+            extra_config["OGR_ESRIJSON_MAX_PAGE_SIZE"] = str(declared_page)
+    else:
+        url = endpoint.url or endpoint.url_template or ""
+        if driver == "OAPIF":
+            read_kwargs["layer"] = str(ogr.get("layer", ""))
+        if bbox is not None:
+            read_kwargs["bbox"] = bbox
+    path = open_path(spec, params, endpoint, url)
+
+    try:
+        with _ReadPolicy(spec, extra_config):
+            df = pyogrio.read_dataframe(path, **read_kwargs)
+    except RouterError:
+        raise
+    except Exception as exc:  # noqa: BLE001 -- pyogrio DataSourceError and kin
+        raise _verbatim_upstream(spec, url, exc)
+
+    if df.crs is not None and df.crs.to_epsg() != 4326:
+        df = df.to_crs("EPSG:4326")
+    logger.info(
+        "router.vector_ogr: %s read %d feature(s) (source=%s)",
+        driver, len(df), spec.source_class,
+    )
+    return [
+        {"type": "Feature", "geometry": geom, "properties": props}
+        for geom, props in zip(
+            (None if g is None else g.__geo_interface__ for g in df.geometry),
+            df.drop(columns=[df.geometry.name]).to_dict(orient="records"),
+        )
+    ]
+
+
+def fetch_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
+    """Fetch across the resolved endpoint chain (primary -> same-dataset mirror).
+
+    Every mirror publishes the SAME dataset, so the hop is silent by the loudness
+    floor; a single endpoint is one read with no mirror.
+    """
+    chain = resolve_endpoints(spec, params)
+    last_exc: Exception | None = None
+    for i, endpoint in enumerate(chain):
+        try:
+            return fetch_from_endpoint(spec, endpoint, params)
+        except Exception as exc:  # noqa: BLE001 -- try the next mirror
+            last_exc = exc
+            if i < len(chain) - 1:
+                logger.warning(
+                    "router.vector_ogr: endpoint %d/%d failed (%s); trying fallback",
+                    i + 1, len(chain), exc,
+                )
+    assert last_exc is not None
+    if len(chain) > 1:
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"all {len(chain)} endpoints failed; last error: {last_exc}",
+        )
+    raise last_exc
+
+
+def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
+    """Read through the driver and serialize to FGB bytes (the ``fetch_fn`` body)."""
+    return features_to_fgb_bytes(fetch_features(spec, params), spec, params)
