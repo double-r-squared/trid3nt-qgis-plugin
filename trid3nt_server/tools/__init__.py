@@ -406,13 +406,6 @@ from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_p
 # fetch_buildings: sidecar-write fold (trigger wave) -- twin DELETED, now
 # spec-driven (source.yaml + buildings.build_request/parse hooks + the overpass_sidecar
 # executor's constrained tags.json side write), promoted by _register_router_specs().
-# fetch_cdc_svi: data-router fold phase-2 wave-2 -- twin DELETED, now spec-driven
-# (source.yaml + router), registered by _register_router_specs() below.
-# fetch_census_acs: data-router fold pilot -- twin DELETED, now spec-driven
-# (source.yaml + router JOIN transform), registered by _register_router_specs() below.
-# fetch_epa_ejscreen: data-router fold phase-2 wave-6 -- twin DELETED,
-# now spec-driven (source.yaml + the esri_json ingest mode + percentile/fraction/
-# raw column kinds + from_param routing), registered by _register_router_specs().
 # fetch_field_boundaries: FTW/fiboa GeoParquet-pushdown fold -- twin DELETED,
 # now spec-driven (source.yaml + field_boundaries.select pre_resolve + field_boundaries.read
 # VECTOR library_delegate hook; the GeoParquet 1.1 row-group bbox pushdown is owned by
@@ -423,16 +416,13 @@ from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_p
 # per-tile ZIP extract mode), registered by _register_router_specs() below.
 # fetch_hrsl_population: data-router fold phase-2 wave-9 -- twin
 # DELETED, now spec-driven (source.yaml + multi_url VRT fan-out), auto-registered.
-# fetch_lehd_jobs: join VALUES-hook fold (trigger wave) -- twin DELETED,
-# now spec-driven (source.yaml + join transform + lehd_jobs.values_plan/values_parse
-# for the per-state LODES bulk gzip-CSV values leg), promoted by _register_router_specs().
 # fetch_overpass_pois + fetch_roads_osm: Overpass-family fold -- twins
 # DELETED, now spec-driven (source.yaml + overpass build_request/parse_response
 # hooks over the http_json endpoint_fallback mirror chain), auto-registered by
 # _register_router_specs() below.
 # fetch_population: WorldPop library_delegate raster fold -- twin DELETED, now
-# spec-driven (source.yaml + worldpop.validate/read hooks); the half-built ACS leg dropped
-# (fetch_census_acs serves tract population), auto-registered below; no eager twin import.
+# spec-driven (source.yaml + worldpop.validate/read hooks); the half-built ACS leg
+# dropped, auto-registered below; no eager twin import.
 # fetch_usace_nsi: data-router fold tier-3 hooks -- twin DELETED, now
 # spec-driven (source.yaml + usace_nsi build_request/parse_response hooks + the
 # RequestPlan POST transport extension), registered by _register_router_specs() below.
@@ -490,9 +480,9 @@ from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E
 # library_delegate mode); auto-registered by _register_router_specs() below.
 
 # -- fetchers/_router: PROMOTED spec-driven sources (data-router fold, phase-2
-# wave 1 -- the fold's first real cut). The 5 pilots (fetch_gridmet,
+# wave 1 -- the fold's first real cut). The pilots (fetch_gridmet,
 # fetch_hifld_critical_infrastructure, fetch_noaa_coops_tides,
-# fetch_esri_landcover_10m, fetch_census_acs) are now served by their
+# fetch_esri_landcover_10m) are now served by their
 # co-located source.yaml + the shared router engine, registered UNDER THE TWIN
 # NAMES at tier="general" (the default retrieval pool). The hand-written twins
 # were DELETED (both replication + routing parity gates passed -> cull doctrine).

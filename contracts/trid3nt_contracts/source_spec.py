@@ -211,10 +211,9 @@ class ParamSpec(GraceModel):
     #: ``_resolve_characteristic`` alias-or-passthrough contract. Default (None) =
     #: no aliasing (strict no-op for every prior spec).
     aliases: dict[str, str] | None = None
-    #: enum only: lower-case + strip the value BEFORE the allowed-set check
-    #: (epa_ejscreen ``indicator`` accepts case-insensitive aliases, echoing the
-    #: normalized key). Default False = the byte-identical strict-match behaviour
-    #: for every prior enum param.
+    #: enum only: lower-case + strip the value BEFORE the allowed-set check, so a
+    #: case-insensitive vocabulary echoes the normalized key. Default False = the
+    #: strict-match behaviour.
     lowercase: bool = False
 
 
@@ -269,10 +268,9 @@ class OutputSpec(GraceModel):
     #: LayerURI. ``route()`` runs the ``hooks.record`` dict builder, caches its JSON
     #: bytes via ``read_through``, and returns the parsed dict envelope (honesty floor
     #: intact: the hook raises typed input/empty/upstream errors; no fabricated
-    #: success). Pairs with ``shape: record`` + ``ext: json``. The wfigs/fault/
-    #: population/lehd record fetchers whose result is a structured lookup (a point +
-    #: bbox discovery, a jobs summary) rather than a map layer. Default raster/vector
-    #: (strict no-op for every prior spec).
+    #: success). Pairs with ``shape: record`` + ``ext: json``. For a fetcher whose
+    #: result is a structured lookup (a point + bbox discovery, a summary) rather
+    #: than a map layer. Default raster/vector.
     layer_type: Literal["raster", "vector", "record"]
     ext: Literal["tif", "fgb", "json"]
     role: Literal["primary", "context", "input"] = "primary"

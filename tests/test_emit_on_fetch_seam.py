@@ -216,7 +216,7 @@ async def test_record_source_never_attempts():
                    loop=asyncio.get_running_loop())
     try:
         maybe_emit_input_on_fetch(
-            _spec(name="fetch_lehd_jobs", layer_type="record"),
+            _spec(name="fetch_usgs_water_quality", layer_type="record"),
             {}, _raster_layer(), visualize=None, purpose=None,
         )
         await asyncio.sleep(0)

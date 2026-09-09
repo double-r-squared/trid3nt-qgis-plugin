@@ -282,11 +282,11 @@ def test_edge_empty_is_header_not_error(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# esri-json ingest mode + percentile/fraction/raw column kinds (ejscreen).
+# esri-json ingest mode + percentile/fraction/raw column kinds.
 # --------------------------------------------------------------------------- #
 
 
-def _ejscreen_like_spec() -> SourceSpec:
+def _esri_json_indicator_spec() -> SourceSpec:
     return SourceSpec.model_validate({
         "name": "fetch_demo_esri",
         "source_class": "demo_esri",
@@ -335,7 +335,7 @@ def test_norm_env_sentinels(kind, val, expect):
 
 
 def test_esri_json_projection_from_param(monkeypatch):
-    spec = _ejscreen_like_spec()
+    spec = _esri_json_indicator_spec()
     esri = [{"attributes": {"ID": "48", "P_PM25": 83.4, "P_OZONE": -999, "MINORPCT": 0.62,
                             "PM25": 9.1, "ACSTOTPOP": 1500},
              "geometry": {"rings": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}}]
@@ -352,7 +352,7 @@ def test_esri_json_projection_from_param(monkeypatch):
 
 
 def test_esri_json_geometry_envelope_is_json():
-    spec = _ejscreen_like_spec()
+    spec = _esri_json_indicator_spec()
     _url, qp = vector_fgb.build_query_params(spec, (-95.3, 29.7, -95.2, 29.8),
                                              endpoint=spec.endpoints["data"])
     assert qp["f"] == "json" and qp["returnGeometry"] == "true"

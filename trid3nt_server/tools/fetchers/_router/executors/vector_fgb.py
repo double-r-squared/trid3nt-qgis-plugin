@@ -103,12 +103,11 @@ def _num(raw: Any) -> float:
 
 
 def _norm_env(v: Any, kind: str) -> float | None:
-    """EPA-EJScreen sentinel normalizers (percentile [0,100] / fraction [0,1] /
+    """Environmental-indicator sentinel normalizers (percentile [0,100] /
 
-    raw). ``<= -999`` (EJSCREEN_NULL_SENTINELS[0]) or non-finite -> None; percentile
-    /fraction clamp to their range and reject out-of-tolerance sentinels; raw
-    passes any finite non-sentinel float. Byte-identical to the twin's three
-    ``_normalize_*`` helpers.
+    fraction [0,1] / raw). ``<= -999`` (the no-data sentinel) or non-finite ->
+    None; percentile/fraction clamp to their range and reject out-of-tolerance
+    sentinels; raw passes any finite non-sentinel float.
     """
     if v is None:
         return None
@@ -133,12 +132,12 @@ def _resolve_column(
     kind = rule.get("kind", "passthrough")
     on_error = rule.get("on_error", "null")
 
-    # A param-echo column (ejscreen `indicator` = the validated request param).
+    # A param-echo column: the column value IS the validated request param.
     if kind == "param":
         return (params or {}).get(rule.get("param"))
     # from_param: the SOURCE field is chosen by a request param through a map
-    # (ejscreen `value` <- INDICATORS[indicator]); resolve then fall through to
-    # the declared kind over that field.
+    # (the source field is looked up by a request param); resolve then fall
+    # through to the declared kind over that field.
     if "from_param" in rule:
         fp = rule.get("from_param") or {}
         field = (fp.get("map") or {}).get((params or {}).get(fp.get("param")))
@@ -476,8 +475,7 @@ def _esri_geometry_to_geojson(g: Any) -> dict[str, Any] | None:
 
     Polygon ``rings`` keep ALL rings under a single Polygon (the standard
     ArcGIS->GeoJSON convention; pyogrio repairs winding on write); degenerate
-    rings (< 4 vertices) are dropped -- byte-identical to the ejscreen twin's
-    ``_esri_rings_to_geojson_geometry``.
+    rings (< 4 vertices) are dropped.
     """
     if not isinstance(g, dict):
         return None
@@ -582,11 +580,11 @@ def build_query_params(
     }
     # orderByFields only when the spec pins one: some hosted services (CDC onemap)
     # reject an orderByFields they do not support, so it is opt-in (the twins that
-    # need stable paging set it; those that omit it, like the CDC SVI twin, do not).
+    # need stable paging set it; those that omit it do not).
     order_by = qt.get("order_by")
     if order_by:
         params["orderByFields"] = str(order_by)
-    # esri-json sources (f=json layers that reject f=geojson, ejscreen) need the
+    # esri-json sources (f=json layers that reject f=geojson) need the
     # geometry as a JSON envelope object + returnGeometry; a no-op for geojson.
     if bool(ingest.get("esri_json")):
         params["returnGeometry"] = "true"
@@ -647,7 +645,7 @@ def _fetch_one_page(spec: SourceSpec, url: str, params: dict[str, str]) -> list[
     features = body.get("features", []) or []
     # esri-json (f=json) sources hand back {attributes, geometry:{rings/x,y/paths}};
     # decode to GeoJSON {properties, geometry} so the shared transforms + serializer
-    # see the uniform shape (ejscreen). No-op for f=geojson features.
+    # see the uniform shape. No-op for f=geojson features.
     if bool((spec.ingest or {}).get("esri_json")):
         return [_esri_feature_to_geojson(f) for f in features if isinstance(f, dict)]
     return features

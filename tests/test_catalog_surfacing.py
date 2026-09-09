@@ -122,7 +122,7 @@ def _os_environ() -> dict:
 #: noticed rather than absorbed; the catalog arms never change it, they only
 #: shrink the declarable POOL. Update this number only alongside the landing or
 #: the removal that moves it.
-_REGISTRY_SIZE = 165
+_REGISTRY_SIZE = 161
 
 
 # --------------------------------------------------------------------------- #
@@ -136,7 +136,7 @@ def test_default_config_identity():
     # The roster PIN: a tool that leaves the registry has to be noticed, so the
     # arms assert the same number and a silent drop fails four tests at once.
     assert r["registry_size"] == _REGISTRY_SIZE
-    assert r["n_specs"] == 101
+    assert r["n_specs"] == 97
     # They stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
     assert r["any_spec_in_declarable"] is True
@@ -160,7 +160,7 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
     # already outside it in the None baseline (tier="internal" absorptions). The
     # number is the measured difference, and it moves only when a spec lands or
     # leaves.
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 100
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 96
     # Still searchable + rankable so a search hit can gate-expand it.
     assert r["gridmet_in_index"] is True
     assert r["gridmet_ranked_top25"] is True
@@ -265,7 +265,7 @@ def test_arm3_specs_leave_pool_and_source_param():
     assert r["registry_size"] == _REGISTRY_SIZE
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 100
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 96
     assert r["gridmet_in_index"] is True
     # fetch_from_catalog exposes the source branch under Arm 3 (like Arm 1).
     assert r["ffc_params"] == ["entry_id", "params", "source", "_extra_ignored"]
@@ -278,10 +278,10 @@ def test_default_declarable_excludes_catalog_tier(_registry_loaded):
     import trid3nt_server.server as srv
 
     fake_search_result = {
-        "results": [{"tool_name": "fetch_gridmet"}, {"tool_name": "fetch_census_acs"}]
+        "results": [{"tool_name": "fetch_gridmet"}, {"tool_name": "fetch_nwi_wetlands"}]
     }
     names = srv._tool_names_from_search_result(fake_search_result)
-    assert names == ["fetch_gridmet", "fetch_census_acs"]
+    assert names == ["fetch_gridmet", "fetch_nwi_wetlands"]
     from trid3nt_server.tools import TOOL_REGISTRY
 
     for n in names:

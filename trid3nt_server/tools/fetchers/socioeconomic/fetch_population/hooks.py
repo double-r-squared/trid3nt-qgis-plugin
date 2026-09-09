@@ -12,8 +12,7 @@ crs)`` for the shared COG writer -- byte-for-byte the twin's
 
 The ACS (Census B01003) leg the twin also carried is DROPPED at this fold (,
 NATE flag-not-copy): it was half-built (geometry=None follow-up + heuristic FIPS
-tables) and Census tract population is served by the dedicated ``fetch_census_acs``
-tool. An ``acs_*`` (or any non-worldpop) dataset now fails the ``validate`` gate with
+tables). An ``acs_*`` (or any non-worldpop) dataset fails the ``validate`` gate with
 the standard typed input error naming only the WorldPop surface.
 
 The companion ``validate`` hook is the twin's pre-cache input gate: it parses +
@@ -90,8 +89,7 @@ def _worldpop_year_from_dataset(spec: SourceSpec, dataset: str) -> int:
         raise router_input_error(
             sc,
             f"unsupported dataset={dataset!r}; fetch_population serves only WorldPop "
-            "rasters (e.g. 'worldpop_2020'). For US Census tract population use "
-            "fetch_census_acs.",
+            "rasters (e.g. 'worldpop_2020').",
             sfx,
         )
     try:

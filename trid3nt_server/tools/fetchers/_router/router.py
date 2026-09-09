@@ -250,7 +250,7 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
 
         elif pspec.type == "enum":
             allowed = pspec.values or []
-            # Case-insensitive enum (ejscreen indicator): normalize BEFORE the
+            # Case-insensitive enum: normalize BEFORE the
             # allowed-set check, echoing the normalized key (no-op when unset).
             if getattr(pspec, "lowercase", False) and isinstance(value, str):
                 value = value.strip().lower()

@@ -2,8 +2,8 @@
 
 Migrated from the deleted twin test files (wave-1: test_fetch_gridmet /
 _hifld_critical_infrastructure / _noaa_coops_tides / _esri_landcover_10m /
-_census_acs; wave-2: test_fetch_nifc_fire_perimeters / _hifld_transmission_lines /
-_mtbs_burn_severity / _cdc_svi / _nhd_waterbodies / _us_drought_monitor). Those
+wave-2: test_fetch_nifc_fire_perimeters / _hifld_transmission_lines /
+_mtbs_burn_severity / _nhd_waterbodies / _us_drought_monitor). Those
 files unit-tested the twins' INTERNAL helpers (``_plan_tile_grid``, ``_VARIABLES``,
 ``_build_where_clause``, ``_normalize_props``, ``_ddate_to_iso`` ...) which no
 longer exist -- deleted per the migration rule. The CONTRACT-level behavior that
@@ -51,11 +51,6 @@ PROMOTED = {
         "properties": ["bbox", "year"],
         "required": ["bbox"],
     },
-    "fetch_census_acs": {
-        "source_class": "census_acs",
-        "properties": ["bbox", "variable", "year"],
-        "required": ["bbox"],
-    },
     # --- phase-2 wave-2: the ArcGIS FeatureServer/MapServer vector family ---
     "fetch_nifc_fire_perimeters": {
         "source_class": "nifc_perimeters",
@@ -73,11 +68,6 @@ PROMOTED = {
         "source_class": "mtbs_burn_severity",
         "properties": ["bbox", "year_range"],
         "required": ["bbox", "year_range"],
-    },
-    "fetch_cdc_svi": {
-        "source_class": "cdc_svi",
-        "properties": ["bbox"],
-        "required": ["bbox"],
     },
     "fetch_nhd_waterbodies": {
         "source_class": "nhd_waterbodies",

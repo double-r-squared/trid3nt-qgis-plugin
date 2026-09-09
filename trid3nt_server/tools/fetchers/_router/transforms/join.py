@@ -1,8 +1,8 @@
 """JOIN-on-key transform (contract sec 2.5) -- first-class, NATE-approved.
 
-The pattern that decides the fold's ceiling (audit surprise #1: census_acs,
-lehd_jobs, usgs_gw, usgs_wq, volcano_alerts, openfema). Declarative ``join``
-block: fetch geometry (vector-fgb executor), extract the scope set, fetch values
+The pattern for a source whose VALUES arrive separately from its GEOMETRY: a
+tabular API keyed on an area code, joined onto the boundary polygons that carry
+that code. Declarative ``join`` block: fetch geometry (vector-fgb executor), extract the scope set, fetch values
 per-scope, left-join on the key, derive the per-feature value, serialize FGB.
 Missing value -> ``null`` (NEVER fabricated -- honesty rule).
 
@@ -32,11 +32,10 @@ __all__ = ["compute_value", "join_on_key", "select_variable", "execute", "is_raw
 def is_raw_passthrough_code(s: Any) -> bool:
     """True if ``s`` looks like a raw ACS-style estimate code (e.g. ``B19013_001E``).
 
-    Mirrors the twin ``fetch_census_acs._is_raw_acs_code``: a leading ``B``/``C``
-    table letter, an ``E`` estimate suffix, and an underscore. This is the
-    full-fidelity passthrough NATE chose -- a raw variable code is accepted
-    alongside the friendly names, resolved to a ``kind=value`` fetch of that code
-    with ``units=count`` (the twin's units for a raw code).
+A leading ``B``/``C`` table letter, an ``E`` estimate suffix, and an
+    underscore. This is the full-fidelity passthrough: a raw variable code is
+    accepted alongside the friendly names, resolved to a ``kind=value`` fetch of
+    that code with ``units=count``.
     """
     if not isinstance(s, str) or not s:
         return False
@@ -57,8 +56,8 @@ def select_variable(spec: SourceSpec, params: dict[str, Any]) -> tuple[str, dict
     """
     join_block = spec.join or {}
     variables = (join_block.get("values") or {}).get("variables") or {}
-    # variable_param: the request param carrying the variable/segment name
-    # (default "variable"; lehd_jobs names it "segment"). No-op for census (default).
+    # variable_param: the request param carrying the variable/segment name. A
+    # source whose vocabulary is not called "variable" declares its own name.
     variable_param = join_block.get("variable_param", "variable")
     requested = params.get(variable_param)
     if not isinstance(requested, str) or not requested.strip():
@@ -71,9 +70,9 @@ def select_variable(spec: SourceSpec, params: dict[str, Any]) -> tuple[str, dict
     low = key.lower()
     if low in variables:
         return low, dict(variables[low])
-    # Raw ACS estimate-code passthrough (full fidelity, NATE-chosen). allow_raw_code
-    # gates it OFF for a closed-vocabulary source (lehd segments), whose
-    # unknown value must raise the twin's plain enum error. Default True = census.
+    # Raw estimate-code passthrough (full fidelity). allow_raw_code gates it OFF
+    # for a CLOSED-vocabulary source, whose unknown value must raise the plain
+    # enum error instead of being accepted as a code.
     if join_block.get("allow_raw_code", True) and is_raw_passthrough_code(key):
         code = key.upper()
         table = code.split("_", 1)[0]
@@ -144,10 +143,9 @@ def join_on_key(
     key_field = geom_cfg.get("key_field", "GEOID")
     keep = geom_cfg.get("keep", [])
     units = var_spec.get("units")
-    # value_field: the property carrying the variable/segment label
-    # (default "variable"; lehd_jobs -> "segment"). extra_props: static param-echo
-    # columns ({prop: {param: <name>}}) the twin stamps beyond the join (lehd year).
-    # Both default to census's exact schema (no-op).
+    # value_field: the property carrying the variable/segment label. extra_props:
+    # static param-echo columns ({prop: {param: <name>}}) a source stamps beyond
+    # the join. Both default to the plain single-variable schema.
     value_field = join_block.get("value_field", "variable")
     extra_props = join_block.get("extra_props") or {}
 
@@ -209,10 +207,10 @@ def fetch_values(
 
     join_block = spec.join or {}
     values_cfg = join_block.get("values") or {}
-    # values_hook: a source whose values leg is NOT the census Data-API
-    # (lehd's per-state bulk gzip-CSV) declares a pure plan+parse hook pair. The
+    # values_hook: a source whose values leg is NOT a query-param tabular API
+    # (a per-state bulk archive, say) declares a pure plan+parse hook pair. The
     # transport (the plan GETs) + honesty stay router-owned here; the hooks only
-    # build the requests and decode the bytes. No-op for census (no values_hook).
+    # build the requests and decode the bytes.
     vhook = values_cfg.get("values_hook")
     if vhook:
         return _fetch_values_via_hook(spec, scope_keys, var_spec, params, vhook)

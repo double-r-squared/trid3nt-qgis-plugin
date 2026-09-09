@@ -92,7 +92,6 @@ docstring: |-
   **When NOT to use:**
   - Per-building occupancy (GHS-POP is gridded; combine ``fetch_buildings``
     footprints with this raster for building-level occupancy).
-  - Authoritative US census tabulation for reporting (use ``fetch_census_acs``).
   - Sub-100 m / parcel-scale precision (HRSL ~30 m is finer; prefer it when
     coverage and resolution both matter and the AOI is small).
   - Real-time counts (GHS-POP is a modeled epoch grid, not a live measurement).

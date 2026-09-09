@@ -9,8 +9,7 @@ units/style LayerURI stamps.
 
 APPROVED REMOVAL (ADR 0092): the twin's half-built ACS (Census B01003) leg is DROPPED.
 An ``acs_*`` dataset now fails the validate gate with the standard typed input error
-(fetch_census_acs serves tract population) -- covered explicitly below as the
-surface-change contract, NOT a parity break.
+-- covered explicitly below as the surface-change contract, NOT a parity break.
 
 The requests/rasterio socket is the ONE sanctioned delegate impurity (mocked here for a
 hermetic offline run over a synthetic country GeoTIFF); the real WorldPop path is
@@ -136,8 +135,8 @@ def test_population_docstring_is_worldpop_only():
 
     doc = TOOL_REGISTRY["fetch_population"].fn.__doc__ or ""
     assert "WorldPop" in doc
-    # The ACS leg is dropped; the doc routes census asks to fetch_census_acs.
-    assert "fetch_census_acs" in doc
+    # The ACS leg is dropped; the doc names only the WorldPop surface.
+    assert "Census" not in doc
 
 
 # --------------------------------------------------------------------------- #
