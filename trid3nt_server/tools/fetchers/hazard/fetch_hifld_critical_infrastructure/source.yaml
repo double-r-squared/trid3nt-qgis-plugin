@@ -33,8 +33,9 @@ gates:
 
 # --- ingestion (vector-API-FGB / ArcGIS FeatureServer query) -------------
 ingest:
-  query_template: {out_fields: "*", f: geojson, order_by: "OBJECTID ASC"}
-  pagination: {mode: result_offset, page_size: 2000}
+  access: ogr
+  ogr: {driver: ESRIJSON}
+  query_template: {out_fields: "*", order_by: "OBJECTID ASC"}
   # Twin _features_to_flatgeobuf parity (declarative, not hardcoded):
   #  - keep only Point features with finite coords (drops null/non-Point rows)
   #  - coerce nested (dict/list) HIFLD props to JSON strings (FGB-safe)
