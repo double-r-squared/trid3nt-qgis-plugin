@@ -32,11 +32,10 @@ params:
     - trunk
     - trunk_link
 hooks:
-  build_request: overpass_roads.build_request
-  parse_response: overpass_roads.parse_response
+  delegate: roads_osm.delegate
+  delegate_validate: roads_osm.validate
 ingest:
-  http_source:
-    endpoint_fallback: true
+  delegate: {library: osmnx, timeout_s: 180}
   properties:
   - osm_id
   - name

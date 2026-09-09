@@ -1,24 +1,24 @@
-"""Overpass-family fold parity (ADR 0070): roads + pois via the router.
+"""Router value coverage for the OSM family, read through OSMnx.
 
-Migrates the value-bearing coverage of the deleted twin tests
-(test_fetch_roads_osm.py + test_fetch_overpass_pois.py) onto the spec-driven
-surface: the PURE hooks (QL build, geometry/clip decode, tag resolution,
-honest-empty), the http_json endpoint_fallback mirror chain (first-success /
-4xx-short-circuit / all-fail), and the end-to-end LayerURI + cache-key stability.
-Offline: synthetic Overpass JSON bodies + an in-memory read_through injector; the
-real 3-mirror network path is proven by the live proof recorded in ADR 0070.
+The library owns the query, the socket and the element-to-geometry decode. What
+each row owns is its tag vocabulary and its projection - clip or keep whole, a
+point or a line, which columns - and that is what these OFFLINE tests exercise,
+against synthetic frames shaped exactly as the library returns them. The mirror
+chain and the silent-error hook are driven against a stand-in for the library's
+own request seam.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
+import geopandas as gpd
+import pandas as pd
 import pytest
+from shapely.geometry import LineString, Point, Polygon
 
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import (
@@ -26,16 +26,13 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.executors import http_json
 from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
-from trid3nt_server.tools.fetchers._router.hooks import RequestPlan, overpass
+from trid3nt_server.tools.fetchers._router.hooks import osm as osm_hooks
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
-from trid3nt_server.tools.fetchers._router.transport import (
-    TransportNotFound,
-    TransportUpstreamError,
-)
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois import hooks as pois
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm import hooks as roads
 
 _SPEC_BASE = (
     Path(__file__).resolve().parents[1]
@@ -48,22 +45,21 @@ _FORT_MYERS = (-82.0, 26.5, -81.8, 26.7)
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def _body(elements: list[dict[str, Any]]) -> bytes:
-    return json.dumps({"version": 0.6, "elements": elements}).encode("utf-8")
-
-
-def _way(osm_id: int, coords: list[tuple[float, float]], **tags: Any) -> dict[str, Any]:
-    return {
-        "type": "way",
-        "id": osm_id,
-        "geometry": [{"lat": lat, "lon": lon} for lon, lat in coords],
-        "tags": tags or {},
-    }
+def _frame(rows: list[tuple[str, int, object, dict]]) -> gpd.GeoDataFrame:
+    """A frame shaped as the library returns one: a (element, id) index plus tags."""
+    index = pd.MultiIndex.from_tuples(
+        [(et, oid) for et, oid, _g, _t in rows], names=["element", "id"])
+    cols: dict[str, list] = {}
+    for _et, _oid, _g, tags in rows:
+        for k in tags:
+            cols.setdefault(k, [])
+    for k in cols:
+        cols[k] = [tags.get(k) for _et, _oid, _g, tags in rows]
+    return gpd.GeoDataFrame(
+        cols, geometry=[g for _et, _oid, g, _t in rows], index=index, crs="EPSG:4326")
 
 
 def _fgb_gdf(fgb: bytes):
-    import geopandas as gpd
-
     with tempfile.NamedTemporaryFile(suffix=".fgb", delete=False) as tf:
         path = tf.name
         tf.write(fgb)
@@ -74,6 +70,11 @@ def _fgb_gdf(fgb: bytes):
             os.unlink(path)
         except OSError:
             pass
+
+
+def _serve(monkeypatch, module, frame):
+    monkeypatch.setattr(module, "overpass_features",
+                        lambda spec, params, tags, *, timeout_s: frame)
 
 
 # --------------------------------------------------------------------------- #
@@ -93,56 +94,48 @@ def test_both_promoted_as_router_specs():
 
 
 # --------------------------------------------------------------------------- #
-# Roads: QL build hook.
+# Roads: the highway vocabulary.
 # --------------------------------------------------------------------------- #
 
 
-def test_roads_ql_contains_bbox_and_classes():
-    ql = overpass._build_roads_ql(_FORT_MYERS, ("motorway", "primary"))
-    assert "(26.5,-82.0,26.7,-81.8)" in ql
-    assert "^(motorway|primary)$" in ql
-    assert "out geom;" in ql
-    assert "[out:json][timeout:60]" in ql
-
-
-def test_roads_ql_narrowed_to_motorway_only():
-    ql = overpass._build_roads_ql(_FORT_MYERS, ("motorway",))
-    assert "^(motorway)$" in ql
-    assert "primary" not in ql
-
-
-def test_roads_build_request_default_classes_sorted():
-    plans = overpass.build_request_roads(ROADS_SPEC, {"bbox": list(_FORT_MYERS), "road_classes": ["motorway", "motorway_link", "primary", "primary_link", "secondary", "tertiary", "trunk", "trunk_link"]})
-    assert len(plans) == 3  # one POST plan per mirror
-    assert all(p.method == "POST" and "data" in p.data for p in plans)
-    # sorted alternation in the QL
-    assert "^(motorway|motorway_link|primary|primary_link|secondary|tertiary|trunk|trunk_link)$" in plans[0].data["data"]
+def test_roads_default_classes_are_the_major_tier_sorted():
+    assert roads._resolve_road_classes("OSM_ROADS", "INPUT_INVALID", None) == sorted(
+        roads._DEFAULT_ROAD_CLASSES)
 
 
 def test_roads_unknown_class_raises_input_error():
     with pytest.raises(RouterInputError) as ei:
-        overpass.build_request_roads(ROADS_SPEC, {"bbox": list(_FORT_MYERS), "road_classes": ["bogus_class"]})
+        roads.validate(ROADS_SPEC, {"road_classes": ["bogus_class"]})
     assert ei.value.error_code == "OSM_ROADS_INPUT_INVALID"
     assert ei.value.retryable is False
 
 
 def test_roads_empty_classes_raises_input_error():
     with pytest.raises(RouterInputError):
-        overpass.build_request_roads(ROADS_SPEC, {"bbox": list(_FORT_MYERS), "road_classes": []})
+        roads.validate(ROADS_SPEC, {"road_classes": []})
+
+
+def test_roads_class_set_is_sorted_and_deduped():
+    assert roads._resolve_road_classes(
+        "OSM_ROADS", "INPUT_INVALID", ["primary", "motorway", "primary"]) == [
+        "motorway", "primary"]
 
 
 # --------------------------------------------------------------------------- #
-# Roads: parse + clip.
+# Roads: the clip, which is what makes a network measured INSIDE an area.
 # --------------------------------------------------------------------------- #
 
 
-def test_roads_parse_extracts_and_clips_spill():
-    bodies = [_body([
-        _way(1, [(-82.3, 26.6), (-81.9, 26.6)], name="W spill", highway="motorway"),
-        _way(2, [(-81.95, 26.55), (-81.85, 26.65)], name="inside", highway="primary"),
-        _way(3, [(-83.0, 26.6), (-82.5, 26.6)], name="gone", highway="primary"),
-    ])]
-    feats = overpass.parse_response_roads(ROADS_SPEC, {"bbox": list(_FORT_MYERS)}, bodies)
+def test_roads_clip_keeps_only_the_in_aoi_run(monkeypatch):
+    _serve(monkeypatch, roads, _frame([
+        ("way", 1, LineString([(-82.3, 26.6), (-81.9, 26.6)]),
+         {"name": "W spill", "highway": "motorway"}),
+        ("way", 2, LineString([(-81.95, 26.55), (-81.85, 26.65)]),
+         {"name": "inside", "highway": "primary"}),
+        ("way", 3, LineString([(-83.0, 26.6), (-82.5, 26.6)]),
+         {"name": "gone", "highway": "primary"}),
+    ]))
+    feats = roads.delegate(ROADS_SPEC, {"bbox": list(_FORT_MYERS)}, timeout_s=1)
     ids = sorted(f["properties"]["osm_id"] for f in feats)
     assert 3 not in ids and {1, 2} <= set(ids)
     for f in feats:
@@ -151,35 +144,28 @@ def test_roads_parse_extracts_and_clips_spill():
             assert 26.5 - 1e-9 <= lat <= 26.7 + 1e-9
 
 
-def test_roads_parse_zigzag_yields_multiple_segments():
-    bodies = [_body([_way(
-        4, [(-81.9, 26.65), (-82.2, 26.65), (-81.9, 26.60), (-82.2, 26.60), (-81.9, 26.55)],
-        name="Zigzag", highway="trunk",
-    )])]
-    feats = overpass.parse_response_roads(ROADS_SPEC, {"bbox": list(_FORT_MYERS)}, bodies)
+def test_roads_a_way_crossing_the_edge_twice_is_two_segments(monkeypatch):
+    _serve(monkeypatch, roads, _frame([
+        ("way", 4, LineString([(-81.9, 26.65), (-82.2, 26.65), (-81.9, 26.60),
+                               (-82.2, 26.60), (-81.9, 26.55)]),
+         {"name": "Zigzag", "highway": "trunk"}),
+    ]))
+    feats = roads.delegate(ROADS_SPEC, {"bbox": list(_FORT_MYERS)}, timeout_s=1)
     assert len(feats) >= 2
     assert all(f["properties"]["osm_id"] == 4 for f in feats)
+    assert all(f["properties"]["name"] == "Zigzag" for f in feats)
 
 
-def test_roads_parse_skips_single_point_and_non_way():
-    bodies = [_body([
-        _way(1, [(-81.95, 26.55), (-81.9, 26.6)], highway="motorway"),
-        {"type": "node", "id": 2, "lat": 26.5, "lon": -82.0},
-        _way(3, [(-81.9, 26.6)], highway="primary"),  # single point
-    ])]
-    feats = overpass.parse_response_roads(ROADS_SPEC, {"bbox": list(_FORT_MYERS)}, bodies)
-    assert [f["properties"]["osm_id"] for f in feats] == [1]
-
-
-def test_roads_50_ways_serialize_to_50_features():
-    ways = [
-        _way(100 + i, [(-82.0 + 0.001 * i, 26.5 + 0.001 * i), (-82.0 + 0.001 * (i + 1), 26.5 + 0.001 * (i + 1))],
-             name=f"Rd {i}", highway="primary")
+def test_roads_serializes_with_the_declared_columns(monkeypatch):
+    _serve(monkeypatch, roads, _frame([
+        ("way", 100 + i,
+         LineString([(-82.0 + 0.001 * i, 26.5 + 0.001 * i),
+                     (-82.0 + 0.001 * (i + 1), 26.5 + 0.001 * (i + 1))]),
+         {"name": f"Rd {i}", "highway": "primary"})
         for i in range(50)
-    ]
-    feats = overpass.parse_response_roads(ROADS_SPEC, {"bbox": list(_FORT_MYERS)}, [_body(ways)])
-    fgb = features_to_fgb_bytes(feats, ROADS_SPEC, {"bbox": list(_FORT_MYERS)})
-    gdf = _fgb_gdf(fgb)
+    ]))
+    feats = roads.delegate(ROADS_SPEC, {"bbox": list(_FORT_MYERS)}, timeout_s=1)
+    gdf = _fgb_gdf(features_to_fgb_bytes(feats, ROADS_SPEC, {"bbox": list(_FORT_MYERS)}))
     assert len(gdf) == 50
     assert (gdf.geometry.geom_type == "LineString").all()
     for col in ("osm_id", "name", "highway", "lanes", "maxspeed"):
@@ -187,16 +173,14 @@ def test_roads_50_ways_serialize_to_50_features():
 
 
 def test_roads_empty_yields_header_only_fgb():
-    fgb = features_to_fgb_bytes([], ROADS_SPEC, {"bbox": list(_FORT_MYERS)})
-    gdf = _fgb_gdf(fgb)
+    gdf = _fgb_gdf(features_to_fgb_bytes([], ROADS_SPEC, {"bbox": list(_FORT_MYERS)}))
     assert len(gdf) == 0
-    # honest-empty header carries the declared schema
     for col in ("osm_id", "name", "highway", "lanes", "maxspeed"):
         assert col in gdf.columns
 
 
 # --------------------------------------------------------------------------- #
-# POIs: tag resolution.
+# POIs: the five ways of naming one tag.
 # --------------------------------------------------------------------------- #
 
 
@@ -208,118 +192,195 @@ def test_roads_empty_yields_header_only_fgb():
     ({"value": "school"}, ("amenity", "school")),
 ])
 def test_pois_tag_resolution(params, expected):
-    assert overpass._resolve_tag("OVERPASS_POIS", "INPUT_INVALID", params) == expected
+    assert pois._resolve_tag("OVERPASS_POIS", "INPUT_INVALID", params) == expected
 
 
 def test_pois_amenity_wins_priority():
-    assert overpass._resolve_tag("OVERPASS_POIS", "INPUT_INVALID",
-                                 {"amenity": "hospital", "tag": "shop=supermarket"}) == ("amenity", "hospital")
+    assert pois._resolve_tag("OVERPASS_POIS", "INPUT_INVALID",
+                             {"amenity": "hospital", "tag": "shop=supermarket"}) == (
+        "amenity", "hospital")
 
 
 def test_pois_no_selector_raises_input_error():
     with pytest.raises(RouterInputError) as ei:
-        overpass._resolve_tag("OVERPASS_POIS", "INPUT_INVALID", {})
+        pois.validate(POIS_SPEC, {})
     assert ei.value.error_code == "OVERPASS_POIS_INPUT_INVALID"
     assert ei.value.retryable is False
 
 
 def test_pois_unmappable_bare_value_raises():
     with pytest.raises(RouterInputError):
-        overpass._resolve_tag("OVERPASS_POIS", "INPUT_INVALID", {"value": "unknownthing"})
+        pois._resolve_tag("OVERPASS_POIS", "INPUT_INVALID", {"value": "unknownthing"})
 
 
 def test_pois_dirty_token_rejected():
     with pytest.raises(RouterInputError):
-        overpass._resolve_tag("OVERPASS_POIS", "INPUT_INVALID", {"tag": "amenity=hos pital"})
-
-
-def test_pois_ql_queries_all_element_types():
-    ql = overpass._build_pois_ql(_FORT_MYERS, "amenity", "hospital")
-    for et in ("node", "way", "relation"):
-        assert f'{et}["amenity"="hospital"]' in ql
-    assert "out center;" in ql
+        pois._resolve_tag("OVERPASS_POIS", "INPUT_INVALID", {"tag": "amenity=hos pital"})
 
 
 # --------------------------------------------------------------------------- #
-# POIs: parse + honest-empty.
+# POIs: one representative point per element, strictly inside the bbox.
 # --------------------------------------------------------------------------- #
 
 
-def test_pois_parse_node_and_center_inside_bbox():
-    bodies = [_body([
-        {"type": "node", "id": 1, "lat": 26.6, "lon": -81.9, "tags": {"amenity": "hospital", "name": "H1"}},
-        {"type": "way", "id": 2, "center": {"lat": 26.62, "lon": -81.88}, "tags": {"amenity": "hospital"}},
-        {"type": "node", "id": 3, "lat": 27.9, "lon": -81.9, "tags": {"amenity": "hospital"}},  # outside bbox
-    ])]
-    feats = overpass.parse_response_pois(POIS_SPEC, {"bbox": list(_FORT_MYERS), "amenity": "hospital"}, bodies)
-    ids = sorted(f["properties"]["osm_id"] for f in feats)
-    assert ids == [1, 2]
-    assert all(f["properties"]["key"] == "amenity" and f["properties"]["value"] == "hospital" for f in feats)
+def test_pois_a_node_is_its_own_point_and_an_area_is_its_bbox_centre(monkeypatch):
+    _serve(monkeypatch, pois, _frame([
+        ("node", 1, Point(-81.9, 26.6), {"amenity": "hospital", "name": "H1"}),
+        ("way", 2, Polygon([(-81.90, 26.60), (-81.86, 26.60), (-81.86, 26.64),
+                            (-81.90, 26.64)]), {"amenity": "hospital"}),
+        ("node", 3, Point(-81.9, 27.9), {"amenity": "hospital"}),   # outside the bbox
+    ]))
+    feats = pois.delegate(
+        POIS_SPEC, {"bbox": list(_FORT_MYERS), "amenity": "hospital"}, timeout_s=1)
+    assert sorted(f["properties"]["osm_id"] for f in feats) == [1, 2]
+    area = next(f for f in feats if f["properties"]["osm_id"] == 2)
+    assert area["geometry"]["coordinates"] == pytest.approx([-81.88, 26.62])
     assert all(f["geometry"]["type"] == "Point" for f in feats)
+    assert all(f["properties"]["key"] == "amenity" for f in feats)
 
 
-def test_pois_zero_features_raises_no_features():
-    with pytest.raises(RouterEmptyError) as ei:
-        overpass.parse_response_pois(POIS_SPEC, {"bbox": list(_FORT_MYERS), "amenity": "hospital"}, [_body([])])
-    assert ei.value.error_code == "OVERPASS_POIS_NO_FEATURES"
-    assert ei.value.retryable is False
-
-
-def test_pois_serialize_carries_props():
-    bodies = [_body([
-        {"type": "node", "id": 1, "lat": 26.6, "lon": -81.9, "tags": {"amenity": "hospital", "name": "H1"}},
-    ])]
-    feats = overpass.parse_response_pois(POIS_SPEC, {"bbox": list(_FORT_MYERS), "amenity": "hospital"}, bodies)
+def test_pois_carries_the_element_type_and_the_whole_tag_bag(monkeypatch):
+    _serve(monkeypatch, pois, _frame([
+        ("node", 1, Point(-81.9, 26.6),
+         {"amenity": "hospital", "name": "H1", "emergency": "yes"}),
+    ]))
+    feats = pois.delegate(
+        POIS_SPEC, {"bbox": list(_FORT_MYERS), "amenity": "hospital"}, timeout_s=1)
+    props = feats[0]["properties"]
+    assert props["osm_type"] == "node"
+    assert props["tags_json"] == (
+        '{"amenity":"hospital","emergency":"yes","name":"H1"}')
     gdf = _fgb_gdf(features_to_fgb_bytes(feats, POIS_SPEC, {"bbox": list(_FORT_MYERS)}))
-    assert len(gdf) == 1
     for col in ("osm_id", "osm_type", "name", "key", "value", "tags_json"):
         assert col in gdf.columns
 
 
+def test_pois_zero_features_raises_no_features(monkeypatch):
+    _serve(monkeypatch, pois, gpd.GeoDataFrame(geometry=[], crs="EPSG:4326"))
+    with pytest.raises(RouterEmptyError) as ei:
+        pois.delegate(
+            POIS_SPEC, {"bbox": list(_FORT_MYERS), "amenity": "hospital"}, timeout_s=1)
+    assert ei.value.error_code == "OVERPASS_POIS_NO_FEATURES"
+    assert ei.value.retryable is False
+
+
 # --------------------------------------------------------------------------- #
-# Mirror endpoint_fallback chain (the data-source fallback norm).
+# The mirror chain and the error the library returns as data.
 # --------------------------------------------------------------------------- #
 
 
-def _plans(n: int = 3):
-    return [RequestPlan(url=f"https://m{i}/api", method="POST", data={"data": "ql"}) for i in range(n)]
+class _Resp:
+    def __init__(self, status_code, text):
+        self.status_code = status_code
+        self.text = text
+        self.ok = status_code < 400
 
 
-def test_fallback_first_success_wins(monkeypatch):
-    calls = []
+def test_the_row_names_the_interpreter_and_the_library_gets_the_base(monkeypatch):
+    """The library appends /interpreter itself, and its timeout is also the QL's
+    own [timeout:N] directive, which Overpass parses as an integer."""
+    seen: list[tuple[str, object]] = []
 
-    def fake_get_raw(plan):
-        calls.append(plan.url)
-        if plan.url == "https://m0/api":
-            raise TransportUpstreamError("504", status=504)
-        return b'{"elements": []}'
+    def fake(bbox, tags):
+        from osmnx import settings
 
-    monkeypatch.setattr(http_json, "_get_raw", fake_get_raw)
-    bodies = http_json._fetch_endpoint_fallback(ROADS_SPEC, _plans())
-    assert bodies == [b'{"elements": []}']
-    assert calls == ["https://m0/api", "https://m1/api"]  # stopped at first success
+        seen.append((settings.overpass_url, settings.requests_timeout))
+        return gpd.GeoDataFrame(geometry=[Point(-81.9, 26.6)], crs="EPSG:4326")
+
+    import osmnx as ox
+
+    monkeypatch.setattr(ox, "features_from_bbox", fake)
+    osm_hooks.overpass_features(
+        ROADS_SPEC, {"bbox": list(_FORT_MYERS)}, {"highway": "primary"}, timeout_s=180.0)
+    url, timeout = seen[0]
+    assert url == "https://overpass-api.de/api"
+    assert isinstance(timeout, int) and timeout == 180
 
 
-def test_fallback_all_fail_raises_upstream(monkeypatch):
-    monkeypatch.setattr(http_json, "_get_raw",
-                        lambda plan: (_ for _ in ()).throw(TransportUpstreamError("504", status=504)))
+def test_a_failed_mirror_is_followed_by_the_next(monkeypatch):
+    seen: list[str] = []
+
+    def fake(bbox, tags):
+        from osmnx import settings
+
+        seen.append(settings.overpass_url)
+        if len(seen) == 1:
+            raise RuntimeError("504")
+        return gpd.GeoDataFrame(geometry=[Point(-81.9, 26.6)], crs="EPSG:4326")
+
+    import osmnx as ox
+
+    monkeypatch.setattr(ox, "features_from_bbox", fake)
+    gdf = osm_hooks.overpass_features(
+        ROADS_SPEC, {"bbox": list(_FORT_MYERS)}, {"highway": "primary"}, timeout_s=1)
+    assert len(gdf) == 1
+    assert len(seen) == 2 and seen[0] != seen[1]
+
+
+def test_every_mirror_failing_is_a_typed_upstream_error(monkeypatch):
+    import osmnx as ox
+
+    monkeypatch.setattr(
+        ox, "features_from_bbox",
+        lambda bbox, tags: (_ for _ in ()).throw(RuntimeError("504 from the mirror")))
     with pytest.raises(RouterUpstreamError) as ei:
-        http_json._fetch_endpoint_fallback(ROADS_SPEC, _plans())
+        osm_hooks.overpass_features(
+            ROADS_SPEC, {"bbox": list(_FORT_MYERS)}, {"highway": "primary"}, timeout_s=1)
     assert ei.value.error_code == "OSM_ROADS_UPSTREAM_ERROR"
     assert ei.value.retryable is True
+    assert "504 from the mirror" in str(ei.value)
 
 
-def test_fallback_4xx_short_circuits(monkeypatch):
-    calls = []
+def test_no_element_matched_is_an_empty_frame_not_a_failure(monkeypatch):
+    import osmnx as ox
 
-    def fake_get_raw(plan):
-        calls.append(plan.url)
-        raise TransportNotFound("404", status=404)
+    monkeypatch.setattr(
+        ox, "features_from_bbox",
+        lambda bbox, tags: (_ for _ in ()).throw(
+            ox._errors.InsufficientResponseError("no elements")))
+    gdf = osm_hooks.overpass_features(
+        ROADS_SPEC, {"bbox": list(_FORT_MYERS)}, {"highway": "primary"}, timeout_s=1)
+    assert len(gdf) == 0
 
-    monkeypatch.setattr(http_json, "_get_raw", fake_get_raw)
-    with pytest.raises(RouterUpstreamError):
-        http_json._fetch_endpoint_fallback(ROADS_SPEC, _plans())
-    assert calls == ["https://m0/api"]  # 4xx did NOT try the other mirrors
+
+def test_a_non_ok_response_with_a_json_body_is_raised_not_returned():
+    """The library's own parse raises only on a body it cannot read as JSON, so a
+    JSON error envelope would reach the router as a zero-element answer."""
+
+    class _Real:
+        @staticmethod
+        def post(url, *a, **k):
+            return _Resp(400, '{"remark": "query timed out"}')
+
+    wrapped = osm_hooks._RaiseOnStatus(_Real())
+    with pytest.raises(osm_hooks._OverpassStatus) as ei:
+        wrapped.post("https://mirror.test/api")
+    assert "query timed out" in str(ei.value)
+    assert "400" in str(ei.value)
+
+
+def test_the_statuses_the_library_retries_itself_pass_through():
+    class _Real:
+        @staticmethod
+        def post(url, *a, **k):
+            return _Resp(429, "slow down")
+
+    assert osm_hooks._RaiseOnStatus(_Real()).post("https://mirror.test/api").status_code == 429
+
+
+def test_a_mirror_that_only_ever_throttles_stops_being_retried():
+    """The library retries a 429 by recursion with no ceiling, so the ceiling is here."""
+
+    class _Real:
+        @staticmethod
+        def post(url, *a, **k):
+            return _Resp(429, "slow down")
+
+    wrapped = osm_hooks._RaiseOnStatus(_Real())
+    for _ in range(osm_hooks._MAX_THROTTLED):
+        assert wrapped.post("https://mirror.test/api").status_code == 429
+    with pytest.raises(osm_hooks._OverpassStatus):
+        wrapped.post("https://mirror.test/api")
 
 
 # --------------------------------------------------------------------------- #
@@ -349,11 +410,11 @@ def _inject_read_through(monkeypatch, store: dict[str, bytes]):
 
 
 def test_roads_end_to_end_layer_uri(monkeypatch):
-    store: dict[str, bytes] = {}
-    _inject_read_through(monkeypatch, store)
-    body = _body([_way(1, [(-81.95, 26.55), (-81.9, 26.6)], name="I-75", highway="motorway")])
-    monkeypatch.setattr(http_json, "_get_raw", lambda plan: body)
-
+    _inject_read_through(monkeypatch, {})
+    _serve(monkeypatch, roads, _frame([
+        ("way", 1, LineString([(-81.95, 26.55), (-81.9, 26.6)]),
+         {"name": "I-75", "highway": "motorway"}),
+    ]))
     layer = router.route(ROADS_SPEC, {"bbox": list(_FORT_MYERS), "road_classes": ["motorway"]})
     assert layer.layer_type == "vector"
     assert layer.role == "context"
@@ -363,44 +424,39 @@ def test_roads_end_to_end_layer_uri(monkeypatch):
 
 
 def test_roads_cache_key_independent_of_class_ordering(monkeypatch):
-    store: dict[str, bytes] = {}
-    _inject_read_through(monkeypatch, store)
+    _inject_read_through(monkeypatch, {})
     calls = {"n": 0}
-    body = _body([_way(1, [(-81.95, 26.55), (-81.9, 26.6)], highway="motorway")])
 
-    def fake(plan):
+    def counting(spec, params, tags, *, timeout_s):
         calls["n"] += 1
-        return body
+        return _frame([("way", 1, LineString([(-81.95, 26.55), (-81.9, 26.6)]),
+                        {"highway": "motorway"})])
 
-    monkeypatch.setattr(http_json, "_get_raw", fake)
+    monkeypatch.setattr(roads, "overpass_features", counting)
     r1 = router.route(ROADS_SPEC, {"bbox": list(_FORT_MYERS), "road_classes": ["motorway", "primary"]})
     r2 = router.route(ROADS_SPEC, {"bbox": list(_FORT_MYERS), "road_classes": ["primary", "motorway"]})
     assert r1.uri == r2.uri
-    assert calls["n"] == 1  # second call was a cache hit (sorted class key)
+    assert calls["n"] == 1  # the second call was a cache hit (sorted class key)
 
 
 def test_pois_end_to_end_bbox_from_features(monkeypatch):
-    store: dict[str, bytes] = {}
-    _inject_read_through(monkeypatch, store)
-    body = _body([
-        {"type": "node", "id": 1, "lat": 26.6, "lon": -81.9, "tags": {"amenity": "hospital"}},
-    ])
-    monkeypatch.setattr(http_json, "_get_raw", lambda plan: body)
+    _inject_read_through(monkeypatch, {})
+    _serve(monkeypatch, pois, _frame([
+        ("node", 1, Point(-81.9, 26.6), {"amenity": "hospital"}),
+    ]))
     layer = router.route(POIS_SPEC, {"bbox": list(_FORT_MYERS), "amenity": "hospital"})
     assert layer.layer_type == "vector"
     assert layer.role == "primary"
     assert layer.style["kind"] == "reference"
     # single-point extent padded by 0.02 (bbox_from_features)
-    assert layer.bbox is not None
     w, s, e, n = layer.bbox
     assert e - w == pytest.approx(0.04, abs=1e-6)
     assert n - s == pytest.approx(0.04, abs=1e-6)
 
 
 def test_pois_no_features_propagates(monkeypatch):
-    store: dict[str, bytes] = {}
-    _inject_read_through(monkeypatch, store)
-    monkeypatch.setattr(http_json, "_get_raw", lambda plan: _body([]))
+    _inject_read_through(monkeypatch, {})
+    _serve(monkeypatch, pois, gpd.GeoDataFrame(geometry=[], crs="EPSG:4326"))
     with pytest.raises(RouterEmptyError) as ei:
         router.route(POIS_SPEC, {"bbox": list(_FORT_MYERS), "amenity": "hospital"})
     assert ei.value.error_code == "OVERPASS_POIS_NO_FEATURES"

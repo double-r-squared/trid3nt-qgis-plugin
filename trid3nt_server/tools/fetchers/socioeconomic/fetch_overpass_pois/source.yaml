@@ -34,11 +34,10 @@ params:
     type: str
     schema_optional: true
 hooks:
-  build_request: overpass_pois.build_request
-  parse_response: overpass_pois.parse_response
+  delegate: overpass_pois.delegate
+  delegate_validate: overpass_pois.validate
 ingest:
-  http_source:
-    endpoint_fallback: true
+  delegate: {library: osmnx, timeout_s: 180}
   properties:
   - osm_id
   - osm_type
