@@ -17,3 +17,4 @@ same reason is as much the shared thing as a keyword is.
 | file | what it is |
 | --- | --- |
 | `river.py` | `RIVER` - what every river deck states about the WATER, whatever is carried in it - plus the chain that cuts the reach out of real geometry, the mesh recipe that triangulates it, the steps that establish the modelled world, the settle that measures it, and the rows every river run and every point release declare. |
+| `__init__.py` | The package door. It re-exports nothing: a consumer imports the body it means. |
