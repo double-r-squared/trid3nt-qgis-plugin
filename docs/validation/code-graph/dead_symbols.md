@@ -13,11 +13,9 @@ separately below. An unused parameter is reclassified from `variable` to
 | `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:188 | 100 | 1 |
 | `unquote` | import | trid3nt_server/emission/uri_registry.py:69 | 90 | 1 |
 | `default_seconds` | parameter | trid3nt_server/gates/confirm.py:117 | 100 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:1174 | 100 | 1 |
-| `isochlor_value` | parameter | trid3nt_server/tools/processing/charts_common.py:1086 | 100 | 1 |
-| `lat_deg` | parameter | trid3nt_server/tools/processing/extract_model_at_observations/extract_model_at_observations.py:632 | 100 | 1 |
-| `gs_backend` | parameter | trid3nt_server/workflows/shared/cog_io.py:535 | 100 | 1 |
-| `runs_bucket_default` | parameter | trid3nt_server/workflows/shared/cog_io.py:537 | 100 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:1173 | 100 | 1 |
+| `gs_backend` | parameter | trid3nt_server/workflows/shared/cog_io.py:481 | 100 | 1 |
+| `runs_bucket_default` | parameter | trid3nt_server/workflows/shared/cog_io.py:483 | 100 | 1 |
 
 ## Callable tier (confidence 60): unused functions, methods, classes
 
@@ -26,38 +24,34 @@ one reached dynamically. Treat as candidates, not verdicts.
 
 | symbol | kind | file:line | loc |
 |---|---|---|---|
-| `build_vadose_breakthrough_chart` | function | trid3nt_server/tools/processing/charts_common.py:796 | 79 |
-| `build_hazard_quantile_band_chart` | function | trid3nt_server/tools/processing/charts_common.py:533 | 78 |
-| `build_ates_recovery_chart` | function | trid3nt_server/tools/processing/charts_common.py:1241 | 62 |
-| `serve_user_supplied_bed` | function | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py:1832 | 38 |
+| `serve_user_supplied_bed` | function | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py:1836 | 38 |
 | `get_session_record` | method | trid3nt_server/persistence.py:704 | 31 |
 | `scan_third_party_imports` | function | plugin/install_dependencies.py:326 | 30 |
-| `_pick_property` | function | trid3nt_server/tools/processing/charts_common.py:1521 | 24 |
 | `_selection_bbox4326` | method | plugin/ui/dock.py:844 | 23 |
 | `update_compute_status` | method | trid3nt_server/emission/pipeline_emitter.py:1673 | 22 |
 | `update_current_progress` | method | trid3nt_server/emission/pipeline_emitter.py:1468 | 20 |
 | `estimate_fetch_resolution` | function | trid3nt_server/gates/cards/solver_confirm.py:252 | 20 |
 | `pin_fetch_resolution` | function | trid3nt_server/gates/cards/solver_confirm.py:274 | 19 |
 | `upsert_session_record` | method | trid3nt_server/persistence.py:526 | 19 |
-| `_default_corpus_path` | function | trid3nt_server/tools/search/search_tools/search_tools.py:391 | 16 |
+| `_default_corpus_path` | function | trid3nt_server/tools/search/search_tools/search_tools.py:388 | 16 |
 | `decimals_for_range` | function | plugin/render/formatting.py:84 | 15 |
-| `require_layer` | method | trid3nt_server/testing/live_run.py:162 | 15 |
+| `require_layer` | method | trid3nt_server/testing/live_run.py:160 | 15 |
 | `_default_corpus_path` | function | trid3nt_server/server/protocol/catalog_http.py:75 | 13 |
-| `run_forever` | method | plugin/net/trid3nt_client.py:2037 | 12 |
+| `run_forever` | method | plugin/net/trid3nt_client.py:2031 | 12 |
 | `format_number` | function | plugin/render/formatting.py:101 | 12 |
 | `describe` | method | trid3nt_server/workflows/runtime/plan.py:342 | 12 |
 | `count_outputs` | method | trid3nt_server/workflows/solver/diagnostics/_common.py:240 | 11 |
 | `read_output_required` | method | trid3nt_server/workflows/solver/diagnostics/_common.py:252 | 11 |
-| `require_chart` | method | trid3nt_server/testing/live_run.py:178 | 10 |
+| `require_chart` | method | trid3nt_server/testing/live_run.py:176 | 10 |
 | `_tool_chip_style` | function | plugin/ui/cards.py:79 | 9 |
 | `_canvas_bbox4326` | method | plugin/ui/dock.py:834 | 9 |
-| `require_metric_close` | method | trid3nt_server/testing/live_run.py:209 | 7 |
+| `require_metric_close` | method | trid3nt_server/testing/live_run.py:207 | 7 |
 | `uri_for_short` | method | trid3nt_server/emission/uri_registry.py:372 | 6 |
 | `coverage_summary` | method | trid3nt_server/fallbacks/walker.py:158 | 6 |
 | `read_stdout_optional` | method | trid3nt_server/workflows/solver/diagnostics/_common.py:273 | 6 |
 | `_toggle_connection` | method | plugin/ui/dock.py:1464 | 5 |
 | `tripped` | method | trid3nt_server/gates/runaway_guard.py:263 | 5 |
-| `_ctg_tile_bounds` | function | trid3nt_server/tools/fetchers/_router/executors/raster_cog.py:1417 | 5 |
+| `_ctg_tile_bounds` | function | trid3nt_server/tools/fetchers/_router/executors/raster_cog.py:1419 | 5 |
 | `with_value` | method | trid3nt_server/workflows/runtime/params.py:226 | 5 |
 | `current_chart_id` | method | plugin/ui/charts_window.py:400 | 4 |
 | `current_turn_drawn_geometry` | function | trid3nt_server/emission/pipeline_emitter.py:157 | 3 |
@@ -65,7 +59,6 @@ one reached dynamically. Treat as candidates, not verdicts.
 | `_toggle_thinking` | method | plugin/ui/cards.py:993 | 2 |
 | `_obj_uri` | function | trid3nt_server/tools/cache.py:347 | 2 |
 | `mtime` | method | trid3nt_server/tools/fetchers/_router/transport/range_file.py:187 | 2 |
-| `_now_iso` | function | trid3nt_server/tools/processing/charts_common.py:299 | 2 |
 | `_refs` | function | trid3nt_server/workflows/runtime/interpreter.py:633 | 2 |
 | `_param_refs` | function | trid3nt_server/workflows/runtime/interpreter.py:637 | 2 |
 
@@ -76,5 +69,5 @@ one reached dynamically. Treat as candidates, not verdicts.
 | declarative row/field DSL: read off the class by the framework | 6 |
 | descriptor/typing decorator | 6 |
 | protocol/framework-called name | 13 |
-| registry decorator: no static caller by construction | 6 |
+| registry decorator: no static caller by construction | 4 |
 | test-support hook (tests are excluded from the scavenge) | 2 |
