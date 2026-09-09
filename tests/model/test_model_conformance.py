@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 CHECKER = REPO_ROOT / "scripts" / "instruments" / "model_check.py"
 MODELS = sorted((REPO_ROOT / "docs" / "model").glob("*.sysml"))
 
