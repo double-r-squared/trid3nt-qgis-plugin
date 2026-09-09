@@ -4435,3 +4435,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the coastal split, a proof-coverage assertion (three live templates
   have none), the proof README stating that the four-variant law
   governs renders, not evidence blobs.
+  THE DOCSTRING LIMIT RULED (NATE 2026-09-09): defaults 3 physical
+  lines for functions and classes, 5 for modules (one line of what
+  lives here + one module-wide constraint; never a pointer); the
+  CONTENT CLASSES are the rule (what it is; what it refuses; a
+  constraint the signature cannot carry; the input/output contract
+  where types under-specify) and the count is the guard that makes
+  the rule enforceable against essays; a longer genuine contract
+  carries "# docstring-exempt: <reason>" on a regenerated ledger
+  (past ~10 entries the limit is re-argued, never routed around);
+  full-line COMMENT BLOCKS are UNCAPPED - the constraint at its point
+  of use, read by whoever changes that line, which is a different
+  reader from the caller at the docstring; LLM-facing tool docstrings
+  keep the 1,000-char front budget, enforced on the 19 that exceed it
+  today; docs/CONVENTIONS.md rewritten to state exactly this.
