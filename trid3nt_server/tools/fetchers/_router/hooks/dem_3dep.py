@@ -222,7 +222,10 @@ def _short_exc(exc: BaseException, limit: int = 220) -> str:
 def _bbox_intersects(
     a: tuple[float, float, float, float], b: tuple[float, float, float, float]
 ) -> bool:
-    return not (a[2] < b[0] or a[0] > b[2] or a[3] < b[1] or a[1] > b[3])
+    """True iff the two WGS84 bboxes overlap; a touching edge counts."""
+    from shapely.geometry import box
+
+    return box(*a).intersects(box(*b))
 
 
 def _bbox_in_us_coverage(bbox: tuple[float, float, float, float]) -> bool:

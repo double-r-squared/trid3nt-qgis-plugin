@@ -314,3 +314,47 @@ def test_solve_emits_single_domain_zoom_to(
         f"expected a single domain zoom-to, got {zoom_tos!r} (the geocode snap "
         "was not purged -> the #159 double rectangle persists)"
     )
+
+
+# --------------------------------------------------------------------------- #
+# The bbox-overlap test the four helpers share
+# --------------------------------------------------------------------------- #
+
+
+def test_the_four_bbox_helpers_agree_that_a_touching_edge_overlaps():
+    """One shapely test behind four call sites, with one documented semantics."""
+    from trid3nt_server.server.dispatch.aoi import _bbox_overlaps
+    from trid3nt_server.tools.fetchers._router.executors.raster_cog import (
+        _bbox_intersects as stac_item_intersects,
+    )
+    from trid3nt_server.tools.fetchers._router.hooks.dem_3dep import (
+        _bbox_intersects as dem_intersects,
+    )
+    from trid3nt_server.tools.fetchers._router.hooks.field_boundaries import (
+        _bbox_intersects as fields_intersects,
+    )
+
+    helpers = [
+        _bbox_overlaps, stac_item_intersects, dem_intersects, fields_intersects,
+    ]
+    cases = [
+        (((0, 0, 1, 1), (2, 2, 3, 3)), False),   # disjoint
+        (((0, 0, 2, 2), (1, 1, 3, 3)), True),    # partial overlap
+        (((0, 0, 4, 4), (1, 1, 2, 2)), True),    # contained
+        (((0, 0, 1, 1), (1, 0, 2, 1)), True),    # shared vertical edge
+        (((0, 0, 1, 1), (0, 1, 1, 2)), True),    # shared horizontal edge
+        (((0, 0, 1, 1), (1, 1, 2, 2)), True),    # single shared corner
+        (((1, 1, 1, 1), (0, 0, 2, 2)), True),    # zero-area box inside
+    ]
+    for helper in helpers:
+        for (a, b), expected in cases:
+            assert helper(a, b) is expected, (helper.__module__, a, b)
+
+
+def test_a_stac_item_with_no_usable_bbox_is_not_a_candidate():
+    from trid3nt_server.tools.fetchers._router.executors.raster_cog import (
+        _bbox_intersects,
+    )
+
+    for bad in (None, [], [1, 2], "abc", [1, 2, "x", 4]):
+        assert _bbox_intersects(bad, (0.0, 0.0, 1.0, 1.0)) is False

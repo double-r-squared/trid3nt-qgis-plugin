@@ -47,7 +47,10 @@ def _datasets(spec: SourceSpec) -> list[dict[str, Any]]:
 
 
 def _bbox_intersects(a: Any, b: Any) -> bool:
-    return not (a[2] < b[0] or b[2] < a[0] or a[3] < b[1] or b[3] < a[1])
+    """True iff the two WGS84 bboxes overlap; a touching edge counts."""
+    from shapely.geometry import box
+
+    return box(*a).intersects(box(*b))
 
 
 # --------------------------------------------------------------------------- #

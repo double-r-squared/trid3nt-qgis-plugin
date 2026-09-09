@@ -190,11 +190,13 @@ def _bbox_overlaps(a: Any, b: Any) -> bool:
     pinned AOI (overlaps -> snap to the pin) from a genuinely DIFFERENT place
     (disjoint -> honor the LLM's box). Touching-edge counts as overlap.
     """
+    from shapely.geometry import box
+
     pa = _coerce_bbox4(a)
     pb = _coerce_bbox4(b)
     if pa is None or pb is None:
         return False
-    return pa[0] <= pb[2] and pb[0] <= pa[2] and pa[1] <= pb[3] and pb[1] <= pa[3]
+    return box(*pa).intersects(box(*pb))
 
 #: Near-exact tolerance (deg) for the fetch-default snap decision. Deliberately
 #: MUCH tighter than the coarse ~2 km ``_BBOX_QUANT_DEG`` scenario-reuse quant so a

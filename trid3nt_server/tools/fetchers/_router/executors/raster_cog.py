@@ -2478,13 +2478,17 @@ def _stac_multi_asset_rgb_to_array(spec: SourceSpec, params: dict[str, Any]) -> 
 
 
 def _bbox_intersects(item_bbox: Any, bbox: tuple[float, float, float, float]) -> bool:
-    """True iff ``item_bbox`` (min_lon,min_lat,max_lon,max_lat) overlaps ``bbox``."""
+    """True iff ``item_bbox`` (min_lon,min_lat,max_lon,max_lat) overlaps ``bbox``.
+
+    A touching edge counts as overlap. An item whose bbox is missing, short or
+    non-numeric is not a candidate.
+    """
+    from shapely.geometry import box
+
     try:
-        ib0, ib1, ib2, ib3 = (float(item_bbox[0]), float(item_bbox[1]),
-                              float(item_bbox[2]), float(item_bbox[3]))
+        return box(*(float(v) for v in item_bbox[:4])).intersects(box(*bbox))
     except (TypeError, ValueError, IndexError):
         return False
-    return not (ib2 < bbox[0] or ib0 > bbox[2] or ib3 < bbox[1] or ib1 > bbox[3])
 
 
 def _select_stac_items(spec: SourceSpec, params: dict[str, Any],
