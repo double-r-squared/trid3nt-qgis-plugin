@@ -6,13 +6,10 @@
 #   scripts/use_openrouter.sh <OPENROUTER_API_KEY> [model] [num_ctx]
 #   scripts/use_openrouter.sh --local          # revert to local ollama (qwen)
 #
-#   model    default: deepseek/deepseek-chat  (a TOOL-CAPABLE model; the agent
-#            is tool-heavy, so pick a model that supports function-calling -
-#            deepseek/deepseek-chat, meta-llama/llama-3.3-70b-instruct,
-#            qwen/qwen-2.5-72b-instruct, mistralai/*. Free variants add ":free"
-#            and are rate-limited.)
-#   num_ctx  default: 65536 (OpenRouter has no /api/show; set it or the clip
-#            guard false-trips at the 16384 default).
+#   model    must be TOOL-CAPABLE: the agent is tool-heavy and a model without
+#            function-calling cannot drive it.
+#   num_ctx  must be set -- OpenRouter has no /api/show, so the clip guard
+#            false-trips at the 16384 default.
 #
 # The key is written ONLY to .env.local (already gitignored). A one-time backup
 # is saved to .env.local.bak. The key is never printed in full or logged.

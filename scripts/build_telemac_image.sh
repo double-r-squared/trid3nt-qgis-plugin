@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # build_telemac_image.sh -- build the TRID3NT TELEMAC-2D river-dye local worker
-# image (trid3nt-local/telemac:latest). Mirrors the swan build line in
-# docs/site/install.md: build context = the worker dir itself (NOT the 588 MB
-# workers tree), Dockerfile discovered in it, a .dockerignore trims tests/pyc.
+# image (trid3nt-local/telemac:latest). Build context = the worker dir itself
+# (NOT the 588 MB workers tree), Dockerfile discovered in it, a .dockerignore
+# trims tests/pyc.
 #
 # Usage: bash scripts/build_telemac_image.sh   (run docker-group as needed, e.g.
 #        `sg docker -c 'bash scripts/build_telemac_image.sh'`).

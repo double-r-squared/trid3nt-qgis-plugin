@@ -7,13 +7,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON="$REPO_ROOT/venvs/agent/bin/python"
 LOG_FILE="$REPO_ROOT/logs/agent.log"
-# Boot-only capture: Python owns agent.log via a RotatingFileHandler (~10MB x3,
-# see trid3nt_server.main._configure_logging) so this script no longer pipes
-# routine output into it (that would double-write and race the handler's own
-# rotation). BOOT_LOG_FILE catches ONLY stderr (Python's console handler
-# targets stdout explicitly; stdout is discarded below) -- a pre-logging-init
-# crash traceback lands here, but routine INFO+ logging never does, so this
-# file stays small instead of re-growing unbounded like the old agent.log did.
+# Boot-only capture. Python owns agent.log via a RotatingFileHandler, so this
+# script must not pipe routine output into it: that would double-write and race
+# the handler's own rotation. BOOT_LOG_FILE catches ONLY stderr (Python's
+# console handler targets stdout explicitly; stdout is discarded below), so a
+# pre-logging-init crash traceback lands here and routine logging never does.
 # Truncated fresh each start.
 BOOT_LOG_FILE="$REPO_ROOT/logs/agent_boot.log"
 PID_FILE="$REPO_ROOT/run/agent.pid"
@@ -55,12 +53,7 @@ export TRID3NT_AGENT_HOST="${TRID3NT_AGENT_HOST:-0.0.0.0}"
 # Python owns log rotation at this exact path (main.py's RotatingFileHandler).
 export TRID3NT_AGENT_LOG_FILE="${TRID3NT_AGENT_LOG_FILE:-$LOG_FILE}"
 
-# Ensure no AWS Cognito pool is set (local = anonymous auth)
-
-# NATE 2026-07-12: no follow-up offers in replies - the user asks for what
-# they want next. Appended to the local model's system prompt (openai path).
-# Layers reach the map from the tool that produced them, and a 0-event fetch
-# stops honestly rather than narrating a layer it did not produce.
+# Appended to the local model's system prompt (openai path only).
 export TRID3NT_OPENAI_EXTRA_SYSTEM="${TRID3NT_OPENAI_EXTRA_SYSTEM:-Never end a reply with an offer, suggestion, or recommendation for a next step (no 'Would you like...', no 'I can also...'). State what was done or found, then stop. The user decides what happens next. Fetch and composer tools publish their own layers. If a fetch returns no data, say so and stop.}"
 
 echo "[start_agent] starting agent (WS :8765, HTTP :8766)..."
@@ -82,15 +75,13 @@ if ! kill -0 "$AGENT_PID" 2>/dev/null; then
   exit 1
 fi
 
-# OPEN-5: best-effort Ollama keep-alive pin. qwen3:8b-16k unloads after
-# Ollama's default 5m idle window, so the FIRST prompt after any idle gap
-# pays a ~60-75s cold-load. A manual keep_alive=24h pin works but does not
-# survive an Ollama restart, so re-arm it here on every agent (re)start
-# instead. Backgrounded (a cold model load can itself take the full 60-75s)
-# and fully non-fatal -- Ollama may be down, or the box may be pointed at a
-# non-Ollama provider (remote/Bedrock), and neither should fail agent
-# startup. Derives the model from the same env the agent itself just
-# loaded ($ENV_FILE, sourced above); falls back to qwen3:8b-24k if unset.
+# Best-effort Ollama keep-alive pin. The model unloads after Ollama's default
+# 5m idle window, so the FIRST prompt after any idle gap pays a ~60-75s
+# cold-load; a manual keep_alive=24h pin does not survive an Ollama restart, so
+# it is re-armed here on every agent (re)start. Backgrounded, because a cold
+# model load can itself take the full 60-75s, and fully non-fatal -- Ollama may
+# be down, or the box may be pointed at a non-Ollama provider, and neither may
+# fail agent startup. The model comes from the env sourced above.
 WARM_MODEL="${TRID3NT_OPENAI_MODEL:-qwen3:8b-24k}"
 (
   curl -s -m 90 http://127.0.0.1:11434/api/generate \

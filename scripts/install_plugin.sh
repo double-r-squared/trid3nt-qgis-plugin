@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-# Install the TRID3NT QGIS plugin into the live QGIS profile.
-#
-# Why this exists (live-feedback 2026-07-12): QGIS loads a COPY of the
-# plugin from the profile dir below, NOT the repo checkout -- a fix
-# committed under plugin/ that is never synced there silently never reaches
-# the user (this drift happened live: the profile carried a stale dock.py).
-# This script IS the plugin deploy step.
+# Install the TRID3NT QGIS plugin into the live QGIS profile -- this script IS
+# the plugin deploy step. QGIS loads a COPY of the plugin from the profile dir
+# below, NOT the repo checkout, so a fix committed under plugin/ that is never
+# synced there silently never reaches the user.
 #
 # The package lives at repo-root plugin/ but installs under the name trid3nt/
 # (its QGIS-loaded name); the co-located tests/, docs/, Makefile, README, and
@@ -59,10 +56,8 @@ mkdir -p "$DST"
 rsync -a --delete "${SHIP_EXCLUDES[@]}" "$SRC" "$DST"
 echo "synced: $SRC -> $DST"
 
-# Version stamp (install-script provenance): write the source commit this sync
-# came from into the INSTALLED copy so a human can eyeball what's actually
-# installed vs. the repo. (The in-plugin Update button was removed; QGIS Plugin
-# Manager owns updates now -- this stamp is now just informational provenance.)
+# Version stamp: the source commit this sync came from, written into the
+# INSTALLED copy so a human can eyeball what is actually installed vs. the repo.
 # Two lines: short sha, branch. Honest "unknown" fallback if this checkout is
 # not a git repo (e.g. an extracted zip) rather than failing the sync.
 GIT_SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"

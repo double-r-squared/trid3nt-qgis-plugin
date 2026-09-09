@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
 # Package the QGIS plugin into the daemon-served custom repository.
 #
-# Builds plugin into a versioned zip + regenerates plugins.xml +
-# manifest.json under the served directory (run/plugin-repo/ by default, or
-# $TRID3NT_PLUGIN_REPO_DIR). Wired into `make agent` so every deploy refreshes
-# the served artifact. The actual packaging logic lives in
-# trid3nt_server.plugin_repo (single source of truth, reused by the serve
-# routes); this script is the deploy-time entrypoint.
+# Builds plugin into a versioned zip + regenerates plugins.xml + manifest.json
+# under the served directory (run/plugin-repo/ by default, or
+# $TRID3NT_PLUGIN_REPO_DIR).
 #
 # Version is metadata.txt-driven and NEVER auto-bumped: a code change without a
 # version= bump prints a WARNING here (Plugin Manager would not see the update)

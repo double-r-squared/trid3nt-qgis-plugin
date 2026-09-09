@@ -24,8 +24,8 @@ echo "[init_minio] current buckets:"
 "$MC" ls "$ALIAS/"
 
 # The QGIS plugin reads layer bytes through GDAL /vsis3, which SIGNS every
-# request, so the buckets stay private. Clear the anonymous-download policy an
-# older init left behind rather than leaving the store world-readable.
+# request, so the buckets stay private: the anonymous-download policy is cleared
+# rather than left world-readable.
 for _b in trid3nt-runs trid3nt-cache; do
   "$MC" anonymous set none "local/$_b" >/dev/null 2>&1 || true
 done

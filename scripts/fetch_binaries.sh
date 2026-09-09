@@ -10,10 +10,9 @@ THIRD_PARTY_DIR="$REPO_ROOT/third_party"
 mkdir -p "$BIN_DIR" "$THIRD_PARTY_DIR"
 
 # ---- MODFLOW 6.7.0 static linux binary ----
-# Bumped 6.5.0 -> 6.7.0 (2026-02-06 USGS release): 6.5.0 does not recognise the
-# PRP options flopy 3.10 emits (EXTEND_TRACKING / COORDINATE_CHECK_METHOD), which
-# broke the PRT capture-zone / wellhead solves. 6.7.0 is the version the
-# gwt_adapter PRT path was authored against.
+# 6.5.0 does not recognise the PRP options flopy 3.10 emits (EXTEND_TRACKING /
+# COORDINATE_CHECK_METHOD), which breaks the PRT capture-zone / wellhead solves;
+# the pin never goes below 6.7.0.
 MF6_VERSION="6.7.0"
 MF6_SHA256="f83e743bac1b3009836a44e6e4aa4b4c522ac2e2c7d291e280db47f68353ebdc"
 MF6_ZIP="$THIRD_PARTY_DIR/mf${MF6_VERSION}_linux.zip"
