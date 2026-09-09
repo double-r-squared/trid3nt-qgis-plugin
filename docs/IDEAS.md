@@ -4383,3 +4383,27 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   exact fill/run invocation with run id and commit), the figures with
   captions under the freshness rule, and the proving runs double as
   the regression set (the canaries). In the docs wave's generator.
+  SCRIPTS RULED (NATE 2026-09-09, docs/validation/scripts-eval.md):
+  the FIVE-DIRECTORY STRUCTURE is adopted - scripts/ keeps the eight
+  user-facing entry points the README and Makefile name; scripts/
+  instruments/ (model_check, code_graph, loc_report, the catalog
+  extractor, tool_sweep, gen_tool_support_page, the canary-evidence
+  replay, harvest_living_atlas, qml_preset_smoke); scripts/packet/
+  (the proof-packet renderers); scripts/drivers/ (the drive lane, the
+  canaries naming their acceptance drivers); scripts/staging/;
+  scripts/local/ GITIGNORED (benches, the direct-run harnesses, the
+  local-model harnesses). The two product modules stranded under
+  sandbox/ (mesh_formats, schism_gr3) move into trid3nt_server/
+  workflows/mesh/shared/formats/ as their own small job FIRST (the
+  sys.path hack in nodes.py dies). THE CULL, all ten recommendations
+  adopted: six dead scripts DELETED (two call symbols that moved; four
+  die with the input-review gate), nine ATTICKED, six to local/,
+  use_openrouter TRACKED, seed_showcase_cases TRACKED with its
+  ledgered client cut landed, replay_canary_evidence an instrument,
+  proof_artemis_real_breakwater_v2 a driver, docs/site/models.md and
+  engines.md rewritten to describe the measurement rather than naming
+  scripts the repo no longer ships, the four docs naming absent
+  scripts corrected, loc_report's --help crash fixed. After: 37
+  tracked files, 7,902 pure LOC; 2,923 pure LOC leave the public
+  repo. Executes inside the hygiene and docs wave under the full-
+  coverage law.
