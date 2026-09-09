@@ -4250,3 +4250,38 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   RE-CUT with a live tool sweep as its own step after the fold (75 of
   176 names dead, 60 registered tools unlisted); until then a dated
   coverage caveat on the page.
+
+- FETCHER FOLD CLOSED (2026-09-09, verifier VERDICT CLEAN at b2daea6e;
+  conformance docs/validation/fetcher-fold-conformance.md): 19
+  families placed - FOLDED F1 (8 STAC specs on the stac-raster
+  executor), G3 (6 Overpass on OSMnx), G10, 12 of 15 G1 (ESRI on the
+  GDAL driver), HWM + NFHL on pygeohydro (NFHL tiling wide AOIs);
+  STAYED F2-F9, G4 (bar the storm-tracks leg), G8, G9; G2/G5/G7 did
+  not fold on measurement. Parity proven per folded row; the norm
+  proven per library (verbatim status/body where the ruling allows);
+  held rows byte-identical. HONEST LOC: product Python 135,416 ->
+  134,778 = -638; the fetcher tree 31,160 -> 30,417 = -743 - about 18%
+  of the census's -3,490 (27% excluding NLDAS-2's +301 of new
+  capability). The census over-counted boilerplate that was each
+  row's own answer and under-counted the library shims (the STAC
+  executor 875 against a 200 target; the HyRiver shim 160; the OSMnx
+  shims 62; the vector driver executor 313). WHAT THE FOLD DELIVERED
+  INSTEAD: two correctness fixes (polygon holes painted as filled
+  drought; a multipolygon building assembled as a triangle), NFHL 42
+  -> 19 s and TIGER 138 -> 61 s, OSMnx's unbounded retry refused, and
+  every folded row proven against a pre-fold capture. Registered tools
+  161 -> 163 as the daemon loads them (the two NEW rows: NLDAS-2, DSWx;
+  the in-process import reads 161 because two catalog tools register
+  only on the startup path - two denominators, both stated). QUEUED
+  (verifier findings, none inside the fold's diff except the first):
+  (1) a hard 500 on an ESRI row runs the driver's five attempts and
+  then the verbatim re-read runs the transport's own five - a double
+  retry to collapse; (2) REGRESSION: the land-cover categorical
+  legend is GONE from the cached object that carried 175 classes on
+  09-03 (the emission seam moved 09-04) - NLCD paints as a grey ramp;
+  (3) telemac_river_dye_refined declares mesh_resolution_m 10.0 and is
+  answered at 7.763 m with the lever read back null - a stale pin;
+  (4) every TELEMAC case labels its cards telemac_river_dye; (5)
+  fetch_overpass_pois loses 3 of 8 corpus phrasings and
+  fetch_copernicus_dem has no corpus. STILL YOURS: the Earthdata
+  .netrc (DSWx + NLDAS-2 live), the support-page re-cut step.
