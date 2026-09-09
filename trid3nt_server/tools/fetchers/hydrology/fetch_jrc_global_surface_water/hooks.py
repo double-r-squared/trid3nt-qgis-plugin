@@ -2,7 +2,7 @@
 
 The ONE irreducible per-source step for the jrc-gsw fold: a per-band GDAL color
 table that is a PURE function of the ``band`` param (never reads the fetched array,
-does no I/O). The ``stac_continuous_mosaic`` serializer bakes the returned
+does no I/O). The ``mosaic`` render's serializer bakes the returned
 ``{value:(r,g,b,a)}`` table into the emitted uint8 COG's band-1 palette so
 ``publish_layer`` colorizes directly from the embedded ramp, independent of the
 single-band TiTiler style registry. The ramp math is carried VERBATIM from the twin

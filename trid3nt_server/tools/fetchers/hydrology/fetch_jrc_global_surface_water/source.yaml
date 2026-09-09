@@ -1,7 +1,7 @@
-# Router source spec (raster-modes wave, stac_continuous_mosaic mode, ADR 0086).
-# Twin: fetch_jrc_global_surface_water.py -- JRC Global Surface Water 30 m long-term
-# statistics via PC STAC (continuous uint8 mosaic, bilinear + per-band nodata 0/253 +
-# two-tier PC REST /sign) with a pure per-band colormap baked into the band-1 palette.
+# JRC Global Surface Water 30 m long-term statistics over the Planetary Computer STAC
+# catalog: a continuous uint8 mosaic, bilinear, with the per-band sentinel (0, or 253
+# for change) kept out of the resampling kernel, and a pure per-band colormap baked
+# into the band-1 palette.
 schema_version: v1
 
 name: fetch_jrc_global_surface_water
@@ -29,11 +29,16 @@ gates:
   max_bbox_deg2: 2.0
 
 ingest:
-  access: stac_continuous_mosaic
+  access: stac
+  render: mosaic
   native_cell_m: 30.0
   stac:
     root: "https://planetarycomputer.microsoft.com/api/stac/v1"
     collection: jrc-gsw
+    sign: planetary_computer
+    resampling: bilinear
+    select:
+      mode: mosaic
     asset_by_param:
       param: band
       map:
@@ -42,6 +47,9 @@ ingest:
         seasonality: seasonality
         change: change
   mosaic:
+    # The JRC COGs publish no header nodata, so the per-band sentinel below is
+    # the SOURCE's as well as the mosaic fill: it stays out of the resampling
+    # kernel rather than blending into the class ramp.
     nodata_by_param:
       param: band
       map: {occurrence: 0, recurrence: 0, seasonality: 0, change: 253}
