@@ -4495,3 +4495,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   law: fetch_copernicus_dem has no corpus BECAUSE it is the one
   tier="internal" seam behind fetch_dem and is out of the retrieval
   index by design - NOT A DEFECT; it stays internal.
+  READABILITY LEDGER (NATE 2026-09-09): the hygiene wave records what
+  it must not touch - every comment or docstring that a better name or
+  a small extraction would make unnecessary becomes a row in docs/
+  READABILITY_LEDGER.md (file, line, the comment as it stands, the
+  change that would remove it, the risk class: rename / extract /
+  restructure); NOTHING is applied by the wave. After the docs wave
+  NATE reads the ledger and either takes a batch as its own reviewed
+  change per module (where behavior is verified as code) or moves on.
