@@ -20,7 +20,7 @@ from rasterio.io import MemoryFile
 from trid3nt_contracts.execution import LandcoverResult
 from trid3nt_server.tools.fetchers._fetch_common import round_bbox_to_resolution
 from trid3nt_server.tools.fetchers._router import router as _router
-from trid3nt_server.tools.fetchers._router.hooks import landcover as lch
+from trid3nt_server.tools.fetchers.terrain.fetch_landcover import hooks as lch
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 from trid3nt_server.tools.search import ogc_adapter
 

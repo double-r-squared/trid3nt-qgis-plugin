@@ -327,7 +327,7 @@ def test_the_four_bbox_helpers_agree_that_a_touching_edge_overlaps():
     from trid3nt_server.tools.fetchers._router.executors.raster_cog import (
         _bbox_intersects as stac_item_intersects,
     )
-    from trid3nt_server.tools.fetchers._router.hooks.dem_3dep import (
+    from trid3nt_server.tools.fetchers.terrain.fetch_dem.hooks import (
         _bbox_intersects as dem_intersects,
     )
     from trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries.hooks import (
