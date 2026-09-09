@@ -553,7 +553,7 @@ def test_run_serializes_then_stages_then_dispatches(monkeypatch, tmp_path):
 def test_every_shared_body_has_at_least_two_users():
     """One user folds back into its template; a body is created when a good
     portion is shared. The guard fires the moment a body gains its first file."""
-    shared = (Path(__file__).resolve().parents[1] / "trid3nt_server" / "workflows"
+    shared = (Path(__file__).resolve().parents[2] / "trid3nt_server" / "workflows"
               / "telemac" / "templates" / "shared")
     if not shared.is_dir():
         return

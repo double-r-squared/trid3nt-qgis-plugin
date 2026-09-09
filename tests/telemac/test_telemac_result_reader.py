@@ -27,7 +27,7 @@ _READERS = (
     "trid3nt_server/workflows/telemac/authoring/assembler.py",
 )
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = Path(__file__).resolve().parents[2]
 
 
 def _scratch_of(argv: list[str]) -> Path:

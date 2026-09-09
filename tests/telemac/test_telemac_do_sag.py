@@ -14,14 +14,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from tests.reach_chain import install_reach_chain
+from tests._fakes.reach_chain import install_reach_chain
 
 from trid3nt_server.workflows.telemac.products.streeter_phelps import (
     sp_critical_point,
     sp_do_profile,
 )
 
-_FIXTURE = Path(__file__).parent / "fixtures" / "telemac_o2_sp_idealized_profile.json"
+_FIXTURE = Path(__file__).parents[1] / "fixtures" / "telemac_o2_sp_idealized_profile.json"
 
 
 # --- Streeter-Phelps closed form: known-value + shape ----------------------- #

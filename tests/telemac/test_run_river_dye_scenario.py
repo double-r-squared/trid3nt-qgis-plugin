@@ -24,7 +24,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.reach_chain import MESH_ROLES, install_reach_chain
+from tests._fakes.reach_chain import MESH_ROLES, install_reach_chain
 from trid3nt_contracts.telemac_contracts import (
     TELEMAC_DYE_STYLE,
     TelemacDyeLayerURI,
@@ -671,7 +671,7 @@ def test_a_derived_release_sits_on_the_DECLARED_centerline(tmp_path, monkeypatch
     construction rather than by luck."""
     from shapely.geometry import LineString, Point
 
-    from tests.reach_chain import CENTERLINE
+    from tests._fakes.reach_chain import CENTERLINE
 
     captured: dict = {}
     _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
@@ -707,7 +707,7 @@ def test_the_water_is_queried_over_the_centerline_padded_by_a_stated_distance(
     """The query window has to reach a far channel behind a mid-river island, so
     it is the centerline's extent grown by a DISTANCE - three kilometres, written
     on the row - and not the line's own tight bounds."""
-    from tests.reach_chain import CENTERLINE_BBOX
+    from tests._fakes.reach_chain import CENTERLINE_BBOX
 
     captured: dict = {}
     _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho")
@@ -739,7 +739,7 @@ def test_a_reach_no_polygon_maps_refuses_as_unmapped_not_as_an_empty_section(
         tmp_path, monkeypatch):
     """The measurement sits between the fetch and the cut, so a reach nothing maps
     fails on its own cause instead of arriving at the section as empty geometry."""
-    from tests.reach_chain import WATER_ELSEWHERE
+    from tests._fakes.reach_chain import WATER_ELSEWHERE
 
     captured: dict = {}
     out = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
@@ -753,7 +753,7 @@ def test_a_partly_mapped_reach_proceeds_and_says_how_much_was_mapped(
     """NO invented threshold: above zero the run proceeds, carrying the MEASURED
     fraction so a reader is never left assuming the flowline-only stretches were
     modelled."""
-    from tests.reach_chain import WATER_GAPPED
+    from tests._fakes.reach_chain import WATER_GAPPED
 
     captured: dict = {}
     peak = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
@@ -771,7 +771,7 @@ def test_a_reach_whose_far_END_is_unmapped_refuses_at_the_cut(
     polygon's own bank, and a boundary role cannot be prescribed across an edge
     the cut never made - so the refusal names the geometry rather than arriving
     at the mesher as an empty face."""
-    from tests.reach_chain import WATER_HALF
+    from tests._fakes.reach_chain import WATER_HALF
 
     captured: dict = {}
     out = _run_tool(tmp_path, monkeypatch, captured, location="Twin Falls, Idaho",
