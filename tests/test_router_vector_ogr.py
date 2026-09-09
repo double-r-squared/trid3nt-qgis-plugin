@@ -219,8 +219,7 @@ def test_an_error_envelope_reaches_the_caller_verbatim(monkeypatch):
     body = json.dumps({"error": {"code": 400, "message": "Unable to complete operation.",
                                  "details": ["Invalid field: BOGUS"]}}).encode()
     monkeypatch.setattr(vector_ogr, "get_client", lambda: object())
-    monkeypatch.setattr(vector_ogr, "get_bytes",
-                        lambda client, url, **kw: (body, "application/json", url))
+    monkeypatch.setattr(vector_ogr, "get_once", lambda client, url, **kw: (body, 200))
     spec = _spec({"access": "ogr", "ogr": {"driver": "ESRIJSON"}})
     exc = vector_ogr._verbatim_upstream(
         spec, "https://service.test/q", RuntimeError("Missing 'features' member."))
@@ -228,10 +227,27 @@ def test_an_error_envelope_reaches_the_caller_verbatim(monkeypatch):
     assert "Unable to complete operation." in str(exc)
 
 
+def test_the_verbatim_re_read_is_a_single_un_retried_get(monkeypatch):
+    """The driver's five attempts are the whole budget: the recovery reads once."""
+    calls: list[str] = []
+
+    def _once(client, url, **kw):
+        calls.append(url)
+        return b'{"error": {"code": 500, "message": "down"}}', 500
+
+    monkeypatch.setattr(vector_ogr, "get_client", lambda: object())
+    monkeypatch.setattr(vector_ogr, "get_once", _once)
+    spec = _spec({"access": "ogr", "ogr": {"driver": "ESRIJSON"}})
+    exc = vector_ogr._verbatim_upstream(
+        spec, "https://service.test/q", RuntimeError("HTTP error code : 500"))
+    assert len(calls) == 1
+    assert "down" in str(exc)
+
+
 def test_a_status_failure_keeps_the_drivers_own_text(monkeypatch):
     monkeypatch.setattr(vector_ogr, "get_client", lambda: object())
-    monkeypatch.setattr(vector_ogr, "get_bytes",
-                        lambda client, url, **kw: (b"<html>gone</html>", "text/html", url))
+    monkeypatch.setattr(vector_ogr, "get_once",
+                        lambda client, url, **kw: (b"<html>gone</html>", 404))
     spec = _spec({"access": "ogr", "ogr": {"driver": "ESRIJSON"}})
     exc = vector_ogr._verbatim_upstream(
         spec, "https://service.test/q", RuntimeError("HTTP response code: 404"))

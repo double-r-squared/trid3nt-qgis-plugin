@@ -28,7 +28,8 @@ backoff is exponential-with-jitter rather than the server's ``Retry-After``.
 An ArcGIS service answers a rejected query 200-with-an-error-body, which the
 driver reports as a missing ``features`` member with the upstream message gone.
 ``_verbatim_upstream`` re-reads that one URL through the transport so the
-service's own message reaches the caller.
+service's own message reaches the caller -- ONE un-retried GET, because the
+driver's five attempts were the whole retry budget this family spends.
 """
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ from ..errors import (
 )
 from ..hooks import resolve_hook
 from ..shape_classifier import classify_response
-from ..transport import TransportError, get_bytes, get_client, is_staged_uri
+from ..transport import TransportError, get_client, get_once, is_staged_uri
 from .vector_fgb import build_where, features_to_fgb_bytes, resolve_endpoints
 
 logger = logging.getLogger(
@@ -195,16 +196,17 @@ def _verbatim_upstream(spec: SourceSpec, url: str, exc: Exception) -> RouterErro
     """The upstream's own message for a read the driver could only call malformed.
 
     An ArcGIS service answers a rejected query 200-with-``{"error": ...}``; the
-    driver reports a missing ``features`` member and drops the message. One plain
-    GET through the transport recovers it. Anything the classifier does not
-    recognize as an error envelope keeps the driver's own text, and only a query
-    URL is re-read - re-fetching a published archive would cost its whole body.
+    driver reports a missing ``features`` member and drops the message. ONE plain
+    un-retried GET recovers it: the driver already spent this family's retries, so
+    a retrying re-read would double what an outage costs. Anything the classifier
+    does not recognize as an error envelope keeps the driver's own text, and only a
+    query URL is re-read - re-fetching a published archive would cost its whole body.
     """
     driver = str(((spec.ingest or {}).get("ogr") or {}).get("driver", "ESRIJSON"))
     if driver != "ESRIJSON":
         return router_upstream_error(spec.error_code_prefix, f"read failed url={url}: {exc}")
     try:
-        body, _ct, _final = get_bytes(get_client(), url)
+        body, _status = get_once(get_client(), url)
         verdict = classify_response(body.decode("utf-8", "replace"))
     except (TransportError, Exception):  # noqa: BLE001 -- the driver's text stands
         return router_upstream_error(spec.error_code_prefix, f"read failed url={url}: {exc}")

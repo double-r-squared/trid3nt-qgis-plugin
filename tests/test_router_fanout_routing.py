@@ -254,8 +254,7 @@ def test_an_error_envelope_reaches_the_caller_verbatim(monkeypatch):
     spec = _levees_like_spec()
     body = b'{"error": {"code": 400, "message": "Invalid query"}}'
     monkeypatch.setattr(vector_ogr, "get_client", lambda: object())
-    monkeypatch.setattr(vector_ogr, "get_bytes",
-                        lambda client, url, **kw: (body, "application/json", url))
+    monkeypatch.setattr(vector_ogr, "get_once", lambda client, url, **kw: (body, 200))
     exc = vector_ogr._verbatim_upstream(
         spec, "https://service.test/q", RuntimeError("Missing 'features' member."))
     assert isinstance(exc, RouterUpstreamError)

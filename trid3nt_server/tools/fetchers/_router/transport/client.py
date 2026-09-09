@@ -5,7 +5,10 @@ every parallel range frame (amortizes the cold-TLS the bench measured at ~0.30s)
 The retry authority lives here and nowhere else: backoff + ``Retry-After`` honored
 on 429/5xx/timeout at BLOCK granularity, per the upstream-provider norm (log the
 upstream error VERBATIM, retry with backoff, surface honestly on exhaustion).
-GDAL-side retries stay off everywhere -- reads never touch ``/vsicurl/``.
+GDAL-side retries stay off for every read that comes through this module. The one
+family that reads through libgdal's own socket (``vector_ogr``) carries the
+authority in the driver instead, so a call that follows such a read must not retry
+again -- :func:`get_once` is the un-retried GET that exists for it.
 """
 
 from __future__ import annotations
@@ -24,7 +27,10 @@ logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.transport.client"
 )
 
-__all__ = ["get_client", "range_get", "get_bytes", "post_bytes", "head", "MAX_RETRIES"]
+__all__ = [
+    "get_client", "range_get", "get_bytes", "get_once", "post_bytes", "head",
+    "MAX_RETRIES",
+]
 
 MAX_RETRIES = 4
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
@@ -151,6 +157,25 @@ def get_bytes(
         return resp.content, resp.headers.get("content-type", ""), str(resp.url)
     assert last_exc is not None
     raise TransportUpstreamError(f"GET failed url={url}: {last_exc}") from last_exc
+
+
+def get_once(client: httpx.Client, url: str, *, headers: dict[str, str] | None = None
+             ) -> tuple[bytes, int]:
+    """ONE GET, no retry, no typed error: the body and status exactly as answered.
+
+    The reader for a caller that already spent its retries somewhere else -- a read
+    whose retry authority is the GDAL driver, whose failure text dropped the
+    service's own message. Retrying here would double the attempts an outage costs,
+    so this attempt stands or the caller keeps the text it already has: a network
+    failure raises :class:`TransportUpstreamError` with nothing retried, and any
+    status (500 included) comes back for the caller to read rather than raising.
+    """
+    try:
+        resp = client.get(url, headers=headers)
+    except (httpx.TimeoutException, httpx.TransportError) as exc:
+        logger.warning("transport.get_once network error url=%s: %s", url, exc)
+        raise TransportUpstreamError(f"GET network failure url={url}: {exc}") from exc
+    return resp.content, resp.status_code
 
 
 def post_bytes(

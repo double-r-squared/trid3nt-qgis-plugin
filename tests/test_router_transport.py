@@ -7,7 +7,7 @@ an in-memory COG and forces error statuses. Coverage:
   - block coalescing (adjacent merge = one GET) + PARALLEL fetch of non-adjacent
     runs (request-count + parallel-batch assertions);
   - forced 404 -> TransportNotFound, 403 -> TransportAuthError, 429 -> retried
-    then TransportUpstreamError, Retry-After honored;
+    then TransportUpstreamError, Retry-After honored, and the un-retried get_once;
   - mid-read disconnect -> typed error via the C-frame recorded-error bridge;
   - block-completeness (truncation) assertion.
 """
@@ -270,6 +270,16 @@ def test_429_exhausts_to_typed_upstream(range_server):
         transport.range_get(c, range_server.url, 0, 1023)
     assert ei.value.status == 429
     assert ei.value.retryable is True
+
+
+def test_get_once_reads_a_500_body_without_spending_a_retry(range_server):
+    """The reader for a caller whose retries were spent by the GDAL driver."""
+    range_server.force_status = 500
+    range_server.force_body = b'{"error": {"message": "down"}}'
+    before = range_server.get_count
+    body, status = transport.get_once(transport.get_client(), range_server.url)
+    assert (status, body) == (500, range_server.force_body)
+    assert range_server.get_count - before == 1
 
 
 def test_retry_after_header_honored(range_server, monkeypatch):
