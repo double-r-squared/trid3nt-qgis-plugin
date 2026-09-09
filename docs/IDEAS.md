@@ -4193,3 +4193,32 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   corrections to the census: the ESRI driver costs 1.05x, not 26 s;
   HyRiver's default cache expiry is 604800 s; the OSMnx shims measure
   62 LOC, not 40.
+  FOLD VECTOR STAGE (2026-09-09, 19 rows landed, 21 commits, pushed at
+  c0e36a5c): G1 11 of 15 ESRI rows on the ESRIJSON driver, G10 TIGER
+  on /vsizip//vsicurl/ (138 s -> 61 s), G3 all six Overpass rows on
+  OSMnx, the storm-tracks zip leg; vector_fgb's fetch half and
+  zip_vector deleted; parity proven on all 19 against pre-fold
+  captures. HONEST LOC: product -402 against the census's -2,430 for
+  the slice - four ESRI rows did not fold and hold 873 of the family's
+  hook LOC; the Overpass rows' clips, representative points and
+  vocabularies are the rows' own answers, not boilerplate; the driver
+  executor costs 313. TWO CORRECTNESS FIXES the fold found: ArcGIS's
+  GeoJSON writer emitted polygon holes as filled outer rings (the
+  drought monitor over-counted one feature's area by 16%; every
+  polygon row in the family carried it); the hand-rolled OSM
+  multipolygon assembler closed open member ways as separate polygons
+  (3 of 3,274 building footprints wrong). OSMnx: two bugs fixed
+  before landing (doubled /interpreter; float timeout), one deviation
+  refused (unbounded recursive 429 retry - three throttled answers end
+  a mirror's turn), ledgered beside the accepted 55 s pause.
+  RESOLUTIONS (orchestrator under standing law - NATE may override):
+  (1) fetch_fema_nfhl_zones - the service answers 200-with-error on
+  deep pages so the driver silently truncates; the row goes to the
+  HYDRO stage's pygeohydro path (its NFHL client, under the shared
+  shim) as the census assigned it; the cursor hook stays until then.
+  (2) fetch_usgs_groundwater_levels - the OAPIF driver cannot express
+  the declared state_code selector; the hook STAYS (a documented lever
+  is never dropped for LOC); ledger row with CONDITION "the USGS OAPIF
+  collection exposes a state property". fetch_usace_dams and
+  fetch_epa_frs_facilities stay on their hooks (contract extensions
+  they would need are stated, not built).
