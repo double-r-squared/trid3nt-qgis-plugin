@@ -1,23 +1,8 @@
 """``section``: cut a polygon layer down to the part a chain actually wants.
 
-One generic geometry primitive with two cuts. BETWEEN two points: the polygon is
-sliced by the two lines perpendicular to the chord joining them, at each end, and
-what survives between them is kept - which is how a mapped water polygon becomes
-the REACH between an upstream and a downstream point, with the two cuts standing
-as the transects an inflow and an outflow are prescribed on. WITHIN an extent:
-the polygon meets a box, the ordinary clip.
-
-The cut is measured in the local UTM zone, because a line perpendicular to a
-chord in degrees is not perpendicular on the ground, and a section that is not
-square to the reach is not the reach.
-
-Nothing is inferred here: no buffering, no snapping, no widening. A polygon this
-tool is handed is a polygon somebody mapped or drew; what comes back is a subset
-of it. When the input carries no polygon there is nothing to section and it
-refuses, because a shape invented to stand in for the missing one would be a
-domain no measurement backs.
+The cut is measured in the local UTM zone, because perpendicular in degrees is
+not perpendicular on the ground. Nothing is inferred and no polygon refuses.
 """
-
 from __future__ import annotations
 
 import logging
@@ -41,19 +26,11 @@ __all__ = ["SectionLayerURI", "SectionError", "section"]
 logger = logging.getLogger("trid3nt_server.tools.processing.section.section")
 
 
+# ``error_code`` is one of SECTION_INPUT_INVALID, SECTION_NO_POLYGON,
+# SECTION_CUT_EMPTY, SECTION_END_FACE_UNMEASURED (one end cut left no transect
+# on the polygon, so the section ends along its own bank), SECTION_SOURCE_UNREADABLE.
 class SectionError(RuntimeError):
-    """A typed section refusal: an error code plus what to supply instead.
-
-    Codes:
-    - ``SECTION_INPUT_INVALID`` -- neither ``between`` nor ``within`` given (or
-      both), or a point/extent that is not two/four finite numbers.
-    - ``SECTION_NO_POLYGON`` -- the source layer carries no polygon geometry.
-    - ``SECTION_CUT_EMPTY`` -- the cut and the polygon do not meet.
-    - ``SECTION_END_FACE_UNMEASURED`` -- one end cut left no transect on the
-      polygon, so the section ends along its own bank there.
-    - ``SECTION_SOURCE_UNREADABLE`` -- the source is neither inline GeoJSON nor a
-      readable vector layer.
-    """
+    """A typed section refusal: a code plus what to supply instead."""
 
     error_code: str
     retryable: bool = False
@@ -66,16 +43,8 @@ class SectionError(RuntimeError):
 
 
 class SectionLayerURI(LayerURI):
-    """Section polygon ``LayerURI`` plus what the cut measured.
-
-    Extra fields beyond ``LayerURI``: ``area_km2`` (what survived the cut),
-    ``source_area_km2`` (what went in), ``length_m`` (the chord, 0 for an extent
-    cut), ``utm_epsg`` (the zone the cut was measured in, 0 for an extent cut),
-    ``parts_kept`` / ``parts_dropped`` (disconnected pieces the cut left),
-    ``face_start`` / ``face_end`` (the two transects the ``between`` cut left, as
-    ``[[lon, lat], [lon, lat]]`` - what a boundary role is prescribed across;
-    empty on an extent cut, which leaves no transect), ``notes`` (every choice the
-    cut made).
+    """Section polygon ``LayerURI`` plus areas in and out, the chord and its UTM
+    zone, parts kept and dropped, and the two end transects a ``between`` left.
     """
 
     area_km2: float = 0.0
@@ -113,11 +82,7 @@ _SECTION_METADATA = AtomicToolMetadata(
 
 
 def _polygons(source: Any) -> list[Any]:
-    """The polygon geometries the section is cut from, in EPSG:4326.
-
-    Read through the SHARED geometry reader, so a chain that binds the producing
-    tool's layer value and a person who types its uri reach the same file.
-    """
+    """The polygon geometries the section is cut from, in EPSG:4326."""
     from shapely.geometry import shape as _shape
 
     try:
@@ -183,10 +148,8 @@ def _extent(value: Any) -> tuple[float, float, float, float]:
 
 
 def _band(a: Any, b: Any, reach: float) -> Any:
-    """The strip between the two perpendicular cuts at ``a`` and ``b``.
-
-    Wide enough to span anything the polygon can reach sideways, so the only
-    edges of the strip that ever touch the polygon are the two cuts themselves.
+    """The strip between the two perpendicular cuts at ``a`` and ``b``, wide enough
+    that only those two cuts ever touch the polygon.
     """
     import numpy as np
     from shapely.geometry import Polygon
@@ -202,19 +165,15 @@ def _band(a: Any, b: Any, reach: float) -> Any:
 
 def _end_face(section_m: Any, point: Any, unit: Any, normal: Any, label: str,
               back: Any) -> list[list[float]]:
-    """The TRANSECT the cut left at one end -> its two lon/lat ends.
-
-    The end cut is a real edge of the section, so the face is measured off the
-    geometry rather than restated: the cut put VERTICES on the plane through the
-    point, and the two furthest apart across the reach are the face's ends. They
-    are found by projecting the section's own boundary vertices, never by
-    intersecting a probe line with the polygon - the cut edge is exactly collinear
-    with such a line, and a collinear intersection over a domain-sized probe
-    returns an edge at one end and nothing at the other for no reason a reader can
-    see. A solver prescribes its inflow across this whole face, so the face - not
-    the single point the chain named it by - is what a boundary role is matched
-    against.
+    """The TRANSECT the cut left at one end, as its two lon/lat ends; a boundary
+    role is prescribed across this whole face, not across the naming point.
     """
+    # The cut put VERTICES on the plane through the point, and the two furthest
+    # apart across the reach are the face's ends. They are found by projecting
+    # the section's OWN boundary vertices, never by intersecting a probe line:
+    # the cut edge is exactly collinear with such a line, and a collinear
+    # intersection over a domain-sized probe returns an edge at one end and
+    # nothing at the other, for no reason a reader can see.
     import numpy as np
 
     origin = np.asarray(point, dtype=float)
@@ -348,39 +307,23 @@ def section(
 ) -> SectionLayerURI:
     """Cut a POLYGON LAYER down to the part between two points, or inside an extent -> a polygon layer.
 
-    Use this when: "just the reach of the river between these two points", "the
-    stretch of this water body from here to here", "clip this polygon to my
-    area". The polygon it returns is a DOMAIN: hand it to
-    ``build_mesh(mesher='om2d', extent=<this uri>)`` to triangulate its interior,
-    or to ``clip_raster_to_polygon``. The classic chain for a river reach is
-    ``fetch_nhd_area_water`` (the mapped water) -> ``section(..., between=[
-    upstream, downstream])``. Do NOT use for: a drainage basin
-    (``delineate_watershed``); widening a line into a polygon - a line has no
-    banks, so a reach nothing maps water for has no domain here.
+    Use for the reach of a river between two points, or clipping a polygon to an
+    area. What it returns is a DOMAIN: hand it to ``build_mesh(mesher='om2d',
+    extent=<this uri>)`` or ``clip_raster_to_polygon``. The river chain is
+    ``fetch_nhd_area_water`` -> ``section(between=[upstream, downstream])``. Not
+    for a drainage basin, and not for widening a line: a line has no banks.
 
-    A ``between`` cut is square to the line joining the two points, so the two
-    end faces are the transects an inflow and an outflow are prescribed on.
+    A ``between`` cut is square to the line joining the two points, so its end
+    faces are the transects a boundary role is prescribed on.
 
     Params:
-        polygon: the polygon to cut - a vector layer uri (GeoJSON, FlatGeobuf,
-            shapefile) or inline GeoJSON. Non-polygon geometries are ignored.
-        between: ``[(lon, lat), (lon, lat)]`` - keep what lies between the two
-            perpendicular cuts at these points. Supply this OR ``within``.
-        within: ``(min_lon, min_lat, max_lon, max_lat)`` - keep what lies inside
-            this extent. Supply this OR ``between``.
+        polygon: the polygon to cut; non-polygon geometries are ignored.
+        between: ``[(lon, lat), (lon, lat)]``, keeping what lies between the
+            perpendicular cuts there. Supply this OR ``within``.
+        within: ``(min_lon, min_lat, max_lon, max_lat)``.
 
-    Returns:
-        ``SectionLayerURI`` -- the sectioned polygon (GeoJSON, EPSG:4326) with ``area_km2``,
-        ``source_area_km2``, ``length_m``, ``utm_epsg``, ``parts_kept``,
-        ``parts_dropped``, ``face_start`` / ``face_end`` (the two end transects a
-        ``between`` cut left, which a mesh prescribes its boundary roles across),
-        honest ``notes``.
-
-    Raises:
-        SectionError: ``SECTION_INPUT_INVALID`` (no cut, or both, or a malformed
-            point/extent), ``SECTION_NO_POLYGON`` (the source maps no polygon),
-            ``SECTION_CUT_EMPTY`` (the cut and the polygon do not meet),
-            ``SECTION_SOURCE_UNREADABLE`` (the source could not be read).
+    Returns the sectioned polygon with the areas, the chord, the parts kept and
+    dropped, and the two end transects.
     """
     from shapely.geometry import mapping
     from shapely.ops import unary_union
