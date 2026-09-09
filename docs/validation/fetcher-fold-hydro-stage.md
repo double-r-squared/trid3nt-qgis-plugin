@@ -142,18 +142,18 @@ it, and the shim costs **+160**.
 
 ## 7. Suite
 
-At `ab932d55`, from the repo root with `venvs/agent`, globs unquoted,
-`env -u TRID3NT_CACHE_BUCKET`, `-p no:cacheprovider --timeout=300 -q`, each slice its
-own invocation.
+From the repo root with `venvs/agent`, globs unquoted, `env -u TRID3NT_CACHE_BUCKET`,
+`-p no:cacheprovider --timeout=300 -q`, each slice its own invocation. The full run
+is at `12c8471e`; the two slices the later commits touch were re-run at `ab932d55`.
 
-| slice | result |
-|---|---|
-| `tests/test_[a-e]*.py` | 1571 passed, 5 skipped |
-| `tests/test_[f-o]*.py` | 4272 passed, 1 xfailed |
-| `tests/test_[p-r]*.py` | 1698 passed, 2 skipped |
-| `tests/test_[s-z]*.py` | 1471 passed, 5 skipped |
-| `contracts/tests` | 425 passed |
-| `plugin/tests` | 386 passed, 2 failed |
+| slice | result | at |
+|---|---|---|
+| `tests/test_[a-e]*.py` | 1571 passed, 5 skipped | `ab932d55` |
+| `tests/test_[f-o]*.py` | 4272 passed, 1 xfailed | `12c8471e` |
+| `tests/test_[p-r]*.py` | 1704 passed, 2 skipped | `ab932d55` |
+| `tests/test_[s-z]*.py` | 1471 passed, 5 skipped | `12c8471e` |
+| `contracts/tests` | 425 passed | `12c8471e` |
+| `plugin/tests` | 386 passed, 2 failed | `12c8471e` |
 
 Zero failures across the five server slices and contracts. The two plugin reds are
 the documented pre-existing Qt pair, `test_case_bbox.py::TestCaseBboxDock::test_case_bbox_dock_behaviors`
