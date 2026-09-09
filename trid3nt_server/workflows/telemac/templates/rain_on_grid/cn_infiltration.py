@@ -60,9 +60,7 @@ class CNInfiltrationError(ValueError):
 # mapped here onto the NLCD 2019/2021 legend so ``fetch_landcover`` drives
 # the field directly. CN values are the paper's T2D column for the mid hydrologic
 # soil group (HSG B); the true CN depends on soil group and is a calibration
-# lever (see the rog-replication-methodology recon -- CN per land cover per
-# engine is a NATE sign-off input, not a fixed constant). Manning n is the paper
-# T2D column verbatim.
+# lever rather than a fixed constant. Manning n is the paper T2D column verbatim.
 # ---------------------------------------------------------------------------
 
 # The Manning column stays Godara's: no library table replaces it -- pygeohydro's

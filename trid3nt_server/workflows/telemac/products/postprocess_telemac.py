@@ -152,7 +152,7 @@ def _pick_dye_var(varnames: list[str], *, mesh_group: str = "DYE") -> str | None
 #: parsing the bundled ``f2d_malpasset-small.slf`` header.
 _WSE_VAR_KEYS: tuple[str, ...] = ("FREE SURFACE", "SURFACE LIBRE", "WATER SURFACE",
                                   "COTE DE LA SURFACE", "COTE DE L'EAU")
-#: Water-depth variable names (English + French) used to build the wet mask.
+#: Water-depth variable names (English + French) the wet mask is built from.
 _DEPTH_VAR_KEYS: tuple[str, ...] = ("WATER DEPTH", "HAUTEUR D'EAU", "HAUTEUR D EAU")
 #: Static bed-elevation variable names (English + French). Read to reproduce the
 #: worker's own ``bed > initial water line`` discrimination on the raster.
