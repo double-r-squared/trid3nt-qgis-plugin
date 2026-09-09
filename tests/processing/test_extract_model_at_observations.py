@@ -107,7 +107,7 @@ def _stn_hwm_layer(path: str):
     """Load the committed USGS STN Hurricane Michael HWM fixture (elev_ft in
     FEET, e.g. 5.64) into an EPSG:4326 point GeoJSON for pairing."""
     fixture = (
-        pathlib.Path(__file__).parent / "fixtures" / "validation" / "stn"
+        pathlib.Path(__file__).parents[1] / "fixtures" / "validation" / "stn"
         / "michael_2018_filtered_hwms.json"
     )
     records = json.loads(fixture.read_text())
