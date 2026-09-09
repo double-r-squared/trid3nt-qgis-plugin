@@ -1,79 +1,8 @@
-"""QGIS custom plugin repository: deploy-time package + per-request serve.
+"""QGIS custom plugin repository: deploy-time package, per-request serve.
 
-The daemon hosts a real QGIS custom plugin repository so QGIS's OWN Plugin
-Manager handles install + upgrade on every client (including a Mac reaching the
-daemon over the tailnet). A user adds
-``http://<daemon-host>:8766/plugin-repo/plugins.xml`` once under Plugin Manager
-> Settings > Add repository; from then on QGIS diffs the served ``version``
-against the installed one and offers Upgrade natively.
-
-TWO PHASES, one source of truth:
-
-- PACKAGE (deploy time, ``package_plugin_repo`` -- run by
-  ``scripts/package_plugin.sh``, wired into ``make agent``). Builds the
-  versioned zip ``trid3nt-<version>.zip`` from ``plugin`` into the
-  served directory, regenerates ``plugins.xml`` from ``metadata.txt``, and
-  writes a ``manifest.json``. The served directory is ``run/plugin-repo/``
-  (server-owned, gitignored like the rest of ``run/``; override via
-  ``TRID3NT_PLUGIN_REPO_DIR``).
-
-- SERVE (per request, ``render_plugins_xml`` / ``served_zip_path`` -- mounted
-  by ``catalog_http._handle_http``). ``GET /plugin-repo/plugins.xml``
-  returns the packaged index with its ``download_url`` host filled in from the
-  REQUEST's own Host header; ``GET /plugin-repo/<versioned-zip>`` serves the
-  packaged zip bytes as a fallback/manual-QA path.
-
-- FRESH ZIP (per request, ``build_fresh_zip`` -- also mounted by
-  ``catalog_http._handle_http`` at the FIXED path
-  :data:`FRESH_ZIP_URL_PATH`, ``/plugin-repo/trid3nt.zip``). This is the
-  ``download_url`` every ``plugins.xml`` now advertises. It builds straight
-  from ``plugin/`` on the daemon's OWN checkout -- no prior
-  ``package_plugin_repo()`` deploy step required -- and mtime-caches the
-  result (a cheap stat-only signature over the source tree; a real rebuild
-  only happens when a file's size or mtime actually changed), so Install-
-  from-ZIP / Plugin Manager's download is never stale behind a forgotten
-  packaging step. The zip carries a build-time provenance stamp
-  (``trid3nt/installed_version.txt``, git sha + branch) using the SAME
-  two-line format ``scripts/install_plugin.sh`` writes into an rsync-
-  installed profile -- today's PACKAGE zip excludes that file entirely (see
-  ``_ZIP_IGNORE_PATTERNS``), so a zip install previously had NO provenance a human
-  could eyeball; the fresh-build path fixes that too.
-
-HOST DERIVATION (the bug the stopgap static server had): a hardcoded IP in
-``plugins.xml`` breaks the moment the client dials a different host. The
-packaged ``plugins.xml`` therefore carries a :data:`HOST_SENTINEL` in place of
-the host; ``render_plugins_xml`` substitutes the per-request Host at serve
-time, so a tailnet client's "Add repository" URL always round-trips to a
-reachable zip URL.
-
-CACHE-BUSTING: ``download_url`` carries ``?v=<version>`` (the same
-metadata.txt version driving everything else) so a client or intermediate
-cache that keyed on the URL sees a new URL the moment the plugin version
-changes. The server does not read or validate ``?v=`` -- it always serves
-whatever ``build_fresh_zip`` currently builds; the query string is a pure
-client/cache hint.
-
-SAFARI CAVEAT: a browser (not QGIS itself) fetching ``download_url`` directly
--- e.g. a human clicking the link inside a rendered ``plugins.xml`` -- can
-still auto-decompress the download depending on the browser's "open safe
-files after downloading" setting (Safari on macOS defaults this on for
-``application/zip``). ``Content-Type: application/zip`` +
-``Content-Disposition: attachment`` reduce the chance but cannot eliminate
-it -- that setting is entirely client-side. QGIS's OWN Plugin Manager
-download path does not go through the browser and is unaffected.
-
-VERSION (metadata.txt-driven, no auto-bump): ``<version>`` in ``plugins.xml``
-and the zip's ``metadata.txt`` are the SAME ``version=`` line straight from
-``plugin/metadata.txt`` -- that agreement is what Plugin Manager
-compares to decide "installed" vs "available". A landing that changes plugin
-code is expected to bump ``version=``; ``package_plugin_repo`` compares the
-packaged tree's content hash against the previous manifest and WARNS (never
-auto-bumps, never fails) when the tree changed but the version did not, so a
-forgotten bump is caught at deploy time.
-
-Every public function is SYNC (subprocess + filesystem + zipfile); the HTTP
-callers wrap them in ``asyncio.to_thread`` -- no sync work belongs on the
-agent's event loop (it would stall the WS keepalive).
+``package_plugin_repo`` writes the versioned zip, ``plugins.xml`` and a manifest;
+serving substitutes the per-request Host for :data:`HOST_SENTINEL` and can build a
+fresh zip from ``plugin/`` on demand. Every function here is SYNC.
 """
 
 from __future__ import annotations
@@ -114,10 +43,8 @@ _DEFAULT_QGIS_MINIMUM_VERSION = "3.28"
 #: always points at a host the client can actually reach.
 HOST_SENTINEL = "__TRID3NT_DAEMON_HOST__"
 
-#: Fixed-name route the FRESH zip is served at (see module docstring). The
-#: literal string in ``catalog_http.py``'s route dispatch MUST match
-#: this -- it is duplicated there rather than imported to follow that
-#: module's existing per-branch literal-path convention.
+#: Fixed-name route the FRESH zip is served at. The literal in
+#: ``catalog_http.py``'s route dispatch MUST match this string.
 FRESH_ZIP_URL_PATH = "/plugin-repo/trid3nt.zip"
 
 #: Basename patterns never carried into the zip (caches, hidden files, and the
@@ -161,11 +88,8 @@ class PluginRepoBuildError(Exception):
 
 
 def _repo_root() -> Path:
-    """The daemon's OWN checkout root (the directory containing
-    ``plugin/``). Default: derived from this file's location
-    (``trid3nt_server/plugin_repo.py`` -> two parents up).
-    Override via ``TRID3NT_REPO_ROOT`` (tests; also covers an installed-package
-    layout where the source-tree-relative walk would be wrong).
+    """The daemon's OWN checkout root, the directory containing ``plugin/``:
+    ``TRID3NT_REPO_ROOT`` when set, else two parents up from this file.
     """
     env = os.environ.get("TRID3NT_REPO_ROOT")
     if env:
@@ -178,10 +102,9 @@ def _plugin_src_dir(repo_root: Path) -> Path:
 
 
 def _served_dir(served_dir: Path | str | None = None) -> Path:
-    """The directory the packaged zip + ``plugins.xml`` + ``manifest.json``
-    live in. Default ``<repo_root>/run/plugin-repo`` -- ``run/`` is already the
-    repo's convention for gitignored service-owned state. Override via the
-    ``served_dir`` argument (tests) or ``TRID3NT_PLUGIN_REPO_DIR``.
+    """The directory holding the packaged zip, ``plugins.xml`` and
+    ``manifest.json``: the ``served_dir`` argument, else
+    ``TRID3NT_PLUGIN_REPO_DIR``, else ``<repo_root>/run/plugin-repo``.
     """
     if served_dir is not None:
         return Path(served_dir).expanduser().resolve()
@@ -226,13 +149,9 @@ def _plugin_version(plugin_src: Path) -> str:
 
 
 def _iter_packaged_files(plugin_src: Path):
-    """Every file that belongs in a packaged trid3nt zip, in sorted-relpath
-    order -- the one exclude rule (``__pycache__``, ``.pyc``, hidden files,
-    the installed-version marker) shared by ``_tree_sha``, the fresh-zip
-    mtime signature, and the in-memory fresh-build zip itself. (``_build_zip``
-    -- the deploy-time PACKAGE path -- expresses the same rule as a
-    ``shutil.ignore_patterns`` for ``copytree`` instead; kept separate since
-    it walks a different way.)
+    """Every file that belongs in a packaged zip, in sorted-relpath order; the
+    one exclude rule shared by the tree hash, the mtime signature and the
+    fresh-build zip.
     """
     for item in sorted(plugin_src.rglob("*")):
         if not item.is_file():
@@ -248,12 +167,9 @@ def _iter_packaged_files(plugin_src: Path):
 
 
 def _tree_sha(plugin_src: Path) -> str:
-    """A stable content hash of the packaged plugin tree.
-
-    Hashes every packaged file (see ``_iter_packaged_files``) as
-    ``<relpath>\\0<bytes>``, in sorted-relpath order. Used only for the
-    deploy-time version-drift warning -- two byte-identical trees hash the
-    same regardless of filesystem mtimes.
+    """A stable content hash of the packaged plugin tree: every packaged file as
+    ``<relpath>\\0<bytes>`` in sorted order, so two byte-identical trees hash the
+    same whatever their mtimes.
     """
     h = hashlib.sha256()
     for item in _iter_packaged_files(plugin_src):
@@ -265,11 +181,10 @@ def _tree_sha(plugin_src: Path) -> str:
 
 
 def _source_signature(plugin_src: Path) -> tuple[tuple[str, int, int], ...]:
-    """Cheap (stat-only, no file reads) signature of the packaged tree, used
-    to invalidate the fresh-zip cache: ``(relpath, size, mtime_ns)`` per
-    packaged file (see ``_iter_packaged_files``), sorted-relpath order. Unlike
-    ``_tree_sha`` this never reads file bytes -- it is meant to run on every
-    request."""
+    """Stat-only signature of the packaged tree - ``(relpath, size, mtime_ns)``
+    per file, sorted - cheap enough to run on every request because it never
+    reads file bytes.
+    """
     entries = []
     for item in _iter_packaged_files(plugin_src):
         st = item.stat()
@@ -311,11 +226,10 @@ def _build_zip(plugin_src: Path, dest_zip: Path) -> None:
 
 
 def _build_zip_bytes(repo_root: Path, plugin_src: Path) -> bytes:
-    """In-memory build for :func:`build_fresh_zip` -- same top-level
-    ``trid3nt/`` layout + LICENSE + excludes as ``_build_zip``, plus a
-    build-time provenance stamp (``trid3nt/installed_version.txt``, git sha +
-    branch in the same two-line format ``scripts/install_plugin.sh`` writes)
-    that the deploy-time PACKAGE zip deliberately excludes."""
+    """In-memory build for :func:`build_fresh_zip`: the same layout and excludes
+    as ``_build_zip`` plus a ``trid3nt/installed_version.txt`` provenance stamp
+    that the deploy-time zip deliberately excludes.
+    """
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for item in _iter_packaged_files(plugin_src):
@@ -330,28 +244,16 @@ def _build_zip_bytes(repo_root: Path, plugin_src: Path) -> bytes:
 
 
 #: In-memory fresh-zip cache: ``str(plugin_src) -> (signature, zip_bytes,
-#: version, zip_filename)``. One entry in practice (one plugin source tree
-#: per daemon process); keyed by path anyway so tests that swap
-#: ``TRID3NT_REPO_ROOT`` never see another test's bytes.
+#: version, zip_filename)``. Keyed by path so a test that swaps
+#: ``TRID3NT_REPO_ROOT`` never sees another test's bytes.
 _fresh_zip_cache: dict[str, tuple[Any, bytes, str, str]] = {}
 _fresh_zip_lock = threading.Lock()
 
 
 def build_fresh_zip(repo_root: Path | None = None) -> tuple[bytes, str, str]:
-    """SYNC -- build (or reuse a cached) plugin zip straight from the source
-    tree ``plugin/``. See the module docstring's FRESH ZIP
-    section. No prior ``package_plugin_repo()`` call is required; every call
-    re-stats the source tree (cheap -- ``_source_signature`` never reads file
-    bytes) and only re-zips when a file's size or mtime actually changed, so
-    a hot source edit is served on the very next request.
-
-    Returns ``(zip_bytes, version, zip_filename)`` -- ``zip_filename`` is the
-    versioned display name (``trid3nt-<version>.zip``) for
-    Content-Disposition; the served URL itself is the fixed
-    :data:`FRESH_ZIP_URL_PATH`.
-
-    Raises :class:`PluginRepoBuildError` when there is no source tree on this
-    checkout (mirrors ``package_plugin_repo``).
+    """SYNC - build, or reuse a cached, plugin zip straight from ``plugin/``,
+    returning ``(zip_bytes, version, zip_filename)``; every call re-stats the
+    tree and rebuilds only when a file's size or mtime changed.
     """
     root = repo_root if repo_root is not None else _repo_root()
     plugin_src = _plugin_src_dir(root)
@@ -423,13 +325,9 @@ _XML_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 def build_plugins_repo_xml(
     plugin_src: Path, download_url: str, file_name: str, version: str
 ) -> bytes:
-    """Render the QGIS plugin-repository index XML for ``plugin_src``.
-
-    Pure/deterministic: ``version`` (metadata-driven, byte-identical to the
-    zip's ``metadata.txt version=``), ``file_name`` (the versioned zip name),
-    and ``download_url`` are all supplied by the caller so the same shape is
-    reused at package time (with the :data:`HOST_SENTINEL` host) and readable
-    back at serve time.
+    """Render the QGIS plugin-repository index XML for ``plugin_src``; pure and
+    deterministic, since ``version``, ``file_name`` and ``download_url`` are all
+    supplied by the caller.
     """
     fields = _parse_metadata_txt(plugin_src / "metadata.txt")
     xml = _XML_TEMPLATE.format(
@@ -480,19 +378,9 @@ def read_manifest(served_dir: Path | str | None = None) -> dict[str, Any] | None
 
 
 def package_plugin_repo(served_dir: Path | str | None = None) -> dict[str, Any]:
-    """SYNC (filesystem copy/zip) -- deploy-time entrypoint.
-
-    Rebuilds the served plugin repository from the daemon's own checkout: the
-    versioned zip ``trid3nt-<version>.zip``, a ``plugins.xml`` carrying the
-    :data:`HOST_SENTINEL` host, and a ``manifest.json``. Old
-    ``trid3nt-*.zip`` are removed so exactly one artifact is served.
-
-    Version-drift warning: when the previous manifest's version equals this
-    one but the packaged tree's content hash differs, logs a WARNING (a code
-    change shipped without a ``version=`` bump, so Plugin Manager would not
-    offer the update). Never auto-bumps, never fails on drift.
-
-    Returns ``{"version", "zip_filename", "tree_sha", "warned", "served_dir"}``.
+    """SYNC - rebuild the served repository (versioned zip, ``plugins.xml`` with
+    the sentinel host, ``manifest.json``), returning ``{"version",
+    "zip_filename", "tree_sha", "warned", "served_dir"}``.
     """
     repo_root = _repo_root()
     plugin_src = _plugin_src_dir(repo_root)
@@ -525,11 +413,9 @@ def package_plugin_repo(served_dir: Path | str | None = None) -> dict[str, Any]:
             stale.unlink()
     _build_zip(plugin_src, dest / zip_filename)
 
-    # download_url points at the FIXED fresh-build endpoint (not this
-    # versioned zip_filename -- that artifact is still written to `dest` as a
-    # manual-QA/fallback path, see served_zip_path) so Plugin Manager never
-    # depends on this deploy-time packaging step having run; ?v= is a pure
-    # cache-busting hint, see module docstring.
+    # download_url points at the FIXED fresh-build endpoint rather than this
+    # versioned artifact, so a client never depends on this packaging step
+    # having run; ``?v=`` is a cache-busting hint the server never reads.
     download_url = f"http://{HOST_SENTINEL}{FRESH_ZIP_URL_PATH}?v={version}"
     xml = build_plugins_repo_xml(plugin_src, download_url, zip_filename, version)
     (dest / "plugins.xml").write_bytes(xml)
@@ -555,13 +441,9 @@ def package_plugin_repo(served_dir: Path | str | None = None) -> dict[str, Any]:
 
 
 def render_plugins_xml(host: str, served_dir: Path | str | None = None) -> bytes:
-    """SYNC -- read the packaged ``plugins.xml`` and fill its download_url host.
-
-    Substitutes the per-request ``host`` (``host:port`` from the request's own
-    Host header) for the :data:`HOST_SENTINEL`, so a client reaches the zip on
-    the same host it dialed the index on. Raises :class:`PluginRepoBuildError`
-    when the repo was never packaged (``scripts/package_plugin.sh`` /
-    ``make agent`` not yet run).
+    """SYNC - read the packaged ``plugins.xml`` and substitute ``host`` for the
+    :data:`HOST_SENTINEL`, so a client reaches the zip on the host it dialed.
+    Refuses with :class:`PluginRepoBuildError` when nothing was packaged yet.
     """
     xml_path = _served_dir(served_dir) / "plugins.xml"
     if not xml_path.is_file():
@@ -574,11 +456,9 @@ def render_plugins_xml(host: str, served_dir: Path | str | None = None) -> bytes
 
 
 def served_zip_path(zip_filename: str, served_dir: Path | str | None = None) -> Path:
-    """SYNC -- resolve a ``GET /plugin-repo/<zip>`` filename to a real file.
-
-    Path-traversal safe: the filename may carry no directory separators and
-    must end in ``.zip``. Raises :class:`FileNotFoundError` when the named zip
-    is not in the served directory (the route maps that to 404).
+    """SYNC - resolve a ``GET /plugin-repo/<zip>`` filename to a real file.
+    Path-traversal safe: no directory separators, ``.zip`` suffix required, and
+    a name that is not in the served directory raises ``FileNotFoundError``.
     """
     name = zip_filename.strip()
     if not name.endswith(".zip") or "/" in name or "\\" in name or name.startswith("."):
@@ -616,11 +496,8 @@ def _git_head_sha(repo_root: Path) -> str:
 
 
 def _git_provenance(repo_root: Path) -> tuple[str, str]:
-    """Short git sha + branch for ``repo_root``, the same two values
-    ``scripts/install_plugin.sh`` stamps into an rsync-installed profile's
-    ``installed_version.txt`` -- ``"unknown"`` for either when this checkout
-    is not a git repo (matches that script's own fallback). Used by
-    :func:`_build_zip_bytes` to stamp the same file into the fresh-build zip.
+    """Short git sha and branch for ``repo_root``, the two values stamped into
+    ``installed_version.txt``; ``"unknown"`` for either outside a git checkout.
     """
     head = _git_head_sha(repo_root)
     sha = head[:7] if head != "unknown" else "unknown"
@@ -629,11 +506,9 @@ def _git_provenance(repo_root: Path) -> tuple[str, str]:
 
 
 def build_version_payload() -> dict[str, Any]:
-    """SYNC (git subprocess) -- caller wraps in ``asyncio.to_thread``.
-
-    The tiny version indicator ``/api/version`` serves: ``{"git_sha": <short
-    sha>, "provider": <active MODEL_PROVIDER>}``. Both degrade to ``"unknown"``
-    rather than raising -- a cheap discovery endpoint, never worth a 500.
+    """SYNC (git subprocess): the ``/api/version`` payload,
+    ``{"git_sha", "provider"}``; either degrades to ``"unknown"`` rather than
+    raising, because a discovery endpoint is never worth a 500.
     """
     repo_root = _repo_root()
     head = _git_head_sha(repo_root)

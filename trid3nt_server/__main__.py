@@ -1,8 +1,4 @@
-"""Allow ``python -m trid3nt_server`` invocation (startup verification).
-
-Delegates to ``trid3nt_server.main.run``, which supports ``--startup-only`` for
-a startup-only verification run.
-"""
+"""Entry point for ``python -m trid3nt_server``."""
 
 from __future__ import annotations
 

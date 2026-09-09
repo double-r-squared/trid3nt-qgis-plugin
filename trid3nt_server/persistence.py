@@ -1,28 +1,8 @@
 """Thin typed wrapper over the document store.
 
-Agent code calls ``Persistence.upsert_case(case_dataclass)``; this module
-issues logical ``insert-one`` / ``update-one`` / ``find-one`` / ``find`` calls
-through a store client and serializes/deserializes through
-``trid3nt_contracts`` ``GraceModel`` types (never raw dicts at the call site).
-
-The store is local JSON: ``FileMCPClient`` keeps one file per collection and is
-the only backend this stack has. It is bound by
-``main._maybe_bind_dev_persistence`` / ``server.init_persistence_from_env``.
-
-Supports ``CaseSummary`` round-trip (get/upsert/list/archive/delete),
-``CaseChatMessage`` append + ``CaseSessionState`` hydration, and ``User``
-round-trip (``get_user_by_id``/``upsert_user``). API-key credentials do not
-persist here: the plugin brokers key values over the ``secret-add`` WS
-seam into the in-memory ``credentials.resolver`` session cache, with env vars
-the headless / dev floor.
-
-Containment: every storage call goes through
-``client.call_tool("<method>", args)``, a single seam; callers pass typed
-``GraceModel`` instances in and get typed instances out, and the ``dict``-shape
-transport is contained here. Persistence is the I/O substrate; any confirmation
-policy lives at the ``server.py`` call sites.
-
-Invariants: no quota/cost/spend fields on any record.
+Callers pass typed ``trid3nt_contracts`` models in and get typed models out;
+the ``dict`` transport is contained behind one ``client.call_tool`` seam. No
+quota, cost or spend field is persisted, and API keys never reach this store.
 """
 
 from __future__ import annotations
@@ -62,11 +42,7 @@ USERS_COLLECTION = "users"  # Auth/Users track stub
 
 
 class MCPClientProtocol(Protocol):
-    """Minimal store-client surface this module depends on.
-
-    ``FileMCPClient`` implements it. Tests pass a mock implementing this single
-    method.
-    """
+    """Minimal store-client surface this module depends on."""
 
     async def call_tool(
         self, name: str, arguments: dict[str, Any] | None = None
@@ -80,12 +56,9 @@ class MCPClientProtocol(Protocol):
 
 
 def _unwrap_result(raw: dict[str, Any]) -> Any:
-    """Extract the payload from one store-client result.
-
-    A read returns its payload under ``document`` (single) or ``documents``
-    (list); a write returns its counts dict as-is. Anything that carries neither
-    key is already the payload, so it passes through and callers branch on "no
-    document" against ``None`` rather than against a shape.
+    """Extract the payload from one store-client result: ``document`` or
+    ``documents`` when present, else the raw result, so a caller branches on
+    ``None`` rather than on a shape.
     """
     if not isinstance(raw, dict):
         return raw
@@ -97,11 +70,8 @@ def _unwrap_result(raw: dict[str, Any]) -> Any:
 
 
 class Persistence:
-    """Typed wrapper over the document store (``MCPClientProtocol``).
-
-    Construct with any object implementing the protocol -- on this stack that is
-    the file-backed ``FileMCPClient``. All methods are ``async`` because the file
-    backend off-loads its blocking I/O to a thread.
+    """Typed wrapper over the document store; every method is ``async``
+    because the file backend off-loads its blocking I/O to a thread.
     """
 
     def __init__(
@@ -116,12 +86,8 @@ class Persistence:
     # ----- Cases --------------------------------------------------------- #
 
     async def get_case(self, case_id: str) -> CaseSummary | None:
-        """Find one Case by id. Returns ``None`` if not found.
-
-        Forward-compat: drops any field the ``ProjectDocument`` schema
-        carries that ``CaseSummary`` doesn't denormalize (e.g. ``deleted_at``,
-        ``owner_user_id``, etc.). The Case envelope is a UI denormalization
-        of the storage shape -- extra storage fields are expected and ignored.
+        """Find one Case by id, or ``None``; a storage field the wire
+        ``CaseSummary`` does not carry is dropped rather than refused.
         """
         raw = await self._store.call_tool(
             "find-one",
@@ -138,14 +104,9 @@ class Persistence:
 
     @staticmethod
     def _doc_to_case_summary(doc: dict) -> CaseSummary:
-        """Normalize a stored projects document into a ``CaseSummary``.
-
-        Strips ``_id`` (rewires to ``case_id``), drops user-link fields the
-        schema doesn't know, and drops any other storage-only fields the
-        denormalized envelope doesn't carry -- including the ephemeral-case
-        ``expires_at`` TTL stamp, which is storage-only and must NEVER reach the
-        wire ``CaseSummary`` (the ``k not in allowed`` filter below already
-        drops it, since ``expires_at`` is not a ``CaseSummary`` field).
+        """Normalize a stored projects document into a ``CaseSummary``: ``_id``
+        rewires to ``case_id`` and every storage-only field is dropped, so an
+        owner link or an ``expires_at`` stamp never reaches the wire.
         """
         allowed = set(CaseSummary.model_fields.keys())
         normalized: dict[str, object] = {}
@@ -169,29 +130,9 @@ class Persistence:
         *,
         owner_user_id: str | None = None,
     ) -> CaseSummary:
-        """Insert or update a Case. Returns the persisted ``CaseSummary``.
-
-        Uses ``update-one`` with ``upsert=True`` so a fresh Case lands and
-        an existing one is overwritten in a single round-trip.
-
-        when ``owner_user_id``
-        is provided, it is stamped onto the document's ``user_id`` field so the
-        Case belongs to its creator. ``CaseSummary`` itself carries no owner
-        field (it is a UI denormalization), so ownership lives only at the
-        storage layer -- the read path (``_doc_to_case_summary``) deliberately
-        drops it. Without this, every newly-created Case would lack a
-        ``user_id`` and become invisible to ``list_cases_for_user``.
-        ``owner_user_id=None`` (the legacy / dev call shape) writes no owner.
-
-        The owner is written under ``$set``, so re-upserting an existing Case
-        with a fresh ``owner_user_id`` updates it; passing ``None`` never
-        clears an already-stamped owner (the ``user_id`` key is simply absent
-        from the ``$set``).
-
-        Cases are durable: no ``expires_at`` TTL stamp is written. A legacy Case
-        doc that still carries a stored ``expires_at`` reads back fine --
-        ``_doc_to_case_summary`` drops the storage-only key so it never reaches
-        the wire ``CaseSummary``.
+        """Insert or update a Case; returns the persisted ``CaseSummary``.
+        ``owner_user_id`` stamps the storage-only ``user_id`` field and a later
+        ``None`` never clears it; Cases carry no ``expires_at`` TTL stamp.
         """
         body = case.model_dump(mode="json")
         body["_id"] = case.case_id  # the ``_id`` primary key
@@ -216,16 +157,9 @@ class Persistence:
     async def set_case_layer_handles(
         self, case_id: str, handles: dict[str, str]
     ) -> None:
-        """Persist a Case's ``{L<n>: uri}`` short-handle map.
-
-        Storage-only ``layer_handles`` field on the cases doc -- the
-        ``last_active_case_id`` pattern: ``CaseSummary`` deliberately does
-        NOT carry it (``_doc_to_case_summary`` drops unknown keys), so the
-        wire contract stays narrow while the storage doc accretes. The
-        ``upsert_case`` full-body ``$set`` never removes it (named-field
-        semantics). ``upsert=False``: a deleted / never-created Case is not
-        resurrected by this side-channel -- the write is simply a no-op.
-        Callers treat this as best-effort (wrap + log, never raise).
+        """Persist a Case's storage-only ``{L<n>: uri}`` short-handle map.
+        ``upsert=False``: a deleted or never-created Case is not resurrected
+        by this side channel, and the caller treats the write as best-effort.
         """
         await self._store.call_tool(
             "update-one",
@@ -241,11 +175,9 @@ class Persistence:
     async def get_case_layer_handles(
         self, case_id: str
     ) -> dict[str, str] | None:
-        """Read back the persisted ``{L<n>: uri}`` map.
-
-        Tolerant: a missing Case / absent field / malformed shape yields
-        ``None`` and the registry degrades to fresh minting. Only
-        str->str entries survive the shape filter.
+        """Read back the persisted ``{L<n>: uri}`` map, or ``None`` when the
+        Case, the field or the shape is missing; only ``str -> str`` entries
+        survive, and the caller falls back to minting fresh handles.
         """
         raw = await self._store.call_tool(
             "find-one",
@@ -269,19 +201,9 @@ class Persistence:
         return out or None
 
     async def list_cases_for_user(self, user_id: str) -> list[CaseSummary]:
-        """List the user's LIVE Cases (``status="active"`` only).
-
-        The ``projects`` collection schema does not yet carry a ``user_id``
-        field yet (it was specified pre-Auth); we pass the filter anyway --
-        once the Auth/Users track adds the field the query starts narrowing,
-        until then it returns the full Case list for the deployment.
-
-        Soft-deleted and archived Cases are excluded both in the query and
-        by a post-validation guard (belt-and-suspenders for backends
-        whose filter dialect quietly ignores the operator); the ``$nin``
-        filter still matches docs with no ``status`` field at all (pre-status
-        records are live by definition: ``CaseSummary.status`` defaults to
-        ``"active"``).
+        """List the user's LIVE Cases: archived and deleted are excluded by the
+        query AND by a post-validation guard, since a backend may ignore the
+        ``$nin``; a document with no ``status`` at all is live.
         """
         raw = await self._store.call_tool(
             "find",
@@ -299,8 +221,7 @@ class Persistence:
             },
         )
         docs = _unwrap_result(raw)
-        # If the store returned no filter match, ``docs`` may be empty
-        # list or None. Be tolerant.
+        # A store with no filter match returns an empty list or None.
         if not docs:
             return []
         if isinstance(docs, dict):
@@ -321,10 +242,8 @@ class Persistence:
         return cases
 
     async def archive_case(self, case_id: str) -> None:
-        """Soft-archive a Case (sets ``status="archived"``).
-
-        Preserves the document for un-archive; ``delete_case`` is the hard
-        path. Mirrors ``CaseStatus`` Literal in ``trid3nt_contracts.case``.
+        """Soft-archive a Case, setting ``status="archived"``; the document
+        survives so an un-archive can restore it.
         """
         await self._store.call_tool(
             "update-one",
@@ -342,11 +261,8 @@ class Persistence:
         )
 
     async def delete_case(self, case_id: str) -> None:
-        """Soft-delete a Case (sets ``status="deleted"``).
-
-        v0.1 stance: soft-delete only. A curator-tooled hard delete is a future
-        addition; data-retention rules (the ``deleted_at`` stamp) point this way
-        anyway. Status mirrors the ``CaseStatus`` Literal tombstone value.
+        """Soft-delete a Case: the document survives with ``status="deleted"``
+        and a ``deleted_at`` stamp; there is no hard-delete path here.
         """
         await self._store.call_tool(
             "update-one",
@@ -366,12 +282,9 @@ class Persistence:
     # ----- Chat history + session state (rehydration) --------------------- #
 
     async def append_chat_message(self, msg: CaseChatMessage) -> None:
-        """Append one persisted chat exchange to a Case's history.
-
-        The chat-message collection is the agent's own session
-        record (it is per-turn replay material, not a solver result), so this
-        write is NOT a confirmation trigger -- the caller does not need to
-        gate it. The carveout is enforced at the confirmation-hook layer.
+        """Append one chat exchange to a Case's history; the chat log is the
+        agent's own record, not a solver result, so the write never triggers a
+        confirmation gate.
         """
         body = msg.model_dump(mode="json")
         body["_id"] = msg.message_id
@@ -385,26 +298,9 @@ class Persistence:
         )
 
     async def upsert_chat_message(self, msg: CaseChatMessage) -> None:
-        """Insert-or-replace one chat row keyed by its stable ``message_id``.
-
-        Durable-card lifecycle (nothing about a solve is transient): an off-box SOLVE card
-        is persisted ``running`` at mint and UPDATED IN PLACE to its terminal
-        state. Unlike ``append_chat_message`` (always a fresh row), this upserts
-        by the stable ``_id`` so the running -> terminal transition rewrites the
-        SAME row -- never a duplicate. ``created_at`` is pinned on first insert
-        via ``$setOnInsert`` so the row KEEPS its position in the
-        ``created_at``-sorted replay across the transition (the terminal update
-        must not reorder the card). Every other field is ``$set`` so the terminal
-        ``state`` / ``duration_ms`` / ``tool_card`` overwrite the running values.
-
-        Routes through the SAME ``update-one`` (upsert) surface every backend
-        implements. The filter carries BOTH key shapes so it targets the natural
-        key on each: ``_id`` for the file backend (chat ``_id`` ==
-        ``message_id``), plus the composite ``case_id`` + ``message_id`` shape a
-        keyed cloud backend would use -- so the get/apply/put upsert lands on
-        exactly one row on either. Best-effort at the call sites
-        (``_persist_chat_turn`` swallows write failures), matching
-        ``append_chat_message``.
+        """Insert-or-replace one chat row keyed by its stable ``message_id``, so
+        a running card and its terminal state rewrite the SAME row; ``created_at``
+        is pinned on insert so the transition never reorders the replay.
         """
         body = msg.model_dump(mode="json")
         body["_id"] = msg.message_id
@@ -428,13 +324,9 @@ class Persistence:
         )
 
     async def get_session_state(self, case_id: str) -> CaseSessionState:
-        """Hydrate the rehydration envelope for a Case (resume).
-
-        Joins the Case header (``CaseSummary``) with its ordered chat history
-        from ``CHAT_COLLECTION``. ``loaded_layers`` / ``pipeline_history`` /
-        ``current_pipeline`` are passed through as dicts -- collections.py
-        owns the concrete shapes (matches the ``SessionStatePayload`` pattern
-        already in ws.py).
+        """Hydrate a Case's resume envelope: its header joined with the ordered
+        chat history; layers, pipeline history and charts pass through as dicts
+        because ``trid3nt_contracts`` owns those shapes.
         """
         case = await self.get_case(case_id)
         if case is None:
@@ -472,25 +364,16 @@ class Persistence:
             except Exception:  # noqa: BLE001
                 logger.warning("skipping malformed CaseChatMessage doc: %s", d)
                 continue
-        # deterministic replay order regardless of backend sort
-        # support -- the full stream (user turns, tool cards, agent narration)
-        # interleaves by ``created_at``; ULID ``message_id`` breaks ties in
-        # write order. Python's sort is stable, so backends that already
-        # honored the ``created_at`` sort are untouched.
+        # Deterministic replay order whatever the backend's sort support: the
+        # stream interleaves by ``created_at`` and the ULID ``message_id``
+        # breaks ties in write order.
         chat.sort(key=lambda m: (m.created_at, m.message_id))
-        # Part B: hydrate ``loaded_layers`` from the persisted
-        # ``Case.loaded_layer_summaries`` so a Case re-open repopulates the
-        # LayerPanel deterministically. The PipelineEmitter holds these in
-        # memory per-connection; without this hydration step a browser
-        # refresh (new WS, new emitter) shows an empty LayerPanel even
-        # though the layers are still published on the per-Case ``.qgs``.
+        # A re-open repopulates the layer panel from the persisted summaries:
+        # the emitter's copy is per-connection and dies with the socket.
         loaded_layers = list(case.loaded_layer_summaries)
-        # hydrate persisted charts so a Case re-open
-        # replays them WITHOUT a re-run. ``$push``es SessionChartRecords
-        # onto the ``sessions`` doc (keyed by case_id == sessions._id) but the
-        # read side was never wired. Pull the array, unwrap each record's
-        # ``payload`` (the ChartEmissionPayload the client rehydrates), in
-        # emitted_at order. Best-effort: a missing/odd doc yields no charts.
+        # Charts persist as ``SessionChartRecord``s pushed onto the sessions
+        # doc; replay unwraps each record's ``payload`` in emitted_at order.
+        # Best-effort: a missing or malformed doc yields no charts.
         charts: list[dict] = []
         try:
             sraw = await self._store.call_tool(
@@ -516,19 +399,13 @@ class Persistence:
         )
 
     # ----- Session records (``sessions`` collection) ----------------------- #
-    # The ``sessions`` document is the TTL-cleaned activity header
-    # (``SESSIONS_TTL``): who/when, which Cases were touched, and the
-    # append-only ``charts`` array that chart-emission ``$push``es onto. Chat
-    # content canonically lives in ``case_chat_messages``;
-    # ``SessionDocument.chat_history`` stays empty at v0.1 so the two stores
-    # never diverge.
+    # The ``sessions`` document is the TTL-cleaned activity header: who and when,
+    # which Cases were touched, and the append-only ``charts`` array. Chat content
+    # lives in ``case_chat_messages`` and never duplicates into this document.
 
     async def upsert_session_record(self, doc: "SessionDocument") -> None:
-        """Insert or fully overwrite a session record.
-
-        ``$set`` of the full document body -- storage-only extras a previous
-        ``$push`` added (e.g. ``charts``) survive because ``$set`` of named
-        fields does not remove unnamed ones.
+        """Insert or fully overwrite a session record; ``$set`` of the named
+        fields leaves storage-only extras such as ``charts`` in place.
         """
         body = doc.model_dump(mode="json", by_alias=True)
         session_id = body.pop("_id")
@@ -551,19 +428,9 @@ class Persistence:
         case_id: str | None = None,
         ttl_seconds: int | None = None,
     ) -> None:
-        """Activity heartbeat for a session -- one upsert round-trip.
-
-        - ``$set`` ``last_active_at`` + ``expires_at`` (TTL driver) so
-          every interaction pushes cleanup 30 days out (``SESSIONS_TTL``).
-        - ``$setOnInsert`` the immutable header (``schema_version``,
-          ``created_at``) so the first touch creates a well-formed record
-          and later touches never rewrite history.
-        - ``$addToSet`` the active Case into ``project_ids`` when given --
-          deduped, so per-turn touches stay idempotent.
-
-        Fire-and-forget discipline at call sites (same as telemetry and
-        chart persistence): callers wrap in ``try/except`` or a
-        task; a persistence hiccup never takes down the user's turn.
+        """Activity heartbeat in one upsert: ``last_active_at`` and the TTL
+        ``expires_at`` are set, the immutable header lands only on insert, and a
+        given ``case_id`` is deduped into ``project_ids``. Never raises upward.
         """
         from trid3nt_contracts.collections import SESSIONS_TTL
 
@@ -598,12 +465,9 @@ class Persistence:
                 "upsert": True,
             },
         )
-        # Header repair: a session doc created by an earlier bare ``$push``
-        # (chart-emission upserts before any touch -- ordering) has
-        # no ``created_at``/``schema_version``, and ``$setOnInsert`` above
-        # can never backfill an EXISTING doc.
-        # Detect and repair once; ``created_at=now`` is the best available
-        # approximation for a doc whose true start was never recorded.
+        # Header repair: a doc first created by a bare chart ``$push`` carries no
+        # ``created_at``/``schema_version`` and ``$setOnInsert`` cannot backfill
+        # an existing doc, so repair once with ``created_at=now``.
         raw = await self._store.call_tool(
             "find-one",
             {
@@ -634,28 +498,9 @@ class Persistence:
     async def set_session_active_case(
         self, session_id: str, case_id: str | None
     ) -> None:
-        """Persist the session's active-Case pointer.
-
-        Writes a storage-only ``last_active_case_id`` field onto the session
-        record so the active-Case pointer survives a process restart
-        (the in-memory ``_SESSION_ACTIVE_CASE`` dict in server.py is wiped on
-        process death). ``SessionDocument`` deliberately does NOT carry this
-        field -- it is storage-only, exactly like the ``charts`` array;
-        ``get_session_record`` drops unknown fields before validation, so the
-        contract model stays narrow while the storage doc accretes.
-
-        The client-stamped ``case_id`` on ``session-resume`` /
-        ``user-message`` remains the REAL authority for turn-binding + replay;
-        this persisted pointer is only the cold-start cache so a reconnecting
-        client that sends a bare resume (older client, no stamp) still lands on
-        the Case it last worked in instead of None.
-
-        ``$set`` (with ``upsert``) so the pointer lands even if no prior
-        ``touch_session`` created the doc; ``$setOnInsert`` mirrors
-        ``touch_session`` so a doc created HERE first is still well-formed.
-        ``case_id=None`` clears the pointer (an explicit Case exit).
-        Fire-and-forget at call sites: a persistence hiccup must never take
-        down the user's turn.
+        """Persist the session's storage-only ``last_active_case_id`` so the
+        pointer survives a restart; ``None`` clears it. The client-stamped
+        ``case_id`` on a turn stays the authority - this is the cold-start cache.
         """
         now = now_utc()
         iso_now = now.isoformat().replace("+00:00", "Z")
@@ -677,15 +522,8 @@ class Persistence:
         )
 
     async def get_session_active_case(self, session_id: str) -> str | None:
-        """Read back the persisted active-Case pointer.
-
-        Returns the ``last_active_case_id`` written by
-        ``set_session_active_case``, or ``None`` when the session has no
-        record / no persisted pointer (a fresh session, or one that never
-        bound a Case). Used by server.py to reload the in-memory pointer when a
-        fresh ``SessionState`` is built after a process restart, so the cold-start
-        cache survives process death. Best-effort: any malformed shape yields
-        ``None``.
+        """Read back the persisted ``last_active_case_id``, or ``None`` for a
+        session with no record, no pointer or a malformed shape.
         """
         raw = await self._store.call_tool(
             "find-one",
@@ -702,12 +540,9 @@ class Persistence:
         return value if isinstance(value, str) else None
 
     async def get_session_record(self, session_id: str) -> "SessionDocument | None":
-        """Read one session record back as a typed ``SessionDocument``.
-
-        Tolerant normalization (same discipline as ``_doc_to_case_summary``):
-        storage-only extras -- notably the ``charts`` array -- are
-        dropped before validation so the contract model stays narrow while
-        the storage document accretes.
+        """Read one session record back as a typed ``SessionDocument``; storage-
+        only extras such as the ``charts`` array are dropped before validation,
+        and a malformed document yields ``None``.
         """
         from trid3nt_contracts.collections import SessionDocument
 
@@ -752,11 +587,7 @@ class Persistence:
         return user
 
     async def get_user_by_id(self, user_id: str) -> User | None:
-        """Find a user by ULID. Returns ``None`` if not found.
-
-        The local-single-user resolver looks up the one fixed
-        ``LOCAL_SINGLE_USER_ID`` record by id on every connect.
-        """
+        """Find a user by ULID, or ``None`` when no record exists."""
         raw = await self._store.call_tool(
             "find-one",
             {
@@ -771,8 +602,8 @@ class Persistence:
         normalized = {k: v for k, v in doc.items() if k != "_id"}
         if "user_id" not in normalized:
             normalized["user_id"] = user_id
-        # Forward-compat: drop fields the v0.1 schema doesn't carry so a
-        # future User schema bump doesn't break the existing record.
+        # Drop fields the current User schema does not carry, so a schema bump
+        # never breaks an existing record.
         allowed = set(User.model_fields.keys())
         normalized = {k: v for k, v in normalized.items() if k in allowed}
         try:
@@ -785,18 +616,12 @@ class Persistence:
 # --------------------------------------------------------------------------- #
 # The file-backed store
 # --------------------------------------------------------------------------- #
-# The file-backed client is the persistence substrate on this stack, and the
-# only one. It satisfies ``MCPClientProtocol``, so ``Persistence`` is written
-# against the protocol rather than against the files.
-#
-# Storage: ``~/.trid3nt/dev_persistence/<database>/<collection>.json``, one
-# JSON file per collection (dict mapping ``_id`` -> document). Atomicity: a
-# per-collection ``asyncio.Lock`` serializes concurrent calls; writes go to a
-# sibling ``<collection>.json.tmp`` then ``os.replace`` (POSIX-atomic
-# rename). Scope matches the method subset Persistence actually invokes:
-# ``insert-one``/``update-one`` (``$set`` + optional ``upsert``)/``delete-one``
-# /``find-one``/``find`` (optional single-key sort) -- just enough query
-# semantics to round-trip Persistence's calls, and no more.
+# Storage is ``~/.trid3nt/dev_persistence/<database>/<collection>.json``, one
+# JSON file per collection mapping ``_id`` to document. A per-collection
+# ``asyncio.Lock`` serializes concurrent calls and writes land through a sibling
+# ``.tmp`` plus ``os.replace``. The supported query surface is exactly what
+# ``Persistence`` invokes: ``insert-one``, ``update-one`` (``$set`` plus optional
+# ``upsert``), ``delete-one``, ``find-one`` and ``find`` with a single-key sort.
 
 import asyncio as _asyncio
 import contextlib as _contextlib
@@ -835,10 +660,8 @@ def _collection_lock(path: _Path) -> _asyncio.Lock:
 @_contextlib.contextmanager
 def _file_lock(path: _Path):
     """Exclusive advisory lock on a sidecar, held across one read-modify-write.
-
-    BLOCKING - runs inside ``to_thread``. The sidecar rather than the store itself
-    because ``_atomic_write`` replaces the store's inode, which would drop a lock
-    taken on it. Cross-PROCESS only; in-process serialization is the asyncio lock.
+    BLOCKING - runs inside ``to_thread``. The sidecar, because ``_atomic_write``
+    replaces the store's inode; cross-PROCESS only, asyncio serializes in-process.
     """
     if _fcntl is None:  # pragma: no cover - this box is Linux
         yield
@@ -853,18 +676,14 @@ def _file_lock(path: _Path):
 
 
 def _default_dev_persistence_dir() -> _Path:
-    """Resolve the on-disk directory for the file-backed dev substrate.
-
-    Override via ``TRID3NT_DEV_PERSISTENCE_DIR`` (used by tests + CI to point
-    at a tmpdir). Default is ``~/.trid3nt/dev_persistence/`` so a fresh
-    clone gets a stable, user-scoped location.
+    """Resolve the on-disk directory for the file-backed substrate:
+    ``TRID3NT_DEV_PERSISTENCE_DIR`` when set, else ``~/.trid3nt/dev_persistence/``.
     """
     override = _os_for_file.environ.get(DEV_PERSISTENCE_DIR_ENV)
     if override:
         return _Path(override).expanduser()
-    # One-time Layer-B rename migration: a pre-rename install kept its data
-    # under ``~/.grace2``. If that directory exists and ``~/.trid3nt`` does
-    # not, rename it in place so existing cases survive the rebrand.
+    # One-time rename migration: data kept under ``~/.grace2`` moves to
+    # ``~/.trid3nt`` when the new directory does not yet exist.
     legacy_home = _Path.home() / ".grace2"
     new_home = _Path.home() / ".trid3nt"
     if legacy_home.is_dir() and not new_home.exists():
@@ -874,16 +693,9 @@ def _default_dev_persistence_dir() -> _Path:
 
 
 class FileMCPClient:
-    """The file-backed store, satisfying :class:`MCPClientProtocol`.
-
-    Implements the methods the :class:`Persistence` wrapper and the declarative
-    step ledger actually invoke (``insert-one``, ``update-one``, ``delete-one``,
-    ``find-one``, ``find``) against a per-collection JSON file in
-    ``base_dir / database / coll.json``.
-
-    Returns what ``Persistence._unwrap_result`` reads: a ``{"document": ...}``
-    envelope for single-document reads, ``{"documents": [...]}`` for list reads,
-    and a counts dict for writes.
+    """The file-backed store, satisfying :class:`MCPClientProtocol` over one
+    JSON file per collection; reads return a ``{"document": ...}`` or
+    ``{"documents": [...]}`` envelope and writes return a counts dict.
     """
 
     def __init__(self, base_dir: _Path | None = None) -> None:
@@ -917,11 +729,9 @@ class FileMCPClient:
         return _collection_lock(path)
 
     def _cycle(self, path: _Path, apply: Any) -> Any:
-        """BLOCKING: one flocked read-modify-write over the CURRENT store.
-
-        The read happens inside the lock, so a mutation is never computed from a
-        snapshot another writer has already superseded - a whole-store write from
-        a stale read resurrects documents that were deleted in between.
+        """BLOCKING: one flocked read-modify-write over the CURRENT store; the
+        read happens inside the lock, so a whole-store write can never be
+        computed from a snapshot another writer has already superseded.
         """
         with _file_lock(path):
             store = self._read_store(path)
@@ -955,11 +765,8 @@ class FileMCPClient:
         """Atomic JSON write: tmp file + os.replace (POSIX-atomic rename)."""
         tmp = path.with_suffix(path.suffix + ".tmp")
         with tmp.open("w", encoding="utf-8") as fh:
-            # default=str so a raw datetime in any document (e.g. the
-            # shadow-telemetry ``called_at_utc``) serializes instead of raising
-            # ``TypeError: Object of type datetime is not JSON serializable`` -
-            # which was silently dropping the model-tagged shadow rows on the
-            # file substrate (the per-model recall@k slice depends on them).
+            # default=str so a raw datetime in any document serializes instead
+            # of raising ``TypeError`` and dropping the row.
             _json_for_file.dump(store, fh, indent=2, sort_keys=True, default=str)
             fh.flush()
             try:
@@ -990,10 +797,9 @@ class FileMCPClient:
                     return False
                 continue
             if isinstance(v, dict) and "$nin" in v:
-                # A MISSING field matches $nin (the doc's
-                # value, None, is "not in" the exclusion list unless None is
-                # listed). uses this for the case-list status filter
-                # so pre-status Case docs stay listed.
+                # A MISSING field matches $nin: the document's value, None, is
+                # "not in" the exclusion list unless None is itself listed, so a
+                # Case doc written before the status field stays listed.
                 if doc.get(k) in v["$nin"]:
                     return False
                 continue
@@ -1007,17 +813,9 @@ class FileMCPClient:
 
     @staticmethod
     def _apply_update(doc: dict, update: dict, *, inserting: bool) -> None:
-        """Apply an update document in-place.
-
-        Supported operators (the set Persistence + chart-emission actually
-        send): ``$set``, ``$setOnInsert`` (applied ONLY when ``inserting``),
-        ``$push`` (appends; creates the array if missing), ``$addToSet``
-        (appends iff not already present -- dict values compared by equality).
-
-        Before only ``$set`` was honored, which silently DROPPED the
-        chart ``$push`` on the dev substrate (the upsert created a
-        bare ``{_id}`` doc and the chart vanished). Unknown operators now
-        raise so the next gap fails loudly instead.
+        """Apply an update document in place, supporting ``$set``,
+        ``$setOnInsert`` (only when ``inserting``), ``$push`` and ``$addToSet``;
+        an unknown operator raises rather than dropping the write.
         """
         for op, fields in update.items():
             if op == "$set":
@@ -1157,18 +955,9 @@ class FileMCPClient:
 
 
 def is_dev_persistence_enabled() -> bool:
-    """Resolve whether the file-backed substrate should engage.
-
-    Order:
-    - explicit ``TRID3NT_DEV_PERSISTENCE=0`` disables (escape hatch for CI
-      that wants the in-memory, no-persistence path);
-    - explicit ``TRID3NT_DEV_PERSISTENCE=1`` enables;
-    - unset → default ON so a fresh local clone gets working Case persistence
-      with zero config.
-
-    The env read is a string check (nothing is started here);
-    ``main._maybe_bind_dev_persistence`` is the single place that binds the
-    file backend when this returns True.
+    """Resolve whether the file-backed substrate engages: an explicit
+    ``TRID3NT_DEV_PERSISTENCE`` value decides, and unset defaults ON so a fresh
+    clone gets working Case persistence with no config.
     """
     raw = _os_for_file.environ.get(DEV_PERSISTENCE_ENABLED_ENV)
     if raw is not None:
@@ -1177,11 +966,7 @@ def is_dev_persistence_enabled() -> bool:
 
 
 def make_file_persistence(base_dir: _Path | None = None) -> Persistence:
-    """Construct a ``Persistence`` backed by the file store.
-
-    Convenience for ``server.init_persistence_from_env`` and tests -- wraps
-    the substrate selection so the call site stays a one-liner.
-    """
+    """Construct a ``Persistence`` backed by the file store."""
     return Persistence(FileMCPClient(base_dir=base_dir))
 
 
@@ -1203,12 +988,8 @@ class UnsupportedPersistenceBackendError(RuntimeError):
 
 
 def resolve_persistence_backend() -> str:
-    """Resolve the configured persistence backend name.
-
-    ``file`` is the only supported backend. An unset (or ``file``) env resolves
-    to ``file``; any other value raises ``UnsupportedPersistenceBackendError``
-    rather than silently falling back, so a stale cloud selection surfaces
-    loudly.
+    """Resolve the configured persistence backend name; ``file`` is the only
+    supported value and any other raises rather than falling back silently.
     """
     selected = (os.environ.get(PERSISTENCE_BACKEND_ENV) or PERSISTENCE_BACKEND_FILE).strip().lower()
     if selected != PERSISTENCE_BACKEND_FILE:
@@ -1222,10 +1003,8 @@ def resolve_persistence_backend() -> str:
 def make_persistence_for_backend(
     *, base_dir: _Path | None = None
 ) -> Persistence:
-    """Build the file-backed ``Persistence``.
-
-    Validates the configured backend first (``resolve_persistence_backend``
-    raises on any non-``file`` selection), then returns ``make_file_persistence``.
+    """Build the file-backed ``Persistence``, refusing first if the configured
+    backend is not ``file``.
     """
     resolve_persistence_backend()
     return make_file_persistence(base_dir=base_dir)

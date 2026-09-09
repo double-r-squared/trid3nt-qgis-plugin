@@ -1,43 +1,8 @@
 """Deterministic expensive-simulation reuse guard.
 
-PROBLEM (live): the agent REDUNDANTLY re-runs expensive simulations and
-re-derives layers that ALREADY exist in the Case - burning minutes and money on
-a solve whose output layer is already on the map. The soft prompt
-steer ("Reuse the existing handle/uri ... do NOT re-fetch or recompute") was
-being IGNORED by the live model. This module makes reuse ROBUST: a deterministic,
-CONSERVATIVE short-circuit that runs on the dispatch hot path BEFORE the solver
-launches, plus the identity machinery the enriched layers-present note uses so
-the model can SEE that a result already exists.
-
-Two cooperating pieces:
-
-1. ``scenario_signature(tool_name, params)`` — distills an expensive-scenario
-   tool call into a normalized, comparable signature: the ``scenario_type`` (the
-   layer-family the run PRODUCES, e.g. ``flood-depth``), the AOI key (a quantized
-   bbox AND/OR a normalized ``location_query``), and the KEY physics params that
-   change the answer (return period + duration for a flood; substance + release
-   rate + duration + location for a plume). Two calls whose signatures
-   compare equal would produce the SAME layer - so the second is redundant.
-
-2. ``ScenarioResultIndex`` — a per-session record of every expensive-scenario
-   result already produced THIS session, keyed by its signature and carrying the
-   produced ``LayerURI`` identity (handle / uri / name / layer_type / bbox).
-   ``find_reuse`` matches a fresh request's signature against the index and, on a
-   CLEAR match, returns the existing result so the dispatcher can short-circuit
-   the solver. The index is seeded from the (durable, per-Case) ``loaded_layers``
-   on a Case reopen so reuse survives a reconnect — a flood RESULT loaded from
-   persistence still short-circuits a re-run.
-
-Design stance — CONSERVATIVE BY CONSTRUCTION. We only ever short-circuit on a
-CLEAR match (same scenario family + same/equivalent AOI + same key params); any
-ambiguity (missing bbox we cannot derive without geocoding, a different return
-period, an explicit re-run/refresh request) falls through to RUN. A false
-short-circuit hands the user a stale answer; a false run only costs a re-solve.
-We bias hard toward correctness.
-
-This module is pure / synchronous / side-effect-free (it never geocodes, never
-touches the network) so it is safe on the dispatch hot path and trivially
-testable.
+A signature match short-circuits an expensive re-run before the solver launches;
+any ambiguity RUNS instead, since a false short-circuit returns a stale answer
+while a false run only costs a re-solve. Pure, synchronous, never networked.
 """
 
 from __future__ import annotations
@@ -69,18 +34,16 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Tool → produced-layer scenario family
+# Tool to produced-layer scenario family
 # --------------------------------------------------------------------------- #
 #
-# Map each EXPENSIVE simulation composer to the scenario family it PRODUCES.
-# ``scenario_type`` is the stable layer-family token used both to key the reuse
-# index and to recognize an existing RESULT layer by its ``layer_id`` prefix
-# (e.g. ``flood-depth-peak-<run_id>`` → ``flood-depth``). Keep these aligned with
-# the layer_id minted by the postprocess step of each workflow.
+# ``scenario_type`` is the stable layer-family token that keys the reuse index
+# and recognizes an existing RESULT layer by its ``layer_id`` prefix; keep the
+# values aligned with the layer_id each workflow's postprocess step mints.
 # NO KEY HERE IS A REGISTERED TOOL, so the guard is inert on every live turn.
-# Keying a template in is a correctness decision, not a rename: a false
-# short-circuit hands the user a stale answer, so a key earns its place only
-# once its postprocess layer_id and its answer-changing params are both pinned.
+# Keying a template in is a correctness decision: a false short-circuit hands
+# the user a stale answer, so a key earns its place only once its postprocess
+# layer_id and its answer-changing params are both pinned.
 EXPENSIVE_SCENARIO_TOOLS: dict[str, str] = {
     "sfincs_flood": "flood-depth",
     "modflow_contaminant_plume": "plume",
@@ -97,7 +60,7 @@ _SCENARIO_LAYER_ID_MARKERS: dict[str, tuple[str, ...]] = {
 }
 
 #: Default bbox quantization (degrees). Two AOIs whose bbox corners agree to
-#: this tolerance are treated as the SAME extent for reuse. ~0.01 deg ≈ 1 km;
+#: this tolerance are treated as the SAME extent for reuse. ~0.01 deg ~ 1 km;
 #: deliberately coarse enough to absorb geocoder jitter on the same place name
 #: but fine enough that a genuinely different AOI never collides.
 _BBOX_QUANT_DEG: float = 0.02
@@ -107,28 +70,16 @@ _BBOX_QUANT_DEG: float = 0.02
 # Fetched / context-layer kind
 # --------------------------------------------------------------------------- #
 #
-# Reuse covers run_model_* (expensive SIMULATION) results; a FETCHED layer needs
-# the same protection. On a "resize the bbox to take in the whole floodplain"
-# follow-up the model must not re-run fetch_fema_nfhl_zones over a layer already
-# loaded -- that mints TWO identical choropleth layers. A fit / zoom / resize /
-# show follow-up must REUSE the already-loaded fetched layer (call
-# compute_layer_bounds on its handle), NEVER re-fetch.
-#
-# A fetched layer has no scenario_type (it is not a simulation RESULT), so the
-# reuse machinery needs a parallel notion of "kind" -- the data FAMILY a fetch
-# produces (landcover / dem / roads / buildings / admin / population / ...). Two loaded
-# layers of the same kind covering the same (or an enclosing) AOI are the SAME
-# data -- a second fetch is redundant. Recognition is prefix/substring based on the
-# layer_id and name so the per-place suffix (``dem-{lon}-{lat}``) does not defeat
-# it. Kept CONSERVATIVE: an unrecognized fetched layer returns ``None`` (the model
-# falls back to the existing INPUT guidance), never a false reuse.
+# A fetched layer is not a simulation RESULT and so has no scenario_type; reuse
+# needs a parallel notion of KIND, the data family a fetch produces. Two loaded
+# layers of the same kind covering the same or an enclosing AOI are the same
+# data. Recognition is prefix/substring based on layer_id and name so a
+# per-place suffix does not defeat it, and an unrecognized layer yields ``None``
+# rather than a false reuse.
 
-#: A fetch_* tool name → the produced-layer KIND token. Used to recognize the
-#: fetch the model is about to repeat so the note can flag the already-loaded
-#: layer of the same kind as reusable. Aligned with each fetcher's ``source_class``
-#: and the ``layer_id`` prefix it mints. Only the common fetchers that produce a
-#: persistent map layer are listed — an absent tool simply gets no fetched-kind
-#: hint (CONSERVATIVE).
+#: A fetch_* tool name to the produced-layer KIND token, aligned with each
+#: fetcher's ``source_class`` and the ``layer_id`` prefix it mints. An absent
+#: tool simply gets no fetched-kind hint.
 _FETCH_TOOL_KIND: dict[str, str] = {
     "fetch_administrative_boundaries": "admin",
     "fetch_roads_osm": "roads",
@@ -160,13 +111,8 @@ def scenario_type_for_tool(tool_name: str) -> str | None:
 
 
 def layer_id_scenario_type(layer_id: str | None, name: str | None = None) -> str | None:
-    """Classify a loaded layer (by id / name) into a scenario RESULT family.
-
-    Returns the ``scenario_type`` token (e.g. ``"flood-depth"``) when the layer
-    looks like the RESULT of an expensive simulation, else ``None`` (an input /
-    context layer such as a fetched DEM or landcover). Used by the enriched
-    layers-present note to label results and by index seeding from persisted
-    ``loaded_layers``.
+    """Classify a loaded layer by id and name into a scenario RESULT family, or
+    ``None`` for an input or context layer such as a fetched DEM.
     """
     hay = " ".join(str(x).lower() for x in (layer_id or "", name or "") if x)
     if not hay:
@@ -184,16 +130,11 @@ def fetched_kind_for_tool(tool_name: str) -> str | None:
 
 
 def fetched_layer_kind(layer_id: str | None, name: str | None = None) -> str | None:
-    """Classify a loaded FETCHED / context layer (by id / name) into a kind.
-
-    Returns the ``kind`` token (e.g. ``"buildings"``, ``"landcover"``, ``"dem"``) when
-    the layer looks like the OUTPUT of a fetch_* tool, else ``None``. A layer that
-    classifies as a simulation RESULT (``layer_id_scenario_type``) is deliberately
-    NOT a fetched kind — results route through the scenario-reuse path. Used by the
-    enriched layers-present note to label a reusable fetched layer (so a fit /
-    resize / re-show follow-up reuses it rather than re-fetching).
+    """Classify a loaded FETCHED layer by id and name into a kind token, else
+    ``None``; a layer that classifies as a simulation RESULT is deliberately not
+    a fetched kind.
     """
-    # A simulation RESULT is not a fetched layer — keep the two taxonomies
+    # A simulation RESULT is not a fetched layer - keep the two taxonomies
     # disjoint so the note never double-labels.
     if layer_id_scenario_type(layer_id, name) is not None:
         return None
@@ -258,13 +199,9 @@ def bbox_encloses(
     inner: Any,
     quant: float = _BBOX_QUANT_DEG,
 ) -> bool:
-    """True iff ``outer`` covers ``inner`` (within quantization tolerance).
-
-    Used by fetched-layer reuse: a requested AOI that is the SAME as, or CONTAINED
-    BY, an already-loaded layer's extent is answered by that existing layer — a
-    fit / resize to a tighter (or identical) box never needs a re-fetch. The
-    tolerance lets a near-equal box (geocoder jitter) still count as enclosed. A
-    request that pokes OUTSIDE the loaded extent is genuinely new data → no reuse.
+    """True iff ``outer`` covers ``inner`` within the quantization tolerance; a
+    request contained by an already-loaded extent is answered by that layer,
+    while one that pokes outside it is genuinely new data.
     """
     o = _coerce_bbox(outer)
     i = _coerce_bbox(inner)
@@ -281,7 +218,7 @@ def bbox_encloses(
 
 
 def _coerce_latlon(value: Any) -> tuple[float, float] | None:
-    """Coerce a 2-element (lat, lon) point, else None. No string parsing here —
+    """Coerce a 2-element (lat, lon) point, else None. No string parsing here -
     the server's ``coerce_latlon`` runs earlier; this guard only sees the
     already-normalized shape (and tolerates the raw 2-list)."""
     if not isinstance(value, (list, tuple)) or len(value) != 2:
@@ -307,26 +244,14 @@ def _round_num(value: Any, ndigits: int = 4) -> float | None:
 
 @dataclass(frozen=True)
 class ScenarioSignature:
-    """Normalized identity of an expensive-scenario request.
-
-    Two signatures with equal ``scenario_type`` + equal ``key_params`` AND an
-    equivalent AOI (matching ``bbox_q`` OR — when no bbox is resolvable — matching
-    ``location_norm``) describe runs that produce the SAME layer.
-
-    Fields:
-        scenario_type: produced-layer family (``flood-depth`` / ``plume``).
-        tool_name: the originating tool (for telemetry; NOT part of equality
-            matching — two flood tools producing flood-depth are interchangeable).
-        bbox: the resolved AOI bbox (lon-first 4-tuple) when one is present in
-            params, else None.
-        bbox_q: the quantized bbox key (the AOI-equality anchor when present).
-        location_norm: normalized ``location_query`` (the AOI-equality fallback
-            when no bbox is resolvable without geocoding).
-        key_params: the frozenset of (name, value) pairs that change the physics
-            answer (return period, duration, contaminant, release rate, ...).
+    """Normalized identity of an expensive-scenario request: equal
+    ``scenario_type`` and ``key_params`` over an equivalent AOI describe two runs
+    that would produce the SAME layer.
     """
 
     scenario_type: str
+    # Telemetry only: two tools that produce the same family are
+    # interchangeable, so this is not part of signature equality.
     tool_name: str
     bbox: tuple[float, float, float, float] | None
     bbox_q: tuple[int, int, int, int] | None
@@ -342,12 +267,11 @@ def _flood_signature(tool_name: str, params: dict) -> ScenarioSignature | None:
     bbox = _coerce_bbox(params.get("bbox"))
     location_norm = _normalize_location_query(params.get("location_query"))
     if bbox is None and location_norm is None:
-        # No AOI we can key on without geocoding → cannot match safely → RUN.
+        # No AOI we can key on without geocoding -> cannot match safely -> RUN.
         return None
-    # Key physics params (accept both _yr/_years and _hr/_hours aliases — by the
-    # time the guard runs, normalize_args has canonicalized to _yr/_hr, but be
-    # defensive). A forcing_raster_uri (observed-precip path) makes the run a
-    # DIFFERENT physics answer, so it participates in the key.
+    # Key physics params, accepting the _yr/_years and _hr/_hours aliases. A
+    # forcing_raster_uri makes the run a DIFFERENT physics answer, so it is
+    # part of the key.
     rp = _round_num(
         params.get("return_period_yr", params.get("return_period_years")), 0
     )
@@ -376,11 +300,11 @@ def _plume_signature(tool_name: str, params: dict) -> ScenarioSignature | None:
     rate = _round_num(params.get("release_rate_kg_s"), 6)
     duration = _round_num(params.get("duration_days"), 4)
     # A plume run is identified by its spill point + contaminant + rate +
-    # duration. Without a usable spill point we cannot match safely → RUN.
+    # duration. Without a usable spill point we cannot match safely -> RUN.
     if loc is None:
         return None
     # Treat the spill POINT as the AOI anchor (quantize a degenerate bbox around
-    # it so near-equal points collide). Plume point is (lat, lon) → build a
+    # it so near-equal points collide). Plume point is (lat, lon) -> build a
     # lon-first degenerate bbox for the shared quantizer.
     lat, lon = loc
     point_bbox = (lon, lat, lon, lat)
@@ -402,11 +326,9 @@ def _plume_signature(tool_name: str, params: dict) -> ScenarioSignature | None:
 
 
 def scenario_signature(tool_name: str, params: dict) -> ScenarioSignature | None:
-    """Build a normalized reuse signature for an expensive-scenario tool call.
-
-    Returns ``None`` when the tool is not a guarded expensive scenario OR when
-    the request lacks the identity we need to match SAFELY without geocoding /
-    side effects (CONSERVATIVE: no signature → never short-circuit → RUN).
+    """Build a normalized reuse signature for an expensive-scenario tool call, or
+    ``None`` when the tool is unguarded or the request lacks identity we can match
+    without geocoding - no signature means no short-circuit.
     """
     scenario_type = scenario_type_for_tool(tool_name)
     if scenario_type is None:
@@ -440,11 +362,8 @@ class ScenarioResult:
 
 @dataclass
 class ScenarioResultIndex:
-    """Per-session record of expensive-scenario results already produced.
-
-    Keyed for matching by ``scenario_type`` + AOI + key params. Populated when an
-    expensive composer returns a layer (``record_result``) and seeded from a
-    Case's persisted ``loaded_layers`` on reopen (``seed_from_loaded_layers``).
+    """Per-session record of expensive-scenario results already produced, keyed
+    for matching by ``scenario_type``, AOI and key params.
     """
 
     session_id: str
@@ -494,14 +413,8 @@ class ScenarioResultIndex:
 
     def seed_from_loaded_layers(self, loaded_layers: Any) -> None:
         """Seed the index from a Case's persisted ``loaded_layers`` on reopen.
-
-        Each loaded layer that looks like an expensive RESULT (its layer_id /
-        name classifies into a scenario family) is recorded WITHOUT a signature —
-        the persisted summary has no bbox / key params, so it can only support
-        the ``location_norm``-absent, same-family AOI reuse path when the next
-        request is bbox-keyed AND the result also carries a bbox. We still record
-        it so the enriched note can label it and so an identical bbox-keyed
-        re-run in a reopened single-result Case short-circuits.
+        A persisted summary carries no signature, so such an entry matches only
+        a request that itself carries no key params.
         """
         known = {r.layer_id for r in self._results}
         for layer in loaded_layers or []:
@@ -511,10 +424,9 @@ class ScenarioResultIndex:
             layer_id = d.get("layer_id")
             if not isinstance(layer_id, str) or not layer_id:
                 continue
-            # CRITICAL: never clobber an in-session record (which carries the
-            # full signature — bbox + key params) with a signature-LESS persisted
-            # seed. The in-session record is strictly richer; a re-seed would
-            # downgrade it and defeat the short-circuit on the very next call.
+            # Never clobber an in-session record, which carries the full
+            # signature, with a signature-LESS persisted seed: the seed is
+            # strictly poorer and would defeat the next short-circuit.
             if layer_id in known:
                 continue
             name = d.get("name") if isinstance(d.get("name"), str) else None
@@ -539,20 +451,9 @@ class ScenarioResultIndex:
         *,
         case_bbox: Any = None,
     ) -> ScenarioResult | None:
-        """Return an existing result that CLEARLY answers ``request``, else None.
-
-        CONSERVATIVE matching ladder (most-recent first), short-circuit only on a
-        clear match:
-
-          1. Same ``scenario_type`` AND same ``key_params`` AND equivalent AOI:
-             - bbox-keyed request: result's bbox (or its signature's bbox)
-               quantizes equal to the request bbox, OR (when the result has no
-               recorded bbox) the request bbox matches the Case AOI bbox AND this
-               is the only result of its family;
-             - location-keyed request (no bbox): result's signature
-               ``location_norm`` matches.
-
-        Anything ambiguous → ``None`` → caller RUNS.
+        """Return an existing result that CLEARLY answers ``request``, newest
+        first, else ``None``; anything ambiguous returns ``None`` and the caller
+        runs the scenario.
         """
         if request is None or not request.aoi_resolvable():
             return None
@@ -575,7 +476,7 @@ class ScenarioResultIndex:
         request: ScenarioSignature, result: ScenarioResult
     ) -> bool:
         """Key physics params must agree. A result with no recorded signature
-        (seeded from persistence) has UNKNOWN params — only matchable when the
+        (seeded from persistence) has UNKNOWN params - only matchable when the
         request itself carries no key params (a bare "model the flood here")."""
         if result.signature is None:
             return len(request.key_params) == 0
@@ -590,11 +491,9 @@ class ScenarioResultIndex:
     ) -> bool:
         # bbox-keyed request.
         if request.bbox is not None:
-            # Prefer the result's SIGNATURE bbox (the request-equivalent AOI
-            # anchor — for a plume this is the degenerate spill-POINT bbox, NOT
-            # the plume FOOTPRINT recorded in ``result.bbox``). Fall back to the
-            # recorded footprint bbox only when no signature is available
-            # (persistence-seeded results).
+            # Prefer the SIGNATURE bbox: for a plume that is the degenerate
+            # spill-POINT bbox, never the plume FOOTPRINT in ``result.bbox``.
+            # The footprint is the fallback for persistence-seeded results.
             result_bbox = (
                 result.signature.bbox if result.signature else None
             ) or result.bbox
@@ -619,7 +518,7 @@ def _layer_to_dict(layer: Any) -> dict | None:
     if hasattr(layer, "model_dump") and callable(layer.model_dump):
         try:
             return layer.model_dump(mode="json")
-        except Exception:  # noqa: BLE001 — non-pydantic duck
+        except Exception:  # noqa: BLE001 - non-pydantic duck
             return None
     return None
 
@@ -631,12 +530,9 @@ def _layer_to_dict(layer: Any) -> dict | None:
 
 @dataclass(frozen=True)
 class FetchedLayerMatch:
-    """An already-loaded FETCHED layer that answers a repeat fetch request.
-
-    Carries the reusable identity (``layer_id`` IS the handle per the layer-handle
-    indirection contract) so a fit / zoom / resize / re-show follow-up reuses it
-    (e.g. ``compute_layer_bounds(layer_uri=layer_id)``) instead of re-fetching and
-    rendering a duplicate.
+    """An already-loaded FETCHED layer that answers a repeat fetch request;
+    ``layer_id`` IS the handle, so a fit or resize follow-up passes it straight
+    to a bounds call instead of re-fetching.
     """
 
     kind: str
@@ -654,24 +550,9 @@ def find_reusable_fetched_layer(
     *,
     case_bbox: Any = None,
 ) -> FetchedLayerMatch | None:
-    """Return an already-loaded fetched layer that ANSWERS a fetch request.
-
-    CONSERVATIVE, pure, side-effect-free — safe on the dispatch hot path and the
-    note builder. Returns a match only on a CLEAR answer:
-
-      * the tool is a recognized fetcher (``fetched_kind_for_tool``), AND
-      * a loaded layer of the SAME kind is present, AND
-      * that layer's extent ENCLOSES the requested AOI (same box, or a fit /
-        resize to a tighter box) — the existing data already covers the request.
-
-    The requested AOI is the ``bbox`` param when present, else the Case AOI bbox
-    (a bare "fit to the protected areas" follow-up carries no bbox of its own — it
-    targets the layer already on the map). When neither is resolvable the AOI
-    cannot be compared without geocoding → no match → caller re-fetches (a false
-    re-fetch only costs a cache hit; a false reuse would hand back stale data).
-
-    A request whose bbox pokes OUTSIDE the loaded extent (a genuinely LARGER /
-    different area) is NOT answered by the existing layer → no match → re-fetch.
+    """Return an already-loaded fetched layer that ANSWERS a fetch request, else
+    ``None``: the tool must be a recognized fetcher and a loaded layer of the same
+    kind must ENCLOSE the requested AOI, or the caller re-fetches.
     """
     kind = fetched_kind_for_tool(tool_name)
     if kind is None:
@@ -682,7 +563,7 @@ def find_reusable_fetched_layer(
     if req_bbox is None:
         req_bbox = _coerce_bbox(case_bbox)
     if req_bbox is None:
-        # No AOI we can compare without geocoding → conservative: re-fetch.
+        # No AOI we can compare without geocoding -> conservative: re-fetch.
         return None
     # Newest-first so a refreshed layer wins on a tie.
     for layer in reversed(list(loaded_layers or [])):
@@ -696,10 +577,9 @@ def find_reusable_fetched_layer(
         if fetched_layer_kind(layer_id, name) != kind:
             continue
         layer_bbox = _coerce_bbox(d.get("bbox"))
-        # When the loaded layer carries an extent, the request must sit inside it
-        # (same box or a tighter fit). When it has NO recorded bbox, fall back to
-        # the Case AOI: a same-kind layer in this Case answers a fit/resize to the
-        # Case AOI (the layer was fetched at the Case extent).
+        # A loaded layer with an extent must ENCLOSE the request (same box or a
+        # tighter fit). With no recorded bbox, a same-kind layer answers only a
+        # request at the Case AOI, the extent it was fetched at.
         if layer_bbox is not None:
             if not bbox_encloses(layer_bbox, req_bbox):
                 continue
@@ -720,8 +600,8 @@ def find_reusable_fetched_layer(
 
 
 # --------------------------------------------------------------------------- #
-# Module-level per-session index store (mirrors uri_registry's store pattern —
-# survives reconnects; shared across a session's sibling WebSocket connections)
+# Module-level per-session index store: survives a reconnect and is shared
+# across a session's sibling WebSocket connections.
 # --------------------------------------------------------------------------- #
 
 _INDEX_STORE_CAP = 256
@@ -740,5 +620,5 @@ def get_scenario_index(session_id: str) -> ScenarioResultIndex:
 
 
 def reset_scenario_indexes_for_tests() -> None:
-    """Test hook — wipe the module-level store."""
+    """Test hook - wipe the module-level store."""
     _SESSION_SCENARIO_INDEXES.clear()
