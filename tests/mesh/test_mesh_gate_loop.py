@@ -242,7 +242,7 @@ def test_mesh_op_surfaces_in_top8():
     from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 
     dd._get_index()
-    corpus_path = (Path(t.__file__).resolve().parents[1] / "workflows" / "mesh"
+    corpus_path = (Path(t.__file__).resolve().parents[2] / "workflows" / "mesh"
                    / "corpus.yaml")
     queries = (yaml.safe_load(corpus_path.read_text()) or {})["mesh_op"]
     assert queries
@@ -478,7 +478,7 @@ def test_no_mesher_has_card_code_of_its_own():
 
     from trid3nt_server.workflows.mesh.meshers import registered_meshers
 
-    repo = pathlib.Path(__file__).resolve().parents[1]
+    repo = pathlib.Path(__file__).resolve().parents[2]
     offenders = {
         f"{path.name}: {name}"
         for path in (pathlib.Path(mesh_gate.__file__), repo / "plugin/ui/gate.py")
@@ -566,7 +566,7 @@ async def test_the_shipped_client_parses_the_card_and_its_reply_routes_home(
     import sys
     from pathlib import Path
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from plugin.ui import gate as client_gate
 
     fake = _FakeEmitter()

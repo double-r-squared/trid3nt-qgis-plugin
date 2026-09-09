@@ -109,7 +109,7 @@ def test_build_mesh_surfaces_in_top8():
     from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 
     dd._get_index()
-    corpus_path = (Path(t.__file__).resolve().parents[1] / "workflows" / "mesh"
+    corpus_path = (Path(t.__file__).resolve().parents[2] / "workflows" / "mesh"
                    / "corpus.yaml")
     queries = (yaml.safe_load(corpus_path.read_text()) or {})["build_mesh"]
     assert queries
