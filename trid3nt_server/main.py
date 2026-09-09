@@ -99,9 +99,8 @@ def _import_tools_registry() -> int:
     from .tools.processing.extract_landcover_class import extract_landcover_class  # noqa: F401
     # register compute_building_density (MS Global ML Building Footprints density raster).
     from .tools.processing.compute_building_density import compute_building_density  # noqa: F401
-    # fetch_roads_osm + fetch_overpass_pois: spec-driven (source.yaml +
-    # overpass hooks), auto-registered by the router spec tree walk; no eager
-    # twin import here.
+    # fetch_roads_osm + fetch_overpass_pois: spec-driven (source.yaml + their OSM
+    # delegates), auto-registered by the router spec tree walk; no eager import.
     # register show_nexrad_radar (display tool: composes an Iowa Mesonet NEXRAD WMS URL).
     from .tools.display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: F401
     # fetch_goes_satellite: spec-driven, auto-registered by

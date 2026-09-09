@@ -314,10 +314,9 @@ def clear_registry_for_tests() -> None:
 # fetch_nws_river_forecast: data-router fold chained-resolution mode -- twin
 # DELETED, now spec-driven (source.yaml + nws_river_forecast hooks: gauges-by-bbox / single
 # detail + bounded per-gauge threshold/stageflow enrichment), registered below.
-# fetch_river_geometry: Overpass-family river fold -- twin DELETED, now
-# spec-driven (source.yaml + overpass_river build_request/parse_response hooks over the
-# http_json endpoint_fallback mirror chain); the vestigial NHDPlus HR HUC4 leg was
-# dropped (NATE-decided). Auto-registered by _register_router_specs() below.
+# fetch_river_geometry: spec-driven (source.yaml + a river_geometry delegate that
+# reads OSM through OSMnx and clips the ways to the AOI); the vestigial NHDPlus HR
+# HUC4 leg was dropped (NATE-decided). Auto-registered by _register_router_specs().
 # fetch_usgs_nwis_gauges: CDS-era flood-seam fold -- twin DELETED, now
 # spec-driven (source.yaml + parse_fallback IV->Site + usgs_nwis hooks), auto-registered.
 # fetch_usgs_water_quality: data-router fold phase-2 wave-3 -- twin
@@ -404,9 +403,10 @@ from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_p
 # fetch_administrative_boundaries: spec-driven (source.yaml +
 # admin_boundaries.build_request FIPS planner + the ogr-vector executor reading the
 # shapefile inside the remote ZIP), registered by _register_router_specs() below.
-# fetch_buildings: sidecar-write fold (trigger wave) -- twin DELETED, now
-# spec-driven (source.yaml + buildings.build_request/parse hooks + the overpass_sidecar
-# executor's constrained tags.json side write), promoted by _register_router_specs().
+# fetch_buildings: spec-driven (source.yaml + a buildings.features hook that reads
+# OSM through OSMnx and returns the slim layer and the tag bag off one frame + the
+# overpass_sidecar executor's constrained tags.json side write), promoted by
+# _register_router_specs().
 # fetch_field_boundaries: FTW/fiboa GeoParquet-pushdown fold -- twin DELETED,
 # now spec-driven (source.yaml + field_boundaries.select pre_resolve + field_boundaries.read
 # VECTOR library_delegate hook; the GeoParquet 1.1 row-group bbox pushdown is owned by
@@ -417,10 +417,9 @@ from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_p
 # per-tile ZIP extract mode), registered by _register_router_specs() below.
 # fetch_hrsl_population: data-router fold phase-2 wave-9 -- twin
 # DELETED, now spec-driven (source.yaml + multi_url VRT fan-out), auto-registered.
-# fetch_overpass_pois + fetch_roads_osm: Overpass-family fold -- twins
-# DELETED, now spec-driven (source.yaml + overpass build_request/parse_response
-# hooks over the http_json endpoint_fallback mirror chain), auto-registered by
-# _register_router_specs() below.
+# fetch_overpass_pois + fetch_roads_osm: spec-driven (source.yaml + a per-row
+# delegate that reads OSM through OSMnx and projects it - a point per element, or a
+# way clipped to the AOI), auto-registered by _register_router_specs() below.
 # fetch_population: WorldPop library_delegate raster fold -- twin DELETED, now
 # spec-driven (source.yaml + worldpop.validate/read hooks); the half-built ACS leg
 # dropped, auto-registered below; no eager twin import.
