@@ -1,0 +1,9 @@
+fetch_opera_dswx:
+- observed flood extent from satellite for this area
+- where was the water actually standing after the storm
+- OPERA DSWx surface water extent for a bbox
+- radar water extent through the clouds during the flood
+- satellite observed inundation to compare against my model
+- did this neighborhood actually flood last week
+- Sentinel-1 SAR derived open water map for a basin
+- most recent surface water observation over this river reach

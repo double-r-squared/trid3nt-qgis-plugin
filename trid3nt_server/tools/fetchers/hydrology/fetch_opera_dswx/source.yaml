@@ -1,0 +1,140 @@
+# Router source spec -- OPERA Dynamic Surface Water Extent (DSWx) over the
+# NASA Earthdata STAC catalog, read through the stac_raster executor.
+#
+# The V1 products live in an EDL-gated bucket: every asset read redirects to
+# urs.earthdata.nasa.gov, and anonymous S3 is refused. The spec therefore
+# REFUSES BY NAME until ~/.netrc carries a machine entry for that host, which is
+# an interactive account step and never an agent's.
+schema_version: v1
+
+name: fetch_opera_dswx
+source_class: opera_dswx
+error_prefix: OPERA_DSWX
+input_error_suffix: BBOX_INVALID
+empty_error_suffix: NO_OBSERVATION
+shape: raster-cog
+supports_global_query: false
+
+endpoints:
+  data:
+    url: "https://cmr.earthdata.nasa.gov/stac/POCLOUD"
+# A water-classification raster carries no vertical reference.
+vertical_datum: n/a (surface-water classification, not an elevation)
+auth:
+  mode: none
+
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp, error_suffix: BBOX_INVALID}
+  sensor:
+    type: enum
+    default: hls
+    lowercase: true
+    error_suffix: SENSOR_INVALID
+    values: [hls, s1]
+    aliases:
+      harmonized_landsat_sentinel: hls
+      optical: hls
+      landsat: hls
+      sentinel-1: s1
+      sentinel1: s1
+      sar: s1
+      radar: s1
+  start_date: {type: iso_date, schema_optional: true}
+  end_date: {type: iso_date, schema_optional: true}
+gates:
+  max_bbox_deg2: 2.0
+
+ingest:
+  access: stac
+  render: mosaic
+  native_cell_m: 30.0
+  palette: passthrough
+  mosaic:
+    # DSWx WTR class 255 is the product's own fill.
+    nodata: 255
+  stac:
+    root: "https://cmr.earthdata.nasa.gov/stac/POCLOUD"
+    sign: netrc:urs.earthdata.nasa.gov
+    resampling: nearest
+    datetime_window: true
+    default_window_days: 30
+    param_error_suffix: SENSOR_INVALID
+    collection_by_param:
+      param: sensor
+      map:
+        hls: OPERA_L3_DSWX-HLS_V1_1.0
+        s1: OPERA_L3_DSWX-S1_V1_1.0
+    product_aliases:
+      hls: hls
+      s1: s1
+    # The water-classification band. Its asset key is numbered per product
+    # (``1_B01_WTR`` on DSWx-HLS, ``0_B01_WTR`` on DSWx-S1), so the asset is
+    # selected by the suffix the two share rather than by a hard-coded key.
+    asset_suffix: _B01_WTR
+    select:
+      mode: latest
+
+normalize:
+  crs: "EPSG:4326"
+  orientation: north_up
+  units: opera_dswx_wtr_class_code
+  quantity: surface_water_extent
+
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  emit_bbox: true
+  style:
+    kind: classed
+    label: Surface water extent
+
+cache:
+  ttl_class: static-30d
+payload_estimate:
+  model: bbox_area
+  mb_per_sq_deg: 3.0
+  floor_mb: 0.2
+
+caveats:
+  - "OPERA DSWx V1 assets are behind Earthdata Login: without a ~/.netrc machine entry for urs.earthdata.nasa.gov this refuses by name (OPERA_DSWX_UPSTREAM_ERROR) rather than returning a fabricated layer; the cookie jar the EDL redirect chain needs is configured by the executor's read path"
+  - "the returned raster is the SCENE's classification, stamped with that scene's acquisition datetime -- an observation at one instant, not a period composite; a window with no overpass -> OPERA_DSWX_NO_OBSERVATION"
+  - "WTR class codes: 0 not-water, 1 open water, 2 partial surface water, 252 snow/ice, 253 cloud/cloud-shadow, 255 fill; the source's own palette is baked into band 1"
+  - "published at 30 m on the MGRS/UTM grid (HLS optical and Sentinel-1 SAR alike); the AOI window is read at the source cell and never sharpened -- there is no resolution lever on this source"
+  - "AOI-scoped (<= 2 deg^2); DSWx-S1 has sparser coverage than DSWx-HLS over most of CONUS, so a short window over an inland basin often has S1 scenes only near a recent acquisition"
+
+docstring: |-
+  Fetch an OPERA Dynamic Surface Water Extent (DSWx) observation for a bbox.
+
+  **What it does:** Searches the NASA Earthdata STAC catalog for the most recent
+  OPERA DSWx scene covering ``bbox`` in the requested window, reads that scene's
+  water-classification band (``B01_WTR``) at 30 m, and returns a single-band
+  uint8 Cloud-Optimized GeoTIFF with the product's own class palette baked in.
+  ``sensor="hls"`` is the optical product (Harmonized Landsat/Sentinel-2, cloud
+  limited); ``sensor="s1"`` is the Sentinel-1 SAR product, which sees through
+  cloud and is the one that answers "where was the water DURING the storm".
+
+  This is an OBSERVED water extent, not a model result: it is the satellite's
+  own classification of one overpass, so it is the natural comparison target for
+  a simulated flood extent and the natural input to a "did this area actually
+  flood" question.
+
+  **When to use:**
+  - Observed inundation extent after a flood event (SAR for the cloudy days).
+  - A validation layer for a modeled flood extent over the same AOI.
+  - Seasonal / event water extent where a long-term statistic (JRC surface
+    water) is too coarse in time.
+
+  **Requires an Earthdata Login.** The V1 products are served from an
+  EDL-gated bucket. Without a ``~/.netrc`` entry for
+  ``urs.earthdata.nasa.gov`` this returns a typed refusal naming the file and
+  the host -- it never falls back to a different dataset.
+
+  **Params:**
+  - ``bbox`` (list[float], required): ``[min_lon, min_lat, max_lon, max_lat]``,
+    WGS84, at most 2 deg^2.
+  - ``sensor`` (str): ``"hls"`` (default, optical) or ``"s1"`` (SAR).
+  - ``start_date`` / ``end_date`` (str, optional): ``"YYYY-MM-DD"`` bounds. Both
+    omitted -> the trailing 30 days.
+
+  **Returns:** a ``LayerURI`` for a single-band uint8 COG of WTR class codes.
