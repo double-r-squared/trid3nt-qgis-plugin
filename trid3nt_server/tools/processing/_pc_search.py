@@ -1,13 +1,7 @@
 """Shared Planetary Computer STAC access for the processing tools.
 
-The three PC readers (NDVI, water-body digitize, change detection) all ask the
-same question of the catalog: the least-cloudy Sentinel-2 scene intersecting a
-bbox in a window. Signing is the SDK's (``planetary_computer.sign_inplace``
-applied at the catalog client), so an item's asset hrefs arrive already signed
-and readable by GDAL.
-
-Every call here is a plain sync function: the agent loop off-loads the whole
-tool body via ``asyncio.to_thread``, so these must never touch the loop.
+Signing is applied at the catalog client, so an item's asset hrefs arrive
+readable by GDAL. Every call here is plain sync and must never touch the loop.
 """
 
 from __future__ import annotations
@@ -67,11 +61,8 @@ def search_least_cloudy_item(
     sort_by_cloud: bool = False,
 ) -> Any:
     """The single best-matching item, with its asset hrefs already signed.
-
-    ``sort_by_cloud`` returns the LEAST-cloudy match; otherwise the first
-    (most-recent / best-overlap) one. Zero matches raise
-    :class:`PCStacNoItemsError`; a network failure raises
-    :class:`PCStacUpstreamError`.
+    ``sort_by_cloud`` picks the least-cloudy match, else the first. Zero matches
+    raise :class:`PCStacNoItemsError`, a network failure :class:`PCStacUpstreamError`.
     """
     import planetary_computer
     from pystac_client import Client

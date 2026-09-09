@@ -1,9 +1,7 @@
-"""Shared core of the pysheds hydrology primitives (split from the original
-two-tool ``hydrology_primitives`` module): the typed error hierarchy, the
-pysheds import seam, DEM staging/conditioning, bbox validation and the
-GeoJSON writer shared by ``delineate_watershed`` + ``extract_stream_network``.
+"""Shared core of the pysheds hydrology primitives.
 
-This module registers nothing; the two tool modules are siblings.
+The typed error hierarchy, the pysheds import seam, DEM staging and
+conditioning, bbox validation and the shared GeoJSON writer.
 """
 
 from __future__ import annotations
@@ -59,10 +57,8 @@ class HydrologyAoiTooLargeError(HydrologyInputError):
     retryable = False
 
 class HydrologyDependencyError(HydrologyPrimitivesError):
-    """pysheds (or rasterio/shapely) is unavailable -- honest, typed.
-
-    pysheds ships transitively with the base ``pfdf`` dependency; this error
-    means the environment is broken, not that an optional extra is missing.
+    """pysheds (or rasterio/shapely) is unavailable: pysheds ships with the base
+    ``pfdf`` dependency, so this is a broken environment, not a missing extra.
     """
 
     error_code = "HYDROLOGY_DEPENDENCY_MISSING"
@@ -175,8 +171,8 @@ def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
 
 #: What the delineation DEM IS FOR, carried onto the emitted layer. D8 routing
 #: needs a natively GEOGRAPHIC grid, so this raster is Copernicus GLO-30 by
-#: METHOD rather than by preference - and a run that also fetches a 3DEP bed puts
-#: two DEMs on the canvas. Without this the user sees two and is told nothing.
+#: METHOD rather than by preference; a run that also fetches a 3DEP bed then puts
+#: two DEMs on the canvas.
 _DEM_PURPOSE = "D8 flow routing (geographic grid); not the model bed"
 
 
@@ -220,10 +216,8 @@ def _open_dem(dem_path: str) -> tuple[Any, Any]:
 
 
 def _conditioned(grid: Any, dem: Any) -> Any:
-    """The pit -> depression -> flat chain: ONE conditioning, spelled once.
-
-    Every consumer of a conditioned surface reads it from here, so a delineation
-    and anything sampled beside it cannot describe two different grounds.
+    """The pit -> depression -> flat chain: ONE conditioning, so no two consumers
+    of a conditioned surface can describe different grounds.
     """
     return grid.resolve_flats(grid.fill_depressions(grid.fill_pits(dem)))
 
@@ -246,17 +240,15 @@ def _condition_dem(dem_path: str) -> tuple[Any, Any, Any]:
 
 def write_conditioned_dem(dem_path: str, out_path: str) -> str:
     """The delineator's own conditioning chain, written back out as a raster.
-
-    A mesh bed painted from the RAW DEM ponds in exactly the pits the delineation
-    already filled to route through: the deepest water in the run is then a
-    single node inside an unfilled sink, and the published depth map is scaled by
-    a terrain artifact rather than by the storm. One chain, one ground.
-
     The profile is the source raster's, so nothing but the elevations moves.
     """
     import rasterio
 
     grid, dem = _open_dem(dem_path)
+    # A mesh bed painted from the RAW DEM ponds in exactly the pits the
+    # delineation already fills to route through: the deepest water in the run is
+    # then a single node inside an unfilled sink, and the published depth map is
+    # scaled by a terrain artifact rather than by the storm.
     try:
         inflated = np.asarray(_conditioned(grid, dem), dtype="float32")
     except Exception as exc:  # noqa: BLE001
@@ -279,24 +271,8 @@ def snap_and_delineate_index_space(
     *,
     snap_search_cells: int = _OUTLET_SNAP_SEARCH_CELLS,
 ) -> tuple[Any, Any, tuple[float, float], int]:
-    """Alignment-invariant catchment upstream of ``(lon, lat)`` -> (mask, polygon, snapped, cells).
-
-    The single robust delineation shared by ``delineate_watershed`` and the
-    TELEMAC rain-on-grid mesh acquisition. Two moves, in order:
-
-    1. Snap the outlet to the MAX-accumulation cell in a +-``snap_search_cells``
-       index window, which guarantees the outlet sits on the main channel.
-    2. Trace the catchment in INDEX space (``xytype="index"``), which is
-       alignment-invariant. ``xytype="coordinate"`` is NOT: its coordinate->cell
-       round-trip can land on a neighbour cell and collapse the basin to a
-       1-cell sliver on certain grid alignments (verified: 33.7-34.0k cells in
-       index space across box quantizations vs 1-14 for the coordinate path).
-
-    Returns ``(mask, polygon, (x_snap, y_snap), cell_count)``. ``polygon`` is in
-    the grid CRS (EPSG:4326 for the geographic Copernicus/3DEP-lonlat DEMs these
-    tools stage) or ``None`` when the catchment is empty. Raises
-    ``HydrologyInputError`` when the outlet window falls outside the grid and
-    ``HydrologyUpstreamError`` when the pysheds trace or polygonization fails.
+    """Alignment-invariant catchment upstream of ``(lon, lat)``: ``(mask, polygon,
+    (x_snap, y_snap), cells)``, ``polygon`` in the grid CRS or None when empty.
     """
     acc_arr = np.asarray(acc)
     affine = grid.affine
@@ -310,11 +286,18 @@ def snap_and_delineate_index_space(
             f"pour point ({lon}, {lat}) falls outside the DEM window; supply a "
             "bbox/pour point inside the analysis AOI."
         )
+    # Snapping the outlet to the max-accumulation cell of the window is what
+    # guarantees it sits on the main channel rather than on a hillslope cell.
     win = acc_arr[rmin:rmax, cmin:cmax]
     di, dj = np.unravel_index(int(np.argmax(win)), win.shape)
     rr, cc = rmin + int(di), cmin + int(dj)
     x_snap, y_snap = affine * (cc + 0.5, rr + 0.5)
 
+    # Tracing in INDEX space is alignment-invariant; xytype="coordinate" is not.
+    # Its coordinate->cell round-trip can land on a neighbour cell and collapse
+    # the basin to a 1-cell sliver on certain grid alignments: 33.7-34.0k cells
+    # in index space across box quantizations against 1-14 for the coordinate
+    # path.
     try:
         catch = grid.catchment(
             x=cc,
@@ -360,8 +343,9 @@ def snap_and_delineate_index_space(
 def _write_geojson(
     fc: dict[str, Any], prefix: str, seed: str, output_dir: str | None
 ) -> str:
-    """Persist a FeatureCollection; return its URI (local for tests, runs
-    bucket live -- same convention as model_debris_flow)."""
+    """Persist a FeatureCollection; return its URI (a local path when
+    ``output_dir`` is given, else an ``s3://`` key in the runs bucket).
+    """
     payload = json.dumps(fc).encode("utf-8")
     filename = f"{prefix}_{seed}.geojson"
     if output_dir is not None:

@@ -1,18 +1,7 @@
-"""Shared GDAL runner for the terrain compute_* tools.
+"""Shared GDAL-CLI runner for the terrain compute_* tools.
 
-Owns the single GDAL-CLI binary resolution (env override -> PATH), the
-PROJ/GDAL data-dir env wiring, the single subprocess invocation (timeout +
-returncode -> typed error), and the shared raster-bytes reader. Only ``gdaldem`` and ``gdal_contour``
-remain subprocess-backed (rasterio has no equivalent).
-
-COG ENCODING IS NOT HERE. Turning a flat GeoTIFF into a tiled
-COG-with-overviews is a PUBLICATION concern - it is what makes a raster
-renderable rather than what makes it correct - so it lives with the rest of
-emission (``trid3nt_server/emission/cog.py``). Keeping it there is what stops
-``emission/publish.py`` reaching backwards into a terrain TOOL to get at it.
-
-Callers supply their own typed-error factory to ``run_gdal`` / ``read_raster_bytes``
-so each tool keeps its own error class + SCREAMING_SNAKE code.
+Callers supply their own typed-error factory, so each tool raises its own
+error class and SCREAMING_SNAKE code.
 """
 
 from __future__ import annotations
@@ -45,11 +34,7 @@ def resolve_gdaldem() -> str | None:
 
 
 def resolve_gdal_contour() -> str | None:
-    """Resolve ``gdal_contour``: env override, else the gdaldem sibling, else PATH.
-
-    ``gdal_contour`` ships next to ``gdaldem``, so a single ``TRID3NT_GDALDEM_BIN``
-    override resolves both; ``TRID3NT_GDAL_CONTOUR_BIN`` overrides it directly.
-    """
+    """Resolve ``gdal_contour``: env override, else the gdaldem sibling, else PATH."""
     global _GDAL_CONTOUR_BIN
     if _GDAL_CONTOUR_BIN is not None:
         return _GDAL_CONTOUR_BIN
@@ -70,17 +55,15 @@ def resolve_gdal_contour() -> str | None:
 
 def gdal_env(gdal_bin: str) -> dict[str, str]:
     """Build the subprocess env, wiring PROJ/GDAL data dirs from the binary prefix.
-
-    A bare gdaldem invocation with ``PROJ_LIB`` unset cannot find ``proj.db``
-    and silently degrades the output CRS to a proj.db-less ``LOCAL_CS`` (QGIS
-    then cannot reproject the layer). Deriving ``<prefix>/share/proj`` +
-    ``<prefix>/share/gdal`` from the resolved binary path restores the projected
-    CRS. Explicit user config wins (``setdefault``).
+    Explicit user config wins over the derived directories.
     """
     env = os.environ.copy()
     prefix = os.path.dirname(os.path.dirname(os.path.abspath(gdal_bin)))
     proj_dir = os.path.join(prefix, "share", "proj")
     gdal_dir = os.path.join(prefix, "share", "gdal")
+    # A gdaldem run with PROJ_LIB unset cannot find proj.db and silently
+    # degrades the output CRS to a proj.db-less LOCAL_CS, which QGIS cannot
+    # reproject. The dirs derived from the binary prefix restore it.
     if os.path.isdir(proj_dir):
         env.setdefault("PROJ_LIB", proj_dir)
         env.setdefault("PROJ_DATA", proj_dir)
@@ -98,9 +81,7 @@ def run_gdal(
     timeout: int = GDAL_TIMEOUT_S,
 ) -> subprocess.CompletedProcess:
     """Run a GDAL CLI subprocess; map missing-binary / timeout / non-zero to typed errors.
-
-    ``on_unavailable`` / ``on_failed`` build the caller's typed error from a
-    message string, so each tool raises its own error class + code.
+    ``on_unavailable`` / ``on_failed`` build the caller's error from a message string.
     """
     try:
         result = subprocess.run(
@@ -125,10 +106,8 @@ def run_gdal(
 
 
 def read_raster_bytes(uri: str, *, on_error: Callable[[str], Exception]) -> bytes:
-    """Read bytes from an ``s3://`` URI (shared boto3 reader) or a local path.
-
-    S3 and local paths only. ``on_error`` builds the caller's typed error for a
-    download / read failure.
+    """Read bytes from an ``s3://`` URI or a local path; nothing else is accepted.
+    ``on_error`` builds the caller's typed error for a download or read failure.
     """
     if uri.startswith("s3://"):
         from trid3nt_server.tools.cache import read_object_bytes_s3
