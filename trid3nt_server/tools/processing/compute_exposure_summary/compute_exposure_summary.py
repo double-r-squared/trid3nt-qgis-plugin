@@ -1,47 +1,8 @@
-"""``compute_exposure_summary`` composer tool -- who/what is inside a hazard footprint.
+"""``compute_exposure_summary`` - who and what is inside a hazard footprint.
 
-Given a hazard raster (flood depth COG, landslide probability, plume
-concentration, ...) this tool derives the hazard FOOTPRINT (cells whose value
-crosses ``threshold``; default: any wet/positive cell) and computes three
-exposure numbers inside it:
-
-    population  -- sum of WorldPop gridded population (people) over footprint
-                   cells, via the SAME ``fetch_population`` machinery the rest
-                   of the surface uses (WorldPop Global_2000_2020, keyless).
-    buildings   -- count of building footprints whose representative point
-                   falls on a footprint cell, via the SAME ``fetch_buildings``
-                   machinery (OSM Overpass primary, MS fallback).
-    area_km2    -- footprint area in km^2 straight off the hazard grid.
-
-Honesty (data-source fallback norm)
-===================================
-
-Exposure degrades PER COMPONENT, never silently and never fabricated:
-
-- If the WorldPop fetch/read fails, ``population`` is ``None`` and
-  ``errors["population"]`` carries the real reason; buildings + area still
-  compute (and vice versa for buildings).
-- ``area_km2`` comes from the hazard raster itself -- if THAT cannot be read
-  the whole call raises a typed error (there is no exposure without a
-  footprint).
-- A footprint with ZERO cells over the threshold raises the typed
-  ``ExposureEmptyFootprintError`` -- "nothing is exposed" is narrated as an
-  explicit no-footprint signal, not a fabricated row of zeros that reads like
-  a computed exposure.
-
-Session side-channel
-====================
-
-The most recent result is recorded in a small module-level store keyed by the
-turn's Case (``pipeline_emitter.current_turn_case``) so ``compose_case_report``
-can fold the exposure numbers into the case situation report without
-re-fetching. The store is in-memory and session-scoped by construction.
-
-``cacheable=False`` (``ttl_class="live-no-cache"``): this is an analysis
-composer over a caller-named artifact; the underlying WorldPop / buildings
-fetches are themselves cached by their own tools.
+Exposure degrades PER COMPONENT - a failed one is None with its reason, never a
+number - and an empty footprint is a typed refusal, not a row of zeros.
 """
-
 from __future__ import annotations
 
 import logging
@@ -89,10 +50,8 @@ class ExposureInputError(ExposureSummaryError):
 
 
 class ExposureEmptyFootprintError(ExposureSummaryError):
-    """No hazard cell crosses the threshold -- an honest empty footprint.
-
-    "Nothing exposed" is a typed signal the agent narrates explicitly; it is
-    never returned as a zeros row that reads like a computed exposure.
+    """No hazard cell crosses the threshold: an honest empty footprint, narrated
+    as nothing exposed rather than returned as a row of zeros.
     """
 
     error_code = "EXPOSURE_EMPTY_FOOTPRINT"
@@ -107,7 +66,7 @@ class ExposureUpstreamError(ExposureSummaryError):
 
 
 # ---------------------------------------------------------------------------
-# Session store (read by compose_case_report).
+# Session store.
 # ---------------------------------------------------------------------------
 
 _GLOBAL_KEY = "__global__"
@@ -132,11 +91,8 @@ def _record_session_exposure(result: dict[str, Any]) -> None:
 
 
 def get_session_exposure(case_id: str | None) -> dict[str, Any] | None:
-    """Return the exposure summary computed this session for ``case_id``.
-
-    Falls back to the global (no-Case-bound) slot; returns ``None`` when no
-    exposure summary has been computed this session. Consumed by
-    ``compose_case_report``.
+    """The exposure summary computed this session for ``case_id``, falling back to
+    the unbound slot; None when nothing has been computed this session.
     """
     if case_id and case_id in _SESSION_EXPOSURE:
         return _SESSION_EXPOSURE[case_id]
@@ -156,18 +112,15 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Fetcher indirections (monkeypatch seams for offline tests).
+# Fetcher indirections.
 # ---------------------------------------------------------------------------
 
 
 def _fetch_population_layer(
     bbox: tuple[float, float, float, float], dataset: str
 ) -> Any:
-    """WorldPop raster ``LayerURI`` for ``bbox`` (the fetch_population seam).
-
-    Resolves via the registry so the WorldPop leg's spec-driven fold
-    is called through its promoted closure -- the same repoint the buildings seam
-    uses. It reads only ``.uri`` as a raster (WorldPop is a single-band COG).
+    """WorldPop raster ``LayerURI`` for ``bbox``, resolved through the registry;
+    only ``.uri`` is read, as a single-band COG.
     """
     from trid3nt_server.tools import TOOL_REGISTRY
 
@@ -219,12 +172,8 @@ def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
 def _footprint_area_km2(
     wet: np.ndarray, transform: Any, crs: Any
 ) -> float:
-    """Footprint area (km^2) off the hazard grid.
-
-    Projected CRS: |det| of the affine cell vectors (meters assumed).
-    Geographic CRS: per-row cell area with a cos(latitude) correction --
-    adequate at AOI scale (the digitize_water_body Web-Mercator-class
-    approximation).
+    """Footprint area in km^2 off the hazard grid: the affine determinant on a
+    projected CRS, per-row geodesic cell area on a geographic one.
     """
     is_geographic = bool(getattr(crs, "is_geographic", False)) if crs else True
     if not is_geographic:
@@ -236,7 +185,7 @@ def _footprint_area_km2(
     dx_deg = abs(transform.a)
     dy_deg = abs(transform.e)
     rows = np.arange(wet.shape[0], dtype=np.float64) + 0.5
-    row_lats = transform.f + rows * transform.e  # row-center latitudes
+    row_lats = transform.f + rows * transform.e
     geod = Geod(ellps="WGS84")
     lon0 = np.full(row_lats.shape, transform.c)
     row_cell_w_m = geod.inv(lon0, row_lats, lon0 + dx_deg, row_lats)[2]
@@ -257,11 +206,8 @@ def _population_in_footprint(
     tmpdir: str,
     notes: list[str],
 ) -> int:
-    """Sum WorldPop people over footprint cells.
-
-    The hazard footprint mask is reprojected (nearest) onto the population
-    grid; population is summed where the mask lands. Raises on any failure --
-    the caller converts to the per-component honest error.
+    """Sum WorldPop people over footprint cells, the mask transferred nearest onto
+    the population grid; any failure raises for the caller to record per-component.
     """
     import rasterio
     from rasterio.warp import Resampling, reproject
@@ -347,11 +293,8 @@ def _buildings_in_footprint(
 
 @register_tool(
     _METADATA,
-    # This is an analysis composer over a caller-named hazard_layer_uri, not
-    # a fetcher: it has no override URI params, but its role (per the
-    # test_open_world_tools_are_fetchers_or_external convention) is the
-    # local exposure computation, not exposing an external-API surface to
-    # the LLM the way fetch_population/fetch_buildings do directly.
+    # An analysis composer over a caller-named hazard raster: the external
+    # surface belongs to fetch_population and fetch_buildings, not to this.
     read_only_hint=True,
     open_world_hint=False,
     destructive_hint=False,
@@ -366,13 +309,10 @@ def compute_exposure_summary(
 ) -> dict[str, Any]:
     """Summarize exposure (population, buildings, area) inside a hazard footprint.
 
-    Use this when: "how many people/buildings are in the flood zone?" right
-    after a flood/surge/plume solve produces a depth/intensity raster, or
-    for situation-report headline numbers (``compose_case_report`` consumes
-    this automatically). Do NOT use for: dollar losses
-    (``compute_flood_depth_damage`` screens those; component-level damage
-    states are not modeled here); generic raster-in-zone
-    stats (the code_exec playground).
+    Use for "how many people or buildings are in the flood zone?" right after
+    a flood, surge or plume solve produces a depth or intensity raster, and for
+    situation-report headline numbers. Not for dollar losses
+    (``compute_flood_depth_damage``) or generic raster-in-zone stats.
 
     Params:
         hazard_layer_uri: hazard raster (band 1 defines the footprint).
@@ -381,17 +321,9 @@ def compute_exposure_summary(
         population_dataset: WorldPop vintage token (default
             ``"worldpop_2020"``).
 
-    Returns:
-        ``{"population", "buildings", "area_km2", "threshold", "bbox",
-        "errors": {per-component honest failure reasons, {} if clean},
-        "notes", "hazard_layer_uri", "computed_at"}``. A failed component
-        is ``None`` with its error recorded -- never fabricated.
-
-    Raises:
-        ExposureInputError: bad uri/threshold.
-        ExposureEmptyFootprintError: no cell crosses the threshold (honest
-            "nothing exposed").
-        ExposureUpstreamError: hazard staging/read failed.
+    Returns population, buildings, area_km2, the threshold, bbox, per-component
+    errors and notes. A failed component is None with its reason, never
+    fabricated; no cell over the threshold is a typed "nothing exposed".
     """
     if not isinstance(hazard_layer_uri, str) or not hazard_layer_uri.strip():
         raise ExposureInputError(
@@ -469,7 +401,6 @@ def compute_exposure_summary(
 
         area_km2 = _footprint_area_km2(wet, transform, crs)
 
-        # Raster bounds in EPSG:4326 drive the population/buildings fetches.
         try:
             if crs is not None and str(crs).upper() != "EPSG:4326":
                 bbox_4326 = tuple(
