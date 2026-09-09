@@ -18,8 +18,8 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ...imagery import _satellite_slider
-from ..errors import router_upstream_error
-from . import RequestPlan, register_hook
+from ..._router.errors import router_upstream_error
+from ..._router.hooks import RequestPlan, register_hook
 
 #: The twin fetched with the shared SLIDER User-Agent; reused verbatim.
 _USER_AGENT = _satellite_slider._USER_AGENT

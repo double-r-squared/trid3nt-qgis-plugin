@@ -37,7 +37,7 @@ import rasterio.transform as _rt
 from trid3nt_contracts.execution import GOESSatelliteLayerURI
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.fetchers._fetch_common import FetchError
-from trid3nt_server.tools.fetchers._router.hooks import goes_satellite as gs
+from trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite import hooks as gs
 from trid3nt_server.tools.fetchers.imagery._goes_common import (
     GOESBboxRequiredError,
     GOESEmptyError,

@@ -33,12 +33,10 @@ from ...imagery._satellite_slider import (
     ts_int_to_datetime,
     ts_int_to_iso,
 )
-from ..errors import router_empty_error, router_input_error, router_upstream_error
-from . import FrameDegraded, FramePlan, frame_windows, register_hook
+from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
+from ..._router.hooks import FrameDegraded, FramePlan, frame_windows, register_hook
 
-logger = logging.getLogger(
-    "trid3nt_server.tools.fetchers._router.hooks.viirs_day_fire"
-)
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "frames_plan",

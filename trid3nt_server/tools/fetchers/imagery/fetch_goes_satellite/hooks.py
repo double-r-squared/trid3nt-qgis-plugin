@@ -52,11 +52,9 @@ from ...imagery._goes_common import (
     GOESInputError,
     GOESUpstreamError,
 )
-from . import register_hook
+from ..._router.hooks import register_hook
 
-logger = logging.getLogger(
-    "trid3nt_server.tools.fetchers._router.hooks.goes_satellite"
-)
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "estimate_payload_mb",

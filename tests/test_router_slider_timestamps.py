@@ -21,7 +21,7 @@ import pytest
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import RouterUpstreamError
 from trid3nt_server.tools.fetchers._router.executors import http_json
-from trid3nt_server.tools.fetchers._router.hooks import slider_timestamps as sth
+from trid3nt_server.tools.fetchers.imagery.fetch_slider_timestamps import hooks as sth
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 SLIDER_SPEC = load_spec_from_path(

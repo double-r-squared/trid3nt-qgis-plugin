@@ -22,7 +22,7 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
 )
 from trid3nt_server.tools.fetchers._router.executors import animation_frames as EX
-from trid3nt_server.tools.fetchers._router.hooks import viirs_day_fire as VF
+from trid3nt_server.tools.fetchers.imagery.fetch_viirs_day_fire import hooks as VF
 from trid3nt_server.tools.fetchers.imagery._satellite_slider import (
     SliderEmptyError,
     ts_int_to_iso,
