@@ -48,10 +48,10 @@ import numpy as np  # noqa: E402
 from matplotlib.animation import PillowWriter  # noqa: E402
 from matplotlib.tri import Triangulation  # noqa: E402
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "contracts"))
-sys.path.insert(0, str(REPO / "scripts" / "sandbox" / "oceanmesh"))
+sys.path.insert(0, str(REPO / "scripts" / "packet"))
 
 import merc_render as MR  # noqa: E402
 

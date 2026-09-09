@@ -479,7 +479,7 @@ package SolveSeam {
 
     part packetAssembler : PacketAssembler {
         doc /*
-        code: scripts/assemble_proof_packet.py
+        code: scripts/packet/assemble_proof_packet.py
         */
         port completionIn : CompletionIn;
     }

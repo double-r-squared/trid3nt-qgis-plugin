@@ -45,9 +45,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "scripts" / "sandbox" / "oceanmesh"))
+sys.path.insert(0, str(REPO / "scripts" / "packet"))
 
 import merc_render as MR  # noqa: E402
 

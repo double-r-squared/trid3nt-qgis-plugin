@@ -15,7 +15,7 @@ home, one registry, one runner:
     venvs/agent/bin/python -m trid3nt_server.testing.canaries <name>
 
 writes the run's evidence JSON and, for a DELIVERING variant, assembles the
-delivery packet from it - ``scripts/assemble_proof_packet.py``, which renders
+delivery packet from it - ``scripts/packet/assemble_proof_packet.py``, which renders
 every panel, chart and animation the checklist demands, verifies them
 mechanically, and writes the ordered ``packet.json`` a reader is handed. Such a
 canary that solves but cannot be delivered exits non-zero, because "did we send
@@ -395,7 +395,7 @@ def assemble_packet(name: str, out_dir: str | None = None,
     A canary that finished is not a canary that can be handed to anybody: the
     panels, the canvas view, the charts, the animation and the evidence JSON are
     the deliverable, and "did we send the GIF" was a remembered question until
-    this. ``scripts/assemble_proof_packet.py`` answers it mechanically and writes
+    this. ``scripts/packet/assemble_proof_packet.py`` answers it mechanically and writes
     ``packet.json`` beside the renders, so every canary close either produces the
     ordered list of what to send or fails loudly saying what is missing.
 
@@ -412,7 +412,7 @@ def assemble_packet(name: str, out_dir: str | None = None,
 
     template, variant = split_variant(name)
     script = (os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__)))) + "/scripts/assemble_proof_packet.py")
+        os.path.abspath(__file__)))) + "/scripts/packet/assemble_proof_packet.py")
     spec = importlib.util.spec_from_file_location("assemble_proof_packet", script)
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("assemble_proof_packet", module)

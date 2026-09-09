@@ -29,7 +29,7 @@ import numpy as np  # noqa: E402
 from trid3nt_server.emission import presets  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPT = REPO / "scripts" / "render_selafin_animation.py"
+SCRIPT = REPO / "scripts" / "packet" / "render_selafin_animation.py"
 
 #: The style row the synthetic field is drawn by - the same row the published
 #: raster of that quantity carries.
@@ -185,7 +185,7 @@ def test_an_empty_field_still_yields_a_usable_scale():
 
 def _packet_module():
     spec = importlib.util.spec_from_file_location(
-        "assemble_proof_packet", REPO / "scripts" / "assemble_proof_packet.py")
+        "assemble_proof_packet", REPO / "scripts" / "packet" / "assemble_proof_packet.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)

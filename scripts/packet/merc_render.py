@@ -1,5 +1,5 @@
-"""Shared ESRI-World-Imagery tile + Web-Mercator primitives for the mesh-proof
-renderers (STANDALONE sandbox).
+"""Shared ESRI-World-Imagery tile + Web-Mercator primitives for the proof
+renderers.
 
 Single source of truth for the basemap math used by every mesh/watershed proof
 render. Each renderer keeps its own matplotlib composition but MUST get its tiles

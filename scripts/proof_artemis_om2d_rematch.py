@@ -11,7 +11,7 @@ One end-to-end run that exercises the whole mesh front against a real harbour:
   2. FEED - the accepted mesh goes into ``artemis_harbor_agitation`` EXPLICITLY,
      through the template's own ``mesh`` slot. Nothing is discovered.
   3. SOLVE + PROVE - the live run writes its evidence to the canonical proof
-     path and ``scripts/assemble_proof_packet.py`` assembles the delivery packet
+     path and ``scripts/packet/assemble_proof_packet.py`` assembles the delivery packet
      from it.
   4. COMPARE - the same question, same forcing, on the worker's own uniform grid,
      so the adaptive answer is read against the one it replaces rather than

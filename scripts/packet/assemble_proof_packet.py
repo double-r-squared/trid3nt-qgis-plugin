@@ -77,7 +77,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from trid3nt_server.testing.proof_animations import (  # noqa: E402
@@ -269,10 +269,10 @@ def read_stamp(path: Path) -> str | None:
 
 
 # --------------------------------------------------------------------------- #
-# The sibling render scripts, imported by path (``scripts/`` is not a package)
+# The sibling render scripts, imported by path (``scripts/packet/`` is not a package)
 # --------------------------------------------------------------------------- #
 def _sibling(name: str):
-    spec = importlib.util.spec_from_file_location(name, REPO / "scripts" / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(name, REPO / "scripts" / "packet" / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault(name, module)
     spec.loader.exec_module(module)
@@ -987,7 +987,7 @@ def assemble(template: str, variant: str, *, run_id: str | None = None,
         "stem": stem, "directory": str(out), "panel_base": base,
         "mode": "check" if check else "render",
         "assembled_at": _dt.datetime.now().isoformat(timespec="seconds"),
-        "assembler": "scripts/assemble_proof_packet.py",
+        "assembler": "scripts/packet/assemble_proof_packet.py",
         "time_stepped": measured,
         "animation_declarations": [_declaration_row(a, len(declared))
                                    for a in declared],

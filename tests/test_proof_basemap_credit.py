@@ -24,7 +24,7 @@ import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
-MODULE = REPO / "scripts" / "sandbox" / "oceanmesh" / "merc_render.py"
+MODULE = REPO / "scripts" / "packet" / "merc_render.py"
 
 
 def _merc_render():

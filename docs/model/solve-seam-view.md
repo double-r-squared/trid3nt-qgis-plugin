@@ -14,7 +14,7 @@ flowchart LR
     launcherArm["LauncherArm<br/>trid3nt_server/workflows/telemac/solving/run_telemac.py"]
     manifestStager["ManifestStager<br/>trid3nt_server/workflows/telemac/authoring/assembler.py"]
     meshAcceptance["MeshAcceptance<br/>trid3nt_server/workflows/mesh/step.py"]
-    packetAssembler["PacketAssembler<br/>scripts/assemble_proof_packet.py"]
+    packetAssembler["PacketAssembler<br/>scripts/packet/assemble_proof_packet.py"]
     resultPostprocess["ResultPostprocess<br/>trid3nt_server/workflows/telemac/products/postprocess_telemac.py"]
     resultReader["ResultReader<br/>trid3nt_server/workflows/telemac/products/result_reader.py"]
     runReader["RunReader<br/>trid3nt_server/workflows/telemac/products/run_reads.py"]

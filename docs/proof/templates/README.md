@@ -36,12 +36,12 @@ handed. It still owes the whole packet. A pin whose renders nobody assembled is 
 pin nobody interrogated, and the numbers that made two of them STOP were only
 visible because the pictures existed.
 
-## THE MECHANISM: `scripts/assemble_proof_packet.py`
+## THE MECHANISM: `scripts/packet/assemble_proof_packet.py`
 
 The per-workflow delivery norm is not a list anybody remembers any more. It is a
 script, and the script refuses:
 
-    venvs/agent/bin/python scripts/assemble_proof_packet.py \
+    venvs/agent/bin/python scripts/packet/assemble_proof_packet.py \
         --template coastal_tidal_surge --variant refined
 
 It renders the whole checklist for one `<template>/<variant>` - every published
@@ -147,7 +147,7 @@ colours for a field that is not that quantity.
 either produces a `packet.json` or exits non-zero.
 
 `trid3nt_server/testing/proof_paths.py` is the ONE place that builds these paths.
-`canaries.evidence_path`, `scripts/render_selafin_animation.py` and the drive
+`canaries.evidence_path`, `scripts/packet/render_selafin_animation.py` and the drive
 scripts all ask it rather than joining their own; `render_all_layers_proof`
 inherits the folder from the evidence JSON it renders from, so panels land beside
 the run that produced them. An unknown variant REFUSES rather than quietly
