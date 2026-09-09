@@ -315,8 +315,8 @@ def clear_registry_for_tests() -> None:
 # DELETED, now spec-driven (source.yaml + nws_river_forecast hooks: gauges-by-bbox / single
 # detail + bounded per-gauge threshold/stageflow enrichment), registered below.
 # fetch_river_geometry: spec-driven (source.yaml + a river_geometry delegate that
-# reads OSM through OSMnx and clips the ways to the AOI); the vestigial NHDPlus HR
-# HUC4 leg was dropped (NATE-decided). Auto-registered by _register_router_specs().
+# reads OSM through OSMnx and clips the ways to the AOI); OSM is the row's only
+# source. Auto-registered by _register_router_specs().
 # fetch_usgs_nwis_gauges: CDS-era flood-seam fold -- twin DELETED, now
 # spec-driven (source.yaml + parse_fallback IV->Site + usgs_nwis hooks), auto-registered.
 # fetch_usgs_water_quality: data-router fold phase-2 wave-3 -- twin
