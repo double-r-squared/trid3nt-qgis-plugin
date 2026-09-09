@@ -1,7 +1,7 @@
 {
   "duckdb_version": "1.5.5",
   "extension": "spatial",
-  "generated_by": "scripts/vendor helper (see docs/decisions/0019)",
+  "generated_by": "duckdb_functions() dump against the pinned duckdb spatial extension",
   "functions": [
     {
       "function": "ST_Affine",

@@ -1,19 +1,9 @@
-"""Sampled payload-size estimation (resolution doctrine R-B, 2026-08-11).
+"""Projected emitted-COG size from a measured sample of the real source.
 
-The payload-warning gate quotes a tool's projected emitted-COG size so the user can
-"proceed native / coarsen / cancel" against REAL numbers. An analytic
-bytes-per-square-degree model is a coarse guess: it ignores the source's true native
-cell size, the real compression ratio of the data, AND the fetcher's own pixel-count
-guard (so it wildly over-quotes a large domain whose grid is actually px-capped).
-
-R-B replaces the guess with a MEASUREMENT: sample a SMALL native-resolution window of
-the real source, measure the output COG's bytes-per-pixel and native pixel density,
-then scale by the target AOI's area (bounded by the fetcher's px cap). The measured
-density is cached per source + coarse region so the gate does not re-sample every
-dispatch; when sampling fails (offline / network) the estimate falls back to the
-analytic model, LABELED so the gate text never claims a measured number it does not
-have. This module is source-agnostic: a tool supplies a ``sample_fn`` that returns the
-measured density for its own source; the cache + area-scaling + labeling live here.
+Source-agnostic: a tool supplies the ``sample_fn`` that measures its own source;
+caching, area-scaling and labelling live here. A failed sample never raises -- it
+falls back to the caller's analytic model, LABELED, so no quoted number is ever
+claimed as measured when it is not.
 """
 from __future__ import annotations
 
@@ -26,14 +16,13 @@ from typing import Callable
 
 logger = logging.getLogger("trid3nt_server.tools.payload_sampling")
 
-#: Per-dimension pixel cap the raster fetchers honour (fetch_topobathy _MAX_DIM). The
-#: emitted grid never exceeds this on either side, so the measured payload has a
-#: CEILING independent of AOI size -- the analytic model misses this and over-quotes.
+#: Per-dimension pixel cap the raster fetchers honour; must stay in lock-step with
+#: theirs. The emitted grid never exceeds it on either side, so the projected payload
+#: has a CEILING independent of AOI size.
 DEFAULT_PX_CAP: int = 12000
 
-#: Bounded LRU of measured densities, keyed ``"<source>|<region-bucket>"``. Small: a
-#: handful of coasts per session. Guarded by a lock (the gate estimator may run in a
-#: worker thread via ``asyncio.to_thread``).
+#: Bounded LRU of measured densities, keyed ``"<source>|<region-bucket>"``. Lock-
+#: guarded: the gate estimator may run in a worker thread via ``asyncio.to_thread``.
 _CACHE_MAX = 64
 _CACHE: "OrderedDict[str, SampledDensity]" = OrderedDict()
 _CACHE_LOCK = threading.Lock()
@@ -41,11 +30,8 @@ _CACHE_LOCK = threading.Lock()
 
 @dataclass(frozen=True)
 class SampledDensity:
-    """A source's MEASURED emit density, from one small native-resolution window.
-
-    ``bytes_per_px`` -- output COG bytes per pixel (captures real dtype + compression).
-    ``px_per_sq_deg`` -- native pixel count per square degree (captures the source's
-    true native cell size). Both are measured from the SAME sampled window."""
+    """A source's measured emit density. Both fields come from the SAME sampled
+    window at the source's native resolution."""
 
     bytes_per_px: float
     px_per_sq_deg: float
@@ -53,11 +39,9 @@ class SampledDensity:
 
 @dataclass(frozen=True)
 class SampledEstimate:
-    """A payload estimate + the provenance of HOW it was produced.
-
-    ``mb`` -- the number the gate quotes. ``kind`` -- ``"measured"`` (from a sampled
-    window) or ``"analytic"`` (the fallback model). ``px`` -- the projected (capped)
-    pixel count, for the gate detail line."""
+    """A payload estimate carrying how it was produced. ``kind`` is exactly
+    ``"measured"`` (sampled window) or ``"analytic"`` (fallback model); ``px`` is 0
+    when analytic."""
 
     mb: float
     kind: str
@@ -93,13 +77,9 @@ def get_density(
     *,
     region_deg: float = 1.0,
 ) -> SampledDensity | None:
-    """Return the source's measured density for the AOI's region, sampling on a miss.
-
-    ``sample_fn(window_bbox)`` builds a small native window and returns the measured
-    :class:`SampledDensity`, or ``None`` when it cannot (offline / no coverage). The
-    result is cached per ``source_key`` + coarse region so the gate samples a region
-    at most once. Never raises -- a failed sample returns ``None`` (analytic fallback).
-    """
+    """Measured density for the AOI's region, sampling on a miss and caching per
+    ``source_key`` + coarse region. Never raises: ``sample_fn`` returning ``None`` or
+    failing yields ``None``."""
     key = f"{source_key}|{_region_bucket(bbox, region_deg)}"
     cached = _cache_get(key)
     if cached is not None:
@@ -138,18 +118,15 @@ def estimate_mb(
 ) -> SampledEstimate:
     """Projected emitted-COG MB for ``bbox`` at ``resolution_m`` (``None`` = native).
 
-    Measured path: scale the sampled density by the AOI area, bounded by ``px_cap`` per
-    side. Native uses the sampled native pixel density; an explicit ``resolution_m``
-    projects the pixel count from the AOI extent / requested cell. Falls back to
-    ``analytic_mb`` (LABELED ``kind="analytic"``) when no measured density is available;
-    the analytic fallback stays resolution-aware -- ``analytic_mb`` is the NATIVE
-    (``analytic_native_res_m``) estimate and a coarser cell scales it by the pixel-count
-    ratio, so the coarsening suggestion is meaningful even offline.
-    """
+    ``analytic_mb`` is the caller's NATIVE-resolution estimate and is used, labelled
+    ``kind="analytic"``, whenever no measured density is available."""
     w, s, e, n = bbox
     sq_deg = max(0.0, e - w) * max(0.0, n - s)
     density = get_density(source_key, bbox, sample_fn, region_deg=region_deg) if sample_fn else None
     if density is None or sq_deg <= 0:
+        # The analytic fallback stays resolution-aware so the coarsening suggestion is
+        # meaningful offline: pixel count scales with the square of the cell-size
+        # ratio against the native resolution ``analytic_mb`` was quoted at.
         if resolution_m is None:
             mb = analytic_mb
         else:

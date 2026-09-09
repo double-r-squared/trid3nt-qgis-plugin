@@ -1,48 +1,8 @@
-"""Atomic-tool registry skeleton.
-
-This package (``trid3nt_server.tools``) is the fetcher/tool surface: specs,
-router, emit-on-fetch, resolution specs, and the registry that collects the
-decorated functions at import time plus the cache shim that mediates
-external-API calls (see ``.cache``). ``AtomicToolMetadata`` lives in
-``trid3nt_contracts.tool_registry``.
-
-How registration works:
-
-    from trid3nt_contracts.tool_registry import AtomicToolMetadata
-    from trid3nt_server.tools import register_tool
-
-    @register_tool(AtomicToolMetadata(
-        name="fetch_dem",
-        ttl_class="static-30d",
-        source_class="dem",
-        cacheable=True,
-    ))
-    def fetch_dem(bbox: BBox) -> str:
-        ...
-
-The ``@register_tool`` decorator:
-
-- Re-validates the metadata payload (pydantic auto-validates at construction;
-  passing an already-validated model just stores it) and refuses to register
-  a tool whose metadata fails the uncacheable-cross-field rule.
-- Stores ``(fn, metadata, module)`` in module-level ``TOOL_REGISTRY``
-  keyed by ``metadata.name``.
-- **Fails fast on duplicate names**: a second registration under
-  the same name raises ``ToolRegistrationError`` at import time so the
-  agent service cannot start with an inconsistent tool surface.
-- Returns the original function unchanged so direct-call testing is trivial.
-
-The ``get_registered_tools()`` helper returns the current registry contents
-(a snapshot list) for the agent service's startup-time tool registration. The
-live generation loop is the raw Bedrock Converse SDK (``adapter.py``), which
-builds its tool declarations directly from this snapshot; there is no ADK
-wrapper (``google-adk`` was dropped in the GCP decommission).
-
-Importing the package triggers ``@register_tool`` decorators in submodules
-(``.fetchers``, ``.search``, ``.meta``, ``.processing``).
-We import them eagerly here so any registration-time ``ValidationError`` or
-``ToolRegistrationError`` surfaces at startup (fail-fast).
-"""
+"""The atomic-tool registry: ``@register_tool`` collects decorated functions into
+``TOOL_REGISTRY`` at import time, keyed by ``metadata.name``. Importing this package
+eagerly imports every tool module so a registration-time ``ValidationError`` or
+``ToolRegistrationError`` surfaces at startup rather than at first use. The cache
+shim that mediates external-API calls lives in ``.cache``."""
 
 from __future__ import annotations
 
@@ -72,25 +32,18 @@ class ToolRegistrationError(RuntimeError):
 
 @dataclass(frozen=True)
 class RegisteredTool:
-    """A tool entry in ``TOOL_REGISTRY``.
-
-    Fields:
-    - ``metadata`` - the validated ``AtomicToolMetadata`` for the tool.
-    - ``fn`` - the original (undecorated) callable. The registry deliberately
-      does NOT wrap it; tests call the function directly via this attribute.
-    - ``module`` - the ``__module__`` attribute at registration time, useful
-      for diagnostics (`"trid3nt_server.tools.meta.code_exec_tool"` etc.).
-    """
+    """One entry in ``TOOL_REGISTRY``. ``fn`` is the ORIGINAL undecorated callable -
+    the registry deliberately never wraps it - and ``module`` is its ``__module__``
+    at registration time."""
 
     metadata: AtomicToolMetadata
     fn: Callable[..., Any]
     module: str
 
 
-#: Module-level registry, keyed by ``metadata.name``. Populated at import time
-#: by ``@register_tool`` calls in submodules. The agent service iterates this
-#: at startup (via ``get_registered_tools()``) to build the Bedrock Converse
-#: tool declarations in ``adapter.py`` (raw SDK loop; no ADK wrapper).
+#: Module-level registry, keyed by ``metadata.name``. Populated at import time by
+#: ``@register_tool`` calls in submodules; the agent service reads it once at
+#: startup through ``get_registered_tools()`` to build its tool declarations.
 TOOL_REGISTRY: dict[str, RegisteredTool] = {}
 
 
@@ -104,61 +57,19 @@ def register_tool(
     destructive_hint: bool | None = None,
     idempotent_hint: bool | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Return a decorator that records ``fn`` + ``metadata`` in ``TOOL_REGISTRY``.
-
-    Usage::
-
-        @register_tool(AtomicToolMetadata(name="x", ttl_class="static-30d",
-                                          source_class="x"))
-        def x(...): ...
-
-     added two metadata flags. They may be set either
-    on the constructed ``AtomicToolMetadata`` directly OR passed as
-    decorator-level kwargs (kwargs win and produce a new metadata via
-    ``model_copy(update=...)``)::
-
-        @register_tool(_BASE_META, supports_global_query=True)
-        def fetch_nws_alerts_conus(bbox=None): ...
-
-     added four MCP annotation hints as decorator-level
-    kwargs using the same pattern::
-
-        @register_tool(_BASE_META, read_only_hint=True, open_world_hint=True,
-                       destructive_hint=False, idempotent_hint=True)
-        def fetch_dem(bbox): ...
-
-    All kwargs default to ``None`` meaning "use whatever the metadata
-    already declares" - the kwarg path is a convenience for tool authors
-    who want the decorator site to be the single visible declaration of
-    the flag. Backward-compatible: existing tools that pre-date the
-    kwargs continue to work; the metadata defaults
-    (``supports_global_query=False``, ``payload_mb_estimator_name=None``,
-    ``read_only_hint=True``, ``open_world_hint=False``,
-    ``destructive_hint=False``, ``idempotent_hint=True``)
-    preserve the earlier behaviour.
-
-    Fail-fast invariants:
-
-    - ``metadata`` must already be a valid ``AtomicToolMetadata`` (pydantic
-      auto-validates at construction, including the uncacheable cross-field
-      ``cacheable``/``ttl_class``/``source_class`` rule). Passing anything
-      else raises ``TypeError``.
-    - The same ``metadata.name`` cannot register twice. A duplicate raises
-      ``ToolRegistrationError`` at import time so a misconfigured agent
-      service never starts.
-    - The original ``fn`` is returned UNCHANGED, so callers can both register
-      a tool and call it directly in tests.
-    """
+    """Return a decorator that records ``fn`` + ``metadata`` in ``TOOL_REGISTRY``
+    and gives back ``fn`` UNCHANGED, so a registered tool is still directly
+    callable. Every kwarg left ``None`` keeps what the metadata already declares;
+    a duplicate ``metadata.name`` raises ``ToolRegistrationError`` at import time,
+    so a misconfigured service never starts."""
     if not isinstance(metadata, AtomicToolMetadata):
         raise TypeError(
             f"register_tool expects AtomicToolMetadata, got {type(metadata).__name__}"
         )
 
-    # If the caller passed flags at the decorator level,
-    # fold them into a fresh metadata. ``model_copy(update=...)`` re-runs
-    # validators because pydantic v2 ``GraceModel`` has
-    # ``validate_assignment=True``, so a bad combination still fails fast at
-    # import time.
+    # Decorator-level flags fold into a fresh metadata. ``model_copy(update=...)``
+    # re-runs the validators because ``GraceModel`` sets ``validate_assignment``,
+    # so a bad combination still fails fast at import time.
     overrides: dict[str, Any] = {}
     if supports_global_query is not None:
         overrides["supports_global_query"] = supports_global_query
@@ -202,11 +113,9 @@ MOUNTED_TOOLS: set[str] = set()
 
 def mount_tool(metadata: AtomicToolMetadata,
                fn: Callable[..., Any]) -> str:
-    """Add one session-scoped tool to the registry -> its name.
-
-    A name already registered - mounted or imported - is refused rather than
-    replaced: the caller would be shadowing a tool it does not own.
-    """
+    """Add one session-scoped tool to the registry -> its name. A name already
+    registered, mounted or imported, is REFUSED rather than replaced: the caller
+    would be shadowing a tool it does not own."""
     name = metadata.name
     existing = TOOL_REGISTRY.get(name)
     if existing is not None:
@@ -233,22 +142,13 @@ def mounted_tool_names() -> frozenset[str]:
 
 
 def get_registered_tools() -> list[RegisteredTool]:
-    """Return a stable-ordered snapshot of the current registry.
-
-    Used by the agent service at startup to build the Bedrock Converse tool
-    declarations (raw SDK loop in ``adapter.py``). Sorted by ``metadata.name``
-    so the registration order is deterministic across runs (important for
-    review diffs).
-    """
+    """A snapshot of the registry sorted by ``metadata.name``, so the declaration
+    order is deterministic across runs."""
     return sorted(TOOL_REGISTRY.values(), key=lambda t: t.metadata.name)
 
 
 def clear_registry_for_tests() -> None:
-    """Empty the registry. ONLY for tests; never call from product code.
-
-    Atomic-tool registration is import-time; tests that need a fresh registry
-    or want to swap implementations call this in a fixture.
-    """
+    """Empty the registry. ONLY for tests; never call from product code."""
     TOOL_REGISTRY.clear()
     MOUNTED_TOOLS.clear()
 
@@ -257,251 +157,39 @@ def clear_registry_for_tests() -> None:
 # Eager submodule import (fail-fast).
 #
 # Importing ``trid3nt_server.tools`` populates ``TOOL_REGISTRY`` with EVERY
-# atomic tool the agent service supports: each module below carries at least
-# one ``@register_tool`` decorator that fires at import time, so any
-# registration-time ``ValidationError`` / ``ToolRegistrationError`` surfaces
-# at startup rather than first use. The block is EXPLICIT (no pkgutil walk),
-# sorted, and grouped by subpackage; regenerate it when adding a tool module.
-# Per-tool rationale lives in each module's docstring.
+# atomic tool the service supports: each module below carries at least one
+# ``@register_tool`` decorator that fires at import time, so a registration-time
+# ``ValidationError`` / ``ToolRegistrationError`` surfaces at startup rather than
+# at first use. The block is EXPLICIT (no pkgutil walk), sorted, and grouped by
+# subpackage; regenerate it when adding a tool module.
+#
+# Almost every fetcher is SPEC-DRIVEN - a co-located source.yaml plus its hooks,
+# registered by the tree walk below - so adding a source is adding a YAML, not an
+# import line here. Only a fetcher with a hand-written module appears in this
+# block.
 # ---------------------------------------------------------------------------
 
-# -- fetchers/weather --
-# fetch_glm_lightning: animation_frames fold -- twin DELETED, now spec-driven
-# (source.yaml + glm.frames_plan/frame_bytes hooks; default output = a frames list), auto-
-# registered by _register_router_specs() below; no eager twin import.
-# fetch_hrrr_forecast + fetch_hrrr_smoke: HRRR-Zarr library-delegate fold
-# -- twins DELETED, now spec-driven (source.yaml + hrrr.resolve_cycle/read/validate
-# delegate hooks: s3fs cycle-walk delegate_resolve + Zarr open -> LCC->4326 reproject
-# + clip + forecast hypot(u,v)); auto-registered by _register_router_specs() below.
-# fetch_mrms_qpe: weather/GRIB fold -- twin DELETED, now spec-driven
-# (source.yaml + mrms_qpe hooks: S3-listed key resolve -> grib_object whole-object COG).
-# show_nexrad_radar (a DISPLAY tool, NOT a fetcher: composes a live WMS GetMap URL,
-# transfers no bytes) is imported from the -- display -- group below.
-# fetch_nws_alerts_conus: data-router fold chained-resolution mode -- twin
-# DELETED, now spec-driven (source.yaml + nws_alerts_conus hooks: single /alerts/active
-# GET + per-alert zone-polygon enrichment), registered by _register_router_specs() below.
-# fetch_nws_event: data-router fold tier-3 hooks -- twin DELETED, now
-# spec-driven (source.yaml + nws_event build_request/parse_response hooks, single-GET
-# NWS /alerts/active GeoJSON), registered by _register_router_specs() below.
-# fetch_storm_events_db: data-router fold -- twin DELETED, now spec-driven
-# (source.yaml + storm_events_db hooks: directory-index resolve -> newest bulk-CSV URL,
-# then bulk gzip-CSV point decode), registered by _register_router_specs() below.
-# fetch_storm_tracks FOLDED to a spec-driven surface: its source.yaml +
-# storm_tracks library-delegate hooks (historical IBTrACS + active NHC incl. the binary
-# forecast-zip secondary-enrichment round) are promoted by register_specs_from_tree;
-# the StormTracks*Error twins live in weather/fetch_storm_tracks/hooks.py. No eager twin import.
-
-# -- fetchers/hydrology --
-# V&V wave (lane C): observed flood-validation data fetchers.
-# fetch_flood_extent_observation FOLDED to a spec-driven surface: its
-# source.yaml + categorical_tile_grid mode is promoted by register_specs_from_tree.
-# fetch_high_water_marks FOLDED to a spec-driven surface: its source.yaml
-# + usgs_stn_hwm hooks register at import via register_specs_from_tree (envelope hook).
-# fetch_jrc_global_surface_water FOLDED to a spec-driven surface: its
-# source.yaml + the stac_raster mosaic render + the jrc_global_surface_water
-# colormap hook register at import via register_specs_from_tree (twin DELETED).
-# fetch_nhd_waterbodies: data-router fold phase-2 wave-2 -- twin DELETED, now
-# spec-driven (source.yaml + router), registered by _register_router_specs() below.
-# fetch_nhdplus_nldi_navigate: data-router fold phase-2 wave-3 -- twin
-# DELETED, now spec-driven (source.yaml + dataretrieval-delegating router),
-# registered by _register_router_specs() below.
-# fetch_noaa_nwm_streamflow FOLDED to a spec-driven surface (the LAST coded
-# data-fetcher): its source.yaml + the nwm_streamflow.* library-
-# delegate hooks (the S3 channel_rt netCDF read -> {feature_id: streamflow} lookup + the NLDI
-# 5x5 spatial sample -> COMIDs + per-reach geometry + JOIN -> point FGB, over the fetch-time
-# provenance channel) register at import via register_specs_from_tree; the NWMStreamflow*Error
-# twins live in hydrology/fetch_noaa_nwm_streamflow/hooks.py. No eager twin import.
-# fetch_nws_river_forecast: data-router fold chained-resolution mode -- twin
-# DELETED, now spec-driven (source.yaml + nws_river_forecast hooks: gauges-by-bbox / single
-# detail + bounded per-gauge threshold/stageflow enrichment), registered below.
-# fetch_river_geometry: spec-driven (source.yaml + a river_geometry delegate that
-# reads OSM through OSMnx and clips the ways to the AOI); OSM is the row's only
-# source. Auto-registered by _register_router_specs().
-# fetch_usgs_nwis_gauges: CDS-era flood-seam fold -- twin DELETED, now
-# spec-driven (source.yaml + parse_fallback IV->Site + usgs_nwis hooks), auto-registered.
-# fetch_usgs_water_quality: data-router fold phase-2 wave-3 -- twin
-# DELETED, now spec-driven (source.yaml + dataretrieval-delegating router),
-# registered by _register_router_specs() below.
-
-# -- fetchers/ocean --
-# fetch_gtsm_tide_surge: CDS library_delegate fold -- twin DELETED, now
-# spec-driven (source.yaml + cds.gtsm_read), auto-registered via _register_router_specs().
-# fetch_noaa_coops_currents: data-router fold phase-2 wave-4 -- twin
-# DELETED, now spec-driven (source.yaml + the station snapshot router mode),
-# registered by _register_router_specs() below.
-# fetch_noaa_coops_tides: data-router fold pilot -- twin DELETED, now spec-driven
-# (source.yaml + router), registered by _register_router_specs() below.
-# fetch_noaa_slr_confidence + fetch_noaa_slr_marsh: raster-stragglers wave --
-# twins DELETED, now spec-driven (source.yaml + the router mapserver_export
-# RGBA mode), registered by _register_router_specs() below.
-# fetch_noaa_slr_scenarios: data-router fold phase-2 wave-6 -- twin
-# DELETED, now spec-driven (source.yaml + the declarative fan-out router mode),
-# registered by _register_router_specs() below.
-# fetch_noaa_sst: quick-folds wave -- twin DELETED, now spec-driven
-# (source.yaml + the raster_cog griddap access mode), registered by _register_router_specs().
-# fetch_topobathy: coastal topo-bathymetry fold -- twin DELETED, now
-# spec-driven (source.yaml + the topobathy.* library-delegate hooks over the 4-leg
-# UTM composite + the fetch-time provenance channel), registered by
-# _register_router_specs() below.
-
-# -- fetchers/terrain --
-# fetch_3dep_extra: library-delegate raster fold -- twin DELETED, now
-# spec-driven (source.yaml + pfdf_3dep delegate/validate hooks over the generic
-# library_delegate mode; per-resolution payload table);
-# auto-registered by _register_router_specs() below.
-# fetch_copernicus_dem: fetcher-fold wave-8 -- twin DELETED, now spec-driven
-# (source.yaml + the stac_raster float render), registered by _register_router_specs()
-# below.
-# fetch_dem FOLDED to a spec-driven surface: its source.yaml +
-# library_delegate py3dep hooks + the source="copernicus" cross-sibling dispatch
-# is promoted by register_specs_from_tree; no eager twin import.
-# fetch_esri_landcover_10m: data-router fold pilot -- twin DELETED, now spec-driven
-# (source.yaml + router), registered by _register_router_specs() below.
-# fetch_landcover FOLDED to a spec-driven surface: its source.yaml +
-# wcs_getcoverage mode + sidecar envelope is promoted by register_specs_from_tree.
-
-# -- fetchers/imagery --
-# fetch_goes_animation + fetch_goes_blend_animation FOLDED to spec-driven surfaces
-#; fetch_goes_archive_animation + fetch_goes_active_fire FOLDED:
-# source.yaml + shape: animation_frames + goes_archive.frames_plan / frame_bytes over
-# the shared imagery._goes_archive_core substrate (netcdf_cf_object per-frame mode),
-# auto-registered by register_specs_from_tree. The substrate lives on in
-# imagery/_goes_archive_core.py (no registered tool).
-# fetch_goes_satellite FOLDED to a spec-driven surface: its source.yaml +
-# goes_satellite library-delegate raster hooks (most-recent MCMIPC read + 15-min
-# valid_time cache rounding) are promoted by register_specs_from_tree; the shared
-# satellite-identifier / S3 substrate lives on in imagery/_goes_common.py (no registered
-# tool). No eager twin import.
-# fetch_landsat_imagery / fetch_naip / fetch_sentinel2_truecolor: STAC-composite wave
-# -- twins DELETED, now spec-driven (source.yaml + the stac_raster rgb render:
-# N reflectance assets + QA/SCL mask + joint 2/98 stretch / inferno LST / raw uint8
-# passthrough), auto-registered by _register_router_specs().
-# fetch_slider_timestamps folded to a record-shape spec; the promoted
-# tool auto-registers via register_specs_from_tree (SLIDER availability + cadence index).
-# fetch_sentinel1_sar: quick-folds wave -- twin DELETED, now spec-driven
-# (source.yaml + the stac_raster float render + coverage-select + log10_db),
-# auto-registered.
-# fetch_viirs_day_fire FOLDED to a spec-driven surface: source.yaml +
-# shape: animation_frames + viirs_day_fire.frames_plan / frame_bytes (JPSS polar
-# day-pass SLIDER stitch), auto-registered by register_specs_from_tree.
-
 # -- fetchers/climate --
-# fetch_chirps_precipitation: data-router fold phase-2 wave-9 -- twin
-# DELETED, now spec-driven (source.yaml + gzip_object), auto-registered.
-# fetch_era5_reanalysis: CDS library_delegate fold -- twin DELETED, now
-# spec-driven (source.yaml + cds.era5_read), auto-registered via _register_router_specs().
-# fetch_gridmet: data-router fold pilot -- twin DELETED, now spec-driven
-# (source.yaml + router), registered by _register_router_specs() below.
-# fetch_modis_lst: data-router fold phase-2 wave-7 -- twin DELETED, now
-# spec-driven (source.yaml + the stac_raster float render), registered by
-# _register_router_specs() below.
-# fetch_us_drought_monitor: data-router fold phase-2 wave-2 -- twin DELETED, now
-# spec-driven (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
 
 # -- fetchers/socioeconomic --
-# fetch_administrative_boundaries: spec-driven (source.yaml +
-# admin_boundaries.build_request FIPS planner + the ogr-vector executor reading the
-# shapefile inside the remote ZIP), registered by _register_router_specs() below.
-# fetch_buildings: spec-driven (source.yaml + a buildings.features hook that reads
-# OSM through OSMnx and returns the slim layer and the tag bag off one frame + the
-# overpass_sidecar executor's constrained tags.json side write), promoted by
-# _register_router_specs().
-# fetch_field_boundaries: FTW/fiboa GeoParquet-pushdown fold -- twin DELETED,
-# now spec-driven (source.yaml + field_boundaries.select pre_resolve + field_boundaries.read
-# VECTOR library_delegate hook; the GeoParquet 1.1 row-group bbox pushdown is owned by
-# geopandas.read_parquet over an fsspec HTTPS handle, not a router transport -- the
-# new-transport STOP refuted). Auto-registered by _register_router_specs() below.
-# fetch_ghsl_population: data-router fold zip/multi-file wave -- twin
-# DELETED, now spec-driven (source.yaml + the raster fixed_tile_grid whole-object
-# per-tile ZIP extract mode), registered by _register_router_specs() below.
-# fetch_hrsl_population: data-router fold phase-2 wave-9 -- twin
-# DELETED, now spec-driven (source.yaml + multi_url VRT fan-out), auto-registered.
-# fetch_overpass_pois + fetch_roads_osm: spec-driven (source.yaml + a per-row
-# delegate that reads OSM through OSMnx and projects it - a point per element, or a
-# way clipped to the AOI), auto-registered by _register_router_specs() below.
-# fetch_population: WorldPop library_delegate raster fold -- twin DELETED, now
-# spec-driven (source.yaml + worldpop.validate/read hooks); the half-built ACS leg
-# dropped, auto-registered below; no eager twin import.
-# fetch_usace_nsi: data-router fold tier-3 hooks -- twin DELETED, now
-# spec-driven (source.yaml + usace_nsi build_request/parse_response hooks + the
-# RequestPlan POST transport extension), registered by _register_router_specs() below.
 from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E402,F401
 
-# -- fetchers/hazard --
-# fetch_fault_sources: finisher-mechanisms wave -- twin DELETED, now
-# spec-driven (source.yaml + fault_sources build_request/parse_response/envelope
-# hooks + the constant_cache two-tier cache + the variant_by_emptiness output
-# switch), auto-registered by _register_router_specs() below.
-# fetch_firms_active_fire: quick-folds wave -- twin DELETED, now spec-driven
-# (source.yaml + firms_active_fire keyed CSV http_json hooks), auto-registered.
-# fetch_hifld_critical_infrastructure: data-router fold pilot -- twin DELETED, now
-# spec-driven (source.yaml + router), registered by _register_router_specs() below.
-# fetch_hifld_transmission_lines: data-router fold phase-2 wave-2 -- twin DELETED,
-# now spec-driven (source.yaml + router), registered by _register_router_specs().
-# fetch_landfire_fuels: data-router fold phase-2 wave-7 -- twin DELETED,
-# now spec-driven (source.yaml + imageserver_export mode), registered by
-# _register_router_specs() below.
-# fetch_mtbs_burn_severity + fetch_nifc_fire_perimeters: data-router fold phase-2
-# wave-2 -- twins DELETED, now spec-driven (source.yaml + router), registered by
-# _register_router_specs() below.
-# fetch_openfema_disasters: data-router fold -- twin DELETED, now spec-driven
-# (source.yaml + openfema_disasters hooks: offset paging + per-county aggregate joined to
-# TIGERweb county polygons by FIPS), registered by _register_router_specs() below.
-# fetch_tsunami_events: data-router fold phase-2 wave-10 (tier-3 hooks) --
-# twin DELETED, now spec-driven (source.yaml + ncei_tsunami build_request/parse_response
-# hooks + paging), registered by _register_router_specs() below.
-# fetch_usace_levees: data-router fold phase-2 wave-6 -- twin DELETED,
-# now spec-driven (source.yaml + endpoint_by_param sub-layer routing +
-# properties_by_param), registered by _register_router_specs() below.
-# fetch_usfs_canopy_fuels: data-router fold phase-2 wave-7 -- twin
-# DELETED, now spec-driven (source.yaml + imageserver_export mode), registered by
-# _register_router_specs() below.
-# fetch_usgs_earthquakes: data-router fold phase-2 wave-10 (tier-3 hooks) --
-# twin DELETED, now spec-driven (source.yaml + usgs_earthquakes build_request/parse_response
-# hooks, single-GET FDSN GeoJSON), registered by _register_router_specs() below.
-# fetch_usgs_volcano_alerts: data-router fold phase-2 wave-10 (tier-3 hooks) --
-# twin DELETED, now spec-driven (source.yaml + usgs_volcano build_request/parse_response
-# hooks, multi-GET HANS join), registered by _register_router_specs() below.
-# fetch_wfigs_incident: record-return output-shape fold -- twin DELETED,
-# now spec-driven (source.yaml + wfigs_incident build_request/record hooks over the
-# shape=record executor; a bare discovery dict, not a LayerURI), auto-registered by
-# _register_router_specs() below.
-
-# -- fetchers/soil --
-# fetch_gcn250_curve_numbers: fetcher-fold wave-8 -- twin DELETED, now spec-driven
-# (source.yaml + router direct_window), registered by _register_router_specs() below.
-# fetch_soilgrids FOLDED to a spec-driven surface: its source.yaml + the
-# projected_vrt_window access mode (Homolosine VRT windowed in the source projection +
-# native->4326 bilinear reproject + per-property Int16 scale) register at import via
-# register_specs_from_tree (twin DELETED).
-# fetch_statsgo_soils: library-delegate raster fold -- twin DELETED, now
-# spec-driven (source.yaml + pfdf_statsgo delegate/validate hooks over the generic
-# library_delegate mode); auto-registered by _register_router_specs() below.
-
-# -- fetchers/_router: PROMOTED spec-driven sources (data-router fold, phase-2
-# wave 1 -- the fold's first real cut). The pilots (fetch_gridmet,
-# fetch_hifld_critical_infrastructure, fetch_noaa_coops_tides,
-# fetch_esri_landcover_10m) are now served by their
-# co-located source.yaml + the shared router engine, registered UNDER THE TWIN
-# NAMES at tier="general" (the default retrieval pool). The hand-written twins
-# were DELETED (both replication + routing parity gates passed -> cull doctrine).
-# Registration walks fetchers/**/source.yaml, so adding a source = adding a YAML.
+# -- fetchers/_router: the walk over fetchers/**/source.yaml. Each promoted spec
+# registers under its own tool name at tier="general", the default retrieval pool.
 from .fetchers._router.registration import register_specs_from_tree as _register_router_specs  # noqa: E402,F401
 
 _register_router_specs()
 
-# -- display (live map overlays that compose a service URL, transferring no data
-# bytes -- NOT fetchers) --
+# -- display (live map overlays composing a service URL; they transfer no data
+# bytes, so they are NOT fetchers) --
 from .display.restyle_layer.restyle_layer import restyle_layer  # noqa: E402,F401 - DISPLAY-state re-emission of an already-published layer
 from .display.show_nexrad_radar.show_nexrad_radar import show_nexrad_radar  # noqa: E402,F401
 
 # -- processing (compute / clip / extract / vector-edit / charts) --
 from .processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E402,F401
 # The two generic geometry composition links: one document out of several layers
-# (``combine``), and the two ends of a line (``endpoints``). Both exist so a
-# domain narrows by CHAINING tools rather than by a mesher growing a domain-prep
-# of its own.
+# (``combine``), and the two ends of a line (``endpoints``).
 from .processing.combine import combine  # noqa: E402,F401
 from .processing.compute_aspect import compute_aspect  # noqa: E402,F401
 from .processing.compute_blended_composite import compute_blended_composite  # noqa: E402,F401
@@ -512,7 +200,7 @@ from .processing.compute_contours import compute_contours  # noqa: E402,F401
 from .processing.compute_cross_section import compute_cross_section  # noqa: E402,F401
 from .processing.compute_exposure_summary import compute_exposure_summary  # noqa: E402,F401
 from .processing.compute_flood_depth_damage import compute_flood_depth_damage  # noqa: E402,F401
-# V&V wave (lane B): flood-extent skill (raster/vector confusion).
+# flood-extent skill (raster/vector confusion).
 from .processing.compute_flood_extent_skill import compute_flood_extent_skill  # noqa: E402,F401
 from .processing.compute_hillshade import compute_hillshade  # noqa: E402,F401
 from .processing.compute_idf_curve import compute_idf_curve  # noqa: E402,F401
@@ -521,26 +209,22 @@ from .processing.compute_layer_bounds import compute_layer_bounds  # noqa: E402,
 from .processing.compute_model_residuals import compute_model_residuals  # noqa: E402,F401
 from .processing.compute_ndvi import compute_ndvi  # noqa: E402,F401
 from .processing.compute_sediment_yield import compute_sediment_yield  # noqa: E402,F401
-# V&V wave (lane B): model-fit skill-metrics wrap (spotpy).
+# model-fit skill metrics (spotpy).
 from .processing.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
 from .processing.compute_slope import compute_slope  # noqa: E402,F401
-# compute_zonal_statistics DEMOTED to the code_exec playground
-# (docs/playbooks/zonal-statistics-recipe.md, docs/decisions/0043).
 from .processing.delineate_watershed import delineate_watershed  # noqa: E402,F401
 from .processing.digitize_water_body import digitize_water_body  # noqa: E402,F401
 from .processing.enhance_satellite_image import enhance_satellite_image  # noqa: E402,F401
 from .processing.endpoints import endpoints  # noqa: E402,F401
 from .processing.extract_landcover_class import extract_landcover_class  # noqa: E402,F401
-# V&V wave (lane C): model-vs-observation pairing primitive.
+# model-vs-observation pairing primitive.
 from .processing.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401
 from .processing.extract_stream_network import extract_stream_network  # noqa: E402,F401
 from .processing.extract_timeseries_at_point import extract_timeseries_at_point  # noqa: E402,F401
 from .processing.charts.generate_chart import generate_chart  # noqa: E402,F401
 from .processing.query_point_hazard import query_point_hazard  # noqa: E402,F401
 from .processing.section import section  # noqa: E402,F401
-# DuckDB spatial-query fold (Phase B): ONE read-only SQL surface replaces the
-# three analytical Q&A tools (summarize_layer_statistics /
-# count_features_above_threshold / aggregate_property_within_zone).
+# The one read-only SQL surface over published layers.
 from .processing.spatial_query import spatial_query  # noqa: E402,F401
 
 # -- simulation (engine bridges, model_* engines, solver seam) --
@@ -548,107 +232,75 @@ from .processing.spatial_query import spatial_query  # noqa: E402,F401
 # modules under workflows/solver/diagnostics/, which are NOT themselves registered.
 from trid3nt_server.workflows.solver.diagnostics import read_run_diagnostics  # noqa: E402,F401
 from trid3nt_server.tools.processing.model_debris_flow import model_debris_flow  # noqa: E402,F401
-# RERUN-WITH-OVERRIDES: derive a run from a run, with named values moved. The
-# skeleton's recalibration interface - what-if, failure recovery, calibration
-# loops.
+# Derive a run from a run, with named values moved: the recalibration interface.
 from trid3nt_server.workflows.runtime.rerun import rerun_workflow  # noqa: E402,F401
 from trid3nt_server.workflows.solver import solver  # noqa: E402,F401
 # -- engine templates: tier=template members are ordinary retrieval-pool tools,
 # registered by their own @register_tool in the workflow-composer block below and
-# callable DIRECTLY. The solver-seam module workflows/telemac/solving/run_telemac.py
-# (WorkflowError classes, solver specs) is separate; the templates import it.
+# callable DIRECTLY. The solver seam they import is a separate module and registers
+# no tool of its own.
 
 # -- discovery (dataset/tool retrieval) --
-# NOTE: search_data_catalog / fetch_from_catalog register at
-# daemon startup via main.py's eager-import block, NOT here - importing this
-# package alone deliberately leaves them out of TOOL_REGISTRY (pre-reorg
-# behavior: the plain ``import trid3nt_server.tools`` surface is 190 tools,
-# 191 after added search_spatial_functions here).
+# search_data_catalog / fetch_from_catalog register at daemon startup via main.py's
+# eager-import block, NOT here: importing this package alone deliberately leaves
+# them out of TOOL_REGISTRY.
 from .search.search_tools import search_tools  # noqa: E402,F401
 from .search.search_spatial_functions import search_spatial_functions  # noqa: E402,F401
-# ESRI Living Atlas: a scoped search over the harvested catalog + a
-# generic fetch bridge. Registered here (in-process) so both surface in the tool
-# retrieval index for their corpus queries (unlike the daemon-startup catalog
-# tools). The two harvested YAML catalogs are DATA, not code.
+# ESRI Living Atlas: a scoped search over the harvested catalog plus a generic
+# fetch bridge. Registered here, in-process, so both surface in the tool-retrieval
+# index for their corpus queries. The two harvested YAML catalogs are DATA.
 from .search.search_living_atlas import search_living_atlas  # noqa: E402,F401
 from .search.fetch_living_atlas_layer import fetch_living_atlas_layer  # noqa: E402,F401
 
 # -- meta (web fetch, code exec, case utilities) --
 from .meta.code_exec_tool import code_exec_tool  # noqa: E402,F401
 from .meta.compose_case_report import compose_case_report  # noqa: E402,F401
-# open_case_in_qgis + register_case_layer are DEREGISTERED (not LLM-visible):
-# their module functions serve the /api/export-qgis + /api/ingest-layer HTTP
-# routes directly (lazy-imported at the route), so the modules are NOT imported
-# here (importing them no longer registers a tool -- the @register_tool
-# decorator was removed).
 from .meta.list_run_frames import list_run_frames  # noqa: E402,F401
-# describe_keywords: the READ over the TELEMAC module catalogs - the way the
-# 1,300-keyword surface is reached, since no docstring budget carries it.
+# describe_keywords: the READ over the TELEMAC module catalogs - the only way the
+# keyword surface is reached, since no docstring budget carries it.
 from trid3nt_server.workflows.telemac.modules.describe import describe_keywords  # noqa: E402,F401
 from .meta.spatial_input_tool import spatial_input_tool  # noqa: E402,F401
 from .search.web_fetch import web_fetch  # noqa: E402,F401
 
 # ---------------------------------------------------------------------------
-# Workflow-composer registrations (each carries its OWN @register_tool) and
-# the 12-category registry meta-tools. Comments preserved from the original
-# registration list.
+# Workflow-composer registrations; each module carries its OWN @register_tool.
 # ---------------------------------------------------------------------------
-# The five REACH templates (engine="telemac", tier="template"), under
-# workflows/telemac/templates/. ONE TEMPLATE PER QUESTION: a tracer, an oil
-# slick, a moving bed, a settling class and an oxygen sag fill DIFFERENT slots
-# of the same deck, so routing picks the template rather than a substance word
-# picking a branch. All five LIST the shared river part, which narrows the
-# domain by CHAINING processing tools - the NLDI mainstem names the stretch, its
-# endpoints name where the stretch stops, and the section cut through the mapped
-# NHDArea banks is the polygon om2d triangulates - so the two end faces are the
-# transects the inflow and the outflow are prescribed on. The edge length is an
-# explicit sheet value on all of them.
+# The five REACH templates (engine="telemac", tier="template"). ONE TEMPLATE PER
+# QUESTION: a tracer, an oil slick, a moving bed, a settling class and an oxygen
+# sag fill DIFFERENT slots of the same deck, so routing picks a template rather
+# than a substance word picking a branch. All five LIST the shared river part,
+# whose two end faces are the transects the inflow and the outflow are prescribed
+# on; the edge length is an explicit sheet value on every one of them.
 from trid3nt_server.workflows.telemac.templates.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - reach conservative-plume front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.templates.do_sag.do_sag import telemac_do_sag as _telemac_do_sag  # noqa: E402,F401 - reach dissolved-oxygen front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.templates.river_oil_spill.river_oil_spill import telemac_river_oil_spill as _telemac_river_oil_spill  # noqa: E402,F401 - reach oil-slick front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.templates.river_scour.river_scour import telemac_river_scour as _telemac_river_scour  # noqa: E402,F401 - reach mobile-bed front (engine=telemac, tier=template)
 from trid3nt_server.workflows.telemac.templates.river_sediment_plume.river_sediment_plume import telemac_river_sediment_plume as _telemac_river_sediment_plume  # noqa: E402,F401 - reach suspended-sediment front (engine=telemac, tier=template)
-# telemac_rain_on_grid TEMPLATE (engine="telemac", tier="template"), workflows/
-# telemac/templates/rain_on_grid/: the CATCHMENT front. Its domain is chained the same way
-# the reach fronts' is - delineate_watershed at the pour point -> combine with the
-# channel network -> om2d over the basin - and its one liquid boundary is declared
-# on the mesh ask at the delineation's snapped pour point, so the outlet
-# hydrograph is the flux through the nodes that role landed on.
+# The CATCHMENT front. Its one liquid boundary is declared on the mesh ask at the
+# delineation's snapped pour point, so the outlet hydrograph is the flux through
+# the nodes that role landed on.
 from trid3nt_server.workflows.telemac.templates.rain_on_grid.rain_on_grid import telemac_rain_on_grid as _telemac_rain_on_grid  # noqa: E402,F401 - catchment rainfall-runoff front (engine=telemac, tier=template)
-# TOMBSTONE: tomawac_wave_field - the TOMAWAC spectral-wave front is rebuilt at rung 4.
-# artemis_harbor_agitation TEMPLATE (engine="telemac", tier="template"),
-# workflows/telemac/templates/agitation/: the ARTEMIS phase-resolving elliptic
-# mild-slope (Berkhoff) engine, asked ONE question - does the declared structure
-# shelter the water behind it. The domain is cut from the real shoreline over the
-# AOI with the structure punched out conformally and every deep boundary stretch
-# designated open; the bed is surveyed topobathy. The phase-resolving complement
-# to the TOMAWAC spectral tier.
+# The ARTEMIS phase-resolving elliptic mild-slope engine, asked ONE question: does
+# the declared structure shelter the water behind it. The domain is cut from the
+# real shoreline with the structure punched out conformally and every deep boundary
+# stretch designated open; the bed is surveyed topobathy.
 from trid3nt_server.workflows.telemac.templates.agitation.agitation import artemis_harbor_agitation as _artemis_harbor_agitation  # noqa: E402,F401 - ARTEMIS agitation front (engine=telemac, tier=template)
-# TOMBSTONE: coastal_tidal_surge - the coastal tidal/surge front is rebuilt at rung 4.
-# telemac3d_stratified_flow TEMPLATE (engine="telemac", tier="template"),
-# workflows/telemac/templates/stratified_flow/: the TELEMAC-3D baroclinic engine,
-# asked ONE question - what the column does over the depth a 2D model averages
-# away. The domain is the water body's own mapped polygon cut to the AOI, which
-# is a CLOSED basin; the same run carries the thermocline that survives and the
-# surface-downwind / return-flow-at-depth velocities the wind drives.
+# The TELEMAC-3D baroclinic engine, asked ONE question: what the column does over
+# the depth a 2D model averages away. Its domain is the water body's own mapped
+# polygon cut to the AOI, a CLOSED basin.
 from trid3nt_server.workflows.telemac.templates.stratified_flow.stratified_flow import telemac3d_stratified_flow as _telemac3d_stratified_flow  # noqa: E402,F401 - TELEMAC-3D stratified front (engine=telemac, tier=template)
 # build_mesh: the one mesh router. A RECIPE - three mesher-agnostic params plus an
 # ordered list of verbatim calls on the wrapped mesh library and on the shared
-# primitives; declared in a template it is a frozen lazy ask, called standalone it
+# primitives. Declared in a template it is a frozen lazy ask; called standalone it
 # builds now and stashes the artifact in the case. Importing it registers every
-# mesher behind it - OceanMesh2D and the regular lattice - and emits an MDAL
-# display layer plus the durable mesh artifact a model template discovers through
-# the precondition gate.
+# mesher behind it.
 from trid3nt_server.workflows.mesh.tool import build_mesh as _build_mesh  # noqa: E402,F401 - mesh domain primitive (tier=general)
-# mesh_op: the runtime face of the word a recipe is written in - append, alter or
-# remove one call on the recipe of the mesh open at the gate, then regenerate. The
-# whole of the mesh-refinement loop.
+# mesh_op: append, alter or remove one call on the recipe of the mesh open at the
+# gate, then regenerate. The whole of the mesh-refinement loop.
 from trid3nt_server.workflows.mesh.op_tool import mesh_op as _mesh_op  # noqa: E402,F401 - mesh domain primitive (tier=general)
 
 
-# COPY-ME authoring template (docs/authoring/writing-a-tool.md). Importing the
-# module is always safe: its @register_tool call is gated behind the
-# TRID3NT_ENABLE_EXAMPLE_TOOL env flag, so it registers example_bbox_area ONLY
-# when a developer explicitly enables it (demo / retrieval-visibility check).
-# Default = imported-but-inert, so it never pollutes the production catalog.
+# COPY-ME authoring template. Importing it is always safe: its @register_tool call
+# is gated behind TRID3NT_ENABLE_EXAMPLE_TOOL, so by default the module is
+# imported-but-inert and never pollutes the production catalog.
 from . import _example_tool_template  # noqa: E402,F401 - INERT unless TRID3NT_ENABLE_EXAMPLE_TOOL is set

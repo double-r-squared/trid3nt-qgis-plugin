@@ -1,9 +1,4 @@
-"""Shared layer-uri helper for agent tools (no ``cases/`` platform import).
-
-``agent/tools/*`` must not import the ``cases/`` platform package (layering:
-``cases/`` sits above ``agent/tools/``, not below it), so the agent-side source
-of ``_strip_query`` lives here.
-"""
+"""Layer-uri helper shared by tools that must not import the cases package."""
 
 from __future__ import annotations
 

@@ -1,45 +1,8 @@
-"""Tool-argument normalizer - kwargs cleanup at the call site.
-
-Gemini routinely invents kwargs the tool doesn't actually accept
-(``run_name``, ``scenario_id``, ``description``, ``rainfall_event``,
-``return_period_years`` when the function declared ``return_period_yr``, etc.).
-Strict Python signatures fail loud on every one of them as
-``TypeError: <fn>() got an unexpected keyword argument <name>``. We've patched
-the most common offenders piecemeal -- this module is the **centralized sweep**.
-
-What this module does, at the agent's ``_invoke_tool_via_emitter`` boundary,
-BEFORE ``entry.fn(**params)``:
-
-1. **Alias mapping** -- known abbreviation pairs (``_yr`` → ``_years``,
-   ``_hr`` → ``_hours``, etc.) are rewritten if the tool's signature accepts
-   the canonical name but the LLM provided the alias (or vice-versa).
-2. **camelCase / snake_case bridging** -- if the LLM sends ``durationHours``
-   and the tool accepts ``duration_hours``, we rename.
-3. **String-form forcing parsing** -- when the LLM stuffs the design-storm
-   spec into a string like ``"atlas14_100yr"`` or ``"100-yr / 24-hr design
-   storm"``, we extract ``return_period_years=100`` / ``duration_hours=24``
-   so downstream tools see the canonical fields.
-4. **Unknown-kwarg absorption** -- params not in the tool's signature and not
-   absorbed by ``**kwargs`` get logged and dropped, never raised.
-
-The function ``normalize_args(tool_name, raw_args, fn)`` is the public entry
-point; ``fn`` is the registered callable (we inspect its signature directly
-rather than maintain a parallel registry of accepted params).
-
-Design notes:
-
-- **No tool-body changes required.** This module's whole point is to keep the
-  57 tool implementations free of ``**_extra_ignored`` boilerplate. The
-  normalizer reads ``inspect.signature(fn)`` and decides what to forward.
-- **Logs are the audit trail.** Every alias rewrite + drop emits a single INFO
-  / DEBUG line so we can spot recurring LLM mistakes and bake them into the
-  alias table.
-- **Idempotent + side-effect free.** Returns a fresh dict; never mutates the
-  caller's params. Safe to call inside hot loops.
-- **Generic aliases first; tool-specific overrides win.** The ``_ALIAS_MAP``
-  is global (``return_period_years`` ↔ ``return_period_yr`` works across
-  every flood tool). Tool-specific quirks live in ``_TOOL_SPECIFIC_ALIASES``.
-"""
+"""Kwargs cleanup at the dispatch seam, before ``entry.fn(**params)``: aliases and
+camelCase keys renamed onto names the signature accepts, a string-form design storm
+parsed into its canonical fields, and anything the signature cannot absorb DROPPED
+rather than raised. Pure and idempotent - a fresh dict out, the caller's params
+untouched, never raises. Every rewrite and drop emits one log line."""
 
 from __future__ import annotations
 
@@ -66,13 +29,9 @@ __all__ = [
 
 
 class LatLonCoercionError(ValueError):
-    """Raised by :func:`coerce_latlon` when a value is genuinely not 2 numbers.
-
-    Distinct ``ValueError`` subtype so callers can catch *only* the
-    latlon-coercion failure and surface a clean typed error
-    (e.g. ``MODFLOW_PARAMS_INVALID``) instead of swallowing an unrelated
-    ``ValueError``.
-    """
+    """Raised by :func:`coerce_latlon` when a value is genuinely not two numbers.
+    A distinct subtype so a caller catches only this, not an unrelated
+    ``ValueError``."""
 
 
 # --------------------------------------------------------------------------- #
@@ -95,7 +54,7 @@ _BIDIRECTIONAL_ALIASES: tuple[tuple[str, str], ...] = (
 
 
 def _build_alias_map() -> dict[str, str]:
-    """Flatten the bidirectional pairs into a directed alias→canonical map."""
+    """Flatten the bidirectional pairs into a directed alias -> canonical map."""
     m: dict[str, str] = {}
     for canon, alias in _BIDIRECTIONAL_ALIASES:
         # Both directions land in the map keyed by the "wrong" name pointing at
@@ -112,10 +71,8 @@ def _build_alias_map() -> dict[str, str]:
 #: win over the generic alias map.
 _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
     "sfincs_flood": {
-        # engine-door refactor (SFINCS slice): the flood template (was
-        # run_model_flood_scenario). Gemini sometimes uses "place" /
-        # "location_name" instead of "location_query" because the docstring's
-        # "Examples:" block names places freely.
+        # The model reaches for "place" / "location_name" instead of
+        # "location_query" because the docstring names places freely.
         "place": "location_query",
         "location_name": "location_query",
         "location": "location_query",
@@ -144,7 +101,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
     },
     # -----------------------------------------------------------------------
     # endpoint aliases.
-    # For each new tool: param-name variants Gemini is likely to invent based
+    # For each new tool: param-name variants the model is likely to invent based
     # on (a) common GIS/API terminology, (b) naming patterns in adjacent tools,
     # (c) docstring prose that names related concepts.
     # -----------------------------------------------------------------------
@@ -153,12 +110,12 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # sfha_only aliases -- Gemini may expand the acronym or use noun form
+        # sfha_only aliases -- the model may expand the acronym or use noun form
         "sfha": "sfha_only",
         "special_flood_hazard": "sfha_only",
         "sfha_filter": "sfha_only",
         "flood_hazard_only": "sfha_only",
-        # zone_filter aliases -- Gemini may use plural or shorter names
+        # zone_filter aliases -- the model may use plural or shorter names
         "zones": "zone_filter",
         "flood_zones": "zone_filter",
         "zone_codes": "zone_filter",
@@ -170,7 +127,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # variable aliases -- Gemini may use "vars", "fields", or shortened forms
+        # variable aliases -- the model may use "vars", "fields", or shortened forms
         "vars": "variable",
         "fields": "variable",
         "variables": "variable",
@@ -182,7 +139,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "lead_hour": "forecast_hour",
         "lead_time": "forecast_hour",
         "forecast_lead": "forecast_hour",
-        # cycle aliases -- Gemini may use ISO or descriptive names
+        # cycle aliases -- the model may use ISO or descriptive names
         "cycle_iso": "cycle",
         "run_time": "cycle",
         "init_time": "cycle",
@@ -200,7 +157,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "cfg": "product",
         "run_type": "product",
         "model_config": "product",
-        # valid_time aliases -- Gemini may use datetime / date / time
+        # valid_time aliases -- the model may use datetime / date / time
         "datetime": "valid_time",
         "date": "valid_time",
         "time": "valid_time",
@@ -217,7 +174,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # layer aliases -- Gemini may use "type", "layer_type", or specific layer names
+        # layer aliases -- the model may use "type", "layer_type", or specific layer names
         "layer_type": "layer",
         "geometry_type": "layer",
         "levee_type": "layer",
@@ -255,7 +212,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # start_time aliases -- Gemini often invents start_date / begin / from
+        # start_time aliases -- the model often invents start_date / begin / from
         "start_date": "start_time",
         "begin": "start_time",
         "start": "start_time",
@@ -315,7 +272,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "end_time": "end_date",
         "datetime_end": "end_date",
         "date_end": "end_date",
-        # product aliases -- Gemini may use "data_type", "observation_type"
+        # product aliases -- the model may use "data_type", "observation_type"
         "data_type": "product",
         "observation_type": "product",
         "tide_product": "product",
@@ -326,7 +283,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # scenario_ft aliases -- Gemini may use scenario, sea_level_rise, slr
+        # scenario_ft aliases -- the model may use scenario, sea_level_rise, slr
         "scenario": "scenario_ft",
         "scenarios": "scenario_ft",
         "sea_level_rise": "scenario_ft",
@@ -352,7 +309,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "to_date": "end_date",
         "end_time": "end_date",
         "datetime_end": "end_date",
-        # output aliases -- Gemini may use "variable", "product", "data_type"
+        # output aliases -- the model may use "variable", "product", "data_type"
         "variable": "output",
         "product": "output",
         "data_type": "output",
@@ -380,14 +337,14 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "time_end": "end_time",
     },
     "fetch_nhdplus_nldi_navigate": {
-        # seed_point aliases -- Gemini may use "point", "location", "coordinate"
+        # seed_point aliases -- the model may use "point", "location", "coordinate"
         "point": "seed_point",
         "location": "seed_point",
         "coordinate": "seed_point",
         "coordinates": "seed_point",
         "lat_lon": "seed_point",
         "latlon": "seed_point",
-        # comid aliases -- Gemini may use "reach_id", "nhd_id", "feature_id"
+        # comid aliases -- the model may use "reach_id", "nhd_id", "feature_id"
         "reach_id": "comid",
         "nhd_id": "comid",
         "feature_id": "comid",
@@ -410,14 +367,14 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # field aliases -- Gemini may use "attribute", "variable", "soil_property"
+        # field aliases -- the model may use "attribute", "variable", "soil_property"
         "attribute": "field",
         "variable": "field",
         "soil_property": "field",
         "property": "field",
         "soil_attribute": "field",
         "soil_field": "field",
-        # timeout_s aliases -- Gemini may omit the _s suffix or use different forms
+        # timeout_s aliases -- the model may omit the _s suffix or use different forms
         "timeout": "timeout_s",
         "timeout_seconds": "timeout_s",
         "http_timeout": "timeout_s",
@@ -451,7 +408,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # resolution aliases -- Gemini may use "res", "cell_size", "pixel_size"
+        # resolution aliases -- the model may use "res", "cell_size", "pixel_size"
         "res": "resolution",
         "cell_size": "resolution",
         "pixel_size": "resolution",
@@ -473,7 +430,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
-        # layer aliases -- Gemini may use "variable", "fuel_layer", "product"
+        # layer aliases -- the model may use "variable", "fuel_layer", "product"
         "variable": "layer",
         "fuel_layer": "layer",
         "product": "layer",
@@ -484,8 +441,8 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
 }
 
 
-#: Kwargs we silently drop without warning (Gemini convenience fields that
-#: never carry signal). Logged at DEBUG level only.
+#: Kwargs silently dropped (model-convenience fields that never carry signal).
+#: Logged at DEBUG level only.
 _SILENT_DROP: frozenset[str] = frozenset(
     {
         "run_name",
@@ -510,10 +467,7 @@ _CAMEL_RE = re.compile(r"(?<!^)(?=[A-Z])")
 
 
 def snake_case(name: str) -> str:
-    """Convert ``durationHours`` → ``duration_hours``.
-
-    No-op on already-snake_case strings; pure (no global state).
-    """
+    """Convert ``durationHours`` -> ``duration_hours``; a no-op on snake_case."""
     if "_" in name or name.islower():
         # Already snake-ish (or single lowercase word) -- leave alone.
         return name.lower() if name.isupper() else name
@@ -522,20 +476,9 @@ def snake_case(name: str) -> str:
 
 def coerce_bbox_value(value: Any) -> list[float] | None:
     """Parse an LLM-emitted bbox into ``[min_lon, min_lat, max_lon, max_lat]``.
-
-    Gemini frequently stuffs the bbox into a STRING -- ``"[-81.9, 26.5, -81.7,
-    26.6]"``, ``"-81.9,26.5,-81.7,26.6"``, ``"(-81.9 26.5 -81.7 26.6)"`` -- even
-    when the tool's Python signature wants a list of 4 floats. Several tools
-    (``compute_building_density``, ``compute_flood_depth_damage``, …) then reject
-    it with ``len(bbox) != 4`` (a string's char length) or a ``not a tuple/list``
-    type error. Live 2026-06-16: a compute_* tool failed 3× on a
-    string bbox, tripping the circuit breaker and blocking the downstream panel.
-
-    Accepts: a 4-element list/tuple (coerced to floats), or a string holding 4
-    comma/space-separated numbers with optional surrounding brackets/parens.
-    Returns ``None`` when the value is not a recognizable 4-number bbox (caller
-    leaves the original value untouched so the tool's own validator speaks).
-    """
+    Accepts a 4-element sequence or a string of 4 comma/space-separated numbers with
+    optional brackets; ``None`` when it is not a recognizable 4-number bbox, so the
+    caller leaves the value untouched and the tool's own validator speaks."""
     if isinstance(value, (list, tuple)):
         if len(value) != 4:
             return None
@@ -546,10 +489,9 @@ def coerce_bbox_value(value: Any) -> list[float] | None:
     if not isinstance(value, str):
         return None
     s = value.strip()
-    # Strip surrounding quote characters first: a bbox double-encoded as a JSON
-    # string arrives with LITERAL quote chars, e.g. ``'"-122.5,37.5,-121.5,38.5"'``
-    # (observed live -- the first call failed with "bbox must be [min_lon,...]").
-    # Peel up to two matching quote layers so '"\'...\'"' also normalizes.
+    # A bbox double-encoded as a JSON string arrives with LITERAL quote chars, e.g.
+    # ``'"-122.5,37.5,-121.5,38.5"'``. Peel up to two matching quote layers so
+    # '"\'...\'"' also normalizes.
     for _ in range(2):
         if len(s) >= 2 and s[0] in "\"'" and s[-1] == s[0]:
             s = s[1:-1].strip()
@@ -570,35 +512,10 @@ def coerce_bbox_value(value: Any) -> list[float] | None:
 
 
 def coerce_latlon(value: Any) -> list[float]:
-    """Coerce an LLM-emitted lat/lon point into ``[lat, lon]`` (two floats).
-
-    Bedrock Claude (and other providers) routinely pass a coordinate *point*
-    parameter as a STRING rather than a JSON array - observed live
-    on ``modflow_contaminant_plume``'s ``spill_location_latlon``::
-
-        "40.8088861,-96.7077751"   "40.81, -96.71"
-        "[40.81, -96.71]"          "(40.81, -96.71)"
-        "40.81 -96.71"
-
-    The naive ``tuple(float(v) for v in value)`` iterates the STRING'S
-    CHARACTERS, so ``float('.')`` raises "could not convert string to float:
-    '.'" and the whole run dies as ``MODFLOW_PARAMS_INVALID`` (non-retryable).
-    Same coercion class as the news-ingest fix.
-
-    Accepts ALL of:
-      * a real 2-element list/tuple of numbers (passed through as floats);
-      * ``"lat,lon"`` / ``"lat, lon"`` (comma, optional whitespace);
-      * ``"[lat, lon]"`` / ``"(lat, lon)"`` (one layer of brackets/parens);
-      * whitespace-separated ``"lat lon"``.
-
-    Returns ``[lat, lon]`` (floats). Order is preserved verbatim -- this helper
-    does NOT reorder or range-check (the downstream contract owns lat/lon range
-    validation); it only guarantees two parsed floats.
-
-    Raises:
-        LatLonCoercionError: when ``value`` is genuinely not two numbers
-            (wrong element count, non-numeric parts, ``None``, etc.).
-    """
+    """Coerce an LLM-emitted lat/lon point into ``[lat, lon]``, accepting a
+    2-element sequence or ``"lat,lon"`` / ``"[lat, lon]"`` / ``"lat lon"``. Order is
+    preserved verbatim and nothing is range-checked - two parsed floats is the whole
+    guarantee. Raises ``LatLonCoercionError`` when the value is not two numbers."""
     if value is None:
         raise LatLonCoercionError("lat/lon is required (got None)")
     # Real list/tuple path -- pass through with float coercion.
@@ -618,6 +535,9 @@ def coerce_latlon(value: Any) -> list[float]:
         raise LatLonCoercionError(
             f"lat/lon must be a 2-list or 'lat,lon' string, got {type(value).__name__}"
         )
+    # A coordinate parameter arrives as a STRING often enough to matter: the naive
+    # ``tuple(float(v) for v in value)`` would iterate the string's CHARACTERS and
+    # die on the decimal point, turning a routable call into a hard param error.
     s = value.strip()
     if not s:
         raise LatLonCoercionError("lat/lon string is empty")
@@ -640,19 +560,9 @@ def coerce_latlon(value: Any) -> list[float]:
 
 
 def parse_forcing_string(s: str) -> dict[str, int]:
-    """Parse a free-text design-storm string into ``{return_period_years, duration_hours}``.
-
-    Handles the most common LLM-invented forms:
-
-    - ``"atlas14_100yr"`` → ``{"return_period_years": 100}``
-    - ``"atlas14_100yr_24hr"`` → ``{"return_period_years": 100, "duration_hours": 24}``
-    - ``"100-yr / 24-hr design storm"`` → both fields
-    - ``"500 year"`` → ``{"return_period_years": 500}``
-    - ``"6 hour"`` → ``{"duration_hours": 6}``
-
-    Returns an empty dict if nothing recognizable is found -- the caller still
-    gets a dict and can fall back to defaults.
-    """
+    """Parse a free-text design storm into ``{return_period_years,
+    duration_hours}``; either key may be absent. An unrecognizable string yields an
+    empty dict, never an error, so the caller can fall back to its defaults."""
     if not s:
         return {}
     out: dict[str, int] = {}
@@ -673,12 +583,9 @@ def parse_forcing_string(s: str) -> dict[str, int]:
 
 
 def _accepted_params(fn: Callable[..., Any]) -> tuple[set[str], bool]:
-    """Return ``(accepted_param_names, accepts_var_keyword)`` for ``fn``.
-
-    If the function declares ``**kwargs`` (any var-keyword param), the second
-    element is True and the normalizer leaves unknown kwargs alone -- the
-    function will absorb them.
-    """
+    """``(accepted_param_names, accepts_var_keyword)`` for ``fn``. A ``**kwargs``
+    declaration sets the flag, and the normalizer then leaves unknown kwargs
+    alone."""
     try:
         sig = inspect.signature(fn)
     except (TypeError, ValueError):
@@ -731,29 +638,10 @@ def autofill_missing_bbox(
     active_aoi: Any = None,
     case_bbox: Any = None,
 ) -> dict[str, Any]:
-    """Fill a REQUIRED bbox-like param the model OMITTED.
-
-    The canvas AOI is a structured field: the client stamps ``aoi_bbox`` on
-    the user-message payload, the server stores it as the session's active
-    AOI, and here -- at the dispatch seam -- a tool call whose signature
-    REQUIRES ``bbox`` / ``aoi_bbox`` but arrived without it gets the value
-    injected. Precedence (first valid wins):
-
-        explicit model arg  >  active canvas AOI  >  Case bbox
-
-    Hard rules:
-      * NEVER overrides an explicit arg -- a present, non-None value is left
-        exactly as the model sent it (the existing pinned-AOI snap owns that
-        case downstream).
-      * Only REQUIRED params fill (no default in the signature); an optional
-        bbox param's absence is the tool's own documented behavior.
-      * Candidates are validated (4 finite numbers, min < max both axes);
-        an invalid candidate falls through to the next source.
-      * Pure function: returns a fresh dict when it fires, the original
-        otherwise; never raises.
-
-    One log line fires per filled param naming the source that won.
-    """
+    """Fill a REQUIRED bbox-like param the model OMITTED, first valid wins in the
+    order explicit arg > active canvas AOI > Case bbox. An explicit value is NEVER
+    overridden and an optional param never fills. Returns a fresh dict when it
+    fires, the original otherwise; never raises, one log line per filled param."""
     try:
         sig = inspect.signature(fn)
     except (TypeError, ValueError):
@@ -821,12 +709,9 @@ def _enum_fuzzy_enabled() -> bool:
 
 
 def _literal_values(annotation: Any) -> tuple[str, ...]:
-    """Extract the STRING choices from a (possibly nested) ``Literal`` annotation.
-
-    Handles ``Literal[...]`` directly and one level of union nesting
-    (``Literal[...] | None`` / ``Optional[Literal[...]]``). Non-string literal
-    members disqualify the param (we only ever correct strings).
-    """
+    """The STRING choices of a ``Literal`` annotation, through one level of union
+    nesting. A non-string literal member disqualifies the param entirely - only
+    strings are ever corrected."""
     origin = typing.get_origin(annotation)
     if origin is typing.Literal:
         vals = typing.get_args(annotation)
@@ -846,10 +731,8 @@ def _literal_values(annotation: Any) -> tuple[str, ...]:
 
 def _literal_choices(fn: Callable[..., Any]) -> dict[str, tuple[str, ...]]:
     """``{param_name: (choice, ...)}`` for every string-Literal param of ``fn``.
-
-    Best-effort: an un-introspectable signature or unresolvable annotations
-    return ``{}`` (never raises -- the correction is an optimization).
-    """
+    Best-effort: an un-introspectable signature or unresolvable annotations return
+    ``{}``, never an error."""
     try:
         sig = inspect.signature(fn)
     except (TypeError, ValueError):
@@ -879,15 +762,10 @@ def fuzzy_correct_enum_args(
     params: dict[str, Any],
     fn: Callable[..., Any],
 ) -> dict[str, Any]:
-    """difflib-correct string args that miss their param's ``Literal`` choices.
-
-    Only fires for params whose annotation declares string ``Literal`` choices
-    AND whose supplied value is a string not among them. An exact
-    case/separator-insensitive match maps straight to the canonical choice;
-    otherwise ``difflib.get_close_matches`` (n=1, cutoff 0.8) decides. Below
-    the cutoff the value is left as-is (the tool's typed error owns it).
-    Pure: returns a fresh dict when a correction fires, the original otherwise.
-    """
+    """difflib-correct string args that miss their param's ``Literal`` choices. A
+    case/separator-insensitive hit maps straight to the canonical choice; below the
+    cutoff the value is left as-is so the tool's typed error still owns it. Returns
+    a fresh dict when a correction fires, the original otherwise."""
     if not params or not _enum_fuzzy_enabled():
         return params
     choices_by_param = _literal_choices(fn)
@@ -933,49 +811,17 @@ def normalize_args(
     raw_args: dict[str, Any],
     fn: Callable[..., Any],
 ) -> dict[str, Any]:
-    """Normalize ``raw_args`` so ``fn(**normalized)`` won't raise on Gemini quirks.
-
-    Pipeline (each step idempotent, fresh-dict output):
-
-    1. **camelCase → snake_case** on every key the function does not already
-       accept verbatim. Bypasses the rename if the snake form is also unknown.
-    2. **Tool-specific alias** (``_TOOL_SPECIFIC_ALIASES[tool_name]``) rewrites.
-    3. **Generic bidirectional alias** (``_BIDIRECTIONAL_ALIASES``) rewrites --
-       only fires if the rename lands the kwarg on an accepted-param name and
-       the canonical name isn't already in ``raw_args``.
-    4. **String-form forcing parsing** -- if ``raw_args`` carries ``forcing``
-       or ``rainfall_event`` as a string AND the function accepts
-       ``return_period_years`` / ``duration_hours``, extract those.
-    5. **Silent-drop list** -- known Gemini-convenience kwargs dropped at DEBUG.
-    6. **Absorb-and-log** -- remaining unknown kwargs dropped at INFO (with the
-       tool name) so we can surface them in logs and add them to the alias
-       map / silent-drop list over time.
-
-    If the function declares ``**kwargs``, steps 5-6 are bypassed (the
-    function explicitly opted into "give me everything").
-
-    Args:
-        tool_name: ``TOOL_REGISTRY`` key -- used for per-tool override lookup
-            and for log attribution.
-        raw_args: the params dict as the LLM produced it (already
-            ``parse_arguments_string``-decoded if string-form).
-        fn: the registered callable. The signature is inspected to decide
-            what's accepted; we never call it here.
-
-    Returns:
-        A fresh dict safe to splat into ``fn(**…)``. Never raises.
-    """
+    """Normalize ``raw_args`` so ``fn(**normalized)`` will not raise on a model's
+    kwarg quirks. ``tool_name`` is the ``TOOL_REGISTRY`` key; ``fn`` is inspected,
+    never called. A function declaring ``**kwargs`` keeps every unknown kwarg,
+    otherwise unknowns are dropped rather than raised. Never raises."""
     if not raw_args:
         return {}
-    # telemac_river_dye combined-coordinate alias (live 2026-07-18, 3x): qwen
-    # packs the release point into ONE string field 'spill_location_latlon'
-    # ("lat,lon") instead of release_lat/release_lon. This MUST normalize
-    # HERE - the gate preview reads normalized args before the tool
-    # function runs, and the approve-click later injects release_* so a
-    # tool-level parse guarded on "coords absent" never fires (proven live:
-    # the preview meshed the wrong river while the coords sat unread).
-    # (engine-door refactor, TELEMAC slice: keyed on the renamed template - the
-    # run_telemac name is now the read-only door.)
+    # A model may pack the release point into ONE 'spill_location_latlon' string
+    # instead of release_lat/release_lon. This MUST normalize HERE: the gate preview
+    # reads normalized args before the tool function runs, and the approve-click
+    # injects release_* only afterwards, so a tool-level parse guarded on "coords
+    # absent" would never fire and the preview would mesh the wrong river.
     if (tool_name == "telemac_river_dye"
             and isinstance(raw_args.get("spill_location_latlon"), str)
             and raw_args.get("release_lat") is None
@@ -1007,7 +853,7 @@ def normalize_args(
     for key, value in raw_args.items():
         target = key
 
-        # Step 1: camelCase → snake_case. Always normalize the case form so
+        # Step 1: camelCase -> snake_case. Always normalize the case form so
         # subsequent alias chains can match. If the snake form is in accepted
         # OR in the alias map, the rename is useful; otherwise leave alone.
         if target not in accepted:
@@ -1066,8 +912,8 @@ def normalize_args(
         else:
             dropped_unknown.append(key)
 
-    # Step 4: string-form forcing parsing. If the LLM sent ``forcing=…`` or
-    # ``rainfall_event=…`` AND the tool accepts the canonical year/hour fields,
+    # Step 4: string-form forcing parsing. If the model sent ``forcing=...`` or
+    # ``rainfall_event=...`` AND the tool accepts the canonical year/hour fields,
     # extract them. Don't overwrite explicit fields the LLM also supplied.
     forcing_str = raw_args.get("forcing") or raw_args.get("rainfall_event")
     if isinstance(forcing_str, str) and (
@@ -1106,11 +952,6 @@ def normalize_args(
             )
             out["bbox"] = coerced
 
-    # Fuzzy enum-arg correction. A string
-    # value that misses its param's Literal choices by a near-miss (typo /
-    # case / separator) is difflib-corrected (cutoff 0.8) with a log line;
-    # anything below the cutoff keeps the normal typed-error path.
-    # TRID3NT_ENUM_FUZZY=0 is the kill switch (checked inside).
     out = fuzzy_correct_enum_args(tool_name, out, fn)
 
     # Logging tail.

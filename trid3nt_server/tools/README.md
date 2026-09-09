@@ -15,8 +15,8 @@ registry and the cache shim are the two seams they all pass through.
 | `payload_sampling.py` | Sampled payload-size estimation, so the size a warning quotes is measured rather than modelled. |
 | `tool_arg_normalizer.py` | Call-site kwargs cleanup, so an invented argument does not fail a call the tool could still take. |
 | `tool_query_corpus.yaml` | The routing phrasings tool retrieval scores an ask against. |
-| `_uri_util.py` | Layer-uri helpers shared by tools that resolve a case layer's uri to its underlying file. |
-| `vector_tiles.py` | The densify / PMTiles seam a dense vector layer takes instead of the inline-GeoJSON emit path. |
+| `_uri_util.py` | The layer-uri query-strip helper, shared by tools that must not import the cases package. |
+| `vector_tiles.py` | The dense-vector seam: simplify, cap and round a FeatureCollection before it is attached to the inline-GeoJSON emit path. |
 
 ## Subfolders
 
@@ -26,7 +26,7 @@ registry and the cache shim are the two seams they all pass through.
 | `fetchers/` | Data fetchers, one folder per phenomenon measured (`climate`, `hazard`, `hydrology`, `imagery`, `ocean`, `socioeconomic`, `soil`, `terrain`, `weather`), plus the shared helpers at its root and `_router/`. See below. |
 | `meta/` | Utility tools: `code_exec_tool`, `compose_case_report`, `list_run_frames`, `spatial_input_tool`. |
 | `processing/` | Compute / clip / extract / vector-edit / chart tools, one folder per tool, flat, plus the shared GDAL, geometry, hydrology and chart cores. |
-| `search/` | Dataset and tool discovery: the YAML catalog tools, the Living Atlas index, the OGC adapter, `search_tools` retrieval and `web_fetch`. |
+| `search/` | Dataset and tool discovery: `search_data_catalog` and `fetch_from_catalog` over the YAML catalog, `search_living_atlas` and `fetch_living_atlas_layer` over the harvested Living Atlas, `search_spatial_functions`, `search_tools` retrieval, the OGC adapter and `web_fetch`. |
 
 ## `fetchers/` - the router and its shared root
 

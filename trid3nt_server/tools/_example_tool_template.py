@@ -1,3 +1,4 @@
+# docstring-exempt: copy-me authoring template; the docstring IS the demonstrated artifact
 """``example_bbox_area`` -- COPY-ME template for a new atomic tool.
 
 This is a COMPLETE, WORKING, minimal registered tool you copy to start your own.
@@ -70,13 +71,14 @@ _METADATA = AtomicToolMetadata(
 #     server-side via _ALWAYS_OFFLOAD_SYNC_TOOLS instead.
 #
 # The docstring is LOAD-BEARING: the adapter builds the LLM tool declaration from
-# the SIGNATURE + this docstring, and Bedrock TRUNCATES the description to 1000
-# chars. FRONT-LOAD the routing block (What / When to use / When NOT) so it
+# the SIGNATURE + this docstring, and the provider TRUNCATES the description to
+# 1000 chars. FRONT-LOAD the routing block (What / When to use / When NOT) so it
 # survives the cut. See docs/authoring/writing-a-tool.md section E.
 #
 # TODO: in a REAL tool, drop the ``if _ENABLED`` gate below and decorate the
 # function directly:  @register_tool(_METADATA, open_world_hint=True)
 # ---------------------------------------------------------------------------
+# docstring-exempt: copy-me authoring template; the docstring IS the demonstrated artifact
 def example_bbox_area(
     bbox: tuple[float, float, float, float],
     label: str = "area of interest",

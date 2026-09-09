@@ -1,26 +1,9 @@
-"""Dense-vector handling for the inline-GeoJSON emit path.
+"""The one decision + transform seam for a vector FeatureCollection on the
+inline-GeoJSON emit path.
 
-A dense vector layer - thousands of OSM building-footprint polygons - attached
-to ``session-state`` as one raw inline-GeoJSON ``FeatureCollection`` is
-expensive to ship and expensive to draw. This module is the single decision +
-transform seam the choke point (``pipeline_emitter._read_vector_uri_as_geojson``)
-calls on every vector FeatureCollection before it is attached for the client:
-
-    densify_if_needed(fc) -> (fc_out, meta)
-
-- ``feature_count <= THRESHOLD``  -> the FC is returned UNCHANGED; ``meta`` is
-  ``None``. The inline path is byte-for-byte preserved for small layers.
-- ``feature_count >  THRESHOLD``  -> every geometry is Douglas-Peucker
-  simplified with ``preserve_topology`` (shared edges stay shared; no slivers
-  or holes) at a tolerance scaled to the layer's own extent, and the feature
-  list is capped at ``MAX_INLINE_FEATURES``, keeping the LARGEST features by
-  bbox area so the map stays representative rather than arbitrarily clipped.
-  ``meta`` records ``simplified`` / ``capped`` / original-vs-emitted counts so
-  the layer is TAGGED, never silently degraded.
-
-Simplification only DROPS vertices or DROPS whole features; it never invents a
-coordinate. The simplified FC carries the same geometry families as the input,
-so no styling changes with it.
+Below ``DENSE_VECTOR_THRESHOLD`` the FC is returned unchanged. Above it,
+simplification only DROPS vertices or DROPS whole features - it never invents a
+coordinate, and the geometry families are unchanged, so styling is unaffected.
 """
 
 from __future__ import annotations
@@ -78,12 +61,9 @@ MAX_INLINE_FEATURES: int = max(
 
 @dataclass(frozen=True)
 class DensifyMeta:
-    """What ``densify_if_needed`` did to a dense FeatureCollection.
-
-    ``None`` is returned alongside the FC when the layer was below threshold
-    (untouched). When present, the choke point stamps these onto the wire layer
-    so the client surfaces the degradation honestly.
-    """
+    """What ``densify_if_needed`` did to a dense FeatureCollection. Present only
+    when the layer was at or above threshold; a below-threshold layer gets
+    ``None``."""
 
     strategy: str  # "simplified" | "capped" | "simplified+capped" | "inline" | "tiled"
     original_feature_count: int
@@ -94,11 +74,7 @@ class DensifyMeta:
     tiles_uri: str | None = None
 
     def as_wire_tag(self) -> dict[str, Any]:
-        """Additive dict merged onto the wire layer dict (extra-tolerant on TS).
-
-        Mirrors the inline-GeoJSON additive-field pattern: the strict
-        ``ProjectLayerSummary`` is dumped first, then this is merged in.
-        """
+        """Additive dict merged onto an already-dumped wire layer dict."""
         return {
             "vector_density": {
                 "strategy": self.strategy,
@@ -111,7 +87,7 @@ class DensifyMeta:
 
 
 # --------------------------------------------------------------------------- #
-# Geometry helpers (shapely — already a hard dep via geopandas)
+# Geometry helpers (shapely - already a hard dep via geopandas)
 # --------------------------------------------------------------------------- #
 
 def _feature_count(fc: dict[str, Any]) -> int:
@@ -137,22 +113,22 @@ def _fc_bounds(geoms: list[Any]) -> tuple[float, float, float, float] | None:
 
 
 def _scaled_tolerance(bounds: tuple[float, float, float, float]) -> float:
-    """Douglas-Peucker tolerance (in CRS units, EPSG:4326 degrees) scaled to the
-    layer extent. ~1/4000 of the larger span keeps building-footprint corners
-    while collapsing redundant vertices. Floored so a tiny extent still
-    simplifies meaningfully; capped so a huge extent doesn't over-collapse."""
+    """Douglas-Peucker tolerance in CRS units (EPSG:4326 degrees), scaled to the
+    layer extent and clamped so a tiny extent still simplifies and a huge one does
+    not over-collapse."""
     minx, miny, maxx, maxy = bounds
     span = max(maxx - minx, maxy - miny)
+    # 1/4000 of the larger span keeps building-footprint corners while collapsing
+    # redundant vertices; the clamp holds the result between roughly 1 m and 50 m at
+    # mid-latitudes (1 deg lat ~= 111 km).
     tol = span / 4000.0
-    # ~1 m to ~50 m at mid-latitudes (1 deg lat ~= 111 km).
     return min(max(tol, 1e-5), 5e-4)
 
 
-#: Output coordinate precision (decimal degrees) for dense layers. 6 dp ≈ 0.11 m
-#: at the equator — well below building-footprint fidelity — but shapely.mapping
-#: emits full float repr (~15 sig digits), so rounding is a real, geometry-safe
-#: wire-byte win EVEN when Douglas-Peucker drops no vertices (the simple-footprint
-#: case the F94 verifier flagged as otherwise unaddressed). Env-overridable.
+#: Output coordinate precision (decimal degrees) for dense layers. 6 dp is about
+#: 0.11 m at the equator, well below building-footprint fidelity, while
+#: shapely.mapping otherwise emits a full float repr (~15 sig digits) - so rounding
+#: is a geometry-safe wire-byte win even when Douglas-Peucker drops no vertices.
 _COORD_PRECISION: int = _env_int("TRID3NT_DENSE_VECTOR_COORD_DP", 6)
 
 
@@ -199,22 +175,15 @@ def _strategy_label(simplified: bool, capped: bool) -> str:
         return "simplified"
     if capped:
         return "capped"
-    # Dense, but no vertices dropped and no features cut — only coordinate
+    # Dense, but no vertices dropped and no features cut - only coordinate
     # precision was trimmed. Do NOT claim "simplified".
     return "inline"
 
 
 def _simplify_and_cap(fc: dict[str, Any]) -> tuple[dict[str, Any], bool, bool, int]:
-    """Topology-preserving simplify + coord-precision trim + largest-area cap.
-
-    Returns ``(fc_out, simplified, capped, emitted_count)``. ``simplified`` is
-    True ONLY when Douglas-Peucker actually removed coordinates (so the honesty
-    tag never claims a reduction that did not happen — F94 verifier fix); the
-    always-applied coordinate-precision rounding is a separate, unflagged
-    wire-byte win. Best-effort: on any shapely failure the ORIGINAL fc is
-    returned with ``simplified=False`` so the layer still renders (never a silent
-    dead-end — the caller logs).
-    """
+    """Returns ``(fc_out, simplified, capped, emitted_count)``; ``simplified`` is
+    True only when Douglas-Peucker actually removed coordinates. Best-effort: any
+    shapely failure returns the ORIGINAL fc with ``simplified=False``."""
     try:
         from shapely.geometry import mapping, shape  # type: ignore[import-not-found]
     except Exception as exc:  # noqa: BLE001
@@ -234,7 +203,7 @@ def _simplify_and_cap(fc: dict[str, Any]) -> tuple[dict[str, Any], bool, bool, i
             continue
         try:
             g = shape(geom)
-        except Exception:  # noqa: BLE001 — skip an unparseable feature, keep going
+        except Exception:  # noqa: BLE001 - skip an unparseable feature, keep going
             continue
         if g.is_empty:
             continue
@@ -253,19 +222,18 @@ def _simplify_and_cap(fc: dict[str, Any]) -> tuple[dict[str, Any], bool, bool, i
     for f, g in parsed:
         try:
             sg = g.simplify(tol, preserve_topology=True)
-        except Exception:  # noqa: BLE001 — keep the original geometry on failure
+        except Exception:  # noqa: BLE001 - keep the original geometry on failure
             sg = g
         if sg.is_empty:
             sg = g  # never drop a feature to emptiness via simplification
         else:
-            # HONESTY: only flag "simplified" when vertices were actually
-            # removed. For simple footprints (4-8 vertices) Douglas-Peucker
-            # frequently drops nothing; claiming a reduction then would lie to
-            # the user (F94 verifier finding).
+            # Only flag "simplified" when vertices were actually removed: for a
+            # simple footprint (4-8 vertices) Douglas-Peucker frequently drops
+            # nothing, and claiming a reduction then would be a false tag.
             try:
                 if _count_coords(_mapping(sg)) < _count_coords(_mapping(g)):
                     any_simplified = True
-            except Exception:  # noqa: BLE001 — never let the count probe break the path
+            except Exception:  # noqa: BLE001 - never let the count probe break the path
                 pass
         try:
             area = abs(sg.bounds[2] - sg.bounds[0]) * abs(sg.bounds[3] - sg.bounds[1])
@@ -307,17 +275,9 @@ def densify_if_needed(
     *,
     layer_id: str = "",
 ) -> tuple[dict[str, Any] | None, DensifyMeta | None]:
-    """Decide how a vector FeatureCollection is delivered to the client (F94).
-
-    Returns ``(fc_out, meta)``:
-    - below ``DENSE_VECTOR_THRESHOLD``: ``(fc, None)`` — current inline path
-      preserved byte-for-byte.
-    - at/above threshold: ``(simplified_capped_fc, DensifyMeta)`` — lighter to
-      ship AND lighter for MapLibre to draw, with the degradation recorded so
-      the choke point can tag the wire layer honestly.
-
-    This function is the inline-FC transform — always safe, always renders.
-    """
+    """Returns ``(fc, None)`` below ``DENSE_VECTOR_THRESHOLD`` - byte-for-byte the
+    input - and ``(simplified_capped_fc, DensifyMeta)`` at or above it. Always
+    returns a renderable FeatureCollection; never raises."""
     if not isinstance(fc, dict):
         return fc, None
     count = _feature_count(fc)
