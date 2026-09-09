@@ -19,3 +19,14 @@ Files:
 - tool-list.md - the exhaustive V&V primitive list (verify + calibrate),
   mapped to package functions; the concrete build target
 - open-questions.md - what must be answered before anything is built
+
+The fetcher fold wave's measurements also live here, and are records rather than
+design space:
+- fetcher-fold-census.md - the two-lens census by protocol family, 97 specs
+- fetcher-fold-stage0.md - THE TRADE, per library, measured before any spec moved
+- fetcher-fold-raster-half.md - the STAC stage
+- nlcd-manning-tables.md - our NLCD -> Manning table beside pygeohydro's, class by
+  class, with each one's published source. A DESIGN-STOP for NATE: swapping tables
+  changes run numbers, so nothing is switched
+- section-vs-hyriver.md - pynhd.flowline_xsection and py3dep.elevation_profile
+  measured against the section cut and the profile sampler. Neither folds
