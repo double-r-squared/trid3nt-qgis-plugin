@@ -36,10 +36,10 @@ gates:
   max_features: 5000
 
 ingest:
+  access: ogr
+  ogr: {driver: ESRIJSON}
   query_template:
     out_fields: "ftype"
-    f: geojson
-  pagination: {mode: exceeded_transfer_limit, page_size: 200}
   properties:
     - ftype
 
