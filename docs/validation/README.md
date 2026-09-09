@@ -25,6 +25,7 @@ design space:
 - fetcher-fold-census.md - the two-lens census by protocol family, 97 specs
 - fetcher-fold-stage0.md - THE TRADE, per library, measured before any spec moved
 - fetcher-fold-raster-half.md - the STAC stage
+- fetcher-fold-hydro-stage.md - the HyRiver stage, its parity and the FEMA NFHL wall
 - nlcd-manning-tables.md - our NLCD -> Manning table beside pygeohydro's, class by
   class, with each one's published source. A DESIGN-STOP for NATE: swapping tables
   changes run numbers, so nothing is switched
