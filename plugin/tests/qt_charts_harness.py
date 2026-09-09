@@ -150,7 +150,9 @@ DAMAGE_CHART = {
     },
 }
 
-# build_uhs_chart shape: single-view line, LINEAR axes (no log scale).
+# Uniform-hazard-spectrum shape: single-view line, LINEAR axes (no log
+# scale). No live producer builds this shape today - the fixture stands on
+# its own as a harness smoke case for the renderer.
 UHS_CHART = {
     "envelope_type": "chart-emission",
     "chart_id": "01HARNESSUHSAAAAAAAAAAAAAA",
