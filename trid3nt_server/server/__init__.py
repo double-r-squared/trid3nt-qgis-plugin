@@ -1,12 +1,8 @@
-"""``trid3nt_server.server`` -- the daemon core.
+"""``trid3nt_server.server`` - the daemon core.
 
-The turn engine, WS connection loop, tool dispatch, gate waits, and session
-state live in the ``session/`` ``turn/`` ``dispatch/`` ``protocol/`` subpackages
-(plus the evicted gate engine in ``trid3nt_server.gates.confirm``). This package
-presents ONE ``trid3nt_server.server.<name>`` namespace: the facade below proxies
-attribute reads across the leaf modules and propagates monkeypatch writes to the
-leaf that owns the binding, so importers and tests see a single flat surface.
-"""
+The subpackages below hold the turn engine, connection loop, tool dispatch and
+session state; this package presents ONE flat
+``trid3nt_server.server.<name>`` namespace over them."""
 
 from __future__ import annotations
 
@@ -103,13 +99,9 @@ __all__ = [
 
 
 class _ServerFacade(_ModuleType):
-    """One flat ``trid3nt_server.server.X`` namespace over the leaf modules.
-
-    A read resolves to the first leaf that binds ``X``; a monkeypatch write
-    rebinds ``X`` in every leaf that already defines it, and a novel write lands
-    on the facade. ``SOLVER_CONFIRM_TOOLS`` / ``FETCH_CONFIRM_TOOLS`` synthesize
-    from the registry via the gate engine.
-    """
+    """One flat ``trid3nt_server.server.X`` namespace over the leaf modules: a
+    read resolves to the first leaf binding ``X``, a write rebinds it in every
+    leaf that defines it, and a novel write lands on the facade."""
 
     def __getattr__(self, name: str):
         if name == "SOLVER_CONFIRM_TOOLS":

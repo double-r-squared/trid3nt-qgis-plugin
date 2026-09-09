@@ -1,22 +1,15 @@
 """Environment-knob configuration helpers for the WebSocket server.
 
-Every helper
-here is a pure ``env -> value`` reader with no session coupling: read LIVE (not
-an import-time snapshot) unless noted, fail-safe to the documented default on a
-malformed value, and honor the ``TRID3NT_*`` env idiom so a live regression can
-be flipped without a code change. Moved verbatim (behavior-preserving); ``_core``
-re-imports these names so bare-global references and monkeypatch targets on
-``trid3nt_server.server.<name>`` resolve exactly as the monolith's did.
-"""
+Every helper is a pure ``env -> value`` reader with no session coupling: read
+LIVE rather than as an import-time snapshot unless noted, and fail safe to the
+documented default on a malformed value."""
 
 from __future__ import annotations
 
 import os
 
-# ---------------------------------------------------------------------------
-# Tool-retrieval K (the discover top-k for retrieve_visible_tools). Enforce is
-# the unconditional, built-in surfacing path; K is the only lever (default 25;
-# retrieve_visible_tools clamps to [1, MAX_K]).
+# Tool-retrieval K, the discover top-k for retrieve_visible_tools. Surfacing is
+# unconditional; K is the only lever (retrieve_visible_tools clamps it).
 def _tool_retrieval_k() -> int:
     """Resolve TRID3NT_TOOL_RETRIEVAL_K (default 25); fall back to the default on
     any parse error. Read per-call so a test can override via the env without a
@@ -32,32 +25,25 @@ def _tool_retrieval_k() -> int:
         return DEFAULT_K
 
 
-# The ``code_exec_request`` confirm gate validity window (seconds). Running
-# arbitrary Python is a deliberate user decision; on expiry the gate fails
-# closed (CONFIRMATION_TIMEOUT) and the sandbox does not run. The code-exec
-# gate itself no longer waits on this constant (see
-# ``_code_exec_approval_timeout_s``); it is retained because the credential /
-# region-choice / solver-confirm gates borrow it as their default wait window.
+# The ``code_exec_request`` confirm gate validity window (seconds). On expiry
+# the gate fails closed and the sandbox does not run. The code-exec gate itself
+# no longer waits on this constant; it survives because the credential,
+# region-choice and solver-confirm gates borrow it as their default window.
 CODE_EXEC_CONFIRM_TIMEOUT_SECONDS: int = int(
     os.environ.get("TRID3NT_CODE_EXEC_CONFIRM_TIMEOUT", "300")
 )
 
-# Honest timeout on unanswered code-exec approvals: the code-exec gate gets its
-# OWN bounded approval window that applies in EVERY lane (deliberately bypassing
-# the F6 24h local override). When no confirmation envelope answers the card in
-# time, the gate raises the typed ``CodeExecApprovalTimeoutError`` so the LLM
-# receives a structured function_response, narrates honestly, and the TURN
-# COMPLETES. Read LIVE (not an import-time snapshot) so runtime flips are honored.
+# The code-exec gate has its OWN bounded approval window that applies in every
+# lane. When no confirmation answers the card in time the gate raises the typed
+# ``CodeExecApprovalTimeoutError``, so the model narrates honestly and the turn
+# COMPLETES. Read LIVE, not as an import-time snapshot, so a flip is honored.
 CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S: float = 180.0
 
 
 def _code_exec_approval_timeout_s() -> float:
-    """Effective approval-wait window (seconds) for the code-exec confirm gate.
-
-    Env override ``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``; default 180s.
-    Malformed / non-positive values fall back to the default (never an
-    unbounded or zero wait).
-    """
+    """Effective approval-wait window for the code-exec confirm gate
+    (``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``, default 180s); a malformed or
+    non-positive value takes the default, never an unbounded or zero wait."""
     raw = os.environ.get("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S")
     if raw is None:
         return CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S
@@ -82,17 +68,13 @@ def _env_flag(name: str, default: bool = True) -> bool:
 
 
 def _ambiguity_margin_threshold() -> float:
-    """Measured-ambiguity threshold (``TRID3NT_AMBIGUITY_MARGIN``).
-
-    RELATIVE top-1 vs top-2 retrieval-score margin under which AUTO mode still
-    surfaces the tool-candidates card. Calibration: RRF fused scores are
-    rank-compressed -- a tool that is rank-1 on every channel beats a
-    consistent rank-2 by only ~1.6% relative, while a genuine cross-channel
-    tie (each of two tools rank-1 somewhere) lands well under ~1%. The 0.01
-    default therefore fires ONLY on genuine channel disagreement, not on any
-    consistently-ordered ranking. ``0`` disables ambiguity asks entirely (the
-    kill switch; ask mode is unaffected). Malformed -> default.
-    """
+    """Measured-ambiguity threshold (``TRID3NT_AMBIGUITY_MARGIN``): the relative
+    top-1 vs top-2 margin under which AUTO mode still surfaces the candidates
+    card; ``0`` disables ambiguity asks and a malformed value takes the default."""
+    # RRF fused scores are rank-compressed: a tool that is rank-1 on every
+    # channel beats a consistent rank-2 by only ~1.6% relative, while a genuine
+    # cross-channel tie lands well under ~1%. The 0.01 default therefore fires
+    # only on real channel disagreement, not on a consistently ordered ranking.
     raw = os.environ.get("TRID3NT_AMBIGUITY_MARGIN")
     if raw is None:
         return 0.01
@@ -104,13 +86,9 @@ def _ambiguity_margin_threshold() -> float:
 
 
 def _tool_choice_timeout_s() -> float:
-    """Bounded wait (seconds) for a ``tool-choice`` reply to the
-    ``tool-candidates`` card (``TRID3NT_TOOL_CHOICE_TIMEOUT_S``, default 45).
-
-    Deliberately BYPASSES the F6 24h local-lane ``_gate_wait_timeout``
-    override (the code-exec-gate precedent): an unanswered picker must
-    degrade to autonomous routing, never hang the turn.
-    """
+    """Bounded wait for a ``tool-choice`` reply to the tool-candidates card
+    (``TRID3NT_TOOL_CHOICE_TIMEOUT_S``, default 45); an unanswered picker
+    degrades to autonomous routing rather than hanging the turn."""
     raw = os.environ.get("TRID3NT_TOOL_CHOICE_TIMEOUT_S")
     if raw is None:
         return 45.0
