@@ -1,158 +1,7 @@
-"""Solver dispatch atomic tools.
+"""Solver dispatch atomic tools: ``run_solver`` and ``wait_for_completion``.
 
-This module registers two atomic tools that drive the solver-execution
-substrate. Dispatch is a local container run (``local-docker``) or a
-direct-binary run (``local-exec``) on this machine, selected per solver by its
-``LocalSolverSpec`` exec spec. Together they implement the **solver-dispatch
-surface**:
-
-    - ``run_solver(solver, model_setup_uri, compute_class="medium")
-       -> ExecutionHandle`` -- submits a solver run on the active backend.
-      Currently only ``solver="sfincs"`` is supported; other values raise
-      ``SolverNotRegisteredError``.
-
-    - ``wait_for_completion(handle, poll_interval_s=10, timeout_s=1800)
-       -> RunResult`` -- polls the run backing ``handle`` every
-      ``poll_interval_s`` seconds, emits a ``pipeline-state`` progress update
-      on every poll via ``PipelineEmitter.update_progress`` (the opt-in seam
-      surfaced for M5+ solvers), and on success reads
-      ``completion.json`` from the runs bucket and returns a populated
-      ``RunResult``. On failure or cancellation the matching terminal
-      ``RunResult`` is returned.
-
-Both tools are uncacheable-by-construction (solver dispatchers are explicitly
-enumerated): ``cacheable=False``, ``ttl_class="live-no-cache"``,
-``source_class="solver_dispatch"``. They never touch the cache shim.
-
-Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
-
-- **Invariant 1 (Determinism boundary): preserves.** Progress estimation is
-  a wall-clock linear ramp keyed off ``handle.submitted_at`` and the
-  target (900 s for ``≤15 min``) -- not an LLM estimate. The ramp
-  is clamped at 95% until the Workflow returns SUCCEEDED (then jumps to
-  100%) so we never falsely advertise completion.
-
-- **Invariant 2 (Deterministic workflows): preserves.** ``run_solver`` is a
-  thin solver dispatch (local container / direct binary);
-  no LLM in the dispatch. The deterministic step graph (stage → invoke →
-  read completion) is owned by the backend.
-
-- **Invariant 8 (Cancellation is first-class): the headline.** Cancel chain
-  end-to-end:
-
-      WS cancel -> server.py inflight_task.cancel()
-                -> asyncio.CancelledError inside emit_tool_call
-                -> emit_tool_call CALLs invoke() which is our
-                    wait_for_completion coroutine
-                -> wait_for_completion sees CancelledError in its poll
-                    sleep, terminates the live container
-                    (≤30 s, Invariant-8)
-                -> the supervisor writes the status="cancelled"
-                    completion.json
-                -> wait_for_completion re-raises CancelledError so
-                    emit_tool_call's mark_cancelled branch fires
-
-  30s budget. The backend handler terminates the run
-  *before* re-raising the ``CancelledError`` so the kill is initiated
-  atomically with the local cancel.
-
-- **A.7 replace-not-reconcile: preserves.** Every progress emission goes
-  through ``PipelineEmitter.update_progress(step_id, ...)``, which already
-  builds the full snapshot per A.7. We never hand-roll a partial frame.
-
-- **Uncacheable (enumeration): preserves.** Both tools declare
-  ``cacheable=False`` + ``ttl_class="live-no-cache"`` + a new source class
-  ``"solver_dispatch"``. The kickoff explicitly enumerates them.
-
-Dependency-injection seams:
-
-- ``_EMITTER_BINDING`` / ``set_emitter_binding(emitter, step_id)`` -- the
-  active ``PipelineEmitter`` + the step_id this ``wait_for_completion``
-  invocation is bracketed by, set by the integration site (``server.py``)
-  where ``emit_tool_call`` surfaces its ``step_id`` to the tool body.
-
-- ``_RUNS_BUCKET`` / ``set_runs_bucket(name)`` -- overrides the runs bucket
-  name. Used by tests to reach a fixture bucket; production wiring leaves it
-  at the env-driven default.
-
-- ``_S3_CLIENT`` / ``set_s3_client(client)`` -- the boto3 S3 client used for
-  ALL S3 staging / completion I/O. Lazily-default to the EC2 instance-role
-  client (boto3-not-s3fs lesson).
-
-Run id generation: the agent service generates a ULID per ``run_solver``
-call. The same id is used to compose the runs-bucket completion path
-(``s3://<runs_bucket>/<run_id>/completion.json``).
-
-Solver backend (local-only)
----------------------------
-
-``local-docker`` is the ONLY backend:
-
-- ``local-docker`` -- the S3-IN → sfincs → S3-OUT envelope lives INSIDE the
-  agent (testable Python); the object store is whatever ``AWS_ENDPOINT_URL``
-  points at (locally: MinIO). The container is the PLAIN upstream
-  ``deltares/sfincs-cpu`` binary image run via ``docker run`` on this
-  machine:
-
-      run_solver: mint run_id → download the setup manifest from S3 (boto3)
-        → stage every ``inputs[]`` object into ``$TRID3NT_RUNS_DIR/<run_id>/``
-        (manifest field name stays the legacy ``gs_uri``; the VALUE is an
-        ``s3://`` URI resolved by scheme via boto3)
-        → launch ``docker run --rm --name <run_id> -v <rundir>:/data -w /data
-        $TRID3NT_SFINCS_IMAGE [sfincs_args]`` DETACHED (Popen) → return
-        ExecutionHandle immediately (``workflow_name="local-docker"``,
-        ``workflows_execution_id="local-docker:<run_id>"`` -- the container
-        name IS the run_id, which is the Invariant-8 cancellation seam).
-
-      supervisor (daemon thread): waits on the docker process, expands the
-        manifest's ``outputs[]`` globs in the rundir, uploads outputs +
-        sfincs.stdout/sfincs.stderr to ``s3://$TRID3NT_RUNS_BUCKET/<run_id>/``
-        (boto3), and ALWAYS writes ``completion.json`` (exact entrypoint.py
-        schema: run_id/status/exit_code/sfincs_stdout_uri/sfincs_stderr_uri/
-        output_uris/started_at/finished_at/error) -- even on crash
-        (status="error") or cancel (status="cancelled").
-
-      wait_for_completion: dispatches on ``handle.workflow_name`` -- local
-        handles poll the completion.json object on S3 (cadence/timeout/
-        progress-ramp semantics) and build the RunResult with
-        ``output_uri = s3://<runs_bucket>/<run_id>/``.
-
-      cancel chain: ``asyncio.CancelledError`` in the poll sleep → mark the
-        run cancelled + ``docker kill <run_id>`` (≤30 s, Invariant-8) → the
-        supervisor wakes on process exit and writes the status="cancelled"
-        completion.json → re-raise.
-
-  ``TRID3NT_RUNS_BUCKET`` has NO default under local-docker (a missing value
-  raises ``SolverDispatchError``). boto3 is used for ALL S3 I/O (s3fs falls
-  back to anonymous credentials on the EC2 instance role - lesson).
-
-Generalized local backend
-----------------------------------------------------
-
-``LocalSolverSpec`` extends the machinery to MODFLOW without forking it. The
-staging → detached launch → supervisor → completion.json → S3-poll envelope is
-solver-agnostic; the solver-specific knobs are bundled into a
-``LocalSolverSpec`` (manifest argv key, launch argv builder, stdout/stderr
-artifact names, completion-manifest field names, an optional post-exit
-classifier for solver-specific status resolution, and the cancel kind):
-
-- SFINCS keeps the ``docker run`` path verbatim
-  (``_run_solver_local_docker`` builds the SFINCS spec; the completion.json
-  is byte-identical to ``workers/sfincs/entrypoint.py``).
-- MODFLOW (``workflows/run_modflow.py``) launches the **mf6 binary directly**
-  (``exec_kind="exec"`` -- no public MODFLOW image exists; the instance gets
-  the same SHA-pinned USGS 6.5.0 static binary the worker image installs).
-  Its spec's ``classify_exit`` reproduces the MODFLOW entrypoint's
-  list-file convergence guard, and the completion.json carries the EXACT
-  ``workers/modflow/entrypoint.py`` key set (``mf6_stdout_uri`` /
-  ``mf6_stderr_uri`` / ``converged`` / ``model_crs``).
-
-Cancel kinds: ``"docker"`` → ``docker kill <run_id>`` (container name ==
-run_id); ``"exec"`` → ``os.killpg`` on the detached process group
-(``start_new_session=True`` makes pgid == pid). Both terminal ≤30 s
-(Invariant 8). ``wait_for_completion`` dispatches on the handle's
-``workflow_name`` ∈ {``local-docker``, ``local-exec``} -- the poll loop is
-shared.
+Dispatch is a local container run or a direct-binary run on this machine,
+selected per solver by its ``LocalSolverSpec``; both tools are uncacheable.
 """
 
 from __future__ import annotations
@@ -208,19 +57,16 @@ logger = logging.getLogger("trid3nt_server.workflows.solver.solver")
 # --------------------------------------------------------------------------- #
 
 
-#: Target run-time budget for ≤200 km² at 30m (15 min).
-#: Progress is wall-clock linear in (now - submitted_at) / target.
+#: Target run-time budget the progress ramp is linear in: progress is
+#: (now - submitted_at) / target, and nothing else.
 NFR_P_4_TARGET_SECONDS: float = 900.0
 
-#: Default poll cadence -- matches the ≤15-min budget granularity (≥9 polls).
+#: Default poll cadence, matched to the target budget granularity.
 DEFAULT_POLL_INTERVAL_S: int = 10
 
-#: Default overall timeout (30 min -- mirrors the Cloud Run Job task_timeout
-#: gives 2× headroom over the target budget). Env-overridable via
-#: ``TRID3NT_SOLVER_TIMEOUT_S`` so a legitimately long run (a large coastal
-#: quadtree + SnapWave solve exceeds the 30-min pluvial budget this constant was
-#: sized for) can be given more headroom on the box WITHOUT touching the call
-#: sites; absent/garbage env falls back to 1800 so default behaviour is unchanged.
+#: Default overall timeout, roughly twice the target budget. Env-overridable via
+#: ``TRID3NT_SOLVER_TIMEOUT_S`` so a legitimately long solve gets headroom without
+#: touching a call site; an absent or unparseable value falls back to the default.
 def _default_timeout_s() -> int:
     raw = (os.environ.get("TRID3NT_SOLVER_TIMEOUT_S") or "").strip()
     try:
@@ -232,44 +78,35 @@ def _default_timeout_s() -> int:
 
 DEFAULT_TIMEOUT_S: int = _default_timeout_s()
 
-#: Highest progress we ever advertise before the Workflow is SUCCEEDED.
-#: Clamp keeps us honest under late runs -- the chip never jumps to 100% on
-#: estimate alone.
+#: Highest progress ever advertised before the run reports success: the clamp is
+#: what stops a late run reading as finished on the strength of an estimate.
 PROGRESS_CLAMP_MAX: int = 95
 
-#: Final progress when the Workflow reports SUCCEEDED.
+#: Final progress, written only when the run actually reports success.
 PROGRESS_TERMINAL: int = 100
 
 
-#: Solver → workflow name registry. The VALUE is the canonical
-#: workflow/composer name for the solver; the registry is consumed purely as a
-#: PRESENCE GATE by ``run_solver`` (an unregistered solver raises
-#: ``SolverNotRegisteredError``) -- the live backend routing + the handle's pinned
-#: ``workflow_name`` come from the backend sentinel
-#: (``LOCAL_DOCKER_WORKFLOW_NAME`` / ``LOCAL_EXEC_WORKFLOW_NAME``), not from this
-#: value. Every entry is now contributed at import by the engine that owns it
-#: (``workflows/telemac/solving/run_telemac.py`` registers the TELEMAC solvers beside
-#: their ``LocalSolverSpec``), so a solver named here without a spec behind it
-#: cannot happen: the two land together or not at all.
+#: Solver -> workflow name registry, consumed purely as a PRESENCE GATE: an
+#: unregistered solver raises, and the backend routing comes from the handle's
+#: pinned sentinel rather than from this value. Every entry is contributed at
+#: import by the engine that owns it, beside that engine's ``LocalSolverSpec``,
+#: so a solver named here without a spec behind it cannot happen.
 SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {}
 
 
 # --- Solver backend seam --- #
 
-#: The ONE backend: plain upstream ``deltares/sfincs-cpu`` via ``docker run`` on
-#: this machine; the staging/upload envelope lives in this module.
+#: The container backend: ``docker run`` on this machine, with the staging and
+#: upload envelope living in this module.
 SOLVER_BACKEND_LOCAL_DOCKER: str = "local-docker"
 
-#: ``ExecutionHandle.workflow_name`` sentinel for local-docker handles --
-#: ``wait_for_completion`` dispatches on it (the handle pins its backend so
-#: env churn between submit and wait cannot mis-route the poll).
+#: ``ExecutionHandle.workflow_name`` sentinel for container handles. The poll
+#: dispatches on it, so env churn between submit and wait cannot mis-route it.
 LOCAL_DOCKER_WORKFLOW_NAME: str = "local-docker"
 
-#: ``ExecutionHandle.workflow_name`` sentinel for image-less local runs that
-#: exec a solver binary directly (MODFLOW's mf6 has no public
-#: image; the USGS static binary runs on the instance). Same poll loop as
-#: local-docker; the cancel chain kills the detached process group instead
-#: of a container.
+#: ``ExecutionHandle.workflow_name`` sentinel for image-less runs that exec a
+#: solver binary directly. Same poll loop; the cancel chain kills the detached
+#: process group instead of a container.
 LOCAL_EXEC_WORKFLOW_NAME: str = "local-exec"
 
 #: The two local workflow_name sentinels ``wait_for_completion`` accepts.
@@ -285,7 +122,7 @@ LOCAL_DOCKER_WORKFLOW_LOCATION: str = "local"
 DEFAULT_LOCAL_RUNS_DIR: str = "/opt/trid3nt/runs"
 
 #: Budget for the ``docker kill`` subprocess on cancel -- comfortably inside
-#: the ≤30 s cancellation-budget envelope.
+#: the 30 s cancellation-budget envelope.
 DOCKER_KILL_TIMEOUT_S: float = 25.0
 
 
@@ -311,19 +148,15 @@ COMPUTE_CLASS_ALIAS: dict[str, str] = {
 
 
 class SolverNotRegisteredError(ValueError):
-    """Raised by ``run_solver`` when ``solver`` is not in
-    ``SOLVER_WORKFLOW_REGISTRY``. Distinct from a tool-params-invalid error
-    so the agent surface can render a useful "solver X not supported in v0.1
-    (ships sfincs only - TELEMAC / MODFLOW / HEC-HMS land in
-    their respective milestones)" message."""
+    """``solver`` is not in ``SOLVER_WORKFLOW_REGISTRY``.
+    Its own type, distinct from a params-invalid error, so the agent surface can
+    say which solvers ARE registered rather than blaming the arguments."""
 
 
 class SolverDispatchError(RuntimeError):
-    """Raised when the backend dispatch (local container / direct binary)
-    fails or the completion-manifest read fails. The
-    agent's emitter classifier maps this to ``UPSTREAM_API_ERROR``. The
-    ``error_code`` attribute carries the open-set A.6 code so a downstream
-    wrapper can re-emit it verbatim."""
+    """The backend dispatch or the completion-manifest read failed.
+    The ``error_code`` attribute carries the typed code, so a downstream wrapper
+    re-emits it verbatim rather than re-deriving one."""
 
     error_code: str = "SOLVER_DISPATCH_FAILED"
 
@@ -335,14 +168,9 @@ class SolverDispatchError(RuntimeError):
 
 @dataclass(frozen=True)
 class EmitterBinding:
-    """Tuple of (emitter, step_id) the active ``wait_for_completion`` invocation
-    should drive progress emissions through.
-
-    The integration site (``server.py``'s ``emit_tool_call`` wrapper) is
-    responsible for binding this around each ``wait_for_completion`` call;
-    until that follow-up job lands, the smoke harness binds it directly per
-    the kickoff TENTATIVE recommendation.
-    """
+    """The ``(emitter, step_id)`` pair the active ``wait_for_completion`` drives its
+    progress emissions through. The caller binds it around each call and clears it
+    after; an unbound invocation emits nothing rather than guessing a step."""
 
     emitter: Any
     step_id: str
@@ -355,10 +183,7 @@ _S3_CLIENT: Any | None = None
 
 def set_emitter_binding(binding: EmitterBinding | None) -> None:
     """Bind the active ``(emitter, step_id)`` pair for progress emission.
-
-    See class docstring for the integration-site discipline. ``None`` clears
-    the binding (the polling loop falls back to no-op progress emission).
-    """
+    ``None`` clears it, and the polling loop falls back to no-op emission."""
     global _EMITTER_BINDING
     _EMITTER_BINDING = binding
 
@@ -370,30 +195,17 @@ def set_runs_bucket(name: str | None) -> None:
 
 
 def set_s3_client(client: Any) -> None:
-    """Bind the boto3 S3 client used for ALL local-docker S3 I/O.
-
-    Production wiring leaves this ``None``: the lazy default builds
-    ``boto3.client("s3", region_name=$AWS_REGION)``, whose endpoint and
-    credentials come from the ambient environment - boto3, never s3fs, because
-    s3fs falls back to anonymous access and reads corrupt bytes.
-    Tests inject a tmpdir-backed fake exposing ``get_object`` /
-    ``put_object``. ``None`` restores the lazy default.
-
-    The deck-assembly (``sfincs_builder``) and run-output
-    (``postprocess_flood``) S3 paths share this seam so one injection covers
-    the whole staged-manifest → solve → postprocess chain.
-    """
+    """Bind the boto3 S3 client used for ALL local-backend S3 I/O.
+    ``None`` restores the lazy default, which reads its endpoint and credentials
+    from the ambient environment. The whole staged-solve chain shares this seam."""
     global _S3_CLIENT
     _S3_CLIENT = client
 
 
 def _get_s3_client() -> Any:
     """Return the bound S3 client or lazily construct the boto3 default.
-
-    boto3 (NOT s3fs) for all S3 I/O -- s3fs falls back to anonymous
-    credentials on the EC2 instance role. Lazy import so
-    A process that never dispatches a solver never pays for boto3 at import.
-    """
+    boto3, never s3fs, which falls back to anonymous credentials; imported lazily
+    so a process that dispatches no solver never pays for it."""
     if _S3_CLIENT is not None:
         return _S3_CLIENT
     try:
@@ -414,13 +226,9 @@ def _get_runs_bucket() -> str:
 
 
 def _get_local_runs_bucket() -> str:
-    """Runs bucket under local-docker, with NO default at all.
-
-    ``set_runs_bucket`` wins (the test seam); otherwise ``TRID3NT_RUNS_BUCKET``
-    must be set explicitly. A default here would let every run upload into a
-    bucket nobody provisioned and call it a success, so an unset variable fails
-    loudly instead.
-    """
+    """Runs bucket under the local backend, with NO default at all.
+    An unset ``TRID3NT_RUNS_BUCKET`` fails loudly: a default would let every run
+    upload into a bucket nobody provisioned and call it a success."""
     if _RUNS_BUCKET is not None:
         return _RUNS_BUCKET
     bucket = (os.environ.get("TRID3NT_RUNS_BUCKET") or "").strip()
@@ -433,27 +241,22 @@ def _get_local_runs_bucket() -> str:
 
 
 # --------------------------------------------------------------------------- #
-# local-docker backend
-#
-# The GCS-IN → sfincs → GCS-OUT envelope from
-# ``workers/sfincs/entrypoint.py`` ported into the agent: staging,
-# detached ``docker run`` of the plain upstream image, a supervisor thread
-# that uploads outputs and ALWAYS writes the entrypoint-schema
-# completion.json, S3 completion polling, and the docker-kill cancel chain.
+# The local backend envelope, one shape for every solver: stage the manifest's
+# inputs from the object store, launch the solver DETACHED, hand a supervisor
+# thread the process, upload the outputs and ALWAYS write completion.json, poll
+# that object from the caller, and cancel by killing the container or the process
+# group. Only the knobs in ``LocalSolverSpec`` differ between solvers.
 # --------------------------------------------------------------------------- #
 
 
 def _utc_now_iso() -> str:
-    """ISO8601-Z timestamp matching the entrypoint's ``_utc_now`` format."""
+    """ISO8601-Z timestamp, the format completion.json records times in."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _split_object_uri(uri: str) -> tuple[str, str, str]:
-    """Split ``s3://bucket/key`` → (scheme, bucket, key).
-
-    Only the ``s3://`` scheme is supported. Raises
-    ``SolverDispatchError`` on malformed or unsupported URIs.
-    """
+    """Split ``s3://bucket/key`` into ``(scheme, bucket, key)``.
+    Only ``s3://`` is supported; anything else raises ``SolverDispatchError``."""
     prefix = "s3://"
     if uri.startswith(prefix):
         bucket, _, key = uri[len(prefix):].partition("/")
@@ -466,9 +269,8 @@ def _split_object_uri(uri: str) -> tuple[str, str, str]:
 
 
 def _read_object_bytes(uri: str) -> bytes:
-    """Read one object's bytes, resolved BY SCHEME (kickoff):
-    ``s3://`` via boto3, ``file://`` / local path via the filesystem (the
-    sfincs_builder local-manifest fallback)."""
+    """Read one object's bytes, resolved BY SCHEME: ``s3://`` via boto3, a
+    ``file://`` or bare local path through the filesystem."""
     if uri.startswith("file://"):
         return Path(uri[len("file://"):]).read_bytes()
     if not uri.startswith("s3://"):
@@ -479,13 +281,9 @@ def _read_object_bytes(uri: str) -> bytes:
 
 
 def _download_object(uri: str, dest: Path) -> None:
-    """Download one staged input to ``dest``, resolved by scheme.
-
-    The manifest's input entries keep the LEGACY field name ``gs_uri`` but
-    the VALUE is an ``s3://`` URI (the storage backend) - we dispatch
-    on the URI scheme, never the field name. Only
-    ``s3://`` (and ``file://`` / local paths) are resolved.
-    """
+    """Download one staged input to ``dest``, resolved by scheme."""
+    # Dispatch on the URI SCHEME, never on the manifest field name: the input
+    # entries are keyed ``gs_uri`` while the value is an ``s3://`` URI.
     dest.parent.mkdir(parents=True, exist_ok=True)
     if uri.startswith("file://") or not uri.startswith("s3://"):
         src = Path(uri[len("file://"):] if uri.startswith("file://") else uri)
@@ -509,37 +307,9 @@ def _upload_file_s3(s3: Any, src: Path, bucket: str, key: str) -> str:
 
 @dataclass(frozen=True)
 class LocalSolverSpec:
-    """Solver-specific knobs for the shared local backend.
-
-    The staging → detached launch → supervisor → completion.json
-    envelope is solver-agnostic; this spec carries everything that is not:
-
-    Fields:
-        solver: lowercase solver identifier carried on the handle (and used in
-            the generic non-zero-exit error message -- ``"sfincs exited with
-            non-zero code N"`` stays byte-identical for SFINCS).
-        workflow_name: the ``ExecutionHandle.workflow_name`` sentinel --
-            ``"local-docker"`` (container launch) or ``"local-exec"``
-            (direct binary launch). ``wait_for_completion`` accepts both.
-        args_key: the manifest key carrying the solver argv tail
-            (``"sfincs_args"`` / ``"mf6_args"`` -- worker-entrypoint parity).
-        build_argv: ``(run_id, rundir, manifest_args) -> argv`` -- the full
-            launch command. SFINCS builds the ``docker run --rm --name
-            <run_id> ...`` line; MODFLOW returns ``[mf6, *args]``.
-        stdout_name / stderr_name: the rundir artifact filenames (and the
-            runs-prefix upload keys) -- ``sfincs.stdout`` / ``mf6.stdout`` etc.
-        stdout_uri_field / stderr_uri_field: the completion.json field names
-            (``sfincs_stdout_uri`` vs ``mf6_stdout_uri`` -- exact entrypoint
-            schemas).
-        exec_kind: ``"docker"`` → cancel via ``docker kill <run_id>``;
-            ``"exec"`` → cancel via ``os.killpg`` on the detached group.
-        classify_exit: optional ``(rundir, exit_code) -> (status, exit_code,
-            error, extra_completion_fields)`` post-exit hook for
-            solver-specific status resolution (MODFLOW's mfsim.lst
-            convergence guard + the ``converged``/``model_crs`` completion
-            fields). ``None`` → the plain exit-code rule (SFINCS). A user
-            cancel overrides whatever the classifier returned.
-    """
+    """Everything the stage / launch / supervise / complete envelope cannot know:
+    the launch argv, the artifact and completion field names, the cancel kind, and
+    an optional post-exit classifier that a user cancel always overrides."""
 
     solver: str
     workflow_name: str
@@ -554,40 +324,23 @@ class LocalSolverSpec:
         Callable[[Path, int], tuple[str, int, str | None, dict[str, Any]]] | None
     ) = None
     env_overrides: dict[str, str] | None = None
-    """Optional environment variable overrides merged into the subprocess env.
-
-    Used by pip-only engine specs (landlab, openquake) to prepend the
-    repo root to PYTHONPATH so ``workers.*`` imports resolve in the
-    subprocess. ``None`` (the default) means the subprocess inherits the parent
-    env unchanged (SFINCS docker + MODFLOW mf6 binary paths both work without
-    any env surgery). Keys/values are plain strings; values replace (not append)
-    the matching env key. Prepend patterns (e.g. PYTHONPATH) must be assembled
-    by the spec factory using the current env value.
-    """
+    """Environment variables merged into the subprocess env; ``None`` inherits the
+    parent env unchanged. A value REPLACES the matching key, so a prepend pattern
+    must be assembled by the spec factory from the current env value."""
 
     network: str | None = None
-    """The docker network this solver's container runs on, when it declares one.
-
-    ``"none"`` is the ENGINE-ROOM posture: the container is handed a fully staged
-    run directory and can reach nothing. It is per-spec, and deliberately so - an
-    engine whose in-container fetches have not been migrated yet would fail under
-    it, so each engine adopts it as its own inputs become staged rather than by a
-    global switch. ``None`` (the default) leaves the launch line untouched, which
-    is the default bridge; a spec whose ``build_argv`` already writes its own
-    ``--network`` keeps that and must leave this unset.
-    """
+    """The docker network this solver's container runs on. ``"none"`` is the
+    ENGINE-ROOM posture - a fully staged run directory and nothing reachable - and
+    is per-spec; a spec whose ``build_argv`` writes its own must leave this unset."""
 
 
 def _with_declared_network(spec: LocalSolverSpec, cmd: list[str]) -> list[str]:
     """Apply the spec's declared docker network to a launch line.
-
-    The flag goes in HERE rather than in each ``build_argv`` because the network a
-    container is allowed is a property of whether its inputs are staged, not of
-    how its argv is spelled - and because a posture spread across five identical
-    closures is one that drifts. A spec that already writes its own ``--network``
-    is left alone: two of them on one command line is a launch failure, and the
-    closure's is the one somebody wrote on purpose.
-    """
+    A spec that writes its own ``--network`` is refused rather than doubled: two of
+    them on one command line is a launch failure."""
+    # The flag goes in here rather than in each ``build_argv`` because the network a
+    # container is allowed is a property of whether its inputs are staged, not of
+    # how its argv is spelled, and a posture spread across closures drifts.
     if not spec.network or spec.exec_kind != "docker":
         return cmd
     if "--network" in cmd:
@@ -622,18 +375,15 @@ class _LocalRun:
     supervisor: threading.Thread | None = None
 
 
-#: run_id → live local run. In-process only: ``run_solver`` and the cancel
+#: run_id -> live local run. In-process only: ``run_solver`` and the cancel
 #: chain are co-located in the agent process (the deployed topology). The
 #: supervisor pops its entry when the completion.json is written.
 _LOCAL_RUNS: dict[str, _LocalRun] = {}
 
 
 def _expand_local_outputs(patterns: list[str], rundir: Path) -> list[Path]:
-    """Glob-expand the manifest ``outputs[]`` in the rundir -- mirrors the
-    entrypoints' ``_expand_outputs`` (files only, de-duplicated, sorted).
-    ``recursive=True`` so ``**`` patterns behave like the SFINCS/MODFLOW
-    worker entrypoints (the MODFLOW manifest carries
-    ``**/gwt_model.ucn`` / ``**/*.lst`` belt-and-suspenders nets)."""
+    """Glob-expand the manifest ``outputs[]`` in the rundir: files only,
+    de-duplicated, sorted, and ``**`` walked recursively."""
     seen: set[Path] = set()
     for pat in patterns:
         for hit in _glob.glob(str(rundir / pat), recursive=True):
@@ -647,14 +397,8 @@ def _discover_publish_manifest_uri(
     s3: Any, runs_bucket: str, run_id: str
 ) -> str | None:
     """The ``publish_manifest.json`` a self-S3 worker wrote under the run prefix.
-
-    A container that reaches the object store itself writes both its manifests
-    and its own completion.json; the supervisor's completion write lands LAST and
-    overwrites the worker's. Without this probe the pointer dies with it and
-    ``read_publish_manifest`` -- which requires the pointer, never globs -- hands
-    every consumer an empty metrics carrier. Returns ``None`` when the worker
-    wrote no manifest (the mounted-rundir specs).
-    """
+    Probed because the supervisor's completion write lands LAST and overwrites the
+    worker's own; ``None`` when the worker wrote no manifest."""
     key = f"{run_id}/publish_manifest.json"
     try:
         s3.head_object(Bucket=runs_bucket, Key=key)
@@ -681,27 +425,12 @@ def _write_local_completion(
     solver: str | None = None,
     code: dict[str, Any] | None = None,
 ) -> None:
-    """Write ``s3://<runs_bucket>/<run_id>/completion.json`` -- EXACT
-    worker-entrypoint schema (the ``wait_for_completion`` terminal signal).
-
-    the stdout/stderr field names + an ``extra`` field dict are
-    spec-driven so the MODFLOW completion carries ``mf6_stdout_uri`` /
-    ``mf6_stderr_uri`` / ``converged`` / ``model_crs`` exactly like
-    ``workers/modflow/entrypoint.py``; the SFINCS defaults are
-    byte-identical.
-
-    V&V wave: ``solver`` is the lowercase engine identifier
-    (``run.spec.solver``) recorded so ``read_run_diagnostics`` can resolve the
-    engine directly instead of inferring it from the stdout field name. It is
-    inserted immediately after ``exit_code`` (before the spec's ``extra`` fold;
-    no engine spec's ``extra`` carries a ``solver`` key, so it is never
-    clobbered) and is forward-only: legacy completion.json objects lack it, so
-    the reader falls back to the stdout-field-name inference.
-
-    ``publish_manifest_uri`` is discovered from the run prefix when the spec did
-    not supply one, so a self-S3 worker's manifest pointer survives this write
-    overwriting the worker's own completion.json.
-    """
+    """Write ``s3://<runs_bucket>/<run_id>/completion.json``, the terminal signal
+    ``wait_for_completion`` polls for. The stdout/stderr field names and the
+    ``extra`` fold are spec-driven, so each solver writes its own key set."""
+    # ``solver`` is recorded so a reader resolves the engine directly instead of
+    # inferring it from a stdout field name. It lands before the spec's ``extra``
+    # fold; no spec carries a ``solver`` key, so it is never clobbered.
     payload = {
         "run_id": run_id,
         "status": status,
@@ -736,10 +465,8 @@ def _write_local_completion(
 
 def _supervise_local_run(run: _LocalRun) -> None:
     """Supervisor body (daemon thread): wait on the solver process, upload
-    stdout/stderr + glob-expanded outputs to the S3 runs prefix, and ALWAYS
-    write completion.json -- even on crash (status="error") or cancel
-    (status="cancelled"). Mirrors the entrypoints' best-effort discipline:
-    no upload failure may prevent the terminal completion write."""
+    stdout/stderr and the expanded outputs, and ALWAYS write completion.json -
+    on crash and on cancel too. No upload failure may prevent that write."""
     status = "error"
     exit_code = 1
     error_msg: str | None = None
@@ -750,10 +477,8 @@ def _supervise_local_run(run: _LocalRun) -> None:
 
     try:
         exit_code = run.proc.wait()
-        # Solver-specific post-exit classification first (the
-        # MODFLOW spec's mfsim.lst convergence guard); the plain exit-code
-        # rule otherwise (SFINCS). A user cancel
-        # overrides either verdict below.
+        # The spec's own post-exit classifier first, the plain exit-code rule
+        # otherwise. A user cancel overrides either verdict below.
         if run.spec.classify_exit is not None:
             try:
                 status, exit_code, error_msg, completion_extra = (
@@ -785,7 +510,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
 
     try:
         s3 = _get_s3_client()
-    except Exception as exc:  # noqa: BLE001 -- no client ⇒ nothing more we can do
+    except Exception as exc:  # noqa: BLE001 -- no client, nothing more we can do
         logger.error(
             "local-docker supervisor could not build S3 client run_id=%s: %s "
             " -- completion.json NOT written (poller will time out)",
@@ -864,23 +589,9 @@ def launch_local_solver(
     run_id: str | None = None,
     compute_class: str = "medium",
 ) -> ExecutionHandle:
-    """Generic local-backend launcher (envelope, spec seam).
-
-    Non-blocking -- mirrors the Cloud Workflows submit semantics: stage the
-    manifest's inputs from the object store, launch the solver detached
-    (``spec.build_argv`` -- a ``docker run`` line or a direct binary), hand the
-    supervisor to a daemon thread, return the ``ExecutionHandle`` immediately.
-
-    Args:
-        spec: the solver-specific knobs (see ``LocalSolverSpec``).
-        model_setup_uri: ``s3://`` / ``gs://`` / ``file://`` URI of the
-            worker-contract manifest; input URIs inside resolve by scheme.
-        run_id: optional pre-minted run id (the MODFLOW deck is staged under
-            ``modflow/<run_id>/`` BEFORE submit, so its run_id must flow
-            through -- parity with the ``{run_id, manifest_uri}`` workflow
-            argument). Minted fresh when ``None`` (the SFINCS path).
-        compute_class: class, alias-mapped onto the schema literal.
-    """
+    """Generic local-backend launcher: stage, launch detached, supervise, return.
+    NON-BLOCKING - the handle comes back before the solve finishes; ``run_id`` is
+    passed in when the deck was staged under it, and minted here otherwise."""
     if not (
         model_setup_uri.startswith("s3://")
         or model_setup_uri.startswith("gs://")
@@ -922,11 +633,9 @@ def launch_local_solver(
     solver_args = [str(a) for a in (manifest.get(spec.args_key, []) or [])]
     output_patterns = [str(p) for p in (manifest.get("outputs", []) or [])]
 
-    # Write the manifest to rundir/manifest.json so subprocess-runner specs
-    # (landlab, openquake) can pass a file:// URI to their worker entrypoints
-    # without requiring a separate S3 read from the subprocess. This is a
-    # no-op for docker/exec specs that do not use the manifest URI at runtime
-    # (SFINCS passes sfincs_args; MODFLOW passes mf6_args; SWMM passes inp path).
+    # The manifest is written to rundir/manifest.json so a subprocess-runner spec
+    # can pass a file:// URI to its entrypoint without a second S3 read. A spec
+    # that passes its arguments on the command line simply ignores the file.
     # WHICH CODE is dispatching. It lands BESIDE the manifest rather than inside
     # it: manifest.json is the worker's input contract and several entrypoints
     # gate it strictly, so run provenance goes in its own file. The run record
@@ -956,7 +665,7 @@ def launch_local_solver(
     rundir_resolved = rundir.resolve()
     for item in inputs:
         try:
-            input_uri = item["gs_uri"]  # legacy field NAME; value resolved by scheme
+            input_uri = item["gs_uri"]  # the field NAME only; the value is a uri
             dest_rel = item["dest"]
         except (TypeError, KeyError) as exc:
             raise SolverDispatchError(
@@ -1003,7 +712,7 @@ def launch_local_solver(
                 stderr=err,
                 cwd=str(rundir),
                 start_new_session=True,  # detach from the agent's signal group
-                env=proc_env,  # None = inherit parent env (default / SFINCS / MODFLOW)
+                env=proc_env,  # None inherits the parent env unchanged
             )
     except Exception as exc:  # noqa: BLE001 -- docker/solver binary missing, etc.
         raise SolverDispatchError(
@@ -1056,14 +765,9 @@ def launch_local_solver(
 def _run_solver_local_docker(
     solver: str, model_setup_uri: str, compute_class: str
 ) -> ExecutionHandle:
-    """``run_solver`` body under ``TRID3NT_SOLVER_BACKEND=local-docker``.
-
-    Every solver is looked up in ``LOCAL_SOLVER_SPEC_REGISTRY``, which its own
-    workflow module fills at import time (deferred via callables, so a spec can
-    name its image and its exit classifier without importing this module back).
-    A solver with no entry raises ``SolverDispatchError`` rather than borrowing
-    somebody else's spec: a wrong-engine dispatch is worse than a loud failure.
-    """
+    """``run_solver`` body on the local backend. Every solver is looked up in
+    ``LOCAL_SOLVER_SPEC_REGISTRY``, and one with no entry RAISES rather than
+    borrowing another spec: a wrong-engine dispatch is worse than a loud failure."""
     factory = LOCAL_SOLVER_SPEC_REGISTRY.get(solver)
     if factory is not None:
         try:
@@ -1097,21 +801,9 @@ LOCAL_SOLVER_SPEC_REGISTRY: dict[str, Any] = {}
 
 
 def register_local_solver_spec(solver: str, factory: Any) -> None:
-    """Register a per-solver LocalSolverSpec factory for the local-docker backend.
-
-    Call at module import time from each workflow module that owns a pip-only
-    engine (e.g. ``run_swmm``, ``run_landlab``, ``model_openquake_psha``).
-    The factory is a zero-arg callable returning a fresh ``LocalSolverSpec``
-    instance (deferred construction avoids circular imports -- the solver module
-    is partially loaded when it first registers). Idempotent: a second call with
-    the same key overwrites silently (the last writer wins, which is harmless
-    since all callers build the same spec).
-
-    Args:
-        solver: lowercase solver identifier (must match ``SOLVER_WORKFLOW_REGISTRY``).
-        factory: ``() -> LocalSolverSpec`` -- called inside
-            ``_run_solver_local_docker`` at dispatch time.
-    """
+    """Register a per-solver ``LocalSolverSpec`` factory, at import time.
+    ``factory`` is a zero-arg callable called at DISPATCH time, so a spec can name
+    its image without importing this module back. Idempotent: last writer wins."""
     LOCAL_SOLVER_SPEC_REGISTRY[solver] = factory
 
 
@@ -1149,10 +841,9 @@ def _killpg_local_run(run: _LocalRun) -> None:
 
 
 def _kill_local_run(run_id: str) -> None:
-    """Kind-aware best-effort kill: exec-kind runs get a
-    process-group SIGKILL; docker-kind (and unknown -- e.g. after an agent
-    restart, where ``docker kill`` against the container name is the only
-    remaining lever) get ``docker kill <run_id>``."""
+    """Kind-aware best-effort kill: an exec-kind run gets a process-group SIGKILL,
+    a docker-kind or unknown run gets ``docker kill <run_id>`` - the container name
+    being the only lever left once the in-process supervisor is gone."""
     run = _LOCAL_RUNS.get(run_id)
     if run is not None and run.spec.exec_kind == "exec":
         _killpg_local_run(run)
@@ -1161,17 +852,16 @@ def _kill_local_run(run_id: str) -> None:
         logger.warning(
             "local kill for unknown run_id=%s (no in-process supervisor); "
             "issuing docker kill only -- an exec-kind run cannot be reached "
-            "after an agent restart (OQ-291-LOCAL-CANCEL-CROSS-PROCESS)",
+            "after an agent restart",
             run_id,
         )
     _docker_kill(run_id)
 
 
 def _request_local_cancel(run_id: str) -> None:
-    """Invariant-8 local cancel: flag the run cancelled, then kill the
-    container / process group (kind-aware). The supervisor wakes
-    on process exit and writes the status="cancelled" completion.json --
-    terminal within ≤30 s."""
+    """Flag the run cancelled, then kill the container or process group.
+    The supervisor wakes on process exit and writes the ``status="cancelled"``
+    completion.json, so the cancel is terminal within the kill budget."""
     run = _LOCAL_RUNS.get(run_id)
     if run is not None:
         run.cancel_requested.set()
@@ -1179,14 +869,9 @@ def _request_local_cancel(run_id: str) -> None:
 
 
 def _try_get_completion_s3(runs_bucket: str, run_id: str) -> dict[str, Any] | None:
-    """Poll ``s3://<runs_bucket>/<run_id>/completion.json`` once.
-
-    Returns the parsed manifest, ``None`` when the object is not there yet
-    (or on a transient read error -- the timeout catches persistent faults,
-    mirroring the Workflows-poll resilience). Malformed JSON raises
-    ``SolverDispatchError`` (S3 PUTs are atomic, so a parse failure is real
-    corruption, not a partial write).
-    """
+    """Poll ``s3://<runs_bucket>/<run_id>/completion.json`` once. ``None`` when the
+    object is absent or transiently unreadable; malformed JSON RAISES, an
+    object-store PUT being atomic, so a parse failure is real corruption."""
     s3 = _get_s3_client()
     try:
         resp = s3.get_object(Bucket=runs_bucket, Key=f"{run_id}/completion.json")
@@ -1224,13 +909,9 @@ def _try_get_completion_s3(runs_bucket: str, run_id: str) -> dict[str, Any] | No
 def _build_local_run_result(
     handle: ExecutionHandle, manifest: dict[str, Any], runs_bucket: str
 ) -> RunResult:
-    """Map a local-docker completion manifest onto a ``RunResult``.
-
-    ``status="ok"`` → ``complete`` with ``output_uri = s3://<runs_bucket>/
-    <run_id>/`` (the runs PREFIX, kickoff-pinned -- ``postprocess_flood``
-    resolves ``sfincs_map.nc`` inside it); ``"cancelled"`` → ``cancelled``;
-    anything else → ``failed`` with the manifest's structured error.
-    """
+    """Map a local completion manifest onto a ``RunResult``.
+    ``status="ok"`` yields ``complete`` with ``output_uri`` set to the run PREFIX,
+    not a file; ``"cancelled"`` yields ``cancelled``, anything else ``failed``."""
     manifest_status = str(manifest.get("status", "")).lower()
     started_at = _to_utc(manifest.get("started_at"))
     completed_at = _to_utc(manifest.get("finished_at")) or datetime.now(timezone.utc)
@@ -1274,9 +955,9 @@ def _build_local_run_result(
 async def _wait_for_completion_local(
     handle: ExecutionHandle, poll_interval_s: int, timeout_s: int
 ) -> RunResult:
-    """``wait_for_completion`` body for local-docker handles: poll the
-    completion.json object on S3 with the same cadence/timeout/progress-ramp
-    semantics as the Cloud Workflows poll."""
+    """``wait_for_completion`` body for a local handle: poll the completion.json
+    object under the run prefix on the caller's cadence, ramping progress and
+    stopping at the timeout."""
     runs_bucket = _get_local_runs_bucket()
     deadline = handle.submitted_at.timestamp() + float(timeout_s)
     loop = asyncio.get_running_loop()
@@ -1316,7 +997,7 @@ async def _wait_for_completion_local(
                     timeout_s,
                     handle.run_id,
                 )
-                # Timeout ≠ user cancel: kill WITHOUT the cancelled flag so the
+                # A timeout is not a user cancel: kill WITHOUT the cancelled flag so the
                 # supervisor records status="error" (mirrors the worker path's
                 # best-effort cancel + SOLVER_TIMEOUT result). Kind-aware
                 #: docker kill or process-group kill.
@@ -1339,8 +1020,8 @@ async def _wait_for_completion_local(
             await asyncio.sleep(poll_interval_s)
 
     except asyncio.CancelledError:
-        # Invariant 8: docker kill + cancelled completion within ≤30 s, then
-        # re-raise so emit_tool_call's mark_cancelled branch fires.
+        # Kill and write the cancelled completion FIRST, then re-raise, so the
+        # caller's cancel branch fires only once the run is actually terminating.
         logger.info(
             "wait_for_completion(local-docker) CANCELLED handle_id=%s; "
             "issuing docker kill %s",
@@ -1381,58 +1062,37 @@ def run_solver(
     solver: str,
     model_setup_uri: str,
     compute_class: str = "medium",
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # Absorbs kwargs the model invents; the normalizer catches these upstream too.
     **_extra_ignored: Any,
 ) -> ExecutionHandle:
-    """Submit a solver execution to the local Docker solver backend.
+    """Submit a solver execution to the local solver backend.
 
-    Use this when: an engine template has already staged a model setup and
-    the solve itself has to be dispatched. Returns
-    an ``ExecutionHandle`` whose ``workflow_name`` pins the backend and which
-    is the Invariant-8 cancellation seam -- feed it to ``wait_for_completion``
-    to poll progress and obtain the ``RunResult``.
+    Use this when: an engine template has already staged a model setup and the
+    solve has to be dispatched. Returns an ``ExecutionHandle`` that is also the
+    cancellation seam - feed it to ``wait_for_completion`` for the ``RunResult``.
 
-    Do NOT use this for: cancelling a running execution (use the WS
-    ``cancel`` envelope -- the cancel chain reaches the run automatically via
-    ``wait_for_completion``'s cancel handler); polling a running execution
-    (use ``wait_for_completion``); inspecting a completed run's outputs
-    (those land in ``RunResult.output_uri``).
+    Do NOT use this for: cancelling a running execution (the cancel envelope
+    reaches the run through ``wait_for_completion``); polling one (use
+    ``wait_for_completion``); inspecting a completed run's outputs (they land in
+    ``RunResult.output_uri``).
 
     Params:
         solver: lowercase solver identifier; it must be a key of
             ``SOLVER_WORKFLOW_REGISTRY`` or the call raises
-            ``SolverNotRegisteredError``, whose message lists what is
-            registered.
-        model_setup_uri: ``s3://`` URI of the manifest the solver envelope
-            reads -- ``inputs``, ``outputs``, and the argv tail under the key
-            the solver's spec declares; input URIs inside are resolved by
-            scheme. The engine template composes this from the atomic tool
-            substrate.
-        compute_class: compute class -- selects the sizing bucket
-            (small/standard/large/xlarge/gpu). Default ``"medium"``.
+            ``SolverNotRegisteredError``, listing what is registered.
+        model_setup_uri: ``s3://`` URI of the manifest the solver envelope reads
+            - inputs, outputs, and the argv tail. The engine template composes it.
+        compute_class: selects the sizing bucket. Default ``"medium"``.
 
     Returns:
-        ``ExecutionHandle{handle_id, run_id, solver, compute_class,
-        workflows_execution_id, workflow_name, workflow_location,
-        submitted_at}`` -- the Invariant-8 cancellation contract. The
-        ``workflow_name`` pins the backend (``local-docker`` / ``local-exec``)
-        so ``wait_for_completion`` routes correctly.
-
-    This tool is uncacheable-by-construction (solver dispatch is
-    explicitly enumerated). The cache shim is NOT invoked.
-
-    Invariant 8 (cancellation): the returned handle carries everything
-    ``wait_for_completion`` needs to terminate the live run on the matching
-    cancel envelope.
+        An ``ExecutionHandle`` whose ``workflow_name`` pins the backend, so
+        ``wait_for_completion`` routes the poll correctly, and whose ``run_id``
+        is what a cancel terminates.
 
     Raises:
-        SolverNotRegisteredError: ``solver`` not in
-            ``SOLVER_WORKFLOW_REGISTRY``.
-        SolverDispatchError: the backend dispatch failed (docker/binary
-            missing, S3 staging error, malformed manifest). The exception is
-            re-raised so the emitter classifier surfaces
-            ``UPSTREAM_API_ERROR`` to the client.
+        SolverNotRegisteredError: ``solver`` not in ``SOLVER_WORKFLOW_REGISTRY``.
+        SolverDispatchError: the dispatch failed - a missing docker or binary, an
+            S3 staging error, a malformed manifest.
     """
     if not isinstance(solver, str) or not solver.strip():
         raise SolverNotRegisteredError(
@@ -1475,15 +1135,9 @@ _WAIT_FOR_COMPLETION_METADATA = AtomicToolMetadata(
 
 
 def _progress_percent(handle_submitted_at: datetime, now: datetime) -> int:
-    """Compute the wall-clock-linear progress estimate clamped to
-    ``PROGRESS_CLAMP_MAX`` while the Workflow is still running.
-
-    Invariant 1 (Determinism boundary): this is wall-clock arithmetic, not
-    an LLM estimate. The ramp is intentionally simple and conservative --
-    a real per-step progress signal would require teaching the SFINCS
-    entrypoint to write running progress to ``progress.json`` between
-    timesteps, which is a follow-up job.
-    """
+    """The wall-clock-linear progress estimate, clamped to ``PROGRESS_CLAMP_MAX``
+    while the run is still going. Wall-clock arithmetic, never an estimate from a
+    model, and clamped so completion is never advertised before it happens."""
     elapsed = max(0.0, (now - handle_submitted_at).total_seconds())
     raw = (elapsed / NFR_P_4_TARGET_SECONDS) * 100.0
     capped = min(PROGRESS_CLAMP_MAX, max(0, int(raw)))
@@ -1519,47 +1173,36 @@ async def wait_for_completion(
     handle: ExecutionHandle,
     poll_interval_s: int = DEFAULT_POLL_INTERVAL_S,
     timeout_s: int = DEFAULT_TIMEOUT_S,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # Absorbs kwargs the model invents; the normalizer catches these upstream too.
     **_extra_ignored: Any,
 ) -> RunResult:
     """Poll the solver run backing ``handle`` until terminal.
 
-    Use this when: the agent has an ``ExecutionHandle`` from ``run_solver``
-    and needs the ``RunResult`` (and the ``output_uri``) before continuing
-    the pipeline. The tool blocks while the solver runs but is cancellable
-    via the WS ``cancel`` chain (Invariant 8 -- see module docstring).
+    Use this when: the agent holds an ``ExecutionHandle`` from ``run_solver`` and
+    needs the ``RunResult`` (and its ``output_uri``) before continuing. It blocks
+    while the solver runs, and is cancellable through the cancel chain.
 
-    Do NOT use this for: starting a new run (use ``run_solver``); short,
-    synchronous tool calls (atomic tools are sub-second; this is the
-    solver-class blocking pattern).
+    Do NOT use this for: starting a new run (use ``run_solver``); short
+    synchronous tool calls - atomic tools are sub-second, this is the
+    solver-class blocking pattern.
 
     Params:
-        handle: the ``ExecutionHandle`` returned by ``run_solver``. The
-            ``workflow_name`` field pins the backend (``local-docker`` /
-            ``local-exec``) so the poll routes correctly.
-        poll_interval_s: seconds between completion polls. Default 10s --
-            matches the <=15-min budget granularity (>=9 polls per run).
-        timeout_s: hard ceiling. Defaults to 1800 s (30 min -- gives 2×
-            headroom over the target budget). On timeout the tool returns
-            ``RunResult{status="failed", error_code="SOLVER_TIMEOUT"}``
-            and best-effort cancels the run.
+        handle: the ``ExecutionHandle`` from ``run_solver``; its
+            ``workflow_name`` pins the backend so the poll routes correctly.
+        poll_interval_s: seconds between completion polls.
+        timeout_s: hard ceiling; on timeout the tool returns a failed
+            ``RunResult`` with ``error_code="SOLVER_TIMEOUT"`` and best-effort
+            cancels the run.
 
     Returns:
         ``RunResult{run_id, handle_id, status, output_uri?, started_at,
         completed_at, duration_seconds, error_code?, error_message?,
-        cancellation_reason?}`` -- terminal outcome. ``status="complete"``
-        carries the ``output_uri`` parsed from ``completion.json``;
-        ``"failed"`` carries the error code/message; ``"cancelled"``
-        carries a ``cancellation_reason``.
+        cancellation_reason?}`` - the terminal outcome. ``status="complete"``
+        carries the ``output_uri`` read from ``completion.json``, ``"failed"``
+        the error code and message, ``"cancelled"`` a ``cancellation_reason``.
 
-    This tool is uncacheable-by-construction. The cache shim is
-    NOT invoked.
-
-    Invariant 8 (cancellation): when the M1 WS cancel chain raises
-    ``asyncio.CancelledError`` inside this coroutine's poll-sleep, the
-    backend handler terminates the live container before
-    re-raising so cancellation is initiated within ≤30 s.
+    On cancellation the backend handler terminates the live run BEFORE
+    re-raising, so the kill is initiated with the cancel rather than after it.
     """
     if poll_interval_s < 0:
         raise SolverDispatchError(
@@ -1570,10 +1213,8 @@ async def wait_for_completion(
             f"timeout_s must be positive; got {timeout_s!r}"
         )
 
-    # --- backend seam: a handle pins its backend (the handle's
-    # workflow_name, not the env, decides -- env churn between submit and wait
-    # cannot mis-route the poll). ``local-docker`` / ``local-exec`` (MODFLOW
-    # direct-binary) share the S3 completion poll. ---
+    # The HANDLE pins its backend, not the env: env churn between submit and wait
+    # cannot mis-route the poll. Both local sentinels share the completion poll.
     if handle.workflow_name in _LOCAL_WORKFLOW_NAMES:
         return await _wait_for_completion_local(handle, poll_interval_s, timeout_s)
 
@@ -1621,19 +1262,9 @@ def _duration(started_at: datetime | None, completed_at: datetime) -> float | No
 
 
 def _solver_error_code(manifest: dict[str, Any]) -> str:
-    """Map a completion-manifest error to an open-set A.6 SCREAMING_SNAKE_CASE
-    error code. Keep narrow; the catch-all bucket is ``SOLVER_FAILED``.
-
-    Surfaced - when lands more
-    solver-specific failure modes (SFINCS_MASS_BALANCE_DIVERGED,
-    MODEL_DECK_INVALID, etc.) the registry expands here.
-
-    Heavy-compute offload: the combined build+solve worker writes an explicit
-    ``error_code`` into completion.json (e.g. ``HYDROMT_BUILD_FAILED``,
-    ``LULC_MAPPING_MISMATCH``, ``RUN_OUTPUT_EMPTY``) so a BUILD-phase failure
-    surfaces the SAME typed code the in-agent build produced. Prefer it when
-    present; otherwise fall back to the generic ``SOLVER_FAILED`` bucket.
-    """
+    """Map a completion-manifest error to a SCREAMING_SNAKE_CASE error code.
+    A worker's own explicit ``error_code`` wins, so a build-phase failure surfaces
+    its own typed code; the catch-all bucket is ``SOLVER_FAILED``."""
     explicit = manifest.get("error_code")
     if isinstance(explicit, str) and explicit.strip():
         return explicit.strip()

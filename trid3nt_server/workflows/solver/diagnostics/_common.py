@@ -1,15 +1,7 @@
-"""Shared internals for the ``read_run_diagnostics`` dispatcher (V&V wave).
+"""Shared internals for the ``read_run_diagnostics`` dispatcher.
 
-Holds the typed-error surface, the normalized per-engine parser return type
-(``EngineDiagnostics``), and the artifact-access seam (``RunArtifacts``) that
-lets every parser read the run's diagnostics files identically whether the run
-lives in the MinIO/S3 runs bucket (production) or in a LOCAL fixture directory
-(the offline ``_run_dir`` test path -- build-contract section 5.3).
-
-Kept out of ``__init__`` so the per-engine parser modules can import these
-without a circular import back through the dispatcher.
-
-ASCII only. No emojis, no typographic dashes.
+The typed errors, the normalized parser return type and the artifact seam, kept
+out of ``__init__`` so a parser imports them without a circular import.
 """
 
 from __future__ import annotations
@@ -65,10 +57,7 @@ class DiagnosticsEngineUnknown(DiagnosticsError):
 
 class DiagnosticsArtifactMissing(DiagnosticsError):
     """completion.json is present but a REQUIRED diagnostics file is absent.
-
-    Carries engine + run_id + the offending filename so the failure is
-    honest and actionable (never a fabricated healthy envelope).
-    """
+    Carries engine, run_id and the offending filename, never a healthy envelope."""
 
     error_code = "DIAGNOSTICS_ARTIFACT_MISSING"
     retryable = True
@@ -88,9 +77,7 @@ class DiagnosticsArtifactMissing(DiagnosticsError):
 
 class DiagnosticsParseError(DiagnosticsError):
     """A diagnostics file was found but could not be parsed.
-
-    NEVER downgrade to a fabricated healthy result -- raise (honesty floor).
-    """
+    Raised rather than downgraded to a fabricated healthy result."""
 
     error_code = "DIAGNOSTICS_PARSE_ERROR"
     retryable = False
@@ -113,21 +100,8 @@ class DiagnosticsParseError(DiagnosticsError):
 @dataclass
 class EngineDiagnostics:
     """The normalized diagnostics a per-engine parser produces.
-
-    The dispatcher folds this into the public envelope (build-contract 3.1),
-    adding ``engine`` / ``run_id`` / ``status`` / ``sources``. Every scalar
-    defaults to ``None`` (the honesty floor: a value the engine does not report
-    is ``null``, never invented); lists default to ``[]``.
-
-    ``healthy`` is the coarse per-engine heuristic roll-up (``True`` / ``False``
-    / ``None`` when indeterminate); the parser sets it because the rule is
-    engine-specific (TELEMAC keys off ``correct_end``, SFINCS off
-    ``finished`` + ``status``, SWMM/MODFLOW off the continuity band). The raw
-    fields remain authoritative; ``notes`` records the heuristic used.
-
-    ``diagnostics_files`` lists the uris/paths the parser actually read -- the
-    dispatcher surfaces them under ``sources.diagnostics_files``.
-    """
+    Every scalar defaults to ``None`` - a value the engine does not report is null,
+    never invented - and the raw fields stay authoritative over ``healthy``."""
 
     mass_balance_pct: float | None = None
     mass_balance_source: str | None = None  # "reported" | "derived" | None
@@ -153,19 +127,8 @@ def basename_of(uri: str) -> str:
 
 class RunArtifacts:
     """Reader over a run's completion.json + diagnostics files.
-
-    Two backends, one interface (build-contract 5.3):
-
-    - OFFLINE (``run_dir`` set): read ``completion.json`` and every diagnostics
-      file from a LOCAL directory, matching on the uri's basename. The fixture
-      test path -- zero network.
-    - PRODUCTION (``reader`` set): read bytes for a full ``s3://`` uri via the
-      injected reader (``solver._read_object_bytes``).
-
-    The parser never cares which backend is live; it asks for an output by
-    basename / suffix and gets bytes (or an honest ``None`` for an optional
-    file that is absent).
-    """
+    ``run_dir`` reads a local directory by basename with zero network, ``reader``
+    reads ``s3://`` bytes; a parser asks by basename or suffix and cannot tell."""
 
     def __init__(
         self,

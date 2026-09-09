@@ -1,18 +1,7 @@
-"""``read_run_diagnostics`` -- ONE engine-diagnostics dispatcher (V&V wave).
+"""``read_run_diagnostics`` - ONE engine-diagnostics dispatcher.
 
-Reads a completed simulation run's retained diagnostics files and returns ONE
-normalized health envelope, regardless of engine. The LLM never picks an
-engine-specific reader: this tool resolves the run handle, recovers the engine
-identity from ``completion.json`` (the ``solver`` field the run supervisor now
-records; a stdout-field-name fallback for legacy runs), dispatches to the
-internal per-engine parser, and folds the result into the build-contract diagnostics envelope.
-
-Honesty floor: a value the engine does not report is ``null`` (never invented);
-a derived value carries ``mass_balance_source="derived"``; a missing/unparseable
-artifact is a typed exception carrying engine + run_id + the offending file,
-never a silent ``None`` or a fabricated ``healthy=true``.
-
-ASCII only. No emojis, no typographic dashes.
+The engine is recovered from ``completion.json``; a value the engine does not
+report is ``null``, and a missing artifact is a typed exception.
 """
 
 from __future__ import annotations
@@ -76,12 +65,8 @@ _METADATA = AtomicToolMetadata(
 
 def _resolve_run_handle(run_handle: str) -> tuple[str | None, str]:
     """Resolve ``run_handle`` -> ``(runs_bucket_or_None, run_id)``.
-
-    Accepts (priority order): a bare ULID; any ``s3://`` uri under the runs
-    prefix (the run prefix OR an object beneath it -- extract the FIRST ULID
-    path segment); else fail typed. ``runs_bucket`` is the bucket parsed from
-    an ``s3://`` handle, else ``None`` (caller falls back to the solver default).
-    """
+    A bare ULID, or the first ULID path segment of an ``s3://`` uri; anything else
+    fails typed. ``runs_bucket`` is ``None`` unless the handle named one."""
     if not run_handle or not str(run_handle).strip():
         raise RunHandleUnresolved(
             "read_run_diagnostics requires a run_handle (a run-id ULID or an "
@@ -111,12 +96,8 @@ def _resolve_run_handle(run_handle: str) -> tuple[str | None, str]:
 
 def _normalize_engine(raw: Any) -> str | None:
     """Map a solver-spec name / stdout-field stem to a canonical engine.
-
-    Handles ``solver`` values that are not bare engine names
-    (``telemac_river_dye`` -> ``telemac``). Every name returned is a key of
-    ``_PARSERS``; anything else returns ``None`` so the caller raises the typed
-    unknown-engine error rather than reaching a parser that does not exist.
-    """
+    Every name returned is a key of ``_PARSERS``; anything else answers ``None``, so
+    the caller raises typed rather than reaching a parser that does not exist."""
     if raw is None:
         return None
     r = str(raw).strip().lower()
@@ -129,11 +110,7 @@ def _normalize_engine(raw: Any) -> str | None:
 
 def _code_staleness_warnings(completion: dict[str, Any]) -> list[str]:
     """The run-vs-code warning as a ``warnings[]`` line, or no lines at all.
-
-    A diagnostics envelope is read to decide whether to TRUST a run; "the engine
-    changed after this ran" belongs in exactly that list. Never raises: a
-    provenance answer must not be able to fail a health read.
-    """
+    Never raises: a provenance answer must not be able to fail a health read."""
     try:
         from trid3nt_server.workflows.solver.code_provenance import staleness
 
@@ -176,13 +153,9 @@ def _recover_engine(completion: dict[str, Any]) -> str:
 def _load_completion(
     run_handle: str, run_dir: str | None
 ) -> tuple[dict[str, Any], str, str, str | None]:
-    """Load completion.json + resolve run identity.
-
-    Returns ``(completion, run_id, completion_source, runs_bucket_or_None)``.
-    OFFLINE (``run_dir`` set): read ``<run_dir>/completion.json`` and skip S3.
-    PRODUCTION: resolve the handle to ``(runs_bucket, run_id)`` and poll S3 via
-    the solver seam.
-    """
+    """Load completion.json -> ``(completion, run_id, source, runs_bucket_or_None)``.
+    With ``run_dir`` set the file is read from disk and S3 is skipped entirely;
+    otherwise the handle resolves and the object is polled through the solver seam."""
     if run_dir is not None:
         path = os.path.join(run_dir, "completion.json")
         if not os.path.exists(path):
@@ -235,27 +208,24 @@ def read_run_diagnostics(
 ) -> dict[str, Any]:
     """Read a finished simulation run's engine diagnostics (mass balance, stability).
 
-    **What it does:** Resolves a run handle to its retained diagnostics files and
-    returns ONE normalized health envelope for whichever engine produced it. You
-    do NOT pick an engine-specific reader -- this tool recovers the engine from
-    the run's completion record and dispatches internally. A run whose engine has
-    no diagnostics reader here raises a typed unknown-engine error rather than
-    guessing.
+    **What it does:** resolves a run handle to its retained diagnostics files and
+    returns ONE normalized health envelope for whichever engine produced it. You do
+    NOT pick an engine-specific reader - the engine is recovered from the run's
+    completion record. A run whose engine has no reader here raises typed rather
+    than guessing.
 
     **When to use:**
-    - Right after any solve, to check "did the run actually converge / conserve
-      mass, or is it garbage?"
-    - "Is this run healthy? What's its mass-balance or continuity error?"
+    - Right after any solve: did the run converge and conserve mass, or is it garbage?
+    - "Is this run healthy? What is its mass-balance or continuity error?"
     - Before trusting a model result for downstream analysis or calibration.
 
     **When NOT to use:**
-    - To compare the model against real observations -> use
-      ``compute_skill_metrics`` / ``compute_model_residuals``.
-    - To fetch the run's output layers/frames -> use ``list_run_frames``.
+    - To compare the model against real observations -> ``compute_skill_metrics`` /
+      ``compute_model_residuals``.
+    - To fetch the run's output layers or frames -> ``list_run_frames``.
 
     **Parameters:**
-    - ``run_handle``: the run id ULID, OR any ``s3://`` run uri (the run prefix
-      or a published-output uri beneath it). The tool extracts the run id.
+    - ``run_handle``: the run id ULID, or any ``s3://`` run uri beneath it.
 
     **Returns:** a dict envelope: ``engine``, ``run_id``, ``status``, ``healthy``
     (coarse heuristic; ``null`` when indeterminate), ``mass_balance_pct`` +
@@ -265,9 +235,6 @@ def read_run_diagnostics(
     ``DIAGNOSTICS_RUN_NOT_FOUND``, ``DIAGNOSTICS_ENGINE_UNKNOWN``,
     ``DIAGNOSTICS_ARTIFACT_MISSING``, ``DIAGNOSTICS_PARSE_ERROR``) rather than a
     fabricated healthy result.
-
-    Cross-tool dependencies: consumes the run produced by any ``run_solver`` /
-    ``run_model_*`` engine tool.
     """
     completion, run_id, completion_source, runs_bucket = _load_completion(
         run_handle, _run_dir

@@ -1,9 +1,9 @@
 run_solver:
 - run the solver now that the setup is ready
-- submit the solver job to Cloud Workflows
-- kick off the flood simulation — the model is staged
+- submit the solver job and give me the execution handle
+- kick off the flood simulation now that the model is staged
 - execute the solver now that the model setup is staged
-- start the flood simulation on Cloud Run and give me the execution handle
+- start the staged simulation and hand back the run handle
 wait_for_completion:
 - wait for the solver run to finish and get the result
 - poll the solver execution until it completes

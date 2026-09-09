@@ -1,18 +1,7 @@
 """Internal TELEMAC diagnostics parser for ``read_run_diagnostics`` (NOT registered).
 
-TELEMAC's run classifier already folds ``telemac_metrics.json`` into
-``completion.json`` (``correct_end`` / ``npoin`` / ``nelem`` / ``nptfr`` /
-``wall_s``), so this parser READS those folded extras rather than re-parsing
-(build-contract 3.1: prefer the completion.json extras). ``correct_end`` drives
-``healthy`` (a TELEMAC run that did not reach CORRECT END OF RUN is unhealthy).
-When ``full_listing.log`` carries a mass-balance line it is parsed into the
-top-level ``mass_balance_pct`` (``"reported"``); where the listing file is absent
-the folded ``listing_tail`` excerpt is read in its place, so a run that died
-before its listing was uploaded still narrates from the solver's own words.
-Otherwise ``null`` -- a failed run whose listing crashed before any balance line
-reports ``null``, never a fabricated value (honesty floor).
-
-ASCII only.
+Reads what the run classifier already folded into ``completion.json`` rather than
+re-parsing it; a balance the listing does not carry stays ``null``.
 """
 
 from __future__ import annotations
@@ -32,7 +21,7 @@ __all__ = ["parse_telemac"]
 #: listing phrasings across TELEMAC-2D versions. The value is a FRACTION
 #: (e.g. ``0.12E-03``) which is converted to a percent (x100). Tested against a
 #: synthesized listing only -- the sole MinIO TELEMAC run is a crashed one whose
-#: listing ends before any balance line (build-contract open issue).
+#: listing ends before any balance line.
 _MASS_BALANCE_RE = re.compile(
     r"RELATIVE ERROR IN (?:MASS[- ]BALANCE|VOLUME)[^:\n]*:\s*"
     r"(-?\d+(?:\.\d+)?(?:[dDeE][+-]?\d+)?)"
