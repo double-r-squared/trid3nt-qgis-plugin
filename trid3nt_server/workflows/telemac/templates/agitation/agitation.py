@@ -154,7 +154,7 @@ class STEERING(ART):
 #: The run's ANSWER, as the numbers a reader has to be able to check.
 ANSWER = ("kd_max", "hs_max_m", "kd_sheltered", "kd_exposed", "wave_period_s",
           "mesh_size_m", "agitation_curve_m", "agitation_curve_kd",
-          "agitation_curve_kind")
+          "agitation_curve_kind", "boundary_states")
 
 
 def build_agitation_chart(*, result: Any, params: Any) -> dict[str, Any] | None:

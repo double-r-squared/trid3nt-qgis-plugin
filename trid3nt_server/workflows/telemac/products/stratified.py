@@ -133,7 +133,12 @@ def _measure(result: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
     heat_final = float(np.trapezoid(final, sigma))
 
     measured: dict[str, Any] = {
-        "variable_label": "Surface temperature", "variable_units": "degC",
+        # Not "Surface temperature": this label rides BOTH rasters' legend
+        # caption (shared scale) and the bed-to-surface profile chart title,
+        # so it may not name one plane. The surface/bottom split in
+        # postprocess_telemac.py's _mk() still reads it correctly - splitting
+        # on the first space finds none here, so the whole label is the noun.
+        "variable_label": "Water temperature", "variable_units": "degC",
         "stratification_metric": round(abs(dt_final), 4),
         "stratification_dt": round(dt_final, 4),
         "stratification_dt_init": round(float(initial[-1] - initial[0]), 4),
@@ -281,6 +286,11 @@ async def publish_stratified_products(*, run: dict[str, Any],
         "profile_sigma": measured["profile_sigma"],
         "profile_values": measured["profile_values"],
         "profile_values_initial": measured["profile_values_initial"],
+        "column_heat_drift_frac": measured["column_heat_drift_frac"],
+        "stratification_dt_init": measured["stratification_dt_init"],
+        "column_heat_mean_init_c": measured["column_heat_mean_init_c"],
+        "column_heat_mean_final_c": measured["column_heat_mean_final_c"],
+        "column_depth_m": measured["column_depth_m"],
     }
 
     # The bottom companion first: it is published and EMITTED here, because only

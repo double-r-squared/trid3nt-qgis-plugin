@@ -482,6 +482,10 @@ class ArtemisAgitationLayerURI(LayerURI):
             paired index-for-index, with the kind naming what the axis IS. The
             chart plots this rather than resampling the raster, so the chart and
             the narrated kd_sheltered / kd_exposed are the SAME measurement.
+        boundary_states: OPTIONAL the mesh topology's own liquid-boundary
+            sentence (``topology.py``'s ``states``) - how many liquid boundaries
+            this domain names and how they are numbered, or that the whole
+            boundary is solid wall.
 
     ``layer_type`` is ``"raster"`` (the Kd COG); the phase field plays from the
     ARTEMIS result SELAFIN mesh sibling discovered via
@@ -502,6 +506,7 @@ class ArtemisAgitationLayerURI(LayerURI):
     agitation_curve_m: list[float] | None = Field(default=None)
     agitation_curve_kd: list[float] | None = Field(default=None)
     agitation_curve_kind: str | None = Field(default=None)
+    boundary_states: str | None = Field(default=None)
 
 
 class Telemac3dLayerURI(LayerURI):
@@ -545,6 +550,17 @@ class Telemac3dLayerURI(LayerURI):
             looked like when the run started and what survived. The chart plots
             it rather than resampling the surface map, which carries no depth at
             all.
+        column_heat_drift_frac: OPTIONAL the depth-weighted column mean's own
+            fractional move over the run (stratification mode, no surface heat
+            exchange) - the numerical error bar on the mixing, since a run that
+            exchanges no heat should conserve the column mean exactly.
+        stratification_dt_init / column_heat_mean_init_c /
+            column_heat_mean_final_c: OPTIONAL the column's top-to-bottom
+            difference and depth-weighted mean at t=0 and at the end, degC -
+            what ``stratification_dt`` and ``column_heat_drift_frac`` are
+            measured against.
+        column_depth_m: OPTIONAL the mesh's deepest node depth, m - where the
+            profile was taken from.
 
     ``layer_type`` is ``"raster"`` (the surface-field COG); the full-column
     evolution plays from the TELEMAC-3D result SELAFIN mesh sibling that
@@ -572,6 +588,11 @@ class Telemac3dLayerURI(LayerURI):
     wind_speed_mps: float | None = Field(default=None, ge=0.0)
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_resolution_label: str | None = Field(default=None)
+    column_heat_drift_frac: float | None = Field(default=None)
+    stratification_dt_init: float | None = Field(default=None)
+    column_heat_mean_init_c: float | None = Field(default=None)
+    column_heat_mean_final_c: float | None = Field(default=None)
+    column_depth_m: float | None = Field(default=None)
 
 
 class TelemacCoastalLayerURI(LayerURI):

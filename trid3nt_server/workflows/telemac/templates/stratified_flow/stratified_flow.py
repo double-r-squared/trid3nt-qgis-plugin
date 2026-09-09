@@ -220,7 +220,9 @@ class STEERING(T3D):
 ANSWER = ("stratification_metric", "stratification_dt", "variable_label",
           "variable_units", "nplan", "wind_speed_mps", "u_surface", "u_bottom",
           "depth_avg_u", "mesh_size_m", "profile_sigma", "profile_values",
-          "profile_values_initial")
+          "profile_values_initial", "column_heat_drift_frac",
+          "stratification_dt_init", "column_heat_mean_init_c",
+          "column_heat_mean_final_c", "column_depth_m")
 
 
 def build_profile_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
