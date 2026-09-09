@@ -22,9 +22,6 @@ spatial_query:
 - sum the losses over the features in each zone
 - aggregate the population attribute within each zone
 - summary statistics of the flood layer attributes
-# cull pass 2 (2026-07-27): vector clip/dissolve/difference/gap phrasings re-homed
-# from clip_vector_to_polygon / merge_features / cut_features_with_polygon / fill_gaps
-# (cut on live replication proof; spatial_query is the surviving SQL surface).
 - clip these monitoring station points to the Florida state boundary
 - I need to trim nationwide NWS alerts to just this state polygon
 - clip the building footprints to the flood zone polygon

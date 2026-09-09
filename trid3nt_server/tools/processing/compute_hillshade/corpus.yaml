@@ -5,4 +5,4 @@ compute_hillshade:
 - render the terrain with sunlight from the northwest
 - show me a 3D-looking terrain base for this volcanic area
 - compute hillshade for the DEM I just fetched over the Sierra Nevada
-- the map looks flat — add terrain shading
+- the map looks flat - add terrain shading
