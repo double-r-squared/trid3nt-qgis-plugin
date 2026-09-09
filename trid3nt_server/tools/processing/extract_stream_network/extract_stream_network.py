@@ -1,8 +1,7 @@
-"""``extract_stream_network``: D8 accumulation >= threshold cells -> stream
-LineStrings vector.
+"""``extract_stream_network``: D8 accumulation over a threshold -> stream lines.
 
-Shared pysheds/DEM plumbing lives in
-``trid3nt_server.tools.processing._hydrology_common``.
+A segment starts at every headwater and every junction, so branches join exactly
+at confluences rather than overlapping through them.
 """
 
 from __future__ import annotations
@@ -53,11 +52,8 @@ class NoStreamsError(HydrologyPrimitivesError):
     retryable = False
 
 class StreamNetworkLayerURI(LayerURI):
-    """Stream-network line ``LayerURI`` plus extraction summary.
-
-    Extra fields beyond ``LayerURI``: ``segment_count`` (LineString branches),
-    ``accumulation_threshold`` (cells), ``total_length_km`` (approximate sum
-    of branch lengths), ``notes`` (engine path + provenance).
+    """Stream-network line ``LayerURI`` plus the branch count, the threshold used,
+    an approximate total length, and honest notes.
     """
 
     segment_count: int = 0
@@ -99,14 +95,11 @@ def _downstream_cell(
 def _trace_stream_network(
     fdir: np.ndarray, mask: np.ndarray, affine: Any
 ) -> list[list[tuple[float, float]]]:
-    """Vectorize the channel cells into LineStrings (pure numpy D8 walk).
-
-    Mirrors pysheds' ``extract_river_network`` segmentation (which is
-    NEP-50-broken in 0.4): a segment starts at every HEADWATER (no channel
-    inflow) and every JUNCTION (>= 2 channel inflows) and follows the D8
-    directions downstream until the next junction / channel exit, so branches
-    join exactly at confluences. Coordinates are cell centers.
+    """Vectorize the channel cells into LineStrings at cell centres, each segment
+    running from a headwater or junction down to the next junction or exit.
     """
+    # A pure-numpy walk because pysheds 0.4's extract_river_network is
+    # NEP-50-broken and must not be substituted back in.
     in_degree = np.zeros(mask.shape, dtype=np.int32)
     rows, cols = np.nonzero(mask)
     for r, c in zip(rows.tolist(), cols.tolist()):
@@ -171,18 +164,9 @@ def extract_stream_network(
             (default 500, ~0.45 km^2 at 30m). Lower=denser network.
         dem_uri: optional override DEM; default Copernicus GLO-30.
 
-    Returns:
-        ``StreamNetworkLayerURI`` -- channel network (GeoJSON LineStrings,
-        one per branch) with ``segment_count``, threshold used,
-        ``total_length_km``, honest ``notes``.
-
-    Raises:
-        HydrologyAoiTooLargeError: bbox over the clamp.
-        HydrologyInputError: bad bbox/threshold/URI.
-        NoStreamsError: no cell reaches the threshold (flat AOI or
-            threshold too high).
-        HydrologyDependencyError: pysheds missing.
-        HydrologyUpstreamError: fetch/write failed.
+    Returns GeoJSON LineStrings, one per branch, with the segment count, the
+    threshold used, an approximate total length and honest notes. No cell over
+    the threshold is a typed refusal, not an empty layer.
     """
     q_bbox = _validate_bbox(bbox)
     try:
@@ -239,8 +223,8 @@ def extract_stream_network(
             f"{len(features)} branch(es) at accumulation >= {threshold} cells."
         )
 
-        # Approximate total length (degrees -> km at the AOI center lat for a
-        # geographic grid; meters -> km for projected grids).
+        # Degrees convert at the AOI centre latitude on a geographic grid;
+        # a projected grid is already metres.
         total_len_km = 0.0
         lat_c = 0.5 * (q_bbox[1] + q_bbox[3])
         kx = 111.320 * max(math.cos(math.radians(lat_c)), 0.01)
