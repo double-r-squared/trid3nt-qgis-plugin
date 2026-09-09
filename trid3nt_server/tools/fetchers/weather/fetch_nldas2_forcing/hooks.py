@@ -10,9 +10,9 @@ reads as malformed data - so an absent credential would surface as a parse error
 about column counts rather than as the missing account it is. The check names the
 file and the host instead.
 
-THE VARIABLE VOCABULARY is this row's data. The library's valid set is fixed, and
-an unknown name is refused by name rather than sent to the service to come back
-empty.
+THE VARIABLE VOCABULARY and its units are read off the library's own table rather
+than restated, so they cannot drift from what the service sends; an unknown name is
+refused by name rather than sent to the service to come back empty.
 
 THE DELIVERABLE IS A FORCING SERIES: each requested variable averaged over the AOI
 into an hourly series, plus the precipitation accumulation, as a bare JSON record
@@ -31,26 +31,23 @@ from ..._router.errors import router_empty_error, router_input_error, router_ups
 from ..._router.hooks import register_hook
 from ..._router.hooks.hyriver import hyriver_call
 
-__all__ = ["build_record", "VALID_VARIABLES"]
+__all__ = ["build_record"]
 
 #: The Earthdata Login host every GES DISC read redirects to.
 _EDL_HOST = "urs.earthdata.nasa.gov"
 
-#: The library's forcing vocabulary, with the unit each series carries.
-VALID_VARIABLES: dict[str, str] = {
-    "prcp": "mm",
-    "pet": "mm",
-    "temp": "K",
-    "wind_u": "m s-1",
-    "wind_v": "m s-1",
-    "rlds": "W m-2",
-    "rsds": "W m-2",
-    "humidity": "kg kg-1",
-    "psurf": "Pa",
-}
-
 #: Asked for nothing in particular, a forcing question wants rain and temperature.
 _DEFAULT_VARIABLES = ("prcp", "temp")
+
+
+def _vocabulary() -> dict[str, dict[str, str]]:
+    """The forcing vocabulary and its units, read off the library's own table.
+
+    Restating the units here would let them drift from what the service sends.
+    """
+    from pynldas2.pynldas2 import NLDAS2_VARS
+
+    return NLDAS2_VARS
 
 
 def _require_earthdata_login(spec: SourceSpec) -> None:
@@ -74,15 +71,15 @@ def _require_earthdata_login(spec: SourceSpec) -> None:
 
 def _variables(spec: SourceSpec, params: dict[str, Any]) -> list[str]:
     """Validate the requested variable set against the library's own vocabulary."""
+    vocab = _vocabulary()
     raw = params.get("variables") or _DEFAULT_VARIABLES
     out: list[str] = []
     for v in raw:
         name = str(v).strip().lower()
-        if name not in VALID_VARIABLES:
+        if name not in vocab:
             raise router_input_error(
                 spec.error_code_prefix,
-                f"variable {v!r} is not an NLDAS-2 forcing variable "
-                f"{sorted(VALID_VARIABLES)}",
+                f"variable {v!r} is not an NLDAS-2 forcing variable {sorted(vocab)}",
                 spec.input_error_suffix,
             )
         if name not in out:
@@ -105,6 +102,7 @@ def build_record(
     start = _dt.date.fromisoformat(str(params["start_date"]))
     end = _dt.date.fromisoformat(str(params["end_date"]))
     variables = _variables(spec, params)
+    vocab = _vocabulary()
 
     ds = hyriver_call(
         spec,
@@ -137,7 +135,8 @@ def build_record(
             continue
         vals = np.asarray(mean[name].values, dtype="float64")
         series[name] = {
-            "units": VALID_VARIABLES[name],
+            "units": vocab[name]["units"],
+            "long_name": vocab[name]["long_name"],
             "values": [round(float(v), 6) if np.isfinite(v) else None for v in vals],
         }
 

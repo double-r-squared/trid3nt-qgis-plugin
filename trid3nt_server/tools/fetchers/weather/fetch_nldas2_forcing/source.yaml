@@ -81,7 +81,7 @@ payload_estimate:
 caveats:
 - "NLDAS-2 is served from NASA GES DISC behind Earthdata Login: without a ~/.netrc machine entry for urs.earthdata.nasa.gov this refuses by name (NLDAS2_UPSTREAM_ERROR) rather than parsing the sign-in page as data."
 - "1/8 degree (~12 km) hourly CONUS + southern Canada / northern Mexico, 1979-01-02 to yesterday; NOT real-time and NOT a forecast."
-- "Returns AOI-MEAN hourly series per variable (a forcing record), not a spatial raster; precipitation is an hourly total in mm, temperature is Kelvin, wind is the u/v pair in m/s."
+- "Returns AOI-MEAN hourly series per variable (a forcing record), not a spatial raster; each series carries the dataset's own unit string (precipitation kg/m^2 per hour, which is mm; temperature K; wind m/s)."
 - "Coarser than fetch_aorc_precip (~800 m) for precipitation alone; NLDAS-2 is the source when the run needs the FULL forcing set (radiation, humidity, wind, pressure) that AORC's precipitation record does not carry."
 
 docstring: |-
