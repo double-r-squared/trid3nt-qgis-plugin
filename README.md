@@ -105,8 +105,11 @@ plugin/tests/          plugin test harnesses + headless E2E drivers
 server/                the server (WS + tool dispatch + turn loop + persistence)
 contracts/             shared pydantic contracts (trid3nt-contracts package)
 workers/               the telemac solver worker + the oceanmesh environment image
-scripts/               run + deploy scripts (start_*, install_plugin, build_*_image, ...)
-scripts/code_graph.py  import graph + orphan/dead-symbol report -> docs/validation/code-graph/
+scripts/               the entry points you type (start_*, init_minio, install_plugin, build_*_image)
+scripts/instruments/   measure + check the tree (model_check, code_graph, loc_report, tool_sweep, ws_smoke)
+scripts/packet/        the delivery-packet renderers a canary closes with
+scripts/drivers/       live drive lane: one declared question per script, run against the daemon
+scripts/staging/       one-shot stagers that publish a source dataset into object storage
 bin/ venvs/ data/ logs/ run/   gitignored runtime (binaries, venvs, storage, logs, pids)
 ```
 

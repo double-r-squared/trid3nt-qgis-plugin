@@ -1,6 +1,6 @@
 """The preset family: four kinds, parameters, and the .qml the writer emits.
 
-The load-validation half of this lives in ``scripts/qml_preset_smoke.py``,
+The load-validation half of this lives in ``scripts/instruments/qml_preset_smoke.py``,
 which needs the installed QGIS. What is offline-provable is here: the family
 is closed at four, a quantity parameterises a preset instead of minting one,
 the override order is the declared one, and the document the writer produces

@@ -7,7 +7,7 @@ and lands one committed JSON per module under
 ``trid3nt_server/workflows/telemac/catalog/`` - generated data, never hand
 edited, re-extracted and compared by the suite whenever the image is present.
 
-  python scripts/extract_telemac_catalog.py
+  python scripts/instruments/extract_telemac_catalog.py
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from trid3nt_server.workflows.mesh.meshers.drivers import drivers_dir  # noqa: E402
 
@@ -33,7 +33,7 @@ _TIMEOUT_S = 600
 
 def catalog_dir() -> Path:
     """Where the committed catalogs live."""
-    return (Path(__file__).resolve().parents[1] / "trid3nt_server" / "workflows"
+    return (Path(__file__).resolve().parents[2] / "trid3nt_server" / "workflows"
             / "telemac" / "catalog")
 
 

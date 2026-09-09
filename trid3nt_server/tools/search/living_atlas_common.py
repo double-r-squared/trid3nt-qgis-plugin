@@ -10,7 +10,7 @@ module registers nothing; ``search_living_atlas`` (ranks entries) and
 ``fetch_living_atlas_layer`` (fetches one entry's bytes) share the loaded catalogs
 through it, mirroring how ``catalog_common`` serves the public-catalog tools.
 
-The two YAML files are harvested DATA (produced by ``scripts/harvest_living_atlas.py``),
+The two YAML files are harvested DATA (produced by ``scripts/instruments/harvest_living_atlas.py``),
 not code -- excluded from the coded-tool / coded-LOC metric.
 """
 

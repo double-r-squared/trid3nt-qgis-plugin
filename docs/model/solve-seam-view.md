@@ -1,6 +1,6 @@
 # SolveSeam - derived view
 
-GENERATED from `docs/model/solve-seam.sysml` by `scripts/model_check.py --view`. Never hand-edited: regenerate it, and `tests/test_model_conformance.py` fails while it is stale.
+GENERATED from `docs/model/solve-seam.sysml` by `scripts/instruments/model_check.py --view`. Never hand-edited: regenerate it, and `tests/test_model_conformance.py` fails while it is stale.
 
 Plane: **workflow**. System: **assembler -> solver -> products**. One seam of the system of systems indexed by [`README.md`](README.md) - never the whole picture.
 

@@ -15,7 +15,7 @@ Resumable: results append to docs/reports/tool-sweep-results.jsonl and tools
 already present are skipped, so re-running continues the sweep. The markdown
 checklist regenerates from the JSONL each run.
 
-Usage:  venvs/agent/bin/python scripts/tool_sweep.py [--only NAME] [--limit N]
+Usage:  venvs/agent/bin/python scripts/instruments/tool_sweep.py [--only NAME] [--limit N]
 """
 
 from __future__ import annotations
@@ -32,7 +32,9 @@ import time
 import traceback
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[2]
+# _env_guard is the drive lane's, and the no-ambient-AWS law wants ONE copy of it.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "drivers"))
 RESULTS = REPO / "docs" / "reports" / "tool-sweep-results.jsonl"
 CHECKLIST = REPO / "docs" / "reports" / "tool-sweep-checklist.md"
 

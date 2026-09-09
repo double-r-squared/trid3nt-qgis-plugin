@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "extract_telemac_catalog.py"
+_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "instruments" / "extract_telemac_catalog.py"
 
 #: What the six exposed dictionaries hold together.
 _TOTAL_KEYWORDS = 1311
@@ -64,4 +64,4 @@ def test_the_committed_catalog_is_what_the_image_says_today(tmp_path):
         committed = (extractor.catalog_dir() / f"{module}.json").read_text()
         assert (tmp_path / f"{module}.json").read_text() == committed, (
             f"{module}.json has drifted from the image's dictionary; re-run "
-            "scripts/extract_telemac_catalog.py and read the diff")
+            "scripts/instruments/extract_telemac_catalog.py and read the diff")

@@ -57,7 +57,7 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 3. The live stack runs on THIS box: MinIO :9000, the daemon via
    `make agent`, local docker solvers. `set -a; source .env.local;
    set +a` for env. Server changes end with daemon restart +
-   `scripts/ws_smoke.py` (all_passed) + the flood canary
+   `scripts/instruments/ws_smoke.py` (all_passed) + the flood canary
    `scripts/run_sfincs_direct.py` (status=ok). You run these yourself.
 4. Behavior-preserving refactors move code verbatim; every reference
    site (tests, monkeypatch paths, source-inspection anchors,

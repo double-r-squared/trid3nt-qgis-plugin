@@ -25,7 +25,7 @@ import websockets.asyncio.client as ws_client
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-REPO_ROOT = Path(__file__).parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 LOG_FILE = REPO_ROOT / "logs" / "ws_smoke.log"
 WS_URL = "ws://127.0.0.1:8765/ws"
 

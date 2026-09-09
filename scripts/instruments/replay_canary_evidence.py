@@ -11,8 +11,8 @@ else that moves is reported, per key, with both values.
 Run:
   cd /home/nate/Documents/trid3nt-local
   set -a; source .env.local; set +a
-  venvs/agent/bin/python scripts/replay_canary_evidence.py
-  venvs/agent/bin/python scripts/replay_canary_evidence.py --only telemac_do_sag
+  venvs/agent/bin/python scripts/instruments/replay_canary_evidence.py
+  venvs/agent/bin/python scripts/instruments/replay_canary_evidence.py --only telemac_do_sag
 """
 
 from __future__ import annotations
@@ -31,9 +31,9 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("replay_canary")
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-_ROOT = Path(__file__).resolve().parents[1] / "docs/proof/templates"
+_ROOT = Path(__file__).resolve().parents[2] / "docs/proof/templates"
 
 #: Keys that identify a RUN rather than an answer. Comparing them would report a
 #: difference on every replay and hide the ones that matter.

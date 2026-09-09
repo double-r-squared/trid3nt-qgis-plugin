@@ -1,7 +1,7 @@
 # `workflows/telemac/catalog/` - the engine's own dictionaries
 
 One JSON per exposed module, extracted IN-IMAGE from the module's dico by
-`scripts/extract_telemac_catalog.py` and committed. Never hand edited: a
+`scripts/instruments/extract_telemac_catalog.py` and committed. Never hand edited: a
 transcribed keyword table is a second answer to a question the engine already
 answers, and `tests/test_telemac_catalog_drift.py` re-extracts from the image
 when one is present and fails on any difference.

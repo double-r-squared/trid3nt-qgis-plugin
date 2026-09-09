@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CHECKER = REPO_ROOT / "scripts" / "model_check.py"
+CHECKER = REPO_ROOT / "scripts" / "instruments" / "model_check.py"
 MODELS = sorted((REPO_ROOT / "docs" / "model").glob("*.sysml"))
 
 
@@ -135,5 +135,5 @@ def test_the_view_is_derived_rather_than_drawn(model, tmp_path):
         pytest.fail(
             f"{view.relative_to(REPO_ROOT)} is stale against "
             f"{model.relative_to(REPO_ROOT)}; regenerate it with "
-            f"'python scripts/model_check.py --model {model.relative_to(REPO_ROOT)} "
+            f"'python scripts/instruments/model_check.py --model {model.relative_to(REPO_ROOT)} "
             "--view'")

@@ -22,7 +22,7 @@ Three rules this module enforces, because a colour cannot state them itself:
   fixed domain scale from one read off this run's own data by looking.
 
 The .qml written here is a SUBSET of QGIS's own style format - their format,
-our writer, their validator. ``scripts/qml_preset_smoke.py`` loads every
+our writer, their validator. ``scripts/instruments/qml_preset_smoke.py`` loads every
 document this module can produce into the installed QGIS and asserts the
 POST-LOAD state (renderer type, stops read back, the range QGIS ends up
 holding); a document that does not survive that read never ships.

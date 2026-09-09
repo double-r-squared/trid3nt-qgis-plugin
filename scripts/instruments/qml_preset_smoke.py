@@ -9,7 +9,7 @@ the range the layer reports is the range the preset resolved.
 Run it with the SYSTEM python (the one QGIS is installed against), from the
 repo root:
 
-    QT_QPA_PLATFORM=offscreen python3 scripts/qml_preset_smoke.py
+    QT_QPA_PLATFORM=offscreen python3 scripts/instruments/qml_preset_smoke.py
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from trid3nt_server.emission import presets  # noqa: E402
 

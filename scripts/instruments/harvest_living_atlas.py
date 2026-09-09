@@ -21,9 +21,9 @@ Rate-limited politely. Offline-testable: ``--fixture <json>`` reads a canned sea
 response instead of the network (used by the offline test suite).
 
 Usage:
-    python scripts/harvest_living_atlas.py                    # full live harvest
-    python scripts/harvest_living_atlas.py --max-per-type 50  # quick sample
-    python scripts/harvest_living_atlas.py --fixture f.json --out-dir /tmp/la
+    python scripts/instruments/harvest_living_atlas.py                    # full live harvest
+    python scripts/instruments/harvest_living_atlas.py --max-per-type 50  # quick sample
+    python scripts/instruments/harvest_living_atlas.py --fixture f.json --out-dir /tmp/la
 """
 
 from __future__ import annotations
@@ -164,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fixture", default=None, help="JSON file of a canned search response (offline)")
     args = ap.parse_args(argv)
 
-    out_dir = Path(args.out_dir) if args.out_dir else Path(__file__).resolve().parents[1] / "data" / "living_atlas"
+    out_dir = Path(args.out_dir) if args.out_dir else Path(__file__).resolve().parents[2] / "data" / "living_atlas"
     from datetime import datetime, timezone
     meta = {
         "harvested_at": datetime.now(timezone.utc).isoformat(),
