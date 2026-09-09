@@ -1,8 +1,7 @@
-# Router source spec (STAC-composite wave, raster-cog stac_multi_asset_rgb, ADR 0080).
-# Twin: fetch_naip.py -- NAIP high-res aerial imagery (RGB) via PC STAC.
-# Folds onto stac_multi_asset_rgb with the SMALLEST directive: render=passthrough reads
-# bands 1..3 of the ONE multi-band `image` asset straight to uint8 (no scale/mask/stretch),
-# most-recent-intersecting item (empty rank). US-only; an all-black window -> NAIP_NO_COVERAGE.
+# NAIP high-resolution aerial imagery (RGB) over the Planetary Computer STAC catalog.
+# The smallest render there is: bands 1..3 of the ONE multi-band `image` asset read
+# straight to uint8 (no scale, no mask, no stretch), most-recent intersecting item.
+# US-only; an all-black window is NAIP_NO_COVERAGE, never a fabricated layer.
 schema_version: v1
 name: fetch_naip
 source_class: naip
@@ -26,12 +25,15 @@ params:
 gates:
   max_bbox_deg2: 0.06
 ingest:
-  access: stac_multi_asset_rgb
+  access: stac
+  render: rgb
   native_cell_m: 1.0
   stac:
     root: https://planetarycomputer.microsoft.com/api/stac/v1
     collection: naip
-    select: {}
+    sign: planetary_computer
+    select:
+      mode: best
   composite:
     px_max: 8192
     default_combo: default

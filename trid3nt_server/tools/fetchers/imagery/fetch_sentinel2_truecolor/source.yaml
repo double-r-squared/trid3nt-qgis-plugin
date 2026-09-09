@@ -1,9 +1,8 @@
-# Router source spec (STAC-composite wave, raster-cog stac_multi_asset_rgb, ADR 0080).
-# Twin: fetch_sentinel2_truecolor.py -- Sentinel-2 L2A true-color RGB via PC STAC.
-# Folds onto stac_multi_asset_rgb: reads B04/B03/B02 (raw uint16) + the SCL scene-
-# classification band, masks cloud/shadow/nodata via SCL classes, joint-2/98-stretch to
-# a baked RGB. Scene rank = least-cloudy (eo:cloud_cover query). nodata_rule=all_bands_zero
-# reproduces the twin's (r==0 & g==0 & b==0) nodata; span_floor 1.0 reproduces max(1, hi-lo).
+# Sentinel-2 L2A true colour over the Planetary Computer STAC catalog: B04/B03/B02
+# (raw uint16) plus the SCL scene-classification band, cloud/shadow/nodata masked by
+# SCL class, joint 2/98 stretch to a baked RGB, least-cloudy scene. nodata_rule
+# all_bands_zero is the (r==0 & g==0 & b==0) rule the raw bands need; span_floor 1.0
+# keeps a flat scene from stretching noise to full range.
 schema_version: v1
 name: fetch_sentinel2_truecolor
 source_class: s2_truecolor
@@ -36,14 +35,17 @@ params:
 gates:
   max_bbox_deg2: 0.5
 ingest:
-  access: stac_multi_asset_rgb
+  access: stac
+  render: rgb
   native_cell_m: 10.0
   stac:
     root: https://planetarycomputer.microsoft.com/api/stac/v1
     collection: sentinel-2-l2a
+    sign: planetary_computer
     datetime_window: true
     default_window_days: 90
     select:
+      mode: best
       cloud_query: true
       rank:
       - by: cloud_cover

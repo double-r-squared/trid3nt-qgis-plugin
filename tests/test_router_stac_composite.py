@@ -1,14 +1,14 @@
 """Router value coverage for the STAC multi-asset RGB composite fold (ADR 0080).
 
 The imagery trio -- fetch_landsat_imagery (true/false-color + thermal LST),
-fetch_sentinel2_truecolor and fetch_naip -- folded to source.yaml + the raster_cog
-``stac_multi_asset_rgb`` mode (one composite mode: N single-band reflectance assets
+fetch_sentinel2_truecolor and fetch_naip -- folded to source.yaml + the stac_raster
+``rgb`` render (one composite path: N single-band reflectance assets
 + a QA/SCL mask + a joint 2/98 stretch; a colormap single-band LST; or a raw uint8
 passthrough; plus a cloud-cover query + coverage/cloud scene rank).
 
 These OFFLINE tests cover the spec identity + metadata flags (twin-identical), the
 param gates (bbox area / band_combo enum + aliases), and the composite RENDER value
-behavior via synthetic source COGs read through a patched opener (cloud/nodata pixels
+behavior over LOCAL synthetic COGs wrapped in real STAC items (cloud/nodata pixels
 zeroed, joint stretch spans 0..255, thermal ramps, naip uint8 passthrough). The live
 PC-STAC pixel parity vs the twins is proven by the live drive.
 """
@@ -17,17 +17,15 @@ from __future__ import annotations
 
 import contextlib
 import os
-import tempfile
-from types import SimpleNamespace
 
 import numpy as np
+import pystac
 import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
 from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router import transport as _tp
-from trid3nt_server.tools.fetchers._router.executors import raster_cog
+from trid3nt_server.tools.fetchers._router.executors import stac_raster
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
 _BBOX = (-95.40, 29.70, -95.30, 29.80)
@@ -61,7 +59,8 @@ def test_spec_identity(specs, name, prefix, empty, cell):
     assert s.supports_global_query is False        # twin metadata flag
     assert s.cache.ttl_class == "static-30d"        # -> cacheable True
     assert s.output.emit_bbox is False              # twins omit LayerURI.bbox
-    assert s.ingest["access"] == "stac_multi_asset_rgb"
+    assert s.ingest["access"] == "stac"
+    assert s.ingest["render"] == "rgb"
     assert s.ingest["native_cell_m"] == cell
 
 
@@ -118,26 +117,24 @@ def test_bad_band_combo_typed_error(specs):
 
 
 @contextlib.contextmanager
-def _synthetic(item, path_map):
-    """Route the composite read through local synthetic COGs (offline)."""
-    real = rasterio.open
+def _catalog(items):
+    """Answer the executor's catalog search with ``items`` (no network)."""
+    import pystac_client
 
-    @contextlib.contextmanager
-    def fake_open(url):
-        with real(path_map[url]) as s:
-            yield s
+    class _Search:
+        def items(self):
+            return list(items)
 
-    orig_owc, orig_sign, orig_search = (
-        _tp.open_windowed_cog, raster_cog._pc_sign_two_tier, raster_cog._rgb_search_items)
-    _tp.open_windowed_cog = fake_open
-    raster_cog._pc_sign_two_tier = lambda spec, href, coll: href
-    raster_cog._rgb_search_items = lambda *a, **k: [item]
+    class _Client:
+        def search(self, **kw):
+            return _Search()
+
+    orig = pystac_client.Client.open
+    pystac_client.Client.open = staticmethod(lambda *a, **k: _Client())
     try:
         yield
     finally:
-        _tp.open_windowed_cog = orig_owc
-        raster_cog._pc_sign_two_tier = orig_sign
-        raster_cog._rgb_search_items = orig_search
+        pystac_client.Client.open = orig
 
 
 def _write_cog(tmp_path, bands, dtype, nodata=None):
@@ -152,8 +149,30 @@ def _write_cog(tmp_path, bands, dtype, nodata=None):
     return p
 
 
-def _assets(m):
-    return {k: SimpleNamespace(href=v) for k, v in m.items()}
+def _item(item_id, assets, props=None, band_counts=None):
+    """A real STAC item over local COGs, carrying the projection metadata the
+    loader reads the source grid from."""
+    item = pystac.Item(
+        id=item_id, geometry=_GEOM, bbox=[-95.45, 29.65, -95.25, 29.85],
+        datetime=None,
+        properties={"datetime": "2024-06-01T00:00:00Z",
+                    "start_datetime": "2024-06-01T00:00:00Z",
+                    "end_datetime": "2024-06-01T00:00:00Z",
+                    "proj:code": "EPSG:4326",
+                    "proj:shape": [_SH, _SW],
+                    "proj:transform": list(_STX)[:6],
+                    **(props or {})},
+        collection="synthetic",
+        stac_extensions=[
+            "https://stac-extensions.github.io/projection/v2.0.0/schema.json"],
+    )
+    for key, path in assets.items():
+        item.add_asset(key, pystac.Asset(href=path, media_type=pystac.MediaType.COG,
+                                         roles=["data"]))
+        n = (band_counts or {}).get(key)
+        if n:
+            item.assets[key].extra_fields["eo:bands"] = [{} for _ in range(n)]
+    return item
 
 
 def _decode(cog):
@@ -171,13 +190,11 @@ def test_s2_truecolor_render(specs, tmp_path):
     scl[:, :80] = 9  # west-half cloud (source cols 0:80 -> the bbox west edge)
     p_r = _write_cog(tmp_path, [red], "uint16"); p_g = _write_cog(tmp_path, [grn], "uint16")
     p_b = _write_cog(tmp_path, [blu], "uint16"); p_s = _write_cog(tmp_path, [scl], "uint16")
-    pm = {p_r: p_r, p_g: p_g, p_b: p_b, p_s: p_s}
-    item = SimpleNamespace(id="s2", properties={"eo:cloud_cover": 5.0}, geometry=_GEOM,
-                           bbox=[-95.45, 29.65, -95.25, 29.85],
-                           assets=_assets({"B04": p_r, "B03": p_g, "B02": p_b, "SCL": p_s}))
-    with _synthetic(item, pm):
-        cog = raster_cog.execute(specs["fetch_sentinel2_truecolor"],
-                                 {"bbox": list(_BBOX), "max_cloud_cover": 30.0})
+    item = _item("s2", {"B04": p_r, "B03": p_g, "B02": p_b, "SCL": p_s},
+                 props={"eo:cloud_cover": 5.0})
+    with _catalog([item]):
+        cog = stac_raster.execute(specs["fetch_sentinel2_truecolor"],
+                                  {"bbox": list(_BBOX), "max_cloud_cover": 30.0})
     arr, dt, ci0 = _decode(cog)
     assert arr.shape[0] == 3 and dt == "uint8"
     assert ci0 == rasterio.enums.ColorInterp.red
@@ -191,14 +208,12 @@ def test_landsat_thermal_ramp(specs, tmp_path):
     thm = r.integers(30000, 50000, (_SH, _SW)).astype("uint16")
     qa = np.zeros((_SH, _SW), dtype="uint16"); qa[:, :80] = (1 << 3)  # west-half cloud bit
     p_t = _write_cog(tmp_path, [thm], "uint16"); p_q = _write_cog(tmp_path, [qa], "uint16")
-    pm = {p_t: p_t, p_q: p_q}
-    item = SimpleNamespace(id="ls", properties={"eo:cloud_cover": 3.0, "platform": "landsat-9"},
-                           geometry=_GEOM, bbox=[-95.45, 29.65, -95.25, 29.85],
-                           assets=_assets({"lwir11": p_t, "qa_pixel": p_q}))
-    with _synthetic(item, pm):
-        cog = raster_cog.execute(specs["fetch_landsat_imagery"],
-                                 {"bbox": list(_BBOX), "band_combo": "thermal",
-                                  "max_cloud_cover": 30.0, "include_legacy_landsat": False})
+    item = _item("ls", {"lwir11": p_t, "qa_pixel": p_q},
+                 props={"eo:cloud_cover": 3.0, "platform": "landsat-9"})
+    with _catalog([item]):
+        cog = stac_raster.execute(specs["fetch_landsat_imagery"],
+                                  {"bbox": list(_BBOX), "band_combo": "thermal",
+                                   "max_cloud_cover": 30.0, "include_legacy_landsat": False})
     arr, dt, ci0 = _decode(cog)
     assert arr.shape[0] == 3 and dt == "uint8"
     assert int(arr[:, :, :5].max()) == 0                     # west cloud edge zeroed
@@ -209,10 +224,9 @@ def test_naip_passthrough(specs, tmp_path):
     r = np.random.default_rng(2)
     img = [r.integers(1, 256, (_SH, _SW)).astype("uint8") for _ in range(4)]  # RGBN
     p_i = _write_cog(tmp_path, img, "uint8")
-    item = SimpleNamespace(id="naip", properties={}, geometry=_GEOM,
-                           bbox=[-95.45, 29.65, -95.25, 29.85], assets=_assets({"image": p_i}))
-    with _synthetic(item, {p_i: p_i}):
-        cog = raster_cog.execute(specs["fetch_naip"], {"bbox": list(_BBOX)})
+    item = _item("naip", {"image": p_i}, band_counts={"image": 4})
+    with _catalog([item]):
+        cog = stac_raster.execute(specs["fetch_naip"], {"bbox": list(_BBOX)})
     arr, dt, ci0 = _decode(cog)
     assert arr.shape[0] == 3 and dt == "uint8"
     assert int(arr.max()) > 0                                # RGB passthrough, not all-black
@@ -221,11 +235,10 @@ def test_naip_passthrough(specs, tmp_path):
 def test_naip_all_black_is_no_coverage(specs, tmp_path):
     img = [np.zeros((_SH, _SW), dtype="uint8") for _ in range(4)]
     p_i = _write_cog(tmp_path, img, "uint8")
-    item = SimpleNamespace(id="naip", properties={}, geometry=_GEOM,
-                           bbox=[-95.45, 29.65, -95.25, 29.85], assets=_assets({"image": p_i}))
-    with _synthetic(item, {p_i: p_i}):
+    item = _item("naip", {"image": p_i}, band_counts={"image": 4})
+    with _catalog([item]):
         with pytest.raises(Exception) as ei:
-            raster_cog.execute(specs["fetch_naip"], {"bbox": list(_BBOX)})
+            stac_raster.execute(specs["fetch_naip"], {"bbox": list(_BBOX)})
     assert getattr(ei.value, "error_code", "") == "NAIP_NO_COVERAGE"
 
 
@@ -235,10 +248,9 @@ def test_s2_all_cloud_is_no_imagery(specs, tmp_path):
     scl = np.full((_SH, _SW), 9, dtype="uint16")  # every pixel high-prob cloud
     p_r = _write_cog(tmp_path, [band()], "uint16"); p_g = _write_cog(tmp_path, [band()], "uint16")
     p_b = _write_cog(tmp_path, [band()], "uint16"); p_s = _write_cog(tmp_path, [scl], "uint16")
-    item = SimpleNamespace(id="s2", properties={"eo:cloud_cover": 5.0}, geometry=_GEOM,
-                           bbox=[-95.45, 29.65, -95.25, 29.85],
-                           assets=_assets({"B04": p_r, "B03": p_g, "B02": p_b, "SCL": p_s}))
-    with _synthetic(item, {p_r: p_r, p_g: p_g, p_b: p_b, p_s: p_s}):
+    item = _item("s2", {"B04": p_r, "B03": p_g, "B02": p_b, "SCL": p_s},
+                 props={"eo:cloud_cover": 5.0})
+    with _catalog([item]):
         with pytest.raises(Exception) as ei:
-            raster_cog.execute(specs["fetch_sentinel2_truecolor"], {"bbox": list(_BBOX)})
+            stac_raster.execute(specs["fetch_sentinel2_truecolor"], {"bbox": list(_BBOX)})
     assert getattr(ei.value, "error_code", "") == "S2_TRUECOLOR_NO_IMAGERY"

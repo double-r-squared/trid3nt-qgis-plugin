@@ -1,10 +1,8 @@
-# Router source spec (STAC-composite wave, raster-cog stac_multi_asset_rgb, ADR 0080).
-# Twin: fetch_landsat_imagery.py -- Landsat Collection-2 Level-2 imagery via PC STAC.
-# Folds onto the NEW stac_multi_asset_rgb mode: per-band_combo recipes read up to 3
-# single-band reflectance assets (+ the qa_pixel CFMask bitmask), joint-2/98-stretch
-# to a baked RGB; the thermal combo reads lwir11, scales to deg C, and inferno-ramps a
-# single band. Scene rank = coverage-bucket -> least-cloudy -> most-coverage with a
-# platform + eo:cloud_cover query filter.
+# Landsat Collection-2 Level-2 imagery over the Planetary Computer STAC catalog.
+# Per band_combo: up to 3 single-band reflectance assets plus the qa_pixel CFMask
+# bitmask, joint 2/98 stretch to a baked RGB; the thermal combo reads lwir11, scales
+# to deg C and inferno-ramps one band. Scene rank is coverage-bucket -> least-cloudy
+# -> most-coverage under a platform + eo:cloud_cover query.
 schema_version: v1
 name: fetch_landsat_imagery
 source_class: landsat_imagery
@@ -63,14 +61,17 @@ params:
 gates:
   max_bbox_deg2: 0.5
 ingest:
-  access: stac_multi_asset_rgb
+  access: stac
+  render: rgb
   native_cell_m: 30.0
   stac:
     root: https://planetarycomputer.microsoft.com/api/stac/v1
     collection: landsat-c2-l2
+    sign: planetary_computer
     datetime_window: true
     default_window_days: 425
     select:
+      mode: best
       cloud_query: true
       platform_query:
         param: include_legacy_landsat
