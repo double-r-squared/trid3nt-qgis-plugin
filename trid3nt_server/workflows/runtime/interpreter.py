@@ -66,9 +66,7 @@ logger = logging.getLogger("trid3nt_server.workflows.runtime.interpreter")
 class RunResult:
     """What a plan produced: the terminal result plus the run's provenance rows.
 
-    ``notes`` carries what the run could NOT produce - an auxiliary chart or
-    render that failed while the primary result stood. The caller narrates them.
-    """
+    ``notes`` carries what the run could NOT produce, for the caller to narrate."""
 
     value: Any
     results: dict[str, Any] = field(default_factory=dict)
@@ -144,10 +142,10 @@ async def interpret(
     try:
         for node in nodes:
             if node.index == first_step:
-                # Law 9 fires before the FIRST step, not the first CONSEQUENTIAL
-                # one: an invented physics value poisons the prep work as surely as
-                # the solve, and a plan that tags nothing consequential would
-                # otherwise skip the floor entirely.
+                # The invented-physics floor fires before the FIRST step, not the
+                # first CONSEQUENTIAL one: an invented value poisons the prep work
+                # as surely as the solve, and a plan that tags nothing consequential
+                # would otherwise skip the floor entirely.
                 _refuse_invented_physics(out.entries, plan.name, input_mode,
                                          self_reviewed=self_reviewed)
             if node.step.consequential:
@@ -229,11 +227,8 @@ def _final_recordable_index(nodes: Sequence[PlanNode]) -> int | None:
 
 def _carry_notes(exc: BaseException, notes: Sequence[str]) -> None:
     """Attach what the run could not produce to the failure that ends it.
-
-    Auxiliary misses are collected on the ``RunResult``, which a raising step
-    never returns - so without this the narration would report the failure and
-    silently drop the products the user was also promised.
-    """
+    A raising step never returns the ``RunResult`` the auxiliary misses collect on,
+    so they travel on the exception instead."""
     for note in notes:
         exc.add_note(f"also missing from this run: {note}")
 
@@ -242,9 +237,7 @@ def _note_aux_failure(out: RunResult, plan_name: str, node: PlanNode,
                       exc: BaseException) -> None:
     """An AUXILIARY node (chart/render) never kills the run - it says what is missing.
 
-    The primary result already exists; retracting a 27-minute solve because a
-    chart builder threw would be the failure-retracts-something anti-pattern.
-    """
+    The primary result stands; a failure here never retracts it."""
     kind = "chart"
     logger.warning("plan %s: %s node %r FAILED (%s); the run's primary result stands",
                    plan_name, kind, node.label, exc, exc_info=True)
@@ -291,9 +284,7 @@ def _data_step_label(name: str) -> str:
 async def _produce(env: _Env, decl: DataDecl) -> Any:
     """Satisfy one declared artifact, ON DEMAND - when a step that reads it runs.
 
-    Demand-pulled rather than fetched up front, so a declared artifact nothing
-    reads costs no fetch.
-    """
+    A declared artifact nothing reads costs no fetch."""
     handed_in = env.supplied.get(decl.name)
     if handed_in is not None:
         _validate_supplied(decl, handed_in, decl.supplied_validate)
@@ -336,17 +327,8 @@ async def _produce(env: _Env, decl: DataDecl) -> Any:
 async def _walk_ladder(env: _Env, producer: Producer,
                        label: str) -> tuple[Producer, Any]:
     """Call the producer, then its declared rungs in order -> the one that ANSWERED.
-
-    The declared ladder IS the mechanism: primary first, each rung after it, and
-    the last rung's failure is what the run reports. Which rung answered is
-    recorded on the ledger record's ``runner``, so a producer that degraded and
-    one that never had a ladder are distinguishable afterwards - the defect an
-    inert ``.ladder()`` left behind.
-
-    A rung that names a DIFFERENT runner than the primary is a cross-dataset
-    substitution, and the loud line is emitted here rather than left to each
-    producer's own discipline: this is the one place that knows a rung fired.
-    """
+    Primary first, each declared rung after it; the last rung's failure is what the
+    run reports, and the answering rung is what the ledger record's ``runner`` names."""
     rungs = (producer, *producer.ladder_rungs)
     failures: list[str] = []
     for index, rung in enumerate(rungs):
@@ -371,6 +353,8 @@ async def _walk_ladder(env: _Env, producer: Producer,
                            label, rung.runner, exc, rungs[index + 1].runner)
             continue
         if index:
+            # This is the one place that knows a rung fired, so the cross-dataset
+            # substitution is announced here rather than left to each producer.
             logger.warning(
                 "LABELED SUBSTITUTION: %s was produced by the fallback rung %s "
                 "rather than %s - a DIFFERENT dataset answered this artifact. "
@@ -383,14 +367,9 @@ async def _walk_ladder(env: _Env, producer: Producer,
 
 
 def _validate_supplied(decl: DataDecl, supplied: Any, validate: Any) -> None:
-    """What a supplied artifact is checked for before the run adopts it.
-
-    Two checks and no third: the slot's declared SHAPE against the artifact's
-    class, and - under ``CoversAOI`` - that a domain with an extent is bound at
-    all, so an artifact is never adopted against no modelled world. Whether the
-    artifact's own extent COVERS that domain is not checked; see
-    :class:`~trid3nt_server.workflows.runtime.data._CoversAOI` for what that costs.
-    """
+    """Two checks and no third before a supplied artifact is adopted: the slot's
+    declared SHAPE against the artifact's class, and - under ``CoversAOI`` - that a
+    domain with an extent is bound. The artifact's own extent is never read."""
     decl.refuse_wrong_shape(supplied)
     if validate is not CoversAOI:
         return
@@ -457,8 +436,8 @@ async def _run_chart(node: PlanNode, env: _Env) -> Any:
     return {"chart": spec.name, "emitted": True}
 
 
-#: The one code law 9 refuses under, so callers route on the reason rather than on
-#: the shape of the plan that hit it.
+#: The one code the invented-physics floor refuses under, so callers route on the
+#: reason rather than on the shape of the plan that hit it.
 _PHYSICS_INPUT_REQUIRED = "PHYSICS_INPUT_REQUIRED"
 
 
@@ -478,21 +457,14 @@ def _refuse_missing_required(params: ResolvedParams, tool_name: str) -> None:
 def _refuse_invented_physics(entries: Sequence[SyntheticInput], tool_name: str,
                              input_mode: str | None, *,
                              self_reviewed: bool) -> None:
-    """Law 9: a physics value nobody approved never reaches a solve.
-
-    The exemption keys on a REVIEW SURFACE, not on a session. Approval needs a card
-    to happen on, and one thing puts one in front of the user: a ``self_gating``
-    step that runs its own input review. A live session without one is a session
-    that will never be asked, so it refuses like a headless one - an emitter is
-    where a card COULD be shown, never evidence that one was.
-
-    So: refuse in auto mode; refuse in user_gated mode with no emitter (nobody to
-    approve); refuse in user_gated mode with an emitter but no review surface
-    (nothing to approve on). Step aside only for a live user_gated session whose
-    plan actually reviews these values.
-    """
+    """A physics value nobody approved never reaches a solve.
+    The exemption keys on a REVIEW SURFACE, not on a session: only a ``self_gating``
+    step puts a card in front of the user, and an emitter is not evidence of one."""
     headless = resolve_input_gate_mode(input_mode) != "auto"
     live = current_emitter() is not None
+    # The only opening: a live user_gated session whose plan actually reviews these
+    # values. Auto mode refuses; user_gated with no emitter has nobody to approve;
+    # user_gated with an emitter but no review surface has nothing to approve on.
     if headless and live and self_reviewed:
         return
     reason = physics_refusal_reason(
@@ -524,12 +496,8 @@ def _adopt(env: _Env, node: PlanNode, value: Any, out: RunResult, *, replayed: b
 
 async def _bind(kwargs: dict[str, Any], env: _Env, label: str) -> dict[str, Any]:
     """Substitute every declared plan value, inside the typed error family.
-
-    Binding is real work over author-supplied containers - a namedtuple kwarg, a
-    set whose bound members are unhashable - so it fails like a step fails and must
-    be reported like one. A raw ``TypeError`` escaping here would bypass the
-    envelope every other plan fault arrives in.
-    """
+    Binding walks author-supplied containers, so it fails like a step fails: no raw
+    ``TypeError`` escapes the envelope every other plan fault arrives in."""
     try:
         bound = {k: await _bind_value(v, env) for k, v in kwargs.items()}
     except asyncio.CancelledError:
@@ -578,12 +546,8 @@ async def _bind_value(value: Any, env: _Env) -> Any:
 
 def _rebuild(original: Any, items: list[Any]) -> Any:
     """Put bound members back into the container the author declared.
-
-    ``type(original)(items)`` is wrong for a namedtuple, whose fields are
-    positional, so that one is rebuilt through ``_make``. A subclass whose
-    constructor takes something else entirely still raises - and ``_bind`` turns
-    that into a typed plan error rather than letting it escape raw.
-    """
+    A namedtuple is rebuilt through ``_make``; a container whose constructor takes
+    something else raises, and ``_bind`` types it."""
     if isinstance(original, tuple) and hasattr(original, "_make"):
         return original._make(items)          # a namedtuple keeps its field names
     return type(original)(items)
@@ -595,13 +559,8 @@ _NO_FIELD = object()
 
 async def _deref(ref: Ref, env: _Env) -> Any:
     """Bind one declared read, REFUSING rather than yielding a missing field.
-
-    The ParamRef leak law reaches attribute tails too: a tail naming a field the
-    referenced thing does not define, or one that is there and empty, is a
-    DECLARATION that does not describe the value it reads. Letting it bind to
-    ``None`` hands the step a hole to fail on several frames later, blaming a
-    runner for a ref nobody checked.
-    """
+    An attribute tail naming a field the referenced thing does not define, or one
+    that is there and empty, refuses here rather than binding to ``None``."""
     if ref.root in env.results:
         base = env.results[ref.root]
     elif ref.root in env.artifacts:
@@ -649,11 +608,8 @@ _LEAK_SCAN_BUDGET = 50_000
 @dataclass
 class _Scan:
     """One leak sweep: the cycle guard, the remaining budget, whether it ran out.
-
-    ``seen`` is shared across the surfaces of one sweep so a value that is both the
-    plan's result and a step result is walked once; ``budget`` is NOT, so a large
-    surface cannot starve the ones scanned after it.
-    """
+    ``seen`` is shared across a sweep's surfaces; ``budget`` is per surface, so a
+    large surface cannot starve the ones scanned after it."""
 
     seen: set[int]
     budget: int
@@ -662,16 +618,8 @@ class _Scan:
 
 def _refuse_leaked_param_refs(surfaces: Mapping[str, Any], where: str) -> None:
     """Refuse an unsubstituted ``ParamRef`` before it becomes data.
-
-    The interpreter is the ONLY thing that substitutes a ref, so one that reaches a
-    runner's arguments, a persisted ledger record or the returned result means a
-    declaration escaped binding. That is always a bug - a ref is a description of a
-    read, and a description written to disk or handed to a solver is a lie about a
-    number. Loud and typed beats ``ParamRef('reach_km')`` in a layer title.
-
-    Each named surface gets its OWN budget, and exhausting one is WARNED rather
-    than passed: a scan that stopped looking has not found the surface clean.
-    """
+    Each named surface gets its own budget, and exhausting one WARNS rather than
+    passing: a scan that stopped looking has not found the surface clean."""
     seen: set[int] = set()
     for name, surface in surfaces.items():
         scan = _Scan(seen=seen, budget=_LEAK_SCAN_BUDGET)
@@ -734,12 +682,8 @@ def _find_param_ref(value: Any, scan: _Scan,
 
 def _object_attrs(obj: Any) -> list[tuple[str, Any]] | None:
     """The attributes of a plain object: ``__dict__``, ``__slots__`` and fields.
-
-    A frozen+slots dataclass has NO ``__dict__``, and it is the house idiom for a
-    value type - so a guard that read only ``__dict__`` could not see a ref held on
-    one, and the ref reached the wire as ``str()`` text through a serializer's
-    ``default=``.
-    """
+    All three, because a frozen+slots dataclass has no ``__dict__`` and would
+    otherwise hide a ref from the scan."""
     pairs: list[tuple[str, Any]] = []
     attrs = getattr(obj, "__dict__", None)
     if isinstance(attrs, dict):
@@ -774,12 +718,8 @@ def _declared_attribute_names(cls: type) -> tuple[str, ...]:
 
 def _load(runner: str) -> Any:
     """The runner a node named: a REGISTERED TOOL first, then a dotted import path.
-
-    One namespace for declarations and for a direct call, so ``tool("section",
-    ...)`` in a plan and ``section(...)`` from a chat are the same function. A name
-    that reads as BOTH refuses: choosing one would make which namespace answered a
-    matter of lookup order rather than of what the author wrote.
-    """
+    A name that resolves as BOTH refuses rather than letting lookup order decide
+    which namespace answered."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     registered = TOOL_REGISTRY.get(runner)
@@ -839,10 +779,8 @@ _LIVE, _ABSENT, _UNREACHABLE = "live", "absent", "unreachable"
 
 async def _artifacts_live(rec: LedgerRecord) -> bool:
     """Probe every artifact the cached record points at.
-
-    A replay that hands back a URI whose object is gone is a dead handle wearing a
-    success envelope; the node re-executes instead.
-    """
+    A record pointing at an object that is gone is not replayable; the node
+    re-executes instead."""
     for uri in rec.artifact_uris:
         state = await asyncio.to_thread(_artifact_state, uri)
         if state == _LIVE:
@@ -861,11 +799,8 @@ async def _artifacts_live(rec: LedgerRecord) -> bool:
 
 def _artifact_state(uri: str) -> str:
     """Is the cached artifact there, gone, or merely unreachable right now?
-
-    ``s3://`` objects are probed; a local path is stat'd; anything else is taken as
-    live. Never raises: a probe that cannot answer must not become a typed error
-    about the RUN - it only means the node re-executes.
-    """
+    ``s3://`` is probed, a local path stat'd, anything else taken as live. Never
+    raises: an unanswerable probe means the node re-executes, not that the run fails."""
     if uri.startswith("s3://"):
         bucket, _, key = uri[len("s3://"):].partition("/")
         if not bucket or not key:

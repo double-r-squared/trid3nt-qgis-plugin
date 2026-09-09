@@ -1,18 +1,7 @@
 """COUPLED VALIDITY: the rules a single ``Param`` declaration cannot express.
 
-A ``Param`` declares its own bounds, and bounds are a statement about ONE value.
-Nothing in that declaration can say that two values are only meaningful together
-- and the classic case is a coefficient whose MEANING is fixed by a law beside
-it. TELEMAC's FRICTION COEFFICIENT is a Strickler Ks under law 3 (higher is
-smoother, order 10-100) and its RECIPROCAL, a Manning n, under law 4 (higher is
-rougher, order 0.01-0.1). A sheet that moves the law and leaves the coefficient
-is not out of range; it is about a different quantity, and no per-param bound can
-see that.
-
-So the rule is DECLARED beside the params it reads, and checked at resolve time -
-on every lane, because a sheet is a sheet whether it came from a fresh invocation
-or from a derivation. The library owns the mechanism; the engine or the template
-owns the rule, because only they know what their params mean together.
+A rule is declared beside the params it reads and checked at resolve time on every
+lane; the library owns the mechanism, the engine or the template owns the rule.
 """
 
 from __future__ import annotations
@@ -31,13 +20,8 @@ logger = logging.getLogger("trid3nt_server.workflows.runtime.validity")
 
 class CoupledValidityError(DeclarativeError):
     """A sheet whose values are each in range and jointly meaningless.
-
-    A REFUSAL, never a warning: the whole point of the rule is that the sheet
-    reads as ordinary - every row inside its declared bounds - while the run it
-    describes is about something the caller did not ask for. Accepting it
-    silently and labelling it afterwards would put the label on an answer that
-    was already wrong.
-    """
+    A REFUSAL, never a warning: the sheet reads as ordinary while the run it
+    describes is about something the caller did not ask for."""
 
     error_code = "COUPLED_VALIDITY_REFUSED"
 
@@ -45,15 +29,8 @@ class CoupledValidityError(DeclarativeError):
 @dataclass(frozen=True, slots=True)
 class Validity:
     """One declared cross-param rule: what it reads, when it holds, what it says.
-
-    ``holds`` is a PREDICATE over the concrete sheet - ``True`` means the
-    combination is meaningful. ``message`` is what the refusal says, formatted
-    against the rule's own ``reads`` (``{friction_law}``, ``{friction_coefficient}``),
-    so the caller is told the values that clashed and not just that they did.
-
-    A rule whose reads are not ALL seated is skipped: an optional param nobody
-    supplied has no value to be jointly wrong with.
-    """
+    ``holds`` is a predicate over the concrete sheet and ``message`` is formatted
+    against ``reads``; a rule whose reads are not ALL seated is skipped."""
 
     name: str
     reads: tuple[str, ...]
@@ -80,11 +57,8 @@ class Validity:
 def refuse_undeclared_reads(rules: Sequence[Validity],
                             declared: Sequence[Any]) -> None:
     """A rule that reads a param the workflow does not declare, refused at import.
-
-    The rule would otherwise be silently SKIPPED forever - its read never seats,
-    so it never fires - and a coupled-validity rule that never fires is worse than
-    none, because the declaration claims a guard that is not there.
-    """
+    It would otherwise be skipped forever, and a declaration claiming a guard that
+    never fires is worse than no guard."""
     names = {getattr(p, "name", None) for p in declared}
     for rule in rules:
         missing = sorted(n for n in rule.reads if n not in names)

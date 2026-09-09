@@ -1,24 +1,7 @@
 """Declared TEMPORAL TRANSFORMS - ``.resample(...)`` and ``.normalize(units=...)``.
 
-pandas does the arithmetic; this module is the DOCTRINE around it.
-
-Three rules decide every call, and none of them is a per-source constant:
-
-* the QUANTITY CLASS picks the default method - a RATE resamples
-  CONSERVATIVELY (mass-preserving), a STATE interpolates LINEARLY, a
-  CATEGORICAL value moves by NEAREST and by nothing else. A caller may
-  override the first two; asking to average class labels is refused.
-* INTERPOLATION IS DECLARED. A transform that ran leaves a provenance stamp
-  ("resampled 6h->1h linear"), so a manufactured value is never mistaken for
-  an observed one, and a payload with no ``.resample()`` is never realigned
-  behind the consumer's back.
-* A HOLE WIDER THAN ``max_gap`` REFUSES. Within-cadence interpolation is
-  refinement; bridging a hole in the record is invention, and this library
-  does not invent the world. The default bound is three native intervals.
-
-Unit conversion rides an EXPLICIT table (below), not a units engine: a
-conversion nobody declared is a conversion nobody can check, and a
-cross-dimension request refuses rather than guessing at intent.
+pandas does the arithmetic; a transform that ran leaves a provenance stamp, and a
+payload with no ``.resample()`` is never realigned behind the consumer's back.
 """
 
 from __future__ import annotations
@@ -54,17 +37,16 @@ STATE = "state"
 #: A class label (land cover, alert level, flow regime). Nearest only.
 CATEGORICAL = "categorical"
 
+# The QUANTITY CLASS picks the default method: a RATE resamples CONSERVATIVELY
+# (mass-preserving), a STATE interpolates LINEARLY, a CATEGORICAL value moves by
+# NEAREST and by nothing else. A caller may override the first two.
 _DEFAULT_METHOD = {RATE: "conservative", STATE: "linear", CATEGORICAL: "nearest"}
 _METHODS = ("conservative", "linear", "nearest")
 
 
 class TemporalGapError(DeclarativeError):
     """The record has a hole wider than the declared ``max_gap``.
-
-    Never bridged: the consumer asked for a cadence the source cannot honestly
-    supply across this window, and a smooth line drawn over missing hours is a
-    fabricated forcing.
-    """
+    Never bridged: a smooth line drawn over missing hours is a fabricated forcing."""
 
     error_code = "TEMPORAL_GAP_UNBRIDGED"
 
@@ -195,11 +177,8 @@ class Transformed:
 def transform_series(series: Any, spec: TemporalSpec | None, *,
                      quantity: str, units: str | None = None) -> Transformed:
     """Resample and unit-normalize a time-indexed series against ``spec``.
-
-    ``series`` is a pandas ``Series`` on a ``DatetimeIndex``, or any sequence of
-    ``(timestamp, value)`` pairs. The returned ``values`` is a pandas ``Series``;
-    the returned ``note`` is the provenance stamp for the run's record.
-    """
+    ``series`` is a pandas ``Series`` on a ``DatetimeIndex`` or a sequence of
+    ``(timestamp, value)`` pairs; ``note`` is the provenance stamp for the record."""
     import pandas as pd
 
     s = _as_series(series, pd)
@@ -229,11 +208,8 @@ def transform_value(value: float, spec: TemporalSpec | None, *,
                     quantity: str, units: str | None = None,
                     native: str | None = None) -> Transformed:
     """The single-value path: unit normalization, and a resample that must be a no-op.
-
-    ``native`` is the interval the value already represents. A ``.resample()`` to
-    anything else REFUSES: one number carries no time axis to redistribute, so
-    honoring the request would mean manufacturing the series it was asked for.
-    """
+    ``native`` is the interval the value already represents; a ``.resample()`` to
+    anything else REFUSES, one number having no time axis to redistribute."""
     notes: list[str] = []
     out = float(value)
     if spec is not None and spec.units is not None and units:
@@ -273,6 +249,8 @@ def _resample(s: Any, target: Any, native: Any, method: str, freq: str, pd: Any)
     return dense.reindex(idx)
 
 
+# Within-cadence interpolation is refinement; bridging a hole in the record is
+# invention. The declared bound defaults to three native intervals.
 def _refuse_gaps(s: Any, bound: Any, native: Any, pd: Any) -> None:
     gaps = s.index.to_series().diff().dropna()
     worst = gaps.max() if len(gaps) else pd.Timedelta(0)
@@ -321,11 +299,8 @@ def _as_series(series: Any, pd: Any) -> Any:
 
 def _native(s: Any, pd: Any) -> Any:
     """The source's own cadence: the LOWER-median sample spacing.
-
-    Robust to a hole (unlike the mean) and never reports a spacing the record
-    does not actually contain (unlike an interpolating median, which turns 6h
-    and 12h into a 9h cadence nothing was ever sampled at).
-    """
+    Robust to a hole, and never reports a spacing the record does not contain -
+    an interpolating median would turn 6h and 12h into an unsampled 9h."""
     diffs = s.index.to_series().diff().dropna()
     return pd.Timedelta(diffs.quantile(0.5, interpolation="lower"))
 

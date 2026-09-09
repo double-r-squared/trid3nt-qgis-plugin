@@ -1,15 +1,7 @@
 """The step ledger: what one invocation may replay, and what it may not.
 
-Every terminal state TOMBSTONES. A plan that runs to the end leaves a completion
-marker in place of its records, so the next invocation of a live-no-cache tool
-refetches the world; a plan that FAILS leaves the same marker, so a re-run of the
-corrected question re-executes rather than replaying artifacts the code that
-produced them no longer describes.
-
-What replay is for is therefore the work a run INHERITS: a derived rerun seeds
-this ledger from its successful parent's snapshot and the ordinary resume path
-walks it. Records also survive a process that died without unwinding, which is
-what ``restart_clean`` discards.
+Every terminal state TOMBSTONES - reaching the end and failing both leave a
+completion marker, so a live-no-cache tool re-executes rather than replaying.
 """
 
 from __future__ import annotations
@@ -44,11 +36,8 @@ _DATA_INDEX = -1
 def invocation_key(workflow: str, values: dict[str, Any],
                    *, input_mode: str | None = None) -> str:
     """Identity of THIS invocation - the same question with the same params rehashes.
-
-    ``input_mode`` is part of the identity: an auto-mode attempt and a user_gated
-    one are different runs (the gated one may revise the very params the auto
-    attempt cached), so a failed auto attempt must not seed a user_gated replay.
-    """
+    ``input_mode`` is part of it: an auto attempt and a user_gated one are different
+    runs, so one must never seed the other's replay."""
     from trid3nt_server.gates.input_review import resolve_input_gate_mode
 
     blob = json.dumps({"w": workflow, "v": values,
@@ -59,13 +48,8 @@ def invocation_key(workflow: str, values: dict[str, Any],
 
 def inputs_digest(value: Any) -> str:
     """A STABLE digest of what a node was handed, across processes.
-
-    A value with a ``uri`` is that uri - the artifact is the input, not the
-    object that wraps it - a model is its own dump, and anything that states
-    neither contributes only its type. Contributing less is the safe direction:
-    it replays a record the inputs may have moved under only where the move is
-    invisible to every reader, and the artifact probe still gates the replay.
-    """
+    A value with a ``uri`` digests as that uri, a model as its own dump, and
+    anything that states neither contributes only its type."""
     return hashlib.sha256(
         json.dumps(_stable(value), sort_keys=True, default=str
                    ).encode("utf-8")).hexdigest()[:16]
@@ -158,12 +142,8 @@ class StepLedger:
     def replay_for(self, index: int, node: str,
                    inputs_key: str) -> LedgerRecord | None:
         """The cached record for this node, when the plan AND its inputs match.
-
-        Position and label say the plan is the same plan; the inputs key says
-        the work would be the same work. A record whose inputs moved is not a
-        record of this run - replaying it would report an artifact produced from
-        values nobody is asking about any more.
-        """
+        Position and label say the plan is the same plan; the inputs key says the
+        work would be the same work. A record whose inputs moved is not a match."""
         for rec in self.records:
             if rec.index == index:
                 if rec.node != node or not rec.inputs_key:
@@ -178,11 +158,8 @@ class StepLedger:
 
     async def record(self, rec: LedgerRecord, *, final: bool = False) -> None:
         """Record one completed node; ``final`` TOMBSTONES the run in the same write.
-
-        Stamping completion together with the last node's record is what closes the
-        crash window: a process that dies (or is cancelled) between the last record
-        and :meth:`complete` would otherwise leave a FINISHED run looking resumable.
-        """
+        One write, because a process that died between the last record and
+        :meth:`complete` would leave a finished run looking resumable."""
         self.records = [r for r in self.records if r.index != rec.index] + [rec]
         self.records.sort(key=lambda r: r.index)
         if final:
@@ -197,19 +174,11 @@ class StepLedger:
 
     async def seed(self, records: list[LedgerRecord],
                    data_records: list[LedgerRecord]) -> None:
-        """Plant the work a DERIVED run inherits from its parent.
-
-        A rerun-with-overrides starts from work its parent already did, which the
-        parent's OWN ledger no longer holds - completion tombstones it, and that
-        tombstone is what stops a live-no-cache tool becoming a result cache. The
-        records arrive from the parent's run SNAPSHOT instead and land here, so
-        the ordinary resume path replays them and nothing downstream needs to know
-        a derivation happened.
-
-        The document is REPLACED, not merged: this key may carry a tombstone from
-        an identical earlier derivation, and inheriting past a tombstone is the
-        whole point of being asked.
-        """
+        """Plant the work a DERIVED run inherits from its parent, so the ordinary
+        resume path replays it. Records arrive from the parent's run SNAPSHOT,
+        never from the parent's ledger, which completion has already tombstoned."""
+        # REPLACE, never merge: this key may carry a tombstone from an identical
+        # earlier derivation, and inheriting past a tombstone is what was asked for.
         self.records = sorted(records, key=lambda r: r.index)
         self.data_records = list(data_records)
         self.completed = False
@@ -217,13 +186,8 @@ class StepLedger:
 
     async def clear(self) -> None:
         """Abandon this key: TOMBSTONE the document, then reap it.
-
-        Reaping alone was enough only when the delete SUCCEEDED. A swallowed reap
-        failure left the abandoned key's records sitting there ``complete: false``
-        and replayable for the whole TTL window - a re-key's orphan, or a
-        restart_clean's discarded attempt, back as a replay ghost. Writing the
-        tombstone first degrades a failed delete into a marker that refuses replay.
-        """
+        Tombstone first, so a delete that fails degrades into a marker that refuses
+        replay rather than leaving the key replayable for the whole TTL window."""
         self.records = []
         self.data_records = []
         if self.existed:
@@ -235,12 +199,8 @@ class StepLedger:
 
     async def complete(self) -> None:
         """The plan reached its end: its records are replaced by a completion tombstone.
-
-        Deleting instead would make every swallowed delete failure a permanent
-        result cache for a ``cacheable=False`` tool. The tombstone is a positive
-        marker written through the same atomic path as the records, and the TTL
-        sweep reaps it, so accumulation is bounded rather than forever.
-        """
+        A positive marker rather than a delete, so a failed delete can never become
+        a permanent result cache for a ``cacheable=False`` tool; the TTL sweep reaps it."""
         if self.completed:
             return
         self._tombstone()
@@ -332,10 +292,8 @@ async def _reap(client: Any, key: str) -> None:
 
 async def _sweep(client: Any) -> None:
     """Evict spent documents: stale schema, or older than the TTL.
-
-    This is what bounds completion tombstones: they are reaped on AGE, so a
-    finished run stays un-replayable for the whole TTL window and then goes.
-    """
+    This is what bounds completion tombstones - they are reaped on AGE, so a
+    finished run stays un-replayable for the whole window and then goes."""
     doc = await client.call_tool("find", {
         "database": DEFAULT_DATABASE, "collection": _COLLECTION, "filter": {},
     })

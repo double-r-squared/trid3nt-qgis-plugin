@@ -1,17 +1,7 @@
 """The USER-INPUT species: things the user hands us - clicks, sketches, values.
 
-One normalizer per SHAPE, and both routes to a param go through it. A value can
-arrive DRAWN (the draw gate's reply) or TYPED (a wire coercion), and if each route
-carried its own coercion the gate vocabulary and the wire vocabulary would drift:
-a polygon the canvas returns closed and a polygon the model types open would
-become two different params with one name. So the gate machinery reads these and
-so do the templates' coercions - the no-double-middleware law, applied to our own
-front door.
-
-A malformed value REFUSES, typed. Degrading a bad point to a derived location is
-the silent-swallow class: the run models somewhere else and says nothing.
-``code`` is the caller's own error code, because a refusal reads to the model as
-that engine's refusal.
+One normalizer per SHAPE for both the drawn and the typed route, so the two
+vocabularies cannot drift; a malformed value REFUSES typed, under ``code``.
 """
 
 from __future__ import annotations
@@ -111,14 +101,8 @@ def polyline_coords(value: Any, *, label: str = "line",
 def polyline_set(value: Any, *, label: str = "lines",
                  code: str = _DEFAULT_CODE) -> list[list[list[float]]] | None:
     """One or MANY drawn/typed lines as ``[[[lon, lat], ...], ...]``.
-
-    The plural of :func:`polyline_coords`, and the shape a context slot that
-    accepts ``geometry="polyline"`` normalizes to: a breakwater field is several
-    ways, a single sketched line is one, and the consumer must not have to
-    care which arrived. A GeoJSON-ish mapping (the draw gate's reply, a Feature,
-    a FeatureCollection) unwraps here rather than in each consumer, which is the
-    whole point of the species living in one place.
-    """
+    Always the plural shape, whether one line arrived or several; a Feature or a
+    FeatureCollection unwraps here rather than in each consumer."""
     if value is None:
         return None
     if isinstance(value, Mapping):
@@ -155,11 +139,8 @@ def polyline_set(value: Any, *, label: str = "lines",
 def polygon_ring(value: Any, *, label: str = "polygon",
                  code: str = _DEFAULT_CODE) -> list[list[float]] | None:
     """A drawn or typed polygon as an OPEN outer ring - no repeated last vertex.
-
-    Open is the one representation, chosen because the two producers disagree: the
-    canvas closes its ring and a typed list usually does not. Normalizing here is
-    what keeps "how many vertices does this polygon have" from having two answers.
-    """
+    One representation, because the canvas closes its ring and a typed list does
+    not, and "how many vertices" must have one answer."""
     if value is None:
         return None
     if isinstance(value, Mapping):
@@ -177,10 +158,8 @@ def polygon_ring(value: Any, *, label: str = "polygon",
 def lonlat_bbox(value: Any, *, label: str = "extent",
                 code: str = _DEFAULT_CODE) -> tuple[float, float, float, float] | None:
     """``(min_lon, min_lat, max_lon, max_lat)``, ORDERED - a dragged box or a typed one.
-
-    A box dragged right-to-left arrives with its corners the other way round; a
-    consumer that subtracts them would get a negative extent and clip to nothing.
-    """
+    A box dragged right-to-left arrives with its corners reversed, and a consumer
+    that subtracted them would clip to nothing."""
     if value is None:
         return None
     parts: Iterable[Any]
@@ -209,12 +188,8 @@ def lonlat_bbox(value: Any, *, label: str = "extent",
 def bearing_deg(value: Any, *, label: str = "bearing",
                 code: str = _DEFAULT_CODE) -> float | None:
     """A compass bearing, WRAPPED to [0, 360).
-
-    A bearing is cyclic, so 370 is 10 and -90 is 270 - clamping one to a declared
-    bound would turn a legal direction into a different legal direction. The wrap
-    happens HERE, before the door, which is why the param can still declare
-    ``bounds=(0, 360)`` and have them mean something.
-    """
+    Cyclic, so 370 is 10 and -90 is 270; wrapping before the door is what lets a
+    param still declare ``bounds=(0, 360)`` and have them mean something."""
     if value is None:
         return None
     try:

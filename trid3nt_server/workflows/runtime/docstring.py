@@ -1,21 +1,7 @@
 """Render a registered tool's docstring from its declarations, in TWO views.
 
-The routing block is emitted FIRST: Bedrock truncates a tool docstring at 1000
-characters, so whatever the model needs to ROUTE has to survive the cut. The two
-views are that split made explicit -
-
-* ``routing`` - which question this tool answers and which it does not. What a
-  surface that only has to help someone CHOOSE the tool needs. The enforced
-  budget covers the PRE-``Returns:`` front (summary + routing + negative
-  routing), not the rendered view: the returns line rides after it and may run
-  the whole string past 1000 characters, which is the point - what the cut can
-  take is the part the model does not need to route.
-* ``full`` (default) - the routing block plus the param sheet in prose. What the
-  model calling the tool needs, because it has to fill those params.
-
-The form card carries the SAME sheet structurally (``declarative.form``), so a
-user reviewing a run reads the declaration itself - bounds, units and source
-badge - rather than this prose rendering of it.
+The routing block is emitted FIRST and must fit 1000 characters; ``routing`` stops
+after the returns line, ``full`` adds the param sheet in prose.
 """
 
 from __future__ import annotations
@@ -28,7 +14,7 @@ __all__ = ["render_docstring"]
 
 _FRONT_BUDGET = 1000
 
-#: Which rendering a surface asks for. See the module docstring for who reads which.
+#: Which rendering a surface asks for.
 DocstringView = Literal["full", "routing"]
 
 
@@ -45,16 +31,8 @@ def render_docstring(
     view: DocstringView = "full",
 ) -> str:
     """Build the docstring: summary, routing, negative routing, params, returns.
-
-    ``sheet`` documents the ENGINE SURFACE behind the params: which module this
-    fills, the rubriques its body touches, and the mandatory slots still open.
-    ``controls`` documents the run levers that are NOT params (gate mode, restart)
-    - the tool accepts them, so the model has to be told they exist. ``context``
-    documents the producer-less Data slots on the same wire: they take a layer the
-    caller already has, and the SHAPE each accepts is the only thing a template
-    that names no source can say about one. ``view`` selects the rendering;
-    ``routing`` stops after the returns line.
-    """
+    ``sheet``, ``controls`` and ``context`` document the engine surface, the run
+    levers that are not params, and the producer-less Data slots on the same wire."""
     head = [summary.strip(), "", routing.strip()]
     if not_for:
         head += ["", f"Do NOT use this for: {not_for.strip()}"]
@@ -83,14 +61,9 @@ def render_docstring(
 
 
 def _ordered(params: Any) -> list[Param]:
-    """Question-bearing params first; constants last (the 'advanced' fold, in prose).
-
-    WHICH params arrive here is the CALLER's decision, not this renderer's: a
-    surface documents its own wire. The registration factory hands over only the
-    params it put on the synthesized signature, so a factory-generated docstring
-    carries no CONSTANT rows - there is no argument there to describe. A whole
-    ``PARAMS`` body is also legal, and reads through the one body helper.
-    """
+    """Question-bearing params first; constants last.
+    Takes whatever the caller passes - a params sequence or a whole ``PARAMS``
+    body - and documents only that, never the full declaration."""
     rank = {doors.QUESTION: 0, doors.USER: 1, doors.GATE: 1,
             doors.SCENARIO: 2, doors.DERIVED: 3, doors.CONSTANT: 4}
     return sorted(param_rows(params), key=lambda p: (rank.get(p.door, 5), p.name))

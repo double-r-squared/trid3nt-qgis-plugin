@@ -1,14 +1,7 @@
-"""The plan VALUE: steps, refs, modifiers, charts.
+"""The plan VALUE: steps, refs, modifiers, charts. Nothing here executes.
 
-Nothing here executes. A template's Door returns the step sequence and the
-SKELETON names and engines the :class:`Plan`. The plan is STATIC: it reads no
-concrete value, so it is built ONCE - at registration - and the interpreter walks
-the same value on every run. Every read is a late-bound ``PARAMS.<param>`` /
-``DATA.<data>`` / ``Ref("step.field")`` description.
-
-A read is attribute access on the template's OWN declaration body (:class:`Row`),
-so a misspelled name is an ``AttributeError`` at the import line that wrote it and
-a name from another template's sheet is unwritable.
+A plan is STATIC, built once at registration and walked on every run; every read
+is a late-bound description whose typo is an ``AttributeError`` at import.
 """
 
 from __future__ import annotations
@@ -36,16 +29,11 @@ __all__ = [
 
 def declared_reads(value: Any, kind: type) -> Iterable[Any]:
     """Every declared read of ``kind`` sitting inside a declared container.
-
-    The ONE walk. The validator checks these reads resolve, the interpreter binds
-    them and evicts on them, and a derivation decides from them which steps its
-    overrides reach - three readers that must agree about what a plan value reads.
-
-    ``Mapping`` rather than ``dict``: a binding block is deep-frozen into
-    ``MappingProxyType``, which is a Mapping and not a dict, so a walk that
-    descended dicts alone would call a ref hidden in a declared block invisible.
-    Sets and frozensets are walked for the same reason.
-    """
+    The ONE walk: the validator, the interpreter and the derivations all read a
+    plan value through it and must agree about what it reads."""
+    # Mapping, not dict: a deep-frozen binding block is a MappingProxyType, so a
+    # walk that descended dicts alone would miss a ref hidden inside one. Sets and
+    # frozensets are walked for the same reason.
     if isinstance(value, kind):
         yield value
     elif isinstance(value, Mapping):
@@ -59,7 +47,6 @@ def declared_reads(value: Any, kind: type) -> Iterable[Any]:
 @dataclass(frozen=True, slots=True)
 class Ref:
     """A reference to a declared param, a declared Data, or a ``.named()`` step.
-
     Dotted (``Ref("reach.seed")``) reads a field off the referenced step's result.
     """
 
@@ -80,14 +67,8 @@ class Ref:
 
 class _Placeholder:
     """A plan-time DESCRIPTION of a read, and the operations that must not read it.
-
-    Truthiness, ``str()`` and f-string interpolation are the three ways a
-    placeholder silently becomes data: a construction-time ``if`` decides a branch
-    against a description, and an f-string bakes ``ParamRef('x')`` into a layer
-    title a user reads. Every placeholder refuses all three the same way, because
-    the leak is the same leak whichever namespace the ref came from. ``repr`` stays
-    live: naming the ref is what a diagnostic is for.
-    """
+    Truthiness, ``str()`` and f-string interpolation all refuse - they are the three
+    ways a description silently becomes data. ``repr`` stays live for diagnostics."""
 
     __slots__ = ()
 
@@ -111,19 +92,8 @@ class _Placeholder:
 @dataclass(frozen=True, slots=True, eq=False, repr=False)
 class ParamRef(_Placeholder):
     """A LATE-BOUND read of a declared param: what ``PARAMS.<name>`` yields.
-
-    A plan DESCRIBES; the interpreter SUBSTITUTES. Baking the concrete value into
-    ``Step.kwargs`` at construction time would freeze the sheet before the form
-    gate the plan itself declares, so an approved revision could never reach the
-    run. The interpreter resolves these against the CURRENT param state instead.
-
-    Every operation that would silently turn the description INTO data refuses:
-    truthiness, ``str``/``format``, equality and hashing. Each one is a real leak
-    path - an f-string bakes ``ParamRef(...)`` into a layer title, ``==`` answers
-    ``False`` against the value the author meant, and hashing lets a ref sit in a
-    set the binder used not to walk. ``repr`` stays live: naming the ref is what a
-    diagnostic is for.
-    """
+    Resolved against the CURRENT param state, so a form-gate revision reaches the
+    run; truthiness, ``str``/``format``, equality and hashing all refuse."""
 
     name: str
 
@@ -147,18 +117,8 @@ class ParamRef(_Placeholder):
 @dataclass(frozen=True, slots=True, eq=False, repr=False)
 class DataRef(_Placeholder, Ref):
     """A late-bound read of a declared ``Data``: what ``DATA.<name>`` yields.
-
-    A :class:`Ref` so the interpreter dereferences it with everything else, and its
-    own type so the registration check can say WHICH body a bad name came from -
-    ``DATA.terain`` is a Data typo, not a step nobody named.
-
-    A PLACEHOLDER like ``ParamRef``, and it refuses the same reads: the artifact a
-    ``DATA.<name>`` describes does not exist until the interpreter produces it, so
-    an f-string over one puts ``DataRef('mesh')`` in front of a user. Equality and
-    hashing stay
-    :class:`Ref`'s: a Data name is compared and keyed by path all through
-    registration.
-    """
+    Its own type so a bad name is reported against the Data body; a placeholder like
+    :class:`ParamRef`, but equality and hashing stay :class:`Ref`'s."""
 
     def __repr__(self) -> str:
         return f"DataRef({self.path!r})"
@@ -166,14 +126,8 @@ class DataRef(_Placeholder, Ref):
 
 class Row:
     """A row in a declaration class body: the ATTRIBUTE NAME is the row's name.
-
-    ONE descriptor behind both bodies. ``__set_name__`` is how the name arrives, so
-    a template never writes it twice, and ``__get__`` makes ``PARAMS.<row>`` /
-    ``DATA.<row>`` the late-bound ref every binding block and plan step already
-    speaks. Reading the body's own attribute is therefore checked by Python at
-    import: a misspelled row is an ``AttributeError`` at the line that wrote it,
-    and a name the template does not declare cannot be written at all.
-    """
+    ``__set_name__`` supplies the name and ``__get__`` yields the late-bound ref, so
+    a misspelled row is an ``AttributeError`` at the line that wrote it."""
 
     __slots__ = ()
 
@@ -202,12 +156,8 @@ class Row:
 
 def body_rows(body: Any, kind: type | tuple[type, ...]) -> tuple[Any, ...]:
     """The declared rows of a class body, in CLASS-BODY ORDER.
-
-    The ONE read of a declaration body - the param sheet, the data chain and the
-    registration factory all walk it, and order is the declaration's own because a
-    ladder and a chain both read down the body. A sequence passes through, so a
-    body assembled in code is still a body.
-    """
+    The ONE read of a declaration body. A sequence passes through, so a body
+    assembled in code is still a body."""
     if isinstance(body, (list, tuple)):
         return tuple(body)
     return tuple(v for v in vars(body).values() if isinstance(v, kind))
@@ -239,14 +189,8 @@ RawKeywords = _RawKeywords()
 @dataclass(frozen=True, slots=True)
 class ChartSpec:
     """A declared chart: the SPEC is the product; the plugin dock is the renderer.
-
-    ``builder`` is the FUNCTION ITSELF - a plain, standalone-runnable
-    ``(result, params) -> payload dict`` colocated in the template file beside
-    the plan it charts. The builder owns the axes: it writes the vega-lite
-    encodings, so the spec declares no x/y of its own. A dotted string is
-    refused: an import path defers the "does this exist" question to run time,
-    after the solve it was supposed to describe.
-    """
+    ``builder`` is the FUNCTION ITSELF, a ``(result, params) -> payload dict`` that
+    owns its own encodings; a dotted string is refused."""
 
     name: str
     builder: Callable[..., Any]
@@ -317,10 +261,8 @@ class Step:
 @dataclass(frozen=True, slots=True)
 class Plan:
     """A workflow's step sequence - a pure value the interpreter walks.
-
-    Built ONCE, by the skeleton, from the Door the template hands over: the name
-    and the engine are the workflow's, not something a template restates.
-    """
+    Built once, from the Door the template hands over; the name and the engine are
+    the workflow's, not something a template restates."""
 
     name: str
     engine: str | None

@@ -1,11 +1,8 @@
-"""The PARAMS class body - a declared VALUE per row (fits a form cell, resolves
-through a door, clamps to declared bounds). Frozen; construction validates the
-declaration.
+"""The PARAMS class body - a declared VALUE per row: a form cell, a door, bounds.
 
-A template writes its params as a class body, so the attribute name IS the param
-name and a reference to it is attribute access on the body
-(``PARAMS.spill_fraction``) - a typo is an ``AttributeError`` at import rather
-than a string nobody checked, and another template's param name is unwritable."""
+The attribute name IS the param name, so ``PARAMS.spill_fraction`` is attribute
+access and a typo is an ``AttributeError`` at import.
+"""
 
 from __future__ import annotations
 
@@ -33,13 +30,8 @@ __all__ = [
 @dataclass(frozen=True, slots=True)
 class Derived:
     """What a derivation returns when it has EVIDENCE to record beside the value.
-
-    A pure arithmetic derivation just returns the number. One that READ THE WORLD
-    knows something the declaration cannot: which texture it sampled, which rung
-    answered, whether the fit was clamped. Returning that with the value is what
-    keeps it on the row - the form card's badge and the run's provenance both read
-    it - instead of leaving it in a log line.
-    """
+    A pure arithmetic derivation returns the number alone; one that read the world
+    returns what it read, and that lands on the row rather than in a log line."""
 
     value: Any
     note: str = ""
@@ -79,20 +71,9 @@ _BASIS_FOR_DOOR: dict[str, str] = {
 
 @dataclass(frozen=True, slots=True)
 class Param(Row):
-    """One declared value: its door, its bounds, its law-9 consequence tag.
-
-    A row in a ``PARAMS`` class body: the attribute name it is written under IS
-    ``name``, so the declaration says it once and ``PARAMS.<name>`` is its own
-    late-bound reference.
-
-    ``resolve`` is a DOTTED IMPORT PATH to a pure ``(params) -> value`` derivation
-    (the GateSpec provider idiom - the declaration stays serializable and engine
-    knowledge stays in the engine). ``user_lever`` marks a derived/constant value
-    the form lets the user override; ``optional`` marks a value whose absence is
-    legal (no gate, no refusal). ``derived_when_absent`` names what stands in when
-    an optional param resolves to nothing, so the absence still leaves a
-    derived-basis provenance row instead of a silent hole.
-    """
+    """One declared value: its door, its bounds, its consequence tag.
+    The attribute name it is written under IS ``name``, and ``resolve`` is a dotted
+    import path so the declaration stays serializable."""
 
     name: str = ""
     desc: str = ""
@@ -180,11 +161,7 @@ class Param(Row):
 
 def param_rows(body: Any) -> tuple[Param, ...]:
     """The declared params of a ``PARAMS`` class body, in CLASS-BODY ORDER.
-
-    The sheet's own order: the resolver, the form card and the synthesized
-    signature all walk it, and the order a reader sees on the card is the order
-    the template wrote.
-    """
+    The sheet's own order - what a reader sees on the card is what the template wrote."""
     return body_rows(body, Param)
 
 
@@ -201,11 +178,8 @@ def refuse_duplicate_params(declared: "Sequence[Param]") -> None:
 
 class ParamNotResolved(AttributeError):
     """A derivation read a param the sheet has not seated yet.
-
-    An ``AttributeError`` so attribute semantics hold, but its own type so the
-    resolver's fixpoint can tell "wait for a dependency" from a real bug inside a
-    derivation - which is also an AttributeError and must never be swallowed.
-    """
+    Its own type, so the resolver's fixpoint can tell "wait for a dependency" from
+    a real ``AttributeError`` inside a derivation, which must never be swallowed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,16 +206,8 @@ class ResolvedParam:
 
 class ResolvedParams:
     """The resolved param sheet - what the RUN reads, never what the plan reads.
-
-    A plan is a static value built before any sheet exists (the Door, with
-    ``PARAMS.<name>`` describing each read), so nothing here is reachable at
-    plan-construction time. What this class serves is the interpreter binding a
-    ref, the gate machinery re-seating an approval, and the
-    :class:`ParamValues` view handed to derivations and chart builders.
-
-    ``p.name`` still yields a :class:`ParamRef` for the templates that predate the
-    skeleton and build their own ``Plan`` from a sheet.
-    """
+    Nothing here is reachable at plan-construction time; ``p.name`` yields a
+    :class:`ParamRef` so a read written against a sheet stays late-bound."""
 
     __slots__ = ("_rows",)
 
@@ -290,11 +256,8 @@ class ResolvedParams:
 
 class ParamValues:
     """Concrete-value view of a resolved sheet: ``v.name`` IS the value.
-
-    Handed to derivations and chart builders, which run at a moment when the value
-    exists and is what they need. Distinct from :class:`ResolvedParams` so a
-    plan-construction read cannot silently collapse into an early-bound value.
-    """
+    A separate type from :class:`ResolvedParams` so a plan-construction read can
+    never silently collapse into an early-bound value."""
 
     __slots__ = ("_rows",)
 
@@ -319,20 +282,15 @@ class ParamValues:
 
 def wire_value(value: Any) -> Any:
     """Render a resolved value for the wire - ONE rule for every surface.
-
-    The form card and the provenance row describe the same param, so they round
-    the same way: six SIGNIFICANT figures, not decimal places. A hydraulic
-    conductivity of 9.3e-07 rounded to four decimals is 0.0, and a row that
-    reports a physics value as zero is worse than no row at all.
-
-    The trade, stated: six significant figures also shorten a LARGE value - a
-    latitude of 42.0176777 renders as 42.0177, about 10 m. This is DISPLAY: the
-    run reads the sheet, never this rendering, and a row the user did not edit is
-    never re-seated from what the card showed.
-    """
+    DISPLAY only: the run reads the sheet, and a row the user did not edit is
+    never re-seated from what the card showed."""
     if value is None or isinstance(value, (bool, int, str)):
         return value
     if isinstance(value, float):
+        # Six SIGNIFICANT figures, not decimal places: 9.3e-07 to four decimals is
+        # 0.0, and a row reporting a physics value as zero is worse than no row.
+        # The same rule shortens a large value - a latitude of 42.0176777 renders
+        # as 42.0177, about 10 m.
         return float(f"{value:.6g}")
     if isinstance(value, (list, tuple)):
         return [wire_value(v) for v in value]

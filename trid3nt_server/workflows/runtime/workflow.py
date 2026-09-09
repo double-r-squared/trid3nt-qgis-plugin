@@ -1,20 +1,7 @@
 """The workflow SKELETON: the template method every declared workflow runs on.
 
-A template file declares a workflow; :class:`Workflow` IS one. The skeleton owns
-everything that never varies between questions - the normalize -> resolve ->
-interpret spine, the post + publish stages, the typed error envelope, the chart
-HOOK and its persistence, the answer artifact, and the registration factory - and
-an engine subtype (``TelemacWorkflow``) declares the two facts a run of that
-engine is recorded under. The mechanics behind the invariants - gate cards, chart
-building and emission, solve supervision, ledger + resume, the leak guard - are
-the interpreter's, and stay there.
-
-The skeleton COMPOSES the library; it does not reimplement it. Gates, ledger,
-binding and the leak guard all live in ``interpreter.py`` and stay there - the
-no-double-middleware law applies to our own library as much as to the fetcher
-router.
-
-See ``docs/design/declarative-workflows.md``, "The Workflow Skeleton".
+A template file declares a workflow; :class:`Workflow` IS one, and owns the
+normalize/resolve/interpret spine, post and publish, and the registration factory.
 """
 
 from __future__ import annotations
@@ -53,13 +40,8 @@ class WireArgsError(DeclarativeError):
 
 def _provenance_row(row: str | tuple[str, str]) -> tuple[str, str]:
     """One declared ``provenance=`` entry, as ``(param, note_key)``.
-
-    A bare name takes the conventional ``<param>_note`` key. A PAIR names the note
-    key where the answer artifact has always called it something else - and it must
-    be exactly a pair: a three-element row would silently drop its tail and a
-    one-element row would raise deep inside :meth:`Workflow.answer`, long after the
-    declaration that was wrong.
-    """
+    A bare name takes the ``<param>_note`` key; a row that is not exactly a pair is
+    refused here rather than dropping its tail or raising at answer time."""
     if isinstance(row, str):
         return (row, f"{row}_note")
     pair = tuple(row)
@@ -72,25 +54,8 @@ def _provenance_row(row: str | tuple[str, str]) -> tuple[str, str]:
 
 class Workflow:
     """The universal skeleton. A template declares; this runs.
-
-    A workflow declares TWO facts about the engine behind it - the solver family a
-    run of it records, and what its solve step is NAMED, which is where the
-    skeleton reads the run prefix from when a result carries none. Everything else
-    a question needs is the Door it hands over.
-
-    The declared Door expresses the world, the mesh, the fill and the run; the
-    skeleton's own body is post + publish, plus the normalize/resolve/interpret
-    spine in front of them.
-
-    HOOKS have SILENT defaults: an unfilled hook does nothing, and no engine
-    subtype ever restates one.
-
-    The contract also names a sensor/context-layer hook. It is deliberately NOT
-    here: the steps that fetch inputs already emit their own through the one
-    emission seam, so a skeleton-level second emitter would be exactly the
-    double-emission the input-surfacing guard exists to catch. It arrives with
-    the emission-unification wave, where the seam is the single home.
-    """
+    A workflow declares two facts about its engine - the solver family and the name
+    of its solve step; hooks have SILENT defaults and no subtype restates one."""
 
     #: The solver family a run of this workflow records.
     engine: str = ""
@@ -155,13 +120,8 @@ class Workflow:
 
     def checks(self, result: Any, run: RunResult) -> tuple[str, ...]:
         """Validation checks over the finished result, as NOTES the caller narrates.
-
-        The one universal check is the RESOLUTION-SENSITIVITY label: an answer in a
-        class the mesh decides says so, and says which way a coarse mesh reads it.
-        Every engine gets it free the moment its template declares the classes; a
-        template that declares none produces no note. A check reports; it never
-        retracts a solved run.
-        """
+        A template that declares no sensitivity classes produces no note, and a
+        check reports - it never retracts a solved run."""
         params = getattr(run, "params", None)
         sheet = params.rows() if params is not None else ()
         return sensitivity_notes(self.sensitivity, self.metadata, result, sheet)
@@ -184,19 +144,9 @@ class Workflow:
                       resume: bool = True,
                       supplied: Mapping[str, Any] | None = None,
                       derived_from: Derivation | None = None) -> Any:
-        """Run the plan on a resolved sheet: interpret, post, publish.
-
-        The spine BOTH lanes share. A fresh invocation resolves its sheet from the
-        wire; a rerun-with-overrides resolves it from its parent's. From here on
-        the two runs are the same run, which is what keeps a derived run's
-        gates, ledger, journal line and answer artifact identical to an original's
-        instead of a second implementation of them.
-
-        ``resolving`` is the sheet or an awaitable of it, so the resolve itself
-        lands inside this method's error envelope - a bounds refusal is a refusal
-        about the run, and reporting it any other way would give one class of
-        typed error two shapes.
-        """
+        """Run the plan on a resolved sheet: interpret, post, publish - the spine a
+        fresh invocation and a rerun-with-overrides both take. ``resolving`` may be
+        an awaitable, so a resolve refusal lands inside this method's envelope."""
         supplied_artifacts = dict(supplied or {})
         started = time.monotonic()
         try:
@@ -233,16 +183,8 @@ class Workflow:
                               keywords: Mapping[str, Any] | None,
                               supplied: Mapping[str, Any]) -> dict[str, Any]:
         """The failure envelope, plus a handle on the work the attempt DID finish.
-
-        A run that dies at the authoring has already geocoded, fetched and
-        meshed. The step ledger keeps that for a retry of the SAME invocation -
-        but the retry a failure actually wants is the same question with the bad
-        value
-        CORRECTED, which is a different invocation and would replay nothing. So
-        the attempt is recorded like a completed run, under an id the envelope
-        names, and the caller re-runs it through the one primitive instead of
-        paying for the good work twice.
-        """
+        The attempt is recorded like a completed run under an id the envelope names,
+        because the retry a failure wants is a different invocation."""
         envelope = self._error(exc.error_code, exc)
         run = getattr(exc, "partial_run", None)
         records = list(getattr(run, "records", ()) or ())
@@ -266,14 +208,10 @@ class Workflow:
 
     def _normalize(self, args: dict[str, Any]) -> tuple[dict[str, Any], dict | None]:
         """Coerce the wire args into the door-1 sheet through the declared coercions.
-
-        The same three-way discrimination :meth:`run` makes, because a coercion can
-        raise all three things: a RETRYABLE typed error is a gate and must PROPAGATE
-        (flattening it into an envelope destroys the ``.suggestions`` channel the
-        adapter harvests off the raised exception); a typed refusal reports under its
-        own code; and anything else is a BUG in our own coercion, which reports as an
-        internal error rather than blaming the caller's params.
-        """
+        Three-way: a retryable typed error PROPAGATES, a typed refusal reports under
+        its own code, and anything else reports as an internal error."""
+        # A retryable error must not be flattened into an envelope: that destroys
+        # the ``.suggestions`` channel the adapter harvests off the raised exception.
         try:
             for coercion in self.coercions:
                 args.update(coercion(args) or {})
@@ -293,13 +231,8 @@ class Workflow:
 
     def _supplied_artifacts(self, wire: Mapping[str, Any]) -> dict[str, Any]:
         """Artifacts handed in for producer-less ``Data`` slots, by slot name.
-
-        A context slot has no producer BY DESIGN - the template will not name a
-        default source for a breakwater or a clip zone - so the only way one gets
-        filled is somebody handing it over. The wire argument carries the slot's
-        own name, which is what makes "which layer is this" answerable from the
-        declaration alone.
-        """
+        The wire argument carries the slot's own name, so "which layer is this" is
+        answerable from the declaration alone."""
         return {decl.name: wire[decl.name] for decl in self.data
                 if decl.producer is None and wire.get(decl.name) is not None}
 
@@ -360,12 +293,8 @@ class Workflow:
 
     def answer(self, result: Any) -> dict[str, Any]:
         """The run's ANSWER: the numbers a reader has to be able to check.
-
-        Persisted beside the chart spec so verification cites the run's own figures
-        rather than recomputing them from the raster. A declared provenance name
-        rides its resolved value AND its note, so a fetched cycle (never a bare
-        "latest") is pinned here too.
-        """
+        A declared provenance name rides its resolved value AND its note, so what a
+        row was pinned to is on the artifact rather than recomputed."""
         out: dict[str, Any] = {f: getattr(result, f, None) for f in self.answer_fields}
         out["layer_uri"] = getattr(result, "uri", None)
         rows = getattr(result, "synthetic_inputs", None) or []
@@ -377,13 +306,8 @@ class Workflow:
 
     def _run_id(self, result: Any, run: RunResult) -> str | None:
         """The solve's run prefix, from the layer or from the solve step itself.
-
-        The step is the one the FACADE declares (``solve_step``), never the literal
-        ``"solve"``: a facade that names its solve step something else would
-        silently lose the prefix, and the run's chart spec and metrics would be
-        persisted nowhere. An analysis-only workflow declares no solve step and
-        simply has no prefix to find here.
-        """
+        Read off the DECLARED ``solve_step``, never the literal ``"solve"``; a
+        workflow that declares none has no prefix to find here."""
         direct = getattr(result, "run_id", None)
         if direct or not self.solve_step:
             return direct
@@ -394,12 +318,8 @@ class Workflow:
                  notes: Sequence[str] = (),
                  derived_from: Derivation | None = None) -> None:
         """Append this run to the run journal - one seam, every engine.
-
-        The publish stage is where a run has everything the record needs at once:
-        the sheet it actually ran on, the answer it published, the provenance rows
-        and the wall time. Anywhere else would be reassembling it from artifacts
-        that are allowed to disappear.
-        """
+        Called from publish, the one point where the sheet, the answer, the
+        provenance rows and the wall time are all in hand at once."""
         from trid3nt_server.emission.pipeline_emitter import current_emitter
 
         sheet = run.params.rows() if run.params is not None else ()
@@ -453,33 +373,11 @@ def register_workflow(
     **register_kwargs: Any,
 ) -> Callable[..., Any]:
     """Generate and register the tool for a declared workflow.
-
-    The generated body IS the skeleton: the ~70 lines of ``_normalize`` /
-    ``_with_notes`` / ``_physical_answer`` plus the try/except tail every template
-    used to repeat live in :class:`Workflow` once. The tool's SIGNATURE is
-    synthesized from the declared params (plus any wire aliases the template names
-    in ``extra_args``), so the model-facing schema is generated from the same
-    declaration the run resolves.
-
-    THE CONSTANT DOOR AND THE WIRE. A CONSTANT-door param is absent from the
-    synthesized signature and from the model-facing docstring's param list, so the
-    model is never offered it and cannot fill it. That is the whole of the
-    enforcement, and stating its EDGE is part of stating it: the generated body
-    takes ``**wire`` and the sheet is filtered by DECLARED name, not by the
-    signature, so a value that arrives for a constant anyway is seated through the
-    USER door with ``basis=user``. That is deliberate and is what keeps the row a
-    user LEVER on the three surfaces it lives on - the form card's advanced fold,
-    the ``!run`` / Tier-A all-params invocation, and the harness that drives the
-    resolved sheet. The exclusion is about who the SCHEMA invites, and the schema
-    invites the user, never the model.
-
-    PARKED IS A STATE, not an absent import. ``parked="<reason>"`` builds and
-    validates the declaration exactly as always - so it stays readable, and a
-    defect in it still refuses at import - and then leaves the MODEL SURFACE: the
-    tool is never registered, and invoking the generated function refuses typed
-    with the reason. Registry membership stops depending on which module a session
-    happened to import first, which is what a commented-out import could not give.
-    """
+    The signature is synthesized from the declared params, so the model-facing
+    schema comes from the same declaration the run resolves."""
+    # ``parked="<reason>"`` builds and validates the declaration as always, then
+    # leaves the MODEL SURFACE: the tool is never registered and the generated
+    # function refuses typed, so membership never depends on import order.
     from trid3nt_server.tools import register_tool
 
     params = param_rows(params)
@@ -533,12 +431,8 @@ def register_workflow(
 def _context_doc(data: Sequence[DataDecl],
                  controls: Sequence[tuple[str, str]]) -> dict[str, Any]:
     """The docstring's ``context`` rows, and the ``controls`` with the slots taken out.
-
-    A producer-less slot is documented in ONE place. Its SHAPE comes from the
-    declaration, which is the only party that knows it; whatever prose the template
-    wrote about the same wire argument is appended and its control row drops, so
-    the model reads one description of one argument instead of two that can drift.
-    """
+    A producer-less slot is documented ONCE: its shape from the declaration, the
+    template's own prose appended, and its control row dropped."""
     slots = tuple(decl for decl in data if decl.producer is None)
     names = {decl.name for decl in slots}
     written = dict(controls)
@@ -553,15 +447,11 @@ def _context_doc(data: Sequence[DataDecl],
 
 def _wire_params(params: Sequence[Param]) -> tuple[Param, ...]:
     """The declared params the MODEL-FACING wire carries - the one definition of it.
-
-    Two exclusions, for two different reasons. ``wire=False`` marks a value a
-    COERCION resolves out of other wire args, so sending it would be sending the
-    same thing twice. A CONSTANT-door param is excluded because the door is a
-    BINDING AUTHORITY contract: a constant is non-question physics, nobody asks
-    for it, and a schema that offers one invites exactly the invented physics the
-    doors exist to prevent. Both the synthesized signature and the generated
-    docstring read this function, so the schema and the prose cannot drift apart.
-    """
+    Read by both the synthesized signature and the generated docstring, so the
+    schema and the prose cannot drift apart."""
+    # Two exclusions: ``wire=False`` marks a value a COERCION resolves out of other
+    # wire args, and a CONSTANT-door param is non-question physics the schema must
+    # never invite the model to fill.
     return tuple(prm for prm in params
                  if prm.wire and prm.door != doors.CONSTANT)
 
@@ -569,20 +459,13 @@ def _wire_params(params: Sequence[Param]) -> tuple[Param, ...]:
 def _wire_signature(params: Sequence[Param], extra: Sequence[tuple[str, Any]],
                     data: Sequence[DataDecl] = ()) -> tuple[inspect.Signature, dict]:
     """The generated tool's signature: declared params, context slots, aliases, controls.
-
-    Every argument is keyword-with-default: the doors supply what the caller omits,
-    so a workflow argument is never positionally required. A ``**`` absorber keeps
-    an unknown key from dead-ending a call the doors could still answer.
-
-    CONSTANT-door params are NOT here. The door is a BINDING AUTHORITY contract,
-    not documentation: a constant is non-question physics, so the model has no
-    business supplying it, and a schema that offers it invites exactly the invented
-    physics the doors exist to prevent. The row keeps its full life on the
-    ``ParamSheet`` - it is form-editable and shows under the card's advanced fold -
-    and a template that decides a particular constant DOES deserve model access
-    re-doors it in one line. ``wire=False`` is the other, orthogonal exclusion: a
-    value a coercion resolves out of other wire args.
-    """
+    Every argument is keyword-with-default, and a ``**`` absorber keeps an unknown
+    key from dead-ending a call the doors could still answer."""
+    # CONSTANT-door params are absent here and from the docstring's param list: that
+    # exclusion is the whole of the enforcement. The generated body still takes
+    # ``**wire`` and filters the sheet by DECLARED name, so a value that arrives for
+    # a constant anyway seats through the USER door with ``basis=user`` - which is
+    # what keeps the row a user lever on the form card and the all-params invocation.
     entries: list[tuple[str, Any, Any]] = [
         (prm.name, prm.wire_type | None, None) for prm in _wire_params(params)
     ]

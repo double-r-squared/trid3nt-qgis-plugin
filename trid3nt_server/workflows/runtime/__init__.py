@@ -1,7 +1,6 @@
 """Declarative workflows: a workflow is PARAMS + DATA + a pure ``plan(p, d)``.
 
-The plan is a value; the interpreter walks it. See
-``docs/design/declarative-workflows.md``.
+The plan is a value; the interpreter walks it.
 """
 
 from __future__ import annotations

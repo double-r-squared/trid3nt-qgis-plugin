@@ -43,24 +43,16 @@ class ParamOutOfRangeError(DeclarativeError):
 
 class ParamRefLeakedError(DeclarativeError):
     """An unsubstituted ``ParamRef`` reached a persisted record or a returned result.
-
-    Always a bug, never data: the interpreter is the only thing that substitutes a
-    ref, so one that survives to disk means a declaration escaped binding (a
-    container arm the binder does not walk, an object attribute, a ref an author
-    stored rather than passed). Refusing loudly beats shipping ``ParamRef('x')``
-    as a layer title or a provenance value.
-    """
+    Always a bug, never data: a ref that survives to disk means a declaration
+    escaped binding."""
 
     error_code = "PARAM_REF_LEAKED"
 
 
 class LeakScanTruncated(UserWarning):
     """The ParamRef leak scan hit its node budget, so a surface is only PART checked.
-
-    Not an error - the surface may well be clean - but never silence either: a
-    guard that ran out of budget and returned "clean" would be indistinguishable
-    from one that looked. The warning names the surfaces it could not finish.
-    """
+    Not an error, and never silent: the warning names the surfaces it could not
+    finish, because a scan that stopped looking is not a scan that found nothing."""
 
 
 class GateRefusedError(DeclarativeError):
@@ -74,10 +66,7 @@ class SuppliedCoverageError(DeclarativeError):
 class SuppliedGeometryError(DeclarativeError):
     """A supplied artifact is not the SHAPE the slot it fills declares.
 
-    A slot that names no source can still say what shape it takes, so filling a
-    mesh slot with a raster is an answer to a different question - and it fails
-    here, at the front door, rather than inside a reader that cannot open it.
-    """
+    Raised at the front door, before any reader is handed the artifact."""
 
     error_code = "SUPPLIED_GEOMETRY_MISMATCH"
 
@@ -96,11 +85,7 @@ class StepFailedError(DeclarativeError):
 
 class WorkflowParkedError(DeclarativeError):
     """A template that is DECLARED but off the model surface was invoked.
-
-    Parking is a state the declaration carries, not an import somebody removed:
-    the plan still validates at import, the tool is simply never registered, and
-    this refusal names the reason so the caller reads why rather than guessing at
-    an absence.
-    """
+    Parking is a state the declaration carries: the plan still validates at import,
+    the tool is simply never registered, and this refusal names the reason."""
 
     error_code = "TEMPLATE_PARKED"

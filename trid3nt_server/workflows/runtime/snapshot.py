@@ -1,17 +1,7 @@
 """The RUN SNAPSHOT: what a FINISHED run leaves behind so a child can derive from it.
 
-The step ledger records an INCOMPLETE attempt and tombstones itself the moment a
-plan reaches its end - that tombstone is what keeps a ``live-no-cache`` tool from
-quietly becoming a result cache, and it stays. A rerun-with-overrides is the
-other thing entirely: an explicit derivation from a NAMED past run, where the
-pinned inputs ARE the point. So a completed run's records are copied out here,
-keyed by its run id, and nothing reaches them except a caller that names that id.
-
-What a snapshot holds is the run's PAST: the sheet it resolved, the artifacts
-handed to it, and one record per node it completed - each record carrying the
-object-store URI the node produced. A child that replays a record therefore
-points at the parent's own artifact, which is what makes "reused byte-identical"
-a fact about the bytes rather than a claim about a re-fetch.
+Keyed by run id and reachable only by a caller that names it; each record carries
+the object-store URI its node produced, so a replay points at the parent's artifact.
 """
 
 from __future__ import annotations
@@ -47,11 +37,8 @@ _TTL = timedelta(days=30)
 @dataclass(frozen=True, slots=True)
 class Derivation:
     """A child run's link to the parent it came from, and what it changed.
-
-    Rides the child's journal line and its narrated notes, so the chain from a
-    calibration's tenth run back to the question that started it is readable
-    without diffing sheets.
-    """
+    Rides the child's journal line and its narrated notes, so a chain of runs reads
+    without diffing sheets."""
 
     parent_run_id: str
     overrides: tuple[str, ...]
@@ -88,11 +75,8 @@ async def write_snapshot(*, run_id: str | None, workflow: str,
                          supplied: Mapping[str, Any],
                          derived_from: Derivation | None = None) -> None:
     """Record this run as derivable-from. Best-effort: never fails a finished run.
-
-    An analysis-only workflow has no solve and therefore no run id to key on; it
-    simply leaves no snapshot, and a rerun of it refuses by name rather than
-    deriving from a run nobody can point at.
-    """
+    A run with no id leaves no snapshot, and a rerun of it refuses by name rather
+    than deriving from a run nobody can point at."""
     if not run_id:
         return
     doc = {

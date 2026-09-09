@@ -1,14 +1,7 @@
 """What a derived run INHERITS: where reuse stops, and which artifacts survive it.
 
-An override moves a value; the plan says which work that value reaches. This
-module answers the reach from the declaration alone - the same walk the validator
-checks refs with and the interpreter binds them with - so "only what depends on
-the override re-executes" is read off the plan rather than guessed at.
-
-The answer is a PREFIX, not a scatter. A step reads more than its declared
-kwargs: it reads the DOMAIN the steps before it bound, and the domain is not
-named in any declaration. So the first node an override reaches is a CUT - work
-before it is the parent's to hand down, work from it on is the child's to do.
+An override moves a value; the plan says which work that value reaches, read off
+the declaration by the same walk the validator and the interpreter use.
 """
 
 from __future__ import annotations
@@ -25,15 +18,12 @@ __all__ = ["reuse_plan"]
 def reuse_plan(plan: Plan, data: Sequence[DataDecl],
                changed: Sequence[str]) -> tuple[int | None, frozenset[str]]:
     """``(cut, reusable_data)`` for a child whose sheet moved on ``changed``.
-
-    ``cut`` is the index of the first node an override reaches, or ``None`` when
-    nothing in the plan reads any of them - which means the child would reproduce
-    its parent exactly and the caller has nothing to run.
-
-    ``reusable_data`` names the declared ``Data`` the child keeps: an artifact is
-    kept only when neither a changed param nor another dropped artifact nor a step
-    the child re-decides feeds its producer.
-    """
+    ``cut`` is the first node an override reaches, ``None`` when the plan reads none
+    of them; ``reusable_data`` is the ``Data`` no dirty producer or re-decided step feeds."""
+    # The answer is a PREFIX, not a scatter: a step reads more than its declared
+    # kwargs - it reads the DOMAIN the steps before it bound, which no declaration
+    # names - so the first node an override reaches is a CUT, and everything from
+    # it on is the child's to do.
     nodes = expand_plan(plan)
     decls = {decl.name: decl for decl in data}
     moved = set(changed)
@@ -71,11 +61,8 @@ def reuse_plan(plan: Plan, data: Sequence[DataDecl],
 
 def _node_key(node: Any) -> str:
     """What a Ref to this node's result would name it.
-
-    A ``When`` is not Ref-able and every branch marker shares one placeholder
-    step, so branches are keyed by INDEX - otherwise one dirty branch would mark
-    every branch in the plan dirty.
-    """
+    A branch marker is not Ref-able and every one shares a placeholder step, so
+    branches are keyed by INDEX and one dirty branch cannot dirty the rest."""
     if node.kind == "when":
         return f"when:{node.index}"
     return node.step.name or node.step.label

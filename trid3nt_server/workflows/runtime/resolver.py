@@ -1,7 +1,7 @@
 """The param resolver: the six doors, in order, with bounds clamping.
 
-Replaces the per-workflow ``try/except/clamp`` blocks. Every resolution leaves a
-provenance row; a clamp leaves a note naming the declared bound it hit.
+Every resolution leaves a provenance row; a clamp leaves a note naming the
+declared bound it hit.
 """
 
 from __future__ import annotations
@@ -38,15 +38,11 @@ async def resolve_params(
     question: Mapping[str, Any] | None = None,
 ) -> ResolvedParams:
     """Walk the doors for every declared param and return the resolved sheet.
-
-    ``supplied`` is what this invocation explicitly passed (door 1 - NEVER ambient:
-    no case-store lookup). ``question`` carries agent-filled values from the ask
-    (door 2).
-
-    Door ORDER is precedence, not evaluation order: a derivation may read any
-    other param, so labeled defaults are seated before derivations run and a
-    derived param competes only with its own fallbacks, never another param's.
-    """
+    ``supplied`` is door 1 and NEVER ambient - no case-store lookup; ``question``
+    is door 2, the agent-filled values from the ask."""
+    # Door ORDER is precedence, not evaluation order: a derivation may read any
+    # other param, so labeled defaults are seated before derivations run and a
+    # derived param competes only with its own fallbacks, never another param's.
     declared = param_rows(declared)
     refuse_duplicate_params(declared)
     rows: dict[str, ResolvedParam] = {}
@@ -131,10 +127,8 @@ async def _derive(param: Param, rows: Mapping[str, ResolvedParam]) -> Any:
 
 def _seat_derived(param: Param, produced: Any, default_note: str) -> ResolvedParam:
     """Seat a derivation's output, keeping whatever EVIDENCE it returned with it.
-
     A derivation that read the world returns :class:`Derived`; a pure one returns
-    the bare value and the declaration's own note stands.
-    """
+    the bare value and the declaration's own note stands."""
     if isinstance(produced, Derived):
         return _finish(param, produced.value, doors.DERIVED,
                        produced.note or default_note,
@@ -142,6 +136,8 @@ def _seat_derived(param: Param, produced: Any, default_note: str) -> ResolvedPar
     return _finish(param, produced, doors.DERIVED, default_note)
 
 
+# docstring-exempt: the two user-authority doors seat identically (both stamp
+# basis=user) and differ only in what they record, which no signature can say.
 def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
                    revised: Mapping[str, Any],
                    *, note: str = "revised at input review",
@@ -149,17 +145,13 @@ def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
                    ) -> tuple[ResolvedParams, list[str]]:
     """Re-seat values a PERSON gave, through the door they gave them at.
 
-    The declared bounds and the non-numeric refusal still apply - a gate is an
-    answer surface, not a bypass - and every genuinely changed row is re-stamped
-    ``basis=user`` so the run's provenance says the user set it. ``note`` is what
-    the row records about HOW it was answered (edited on the form, drawn on the
-    canvas, named as an override of a past run); it reaches the provenance entry
-    the result carries. ``door`` is which of the two user-authority doors seated
-    it - GATE for an answer given at a card, USER for a value named up front,
-    which is what a rerun's overrides are. Both stamp ``basis=user``; the door is
-    what says whether a card was involved. Returns the new sheet plus the names
-    that actually changed. Names that are not declared params cannot be seated and
-    are reported by the caller, never silently absorbed.
+    Declared bounds and the non-numeric refusal still apply - a gate is an answer
+    surface, not a bypass - and every changed row is re-stamped ``basis=user``.
+    ``door`` is GATE for an answer given at a card, USER for a value named up
+    front; both stamp ``basis=user``, and the door is what says whether a card was
+    involved. ``note`` records HOW the value was answered. Returns the new sheet
+    and the names that actually changed; a name that is not a declared param is
+    not seated, and the caller reports it rather than absorbing it.
     """
     by_name = {p.name: p for p in param_rows(declared)}
     rows: dict[str, ResolvedParam] = {}
@@ -175,25 +167,20 @@ def reseat_revised(declared: Sequence[Param], resolved: ResolvedParams,
     return (resolved.replacing(rows) if rows else resolved), changed
 
 
+# docstring-exempt: the three-element return is under-specified by its type, and
+# the pin on a user-basis row is a rule no signature carries.
 async def rederive_revised(
     declared: Sequence[Param], resolved: ResolvedParams, changed: Sequence[str],
     *, occasion: str = "input review",
 ) -> tuple[ResolvedParams, list[str], list[str]]:
     """Re-run the derivations over a REVISED sheet, to the same fixpoint.
 
-    A revision that leaves derived rows on their pre-revision values ships a sheet
-    that contradicts itself - saturation computed from 20 C beside an approved
-    30 C. Derived rows therefore re-derive against the approved values, with a
-    note naming the revision.
-
-    The user always wins: a row the user supplied or edited (``basis=user``) is
-    PINNED and never recomputed. When the revised sheet would now derive something
-    else for such a row, the pin stands and the row's note says so - a silent
-    overwrite of an explicit edit is the same swallow this library exists to
-    outlaw.
-
-    Returns the new sheet, the names that actually RE-DERIVED (they are revisions
-    too, so dependent data is evicted on them), and the conflict notes.
+    Derived rows re-derive against the approved values, so the sheet cannot ship
+    a derivation computed from a superseded input. A row the user supplied or
+    edited (``basis=user``) is PINNED and never recomputed; where the revised
+    sheet would derive something else for one, the pin stands and the row's note
+    says so. Returns the new sheet, the names that actually RE-DERIVED - they are
+    revisions too, so dependent data is evicted on them - and the conflict notes.
     """
     derived = [p for p in declared if p.door == doors.DERIVED]
     if not changed or not derived:
@@ -246,10 +233,8 @@ async def rederive_revised(
 async def _rederive_row(param: Param, rows: Mapping[str, ResolvedParam],
                         current: ResolvedParam, note: str) -> ResolvedParam | None:
     """Re-run one derivation; ``None`` when it cannot run yet or lands unchanged.
-
-    Compared AFTER ``_finish``, so a derivation whose raw value moves but clamps
-    back onto the same declared bound is correctly read as unchanged.
-    """
+    Compared AFTER ``_finish``, so a raw value that moves but clamps back onto the
+    same declared bound reads as unchanged."""
     try:
         value = await _derive(param, rows)
     except ParamNotResolved:
@@ -334,11 +319,8 @@ def _as_float(value: Any) -> float | None:
 def provenance_entries(resolved: ResolvedParams,
                        declared: Any) -> list[SyntheticInput]:
     """The run's provenance rows - what the input-review gate and the layer carry.
-
-    A ``default_demo`` + ``physics`` row is what makes the gate refuse in auto mode
-    (law 9). An absent param that declares ``derived_when_absent`` still leaves a
-    derived-basis row: the user has to see what the run measured against.
-    """
+    A ``default_demo`` + ``physics`` row is what makes the gate refuse in auto mode;
+    an absent param declaring ``derived_when_absent`` still leaves a derived row."""
     by_name = {p.name: p for p in param_rows(declared)}
     out: list[SyntheticInput] = []
     for row in resolved.rows():
@@ -368,12 +350,8 @@ def provenance_entries(resolved: ResolvedParams,
 def merge_provenance(existing: Sequence[SyntheticInput],
                      declared: Sequence[SyntheticInput]) -> list[SyntheticInput]:
     """Merge a composite step's own provenance rows with the plan's declared rows.
-
-    The composite's row WINS on a name collision: it stamped what actually
-    resolved (``basis=fetched`` once the data landed), while the declaration only
-    knows what was asked for. Two rows for one param is a contradiction, not a
-    record.
-    """
+    The composite's row WINS on a name collision - it stamped what actually
+    resolved, while the declaration only knows what was asked for."""
     kept = list(existing)
     taken = {row.param for row in kept}
     kept.extend(row for row in declared if row.param not in taken)

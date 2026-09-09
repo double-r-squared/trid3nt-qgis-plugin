@@ -18,10 +18,7 @@ __all__ = ["validate_plan"]
 def validate_plan(plan: Plan, params: Sequence[Param],
                   data: Sequence[DataDecl] = ()) -> None:
     """Refuse a plan that cannot possibly execute. Raises :class:`PlanValidationError`.
-
-    The plan is STATIC - it reads no concrete value - so validation needs no sheet
-    and runs at REGISTRATION, before any invocation exists.
-    """
+    Needs no sheet, because the plan is static, and so runs at REGISTRATION."""
     refuse_duplicate_params(params)
     param_names = {p.name for p in params}
     data_names = {d.name for d in data}
@@ -45,11 +42,8 @@ def _check_duplicate_names(plan: Plan) -> None:
 
 def _check_refs(plan: Plan, param_names: set[str], data_names: set[str]) -> None:
     """Ref integrity, in DECLARATION ORDER.
-
-    A step may read a param, a declared Data, or a step named BEFORE it: the
-    sequence is what makes a read resolvable, so a ref to a step declared later is
-    a runtime REF_UNRESOLVED waiting to happen rather than a valid plan.
-    """
+    A step may read a param, a declared Data, or a step named BEFORE it; a ref to a
+    step declared later is refused here rather than at run time."""
     visible: set[str] = set()
     for node in plan.steps:
         for ref in _walk_refs(dict(node.kwargs)):
@@ -72,12 +66,8 @@ def _check_param_refs(plan: Plan, param_names: set[str]) -> None:
 
 def param_name_refusal(ref: ParamRef, param_names: set[str], where: str) -> str:
     """A ``ParamRef`` that names no declared param, said with the nearest spellings.
-
-    A ref written as ``PARAMS.<name>`` cannot reach here - the body refuses the
-    name at import - so what this catches is a ref BUILT from a string, where the
-    candidate list runs to forty names and the nearest spellings are the whole
-    value of the message.
-    """
+    Only a ref BUILT from a string reaches here; one written as ``PARAMS.<name>``
+    is already refused at import."""
     import difflib
 
     close = difflib.get_close_matches(ref.name, sorted(param_names), n=3, cutoff=0.6)
@@ -91,13 +81,8 @@ def param_name_refusal(ref: ParamRef, param_names: set[str], where: str) -> str:
 def _check_data_refs(data: Sequence[DataDecl], param_names: set[str],
                      data_names: set[str], plan: Plan) -> None:
     """What a Data producer may read: a param, another Data, or a named step.
-
-    The step case is what the interpreter has always resolved - ``_deref`` looks in
-    the step results FIRST - and it is what a chained domain needs: the acquired
-    AOI is a step result, so a producer that narrows the domain has to be able to
-    name it. Demand-pull is what makes it sound: a Data is produced when a step
-    that reads it runs, which is after the step it names.
-    """
+    The step case is sound because production is demand-pulled: a Data is produced
+    when a step that reads it runs, which is after the step it names."""
     named = {step.name for step in plan.declared() if step.name is not None}
     for decl in data:
         for ref in _walk_refs(dict(decl.producer_kwargs)):

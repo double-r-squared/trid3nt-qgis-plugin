@@ -1,29 +1,7 @@
 """RERUN-WITH-OVERRIDES: derive a run from a parent run, with named values replaced.
 
-The universal recalibration interface. One question, asked again with something
-moved: a failed run retried with the value that failed corrected, a what-if fan
-off one parent, a calibration loop's next step. All three are this, and the loop
-is only this driven by a proposer.
-
-What derivation means, precisely:
-
-* The sheet comes from the PARENT, not from the wire. Its own overrides seat
-  through the USER door, labelled as an override of the run they came from, and
-  the derivations that read them re-derive - while a value the parent's user
-  pinned keeps its precedence, because a derivation is not a licence to overwrite
-  somebody's explicit answer.
-* The reach of the overrides is read off the PLAN (``reuse.py``). Work the
-  overrides do not reach is inherited: the parent's own ledger records are
-  planted under the child's key, so the interpreter's ordinary resume path
-  replays them and the artifacts the child reuses are the parent's own objects,
-  byte for byte, because the record carries their URIs.
-* From the sheet on, the child is an ordinary run. It gates, it ledgers, it
-  journals, it publishes and it leaves a snapshot of its own - so a child can be
-  a parent, which is what a calibration loop is made of.
-
-CONSTANT-door params ARE overridable here. The constant door governs what the
-MODEL's plan schema offers, and this is not that surface: recalibration is the
-sanctioned way a constant moves, and it moves by being NAMED.
+The sheet comes from the PARENT, not the wire; overrides seat through the USER door
+and what reads them re-derives, while a pinned user value keeps its precedence.
 """
 
 from __future__ import annotations
@@ -88,6 +66,9 @@ async def rerun(parent_run_id: str, overrides: Mapping[str, Any]) -> Any:
 
     parent = ResolvedParams({row.name: row for row in snap.sheet})
     note = f"override of run {parent_run_id}"
+    # A CONSTANT-door param IS overridable here: the constant door governs what the
+    # model's schema offers, and this is not that surface - recalibration is how a
+    # constant moves, and it moves by being NAMED.
     child, changed = reseat_revised(workflow.params, parent, overrides,
                                     note=note, door=doors.USER)
     if not changed:

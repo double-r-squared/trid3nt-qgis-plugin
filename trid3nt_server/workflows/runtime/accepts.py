@@ -1,20 +1,7 @@
 """What a template accepts when something is SUPPLIED to it, role by role.
 
-A template's PARAMS say what it can be TOLD. This says what it can be HANDED, and
-it says it one ROLE at a time: a mesh, a release point, and whatever the
-geometry-by-name seam brings next. Each row names the kinds that role's pipeline
-was built and TESTED against, and membership in it is the whole of the test the
-supply door runs.
-
-ABSENCE IS THE REFUSAL, and it is per role. A template with no ``mesh`` row has no
-tested supplied-mesh path, so the door refuses rather than admitting whatever it
-was handed - while the same template may still accept a release, because two rows
-are two claims about two pipelines and neither one licenses the other. A row is
-written when the path it describes is tested, never in advance of it.
-
-An accept-set that names NOTHING is not a stricter version of that absence: it is
-authored nonsense, and it refuses where it is written rather than at a door nobody
-would reach.
+A row names the kinds that role's supplied path was tested against and membership
+is the whole of the door's test; an absent row is the refusal.
 """
 
 from __future__ import annotations
@@ -38,11 +25,8 @@ class AcceptsDeclarationError(DeclarativeError):
 @dataclass(frozen=True, init=False)
 class Accepts:
     """The kinds a template accepts for each SUPPLY ROLE - frozen rows, and membership.
-
-    The mesh role is typed to the closed :data:`MeshKind` vocabulary, so an author
-    writing one is autocompleted to the legal members and a typo is flagged where
-    it is written rather than at the door it would refuse at.
-    """
+    The mesh role is typed to the closed :data:`MeshKind` vocabulary, so a typo is
+    refused where it is written rather than at the door."""
 
     roles: Mapping[str, tuple[str, ...]]
 
