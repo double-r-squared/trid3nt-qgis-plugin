@@ -1,9 +1,5 @@
 """The MESH display face: a built mesh as the SMS ``.2dm`` MDAL opens.
 
-Mesh is a data type on the one emission seam. The razor: geometry that feeds a
-SOLVER is the mesh front's business and lives beside the mesher that built it;
-geometry that feeds a SCREEN is emission's, and this is where it is written.
-
 MDAL reads a ``.2dm`` directly as a mesh layer and turns the node z column into
 its "Bed Elevation" dataset. The format carries no CRS, so the layer row's
 ``crs_authid`` is what names the coordinates the nodes are written in.
@@ -34,10 +30,7 @@ class MeshDisplayError(RuntimeError):
 def mesh_display_path(mesh: Any) -> str | None:
     """The display file the MESHER wrote itself, or ``None`` to write a ``.2dm``.
 
-    A mesh whose cells an engine re-realizes carries no connectivity for the
-    ``.2dm`` format to hold, so its mesher draws its own face - cell polygons -
-    and names it here. Every node/cell mesh leaves this unset and takes the one
-    writer above.
+    A mesh whose cells an engine re-realizes carries no connectivity ``.2dm`` holds.
     """
     declared = dict(getattr(mesh, "meta", None) or {}).get("files") or {}
     path = declared.get("display_uri")
@@ -46,10 +39,8 @@ def mesh_display_path(mesh: Any) -> str | None:
 
 def write_2dm(mesh: Any) -> str:
     """Write a built mesh as the ``.2dm`` text MDAL opens as a mesh layer.
-
     A bed-less mesh writes a zero node column because the format requires one;
-    the artifact's ``has_bathymetry`` is what says whether an elevation was ever
-    sampled.
+    ``has_bathymetry`` is what says whether an elevation was ever sampled.
     """
     points = np.asarray(mesh.points, dtype=float)
     bed = (np.zeros(points.shape[0], dtype=float) if mesh.bed is None
@@ -60,8 +51,7 @@ def write_2dm(mesh: Any) -> str:
 def write_2dm_arrays(points: Any, cells: Any, z: Any) -> str:
     """Write ``(points, cells, z)`` arrays as ``.2dm`` text - nodes and cells 1-based.
 
-    The array face, for a producer holding the geometry rather than a built mesh
-    value. Coordinates are written in the units they arrive in.
+    Coordinates are written in the units they arrive in.
     """
     pts = np.asarray(points, dtype=float)
     cel = np.asarray(cells, dtype=np.int64)

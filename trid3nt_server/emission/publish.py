@@ -1,47 +1,8 @@
 """The raster PUBLISH mechanism - write, register, notify.
 
-Emission is AUTOMATIC: there is no "display this" intent and no
-``publish_layer`` tool for a model to call. Every renderable raster a tool
-returns rides :func:`trid3nt_server.emission.layer_uri_emit.publish_for_emission`
-through this module on its way to the map, intermediates included - the user
-hides what they do not want to see in QGIS.
-
-    ``publish_layer(layer_uri, layer_id, style, ...)``
-      -> ``str`` (the raster's ``s3://`` COG URI, ready for the envelope)
-
-One store, one scheme. A raster lives as a COG at ``s3://<bucket>/<key>`` and
-the QGIS plugin - the ONLY client - reads THAT uri natively through GDAL
-``/vsis3``, so a publish never mints a second face for the same layer. What it
-does, in order:
-
-1. **write** - enforce COG overviews, writing a tiled+overview sibling into the
-   same bucket when the source has none (a no-overview COG renders spotty);
-2. **register** - ``observe_published_layer`` binds the layer handle to that
-   one uri, so downstream tools resolve the handle to readable bytes;
-3. **notify** - resolve the DECLARED style row through ``emission/presets.py``
-   (the already-painted guards first, then the preset) and stash the resulting
-   ``LegendKey`` keyed by the uri the envelope carries.
-
-Vectors are a benign no-op: they are already objects in the same store and the
-plugin opens them natively too, so there is nothing to publish.
-
-Everything in this module belongs to one of those three, plus the naming a
-layer list needs (``derive_readable_layer_name`` and the URI-segment helpers
-under it): a layer whose producer named nothing must still be readable in the
-tree. There is no defensive handle parsing here - every caller arrives with the
-``s3://`` uri its own producer wrote, so an unresolvable reference is a caller
-bug, not a shape this module guesses at.
-
-**Cross-cutting principles:**
-
-- **Side effect, never cached.** A publish writes overview COGs and registers a
-  layer; there is nothing to memoize.
-- **Resilience:** failures surface as typed :class:`PublishLayerError`
-  (not unhandled exceptions); style/legend/overview probes fail OPEN so a
-  publish is never blocked by a best-effort enhancement. The caller at the
-  emission seam also fails open: a raster whose publish fails still reaches
-  the map as its ``s3://`` COG, unstyled, because the QGIS plugin can read
-  that - a degrade, not a broken layer row.
+One store, one scheme: a raster lives as a COG at ``s3://<bucket>/<key>`` that
+the QGIS plugin reads through GDAL ``/vsis3``, so a publish never mints a second
+face for it. Vectors are a benign no-op, and every probe here fails OPEN.
 """
 
 from __future__ import annotations
@@ -77,15 +38,8 @@ logger = logging.getLogger("trid3nt_server.emission.publish")
 
 class PublishLayerError(RuntimeError):
     """Raised when ``publish_layer`` cannot complete the round-trip.
-
-    The ``error_code`` attribute carries a SCREAMING_SNAKE_CASE code so the
-    agent surface can render a useful failure narration and the pipeline strip
-    shows ``UPSTREAM_API_ERROR``. ``retryable`` (contract; harvested
-    by ``adapter._classify_error``) tells the model whether re-issuing the
-    call with corrected args can succeed.
-
-    One code: ``LAYER_URI_NOT_FOUND`` (retryable) - ``layer_uri`` is not an
-    ``s3://`` COG in this store, which is the only thing a publish can consume.
+    ``error_code`` is a SCREAMING_SNAKE_CASE code; ``retryable`` says whether
+    re-issuing the call with corrected arguments can succeed.
     """
 
     def __init__(self, error_code: str, message: str, *, retryable: bool = False) -> None:
@@ -99,26 +53,15 @@ class PublishLayerError(RuntimeError):
 #
 # Two guards run FIRST because they are facts about the FILE rather than about
 # the style, and each one is a way a ramp would CORRUPT an already-painted
-# image: a COG carrying its own band-1 colour table (NLCD land cover) is
-# coloured by that table, and an RGB(A) / multiband COG (a coloured relief, a
-# landcover-plus-hillshade composite) is coloured already. Neither takes a
-# preset - they are handed back as "already painted".
-#
-# Everything after that is the STYLE decision, and it is not made here: the
-# producer DECLARED a style row and ``emission/presets.py`` resolves it,
-# reading this raster's own range only when the declared policy asks for it.
+# image: a COG carrying its own band-1 colour table is coloured by that table,
+# and an RGB(A) / multiband COG is coloured already. Neither takes a preset -
+# they are handed back as "already painted".
 # --------------------------------------------------------------------------- #
 
 def _is_rgba_or_multiband(raster_bytes: bytes | None) -> bool:
     """True if the COG is RGB(A)/multiband - QGIS renders it DIRECTLY.
 
-    Reads the in-hand COG bytes via a rasterio ``MemoryFile`` and reports True
-    when band count >= 3 OR any band's color interpretation is one of
-    Red/Green/Blue/Alpha. Such rasters (colored relief, blended landcover +
-    hillshade composites) are already colorized: a single-band ramp would
-    corrupt them, so the resolver hands them back unstyled. Best-effort:
-    returns False on any read failure so a real single-band scalar still gets
-    its range.
+    A read failure returns False, so a single-band scalar still gets its range.
     """
     if not raster_bytes:
         return False
@@ -161,18 +104,13 @@ def resolve_layer_style(
 ) -> "presets.Resolved | None":
     """Resolve a DECLARED style row against this raster. The one resolution point.
 
-    ``band_stats`` is the register-only fast path: a worker already computed the
-    percentiles, so the range resolves without downloading the COG. ``None`` is
-    returned for a raster that is already painted - an RGB(A) composite, or a
-    COG carrying its own band-1 colour table.
-
-    A VECTOR or MESH declaration resolves through this same call and the same
-    ``presets.resolve``: it simply skips the raster probes, which are questions
-    about a COG's bytes that a FlatGeobuf's features and a SELAFIN's dataset
-    groups cannot answer. One seam, four kinds - never a second resolver per
-    layer type.
+    ``None`` for an already-painted raster; ``band_stats`` skips the COG read.
     """
     preset = presets.from_row(style)
+    # A vector or mesh declaration takes this same call and the same resolve: it
+    # skips the raster probes, which are questions about a COG's bytes that a
+    # FlatGeobuf's features and a SELAFIN's dataset groups cannot answer. One
+    # seam, four kinds - never a second resolver per layer type.
     if not presets.paints_a_raster(preset):
         resolved = presets.resolve(preset, override=override, shared=shared)
         logger.info("publish_layer (style) uri=%s -> %s", layer_uri,
@@ -213,15 +151,12 @@ def resolve_layer_style(
 # Fail-open: ANY failure here returns ``None`` so a publish is never blocked.
 # --------------------------------------------------------------------------- #
 
-#: Module-level side-table of the most-recent published-raster ``LegendKey``
-#: keyed by the layer's ``s3://`` COG uri; the register-only manifest seam keys
-#: by the same ``cog_uri``, so both producers share one key shape.
-#: ``publish_layer`` returns a bare URI string, so the server wrap-site rebuilds
-#: a ``LayerURI`` from it WITHOUT a legend; the pipeline emitter's
-#: ``add_loaded_layer`` lifts the legend back out of this stash by ``layer.uri``.
-#: Module scope is safe - the legend is a pure function of the
-#: content-addressed COG plus the declared row. FIFO-bounded at the write site
-#: so the always-on agent process never grows it without limit.
+#: The most-recent published-raster ``LegendKey`` keyed by the layer's ``s3://``
+#: COG uri. The legend travels by URI rather than on the layer row, and the
+#: register-only manifest seam keys by the same uri, so both producers share one
+#: key shape. Module scope is safe - the legend is a pure function of the
+#: content-addressed COG plus the declared row. FIFO-bounded at the write site so
+#: the always-on agent process never grows it without limit.
 _MAX_LEGEND_ENTRIES: int = 256
 _LAST_LEGEND_BY_URI: dict[str, Any] = {}
 
@@ -237,15 +172,8 @@ def legend_for_published_layer(
     band_stats: tuple[float | None, float | None] | None = None,
 ) -> "LegendKey | None":
     """The layer's resolved style, as the key the map renders from.
-
-    The declared row is resolved ONCE here: the concrete range, the ramp and the
-    .qml all come out of that one resolution. ``None`` for a raster that is
-    already painted - an RGB(A) composite or a COG carrying its own colour
-    table paints itself, and QGIS's own renderer for such a file IS the render,
-    so there is no key to state. A vector or mesh declaration takes the same
-    route and never touches the object at all.
-
-    Fail-open: ``None`` on any error, so a publish is never blocked.
+    The declared row is resolved ONCE: the range, the ramp and the .qml all come
+    out of that one resolution. ``None`` on an already-painted raster or any error.
     """
     from trid3nt_contracts.execution import LegendKey
 
@@ -276,10 +204,8 @@ def legend_for_published_layer(
 
 def _stash_legend_for_uri(layer_uri: str, legend: "LegendKey | None") -> None:
     """Record (or clear) the published layer's ``LegendKey`` keyed by its uri.
-
-    FIFO-bounded so the always-on agent process cannot grow this side-table
-    without limit. A ``None`` legend clears any stale entry for this uri (so a
-    re-publish that now resolves to no key cannot leave an orphaned one behind).
+    A ``None`` legend CLEARS the entry, so a re-publish that now resolves to no
+    key cannot leave an orphaned one behind.
     """
     if not layer_uri:
         return
@@ -295,29 +221,24 @@ def _stash_legend_for_uri(layer_uri: str, legend: "LegendKey | None") -> None:
 def pop_legend_for_uri(layer_uri: str) -> "LegendKey | None":
     """Look up the stashed ``LegendKey`` for a published layer's uri.
 
-    Non-destructive READ (a re-emit / replay of the SAME layer must resolve the
-    same key). The pipeline emitter's ``add_loaded_layer`` calls this to lift the
-    legend onto the ``ProjectLayerSummary`` for the publish_layer wrap-site path
-    (where the rebuilt ``LayerURI`` carries no legend of its own). Returns
-    ``None`` when nothing was stashed (a categorical-RGBA layer).
+    A non-destructive read: a re-emit of the SAME layer must resolve the same key.
     """
     return _LAST_LEGEND_BY_URI.get(layer_uri)
 
 
-# NOTE: QGIS-native rendering emits the raw ``s3://`` COG uri directly (see
-# module docstring) - do not reintroduce an XYZ tile-template mint here.
+# The raw ``s3://`` COG uri IS what the client renders: do not reintroduce an
+# XYZ tile-template mint here.
 
 
 # --------------------------------------------------------------------------- #
 # Benign vector handling
 # --------------------------------------------------------------------------- #
 
-#: Vector artifact extensions. ``publish_layer`` is RASTER-ONLY (see the module
-#: docstring). A vector reaching here is ALREADY a store object the plugin
-#: opens natively, so a publish is unnecessary - and GDAL cannot open a
-#: FlatGeobuf as a raster COG, so routing one through the raster path would
-#: fail to open, not render. Token-tail matched against the resolved URI
-#: basename.
+#: Vector artifact extensions. ``publish_layer`` is RASTER-ONLY: a vector
+#: reaching it is already a store object the plugin opens natively, and GDAL
+#: cannot open a FlatGeobuf as a raster COG, so routing one through the raster
+#: path would fail to open rather than render. Token-tail matched against the
+#: resolved URI basename.
 _VECTOR_EXTS = (
     ".fgb",
     ".geojson",
@@ -337,10 +258,7 @@ def _is_vector_uri(layer_uri: str) -> bool:
 def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
     """Return a calm, NON-ERROR signal for a vector handed to publish_layer.
 
-    A vector needs no publish: it is already an object in the store and the
-    plugin opens it natively. So this neither raises (the step completes green)
-    nor registers anything. The returned string is what the caller logs - an
-    honest "no publish needed" rather than a failure it must explain.
+    Neither raises nor registers anything: a vector needs no publish at all.
     """
     logger.info(
         "publish_layer: benign vector no-op for layer_id=%s uri=%s",
@@ -361,12 +279,8 @@ def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
 
 def _raster_has_overviews(raster_bytes: bytes) -> bool | None:
     """True/False if the in-memory raster has internal overviews; None if unknown.
-
-    Reads the bytes through a rasterio ``MemoryFile`` and inspects
-    ``overviews(1)``. A non-empty list = overviews present. ``None`` is
-    returned when rasterio is unavailable or the open fails - callers treat
-    ``None`` as "cannot determine" and fail-open (publish as-is, legacy
-    behavior).
+    ``None`` means CANNOT DETERMINE - rasterio absent, or the open failed - and
+    every caller fails open on it and publishes the raster as-is.
     """
     try:
         import rasterio
@@ -393,14 +307,8 @@ def _raster_has_overviews(raster_bytes: bytes) -> bool | None:
 
 def _read_band1_colormap(src) -> dict | None:
     """Return the band-1 palette color table (``{idx: (r,g,b,a)}``) or ``None``.
-
-    NLCD land cover (and other categorical rasters) ship a single-band
-    palette-index COG with an EMBEDDED GDAL color table; QGIS colorizes from
-    it. The overview-enforcement re-write must carry that table forward or
-    the layer renders solid grey. rasterio raises ``ValueError`` when
-    band 1 has no color table - the normal case for continuous rasters (DEM,
-    hillshade, flood depth) - and we return ``None`` so callers do NOT fabricate
-    one.
+    ``None`` when band 1 carries no table - the normal case for a continuous
+    raster - so that no caller fabricates one.
     """
     try:
         return src.colormap(1)
@@ -414,9 +322,7 @@ def _read_band1_colormap(src) -> dict | None:
 def _apply_band1_colormap(dst, cmap: dict | None) -> None:
     """Stamp a preserved band-1 color table + palette colorinterp onto ``dst``.
 
-    No-op when ``cmap`` is ``None`` (non-paletted raster - never fabricate a
-    color table). Otherwise writes the table on band 1 and marks band 1's color
-    interpretation ``palette`` so QGIS treats the integer pixels as indices.
+    A ``None`` ``cmap`` is a no-op: a colour table is never fabricated.
     """
     if cmap is None:
         return
@@ -441,15 +347,8 @@ def _apply_band1_colormap(dst, cmap: dict | None) -> None:
 
 def _build_cog_with_overviews(raster_bytes: bytes) -> bytes | None:
     """Translate flat raster bytes into a tiled COG WITH overviews.
-
-    Two paths. The COG-driver encode (``emission/cog.translate_to_cog``) tiles and
-    builds overviews in one pass; it degrades to the flat input bytes rather than
-    raising, so the result is CHECKED for overviews before it is trusted. The
-    rasterio fallback (``rio-cogeo`` if present, else a tiled-profile copy plus
-    ``build_overviews``) covers whatever the first path could not encode.
-
-    Returns the new COG bytes, or ``None`` when no path could produce a real
-    overview-bearing COG (caller then fails-open and publishes the original).
+    ``None`` when no path produced a real overview-bearing COG; the COG encode
+    degrades to flat bytes rather than raising, so its result is checked first.
     """
     in_tmp: str | None = None
     try:
@@ -557,12 +456,7 @@ def _build_cog_with_overviews_rasterio(raster_bytes: bytes) -> bytes | None:
 def _overview_factors(width: int, height: int) -> list[int]:
     """Power-of-two decimation factors down to a ~256px overview.
 
-    For small rasters (max dimension < 512px) the 256px floor alone would
-    produce an empty list, and QGIS then computes minzoom == maxzoom for a
-    tiny overview-free COG and renders nothing at the default CONUS zoom, so
-    this always includes at least factor=2 even when the 256px floor is
-    never met. A single factor-2 overview (64-75px) is sufficient for QGIS
-    to lower its minzoom and overzoom the tiles at any zoom level.
+    Never empty: a raster too small for the 256px floor still gets factor 2.
     """
     factors: list[int] = []
     factor = 2
@@ -571,8 +465,10 @@ def _overview_factors(width: int, height: int) -> list[int]:
         factor *= 2
         if len(factors) >= 8:  # safety cap
             break
-    # Always add factor=2 even when the image is already smaller than 512px so
-    # QGIS gets at least one overview level for tiny rasters.
+    # Always add factor=2 even when the image is already smaller than 512px: with
+    # no overview level at all QGIS computes minzoom == maxzoom for a tiny COG and
+    # renders nothing at a continental zoom. One factor-2 level is enough for it
+    # to lower its minzoom and overzoom the tiles.
     if not factors:
         factors = [2]
     return factors
@@ -581,8 +477,7 @@ def _overview_factors(width: int, height: int) -> list[int]:
 def _read_raster_bytes(layer_uri: str) -> bytes | None:
     """Read raster bytes for an ``s3://`` / local URI (None on failure).
 
-    Used by the overview check. Fail-open: any read error returns ``None``
-    so the publish proceeds with the original URI.
+    Fail-open: any read error returns ``None`` and the publish proceeds.
     """
     try:
         if layer_uri.startswith("s3://"):
@@ -605,9 +500,7 @@ def _read_raster_bytes(layer_uri: str) -> bytes | None:
 def _split_s3_uri(uri: str) -> tuple[str, str] | None:
     """``(bucket, key)`` for an ``s3://`` URI, or ``None`` when it is not one.
 
-    The solver's ``_split_object_uri`` RAISES on anything that is not an object
-    URI; this is the fail-open caller's shape, because a local path here is a
-    legal input rather than a fault.
+    A local path is a legal input here rather than a fault, so this never raises.
     """
     from trid3nt_server.workflows.solver.solver import (
         SolverDispatchError,
@@ -622,11 +515,9 @@ def _split_s3_uri(uri: str) -> tuple[str, str] | None:
 
 
 def _write_overview_cog(layer_uri: str, cog_bytes: bytes) -> str | None:
-    """Write the auto-translated COG alongside the source; return its URI (None on fail).
-
-    A fresh ULID-suffixed sibling object so the original (no-overview) COG is
-    never mutated in place and warm negative-caches don't poison the new path.
-    Fail-open: returns ``None`` on any write error (caller publishes original).
+    """Write the auto-translated COG alongside the source; ``None`` on failure.
+    A fresh ULID-suffixed sibling: the original COG is never mutated in place
+    and a warm negative cache cannot poison the new object.
     """
     parsed_s3 = _split_s3_uri(layer_uri)
     try:
@@ -659,17 +550,8 @@ def _write_overview_cog(layer_uri: str, cog_bytes: bytes) -> str | None:
 
 def _ensure_raster_has_overviews(layer_uri: str) -> str:
     """Guarantee the published raster is a COG WITH overviews.
-
-    A no-overview COG renders SPOTTY (per-strip range requests time out cold;
-    QGIS can't downsample for low zooms), so before a raster is registered,
-    validate the source COG has overviews. When missing, auto-translate to a
-    tiled+overview COG (reusing ``emission.cog.translate_to_cog``, with a
-    rasterio fallback), write it to a fresh sibling object, log the
-    auto-translate, and publish THAT instead.
-
-    Fail-open at every step: an unreadable raster, a missing rasterio, a failed
-    translate, or a failed write all degrade to returning ``layer_uri``
-    unchanged (never blocks a publish).
+    Fail-open at every step: an unreadable raster, a failed translate or a failed
+    write all return ``layer_uri`` unchanged rather than blocking the publish.
     """
     raster_bytes = _read_raster_bytes(layer_uri)
     if raster_bytes is None:
@@ -706,9 +588,7 @@ def _ensure_raster_has_overviews(layer_uri: str) -> str:
 def _looks_like_ulid(value: str) -> bool:
     """True for a 26-char Crockford-base32 ULID shape (case-insensitive).
 
-    Matches ``new_ulid()``'s output shape without importing the ``ulid``
-    package here -- a cheap regex is enough to recognize "this is not a
-    human name, it's an identifier" for the name-derivation guard.
+    Shape only: enough to tell an identifier from a human name.
     """
     import re as _re
 
@@ -718,8 +598,7 @@ def _looks_like_ulid(value: str) -> bool:
 def _looks_like_hash_or_id(value: str) -> bool:
     """True for a bare ULID, or a long hex/opaque cache-key-shaped token.
 
-    Used to skip non-human URI path segments (e.g. a cache-key filename
-    stem like ``a1b2c3d4e5f6...tif``) when deriving a name from the URI.
+    The test for a URI segment that is not worth showing a reader.
     """
     import re as _re
 
@@ -731,11 +610,7 @@ def _looks_like_hash_or_id(value: str) -> bool:
 def _label_from_uri(layer_uri: str) -> str | None:
     """Human label from a source ``layer_uri`` path segment, or ``None``.
 
-    Prefers the PARENT directory segment (e.g. ``.../hillshade/<hash>.tif``
-    -> ``"hillshade"``) since the file stem is typically a cache hash or a
-    bare ULID and not human-meaningful; falls back to the file stem itself
-    when it IS human-shaped (no parent segment, or the parent is also
-    opaque).
+    The PARENT segment wins over the file stem, which is usually a cache hash.
     """
     from urllib.parse import urlparse as _urlparse
 
@@ -755,9 +630,10 @@ def _label_from_uri(layer_uri: str) -> str | None:
 
 
 def _short_disambiguator(layer_id: str) -> str:
-    """Short suffix (last 4 alnum chars of ``layer_id``, else today's MMDD)
-    so two derived names for the same family/preset don't collide in the
-    UI's layer list."""
+    """Short suffix: the last 4 alnum chars of ``layer_id``, else today's MMDD.
+
+    So two derived names for the same family do not collide in the layer list.
+    """
     import re as _re
 
     tail = _re.sub(r"[^A-Za-z0-9]", "", layer_id or "")[-4:]
@@ -776,25 +652,11 @@ def derive_readable_layer_name(
 ) -> str:
     """Derive a human-readable layer name for the layer list.
 
-    A producer that names nothing, and whose ``layer_id`` is a bare ULID, would
-    otherwise reach the layer list as ``'01KX5TEZ20BK86EE6DG8PSVFJK'`` --
-    meaningless to the user. Precedence:
-
-    1. an explicit, non-empty ``name`` that is not ITSELF a bare-ULID shape
-       -- returned VERBATIM, no disambiguator appended (the caller already
-       chose it deliberately; second-guessing it would be surprising).
-    2. the declared style row's own ``label``.
-    3. a human segment of the source ``layer_uri`` path (the parent
-       directory / product-family segment -- the file stem is typically a
-       cache hash or a ULID).
-    4. a generic ``"Layer"`` fallback.
-
-    Cases 2-4 append a short disambiguator (``_short_disambiguator``) so two
-    derived names for the same family don't collide in the UI list.
-    INVARIANT: a bare-ULID name must never reach the layer summary when any
-    better signal (an explicit name, a declared label, or a URI segment) is
-    available.
+    An explicit non-ULID ``name`` returns verbatim; a derived one is disambiguated.
     """
+    # Precedence: an explicit non-ULID name, then the declared row's label, then a
+    # human segment of the source uri, then "Layer". A bare ULID must never reach
+    # the layer summary while any of the later signals is available.
     if name and name.strip() and not _looks_like_ulid(name.strip()):
         return name.strip()
 
@@ -821,55 +683,22 @@ def publish_layer(
     #: coarse-versus-refined are painted against each other rather than each
     #: against itself.
     shared_range: tuple[float, float] | None = None,
-    # Absorb extra keywords: callers are ~30 composers plus the emission
-    # seam, and a new keyword on one of them must not break the other
-    # twenty-nine.
+    # Absorb extra keywords: a new keyword on one caller must not break the rest.
     **_extra_ignored: Any,
 ) -> str:
     """Publish a COG raster: write, register, notify.
-
-    Enforces COG overviews, registers the layer handle against the ONE uri it
-    carries, resolves the declared style row into a legend the envelope hands
-    the map, and returns that ``s3://`` COG uri - the QGIS plugin opens it
-    natively through GDAL ``/vsis3``. Vectors are a benign no-op: they are
-    already store objects the plugin opens the same way.
-
-    Called by the emission seam for every renderable raster a tool returns
-    (``layer_uri_emit.publish_for_emission``), by the solver outputs seam, and
-    by the composers that publish a product layer directly. It is NOT a
-    registered tool and there is no model-facing intent that reaches it.
-
-    Args:
-        layer_uri: the ``s3://`` COG URI. Every caller reaches here with the
-            uri its own producer wrote, already resolved.
-        layer_id: stable, Case-unique id for the published layer.
-        style: the DECLARED style row - which of the four preset shapes draws
-            this layer and the parameters that shape needs. ``None`` takes the
-            continuous kind's bare default.
-        name: display name for the layer list. Derived from the preset label /
-            a URI path segment when omitted, so a bare ULID never reaches the
-            layer summary.
-
-    Returns:
-        The published raster's ``s3://`` COG URI (the overview-enforced sibling
-        when one had to be built). Suitable as a ``LayerURI.uri``.
-
-    Raises:
-        PublishLayerError: a non-``s3://`` raster URI. ``error_code`` carries a
-            SCREAMING_SNAKE_CASE code.
+    Returns the ``s3://`` COG uri the client renders - the overview-enforced
+    sibling when one had to be built. A vector is a benign no-op, not an error.
     """
-    # ``name`` is a transport-only carrier (see docstring) - the
-    # actual LayerURI.name the client renders is computed by the server-side
-    # wrap-site's ``derive_readable_layer_name`` call (it has the resolved
-    # published URI this function's caller does not see yet).
-    # Logged here purely for observability of what the model actually sent.
+    # ``name`` is transport-only: the name the client renders is derived later,
+    # where the published uri this call has not returned yet is in hand. Logged
+    # here only to show what the caller actually sent.
     if name:
         logger.info("publish_layer: name=%r layer_id=%r", name, layer_id)
 
-    # A vector needs no publish: it is already a store object the plugin opens
-    # natively, and GDAL cannot open a FlatGeobuf as a raster COG. Return a
-    # BENIGN, non-error result so the step completes GREEN and the agent
-    # narrates honestly instead of re-calling.
+    # A vector needs no publish: it is already a store object the client opens
+    # natively, and GDAL cannot open a FlatGeobuf as a raster COG. The result is
+    # BENIGN and non-error, so the step completes green rather than re-calling.
     if _is_vector_uri(layer_uri):
         return _benign_vector_noop(layer_uri, layer_id)
     if not layer_uri.startswith("s3://"):
@@ -879,19 +708,15 @@ def publish_layer(
             "Pass the producing tool's layer handle or its s3:// URI verbatim.",
             retryable=True,
         )
-    # A no-overview COG renders SPOTTY (per-strip range requests time out
-    # cold; QGIS can't downsample for low zooms), so validate the COG has
-    # overviews and auto-translate to a tiled+overview COG before the
-    # raster is registered. Fail-open (publishes as-is) on any error.
+    # A no-overview COG renders spotty: per-strip range requests time out cold
+    # and nothing can downsample it for a low zoom. Enforced BEFORE registration
+    # so the uri that is registered is the one that renders.
     layer_uri = _ensure_raster_has_overviews(layer_uri)
 
-    # The DECLARED style row, resolved against this raster ONCE: the concrete
-    # range, the ramp and the .qml the map loads all come out of that one
-    # resolution, and the result is stashed keyed by the s3:// uri this call
-    # returns. publish_layer returns a bare URI string, so the server wrap-site
-    # rebuilds a LayerURI WITHOUT a legend; the pipeline emitter's
-    # add_loaded_layer lifts it back out of the stash by layer.uri.
-    # Fail-open: a None legend clears the stash entry.
+    # The DECLARED style row, resolved against this raster ONCE: the range, the
+    # ramp and the .qml all come out of that one resolution, stashed under the
+    # s3:// uri this call returns because the legend travels by uri, not on the
+    # returned value. Fail-open: a None legend clears the stash entry.
     try:
         _stash_legend_for_uri(layer_uri, legend_for_published_layer(
             style, layer_uri, override=scale, shared=shared_range))
@@ -899,8 +724,8 @@ def publish_layer(
         logger.debug("publish_layer legend build skipped (%s: %s)",
                      type(exc).__name__, exc)
     logger.info("publish_layer layer_id=%s uri=%s", layer_id, layer_uri)
-    # Register the layer so the ``flood-depth-peak-<id>``-style handle resolves
-    # for downstream tools (Pelicun, zonal stats). One scheme, one face: the
-    # s3:// COG is both the data uri and the uri the plugin renders.
+    # Register the layer so a downstream tool resolves the handle to readable
+    # bytes. One scheme, one face: the s3:// COG is both the data uri and the uri
+    # the client renders.
     observe_published_layer(layer_id, uri=layer_uri)
     return layer_uri

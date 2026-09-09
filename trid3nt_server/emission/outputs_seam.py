@@ -1,42 +1,8 @@
-"""The emit-on-solve seam consumer -- ``outputs.json`` -> published ``LayerURI``s.
+"""The emit-on-solve seam consumer: ``outputs.json`` -> published ``LayerURI``s.
 
-A solver leg writes an append-only ``outputs.json`` manifest under its run
-prefix (``trid3nt_contracts.outputs_manifest``, ``schema_version`` 1); this
-module reads it at completion and turns every entry into a registered,
-styled, legend-stashed ``LayerURI``. A solved product's style is DERIVED from
-the manifest entry itself - its ``kind`` picks the preset shape, its
-``quantity`` and ``units`` are the parameters - so a worker never bakes a
-style and no quantity can be "unregistered".
-
-Routing:
-  * ``raster`` with NO ``t``          -> ONE standalone layer (role ``primary``).
-  * ``raster`` with ``t``, sharing a  -> a TEMPORAL GROUP (frames in ``t`` order,
-    ``quantity`` with siblings           role ``context``, the grouping token
-                                         preserved so the plugin's
-                                         ``detectSequentialGroups`` forms the
-                                         frame sequence).
-  * ``vector``                        -> a vector layer.
-  * ``mesh``                          -> a native SELAFIN ``layer_type="mesh"``
-                                         layer (role ``context``, ``crs_authid``
-                                         and ``reference_time`` from the entry,
-                                         ``bbox=None``); MDAL animates every
-                                         frame from the one file, on the run's
-                                         own clock.
-  * ``scalar``                        -> parse + validate, log-only in v1.
-
-The emitted layer-event stream -- ``name``, ``layer_id`` (modulo run-id), the
-declared ``style`` row and the resolved legend, ``bbox``, ``role``, ``units``
-and the temporal-group membership -- must stay byte-identical to what
-``register_manifest_layers`` renders for the same solved output. The RANGE is
-the run's own: one per quantity, spanning the peak and every frame, read from
-the producer's ``band_stats`` where present and off the COG only where absent.
-
-``layer_id`` is minted deterministically from ``(quantity, t-ordinal, run_id)``
-so a re-poll of an already-published entry resolves to the SAME id and is a
-no-op on ``observe_published_layer``.
-
-MISSING / unknown-schema manifest -> ``read_outputs_manifest`` returns ``None``
-and the caller runs its existing path unchanged.
+A solved product's style is DERIVED from its manifest entry - the ``kind`` picks
+the preset shape, ``quantity`` and ``units`` parameterise it - so a worker never
+bakes a style. A missing or unknown-schema manifest is a no-op, never an error.
 """
 
 from __future__ import annotations
@@ -74,12 +40,7 @@ logger = logging.getLogger("trid3nt_server.emission.outputs_seam")
 class PublishedFrame:
     """Replay metadata for one published entry.
 
-    Carried ALONGSIDE the emitted ``LayerURI`` so the persistence layer can stamp
-    the optional ``t`` / ``group_id`` onto the case-layer record; a Case reopen
-    rebuilds the temporal group from these
-    without re-polling ``outputs.json`` (which may be GC'd). The live-emitted
-    ``LayerURI`` itself carries none of this -- it stays byte-identical to the
-    register path.
+    Carried beside the ``LayerURI``, which carries no ``t`` or ``group_id`` itself.
     """
 
     layer_id: str
@@ -91,12 +52,9 @@ class PublishedFrame:
 
 @dataclass
 class SeamPublishResult:
-    """The seam's register-only outcome -- a drop-in for ``ManifestRegisterResult``.
+    """The seam's register-only outcome; ``frames`` runs parallel to ``layers``.
 
-    ``layers`` is ordered [standalone/primary layers..., then each temporal
-    group's frames in ``t`` order...] so a caller splits by ``role`` exactly as
-    it does for the register path. ``frames`` is the parallel replay metadata.
-    ``mesh_count`` / ``scalar_count`` record the log-only kinds.
+    ``layers`` is ordered standalone first, then each temporal group in ``t`` order.
     """
 
     layers: list[LayerURI] = field(default_factory=list)
@@ -112,12 +70,7 @@ class SeamPublishResult:
 def read_outputs_manifest(run_result: Any) -> OutputsManifest | None:
     """Read + schema-gate ``outputs.json`` from a completed run's prefix.
 
-    Resolves ``s3://<runs_bucket>/<run_id>/outputs.json`` (the same prefix
-    ``RunResult.output_uri`` points at) and parses it through the tolerant,
-    schema-gated reader. Returns ``None`` -- the byte-identical no-op the caller
-    treats as "run its existing publish path" -- when the object is absent, the
-    completion read fails, or the body carries an unknown ``schema_version`` /
-    foreign ``kind``. NEVER raises.
+    ``None`` when absent, unreadable or of an unknown schema; never raises.
     """
     run_id = getattr(run_result, "run_id", None)
     if not run_id:
@@ -164,8 +117,9 @@ def read_outputs_manifest(run_result: Any) -> OutputsManifest | None:
 # Layer id / grouping.
 # --------------------------------------------------------------------------- #
 def _quantity_base(quantity: str) -> str:
-    """``flood_depth`` -> ``flood-depth``: must match the register path's stem
-    so ``layer_id`` stays byte-equivalent (modulo run-id) between the two paths.
+    """``flood_depth`` -> ``flood-depth``: the stem the register path uses too.
+
+    ``layer_id`` stays byte-equivalent (modulo run-id) between the two paths.
     """
     return (quantity or "").strip().lower().replace("_", "-")
 
@@ -179,8 +133,7 @@ _KIND_BY_ENTRY: dict[str, str] = {
 def quantity_label(quantity: str) -> str:
     """``flood_depth`` -> ``Flood depth``: the quantity, said out loud.
 
-    The producer already named the physical field; a second table mapping that
-    name to a prettier one is the mirror this seam exists without.
+    No lookup table: the producer's own field name is the label's only source.
     """
     words = (quantity or "").strip().replace("-", " ").replace("_", " ").strip()
     return words[:1].upper() + words[1:] if words else "Value"
@@ -189,10 +142,7 @@ def quantity_label(quantity: str) -> str:
 def entry_style(entry: OutputEntry) -> dict[str, Any]:
     """The style row a solved output derives from the product contract.
 
-    The entry's ``kind`` picks the preset shape and its ``quantity`` / ``units``
-    parameterise it. A mesh entry names the dataset group QGIS binds by - the
-    group the entry declares, else the quantity. Nothing here is keyed on a
-    preset name, so nothing here can be mislabelled by one.
+    Nothing here is keyed on a preset NAME, so nothing can be mislabelled by one.
     """
     row: dict[str, Any] = {
         "kind": _KIND_BY_ENTRY.get(entry.kind, "continuous"),
@@ -201,6 +151,8 @@ def entry_style(entry: OutputEntry) -> dict[str, Any]:
     if entry.units:
         row["units"] = entry.units
     if entry.kind == "mesh":
+        # The dataset group QGIS binds by: the one the entry declares, else the
+        # quantity.
         row["dataset_group"] = entry.dataset_group or entry.quantity
         # A mesh has no band to read, so a range it is to be painted on has to
         # be DECLARED. The producer states the published max-over-time range
@@ -216,8 +168,7 @@ def entry_style(entry: OutputEntry) -> dict[str, Any]:
 def _entry_range(entry: OutputEntry) -> tuple[float, float] | None:
     """The RUN range this one raster contributes - its band stats, or one read.
 
-    Producers usually precompute the stats onto the manifest, so the read is the
-    exception.
+    The read is the exception: producers usually precompute the stats.
     """
     bs = entry.band_stats
     if bs is not None and (bs.is_categorical or bs.is_rgba):
@@ -236,13 +187,11 @@ def _entry_range(entry: OutputEntry) -> tuple[float, float] | None:
 
 
 def _run_ranges(manifest: OutputsManifest) -> dict[str, tuple[float, float] | None]:
-    """ONE range per quantity, spanning the whole run - peak and every frame.
-
-    The scope of a data-driven scale is the RUN, never the frame. Resolving each
-    frame against its own values makes the same colour mean a different depth in
-    the next frame, which is a dishonest animation rather than a better-contrasted
-    one. The peak entry is in the span too, so the still and the frames agree.
-    """
+    """ONE range per quantity, spanning the whole run - peak and every frame."""
+    # The scope of a data-driven scale is the RUN, never the frame: resolving each
+    # frame against its own values makes the same colour mean a different depth in
+    # the next frame. The peak entry is in the span too, so the still and the
+    # frames agree.
     contributions: dict[str, list[tuple[float, float] | None]] = {}
     for entry in manifest.entries:
         if entry.kind != "raster":
@@ -316,21 +265,7 @@ def build_layers_from_outputs(
 ) -> SeamPublishResult:
     """Turn a parsed ``outputs.json`` into registered ``LayerURI``s + replay meta.
 
-    Pure given the active dispatch registry (``observe_published_layer`` is a
-    no-op outside a dispatch ContextVar -- exactly why registration stays
-    agent-side). Does NO heavy I/O for registered quantities that carry
-    ``band_stats`` (the register-only fast path); the only COG touch is the
-    unregistered-quantity neutral-ramp fallback.
-
-    ``frames_only``: when True, the seam owns the TEMPORAL FRAMES ONLY --
-    standalone rasters (the peak/final field) and vectors are NOT built or
-    registered. The composer keeps its own typed peak layer (with the
-    narration scalars on it) and never consumes the seam's peak entry, so the
-    same COG uri is never registered twice. ``outputs.json`` still carries the
-    peak entry for completeness (a whole-run record); the seam simply skips
-    it. A ``kind="mesh"`` entry IS the temporal artifact, so it is ALWAYS
-    built (under frames_only too). Default False: the seam owns all
-    publication.
+    ``frames_only`` builds temporal entries alone, leaving the peak to the composer.
     """
     result = SeamPublishResult()
     #: ONE range per quantity over the whole run. Computed BEFORE any layer is
@@ -339,7 +274,8 @@ def build_layers_from_outputs(
 
     # Split raster entries into non-temporal (standalone) and temporal (grouped
     # by quantity). Under ``frames_only`` the standalone/vector buckets stay
-    # empty (the peak stays composer-built).
+    # empty: the composer keeps its own peak layer, so the same COG uri is
+    # never registered twice.
     standalone: list[OutputEntry] = []
     temporal_by_quantity: dict[str, list[OutputEntry]] = {}
     vectors: list[OutputEntry] = []
@@ -369,6 +305,9 @@ def build_layers_from_outputs(
             )
 
     # --- Standalone rasters (peak/final field): role primary. ---
+    # Every layer_id below is minted from (quantity, t-ordinal, run_id) and from
+    # nothing else, so a re-poll of an already-published entry resolves to the
+    # same id and lands as a no-op on ``observe_published_layer``.
     for entry in standalone:
         layer_id = f"{_quantity_base(entry.quantity)}-peak-{run_id}"
         layer = _build_raster_layer(

@@ -1,31 +1,8 @@
 """The preset family: four data KINDS, one .qml writer.
 
-A preset is not a quantity. Four renderer shapes cover every product this
-platform draws - a continuous raster ramp, a classed vector, a reference
-outline, a mesh dataset group - and everything a quantity contributes (its
-units, its legend title, the one scale it is read on, its ramp) is a
-PARAMETER of one of those four, never a fifth preset.
-
-Presentation is declared where the DATA is declared: a fetcher's
-``source.yaml`` carries a ``style:`` row, a solved product carries its kind
-and quantity. Workflow declarations carry none of it.
-
-Three rules this module enforces, because a colour cannot state them itself:
-
-* THE SCOPE OF ``policy: data`` IS THE RUN, NEVER THE FRAME. The range is
-  computed once and every frame, plane and legend uses that one range - a
-  per-frame range makes the same colour mean a different value in the next
-  frame.
-* A COMPARISON SET SHARES ONE RANGE, resolved together through
-  :func:`shared_range`.
-* THE LEGEND STATES THE POLICY AND THE RANGE, because a reader cannot tell a
-  fixed domain scale from one read off this run's own data by looking.
-
-The .qml written here is a SUBSET of QGIS's own style format - their format,
-our writer, their validator. ``scripts/instruments/qml_preset_smoke.py`` loads every
-document this module can produce into the installed QGIS and asserts the
-POST-LOAD state (renderer type, stops read back, the range QGIS ends up
-holding); a document that does not survive that read never ships.
+A preset is not a quantity: four renderer shapes cover every product drawn here,
+and a quantity's units, title, scale and ramp parameterise one of the four rather
+than adding a fifth. The .qml written is a subset of QGIS's own style format.
 """
 
 from __future__ import annotations
@@ -93,8 +70,7 @@ _RAMP_STOPS: dict[str, tuple[str, ...]] = {
 def ramp_stops(name: str | None) -> tuple[str, ...]:
     """The hex stops of a ramp; a ``<base>_r`` name is the base reversed.
 
-    An unknown name takes the default ramp rather than grey - a picture in the
-    wrong ramp is recoverable by a restyle, a grey one reads as no data.
+    An unknown name takes the default ramp, never grey - grey reads as no data.
     """
     key = (name or "").strip().lower()
     stops = _RAMP_STOPS.get(key)
@@ -113,9 +89,7 @@ def ramp_stops(name: str | None) -> tuple[str, ...]:
 class Scale:
     """The one scale a quantity is read on.
 
-    ``range`` under ``policy="data"`` is the FALLBACK the resolver uses when the
-    raster's own statistics cannot be read - never a silent second opinion
-    about the data.
+    ``range`` under ``policy="data"`` is the FALLBACK, never a second opinion.
     """
 
     policy: Policy = "data"
@@ -137,27 +111,24 @@ class Scale:
 
 @dataclass(frozen=True, slots=True)
 class Preset:
-    """One of four renderer shapes, parameterised by what the data is.
-
-    ``classes`` are ``(lower, upper, "#rrggbb", label)`` breaks and are what
-    makes a ``classed`` preset classed. ``geometry`` picks the symbol shape a
-    vector kind needs, and its PRESENCE is what says the layer is a vector: a
-    classed row without one is a classed RASTER, drawn as discrete bands rather
-    than as graduated symbols. ``dataset_group`` names the MDAL group a mesh
-    preset paints, which is how QGIS binds it (an index does not survive the
-    load).
-    """
+    """One of four renderer shapes, parameterised by what the data is."""
 
     kind: Kind = "continuous"
     ramp: str = DEFAULT_RAMP
     units: str | None = None
     label: str | None = None
     scale: Scale = Scale()
+    #: ``(lower, upper, "#rrggbb", label)`` breaks - what makes a preset classed.
     classes: tuple[tuple[float, float, str, str], ...] = ()
+    #: The symbol shape a vector kind needs. Its PRESENCE is what says the layer
+    #: is a vector: a classed row without one is a classed RASTER, drawn as
+    #: discrete bands rather than as graduated symbols.
     geometry: Geometry | None = None
     color: str = "#3b7dd8"
     #: The vector field a ``classed`` preset classifies on.
     attribute: str | None = None
+    #: The MDAL group a mesh preset paints. QGIS binds it by NAME; an index does
+    #: not survive the load.
     dataset_group: str | None = None
 
     def titled(self, label: str | None, units: str | None) -> "Preset":
@@ -185,10 +156,7 @@ def bare_default(kind: str | None) -> Preset:
 def paints_a_raster(preset: Preset) -> bool:
     """Does this preset draw a RASTER - the only shape with bands to read?
 
-    The resolver's raster probes (the band read, the palette and RGB(A) guards)
-    are facts about a COG's bytes; a vector's features and a mesh's dataset
-    groups have none of them. A ``geometry`` is what makes a classed preset a
-    vector, and a ``mesh`` is never a raster.
+    A ``geometry`` makes a classed preset a vector; a mesh is never a raster.
     """
     return preset.kind in ("continuous", "classed") and preset.geometry is None
 
@@ -208,9 +176,7 @@ def _scale_from(doc: Any, fallback: Scale) -> Scale:
 def from_row(row: Any) -> Preset:
     """A declared ``style:`` row as a preset. An absent row is the bare default.
 
-    The row is DATA about the data - which of the four shapes draws it, and the
-    parameters that shape needs - so it lives beside the source or product that
-    produces the layer, never in a table somewhere else.
+    The row lives beside the source or product it draws, never in a table elsewhere.
     """
     if not isinstance(row, Mapping):
         return bare_default("continuous")
@@ -299,13 +265,7 @@ def resolve(
 ) -> Resolved:
     """Resolve a preset to a concrete scale. The ONE place that decision is made.
 
-    ``read_range`` is asked for the layer's own range ONLY when the resolved
-    policy is ``data`` and no ``shared`` range was handed in, so a fixed-scale
-    preset never pays for a band read and a comparison set never re-reads a
-    range it was already given.
-
-    Override order, later wins: the declared row -> ``override`` (a restyle
-    ask) -> ``shared``.
+    Override order, later wins: the declared row -> ``override`` -> ``shared``.
     """
     scale = preset.scale.merged(override)
     spec = replace(preset, scale=scale)
@@ -315,6 +275,11 @@ def resolve(
         return Resolved(spec, shared, SHARED)
     if scale.policy == "fixed" and scale.range is not None:
         return Resolved(spec, scale.range, FIXED)
+    # ``read_range`` is asked for the layer's own range ONLY under policy ``data``
+    # with no ``shared`` range handed in, so a fixed-scale preset never pays for a
+    # band read and a comparison set never re-reads a range it was given. The
+    # scope of that read is the RUN, never one frame: a per-frame range makes the
+    # same colour mean a different value in the next frame.
     found = read_range(scale) if read_range is not None else None
     if found is not None:
         return Resolved(spec, _widen(found), FROM_DATA)
@@ -335,8 +300,7 @@ def shared_range(
 ) -> tuple[float, float] | None:
     """ONE range spanning a compared set - before/after, coarse-versus-refined.
 
-    Layers a reader compares must be painted on one scale or the comparison is
-    a picture of two colour maps. ``None`` when nothing in the set had a range.
+    A compared set shares one scale; ``None`` when nothing in it had a range.
     """
     found = [r for r in ranges if r is not None]
     if not found:
@@ -349,9 +313,7 @@ def band_range_reader(
 ) -> Callable[[Scale], tuple[float, float] | None]:
     """A ``read_range`` that reads band 1 of an in-hand COG at the scale's clip.
 
-    ``None`` for missing bytes, missing deps, an unreadable raster or a band
-    with no finite values - the resolver then falls back to the declared range
-    and SAYS SO on the legend.
+    ``None`` when nothing finite can be read; the resolver then says fallback.
     """
 
     def _read(scale: Scale) -> tuple[float, float] | None:
@@ -566,8 +528,7 @@ def legend_key(row: Any, *, value_range: tuple[float, float] | None = None,
                label: str | None = None, units: str | None = None) -> Any:
     """A declared row plus a range a producer already measured, as the wire key.
 
-    For a producer that computed its own range while it had the field in hand -
-    the whole point of resolving there is that nothing has to re-read the COG.
+    For a producer that measured while it held the field: nothing re-reads the COG.
     """
     from trid3nt_contracts.execution import LegendKey
 
@@ -588,16 +549,15 @@ def legend_key(row: Any, *, value_range: tuple[float, float] | None = None,
 def qml(resolved: Resolved) -> str | None:
     """The resolved preset as a QGIS ``.qml`` document, or ``None``.
 
-    ``None`` when the preset has nothing it can honestly say about THIS layer:
-    a mesh preset with no named dataset group (QGIS binds a group by name, and
-    an unbound block is silently dropped), a reference preset whose geometry was
-    never declared (a symbol of the wrong shape loads and then draws nothing), or
-    a classed preset with no breaks - a shader with no items paints the whole
-    raster one flat colour, which is what a land-cover COG carrying its own class
-    table gets when a document is written over it. QGIS's own default rendering
-    stands in all three cases, and for a paletted file that default IS its table.
-
+    ``None`` when the preset has nothing it can honestly say about THIS layer.
     """
+    # Three refusals, each because the document would draw worse than QGIS's own
+    # default: a mesh preset with no named dataset group (QGIS binds a group by
+    # name, and an unbound block is silently dropped); a reference preset whose
+    # geometry was never declared (a symbol of the wrong shape loads and then
+    # draws nothing); a classed preset with no breaks (a shader with no items
+    # paints the whole raster one flat colour, which is what a paletted file
+    # carrying its own class table gets when a document is written over it).
     if resolved.preset.kind == "mesh" and not resolved.preset.dataset_group:
         return None
     if resolved.preset.kind == "reference" and resolved.preset.geometry is None:

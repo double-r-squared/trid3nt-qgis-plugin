@@ -1,13 +1,7 @@
 """COG encoding - the publication step that makes a raster renderable.
 
-A flat GeoTIFF is correct and unviewable: without internal tiles and overviews a
-client fetches the whole file to draw one zoom level. Encoding it is therefore
-part of PUBLISHING a raster, not part of computing one, which is why it lives
-here rather than inside a terrain tool that happened to need it first.
-
-Best-effort by contract: a failed encode returns the input bytes unchanged. A
-raster that renders slowly is worth having; a publish that raised because the
-overviews would not build is not.
+Best-effort by contract: a failed encode returns the input bytes unchanged, so a
+raster that renders slowly is still published.
 """
 
 from __future__ import annotations
@@ -22,14 +16,9 @@ __all__ = ["translate_to_cog"]
 
 
 def translate_to_cog(input_path: str) -> bytes:
-    """Encode a flat GeoTIFF into tiled COG-with-overviews bytes (in-process rasterio).
-
-    The rasterio ``COG`` driver tiles + builds overviews in one pass, so the
-    product renders without a per-strip range request. Preserves dtype, CRS,
-    transform, nodata, band color-interpretation, and a band-1 palette color
-    table (paletted rasters like NLCD land cover). Best-effort: returns the
-    input bytes unchanged on any failure (never raises).
-
+    """Encode a flat GeoTIFF into tiled COG-with-overviews bytes.
+    Preserves dtype, CRS, transform, nodata, band color-interpretation and a
+    band-1 palette. Returns the input bytes unchanged on any failure; never raises.
     """
     out_tmp: str | None = None
     try:

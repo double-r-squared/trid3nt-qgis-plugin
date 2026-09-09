@@ -1,16 +1,5 @@
-"""Layer URI emission and pipeline event plumbing.
+"""Layer emission: everything a computed layer passes through on its way to the map.
 
-Everything a computed layer passes through on its way to the map, in one
-package:
-
-  * ``layer_uri_emit`` - THE seam. ``publish_for_emission`` publishes a raster
-    automatically (nothing asks), then ``emit_layer_uri`` guards what is
-    deliverable.
-  * ``publish`` - the raster publish MECHANISM the seam calls: COG overviews,
-    the style-resolver ladder, the data-driven legend, layer registration.
-  * ``pipeline_emitter`` - the step cards + the ``loaded_layers`` accumulator
-    that emits ``session-state``.
-  * ``uri_registry`` - the session-scoped handle -> exact-URI indirection.
-  * ``outputs_seam`` - the solver ``outputs.json`` manifest -> published layers.
-  * ``styles`` - THE style resolver over the contract's preset + quantity tables.
+Publication is automatic - a raster is published as it is produced - and a
+deliverability guard, not the producing tool, decides what reaches the client.
 """

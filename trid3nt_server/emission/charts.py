@@ -1,12 +1,7 @@
-"""Shared chart-emission core: ``build_chart_payload`` (the single
-Vega-Lite chart-envelope builder every chart tool + engine postprocessor
-routes through), ``is_chart_emission_result``, the ``ChartToolError`` typed
-error, layer staging/read helpers, and the two engine-facing builders whose
-producers are in the tree - ``build_budget_partition_chart`` and
-``build_hydrograph_overlay_chart``.
+"""Chart emission: the one Vega-Lite chart-envelope builder and its read helpers.
 
-The generic ``generate_chart`` tool lives in a sibling module; this module
-registers nothing.
+Every chart tool and engine postprocessor routes its spec through
+``build_chart_payload``. This module registers no tool of its own.
 """
 
 from __future__ import annotations
@@ -36,10 +31,9 @@ logger = logging.getLogger("trid3nt_server.emission.charts")
 # Constants
 # ---------------------------------------------------------------------------
 
-#: Maximum number of inline rows in a Vega-Lite spec's ``data.values``. The
-#: kickoff caps the inline spec at ~2000 rows so the wire envelope (and the
-#: function_response that summarizes it) stays small. Histograms/bars are
-#: pre-binned well under this; the cap is a hard safety rail.
+#: Maximum number of inline rows in a Vega-Lite spec's ``data.values``, so the
+#: wire envelope (and the function_response that summarizes it) stays small.
+#: Histograms and bars are pre-binned well under this; the cap is a hard rail.
 _MAX_ROWS = 2000
 
 #: Maximum number of raster cells sampled for a histogram. A full COG can be
@@ -67,16 +61,7 @@ _VECTOR_EXTS = {".fgb", ".geojson", ".gpkg", ".shp", ".json", ".gml", ".kml"}
 class ChartToolError(RuntimeError):
     """Raised when a chart-generation tool cannot produce a chart.
 
-    ``error_code`` carries a SCREAMING_SNAKE_CASE code consumed by
-    ``summarize_tool_result`` (retry surface):
-
-    - ``LAYER_OPEN_FAILED``  - raster/vector layer could not be opened.
-    - ``DOWNLOAD_FAILED``    - S3/local read for the layer URI failed.
-    - ``PROPERTY_NOT_FOUND`` - the named property/attribute is absent.
-    - ``NO_NUMERIC_PROPERTY``- no numeric attribute available to chart.
-    - ``NO_TIME_DIMENSION``  - generate_time_series on a non-temporal layer.
-    - ``NO_DATA``            - layer has zero valid cells / features.
-    - ``MISSING_DAMAGE_COLUMN`` - damage FGB lacks the ``ds_mean`` column.
+    ``error_code`` is a SCREAMING_SNAKE_CASE code the retry surface reads.
     """
 
     def __init__(self, error_code: str, message: str, *, retryable: bool = False) -> None:
@@ -85,20 +70,17 @@ class ChartToolError(RuntimeError):
         self.retryable = retryable
 
 # ---------------------------------------------------------------------------
-# URI / layer-type helpers (mirror analytical_qa)
+# URI / layer-type helpers
 # ---------------------------------------------------------------------------
 
 
 def _download_uri_bytes(uri: str, storage_client: object | None = None) -> bytes:
     """Download bytes from an ``s3://`` URI or read a local path.
 
-    GCP is decommissioned: object-store reads route through boto3 (S3).
-    ``storage_client`` is retained for backward-compatible call signatures
-    but is ignored.
+    ``storage_client`` is ignored: object-store reads route through boto3.
     """
-    del storage_client  # GCP decommissioned - S3/local only.
-    # s3:// staging via the shared boto3 reader
-    # (NOT s3fs - instance-role lesson).
+    del storage_client
+    # The shared boto3 reader, never s3fs: only boto3 picks up the instance role.
     if uri.startswith("s3://"):
         from trid3nt_server.tools.cache import read_object_bytes_s3
 
@@ -158,16 +140,8 @@ def _read_geodataframe(local_path: str):  # type: ignore[return]
 
 def _summarize_raster(local_path: str) -> dict[str, Any]:
     """Open a single-band raster and compute summary statistics + histogram.
-
-    Relocated from the retired ``analytical_qa`` module (the DuckDB
-    ``spatial_query`` fold): ``compose_case_report`` reuses this machinery for
-    its per-layer stats lines, so it lives on here alongside the other
-    URI/layer helpers this module already mirrors. Raises ``ChartToolError``
-    (LAYER_OPEN_FAILED) instead of the retired ``AnalyticalQAError``.
-
-    The read is rasterio's masked read, so GDAL's own validity - the nodata
-    value AND any mask or alpha band - decides which pixels count. NaN is
-    masked on top of that: a raster can carry NaN fill without tagging it.
+    A masked read: GDAL's own validity decides which pixels count, and NaN is
+    masked on top of it because a raster may carry NaN fill without tagging it.
     """
     try:
         import rasterio
@@ -225,9 +199,7 @@ def _summarize_raster(local_path: str) -> dict[str, Any]:
 def _summarize_vector(local_path: str) -> dict[str, Any]:
     """Read a vector layer and compute per-attribute numeric summaries.
 
-    Relocated from the retired ``analytical_qa`` module (see
-    ``_summarize_raster`` above for the rationale). A column with no non-null
-    values reports zeros-and-Nones rather than pandas' NaN aggregates.
+    A column with no non-null values reports zeros-and-Nones, not NaN aggregates.
     """
     gdf = _read_geodataframe(local_path)
     numeric = gdf.drop(columns="geometry", errors="ignore").select_dtypes("number")
@@ -281,10 +253,7 @@ def build_chart_payload(
 ) -> dict[str, Any]:
     """Wrap a Vega-Lite spec in a validated ``ChartEmissionPayload`` dict.
 
-    Guarantees the spec carries the v5 ``$schema`` (so it passes the contract's
-    structural check) and caps the inline ``data.values`` at ``_MAX_ROWS`` rows.
-    Returns ``payload.model_dump(mode="json")`` - the exact dict shape the agent
-    loop detects and emits.
+    Forces the v5 ``$schema`` and caps inline ``data.values`` at ``_MAX_ROWS``.
     """
     spec = dict(vega_lite_spec)
     spec.setdefault("$schema", _VEGA_LITE_V5_SCHEMA)
@@ -315,10 +284,7 @@ def build_chart_payload(
 def is_chart_emission_result(result: Any) -> bool:
     """True iff ``result`` is a ChartEmissionPayload-shaped dict.
 
-    The agent loop (server.py) calls this to decide whether to emit a
-    ``chart-emission`` WS envelope + persist a ``SessionChartRecord``. The
-    signal is the ``envelope_type == "chart-emission"`` discriminator plus a
-    dict ``vega_lite_spec`` - i.e. the literal output of ``build_chart_payload``.
+    The discriminator is ``envelope_type == "chart-emission"`` plus a dict spec.
     """
     return (
         isinstance(result, dict)
@@ -330,12 +296,9 @@ def is_chart_emission_result(result: Any) -> bool:
 # ---------------------------------------------------------------------------
 # Engine-output chart builders (wire non-raster engine values).
 #
-# These do NOT read a layer URI and are NOT registered tools. A composer that
-# holds the already-parsed engine quantities calls one of these to build a
-# chart-emission payload, then side-emits it through the live pipeline
-# emitter. Every number is a real parsed engine output - never synthesized.
-# When the required series is absent / empty each builder returns ``None``
-# (the honesty floor: emit NO chart rather than invent one).
+# Every number is a real parsed engine output, never synthesized. When the
+# required series is absent or empty each builder returns ``None``: the honesty
+# floor is to emit NO chart rather than invent one.
 # ---------------------------------------------------------------------------
 
 
@@ -346,14 +309,8 @@ def build_budget_partition_chart(
     created_turn_id: str | None = None,
 ) -> dict[str, Any] | None:
     """Build a signed inflow/outflow bar chart from a MODFLOW CBC partition.
-
-    ``budget_partition_m3_day`` maps each CBC budget term (zone/source/sink) to
-    its signed flow rate (m^3/day, MF6 sign: positive = INTO the aquifer/zone,
-    negative = OUT - an extraction WEL reads negative). This is the typed
-    ``BudgetPartitionLayerURI.budget_partition_m3_day`` dict the postprocess
-    already built (FLOW-JA-FACE is already excluded from the headline upstream).
-    Bars are colored by sign (inflow vs outflow). Returns ``None`` when the
-    partition is empty.
+    Flows are m^3/day under the MF6 sign (+ = into the aquifer); ``None`` when
+    the partition is empty.
     """
     if not budget_partition_m3_day:
         return None
@@ -430,27 +387,16 @@ def build_hydrograph_overlay_chart(
     source_layer_uri: str | None = None,
     created_turn_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """Overlay a computed hydrograph against an observed one (rain-on-grid V&V).
-
-    The computed-vs-observed discharge overlay the rain-on-grid validation
-    protocol (Godara et al. 2024) reports: two colour-split line series on a
-    shared time axis. ``times`` is the shared x axis -- numeric (elapsed hours,
-    quantitative) or ISO8601 strings (temporal). ``computed`` is the simulated
-    outlet-discharge series (required); ``observed`` is the gauge series
-    (optional -- when absent or all-null the chart is computed-only, still a
-    valid single-series hydrograph). ``nse`` / ``r2`` (from
-    ``nash_sutcliffe_efficiency`` / ``pearson_r2``) are folded into the caption
-    when supplied; the chart never recomputes them.
-
-    Honesty floor: returns ``None`` when the computed series has fewer than 2
-    finite points aligned with ``times`` (a single point is not a hydrograph).
-    Non-finite / mismatched-length samples are dropped, never fabricated.
+    """Overlay a computed hydrograph against an optional observed one.
+    ``times`` is numeric (elapsed hours) or ISO8601 strings; ``nse``/``r2`` are
+    captioned as supplied and never recomputed here.
     """
     n = min(len(times), len(computed))
     xs_raw = list(times)[:n]
     numeric_x = all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in xs_raw)
     x_type = "quantitative" if numeric_x else "temporal"
 
+    # Non-finite and mismatched-length samples are dropped, never interpolated.
     def _series_rows(values: list[Any] | None, label: str) -> list[dict[str, Any]]:
         if not values:
             return []
@@ -468,6 +414,8 @@ def build_hydrograph_overlay_chart(
         return rows
 
     computed_rows = _series_rows(list(computed), computed_label)
+    # Fewer than 2 finite computed points is not a hydrograph: emit no chart
+    # rather than draw a single point as a series.
     if len(computed_rows) < 2:
         return None
     observed_rows = _series_rows(list(observed) if observed else None, observed_label)
@@ -525,8 +473,7 @@ def build_hydrograph_overlay_chart(
 def _sample_raster_values(local_path: str) -> np.ndarray:
     """Return a 1-D array of valid (non-nodata, finite) cell values.
 
-    Samples at most ``_RASTER_SAMPLE_CAP`` cells deterministically (fixed seed)
-    when the band exceeds the cap.
+    Samples at most ``_RASTER_SAMPLE_CAP`` cells, deterministically seeded.
     """
     try:
         import rasterio

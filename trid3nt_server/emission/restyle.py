@@ -1,14 +1,8 @@
 """THE presentation surface. Re-paint, retitle, or un-emit an existing layer.
 
-Emission is automatic - a produced layer appears - so nothing here puts a layer
-on the map. What lives here is everything a reader may want to change about one
-AFTERWARDS: its ramp, its title, its scale, which of the four preset shapes
-draws it, and whether it is on the canvas at all. All of it is DISPLAY STATE:
-changing any of it recomputes nothing and moves no number.
-
-``hide=True`` is the un-emit and ``hide=False`` puts the layer back. Every
-restyle is journaled with the sentence the legend ends up saying, because the
-colours cannot state which policy produced them.
+All of it is DISPLAY STATE: changing any of it recomputes nothing and moves no
+number. Every restyle is journaled with the sentence the legend ends up saying,
+because the colours cannot state which policy produced them.
 """
 
 from __future__ import annotations
@@ -40,12 +34,9 @@ def scale_override(*, policy: str | None = None,
                    value_range: tuple[float, float] | None = None,
                    transform: str | None = None,
                    clip: tuple[float, float] | None = None) -> Scale | None:
-    """The caller's scale ASK in the preset vocabulary, or ``None``.
-
-    ``None`` when nothing was overridden, which is what lets the resolver fall
-    straight through to the declared row rather than merging an empty spec that
-    would quietly re-assert defaults over it.
-    """
+    """The caller's scale ASK in the preset vocabulary, or ``None``."""
+    # ``None`` rather than an empty spec: the resolver then falls straight through
+    # to the declared row instead of merging defaults back over it.
     if policy is None and value_range is None and transform is None and clip is None:
         return None
     return Scale(
@@ -63,8 +54,7 @@ def restyled_row(declared: dict[str, Any] | None, *,
                  units: str | None = None) -> dict[str, Any]:
     """The declared row with the caller's presentation asks laid over it.
 
-    A kind override re-shapes the layer (a classed field read as a ramp, say);
-    everything else parameterises the shape it already has.
+    A kind override re-shapes the layer; the rest parameterise the shape it has.
     """
     row = dict(declared or {})
     if kind is not None:
@@ -85,8 +75,7 @@ def restyled_row(declared: dict[str, Any] | None, *,
 async def set_hidden(layer_id: str, hidden: bool) -> bool:
     """Take a layer off the canvas, or put it back. The un-emit.
 
-    Returns False when no emitter is bound or the session never loaded that
-    layer - a restyle of a layer nobody published is a refusal, not a no-op.
+    False when no emitter is bound or the session never loaded that layer.
     """
     from .pipeline_emitter import current_emitter
 
@@ -109,8 +98,7 @@ def apply_style(*, layer_uri: str, layer_id: str,
                 shared: tuple[float, float] | None = None) -> Resolved:
     """Re-emit one published layer's display face under the caller's asks.
 
-    Returns the RESOLVED preset, so the caller can say on the legend which
-    policy ran and over what range - the resolver's answer, not the ask.
+    Returns the RESOLVED preset - what the resolver decided, not what was asked.
     """
     if not layer_uri or not layer_id:
         raise RestyleError("a restyle needs both the layer's uri and its layer id.")
