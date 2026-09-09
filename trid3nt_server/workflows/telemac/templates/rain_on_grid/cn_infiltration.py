@@ -76,6 +76,9 @@ class CNInfiltrationError(ValueError):
 # T2D column verbatim.
 # ---------------------------------------------------------------------------
 
+# The Manning column stays Godara's: no library table replaces it -- pygeohydro's
+# overland_roughness agrees on none of the 17 shared codes (docs/validation/nlcd-manning-tables.md).
+#
 # nlcd_code -> (curve_number_amc2, manning_n, paper_class_label)
 NLCD_CN_MANNING: dict[int, tuple[float, float, str]] = {
     11: (100.0, 0.040, "river/open-water"),   # Open Water
