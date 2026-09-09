@@ -1,6 +1,7 @@
-# Router source spec (data-router fold, pilot 4/5) -- Esri/IO 10m land cover.
-# Twin: fetch_esri_landcover_10m.py (HYBRID, raster-COG STAC + tiled-mosaic).
-# STAC search + auto-tile grid + rasterio.merge (categorical, first-non-nodata).
+# Esri / Impact Observatory 10 m annual land cover over the Planetary Computer STAC
+# catalog: every item of the request year fused first-valid at nearest, the source's
+# own categorical palette baked into band 1, sub-tiled by the tiled-mosaic transform
+# so a large AOI keeps its cell rather than hitting the pixel cap as one window.
 schema_version: v1
 
 name: fetch_esri_landcover_10m
@@ -27,18 +28,22 @@ params:
 gates:
   max_bbox_deg2: 8.0                 # hard ceiling -> redirect to NLCD (fetch_landcover)
 
-# --- ingestion (raster-COG / STAC-search + tiled-mosaic transform) --------
-# The router raster-cog stac_search sub-mode reuses the _pc_stac primitives
-# (sas_sign_href + bbox_pixel_dims), reprojects each intersecting item to
-# EPSG:4326 nearest, first-non-nodata mosaics to uint8, and bakes the categorical
-# palette -- byte-for-byte the twin's _fetch_single_tile_mosaic + _write_palette_cog.
+# --- ingestion (STAC catalog + tiled-mosaic transform) --------------------
+# The stac_raster executor loads every intersecting item of the request year onto
+# one EPSG:4326 geobox at 10 m, nearest, fusing first-valid, and bakes the source's
+# own categorical palette into band 1.
 ingest:
-  access: stac_search
+  access: stac
+  render: mosaic
   stac:
     root: "https://planetarycomputer.microsoft.com/api/stac/v1"
     collection: io-lulc-annual-v02
     data_asset: data
-    sign: sas
+    sign: planetary_computer
+    resampling: nearest
+    year_param: year
+    select:
+      mode: mosaic
   year: {min: 2017, max: 2023, default: 2023}
   native_cell_m: 10
   tile_deg2: 0.5                     # sub-tile cap -> tiled-mosaic transform
