@@ -1,31 +1,8 @@
-"""``query_point_hazard`` atomic tool -- sample every case raster at one point.
+"""``query_point_hazard`` - sample every case raster at one point.
 
-Given a location (an explicit lon/lat pair OR a free-text place name geocoded
-through the SAME Nominatim machinery ``geocode_location`` uses), sample every
-RASTER layer currently loaded on the Case at that point and return the
-per-layer values (layer name, sampled value, units when known).
-
-Case layers come from the persisted ``CaseSummary.loaded_layer_summaries``
-(``ProjectLayerSummary`` dicts) via the app-level ``Persistence`` singleton --
-the exact enumeration path ``open_case_in_qgis`` uses. The Case defaults to
-the turn's bound Case (``pipeline_emitter.current_turn_case``) so the LLM does
-not need to thread a case_id through.
-
-Honesty (data-source fallback norm)
-===================================
-
-- A Case with NO layers raises the typed ``NoCaseLayersError`` (the required
-  clear "no case layers" signal); a Case whose layers are all vector raises
-  the same typed error with an explicit no-raster message.
-- A single unreadable layer is a PER-LAYER honest entry
-  (``value=None`` + ``error``), never a hard fail and never a made-up value.
-- A point outside a layer's extent, or on nodata, returns ``value=None`` with
-  an explicit ``note`` -- "no data here" is stated, not zero-filled.
-
-``cacheable=False`` (``ttl_class="live-no-cache"``): the result depends on the
-LIVE Case layer list, which changes as the session runs.
+A Case with no raster layers is a typed error; a single unreadable layer, or a
+point off an extent or on nodata, is None with a note, never zero-filled.
 """
-
 from __future__ import annotations
 
 import logging
@@ -104,15 +81,12 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Location resolution (lon/lat pair or geocoded place).
+# Location resolution.
 # ---------------------------------------------------------------------------
 
 
 def _geocode_place(place: str) -> dict[str, Any]:
-    """Forward-geocode ``place`` via the geocode_location machinery.
-
-    Module-level indirection so offline tests monkeypatch this seam.
-    """
+    """Forward-geocode ``place`` through the shared geocoder."""
     from trid3nt_server.tools.fetchers.socioeconomic.geocode_location.geocode_location import geocode_location
 
     return geocode_location(query=place)
@@ -121,10 +95,8 @@ def _geocode_place(place: str) -> dict[str, Any]:
 def resolve_point(
     lon: Any, lat: Any, place: Any, error_cls: type[Exception] = PointHazardInputError
 ) -> tuple[float, float, str]:
-    """Resolve ``(lon, lat, label)`` from an explicit pair or a place name.
-
-    Shared with ``extract_timeseries_at_point``. Raises ``error_cls`` on a
-    missing/invalid location; geocode failures surface with their real reason.
+    """``(lon, lat, label)`` from an explicit pair or a place name; a missing or
+    invalid location raises ``error_cls``, and a geocode failure keeps its reason.
     """
     if lon is not None or lat is not None:
         try:
@@ -165,7 +137,7 @@ def resolve_point(
 
 
 # ---------------------------------------------------------------------------
-# Case-layer enumeration (the open_case_in_qgis persistence seam).
+# Case-layer enumeration.
 # ---------------------------------------------------------------------------
 
 
@@ -191,13 +163,8 @@ async def layers_from_case(
     case_id: str,
     not_found_cls: type[Exception] = PointHazardUpstreamError,
 ) -> tuple[list[dict[str, Any]], list[float] | None, str, Any]:
-    """Resolve ``(layer dicts, case bbox, case title, case doc)`` for ``case_id``.
-
-    Layers come from the Case doc's persisted ``loaded_layer_summaries``
-    (``ProjectLayerSummary`` dicts) via ``telemetry.get_persistence`` -- the
-    exact seam ``open_case_in_qgis._layers_from_case`` uses (and the same
-    monkeypatch point for tests). Shared with ``extract_timeseries_at_point``
-    and ``compose_case_report``.
+    """``(layer dicts, case bbox, case title, case doc)`` for ``case_id``, read
+    from the Case doc's persisted ``loaded_layer_summaries``.
     """
     from trid3nt_server.telemetry import get_persistence
 
@@ -224,9 +191,8 @@ async def layers_from_case(
 
 
 def stage_layer_local(uri: str, tmpdir: str, label: str) -> str:
-    """Materialize a layer uri locally (s3:// via boto3, else a local path).
-
-    Raises on failure -- callers convert to a per-layer honest entry.
+    """Materialize an ``s3://`` or local layer uri to a local path; a failure
+    raises, for the caller to record as a per-layer entry.
     """
     from trid3nt_server.tools._uri_util import _strip_query
 
@@ -252,11 +218,8 @@ def stage_layer_local(uri: str, tmpdir: str, label: str) -> str:
 def sample_raster_at_point(
     local_path: str, lon: float, lat: float
 ) -> tuple[float | None, str | None, str | None]:
-    """Sample band 1 of ``local_path`` at an EPSG:4326 point.
-
-    Returns ``(value, note, units)``: ``value=None`` with an explicit note
-    when the point is outside the raster extent or lands on nodata. Raises on
-    open/read failure (callers convert to a per-layer honest entry).
+    """``(value, note, units)`` for band 1 at an EPSG:4326 point; a point off the
+    extent or on nodata is None with a note, and a read failure raises.
     """
     import rasterio
     from rasterio.warp import transform as warp_transform
@@ -324,17 +287,9 @@ async def query_point_hazard(
         place: free-text place name to geocode.
         case_id: Case to sample; default the turn's bound Case.
 
-    Returns:
-        ``{"location": {lon, lat, label}, "case_id", "case_title",
-        "results": [{layer_id, name, value, units, note?, error?}, ...],
-        "skipped_vector_layers", "sampled_count", "computed_at"}``.
-        Per-layer failures are honest entries, never fabricated.
-
-    Raises:
-        PointHazardInputError: no/invalid location or geocode miss.
-        NoCaseBoundError: no case_id and no turn Case.
-        NoCaseLayersError: Case has no layers, or none is a raster.
-        PointHazardUpstreamError: persistence unavailable / case not found.
+    Returns the location, the case, and one result per raster layer carrying its
+    value, units and any note. A per-layer failure is an honest entry, never a
+    fabricated number; no layers at all is a typed refusal.
     """
     q_lon, q_lat, label = resolve_point(lon, lat, place)
     resolved_case = resolve_case_id(case_id)
