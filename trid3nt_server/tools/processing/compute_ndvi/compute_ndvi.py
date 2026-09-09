@@ -1,44 +1,8 @@
-"""``compute_ndvi`` atomic tool  --  Sentinel-2 NDVI vegetation index (conservation).
+"""``compute_ndvi`` - Sentinel-2 NDVI vegetation index.
 
-Computes the Normalized Difference Vegetation Index
-
-    NDVI = (NIR - Red) / (NIR + Red)
-
-for a bbox + time window from Sentinel-2 L2A surface reflectance, via the
-Microsoft Planetary Computer (PC) STAC catalog. NDVI is the canonical
-vegetation-vigor / green-biomass index (range -1..1; bare soil / water near 0,
-dense healthy vegetation 0.6-0.9). It is the vegetation layer in an SC-DNR-style
-conservation-priority stack (composed in the code_exec playground).
-
-Data source
-===========
-
-PC collection ``sentinel-2-l2a`` (Sentinel-2 Level-2A, 10 m surface reflectance):
-
-    catalog: https://planetarycomputer.microsoft.com/api/stac/v1
-    bands:   B04 (Red, 10 m), B08 (NIR, 10 m)
-    select:  the LEAST-cloudy scene (``eo:cloud_cover``) intersecting the bbox
-             inside the requested datetime window.
-
-Assets are Azure-Blob COGs behind SAS tokens; this tool signs each asset href
-signed by the planetary-computer SDK at the catalog client and reads a
-bbox-windowed, EPSG:4326-warped array per band through GDAL ``/vsicurl/``. NDVI
-is computed in-memory and re-emitted as a single-band float32 COG (-1..1) with a
-green vegetation colormap (an RdYlGn ramp over the index's own -1..1 domain).
-
-Honesty (data-source fallback norm): if NO Sentinel-2 scene intersects the bbox
-in the window (or none under the cloud threshold), a typed
-``NDVINoImageryError`` is raised  --  never a fabricated layer.
-
-Routed through ``read_through`` so identical
-``(bbox, start, end, max_cloud_cover)`` calls reuse the cached NDVI COG in the
-``static-30d`` / ``ndvi`` cache prefix.
-
-Tier-1 free (no API key). Heavy emit-free sync raster work  --  registered in
-``_ALWAYS_OFFLOAD_SYNC_TOOLS`` so it runs via ``asyncio.to_thread`` and never
-stalls the WebSocket heartbeat.
+NDVI = (NIR - Red) / (NIR + Red), clamped to its own -1..1 domain. No scene in
+the window under the cloud cap is a typed refusal, never a fabricated layer.
 """
-
 from __future__ import annotations
 
 import logging
@@ -87,9 +51,8 @@ class NDVIBboxError(NDVIError):
 
 
 class NDVINoImageryError(NDVIError):
-    """No Sentinel-2 scene covers the bbox in the window under the cloud cap.
-
-    Honest no-imagery signal (data-source fallback norm)  --  never fabricate.
+    """No Sentinel-2 scene covers the bbox in the window under the cloud cap; an
+    honest miss, never a fabricated layer.
     """
 
     error_code = "NDVI_NO_IMAGERY"
@@ -114,15 +77,13 @@ _NIR_BAND = "B08"
 #: Sentinel-2 native 10 m grid; used to size the bbox-windowed read.
 _NATIVE_CELL_M = 10.0
 
-#: Default cloud-cover ceiling (percent) for scene selection. Generous so a
-#: typical AOI finds a usable scene; the least-cloudy match is then chosen.
+#: Cloud-cover ceiling in percent for scene selection, generous so a typical AOI
+#: finds a usable scene; the least-cloudy match is then chosen.
 _DEFAULT_MAX_CLOUD = 30.0
 
-#: bbox area guardrail (deg^2). This is NOT a memory ceiling: the emitted
-#: grid is already px-clamped to [16,4096]/axis by bbox_pixel_dims,
-#: so an AOI up to this cap clamps to 4096x4096 and auto-coarsens to
-#: ~20-24 m/px -- COG byte size stays bounded regardless of bbox area.
-#: ~1.0 deg^2 ~ a county-ish extent; beyond it we still raise.
+#: bbox area guardrail in deg^2, not a memory ceiling: the grid is px-clamped to
+#: [16,4096] per axis, so an AOI up to this cap coarsens to ~20-24 m/px and the
+#: COG stays bounded whatever the area. About a county extent; beyond it, refuse.
 _MAX_BBOX_DEG2 = 1.0
 
 #: Native-10m comfort window (deg^2). Below this an AOI fits the 4096px grid at
@@ -162,11 +123,7 @@ def estimate_payload_mb(
     bbox: tuple[float, float, float, float] | None = None,
     **_kw: Any,
 ) -> float:
-    """Estimate emitted NDVI COG size in MB.
-
-    A single-band float32 LZW-COG at 10 m runs ~150 MB / sq-deg uncompressed;
-    NDVI compresses well (smooth ramp). Scale linearly with bbox area, floored.
-    """
+    """The emitted COG's size in MB, scaled linearly with bbox area and floored."""
     if bbox is None:
         return 5.0
     try:
@@ -206,10 +163,9 @@ def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
             "the 4096px grid (effective cell ~= bbox_m/4096); narrow the bbox for "
             "native 10 m."
         )
-    # between the native-10m comfort window and the cap we do
-    # NOT raise -- the px-clamp ([16,4096]/axis in bbox_pixel_dims)
-    # already coarsens the grid so the COG stays bounded. Log an honest note so
-    # the user understands the resolution trade (native 10 m -> ~20-24 m/px).
+    # Between the comfort window and the cap nothing raises: the px-clamp
+    # already coarsens the grid, so the note is what makes the resolution trade
+    # visible rather than silent.
     if area > _NATIVE_COMFORT_DEG2:
         logger.info(
             "compute_ndvi: bbox area %.3f deg^2 exceeds the ~%.2f deg^2 native-10m "
@@ -228,11 +184,8 @@ def _round_bbox(
 
 
 def _default_window() -> tuple[str, str]:
-    """Default datetime window: the most recent full growing season-ish year.
-
-    Returns ``(start_iso, end_iso)`` as ``YYYY-MM-DD`` strings. Defaults to a
-    trailing ~14 month window so a recent low-cloud scene is reliably found
-    even outside peak season.
+    """``(start_iso, end_iso)``: a trailing 14-month window, wide enough that a
+    low-cloud scene is found even outside peak season.
     """
     from datetime import datetime, timedelta, timezone
 
@@ -252,10 +205,8 @@ def _read_band_window(
     width_px: int,
     height_px: int,
 ) -> Any:
-    """Read ``signed_href`` warped to EPSG:4326 and windowed to ``bbox``.
-
-    Returns a 2-D float32 numpy masked array at ``(height_px, width_px)``.
-    Raises ``NDVIUpstreamError`` on any read failure.
+    """``signed_href`` warped to EPSG:4326 and windowed to ``bbox`` as a 2-D
+    float32 masked array; any read failure raises ``NDVIUpstreamError``.
     """
     import numpy as np
     import rasterio
@@ -265,8 +216,6 @@ def _read_band_window(
     try:
         with rasterio.Env(**_pc_search.VSICURL_ENV_KW):
             with rasterio.open(vsicurl) as src:
-                # Destination grid: the requested bbox at the requested size in
-                # EPSG:4326. reproject() resamples the source (UTM) into it.
                 dst_transform = rasterio.transform.from_bounds(
                     bbox[0], bbox[1], bbox[2], bbox[3], width_px, height_px
                 )
@@ -297,16 +246,12 @@ def _compute_ndvi_cog_bytes(
     datetime_range: str,
     max_cloud_cover: float,
 ) -> bytes:
-    """Search S2, compute NDVI for ``bbox``, return a single-band float32 COG.
-
-    Raises:
-        ``NDVINoImageryError``: no scene in the window (honest no-imagery).
-        ``NDVIUpstreamError``: search / read / write failure.
+    """Search Sentinel-2, compute NDVI for ``bbox`` and return a single-band
+    float32 COG; no scene in the window raises ``NDVINoImageryError``.
     """
     import numpy as np
     import rasterio
 
-    # 1. Pick the least-cloudy intersecting scene in the window.
     try:
         item = _pc_search.search_least_cloudy_item(
             collection=_COLLECTION,
@@ -413,11 +358,8 @@ def _compute_ndvi_cog_bytes(
 
 @register_tool(
     _METADATA,
-    # Annotations: readOnlyHint=True, openWorldHint=False (a local raster compute
-    # -- like the other compute_* tools; the annotation contract reserves
-    # open_world_hint for fetch_* / web_fetch / catalog_* external-API tools, and
-    # test_open_world_tools_are_fetchers_or_external forbids a compute_* tool from
-    # carrying it), destructiveHint=False, idempotentHint=True (cache-deduped).
+    # open_world_hint is reserved for fetch_* / web_fetch / catalog_* tools; a
+    # compute_* tool never carries it.
     open_world_hint=False,
 )
 def compute_ndvi(
@@ -430,26 +372,20 @@ def compute_ndvi(
 ) -> LayerURI:
     """Compute Sentinel-2 NDVI (vegetation vigor) for a bbox + time window.
 
-    Use this (not ``fetch_sentinel2_truecolor``) when you want NDVI
-    vegetation-index values, not the raw picture -- vegetation condition/
-    greenness/canopy vigor, or the vegetation input to a conservation-priority
-    composite (compose in the code_exec playground). Water/bare soil ~0, sparse vegetation
-    0.2-0.5, dense canopy 0.6-0.9. Do NOT use for: land-cover classes
-    (``fetch_landcover``/``extract_landcover_class``); true-color imagery
-    (``fetch_naip``).
+    Use this, not ``fetch_sentinel2_truecolor``, when you want NDVI values
+    rather than the picture: vegetation condition, greenness, canopy vigor, or
+    the vegetation input to a composite. Water and bare soil sit near 0, sparse
+    vegetation 0.2-0.5, dense canopy 0.6-0.9. Not for land-cover classes
+    (``fetch_landcover``) or true-color imagery (``fetch_naip``).
 
     Params:
-        bbox: (min_lon, min_lat, max_lon, max_lat) EPSG:4326, <= 1.0 deg^2.
-            AOIs under ~0.5 deg^2 read at native 10m; larger auto-coarsen
-            to fit 4096px.
-        start_date/end_date: "YYYY-MM-DD" window; default trailing ~14mo.
-        max_cloud_cover: scene cloud ceiling percent (default 30.0);
-            least-cloudy scene chosen.
+        bbox: EPSG:4326, at most 1.0 deg^2. Under about 0.5 deg^2 reads at
+            native 10 m; larger auto-coarsens to fit a 4096 px grid.
+        start_date/end_date: "YYYY-MM-DD"; default a trailing 14 months.
+        max_cloud_cover: scene ceiling in percent, default 30.0; the
+            least-cloudy match is chosen.
 
-    Returns:
-        ``LayerURI`` (raster, ``role="primary"``, ``units="NDVI (-1..1)"``) for a single-band float32 COG, cache
-        bucket, TTL 30d. Source: Sentinel-2 L2A via Microsoft Planetary
-        Computer STAC (bands B04+B08).
+    Returns a single-band float32 COG in -1..1 from Sentinel-2 L2A B04 and B08.
     """
     _validate_bbox(bbox)
     q_bbox = _round_bbox(bbox)
