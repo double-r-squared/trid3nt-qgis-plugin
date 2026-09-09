@@ -1,8 +1,7 @@
-"""``delineate_watershed``: pysheds D8 catchment upstream of a snapped pour
-point -> watershed polygon vector.
+"""``delineate_watershed``: pysheds D8 catchment upstream of a snapped pour point.
 
-Shared pysheds/DEM plumbing lives in
-``trid3nt_server.tools.processing._hydrology_common``.
+The catchment is traced in the DEM's own grid and returned in the EPSG:4326 its
+``LayerURI`` declares, whatever projection the raster carried.
 """
 
 from __future__ import annotations
@@ -52,17 +51,13 @@ class EmptyWatershedError(HydrologyPrimitivesError):
     retryable = False
 
 # ---------------------------------------------------------------------------
-# Result types -- LayerURI subclasses carrying summaries (house side-channel).
+# Result types.
 # ---------------------------------------------------------------------------
 
 
 class WatershedLayerURI(LayerURI):
-    """Watershed polygon ``LayerURI`` plus delineation summary.
-
-    Extra fields beyond ``LayerURI``: ``area_km2`` (catchment area),
-    ``cell_count`` (catchment cells), ``pour_point`` (as requested, lon/lat),
-    ``snapped_pour_point`` (the accumulation-snapped outlet actually used),
-    ``notes`` (engine path + every adjustment made).
+    """Watershed polygon ``LayerURI`` plus the catchment area and cell count, the
+    pour point as requested AND as snapped, and notes on every adjustment.
     """
 
     area_km2: float = 0.0
@@ -121,12 +116,10 @@ def _snap_to_stream(
     lat: float,
     threshold: int,
 ) -> tuple[float, float] | None:
-    """Nearest cell CENTER (lon, lat) with accumulation >= ``threshold``.
-
-    Pure numpy (pysheds 0.4's ``snap_to_mask`` is NEP-50-broken): distance is
-    measured in cell-index space, which is adequate for a snap over a small
-    AOI. Returns ``None`` when no cell reaches the threshold.
+    """Nearest cell CENTRE with accumulation at or above ``threshold``, measured
+    in cell-index space; None when no cell reaches it.
     """
+    # Pure numpy because pysheds 0.4's snap_to_mask is NEP-50-broken.
     mask = acc >= threshold
     if not bool(mask.any()):
         return None
@@ -147,8 +140,9 @@ def _grid_epsg(grid: Any) -> int | None:
         return None
 
 def _cell_area_km2(grid: Any) -> float:
-    """Approximate cell area (km^2), converting degrees at the center latitude
-    for a geographic grid (adequate over a <=0.3-degree AOI)."""
+    """Approximate cell area in km^2, degrees converted at the centre latitude on
+    a geographic grid, which is adequate over the 0.3-degree AOI clamp.
+    """
     affine = grid.affine
     res_x, res_y = abs(affine.a), abs(affine.e)
     try:
@@ -156,7 +150,7 @@ def _cell_area_km2(grid: Any) -> float:
     except Exception:  # noqa: BLE001
         geographic = False
     if not geographic:
-        # pysheds' crs is a pyproj CRS; a projected grid is already meters.
+        # A projected grid's cell size is already in metres.
         return (res_x * res_y) / 1.0e6
     from pyproj import Geod
 
@@ -191,34 +185,22 @@ def delineate_watershed(
 ) -> WatershedLayerURI:
     """Delineate the watershed (drainage basin) upstream of a pour point (D8 flow analysis via pysheds).
 
-    Use this when: "what drains to this point/gauge/outfall/dam site",
-    "delineate the watershed above here", or as an AOI mask for the
-    code_exec playground / ``clip_raster_to_polygon``. Do NOT use
-    for: the stream network itself (``extract_stream_network``); regional
-    named-basin boundaries (``fetch_nhdplus_nldi_navigate`` -- this is a
-    local DEM delineation clamped to 0.3 deg).
+    Use for what drains to this point, gauge, outfall or dam site, or as an AOI
+    mask for ``clip_raster_to_polygon``. Not for the stream network itself
+    (``extract_stream_network``) or regional named basins
+    (``fetch_nhdplus_nldi_navigate``); this is a local DEM delineation.
 
     Params:
-        pour_point: (lon, lat) EPSG:4326 outlet; snapped to the nearest
-            cell with >= ``snap_threshold`` upslope cells.
-        bbox: optional analysis extent, <= 0.3 deg per side; default
-            0.1-deg box centered on the pour point. Watershed is truncated
-            at the bbox edge -- enlarge if the basin looks clipped.
-        dem_uri: optional override DEM; default Copernicus GLO-30.
-        snap_threshold: upslope-cell count defining a flow line (default
-            100).
+        pour_point: (lon, lat) outlet, snapped to the nearest cell with at
+            least ``snap_threshold`` upslope cells.
+        bbox: analysis extent, at most 0.3 deg per side; default a 0.1-deg
+            box on the pour point. The basin is TRUNCATED at that edge, so
+            enlarge it when the result looks clipped.
+        dem_uri: override DEM; default Copernicus GLO-30.
+        snap_threshold: upslope-cell count defining a flow line, default 100.
 
-    Returns:
-        ``WatershedLayerURI`` -- catchment polygon (GeoJSON) with
-        ``area_km2``, ``cell_count``, requested/snapped pour points,
-        honest ``notes``.
-
-    Raises:
-        HydrologyAoiTooLargeError: bbox over the clamp.
-        HydrologyInputError: bad pour point/bbox/URI.
-        EmptyWatershedError: pour point produced an empty catchment.
-        HydrologyDependencyError: pysheds missing.
-        HydrologyUpstreamError: fetch/write failed.
+    Returns the catchment polygon with its area, cell count, requested and
+    snapped pour points, and honest notes.
     """
     lon, lat = _validate_pour_point(pour_point)
     if bbox is None:
@@ -269,11 +251,9 @@ def delineate_watershed(
             into = out_of = lambda x, y: (x, y)  # noqa: E731 - the identity pair
         grid_x, grid_y = into(lon, lat)
 
-        # Coarse snap: move the pour point onto the nearest flow line
-        # (>= snap_cells upslope). Handles a pour point clicked well off any
-        # channel; the fine window-refine + INDEX-space trace below is what makes
-        # the delineation alignment-invariant (a coordinate-space catchment can
-        # collapse to a 1-cell sliver on some grid alignments).
+        # The coarse snap moves a pour point clicked well off any channel onto
+        # the nearest flow line; the window refine and index-space trace below
+        # are what make the delineation alignment-invariant.
         acc_arr = np.asarray(acc)
         snapped = _snap_to_stream(acc_arr, grid.affine, grid_x, grid_y, snap_cells)
         if snapped is not None:
