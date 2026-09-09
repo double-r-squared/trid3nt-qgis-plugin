@@ -3545,3 +3545,31 @@ Each is corrected here rather than carried into the reshuffle.
 | `tests/test_telemac_rain_on_grid_template.py` | `scripts/sandbox/telemac/rog_coweeta_live.py` and `rog_offline_smoke.py` as the live proof | Both went to the attic in the 2026-08-28 fresh-start purge. The live proof is the `telemac_rain_on_grid` canary and its refined variant, whose packets are the evidence. |
 | `docs/validation/telemac-family-migration-inventory.md` | five drivers in its "driver today" column | A DATED record, so the rows stay VERBATIM: a one-line dated note at the top names the five and points here. |
 | `docs/DELETION_LEDGER.md` (the `run_l2_validation_harness.py` section) | a QUEUED row for a file already gone | CLOSED in place: the file left in the 2026-08-28 purge with the rest of the per-engine drivers, and the engine it validated left with it. Status ATTIC, not QUEUED. |
+
+## The tests cull - DELETED - 2026-09-09
+
+TESTS RULED (`docs/IDEAS.md` 2026-09-09) on `docs/validation/tests-eval.md` section 3.
+One row per chop; the evidence column is the eval's measurement, verbatim.
+
+| Path | pure LOC | Class | Evidence | Condition |
+|---|---:|---|---|---|
+| `tests/eval_routing_live.py` | 528 | ORPHAN | Live routing eval against the agent "through the FunctionTool registry"; Gemini is not a selectable provider and the shipped adapters are `openai`, `anthropic`, `scripted`. Zero code references. A LIVE driver sitting in the offline suite directory. | none |
+| `tests/audit_gemini_schema_compliance.py` | 162 | ORPHAN + DUPLICATE | A standalone audit script re-implementing `tests/test_gemini_schema_compliance.py`'s four invariants. Zero code references. | none |
+| `tests/live_evidence_job_0169.py` | 155 | ORPHAN | Closed-job live-evidence harness against a mocked provider. Zero code references. | none |
+| `tests/card_client.py` | 60 | ORPHAN | Claims to be shared by every test that drives a declared gate without a daemon; `grep -rn card_client` over `tests/ plugin/ scripts/ trid3nt_server/` returns nothing outside the file. Shared by zero tests. | none |
+| `tests/test_pandas_pin_regression.py` | 25 | ORPHAN | Guards a pandas pin for `hydromt-sfincs 1.2.2`; `git ls-files '*.py' \| xargs grep -ln "hydromt_sfincs\|SfincsModel"` returns zero files. Its two assertions call `pd.RangeIndex.is_integer()` and `pd.date_range(freq="10T")` directly - it tests pandas, not a product behavior. | the pyproject pins do NOT go with it in this stage - see the QUEUED row below |
+| `tests/fixtures/sfincs_aoi/` (3 files, 68K) | - | ORPHAN | `grep -rl sfincs_aoi` over `tests/ plugin/ scripts/ trid3nt_server/ workers/` returns nothing; SFINCS product code is gone. | with `test_pandas_pin_regression.py` |
+| `tests/fixtures/finite_fault/` (1 file, 8K) | - | ORPHAN | `grep -rl finite_fault` returns nothing. | none |
+| `tests/fixtures/case2_news_article.txt` (4K) | - | ORPHAN | `grep -rl case2_news_article` returns nothing. | none |
+| `plugin/tests/headless_telemac_p4_acceptance.py` | 277 | ORPHAN | One-shot acceptance driver; zero inbound references in `plugin/ tests/ scripts/ docs/ Makefile`. | the acceptance is re-provable from a live template drive |
+| `plugin/tests/headless_dye_redrive_proof.py` | 193 | ORPHAN | Zero inbound references; the dye redrive is the flagship canary's own packet. | none |
+| `plugin/tests/headless_thinking_proof.py` | 139 | ORPHAN | Zero inbound references; thinking persistence is covered offline by `tests/adapters/test_thinking_persistence.py`. | none |
+
+Two function-level chops in the same ruling, taken as `+ TRIM` inside files that
+move rather than as whole files: the roster assertion in `test_mesh_om2d.py` (3 LOC,
+byte-identical to `test_mesh_meshers.py`'s), and the fuzz cross product in
+`test_gemini_kwargs_fuzz.py` (85 LOC, 3,243 collected cases).
+
+| Candidate | Scope | Condition to delete | Status | Source |
+|---|---|---|---|---|
+| the `hydromt-sfincs` and `pandas` pins | `pyproject.toml` | The eval's condition on `test_pandas_pin_regression.py`: the pins that test guarded have no subject - SFINCS is gone and the pandas cap exists only to work around `hydromt-sfincs 1.2.2`. NOT taken with the test: removing a dependency and lifting a version cap is a build-surface change, and the wave that took the test is documentation and structure only. Condition to delete: a wave that owns the dependency set, where a fresh install is re-resolved and proven. | QUEUED | `docs/validation/tests-eval.md` section 3.1 |
