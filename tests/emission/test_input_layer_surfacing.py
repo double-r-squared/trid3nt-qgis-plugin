@@ -319,7 +319,7 @@ import pathlib  # noqa: E402
 import re  # noqa: E402
 
 _WORKFLOWS_DIR = (
-    pathlib.Path(__file__).resolve().parents[1]
+    pathlib.Path(__file__).resolve().parents[2]
     / "trid3nt_server" / "workflows"
 )
 
