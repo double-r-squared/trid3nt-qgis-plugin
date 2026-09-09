@@ -4516,3 +4516,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   under --help rewrote the frozen bench report docs/reports/tool-
   routing-failure-split.md; restored from HEAD - evals must never
   execute a script's module body against frozen evidence.
+  DATED RECORDS STAY VERBATIM (orchestrator under standing law
+  2026-09-09 - NATE may override): a dated validation or conformance
+  record (docs/validation/*-conformance.md and its kin) is the record
+  of what was true at that check; a later change that falsifies its
+  wording does NOT rewrite the finding - the correction lives in the
+  ledger row (or a one-line dated note at the top of the record
+  pointing to it). Same class as docs/proof: evidence is frozen,
+  method and maps are live. The hygiene wave's prerequisite move
+  (the TIN writers into the product tree) therefore leaves mesh-wave-
+  conformance.md:97 verbatim with its note.
