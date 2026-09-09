@@ -844,7 +844,11 @@ def postprocess_telemac_deposition(
             "centered at 0. A localized bedload pile-up at the sediment inflow "
             "boundary is a known GAIA artifact (capped off the diverging ramp). "
             "Grain size is a demo default / user override (no site bed-composition "
-            "fetcher exists)."
+            "fetcher exists). The legend is a 99th-percentile stretch of the whole "
+            "field, ONE SCALE for the whole map: max_scour_mm / max_deposition_mm "
+            "can read well past the ramp's saturated ends where a single point-"
+            "source bullseye concentrates the peak - read the extremes off the "
+            "narrated numbers, not the color at the hottest pixel."
         )
         layer_name = f"Bed evolution / scour ({reach_name})"
         layer_id = f"telemac-bed-evolution-{run_id}"
@@ -2059,7 +2063,10 @@ def postprocess_artemis(
         "Phase-resolving harbour-agitation screening (ARTEMIS elliptic mild-slope "
         "/ Berkhoff): agitation coefficient Kd = Hs/H0 (how much the incident wave "
         "is amplified or sheltered). A planning-grade field driven by a prescribed "
-        "monochromatic incident wave, not a calibrated hindcast."
+        "monochromatic incident wave, not a calibrated hindcast. kd_max is often a "
+        "standing wave against the domain's own open (seaward) boundary rather "
+        "than a harbour answer; the sheltering ratio (kd_sheltered / kd_exposed) "
+        "is the number that answers whether the structure shelters."
     )
     layer = ArtemisAgitationLayerURI(
         layer_id=f"artemis-agitation-{run_id}",
