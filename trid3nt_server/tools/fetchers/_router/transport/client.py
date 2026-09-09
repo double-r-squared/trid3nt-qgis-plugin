@@ -1,15 +1,8 @@
-"""Pooled httpx client + the ONE retry authority for remote-FILE range reads.
+"""Pooled httpx client and the ONE retry authority for remote-FILE range reads.
 
-A single process-wide ``httpx.Client`` reuses connections across every read and
-every parallel range frame (amortizes the cold-TLS the bench measured at ~0.30s).
-The retry authority lives here and nowhere else: backoff + ``Retry-After`` honored
-on 429/5xx/timeout at BLOCK granularity, per the upstream-provider norm (log the
-upstream error VERBATIM, retry with backoff, surface honestly on exhaustion).
-GDAL-side retries stay off for every read that comes through this module. The one
-family that reads through libgdal's own socket (``vector_ogr``) carries the
-authority in the driver instead, so a call that follows such a read must not retry
-again -- :func:`get_once` is the un-retried GET that exists for it.
-"""
+One process-wide client reuses connections across every read and every parallel range
+frame. Retry lives here and nowhere else; a caller whose retries were already spent
+elsewhere uses the un-retried :func:`get_once`."""
 
 from __future__ import annotations
 
@@ -121,15 +114,9 @@ def get_bytes(
     client: httpx.Client, url: str, *, headers: dict[str, str] | None = None,
     params: dict[str, Any] | None = None,
 ) -> tuple[bytes, str, str]:
-    """GET a full object with the retry authority; return ``(body, content_type, final_url)``.
-
-    The whole-object counterpart to :func:`range_get` for REST endpoints that
-    hand back a ready artifact in one response (ArcGIS ImageServer exportImage),
-    NOT a byte-servable COG. Redirects are followed by the pooled client. Retries
-    429/5xx/timeout/connection with backoff + ``Retry-After``; a 404/403 (or any
-    other 4xx) classifies to a typed transport error immediately. On retry
-    exhaustion the verbatim upstream status/body is surfaced.
-    """
+    """GET a whole object; return ``(body, content_type, final_url)``. Redirects are
+    followed. 429/5xx/timeout/connection retry with backoff; any other 4xx classifies
+    to a typed transport error immediately, and exhaustion surfaces verbatim."""
     last_exc: Exception | None = None
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -161,15 +148,9 @@ def get_bytes(
 
 def get_once(client: httpx.Client, url: str, *, headers: dict[str, str] | None = None
              ) -> tuple[bytes, int]:
-    """ONE GET, no retry, no typed error: the body and status exactly as answered.
-
-    The reader for a caller that already spent its retries somewhere else -- a read
-    whose retry authority is the GDAL driver, whose failure text dropped the
-    service's own message. Retrying here would double the attempts an outage costs,
-    so this attempt stands or the caller keeps the text it already has: a network
-    failure raises :class:`TransportUpstreamError` with nothing retried, and any
-    status (500 included) comes back for the caller to read rather than raising.
-    """
+    """ONE GET, no retry, no typed error: the body and status exactly as answered, for
+    a caller that already spent its retries elsewhere. Any status (500 included)
+    comes back to be read; only a network failure raises, with nothing retried."""
     try:
         resp = client.get(url, headers=headers)
     except (httpx.TimeoutException, httpx.TransportError) as exc:
@@ -183,17 +164,9 @@ def post_bytes(
     params: dict[str, Any] | None = None, json_body: Any = None,
     data: dict[str, Any] | None = None,
 ) -> tuple[bytes, str, str]:
-    """POST a body and return ``(body, content_type, final_url)`` with the retry authority.
-
-    The write-method counterpart to :func:`get_bytes` for REST endpoints whose
-    query is a request body rather than a query string: ``json_body`` sends a JSON
-    body (USACE NSI's structures POST), ``data`` sends a form-encoded body (the
-    Overpass interpreter reads its QL from the ``data`` form field). Shares the ONE
-    retry authority (429/5xx/timeout backoff + ``Retry-After``); a 4xx classifies to
-    a typed transport error immediately. A POST is retried on the same idempotency
-    assumption the whole router makes for its cacheable read-through fetchers (the
-    endpoint is a pure query, no side effect), so the retry set is unchanged.
-    """
+    """POST a body and return ``(body, content_type, final_url)``: ``json_body`` sends
+    JSON, ``data`` sends form-encoded. Retried like a GET, on the assumption every
+    routed endpoint is a pure query with no side effect; a 4xx classifies at once."""
     last_exc: Exception | None = None
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -224,12 +197,9 @@ def post_bytes(
 
 
 def range_get(client: httpx.Client, url: str, lo: int, hi: int) -> bytes:
-    """GET ``bytes=lo-hi`` with the retry authority; return the body bytes.
-
-    Retries 429/5xx/timeout/connection with backoff + ``Retry-After``; a 404/403
-    (or any other 4xx) is classified to a typed transport error immediately (no
-    retry). On retry exhaustion the verbatim upstream status/body is surfaced.
-    """
+    """GET ``bytes=lo-hi`` and return the body bytes. 429/5xx/timeout/connection retry
+    with backoff; any other 4xx classifies to a typed transport error with no retry,
+    and exhaustion surfaces the verbatim upstream status and body."""
     headers = {"Range": f"bytes={lo}-{hi}"}
     last_exc: Exception | None = None
     for attempt in range(MAX_RETRIES + 1):

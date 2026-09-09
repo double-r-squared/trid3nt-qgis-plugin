@@ -1,30 +1,21 @@
 """stac-raster executor: a STAC catalog read through ``odc.stac.load``.
 
-One access mode (``ingest.access: stac``) serving three renders
-(``ingest.render``):
+One access mode serving three renders: a physical-scalar float grid, a uint8
+first-valid mosaic with a baked palette, and a 3-band photometric RGB. The library
+owns search, signing, the grid and the fuse; this module owns the band math."""
 
-- ``float``     a physical-scalar float32 grid (DN scale/offset, dB, masks).
-- ``mosaic``    a uint8 first-valid mosaic with a palette baked into band 1.
-- ``rgb``       a 3-band photometric-RGB uint8 composite.
-
-The library owns search, signing, the destination grid and the pixel fuse; this
-module owns the spec vocabulary (which collection, which asset, which scene) and
-the band math no catalog does.
-
-READ PATH. Assets are read by GDAL's own HTTP client, configured once through
-``odc.loader.configure_rio`` -- odc opens its own rasterio env per read from a
-module-global config, so an enclosing ``rasterio.Env`` does not reach it. The
-upstream STATUS is verbatim on the exception (``HTTP response code: 404``) and
-retries fire on 429/500/502/503/504. Two measured deviations from the transport's
-norm are ledgered for this family: GDAL keeps the status but discards the S3 XML
-``<Code>`` body, and its backoff is exponential-with-jitter rather than the
-server's ``Retry-After``.
-
-SOURCE NODATA is the source's own where the asset header publishes one. Where it
-does not, the spec's declared sentinel stands in, so a fill value never blends
-into a resampling kernel; the loader has no channel for that, so it rides in on
-a reader (see ``_driver_with_src_nodata``).
-"""
+# READ PATH. Assets are read by GDAL's own HTTP client, configured once through
+# ``odc.loader.configure_rio`` -- odc opens its own rasterio env per read from a
+# module-global config, so an enclosing ``rasterio.Env`` does not reach it. The
+# upstream STATUS is verbatim on the exception and retries fire on
+# 429/500/502/503/504. Two measured deviations from the transport's norm hold for
+# this family: GDAL keeps the status but discards the S3 XML ``<Code>`` body, and its
+# backoff is exponential-with-jitter rather than the server's ``Retry-After``.
+#
+# SOURCE NODATA is the source's own where the asset header publishes one. Where it
+# does not, the spec's declared sentinel stands in, so a fill value never blends into
+# a resampling kernel; the loader has no channel for that, so it rides in on a reader
+# (see ``_driver_with_src_nodata``).
 
 from __future__ import annotations
 
@@ -90,13 +81,9 @@ def _configure_read_path() -> None:
 
 
 def _signing_modifier(spec: SourceSpec) -> Any:
-    """The catalog's asset-signing hook, or a typed refusal naming what is missing.
-
-    ``planetary_computer`` signs Azure blob hrefs off the PC SAS endpoint.
-    ``netrc:<host>`` names a catalog whose assets are behind an interactive
-    login: the refusal names the file and the host rather than failing at the
-    first 401.
-    """
+    """The catalog's asset-signing hook, or a typed refusal naming what is missing:
+    ``netrc:<host>`` names a catalog behind an interactive login, and the refusal
+    names the file and the host rather than failing at the first 401."""
     sign = str(((spec.ingest or {}).get("stac") or {}).get("sign") or "none")
     if sign == "planetary_computer":
         import planetary_computer
@@ -154,12 +141,9 @@ def _resolve_collection(spec: SourceSpec, params: dict[str, Any]) -> tuple[str, 
 
 def _resolve_asset(spec: SourceSpec, params: dict[str, Any], product: str | None,
                    items: list[Any] | None = None) -> str:
-    """The asset key to read: static, param-keyed, or matched on a declared suffix.
-
-    A product whose asset keys are numbered per collection (OPERA DSWx's
-    ``1_B01_WTR`` / ``0_B01_WTR``) declares the suffix its variants share, and
-    the key is read off the items rather than hard-coded.
-    """
+    """The asset key to read: static, param-keyed, or matched on a declared suffix. A
+    product whose asset keys are numbered per collection declares the suffix its
+    variants share, and the key is read off the items rather than hard-coded."""
     stac = (spec.ingest or {}).get("stac", {})
     suffix = stac.get("asset_suffix")
     if suffix:
@@ -262,12 +246,9 @@ def _dt_key(item: Any) -> str:
 
 
 def _rank_item(sel: dict, items: list[Any], bbox: tuple) -> Any:
-    """The best item per the declarative ``select.rank`` keys.
-
-    ``{by: coverage_bucket, min_frac}`` (full-coverage scenes first),
-    ``{by: cloud_cover}`` (least-cloudy) or ``{by: coverage}`` (most AOI overlap).
-    An empty rank returns the first item (most-recent intersecting).
-    """
+    """The best item per the declarative ``select.rank`` keys: ``coverage_bucket`` puts
+    full-coverage scenes first, ``cloud_cover`` the least cloudy, ``coverage`` the most
+    AOI overlap. An empty rank returns the first, most-recent intersecting item."""
     rank = sel.get("rank") or []
     if not rank:
         return items[0]
@@ -293,13 +274,9 @@ def _rank_item(sel: dict, items: list[Any], bbox: tuple) -> Any:
 
 def _select_items(spec: SourceSpec, params: dict[str, Any], items: list[Any],
                   asset_key: str) -> list[Any]:
-    """Narrow the search result to the scenes the spec's select mode asks for.
-
-    ``mosaic`` keeps every item (the load fuses them first-valid, in search
-    order); ``latest`` takes the most recent; ``coverage`` ranks AOI coverage
-    then recency over the scenes that actually carry the asset; ``best`` applies
-    the declared rank ladder.
-    """
+    """Narrow the search result to the scenes the spec's select mode asks for:
+    ``mosaic`` keeps every item, ``latest`` the most recent, ``coverage`` ranks AOI
+    coverage then recency over scenes carrying the asset, ``best`` the rank ladder."""
     stac = (spec.ingest or {}).get("stac", {})
     sel = stac.get("select") or {}
     mode = sel.get("mode", "mosaic")
@@ -330,11 +307,9 @@ def _select_items(spec: SourceSpec, params: dict[str, Any], items: list[Any],
 
 
 def _source_cell(items: list[Any]) -> tuple[float, float, float] | None:
-    """``(cell_deg, origin_x, origin_y)`` of the items' own EPSG:4326 lattice.
-
-    Read off the STAC item's projection metadata, so a native-lattice ask costs
-    no probe read. ``None`` when the item does not publish a geographic grid.
-    """
+    """``(cell_deg, origin_x, origin_y)`` of the items' own EPSG:4326 lattice, read off
+    the STAC projection metadata so a native-lattice ask costs no probe read.
+    ``None`` when the item publishes no geographic grid."""
     import odc.stac
 
     try:
@@ -349,27 +324,9 @@ def _source_cell(items: list[Any]) -> tuple[float, float, float] | None:
 
 def _geobox(spec: SourceSpec, params: dict[str, Any], items: list[Any],
             *, px_max: int | None = None) -> tuple[Any, str]:
-    """``(GeoBox, resampling)`` -- the source's own lattice when asked for, else metric.
-
-    Without ``px_per_deg`` the metric sizing applies: a grid derived from
-    ``native_cell_m`` at the bbox mid-latitude. That is a lattice of the
-    router's OWN, so it needs bilinear, and every value it returns is an
-    interpolation of the source rather than the source.
-
-    ``px_per_deg`` asks instead for the SOURCE's lattice, and the phase comes
-    from the data. A global 1-arcsecond DEM tile is pixel-is-POINT: its pixel
-    CENTRES sit on the integer arcsecond, so its edges sit half a pixel off the
-    integer degree, and a lattice snapped to the prime meridian would land every
-    destination centre exactly BETWEEN two source centres. Snapping to the
-    source's own origin instead puts every destination pixel centre on a source
-    pixel centre, and NEAREST carries the value across unchanged, so a consumer
-    that samples the returned raster at its own nodes reads the number an
-    in-container read of the tile would have returned.
-
-    Two things fall back to the resampled grid rather than pretending: a source
-    whose cell is not the declared density (the ask does not describe the data),
-    and a lattice past the pixel cap (a large AOI).
-    """
+    """``(GeoBox, resampling)``: the source's own lattice when ``px_per_deg`` asks for
+    it, else a metric grid derived from ``native_cell_m``. A source whose cell is not
+    the declared density, or a lattice past the pixel cap, falls back to metric."""
     import math
 
     import rasterio
@@ -383,6 +340,8 @@ def _geobox(spec: SourceSpec, params: dict[str, Any], items: list[Any],
     px_max = int(px_max if px_max is not None else ingest.get("px_max", 4096))
     default_resampling = str(((ingest.get("stac") or {}).get("resampling")) or "bilinear")
 
+    # The metric grid is a lattice of the router's OWN, so it needs bilinear, and every
+    # value it returns is an interpolation of the source rather than the source.
     def _resampled() -> tuple[Any, str]:
         w, h = bbox_pixel_dims(bbox, float(ingest.get("native_cell_m", 1000.0)),
                                px_min=px_min, px_max=px_max)
@@ -408,6 +367,13 @@ def _geobox(spec: SourceSpec, params: dict[str, Any], items: list[Any],
             density, "unknown" if src is None else f"{src[0]:.10g} deg")
         return _resampled()
 
+    # The phase comes from the data. A global 1-arcsecond DEM tile is pixel-is-POINT:
+    # its pixel CENTRES sit on the integer arcsecond, so its edges sit half a pixel off
+    # the integer degree, and a lattice snapped to the prime meridian would land every
+    # destination centre exactly BETWEEN two source centres. Snapping to the source's
+    # own origin instead puts every destination centre on a source centre, and NEAREST
+    # carries the value across unchanged, so a consumer sampling the returned raster at
+    # its own nodes reads the number an in-container read of the tile would return.
     _, ox, oy = src
     west = ox + math.floor((bbox[0] - ox) / cell) * cell
     east = ox + math.ceil((bbox[2] - ox) / cell) * cell
@@ -438,14 +404,13 @@ def _one_group(item: Any, parsed: Any, idx: int) -> int:
 
 
 def _driver_with_src_nodata(nodata: float) -> Any:
-    """A reader driver that carries a DECLARED source sentinel into the read.
+    """A reader driver that carries a DECLARED source sentinel into the read, because
+    the loader resolves nodata from the asset header alone and the load API has no
+    channel for a value the header omits."""
 
-    The loader resolves a source's nodata from the asset header alone. A source
-    that publishes none (JRC's surface-water COGs) still HAS one, declared on the
-    spec row, and excluding it from the resampling kernel is the difference
-    between a class boundary and a blend of a class code with a fill value. The
-    load API has no channel for it, so the value rides in on the reader.
-    """
+    # A source that publishes no header nodata still HAS one, declared on the spec row,
+    # and excluding it from the resampling kernel is the difference between a class
+    # boundary and a blend of a class code with a fill value.
     from dataclasses import replace
 
     from odc.loader import RioDriver
@@ -471,12 +436,9 @@ def _driver_with_src_nodata(nodata: float) -> Any:
 def _load(spec: SourceSpec, items: list[Any], bands: list[str], geobox: Any,
           resampling: Any, *, dtype: str, nodata: float | None,
           src_nodata: float | None = None) -> dict[str, Any]:
-    """``{band: 2D array}`` fused first-valid over ``items`` in the supplied order.
-
-    Every source failure arrives here as the library's own exception carrying the
-    verbatim upstream status; it is restamped with the spec's code, never
-    swallowed.
-    """
+    """``{band: 2D array}`` fused first-valid over ``items`` in the supplied order. A
+    source failure arrives as the library's own exception carrying the verbatim
+    upstream status, and is restamped with the spec's code rather than swallowed."""
     import odc.stac
 
     _configure_read_path()
@@ -508,11 +470,9 @@ def _load(spec: SourceSpec, items: list[Any], bands: list[str], geobox: Any,
 
 
 def _render_float(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Continuous-FLOAT read -> DN scale/offset -> float32 ``(array, transform, crs)``.
-
-    NaN is the fill; the serialize directive decides whether ``execute`` writes it
-    as NaN or as the source's own sentinel.
-    """
+    """Continuous-FLOAT read, DN scale and offset applied, to float32
+    ``(array, transform, crs)``. NaN is the fill; the serialize directive decides
+    whether it is written as NaN or as the source's own sentinel."""
     import numpy as np
 
     ingest = spec.ingest or {}
@@ -569,11 +529,9 @@ def _source_colormap(spec: SourceSpec, items: list[Any], asset: str) -> dict | N
 
 
 def stac_to_mosaic(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, str, dict | None]:
-    """uint8 first-valid mosaic ``(array, transform, crs, colormap|None)``.
-
-    The palette is the source's own where the spec declares passthrough, else the
-    spec's pure colormap hook.
-    """
+    """uint8 first-valid mosaic ``(array, transform, crs, colormap|None)``. The palette
+    is the source's own where the spec declares passthrough, else the spec's pure
+    colormap hook."""
     import numpy as np
 
     ingest = spec.ingest or {}
@@ -626,14 +584,9 @@ def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, A
 
 
 def _declare_asset_bands(items: list[Any], asset: str) -> int:
-    """Restate an item's per-band list in the form the loader enumerates, and
-    return how many bands the asset carries.
-
-    A multi-band asset described only by the legacy ``eo:bands`` list resolves to
-    a single band, because the loader counts the STAC 1.1 ``bands`` array. The
-    count comes from the item's OWN band list either way -- this translates the
-    form, it does not supply a number the item did not publish.
-    """
+    """Restate an item's per-band list in the form the loader enumerates and return the
+    band count, which comes from the item's OWN list: an asset described only by the
+    legacy ``eo:bands`` list would otherwise resolve to a single band."""
     n = 1
     for item in items:
         a = (getattr(item, "assets", {}) or {}).get(asset)
@@ -677,12 +630,9 @@ def _rgb_bad_mask(mask_arr: Any, mask: dict) -> Any:
 
 
 def _rgb_render_joint_stretch(spec: SourceSpec, bands: list[Any], bad: Any, render: dict) -> Any:
-    """Joint 2..98 percentile-stretch N float bands to a uint8 RGB (nodata+bad -> 0).
-
-    ``nodata_rule=all_bands_zero`` (raw uint16 reflectance) else the non-finite
-    fill from the reflectance transform. Raises a typed EMPTY when no clear pixel
-    remains. Returns an ``(N, H, W)`` uint8 array.
-    """
+    """Joint 2..98 percentile-stretch N float bands to an ``(N, H, W)`` uint8 RGB, with
+    nodata and bad pixels zeroed per ``nodata_rule``. Raises a typed EMPTY when no
+    clear pixel remains, rather than returning a blank composite."""
     import numpy as np
 
     stack = np.stack(bands)  # (N, H, W) float32

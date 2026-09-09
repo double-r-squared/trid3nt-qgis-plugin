@@ -1,41 +1,21 @@
-"""Coastal topo-bathymetry delegate hooks: the ``fetch_topobathy`` fold.
+"""Coastal topo-bathymetry delegate hooks.
 
-``fetch_topobathy`` folds onto the router as a ``library_delegate`` raster source.
-It is NOT a single-source raster read but a 4-leg UTM-precedence COMPOSITE (NOAA
-NCEI CUDEM 1/9" tiles -> NCEI regional 1 m tiles -> ETOPO 2022 global fallback
-bathy -> USGS 3DEP land via the sibling ``fetch_dem``), each reprojected onto one
-shared EPSG:32616 grid + a per-tile NAVD88 datum gate. The heterogeneous discovery
-+ warp-merge + datum gate IS our bespoke code, so it lives here as delegate hooks:
+Not a single-source raster read but a 4-leg UTM-precedence COMPOSITE -- nearshore
+tiles, regional fine tiles, a global relief base, a land DEM -- each reprojected onto
+one shared grid behind a per-tile NAVD88 datum gate, which is what lives here."""
 
-  * ``topobathy.validate`` (delegate_validate) -- the US-coastal-envelope + degenerate
-    bbox + resolution / offset / timeout / min_pixel finiteness gate, raised
-    pre-cache / pre-network as a ``TopobathyInputError``.
-  * ``topobathy.read`` (delegate) -- the 4-leg select + datum gate + merge -> the
-    composite ``(array, transform, crs)`` for the shared COG writer. It ALSO records
-    the FETCH-TIME provenance (which legs painted the merge) via the provenance
-    channel, so the four ``TopobathyResult`` fields survive a cache hit.
-  * ``topobathy.envelope`` -- the twin's exact ``topobathy-...`` layer_id / name and
-    the four provenance fields read back from the channel (declared defaults when a
-    pre-channel cache object has no sidecar -- byte-identical to the twin's own
-    cache-hit behaviour, which reverted to defaults).
-
-The four fetch-time provenance fields are FETCH-TIME provenance -- which of the four
-heterogeneous sources painted the merge -- and are NOT recoverable from the final
-single-band float32 COG; the provenance channel (bytes + a cache-replayable sidecar)
-is exactly the general capability that unblocks this fold.
-
-LOUD-FALLBACK NORM (follow-up row, applied in the fold rather than
-preserved): the 3DEP land leg's SILENT swallow becomes a LABELED ``land_absent``
-degrade (a provenance entry + ``fallback_warning``), and the CUDEM -> ETOPO
-proceed-and-warn is verified to reach the envelope on every path. Topobathy is NOT
-hard-gated this wave -- coastal flood scenarios depend on best-effort terrain, so
-labeling (not a pause-and-ask gate) is the agreed treatment for this consumer.
-
-The ``TopobathyError`` classes live HERE (their stable importable home now that the
-coded twin is deleted). Their base is ``FetchError`` so ``library_delegate.invoke``
-passes them through unchanged (its ``except FetchError: raise`` passthrough),
-preserving the pinned ``error_code`` through the delegate wrapper.
-"""
+# WHICH LEGS PAINTED THE MERGE is FETCH-TIME provenance and is NOT recoverable from
+# the final single-band float32 COG, so ``topobathy.read`` records it through the
+# provenance channel (bytes plus a cache-replayable sidecar) and
+# ``topobathy.envelope`` reads it back; a cache object written before that channel
+# existed has no sidecar and falls to the declared defaults.
+#
+# The land leg's ocean fill is a LABELED degrade rather than a silent swallow, and a
+# nearshore-to-global hop proceeds-and-warns rather than pausing: coastal scenarios
+# depend on best-effort terrain, so labeling is the agreed treatment here.
+#
+# The ``TopobathyError`` classes live HERE, and their base is ``FetchError`` so the
+# delegate wrapper's passthrough preserves each pinned ``error_code``.
 
 from __future__ import annotations
 
@@ -85,11 +65,8 @@ __all__ = [
 
 
 class TopobathyError(FetchError):
-    """Base class for fetch_topobathy failures.
-
-    ``error_code`` maps to the WebSocket A.6 error frame emitted by the agent
-    surface. ``retryable`` guides retry/clarify/fallback logic.
-    """
+    """Base class for topobathy failures: ``error_code`` is the stable wire code and
+    ``retryable`` guides the retry, clarify and fallback decision."""
 
     error_code: str = "TOPOBATHY_ERROR"
     retryable: bool = True
@@ -112,34 +89,26 @@ class TopobathyUpstreamError(TopobathyError):
 
 
 class TopobathyEmptyError(TopobathyError):
-    """Neither CUDEM nor 3DEP produced any usable elevation for the AOI.
-
-    This is the hard dead-end: no land DEM AND no bathy. The softer case --
-    CUDEM missing but 3DEP land present -- does NOT raise; it degrades to a
-    land-only DEM and returns a ``TopobathyResult`` carrying an honest
-    ``bathymetry_present=False`` warning (data-source fallback norm)."""
+    """No leg produced usable elevation for the AOI: the hard dead-end of no land DEM
+    AND no bathy. The softer case -- land present, bathy missing -- does NOT raise; it
+    degrades and reports ``bathymetry_present=False``."""
 
     error_code = "TOPOBATHY_EMPTY"
     retryable = False
 
 
 class TopobathyDatumError(TopobathyError):
-    """A CUDEM tile's vertical datum is NOT NAVD88 and no documented NAVD88
-    offset was supplied (Invariant 7 -- never silently merge mismatched
-    datums)."""
+    """A tile's vertical datum is NOT NAVD88 and no documented offset was supplied:
+    mismatched datums are never silently merged."""
 
     error_code = "TOPOBATHY_DATUM_MISMATCH"
     retryable = False
 
 
 class TopobathyCoverageGapError(TopobathyError, LadderGap):
-    """The CUDEM nearshore composite covers only PART of the AOI.
-
-    Also a :class:`LadderGap`, so the fallback walker reads the covered fraction
-    off it and fills the remainder from a permitted rung. Raised INSTEAD of
-    letting the 3DEP land leg's flat 0 m ocean fill paint the uncovered water:
-    that fill is a fake landmass the wave/surge solver treats as dry ground.
-    """
+    """The nearshore composite covers only PART of the AOI. Also a :class:`LadderGap`,
+    so the walker reads the covered fraction off it. Raised INSTEAD of letting the
+    land leg's flat 0 m ocean fill paint the uncovered water as fake dry ground."""
 
     error_code = "TOPOBATHY_COVERAGE_GAP"
     retryable = False
@@ -262,15 +231,14 @@ _SAMPLE_WIN_PX = 512
 def _sample_topobathy_density(
     aoi_bbox: tuple[float, float, float, float],
 ) -> Any:
-    """Measure the emit density from a SMALL native window in the AOI (R-B sampling).
+    """Measure the emit density from a SMALL native window at the AOI centre, or return
+    ``None`` when no real tile covers it. One header-range open and one window read,
+    so it is gate-fast."""
 
-    Reads a ``_SAMPLE_WIN_PX`` window from the FINEST real source tile covering the AOI
-    centre (CUDEM 1/9" where present, else the ETOPO global base), re-encodes it as the
-    SAME float32 LZW COG the fetch emits to measure real bytes-per-pixel, and derives
-    the native output pixel density from the tile's native cell projected to metres.
-    Returns ``None`` (analytic fallback) when no real tile covers the AOI (offline / no
-    coverage). One header-range open + one window read -- no 4-leg merge, no urllist
-    beyond the centre intersect -- so it is gate-fast and cached per region."""
+    # The window comes from the FINEST real source tile over the centre and is
+    # re-encoded as the SAME COG the fetch emits, so bytes-per-pixel is measured rather
+    # than assumed; the output pixel density comes from that tile's native cell
+    # projected to metres.
     import numpy as np
     import rasterio
     from rasterio.windows import Window
@@ -341,13 +309,9 @@ def estimate_payload_mb(
     resolution_m: float | int | None = None,
     **_kw: Any,
 ) -> float:
-    """Estimate the emitted COG size in MB (R-B: measured sample, analytic fallback).
-
-    Samples a small native window's real emit density (bytes/px + native pixel density)
-    and scales it by the AOI area, bounded by the 12000 px-per-side guard; falls back
-    to the bytes-per-square-degree analytic model when sampling is unavailable.
-    ``resolution_m=None`` estimates the NATIVE composite; an explicit value estimates
-    that coarsened grid."""
+    """Estimate the emitted COG size in MB: a sampled window's real emit density scaled
+    by the AOI area, falling back to the analytic model when sampling is unavailable.
+    ``resolution_m=None`` estimates the NATIVE composite, a value that coarsened grid."""
     if bbox is None:
         return _analytic_payload_mb(bbox)
     from trid3nt_server.tools.payload_sampling import estimate_mb
@@ -366,12 +330,9 @@ def estimate_payload_mb_detail(
     resolution_m: float | int | None = None,
     **_kw: Any,
 ) -> str | None:
-    """Gate-text detail: the estimate + estimator KIND (measured vs analytic).
-
-    Companion to ``estimate_payload_mb`` (the gate resolves ``<estimator>_detail``);
-    returns a one-line human string naming whether the quoted number was measured from
-    a sampled window or the analytic fallback, so the payload card is honest about its
-    provenance. Returns ``None`` when there is no bbox to reason about."""
+    """Gate text naming whether the quoted estimate was MEASURED from a sampled window
+    or came from the analytic fallback, so the payload card is honest about its own
+    provenance. ``None`` when there is no bbox to reason about."""
     if bbox is None:
         return None
     from trid3nt_server.tools.payload_sampling import estimate_mb
@@ -506,13 +467,9 @@ def _fetch_cudem_urllist(timeout_s: float) -> list[str]:
 def cudem_coverage_fraction(
     bbox: tuple[float, float, float, float], tile_urls: list[str]
 ) -> float | None:
-    """The fraction of ``bbox`` the selected CUDEM tiles cover, or None if unknown.
-
-    CUDEM tiles are non-overlapping 0.25-degree squares whose NW corner is encoded
-    in the filename, so the clipped areas sum exactly. Returns None when ANY
-    selected tile's footprint cannot be parsed: a coverage gap that cannot be
-    PROVEN is never claimed.
-    """
+    """The fraction of ``bbox`` the selected tiles cover, the clipped areas summing
+    exactly because the tiles are non-overlapping squares. ANY unparseable footprint
+    returns None: a coverage gap that cannot be PROVEN is never claimed."""
     west, south, east, north = bbox
     area = max(0.0, east - west) * max(0.0, north - south)
     if area <= 0.0:
@@ -653,7 +610,7 @@ def _select_regional_coastal_dem_tiles(
 
 
 # ---------------------------------------------------------------------------
-# Vertical-datum gate (Invariant 7).
+# Vertical-datum gate.
 # ---------------------------------------------------------------------------
 
 
@@ -725,7 +682,7 @@ def _classify_vertical_datum(
 
 
 # ---------------------------------------------------------------------------
-# 3DEP land DEM (REUSE fetch_dem via the registry closure -- seam-1).
+# 3DEP land DEM, read by reusing fetch_dem through the registry closure.
 # ---------------------------------------------------------------------------
 
 
@@ -853,14 +810,9 @@ _LAND_LEG_WATERLINE_M = 0.0
 
 
 def _mask_land_leg_ocean_fill(land_local_path: str) -> str:
-    """Drop the 3DEP land DEM's at/below-waterline ocean-fill cells (deep-water rung).
-
-    Reads the staged 3DEP land tif, masks every cell at or below
-    ``_LAND_LEG_WATERLINE_M`` to NaN (the flat 0 m ocean fill + any negative fringe),
-    and writes a temp GTiff carrying ONLY the genuine emergent (positive) terrain. The
-    generic LAST-wins composite then lets the ETOPO full-column bathy base show through
-    the masked cells offshore while the finer 3DEP land still paints onshore. Returns
-    the temp path (registered by the caller for cleanup)."""
+    """Mask the land DEM's at-or-below-waterline ocean fill to NaN, returning a temp
+    GTiff of ONLY genuine emergent terrain. The LAST-wins composite then shows the
+    full-column bathy base offshore while the finer land still paints onshore."""
     import numpy as np
     import rasterio
 
@@ -962,18 +914,15 @@ def _source_res_m(ds: Any) -> float:
 def _decimated_source_read(
     ds: Any, target_res_m: float, aoi_bbox_4326: tuple[float, float, float, float],
 ) -> tuple[Any, Any]:
-    """Read a source band CLIPPED to the AOI and decimated to ~the target resolution,
-    returning ``(array_float32, transform)`` (or ``(None, None)`` when the AOI does not
-    intersect this source).
+    """Read a source band CLIPPED to the AOI and decimated to about the target
+    resolution, or ``(None, None)`` when the AOI does not intersect this source."""
 
-    Reading a full-native CUDEM 1/9" tile (8112x8112) only to resample it onto a coarse
-    bbox-clipped output grid is the dominant fetch cost (many tiles over /vsicurl).
-    CUDEM COGs carry no overviews but ARE internally tiled, so a bbox WINDOW read pulls
-    only the AOI-overlapping blocks (skipping the tile regions outside the AOI), and the
-    ``out_shape`` decimation then shrinks the decoded array + the downstream reproject
-    cost. The read is oversampled ~2x relative to the target cell so the bilinear
-    reprojection stays clean; a source already at/coarser than the target is read at
-    the window's native size."""
+    # Reading a full-native tile only to resample it onto a coarse bbox-clipped grid is
+    # the dominant fetch cost. These COGs carry no overviews but ARE internally tiled,
+    # so a bbox WINDOW read pulls only the AOI-overlapping blocks, and the out_shape
+    # decimation shrinks both the decoded array and the downstream reproject. The read
+    # is oversampled about 2x relative to the target cell so the bilinear reprojection
+    # stays clean; a source already at or coarser than the target is read natively.
     import numpy as np
     import rasterio
     from rasterio.warp import transform_bounds
@@ -1009,26 +958,22 @@ def _composite_sources_to_array(
     bbox: tuple[float, float, float, float],
     min_pixel_m: float | None = None,
 ) -> tuple[Any, Any, str, list[bool], list[tuple[float, float, float, float] | None]]:
-    """Per-source warp + precedence composite -> ``(array, transform, target_crs,
-    painted, footprints)``.
+    """Per-source warp and precedence composite to ``(array, transform, target_crs,
+    painted, footprints)``."""
 
-    NEVER ``rasterio.merge``s raw heterogeneous sources (the upside-down MergeError
-    for the CUDEM-EPSG:4269 + 3DEP-EPSG:5070 mix): each source is reprojected from
-    its OWN CRS onto the shared bbox-clipped grid (normalising CRS + orientation),
-    an unflagged |z|>=cap sentinel is masked to NaN, then composited LAST-wins.
-
-    ``painted`` is ONE FLAG PER INPUT SOURCE, in order: True when that source
-    contributed at least one valid cell. Sources drop out here silently
-    (unreadable, empty, no AOI intersect), so a caller that PROMISED coverage from
-    a footprint must reconcile the promise against these flags, not against the
-    input list. Positional (not by path) because a source path may be rewritten
-    between selection and merge.
-
-    ``footprints`` is the same-length companion: the source's own georeferenced
-    extent in EPSG:4326, or None where it did not paint or its bounds could not be
-    projected. FOOTPRINT granularity -- a source that paints one corner of its
-    extent still reports the whole extent, the same limit the CUDEM tile-footprint
-    measure carries."""
+    # Raw heterogeneous sources are NEVER merged directly (a mixed-CRS merge raises on
+    # orientation): each source is reprojected from its OWN CRS onto the shared
+    # bbox-clipped grid, an unflagged |z| >= cap sentinel masks to NaN, then LAST wins.
+    #
+    # ``painted`` is ONE FLAG PER INPUT SOURCE, in order, True when that source
+    # contributed at least one valid cell. Sources drop out here silently -- unreadable,
+    # empty, no AOI intersect -- so a caller that PROMISED coverage from a footprint
+    # must reconcile against these flags, not against the input list. It is positional
+    # rather than by path, because a path may be rewritten between selection and merge.
+    #
+    # ``footprints`` is the same-length companion: the source's own georeferenced extent
+    # in EPSG:4326, or None where it did not paint. FOOTPRINT granularity -- a source
+    # painting one corner of its extent still reports the whole extent.
     import numpy as np
     import rasterio
     from rasterio.warp import Resampling, reproject, transform_bounds
@@ -1103,14 +1048,9 @@ def _composite_sources_to_array(
 
 
 def painted_fraction(array: Any) -> float:
-    """The share of the AOI grid that carries a real bed value.
-
-    The composite is built on a bbox-clipped grid, so every one of its cells IS
-    an AOI cell and a NaN is a cell no source painted. That makes this a measure
-    of PAINTED BED rather than of delivered footprint: a tile can cover the AOI
-    and still leave a quarter of it nodata, and crediting the footprint reports
-    a bed the programme does not publish as one it does.
-    """
+    """The share of the AOI grid that carries a real bed value: the composite sits on a
+    bbox-clipped grid, so every cell is an AOI cell and a NaN is a cell nobody painted.
+    A measure of PAINTED BED, not of delivered footprint."""
     import numpy as np
 
     grid = np.asarray(array, dtype="float64")
@@ -1137,14 +1077,9 @@ def _compose_fallback_warnings(
     etopo_share: float = 0.0,
     regional_share: float = 0.0,
 ) -> str | None:
-    """Build the LABELED fallback-warning string (data-source + loud-fallback norms).
-
-    Pure over the merge outcome so both R-C branches are testable without a fetch. The
-    GLOBAL-FALLBACK cause is HONEST: only ``cudem_status == "no_intersect"`` (a real
-    tile-index intersect that returned zero) may claim the collection omits this coast;
-    a caller ``skipped`` / an ``index_unreachable`` / a datum-gated ``present`` each
-    name their own true cause (the 0221 fix -- the old text lied when CUDEM was
-    skipped)."""
+    """Build the LABELED fallback-warning string, pure over the merge outcome. The
+    global-fallback cause is HONEST: only a real tile-index intersect returning zero may
+    claim the collection omits this coast; every other cause names itself."""
     warnings: list[str] = []
     if not bathy_present:
         warnings.append(
@@ -1234,13 +1169,9 @@ def _footprint_union(boxes: Sequence[Any]) -> Any:
 
 
 def _share_of_aoi(geom: Any, aoi: Any, *, minus: Sequence[Any] = ()) -> float:
-    """The share of ``aoi`` that ``geom`` covers and nothing in ``minus`` does.
-
-    Footprint arithmetic over source EXTENTS, so the shares of disjoint sources
-    sum exactly. Interior nodata inside an extent is measured by neither this nor
-    the CUDEM tile-footprint fraction -- the documented open edge of the coverage
-    contract.
-    """
+    """The share of ``aoi`` that ``geom`` covers and nothing in ``minus`` does. Footprint
+    arithmetic over source EXTENTS, so disjoint sources sum exactly; interior nodata
+    inside an extent is measured here by nothing, the open edge of this contract."""
     if geom is None or aoi.area <= 0.0:
         return 0.0
     for other in minus:
@@ -1256,19 +1187,13 @@ def _rung_coverage(
     etopo_share: float,
     regional_share: float,
 ) -> dict[str, float] | None:
-    """The MEASURED share each source painted, keyed by BATHYMETRY_LADDER rung.
+    """The MEASURED share each source painted, keyed by ladder rung, or ``None`` when
+    nothing measurable painted a bed. Every share is measured independently, so a base
+    reaching part of the AOI reports that part and never the complement of another."""
 
-    The fallback walker reconciles its promise arithmetic against this, so an
-    activation row reports paint rather than a tile-footprint promise. Every share
-    is measured independently -- an ETOPO base that reaches only part of the AOI
-    reports only that part, never "whatever CUDEM did not cover".
-
-    ``regional_fine`` is the NCEI fine coastal DEM the caller switched on: an
-    ``enhancement`` rung, declared so the walker can name it, gated by nobody
-    because a FINER source costs nothing to take.
-
-    ``None`` when nothing measurable painted a bed.
-    """
+    # ``regional_fine`` is the fine coastal DEM the caller switched on: an
+    # ``enhancement`` rung, declared so the walker can name it and gated by nobody,
+    # because a FINER source costs nothing to take.
     cudem = (
         max(0.0, min(1.0, cudem_painted_fraction))
         if cudem_painted_fraction is not None
@@ -1294,28 +1219,24 @@ def _select_and_merge(
     skip_cudem: bool = False,
     skip_land: bool = False,
 ) -> tuple[Any, Any, str, dict[str, Any]]:
-    """Run the 4-leg discovery + datum gate + merge; return ``(array, transform,
-    crs, provenance)``. ``provenance`` carries the four TopobathyResult fields plus
-    the LABELED loud-degrade warnings.
+    """Run the 4-leg discovery, datum gate and merge, returning ``(array, transform,
+    crs, provenance)``, where provenance carries the result fields plus the labeled
+    degrade warnings."""
 
-    ``skip_cudem`` drops the fine NOAA CUDEM 1/9" nearshore composite (and its
-    per-tile network reads) -- a SCREENING caller (e.g. a coarse surge TIN) that
-    only needs the GLOBAL ETOPO shelf base + 3DEP land, where reading dozens of
-    CUDEM tiles over a large domain is both wasted (at coarse node density) and the
-    dominant time/failure cost. It forces the ETOPO bathy base on so a real
-    below-waterline bed is still present.
-
-    ``skip_land`` drops the 3DEP land leg. The 3DEP land DEM fills the nearshore
-    ocean with a 0 m sea-level value that (as the higher-precedence source) CLOBBERS
-    the ETOPO negative bathy over water -- flattening a surge domain to ~0 m depth.
-    ETOPO 2022 is already a COMPLETE topo-bathy (land positive, sea negative), so a
-    screening surge mesh (whose land nodes are clamped to min-wet anyway) wants
-    ETOPO-only: real negative bathy offshore, no 0 m ocean clobber."""
-    # 1) CUDEM tiles (best-effort -- empty == no coverage). ``cudem_status`` records
-    # WHY the fine composite is absent so the fallback warning is HONEST: only a real
-    # tile-index intersect that returns zero may claim the collection omits this coast
-    # (NATE resolution doctrine, 2026-08-11 -- the 0221 blockiness was CUDEM SKIPPED by
-    # the caller, not absent, so the old "collection omits this coast" text lied).
+    # ``skip_cudem`` drops the fine nearshore composite and its per-tile network reads,
+    # for a SCREENING caller that needs only the global shelf base and the land DEM,
+    # where reading dozens of nearshore tiles over a large domain is both wasted at
+    # coarse node density and the dominant time and failure cost. It forces the global
+    # bathy base on, so a real below-waterline bed is still present.
+    #
+    # ``skip_land`` drops the land leg, whose DEM fills the nearshore ocean with a 0 m
+    # sea-level value that, as the higher-precedence source, CLOBBERS the negative bathy
+    # over water and flattens a surge domain to about 0 m depth. The global relief base
+    # is already a complete topo-bathy, so a screening surge mesh wants it alone.
+    # 1) CUDEM tiles, best-effort: empty means no coverage. ``cudem_status`` records
+    # WHY the fine composite is absent, so the fallback warning is HONEST -- only a real
+    # tile-index intersect that returns zero may claim the collection omits this coast.
+    # A composite the caller SKIPPED is absent for a different reason and says so.
     cudem_urls: list[str] = []
     cudem_status: str  # skipped | index_unreachable | no_intersect | present
     if skip_cudem:
@@ -1336,7 +1257,7 @@ def _select_and_merge(
             cudem_status = "index_unreachable"
     cudem_vsicurl: list[str] = [f"/vsicurl/{u}" for u in cudem_urls]
 
-    # 2) Datum gate per selected CUDEM tile (Invariant 7).
+    # 2) Datum gate per selected CUDEM tile.
     datum_offsets: list[float] = []
     gated_paths: list[str] = []
     for vp in cudem_vsicurl:
@@ -1590,18 +1511,13 @@ def _select_and_merge(
 
 @register_hook("topobathy.validate")
 def validate_topobathy(spec: Any, params: dict[str, Any]) -> None:
-    """Pre-cache input gate: US coastal envelope + finiteness + CUDEM coverage.
+    """Pre-cache input gate: the US-coastal envelope and the offset, timeout and
+    min-pixel finiteness the declarative surface cannot express."""
 
-    The router's generic bbox validation already stamps TOPOBATHY_INPUT_INVALID for
-    shape / range / degenerate bboxes; this adds the topobathy-specific checks the
-    declarative surface cannot express (the US-coastal envelope, the offset / timeout
-    / min_pixel finiteness), raising ``TopobathyInputError`` pre-network.
-
-    PRE-CACHE, not pre-network: the coverage check needs the CUDEM tile manifest,
-    so this runs one memoized GET (``_fetch_cudem_urllist``, 10-minute process
-    memo). It runs here rather than in the delegate because a partial-coverage gap
-    is a property of the REQUEST: a cache hit would otherwise serve a stored
-    surface whose water is fake land without the ladder ever running."""
+    # PRE-CACHE, not pre-network: the coverage check needs the tile manifest, so this
+    # runs one memoized GET. It runs here rather than in the delegate because a
+    # partial-coverage gap is a property of the REQUEST -- a cache hit would otherwise
+    # serve a stored surface whose water is fake land, without the ladder ever running.
     bbox = tuple(float(v) for v in params["bbox"])
 
     # A declared class whose ladder has no rung refuses HERE, before the cache
@@ -1641,13 +1557,9 @@ _COVERAGE_COMPLETE = 0.999
 def _coverage_gap_message(
     note: str, *, skip_land: bool, coarser_bed_can_fill: bool = True
 ) -> str:
-    """The TOPOBATHY_COVERAGE_GAP text: what the gap costs, and how to proceed.
-
-    ``skip_land`` changes what the gap COSTS: a refusal may not cite a land fill
-    the caller explicitly disabled. ``coarser_bed_can_fill`` is False once the
-    coarser bed has BEEN laid and still fell short -- advertising a remedy that
-    was already tried and did not work is the refusal lying about itself.
-    """
+    """The coverage-gap text: what the gap costs, and how to proceed. A refusal may not
+    cite a land fill the caller disabled, nor advertise a coarser bed that has already
+    been laid and still fell short."""
     consequence = (
         "This request disabled the 3DEP land leg (skip_land), so nothing would "
         "paint that water at all -- it would be NODATA and a wave/surge solver "
@@ -1682,27 +1594,20 @@ def _coverage_gap_message(
 def _assert_nearshore_coverage(
     bbox: tuple[float, float, float, float], params: dict[str, Any]
 ) -> None:
-    """Raise the ladder gap when CUDEM's FOOTPRINT covers only PART of the AOI.
+    """Raise the ladder gap when the nearshore FOOTPRINT covers only PART of the AOI,
+    including at 0%: uncovered water would otherwise be painted by the land leg's flat
+    ocean fill, a rectangle of fake land a solver excludes from its grid."""
 
-    The uncovered water would otherwise be painted by the 3DEP land leg's flat
-    ~0 m ocean fill -- a rectangle of fake land a wave or surge solver excludes
-    from its computational grid. A ZERO-CUDEM AOI is the same gap at 0%: the
-    nearshore composite this tool is FOR does not reach it at all, and the coarser
-    global bed that could stand in is a cross-dataset substitution the fallback
-    gate has to see. Exempt: a request that already lays the global ETOPO column
-    down (its bathy base spans the AOI), and a request pulling the NCEI regional
-    fine legs (whose footprints this check does not model). An exemption
-    only DEFERS the question: ``_select_and_merge`` measures what every leg
-    actually painted and refuses there when the exempted source did not reach the
-    hole, so the two gates permit exactly the same requests.
-
-    BLIND SPOTS, stated so no caller over-reads a pass: this is a FOOTPRINT
-    union, so a tile counts as covering its whole 0.25-degree square even where
-    its own pixels are nodata (an interior hole reads as covered), and a tile can
-    still drop after this check runs. ``_select_and_merge`` reconciles the promise
-    against the tiles that actually PAINTED; interior nodata is measured by
-    neither and is the known open edge of this contract.
-    """
+    # Exempt: a request that already lays the global column down, and a request pulling
+    # the regional fine legs, whose footprints this check does not model. An exemption
+    # only DEFERS the question -- ``_select_and_merge`` measures what every leg actually
+    # painted and refuses there when the exempted source did not reach the hole -- so
+    # the two gates permit exactly the same requests.
+    #
+    # BLIND SPOTS, stated so no caller over-reads a pass: this is a FOOTPRINT union, so
+    # a tile counts as covering its whole square even where its own pixels are nodata,
+    # and a tile can still drop after this check runs. Interior nodata is measured by
+    # neither gate and is the known open edge of this contract.
     if bool(params.get("force_bathy_base")) or bool(params.get("skip_cudem")):
         return
     if bool(params.get("include_regional_fine")):
@@ -1757,10 +1662,9 @@ def _assert_nearshore_coverage(
 def read_topobathy(
     spec: Any, params: dict[str, Any], *, timeout_s: float
 ) -> tuple[Any, Any, Any]:
-    """Fetch + merge the coastal topo-bathymetry composite; RECORD the fetch-time
-    provenance and return ``(array, transform, crs)`` for the shared COG
-    writer. The provenance dict (which legs painted the merge + the labeled
-    degrades) reaches ``topobathy.envelope`` via the channel."""
+    """Fetch and merge the composite, RECORD the fetch-time provenance, and return
+    ``(array, transform, crs)``. The provenance dict -- which legs painted, and the
+    labeled degrades -- reaches the envelope hook through the channel."""
     bbox = tuple(float(v) for v in params["bbox"])
     resolution_m = int(params.get("resolution_m", 10))
     target_crs = (str(params.get("target_crs") or TARGET_CRS)).strip()
@@ -1798,13 +1702,9 @@ def envelope_topobathy(
     data: bytes | None,
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build the TopobathyResult fields: the twin's exact layer_id / name plus the
-    four FETCH-TIME provenance fields read back from the channel.
-
-    ``provenance`` is None for a cache object written before the channel existed (no
-    sidecar); the declared defaults (bathymetry_present=True, no warning, counts 0)
-    then hold -- byte-identical to the twin's own cache-hit behaviour, which reverted
-    to those defaults because ``fetch_fn`` did not run."""
+    """Build the result fields: the layer_id and name, plus the four FETCH-TIME
+    provenance fields read back from the channel. A cache object written before that
+    channel existed carries no sidecar, and the declared defaults hold."""
     b = tuple(float(v) for v in params["bbox"])
     layer_id = f"topobathy-{b[0]:.4f}-{b[1]:.4f}-{b[2]:.4f}-{b[3]:.4f}"
     name = (
@@ -1836,12 +1736,9 @@ def envelope_topobathy(
 def serve_user_supplied_bed(
     bbox: Any = None, dem_uri: Any = None, **_ignored: Any
 ) -> Any:
-    """Serve the caller's OWN topo/bathy raster as the ladder's top rung.
-
-    No fetch, no merge: the URI the caller passed IS the bed, labeled
-    ``basis="user"`` so the input review reads it as user data rather than
-    anything this tool derived.
-    """
+    """Serve the caller's OWN raster as the ladder's top rung: no fetch, no merge. The
+    URI passed IS the bed, labeled ``basis="user"`` so the input review reads it as
+    user data rather than anything this tool derived."""
     from trid3nt_contracts.common import SyntheticInput
     from trid3nt_contracts.execution import TopobathyResult
 

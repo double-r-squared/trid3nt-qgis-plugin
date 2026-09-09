@@ -1,16 +1,8 @@
-"""Source-spec loader: schema validation + co-located corpus pickup + tree walk.
+"""Source-spec loader: schema validation, co-located corpus pickup, tree walk.
 
-Mirrors ``search_tools._compose_corpus_from_tree`` (which rglobs
-``corpus.yaml``): ``_compose_specs_from_tree`` rglobs ``fetchers/**/source.yaml``,
-validates each into a :class:`SourceSpec`, and returns ``{name: spec}``. Clean-
-as-you-go (contract sec 1): when a twin dies in phase 2 its ``fetch_X.py`` is
-deleted and ``source.yaml`` remains as the sole surface.
-
-Co-located corpus pickup (contract sec 3.3 point 3): the spec MAY carry its
-retrieval ``corpus`` phrasings inline; when it does not, the loader lifts them
-verbatim from the sibling ``corpus.yaml`` under the twin's name, so the phrasings
-route to the virtual tool with zero index change.
-"""
+``fetchers/**/source.yaml`` validates into a :class:`SourceSpec` keyed by name. A
+spec MAY carry its retrieval ``corpus`` phrasings inline; when it does not, the
+loader lifts them verbatim from the sibling ``corpus.yaml`` under the spec name."""
 
 from __future__ import annotations
 
@@ -45,10 +37,8 @@ def _fetchers_root() -> Path:
 
 
 def _read_sibling_corpus(source_yaml: Path, name: str) -> list[str]:
-    """Lift retrieval phrasings for ``name`` from the sibling ``corpus.yaml``.
-
-    Returns ``[]`` when the sibling file is absent / malformed / lacks the key.
-    """
+    """Lift retrieval phrasings for ``name`` from the sibling ``corpus.yaml``,
+    returning ``[]`` when that file is absent, malformed, or lacks the key."""
     corpus_path = source_yaml.parent / "corpus.yaml"
     if not corpus_path.exists():
         return []
@@ -66,10 +56,8 @@ def _read_sibling_corpus(source_yaml: Path, name: str) -> list[str]:
 
 def load_spec(data: dict, *, source_hint: str = "<dict>") -> SourceSpec:
     """Validate an already-parsed spec mapping into a :class:`SourceSpec`.
-
-    Raises :class:`SpecLoadError` (wrapping the pydantic ``ValidationError``) so
-    callers get one exception type for both parse and validation failures.
-    """
+    Raises :class:`SpecLoadError` wrapping the pydantic ``ValidationError``, so one
+    exception type covers both parse and validation failures."""
     if not isinstance(data, dict):
         raise SpecLoadError(f"{source_hint}: spec must be a mapping, got {type(data).__name__}")
     try:
@@ -79,11 +67,8 @@ def load_spec(data: dict, *, source_hint: str = "<dict>") -> SourceSpec:
 
 
 def load_spec_from_path(path: Path) -> SourceSpec:
-    """Load + validate one ``source.yaml``, filling corpus from the sibling file.
-
-    If the spec omits ``corpus`` (or leaves it empty), the loader lifts the
-    phrasings from the sibling ``corpus.yaml`` under the spec's ``name``.
-    """
+    """Load and validate one ``source.yaml``, filling corpus from the sibling file:
+    an omitted or empty ``corpus`` is lifted from ``corpus.yaml`` under the spec name."""
     path = Path(path)
     try:
         with path.open() as fh:
@@ -106,12 +91,8 @@ def load_spec_from_path(path: Path) -> SourceSpec:
 
 def compose_specs_from_tree(root: Path | None = None) -> dict[str, SourceSpec]:
     """Walk ``fetchers/**/source.yaml`` and return ``{name: SourceSpec}``.
-
-    A single malformed spec does NOT abort the whole compose -- it is logged and
-    skipped (a broken co-located file never takes down startup), mirroring the
-    best-effort corpus tree walk. Duplicate ``name`` keys: last-wins with a
-    warning (the loader is deterministic via ``sorted`` iteration).
-    """
+    A malformed spec is logged and skipped, never aborting the walk; a duplicate
+    ``name`` is last-wins with a warning, deterministic by sorted iteration."""
     base = Path(root) if root is not None else _fetchers_root()
     composed: dict[str, SourceSpec] = {}
     for spath in sorted(base.rglob("source.yaml")):

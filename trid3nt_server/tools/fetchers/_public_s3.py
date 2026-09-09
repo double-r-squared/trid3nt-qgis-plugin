@@ -1,19 +1,8 @@
-"""_public_s3.py -- anonymous access to PUBLIC AWS S3 buckets, immune to
-AWS_ENDPOINT_URL.
+"""Anonymous access to PUBLIC AWS S3 buckets, immune to ``AWS_ENDPOINT_URL``.
 
-The TRID3NT Local (offline) build points ``AWS_ENDPOINT_URL`` at MinIO so the
-agent's own storage (runs/cache buckets) stays on-disk. boto3 (>=1.28) and
-s3fs/aiobotocore BOTH honor that env var globally, which silently redirects the
-anonymous PUBLIC NOAA open-data reads (``noaa-goesNN`` GLM granules, the
-``hrrrzarr`` Herbie mirror) to MinIO -- listings come back empty / Access
-Denied and the tools fail with misleading "no data upstream" errors (found by
-the 2026-07-06 local tool sweep: fetch_glm_lightning, fetch_hrrr_forecast,
-fetch_hrrr_smoke).
-
-An UNSIGNED/anonymous client never has a reason to target a private endpoint,
-so these helpers pin the real AWS endpoint explicitly. Cloud behavior is
-unchanged (there the env var is unset and the pin equals the default).
-"""
+boto3 and s3fs/aiobotocore both honor ``AWS_ENDPOINT_URL`` globally, so an
+unset-endpoint default would redirect anonymous public-bucket reads at whatever
+private endpoint the environment names; these helpers pin the real AWS endpoint."""
 
 from __future__ import annotations
 

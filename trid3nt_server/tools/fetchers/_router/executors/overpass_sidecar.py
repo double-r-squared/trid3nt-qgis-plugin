@@ -1,22 +1,8 @@
-"""overpass_sidecar executor (trigger wave): vector FGB + a tags SIDECAR.
+"""Vector FGB plus a tags SIDECAR: the one sanctioned side write.
 
-The router is read-through-ONLY; fetch_buildings needs the ONE sanctioned side write:
-a ``.tags.json`` object keyed off the SAME cache key as the ``.fgb`` (the full OSM tag
-bag per footprint), read back cross-module by ``/api/building-detail`` so the inline FGB
-stays slim. This executor is the minimal constrained write extension -- constrained like
-the library_delegate:
-
-- ONE declared sidecar object (``ingest.sidecar_write.ext``), a SIBLING of the ``.fgb``
-  (recomputes the exact ``read_through`` key: same metadata + params + ttl vintage).
-- BEST-EFFORT + telemetry-marked: a sidecar fault NEVER fails the fetch (the slim layer
-  still renders; enrich degrades to a live Overpass-by-id query) -- the honesty floor is
-  untouched (``read_through`` still owns the ``.fgb`` success/error).
-
-The read and the serialization stay shared: the row reads through the ordinary
-library-delegate seam, whose hook returns BOTH halves at once - the slim features
-and the tag bag keyed by the same fid. This module is the side write and nothing
-else.
-"""
+The router is read-through-ONLY. This executor writes ONE declared sidecar object
+keyed off the SAME cache key as the ``.fgb``, so the slim layer and its tag bag are
+siblings. The write is best-effort: a sidecar fault never fails the fetch."""
 
 from __future__ import annotations
 
@@ -40,12 +26,8 @@ __all__ = ["execute", "sidecar_uri"]
 
 def sidecar_uri(spec: SourceSpec, params: dict[str, Any], ext: str) -> str:
     """The ``s3://`` URI of the sidecar SIBLING of this call's ``.fgb`` cache object.
-
-    Recomputes the EXACT key ``read_through`` derives (``source_id = source_class or
-    name``; ``compute_cache_key(source_id, params, ttl)``; ``cache_path(source_class,
-    ttl, key, ext)``) so the sidecar shares the ``.fgb``'s ``<key>``, only the ext
-    differs -- the twin's ``buildings_cache_uri`` contract, now spec-derived.
-    """
+    Recomputes the EXACT key ``read_through`` derives, so the sidecar shares the
+    ``.fgb``'s key and only the extension differs."""
     from ....cache import CACHE_BUCKET, cache_path, compute_cache_key
 
     source_class = spec.source_class
@@ -86,8 +68,8 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     features, tags_by_fid = invoke(spec, params)
 
     if not features:
-        # The twin raised on an empty AOI (it triggered the dead msft fallback);
-        # OSM-only, a bbox with no mapped building footprints is a typed empty.
+        # A bbox with no mapped building footprints is a typed empty: there is no
+        # second source to fall back to.
         raise router_empty_error(
             spec.error_code_prefix,
             f"No OpenStreetMap building footprints intersect bbox={params.get('bbox')!r} "

@@ -1,16 +1,8 @@
 """Router typed-error hierarchy over the shared ``_fetch_common`` bases.
 
-INDISTINGUISHABILITY (router-pilot-contract sec 0 + 2): a spec-driven source's
-A.6 error frame must be byte-identical to the hand-written twin's. The twins
-carry per-source subclasses (``GRIDMETUpstreamError`` etc.) whose ``error_code``
-is ``<SOURCE>_UPSTREAM_ERROR`` / ``<SOURCE>_INPUT_ERROR`` / ``<SOURCE>_EMPTY``.
-The router reproduces that shape from the spec's ``source_class`` at raise time
-via ``router_error(...)``, so the surfaced ``error_code`` + ``retryable`` match
-the twin without a per-source Python class.
-
-These subclass the shared ``FetchError`` base in ``_fetch_common`` (the same
-base the twins subclass), so the server-side A.6 mapping treats them identically.
-"""
+A spec-driven source raises a per-source ``error_code`` -- ``<PREFIX>_UPSTREAM_ERROR``
+/ ``<PREFIX>_INPUT_ERROR`` / ``<PREFIX>_EMPTY`` -- stamped at raise time from the
+spec, so no source needs a Python error class of its own."""
 
 from __future__ import annotations
 
@@ -33,13 +25,9 @@ __all__ = [
 
 
 class RouterError(FetchError):
-    """Base for router-driven fetch failures. Carries a dynamic ``error_code``.
-
-    ``actionability`` (item 3, observability/retention batch): every router
-    error is the upstream 4xx-arg/429/5xx/timeout class -> "agent" (unchanged
-    routing: rich verbatim function_response). Router errors carry no
-    credential concept today, so no subclass overrides this.
-    """
+    """Base for router-driven fetch failures, carrying a dynamic ``error_code``.
+    Every router error is the upstream 4xx-arg/429/5xx/timeout class, so
+    ``actionability`` stays "agent"; no router error carries a credential concept."""
 
     error_code: str = "ROUTER_ERROR"
     retryable: bool = True
@@ -61,11 +49,8 @@ class RouterUpstreamError(RouterError):
 
 
 class RouterEmptyError(RouterError):
-    """The request produced no finite data where an empty result is a typed error.
-
-    (raster/station/tiled sources; vector sources emit an honest header-only FGB
-    instead, never this error.)
-    """
+    """The request produced no finite data where empty is a typed error: raster,
+    station and tiled sources. A vector source emits a header-only FGB instead."""
 
     error_code = "ROUTER_EMPTY"
     retryable = False
@@ -79,20 +64,14 @@ class RouterNotAvailableError(RouterError):
 
 
 # --------------------------------------------------------------------------- #
-# Factories that stamp the twin-identical per-source ``error_code``.
+# Factories that stamp the per-source ``error_code``.
 # --------------------------------------------------------------------------- #
 
 
 def _stamp(cls: type[RouterError], code_prefix: str, suffix: str, message: str) -> RouterError:
-    """Build a RouterError whose ``error_code`` is ``<PREFIX>_<SUFFIX>``.
-
-    ``code_prefix`` is ``SourceSpec.error_code_prefix`` -- the twin's exact A.6
-    token (e.g. ``"COOPS_TIDES"``, ``"GRIDMET"``), NOT necessarily the cache
-    ``source_class``. e.g. code_prefix="GRIDMET" + "UPSTREAM_ERROR" ->
-    "GRIDMET_UPSTREAM_ERROR" -- byte-identical to the ``fetch_gridmet`` twin's
-    ``GRIDMETUpstreamError``; code_prefix="COOPS_TIDES" -> "COOPS_TIDES_EMPTY"
-    even though the cache source_class is ``noaa_coops_tides`` (VERDICT #1).
-    """
+    """Build a RouterError whose ``error_code`` is ``<PREFIX>_<SUFFIX>``, the prefix
+    being ``SourceSpec.error_code_prefix``: the surfaced token, NOT necessarily the
+    cache ``source_class``, which diverges from it."""
     exc = cls(message)
     # Instance-level override wins over the class attribute the server reads.
     exc.error_code = f"{code_prefix.upper()}_{suffix}"
@@ -103,9 +82,8 @@ def _stamp(cls: type[RouterError], code_prefix: str, suffix: str, message: str) 
 def router_input_error(
     code_prefix: str, message: str, suffix: str = "INPUT_ERROR"
 ) -> RouterInputError:
-    """Typed bad-input error. ``suffix`` defaults to the byte-identical
-    ``INPUT_ERROR`` but a source may stamp its own (hifld/census ``INPUT_INVALID``,
-    esri per-param ``BBOX_INVALID`` / ``YEAR_INVALID``)."""
+    """Typed bad-input error. ``suffix`` defaults to ``INPUT_ERROR``; a source may
+    stamp its own (``INPUT_INVALID``, per-param ``BBOX_INVALID`` / ``YEAR_INVALID``)."""
     return _stamp(RouterInputError, code_prefix, suffix, message)  # type: ignore[return-value]
 
 
@@ -116,8 +94,8 @@ def router_upstream_error(code_prefix: str, message: str) -> RouterUpstreamError
 def router_empty_error(
     code_prefix: str, message: str, suffix: str = "EMPTY"
 ) -> RouterEmptyError:
-    """Typed empty/no-coverage error. ``suffix`` defaults to ``EMPTY`` but esri
-    stamps ``NO_COVERAGE`` (ESRI_LANDCOVER_NO_COVERAGE)."""
+    """Typed empty/no-coverage error. ``suffix`` defaults to ``EMPTY``; a source may
+    stamp its own, e.g. ``NO_COVERAGE``."""
     return _stamp(RouterEmptyError, code_prefix, suffix, message)  # type: ignore[return-value]
 
 
@@ -126,13 +104,9 @@ def router_not_available_error(code_prefix: str, message: str) -> RouterNotAvail
 
 
 def bbox_error_suffix(spec: Any) -> str:
-    """The A.6 input-error suffix for a bbox-class failure (gate / malformed bbox).
-
-    Returns the bbox param's ``error_suffix`` when it pins one (esri
-    ``BBOX_INVALID``), else the spec-level ``input_error_suffix`` (gridmet/coops
-    ``INPUT_ERROR``, hifld/census ``INPUT_INVALID``). Duck-typed over SourceSpec
-    so ``errors`` stays import-cycle free.
-    """
+    """The input-error suffix for a bbox-class failure (gate or malformed bbox):
+    the bbox param's ``error_suffix`` when it pins one, else the spec-level
+    ``input_error_suffix``. Duck-typed over SourceSpec to stay import-cycle free."""
     for pspec in getattr(spec, "params", {}).values():
         if getattr(pspec, "type", None) == "bbox" and getattr(pspec, "error_suffix", None):
             return pspec.error_suffix

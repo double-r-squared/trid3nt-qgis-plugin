@@ -1,30 +1,8 @@
 """animation_frames executor: the FRAMES-LIST output shape.
 
-Selected when a spec declares ``shape: animation_frames``. Unlike every other
-executor (which returns ONE ``bytes`` body the ``route()`` read_through caches into
-ONE LayerURI), an animation source is an ORDERED, per-timestamp sequence: each
-frame is its OWN cache entry and its OWN ``LayerURI``, so this executor owns the
-per-frame ``read_through`` loop and returns ``list[LayerURI]`` directly (``route()``
-returns the list, no top-level read_through).
-
-The two PURE-ish source hooks own the source-specific steps; the executor owns the
-loop, the cache, the per-frame graceful-degrade + honesty floor, and the LayerURI
-emission:
-
-- ``hooks.frames_plan(spec, params) -> list[FramePlan]`` -- the pre-loop resolve:
-  fetch the timestamp index, window it, subsample, (optionally) filter, and return
-  the ordered per-frame plans (each with its cache_params + scrubber name-token +
-  layer_id + bbox). Raises the source's typed EMPTY when the window matched no
-  frames (honesty floor: an empty window is a hard typed no-data, never [] success).
-- ``hooks.frame_bytes(spec, params, frame) -> bytes`` -- build ONE frame's COG
-  bytes (the SLIDER tile-stitch mosaic, or a post-stitch blend). It raises
-  ``FrameDegraded`` to skip a single transparent / off-swath / upstream-failed
-  frame; the executor records the skip and drops it.
-
-Honesty floor: a run that produced NO frames (every frame degraded) raises the
-source's typed EMPTY error naming the last degradation -- never a silent empty list,
-never a fabricated success.
-"""
+An animation source is an ORDERED per-timestamp sequence, so each frame is its own
+cache entry and its own ``LayerURI``. A run that produced NO frames raises the
+source's typed EMPTY error, never a silent empty list."""
 
 from __future__ import annotations
 
@@ -50,6 +28,14 @@ def execute(
     spec: SourceSpec, params: dict[str, Any], metadata: AtomicToolMetadata
 ) -> list[LayerURI]:
     """Drive the per-frame read_through loop and emit an ordered ``list[LayerURI]``."""
+
+    # The two source hooks own the source-specific steps and nothing else:
+    # ``frames_plan`` is the pre-loop resolve (fetch the timestamp index, window,
+    # subsample, filter) returning the ordered per-frame plans, and raising the
+    # source's typed EMPTY when the window matched no frames; ``frame_bytes`` builds
+    # ONE frame's COG bytes and raises ``FrameDegraded`` to skip a single transparent,
+    # off-swath or upstream-failed frame. The executor owns the loop, the cache, the
+    # per-frame degrade and the LayerURI emission.
     frames_plan = resolve_hook(spec.hooks.frames_plan)  # type: ignore[union-attr]
     frame_bytes = resolve_hook(spec.hooks.frame_bytes)  # type: ignore[union-attr]
 

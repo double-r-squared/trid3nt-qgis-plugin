@@ -1,25 +1,8 @@
 """Record-return executor: the bare-JSON-dict output shape.
 
-Selected when a spec declares ``shape: record`` / ``output.layer_type: record``.
-The source's result is a STRUCTURED DICT (a discovery record, a summary), NOT a
-renderable LayerURI -- so the router does not build a LayerURI or serialize a
-COG/FGB; it produces JSON bytes the read-through caches and ``route()`` returns as
-the parsed dict envelope.
-
-The router owns the transport (fetching the ``hooks.build_request`` plans through
-the shared pooled client + retry authority) and the cache; the PURE ``hooks.record``
-hook shapes the fetched body/bodies into the dict. The plans are walked IN ORDER and
-the executor STOPS at the first plan whose record hook returns a non-None dict -- the
-wfigs Current->YearToDate best-feature short-circuit (a recently-contained fire the
-live feed dropped resolves against the all-incidents sibling). If EVERY plan yields
-None the source's typed empty/not-found error raises (honesty floor: the hook never
-fabricates a success dict, and a bad body still raises a typed upstream error via the
-shared factories -- so a "no such record" is an honest typed dead-end, never a silent
-empty the caller could narrate as a hit).
-
-A record spec that declares no ``build_request`` (a pure dict builder needing no
-fetch) calls the record hook once with an empty body list.
-"""
+The source's result is a STRUCTURED DICT, not a renderable LayerURI, so the router
+serializes no COG or FGB: it produces JSON bytes the read-through caches, and the
+pure ``hooks.record`` hook shapes the fetched bodies into that dict."""
 
 from __future__ import annotations
 
@@ -41,12 +24,9 @@ __all__ = ["execute"]
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Fetch the build plan(s) and shape the record dict to JSON bytes (fetch_fn body).
-
-    Returns the ``json.dumps`` of the first non-None ``hooks.record`` dict, walking
-    the build plans in order (first-usable-record short-circuit). Raises the source's
-    typed empty/not-found error when every plan yields None.
-    """
+    """Fetch the build plan(s) and shape the record dict to JSON bytes: the first
+    non-None ``hooks.record`` dict, walking the plans in order. Every plan yielding
+    None raises the source's typed empty/not-found error, never a fabricated hit."""
     record = resolve_hook(spec.hooks.record)  # type: ignore[union-attr]
     build_name = spec.hooks.build_request if spec.hooks is not None else None
     if not build_name:

@@ -1,30 +1,8 @@
-"""Promotion registration (data-router fold, phase-2 wave 1 -- the first real cut).
+"""Promotion registration: a ``source.yaml`` spec becomes THE tool under its name.
 
-Both parity gates PASSED for the 5 pilots (replication 5/5 edge-matrix +
-routing SUPPORTED byte-identical), so per the cull doctrine the hand-written
-twins DIE and their spec-driven surfaces take their names. This module registers
-each ``source.yaml`` spec as THE tool under its twin name at import time
-(``tier="general"`` -> the DEFAULT retrieval pool), NOT behind an env toggle: the
-experiment machinery retired here; promotion is the default.
-
-INDISTINGUISHABILITY (data-router-fold.md retention principle): the promoted tool
-is byte-identical to the twin at every consumer surface EXCEPT the callable body:
-
-- Docstring: carried VERBATIM from the twin (``spec.docstring``), so the
-  ``FunctionDeclaration`` description AND the BM25/dense retrieval-index document
-  text do not shift (the routing-parity index invariant).
-- Signature: SYNTHESIZED from ``spec.params`` (:func:`promoted_signature`) with
-  the twin's exact param names / required set / defaults, so
-  ``FunctionDeclaration.from_callable`` builds the same inputSchema and the
-  dispatch-time ``tool_arg_normalizer`` (``inspect.signature`` + ``get_type_hints``)
-  sees the twin's params.
-- Callable seam: ``TOOL_REGISTRY[name].fn`` is the router closure, so every nested
-  consumer (``sfincs_forcing_autowire`` et al.) resolves the same name to a
-  ``(**kwargs) -> LayerURI`` callable -- a mechanical repoint, envelope unchanged.
-- Payload gate: a per-spec synthetic module exposes the synthesized
-  ``estimate_payload_mb`` so the server ``tool-payload-warning`` seam resolves it
-  exactly as it resolved the twin's module-level estimator.
-"""
+Every consumer surface is built from the declaration: the docstring carried verbatim,
+the signature synthesized from ``spec.params``, the callable seam a router closure,
+and a per-spec synthetic module carrying ``estimate_payload_mb``."""
 
 from __future__ import annotations
 
@@ -60,13 +38,13 @@ __all__ = [
 #: twin_name -> SourceSpec for every promoted spec-driven tool (diagnostics/tests).
 _SPEC_REGISTRY: dict[str, SourceSpec] = {}
 
-#: Catalog-surfacing experiment flag (experiments/catalog_surfacing/DESIGN.md).
+#: Catalog-surfacing experiment flag.
 #: UNSET (default) -> the spec-served sources register tier="general" (ambient).
 #: "1" (card-carried), "2" (discovery-expands-declaration) or "3" -> they register
 #: tier="catalog": EXCLUDED from the default declarable pool but KEPT in the search
 #: index, reachable by name through ``fetch_from_catalog(source=...)``. The flag is
 #: read at import so each arm runs in its OWN process with a clean pool; DEFAULT
-#: behaviour is byte-identical when it is unset.
+#: behaviour is unchanged when it is unset.
 CATALOG_ARM_ENV = "TRID3NT_CATALOG_ARM"
 
 
@@ -77,12 +55,9 @@ def catalog_arm() -> str | None:
 
 
 def _annotation_for(ptype: str) -> Any:
-    """The schema-compatible Python annotation for a spec param type.
-
-    bbox -> ``list[float]`` (the adapter simplifies the twin's tuple annotation to
-    the same array schema); int/float pass through; every string-ish type
-    (``iso_date`` / ``enum`` / ``str``) -> ``str``.
-    """
+    """The schema-compatible Python annotation for a spec param type: bbox becomes
+    ``list[float]``, int and float pass through, and every string-ish type
+    (``iso_date`` / ``enum`` / ``str``) becomes ``str``."""
     if ptype == "bbox":
         return list[float]
     if ptype == "point":
@@ -106,13 +81,9 @@ def _annotation_for(ptype: str) -> Any:
 
 
 def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, Any]]:
-    """Synthesize the promoted tool's signature + annotations from ``spec.params``.
-
-    Required (no-default) params first, defaulted params next, then a VAR_KEYWORD
-    absorber (the twin's ``**_extra_ignored``). A param is REQUIRED-in-signature iff
-    it is ``required`` and carries no ``default`` -- exactly the twin's contract, so
-    ``from_callable`` reproduces the twin's inputSchema ``properties`` + ``required``.
-    """
+    """Synthesize the promoted tool's signature and annotations from ``spec.params``:
+    required params first, defaulted next, then a VAR_KEYWORD absorber. A param is
+    required-in-signature iff it is ``required`` and carries no ``default``."""
     required: list[inspect.Parameter] = []
     optional: list[inspect.Parameter] = []
     annotations: dict[str, Any] = {}
@@ -125,12 +96,10 @@ def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, A
             )
         else:
             # The adapter marks a None-default NON-Optional annotation as
-            # required-in-schema (the "None-default is required" quirk wave-2
-            # relies on: min_voltage_kv / year_range / date). A param that the
-            # twin author wrote ``T | None = None`` (Optional) is NOT required in
-            # the twin schema; ``schema_optional`` reproduces that by annotating
-            # ``X | None`` so the adapter keeps it OUT of required (wqp bbox, nldi
-            # seed_point / comid). Default preserves the wave-2 required quirk.
+            # required-in-schema (min_voltage_kv / year_range / date rely on that).
+            # A param declared ``T | None = None`` is NOT required; ``schema_optional``
+            # reproduces that by annotating ``X | None``, so the adapter keeps it out
+            # of required (wqp bbox, nldi seed_point / comid).
             opt_ann = (ann | None) if (pspec.default is None and getattr(pspec, "schema_optional", False)) else ann
             annotations[pname] = opt_ann
             optional.append(
@@ -145,18 +114,17 @@ def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, A
         inspect.Parameter("_extra_ignored", inspect.Parameter.VAR_KEYWORD, annotation=Any)
     ]
     annotations["_extra_ignored"] = Any
-    # An animation_frames source returns an ordered list[LayerURI]; every
-    # other shape returns a single LayerURI / record dict. The return annotation is
-    # cosmetic to the inputSchema (built from params) but kept honest so the promoted
-    # signature reads like the twin's ``-> list[LayerURI]``.
+    # An animation_frames source returns an ordered list[LayerURI]; every other shape
+    # returns a single LayerURI / record dict. The return annotation is cosmetic to
+    # the inputSchema, which is built from params, but is kept honest anyway.
     ret = list if spec.shape == "animation_frames" else dict
     annotations["return"] = ret
     return inspect.Signature(params, return_annotation=ret), annotations
 
 
 def _synthesize_doc(spec: SourceSpec) -> str:
-    """The promoted tool's docstring: the twin's verbatim (indistinguishability)
-    when the spec carries it, else a spec-derived surface from caveats + corpus."""
+    """The promoted tool's docstring: the spec's own when it carries one, else a
+    surface derived from its caveats and corpus phrasings."""
     if spec.docstring:
         return spec.docstring
     lines = [f"{spec.name} (spec-driven, source_class={spec.source_class})."]
@@ -168,13 +136,9 @@ def _synthesize_doc(spec: SourceSpec) -> str:
 
 
 def _estimator_module(spec: SourceSpec) -> str:
-    """Create a per-spec synthetic module carrying ``estimate_payload_mb``.
-
-    The payload-warning seam resolves the estimator via
-    ``getattr(import_module(entry.module), "estimate_payload_mb")``; giving each
-    promoted tool its own module makes that resolution point at the spec's
-    synthesized estimator (indistinguishable from a twin's module-level estimator).
-    """
+    """Create a per-spec synthetic module carrying ``estimate_payload_mb``. The
+    payload-warning seam resolves the estimator off ``entry.module``, so each
+    promoted tool needs a module of its own for that lookup to land."""
     mod_name = f"trid3nt_server.tools.fetchers._router._promoted.{spec.name}"
     mod = types.ModuleType(mod_name)
     mod.estimate_payload_mb = router.synthesize_payload_estimator(spec)  # type: ignore[attr-defined]
@@ -183,12 +147,9 @@ def _estimator_module(spec: SourceSpec) -> str:
 
 
 def _validate_hooks(spec: SourceSpec) -> None:
-    """Assert every ``hooks.*`` name the spec declares resolves at load.
-
-    The hook contract is a name-string reference; a typo or a deleted hook must
-    fail LOUDLY at registration, not silently at first call. Importing
-    ``_router.hooks`` populates ``HOOK_REGISTRY`` via the hook modules' decorators.
-    """
+    """Assert every ``hooks.*`` name the spec declares resolves at load. The hook
+    contract is a name-string reference, so a typo or a deleted hook must fail
+    LOUDLY at registration rather than silently at first call."""
     from .hooks import HookResolutionError, has_hook
 
     if spec.hooks is not None:
@@ -282,11 +243,9 @@ def _validate_hooks(spec: SourceSpec) -> None:
 
 
 def register_spec(spec: SourceSpec) -> str:
-    """Register the spec-driven surface as THE tool under ``spec.name`` (tier=general).
-
-    Idempotent: a second registration of an already-present name is a no-op (it
-    only re-records the spec). Returns the registered name.
-    """
+    """Register the spec-driven surface as THE tool under ``spec.name`` and return
+    that name. Idempotent: a second registration of a present name only re-records
+    the spec."""
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
     from trid3nt_server import tools as _tools
@@ -336,8 +295,8 @@ def register_spec(spec: SourceSpec) -> str:
         # DATA-native resolution declarations ride from the spec onto the
         # metadata so the gate card can quote them (two-layer truth: data facts here).
         resolution_specs=spec.resolution_declarations,
-        # the declared confirm gate (ADR 0273): a heavy fetcher's resolution gate
-        # rides onto the metadata so the server gate engine reads membership here.
+        # The declared confirm gate: a heavy fetcher's resolution gate rides onto the
+        # metadata, so the server gate engine reads membership here.
         gate_spec=router._gate_spec_for_source(spec),
     )
     _tools.register_tool(metadata)(_promoted)
@@ -351,13 +310,9 @@ def register_spec(spec: SourceSpec) -> str:
 
 
 def register_specs_from_tree(root: Path | None = None) -> list[str]:
-    """Walk ``fetchers/**/source.yaml`` and promote each spec to a registered tool.
-
-    Returns the registered names. Called ONCE from ``agent/tools/__init__.py`` at
-    import time (replacing the deleted twins' eager imports). A single spec that
-    fails to register (e.g. an unresolved hook name) is logged and skipped so one
-    broken co-located file never takes down startup -- mirroring the compose walk.
-    """
+    """Walk ``fetchers/**/source.yaml``, promote each spec, and return the registered
+    names. A spec that fails to register -- an unresolved hook name, say -- is logged
+    and skipped, so one broken co-located file never takes down startup."""
     registered: list[str] = []
     for spec in compose_specs_from_tree(root).values():
         try:
@@ -373,12 +328,9 @@ def registered_spec_names() -> set[str]:
 
 
 def get_spec(name: str) -> SourceSpec | None:
-    """The promoted ``SourceSpec`` for ``name`` (None if not spec-served).
-
-    The in-process seam for a consumer that needs a source's raw fetched bytes
-    without the cache/publish round trip (region_choice's admin-boundary candidate
-    build): resolve the spec, then run ``router.validate_params`` + the executor.
-    """
+    """The promoted ``SourceSpec`` for ``name``, or None when it is not spec-served.
+    The in-process seam for a consumer that needs a source's raw bytes without the
+    cache and publish round trip: resolve, validate params, run the executor."""
     return _SPEC_REGISTRY.get(name)
 
 
@@ -397,13 +349,9 @@ def _param_schema_entry(pspec: Any) -> dict[str, Any]:
 
 
 def spec_card(spec: SourceSpec, relevance_score: float | None = None) -> dict[str, Any]:
-    """Project a ``SourceSpec`` into a Design-1 catalog CARD.
-
-    Carries the FULL untruncated docstring (NOT clipped at the provider ~1000-char
-    tool limit), the typed param schema derived from ``spec.params``, and the
-    honesty context (gates / caveats / fallback) -- the model's ONLY view of
-    per-source detail in Design 1.
-    """
+    """Project a ``SourceSpec`` into a catalog CARD carrying the FULL untruncated
+    docstring (never clipped at the provider tool-description limit), the typed param
+    schema, and the honesty context of gates, caveats and fallback."""
     card: dict[str, Any] = {
         "name": spec.name,
         "source_class": spec.source_class,
@@ -419,12 +367,9 @@ def spec_card(spec: SourceSpec, relevance_score: float | None = None) -> dict[st
 
 
 def search_spec_cards(topic: str, k: int = 10) -> list[dict[str, Any]]:
-    """Rank spec-served source CARDS for a free-text topic (Design 1 search path).
-
-    Ranks through the SAME BM25/dense retrieval index Design 2's discovery uses
-    (ranking parity), then keeps only the spec-served sources and projects each to
-    a card. Returns ``[]`` on a cold index (caller fails open / escalates).
-    """
+    """Rank spec-served source CARDS for a free-text topic through the same retrieval
+    index discovery uses, keeping only spec-served sources. Returns ``[]`` on a cold
+    index, for the caller to fail open on."""
     from trid3nt_server.tools.search.tool_retrieval import (
         MAX_K,
         retrieve_ranked_tools,

@@ -1,29 +1,14 @@
-"""Copernicus CDS library-delegate hooks: ERA5 + GTSM.
+"""Copernicus CDS library-delegate hooks: ERA5 and GTSM.
 
-The CDS/``cdsapi`` client owns the request-poll-download socket, so both CDS
-sources fold onto the ``library_delegate`` executor: the router keeps
-params / gates / stamps / cache / typed-errors, and these hooks own the ONE
-sanctioned impurity -- the ``cdsapi.Client.retrieve`` call under a declared
-wall-clock timeout (``ingest.delegate.timeout_s``). Two sources share this module:
+The ``cdsapi`` client owns the request-poll-download socket, so both sources fold
+onto the library-delegate executor: these hooks own a ``retrieve`` call under a
+declared wall-clock timeout, plus a pure pre-cache validate hook per source."""
 
-- ``era5.read``  -> ``(array, transform, crs)`` for the raster COG writer
-  (single CDS-native variable, OR the derived ``10m_wind_speed`` = two retrieves
-  combined by ``hypot(u, v)``).
-- ``gtsm.read``  -> ``list[GeoJSON feature]`` for the vector FGB writer
-  (one Point per in-bbox gauge carrying the inline ``time_series_csv``).
-
-Each source also declares a pure ``delegate_validate`` hook running pre-cache /
-pre-network (bbox + variable/output + date-range gates, byte-identical to the
-twins' ``_validate_*`` helpers).
-
-KEY RESOLUTION (per-source): ``api_key`` kwarg -> str ``secret_ref`` -> the
-``TRID3NT_COPERNICUS_CDS_API_KEY`` env var -> ``None`` (cdsapi falls back to
-``~/.cdsapirc``). ``None`` is NOT an error: the cdsapi Client constructor raises
-its own "Missing/incomplete configuration file" when no credential exists, and
-the classifier below maps that to the source's ``*_MISSING_KEY`` (the credential
-card). Live-positive requires a resolvable key; the offline surface is
-missing-key + input-validation parity (no key is ever registered here).
-"""
+# KEY RESOLUTION, per source: an ``api_key`` kwarg, then a str ``secret_ref``, then
+# the ``TRID3NT_COPERNICUS_CDS_API_KEY`` env var, then None. None is NOT an error:
+# cdsapi falls back to ``~/.cdsapirc``, and absent that its Client constructor raises
+# its own missing-configuration error, which the classifier below maps to the source's
+# ``*_MISSING_KEY``. No key is ever registered here.
 
 from __future__ import annotations
 
@@ -58,10 +43,10 @@ logger = logging.getLogger(
 _DEFAULT_CDS_URL = "https://cds.climate.copernicus.eu/api"
 _KEY_ENV = "TRID3NT_COPERNICUS_CDS_API_KEY"
 
-#: The missing-``~/.cdsapirc`` / no-config phrase family (ERA5 twin's list). The
-#: cdsapi Client constructor raises "Missing/incomplete configuration file:
-#: <path>/.cdsapirc" when no credential is discoverable; these catch that (+ the
-#: close variants) WITHOUT over-matching a transient/queue/network upstream error.
+#: The missing-``~/.cdsapirc`` / no-config phrase family. The cdsapi Client
+#: constructor raises "Missing/incomplete configuration file: <path>/.cdsapirc" when
+#: no credential is discoverable; these catch that and its close variants WITHOUT
+#: over-matching a transient queue or network upstream error.
 _MISSING_KEY_CDS_PHRASES: tuple[str, ...] = (
     ".cdsapirc",
     "missing/incomplete configuration",
@@ -112,13 +97,9 @@ _GTSM_MAX_DATE_RANGE_DAYS = 366
 
 
 def _resolve_key(params: dict[str, Any]) -> str | None:
-    """Resolve the CDS key: api_key kwarg -> str secret_ref -> env var -> None.
-
-    Returns ``None`` when every path misses (NOT an error): cdsapi falls back to
-    ``~/.cdsapirc`` and, absent that, raises the missing-config error the retrieve
-    classifier maps to the source's ``*_MISSING_KEY``. A str ``secret_ref`` is a
-    ref/shortcut passed verbatim (the firms_active_fire keyed precedent).
-    """
+    """Resolve the CDS key: ``api_key`` kwarg, then a str ``secret_ref`` passed
+    verbatim, then the env var, then ``None``. None is NOT an error -- cdsapi falls
+    back to ``~/.cdsapirc``, and its own missing-config error classifies downstream."""
     api_key = params.get("api_key")
     if api_key:
         return str(api_key)
@@ -141,15 +122,9 @@ def _cds_retrieve_with_timeout(
     timeout_s: float,
     missing_phrases: tuple[str, ...],
 ) -> None:
-    """Run ``cdsapi.Client.retrieve`` under a wall-clock watchdog; classify failures.
-
-    cdsapi has no native timeout, so the retrieve runs in a daemon worker thread
-    joined with a deadline (the twins' exact watchdog). On the failure path the
-    caught exception message is classified in priority order: MISSING-KEY (no
-    credential configured) -> AUTH (a key present but rejected) -> generic
-    retryable UPSTREAM -- via the shared ``router_*_error`` factories so the A.6
-    code is the twin's ``<PREFIX>_MISSING_KEY`` / ``_AUTH_ERROR`` / ``_UPSTREAM_ERROR``.
-    """
+    """Run ``cdsapi.Client.retrieve`` under a wall-clock watchdog, since cdsapi has no
+    native timeout: a daemon worker thread joined with a deadline. A failure classifies
+    in priority order -- missing key, then auth, then retryable upstream."""
     import threading
 
     sc = spec.error_code_prefix
@@ -196,7 +171,7 @@ def _cds_retrieve_with_timeout(
 
 
 def _validate_bbox(sc: str, bbox: Any, suffix: str) -> tuple[float, float, float, float]:
-    """Shared CDS bbox gate (both twins' ``_validate_bbox``, byte-identical)."""
+    """Shared CDS bbox gate."""
     if not isinstance(bbox, (tuple, list)) or len(bbox) != 4:
         raise router_input_error(sc, f"bbox must be (west, south, east, north); got {bbox!r}", suffix)
     try:
@@ -230,7 +205,7 @@ def _parse_iso(sc: str, s: Any, field: str, suffix: str) -> _dt.date:
 
 @register_hook("era5.validate")
 def era5_validate(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Pre-cache ERA5 input gate (bbox + variable + date-range), the twin's helpers."""
+    """Pre-cache ERA5 input gate: bbox, variable and date range."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
     _validate_bbox(sc, params.get("bbox"), sfx)
@@ -275,7 +250,7 @@ def _era5_build_request(variable: str, bbox: tuple[float, float, float, float], 
 
 
 def _era5_netcdf_to_da(spec: SourceSpec, nc_path: str, cds_variable: str, bbox: tuple[float, float, float, float]) -> Any:
-    """CDS NetCDF -> a single 2D lat-ascending DataArray clipped to bbox (twin parity)."""
+    """CDS NetCDF to a single 2D lat-ascending DataArray clipped to the bbox."""
     import numpy as np
     import rioxarray  # noqa: F401 -- registers the .rio accessor
     import xarray as xr
@@ -359,12 +334,9 @@ def _da_to_array_transform(da: Any) -> tuple[Any, Any, Any]:
 
 @register_hook("era5.read")
 def era5_read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> tuple[Any, Any, Any]:
-    """CDS retrieve(s) -> NetCDF(s) -> north-up ``(array, transform, crs)``.
-
-    A CDS-native variable = one retrieve -> one array. The derived
-    ``10m_wind_speed`` = two retrieves (U + V 10 m components) combined into the
-    elementwise magnitude ``hypot(u, v)`` on the shared ERA5 0.25 deg grid.
-    """
+    """CDS retrieves to a north-up ``(array, transform, crs)``. A CDS-native variable is
+    one retrieve; the derived ``10m_wind_speed`` is two, the U and V components
+    combined into the elementwise magnitude on their shared grid."""
     import numpy as np
     import xarray as xr
 
@@ -425,7 +397,7 @@ def era5_read(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> 
 
 @register_hook("gtsm.validate")
 def gtsm_validate(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Pre-cache GTSM input gate (bbox + output + date-range), the twin's helpers."""
+    """Pre-cache GTSM input gate: bbox, output and date range."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
     _validate_bbox(sc, params.get("bbox"), sfx)

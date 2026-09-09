@@ -1,45 +1,29 @@
-"""Tier-3 hook contract: the named, registered, PURE extension points.
+"""The hook contract: the named, registered, PURE extension points.
 
-A source whose bespoke-ness is a single clean irreducible step the declarative
-param/ingest surface cannot express references a registered pure function by name
-in its ``source.yaml`` (``hooks.build_request`` / ``hooks.parse_response``). This
-package is that function set: a name -> callable table (:data:`HOOK_REGISTRY`), the
-:func:`register_hook` decorator that fills it, and :func:`resolve_hook` /
-:func:`has_hook` the router + registration read.
+A source whose bespoke-ness is one irreducible step the declarative surface cannot
+express names a registered pure function in its ``source.yaml``. A hook is PURE --
+no transport, cache or gate -- MINIMAL, REGISTERED under a validated name, TESTED."""
 
-DOCTRINE (data-router-fold.md, tier-3): hooks are PURE, MINIMAL, REGISTERED,
-TESTED. Pure = no I/O (transport, caching, gates, stamps, and the typed-error
-FACTORY machinery stay router-owned; a hook only computes and MAY call a shared
-``router_*_error`` factory to raise a source-stamped typed error). Minimal = a
-hook point exists only because a real source needs it. Registered = referenced by
-a name string a spec load validates. Tested = each hook module carries its own
-unit tests.
-
-Hook signatures:
-- ``build_request(spec, params) -> list[RequestPlan]`` -- source-specific
-  request construction + bespoke pre-fetch input validation. 1..N plans.
-- ``parse_response(spec, params, bodies: list[bytes]) -> list[dict]`` -- decode
-  the source payload(s) into GeoJSON-ish point features; raise the honest-empty /
-  too-large / bad-body typed errors.
-
-Chained-resolution mode adds five PURE points for the resolve-then-fetch
-/ bounded per-item enrichment shape; the router owns every round trip + the loops:
-- ``resolve_build(spec, params) -> list[RequestPlan]`` -- round-1 name->id request(s)
-  (or ``[]`` to skip); ``resolve_parse(spec, params, bodies) -> dict`` -- the resolved
-  id as a params-merge (runs pre-cache-key so name+id collapse).
-- ``next_page(spec, params, bodies) -> RequestPlan | None`` -- offset-paging loop
-  control (next page or stop).
-- ``enrich_plan(spec, params, features) -> list[(ref_key, RequestPlan)]`` -- per-item
-  detail requests; ``enrich_merge(spec, params, features, results) -> list[dict]`` --
-  fold the deduped/bounded/best-effort detail back in (every feature survives).
-
-Envelope mode adds the POST-EMIT point for a LayerURI-SUBCLASS result:
-- ``envelope(spec, params, layer, data: bytes) -> dict`` -- the last hook the router
-  calls; over the assembled ``LayerURI`` + the produced bytes it computes the extra
-  business fields (breakdowns / caveats / notes) for the spec's
-  ``output.result_model`` subclass. PURE (no transport); the router drops the
-  honesty-floor-owned ``uri`` / ``layer_type`` keys so a hook can only enrich.
-"""
+# The hook points, by mode.
+#
+# The base pair: ``build_request(spec, params) -> list[RequestPlan]`` is the
+# source-specific request construction and pre-fetch input validation, 1..N plans;
+# ``parse_response(spec, params, bodies) -> list[dict]`` decodes the payloads into
+# GeoJSON-ish features and raises the honest-empty, too-large and bad-body errors.
+#
+# Chained resolution adds five points for resolve-then-fetch with bounded per-item
+# enrichment, the router owning every round trip and both loops: ``resolve_build``
+# builds the round-1 name-to-id requests (or [] to skip) and ``resolve_parse``
+# returns the resolved id as a params-merge, pre-cache-key, so name and id collapse
+# to one entry; ``next_page`` is offset-paging loop control; ``enrich_plan`` emits
+# the per-item detail requests and ``enrich_merge`` folds the deduped, bounded,
+# best-effort results back in, every feature surviving.
+#
+# Envelope mode adds the post-emit point: ``envelope(spec, params, layer, data)`` is
+# the LAST hook the router calls, computing the extra business fields for the spec's
+# ``output.result_model`` subclass over the assembled layer and the produced bytes.
+# It is pure, and the router drops the honesty-floor-owned ``uri`` and ``layer_type``
+# keys from its return, so a hook can only enrich.
 
 from __future__ import annotations
 
@@ -64,19 +48,13 @@ __all__ = [
 
 @dataclass(frozen=True)
 class RequestPlan:
-    """One request the router transport executes on a ``build_request`` hook's behalf.
+    """One request the router transport executes on a hook's behalf: PURE data, so the
+    hook decides url, query, headers, method and body while the router owns the socket,
+    the retry authority and the typed errors."""
 
-    PURE data (no socket): the hook decides the URL / query params / headers /
-    method / JSON body; the router owns the actual GET or POST, its retry
-    authority, and typed transport errors.
-
-    ``method`` defaults to ``"GET"`` (every prior hook). ``"POST"`` sends
-    ``json_body`` as a JSON request body -- the write-method REST shape whose
-    query is a body, not a query string (USACE NSI's structures POST) -- or, when
-    ``data`` is set instead, a form-encoded body (the Overpass interpreter reads
-    its QL from the ``data`` form field). No I/O still happens in the hook: it
-    only DESCRIBES the request.
-    """
+    # ``method`` defaults to "GET". "POST" sends ``json_body`` as a JSON request body,
+    # the REST shape whose query is a body rather than a query string, or, when
+    # ``data`` is set instead, a form-encoded body.
 
     url: str
     params: dict[str, Any] | None = None
@@ -88,52 +66,39 @@ class RequestPlan:
 
 @dataclass(frozen=True)
 class FramePlan:
-    """One frame of a ``shape: animation_frames`` sequence.
+    """One frame of a ``shape: animation_frames`` sequence: PURE data, produced in
+    order by the ``frames_plan`` hook with the window and subsample already applied,
+    and driven one ``read_through`` per frame by the executor."""
 
-    PURE data: the ``frames_plan`` hook produces the ORDERED list of these (the
-    pre-loop window/subsample already applied), and the ``animation_frames``
-    executor drives one ``read_through`` per frame + emits a ``LayerURI`` per frame.
-
-    - ``cache_params`` -- the per-frame read_through cache key (byte-identical to
-      the hand-written twin's per-frame params so the fold reuses cached frames).
-    - ``name`` -- the emitted ``LayerURI.name``, the layer's caption.
-    - ``valid_from`` / ``valid_to`` -- the ISO-8601 UTC window this frame is
-      valid for, which the map stamps as the layer's fixed temporal range. The
-      plan holds the instants already; spelling a time into ``name`` for a
-      reader to parse back out is the same fact in the wrong data class.
-    - ``layer_id`` -- the emitted ``LayerURI.layer_id`` (a per-product stem keeps
-      sibling products in separate scrubber groups).
-    - ``bbox`` -- the AOI bbox stamped on every frame's ``LayerURI.bbox``.
-    - ``fetch_context`` -- OPTIONAL out-of-cache-key fetch inputs the frame_bytes
-      hook needs but that must NOT enter the read_through key: the raw
-      MCMIPC S3 object key + the raw (unrounded) fetch args for an archive frame,
-      which is addressed by an opaque per-scan key the ts-addressed SLIDER frames
-      never carried. Defaulted empty -> a strict no-op for the wave-1 SLIDER frames.
-    """
-
+    #: The per-frame read_through cache key.
     cache_params: dict[str, Any]
+    #: The emitted LayerURI.name, which is the layer's caption.
     name: str
+    #: The emitted LayerURI.layer_id; a per-product stem keeps sibling products in
+    #: separate scrubber groups.
     layer_id: str
+    #: The AOI bbox stamped on every frame's LayerURI.bbox.
     bbox: tuple[float, float, float, float]
+    #: The ISO-8601 UTC window this frame is valid for, which the map stamps as the
+    #: layer's fixed temporal range. The plan holds the instants already; spelling a
+    #: time into ``name`` for a reader to parse back out is the same fact in the wrong
+    #: data class.
     valid_from: str | None = None
     valid_to: str | None = None
+    #: OPTIONAL fetch inputs the frame_bytes hook needs that must NOT enter the
+    #: read_through key -- an opaque per-scan object key, the raw unrounded fetch args
+    #: -- for a frame addressed by something other than its timestamp.
     fetch_context: dict[str, Any] = field(default_factory=dict)
-    #: OPTIONAL per-frame style row override. The archive source emits
-    #: distinct bands with distinct presets (goes_rgb_animation for the RGB composites,
-    #: goes_fire_hotspots_rgba for the transparent hotspot RGBA) that a single
-    #: the spec's own style row cannot carry; None -> the executor falls back
-    #: to the spec's row.
+    #: OPTIONAL per-frame style row override, for a source whose frames carry distinct
+    #: presets a single spec-level style row cannot express. None falls back to the
+    #: spec's own row.
     style: dict | None = None
 
 
 def frame_windows(instants: list[str]) -> list[tuple[str | None, str | None]]:
-    """Each declared instant's validity window: it runs until the next one.
-
-    The LAST frame has no successor, so it keeps the interval before it - the
-    only cadence the record actually measured. A sequence of fewer than two
-    instants has no measured cadence at all and states no window rather than
-    inventing one, which is what a synthetic one-hour-per-step clock was.
-    """
+    """Each declared instant's validity window: it runs until the next one. The LAST
+    frame keeps the interval before it, the only cadence the record measured, and
+    fewer than two instants states NO window rather than inventing a clock."""
     from datetime import datetime
 
     if len(instants) < 2:
@@ -145,13 +110,9 @@ def frame_windows(instants: list[str]) -> list[tuple[str | None, str | None]]:
 
 
 class FrameDegraded(Exception):
-    """A ``frame_bytes`` hook raises this to skip ONE degraded frame.
-
-    A transparent / off-swath / upstream-failed single frame is a RECORDED
-    degradation the executor drops (never a silent gap); the executor's honesty
-    floor raises the source's typed EMPTY error only when EVERY frame degrades.
-    ``message`` is preserved for the all-frames-failed error text.
-    """
+    """A ``frame_bytes`` hook raises this to skip ONE degraded frame: a recorded
+    degradation the executor drops, never a silent gap. Only EVERY frame degrading
+    raises the source's typed EMPTY, and ``message`` carries into that text."""
 
 
 class HookResolutionError(ValueError):
@@ -163,11 +124,9 @@ HOOK_REGISTRY: dict[str, Callable[..., Any]] = {}
 
 
 def register_hook(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Register a pure hook under ``name`` (``<source_key>.<point>``).
-
-    A duplicate name is a defect (two hooks would answer one spec reference), so
-    it raises rather than silently last-wins.
-    """
+    """Register a pure hook under ``name``, shaped ``<source_key>.<point>``. A
+    duplicate name is a defect -- two hooks would answer one spec reference -- so it
+    raises rather than silently last-wins."""
 
     def _wrap(fn: Callable[..., Any]) -> Callable[..., Any]:
         if name in HOOK_REGISTRY and HOOK_REGISTRY[name] is not fn:

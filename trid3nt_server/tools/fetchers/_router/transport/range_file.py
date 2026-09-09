@@ -1,26 +1,8 @@
-"""Coalescing range-reading file + rasterio opener for remote COGs.
+"""Coalescing range-reading file and rasterio opener for remote COGs.
 
-``CoalescedRangeFile`` presents a remote HTTP object as a seekable read-only file
-GDAL reads through rasterio ``opener=``; GDAL itself never networks. Reads round to
-1 MiB blocks with an in-memory cache; adjacent missing blocks merge into ONE range
-GET; multiple NON-adjacent missing runs in a single read fetch in PARALLEL (bounded
-~8) -- the work item the ingest decision named to close vsicurl's request-count
-edge. Every fetched span is length-asserted against its request, so a truncated
-read is a typed error rather than silent corruption.
-
-``TransportOpener`` is a plain fsspec-shaped opener (rasterio adapts it via its
-filesystem container). GDAL's native ReadMultiRange path is deliberately NOT wired:
-it hangs GDAL through a Python opener at this rasterio/GDAL version (the same
-"native edge vanishes through a rasterio opener" limitation the decision doc found
-for obstore), so the coalescing sequential path -- which works and is request-
-efficient -- is the transport.
-
-The exception bridge: GDAL's C read callback is unguarded, so a raise out of
-``readinto`` corrupts its buffer (proven abort). Instead a transport error hit
-mid-read is RECORDED on the file (``recorded_error``) and ``readinto`` returns 0
-(a short read); GDAL fails cleanly and the opener wrapper re-raises the recorded
-typed original.
-"""
+A remote object is presented as a seekable read-only file, so GDAL never networks:
+reads round to 1 MiB blocks, adjacent gaps merge into one range GET, non-adjacent
+gaps fetch in parallel, and every span is length-asserted against its request."""
 
 from __future__ import annotations
 
@@ -157,15 +139,9 @@ class CoalescedRangeFile(io.RawIOBase):
 
 
 class TransportOpener:
-    """rasterio ``opener=`` adapter (fsspec-shaped) serving ONE remote COG.
-
-    Exposes EXACTLY the minimal filesystem-container method set rasterio's opener
-    adaptation needs for a single-file random-access read (open / isfile / isdir /
-    mtime / size). Adding ``ls`` / ``exists`` makes GDAL treat the path as a
-    listable directory and enumerate, which HANGS the read -- so they are omitted
-    by design. Holds the produced file objects so the caller can recover a recorded
-    transport error after rasterio raises (the C-frame exception bridge).
-    """
+    """rasterio ``opener=`` adapter (fsspec-shaped) serving ONE remote COG, exposing
+    EXACTLY open / isfile / isdir / mtime / size: adding ``ls`` or ``exists`` makes
+    GDAL treat the path as a listable directory and enumerate, hanging the read."""
 
     def __init__(self, url: str, client: httpx.Client, size: int):
         self.url = url

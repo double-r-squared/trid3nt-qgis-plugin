@@ -1,25 +1,8 @@
-"""goes_animation frames hooks: the GOES SLIDER-stitch animation.
+"""GOES animation frames hooks: the SLIDER-stitch animation.
 
-Folds fetch_goes_animation + fetch_goes_blend_animation onto the frames-list output
-shape (shape: animation_frames). The router owns the per-frame read_through loop +
-the honesty floor + the LayerURI emission; these two hooks own the source-specific
-steps:
-
-- ``frames_plan`` -- resolve the SLIDER time index (via the shared
-  ``_satellite_slider`` list[int] reader), window + even-subsample it, and build the
-  ordered per-frame plans. A ``band`` in the blend-token set (or the band-less blend
-  delegate spec) builds ONE composite scrubber group (GeoColor base + Fire
-  Temperature glow); ``geocolor`` / ``fire_temperature`` each build their own group.
-- ``frame_bytes`` -- build ONE frame's RGB COG: a single SLIDER product
-  stitch-mosaic, or (for the synthetic blend product) the co-temporal GeoColor +
-  Fire Temperature pair blended into one composite.
-
-The GOES satellite spelling zoo (goes18 / "GOES West" / G18 / 18) is normalized via
-the shared ``_normalize_satellite`` seam (a genuinely-unknown bird raises the loud
-GOESInputError); a valid-but-unserved GOES bird raises the source's typed
-GOES_ANIM_INPUT_INVALID. Frame names carry the ``step <N>`` scrubber token + the ISO
-valid-time. ASCII only.
-"""
+``frames_plan`` resolves the SLIDER time index, windows and even-subsamples it into
+ordered per-frame plans; ``frame_bytes`` builds ONE frame's RGB COG, a single-product
+stitch or the co-temporal blend, which is ONE scrubber group rather than two."""
 
 from __future__ import annotations
 
@@ -65,10 +48,10 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Constants (carried verbatim from the fetch_goes_animation twin).
+# Constants.
 # --------------------------------------------------------------------------- #
 
-#: band/product name -> SLIDER product slug (CONFIRMED from define-products.js).
+#: band/product name -> SLIDER product slug, read from the viewer's own product list.
 _BAND_TO_SLIDER_PRODUCT: dict[str, str] = {
     "geocolor": "geocolor",
     "fire_temperature": "fire_temperature",
@@ -108,11 +91,9 @@ _BBOX_QUANTIZE_DP = 6
 
 
 def _parse_utc(spec: SourceSpec, value: Any) -> datetime:
-    """Parse an ISO-8601 (or 'YYYY-MM-DD HH:MM') string / datetime -> aware UTC.
-
-    Accepts a trailing 'Z', '+00:00', a space or 'T' separator, and a bare date.
-    Raises the source's typed INPUT error for an unparseable value.
-    """
+    """Parse an ISO-8601 string or datetime to aware UTC, accepting a trailing 'Z' or
+    '+00:00', a space or 'T' separator, and a bare date. An unparseable value raises
+    the source's typed INPUT error."""
     if isinstance(value, datetime):
         dt = value
         return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
@@ -191,12 +172,9 @@ def _round_bbox(bbox: Any) -> tuple[float, float, float, float]:
 
 
 def _resolve_satellite(spec: SourceSpec, satellite: str) -> str:
-    """Normalize the spelling zoo -> canonical bird, then gate to the served set.
-
-    ``_normalize_satellite`` raises the loud GOESInputError for a genuinely-unknown
-    bird; a valid GOES bird this tool does not serve raises the source's typed
-    GOES_ANIM_INPUT_INVALID.
-    """
+    """Normalize the spelling zoo to a canonical bird, then gate to the served set: a
+    genuinely-unknown bird raises loudly from the shared normalizer, and a valid bird
+    this tool does not serve raises the source's typed input error."""
     satellite = _normalize_satellite(satellite)
     if satellite not in GOES_ANIM_SATELLITES:
         raise router_input_error(
@@ -236,12 +214,9 @@ def _resolve_window(
 
 @register_hook("goes_animation.frames_plan")
 def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
-    """Resolve + window the SLIDER frame set into ordered per-frame plans.
-
-    A ``band`` in the blend-token set (or a band-less blend-delegate spec) builds ONE
-    composite blend group; ``geocolor`` / ``fire_temperature`` each build their own
-    group. Raises the source's typed EMPTY when the window matched no frames.
-    """
+    """Resolve and window the SLIDER frame set into ordered per-frame plans. A band in
+    the blend-token set builds ONE composite group, each other band its own; a window
+    that matched no frames raises the source's typed EMPTY."""
     sc = spec.error_code_prefix
     q_bbox = _round_bbox(params["bbox"])
     satellite = _resolve_satellite(spec, params.get("satellite", "goes-18"))
@@ -330,9 +305,9 @@ def _single_product_frame_bytes(
     spec: SourceSpec, sat: str, sector: str, product: str, ts_int: int, zoom: int,
     bbox: tuple[float, float, float, float],
 ) -> bytes:
-    """Cache-mediated fetch of ONE single-product SLIDER frame COG (the blend
-    consumes the GeoColor + Fire Temperature frames through this, so a frame already
-    pulled for a single-product run is reused -- byte-identical cache key)."""
+    """Cache-mediated fetch of ONE single-product SLIDER frame COG. The blend consumes
+    its component frames through this too, so a frame already pulled for a
+    single-product run is reused under the same cache key."""
     from ....cache import read_through
     from ..router import synthesize_metadata
 
@@ -351,11 +326,9 @@ def _single_product_frame_bytes(
 
 @register_hook("goes_animation.frame_bytes")
 def frame_bytes(spec: SourceSpec, params: dict[str, Any], frame: FramePlan) -> bytes:
-    """Build ONE frame's RGB COG (single-product stitch, or the co-temporal blend).
-
-    Raises :class:`FrameDegraded` for a transparent / off-grid / upstream-failed
-    frame (the executor records + drops it, honesty floor intact).
-    """
+    """Build ONE frame's RGB COG, a single-product stitch or the co-temporal blend.
+    Raises :class:`FrameDegraded` for a transparent, off-grid or upstream-failed
+    frame, so the executor records and drops that one."""
     cp = frame.cache_params
     sat = cp["satellite"]
     sector = cp["sector"]

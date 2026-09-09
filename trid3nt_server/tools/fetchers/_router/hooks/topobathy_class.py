@@ -1,53 +1,8 @@
 """Per-water-body-class bed ladders for the topobathy row, and the classifier.
 
-A bed source is fit for one KIND of water and not another. NOAA BlueTopo is a
-compiled surface for navigationally significant water; NOAA CUDEM is a coastal
-topo-bathy mosaic; a surveyed cross-section at a streamgage is neither. So the
-topobathy row does not have one ladder, it has one PER CLASS, and which ladder
-governs a request is decided by what the chain already measured about the water
-- never by a default that guesses.
-
-Three classes, and what each one gets:
-
-  coastal_estuary     user bed -> BlueTopo -> the CUDEM composite -> refuse
-  navigable_river     refuses: its primary stopped and nothing is left to ladder
-  small_inland_stream refuses: no rung ships
-
-WHAT STOPPED, AND WHY. Three rungs the methodology names do not ship, each for a
-measured reason found by verifying the source live before writing any of it:
-
-  * eHydro (the navigable primary). Its queryable surface is ONE ArcGIS layer of
-    survey-boundary polygons. It carries a horizontal ``sourceprojection`` and NO
-    vertical datum field at all - 96 distinct values across 122,203 surveys, not
-    one of them naming a vertical datum. The soundings are per-survey bulk ZIPs
-    on a separate host. A bed source whose datum is unknowable from its index
-    cannot state its datum in provenance, and a bed whose datum nobody carried
-    is a bed nobody can merge.
-  * NXSDB (the small-stream primary). Its measurement layers carry
-    ``Distance_ft`` and ``Depth_ft`` - depth below the water surface at gauging
-    time - and no bed elevation and no vertical datum. A bed would have to be
-    DERIVED from the gage datum plus the stage at measurement time, which is a
-    producer, not a fetch. It is also published as one 655 MB national
-    GeoPackage with a layer per measurement, on a host that serves no range
-    requests, so there is no per-AOI read of it at all.
-  * The synthetic channel producer. Its slot on the small-stream ladder is
-    DEFERRED BY RULING, not merely unbuilt: no synthetic bathymetry is produced,
-    and whether a fabricated bed may ever stand in for a survey is a user
-    decision rather than a gap for an implementation to close. Stated here and
-    empty, so a later reader finds a decision where they would otherwise find an
-    oversight.
-
-So the small-stream class has no rung, and the navigable class has only its
-BlueTopo alternate left once its eHydro primary stopped - which is a source, not
-a LADDER: a ladder is a declared DEGRADATION PATH, and one with nothing below its
-primary declares no degradation to permit. Both classes therefore REFUSE, naming
-what is missing. That is the honest-refusal floor working, not a hole - the
-alternative is letting a surface DEM's water top stand in for a channel bottom,
-which is the substitution the correct-data-class law exists to prevent.
-
-Falling from BlueTopo to the CUDEM composite is a CROSS-DATASET substitution and
-wears that consequence, so the loudness gate asks before it happens.
-"""
+A bed source is fit for one KIND of water and not another, so the row has one ladder
+PER CLASS, and which one governs is decided by what the chain already measured about
+the water, never by a default that guesses. A class with no rung REFUSES."""
 
 from __future__ import annotations
 
@@ -89,11 +44,9 @@ WATER_BODY_CLASSES: tuple[str, ...] = (
 
 
 class WaterBodyClassUnknown(ValueError):
-    """The held rows cannot decide the class, so nothing decides it.
-
-    Carries ``missing``: what evidence would have decided it. A refusal that does
-    not name what was missing tells the author nothing they can act on.
-    """
+    """The held rows cannot decide the class, so nothing decides it. Carries
+    ``missing``: what evidence would have decided it, because a refusal that does not
+    name what was missing tells the author nothing they can act on."""
 
     def __init__(self, message: str, *, missing: Sequence[str]) -> None:
         super().__init__(message)
@@ -142,25 +95,19 @@ def classify_water_body(
     water_features: Any = None,
     mapped_water_fraction: float | None = None,
 ) -> WaterBodyClass:
-    """The reach's water-body class, from the rows the chain already holds.
+    """The reach's water-body class, from the rows the chain already holds: the mapped
+    water-surface features and the share of the centerline they map."""
 
-    ``water_features`` are the mapped water-surface features (the NHDArea row,
-    each carrying ``ftype``); ``mapped_water_fraction`` is the share of the
-    centerline those polygons map, which the reach front already measures.
-
-    Two verdicts are decidable from that evidence and one is not:
-
-    * a TIDAL FType among the mapped water -> ``coastal_estuary``;
-    * NO mapped water surface at all -> ``small_inland_stream``. A channel too
-      narrow to be mapped as an area is a flowline only, and the water fetcher
-      says so in its own caveats - the absence is a real answer about the
-      channel, not a fetch failure;
-    * a mapped INLAND channel surface -> undecided, and it REFUSES. The evidence
-      says the river is wide; the navigable class means a federally maintained
-      navigation channel, and no row the chain holds says whether this one is.
-      Deciding it would need a row nobody fetches yet, and the two classes get
-      different beds, so the refusal names that rather than picking one.
-    """
+    # Two verdicts are decidable from that evidence and one is not:
+    #
+    # * a TIDAL FType among the mapped water -> coastal_estuary;
+    # * NO mapped water surface at all -> small_inland_stream. A channel too narrow to
+    #   be mapped as an area is a flowline only, and the water fetcher says so in its
+    #   own caveats: the absence is a real answer about the channel, not a failure;
+    # * a mapped INLAND channel surface -> undecided, and it REFUSES. The evidence says
+    #   the river is wide; the navigable class means a federally maintained navigation
+    #   channel, and no row the chain holds says whether this one is. Deciding it would
+    #   need a row nobody fetches yet, and the two classes get different beds.
     codes = _ftypes(water_features)
     if codes & TIDAL_FTYPES:
         return "coastal_estuary"
@@ -200,15 +147,13 @@ def serve_bluetopo_bed(
     timeout_s: Any = None,
     **_ignored: Any,
 ) -> Any:
-    """Serve the BlueTopo rung, reporting a PARTIAL cover as a gap.
+    """Serve the BlueTopo rung, reporting a PARTIAL cover as a gap: it is bathymetry
+    only, so an AOI including land is partly covered by construction."""
 
-    BlueTopo is bathymetry only, so an AOI that includes land is partially
-    covered by construction. The share is the PAINTED bed - AOI cells the merge
-    gave a real value, so a nodata cell inside a delivered tile counts as
-    uncovered - and it is handed to the walker as a :class:`LadderGap`, which is
-    what lets the next rung fill the rest under the loudness gate rather than
-    this rung quietly returning a half-painted bed as a whole one.
-    """
+    # The share is the PAINTED bed -- AOI cells the merge gave a real value, so a nodata
+    # cell inside a delivered tile counts as uncovered -- and it is handed to the walker
+    # as a LadderGap, which is what lets the next rung fill the rest under the loudness
+    # gate rather than this rung quietly returning a half-painted bed as a whole one.
     from trid3nt_server.tools import TOOL_REGISTRY
 
     from .topobathy import TopobathyCoverageGapError
@@ -302,6 +247,35 @@ COASTAL_ESTUARY_LADDER = register_ladder(Ladder(
     ),
 ))
 
+# WHAT STOPPED, AND WHY. Three rungs the methodology names do not ship, each for a
+# measured reason found by verifying the source live:
+#
+#   * eHydro, the navigable primary. Its queryable surface is ONE ArcGIS layer of
+#     survey-boundary polygons. It carries a horizontal ``sourceprojection`` and NO
+#     vertical datum field at all -- 96 distinct values across 122,203 surveys, not
+#     one of them naming a vertical datum. The soundings are per-survey bulk ZIPs on
+#     a separate host. A bed source whose datum is unknowable from its index cannot
+#     state its datum in provenance, and a bed whose datum nobody carried is a bed
+#     nobody can merge.
+#   * NXSDB, the small-stream primary. Its measurement layers carry ``Distance_ft``
+#     and ``Depth_ft`` -- depth below the water surface at gauging time -- and no bed
+#     elevation and no vertical datum. A bed would have to be DERIVED from the gage
+#     datum plus the stage at measurement time, which is a producer, not a fetch. It
+#     is also published as one 655 MB national GeoPackage with a layer per
+#     measurement, on a host that serves no range requests, so there is no per-AOI
+#     read of it at all.
+#   * The synthetic channel producer. Its slot on the small-stream ladder is DEFERRED
+#     BY RULING, not merely unbuilt: no synthetic bathymetry is produced, and whether
+#     a fabricated bed may ever stand in for a survey is a user decision.
+#
+# So the small-stream class has no rung, and the navigable class has only its
+# BlueTopo alternate left once its eHydro primary stopped -- which is a source, not a
+# LADDER: a ladder is a declared DEGRADATION PATH, and one with nothing below its
+# primary declares no degradation to permit. Both classes therefore REFUSE. That is
+# the honest-refusal floor working, not a hole: the alternative is letting a surface
+# DEM's water top stand in for a channel bottom, which is the substitution the
+# correct-data-class law exists to prevent.
+
 #: Class -> ladder. A class ABSENT here is stopped, and STOPPED_CLASSES says why.
 CLASS_LADDERS: Mapping[str, Ladder] = {
     "coastal_estuary": COASTAL_ESTUARY_LADDER,
@@ -337,16 +311,13 @@ STOPPED_CLASSES: Mapping[str, str] = {
 
 
 def ladder_for_request(params: Mapping[str, Any]) -> Ladder | None:
-    """The ladder governing this request, or None to use the unclassed default.
+    """The ladder governing this request, or None to use the unclassed default: a
+    request declaring no ``water_body_class`` keeps the row's original ladder, because
+    a class nobody declared is not a class anybody may assume."""
 
-    A request that declares no ``water_body_class`` keeps the row's original
-    ladder: the per-class ladders govern the row that states which water it is,
-    and a class nobody declared is not a class anybody may assume.
-
-    A STOPPED class never reaches a ladder at all - the capability's pre-cache
-    input gate refuses it by name before the walk starts, because no source
-    ships for it and no later stage could change that.
-    """
+    # A STOPPED class never reaches a ladder at all: the capability's pre-cache input
+    # gate refuses it by name before the walk starts, because no source ships for it and
+    # no later stage could change that.
     declared = params.get("water_body_class")
     if not declared:
         return None

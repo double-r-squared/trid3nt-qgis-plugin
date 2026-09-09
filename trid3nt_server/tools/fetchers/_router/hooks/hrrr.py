@@ -1,21 +1,15 @@
 """HRRR-Zarr delegate hooks: the fsspec/xarray Zarr store owns the socket.
 
-The NOAA HRRR / HRRR-Smoke forecast is published as a nested Zarr store on the
-University of Utah CHPC S3 mirror (``hrrrzarr``). fsspec + xarray own the store
-socket + the LCC coordinate arrays, so the router DELEGATES the read: a
-``library_delegate`` raster spec whose ``hooks.delegate`` returns
-``(array_2d_float32, affine_transform, crs)`` already in EPSG:4326 (the hook owns
-the reproject + clip + the forecast's derived ``hypot(u,v)`` synthesis), and whose
-``hooks.delegate_resolve`` walks the s3fs mirror backward for the newest published
-cycle BEFORE ``read_through`` so the resolved cycle enters the cache key.
+The forecast is a nested Zarr store whose socket and coordinate arrays the library
+owns, so ``delegate`` returns an EPSG:4326 array -- the hook owning the reproject,
+clip and synthesis -- and ``delegate_resolve`` walks back to the newest cycle."""
 
-ONE shared module serves both ``fetch_hrrr_forecast`` and ``fetch_hrrr_smoke`` -- an
-identical Zarr body; the per-source difference (the variable -> level/s3_var table,
-the forecast-only derived ``10m_wind_speed``, the smoke-only ``-9999.0`` fill mask)
-is declared in ``ingest.hrrr`` and read here. The HRRR-grid physical facts (the LCC
-proj4, the CONUS envelope, the 18/48 h horizons, the 6 h cycle backstop) are the
-same for both mirrors, so they stay module constants.
-"""
+# ONE shared module serves both the forecast and the smoke source -- an identical
+# Zarr body. The per-source difference (the variable to level/s3_var table, the
+# forecast-only derived wind speed, the smoke-only fill mask) is declared in
+# ``ingest.hrrr`` and read here. The HRRR-grid physical facts -- the LCC proj4, the
+# CONUS envelope, the 18/48 h horizons, the 6 h cycle backstop -- are the same for
+# both mirrors, so they stay module constants.
 
 from __future__ import annotations
 
@@ -35,10 +29,9 @@ logger = logging.getLogger(
 
 __all__ = ["resolve_cycle", "read_slice", "validate_inputs"]
 
-# HRRR LCC projection (NCEP/EMC standard) + CONUS envelope + horizons -- the same
-# physical grid for HRRR and HRRR-Smoke (twin ``_HRRR_PROJ4`` / ``_CONUS_*`` /
-# horizon constants, verbatim). Kept module-level (not ingest) so both specs share
-# one source of truth for the grid facts.
+# HRRR LCC projection, CONUS envelope and horizons: the same physical grid for HRRR
+# and HRRR-Smoke, kept module-level rather than in ingest so both specs read one
+# source of truth for the grid facts.
 _HRRR_PROJ4 = (
     "+proj=lcc +lat_1=38.5 +lat_2=38.5 +lat_0=38.5 +lon_0=-97.5 "
     "+x_0=0 +y_0=0 +R=6371229 +units=m +no_defs"
@@ -74,12 +67,9 @@ def _var_levels(spec: SourceSpec, variable: str) -> tuple[str, str]:
 
 
 def _probe_levels(spec: SourceSpec, variable: str) -> tuple[str, str]:
-    """The ``(level, s3_var)`` used to PROBE the cycle for ``variable``.
-
-    A derived variable (forecast ``10m_wind_speed``) has no single S3 array; its
-    ``ingest.hrrr.derived`` entry names a ``probe`` component (publishing is atomic
-    per cycle, so probing one component proves the cycle is posted).
-    """
+    """The ``(level, s3_var)`` used to PROBE the cycle for ``variable``. A derived
+    variable has no single array, so its ``ingest.hrrr.derived`` entry names one
+    component: publishing is atomic per cycle, so one component proves the cycle."""
     derived = (_hrrr_cfg(spec).get("derived") or {}).get(variable)
     if derived:
         return _var_levels(spec, str(derived["probe"]))
@@ -124,14 +114,9 @@ def _zarr_paths(cycle_date: _dt.date, cycle_hour: int, level: str, s3_var: str) 
 
 @register_hook("hrrr.validate")
 def validate_inputs(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Twin ``_validate_bbox`` CONUS gate + ``_validate_forecast_hour`` horizon.
-
-    The router already ran the shared bbox finite/range/degenerate + the variable
-    enum + the forecast_hour ``min: 0`` gate; this adds the two twin gates the
-    declarative surface cannot express: the bbox-entirely-outside-CONUS refusal and
-    the forecast_hour-vs-cycle-horizon ceiling (cross-param with the resolved-or-now
-    cycle hour). Both are typed INPUT errors (byte-identical to the twin).
-    """
+    """The two input gates the declarative surface cannot express: the
+    bbox-entirely-outside-CONUS refusal, and the forecast_hour-versus-cycle-horizon
+    ceiling, which is cross-param with the resolved-or-now cycle hour."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
     bbox = params.get("bbox")
@@ -166,12 +151,9 @@ def validate_inputs(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 @register_hook("hrrr.resolve_cycle")
 def resolve_cycle(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> dict[str, Any]:
-    """Walk the s3fs mirror backward for the newest published cycle (twin ``_resolve_cycle``).
-
-    Returns ``{"cycle_date": <iso>, "cycle_hour": <int>}`` merged into params BEFORE
-    ``read_through`` so the resolved cycle enters the cache key. Exhausting the 6 h
-    backstop raises the twin's retryable NOT_AVAILABLE.
-    """
+    """Walk the mirror backward for the newest published cycle, returning
+    ``{"cycle_date", "cycle_hour"}`` to merge into params BEFORE read_through so the
+    cycle enters the cache key. Exhausting the backstop raises NOT_AVAILABLE."""
     sc = spec.error_code_prefix
     variable = params["variable"]
     forecast_hour = int(params.get("forecast_hour", 1))
@@ -227,12 +209,9 @@ def _open_component_4326(
     forecast_hour: int,
     bbox: tuple[float, float, float, float],
 ) -> Any:
-    """Open ONE plain HRRR-Zarr component, reproject to EPSG:4326, clip to bbox.
-
-    Returns the clipped, materialized ``xarray.DataArray`` (float32-valued,
-    EPSG:4326). Raises the twin's typed UPSTREAM (open/decode/reproject) / EMPTY
-    (empty window after clip).
-    """
+    """Open ONE plain HRRR-Zarr component, reproject to EPSG:4326 and clip to the bbox,
+    returning the materialized float32 DataArray. An open, decode or reproject failure
+    is UPSTREAM; an empty window after the clip is EMPTY."""
     import fsspec
     import rioxarray  # noqa: F401 -- registers the .rio accessor
     import xarray as xr
@@ -303,14 +282,9 @@ def _open_component_4326(
 
 @register_hook("hrrr.read")
 def read_slice(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> tuple[Any, Any, Any]:
-    """Open the HRRR-Zarr slice(s) -> ``(array_2d_float32, affine, EPSG:4326)``.
-
-    For a plain single-array variable: one component, reprojected + clipped. For the
-    forecast's derived ``10m_wind_speed``: both UGRD/VGRD components on the same
-    EPSG:4326 grid combined via ``hypot(u, v)`` (NaN preserved). The shared COG writer
-    serializes the returned array (float32, NaN nodata, DEFLATE) -- byte-parity with
-    the twin's ``to_raster`` write.
-    """
+    """Open the HRRR-Zarr slices to ``(array_2d_float32, affine, EPSG:4326)``. A plain
+    variable is one reprojected and clipped component; a derived one combines its
+    components on the same grid, NaN preserved."""
     import numpy as np
 
     sc = spec.error_code_prefix

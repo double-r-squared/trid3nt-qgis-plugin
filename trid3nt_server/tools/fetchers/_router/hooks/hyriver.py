@@ -1,28 +1,21 @@
-"""Every HyRiver call rides here: the retry, the status filter, and the error the
-library hands back as data.
+"""Every HyRiver call rides here: the retry, the status filter, and the refusal.
 
-HyRiver's HTTP layer (``async_retriever``) has no retry, no status filter and no
-``Retry-After`` read, and a 4xx whose body parses as JSON is RETURNED AS A VALUE -
-so an upstream refusal would otherwise reach the router as an answer and become an
-honest-looking empty layer. :func:`hyriver_call` restores the norm for pygeohydro
-and pynldas2 alike: an error document is raised carrying the upstream text verbatim,
-429 and 5xx back off and retry, a ``Retry-After`` is obeyed wherever the provider
-puts one within reach, and a connection that never produced a response is retried
-the way ``transport/client.py`` retries one.
+Its HTTP layer has no retry, no status filter and no ``Retry-After`` read, and a 4xx
+whose body parses as JSON is RETURNED AS A VALUE, so an upstream refusal would else
+reach the router as an answer and become an honest-looking empty layer."""
 
-WITHIN REACH is measured, and it is the body only: the library reads the response
-and discards the headers, so a status integer and a ``Retry-After`` are honored
-exactly when the service repeats them in the payload - RFC 7807's ``status``, an
-ESRI ``error.code``, the status an ArcGIS error PAGE prints beside ``Code:``. A
-body that names no status is refused once rather than retried blind, EXCEPT when
-there was no response at all: a reset or timed-out connection is retryable on its
-exception class alone, which is the one signal the library does hand over intact.
-
-CACHE. The library keeps its own SQLite response cache, a second cache under the
-router's tier. Its expiry is pinned to the SHORTEST router TTL window so it can
-never hand a stale body to a fresh router key, and both files are written under the
-runs dir rather than the process's working directory.
-"""
+# WITHIN REACH is measured, and it is the body only: the library reads the response
+# and discards the headers, so a status integer and a ``Retry-After`` are honored
+# exactly when the service repeats them in the payload -- RFC 7807's ``status``, an
+# ESRI ``error.code``, the status an ArcGIS error PAGE prints beside ``Code:``. A body
+# that names no status is refused once rather than retried blind, EXCEPT when there
+# was no response at all: a reset or timed-out connection is retryable on its
+# exception class alone, the one signal the library does hand over intact.
+#
+# CACHE. The library keeps its own SQLite response cache, a second cache under the
+# router's tier. Its expiry is pinned to the SHORTEST router TTL window so it can
+# never hand a stale body to a fresh router key, and both files are written under the
+# runs dir rather than the process's working directory.
 
 from __future__ import annotations
 
@@ -133,11 +126,9 @@ def _wait(state: RetryCallState) -> float:
 
 
 def hyriver_call(spec: SourceSpec, what: str, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
-    """Call one pygeohydro / pynldas2 entry point under the upstream-provider norm.
-
-    ``what`` names the call in the error a caller reads. Anything left after the
-    retries is a typed upstream error whose message is the library's text verbatim.
-    """
+    """Call one library entry point under the upstream-provider norm. ``what`` names
+    the call in the error a caller reads, and anything left after the retries is a
+    typed upstream error carrying the library's text verbatim."""
     configure_cache()
     try:
         for attempt in Retrying(

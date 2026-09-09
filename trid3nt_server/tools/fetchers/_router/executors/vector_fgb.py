@@ -1,18 +1,8 @@
-"""vector-fgb serializer (contract sec 2.2): the shape every vector row ends in.
+"""vector-fgb serializer: the shape every vector row ends in.
 
-GeoJSON features -> FlatGeobuf via ``geopandas ... driver="FlatGeobuf",
-engine="pyogrio"``, plus the declarative frame normalizer every vector executor
-runs first: the ordered ``column_map`` projection, the geometry filter, the
-nested-JSON coercion and the derived columns. ALWAYS emits a valid FGB -- an empty
-result is a header-only FGB carrying the declared/derived schema (honest-empty,
-never a fabricated error).
-
-Two spec-vocabulary resolvers live here beside them because they answer the same
-question - what this call is asking for - rather than how it is fetched:
-``build_where`` turns ``ingest.where_clauses`` into the server-side ``where=``, and
-``resolve_endpoints`` picks the primary and its same-dataset mirrors. Everything
-here is pure and offline-testable; the reads live in the executors.
-"""
+GeoJSON features become FlatGeobuf, after the declarative frame normalizer every
+vector executor runs first. ALWAYS emits a valid FGB: an empty result is a
+header-only FGB carrying the declared schema, never a fabricated error."""
 
 from __future__ import annotations
 
@@ -42,14 +32,14 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Declarative WHERE-clause builder (phase-2 wave-2 ArcGIS family).
+# Declarative WHERE-clause builder for the ArcGIS family.
 #
 # `ingest.where_clauses` is an ordered list of {template, require:[params]}
 # rules: a rule contributes its `str.format(**params)` clause ONLY when every
 # `require` param is present + non-None in the validated params; the surviving
 # clauses are AND-joined. Absent/none-declared -> falls back to a literal
-# `where` param else "1=1". This carries the hifld VOLTAGE floor, the mtbs YEAR
-# range, and the drought period= filters as spec data, no source hardcode.
+# `where` param else "1=1". A voltage floor, a year range and a period filter are
+# all spec data this way, with no source hardcode.
 # --------------------------------------------------------------------------- #
 
 
@@ -74,11 +64,11 @@ def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Declarative column normalizer (phase-2 wave-2 ArcGIS family).
+# Declarative column normalizer for the ArcGIS family.
 #
-# `ingest.column_map` is an ORDERED map out_col -> rule reproducing a twin's
-# raw-property -> output-column projection/rename/normalization WITHOUT a source
-# hardcode. Rule fields:
+# `ingest.column_map` is an ORDERED map out_col -> rule, a raw-property to
+# output-column projection, rename and normalization with no source hardcode.
+# Rule fields:
 #   from            source property key (case-insensitive when column_map_ci)
 #   kind            passthrough(default) | int | float | str | lookup | date_iso
 #   null_below      numeric: value <= this -> None (the -999 SVI sentinel)
@@ -101,12 +91,9 @@ def _num(raw: Any) -> float:
 
 
 def _norm_env(v: Any, kind: str) -> float | None:
-    """Environmental-indicator sentinel normalizers (percentile [0,100] /
-
-    fraction [0,1] / raw). ``<= -999`` (the no-data sentinel) or non-finite ->
-    None; percentile/fraction clamp to their range and reject out-of-tolerance
-    sentinels; raw passes any finite non-sentinel float.
-    """
+    """Sentinel normalizer for an environmental indicator: ``<= -999`` or non-finite
+    yields None, percentile and fraction clamp to their range and reject an
+    out-of-tolerance sentinel, and raw passes any finite non-sentinel float."""
     if v is None:
         return None
     try:
@@ -207,15 +194,9 @@ def _resolve_column(
 
 
 def _resolve_column_map(spec: SourceSpec, params: dict[str, Any] | None) -> dict[str, Any] | None:
-    """The effective column_map for this call (static, or per-enum synthesized).
-
-    ``ingest.properties_by_param`` (phase-2 wave-6) reproduces a twin whose kept
-    property SET varies by an enum param (usace_levees ``layer`` -> a different
-    ``_LAYER_PROPERTIES`` tuple per sub-layer): it synthesizes a passthrough
-    column_map over the resolved per-value column list, so the projection +
-    honest-empty header schema both follow the selected value. No-op (returns the
-    static ``ingest.column_map``, possibly None) for every prior spec.
-    """
+    """The effective column_map for this call: the static ``ingest.column_map``, or a
+    passthrough map synthesized from ``ingest.properties_by_param`` when the kept
+    property SET varies by an enum param, so the empty header follows it too."""
     ingest = spec.ingest or {}
     pbp = ingest.get("properties_by_param")
     if isinstance(pbp, dict) and params is not None:
@@ -255,10 +236,9 @@ def apply_column_map(
 
 
 # --------------------------------------------------------------------------- #
-# Declarative ingest transforms (contract sec 2.2 -- the hifld twin's parity
-# gap: derived/constant columns, nested-property -> JSON coercion, and the
-# Point/finite-geometry filter). All three are opt-in ``ingest.*`` directives
-# (no source hardcodes); a spec without them is a strict no-op (census/demo).
+# Declarative ingest transforms: derived and constant columns, nested-property to
+# JSON coercion, and the Point/finite-geometry filter. All three are opt-in
+# ``ingest.*`` directives; a spec declaring none of them is untouched.
 # --------------------------------------------------------------------------- #
 
 
@@ -267,11 +247,9 @@ def _derived_column_names(spec: SourceSpec) -> list[str]:
 
 
 def _passes_geometry_filter(geom: Any, gf: dict[str, Any]) -> bool:
-    """Point/finite-geometry filter (hifld twin ``_features_to_flatgeobuf``).
-
-    ``geom_types`` restricts to a geometry-type allowlist; ``require_finite``
-    drops features whose leading (x, y) coordinate pair is missing/non-finite.
-    """
+    """Point/finite-geometry filter: ``geom_types`` is a geometry-type allowlist and
+    ``require_finite`` drops a feature whose leading (x, y) pair is missing or
+    non-finite."""
     if geom is None:
         return False
     geom_types = gf.get("geom_types")
@@ -291,13 +269,9 @@ def _passes_geometry_filter(geom: Any, gf: dict[str, Any]) -> bool:
 
 
 def _resolve_derived(dc_spec: dict[str, Any], spec: SourceSpec, params: dict[str, Any] | None) -> Any:
-    """Resolve one derived-column value from a declarative source descriptor.
-
-    ``source: const``   -> ``value`` (a constant).
-    ``source: param``   -> ``params[param]`` (e.g. facility_type == the request).
-    ``source: routing`` -> ``ingest.routing[params[key_param]][field]`` (e.g.
-    facility_label == the routing table's label for the requested facility_type).
-    """
+    """Resolve one derived-column value from its descriptor: ``const`` is a literal,
+    ``param`` echoes a request param, and ``routing`` reads a field out of
+    ``ingest.routing`` keyed by a request param's value."""
     src = dc_spec.get("source")
     if src == "const":
         return dc_spec.get("value")
@@ -349,18 +323,15 @@ def apply_ingest_transforms(
 def _out_columns(
     spec: SourceSpec, features: list[dict[str, Any]], params: dict[str, Any] | None = None
 ) -> list[str]:
-    """Resolve the output property columns (spec-declared or feature-derived).
-
-    Derived-column names are always appended so an honest-empty header-only FGB
-    still carries them (matching the hifld twin's ``[facility_type,
-    facility_label]`` empty schema).
-    """
+    """Resolve the output property columns, spec-declared or feature-derived. Derived
+    names are always appended, so an honest-empty header-only FGB still carries
+    them."""
     ingest = spec.ingest or {}
     cmap = _resolve_column_map(spec, params)
     declared = ingest.get("properties")
     if cmap:
-        # column_map is the authoritative projected schema (honest-empty header
-        # still carries every mapped column, matching the twins' empty FGB).
+        # column_map is the authoritative projected schema: the honest-empty header
+        # still carries every mapped column.
         cols = [str(c) for c in cmap]
     elif declared:
         cols = [str(c) for c in declared]
@@ -381,14 +352,9 @@ def features_to_fgb_bytes(
     spec: SourceSpec,
     params: dict[str, Any] | None = None,
 ) -> bytes:
-    """Serialize GeoJSON features to FlatGeobuf bytes (pure, offline).
-
-    Applies the declarative ingest transforms (geometry filter, JSON coercion,
-    derived columns) first, then serializes. Always emits a valid FGB: an empty
-    feature list yields a header-only FGB carrying the declared/derived column
-    schema so downstream readers still parse (honest-empty, matching the
-    hifld/census twins).
-    """
+    """Serialize GeoJSON features to FlatGeobuf bytes, applying the declarative ingest
+    transforms first. Always emits a valid FGB: an empty feature list yields a
+    header-only FGB carrying the declared and derived schema, so readers still parse."""
     try:
         import geopandas as gpd
         import pandas as pd
@@ -398,9 +364,8 @@ def features_to_fgb_bytes(
     features = apply_ingest_transforms(features, spec, params)
 
     crs = spec.normalize.crs
-    # keep_null_geometry: preserve attribute-only rows (nws_alerts_conus
-    # unresolvable-zone alerts) instead of dropping NULL-geometry features. Default
-    # off = the byte-identical drop-null path for every prior spec.
+    # keep_null_geometry preserves attribute-only rows -- an alert whose zone did not
+    # resolve -- instead of dropping NULL-geometry features. Default off.
     keep_null = bool(getattr(spec.output, "keep_null_geometry", False))
     if keep_null:
         rows = [f for f in features if isinstance(f, dict)]
@@ -468,14 +433,9 @@ def features_to_fgb_bytes(
 
 
 def resolve_endpoints(spec: SourceSpec, params: dict[str, Any]) -> list[Any]:
-    """Ordered endpoint chain for the fetch: the SELECTED primary + fallbacks.
-
-    ``ingest.endpoint_select`` chooses the primary by a param's presence (drought
-    current layer /3 when ``date`` absent, archive layer /2 when present).
-    Absent -> the ``data`` endpoint (else the first). ``spec.endpoint_fallback``
-    names ordered SAME-DATA mirrors of this spec's own ``endpoints`` block, tried
-    on the primary's upstream failure (nhd HR -> medium-res).
-    """
+    """Ordered endpoint chain: the selected primary then its fallbacks.
+    ``ingest.endpoint_select`` picks the primary by a param's presence, defaulting to
+    the ``data`` endpoint; ``spec.endpoint_fallback`` names SAME-DATA mirrors."""
     endpoints = spec.endpoints
     ingest = spec.ingest or {}
     sel = ingest.get("endpoint_select")

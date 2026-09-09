@@ -1,36 +1,8 @@
 """ogr-vector executor: a published vector layer read through a GDAL vector driver.
 
-One access mode (``ingest.access: ogr``) over three source shapes, named by
-``ingest.ogr.driver``:
-
-- ``ESRIJSON``  an ArcGIS FeatureServer / MapServer ``/query`` URL. The bbox is
-                the esri geometry envelope in the query and the driver follows
-                ``exceededTransferLimit`` across pages by itself.
-- ``OAPIF``     an OGC API - Features landing page; the collection is the layer
-                and the bbox is pushed to the driver.
-- ``vsizip``    a vector member inside a remote ZIP, read by range request
-                through ``/vsizip//vsicurl/`` - no whole-object GET, no tmpdir.
-                A source whose request spans several ZIPs keeps its URL planner
-                as the one surviving hook, and the parts concatenate.
-
-The driver owns the socket, the paging and the decode; this module owns the spec
-vocabulary (which endpoint, which where-clause, which page) and hands GeoJSON
-features to the same ``vector_fgb`` serializer every other vector row uses, so
-the declared column schema and the honest-empty header-only FGB are unchanged.
-
-READ PATH. pyogrio links its own libgdal, so the read policy is applied through
-``pyogrio.set_gdal_config_options``; a ``rasterio.Env`` does not reach it. Retries
-fire on 429/500/502/503/504 and the upstream STATUS is verbatim on
-``DataSourceError``. Two measured deviations from the transport's norm are
-ledgered for this family: GDAL discards the S3 XML ``<Code>`` body, and its
-backoff is exponential-with-jitter rather than the server's ``Retry-After``.
-
-An ArcGIS service answers a rejected query 200-with-an-error-body, which the
-driver reports as a missing ``features`` member with the upstream message gone.
-``_verbatim_upstream`` re-reads that one URL through the transport so the
-service's own message reaches the caller -- ONE un-retried GET, because the
-driver's five attempts were the whole retry budget this family spends.
-"""
+One access mode over three source shapes: an ArcGIS query URL, an OGC API - Features
+collection, or a vector member inside a remote ZIP. The driver owns the socket, the
+paging and the decode; this module owns the spec vocabulary."""
 
 from __future__ import annotations
 
@@ -75,6 +47,12 @@ _READ_PATH = {
 _config_lock = threading.Lock()
 
 
+# pyogrio links its own libgdal, so the read policy is applied through
+# ``pyogrio.set_gdal_config_options``; a ``rasterio.Env`` does not reach it. Retries
+# fire on 429/500/502/503/504 and the upstream STATUS is verbatim on
+# ``DataSourceError``. Two measured deviations from the transport's norm hold for
+# this family: GDAL discards the S3 XML ``<Code>`` body, and its backoff is
+# exponential-with-jitter rather than the server's ``Retry-After``.
 class _ReadPolicy:
     """Install the read policy plus this source's headers for one driver read."""
 
@@ -117,14 +95,9 @@ def build_query(
     endpoint: Any | None = None,
     page_size: int | None = None,
 ) -> str:
-    """The ArcGIS ``/query`` URL the ESRIJSON driver opens (no offset, no page).
-
-    ``f=json`` is what the driver reads; ``bbox=None`` omits the geometry envelope
-    (the global sweep). Paging is the driver's, so this carries no ``resultOffset``.
-    ``page_size`` pins ``resultRecordCount``, which the driver reads off the URL and
-    carries into every page it asks for; unset, the page is the layer's own
-    ``maxRecordCount``.
-    """
+    """The ArcGIS ``/query`` URL the ESRIJSON driver opens, carrying no offset because
+    paging is the driver's. ``bbox=None`` omits the geometry envelope for a global
+    sweep, and ``page_size`` pins the ``resultRecordCount`` the driver carries."""
     ingest = spec.ingest or {}
     qt = ingest.get("query_template", {})
     if endpoint is None:
@@ -182,26 +155,18 @@ def open_path(spec: SourceSpec, url: str) -> str:
 
 
 def zip_urls(spec: SourceSpec, params: dict[str, Any], endpoint: Any) -> list[str]:
-    """The ZIP URL(s) this request spans: the source's own planner, or the endpoint.
-
-    A nationwide archive is one URL; a per-state one fans out over every state the
-    bbox reaches, which is a routing table only the source holds.
-    """
+    """The ZIP URLs this request spans: the source's own planner, else the endpoint. A
+    nationwide archive is one URL; a per-state one fans out over every state the bbox
+    reaches, which is a routing table only the source holds."""
     if spec.hooks is not None and spec.hooks.build_request:
         return [p.url for p in resolve_hook(spec.hooks.build_request)(spec, params)]
     return [endpoint.url or endpoint.url_template or ""]
 
 
 def _verbatim_upstream(spec: SourceSpec, url: str, exc: Exception) -> RouterError:
-    """The upstream's own message for a read the driver could only call malformed.
-
-    An ArcGIS service answers a rejected query 200-with-``{"error": ...}``; the
-    driver reports a missing ``features`` member and drops the message. ONE plain
-    un-retried GET recovers it: the driver already spent this family's retries, so
-    a retrying re-read would double what an outage costs. Anything the classifier
-    does not recognize as an error envelope keeps the driver's own text, and only a
-    query URL is re-read - re-fetching a published archive would cost its whole body.
-    """
+    """The upstream's own message for a read the driver could only call malformed, via
+    ONE un-retried GET: the driver already spent this family's retry budget. Only a
+    query URL is re-read, and an unrecognized body keeps the driver's own text."""
     driver = str(((spec.ingest or {}).get("ogr") or {}).get("driver", "ESRIJSON"))
     if driver != "ESRIJSON":
         return router_upstream_error(spec.error_code_prefix, f"read failed url={url}: {exc}")
@@ -287,11 +252,9 @@ def fetch_from_endpoint(
 
 
 def fetch_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
-    """Fetch across the resolved endpoint chain (primary -> same-dataset mirror).
-
-    Every mirror publishes the SAME dataset, so the hop is silent by the loudness
-    floor; a single endpoint is one read with no mirror.
-    """
+    """Fetch across the resolved endpoint chain. Every mirror publishes the SAME
+    dataset, so the hop is silent under the loudness floor; a single endpoint is one
+    read with no mirror."""
     chain = resolve_endpoints(spec, params)
     last_exc: Exception | None = None
     for i, endpoint in enumerate(chain):

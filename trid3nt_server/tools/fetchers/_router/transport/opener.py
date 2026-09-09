@@ -1,14 +1,8 @@
-"""Pre-flight probe + the windowed-COG open context manager (the executor seam).
+"""Pre-flight probe and the windowed-COG open context manager.
 
-``open_windowed_cog`` is the single entry point raster_cog uses instead of
-``rasterio.open('/vsicurl/'+url)``. It (1) pre-flights the object with a HEAD to
-size it and surface a typed EARLY error (status INT + verbatim body -- S3 XML
-NoSuchKey vs AccessDenied distinguished; HEAD carries no S3 body, so a tiny
-range GET recovers the verbatim ``<Code>`` on a non-2xx); (2) opens the dataset
-through the coalescing transport opener; (3) bridges the GDAL C-frame exception
-swallow -- on any rasterio failure it re-raises the transport's recorded typed
-original so the router classifies retryability from the real status.
-"""
+``open_windowed_cog`` pre-flights the object with a HEAD for its size and an early
+typed error, opens the dataset through the coalescing transport, and bridges the
+GDAL C-frame exception swallow so the real status survives to the caller."""
 
 from __future__ import annotations
 
@@ -55,19 +49,9 @@ def _size_from_range(client: httpx.Client, url: str) -> int:
 
 
 def preflight(url: str, client: httpx.Client) -> int:
-    """HEAD the object; return its byte size or raise a typed early error.
-
-    A non-2xx HEAD status is classified with a verbatim body recovered via a tiny
-    range GET (S3 HEAD returns no body): 404/NoSuchKey, 403/AccessDenied, 429/5xx.
-
-    Skip-HEAD recovery: some single-object hosts REJECT HEAD (figshare's
-    ndownloader 403s HEAD while the redirected S3 object is range-readable). A
-    403/405 HEAD therefore attempts a range-GET size probe FIRST; a 206 there
-    proves the object is accessible and yields the size, so the read proceeds.
-    Only when the range GET ALSO fails does the classified auth/not-found error
-    stand. This is additive: for hosts whose HEAD works (every prior COG) the
-    range-GET branch is never reached, so behavior is unchanged.
-    """
+    """HEAD the object; return its byte size or raise a typed early error, with the
+    verbatim body recovered by a tiny range GET because an S3 HEAD carries none.
+    A 403/405 falls back to a range-GET size probe before the error stands."""
     resp = head(client, url)
     if resp.status_code >= 400:
         if resp.status_code in (403, 405):
@@ -85,12 +69,9 @@ def preflight(url: str, client: httpx.Client) -> int:
 
 @contextmanager
 def open_windowed_cog(url: str) -> Iterator:
-    """Open a remote COG for windowed reads through the coalescing transport.
-
-    Yields an open rasterio dataset. On any failure the transport's recorded typed
-    error (NoSuchKey/AccessDenied/upstream) is re-raised in place of the opaque
-    ``RasterioIOError``; a pre-flight error raises before GDAL is ever invoked.
-    """
+    """Open a remote COG for windowed reads, yielding an open rasterio dataset. Any
+    failure re-raises the transport's recorded typed error in place of the opaque
+    ``RasterioIOError``; a pre-flight error raises before GDAL is invoked."""
     import rasterio
 
     client = get_client()

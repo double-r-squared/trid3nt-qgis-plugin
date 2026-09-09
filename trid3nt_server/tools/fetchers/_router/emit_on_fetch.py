@@ -1,31 +1,8 @@
-"""Emit-on-fetch: surface a fetched INPUT as a role=context layer.
+"""Emit-on-fetch: surface a fetched INPUT as a ``role="context"`` layer.
 
-The single seam that closes the IN-COMPOSER visualization gap. A spec's RENDER
-DECLARATION (it returns a renderable ``LayerURI`` -- a raster COG or a vector
-FGB, not a ``record`` dict) IS the intent to visualize: presence means the data
-has a visual form and WILL be surfaced wherever it is fetched. The DIRECT chat
-path already honours this (``emit_tool_call`` emits the returned LayerURI as the
-tool's declared role); this hook adds the missing half -- when the SAME router
-``route()`` runs as a bare function nested inside a COMPOSER, the fetched data is
-published BY REFERENCE as a ``role="context"`` input row beneath the primary
-result, so an engine's terrain / rivers / land cover are never invisible.
-
-Design facts (settled semantics, docs/IDEAS.md 2026-08-13):
-  * NO boolean flag on the spec -- the render declaration is the switch. A
-    ``record`` source (``layer_type=record``) has no visual form and never emits.
-  * ``visualize=False`` is a per-CALL belt-and-suspenders reserved for PROBE
-    fetches of visualizable data (AOI candidate scans); it suppresses this hook.
-  * ``purpose=`` lets a composer contribute ONE word to the layer name (a label,
-    never a pathway) -- e.g. ``purpose="mesh bed"``.
-  * BEST-EFFORT: a surfacing failure NEVER fails the fetch (logged once).
-  * SESSION dedup by uri: a fetched input is surfaced once per session.
-
-The actual emit rides the existing ``layer_uri_emit`` machinery
-(``publish_raster_input_cog`` for a raster COG, ``publish_input_layer`` for a
-vector), reused not duplicated. Because ``route()`` is synchronous (and a fetcher
-is frequently off-loaded to a worker thread), the async emit coroutine is driven
-back onto the emitter's bound loop via ``run_coroutine_threadsafe``.
-"""
+A spec's render declaration is the switch -- there is no boolean -- so a source
+returning a renderable LayerURI is published by reference when ``route()`` runs
+inside a composer. Best-effort, and a uri is surfaced once per session."""
 
 from __future__ import annotations
 
@@ -59,14 +36,9 @@ def _resolution_label(spec: SourceSpec) -> str | None:
 def input_layer_name(
     spec: SourceSpec, params: dict[str, Any], purpose: str | None
 ) -> str:
-    """Build the provenance name ``Input: <what> (<source>[, <resolution>][, <datum>])``.
-
-    ``<what>`` is the composer-supplied ``purpose`` word when present, else the
-    resolved ``variable`` / ``product`` param, else the source class. A source
-    that states a VERTICAL DATUM carries it here: the layer is what a person is
-    shown when they judge a bed and decide whether to refine it, and an elevation
-    whose reference is not on the card cannot be stitched to another source's.
-    """
+    """Build ``Input: <what> (<source>[, <resolution>][, <datum>])``, where ``<what>``
+    is the caller's ``purpose`` word, else the resolved ``variable`` / ``product``
+    param, else the source class. A declared VERTICAL DATUM always rides here."""
     variable = params.get("variable") or params.get("product") or spec.source_class
     if isinstance(purpose, str) and purpose.strip():
         what = purpose.strip()
@@ -82,18 +54,9 @@ def input_layer_name(
 
 
 def _drive_emit(emitter: Any, coro_factory: Callable[[], Any]) -> None:
-    """Drive an async emit coroutine to the emitter's bound loop from any thread.
-
-    * On a WORKER thread (the off-loaded sync fetch, no running loop here): the
-      loop the emitter was bracketed on IS free (it is awaiting the ``to_thread``
-      future), so schedule the coroutine on it and WAIT -- ordering + WS framing
-      are preserved because the composer task is parked on the thread meanwhile.
-    * On the LOOP thread (a composer that called the fetch WITHOUT off-loading):
-      a blocking wait would deadlock, so fire-and-forget as a task; it runs the
-      instant the sync fetch stack unwinds back to the loop (still before the
-      long solve). A strong ref is kept so it is not GC'd mid-flight.
-    * No loop at all (a pure direct/CI call): run it to completion inline.
-    """
+    """Drive an async emit coroutine onto the emitter's bound loop from any thread.
+    A worker thread schedules and WAITS (ordering and framing hold, because the
+    caller is parked); the loop thread fires-and-forgets, since waiting deadlocks."""
     try:
         running = asyncio.get_running_loop()
     except RuntimeError:
@@ -127,14 +90,12 @@ def maybe_emit_input_on_fetch(
     visualize: Any,
     purpose: str | None,
 ) -> None:
-    """Surface ``layer`` as a role=context input IFF in composer mode.
-
-    Called from ``route()`` right after a successful LayerURI build. No-op (and
-    NEVER raises) unless every gate passes: an emitter is bound, this is NOT the
-    direct-dispatch of the fetcher itself, ``visualize`` is not ``False``, the
-    spec declares a renderable output, and the uri has not already been surfaced.
-    """
+    """Surface ``layer`` as a role=context input IFF in composer mode: a no-op that
+    NEVER raises unless every gate passes -- an emitter is bound, this is not the
+    fetcher's own direct dispatch, output is renderable, and the uri is new."""
     try:
+        # visualize=False is the per-CALL suppression, for a PROBE fetch of otherwise
+        # visualizable data (an AOI candidate scan); the spec itself carries no flag.
         if visualize is False:
             return
         from trid3nt_server.emission.pipeline_emitter import (

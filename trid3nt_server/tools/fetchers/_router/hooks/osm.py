@@ -1,27 +1,18 @@
 """OSM reads through OSMnx: the mirror chain, and the error the library drops.
 
-OSMnx owns the Overpass query, the socket, the adaptive pre-request pause sized
-off the server's own ``/status``, and the element-to-geometry decode - including
-the multipolygon relation assembly and the full tag bag as frame columns. Two
-things it does not own ride here.
+OSMnx owns the query, the socket, the pre-request pause and the geometry decode. Two
+things it does not own ride here: the mirror chain, since it holds ONE url, and the
+refusal it returns AS DATA when a non-OK body parses as JSON."""
 
-MIRRORS. OSMnx holds ONE ``settings.overpass_url``, so the three-mirror chain each
-source declares is ours: set, call, catch, next, restore. It also wants the API
-BASE and appends ``/interpreter`` itself, while a source row names the interpreter
-URL its callers would use, so the suffix comes off here.
-
-THE SILENT ERROR. ``osmnx._http._parse_response`` raises only when the body fails
-to parse as JSON, so a non-OK response carrying a valid JSON error envelope is
-RETURNED AS DATA - an honest-empty layer exactly where an upstream failure belongs.
-The wrapped post raises on any non-OK status OSMnx does not handle itself, carrying
-the upstream status and body verbatim.
-
-MEASURED AND ACCEPTED for this family: on a 429 or a 504 OSMnx pauses a hardcoded
-55 s (``osmnx/_overpass.py``) rather than the server's ``Retry-After``. It recovers;
-it just does not obey the server's number. What is NOT accepted is that it retries
-by RECURSION with no ceiling, so a mirror that keeps refusing hangs the fetch
-forever: the wrapped post counts those refusals and lets the mirror chain move on.
-"""
+# MIRRORS. OSMnx wants the API BASE and appends ``/interpreter`` itself, while a
+# source row names the interpreter URL its callers would use, so the suffix comes off
+# here; the chain is set, call, catch, next, restore.
+#
+# MEASURED AND ACCEPTED for this family: on a 429 or a 504 OSMnx pauses a hardcoded
+# 55 s rather than the server's ``Retry-After``. It recovers; it just does not obey
+# the server's number. What is NOT accepted is that it retries by RECURSION with no
+# ceiling, so a mirror that keeps refusing would hang the fetch forever: the wrapped
+# post counts those refusals and lets the mirror chain move on.
 
 from __future__ import annotations
 
@@ -83,12 +74,9 @@ def overpass_features(
     *,
     timeout_s: float,
 ) -> Any:
-    """Every OSM feature in the bbox carrying ``tags``, as a GeoDataFrame.
-
-    The bbox is ``(west, south, east, north)``; OSMnx keeps whole geometries that
-    intersect it. An area with no such feature is an EMPTY frame, which is an
-    answer; every mirror failing is a typed upstream error naming the last one.
-    """
+    """Every OSM feature in the ``(west, south, east, north)`` bbox carrying ``tags``,
+    whole geometries kept where they intersect. An area with no such feature is an
+    EMPTY frame, an answer; every mirror failing is a typed upstream error."""
     import osmnx as ox
     from osmnx import _overpass, settings
 
@@ -145,12 +133,9 @@ def osm_id_of(index_value: Any) -> int:
 
 
 def clip_to_bbox(geom: Any, bbox: tuple[float, float, float, float]) -> list[list[list[float]]]:
-    """A way's vertices, cut to the bbox, as one coordinate list per in-AOI segment.
-
-    A way crossing the boundary several times is several segments, each of which
-    is the same way and carries the same attributes. Anything the cut leaves with
-    fewer than two vertices is not a line and is dropped.
-    """
+    """A way's vertices cut to the bbox, one coordinate list per in-AOI segment: a way
+    crossing the boundary several times is several segments of the same way with the
+    same attributes, and anything left under two vertices is not a line."""
     from shapely import clip_by_rect
 
     if geom is None or geom.is_empty:

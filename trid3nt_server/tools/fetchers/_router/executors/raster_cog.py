@@ -1,15 +1,8 @@
-"""raster-cog executor (contract sec 2.1).
+"""raster-cog executor: a gridded source read to a CRS-tagged single-band COG.
 
-Reads a gridded source to a CRS-tagged single-band COG over the router's own
-transport: every sub-mode keyed by ``ingest.access`` reads through
-``transport/range_file.py``, so GDAL parses and never networks. A STAC catalog
-source reads through ``stac_raster.py`` instead.
-
-Emits ``nodata=nan``, north-up (no lat sortby -- the gridmet orientation lesson
-is a ``normalize.orientation`` directive), CRS re-asserted post-astype. The pure
-serializer ``array_to_cog_bytes`` is offline-testable with a synthetic array; the
-network sub-modes route through ``fetch_source_array`` which tests monkeypatch.
-"""
+Every sub-mode keyed by ``ingest.access`` reads through the router's own transport,
+so GDAL parses and never networks. Emits ``nodata=nan``, north-up, with the CRS
+re-asserted after the astype so a dropped CRS never reaches the correctness gate."""
 
 from __future__ import annotations
 
@@ -45,24 +38,16 @@ def array_to_cog_bytes(
     colormap: dict | None = None,
     colorinterp: str | None = None,
 ) -> bytes:
-    """Serialize a 2D (or multi-band 3D) array to COG bytes (pure, offline).
+    """Serialize a 2D or multi-band 3D array to COG bytes. North-up is the caller's
+    (the transform already carries a negative y-step), and the CRS is re-asserted
+    after the astype so the geographic-correctness gate never sees a dropped CRS."""
 
-    North-up is the caller's responsibility (the transform already carries a
-    negative y-step). CRS is re-asserted on the profile after the astype so the
-    geographic-correctness gate never sees a dropped CRS (codified lesson).
-
-    ``colormap`` (a GDAL ``{class_code: (r,g,b,a)}`` table) bakes a categorical
-    palette into band 1 with ``ColorInterp.palette`` -- byte-identical to the
-    esri_landcover twin's ``_write_palette_cog`` so ``publish_layer`` colorizes
-    from the embedded table (categorical passthrough, no rescale).
-
-    ``colorinterp="rgba"`` tags a 4-band uint8 array as red/green/blue/alpha so
-    ``publish_layer`` renders a server-symbolized overlay's baked palette directly
-    (the mapserver_export siblings' transparent RGBA raster). ``nodata=None`` omits
-    the nodata tag from the profile (an RGBA overlay carries transparency in the
-    alpha band, not a nodata sentinel). Both default to the single-band float32
-    behaviour -- strictly no-op for every prior caller.
-    """
+    # ``colormap`` bakes a categorical palette into band 1 with ColorInterp.palette,
+    # so the publish seam colorizes from the embedded table with no rescale.
+    # ``colorinterp="rgba"`` tags a 4-band uint8 array as red/green/blue/alpha, so a
+    # server-symbolized overlay's baked palette renders directly, and ``nodata=None``
+    # omits the nodata tag: an RGBA overlay carries transparency in its alpha band,
+    # not in a sentinel. Both default to the single-band float32 behaviour.
     import numpy as np
     import rasterio
 
@@ -136,12 +121,9 @@ def array_to_cog_bytes(
 
 
 def fetch_source_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Return ``(array_2d, affine_transform, crs)`` for the requested extent.
-
-    Dispatches on ``ingest.access`` (default ``opendap`` for a raster spec). Each
-    sub-mode raises :class:`RouterUpstreamError` on open/read failure and
-    :class:`RouterEmptyError` when the window has no finite pixels.
-    """
+    """Return ``(array_2d, affine_transform, crs)`` for the requested extent,
+    dispatching on ``ingest.access``. Each sub-mode raises RouterUpstreamError on an
+    open or read failure and RouterEmptyError when the window has no finite pixels."""
     access = (spec.ingest or {}).get("access", "opendap")
     if access == "opendap":
         return _opendap_to_array(spec, params)
@@ -245,15 +227,9 @@ def _opendap_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, An
 
 
 def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Windowed read of a known COG/VRT through the httpx transport (direct-window).
-
-    Reads via the coalescing/parallel range opener -- GDAL never
-    networks -- so the transport surfaces a typed status: a missing object (404 /
-    S3 NoSuchKey) maps to the typed EMPTY frame (the twins' no-coverage semantics),
-    403/AccessDenied to an auth-class upstream error, 429/5xx to a retryable
-    upstream error. This is where the old ``/vsicurl/`` path lost the 404->EMPTY
-    split (GDAL discarded the status, so every failure read as UPSTREAM_ERROR).
-    """
+    """Windowed read of a known COG or VRT through the coalescing range opener, so the
+    transport surfaces a typed status: a missing object is EMPTY (no coverage),
+    403/AccessDenied is auth-class, and 429/5xx is a retryable upstream error."""
     import numpy as np
     from rasterio.windows import Window
     from rasterio.windows import from_bounds as window_from_bounds
@@ -270,8 +246,8 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
     ingest = spec.ingest or {}
     bbox = params["bbox"]
 
-    # url_by_param (wave-8, gcn250): a param value (enum) selects the object URL;
-    # absent -> the single `data` endpoint URL (every prior direct_window spec).
+    # url_by_param: a param value (an enum) selects the object URL; absent, the single
+    # `data` endpoint URL applies.
     ubp = ingest.get("url_by_param")
     if ubp:
         url = (ubp.get("map") or {}).get(params.get(ubp.get("param")))
@@ -305,7 +281,7 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
         with open_windowed_cog(url) as src:
             win = window_from_bounds(*bbox, transform=src.transform)
             if round_pixel:
-                # gcn250 parity: outward-round to integer pixels, clip to extent.
+                # Outward-round to integer pixels, then clip to the extent.
                 win = win.round_offsets(op="floor").round_lengths(op="ceil")
                 win = win.intersection(Window(0, 0, src.width, src.height))
                 if win.width <= 0 or win.height <= 0:
@@ -344,9 +320,8 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
     if arr.size == 0:
         raise router_empty_error(spec.error_code_prefix, f"bbox={bbox} produced an empty window", spec.empty_error_suffix)
 
-    # all-nodata coverage gate (wave-8, gcn250): a window entirely the source
-    # nodata sentinel is honest no-coverage (over open water / off-disk), never a
-    # fabricated layer. Absent `nodata_gate` -> no gate (every prior spec).
+    # All-nodata coverage gate: a window that is entirely the source nodata sentinel
+    # is honest no-coverage, never a fabricated layer. Absent `nodata_gate`, no gate.
     if ingest.get("nodata_gate"):
         sentinel = src_nodata if src_nodata is not None else float(ingest.get("default_nodata", 255))
         # A NaN sentinel needs the finiteness test: ``arr != nan`` is True for
@@ -366,12 +341,11 @@ def _direct_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[A
 
 # --------------------------------------------------------------------------- #
 # multi_url (VRT fan-out): a mosaic source declared over MANY member URLs. The
-# single-URL opener serves ONE object, so a multi-tile .vrt read returns all-NaN
-# (it re-serves the VRT bytes for every sub-tile open); this mode resolves the
-# member tiles, windows the intersecting ones through the SAME transport opener,
-# and mosaics them into the requested window (the highest-leverage enabler).
-# Member discovery is pluggable (``mode: vrt`` today) so a future
-# declared-tile-grid source reuses the identical windowed-mosaic read path.
+# single-URL opener serves ONE object, so a multi-tile .vrt read through it returns
+# all-NaN -- it re-serves the VRT bytes for every sub-tile open. This mode resolves
+# the member tiles, windows the intersecting ones through the SAME transport opener,
+# and mosaics them into the requested window. Member discovery is pluggable, so
+# another discovery mode reuses the identical windowed-mosaic read path.
 # --------------------------------------------------------------------------- #
 
 
@@ -388,13 +362,9 @@ class _VrtSource:
 
 
 def _parse_vrt(vrt_xml: bytes, base_url: str) -> tuple[Any, int, int, Any, float, list["_VrtSource"]]:
-    """Parse a GDAL ``.vrt`` mosaic into ``(transform, xsize, ysize, crs, nodata, sources)``.
-
-    Reads the mosaic geotransform / raster size / SRS / band NoDataValue and each
-    ``(Simple|Complex)Source``'s ``SourceFilename`` + ``SrcRect`` + ``DstRect`` -- the
-    exact fields GDAL uses to fan a windowed read out to the member tiles, so an
-    explicit member-by-member read reproduces ``/vsicurl/`` value-for-value.
-    """
+    """Parse a GDAL ``.vrt`` mosaic into ``(transform, xsize, ysize, crs, nodata,
+    sources)``, reading each source's filename and src/dst rects -- the fields GDAL
+    itself uses to fan a windowed read out to the member tiles."""
     import xml.etree.ElementTree as ET
 
     import rasterio
@@ -435,21 +405,17 @@ def _parse_vrt(vrt_xml: bytes, base_url: str) -> tuple[Any, int, int, Any, float
 
 
 def _resolve_multi_url_members(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, int, int, Any, float, list["_VrtSource"]]:
-    """Resolve the mosaic grid + member tiles for a ``multi_url`` source.
-
-    ``mode: vrt`` fetches the declared ``.vrt`` whole-object through the transport
-    and parses it. The dispatch is isolated so a future ``mode: tile_grid`` can
-    synthesize members from a declarative grid and reuse the identical read path.
-    """
+    """Resolve the mosaic grid and member tiles for a ``multi_url`` source: ``mode:
+    vrt`` fetches the declared ``.vrt`` whole-object and parses it. The dispatch is
+    isolated so another member-discovery mode reuses the identical read path."""
     from ..transport import TransportError, get_bytes, get_client
 
     ingest = spec.ingest or {}
     mu = ingest.get("multi_url", {})
     mode = mu.get("mode", "vrt")
     endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
-    # A param-templated VRT URL (soilgrids: {property}/{property}_{depth}_mean.vrt)
-    # is filled from params; a static url passes through unchanged (no-op for hrsl /
-    # every prior multi_url spec, which declare a placeholder-free ``url``).
+    # A param-templated VRT URL is filled from params; a placeholder-free ``url``
+    # passes through unchanged.
     url = endpoint.url or (endpoint.url_template.format(**params) if endpoint.url_template else "")
     if url.startswith("/vsicurl/"):
         url = url[len("/vsicurl/"):]
@@ -467,15 +433,9 @@ def _resolve_multi_url_members(spec: SourceSpec, params: dict[str, Any]) -> tupl
 
 
 def _multi_url_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """VRT fan-out windowed mosaic read (; hrsl_population).
-
-    Windows the mosaic to ``bbox`` (outward integer-pixel rounding, the twin's
-    window math), reads each INTERSECTING member's sub-window through the coalescing
-    transport opener (bounded parallel), and pastes the non-nodata pixels into the
-    output window. An all-nodata window (over open water / off coverage) -> typed
-    EMPTY; ANY intersecting-member read failure -> typed UPSTREAM (never a silent
-    partial), matching the twin whose GDAL read fails the whole window.
-    """
+    """VRT fan-out windowed mosaic read: window the mosaic to ``bbox`` with outward
+    integer-pixel rounding, read each intersecting member, paste its non-nodata
+    pixels. All-nodata is EMPTY; ANY member failure is UPSTREAM, never a partial."""
     from concurrent.futures import ThreadPoolExecutor
 
     import numpy as np
@@ -492,8 +452,8 @@ def _multi_url_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, 
     bbox = params["bbox"]
     transform, xsize, ysize, crs, nodata, sources = _resolve_multi_url_members(spec, params)
 
-    # Window math reproduces the twin: from_bounds -> floor offsets, ceil lengths,
-    # clip to the mosaic extent. A window with no mosaic overlap -> typed EMPTY.
+    # Window math: from_bounds, then floor offsets, ceil lengths, clip to the mosaic
+    # extent. A window with no mosaic overlap is a typed EMPTY.
     win = window_from_bounds(*bbox, transform=transform)
     win = win.round_offsets(op="floor").round_lengths(op="ceil")
     c0 = max(0, int(win.col_off))
@@ -560,27 +520,20 @@ def _multi_url_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, 
 
 
 # --------------------------------------------------------------------------- #
-# projected_vrt_window: a VRT mosaic in a NON-4326 projected CRS (SoilGrids'
-# Interrupted Goode Homolosine 250 m grid). Unlike multi_url (which
-# windows a 4326 VRT directly and returns the native array), this transform_bounds
-# the 4326 bbox INTO the source CRS (densified), windows the native grid (the twin's
-# floor/ceil + pad), reads the intersecting members through the SAME coalescing
-# transport opener, reprojects the native window -> EPSG:4326 (bilinear, the twin's
-# target-res grid), and applies a per-property Int16->physical scale divisor. NaN
-# fill; the serialize directive (nodata=-9999) writes the float32 COG. STRICT no-op
-# for every prior raster spec (a distinct access mode).
+# projected_vrt_window: a VRT mosaic in a NON-4326 projected CRS. Where multi_url
+# windows a 4326 VRT directly and returns the native array, this transform_bounds the
+# 4326 bbox INTO the source CRS (densified), windows the native grid with a floor/ceil
+# plus pad, reads the intersecting members through the SAME coalescing transport
+# opener, reprojects the native window to EPSG:4326 bilinear, and applies a
+# per-property fixed-point to physical scale divisor. NaN fill; the serialize
+# directive writes the float32 COG.
 # --------------------------------------------------------------------------- #
 
 
 def _projected_vrt_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Projected VRT window read + native->4326 reproject + per-property scale.
-
-    Reproduces the fetch_soilgrids twin ``_fetch_soilgrids_bytes`` value-for-value:
-    the 4326 bbox -> Homolosine bounds (densified), the floor/ceil + 2 px pad native
-    window, the intersecting-member mosaic, the bilinear reproject to the ~250 m
-    EPSG:4326 target grid, and the fixed-point Int16 -> physical scale (NaN fill).
-    An all-nodata window (ocean / off the soil land surface) -> typed EMPTY.
-    """
+    """Projected VRT window read, native-to-4326 reproject, per-property scale: the
+    4326 bbox becomes densified native bounds, the intersecting members mosaic, the
+    window reprojects bilinear, and fixed-point integers scale to physical units."""
     from concurrent.futures import ThreadPoolExecutor
 
     import numpy as np
@@ -669,7 +622,7 @@ def _projected_vrt_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> 
 
     native_transform = rasterio.windows.transform(Window(c0, r0, out_w, out_h), transform)
 
-    # Reproject the native window -> EPSG:4326 target grid (the twin's res).
+    # Reproject the native window onto the EPSG:4326 target grid.
     target_res = float(pw.get("target_res_deg", 0.0025))
     dst_w = max(1, int(round((bbox[2] - bbox[0]) / target_res)))
     dst_h = max(1, int(round((bbox[3] - bbox[1]) / target_res)))
@@ -689,8 +642,8 @@ def _projected_vrt_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> 
             f"bbox={bbox} produced no valid pixels (all-nodata window -- over open "
             f"water or off the soil land surface)", spec.empty_error_suffix)
 
-    # Per-property fixed-point Int16 -> physical units; nodata -> NaN (the serialize
-    # directive fills NaN -> the -9999 float sentinel).
+    # Per-property fixed-point Int16 to physical units; nodata becomes NaN, which the
+    # serialize directive fills with the declared float sentinel.
     scale_div = 1.0
     sbp = pw.get("scale_by_param")
     if sbp:
@@ -702,22 +655,16 @@ def _projected_vrt_window_to_array(spec: SourceSpec, params: dict[str, Any]) -> 
 
 # --------------------------------------------------------------------------- #
 # gzip_object: a whole-object GET of a date-templated ``.tif.gz``, gunzip, in-
-# memory open + window. A gzip stream is NOT a byte-servable COG (no windowable
-# layout), so the whole-object cost is accepted and gated honestly by the payload
-# estimator; ``bbox=None`` reads the full grid (supports_global_query).,
-# chirps_precipitation.
+# memory open + window. A gzip stream is NOT a byte-servable COG (it has no
+# windowable layout), so the whole-object cost is accepted and gated honestly by the
+# payload estimator; ``bbox=None`` reads the full grid.
 # --------------------------------------------------------------------------- #
 
 
 def _resolve_gzip_url(spec: SourceSpec, params: dict[str, Any], go: dict[str, Any]) -> str:
-    """Build the date-templated object URL for a ``gzip_object`` source.
-
-    Period-selected template (chirps monthly vs daily path patterns) filled from a
-    parsed ``date`` param. A template that references ``{day}`` requires a full
-    ``YYYY-MM-DD``; a monthly template accepts ``YYYY-MM`` (or ``YYYY-MM-DD``, day
-    ignored). Coverage bounds (``min_year`` floor, no-future) raise a typed INPUT
-    error -- the twin's pre-network date validation, reproduced.
-    """
+    """Build the date-templated object URL for a ``gzip_object`` source. A template
+    referencing ``{day}`` requires a full ``YYYY-MM-DD``; a monthly one accepts
+    ``YYYY-MM``. Coverage bounds raise a typed INPUT error before any network call."""
     import re
     from datetime import date as _date
     from datetime import datetime, timezone
@@ -759,15 +706,9 @@ def _resolve_gzip_url(spec: SourceSpec, params: dict[str, Any], go: dict[str, An
 
 
 def _gzip_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Whole-object GET + gunzip + in-memory window (; chirps_precipitation).
-
-    Reads the whole ``.tif.gz`` through the transport (accepting the whole-object
-    cost -- a gzip stream is not windowed-servable), gunzips, opens in memory, and
-    windows to ``bbox`` (``None`` -> the full grid). A source-embedded nodata
-    sentinel (``arr <= threshold``) collapses to NaN; an all-nodata window ->
-    typed EMPTY. A 404 -> typed NOT_AVAILABLE (the date is unpublished); any other
-    fetch/gunzip failure -> typed UPSTREAM.
-    """
+    """Whole-object GET, gunzip, in-memory window to ``bbox`` (``None`` reads the full
+    grid). A source-embedded nodata sentinel collapses to NaN and an all-nodata
+    window is EMPTY; a 404 is NOT_AVAILABLE, any other failure UPSTREAM."""
     import gzip
     import math
 
@@ -836,32 +777,26 @@ def _gzip_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
 
 # --------------------------------------------------------------------------- #
 # grib_object: a whole-object GET of a resolved ``.grib2(.gz)`` key, gunzip, GRIB
-# decode (the GRIB driver needs a real path -- a MemoryFile cannot host its
-# tabular index -- so the bytes land in a tempfile), a source-grid bbox window,
-# a sentinel->nodata collapse, and a conditional reproject to EPSG:4326. The
-# gzip_object precedent at GRIB scale: GRIB is whole-object by nature
-# (no byte-range windowing), so the whole-object cost is accepted + payload-gated,
-# and the decode receiving whole bytes is pure. The S3-listed key is resolved
-# pre-cache-key by the resolve phase (mrms_qpe hooks) and merged into
-# params, so this mode only reads params[key_param] and never lists. NOAA MRMS QPE.
+# decode, a source-grid bbox window, a sentinel-to-nodata collapse, and a conditional
+# reproject to EPSG:4326. The GRIB driver needs a REAL PATH -- a MemoryFile cannot
+# host its tabular index -- so the bytes land in a tempfile. GRIB is whole-object by
+# nature (no byte-range windowing), so that cost is accepted and payload-gated. The
+# listed key is resolved pre-cache-key by the resolve phase and merged into params,
+# so this mode only reads params[key_param] and never lists.
 # --------------------------------------------------------------------------- #
 
 
 def _grib_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Whole-object GRIB GET + gunzip + windowed decode + sentinel-nodata.
+    """Whole-object GRIB GET, gunzip, windowed decode, sentinel-to-nodata collapse.
+    The returned array carries the ``nodata`` sentinel in-band and every pixel is
+    finite, so the serialize block writes it through unchanged."""
 
-    Reproduces the MRMS twin ``_grib2_to_geotiff`` value-for-value: read band 1 as
-    float32, collapse the source sentinels (``sentinel_equals`` list + ``sentinel_below``
-    floor) to the ``nodata`` value, clip to ``bbox`` on the SOURCE grid (floor-offset
-    / ceil-length / clip-to-extent -- cheaper + integrity-safe since the source CRS
-    is also geographic), then reproject to EPSG:4326 ONLY when the decoded CRS is not
-    already 4326 (calculate_default_transform + nearest, nodata-preserving). ``bbox=None``
-    reads the full grid (supports_global_query). A window off the source extent -> typed
-    EMPTY; a 404 (the key vanished between resolve + fetch) -> typed NOT_AVAILABLE; any
-    other fetch / gunzip / decode failure -> typed UPSTREAM. The returned array carries
-    the ``nodata`` sentinel in-band; ``execute``'s ``serialize`` block (nodata=<same>)
-    writes it through unchanged (every pixel is finite, so the fill is a no-op).
-    """
+    # Band 1 reads as float32, the declared sentinels collapse to nodata, and the clip
+    # happens on the SOURCE grid (cheaper and integrity-safe, the source CRS being
+    # geographic too) before a reproject that runs ONLY when the decoded CRS is not
+    # already 4326. ``bbox=None`` reads the full grid. A window off the source extent
+    # is EMPTY, a 404 (the key vanished between resolve and fetch) is NOT_AVAILABLE,
+    # and any other fetch, gunzip or decode failure is UPSTREAM.
     import gzip
     import math
 
@@ -935,7 +870,7 @@ def _grib_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
             except OSError:
                 pass
 
-    # Sentinel collapse -> nodata (MRMS: -3 no-precip, -1 missing, plus a floor).
+    # Sentinel collapse to nodata: the declared equals list plus a below-floor.
     mask = np.zeros(arr.shape, dtype=bool)
     for sv in sentinel_equals:
         mask |= (arr == sv)
@@ -943,7 +878,7 @@ def _grib_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
         mask |= (arr < float(sentinel_below))
     arr = np.where(mask, nodata, arr).astype("float32")
 
-    # Clip on the source grid BEFORE reproject (twin: cheaper + integrity-safe).
+    # Clip on the source grid BEFORE the reproject: cheaper and integrity-safe.
     if bbox is not None:
         window = window_from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], transform=src_transform)
         row_off = max(0, int(math.floor(window.row_off)))
@@ -982,25 +917,18 @@ def _grib_object_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any
 # --------------------------------------------------------------------------- #
 # griddap: an ERDDAP griddap bracket-selector REST endpoint that returns a
 # PRE-SUBSET NetCDF (``.nc?<var>[(<time>)][(<lat_hi>):(<lat_lo>)][(<lon_lo>):
-# (<lon_hi>)]``) -- the server does the bbox+day subset, so the whole (small)
+# (<lon_hi>)]``) -- the server does the bbox and day subset, so the whole small
 # object is a windowed read by construction. A single GET through the shared
-# transport, an in-memory xarray open + squeeze, and a north-up (array, transform,
-# crs). A 404 whose body carries the ERDDAP no-matching / axis-range markers is
-# honest no-data (typed EMPTY, the twin's SSTNoDataError); an all-NaN window
-# (fully-land AOI, masked ocean product) is also EMPTY. NOAA CoastWatch CRW SST.
+# transport, an in-memory xarray open and squeeze, and a north-up (array, transform,
+# crs). A 404 whose body carries the ERDDAP no-matching or axis-range markers is
+# honest no-data (typed EMPTY); an all-NaN window over a fully-land AOI is also EMPTY.
 # --------------------------------------------------------------------------- #
 
 
 def _griddap_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """ERDDAP griddap bracket-selector ``.nc`` GET + xarray subset -> float32 array.
-
-    Builds the griddap bracket-selector URL (lat written high:low when the grid
-    descends), GETs the pre-subset NetCDF, opens it in-memory, squeezes the
-    singleton time, and returns the north-up ``(array, transform, "EPSG:4326")``.
-    ``date`` defaults to the most-recent likely-published day (today-1 UTC) when
-    absent (that default day does NOT enter the cache key, an explicit date does). A 404 with the no-data
-    body markers -> typed EMPTY; any other non-2xx / parse failure -> typed UPSTREAM.
-    """
+    """ERDDAP griddap bracket-selector GET to a north-up float32 array. An absent
+    ``date`` defaults to the most-recent likely-published day, which does NOT enter
+    the cache key; a 404 carrying the no-data body markers is EMPTY, not UPSTREAM."""
     import datetime as _dt
 
     import numpy as np
@@ -1144,21 +1072,17 @@ def _griddap_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, An
 # ZIP objects, each wrapping ONE DEFLATE-compressed .tif member (GHS-POP tiles).
 # A DEFLATE member is not windowable by a byte range (decoding forces a near-whole
 # member transfer), so the honest shape is a WHOLE-OBJECT GET of each intersecting
-# tile's ZIP (the shared ``get_zip`` step), an in-memory member read, a
-# per-tile window, and a NaN-nodata merge -- value-identical to the twin's
-# ``/vsizip//vsicurl/`` windowed read (same member bytes, same window math)..
+# tile's ZIP through the shared ``get_zip`` step, an in-memory member read, a per-tile
+# window, and a NaN-nodata merge.
 # --------------------------------------------------------------------------- #
 
 
 def _tile_grid_tiles(
     bbox: tuple[float, float, float, float], g: dict[str, Any]
 ) -> list[tuple[int, int]]:
-    """Map a bbox to the (row, col) tiles of a regular degree grid (GHSL parity).
-
-    Grid origin is offset from the integer-degree lattice by ``lon_offset`` /
-    ``top_offset`` (the global raster does not start exactly at -180/+90). The
-    row/col math reproduces the twin's ``_tiles_for_bbox`` exactly.
-    """
+    """Map a bbox to the (row, col) tiles of a regular degree grid whose origin is
+    offset from the integer-degree lattice by ``lon_offset`` and ``top_offset``: the
+    global raster does not start exactly at -180/+90."""
     import math
 
     tile_deg = float(g.get("tile_deg", 10.0))
@@ -1178,16 +1102,9 @@ def _tile_grid_tiles(
 
 
 def _fixed_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Whole-object per-tile ZIP GET + in-memory member window + NaN merge.
-
-    For each intersecting grid tile: ``get_zip`` the tile's ZIP object through the
-    shared transport, read the named DEFLATE ``.tif`` member into a MemoryFile, and
-    window it to ``bbox`` (the twin's floor-offset / ceil-length / clip window math).
-    A missing tile (the archive omits ocean-only R/C -> 404) is a coverage gap, not
-    a failure (skip). Negative source fill -> NaN; the tiles are NaN-merged; an
-    all-NaN / no-tile window -> typed EMPTY; a per-tile read failure -> typed UPSTREAM.
-    A window exceeding ``max_pixels`` -> typed INPUT error (the twin's refusal).
-    """
+    """Whole-object per-tile ZIP GET, in-memory member window, NaN merge. A missing
+    tile is a coverage gap and is skipped, an all-NaN or no-tile window is EMPTY, a
+    per-tile read failure is UPSTREAM, and a window past ``max_pixels`` is INPUT."""
     import numpy as np
     import rasterio
     import rasterio.io
@@ -1234,8 +1151,8 @@ def _fixed_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
                 zf = get_zip(get_client(), url, headers={"User-Agent": ua})
                 tif_bytes = zf.read(member)
             except TransportNotFound:
-                # A missing tile (ocean-only R/C the archive omits) is a coverage
-                # gap, not a hard failure when other tiles exist (twin: continue).
+                # A missing tile (an ocean-only row/col the archive omits) is a
+                # coverage gap, not a hard failure while other tiles exist.
                 logger.info("router.fixed_tile_grid: tile R%d_C%d absent (404); skipping", r, c)
                 continue
             except Exception as exc:  # noqa: BLE001 -- any fetch/extract failure: no-coverage
@@ -1301,27 +1218,23 @@ def _fixed_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
 # --------------------------------------------------------------------------- #
 # wcs_getcoverage: a WCS 1.0.0 GetCoverage templated GET of a CATEGORICAL coverage
 # (NLCD via the MRLC GeoServer) returning the canonical class integers in the band
-# (NOT palette indices) -> a NLCD background(0)->nodata pixel remap -> a palette COG
-# (embedded band-1 color table preserved). The coverage id resolves from the vintage
-# year (declarative map); the effective resolution + quantized bbox are the pre_resolve
-# auto-coarsen (merged into params before the cache key). The GET runs through the
-# shared ogc adapter (the twin's Tier-2 WCS seam), the ONE sanctioned socket for this
-# mode. ``execute`` bakes the source's embedded palette into the serialized COG. MRLC
-# NLCD.
+# (NOT palette indices), then a background(0)-to-nodata pixel remap, then a palette
+# COG with the embedded band-1 color table preserved. The coverage id resolves from
+# the vintage year through a declarative map; the effective resolution and quantized
+# bbox come from the pre_resolve auto-coarsen, merged into params before the cache
+# key. The GET runs through the shared ogc adapter, the ONE sanctioned socket for this
+# mode, and ``execute`` bakes the source's embedded palette into the serialized COG.
 # --------------------------------------------------------------------------- #
 
 
 def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any, dict | None, float | None]:
-    """WCS 1.0.0 GetCoverage GET + NLCD background(0)->nodata remap.
+    """WCS 1.0.0 GetCoverage to ``(array uint8, transform, crs, colormap|None,
+    nodata)``. A missing coverage or non-TIFF body is a typed UPSTREAM error."""
 
-    Returns ``(array uint8, transform, crs, colormap|None, nodata)``. The MRLC WCS
-    embedded color table maps class 0 (Background / no-coverage: open ocean,
-    international waters) to opaque black rather than transparent, and 0 is NEVER a
-    legitimate NLCD code (real codes are 11-95), so every 0-valued pixel is folded
-    into the raster's declared nodata sentinel (already-transparent) -- the twin's
-    ``_fix_nlcd_background_transparency`` at the pixel level. A missing coverage /
-    non-TIFF body -> typed UPSTREAM.
-    """
+    # The published color table paints class 0 (Background: open ocean, international
+    # waters) opaque black rather than transparent, and 0 is NEVER a legitimate NLCD
+    # code -- the real codes are 11-95 -- so every 0-valued pixel folds into the
+    # raster's declared nodata sentinel, which is already transparent.
     import numpy as np
     import rasterio
     from rasterio.io import MemoryFile
@@ -1344,8 +1257,8 @@ def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
             f"(available: {sorted(coverage_by_year)}).",
         )
 
-    # WCS 1.0.0 GetCoverage requires explicit WIDTH/HEIGHT; size the pixel grid to
-    # the bbox at the effective resolution, clamped to the MRLC ~4000 px/axis cap.
+    # WCS 1.0.0 GetCoverage requires an explicit WIDTH/HEIGHT: size the pixel grid to
+    # the bbox at the effective resolution, clamped to the service's per-axis cap.
     min_lon, min_lat, max_lon, max_lat = bbox
     mid_lat = 0.5 * (min_lat + max_lat)
     from pyproj import Geod
@@ -1399,19 +1312,18 @@ def _wcs_getcoverage_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple
 # --------------------------------------------------------------------------- #
 # categorical_tile_grid: a global CATEGORICAL raster cut into a fixed h/v degree
 # grid of per-tile direct-GET GeoTIFFs (NASA LANCE MCDWD flood tiles), each a
-# uint8 class raster (NOT zip-wrapped, NOT continuous). The first-valid-wins uint8
-# mosaic + embedded palette variant of ``fixed_tile_grid`` (continuous NaN-merge)
-# named: per-10-deg-tile GeoTIFF -> nearest-window -> FIRST-VALID uint8
-# mosaic. The (year, doy) drive the per-tile URL and are resolved pre-cache-key by
-# the ``pre_resolve`` dir-walk hook (merged into params). ``execute`` serializes
-# the returned uint8 array with the declarative palette (nodata transparent). A
-# missing tile (404) is a coverage gap (skip); an all-nodata mosaic -> typed EMPTY.
-# NASA LANCE MCDWD_L3_F3_NRT.
+# uint8 class raster, neither zip-wrapped nor continuous. It is the first-valid-wins
+# uint8 mosaic and embedded-palette variant of ``fixed_tile_grid``: a per-tile GeoTIFF
+# nearest-window into a FIRST-VALID uint8 mosaic. The (year, doy) drive the per-tile
+# URL and are resolved pre-cache-key by the ``pre_resolve`` dir-walk hook, merged into
+# params. ``execute`` serializes the uint8 array with the declarative palette, nodata
+# transparent. A missing tile (404) is a coverage gap and is skipped; an all-nodata
+# mosaic is a typed EMPTY.
 # --------------------------------------------------------------------------- #
 
 
 def _ctg_tile_bounds(h: int, v: int, tile_deg: float) -> tuple[float, float, float, float]:
-    """(west, south, east, north) of an h{hh}v{vv} tile (twin ``_tile_bounds``)."""
+    """(west, south, east, north) of an h{hh}v{vv} tile."""
     west = -180.0 + tile_deg * h
     north = 90.0 - tile_deg * v
     return (west, north - tile_deg, west + tile_deg, north)
@@ -1420,7 +1332,7 @@ def _ctg_tile_bounds(h: int, v: int, tile_deg: float) -> tuple[float, float, flo
 def _ctg_tiles_for_bbox(
     bbox: tuple[float, float, float, float], g: dict[str, Any]
 ) -> list[tuple[int, int]]:
-    """The (h, v) tiles overlapping ``bbox`` clamped to the grid (twin ``_tiles_for_bbox``)."""
+    """The (h, v) tiles overlapping ``bbox``, clamped to the grid."""
     import math
 
     tile_deg = float(g.get("tile_deg", 10.0))
@@ -1461,16 +1373,9 @@ def _ctg_read_tile_window(
 
 
 def _categorical_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Direct-GET per-tile categorical GeoTIFF + first-valid uint8 mosaic.
-
-    For each covering h/v tile: GET the ``{archive}/{year}/{doy}/{fname}`` object
-    through the shared transport (404 -> skip, a coverage gap), reproject-window its
-    band-1 to ``bbox`` nearest (uint8), and paste its non-nodata pixels where the
-    mosaic is still nodata (FIRST-VALID wins -- the twin's tile order). An all-nodata
-    / no-tile mosaic -> typed EMPTY (honest no-coverage). Any non-404 tile fetch or
-    read failure -> typed UPSTREAM. Returns ``(mosaic uint8, transform, "EPSG:4326")``;
-    ``execute`` bakes the declarative palette into the serialized COG.
-    """
+    """Direct-GET per-tile categorical GeoTIFF to a FIRST-VALID uint8 mosaic: a 404
+    tile is a coverage gap and is skipped, an all-nodata or no-tile mosaic is EMPTY,
+    and any other tile fetch or read failure is UPSTREAM."""
     import numpy as np
     import rasterio
 
@@ -1534,16 +1439,14 @@ def _categorical_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) ->
 
 
 def _imageserver_size(bbox: tuple[float, float, float, float], ingest: dict[str, Any]) -> tuple[int, int]:
-    """ImageServer ``size`` (width_px, height_px) for ``bbox`` at the native grid.
+    """ImageServer ``size`` (width_px, height_px) for ``bbox``, from either declared
+    sizing, each clamped per axis to ``px_min`` / ``px_max``."""
 
-    Two declared sizings. ``px_per_deg`` asks for a fixed pixel density per
-    DEGREE on both axes -- an angular grid, so the cell is not square away from
-    the equator, and a caller that wants the sample lattice reproduced exactly
-    (rather than a metric cell) declares this one; the density itself may be a
-    request param, so a param of the same name overrides the spec default.
-    Otherwise the metric sizing applies: m/degree at the bbox midpoint latitude
-    rounded to ``native_cell_m``. Both clamp per axis to ``px_min`` / ``px_max``.
-    """
+    # ``px_per_deg`` is a fixed pixel density per DEGREE on both axes -- an angular
+    # grid, so the cell is not square away from the equator -- and is what a caller
+    # declares to reproduce a sample lattice exactly rather than a metric cell; a
+    # request param of the same name overrides the spec default. Otherwise the metric
+    # sizing applies: m/degree at the bbox midpoint latitude over ``native_cell_m``.
     px_min = int(ingest.get("px_min", 16))
     px_max = int(ingest.get("px_max", 4096))
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -1566,15 +1469,9 @@ def _imageserver_size(bbox: tuple[float, float, float, float], ingest: dict[str,
 
 
 def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """ArcGIS ImageServer ``exportImage`` REST fetch + all-nodata coverage gate.
-
-    Returns the server's ready GeoTIFF body UNCHANGED (the twins did no
-    reserialization -- the exportImage response IS the cached artifact), so the
-    router's output is value-identical to the hand-written twin. The transport
-    owns the socket; GDAL only parses the returned bytes for the
-    all-nodata gate. A JSON error envelope / non-TIFF body -> typed UPSTREAM;
-    an all-nodata raster (bbox outside coverage) -> typed EMPTY.
-    """
+    """ArcGIS ImageServer ``exportImage`` fetch, returning the server's ready GeoTIFF
+    body UNCHANGED: the response IS the cached artifact, and GDAL only parses it for
+    the all-nodata gate. A non-TIFF body is UPSTREAM, an all-nodata raster EMPTY."""
     import numpy as np
     import rasterio
     from rasterio.io import MemoryFile
@@ -1595,8 +1492,8 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
         svc_map = svc_cfg.get("map", {})
         service = svc_map.get(params.get(svc_param))
     if service is None:
-        # A param outside the map is an input defect (mirrors the twin's layer
-        # guard); the enum gate already rejected it, so this is defense-in-depth.
+        # A param outside the map is an input defect; the enum gate already rejected
+        # it, so this is defence in depth.
         raise router_upstream_error(
             spec.error_code_prefix, f"no ImageServer service for {svc_param}={params.get(svc_param)!r}"
         )
@@ -1670,22 +1567,19 @@ def _imageserver_export_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes
 # mapserver_export: an ArcGIS MapServer ``/export`` returning a SERVER-SYMBOLIZED
 # PNG32 (a baked color scheme, not raw values), georeferenced client-side into a
 # 4-band RGBA COG so publish_layer renders the baked symbology directly (no
-# colormap, no style-registry row). The transport owns the socket;
-# PIL/GDAL only decode the returned image. A fully-transparent export (a bbox with
-# no coverage at that level) is a VALID transparent overlay, never a fabricated
-# layer AND never a typed EMPTY (the twin's honesty floor: the layer appears and
-# renders nothing). NOAA OCM SLR Viewer conf_* / marsh_* siblings.
+# colormap, no style-registry row). The transport owns the socket; PIL and GDAL only
+# decode the returned image. A fully-transparent export -- a bbox with no coverage at
+# that level -- is a VALID transparent overlay, never a fabricated layer and never a
+# typed EMPTY: the layer appears and renders nothing.
 # --------------------------------------------------------------------------- #
 
 
 def _mapserver_export_grid(
     bbox: tuple[float, float, float, float], res_deg: float, img: dict[str, Any]
 ) -> tuple[int, int]:
-    """MapServer/export ``size`` (width_px, height_px) from a res_deg cell size.
-
-    Reproduces the twin's ``grid_size``: ceil the bbox span over ``res_deg``, clamp
-    per axis to ``[px_min, px_max]`` (NOAA rejects very large export requests).
-    """
+    """MapServer/export ``size`` (width_px, height_px) from a ``res_deg`` cell: the
+    bbox span ceils over the cell and clamps per axis to ``[px_min, px_max]``,
+    because the service rejects a very large export request."""
     import math
 
     px_min = int(img.get("px_min", 16))
@@ -1697,16 +1591,9 @@ def _mapserver_export_grid(
 
 
 def _mapserver_export_rgba_bytes(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """MapServer ``/export`` PNG32 -> georeferenced 4-band RGBA COG bytes.
-
-    Resolves the service name from a request param (the SLR level -> conf_*/marsh_*
-    service), fetches the server-rendered PNG over the bbox through the shared
-    transport, decodes it to RGBA, georeferences it with the request-bbox transform,
-    and serializes a 4-band RGBA COG. A missing service (an out-of-set level) is a
-    typed INPUT error (the twin's ``NOAA_SLR_RASTER_INPUT_INVALID``); an undecodable
-    body / HTTP failure is a typed UPSTREAM error. No nodata coverage gate -- a
-    transparent export is a valid empty overlay.
-    """
+    """MapServer ``/export`` PNG32 to a georeferenced 4-band RGBA COG: the service name
+    resolves from a request param, and an out-of-set value is a typed INPUT error.
+    No nodata gate -- a fully transparent export is a valid empty overlay."""
     import io
 
     import numpy as np
@@ -1725,8 +1612,7 @@ def _mapserver_export_rgba_bytes(spec: SourceSpec, params: dict[str, Any]) -> by
     svc_map = svc_cfg.get("map", {})
     service = svc_map.get(params.get(svc_param))
     if service is None:
-        # An out-of-set level is an input defect (the twin's per-level validation
-        # raised NOAA_SLR_RASTER_INPUT_INVALID before any network call).
+        # An out-of-set level is an input defect, raised before any network call.
         raise router_input_error(
             spec.error_code_prefix,
             f"{svc_param}={params.get(svc_param)!r} is not a valid level (no service in the map)",
@@ -1736,9 +1622,8 @@ def _mapserver_export_rgba_bytes(spec: SourceSpec, params: dict[str, Any]) -> by
     base = (endpoint.url or endpoint.url_template or "").rstrip("/")
     url = f"{base}/{service}/MapServer/export"
 
-    # res_deg is a request param (model-overridable); fall back to the static
-    # default. A non-positive / non-finite value is a typed INPUT error (the twin's
-    # resolve_res_deg guard), reproduced before any network call.
+    # res_deg is a request param, falling back to the static default. A non-positive
+    # or non-finite value is a typed INPUT error, raised before any network call.
     import math as _math
 
     res_deg = params.get("res_deg")
@@ -1776,17 +1661,15 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     """Fetch the source array and serialize to COG bytes (the ``fetch_fn`` body)."""
     access = (spec.ingest or {}).get("access", "opendap")
     if access == "imageserver_export":
-        # The ImageServer exportImage response IS the artifact (no reserialize) --
-        # value-identical to the twin's raw GeoTIFF body.
+        # The ImageServer exportImage response IS the artifact: no reserialize.
         return _imageserver_export_bytes(spec, params)
     if access == "mapserver_export":
-        # A MapServer/export server-symbolized PNG32 georeferenced client-side into
-        # a 4-band RGBA COG (noaa_slr conf_*/marsh_* overlays).
+        # A MapServer/export server-symbolized PNG32, georeferenced client-side into
+        # a 4-band RGBA COG.
         return _mapserver_export_rgba_bytes(spec, params)
     if access == "categorical_tile_grid":
-        # a uint8 categorical first-valid mosaic + the declarative palette
-        # baked into a 256-entry band-1 color table (nodata index transparent) --
-        # value-identical to the twin's ``_fetch_flood_extent_cog_bytes`` COG.
+        # A uint8 categorical first-valid mosaic, with the declarative palette baked
+        # into a 256-entry band-1 color table and the nodata index transparent.
         g = (spec.ingest or {}).get("categorical_tile_grid", {})
         nodata = int(g.get("nodata", 255))
         arr, transform, crs = _categorical_tile_grid_to_array(spec, params)
@@ -1798,15 +1681,14 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
     if access == "wcs_getcoverage":
         # WCS 1.0.0 GetCoverage categorical NLCD -> background(0)->nodata
         # remap -> palette COG (the source's embedded band-1 color table preserved,
-        # nodata transparent) -- the twin's paletted, overview-carrying landcover COG.
+        # nodata transparent) -- a paletted, overview-carrying categorical COG.
         arr, transform, crs, colormap, nodata = _wcs_getcoverage_to_array(spec, params)
         return array_to_cog_bytes(
             arr, transform, crs, nodata=nodata, dtype="uint8", colormap=colormap
         )
     arr, transform, crs = fetch_source_array(spec, params)
-    # serialize directive (wave-8): a float source that writes a NON-NaN nodata
-    # sentinel (copernicus_dem: fill NaN -> -9999, nodata=-9999) declares it here.
-    # Absent (every prior float spec) -> NaN-nodata passthrough (modis parity).
+    # serialize directive: a float source that writes a NON-NaN nodata sentinel
+    # declares it here. Absent, NaN-nodata passes through unchanged.
     ser = (spec.ingest or {}).get("serialize") or {}
     out_nodata = ser.get("nodata")
     if out_nodata is not None:

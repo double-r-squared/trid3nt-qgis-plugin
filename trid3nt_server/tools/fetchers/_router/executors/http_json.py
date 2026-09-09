@@ -1,14 +1,8 @@
-"""http_json executor: the tier-3 hook-driven point-event fetch path.
+"""http_json executor: the hook-driven point-event fetch path.
 
-Selected when a spec declares ``hooks.build_request``. The engine owns the
-transport (the shared pooled client + retry authority), the paging LOOP, and the
-FGB serialize; the two named PURE hooks own the source-specific steps:
-``build_request`` constructs the request(s), ``parse_response`` decodes the body
-/ bodies into GeoJSON point features (raising the honest-empty / too-large /
-bad-body typed errors). Multi-request (N static plans, joined at parse) and paging
-(one plan per page, bounded by the declared ``totalPages`` probe) both funnel a
-LIST of response bodies into the single parse hook -- identical downstream.
-"""
+The engine owns the transport, the paging LOOP and the FGB serialize; two PURE hooks
+own the source-specific steps -- ``build_request`` constructs the requests, and
+``parse_response`` decodes the bodies and raises the honest-empty typed errors."""
 
 from __future__ import annotations
 
@@ -31,12 +25,9 @@ __all__ = ["execute", "fetch_bodies"]
 
 
 def _get_raw(plan: RequestPlan) -> bytes:
-    """Execute one plan through the shared transport; let ``TransportError`` propagate.
-
-    GET by default; ``plan.method == "POST"`` sends ``plan.json_body`` as a JSON
-    body or ``plan.data`` as a form-encoded body (the Overpass QL ``data`` field).
-    The transport owns the retry authority either way.
-    """
+    """Execute one plan through the shared transport, letting ``TransportError``
+    propagate. GET by default; ``plan.method == "POST"`` sends ``plan.json_body`` as
+    JSON or ``plan.data`` form-encoded. The transport owns the retry authority."""
     if plan.method == "POST":
         body, _ct, _url = post_bytes(
             get_client(), plan.url, headers=plan.headers, params=plan.params,
@@ -48,14 +39,9 @@ def _get_raw(plan: RequestPlan) -> bytes:
 
 
 def _get(spec: SourceSpec, plan: RequestPlan) -> bytes:
-    """Execute one plan, mapping a ``TransportError`` to the source-stamped router error.
-
-    A spec that declares ``hooks.classify_status`` (a keyed source that splits the
-    HTTP status into the twin's distinct typed errors -- 401/403 -> credential-shaped
-    ``*_AUTH_ERROR``, 404 -> ``*_INPUT_ERROR``) is consulted FIRST; it returns a
-    typed RouterError to raise, or None to keep the default retryable upstream mapping.
-    No prior spec declares it (strict no-op).
-    """
+    """Execute one plan, mapping a ``TransportError`` to the source-stamped router
+    error. A declared ``hooks.classify_status`` is consulted FIRST and returns either
+    a typed error to raise or None, which keeps the retryable upstream default."""
     try:
         return _get_raw(plan)
     except TransportError as exc:
@@ -68,15 +54,9 @@ def _get(spec: SourceSpec, plan: RequestPlan) -> bytes:
 
 
 def _fetch_endpoint_fallback(spec: SourceSpec, plans: list[RequestPlan]) -> list[bytes]:
-    """Try ``plans`` as a data-source fallback CHAIN; the first success wins.
-
-    The build hook returns one plan per mirror (the primary + its siblings, the
-    spec fallback-chain). Each is tried in order through the shared transport;
-    the first success returns a single-body list. A non-429 4xx short-circuits the
-    chain (the request itself is bad -- another mirror will not help); a 5xx / 429 /
-    timeout / connection error advances to the next mirror. If every mirror fails a
-    source-stamped upstream error is raised (retryable), naming the count.
-    """
+    """Try ``plans`` as a data-source fallback CHAIN, first success wins: a non-429 4xx
+    short-circuits (the request itself is bad), a 5xx / 429 / timeout advances to the
+    next mirror, and every mirror failing raises a retryable upstream error."""
     sc = spec.error_code_prefix
     last_exc: Exception | None = None
     for i, plan in enumerate(plans):
@@ -100,12 +80,9 @@ def _fetch_endpoint_fallback(spec: SourceSpec, plans: list[RequestPlan]) -> list
 
 
 def _fetch_paged(spec: SourceSpec, params: dict[str, Any], build: Any, paging: dict[str, Any]) -> list[bytes]:
-    """Walk pages until the declared ``totalPages`` (bounded by ``max_pages``).
-
-    The page count is read from the first page's ``total_pages_key`` (a light JSON
-    probe purely for loop control; the AUTHORITATIVE decode is the parse hook over
-    all bodies). Overrunning ``max_pages`` -> the source-stamped RESULT_TOO_LARGE.
-    """
+    """Walk pages until the declared ``totalPages``, bounded by ``max_pages``. The page
+    count is a light probe for loop control only -- the authoritative decode is the
+    parse hook over all bodies -- and overrunning raises RESULT_TOO_LARGE."""
     sc = spec.error_code_prefix
     page_param = paging.get("page_param", "page")
     total_pages_key = paging.get("total_pages_key", "totalPages")
@@ -152,17 +129,9 @@ def _fetch_paged(spec: SourceSpec, params: dict[str, Any], build: Any, paging: d
 
 
 def _fetch_constant_cache(spec: SourceSpec, plans: list[RequestPlan], cc: dict[str, Any]) -> list[bytes]:
-    """Fetch each plan through an INNER constant-key ``read_through``.
-
-    The two-tier cache: a source whose bespoke body is "download ONE big
-    whole-world file once, then filter it per-AOI in the parse hook" (the GEM GAF
-    10.6 MB harmonized GeoJSON) declares ``ingest.constant_cache``. The plan bytes
-    are cached under a CONSTANT key (``{"file": cc.file_id}``, independent of the
-    AOI), so distinct AOIs share one cached download -- the naive-fold per-AOI
-    re-download regression is impossible. The OUTER ``read_through`` in
-    ``route()`` still caches the small AOI-filtered FGB per AOI. No-op unless the
-    spec declares ``constant_cache``.
-    """
+    """Fetch each plan through an INNER constant-key ``read_through``, so a source that
+    downloads ONE whole-world file and filters it per AOI caches that download under an
+    AOI-independent key while the outer read_through still caches per AOI."""
     from ....cache import read_through
     from ..router import synthesize_metadata
 
@@ -183,17 +152,9 @@ def _fetch_constant_cache(spec: SourceSpec, plans: list[RequestPlan], cc: dict[s
 
 
 def fetch_bodies(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
-    """Resolve the request plan(s) via the build hook and GET the response body/bodies.
-
-    Modes by declared ``ingest.http_source``: ``paging`` walks pages;
-    ``endpoint_fallback`` treats the plans as a first-success-wins mirror chain
-    (the Overpass 3-mirror fallback, the spec fallback-chain); the default fetches
-    every plan and joins them at parse (a static multi-endpoint set).
-
-    ``ingest.constant_cache`` wraps the plan fetch in an INNER
-    constant-key ``read_through`` so a whole-world source file is downloaded once
-    and re-filtered per AOI (the two-tier cache) instead of re-downloaded per AOI.
-    """
+    """Resolve the request plans via the build hook and GET the bodies. By declared
+    ``ingest.http_source``: ``paging`` walks pages, ``endpoint_fallback`` is a
+    first-success mirror chain, and the default joins every plan at parse."""
     build = resolve_hook(spec.hooks.build_request)  # type: ignore[union-attr]
     http_source = (spec.ingest or {}).get("http_source") or {}
     paging = http_source.get("paging")
@@ -209,18 +170,9 @@ def fetch_bodies(spec: SourceSpec, params: dict[str, Any]) -> list[bytes]:
 
 
 def _execute_parse_fallback(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """PARSE-driven data-source fallback chain: first non-empty parse wins.
-
-    Unlike ``endpoint_fallback`` (a first-HTTP-SUCCESS mirror chain), this walks the
-    build hook's ORDERED plans, parses EACH fetched body on its own, and stops at the
-    first plan whose parse yields >= 1 feature -- the USGS NWIS IV WaterML-JSON primary
-    -> Site-service RDB fallback (a 404/empty IV body is a parse-empty, not a transport
-    failure, so it degrades to the Site plan). When EVERY plan yields empty the source's
-    honest typed EMPTY error is raised (the twin's NO_STATIONS gate) INSTEAD of an empty
-    header-only FGB -- a hard no-data answer, never a fabricated success layer. The parse
-    hook sees one body at a time (``bodies=[body]``) and self-detects the payload shape.
-    No-op unless the spec declares ``ingest.http_source.parse_fallback``.
-    """
+    """PARSE-driven fallback chain: parse EACH plan's body on its own and stop at the
+    first yielding >= 1 feature, so an empty body degrades to the next plan. Every plan
+    empty raises the source's typed EMPTY, never a fabricated header-only layer."""
     build = resolve_hook(spec.hooks.build_request)  # type: ignore[union-attr]
     parse = resolve_hook(spec.hooks.parse_response)  # type: ignore[union-attr]
     plans = build(spec, params)

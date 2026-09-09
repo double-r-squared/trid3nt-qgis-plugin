@@ -1,17 +1,8 @@
-"""station-timeseries-fgb executor (contract sec 2.3).
+"""station-timeseries executor: a station catalog becomes a point FGB.
 
-Catalog-discover (``ingest.station_catalog`` bbox filter, ``max_stations`` cap)
--> per-station data loop -> point-FGB with one Point per station + the scalar
-rollups + the inline ``time_series_csv`` attribute (comma-separated ``iso,value``
-rows for SFINCS boundary consumption). Individual station failures swallow to
-``None`` (one bad station never aborts the bbox); all-empty -> typed ``*_EMPTY``.
-This is the ``_fetch_coops_tides_bytes`` + ``_build_flatgeobuf`` contract,
-generalized.
-
-The pure serializer ``stations_to_point_fgb`` is offline-testable with synthetic
-station records; the network path routes through ``fetch_station_records`` which
-tests monkeypatch.
-"""
+Catalog-discover under a bbox filter and a cap, then a per-station data loop, then
+one Point per station carrying the rollups and the inline series. One station's
+failure never aborts the bbox; every station empty raises the typed ``*_EMPTY``."""
 
 from __future__ import annotations
 
@@ -42,21 +33,17 @@ __all__ = [
 
 
 def _normalize_time(t: Any, mode: str | None) -> Any:
-    """Normalize a per-observation timestamp per ``ingest.per_station.time_normalize``.
-
-    ``iso8601z`` mirrors the CO-OPS twin EXACTLY (``_fetch_station_data``):
-    ``"2022-09-28 00:00" -> "2022-09-28T00:00Z"`` (space -> ``T`` + ``Z`` suffix),
-    but ONLY when the value carries a space (already-ISO values pass through).
-    """
+    """Normalize a timestamp per ``ingest.per_station.time_normalize``: ``iso8601z``
+    rewrites ``"2022-09-28 00:00"`` to ``"2022-09-28T00:00Z"`` ONLY when the value
+    carries a space, so an already-ISO value passes through untouched."""
     if mode == "iso8601z" and isinstance(t, str) and " " in t:
         return t.replace(" ", "T") + "Z"
     return t
 
 
 def _as_date(v: Any) -> Any:
-    """Coerce an ISO ``YYYY-MM-DD`` string (router-validated) to a ``date`` so a
-    ``{start:%Y%m%d}`` request template strftimes instead of raising on a str
-    (the CO-OPS datagetter needs YYYYMMDD; VERDICT live-gap #coops)."""
+    """Coerce a router-validated ``YYYY-MM-DD`` string to a ``date``, so a
+    ``{start:%Y%m%d}`` request template strftimes instead of raising on a str."""
     if isinstance(v, _dt.date):
         return v
     try:
@@ -79,13 +66,9 @@ def stations_to_point_fgb(
     *,
     product: str = "water_level",
 ) -> bytes:
-    """Serialize per-station time-series records to point-FGB bytes (pure).
-
-    Each record: ``{station_id, station_name, lon, lat, rows: [{t, v}, ...]}``.
-    Emits one Point per station carrying the scalar rollups + the inline
-    ``time_series_csv`` (``iso,value`` rows). An all-empty record set raises the
-    typed ``*_EMPTY`` error (station sources are typed-empty, not honest-empty).
-    """
+    """Serialize records of ``{station_id, station_name, lon, lat, rows}`` to point-FGB
+    bytes: one Point per station with the scalar rollups and the inline
+    ``time_series_csv``. An all-empty set raises ``*_EMPTY``, never a header-only FGB."""
     import numpy as np
 
     try:
@@ -174,14 +157,9 @@ def stations_to_point_fgb(
 
 
 def _guard_not_staged(spec: SourceSpec, url: str) -> None:
-    """Refuse a staged s3:// uri before it reaches httpx.
-
-    This executor talks a station-catalog/timeseries REST API over httpx, which
-    cannot serve a staged object (that needs the raster_cog direct_window
-    bucket/key resolution). Full staged-vector/station support is future work
-    -- this closes the trap with a typed error instead of a raw httpx failure
-    on an unsupported scheme.
-    """
+    """Refuse a staged ``s3://`` uri before it reaches httpx: this executor talks a REST
+    API and cannot resolve an object-store bucket and key, so the scheme raises a typed
+    error rather than an opaque httpx failure."""
     if is_staged_uri(url):
         raise router_upstream_error(
             spec.error_code_prefix,
@@ -286,23 +264,19 @@ def fetch_station_records(spec: SourceSpec, params: dict[str, Any]) -> list[dict
 
 
 # --------------------------------------------------------------------------- #
-# SNAPSHOT mode (``ingest.per_station.emit == "snapshot"``). One representative
-# row per station (latest observed / nearest-now prediction) instead of the full
-# time series -- the coops-currents sibling of the coops-tides rollup path. STRICT
-# no-op for every timeseries spec (they declare no ``emit`` key). The audit's
-# HYBRID hook (``_parse_predictions`` flood/ebb/slack direction) lives in the
-# named ``coops_currents`` selector, dispatched by ``snapshot.transform``.
+# SNAPSHOT mode (``ingest.per_station.emit == "snapshot"``). One representative row
+# per station -- the latest observed or the nearest-now prediction -- instead of the
+# full time series. The flood/ebb/slack direction lives in the named
+# ``coops_currents`` selector, dispatched by ``snapshot.transform``.
 # --------------------------------------------------------------------------- #
 
 
 def _snapshot_window(
     product: str, wcfg: dict[str, Any] | None, now: _dt.datetime
 ) -> tuple[_dt.date, _dt.date]:
-    """now-relative ``(begin, end)`` date window per product (twin parity).
-
-    ``lookback`` -> ``[now-days, now]`` (observed latest); ``lookahead`` ->
-    ``[now, now+days]`` (prediction nearest now). Default = 2-day lookback.
-    """
+    """The now-relative ``(begin, end)`` date window for a product: ``lookback`` gives
+    ``[now-days, now]`` and ``lookahead`` gives ``[now, now+days]``, defaulting to a
+    two-day lookback."""
     cfg = (wcfg or {}).get(product) or {}
     days = int(cfg.get("days", 2))
     if cfg.get("mode") == "lookahead":
@@ -319,7 +293,7 @@ def _cur_to_dt(t: Any) -> _dt.datetime | None:
 
 
 def _cur_iso(t: Any) -> str:
-    """Normalize ``"YYYY-MM-DD HH:MM"`` -> ``"YYYY-MM-DDTHH:MMZ"`` (twin _parse_iso)."""
+    """Normalize ``"YYYY-MM-DD HH:MM"`` to ``"YYYY-MM-DDTHH:MMZ"``."""
     s = str(t)
     return s.replace(" ", "T") + "Z" if " " in s else s
 
@@ -327,12 +301,9 @@ def _cur_iso(t: Any) -> str:
 def coops_currents_select(
     body: dict[str, Any], product: str, now: _dt.datetime
 ) -> dict[str, Any] | None:
-    """The CO-OPS currents snapshot transform (twin ``_parse_observed`` /
-    ``_parse_predictions``): pick the latest valid observed row, or the predicted
-    row nearest ``now`` with flood/ebb/slack direction from the velocity sign.
-
-    Returns ``{speed_kn, direction_deg, datetime, bin, flow_state}`` or ``None``.
-    """
+    """The CO-OPS currents snapshot transform: the latest valid observed row, or the
+    predicted row nearest ``now`` with flood/ebb/slack read off the velocity sign.
+    Returns ``{speed_kn, direction_deg, datetime, bin, flow_state}`` or ``None``."""
     import math
 
     if product == "currents_predictions":
@@ -476,11 +447,9 @@ def _fetch_station_snapshot(
 def snapshots_to_point_fgb(
     records: list[dict[str, Any]], spec: SourceSpec, *, product: str = "currents"
 ) -> bytes:
-    """Serialize per-station snapshot records to point-FGB bytes (pure).
-
-    One Point per station carrying the declared ``snapshot.columns``. An empty
-    record set raises the typed ``*_EMPTY`` (station sources are typed-empty).
-    """
+    """Serialize per-station snapshot records to point-FGB bytes: one Point per station
+    carrying the declared ``snapshot.columns``. An empty record set raises the typed
+    ``*_EMPTY``, never a header-only FGB."""
     try:
         import geopandas as gpd
         import pandas as pd
@@ -540,12 +509,9 @@ def execute_snapshot(spec: SourceSpec, params: dict[str, Any]) -> bytes:
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Discover + fetch stations and serialize to point-FGB bytes.
-
-    ``ingest.per_station.emit == "snapshot"`` selects the one-row-per-station
-    snapshot path (coops-currents); every other station spec (no ``emit`` key)
-    takes the rollup + inline ``time_series_csv`` path (coops-tides) unchanged.
-    """
+    """Discover and fetch stations, then serialize to point-FGB bytes.
+    ``ingest.per_station.emit == "snapshot"`` selects the one-row-per-station path;
+    every other spec takes the rollup and inline ``time_series_csv`` path."""
     if ((spec.ingest or {}).get("per_station") or {}).get("emit") == "snapshot":
         return execute_snapshot(spec, params)
     records = fetch_station_records(spec, params)

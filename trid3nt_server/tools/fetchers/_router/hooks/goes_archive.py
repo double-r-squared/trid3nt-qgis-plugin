@@ -1,28 +1,12 @@
-"""goes_archive frames hooks: the netcdf_cf_object per-frame mode.
+"""GOES archive frames hooks: the per-frame netCDF object mode.
 
-Folds fetch_goes_archive_animation + fetch_goes_active_fire onto shape:
-animation_frames. The router owns the per-frame read_through loop + honesty floor +
-LayerURI emission; these two hooks own the source-specific steps over the shared
-``imagery._goes_archive_core`` substrate (S3 window list + CF-scaled MCMIPC netCDF
-band read + Fire-Temperature / true-color / hotspot / baked composite):
+``frames_plan`` lists the in-window keys on the anonymous public archive,
+even-subsamples to the source cap and builds the ordered plans; ``frame_bytes``
+downloads ONE netCDF. The ``ingest.archive.mode`` flag picks a spec's surface."""
 
-- ``frames_plan`` -- resolve the window, list the in-window ``ABI-L2-MCMIPC`` S3
-  keys (anonymous public archive), even-subsample to the source cap, and build the
-  ordered per-frame plans. Each frame's ``cache_params`` are byte-identical to the
-  twin's per-frame params (so the fold reuses any already-cached frame); the opaque
-  MCMIPC S3 key + the raw (unrounded) fetch args ride in the out-of-cache-key
-  ``fetch_context``.
-- ``frame_bytes`` -- download ONE MCMIPC netCDF and composite the requested product
-  to COG bytes via ``core._fetch_archive_frame_cog_bytes``. Raises
-  :class:`FrameDegraded` to skip a single empty / off-disk / upstream-failed frame
-  (honesty floor: the executor records + drops it, and raises the typed EMPTY only
-  when EVERY frame degrades).
-
-Two twins, ONE hook pair: the ``ingest.archive.mode`` flag selects the ``full``
-band-selectable archive-animation surface vs the ``hotspots`` split-window
-active-fire surface (fixed ``fire_hotspots`` band, distinct cap / default window /
-cache-param shape / label). ASCII only.
-"""
+# The opaque object key and the raw unrounded fetch args ride in the out-of-cache-key
+# ``fetch_context``, because a frame here is addressed by an opaque per-scan key
+# rather than by its timestamp.
 
 from __future__ import annotations
 
@@ -55,13 +39,9 @@ def _round_bbox(bbox: Any) -> tuple[float, float, float, float]:
 
 
 def _resolve_satellite(spec: SourceSpec, satellite: Any) -> str:
-    """Normalize the GOES spelling zoo -> canonical bird, then gate to the archive set.
-
-    ``_normalize_satellite`` raises the loud GOESInputError for a genuinely-unknown
-    bird; a valid GOES bird not in the raw-archive set raises the source's typed
-    ``*_INPUT_INVALID`` (byte-identical to the twins' GOESArchiveInputError, which
-    both stamped ``GOES_ARCHIVE_INPUT_INVALID``).
-    """
+    """Normalize the GOES spelling zoo to a canonical bird, then gate to the archive
+    set: a genuinely-unknown bird raises loudly from the shared normalizer, and a
+    valid bird outside the raw-archive set raises the source's ``*_INPUT_INVALID``."""
     sat = _normalize_satellite(str(satellite))
     if sat not in core.GOES_ARCHIVE_SATELLITES:
         raise router_input_error(
@@ -135,7 +115,8 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     satellite = _resolve_satellite(spec, params.get("satellite", "goes-18"))
     start_dt, end_dt = _resolve_window(spec, params, default_window_min)
 
-    # List the in-window MCMIPC keys (anonymous public S3), map twin error types.
+    # List the in-window MCMIPC keys on the anonymous public bucket, mapping the
+    # library's error types to the source's typed ones.
     try:
         pairs = core._list_archive_keys_in_window(satellite, start_dt, end_dt)
     except core.GOESArchiveInputError as exc:
@@ -157,7 +138,7 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
     sat_label = satellite.upper()
 
     if mode == "hotspots":
-        # fetch_goes_active_fire surface: fixed fire_hotspots band, own cache params.
+        # The active-fire surface: a fixed fire_hotspots band with its own cache params.
         af_c07 = round(_thresh(params.get("bt_c07_min_k"), core.FIRE_BT_C07_MIN_K), 3)
         af_diff = round(_thresh(params.get("bt_diff_min_k"), core.FIRE_BT_DIFF_MIN_K), 3)
         plans: list[FramePlan] = []
@@ -252,12 +233,9 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
 
 @register_hook("goes_archive.frame_bytes")
 def frame_bytes(spec: SourceSpec, params: dict[str, Any], frame: FramePlan) -> bytes:
-    """Download ONE MCMIPC netCDF -> the requested product COG bytes (via the core builder).
-
-    Raises :class:`FrameDegraded` for an empty / off-disk / upstream-failed single
-    frame (the executor records + drops it; the honesty floor raises the typed EMPTY
-    only when EVERY frame degrades) -- byte-for-byte the twins' per-frame skip.
-    """
+    """Download ONE MCMIPC netCDF and composite the requested product to COG bytes.
+    Raises :class:`FrameDegraded` for an empty, off-disk or upstream-failed frame, so
+    the executor records and drops that one instead of failing the sequence."""
     ctx = frame.fetch_context
     satellite = frame.cache_params["satellite"]
     key = ctx["key"]

@@ -1,24 +1,8 @@
-"""US state / NWS area-code resolution shared by the NWS alert tools.
+"""US state / NWS area-code resolution for the NWS alert tools.
 
-Why this exists: the live demo "show me weather alerts in texas" rendered
-alerts in surrounding states because the request fell through to the
-unscoped CONUS sweep. The NWS API supports precise server-side filtering
-(``api.weather.gov/alerts/active?area=TX``) — but the LLM passes location
-TEXT ("Texas", "texas", "TX"), so both ``fetch_nws_event`` and
-``fetch_nws_alerts_conus`` need one canonical place that maps free-form
-state references to the 2-letter codes NWS accepts.
-
-Scope is deliberately narrow:
-
-- 50 states + DC + 5 territories by FULL NAME (case-insensitive) or
-  2-letter code.
-- Marine-zone codes (``PZ``, ``GM``, ...) pass through as valid NWS area
-  codes but have no name mapping.
-- Anything else (cities, counties, countries, free-form text) resolves to
-  ``None`` — the callers decide whether that's an input error
-  (``fetch_nws_alerts_conus``) or falls through to FIPS/bbox handling
-  (``fetch_nws_event``).
-"""
+Free-form state text resolves to the 2-letter codes ``api.weather.gov`` accepts:
+50 states, DC and 5 territories, by name or code. A marine-zone code passes through
+unmapped; anything else resolves to ``None`` for the caller to classify."""
 
 from __future__ import annotations
 
@@ -88,16 +72,8 @@ _LEADING_NOISE = re.compile(r"^(?:the\s+)?(?:state\s+of\s+)?", re.IGNORECASE)
 def resolve_state_code(text: str) -> str | None:
     """Resolve free-form state text to a 2-letter NWS area code, or ``None``.
 
-    Accepts (case-insensitively, with surrounding whitespace tolerated):
-
-    - 2-letter codes already in ``NWS_AREA_CODES`` ("TX", "tx")
-    - Full state/territory names ("Texas", "new   mexico", "Puerto Rico")
-    - A leading "state of " / "the state of " prefix ("State of Texas")
-
-    Returns ``None`` for anything that is not a recognized state/territory/
-    marine-zone reference (cities, counties, FIPS codes, countries, ...).
-    Never raises.
-    """
+    Case-insensitive, whitespace-tolerant, and tolerant of a leading "state of ";
+    anything unrecognized returns ``None`` rather than raising."""
     if not isinstance(text, str):
         return None
     s = text.strip()
@@ -113,8 +89,7 @@ def resolve_state_code(text: str) -> str | None:
 
 
 def state_display_name(code: str) -> str:
-    """Human-readable label for a 2-letter area code ("TX" → "Texas").
+    """Human-readable label for a 2-letter area code ("TX" -> "Texas").
 
-    Marine-zone codes (no name mapping) echo the code itself.
-    """
+    Marine-zone codes have no name mapping and echo the code itself."""
     return STATE_CODE_TO_NAME.get(code.upper(), code.upper())

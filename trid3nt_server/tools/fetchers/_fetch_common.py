@@ -1,13 +1,8 @@
-"""Shared core of the data fetchers (split from the original multi-tool
-``data_fetch`` module): the typed fetch-error hierarchy
-(``FetchError`` / ``UpstreamAPIError`` / ``BboxInvalidError``), the Nominatim
-usage-policy User-Agent, and the bbox validation / resolution-quantization
-helpers every fetcher pre-applies before handing params to the cache
-shim (engine-side quantize).
+"""Shared core of the data fetchers.
 
-Tool-specific error subclasses (``GeocodeNoMatchError``, ``DemPartialCoverageError``,
-``PrecipForcingUnavailableError``, ...) live next to their tool module.
-"""
+The typed fetch-error hierarchy, the Nominatim usage-policy User-Agent, and the
+bbox validation and resolution-quantization helpers every fetcher pre-applies
+before handing params to the cache shim."""
 
 from __future__ import annotations
 
@@ -26,25 +21,15 @@ __all__ = [
 # Error codes registered by this module (typed-error surface).
 # ---------------------------------------------------------------------------
 #
-# These RuntimeError subclasses carry a stable ``error_code`` for the
-# WebSocket A.6 error frame the agent surface emits when a fetch fails. They
-# are caught nowhere inside this module — the ``read_through`` contract is
-# "re-raise on fetcher failure; no sentinel" — so server-side error handling
-# (server.py M1) maps them to A.6 codes via the agent's error surface
-# (mapping not yet landed; for now they bubble up).
+# These RuntimeError subclasses carry a stable ``error_code`` for the error frame
+# the agent surface emits when a fetch fails. Nothing in this module catches them:
+# the ``read_through`` contract is "re-raise on fetcher failure; no sentinel".
 
 
 class FetchError(RuntimeError):
-    """Base class for data-fetch failures. ``error_code`` is the A.6 code.
-
-    ``actionability`` (item 3, observability/retention batch): closed
-    ``{"agent", "user", "operator"}``, read by
-    ``agent.gates.actionability.classify_actionability`` before its
-    credential-shape / untyped-exception fallbacks. Default "agent" -- the
-    upstream 4xx-arg/429/5xx/timeout class; unchanged routing (rich verbatim
-    function_response). A tool with a genuine missing-credential error should
-    override this to ``"user"`` on its own auth-error subclass.
-    """
+    """Base class for data-fetch failures; ``error_code`` is the stable wire code.
+    ``actionability`` is closed over ``{"agent", "user", "operator"}`` and defaults
+    to "agent"; a subclass raised for a missing credential overrides it to "user"."""
 
     error_code: str = "UPSTREAM_API_ERROR"
     retryable: bool = True
@@ -76,12 +61,9 @@ _DEFAULT_USER_AGENT = (
 
 
 def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
-    """Raise ``BboxInvalidError`` if ``bbox`` is degenerate or out of WGS84 range.
-
-    A valid bbox is ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326,
-    with min < max on both axes, lons in ``[-180, 180]`` and lats in
-    ``[-90, 90]``.
-    """
+    """Raise ``BboxInvalidError`` unless ``bbox`` is ``(min_lon, min_lat, max_lon,
+    max_lat)`` in EPSG:4326 with min < max on both axes, lons in ``[-180, 180]``
+    and lats in ``[-90, 90]``."""
     if len(bbox) != 4:
         raise BboxInvalidError(
             f"bbox must be a 4-tuple (min_lon, min_lat, max_lon, max_lat); got {bbox!r}"
@@ -102,36 +84,17 @@ def round_bbox_to_resolution(
     bbox: tuple[float, float, float, float],
     resolution_m: int,
 ) -> tuple[float, float, float, float]:
-    """Quantize a WGS84 bbox to a per-source resolution grid before cache-keying.
-
-    Rationale: two callers asking for the same area at the same resolution
-    should hit the same cache entry even if their bbox edges differ by a few
-    floating-point meters. We snap each corner to the nearest grid line whose
-    spacing in degrees matches ``resolution_m`` (using a degrees-per-meter
-    conversion at the bbox center latitude — good enough for any sub-state
-    bbox; per-source overrides can refine).
-
-    Args:
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-        resolution_m: target grid spacing in meters (e.g. 10 for 3DEP 10m).
-
-    Returns:
-        A quantized bbox tuple. Always slightly larger than the input bbox
-        (snaps mins down and maxes up) so the requested area is covered.
-
-    Engine-side resolution of the quantization-location question:
-    the cache shim's contract is canonicalize+hash; per-source quantization
-    is engine-owned domain knowledge.
-    """
+    """Quantize an EPSG:4326 bbox to a ``resolution_m`` grid before cache-keying:
+    mins snap down and maxes up, so the result always covers the input. The
+    degrees-per-metre conversion is taken at the bbox centre latitude."""
     _validate_bbox(bbox)
     if resolution_m <= 0:
         raise BboxInvalidError(f"resolution_m must be positive; got {resolution_m!r}")
 
     min_lon, min_lat, max_lon, max_lat = bbox
-    # Stabilize mid_lat by rounding to 4 decimals (~11m) so two callers whose
-    # bbox edges differ by sub-meter floats don't get different
-    # m_per_deg_lon factors (which would defeat the dedup-via-quantization
-    # property — same grid cell must yield same snap result).
+    # Stabilize mid_lat by rounding to 4 decimals (~11m) so two callers whose bbox
+    # edges differ by sub-meter floats don't get different m_per_deg_lon factors,
+    # which would defeat the dedup property: same grid cell, same snap result.
     mid_lat = round(0.5 * (min_lat + max_lat), 4)
     # 1 degree of latitude ~ 111_320 m; 1 degree of longitude ~ 111_320 * cos(lat) m.
     m_per_deg_lat = 111_320.0
@@ -157,13 +120,9 @@ def round_bbox_to_resolution(
     )
 
 def _bbox_area_km2(bbox: tuple[float, float, float, float]) -> float:
-    """Geodesic area of a WGS84 bbox in square kilometres.
-
-    The ring is densified before measuring: pyproj joins consecutive vertices
-    with geodesics, and a bbox's top and bottom edges are PARALLELS, so a long
-    undensified edge cuts the corner poleward. A bbox spanning more than half
-    the globe is degenerate as a ring and is not measurable this way.
-    """
+    """Geodesic area of a WGS84 bbox in square kilometres. The ring is densified
+    first: a bbox's top and bottom edges are PARALLELS, and an undensified geodesic
+    cuts the corner poleward. Over half the globe is degenerate as a ring here."""
     import shapely
     from pyproj import Geod
 
@@ -178,11 +137,9 @@ def bbox_pixel_dims(
     px_min: int = 16,
     px_max: int = 4096,
 ) -> tuple[int, int]:
-    """``(width_px, height_px)`` for ``bbox`` at ``native_cell_m``.
-
-    Measures metres-per-degree at the bbox mid-latitude and clamps each axis to
-    ``[px_min, px_max]``, so a large AOI never materializes an unbounded grid.
-    """
+    """``(width_px, height_px)`` for ``bbox`` at ``native_cell_m``, metres-per-degree
+    measured at the bbox mid-latitude. Each axis is clamped to ``[px_min, px_max]``,
+    so a large AOI never materializes an unbounded grid."""
     min_lon, min_lat, max_lon, max_lat = bbox
     mid_lat = 0.5 * (min_lat + max_lat)
     from pyproj import Geod

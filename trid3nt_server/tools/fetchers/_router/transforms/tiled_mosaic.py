@@ -1,14 +1,8 @@
-"""tiled-mosaic transform (contract sec 2.4) -- HYBRID glue for esri_landcover.
+"""Tiled-mosaic transform over the raster-cog executor.
 
-A named transform WRAPPING the raster-cog executor: ``plan_tile_grid`` splits a
-bbox >``tile_deg2`` into sub-tiles, each fetched via the raster-cog executor,
-written to temp GTiffs, merged via ``rasterio.merge`` (``method="first"``,
-categorical-safe), palette passthrough preserved. Single-tile bbox is the fast
-path (one executor call). Hard ceiling ``gates.max_bbox_deg2`` raises the typed
-bbox error redirecting to the sibling. This is a transform (composes the executor
-N times), not a new executor -- keeping executors atomic per the
-"analysis is composition" norm.
-"""
+A bbox larger than ``tile_deg2`` splits into sub-tiles, each fetched through the
+executor and merged first-non-nodata, categorical-safe and palette-preserving. A
+single-tile bbox is one executor call; ``gates.max_bbox_deg2`` is the hard ceiling."""
 
 from __future__ import annotations
 
@@ -39,12 +33,9 @@ def plan_tile_grid(
     bbox: tuple[float, float, float, float],
     tile_deg2: float,
 ) -> list[tuple[float, float, float, float]]:
-    """Split ``bbox`` into a grid of sub-bboxes each with area <= ``tile_deg2``.
-
-    Border cells may be narrower; all cells cover the full bbox with no gaps.
-    Total area already <= ``tile_deg2`` -> a single entry equal to ``bbox``.
-    Lifted verbatim from the ``fetch_esri_landcover_10m._plan_tile_grid`` twin.
-    """
+    """Split ``bbox`` into sub-bboxes each of area <= ``tile_deg2``. Border cells may
+    be narrower, and the cells cover the full bbox with no gaps; an area already
+    within ``tile_deg2`` returns a single entry equal to ``bbox``."""
     min_lon, min_lat, max_lon, max_lat = bbox
     dlon = max_lon - min_lon
     dlat = max_lat - min_lat
@@ -100,13 +91,9 @@ def mosaic_tile_files(
     nodata: float | None = None,
     colormap: dict | None = None,
 ) -> bytes:
-    """Merge tile GTiffs into one COG via ``rasterio.merge`` (categorical-safe).
-
-    ``method="first"`` + ``resampling=nearest`` keep class codes un-interpolated
-    (the landcover categorical requirement). ``nodata`` + ``colormap`` carry the
-    categorical mosaic's nodata + embedded palette through to the output COG.
-    Returns COG bytes.
-    """
+    """Merge tile GTiffs into one COG and return its bytes. First-non-nodata with
+    nearest resampling keeps class codes un-interpolated, and ``nodata`` plus
+    ``colormap`` carry the categorical palette through to the output."""
     import rasterio
     from rasterio.enums import Resampling
     from rasterio.merge import merge as rio_merge

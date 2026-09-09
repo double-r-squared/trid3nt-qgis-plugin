@@ -1,16 +1,8 @@
 """pfdf raster-delegate hooks: USGS readers whose library owns the socket.
 
-pfdf (the USGS post-fire debris-flow toolkit) ships maintained readers for the USGS
-TNM 3DEP DEM and the STATSGO soils COG collection -- each owns discovery + the
-socket internally, returning a pfdf ``Raster``. The router DELEGATES the one network
-step to these hooks and keeps params/gates/cache/stamps/typed-errors; the constrained
-``library_delegate.invoke`` wrapper passes the declared timeout, marks the call
-library-owned, and backstops any unmapped pfdf exception as a retryable upstream.
-
-Each hook returns ``(array_2d_float32, affine_transform, crs)`` for the shared COG
-writer. The companion ``*.validate`` hook is the twin's pre-cache input gate (the
-exact CONUS / US envelope) run BEFORE read_through.
-"""
+pfdf ships maintained readers for the USGS TNM 3DEP DEM and the STATSGO soils COG
+collection, each owning discovery and the socket. A hook returns ``(array_float32,
+transform, crs)``, and its companion validate hook is the pre-cache coverage gate."""
 
 from __future__ import annotations
 
@@ -29,13 +21,13 @@ __all__ = [
     "read_3dep",
 ]
 
-#: STATSGO CONUS envelope (the twin's exact ``_CONUS_BBOX``); STATSGO does not cover
-#: Alaska / Hawaii / territories. Kept here (not the router ``conus_only`` gate) so
-#: the envelope is byte-identical to the twin's.
+#: STATSGO CONUS envelope: STATSGO does not cover Alaska, Hawaii or the territories.
+#: Kept here rather than on the router's ``conus_only`` gate so the envelope is this
+#: source's own.
 _STATSGO_CONUS: tuple[float, float, float, float] = (-125.0, 24.0, -66.5, 49.5)
 
-#: 3DEP US envelope (the twin's exact ``_US_BBOX``): CONUS + AK + HI + territories.
-#: The live TNM query is the authoritative coverage check; this is the loose gate.
+#: 3DEP US envelope: CONUS plus AK, HI and the territories. The live TNM query is the
+#: authoritative coverage check; this is the loose gate before it.
 _3DEP_US: tuple[float, float, float, float] = (-180.0, 13.0, -65.0, 72.0)
 
 
@@ -62,7 +54,7 @@ def _raster_to_array(spec: SourceSpec, raster: Any) -> tuple[Any, Any, Any]:
 
 @register_hook("pfdf_statsgo.validate")
 def validate_statsgo(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Twin ``_validate_bbox`` CONUS gate (pre-cache). Field is router-enum-validated."""
+    """Pre-cache CONUS gate; the field itself is router-enum-validated."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
     bbox = params.get("bbox")
@@ -81,12 +73,9 @@ def validate_statsgo(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 @register_hook("pfdf_statsgo.read")
 def read_statsgo(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> tuple[Any, Any, Any]:
-    """Read a STATSGO field COG via pfdf; return ``(array, affine, crs)``.
-
-    Empty (all-NaN inside CONUS -- open water / Great Lakes pocket) -> the twin's
-    typed EMPTY. A pfdf/ScienceBase failure -> the backstop upstream error (raised
-    verbatim by the invoke wrapper); the import guard is mapped here explicitly.
-    """
+    """Read a STATSGO field COG via pfdf to ``(array, affine, crs)``. An all-NaN window
+    inside CONUS -- open water, a Great Lakes pocket -- is a typed EMPTY; a library
+    failure reaches the invoke wrapper's verbatim upstream backstop."""
     sc = spec.error_code_prefix
     field = params["field"]
     bbox = [float(v) for v in params["bbox"]]
@@ -119,13 +108,9 @@ def read_statsgo(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) 
 
 @register_hook("pfdf_3dep.validate")
 def validate_3dep(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Twin ``_validate_bbox`` US-envelope gate (pre-cache). 3DEP is US-only.
-
-    The router's shared bbox validator already ran finite / range / degenerate; this
-    hook adds only the US-envelope intersection (byte-identical to the twin's, kept
-    here so the envelope is not a shared-gate approximation). ``resolution`` /
-    ``max_tiles`` are router-enum / router-range validated.
-    """
+    """Pre-cache US-envelope gate: 3DEP is US-only. The router's shared validator
+    already ran finite, range and degenerate checks, so this adds only the envelope
+    intersection, kept here rather than approximated by a shared gate."""
     sc = spec.error_code_prefix
     sfx = spec.input_error_suffix
     bbox = params.get("bbox")
@@ -143,17 +128,12 @@ def validate_3dep(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 @register_hook("pfdf_3dep.read")
 def read_3dep(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> tuple[Any, Any, Any]:
-    """Read a 3DEP DEM tile mosaic via pfdf TNM; return ``(array, affine, crs)``.
+    """Read a 3DEP DEM tile mosaic via pfdf TNM to ``(array, affine, crs)``. A
+    zero-coverage resolution is EMPTY (a coarser one may cover), a tile-count overrun
+    is INPUT, and anything else reaches the invoke wrapper's upstream backstop."""
 
-    The twin's pfdf exception mapping is reproduced verbatim (lowercased-message
-    dispatch): a zero-coverage resolution -> typed EMPTY (retry a coarser resolution),
-    a tile-count overrun -> typed INPUT (raise ``max_tiles`` / shrink bbox), anything
-    else -> the backstop UPSTREAM (raised by the invoke wrapper). The pfdf ``Raster``
-    is read directly into ``(array, affine, crs)`` -- the statsgo array path -- rather
-    than the twin's save -> rioxarray-reopen -> re-encode (the same array / CRS /
-    nodata; divergence class). No all-NaN empty gate: the twin had none for
-    3DEP (pfdf's NoTNMProductsError is the only empty signal).
-    """
+    # There is no all-NaN empty gate here: the library's own no-products error is the
+    # only empty signal 3DEP gives.
     sc = spec.error_code_prefix
     resolution = params["resolution"]
     max_tiles = int(params["max_tiles"])
@@ -172,7 +152,7 @@ def read_3dep(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> 
             max_tiles=max_tiles,
             timeout=timeout_s,
         )
-    except Exception as exc:  # noqa: BLE001 -- twin's lowercased-message dispatch
+    except Exception as exc:  # noqa: BLE001 -- lowercased-message dispatch
         msg = str(exc).lower()
         if "noproducts" in msg.replace(" ", "") or "no tnm products" in msg:
             raise router_empty_error(

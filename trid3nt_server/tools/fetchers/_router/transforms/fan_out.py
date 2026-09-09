@@ -1,15 +1,8 @@
-"""Declarative fan-out transform.
+"""Declarative fan-out transform over the vector-fgb executor.
 
-A named transform WRAPPING the vector-fgb executor for the multi-query-per-value
-shape: a ``float_list`` param drives one query PER value against a per-value
-endpoint (``url_template`` + a ``value_map`` substitution), each fetched feature
-is stamped with per-value output columns, and all values' features MERGE into one
-FlatGeobuf (slr_scenarios: one query per ``scenario_ft`` level, ``slr_ft`` +
-``scenario_label`` stamped, dissolved polygons merged in sorted-level order). This
-composes the vector executor N times (analysis-is-composition), never a new
-executor. Strictly no-op for prior specs: only reached when ``ingest.fan_out`` is
-declared, which no prior spec sets.
-"""
+A ``float_list`` param drives one query PER value against a per-value endpoint,
+each fetched feature is stamped with per-value output columns, and every value's
+features merge into one FlatGeobuf. Reached only when ``ingest.fan_out`` is declared."""
 
 from __future__ import annotations
 
@@ -29,24 +22,17 @@ __all__ = ["fan_value_key", "build_stamp_props", "execute"]
 
 
 def fan_value_key(v: float) -> str:
-    """The ``value_map`` lookup key for a fan-out value (``1.0`` -> ``"1.0"``).
-
-    ``str(float)`` gives the twin's naming input verbatim (``0.5`` -> ``"0.5"``,
-    ``10.0`` -> ``"10.0"``); the spec's ``value_map`` is keyed by these strings.
-    """
+    """The ``value_map`` lookup key for a fan-out value: ``str(float)``, so ``1.0``
+    keys as ``"1.0"`` and ``0.5`` as ``"0.5"``."""
     return str(float(v))
 
 
 def build_stamp_props(
     stamp: dict[str, Any], value: float, src_props: dict[str, Any]
 ) -> dict[str, Any]:
-    """Build one feature's stamped output props (ordered per ``stamp``).
-
-    Each ``stamp`` entry (in declaration order) resolves a source column:
-    ``value`` -> the fan-out value; ``value_template`` -> ``template.format(value=)``
-    (the twin's ``scenario_label``); ``prop`` -> a source property (``from``) with
-    an optional ``kind`` (int/float/passthrough) + ``default`` when absent.
-    """
+    """Build one feature's stamped output props in ``stamp`` declaration order, each
+    entry resolving a column: ``value`` the fan-out value, ``value_template`` a
+    ``format(value=)`` string, ``prop`` a source property with kind and default."""
     props: dict[str, Any] = {}
     for col, rule in stamp.items():
         source = rule.get("source")
