@@ -4059,3 +4059,27 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the SWOT fetchers) -> processing the workflow way -> rung 4. The
   census is read-only and starts NOW beside the sweep; it excludes the
   13 packages bound for the scope attic. Calibration spec rev 1c.
+
+- LEAN SWEEP CLOSED (2026-09-08, verifier VERDICT CLEAN at 73463a89):
+  pins (httpx, PyYAML, tenacity, aiohttp; then shapely, pyproj, scipy,
+  xarray), nine delete rows, the map-command narrowing, ledger hygiene
+  (7 flips, 63 stale rows collapsed, L336 overturned), the four web-
+  era cuts (Bedrock Converse after a three-helper lift; the arm-3
+  router atticked; the impact envelope both ends; the dead message
+  kinds), library rows L5 L9 L11(measurement sites) L12(numpy) L13 L14
+  (L8 deferred with a condition). LOC HONEST: server 141,637 ->
+  138,545 (-3,092); product Python -4,896 against -5,133 projected
+  (the +90 of the lifted provider-neutral modules and longer pyproj
+  call sites); two live packets green. BEHAVIOR CHANGE stated: with
+  MODEL_PROVIDER unset the local-models and provider-config endpoints
+  are present (the allowlist gate was Bedrock's). QUEUED to the scope-
+  move wave's tail (reported, not fixed): four live docs still name
+  deleted or moved modules (docs/design/emission.md:304-305, docs/
+  authoring/writing-a-tool.md:328, docs/design/outputs-manifest-
+  schema.md:225,459, docs/design/calibration-methodology.md:189,318);
+  a stale comment at plugin/tests/qt_charts_harness.py:153; docs/
+  validation/code-graph/* unregenerated; SetTemporalConfigArgs carries
+  a COMMAND the narrowed Literal no longer admits (held on the WMS-T
+  row - internally inconsistent until it resolves); the inventory's
+  contracts/plugin baselines included tests (product-only 8,832 and
+  14,997).
