@@ -29,10 +29,10 @@ params:
              6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0]
 
 ingest:
+  access: ogr
+  ogr: {driver: ESRIJSON}
   query_template:
-    out_fields: "OBJECTID,Dissolve"          # twin _OUT_FIELDS
-    f: geojson
-  pagination: {mode: exceeded_transfer_limit, page_size: 1000}
+    out_fields: "OBJECTID,Dissolve"
   properties: [slr_ft, scenario_label, dissolve]   # honest-empty header schema (twin empty FGB)
   fan_out:
     param: scenario_ft
