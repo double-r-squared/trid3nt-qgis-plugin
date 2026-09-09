@@ -8,7 +8,7 @@ spatial_query:
 - give me the count of structures with flood depth over 1 meter in this layer
 - what is the total damage cost for the buildings inside the flood zone polygon
 - sum the structure replacement value for everything within the county boundary
-- average building value for the parcels whose centroid falls in this protected area
+- average building value for the parcels whose centroid falls in this watershed boundary
 - add up the damage values for the features within this admin boundary
 - spatial join the points to the zones and count the features per zone
 - run a sql query over the layers on the map
@@ -25,7 +25,7 @@ spatial_query:
 # cull pass 2 (2026-07-27): vector clip/dissolve/difference/gap phrasings re-homed
 # from clip_vector_to_polygon / merge_features / cut_features_with_polygon / fill_gaps
 # (cut on live replication proof; spatial_query is the surviving SQL surface).
-- clip these GBIF occurrence points to the Florida state boundary
+- clip these monitoring station points to the Florida state boundary
 - I need to trim nationwide NWS alerts to just this state polygon
 - clip the building footprints to the flood zone polygon
 - filter these national dam points down to those inside this watershed
