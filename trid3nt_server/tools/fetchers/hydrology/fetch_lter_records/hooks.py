@@ -10,8 +10,7 @@ this environment. The identical EML metadata + data objects are mirrored PUBLICL
 by DataONE (``cn.dataone.org/cn/v2/resolve/<encoded-PASTA-PID>``), which redirects
 to the member-node copy; a credentialed EDI pull would hit the identical bytes. So
 every fetch goes through the DataONE ``resolve`` endpoint (redirect-followed by the
-router transport). Proven in ``scripts/sandbox/replication/edi_coweeta_coverage.py``
-(Coweeta Ball Creek weir #9 hourly discharge, m3/s) -- generalized here.
+router transport).
 
 Two phases over the shared router transport:
 - resolve (PRE-cache-key): ``resolve_build`` -> the package's EML metadata request;

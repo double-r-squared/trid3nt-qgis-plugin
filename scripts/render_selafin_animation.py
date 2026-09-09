@@ -7,11 +7,9 @@ the tide rising, the column stratifying, the plume arriving - and this renders i
 straight off the run's OWN time-stepped SELAFIN. Never a re-solve, never a
 re-derivation.
 
-Generic on purpose. ``proof_river_dye_frames.py`` is the river-dye version of
-this, with the dye variable, its filenames and its mg/L labels welded in; every
-other engine in the family then had no animation at all. Here the run says what
-to read - which SELAFIN, which variable, which units - so one tool covers the
-family and a new template gets its GIF by naming its file.
+Generic on purpose: the run says what to read - which SELAFIN, which variable,
+which units - so one renderer covers the family and a new template gets its GIF
+by naming its file.
 
 ONE SCALE FOR THE WHOLE GIF. The colour range is resolved once, over every frame
 at once, through the style contract (``--quantity`` names the published quantity,

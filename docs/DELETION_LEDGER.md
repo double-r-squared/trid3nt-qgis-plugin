@@ -3438,3 +3438,45 @@ Extracted, not deleted: `MockMCPClient` + `_fresh_case_summary` left
 `tests/test_server_case_handlers.py`, verbatim, for `tests/_fakes/__init__.py`.
 Both modules now import them back. The test tree stays FLAT; the mirror move is a
 later change.
+
+## scripts/ cull - the six deletes and the nine attic rows - 2026-09-09
+
+The SCRIPTS RULED cull, executed against `docs/validation/scripts-eval.md`
+sections 1h, 1i and 4. Six files are DELETED with runtime evidence; nine leave
+INTACT to `~/Documents/trid3nt-attic/`, paths mirrored, because their finding is
+already recorded and only their code is dead.
+
+### DELETED (6 files, 605 pure LOC)
+
+| Deleted | Pure LOC | Evidence | Condition |
+|---|---:|---|---|
+| `scripts/tool_routing_sweep.py` | 168 | Dead against the bench it loads: `tool_routing_bench.py` defines neither `new_id` (it uses `new_ulid`) nor `do_handshake` (the ws_client name is `handshake`), and this file calls `bench.new_id()` at `:175` and `bench.do_handshake` at `:182`. | MET: the two symbols grep to zero in the bench. |
+| `scripts/tool_usability_sweep.py` | 183 | The same two dead symbols at `:154` and `:160`, and its first act is to load the file above, which is going. | MET: same trace, plus its only dependency leaves. |
+| `scripts/proof_artemis_composer_live.py` | 26 | Superseded by the `artemis_harbor_agitation` LiveRun canary; its auto-mode direct call is REFUSED by the input-review gate (`PHYSICS_INPUT_REQUIRED ... open_depth_threshold_m`). A smoke the product refuses to run is not a smoke. | MET: the canary is declared at `trid3nt_server/testing/canaries.py:122`. |
+| `scripts/proof_wave_bed_input_live.py` | 63 | The identical refusal, then `SMOKE FAILED`. Zero consumers anywhere in the tree. | MET: grep-to-zero. |
+| `scripts/proof_wave_bed_input_render.py` | 29 | The render half of the pair above; `AssertionError` in `render_fidelity_proof_generic.download_s3` before it draws anything. Zero consumers. | MET: grep-to-zero. |
+| `scripts/render_fidelity_proof_generic.py` | 136 | Its only two importers are the two rows above, so the three die together. The packet renderers reach basemap tiles through `merc_render` instead. | MET: grep-to-zero after those two go. |
+
+### ATTIC (9 modules + 3 data files, 1,242 pure LOC)
+
+Mirrored under `~/Documents/trid3nt-attic/scripts/`. Each is a capability nobody
+calls whose finding is recorded elsewhere; the code leaves the public repo, the
+finding does not.
+
+| Attic path | Pure LOC | Why it left |
+|---|---:|---|
+| `scripts/proof_auto_emit_seam.py` | 93 | Its ADR landed and the suite asserts the seam; nobody calls it. |
+| `scripts/proof_declared_style_live.py` | 127 | Superseded as a standing check by `qml_preset_smoke.py`, which a suite test pins. |
+| `scripts/proof_rerun_with_overrides.py` | 231 | The primitive landed; `replay_canary_evidence.py` is the standing instrument over the same evidence. |
+| `scripts/proof_river_dye_frames.py` | 165 | One template's private copy of what `render_selafin_animation.py` now does for the whole family. |
+| `scripts/sandbox/pysheds_watershed/proof_watershed.py` | 219 | A spike with zero importers; both tools it exercised are still registered. |
+| `scripts/sandbox/replication/ballcreek_delineate_explore.py` | 106 | Replication exploration superseded by the rain-on-grid front. |
+| `scripts/sandbox/replication/edi_coweeta_coverage.py` | 118 | A one-shot coverage question, answered; its access finding now lives in `fetch_lter_records/hooks.py`. |
+| `scripts/sandbox/telemac/render_erodible_scour_proof.py` | 168 | Cannot re-run: its inputs are a pinned run id under a per-session scratch path. |
+| `scripts/sandbox/telemac/run_erodible_scour_direct.py` | 15 | The render half is atticked and nothing else calls it. |
+| `scripts/sandbox/replication/{ballcreek_delineation_provenance,ballcreek_events,coweeta_edi_provenance}.json` | data | The recorded findings of the two atticked replication scripts; they travel with the code that produced them. |
+
+Repointed with the cull, not relocated: `render_selafin_animation.py`'s module
+docstring lost its supersession paragraph naming `proof_river_dye_frames.py`, and
+`fetch_lter_records/hooks.py` lost the sentence naming the atticked coverage
+probe. `scripts/sandbox/` now holds only the gitignored GSHHG shoreline.
