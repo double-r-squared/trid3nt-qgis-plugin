@@ -4311,3 +4311,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the repo README rewritten to the product as it is. A read-only
   census (docstrings by audience and content; every ADR classified;
   the docs tree and READMEs against the tree) precedes the wave.
+  SCRIPTS AND TESTS (NATE 2026-09-09): scripts/ does not all face the
+  public repo - a read-only EVAL first (every script: consumers, runs?,
+  last commit; fates TRACKED PRODUCT / LOCAL-ONLY ignored dir / ATTIC
+  / DELETE; git cannot track-but-not-push, so local means untracked
+  and the eval names which standing law still needs each local
+  script); then a CULL and a FILE STRUCTURE by role (user-facing entry
+  points, instruments, drivers). THE SAME FOR tests/: a read-only eval
+  (every file mapped to its subject; orphans, duplicates, harness
+  tests, stale pins), a CULL, and a directory structure MIRRORING the
+  product tree with suite slices by directory replacing the
+  alphabetical globs. Both evals run beside the docs census; NATE
+  rules on each before anything moves.
