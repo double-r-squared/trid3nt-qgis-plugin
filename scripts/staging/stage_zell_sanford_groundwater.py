@@ -61,9 +61,9 @@ negative depth to water is -25.68 m and the series is smooth. No second
 threshold is needed or applied.
 
 Usage:
-    python scripts/stage_zell_sanford_groundwater.py --step all
-    python scripts/stage_zell_sanford_groundwater.py --step kmosaic
-    python scripts/stage_zell_sanford_groundwater.py --step build --no-upload
+    python scripts/staging/stage_zell_sanford_groundwater.py --step all
+    python scripts/staging/stage_zell_sanford_groundwater.py --step kmosaic
+    python scripts/staging/stage_zell_sanford_groundwater.py --step build --no-upload
 """
 
 from __future__ import annotations
@@ -82,7 +82,9 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+# _env_guard is the drive lane's, and the no-ambient-AWS law wants ONE copy of it.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "drivers"))
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
@@ -1083,7 +1085,7 @@ def main(argv: list[str] | None = None) -> int:
             "retrieved_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(
                 timespec="seconds"),
             "conversion_commit": _commit(),
-            "conversion_script": "scripts/stage_zell_sanford_groundwater.py",
+            "conversion_script": "scripts/staging/stage_zell_sanford_groundwater.py",
             "staged_units": cfg["units"],
             "quantity": cfg["quantity"],
             "unit_scale_applied": 1.0,

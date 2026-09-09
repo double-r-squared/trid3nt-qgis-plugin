@@ -27,9 +27,9 @@ geometry, value domain, whole-grid statistics) plus the paper's stated
 arid-west / humid-east gradient, and refuses to upload when a check fails.
 
 Usage:
-    python scripts/stage_groundwater_recharge.py --dataset all
-    python scripts/stage_groundwater_recharge.py --dataset reitz2017 --no-upload
-    python scripts/stage_groundwater_recharge.py --dataset all --work-dir /tmp/gwr
+    python scripts/staging/stage_groundwater_recharge.py --dataset all
+    python scripts/staging/stage_groundwater_recharge.py --dataset reitz2017 --no-upload
+    python scripts/staging/stage_groundwater_recharge.py --dataset all --work-dir /tmp/gwr
 """
 
 from __future__ import annotations
@@ -46,7 +46,9 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+# _env_guard is the drive lane's, and the no-ambient-AWS law wants ONE copy of it.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "drivers"))
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
@@ -490,7 +492,7 @@ def stage_one(key: str, work: Path, bucket: str, do_upload: bool) -> dict[str, A
         "source_member": cfg["member"],
         "retrieved_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
         "conversion_commit": _commit(),
-        "conversion_script": "scripts/stage_groundwater_recharge.py",
+        "conversion_script": "scripts/staging/stage_groundwater_recharge.py",
         "native_units": cfg["published"]["native_units"],
         "staged_units": "mm/yr",
         "unit_scale_applied": cfg["published"]["unit_scale"],

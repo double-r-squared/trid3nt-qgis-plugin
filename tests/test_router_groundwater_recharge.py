@@ -2,7 +2,7 @@
 
 The first STAGED-DATASET fetcher: the served objects are COGs this repo built
 from two published USGS CONUS recharge releases (Reitz et al. 2017, Wolock 2003)
-via ``scripts/stage_groundwater_recharge.py``, and the spec names them by bucket
+via ``scripts/staging/stage_groundwater_recharge.py``, and the spec names them by bucket
 and key so the transport resolves the host from the active object-store endpoint.
 
 These OFFLINE tests cover the spec identity + metadata flags, the staged-uri

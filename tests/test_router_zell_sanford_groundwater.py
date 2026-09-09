@@ -2,7 +2,7 @@
 fetch_aquifer_transmissivity (ADR 0298).
 
 Three staged-dataset fetchers over the Zell & Sanford 2020 CONUS surficial
-groundwater release, built by ``scripts/stage_zell_sanford_groundwater.py``.
+groundwater release, built by ``scripts/staging/stage_zell_sanford_groundwater.py``.
 Depth to water and transmissivity are the published rasters; saturated
 thickness is DERIVED as ``b = T / K`` from the release's own transmissivity
 and hydraulic conductivity. Transmissivity was built and validated in the
