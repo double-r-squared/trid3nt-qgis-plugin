@@ -1,9 +1,8 @@
-# Router source spec (quick-folds wave, raster-cog stac_float, ADR 0079).
-# Twin: fetch_sentinel1_sar.py -- Sentinel-1 C-band SAR backscatter (dB) via PC STAC.
-# Folds onto stac_float with the EXISTING asset_by_param (vv/vh) + collection_by_param
-# (rtc/grd) plus two precise additions: a `coverage` scene-select (coverage-fraction-
-# then-recency with an asset-presence pre-filter) and a `log10_db` transform directive
-# (10*log10(power)); the -9999 dB nodata is the existing serialize directive.
+# Sentinel-1 C-band SAR backscatter (dB) over the Planetary Computer STAC catalog.
+# The scene is chosen by AOI coverage then recency over the scenes that actually carry
+# the requested polarization - a swath edge can clip a corner, and a scene missing the
+# asset is not a candidate. Linear gamma0 power becomes decibels (10*log10) and the
+# -9999 dB nodata is the serialize directive.
 schema_version: v1
 name: fetch_sentinel1_sar
 source_class: sentinel1_sar
@@ -44,13 +43,16 @@ params:
 gates:
   max_bbox_deg2: 0.5
 ingest:
-  access: stac_float
+  access: stac
+  render: float
   native_cell_m: 10.0
   stac:
     root: https://planetarycomputer.microsoft.com/api/stac/v1
+    sign: planetary_computer
     datetime_window: true
     default_window_days: 90
-    select: coverage
+    select:
+      mode: coverage
     param_error_suffix: COLLECTION_INVALID
     collection_by_param:
       param: collection

@@ -1,6 +1,6 @@
 """Router value coverage for the fetch_sentinel1_sar fold (ADR 0079).
 
-The Sentinel-1 SAR twin folded to a source.yaml + the raster_cog ``stac_float`` mode
+The Sentinel-1 SAR twin folded to a source.yaml + the stac_raster ``float`` render
 with two additions: a ``coverage`` scene-select (coverage-fraction-then-recency with an
 asset-presence pre-filter) and a ``log10_db`` transform (10*log10(power)); the -9999 dB
 nodata is the existing ``serialize`` directive. These OFFLINE tests cover the spec
@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools.fetchers._router import router
-from trid3nt_server.tools.fetchers._router.executors import raster_cog
+from trid3nt_server.tools.fetchers._router.executors import stac_raster
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
 
@@ -34,7 +34,7 @@ def test_spec_identity(spec):
     assert spec.output.emit_bbox is False               # twin omits LayerURI.bbox
     assert spec.empty_error_suffix == "NO_IMAGERY"
     stac = (spec.ingest or {}).get("stac", {})
-    assert stac.get("select") == "coverage"
+    assert stac.get("select", {}).get("mode") == "coverage"
     assert (spec.ingest or {}).get("transform", {}).get("log10_db") is True
     assert (spec.ingest or {}).get("serialize", {}).get("nodata") == -9999.0
 
@@ -66,7 +66,7 @@ def test_polarization_case_insensitive(spec):
 ])
 def test_collection_alias_normalization(spec, raw, canon):
     stac = (spec.ingest or {}).get("stac", {})
-    norm = raster_cog._normalize_via_aliases(
+    norm = stac_raster._normalize_via_aliases(
         spec, raw, stac.get("product_aliases", {}),
         list((stac.get("collection_by_param") or {}).get("map", {}).keys()),
         stac.get("param_error_suffix", "PARAM_INVALID"),
@@ -77,7 +77,7 @@ def test_collection_alias_normalization(spec, raw, canon):
 def test_unknown_collection_raises_typed(spec):
     stac = (spec.ingest or {}).get("stac", {})
     with pytest.raises(Exception) as ei:
-        raster_cog._normalize_via_aliases(
+        stac_raster._normalize_via_aliases(
             spec, "landsat", stac.get("product_aliases", {}),
             list((stac.get("collection_by_param") or {}).get("map", {}).keys()),
             stac.get("param_error_suffix", "PARAM_INVALID"),
@@ -95,8 +95,8 @@ def test_serialize_directive_fills_db_nodata(spec, monkeypatch):
     def fake_fetch(_spec, _params):
         return arr, transform, "EPSG:4326"
 
-    monkeypatch.setattr(raster_cog, "fetch_source_array", fake_fetch)
-    cog = raster_cog.execute(spec, {"bbox": [-95.4, 29.7, -95.3, 29.8]})
+    monkeypatch.setattr(stac_raster, "_render_float", fake_fetch)
+    cog = stac_raster.execute(spec, {"bbox": [-95.4, 29.7, -95.3, 29.8]})
     assert cog[:4] in (b"II*\x00", b"MM\x00*")
 
     import os
