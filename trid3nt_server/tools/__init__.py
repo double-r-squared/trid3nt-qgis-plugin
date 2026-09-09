@@ -289,7 +289,7 @@ def clear_registry_for_tests() -> None:
 # fetch_storm_tracks FOLDED to a spec-driven surface: its source.yaml +
 # storm_tracks library-delegate hooks (historical IBTrACS + active NHC incl. the binary
 # forecast-zip secondary-enrichment round) are promoted by register_specs_from_tree;
-# the StormTracks*Error twins live in _router/hooks/storm_tracks.py. No eager twin import.
+# the StormTracks*Error twins live in weather/fetch_storm_tracks/hooks.py. No eager twin import.
 
 # -- fetchers/hydrology --
 # V&V wave (lane C): observed flood-validation data fetchers.
@@ -310,7 +310,7 @@ def clear_registry_for_tests() -> None:
 # delegate hooks (the S3 channel_rt netCDF read -> {feature_id: streamflow} lookup + the NLDI
 # 5x5 spatial sample -> COMIDs + per-reach geometry + JOIN -> point FGB, over the fetch-time
 # provenance channel) register at import via register_specs_from_tree; the NWMStreamflow*Error
-# twins live in _router/hooks/nwm_streamflow.py. No eager twin import.
+# twins live in hydrology/fetch_noaa_nwm_streamflow/hooks.py. No eager twin import.
 # fetch_nws_river_forecast: data-router fold chained-resolution mode -- twin
 # DELETED, now spec-driven (source.yaml + nws_river_forecast hooks: gauges-by-bbox / single
 # detail + bounded per-gauge threshold/stageflow enrichment), registered below.

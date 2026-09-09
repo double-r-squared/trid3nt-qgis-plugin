@@ -108,8 +108,9 @@ because a real source needs it -- ``post_process`` was evaluated and rejected in
 favor of declarative ``output.bbox_from_features``), **REGISTERED** (a name string a
 spec load validates against ``HOOK_REGISTRY``), and **TESTED** (each hook module
 carries its own unit tests). END STATE: the fetcher package is ``_router/`` (the
-engine) + ``_router/hooks/`` (the pure per-source steps) + ``**/source.yaml`` (the
-data) + ``**/corpus.yaml`` (the phrasings). Coded fetcher tools -> 0.
+engine, with ``_router/hooks/`` holding the contract and the modules several specs
+share) + ``**/hooks.py`` (one spec's own pure steps, beside it) + ``**/source.yaml``
+(the data) + ``**/corpus.yaml`` (the phrasings). Coded fetcher tools -> 0.
 
 ### Remaining coded-fetcher worklist (rough, by target tier)
 

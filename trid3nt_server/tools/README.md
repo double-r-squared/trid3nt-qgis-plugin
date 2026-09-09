@@ -42,6 +42,7 @@ registry and the cache shim are the two seams they all pass through.
 | `_router/errors.py` | The router's typed-error hierarchy over the shared fetch bases. |
 | `_router/shape_classifier.py` | The one classifier for what shape a response came back in. |
 | `_router/executors/` | How a request is actually run: HTTP JSON, raster COG, vector FlatGeobuf, zipped vector, station timeseries, library delegates, animation frames. |
-| `_router/hooks/` | Per-source `build_request` / `parse_response` overrides - one file per source that needs more than the spec can declare. |
+| `_router/hooks/` | The hook contract (`RequestPlan`, `register_hook`, `resolve_hook`) and the modules SEVERAL specs share; the loader walks both this folder and the co-located `hooks.py` files. |
+| `<group>/<spec>/hooks.py` | One spec's own `build_request` / `parse_response` overrides - what the spec cannot declare, beside the spec, registered by the tree walk. |
 | `_router/transforms/` | Post-fetch shaping: `fan_out`, `join`, `tiled_mosaic`. |
 | `_router/transport/` | The HTTP client, opener, staged and range-read file access, zip-object reads, and their errors. |
