@@ -358,11 +358,11 @@ PACKET_NOTES: dict[tuple[str, str], tuple[str, ...]] = {
         "what a regression moves.",
     ),
     ("telemac3d_stratified_flow", "coarse"): (
-        "3000 m HORIZONTAL over a one-hour window. The question is whether a calm "
-        "column KEEPS its thermocline, and the surviving top-to-bottom difference "
-        "is the number this run answers with; the horizontal field at this "
-        "spacing resolves no lake circulation. The refined declaration (1000 m at "
-        "the same 13 planes) is the one the horizontal is read from.",
+        "32.94 m HORIZONTAL (60 m asked) over a five-hour window with a "
+        "prescribed 6 m/s wind whose purpose is to MIX the column. The question "
+        "is how much of the thermocline survives that forcing, and the surviving "
+        "top-to-bottom difference is the number this run answers with; the "
+        "horizontal field at this spacing resolves no lake circulation.",
     ),
 }
 
