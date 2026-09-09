@@ -153,12 +153,3 @@ docstring: |-
         (retryable=False).
       - ``BLUETOPO_UPSTREAM_ERROR``: tile-scheme listing / tile read / merge
         failure (retryable=True).
-
-  **Cross-tool dependencies:**
-      - The PRIMARY rung of the coastal/estuary bed ladder, above the
-        ``fetch_topobathy`` CUDEM composite.
-      - Upstream source: the ``noaa-ocs-nationalbathymetry-pds`` public S3
-        bucket (anonymous read) and its published tile-scheme GeoPackage.
-
-  Cache: ``ttl_class="static-30d"``, ``source_class="bluetopo"``.
-  Tier-1 free. No API key. ``supports_global_query=False``.

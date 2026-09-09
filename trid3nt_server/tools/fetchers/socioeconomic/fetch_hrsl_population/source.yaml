@@ -1,7 +1,6 @@
-# Router source spec (fetcher-fold wave-9, multi_url VRT fan-out, ADR 0055).
-# Twin: fetch_hrsl_population.py -- Meta + CIESIN HRSL ~30 m gridded population.
-# The global mosaic is a multi-tile .vrt; the single-URL opener returns all-NaN,
-# so the VRT fan-out resolves the member tiles + windows the intersecting ones.
+# Meta and CIESIN HRSL ~30 m gridded population. The global mosaic is a multi-tile .vrt,
+# which the single-URL opener would read as all-NaN, so the VRT fan-out resolves the
+# member tiles and windows the intersecting ones.
 schema_version: v1
 
 name: fetch_hrsl_population
@@ -71,7 +70,7 @@ docstring: |-
   reads only the window covering the requested bbox, and writes a
   Cloud-Optimized GeoTIFF of persons-per-cell values. Resolution ~1 arcsecond
   (~30 m at the equator); float32, NaN nodata, EPSG:4326. Cached ``static-30d``.
-  Coverage: global land areas between approximately −56° and +72° latitude
+  Coverage: global land areas between approximately -56 deg and +72 deg latitude
   (excludes Antarctica + far Arctic). No API key required.
 
   **When to use:**
@@ -103,11 +102,3 @@ docstring: |-
   ``LayerURI(layer_type="raster", role="primary", units="persons_per_cell")``
   pointing at a COG (.tif). EPSG:4326, float32, NaN nodata, ~30 m pixels.
   Tagged with ``units=persons_per_cell`` and ``source=Meta_HRSL_v1.5_latest``.
-
-  **Cross-tool dependencies:**
-  - Downstream of: ``geocode_location`` (provides bbox), ``fetch_dem``
-    (co-registered for elevation-weighted exposure).
-  - Upstream of: zonal population-within-a-polygon sums composed in the
-    code_exec playground, a structural-loss impact post-processor, any
-    population-at-risk workflow step.
-  - Pairs with: ``fetch_buildings`` (combine for occupancy-weighted analyses).

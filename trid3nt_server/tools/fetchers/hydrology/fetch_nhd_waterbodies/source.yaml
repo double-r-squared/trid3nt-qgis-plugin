@@ -1,8 +1,6 @@
-# Router source spec (data-router fold, phase-2 wave-2 ArcGIS family).
-# Twin: fetch_nhd_waterbodies.py (SPEC-EXPRESSIBLE, vector-API-FGB / ArcGIS).
-# Uses the new primary->fallback endpoint chain (HR -> medium-res, the
-# data-source-fallback norm) + case-insensitive column_map with a lookup-derived
-# ftype_label (the two endpoints return field names in different case).
+# NHD waterbodies over an ArcGIS FeatureServer, with a primary-to-fallback endpoint
+# chain (high resolution, then medium) and a case-insensitive column_map whose
+# lookup-derived ftype_label absorbs the two endpoints' differing field case.
 schema_version: v1
 
 name: fetch_nhd_waterbodies
@@ -24,7 +22,7 @@ endpoint_fallback: [medium]                           # tried in order on the pr
 params:
   bbox: {type: bbox, required: true, quantize: round_6dp}
 gates:
-  max_features: 100000                       # twin _MAX_PAGES(100) * _PAGE_SIZE(1000)
+  max_features: 100000                       # 100 pages of 1000
 
 ingest:
   access: ogr
@@ -56,11 +54,11 @@ output:
   style:
     kind: reference
     geometry: polygon
-  emit_bbox: false                           # twin LayerURI omits bbox
+  emit_bbox: false                           # the LayerURI omits bbox
 
 cache:
   ttl_class: static-30d
-payload_estimate:                            # twin: area*0.4 clamp[0.05,50]
+payload_estimate:                            # area*0.4 clamp[0.05,50]
   model: bbox_area
   mb_per_sq_deg: 0.4
   floor_mb: 0.05
@@ -115,7 +113,7 @@ docstring: |-
       - Feeds ``spatial_query`` (waterbody area inside a footprint, or
         waterbodies within a place).
 
-  Resilience (feedback_data_source_fallback_norm): PRIMARY NHDPlus_HR ->
+  Resilience: PRIMARY NHDPlus_HR ->
   FALLBACK medium-resolution NHD Waterbody -> honest
   ``NHDWaterbodiesUpstreamError(retryable=True)`` if both fail. Never fabricates
   a non-empty layer. Cache: ``static-30d``, keyed on ``bbox-rounded-6dp`` +

@@ -6,7 +6,7 @@ error_prefix: GOES_ARCHIVE
 input_error_suffix: INPUT_INVALID
 empty_error_suffix: EMPTY
 
-docstring: |
+docstring: |-
   Detect ACTIVE FIRE in an AOI from raw GOES ABI via the Matson-Dozier split-window discriminator.
 
   **What it does:** Fetches the raw ``ABI-L2-MCMIPC`` GOES frame(s) for the AOI
@@ -53,12 +53,6 @@ docstring: |
   ``"GOES Active Fire step <N> <ISO> (<SAT>)"``. A window with no archived frames
   OR no detected hot pixels raises a typed error (honesty floor) -- it never
   emits a blank overlay.
-
-  **Cross-tool dependencies:**
-  - Upstream: ``fetch_wfigs_incident`` (the AOI bbox + the window floor).
-  - Pairs with: ``fetch_goes_archive_animation`` band=``"true_color"`` (the
-    base the hotspots overlay) + ``fetch_nifc_fire_perimeters``.
-
 # The raw ABI-L2-MCMIPC netCDF archive the frames hooks list + read via the shared
 # imagery._goes_archive_core substrate (anonymous public S3); documentary.
 endpoints:

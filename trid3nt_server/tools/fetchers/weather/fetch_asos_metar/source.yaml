@@ -1,6 +1,5 @@
-# Router source spec (station-observations fold, ADR 0065).
-# Twin: fetch_asos_metar.py -- FOLDED via the resolve phase (multi-state
-# station discovery) + main fetch (one bulk IEM CGI CSV; one point per obs row).
+# IEM ASOS/METAR station observations: a multi-state station discovery in the resolve
+# phase, then ONE bulk CSV as the main fetch, one point per observation row.
 schema_version: v1
 name: fetch_asos_metar
 source_class: asos_metar
@@ -98,15 +97,15 @@ docstring: "Fetch ASOS/METAR surface weather observations as a point FlatGeobuf.
   \ omitted). IEM archive extends back to the 1920s for\n        many CONUS stations; typical recent data\
   \ available with ~1-hour lag.\n    end_time: End of observation window as ISO-8601 date or datetime\n\
   \        (e.g. ``\"2024-09-28\"``). Defaults to current UTC time when omitted.\n        Wide windows\
-  \ (> 30 days × many stations) may produce large payloads\n        (> 25 MB); the payload-warning system\
+  \ (> 30 days x many stations) may produce large payloads\n        (> 25 MB); the payload-warning system\
   \ will surface a confirmation\n        prompt before fetching.\n\nReturns:\n    ``LayerURI`` pointing\
   \ at a FlatGeobuf in the cache bucket:\n    ``s3://trid3nt-cache/cache/dynamic-1h/asos_metar/<key>.fgb``\n\
-  \    - ``layer_type=\"vector\"``, ``role=\"context\"``, ``units=\"mixed\"``\n      (temperature in °F,\
+  \    - ``layer_type=\"vector\"``, ``role=\"context\"``, ``units=\"mixed\"``\n      (temperature in  degF,\
   \ wind in knots, pressure in inHg/hPa,\n      visibility in miles -- standard ASOS/METAR units).\n \
   \   - Geometry: Point at each ASOS station's coordinates, EPSG:4326.\n    - Properties per observation:\
   \ ``station`` (ICAO/FAA id),\n      ``valid`` (UTC observation time ISO-8601), ``lon``, ``lat``,\n \
-  \     ``elevation`` (ft), ``tmpf`` (°F), ``dwpf`` (°F), ``sknt``\n      (wind kt), ``drct`` (wind dir\
-  \ °), ``gust`` (gust kt), ``alti``\n      (altimeter inHg), ``mslp`` (MSLP hPa), ``vsby`` (visibility\
+  \     ``elevation`` (ft), ``tmpf`` ( degF), ``dwpf`` ( degF), ``sknt``\n      (wind kt), ``drct`` (wind dir\
+  \  deg), ``gust`` (gust kt), ``alti``\n      (altimeter inHg), ``mslp`` (MSLP hPa), ``vsby`` (visibility\
   \ mi),\n      ``wxcodes`` (present weather), ``skyc1`` (sky cover), ``skyl1``\n      (sky layer height\
   \ ft). Missing values are ``null``.\n\nCache: ``dynamic-1h`` -- identical ``(bbox-4dp, start_time, end_time)``\
   \ calls\nwithin the same UTC hour reuse the cached FlatGeobuf.\n\nCross-tool dependencies:\n    - Composes\

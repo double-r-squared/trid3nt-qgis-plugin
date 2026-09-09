@@ -121,12 +121,12 @@ docstring: |-
     difference between two windows (call twice).
 
   **When NOT to use:**
-  - Fine-grained single-scene thermal detail  --  use
+  - Fine-grained single-scene thermal detail -- use
     ``fetch_landsat_imagery(band_combo="thermal")`` (30 m, baked RGB snapshot).
-  - AIR temperature (2 m)  --  use ``fetch_era5_reanalysis`` / ``fetch_hrrr_forecast``
+  - AIR temperature (2 m) -- use ``fetch_era5_reanalysis`` / ``fetch_hrrr_forecast``
     / ``fetch_gridmet`` (LST is the SURFACE skin temperature, much hotter than
     air on a sunny day).
-  - Sea-surface temperature  --  use ``fetch_noaa_sst``.
+  - Sea-surface temperature -- use ``fetch_noaa_sst``.
 
   **Parameters:**
   - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
@@ -149,6 +149,3 @@ docstring: |-
   ``LST_Night_1km``). MODIS COGs live in the Azure ``modiseuwest`` account, so
   each href is signed via the per-href PC sign endpoint (the per-collection
   token does not authorize that account).
-
-  FR-CE-8: routed through ``read_through`` so identical ``(bbox, window,
-  product, daynight)`` calls reuse the cached COG.

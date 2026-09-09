@@ -1,10 +1,10 @@
-# Router source spec -- OPERA Dynamic Surface Water Extent (DSWx) over the
-# NASA Earthdata STAC catalog, read through the stac_raster executor.
+# OPERA Dynamic Surface Water Extent over the NASA Earthdata STAC catalog, read through
+# the stac_raster executor.
 #
 # The V1 products live in an EDL-gated bucket: every asset read redirects to
-# urs.earthdata.nasa.gov, and anonymous S3 is refused. The spec therefore
-# REFUSES BY NAME until ~/.netrc carries a machine entry for that host, which is
-# an interactive account step and never an agent's.
+# urs.earthdata.nasa.gov, and anonymous S3 is refused. The spec therefore REFUSES BY NAME
+# until ~/.netrc carries a machine entry for that host, which is an interactive account
+# step and never an agent's.
 schema_version: v1
 
 name: fetch_opera_dswx

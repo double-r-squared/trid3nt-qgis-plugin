@@ -110,13 +110,3 @@ docstring: |-
   Tagged ``units=persons_per_cell`` and
   ``source=JRC_GHS_POP_E2020_GLOBE_R2023A_4326_3ss``. Reuses the
   ``population_density`` style preset (magma persons/cell ramp).
-
-  **Cross-tool dependencies:**
-  - Downstream of: ``geocode_location`` (provides bbox), ``fetch_dem``
-    (co-registered for elevation-weighted exposure).
-  - Upstream of: zonal population-within-a-polygon sums composed in the
-    code_exec playground, a structural-loss impact post-processor, any
-    population-at-risk workflow step.
-  - Complements: ``fetch_hrsl_population`` (Meta HRSL ~30 m global) and
-    ``fetch_population`` (WorldPop / US Census) -- different methodologies,
-    same persons/cell semantics.

@@ -77,34 +77,51 @@ payload_estimate:
   floor_mb: 0.01
   kb_per_feature: 0.5
   features_per_sq_deg: 20000.0
-docstring: "Agricultural FIELD BOUNDARIES (Fields of The World / fiboa) for an AOI.\n\n**What it does:**\
-  \ Fetches published agricultural field-boundary polygons -- individual farm parcels / fields -- for\
-  \ the requested bbox from the Fields of\nThe World (FTW) / fiboa open datasets on Source Cooperative,\
-  \ clips them to\nthe exact AOI, and returns them as a vector layer that renders inline on the\nmap automatically\
-  \ (like roads / protected areas). NO API key required.\n\n**Coverage (IMPORTANT -- regional, not global yet):** This serves\
-  \ the\nPUBLISHED FTW/fiboa benchmark, which covers specific regions, currently:\nthe contiguous United\
-  \ States (USDA Crop Sequence Boundaries), Japan, and\nDenmark. A bbox outside every covered region returns\
-  \ a structured\n``FIELDS_NO_COVERAGE`` error -- there are simply no published boundaries\nthere. On-demand\
-  \ field-boundary INFERENCE from satellite imagery for an\narbitrary AOI (running an FTW model anywhere\
-  \ on Earth) is a SEPARATE future\ntool and is not available through this one.\n\n**When to use:**\n\
-  - User wants to see farm fields / agricultural parcels / field boundaries\n  over an AOI in the US,\
-  \ Japan, or Denmark.\n- A hazard analysis needs cropland parcel geometry as context (e.g. which\n  fields\
-  \ a flood footprint covers, agricultural exposure mapping).\n- Pairs with flood / drought / fire layers\
-  \ to quantify agricultural impact.\n\n**When NOT to use:**\n- Land-cover CLASSIFICATION rasters (use\
-  \ ``fetch_landcover`` / NLCD) -- this\n  returns vector PARCEL boundaries, not a per-pixel crop-type\
-  \ raster.\n- Cadastral / legal property parcels -- these are agricultural FIELD units,\n  not legal\
-  \ land-ownership parcels (use a county assessor source for those).\n- Areas outside the covered regions\
-  \ -- the tool will honestly report no\n  coverage rather than guess; do not retry the same out-of-coverage\
-  \ bbox.\n- Administrative boundaries (use ``fetch_administrative_boundaries``).\n\n**Parameters:**\n\
-  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.\n  Keep it small (a county\
-  \ or smaller); a continent-sized bbox returns far\n  too many parcels. Example (Ames, Iowa cropland):\n\
-  \  ``(-93.70, 42.00, -93.60, 42.08)``.\n- ``dataset`` (str | None): force a specific source key\n  (``\"\
-  us_usda_cropland\"``, ``\"japan\"``, ``\"denmark\"``). Default ``None``\n  auto-selects the dataset\
-  \ whose coverage contains the bbox.\n\n**Returns:** A ``LayerURI`` (``layer_type=\"vector\"``, ``role=\"\
-  context\"``,\n``units=None``) pointing at a FlatGeobuf of field polygons. Each feature\ncarries a ``crop_name``\
-  \ property (the source crop / land-type label where\nthe dataset provides one). An AOI with coverage\
-  \ but no fields (e.g. urban /\nwater) returns a valid 0-feature layer, not an error.\n\n**Cross-tool\
-  \ dependencies:**\n- Typically layered over flood / fire / drought hazard rasters as context.\n- Pairs\
-  \ with ``spatial_query`` to summarize a hazard over fields.\n- Use ``fetch_administrative_boundaries``\
-  \ first if you need a county/AOI\n  bbox to query within.\n\nFR-CE-8: ``read_through`` with ``ttl_class=\"\
-  static-30d\"``; cache key is\nSHA-256 over ``(bbox-6dp, dataset_key)``."
+docstring: |-
+  Agricultural FIELD BOUNDARIES (Fields of The World / fiboa) for an AOI.
+
+  **What it does:** Fetches published agricultural field-boundary polygons -- individual farm parcels / fields -- for the requested bbox from the Fields of
+  The World (FTW) / fiboa open datasets on Source Cooperative, clips them to
+  the exact AOI, and returns them as a vector layer that renders inline on the
+  map automatically (like roads / protected areas). NO API key required.
+
+  **Coverage (IMPORTANT -- regional, not global yet):** This serves the
+  PUBLISHED FTW/fiboa benchmark, which covers specific regions, currently:
+  the contiguous United States (USDA Crop Sequence Boundaries), Japan, and
+  Denmark. A bbox outside every covered region returns a structured
+  ``FIELDS_NO_COVERAGE`` error -- there are simply no published boundaries
+  there. On-demand field-boundary INFERENCE from satellite imagery for an
+  arbitrary AOI (running an FTW model anywhere on Earth) is a SEPARATE future
+  tool and is not available through this one.
+
+  **When to use:**
+  - User wants to see farm fields / agricultural parcels / field boundaries
+    over an AOI in the US, Japan, or Denmark.
+  - A hazard analysis needs cropland parcel geometry as context (e.g. which
+    fields a flood footprint covers, agricultural exposure mapping).
+  - Pairs with flood / drought / fire layers to quantify agricultural impact.
+
+  **When NOT to use:**
+  - Land-cover CLASSIFICATION rasters (use ``fetch_landcover`` / NLCD) -- this
+    returns vector PARCEL boundaries, not a per-pixel crop-type raster.
+  - Cadastral / legal property parcels -- these are agricultural FIELD units,
+    not legal land-ownership parcels (use a county assessor source for those).
+  - Areas outside the covered regions -- the tool will honestly report no
+    coverage rather than guess; do not retry the same out-of-coverage bbox.
+  - Administrative boundaries (use ``fetch_administrative_boundaries``).
+
+  **Parameters:**
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+    Keep it small (a county or smaller); a continent-sized bbox returns far
+    too many parcels. Example (Ames, Iowa cropland):
+    ``(-93.70, 42.00, -93.60, 42.08)``.
+  - ``dataset`` (str | None): force a specific source key
+    (``"us_usda_cropland"``, ``"japan"``, ``"denmark"``). Default ``None``
+    auto-selects the dataset whose coverage contains the bbox.
+
+  **Returns:** A ``LayerURI`` (``layer_type="vector"``, ``role="context"``,
+  ``units=None``) pointing at a FlatGeobuf of field polygons. Each feature
+  carries a ``crop_name`` property (the source crop / land-type label where
+  the dataset provides one). An AOI with coverage but no fields (e.g. urban /
+  water) returns a valid 0-feature layer, not an error.
+

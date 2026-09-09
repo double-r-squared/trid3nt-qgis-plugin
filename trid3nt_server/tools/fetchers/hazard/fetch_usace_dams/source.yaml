@@ -203,8 +203,8 @@ docstring: |-
 
   Cross-tool dependencies:
       Consumes optional bbox from ``fetch_administrative_boundaries`` /
-      ``geocode_location`` (typical agent workflow: geocode "Lake Mead" →
-      derive bbox → call this tool). Feeds into ``spatial_query``
+      ``geocode_location`` (typical agent workflow: geocode "Lake Mead" ->
+      derive bbox -> call this tool). Feeds into ``spatial_query``
       (clip dams to watershed / county / Case AOI), and into
       exposure/loss composers that pair dam location with modeled
       hazard footprints.
@@ -212,12 +212,3 @@ docstring: |-
   Cache: ``static-30d`` (NID is updated quarterly at fastest; a 30-day
   bucket gives ~12x amortization). Cache key: SHA-256 of bbox-rounded-6dp
   or "global" sentinel.
-
-  External-API resilience (NFR-R-1): The ESRI Living Atlas cluster
-  occasionally returns 5xx during ESRI maintenance windows. On network
-  failure / non-2xx / malformed JSON / ArcGIS error envelope the tool
-  raises ``USACEDAMSUpstreamError(retryable=True)`` so the agent's
-  FR-AS-11 surface decides whether to retry, clarify, or fall back.
-
-  Source-tier: FR-HEP-2 Tier 1 (USACE is the regulatory authority for
-  the NID).

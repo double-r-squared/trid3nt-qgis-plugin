@@ -1,8 +1,7 @@
-# Router source spec (raster-stragglers wave, mapserver_export mode, ADR 0068).
-# Twin: fetch_noaa_slr_confidence.py + shared _noaa_slr_raster.py -- NOAA OCM SLR
-# Viewer conf_* MapServer/export server-symbolized PNG32 -> 4-band RGBA COG.
-# A fully-transparent export (no coverage at this level) is a VALID transparent
-# overlay, never a typed EMPTY (the twin's honesty floor).
+# NOAA OCM SLR Viewer confidence-of-mapping: a server-symbolized PNG32 from
+# MapServer/export, georeferenced client-side into a 4-band RGBA COG. A fully transparent
+# export -- no coverage at that level -- is a VALID transparent overlay, never a typed
+# EMPTY (the honesty floor).
 schema_version: v1
 
 name: fetch_noaa_slr_confidence
@@ -113,6 +112,3 @@ docstring: |-
   ``role="context"``). A bbox with no SLR
   coverage at this level returns a valid transparent (empty) overlay -- never
   fabricated content.
-
-  **Cross-tool dependencies:** pairs with ``fetch_noaa_slr_scenarios`` (footprint)
-  and ``fetch_noaa_slr_marsh`` (marsh migration) -- the three NOAA OCM SLR Viewer products.

@@ -129,13 +129,13 @@ docstring: |-
     use ``fetch_topobathy`` for coastal seafloor depth.
   - Single-point elevation lookups -- the tool fetches a raster window;
     for a point query use a future ``point_elevation`` tool.
-  - Continent-scale bboxes (> 5,000,000 km²) -- rejected with
+  - Continent-scale bboxes (> 5,000,000 km2) -- rejected with
     ``BboxInvalidError``. State/multi-state bboxes auto-coarsen instead of
     failing (not a dead end).
 
   **Parameters:**
   - ``bbox`` (tuple[float,float,float,float]): ``(min_lon, min_lat, max_lon,
-    max_lat)`` in EPSG:4326. Max area 5,000,000 km²; large bboxes auto-coarsen.
+    max_lat)`` in EPSG:4326. Max area 5,000,000 km2; large bboxes auto-coarsen.
   - ``resolution_m`` (int, default 10): DEM grid spacing in meters (3DEP only).
     10 m or 30 m are fastest on 3DEP's tile tree. A large bbox may deliver a
     coarser grid than requested (a pixel-budget auto-coarsen); the delivered
@@ -152,15 +152,8 @@ docstring: |-
   A ``LayerURI`` pointing at a Cloud-Optimized GeoTIFF in the cache bucket
   (``s3://trid3nt-cache/cache/static-30d/dem/<key>.tif``).
   CRS: EPSG:5070 (py3dep default); units: meters above NAVD88.
-  Fields consumed downstream: ``uri`` → by hydraulic model setup and
-  the QGIS plugin's native rendering;→ map rendering. When the
+  Fields consumed downstream: ``uri`` -> by hydraulic model setup and
+  the QGIS plugin's native rendering;-> map rendering. When the
   bbox forced a coarser grid than requested, ``name`` carries an honest
   coarsening note (approximate terrain -- fine for a hillshade/overview,
   not site-scale analysis).
-
-  **Cross-tool dependencies:**
-  - Downstream: hydraulic model setup,
-    ``compute_slope``, ``compute_hillshade``, ``compute_aspect``,
-    ``compute_colored_relief``, AOI zonal stats in the code_exec playground.
-  - Typically called after: ``geocode_location`` supplies the bbox.
-  - Sibling source: ``source="copernicus"`` for non-US / global terrain.

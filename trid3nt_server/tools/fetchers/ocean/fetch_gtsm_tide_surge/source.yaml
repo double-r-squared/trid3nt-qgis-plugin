@@ -1,7 +1,6 @@
-# Router source spec (ADR 0085) -- Deltares GTSM v3.0 global tide + surge.
-# Twin: fetch_gtsm_tide_surge.py (library_delegate vector; cdsapi owns the socket).
-# CDS retrieve -> ZIP -> NetCDF(s) -> bbox-subset -> one Point per gauge w/ inline
-# time_series_csv. delegate: cds.gtsm_read returns GeoJSON features for the FGB writer.
+# Deltares GTSM global tide and surge, a library_delegate vector: cdsapi owns the socket.
+# CDS retrieve -> ZIP -> NetCDF -> bbox subset -> one Point per gauge carrying an inline
+# time_series_csv; the delegate returns GeoJSON features for the FGB writer.
 schema_version: v1
 
 name: fetch_gtsm_tide_surge
@@ -49,8 +48,8 @@ output:
 
 cache:
   ttl_class: static-30d
-# ~0.1 MB / day / coastal bbox (twin estimator); GTSM output is always a tiny
-# sparse gauge FGB -- never trips the 25 MB warn / 250 MB block gate. The twin's
+# ~0.1 MB / day / coastal bbox ; GTSM output is always a tiny
+# sparse gauge FGB -- never trips the 25 MB warn / 250 MB block gate. The
 # coastal-factor clamp is not reproduced (non-gating).
 payload_estimate:
   model: bbox_area
@@ -64,7 +63,7 @@ caveats:
 
 # corpus lifted from sibling corpus.yaml.
 
-docstring: |
+docstring: |-
   Global Tide and Surge Model v3.0 Tier-2 coastal water-level fetcher.
 
   **What it does:** Retrieves hourly tide + storm-surge time series from
@@ -102,7 +101,7 @@ docstring: |
 
   - ``bbox``: ``(west, south, east, north)`` in EPSG:4326. Required;
     ``supports_global_query=False`` -- global time-series is GB-scale.
-  - ``start_date``: ISO YYYY-MM-DD inclusive. GTSM coverage: 1950 → ~2024.
+  - ``start_date``: ISO YYYY-MM-DD inclusive. GTSM coverage: 1950 -> ~2024.
   - ``end_date``: ISO YYYY-MM-DD inclusive. Hard cap 366 days from start.
   - ``output``: ``"water_level"`` (default, tide + surge; canonical
     hydraulic model input) or ``"surge_only"`` (meteorological residual only).
@@ -122,18 +121,3 @@ docstring: |
   Raises: ``GTSMMissingKeyError`` (no key), ``GTSMAuthError`` (bad key),
   ``GTSMInputError`` (bad params), ``GTSMEmptyError`` (no gauges in bbox),
   ``GTSMUpstreamError`` (CDS queue timeout / network failure, retryable).
-
-  **Cross-tool dependencies:**
-
-  - Feeds coastal boundary forcing (parses ``time_series_csv``) into a
-    compound-flood hydraulic model; compound-flood composition happens
-    in the code_exec playground.
-  - Pair with: ``fetch_era5_reanalysis`` (atmospheric + wave forcing for
-    the same event window); ``fetch_noaa_nwm_streamflow`` (fluvial inflow
-    boundary); ``fetch_mrms_qpe`` / ERA5 precip (rainfall forcing).
-  - Auth path shares ``Persistence.get_secret_value`` with
-    ``fetch_era5_reanalysis`` (both use the Copernicus CDS key).
-
-  FR-CE-8: ``read_through`` with ``ttl_class="static-30d"``; cache key =
-  SHA-256 of ``(bbox-6dp, start_date, end_date, output)`` -- api_key
-  excluded (FR-DC-4 dedup).

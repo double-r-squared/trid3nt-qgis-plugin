@@ -1,7 +1,5 @@
-# Router source spec (fetcher-fold wave-9, gzip_object whole-object mode, ADR 0055).
-# Twin: fetch_chirps_precipitation.py -- UCSB CHIRPS-2.0 quasi-global rainfall.
-# Date-templated .tif.gz (monthly/daily path patterns); a gzip stream is not a
-# windowed COG, so the whole object is fetched + gunzipped + windowed in memory.
+# UCSB CHIRPS-2.0 quasi-global rainfall, a date-templated .tif.gz. A gzip stream is
+# not a windowed COG, so the whole object is fetched, gunzipped and windowed in memory.
 schema_version: v1
 
 name: fetch_chirps_precipitation
@@ -122,15 +120,3 @@ docstring: |-
   ``CHIRPSNotAvailableError`` (no published raster for that date, HTTP 404),
   ``CHIRPSUpstreamError`` (network / gzip / decode failure, retryable),
   ``CHIRPSEmptyError`` (bbox outside the CHIRPS 50S-50N extent or all-ocean).
-
-  **Cross-tool dependencies:**
-
-  - Pair with ``fetch_us_drought_monitor`` (CONUS drought) for a global vs
-    CONUS drought view, or summarize per-admin-unit or per-field rainfall
-    totals in the code_exec playground (zonal stats over a polygon).
-  - Alternative for CONUS radar precip: ``fetch_mrms_qpe``. Alternative for
-    global hourly reanalysis precip: ``fetch_era5_reanalysis`` (CDS key).
-
-  Cache: ``ttl_class="static-30d"`` (published rasters are immutable); key =
-  SHA-256 of ``(bbox-6dp, period, date)``. Payload estimate:
-  ``estimate_payload_mb(bbox, period)``.

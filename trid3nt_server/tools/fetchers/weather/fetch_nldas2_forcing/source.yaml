@@ -1,10 +1,9 @@
-# Router source spec -- NASA NLDAS-2 hourly land-surface forcing, read through
-# pynldas2 (the HyRiver line) on the pure-record path.
+# NASA NLDAS-2 hourly land-surface forcing, read through pynldas2 on the pure-record path.
 #
-# The GES DISC time-series service is behind Earthdata Login: an unauthenticated
-# request answers 200 with the EDL sign-in PAGE, which a parser reads as garbage.
-# The spec therefore REFUSES BY NAME until ~/.netrc carries a machine entry for
-# urs.earthdata.nasa.gov, the same interactive account step fetch_opera_dswx names.
+# The time-series service is behind Earthdata Login: an unauthenticated request answers
+# 200 with the sign-in PAGE, which a parser reads as garbage. The spec therefore REFUSES
+# BY NAME until ~/.netrc carries a machine entry for urs.earthdata.nasa.gov, the same
+# interactive account step fetch_opera_dswx names.
 schema_version: v1
 
 name: fetch_nldas2_forcing
@@ -128,9 +127,3 @@ docstring: |-
   ``n_hours``, ``n_cells``, ``times`` (ISO hourly), a ``series`` map of variable ->
   ``{units, values}``, and ``precip_total_mm`` when precipitation was requested.
   Cached ``static-30d``.
-
-  **Cross-tool dependencies:**
-  - Pairs with: ``fetch_usgs_nwis_gauges`` (the discharge record a forced run is
-    graded against) and ``fetch_dem``.
-  - Alternative: ``fetch_aorc_precip`` (CONUS, ~800 m, precipitation only),
-    ``fetch_era5_reanalysis`` (global, 27 km, full forcing).

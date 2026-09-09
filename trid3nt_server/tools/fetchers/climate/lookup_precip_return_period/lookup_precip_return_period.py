@@ -67,7 +67,7 @@ _LOOKUP_PRECIP_RETURN_PERIOD_METADATA = AtomicToolMetadata(
 # change degrades to one extra hop rather than a hard break.
 _ATLAS14_PFDS_URL = "https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv"
 
-#: Atlas 14 native source grid: 1/120 degree (≈ 30 arc-seconds).
+#: Atlas 14 native source grid: 1/120 degree (~ 30 arc-seconds).
 _ATLAS14_GRID_DEG = 1.0 / 120.0
 
 #: The ARI (Average Recurrence Interval) columns Atlas 14 reports -- fixed.
@@ -465,7 +465,7 @@ def lookup_precip_return_period(
         ):
             raise UpstreamAPIError(
                 f"NOAA Atlas 14 PFDS response did not contain "
-                f"duration={duration_label} × ARI={return_period_years} for "
+                f"duration={duration_label} x ARI={return_period_years} for "
                 f"(lat={lat_q}, lon={lon_q}); parsed matrix labels: "
                 f"{list(matrix.keys())[:5]}..."
             )
@@ -520,7 +520,7 @@ def lookup_precip_return_period(
                 f"NOT in NOAA Atlas 14 ({atlas14_exc}) and outside the NOAA "
                 f"Atlas 2 (Western US) coverage envelope. REMEDIATION: supply "
                 f"observed precipitation via the forcing_raster_uri / observed-"
-                f"precip path (fetch_mrms_qpe / ERA5 / gridMET → a precip COG), "
+                f"precip path (fetch_mrms_qpe / ERA5 / gridMET -> a precip COG), "
                 f"or choose an AOI inside Atlas-14 (CONUS east of the Rockies + "
                 f"SW) or Atlas-2 (Western US) coverage."
             ) from atlas14_exc
@@ -533,7 +533,7 @@ def lookup_precip_return_period(
         ):
             raise PrecipForcingUnavailableError(
                 f"NOAA Atlas 2 fallback produced no depth for "
-                f"duration={duration_label} × ARI={return_period_years} at "
+                f"duration={duration_label} x ARI={return_period_years} at "
                 f"(lat={lat_q}, lon={lon_q})."
             ) from atlas14_exc
         depth_inches = a2_matrix[duration_label][return_period_years]

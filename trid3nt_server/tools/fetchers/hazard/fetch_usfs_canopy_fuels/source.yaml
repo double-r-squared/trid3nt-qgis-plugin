@@ -1,6 +1,5 @@
-# Router source spec (fetcher-fold wave-7, imageserver_export mode, ADR 0053).
-# Twin: fetch_usfs_canopy_fuels.py -- LANDFIRE LF2022 CBH/CBD ImageServer exportImage.
-# The exportImage GeoTIFF body IS the artifact (no reserialize); value-identical.
+# LANDFIRE canopy bulk density and base height over ImageServer exportImage:
+# the returned GeoTIFF body IS the artifact, serialized no further.
 schema_version: v1
 
 name: fetch_usfs_canopy_fuels
@@ -109,13 +108,13 @@ docstring: |-
           Example for San Diego fire country:
           ``(-117.5, 32.5, -117.0, 33.0)``.
       layer: Which canopy-fuel layer to fetch:
-          ``"cbh"`` (default): canopy base height, metres × 10 (S16
-              scaled integer). Pixel 50 → 5.0 m height. Value 0 =
+          ``"cbh"`` (default): canopy base height, metres x 10 (S16
+              scaled integer). Pixel 50 -> 5.0 m height. Value 0 =
               non-burnable / open water; 1 = non-burnable land.
               Used by fire models as the height at which crown-fire
               transition can begin.
-          ``"cbd"``: canopy bulk density, kg/m³ × 100 (S16 scaled
-              integer). Pixel 12 → 0.12 kg/m³. Value 0 = non-burnable.
+          ``"cbd"``: canopy bulk density, kg/m3 x 100 (S16 scaled
+              integer). Pixel 12 -> 0.12 kg/m3. Value 0 = non-burnable.
               Used by fire models to compute crown-fire rate of spread.
 
   Returns:
@@ -143,14 +142,10 @@ docstring: |-
           degenerate; non-retryable.
       ``USFSCanopyFuelsUpstreamError``: LANDFIRE ImageServer network failure,
           HTTP non-200, JSON error envelope, or non-TIFF body; retryable.
-      ``USFSCanopyFuelsEmptyError``: all-nodata raster — bbox outside CONUS
+      ``USFSCanopyFuelsEmptyError``: all-nodata raster -- bbox outside CONUS
           LANDFIRE coverage; non-retryable.
 
-  Cache: ``static-30d`` (FR-DC-2). LANDFIRE LF2022 is a static product;
+  Cache: ``static-30d``. LANDFIRE LF2022 is a static product;
   the 30-day window is well inside the publication cadence. Cache key:
   SHA-256 of ``(layer, bbox-rounded-to-6dp, year="2022")``. A future
   LF2023 upgrade is a cache-key bump, not silent staleness.
-
-  Source-tier: FR-HEP-2 Tier 1 (USDA Forest Service + USGS authoritative
-  canopy-fuel programme). No API key required. Payload estimate: ~0.5 MB
-  per square degree, clipped to [0.05, 50] MB.

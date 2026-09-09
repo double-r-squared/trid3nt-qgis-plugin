@@ -1,8 +1,7 @@
-# Router source spec (ADR 0203) -- LTER / EDI environmental data records.
-# Record shape: a generic reader for one CSV/TSV data entity of an EDI (PASTA)
-# package, fetched through the public DataONE mirror (PASTA is 403 anonymously;
-# ADR 0202). resolve_build/parse resolve package_id -> entity data URL + parse
-# hints (pre-cache-key); build_request/record fetch + parse the time series.
+# LTER / EDI environmental data records: a generic reader for one delimited data entity
+# of a package, fetched through the public DataONE mirror because the native repository
+# API is 403 anonymously. The resolve phase turns a package id into the entity data URL
+# and its parse hints, pre-cache-key.
 schema_version: v1
 
 name: fetch_lter_records
@@ -74,7 +73,7 @@ caveats:
 
 # corpus lifted from sibling corpus.yaml.
 
-docstring: |
+docstring: |-
   Read a US-LTER / EDI long-term environmental data record (a station time series) by package id.
 
   **What it does:** Fetches one data entity (a CSV/TSV table) of an Environmental
@@ -119,8 +118,3 @@ docstring: |
   ``window``, ``times`` (raw timestamps), ``series`` (per-column value lists;
   ``null`` for unparseable cells), and ``summary`` (per-column ``peak`` / ``min`` /
   ``mean`` + units). Cached ``static-30d``.
-
-  **Cross-tool dependencies:**
-  - Pairs with: ``fetch_aorc_precip`` (the AOI-mean hyetograph forcing a rain-on-grid
-    run whose outlet discharge this observed series grades).
-  - Alternative: ``fetch_usgs_nwis_gauges`` (operational USGS gauge series).

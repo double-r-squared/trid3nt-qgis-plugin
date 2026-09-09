@@ -202,18 +202,18 @@ docstring: |-
   least-cloudy), reads the requested 30 m bands clipped to the bbox, masks
   cloud / shadow / fill via the ``qa_pixel`` CFMask bitmask, and returns a
   3-band RGB COG that paints directly as a satellite image (multiband
-  passthrough  --  no rescale / colormap; the baked colors
+  passthrough -- no rescale / colormap; the baked colors
   render as-is).
 
   Three ``band_combo`` outputs:
 
-  - ``true_color`` (default): Red/Green/Blue surface reflectance  --  natural
+  - ``true_color`` (default): Red/Green/Blue surface reflectance -- natural
     color, "what does this area look like from space".
-  - ``false_color_nir``: NIR/Red/Green  --  the color-infrared composite;
+  - ``false_color_nir``: NIR/Red/Green -- the color-infrared composite;
     healthy vegetation glows bright red, water is near-black. Good for
     vegetation extent / burn scars / water bodies.
   - ``thermal``: land-surface temperature from the thermal band (``lwir11``),
-    converted to deg C and baked through an inferno heat ramp  --  the keyless
+    converted to deg C and baked through an inferno heat ramp -- the keyless
     path to urban-heat-island / surface-temperature maps.
 
   Landsat's archive reaches back to the 1980s, so this is the source for LONG
@@ -229,9 +229,9 @@ docstring: |-
   - A vegetation / water / burn-scar composite (``band_combo="false_color_nir"``).
 
   **When NOT to use:**
-  - US sub-meter aerial detail  --  use ``fetch_naip`` (~1 m vs 30 m).
-  - Recent fine-grained natural color  --  ``fetch_sentinel2_truecolor`` (10 m).
-  - A continuous vegetation INDEX  --  ``compute_ndvi`` (Sentinel-2 NDVI).
+  - US sub-meter aerial detail -- use ``fetch_naip`` (~1 m vs 30 m).
+  - Recent fine-grained natural color -- ``fetch_sentinel2_truecolor`` (10 m).
+  - A continuous vegetation INDEX -- ``compute_ndvi`` (Sentinel-2 NDVI).
   - Areas fully clouded in the window (raise the window / ``max_cloud_cover``);
     a no-imagery result is an honest typed error, never a fabricated layer.
 
@@ -249,7 +249,7 @@ docstring: |-
   - ``include_legacy_landsat`` (bool, default False): when True, widen the
     platform set to Landsat 4/5/7 for deep-history windows (note: Landsat 7
     post-2003 has SLC-off scan-line gaps, and Landsat 4/5/7 thermal uses a
-    different band  --  thermal is most reliable on the default 8/9).
+    different band -- thermal is most reliable on the default 8/9).
 
   **Returns:** A ``LayerURI`` (``layer_type="raster"``) pointing at a 3-band
   RGB COG in the ``static-30d``/``landsat_imagery`` cache prefix.
@@ -259,6 +259,3 @@ docstring: |-
   **Data source:** Landsat Collection-2 Level-2 via the Microsoft Planetary
   Computer STAC (``landsat-c2-l2``; assets red/green/blue/nir08/lwir11 +
   qa_pixel).
-
-  FR-CE-8: routed through ``read_through`` so identical ``(bbox, window,
-  band_combo, cloud, legacy)`` calls reuse the cached RGB COG.

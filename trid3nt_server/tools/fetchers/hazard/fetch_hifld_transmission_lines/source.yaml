@@ -1,11 +1,10 @@
-# Router source spec (data-router fold, phase-2 wave-2 ArcGIS family).
-# Twin: fetch_hifld_transmission_lines.py (SPEC-EXPRESSIBLE, vector-API-FGB / ArcGIS).
-# Uses the new declarative WHERE builder (VOLTAGE floor) + const derived columns.
+# HIFLD transmission lines over an ArcGIS FeatureServer, with a declarative WHERE
+# builder for the VOLTAGE floor and const derived columns.
 schema_version: v1
 
 name: fetch_hifld_transmission_lines
-source_class: hifld_transmission_lines     # cache prefix == twin source_class
-error_prefix: HIFLD_TRANSMISSION           # twin A.6 token (HIFLDTransmission*Error) != cache prefix
+source_class: hifld_transmission_lines     # cache prefix
+error_prefix: HIFLD_TRANSMISSION           # error token, distinct from the cache prefix
 input_error_suffix: INPUT_INVALID          # HIFLDTransmissionInputError -> *_INPUT_INVALID
 shape: vector-fgb
 supports_global_query: false               # HIFLD is US-only, bbox required
@@ -21,16 +20,16 @@ params:
   bbox:           {type: bbox, required: true, quantize: round_6dp}
   min_voltage_kv: {type: float, required: false, default: null, min: 0.0}
 gates:
-  max_features: 30000                        # twin _MAX_TOTAL_FEATURES
+  max_features: 30000                        # paging cap
 
 ingest:
   access: ogr
   ogr: {driver: ESRIJSON}
   query_template: {out_fields: "*", order_by: "OBJECTID ASC"}
-  # VOLTAGE floor only when the caller pins one (twin: VOLTAGE >= {v:g}).
+  # VOLTAGE floor only when the caller pins one (VOLTAGE >= {v:g}).
   where_clauses:
     - {template: "VOLTAGE >= {min_voltage_kv:g}", require: [min_voltage_kv]}
-  # LineString / MultiLineString only (twin drops non-line geoms defensively).
+  # LineString / MultiLineString only (non-line geoms are dropped defensively).
   geometry_filter: {geom_types: [LineString, MultiLineString]}
   json_coerce_nested: true
   derived_columns:
@@ -48,11 +47,11 @@ output:
   style:
     kind: reference
     geometry: line
-  emit_bbox: true                            # twin LayerURI carries bbox
+  emit_bbox: true                            # the LayerURI carries bbox
 
 cache:
   ttl_class: static-30d
-payload_estimate:                            # twin: est_features(=area*1200)*700/(1024^2)
+payload_estimate:                            # est_features(=area*1200)*700/(1024^2)
   model: per_feature
   features_per_sq_deg: 1200.0
   kb_per_feature: 0.68359375                 # 700 bytes / 1024

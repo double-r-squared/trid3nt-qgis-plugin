@@ -1,10 +1,7 @@
-# Router source spec (fetcher-fold, ADR 0092): GOES GLM group-energy-density frames.
-# Twin: fetch_glm_lightning.py -- point-gridding of GLM-L2-LCFA group energy onto the
-# ABI-co-registered EPSG:4326 grid. The DEFAULT output is now an ORDERED
-# list[LayerURI] of GED frames (the single-accumulation case = a ONE-frame list); the
-# ADR 0088 single-vs-list STOP dissolves because the frames-list shape carries the
-# variant for free. glm.frames_plan splits the window into buckets, glm.frame_bytes
-# builds one bucket's purple-RGBA COG (numpy.add.at binning over the shared substrate).
+# GOES GLM group-energy-density frames: point-gridding of GLM group energy onto the
+# ABI-co-registered EPSG:4326 grid. The output is an ORDERED list of frames, a single
+# accumulation being a one-frame list. The plan hook splits the window into buckets and
+# the bytes hook builds one bucket's purple-RGBA COG by binning over the shared substrate.
 schema_version: v1
 
 name: fetch_glm_lightning
@@ -60,7 +57,7 @@ output:
 cache:
   ttl_class: dynamic-1h
 
-# The twin's estimator returned a small per-AOI MB (mostly-transparent RGBA overlay);
+# The estimate is a small per-AOI MB, a mostly-transparent RGBA overlay;
 # the router's mandatory bbox_area seam gives an equivalent small estimate that never
 # trips the chat-warn threshold on a normal storm AOI.
 payload_estimate:
@@ -122,9 +119,3 @@ docstring: |-
   The single-accumulation case is a one-frame list. A window where no bucket has any
   lightning group inside the AOI raises a typed EMPTY error (honesty floor) -- it
   never emits a blank overlay.
-
-  **Cross-tool dependencies:**
-  - Pairs with: ``fetch_goes_archive_animation`` band ``true_color`` /
-    ``fire_temperature`` (the GOES base this lightning density overlays, identical grid).
-  - Sibling fetchers: ``fetch_goes_satellite`` (single ABI frame),
-    ``fetch_goes_active_fire`` (split-window hot pixels).

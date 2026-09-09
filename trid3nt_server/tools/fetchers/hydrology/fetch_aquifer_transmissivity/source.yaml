@@ -1,11 +1,9 @@
-# Router source spec: staged-dataset direct_window over the Zell & Sanford 2020
-# CONUS transmissivity raster, converted to a COG by
-# scripts/staging/stage_zell_sanford_groundwater.py. The s3:// endpoint names bucket/key
-# only -- the transport resolves the host from the active object-store endpoint
-# at read time. ADR 0298 Decision 7 parked this spec (NormalizeSpec.quantity is
-# a single static stamp, so transmissivity could not ride fetch_aquifer_thickness
-# without mislabelling a m2/day layer as a saturated thickness); NATE ruled
-# REGISTER, so this spec gives it its own name, units and style ramp.
+# A staged-dataset direct_window over the Zell & Sanford 2020 CONUS transmissivity
+# raster, converted to a COG by scripts/staging/stage_zell_sanford_groundwater.py. The
+# s3:// endpoint names bucket and key only: the transport resolves the host from the
+# active object-store endpoint at read time. It carries its own name, units and style
+# ramp because a single static quantity stamp could not label both a transmissivity in
+# m2/day and a saturated thickness.
 schema_version: v1
 
 name: fetch_aquifer_transmissivity
@@ -128,13 +126,3 @@ docstring: |-
   ``layer_type="raster"``, ``role="primary"``, ``units="m2/day"``,
   ``quantity="aquifer_transmissivity"``. EPSG:4326, float32, NaN nodata,
   1/450 degree cells (about 247 m) from the native 250 m Albers model grid.
-
-  **Cross-tool dependencies:**
-  - Upstream: ``geocode_location`` or ``fetch_admin_boundaries`` for the bbox.
-  - Pairs with: ``fetch_aquifer_thickness`` (T divided by this model's own K
-    mosaic recovers saturated thickness -- same model, same grid),
-    ``fetch_water_table_depth`` (the top of the saturated column this
-    transmissivity is measured over), ``fetch_groundwater_recharge`` (the flux
-    that sustains the flow this transmissivity governs).
-  - Downstream: groundwater flow model setup, regional flow-capacity
-    comparison, and water-budget analysis in the python playground.

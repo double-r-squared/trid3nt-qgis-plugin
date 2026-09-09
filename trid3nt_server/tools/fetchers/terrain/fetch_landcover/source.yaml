@@ -1,9 +1,7 @@
-# Router source spec (landcover + flood-extent wave, ADR 0082).
-# Twin: fetch_landcover.py -- FOLDED via the wcs_getcoverage access mode (WCS 1.0.0
-# GetCoverage -> NLCD background(0)->nodata remap -> palette COG), the pre_resolve
-# auto-coarsen (dataset alias + vintage parse + effective-resolution + quantized bbox
-# into the cache key), and the post-emit envelope (the Manning's sidecar ->
-# LandcoverResult). flood.py re-pointed to read .uri + .nlcd_vintage_year off the subclass.
+# NLCD through the wcs_getcoverage access mode: a WCS 1.0.0 GetCoverage, a
+# background(0)-to-nodata remap, and a palette COG. The pre_resolve step carries the
+# dataset alias, the vintage parse, the effective resolution and the quantized bbox into
+# the cache key, and the envelope carries the validation sidecar.
 schema_version: v1
 name: fetch_landcover
 # ADR 0273 -- declared confirm gate: the heavy raster fetch gets the canonical
@@ -84,8 +82,7 @@ corpus:
 docstring: |-
   Fetch landcover classification raster (NLCD or ESA WorldCover) for a bbox.
 
-  Access pattern: Tier 2 (OGC service -- MRLC WCS/WMS endpoint per §F.1.1; live
-  verification found NLCD is Tier 2).
+  Access pattern: an OGC service, the MRLC WCS endpoint.
 
   **What it does:** Downloads an NLCD or ESA WorldCover landcover GeoTIFF
   clipped to the requested bbox via the MRLC WCS 1.0.0 GeoServer endpoint.
@@ -111,7 +108,7 @@ docstring: |-
     the ESA WorldCover branch, but that branch currently raises
     ``UpstreamAPIError`` (forward-looking).
   - Single-point landcover classification -- this tool returns a raster;
-    use ``extract_landcover_class`` for point lookups once it lands.
+    use ``extract_landcover_class`` for a point lookup.
   - Continent-scale bboxes (> 5,000,000 km^2) -- the tool raises
     ``BboxInvalidError`` at that hard ceiling. State-scale and
     multi-state-scale bboxes are served by auto-coarsening the resolution
@@ -146,9 +143,3 @@ docstring: |-
     ``resolution_m`` when at native 30 m; coarser when the bbox was large).
   - ``native_resolution_m`` (int): NLCD native resolution (30 m).
   - ``downsampled`` (bool): True when ``effective_resolution_m > native_resolution_m``.
-
-  **Cross-tool dependencies:**
-  - Upstream: ``geocode_location`` for bbox derivation.
-  - Downstream: Manning's roughness assignment for a hydraulic model,
-    the QGIS plugin's native rendering, ``extract_landcover_class``,
-    ``compute_impervious_surface``.

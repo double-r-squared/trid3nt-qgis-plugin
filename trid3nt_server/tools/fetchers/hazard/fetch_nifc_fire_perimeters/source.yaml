@@ -1,12 +1,10 @@
-# Router source spec (data-router fold, phase-2 wave-2 ArcGIS family).
-# Twin: fetch_nifc_fire_perimeters.py (SPEC-EXPRESSIBLE, vector-API-FGB / ArcGIS).
-# CLEAN: single FeatureServer, geojson, single-shot, where=1=1, bbox-optional
-# (supports_global_query), out_fields projection + json-coerce, honest-empty FGB.
+# NIFC fire perimeters over a single ArcGIS FeatureServer: geojson, single-shot,
+# where=1=1, bbox-optional, an out_fields projection with json-coerce, honest-empty FGB.
 schema_version: v1
 
 name: fetch_nifc_fire_perimeters
-source_class: nifc_perimeters              # cache prefix == twin source_class
-error_prefix: NIFC_FIRE                     # twin A.6 token (NIFCFire*Error) != cache prefix
+source_class: nifc_perimeters              # cache prefix
+error_prefix: NIFC_FIRE                     # error token, distinct from the cache prefix
 input_error_suffix: INPUT_INVALID          # NIFCFireInputError -> *_INPUT_INVALID
 shape: vector-fgb
 supports_global_query: true                # bbox=None -> CONUS+AK+HI sweep
@@ -42,11 +40,11 @@ output:
   style:
     kind: reference
     geometry: polygon
-  emit_bbox: false                          # twin LayerURI omits bbox
+  emit_bbox: false                          # the LayerURI omits bbox
 
 cache:
   ttl_class: dynamic-1h
-payload_estimate:                           # twin has no estimator; a bbox-area heuristic is additive-honest
+payload_estimate:                           # a bbox-area heuristic
   model: bbox_area
   mb_per_sq_deg: 1.0
   floor_mb: 0.02
@@ -64,12 +62,12 @@ docstring: |-
   and returns a FlatGeobuf vector layer. Supports both CONUS-wide sweeps
   (``bbox=None``, ``supports_global_query=True``) and spatially filtered
   queries. Cached ``dynamic-1h`` (active fires update frequently).
-  No API key required. FR-HEP-2 Tier 1 source.
+  No API key required.
 
   **When to use:**
   - "Show me every active wildfire in California right now."
   - Wildfire hazard-context overlay on a population or air-quality layer.
-  - Discovery step before fetching FIRMS detections — identify which fires
+  - Discovery step before fetching FIRMS detections -- identify which fires
     have established perimeters vs. new hotspot clusters.
   - "What is the biggest active megafire and how contained is it?"
 
@@ -84,7 +82,7 @@ docstring: |-
   **Parameters:**
   - ``bbox`` (tuple or None): ``(min_lon, min_lat, max_lon, max_lat)`` in
     EPSG:4326 for a spatially filtered query. ``None`` (default) returns all
-    currently active perimeters CONUS+AK+HI (typically 20–200 features,
+    currently active perimeters CONUS+AK+HI (typically 20-200 features,
     ~1 MB payload). Example: ``(-122.5, 37.0, -120.0, 39.0)`` for Northern
     California.
   - ``status`` (str): ``"active"`` (default). Accepted: ``active``,
@@ -95,11 +93,3 @@ docstring: |-
   ``LayerURI(layer_type="vector", role="primary", units=None)`` pointing at a
   FlatGeobuf with fields: incident name, GIS acres, percent contained,
   ignition date, ignition cause, POO state, and fire type. EPSG:4326.
-
-  **Cross-tool dependencies:**
-  - Pairs with: ``fetch_firms_active_fire`` (satellite detections inside/near
-    perimeters), ``fetch_nws_alerts_conus`` (co-occurring fire-weather watches
-    + red-flag warnings).
-  - Upstream of: smoke/population-impact overlays, evacuation zone analysis.
-  - Historical complement: ``fetch_mtbs_burn_severity`` for 1984-present
-    burned-area polygons.

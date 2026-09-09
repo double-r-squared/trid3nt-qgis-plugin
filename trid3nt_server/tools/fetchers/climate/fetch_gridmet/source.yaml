@@ -1,10 +1,9 @@
-# Router source spec (data-router fold, pilot 1/5) -- gridMET CONUS gridded met.
-# Twin: fetch_gridmet/fetch_gridmet.py (SPEC-EXPRESSIBLE, raster-COG / OPeNDAP).
-# Normalization stamps + endpoints + params lifted VERBATIM from the twin's code.
+# gridMET CONUS gridded meteorology, a raster COG read over OPeNDAP.
+# Normalization stamps, endpoints and params are the source's own.
 schema_version: v1
 
 name: fetch_gridmet
-source_class: gridmet          # cache prefix == twin _METADATA.source_class
+source_class: gridmet          # cache prefix
 shape: raster-cog
 supports_global_query: false   # gridMET is CONUS-only
 
@@ -22,7 +21,7 @@ params:
   bbox:       {type: bbox, required: true, quantize: round_6dp}
   variable:   {type: enum, required: true,
                values: [fm100, fm1000, pet, pdsi, tmmn, tmmx, vpd, vs, rmin, rmax, pr, srad]}
-  # coverage bounds -> GRIDMET_NOT_AVAILABLE (twin GRIDMETNotAvailableError):
+  # coverage bounds -> GRIDMET_NOT_AVAILABLE :
   # start before the 1979-01-01 aggregate start, or end beyond real time (today+1).
   start_date: {type: iso_date, required: true, min_date: "1979-01-01"}
   end_date:   {type: iso_date, required: true, max_range_days: 366, max_future_days: 1}
@@ -49,7 +48,7 @@ ingest:
     srad:   {long_name: surface_downwelling_shortwave_flux_in_air, units: "W m-2"}
 
 # --- normalization stamps (indistinguishability) -------------------------
-# NOTE: units are per-variable in the twin; the router carries ONE units string
+# NOTE: units are per-variable upstream; the router carries ONE units string
 # on the emitted LayerURI, so this stamps the fm100/fm1000/rmin/rmax value
 # ("Percent"). Per-variable LayerURI.units is a router single-string limitation
 # (see VERDICT.md); the pilot fixed request is fm100 -> Percent (parity holds).
@@ -83,12 +82,12 @@ output:
                scale: {policy: fixed, range: [250, 320], transform: linear}}
         vs: {kind: continuous, units: 'm s-1', label: Gridmet vs,
              scale: {policy: fixed, range: [0, 25], transform: linear}}
-  emit_bbox: false             # twin gridMET LayerURI omits bbox (parity tell)
+  emit_bbox: false             # the LayerURI omits bbox
 
 # --- cache + payload gate ------------------------------------------------
 cache:
   ttl_class: static-30d
-payload_estimate:              # twin: max(0.01, 0.01 * sq_deg)
+payload_estimate:              # max(0.01, 0.01 * sq_deg)
   model: bbox_area
   mb_per_sq_deg: 0.01
   floor_mb: 0.01
@@ -101,11 +100,10 @@ caveats:
 
 # corpus omitted here -> loader lifts it verbatim from the sibling corpus.yaml.
 
-# --- LLM docstring (carried VERBATIM from the twin via inspect.getdoc;
-# the sole source of the promoted FunctionDeclaration description + the
-# retrieval-index document text -> indistinguishable from the twin). ---
-docstring: |
-  gridMET CONUS daily gridded meteorology (4 km, 1979 → present).
+# --- LLM docstring: the sole source of the promoted tool description and the
+# retrieval-index document text. ---
+docstring: |-
+  gridMET CONUS daily gridded meteorology (4 km, 1979 -> present).
 
   Fetches a daily gridded meteorological variable from the University of
   Idaho gridMET dataset (Abatzoglou 2013) over the requested bbox + date
@@ -121,11 +119,11 @@ docstring: |
     - The wildfire pipeline needs *dynamic* moisture state to pair with
       LANDFIRE *static* fuel models.
     - User asks for Palmer Drought Severity Index (pdsi) anywhere in
-      CONUS, 1979-01-01 → present (3-day lag).
+      CONUS, 1979-01-01 -> present (3-day lag).
     - User asks for reference ET (pet) for water-balance computations.
 
   Do NOT use this for:
-    - Non-CONUS bboxes -- use ``fetch_era5_reanalysis`` (global 0.25°).
+    - Non-CONUS bboxes -- use ``fetch_era5_reanalysis`` (global 0.25 deg).
     - Sub-daily timesteps -- gridMET is daily; use ERA5, HRRR, NEXRAD,
       or GOES for hourly / sub-hourly.
     - Real-time / live forecast -- gridMET lags ~3 days; use NWS Alerts
@@ -176,6 +174,3 @@ docstring: |
     ``GRIDMETNotAvailableError``: dates outside published coverage.
     ``GRIDMETEmptyError``: bbox subset has no finite pixels.
     ``GRIDMETUpstreamError``: THREDDS DAP failure (retryable).
-
-  FR-CE-8: routed through ``read_through`` (``ttl_class="static-30d"``).
-  ``supports_global_query=False`` -- gridMET is CONUS-only.

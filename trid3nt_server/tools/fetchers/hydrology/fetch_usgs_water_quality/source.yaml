@@ -1,8 +1,6 @@
-# Router source spec (fetcher fold phase-2 wave-3, ADR 0040) -- USGS/EPA
-# Water Quality Portal sample sites + latest characteristic value.
-# Twin: fetch_usgs_water_quality.py (HYBRID, vector-FGB station+result join).
-# DELEGATES to the official USGS `dataretrieval` client (wqp.what_sites +
-# wqp.get_results) instead of raw HTTP + GeoJSON/CSV parsing (ingest.delegate).
+# USGS/EPA Water Quality Portal sample sites with their latest characteristic value,
+# DELEGATED to the official USGS dataretrieval client rather than raw HTTP with its own
+# GeoJSON and CSV parsing.
 
 schema_version: v1
 name: fetch_usgs_water_quality

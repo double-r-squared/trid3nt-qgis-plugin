@@ -99,7 +99,7 @@ def round_bbox_to_resolution(
     # 1 degree of latitude ~ 111_320 m; 1 degree of longitude ~ 111_320 * cos(lat) m.
     m_per_deg_lat = 111_320.0
     m_per_deg_lon = 111_320.0 * math.cos(math.radians(mid_lat))
-    if m_per_deg_lon < 1e-6:  # near a pole — fall back to deg-lat
+    if m_per_deg_lon < 1e-6:  # near a pole -- fall back to deg-lat
         m_per_deg_lon = 111_320.0
 
     deg_lat_per_step = resolution_m / m_per_deg_lat

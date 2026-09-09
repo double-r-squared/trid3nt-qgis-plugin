@@ -1,8 +1,6 @@
-# Router source spec (data-router fold, phase-2 wave-2 ArcGIS family).
-# Twin: fetch_us_drought_monitor.py (SPEC-EXPRESSIBLE, vector-API-FGB / ArcGIS).
-# Uses the new date_compact param + param-conditioned endpoint_select (current
-# layer /3 vs archive layer /2) + declarative WHERE (period=) + column_map with
-# a dm->label lookup and a ddate -> ISO valid_date transform.
+# US Drought Monitor polygons over an ArcGIS FeatureServer. A date_compact param and a
+# param-conditioned endpoint_select (the current layer versus the archive layer), plus a
+# declarative WHERE and a column_map with a dm->label lookup and a ddate -> ISO transform.
 schema_version: v1
 
 name: fetch_us_drought_monitor
@@ -32,7 +30,7 @@ ingest:
   query_template:
     out_fields: "OBJECTID,dm,period,ddate"
     order_by: "OBJECTID ASC"
-  # Archive filter only when a release date is pinned (twin: period='<YYYYMMDD>').
+  # Archive filter only when a release date is pinned (period='<YYYYMMDD>').
   where_clauses:
     - {template: "period='{date}'", require: [date]}
   column_map:
@@ -55,11 +53,11 @@ output:
   style:
     kind: reference
     geometry: polygon
-  emit_bbox: true                            # twin LayerURI carries bbox
+  emit_bbox: true                            # the LayerURI carries bbox
 
 cache:
   ttl_class: semi-static-7d
-payload_estimate:                            # twin: area*0.6 clamp[0.05,60]
+payload_estimate:                            # area*0.6 clamp[0.05,60]
   model: bbox_area
   mb_per_sq_deg: 0.6
   floor_mb: 0.05
@@ -111,15 +109,6 @@ docstring: |-
       class), ``label`` (str, e.g. "D2 Severe Drought"), ``period`` (str
       ``YYYYMMDD``), ``valid_date`` (str ISO date or empty). ``layer_type``
       is ``"vector"``, ``role`` is ``"primary"`` ``units`` is ``"dm_class"``.
-
-  **Cross-tool dependencies:**
-      - Feeds INTO: ``spatial_query`` (assets/acres inside a drought
-        footprint; admin/watershed-scoped drought report with
-        ``fetch_administrative_boundaries``).
-      - Pairs WITH: ``fetch_field_boundaries`` (FTW/fiboa ag fields) for
-        drought-on-agriculture demos, ``fetch_firms_active_fire`` /
-        ``fetch_goes_active_fire`` for drought-as-fire-antecedent context.
-
   **Error types:**
       - ``US_DROUGHT_MONITORInputError``: bad bbox or date (retryable=False).
       - ``US_DROUGHT_MONITORUpstreamError``: HTTP/network failure, ArcGIS

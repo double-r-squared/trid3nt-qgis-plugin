@@ -1,8 +1,7 @@
-# Router source spec (ADR 0203) -- NOAA AORC v1.1 hourly precipitation.
-# Record shape (pure-record path): the aorc_precip.build_record hook owns the
-# public-bucket Zarr socket (anonymous s3fs) and returns the AOI-mean hyetograph
-# + accumulation, a bare JSON dict (not a renderable layer). It is the pre-2020
-# / any-historical-year precipitation forcing MRMS (>= 2020-10) cannot reach.
+# NOAA AORC hourly precipitation on the pure-record path: the build_record hook owns the
+# public-bucket Zarr socket and returns the AOI-mean hyetograph and accumulation as a
+# bare JSON dict, not a renderable layer. It is the historical precipitation forcing a
+# radar QPE product cannot reach.
 schema_version: v1
 
 name: fetch_aorc_precip
@@ -73,7 +72,7 @@ caveats:
 
 # corpus lifted from sibling corpus.yaml.
 
-docstring: |
+docstring: |-
   NOAA AORC v1.1 historical hourly precipitation -- the AOI-mean hyetograph forcing series for any CONUS year since 1979.
 
   **What it does:** Opens the public NOAA Analysis of Record for Calibration
@@ -119,11 +118,3 @@ docstring: |
   ``precip_mm`` (the AOI-mean hyetograph), ``total_mm`` (window accumulation),
   ``peak_mm_per_hr`` + ``peak_time``, and ``cell_accumulation_mm`` (per-cell window
   total min/max/mean). Cached ``static-30d``.
-
-  **Cross-tool dependencies:**
-  - Pairs with: ``fetch_lter_records`` (an observed outlet-discharge series to grade
-    a rain-on-grid replication AORC forces) and ``fetch_usgs_nwis_gauges``.
-  - Consumed by: rain-on-grid composers (the TELEMAC / hydrologic forcing series)
-    and per-basin runoff analysis in the code_exec playground.
-  - Alternative: ``fetch_mrms_qpe`` (CONUS, >= 2020-10, gauge-corrected raster),
-    ``fetch_era5_reanalysis`` (global, 27 km).

@@ -77,8 +77,8 @@ docstring: |-
   2. Typed honest error if every mirror fails -- never a silent dead-end or a
      hallucinated success.
 
-  (The NHDPlus HR HUC4 region-download fallback leg was removed in ADR 0074 --
-  its 8-envelope bbox->HUC4 heuristic + ~144 MB download was effectively never
+  (The NHDPlus HR HUC4 region-download fallback leg is gone --
+  its 8-envelope bbox->HUC4 heuristic and ~144 MB download were effectively never
   reached, since OSM is the reliable global primary.)
 
   **When to use:**
@@ -103,7 +103,7 @@ docstring: |-
     max_lat)`` in EPSG:4326. Max area 5,000 km2.
   - ``source`` (str, default ``"nhdplus_hr"``): accepted for backward
     compatibility; ``"nhdplus_hr"`` and ``"osm"`` both resolve to the OSM
-    Overpass waterway path (the NHDPlus HR leg was removed in ADR 0074).
+    Overpass waterway path.
     Unsupported labels (e.g. ``"merit_hydro"``) raise a typed input error.
   - ``waterway_type`` (str | list[str] | None, default ``None``): widens or
     narrows the OSM ``waterway`` tag set. ``None`` keeps the default channel
@@ -123,8 +123,3 @@ docstring: |-
   ``layer_type="vector"``, ``role="input"``. The FlatGeobuf renders inline on
   the map via the GeoJSON path (``add_loaded_layer``). Properties per feature:
   ``osm_id`` (int), ``name`` (str | None), ``waterway`` (str).
-
-  **Cross-tool dependencies:**
-  - Upstream: ``geocode_location`` for bbox derivation.
-  - Downstream: a hydraulic model's river-burning DEM
-    step, ``delineate_watershed``, stream-network display in map panel.

@@ -1,13 +1,11 @@
-# Router source spec (data-router fold, phase-2 wave-6 VECTOR/ZIP family, ADR 0052).
-# Twin: fetch_usace_levees.py (was SPEC-EXPRESSIBLE; wave-2 deferred it for lack
-# of per-enum sub-layer routing). Uses the NEW endpoint_by_param (layer -> NLD
-# FeatureServer sub-layer) + properties_by_param (per-layer kept-column set) +
-# json_coerce_nested (STATES/COUNTIES list fields -> JSON strings).
+# USACE National Levee Database. endpoint_by_param routes the layer enum to its
+# FeatureServer sub-layer, properties_by_param carries the per-layer kept-column set, and
+# json_coerce_nested turns the STATES and COUNTIES list fields into JSON strings.
 schema_version: v1
 
 name: fetch_usace_levees
 source_class: usace_nld                     # cache prefix
-error_prefix: USACE_LEVEES                   # twin A.6 token (USACE_LEVEES_*)
+error_prefix: USACE_LEVEES                   # error token
 input_error_suffix: INPUT_INVALID           # USACELeveeInputError -> USACE_LEVEES_INPUT_INVALID
 shape: vector-fgb
 supports_global_query: true                 # None bbox -> CONUS+AK+HI sweep
@@ -28,7 +26,7 @@ params:
   layer: {type: enum, required: false, default: leveed_areas,
           values: [leveed_areas, system_routes, embankments]}
 gates:
-  max_features: 20000                        # twin _MAX_PAGES(20) * _PAGE_SIZE(1000)
+  max_features: 20000                        # 20 pages of 1000
 
 ingest:
   access: ogr
@@ -39,7 +37,7 @@ ingest:
     param: layer
     map: {leveed_areas: areas, system_routes: routes, embankments: embankments}
   json_coerce_nested: true                    # STATES/COUNTIES/... list fields -> JSON strings
-  properties_by_param:                        # per-layer kept-column set (twin _LAYER_PROPERTIES)
+  properties_by_param:                        # per-layer kept-column set
     param: layer
     map:
       leveed_areas: [OBJECTID, SYSTEM_ID, SYSTEM_NAME, LEVEED_ID, LEVEED_AREA_SQ_MI,
@@ -67,11 +65,11 @@ output:
   style:
     kind: reference
     geometry: polygon
-  emit_bbox: false                            # twin LayerURI omits bbox
+  emit_bbox: false                            # the LayerURI omits bbox
 
 cache:
   ttl_class: static-30d
-payload_estimate:                             # twin: per-layer national-count * per-feature
+payload_estimate:                             # per-layer national-count * per-feature
   model: per_feature
   features_per_sq_deg: 2.0
   kb_per_feature: 20.0
@@ -113,7 +111,7 @@ docstring: |-
   Parameters:
       bbox: Optional ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326,
           each value in ``[-180, 180]`` / ``[-90, 90]`` with min < max.
-          None → CONUS+AK+HI sweep. Example: ``(-90.3, 29.7, -89.7, 30.2)``
+          None -> CONUS+AK+HI sweep. Example: ``(-90.3, 29.7, -89.7, 30.2)``
           for the New Orleans metro area.
       layer: One of ``"leveed_areas"`` (default; protected-area polygons,
           best for impact analysis), ``"system_routes"`` (centerline
@@ -136,6 +134,5 @@ docstring: |-
   intersection with ``fetch_nws_alerts_conus`` flood warnings.
 
   Cache: ``static-30d`` (NLD updates quarterly). Cache key: SHA-256 of
-  ``(bbox-rounded-6dp-or-"global", layer)``. Source-tier: FR-HEP-2 Tier 1
-  (USACE federal authority). On upstream failure raises
-  ``USACELeveeUpstreamError(retryable=True)`` per FR-AS-11.
+  ``(bbox-rounded-6dp-or-"global", layer)``. USACE is the federal authority for this dataset. On upstream failure it
+  raises ``USACELeveeUpstreamError(retryable=True)``.

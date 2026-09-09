@@ -1,10 +1,8 @@
-# Router source spec (FETCHER FINALE WAVE 2, ADR 0111): the fetch_storm_tracks fold.
-# Twin: fetch_storm_tracks.py -- hurricane / tropical-cyclone tracks, TWO modes under
-# one name. Folds onto a library_delegate VECTOR source: the delegate (storm_tracks.read)
-# owns BOTH network rounds (historical IBTrACS CSV; active NHC JSON + the BINARY
-# forecast-track zip-shapefile secondary-enrichment round) so the binary second round is
-# just delegate socket I/O, not a new executor phase (ADR 0090 -> 0111). Mode provenance
-# rides the fetch-time provenance channel (ADR 0110).
+# Hurricane and tropical-cyclone tracks, TWO modes under one name, on a library_delegate
+# VECTOR source. The delegate owns BOTH network rounds -- the historical archive CSV, and
+# the active index plus its BINARY forecast-track zip-shapefile round -- so the binary
+# second round is just delegate socket I/O rather than a new executor phase. Mode
+# provenance rides the fetch-time provenance channel.
 schema_version: v1
 name: fetch_storm_tracks
 source_class: storm_tracks
@@ -197,5 +195,3 @@ docstring: |-
         ``fetch_noaa_coops_tides`` (observed surge at landfall).
       - Upstream sources: NOAA NCEI IBTrACS v04r01 (historical), NOAA NHC
         CurrentStorms.json + forecast-track GIS (active).
-
-  Source-tier: FR-HEP-2 Tier 1 (NOAA NCEI / NHC). Tier-1 free, no API key.

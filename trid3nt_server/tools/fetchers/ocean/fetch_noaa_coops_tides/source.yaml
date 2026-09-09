@@ -1,11 +1,10 @@
-# Router source spec (data-router fold, pilot 3/5) -- NOAA CO-OPS tide stations.
-# Twin: fetch_noaa_coops_tides.py (SPEC-EXPRESSIBLE, station-timeseries-FGB).
-# catalog-discover + per-station datagetter loop + inline time_series_csv -> FGB.
+# NOAA CO-OPS tide stations: a station-catalog discover, a per-station datagetter loop,
+# and an inline time_series_csv per station in the emitted FGB.
 schema_version: v1
 
 name: fetch_noaa_coops_tides
-source_class: noaa_coops_tides   # cache prefix == twin source_class
-error_prefix: COOPS_TIDES        # twin A.6 token (COOPSTides*Error) != cache prefix
+source_class: noaa_coops_tides   # cache prefix
+error_prefix: COOPS_TIDES        # error token, distinct from the cache prefix
 shape: station-timeseries-fgb
 supports_global_query: false
 
@@ -50,7 +49,7 @@ ingest:
     rows_key: [data, predictions]   # first present wins
     time_key: t
     value_key: v
-    time_normalize: iso8601z        # "YYYY-MM-DD HH:MM" -> "YYYY-MM-DDTHH:MMZ" (twin parity)
+    time_normalize: iso8601z        # "YYYY-MM-DD HH:MM" -> "YYYY-MM-DDTHH:MMZ"
     time_series_csv: true           # inline CSV attribute (coastal boundary forcing)
     scalars: [wl_min_m, wl_max_m, wl_mean_m, n_timesteps, time_start, time_end]
 
@@ -88,10 +87,9 @@ caveats:
 
 # corpus lifted from sibling corpus.yaml.
 
-# --- LLM docstring (carried VERBATIM from the twin via inspect.getdoc;
-# the sole source of the promoted FunctionDeclaration description + the
-# retrieval-index document text -> indistinguishable from the twin). ---
-docstring: |
+# --- LLM docstring: the sole source of the promoted tool description and the
+# retrieval-index document text. ---
+docstring: |-
   Fetch NOAA CO-OPS tide-station observations or predictions as a FlatGeobuf.
 
   **What it does:** Retrieves hourly water-level time series from the NOAA
@@ -117,16 +115,16 @@ docstring: |
     the observed record.
 
   **When NOT to use:**
-  - For global coastal water-level (non-US) → use ``fetch_gtsm_tide_surge``
+  - For global coastal water-level (non-US) -> use ``fetch_gtsm_tide_surge``
     (GTSM v3.0 global reanalysis).
-  - For river-discharge / streamflow → use ``fetch_noaa_nwm_streamflow``
+  - For river-discharge / streamflow -> use ``fetch_noaa_nwm_streamflow``
     or ``fetch_usgs_nwis_gauges`` (USGS NWIS).
-  - For wave height or ocean swell → CO-OPS does not serve wave products;
+  - For wave height or ocean swell -> CO-OPS does not serve wave products;
     use ERA5 or NOAA WAVEWATCH III (not currently in the tool catalog).
-  - For gridded storm-surge inundation rasters → gridded inundation
+  - For gridded storm-surge inundation rasters -> gridded inundation
     modeling is not currently available from this tool; it returns
     point time series only.
-  - For sub-hourly tide data (6-minute observations) → the current tool
+  - For sub-hourly tide data (6-minute observations) -> the current tool
     returns hourly (``interval=h``); extend with ``interval=6`` in a
     future version if a hydraulic model setup requires finer resolution.
 
@@ -136,7 +134,7 @@ docstring: |
           has ~300 stations globally, primarily US coastline and territories;
           specify a coastal bbox. Cap of 50 stations per call.
           Example for Fort Myers + Naples area: ``(-82.5, 25.5, -81.0, 27.5)``
-          → returns 2 stations (8725520 Fort Myers + 8725114 Naples Bay).
+          -> returns 2 stations (8725520 Fort Myers + 8725114 Naples Bay).
       start_date: ISO YYYY-MM-DD; inclusive start of the data window.
           Example: ``"2022-09-28"`` (Hurricane Ian landfall day).
       end_date: ISO YYYY-MM-DD; inclusive end of the data window.
@@ -161,20 +159,6 @@ docstring: |
       ``time_series_csv`` (comma-separated "iso,value_m" rows for
       hydraulic model boundary input). ``layer_type="vector"``, ``role="primary"``,
       ``units="m (MLLW)"``.
-
-  **Cross-tool dependencies:**
-      - Feeds coastal boundary forcing into a compound-flood hydraulic
-        model run; the layer also renders on the map automatically.
-      - Cross-checks: ``fetch_gtsm_tide_surge`` (global non-US tide+surge
-        reanalysis) -- CONUS basin with CO-OPS coverage should prefer this
-        tool; non-CONUS should prefer GTSM.
-      - Composes ALONGSIDE: ``fetch_mrms_qpe`` (precip forcing),
-        ``fetch_noaa_nwm_streamflow`` (river discharge), and
-        ``fetch_era5_reanalysis`` (offshore wind/wave forcing) for the
-        full compound-flood forcing stack.
-      - Sibling NWM tool (river): ``fetch_noaa_nwm_streamflow`` for CONUS
-        fluvial forcing.
-
   **Error types:**
       - ``COOPSTidesInputError``: bad bbox / product / dates (retryable=False).
       - ``COOPSTidesUpstreamError``: HTTP/network failure (retryable=True).

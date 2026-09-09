@@ -1,7 +1,6 @@
-# Router source spec (ADR 0085) -- Copernicus ERA5 global reanalysis.
-# Twin: fetch_era5_reanalysis.py (library_delegate raster; cdsapi owns the socket).
-# CDS retrieve -> NetCDF -> time-mean COG. delegate: cds.era5_read; the derived
-# 10m_wind_speed = two component retrieves combined by hypot(u, v).
+# Copernicus ERA5 global reanalysis, a library_delegate raster: cdsapi owns the socket.
+# CDS retrieve -> NetCDF -> time-mean COG; the derived 10m_wind_speed is two component
+# retrieves combined by hypot(u, v).
 schema_version: v1
 
 name: fetch_era5_reanalysis
@@ -92,7 +91,7 @@ output:
 
 cache:
   ttl_class: static-30d
-# ~0.5 MB / variable / day / 1 deg square (twin estimator, per_station reproduces
+# ~0.5 MB / variable / day / 1 deg square (the per_station model reproduces
 # the area*days scaling the bbox_area model cannot: stations_per_sq_deg=1 *
 # kb_per_station_per_day=512 * n_days / 1024 = 0.5 * sq * n_days MB).
 payload_estimate:
@@ -109,7 +108,7 @@ caveats:
 
 # corpus lifted from sibling corpus.yaml.
 
-docstring: |
+docstring: |-
   Copernicus ERA5 global reanalysis fetcher: historical hourly wind / precip / temperature / wave height.
 
   Use this (do not stop at geocode_location) when the user names ERA5 or wants
@@ -126,7 +125,7 @@ docstring: |
 
   **When to use:**
   - A GENERIC historical wind request ("how windy was it", "wind speed over
-    the Gulf during the storm", "show me the wind") → use
+    the Gulf during the storm", "show me the wind") -> use
     ``variable="10m_wind_speed"``. This returns a SINGLE positive wind-speed
     magnitude field (``sqrt(u^2 + v^2)``, m s-1) -- the natural answer to "how
     windy". Only reach for the lone signed ``10m_u_component_of_wind`` /
@@ -171,8 +170,8 @@ docstring: |
     to ~3 months ago (finalised) or 5 days ago (ERA5T preliminary).
   - ``end_date`` (str): ISO YYYY-MM-DD inclusive. Hard cap 366 days from start.
   - ``api_key`` (str | None): explicit CDS key; overrides all other resolution
-    paths. Resolved priority: kwarg → ``secret_ref`` → env var
-    ``TRID3NT_COPERNICUS_CDS_API_KEY`` → ``~/.cdsapirc``.
+    paths. Resolved priority: kwarg -> ``secret_ref`` -> env var
+    ``TRID3NT_COPERNICUS_CDS_API_KEY`` -> ``~/.cdsapirc``.
   - ``secret_ref`` (Any | None): per-Case ``SecretRecord`` for production.
 
   **Returns:** A ``LayerURI`` pointing at a float32 COG in the cache bucket
@@ -180,17 +179,4 @@ docstring: |
   carrying the time-mean of the requested variable, clipped to bbox.
   ``layer_type="raster"``, ``role="primary"``. Units: ``"m s-1"`` for
   wind, ``"K"`` for temperature, ``"m"`` for precipitation / runoff /
-  wave height. EPSG:4326, 0.25° native (~27 km).
-
-  **Cross-tool dependencies:**
-  - Upstream: ``geocode_location`` supplies bbox from a place name.
-  - Downstream: a hydraulic model's wind/precip forcing input (see
-    ``build_mesh``, ``run_solver``); ``fetch_gtsm_tide_surge`` pairs for the
-    coastal boundary condition.
-  - Alternative: ``fetch_mrms_qpe`` (CONUS, 1 km, gauge-corrected, no key),
-    ``fetch_hrrr_forecast`` (CONUS, 3 km, forecast, no key).
-
-  FR-CE-8: ``read_through`` with ``ttl_class="static-30d"``; cache key
-  is ``(variable, bbox-rounded-6dp, start_date, end_date)`` -- api_key
-  excluded so the same ERA5 grid is shared across callers (FR-DC-4 dedup).
-  CDS jobs are queued server-side; wrapped in a 5-minute wall-clock timeout.
+  wave height. EPSG:4326, 0.25 deg native (~27 km).

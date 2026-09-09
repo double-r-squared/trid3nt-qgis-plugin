@@ -1,6 +1,6 @@
-# Router source spec (keyed chained paging+enrich fold, ADR 0065).
-# Twin: fetch_openaq_measurements.py -- FOLDED via offset paging (locations) +
-# PHASE E enrich (per-location latest + sensor->parameter join, expanding).
+# OpenAQ v3 latest measurements: offset paging over the locations sweep, then a
+# per-location latest enrich that joins each sensor value to its parameter and expands
+# into one point per station and parameter.
 schema_version: v1
 name: fetch_openaq_measurements
 source_class: openaq

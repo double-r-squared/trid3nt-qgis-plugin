@@ -1,10 +1,6 @@
-# Router source spec (fetcher-fold, ADR 0092): WorldPop whole-object-window raster.
-# Twin: fetch_population.py -- WorldPop 100m/1km gridded population. The half-built
-# ACS (Census B01003) leg is DROPPED at this fold (NATE flag-not-copy); Census tract
-# population is a WorldPop raster only. WorldPop serves HTTP 200 to range
-# requests, so /vsicurl cannot window it -> the library_delegate whole-object-
-# download-then-window mode (worldpop.read owns the socket, worldpop.validate is the
-# pre-cache vintage gate).
+# WorldPop gridded population, whole-object-window. The server answers a RANGE request
+# with a full 200 body, so a windowed read cannot work: the delegate downloads the
+# country file once and windows the AOI out of it, with a pre-cache vintage gate.
 schema_version: v1
 
 name: fetch_population

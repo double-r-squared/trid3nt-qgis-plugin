@@ -1,7 +1,6 @@
-# Router source spec (data-router fold, phase-2 wave-10 tier-3 hooks, ADR 0056).
-# Twin: fetch_tsunami_events.py -- FOLDED via hooks (PAGED NCEI JSON point API).
-# ingest.http_source.paging drives the totalPages loop; ncei_tsunami.build_request builds
-# one page's request, ncei_tsunami.parse_response decodes concatenated items per mode.
+# NCEI historical tsunamis, a paged JSON point API. ingest.http_source.paging drives the
+# totalPages loop; the build hook builds one page's request and the parse hook decodes
+# the concatenated items per mode.
 schema_version: v1
 name: fetch_tsunami_events
 source_class: ncei_tsunami

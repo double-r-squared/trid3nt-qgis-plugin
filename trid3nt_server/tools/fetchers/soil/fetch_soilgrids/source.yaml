@@ -1,9 +1,7 @@
-# Router source spec (raster-modes wave, projected_vrt_window mode, ADR 0086).
-# Twin: fetch_soilgrids.py -- ISRIC SoilGrids 2.0 global 250 m soil properties. The
-# Homolosine VRT is windowed in the SOURCE projection (transform_bounds 4326->
-# Homolosine, densified + the twin's floor/ceil + 2 px pad), the intersecting members
-# read through the coalescing transport, reprojected native->4326 (bilinear, ~250 m),
-# and the fixed-point Int16 scaled to physical units per property.
+# ISRIC SoilGrids 2.0 global 250 m soil properties. The Homolosine VRT is windowed in the
+# SOURCE projection (bounds transformed and densified, with a floor/ceil and a 2 px pad),
+# the intersecting members read through the coalescing transport, the window reprojected
+# to EPSG:4326 bilinear, and the fixed-point Int16 scaled to physical units per property.
 schema_version: v1
 
 name: fetch_soilgrids
@@ -159,6 +157,3 @@ docstring: |-
   Honesty: an all-NoData window (ocean / off the soil surface) raises a typed
   ``SoilGridsEmptyError``; an unknown property/depth raises
   ``SoilGridsInputError`` -- never a fabricated layer.
-
-  FR-CE-8: routed through ``read_through`` so identical
-  ``(bbox, property, depth)`` calls reuse the cached COG.

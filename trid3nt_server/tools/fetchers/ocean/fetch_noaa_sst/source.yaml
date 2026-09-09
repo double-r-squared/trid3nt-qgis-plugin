@@ -1,10 +1,8 @@
-# Router source spec (quick-folds wave, raster-cog griddap access mode, ADR 0079).
-# Twin: fetch_noaa_sst.py -- NOAA Coral Reef Watch daily 5 km SST via ERDDAP griddap.
-# The griddap bracket-selector .nc REST endpoint (server-side bbox+day subset) folds
-# onto the new raster_cog `griddap` access mode: one GET -> in-memory xarray subset ->
-# north-up float32 array -> the executor's NaN-nodata COG serialize. A 404 with the
-# ERDDAP no-matching / axis-range markers -> honest NOAA_SST_NO_DATA (twin's
-# SSTNoDataError); an all-NaN (fully-land) window -> the same honest empty.
+# NOAA Coral Reef Watch daily 5 km SST through the ERDDAP griddap access mode: the
+# bracket-selector .nc endpoint does the bbox and day subset server-side, so one GET
+# yields an in-memory xarray subset and a north-up float32 array for the COG serialize.
+# A 404 carrying the no-matching or axis-range markers is an honest no-data, as is an
+# all-NaN fully-land window.
 schema_version: v1
 name: fetch_noaa_sst
 source_class: noaa_sst
@@ -84,7 +82,7 @@ docstring: |-
   degrees C, diverging blue-red ramp ``sst_anomaly``).
 
   The CRW product is global, gap-filled (no cloud holes), updated daily with
-  ~1 day latency, and covers 1985-present  --  the go-to "how warm is the ocean
+  ~1 day latency, and covers 1985-present -- the go-to "how warm is the ocean
   here" / marine-heatwave / coral-bleaching-stress / hurricane-fuel layer.
 
   **When to use:**
@@ -96,11 +94,11 @@ docstring: |-
     heat stress, fisheries / ecosystem temperature context.
 
   **When NOT to use:**
-  - LAND-surface temperature  --  this is OCEAN ONLY; a land bbox returns an
+  - LAND-surface temperature -- this is OCEAN ONLY; a land bbox returns an
     honest no-data error (CRW masks land).
-  - Air / 2 m temperature  --  use ``fetch_era5_reanalysis`` /
+  - Air / 2 m temperature -- use ``fetch_era5_reanalysis`` /
     ``fetch_gridmet`` (those are atmospheric, not sea-surface).
-  - Sub-5 km coastal detail  --  CRW is 5 km; for finer SST a higher-res
+  - Sub-5 km coastal detail -- CRW is 5 km; for finer SST a higher-res
     product (e.g. MUR 1 km) would be a separate fetcher.
 
   **Parameters:**
@@ -118,6 +116,3 @@ docstring: |-
   **Data source:** NOAA Coral Reef Watch Operational Daily 5 km
   (``NOAA_DHW``; ``CRW_SST`` / ``CRW_SSTANOMALY``) via the NOAA CoastWatch
   ERDDAP griddap endpoint. Tier-1 free (no API key).
-
-  FR-CE-8: routed through ``read_through`` so identical ``(bbox, date,
-  variable)`` calls reuse the cached SST COG.

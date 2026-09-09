@@ -244,13 +244,3 @@ docstring: |-
       - ``FALLBACK_LADDER_ERROR``: an untyped failure under a ladder rung
         (cache / transport / internal). NOT a coverage verdict -- retryability
         is inherited from the original failure.
-
-  **Cross-tool dependencies:**
-      - REUSES ``fetch_dem`` for the 3DEP land DEM (does NOT reimplement 3DEP).
-      - Composes INTO a coastal hydraulic model's terrain/bathymetry
-        ingestion -- drop-in for ``fetch_dem`` on the coastal path.
-      - Upstream sources: NOAA NCEI CUDEM 1/9 arc-second (public S3
-        ``noaa-nos-coastal-lidar-pds``) + USGS 3DEP (via ``fetch_dem``).
-
-  Cache: ``ttl_class="static-30d"``, ``source_class="topobathy"``.
-  Tier-1 free. No API key. ``supports_global_query=False``.

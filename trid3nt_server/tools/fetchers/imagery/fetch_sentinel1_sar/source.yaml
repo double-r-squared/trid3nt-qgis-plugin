@@ -118,7 +118,7 @@ docstring: |-
 
   Sentinel-1 SAR is its own illumination source and C-band sees THROUGH
   clouds, smoke and darkness, so it images the ground in ALL WEATHER, DAY OR
-  NIGHT  --  exactly when optical Sentinel-2 / Landsat go blind (hurricane
+  NIGHT -- exactly when optical Sentinel-2 / Landsat go blind (hurricane
   landfall, wildfire smoke, polar night). It is the canonical keyless FLOOD
   layer: calm open water is specular and reflects radar away from the sensor,
   so flooded ground reads as anomalously LOW backscatter (dark) against the
@@ -132,9 +132,9 @@ docstring: |-
     vegetation-volume sensitivity).
 
   **When NOT to use:**
-  - A natural-color "what does it look like" picture  --  use
+  - A natural-color "what does it look like" picture -- use
     ``fetch_sentinel2_truecolor`` (10 m optical) or ``fetch_landsat_imagery``.
-  - A vegetation index  --  use ``compute_ndvi``.
+  - A vegetation index -- use ``compute_ndvi``.
   - Areas / windows with no Sentinel-1 pass (widen the window); a no-imagery
     result is an honest typed error, never a fabricated layer.
 
@@ -161,6 +161,3 @@ docstring: |-
 
   **Data source:** Sentinel-1 RTC / GRD via the Microsoft Planetary Computer
   STAC (``sentinel-1-rtc`` / ``sentinel-1-grd``; vv / vh gamma0 assets).
-
-  FR-CE-8: routed through ``read_through`` so identical ``(bbox, window,
-  polarization, collection)`` calls reuse the cached dB COG.

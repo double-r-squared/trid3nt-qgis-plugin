@@ -56,25 +56,42 @@ caveats:
 - US Census TIGER/Line 2024 administrative polygons (state/county/place/zcta), clipped to bbox. The
   shapefile is read inside the remote ZIP by range request; place fans out per intersecting state FIPS.
   US + territories only. No feature in bbox -> ADMIN_BOUNDARY_EMPTY.
-docstring: "Fetch US Census TIGER/Line 2024 administrative-boundary polygons clipped to a bbox.\n\n**What\
-  \ it does:** Reads the TIGER/Line 2024 shapefile for the requested\nadministrative level inside its ZIP on ``census.gov``,\
-  \ by range request,\nselecting the features that intersect the bbox, and returns a FlatGeobuf\nvector layer. Cached ``static-30d``\n\
-  (boundaries change at most once per census year). Four levels supported:\nstate, county, place (cities/CDPs),\
-  \ and ZIP Code Tabulation Areas (zcta).\n\n**When to use:**\n- Agent needs administrative outlines for\
-  \ spatial context alongside a\n  hazard layer (e.g. county boundaries over a flood inundation surface).\n\
-  - Workflow must aggregate or label results by jurisdiction -- state, county,\n  city, or ZIP code.\n\
-  - User asks for a geographic boundary before calling\n  ``clip_raster_to_polygon`` or ``spatial_query``.\n\
-  - ``geocode_location`` returned a bbox but the workflow needs the actual\n  polygon for precise clipping.\n\
-  \n**When NOT to use:**\n- Parcel-level or cadastral boundaries (county assessor data; not in scope).\n\
-  - Congressional or voting districts (different TIGER layers, not added).\n- International administrative\
-  \ boundaries (TIGER is US + territories only).\n- Simple place-name → bbox resolution (use ``geocode_location``\
-  \ instead).\n\n**Parameters:**\n- ``level`` (str): one of ``\"state\"`` (50 + DC + territories), ``\"\
-  county\"``\n  (3000+ counties), ``\"place\"`` (cities/CDPs; per-state ZIPs; only states\n  intersecting\
-  \ bbox are fetched), or ``\"zcta\"`` (ZIP Code Tabulation Areas;\n  ~504 MB download -- subsequent calls\
-  \ hit 30-day cache).\n- ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.\n \
-  \ Example: ``(-82.2, 26.3, -81.5, 26.8)`` for Lee County FL.\n\n**Returns:**\n``LayerURI(layer_type=\"\
-  vector\", role=\"context\", units=None)`` pointing at a\nFlatGeobuf with TIGER standard fields (GEOID,\
-  \ NAME, STATEFP, etc.) clipped\nto the requested bbox.\n\n**Cross-tool dependencies:**\n- Upstream of:\
-  \ ``clip_raster_to_polygon``, ``spatial_query``,\n  overlay display.\n- Pairs with: ``geocode_location``\
-  \ (resolve name → bbox first), then\n  ``fetch_administrative_boundaries`` for the actual polygon.\n\
-  - Feeds into: jurisdictional labeling in any flood/wildfire impact summary."
+docstring: |-
+  Fetch US Census TIGER/Line 2024 administrative-boundary polygons clipped to a bbox.
+
+  **What it does:** Reads the TIGER/Line 2024 shapefile for the requested
+  administrative level inside its ZIP on ``census.gov``, by range request,
+  selecting the features that intersect the bbox, and returns a FlatGeobuf
+  vector layer. Cached ``static-30d``
+  (boundaries change at most once per census year). Four levels supported:
+  state, county, place (cities/CDPs), and ZIP Code Tabulation Areas (zcta).
+
+  **When to use:**
+  - Agent needs administrative outlines for spatial context alongside a
+    hazard layer (e.g. county boundaries over a flood inundation surface).
+  - Workflow must aggregate or label results by jurisdiction -- state, county,
+    city, or ZIP code.
+  - User asks for a geographic boundary before calling
+    ``clip_raster_to_polygon`` or ``spatial_query``.
+  - ``geocode_location`` returned a bbox but the workflow needs the actual
+    polygon for precise clipping.
+
+  **When NOT to use:**
+  - Parcel-level or cadastral boundaries (county assessor data; not in scope).
+  - Congressional or voting districts (different TIGER layers, not added).
+  - International administrative boundaries (TIGER is US + territories only).
+  - Simple place-name -> bbox resolution (use ``geocode_location`` instead).
+
+  **Parameters:**
+  - ``level`` (str): one of ``"state"`` (50 + DC + territories), ``"county"``
+    (3000+ counties), ``"place"`` (cities/CDPs; per-state ZIPs; only states
+    intersecting bbox are fetched), or ``"zcta"`` (ZIP Code Tabulation Areas;
+    ~504 MB download -- subsequent calls hit 30-day cache).
+  - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+    Example: ``(-82.2, 26.3, -81.5, 26.8)`` for Lee County FL.
+
+  **Returns:**
+  ``LayerURI(layer_type="vector", role="context", units=None)`` pointing at a
+  FlatGeobuf with TIGER standard fields (GEOID, NAME, STATEFP, etc.) clipped
+  to the requested bbox.
+

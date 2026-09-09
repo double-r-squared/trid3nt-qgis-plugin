@@ -1,8 +1,7 @@
-# Router source spec (landcover + flood-extent wave, ADR 0082).
-# Twin: fetch_flood_extent_observation.py -- FOLDED via the categorical_tile_grid
-# access mode (per-10-deg-tile direct GET + first-valid uint8 mosaic + palette COG),
-# the pre_resolve LANCE dir-walk (date/None -> year/doy into the cache key), and the
-# post-emit envelope (class_breakdown/flood_area/legend -> FloodExtentObservationResult).
+# Observed flood extent through the categorical_tile_grid access mode: a per-tile direct
+# GET, a first-valid uint8 mosaic and a palette COG. The pre_resolve dir-walk turns a
+# date, or None for latest, into the year and day-of-year the cache key carries, and the
+# envelope carries the class breakdown, flood area and legend.
 schema_version: v1
 name: fetch_flood_extent_observation
 source_class: mcdwd_flood_extent
@@ -91,26 +90,53 @@ corpus:
 - MODIS flood map for the recent flooding
 - benchmark flood extent raster to compute CSI against the model
 - get the observed flood extent so I can score my simulation
-docstring: "Fetch an OBSERVED (satellite-derived) flood extent for a bbox as a categorical COG.\n\nReturns NASA's\
-  \ MODIS Global Flood Product (MCDWD, 250 m, 3-day) classified\ninto no-water / surface-water / recurring-flood\
-  \ / flood -- the benchmark\nOBSERVED extent ``compute_flood_extent_skill`` scores a modeled flood\nsurface against\
-  \ (Hit rate / False Alarm / CSI).\n\n**When to use:**\n- You need an observed flood footprint to validate a model:\n\
-  \  ``compute_flood_extent_skill(model_extent, this)``.\n- \"satellite flood extent here\", \"where was actually\
-  \ flooded\", \"observed\n  inundation for this AOI\".\n\n**When NOT to use:**\n- Raw SAR backscatter (you want\
-  \ to threshold it yourself) ->\n  ``fetch_sentinel1_sar``.\n- The long-term where-water-ever-was baseline ->\n\
-  \  ``fetch_jrc_global_surface_water``.\n- Surveyed peak-STAGE point marks -> ``fetch_high_water_marks``.\n- Regulatory\
-  \ flood ZONES -> ``fetch_fema_nfhl_zones``; MODELED depth -> ``telemac_rain_on_grid``.\n\n**Parameters:**\n\
-  - ``bbox``: REQUIRED ``(west, south, east, north)`` in EPSG:4326.\n- ``date``: OPTIONAL ISO ``YYYY-MM-DD``. Omitted\
-  \ -> the latest available\n  3-day composite. NEAR-REAL-TIME only (a rolling recent window); a specific\n  historical\
-  \ date may be unavailable (honest ``FloodExtentNoCoverageError``).\n\n**Returns:** ``FloodExtentLayerURI`` --\
-  \ a single-band uint8 categorical COG\n(EPSG:4326, nodata=255) with an embedded palette + a categorical\n``LegendKey``\
-  \ (1 surface water, 2 recurring flood, 3 flood). Envelope:\n``product``, ``observation_date``, ``class_breakdown``,\n\
-  ``flood_pixel_count``, ``flood_area_km2``, ``caveats`` (satellite\ndetection-limit + resolution + NRT-provisional),\
-  \ ``notes``.\n\n**Honest limits (caveats + report open_issues):** optical/SAR flood\nmapping under-detects flooding\
-  \ under vegetation + in dense urban areas;\n250 m misses narrow/sub-pixel flooding; cloud gaps show as nodata;\
-  \ this is\nthe provisional NRT product, not the QA'd archive. Anonymous HISTORICAL\nevent extents (reprocessed\
-  \ MCDWD_L3 archive, Copernicus GFM/EMS SAR) need\ncredentials -- a documented follow-up, not offered here.\n\n\
-  **Errors (FR-AS-11):** ``FloodExtentInputError`` (missing/bad/too-large\nbbox, bad date); ``FloodExtentNoCoverageError``\
-  \ (no tile/date, all-nodata\nmosaic); ``FloodExtentUpstreamError`` (LANCE listing/download/read/write).\n\nCross-tool\
-  \ dependencies:\n    - Downstream: ``compute_flood_extent_skill`` (benchmark extent).\n    - Source: NASA LANCE\
-  \ MCDWD_L3_F3_NRT (nrt3.modaps.eosdis.nasa.gov)."
+docstring: |-
+  Fetch an OBSERVED (satellite-derived) flood extent for a bbox as a categorical COG.
+
+  Returns NASA's MODIS Global Flood Product (MCDWD, 250 m, 3-day) classified
+  into no-water / surface-water / recurring-flood / flood -- the benchmark
+  OBSERVED extent ``compute_flood_extent_skill`` scores a modeled flood
+  surface against (Hit rate / False Alarm / CSI).
+
+  **When to use:**
+  - You need an observed flood footprint to validate a model:
+    ``compute_flood_extent_skill(model_extent, this)``.
+  - "satellite flood extent here", "where was actually flooded", "observed
+    inundation for this AOI".
+
+  **When NOT to use:**
+  - Raw SAR backscatter (you want to threshold it yourself) ->
+    ``fetch_sentinel1_sar``.
+  - The long-term where-water-ever-was baseline ->
+    ``fetch_jrc_global_surface_water``.
+  - Surveyed peak-STAGE point marks -> ``fetch_high_water_marks``.
+  - Regulatory flood ZONES -> ``fetch_fema_nfhl_zones``; MODELED depth -> ``telemac_rain_on_grid``.
+
+  **Parameters:**
+  - ``bbox``: REQUIRED ``(west, south, east, north)`` in EPSG:4326.
+  - ``date``: OPTIONAL ISO ``YYYY-MM-DD``. Omitted -> the latest available
+    3-day composite. NEAR-REAL-TIME only (a rolling recent window); a specific
+    historical date may be unavailable (honest ``FloodExtentNoCoverageError``).
+
+  **Returns:** ``FloodExtentLayerURI`` -- a single-band uint8 categorical COG
+  (EPSG:4326, nodata=255) with an embedded palette + a categorical
+  ``LegendKey`` (1 surface water, 2 recurring flood, 3 flood). Envelope:
+  ``product``, ``observation_date``, ``class_breakdown``,
+  ``flood_pixel_count``, ``flood_area_km2``, ``caveats`` (satellite
+  detection-limit + resolution + NRT-provisional), ``notes``.
+
+  **Honest limits (caveats + report open_issues):** optical/SAR flood
+  mapping under-detects flooding under vegetation + in dense urban areas;
+  250 m misses narrow/sub-pixel flooding; cloud gaps show as nodata; this is
+  the provisional NRT product, not the QA'd archive. Anonymous HISTORICAL
+  event extents (reprocessed MCDWD_L3 archive, Copernicus GFM/EMS SAR) need
+  credentials -- a documented follow-up, not offered here.
+
+  **Errors:** ``FloodExtentInputError`` (missing/bad/too-large
+  bbox, bad date); ``FloodExtentNoCoverageError`` (no tile/date, all-nodata
+  mosaic); ``FloodExtentUpstreamError`` (LANCE listing/download/read/write).
+
+  Cross-tool dependencies:
+      - Downstream: ``compute_flood_extent_skill`` (benchmark extent).
+      - Source: NASA LANCE MCDWD_L3_F3_NRT (nrt3.modaps.eosdis.nasa.gov).
+

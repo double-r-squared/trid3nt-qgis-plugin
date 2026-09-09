@@ -98,7 +98,7 @@ docstring: |-
   the embedded palette (no rescale/colormap override).
 
   GSW is the European Commission JRC's 38-year (1984-2021) Landsat-derived
-  surface-water record reduced to per-pixel statistics  --  the long-term
+  surface-water record reduced to per-pixel statistics -- the long-term
   BASELINE that answers "is this water permanent or seasonal?", "where has
   water EVER been (the flood envelope)?", and "is this lake growing or
   shrinking?".
@@ -145,8 +145,5 @@ docstring: |-
   Centre) via the Microsoft Planetary Computer STAC (``jrc-gsw``).
 
   Honesty: no covering item, or an all-nodata mosaic (ocean / fully-dry AOI),
-  raises a typed ``JrcSurfaceWaterNoCoverageError``  --  never a fabricated
+  raises a typed ``JrcSurfaceWaterNoCoverageError`` -- never a fabricated
   layer.
-
-  FR-CE-8: routed through ``read_through`` so identical ``(bbox, band)`` calls
-  reuse the cached COG.

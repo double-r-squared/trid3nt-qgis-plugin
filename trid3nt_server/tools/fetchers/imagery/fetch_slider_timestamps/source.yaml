@@ -85,7 +85,7 @@ cache:
   ttl_class: live-no-cache
 
 # The record is a tiny JSON availability dict (echoed ids + an int list), not a
-# bulk payload; the twin registered no estimator (cacheable=False). A tiny clipped
+# bulk payload; there is no estimator (cacheable=False). A tiny clipped
 # estimate (never warns) reproduces that no-warning behaviour under the router's
 # mandatory payload seam.
 payload_estimate:

@@ -1,15 +1,12 @@
-# Router source spec (data-router fold, phase-2 wave-4 station family) --
-# NOAA CO-OPS tidal-current stations. Twin: fetch_noaa_coops_currents.py (HYBRID,
-# station-timeseries-fgb SNAPSHOT). Sibling of the folded coops-tides pilot: same
-# station-catalog discover + per-station datagetter loop, but emits ONE snapshot
-# row per station (latest observed / nearest-now prediction) instead of the full
-# time series -- the `emit: snapshot` station mode + the `coops_currents` named
-# transform (the audit's `_parse_predictions` flood/ebb/slack hook).
+# NOAA CO-OPS tidal-current stations: the same station-catalog discover and per-station
+# datagetter loop as the tide sibling, but emitting ONE snapshot row per station -- the
+# latest observed, or the prediction nearest now -- through the snapshot station mode and
+# the named coops_currents transform that reads flood, ebb and slack off the velocity.
 schema_version: v1
 
 name: fetch_noaa_coops_currents
-source_class: noaa_coops_currents   # cache prefix == twin source_class
-error_prefix: COOPS_CURRENTS        # twin A.6 token (COOPSCurrents*Error)
+source_class: noaa_coops_currents   # cache prefix
+error_prefix: COOPS_CURRENTS        # error token
 shape: station-timeseries-fgb
 supports_global_query: false
 
@@ -35,7 +32,7 @@ gates:
 ingest:
   station_catalog: {lat_key: lat, lon_key: lng, id_key: id, name_key: name, rows_key: stations}
   per_station:
-    # SNAPSHOT: one representative row per station (twin _parse_observed /
+    # SNAPSHOT: one representative row per station (the observed /
     # _parse_predictions), NOT the rollup + time_series_csv path (coops-tides).
     # Strict no-op for every timeseries spec (no `emit` key -> rollup path).
     emit: snapshot
@@ -44,7 +41,7 @@ ingest:
       # direction + latest-observed / nearest-now prediction pick).
       transform: coops_currents
       columns: [station_id, station_name, lon, lat, product, speed_kn, direction_deg, datetime, bin, flow_state]
-      # now-relative window per product (twin _fetch_coops_currents_bytes):
+      # now-relative window per product :
       # observed looks back 2d for the latest sample; predictions look ahead 2d.
       window:
         currents:             {mode: lookback,  days: 2}
@@ -59,7 +56,7 @@ ingest:
       station: "{id}"
       product: "{product}"
       time_zone: gmt
-      units: english          # english -> speed in KNOTS (twin parity)
+      units: english          # english -> speed in KNOTS
       application: trid3nt
       format: json
 
@@ -96,7 +93,7 @@ caveats:
 
 # corpus lifted from sibling corpus.yaml.
 
-# --- LLM docstring (carried VERBATIM from the twin via inspect.getdoc) ----
+# --- LLM docstring ---
 docstring: |-
   Fetch NOAA CO-OPS tidal-current stations + latest current as a FlatGeobuf.
 
@@ -104,7 +101,7 @@ docstring: |-
   speed + direction from the NOAA CO-OPS Data API for all current stations
   within a bbox. Returns a POINT FlatGeobuf with one feature per station,
   carrying ``speed_kn`` (knots), ``direction_deg`` (degrees true), and the
-  observation ``datetime``. A current-conditions snapshot — complements the
+  observation ``datetime``. A current-conditions snapshot -- complements the
   water-level time series from ``fetch_noaa_coops_tides``. Tier-1 free, no API
   key. Covers US tidal inlets, harbors, and channels (~88 realtime stations).
 
@@ -143,11 +140,6 @@ docstring: |-
       UTC), ``bin`` (int, -1 if N/A), ``flow_state`` ("flood"/"ebb"/"slack"
       for predictions, "" for observed). ``layer_type="vector"``,
       ``role="primary"``, ``units="kn"``.
-
-  **Cross-tool dependencies:**
-      - Complements: ``fetch_noaa_coops_tides`` (water level at the same
-        inlets), ``fetch_gtsm_tide_surge`` (global tide+surge).
-
   **Error types:**
       - ``COOPSCurrentsInputError``: bad bbox / product (retryable=False).
       - ``COOPSCurrentsUpstreamError``: HTTP/network failure (retryable=True).

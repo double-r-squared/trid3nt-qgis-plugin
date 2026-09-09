@@ -6,7 +6,7 @@ error_prefix: WFIGS_INCIDENT
 input_error_suffix: INPUT_INVALID
 empty_error_suffix: NOT_FOUND
 
-docstring: |
+docstring: |-
   Resolve a NAMED wildfire incident (NIFC/WFIGS) -> authoritative point + bbox + discovery time.
 
   **What it does:** Looks a named wildland-fire incident up in the NIFC WFIGS
@@ -47,14 +47,6 @@ docstring: |
   ``fire_discovery_datetime`` (ISO-8601 UTC or null), ``incident_size_acres``,
   ``percent_contained``, ``poo_state``, ``poo_county``, ``irwin_id``,
   ``unique_fire_identifier``. Cached ``dynamic-1h``.
-
-  **Cross-tool dependencies:**
-  - Upstream of: ``fetch_goes_animation`` / ``fetch_viirs_day_fire`` (the AOI
-    bbox + the discovery-time floor for the animation window; see the
-    frame-animation playground recipe, docs/playbooks/frame-animation-recipe.md).
-  - Pairs with: ``fetch_firms_active_fire`` + ``fetch_nifc_fire_perimeters``
-    (co-registered hot-pixel + perimeter overlays around the resolved point).
-
 endpoints:
   current:
     url: https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query
@@ -88,7 +80,7 @@ cache:
   ttl_class: dynamic-1h
 
 # The record is a small structured JSON dict (a point + bbox + discovery fields),
-# not a bulk payload; the twin registered no estimator. A tiny clipped estimate
+# not a bulk payload; A tiny clipped estimate
 # (never warns) reproduces that no-warning behaviour under the router's mandatory
 # payload seam.
 payload_estimate:

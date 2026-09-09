@@ -1,8 +1,6 @@
-# Router source spec (data-router fold, tier-3 hooks, ADR 0061).
-# Twin: fetch_usace_nsi.py -- FOLDED via hooks (single-POST NSI structures GeoJSON points).
-# Bespoke steps -> named PURE hooks: usace_nsi.build_request (span cap + polygon POST body),
-# usace_nsi.parse_response (FeatureCollection decode, prop project, exposure-value col derive).
-# Uses the RequestPlan POST transport extension (method=POST, json_body).
+# USACE National Structure Inventory points, a single POST whose query is a JSON body.
+# The build hook carries the span cap and the polygon POST body; the parse hook decodes
+# the FeatureCollection, projects the preserved props, and derives the exposure columns.
 schema_version: v1
 name: fetch_usace_nsi
 source_class: usace_nsi
@@ -71,7 +69,7 @@ caveats:
   degree (NSI 500s oversized envelopes). A bbox with no structures -> a header-only FlatGeobuf, never
   an error.
 docstring: |-
-  USACE National Structure Inventory as a point FlatGeobuf — buildings +
+  USACE National Structure Inventory as a point FlatGeobuf -- buildings +
   HAZUS occupancy class + per-structure replacement value (USD).
 
   What it does: queries the U.S. Army Corps of Engineers (USACE) National
@@ -100,24 +98,24 @@ docstring: |-
         / etc.) in a small area.
 
   When NOT to use:
-      - Outside the United States — NSI only covers CONUS + AK + HI + the
+      - Outside the United States -- NSI only covers CONUS + AK + HI + the
         U.S. territories. Use ``compute_building_density`` (Microsoft
         Global ML Building Footprints) for international queries instead.
-      - For bbox spans larger than ~1 degree per axis — NSI rejects
+      - For bbox spans larger than ~1 degree per axis -- NSI rejects
         oversized queries with a 500. Split into tiles and call once per
         tile, or use ``compute_building_density`` for the regional
         aggregate.
-      - For aggregate building density rasters — ``compute_building_density``
+      - For aggregate building density rasters -- ``compute_building_density``
         is the right primitive when you want a raster of building counts
         per cell, not point features.
-      - For HRSL population grids — ``fetch_hrsl_population`` is the
+      - For HRSL population grids -- ``fetch_hrsl_population`` is the
         dedicated tool when you only need persons-per-cell, not per-
         structure attributes.
 
   Parameters:
       bbox: REQUIRED ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
           Valid range: ``min_lon`` in [-180, 180], ``max_lat`` in [-90, 90],
-          min < max on each axis. Span on each axis must be ≤ 1.0 degree
+          min < max on each axis. Span on each axis must be <= 1.0 degree
           (NSI server-side cap; oversized envelopes return 500). Example:
           ``(-81.880, 26.620, -81.860, 26.660)`` for a Fort Myers Beach
           neighborhood (~0.02 deg, ~50-200 structures).
@@ -128,42 +126,42 @@ docstring: |-
       ``s3://trid3nt-cache/cache/static-30d/usace_nsi/<key>.fgb``.
       ``layer_type="vector"``, ``role="primary"``, ``units=None`` Each feature carries:
 
-      - ``fd_id`` (int) — NSI persistent feature ID.
-      - ``occtype`` (str) — HAZUS occupancy class (``RES1``, ``RES3A``,
+      - ``fd_id`` (int) -- NSI persistent feature ID.
+      - ``occtype`` (str) -- HAZUS occupancy class (``RES1``, ``RES3A``,
         ``COM1``, ``IND1``, ``EDU1``, ...). Downstream exposure analysis
         reads this.
-      - ``component_type`` (str) — duplicate of ``occtype`` under a
+      - ``component_type`` (str) -- duplicate of ``occtype`` under a
         standard exposure-analysis column name.
-      - ``st_damcat`` (str) — Structure damage category (RES, COM, IND).
-      - ``bldgtype`` (str) — Construction type (W=wood, S=steel, C=concrete,
+      - ``st_damcat`` (str) -- Structure damage category (RES, COM, IND).
+      - ``bldgtype`` (str) -- Construction type (W=wood, S=steel, C=concrete,
         M=masonry).
-      - ``found_type`` (str) — Foundation type (S=slab, B=basement,
+      - ``found_type`` (str) -- Foundation type (S=slab, B=basement,
         C=crawlspace, P=pier).
-      - ``found_ht`` (float) — Foundation height above ground (ft).
-      - ``num_story`` (int) — Number of stories.
-      - ``sqft`` (float) — Building square footage.
-      - ``med_yr_blt`` (int) — Median year built (Census block).
-      - ``val_struct`` (float) — Structure replacement value (USD).
-      - ``replacement_value`` (float) — duplicate of ``val_struct`` under
+      - ``found_ht`` (float) -- Foundation height above ground (ft).
+      - ``num_story`` (int) -- Number of stories.
+      - ``sqft`` (float) -- Building square footage.
+      - ``med_yr_blt`` (int) -- Median year built (Census block).
+      - ``val_struct`` (float) -- Structure replacement value (USD).
+      - ``replacement_value`` (float) -- duplicate of ``val_struct`` under
         a standard exposure-analysis column name.
-      - ``val_cont`` (float) — Content replacement value (USD).
-      - ``val_vehic`` (float) — Vehicle replacement value (USD).
-      - ``firmzone`` (str|None) — FEMA FIRM flood zone (``AE``, ``X``,
+      - ``val_cont`` (float) -- Content replacement value (USD).
+      - ``val_vehic`` (float) -- Vehicle replacement value (USD).
+      - ``firmzone`` (str|None) -- FEMA FIRM flood zone (``AE``, ``X``,
         ``VE``, or None).
-      - ``cbfips`` (str) — Census block FIPS code.
-      - ``ground_elv`` / ``ground_elv_m`` (float) — Ground elevation
+      - ``cbfips`` (str) -- Census block FIPS code.
+      - ``ground_elv`` / ``ground_elv_m`` (float) -- Ground elevation
         (ft / m).
       - ``pop2amu65`` / ``pop2amo65`` / ``pop2pmu65`` / ``pop2pmo65``
-        (int) — Population AM/PM, under/over 65.
-      - ``students`` (int) — Student count (schools).
-      - ``source`` (str) — NSI source tier (E=Estimated, P=Parcel, ...).
+        (int) -- Population AM/PM, under/over 65.
+      - ``students`` (int) -- Student count (schools).
+      - ``source`` (str) -- NSI source tier (E=Estimated, P=Parcel, ...).
 
   Cross-tool dependencies:
       - Every NSI feature already carries ``component_type`` and
         ``replacement_value`` (added by this tool) for real HAZUS
         occupancy + structure values rather than a class-default
         fallback. This is the **preferred** structure-exposure substrate
-        when the bbox is inside CONUS — prefer NSI when available and
+        when the bbox is inside CONUS -- prefer NSI when available and
         fall back to ``compute_building_density`` only outside the US.
       - Complementary to ``fetch_hrsl_population`` (population grid),
         ``fetch_administrative_boundaries`` (admin polygons for zonal
@@ -173,15 +171,3 @@ docstring: |-
   Cache: ``static-30d`` (the NSI is rebuilt by USACE on a ~quarterly
   cadence; a 30-day TTL matches the update rhythm). Cache key:
   SHA-256 of (bbox-rounded-6dp, "static-30d" vintage).
-
-  External-API resilience (NFR-R-1): the NSI cluster occasionally returns
-  5xx for transient backend issues. Network failure / non-2xx / malformed
-  JSON / non-FeatureCollection responses raise
-  ``USACE_NSIUpstreamError(retryable=True)`` so the agent's FR-AS-11
-  surface decides whether to retry, clarify, or fall back.
-
-
-  Payload estimation (FR-DC-9 hook): see ``estimate_payload_mb``
-  — bbox-area-driven, with the dense-urban upper bound (~50 MB / deg²).
-  Typical city-scale ~0.1-degree queries land in single-digit MB; the
-  full 1-degree max can push past 25 MB and trip the chat-warning gate.

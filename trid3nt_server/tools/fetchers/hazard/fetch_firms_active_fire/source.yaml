@@ -1,9 +1,7 @@
-# Router source spec (quick-folds wave, keyed CSV http_json, ADR 0079).
-# Twin: fetch_firms_active_fire.py -- NASA FIRMS active-fire / thermal-anomaly, keyed.
-# build_request resolves the MAP_KEY (kwarg -> secret_ref -> env) INTO the URL path
-# (raising FIRMS_MISSING_KEY pre-network when absent); parse_response decodes the CSV
-# into Point features + the 200-with-error-body auth check (FIRMS_AUTH_ERROR);
-# classify_status re-applies the same body markers on a non-2xx TransportError.
+# NASA FIRMS active-fire / thermal-anomaly detections, keyed. build_request resolves the
+# MAP_KEY into the URL path, raising FIRMS_MISSING_KEY pre-network when absent;
+# parse_response decodes the CSV and checks the 200-with-error-body for an auth failure,
+# and classify_status re-applies the same body markers on a non-2xx transport error.
 schema_version: v1
 name: fetch_firms_active_fire
 source_class: firms_active_fire
@@ -137,11 +135,3 @@ docstring: |-
   FlatGeobuf with fields: ``brightness``, ``scan``, ``track``, ``acq_date``,
   ``acq_time``, ``satellite``, ``instrument``, ``confidence``, ``version``,
   ``bright_t31``, ``frp``, ``daynight``. Cached ``dynamic-1h``.
-
-  **Cross-tool dependencies:**
-  - Upstream of: wildfire spread-model workflow setups, smoke/population
-    impact overlays.
-  - Pairs with: ``fetch_nifc_fire_perimeters`` (current perimeters around FIRMS
-    detections), ``fetch_mtbs_burn_severity`` (historical context).
-  - Auth dependency: set ``TRID3NT_FIRMS_MAP_KEY`` env var (register free at
-    ``firms.modaps.eosdis.nasa.gov/api/map_key/``).

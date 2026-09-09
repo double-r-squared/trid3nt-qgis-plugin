@@ -1,7 +1,6 @@
-# Router source spec: staged-dataset direct_window over a raster DERIVED from
-# the Zell & Sanford 2020 release as b = T / K -- the published CONUS
-# transmissivity divided by a CONUS mosaic of the models' own hydraulic
-# conductivity. See scripts/staging/stage_zell_sanford_groundwater.py and ADR 0298.
+# A staged-dataset direct_window over a raster DERIVED from the Zell & Sanford 2020
+# release as b = T / K: the published CONUS transmissivity divided by a CONUS mosaic of
+# the models' own hydraulic conductivity. See scripts/staging/stage_zell_sanford_groundwater.py.
 schema_version: v1
 
 name: fetch_aquifer_thickness
@@ -124,12 +123,3 @@ docstring: |-
   ``quantity="aquifer_saturated_thickness"``. EPSG:4326, float32, NaN nodata,
   1/450 degree cells (about 247 m) from the native 250 m Albers model grid.
   CONUS mean is about 54.9 m; the grid spans 0 m (a dry model cell) to 168.7 m.
-
-  **Cross-tool dependencies:**
-  - Upstream: ``geocode_location`` or ``fetch_admin_boundaries`` for the bbox.
-  - Pairs with: ``fetch_water_table_depth`` (the top of this saturated column,
-    same model and same grid -- their sum recovers the model's prescribed zone
-    thickness), ``fetch_groundwater_recharge`` (the flux that sustains it),
-    ``fetch_usgs_groundwater_levels`` (observed water levels).
-  - Downstream: storage and sustainable-yield estimates, groundwater flow
-    model layer setup, and water-budget analysis in the python playground.

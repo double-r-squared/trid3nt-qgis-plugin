@@ -1,8 +1,6 @@
-# Router source spec (keyed/misc-leftovers wave, chained_resolution enrich, ADR 0071).
-# Twin: fetch_usgs_groundwater_levels.py -- USGS Water Data OGC API groundwater wells.
-# Measurements primary (build_request/parse_response) + best-effort monitoring-locations
-# enrich (PHASE E; a failed/absent locations body leaves names blank, never drops a
-# reading). Keyless. compute_model_residuals re-pointed to the in-process router seam.
+# USGS Water Data OGC API groundwater wells: a measurements primary, then a best-effort
+# monitoring-locations enrich. A failed or absent locations body leaves the names blank
+# and never drops a reading. Keyless.
 schema_version: v1
 
 name: fetch_usgs_groundwater_levels

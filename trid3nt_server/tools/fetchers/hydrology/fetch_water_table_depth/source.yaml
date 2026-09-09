@@ -1,8 +1,7 @@
-# Router source spec: staged-dataset direct_window over the Zell & Sanford 2020
-# CONUS depth-to-water raster, converted to a COG by
-# scripts/staging/stage_zell_sanford_groundwater.py. The s3:// endpoint names bucket/key
-# only -- the transport resolves the host from the active object-store endpoint
-# at read time.
+# A staged-dataset direct_window over the Zell & Sanford 2020 CONUS depth-to-water
+# raster, converted to a COG by scripts/staging/stage_zell_sanford_groundwater.py. The
+# s3:// endpoint names bucket and key only: the transport resolves the host from the
+# active object-store endpoint at read time.
 schema_version: v1
 
 name: fetch_water_table_depth
@@ -130,13 +129,3 @@ docstring: |-
   degree cells (about 247 m) resampled NEAREST from the native 250 m Albers
   model grid, so every value is a model value. CONUS mean depth is about
   19.9 m; the grid spans -25.7 m to 240.5 m.
-
-  **Cross-tool dependencies:**
-  - Upstream: ``geocode_location`` or ``fetch_admin_boundaries`` for the bbox.
-  - Pairs with: ``fetch_aquifer_thickness`` (the saturated thickness beneath
-    this water table, from the same model), ``fetch_groundwater_recharge`` (the
-    recharge that drives it), ``fetch_usgs_groundwater_levels`` (observed water
-    levels for the same area), ``fetch_3dep_dem`` (land-surface elevation, so
-    that elevation minus this depth is the water-table elevation).
-  - Downstream: initial heads for a groundwater flow model, unsaturated-zone
-    travel-time work, and water-budget analysis in the python playground.

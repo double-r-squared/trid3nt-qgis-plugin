@@ -1,8 +1,5 @@
-# Router source spec (fetcher fold phase-2 wave-3, ADR 0040) -- NHDPlus NLDI
-# network navigation (flowline traversal from a seed).
-# Twin: fetch_nhdplus_nldi_navigate.py (HYBRID, vector-FGB LineString navigate).
-# DELEGATES to the official USGS `dataretrieval` client (nldi.get_features snap
-# + nldi.get_flowlines navigate) instead of raw HTTP (ingest.delegate).
+# NHDPlus NLDI network navigation: flowline traversal from a seed, DELEGATED to the
+# official USGS dataretrieval client (a snap, then a navigate) rather than raw HTTP.
 
 schema_version: v1
 name: fetch_nhdplus_nldi_navigate

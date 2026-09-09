@@ -1,8 +1,6 @@
-# Router source spec (fetcher-fold wave-8, direct_window + skip-HEAD + int16 serialize, ADR 0054).
-# Twin: fetch_gcn250_curve_numbers.py -- GCN250 global SCS curve numbers (Jaafar
-# 2019, figshare). Enum -> figshare URL (302 redirect, HEAD-403; the transport
-# follows redirects + recovers size via range-GET), windowed int16 read, all-
-# nodata coverage gate. Pluvial-flood hydraulic-model consumer.
+# GCN250 global SCS curve numbers. The enum resolves to a published archive URL that
+# redirects and refuses HEAD, so the transport follows the redirect and recovers the size
+# by range-GET; the read is a windowed int16 with an all-nodata coverage gate.
 schema_version: v1
 
 name: fetch_gcn250_curve_numbers
@@ -118,15 +116,3 @@ docstring: |-
   EPSG:4326, int16 (0-100), nodata = 255, ~250 m pixel size. Downstream
   hydraulic-model workflows should reproject to a metric CRS before
   ingestion.
-
-  **Cross-tool dependencies:**
-  - Upstream: ``geocode_location`` for bbox from a place name.
-  - Downstream: infiltration input for a pluvial-flood hydraulic model,
-    pluvial-flood scenario composers.
-  - CONUS alternative: ``compute_impervious_surface`` + ``extract_landcover_class``
-    for higher-resolution NLCD-based curve numbers.
-  - Pairs with: ``fetch_era5_reanalysis`` (precipitation forcing) and
-    ``fetch_dem`` (terrain) for the full compound-flood forcing stack.
-
-  FR-CE-8 / FR-DC-3: ``read_through`` with ``ttl_class="static-30d"``; cache
-  key is SHA-256 over ``(bbox-6dp, antecedent_moisture)``.

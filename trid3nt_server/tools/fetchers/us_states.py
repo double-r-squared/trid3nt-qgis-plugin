@@ -33,7 +33,7 @@ NWS_AREA_CODES: frozenset[str] = frozenset({
 })
 
 
-#: Full state/territory names (lowercase, single-spaced) → 2-letter code.
+#: Full state/territory names (lowercase, single-spaced) -> 2-letter code.
 STATE_NAME_TO_CODE: dict[str, str] = {
     "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR",
     "california": "CA", "colorado": "CO", "connecticut": "CT",

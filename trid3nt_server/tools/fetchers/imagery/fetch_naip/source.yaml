@@ -74,10 +74,10 @@ docstring: |-
   **What it does:** Searches the Microsoft Planetary Computer for a NAIP
   aerial-imagery item intersecting ``bbox``, reads the R/G/B bands clipped to
   the bbox at ~1 m, and returns a 3-band uint8 RGB COG that renders directly
-  as the aerial BASE layer (no rescale / colormap  --  the baked colors paint
+  as the aerial BASE layer (no rescale / colormap -- the baked colors paint
   as-is via multiband passthrough).
 
-  NAIP is leaf-on, ~0.6-1 m, refreshed on a multi-year state cycle  --  the
+  NAIP is leaf-on, ~0.6-1 m, refreshed on a multi-year state cycle -- the
   canonical free US aerial basemap for site-level context.
 
   **When to use:**
@@ -87,11 +87,11 @@ docstring: |-
     flood-extent overlay.
 
   **When NOT to use:**
-  - Outside the US (NAIP is CONUS + HI + PR + USVI only)  --  a no-coverage
+  - Outside the US (NAIP is CONUS + HI + PR + USVI only) -- a no-coverage
     result is an honest typed error, not a fabricated layer.
   - Vegetation index (use ``compute_ndvi``) or land-cover classes (use
     ``fetch_landcover``).
-  - Very large AOIs  --  NAIP is sub-meter; the tool caps the bbox to a small
+  - Very large AOIs -- NAIP is sub-meter; the tool caps the bbox to a small
     neighborhood / preserve (~0.06 deg^2).
 
   **Parameters:**
@@ -104,6 +104,3 @@ docstring: |-
 
   **Data source:** USDA NAIP via the Microsoft Planetary Computer STAC
   (``naip`` collection; ``image`` asset).
-
-  FR-CE-8: routed through ``read_through`` so identical bbox calls reuse the
-  cached RGB COG.

@@ -1,11 +1,10 @@
-# Router source spec (data-router fold, phase-2 wave-2 ArcGIS family).
-# Twin: fetch_mtbs_burn_severity.py (SPEC-EXPRESSIBLE, vector-API-FGB / ArcGIS).
-# Uses the new int_range param + declarative WHERE builder (YEAR range).
+# MTBS burn-severity polygons over an ArcGIS FeatureServer, with an int_range param and
+# a declarative WHERE builder for the YEAR range.
 schema_version: v1
 
 name: fetch_mtbs_burn_severity
-source_class: mtbs_burn_severity           # cache prefix == twin source_class
-error_prefix: MTBS                          # twin A.6 token (MTBS*Error) != cache prefix
+source_class: mtbs_burn_severity           # cache prefix
+error_prefix: MTBS                          # error token, distinct from the cache prefix
 shape: vector-fgb
 supports_global_query: false               # bbox required
 
@@ -21,7 +20,7 @@ params:
   year_range: {type: int_range, required: false, default: null, min: 1984, max: 2100,
                error_suffix: YEAR_RANGE_INVALID}
 gates:
-  max_features: 50000                        # twin _MAX_PAGES(50) * _PAGE_SIZE(1000)
+  max_features: 50000                        # 50 pages of 1000
 
 ingest:
   access: ogr
@@ -30,7 +29,7 @@ ingest:
   query_template:
     out_fields: "FIRE_ID,FIRE_NAME,YEAR,FIRE_TYPE,ACRES,LATITUDE,LONGITUDE,MAP_ID,MAP_PROG,ASMNT_TYPE,IRWINID,IG_DATE"
     order_by: "OBJECTID ASC"
-  # YEAR range only when year_range is pinned (twin: YEAR >= start AND YEAR <= end).
+  # YEAR range only when year_range is pinned (YEAR >= start AND YEAR <= end).
   where_clauses:
     - {template: "YEAR >= {year_range[0]} AND YEAR <= {year_range[1]}", require: [year_range]}
 
@@ -45,11 +44,11 @@ output:
   style:
     kind: reference
     geometry: polygon
-  emit_bbox: false                           # twin LayerURI omits bbox
+  emit_bbox: false                           # the LayerURI omits bbox
 
 cache:
   ttl_class: static-30d
-payload_estimate:                            # twin has no estimator; bbox-area heuristic (additive-honest)
+payload_estimate:                            # bbox-area heuristic
   model: bbox_area
   mb_per_sq_deg: 1.0
   floor_mb: 0.02
@@ -63,10 +62,10 @@ docstring: |-
 
   **What it does:** Queries the USFS/USGS MTBS (Monitoring Trends in Burn
   Severity) ArcGIS FeatureServer (EDW_MTBS_v1) for burned-area boundary
-  polygons — one polygon per fire event — filtered to a bbox and optional
+  polygons -- one polygon per fire event -- filtered to a bbox and optional
   year range. Returns a FlatGeobuf with fire name, year, type, acres, and
-  provenance fields. MTBS covers CONUS + AK + HI + PR, 1984–present, for
-  fires ≥1000 acres in the West and ≥500 acres in the East. Cached
+  provenance fields. MTBS covers CONUS + AK + HI + PR, 1984-present, for
+  fires >=1000 acres in the West and >=500 acres in the East. Cached
   ``static-30d``. No API key required.
 
   **When to use:**
@@ -91,7 +90,7 @@ docstring: |-
     Required. Example: ``(-124.0, 40.0, -120.0, 43.0)`` for Northern CA/OR.
   - ``year_range`` (tuple or None): ``(start_year, end_year)`` inclusive,
     both integers, minimum start 1984. Filters server-side via
-    ``YEAR >= start AND YEAR <= end``. ``None`` returns all years 1984–present.
+    ``YEAR >= start AND YEAR <= end``. ``None`` returns all years 1984-present.
 
   **Returns:**
   ``LayerURI(layer_type="vector", role="primary", units=None)`` pointing at a
@@ -99,11 +98,3 @@ docstring: |-
   ``FIRE_TYPE`` (Wildfire/Prescribed Fire/Wildland Fire Use/Unknown),
   ``ACRES``, ``LATITUDE``, ``LONGITUDE``, ``MAP_ID``, ``MAP_PROG``,
   ``ASMNT_TYPE``, ``IRWINID``, ``IG_DATE``. EPSG:4326.
-
-  **Cross-tool dependencies:**
-  - Pairs with: ``fetch_nifc_fire_perimeters`` (current active fires),
-    ``fetch_firms_active_fire`` (near-real-time detections in or near scars).
-  - Upstream of: debris-flow / post-fire flood risk workflows
-    (``model_debris_flow``, ``fetch_gcn250_curve_numbers``).
-  - Complements: ``fetch_dem`` + ``compute_slope`` for post-fire watershed
-    erosion context.

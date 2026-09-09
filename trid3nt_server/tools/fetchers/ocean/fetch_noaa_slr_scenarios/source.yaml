@@ -1,13 +1,11 @@
-# Router source spec (data-router fold, phase-2 wave-6 VECTOR/ZIP family, ADR 0052).
-# Twin: fetch_noaa_slr_scenarios.py (was SPEC-EXPRESSIBLE; wave-2 deferred it for
-# lack of a fan-out mode). Uses the NEW declarative fan-out: one query PER
-# scenario_ft level against a per-level MapServer (value_map -> service name),
-# per-level slr_ft + scenario_label stamped, dissolved polygons merged.
+# NOAA SLR scenario footprints through the declarative fan-out: one query PER
+# scenario_ft level against a per-level MapServer, each level's slr_ft and scenario_label
+# stamped, and the dissolved polygons merged into one layer.
 schema_version: v1
 
 name: fetch_noaa_slr_scenarios
 source_class: noaa_slr_scenarios           # cache prefix
-error_prefix: NOAA_SLR_SCENARIOS            # twin A.6 token (NOAA_SLR_SCENARIOS_*)
+error_prefix: NOAA_SLR_SCENARIOS            # error token
 input_error_suffix: INPUT_INVALID          # NOAA_SLR_SCENARIOSInputError -> *_INPUT_INVALID
 shape: vector-fgb
 supports_global_query: false               # CONUS coastal polygon source, bbox required
@@ -24,7 +22,7 @@ params:
   scenario_ft:
     type: float_list
     required: false
-    default: [1.0, 2.0, 3.0]                # twin DEFAULT_SCENARIOS_FT
+    default: [1.0, 2.0, 3.0]                # the default scenario set
     values: [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5,
              6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0]
 
@@ -33,7 +31,7 @@ ingest:
   ogr: {driver: ESRIJSON}
   query_template:
     out_fields: "OBJECTID,Dissolve"
-  properties: [slr_ft, scenario_label, dissolve]   # honest-empty header schema (twin empty FGB)
+  properties: [slr_ft, scenario_label, dissolve]   # honest-empty header schema
   fan_out:
     param: scenario_ft
     endpoint: data
@@ -79,7 +77,7 @@ output:
 
 cache:
   ttl_class: static-30d
-payload_estimate:                            # twin: n_scenarios * area * 0.3 clamp[0.02,50]
+payload_estimate:                            # n_scenarios * area * 0.3 clamp[0.02,50]
   model: bbox_area
   mb_per_sq_deg: 0.9                          # ~0.3/scenario * 3 default scenarios
   floor_mb: 0.02
@@ -108,23 +106,22 @@ docstring: |-
     simultaneously (pass a list to ``scenario_ft``).
 
   **When NOT to use:**
-  - For real-time / event-driven storm-surge inundation → use
+  - For real-time / event-driven storm-surge inundation -> use
     ``fetch_gtsm_tide_surge``.
-  - For probabilistic SLR projections with uncertainty ranges → the Sweet et
+  - For probabilistic SLR projections with uncertainty ranges -> the Sweet et
     al. (2022) NOAA Technical Report scenarios (Intermediate, High, etc.) are
     a separate dataset not in the OCM Viewer.
-  - For inland / non-coastal flooding → use ``fetch_fema_nfhl_zones`` or
+  - For inland / non-coastal flooding -> use ``fetch_fema_nfhl_zones`` or
     a hydraulic model run (e.g. ``telemac_rain_on_grid``).
-  - For areas outside CONUS → use ``fetch_gtsm_tide_surge`` (global coastal
+  - For areas outside CONUS -> use ``fetch_gtsm_tide_surge`` (global coastal
     water-level reanalysis); SLR Viewer data is CONUS-only.
-  - For marsh migration / habitat-transition projections → a separate
-    ``fetch_noaa_slr_marsh`` tool (not yet implemented) covers the
-    ``marsh_*`` MapServer services in the same folder.
+  - For marsh migration / habitat-transition projections -> use
+    ``fetch_noaa_slr_marsh``, which covers the ``marsh_*`` services.
 
   **Parameters:**
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required.
           ``supports_global_query=False`` -- CONUS coastal polygon source.
-          Recommended ≤ ~2° per side for tractable response times. Example
+          Recommended <= ~2 deg per side for tractable response times. Example
           for coastal Lee County FL (Fort Myers / Naples area):
           ``(-82.2, 26.2, -81.5, 26.9)``.
       scenario_ft: SLR scenario level(s) in feet. Valid values: ``0, 0.5, 1,
@@ -139,17 +136,6 @@ docstring: |-
       in feet), ``scenario_label`` (str, e.g. "1.0 ft SLR"), ``dissolve``
       (int, always 1 -- source is fully dissolved per scenario). ``layer_type``
       is ``"vector"``, ``role`` is ``"primary"`` ``units`` is ``"feet"``.
-
-  **Cross-tool dependencies:**
-      - Feeds INTO: ``spatial_query`` (structure count / population inside
-        SLR footprint; admin-bounded SLR exposure report).
-      - Compare WITH: ``fetch_fema_nfhl_zones`` (regulatory floodplain
-        vs. projected SLR inundation side-by-side), ``fetch_usace_nsi``
-        (structure-level asset inventory for exposure counting).
-      - Sibling tools: ``fetch_noaa_coops_tides`` (observed tide levels for
-        validating SLR baseline), ``fetch_gtsm_tide_surge`` (global coastal
-        water-level for non-CONUS).
-
   **Error types:**
       - ``NOAA_SLR_SCENARIOSInputError``: bad bbox or unknown scenario_ft
         (retryable=False).

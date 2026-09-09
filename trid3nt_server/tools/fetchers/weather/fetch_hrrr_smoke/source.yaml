@@ -99,7 +99,7 @@ docstring: |-
     ``fetch_mtbs_burn_severity`` (post-fire severity).
   - "Forecast smoke + observed weather" comparisons against
     ``fetch_asos_metar`` (visibility, sky conditions) for plausibility.
-  - Short-term (≤ 18 h on most cycles, ≤ 48 h on 00/06/12/18z cycles)
+  - Short-term (<= 18 h on most cycles, <= 48 h on 00/06/12/18z cycles)
     US smoke-transport decision-support overlay.
 
   When NOT to use:
@@ -107,8 +107,8 @@ docstring: |-
     ``fetch_hrrr_forecast``. HRRR-Smoke shares the same dynamical core
     but this tool exposes only smoke / aerosol diagnostics.
   - Observed surface particulate (PM2.5 / PM10 / AOD) -- HRRR-Smoke is
-    model output. There is no HRRR-Smoke "observation"; use EPA AirNow
-    (future tool) or NASA MODIS AOD (future) for measured aerosols.
+    model output. There is no HRRR-Smoke "observation"; use
+    ``fetch_airnow_air_quality`` for measured surface particulate.
   - Active fire detection -- use ``fetch_firms_active_fire`` (NASA VIIRS/
     MODIS hot spots) or ``fetch_goes_satellite`` (GOES-East/West fire
     products). HRRR-Smoke ingests these as forcing; it does not produce
@@ -127,7 +127,7 @@ docstring: |-
           lat 21..53). Example: ``(-124.5, 41.0, -120.0, 46.3)`` for a
           northern California / southern Oregon wildfire footprint.
       variable: one of:
-          - ``"near_surface_smoke"`` (kg m-3, 8 m AGL smoke mass density -- the "what you'd breathe" layer; multiply by ~10⁹ for µg m-3)
+          - ``"near_surface_smoke"`` (kg m-3, 8 m AGL smoke mass density -- the "what you'd breathe" layer; multiply by ~109 for ug m-3)
           - ``"smoke_column_mass"`` (kg m-2, vertically-integrated smoke
             column -- total atmospheric smoke load)
           - ``"aerosol_optical_depth"`` (dimensionless, 550 nm AOD -- proxy for satellite-observable smoke opacity).
@@ -139,7 +139,7 @@ docstring: |-
           zarr). Default ``1``.
       cycle: optional ISO-8601 cycle timestamp like
           ``"2026-06-09T00:00:00Z"`` to pin a specific cycle. Default
-          ``None`` → use the most recent published cycle (walks backward
+          ``None`` -> use the most recent published cycle (walks backward
           up to 6 h from current UTC).
 
   Returns:
@@ -176,9 +176,3 @@ docstring: |-
           within the 6 h backstop (retryable=True).
       ``HRRRSmokeUpstreamError``: S3 / zarr / reprojection failure
           (retryable=True).
-
-  FR-CE-8: routed through ``read_through`` with ``ttl_class="dynamic-1h"``
-  so identical ``(bbox, variable, cycle, forecast_hour)`` calls reuse
-  the cached COG within the hourly window. The cache key includes the
-  cycle identifier so distinct cycles predicting the same valid time
-  map to distinct cache entries.

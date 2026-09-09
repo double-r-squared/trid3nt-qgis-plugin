@@ -1,5 +1,4 @@
-# Router source spec (data-router fold, chained-resolution mode, ADR 0063).
-# Twin: fetch_nws_river_forecast.py -- FOLDED via chained-resolution hooks.
+# NWS/NWPS river-forecast gauges, through the chained-resolution hooks.
 schema_version: v1
 name: fetch_nws_river_forecast
 source_class: nws_nwps_river_forecast

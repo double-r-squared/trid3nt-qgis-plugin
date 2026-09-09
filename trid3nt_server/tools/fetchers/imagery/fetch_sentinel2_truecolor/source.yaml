@@ -106,12 +106,12 @@ docstring: |-
   SCL scene-classification band clipped to the bbox at 10 m, masks cloud /
   shadow / nodata pixels via SCL, joint-percentile-stretches the uint16
   reflectance to uint8, and returns a 3-band RGB COG that paints directly as a
-  recent satellite basemap (no rescale / colormap  --  the baked natural colors
+  recent satellite basemap (no rescale / colormap -- the baked natural colors
   render as-is via multiband passthrough).
 
   Sentinel-2 is GLOBAL and refreshes every ~5 days, so this is the go-to
   "what does this area look like right now from space" layer anywhere on
-  Earth  --  the worldwide complement to the US-only ``fetch_naip``.
+  Earth -- the worldwide complement to the US-only ``fetch_naip``.
 
   **When to use:**
   - User wants a recent true-color / natural-color satellite image of an area
@@ -121,10 +121,10 @@ docstring: |-
     recent date matters (call twice with different windows to compare).
 
   **When NOT to use:**
-  - US sub-meter aerial detail  --  use ``fetch_naip`` (~1 m vs 10 m).
-  - Vegetation vigor index  --  use ``compute_ndvi`` (continuous greenness, not
+  - US sub-meter aerial detail -- use ``fetch_naip`` (~1 m vs 10 m).
+  - Vegetation vigor index -- use ``compute_ndvi`` (continuous greenness, not
     a picture).
-  - Land-cover CLASSES (forest / crop / urban)  --  use ``fetch_landcover`` /
+  - Land-cover CLASSES (forest / crop / urban) -- use ``fetch_landcover`` /
     ``extract_landcover_class``.
   - Areas with persistent cloud cover in the window (raise the window or the
     ``max_cloud_cover`` ceiling); a no-imagery result is an honest typed error.
@@ -143,6 +143,3 @@ docstring: |-
 
   **Data source:** Sentinel-2 Level-2A via the Microsoft Planetary Computer
   STAC (``sentinel-2-l2a`` collection; bands B04/B03/B02 + SCL).
-
-  FR-CE-8: routed through ``read_through`` so identical ``(bbox, window,
-  cloud)`` calls reuse the cached RGB COG.

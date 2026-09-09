@@ -1,6 +1,5 @@
-# Router source spec (fetcher-fold wave-7, imageserver_export mode, ADR 0053).
-# Twin: fetch_landfire_fuels.py -- LANDFIRE LF2022 ImageServer exportImage.
-# The exportImage GeoTIFF body IS the artifact (no reserialize); value-identical.
+# LANDFIRE ImageServer exportImage: the returned GeoTIFF body IS the artifact,
+# serialized no further.
 schema_version: v1
 
 name: fetch_landfire_fuels
@@ -133,17 +132,3 @@ docstring: |-
   continuous canopy layers (``"m * 10"`` / ``"kg/m^3 * 100"``), ``None``
   for categorical fuel-model layers. EPSG:4326, 30 m native resolution,
   LANDFIRE 2022 vintage.
-
-  **Cross-tool dependencies:**
-  - Feeds: FlamMap / FARSITE / FSim wildfire spread workflows (deferred),
-    any engine step that needs fuel category codes per pixel.
-  - Pairs with: ``fetch_raws_weather`` or ``fetch_hrrr_forecast`` for the
-    meteorological forcing stack; ``fetch_dem`` for terrain-slope inputs.
-  - Provides ``fbfm40`` / ``fbfm13`` via ``role="primary"`` so the QGIS
-    plugin renders it natively with the ``categorical_landcover`` style
-    preset; canopy layers use ``continuous_dem`` ramp.
-
-  FR-CE-8: Routed through ``read_through`` so identical ``(bbox, layer)``
-  calls reuse the cached GeoTIFF. Cache key includes ``(layer,
-  bbox-rounded-to-6dp, year="2022")`` so a future year upgrade (e.g.
-  LF2023) is a cache-key change, not a silent staleness.

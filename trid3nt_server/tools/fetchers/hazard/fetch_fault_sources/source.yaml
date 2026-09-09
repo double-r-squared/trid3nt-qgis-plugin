@@ -1,8 +1,6 @@
-# Router source spec (finisher-mechanisms wave, ADR 0081).
-# Twin: fetch_fault_sources.py -- FOLDED via build_request/parse_response +
-# the constant_cache two-tier cache (10.6 MB GEM GAF downloaded once, AOI-
-# filtered in the parse hook) + variant_by_emptiness (zero-fault AOI -> record
-# dict) + the post-emit envelope hook (kinematic records -> FaultSourcesResult).
+# GEM active faults. The whole-world harmonized GeoJSON downloads once through the
+# constant_cache two-tier cache and is AOI-filtered in the parse hook; a zero-fault AOI
+# answers with the emptiness-switch record, and the envelope hook carries the kinematics.
 schema_version: v1
 name: fetch_fault_sources
 source_class: gem_active_faults

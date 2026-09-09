@@ -55,28 +55,47 @@ caveats:
   Ways are returned WHOLE, not clipped to the bbox - a barrier clipped at the AOI edge would open a gap
   the real structure does not have. An area with no surveyed structure returns a valid 0-feature layer,
   not an error.
-docstring: "Surveyed coastal wave BARRIERS (breakwaters, groynes) as LineStrings, from OpenStreetMap.\n\
-  \n**What it does:** Queries the OpenStreetMap Overpass API for ways tagged\n``man_made=breakwater``\
-  \ or ``man_made=groyne`` that touch the requested\nbbox, and returns each one as a WHOLE LineString\
-  \ in EPSG:4326, serialized\nto FlatGeobuf and cached for 30 days. Ways are deliberately NOT clipped\n\
-  to the bbox: a barrier is a solid object, and cutting one at the AOI edge\nwould put a gap in the middle\
-  \ of a structure that has none. The vector\nrenders inline on the map automatically.\n\n**When to use:**\n- The user asks what protects a harbour, marina or berthing area, or\n \
-  \ wants the breakwater drawn on the map.\n- Feeding ``artemis_harbor_agitation``'s ``structure`` slot:\
-  \ fetch the\n  surveyed barrier, then hand the returned layer to the agitation run so\n  the solver meshes\
-  \ the REAL structure as a thin solid barrier rather\n  than solving open water.\n- Any shoreline-protection\
-  \ inventory or coastal-structure context overlay.\n\n**When NOT to use:**\n- DO NOT use for PIERS or docks\
-  \ -- ``man_made=pier`` is excluded by\n  design. A pier is the berthing structure being sheltered, not\
-  \ a wave\n  barrier; meshing one solid answers a different question. Use\n  ``fetch_overpass_pois`` with\
-  \ an explicit tag if you want piers.\n- DO NOT use for levees, seawalls or revetments -- those carry\
-  \ different\n  OSM tags and are not in this tool's closed vocabulary.\n- DO NOT use for engineering-grade\
-  \ structure geometry: OSM breakwater\n  ways are volunteer-surveyed centrelines with no crest elevation\
-  \ and no\n  cross-section.\n\n**Parameters:**\n- ``bbox`` (tuple[float, float, float, float]): ``(min_lon,\
-  \ min_lat,\n  max_lon, max_lat)`` in EPSG:4326. Required.\n- ``structure_type`` (list[str] | None, default\
-  \ None): which OSM\n  ``man_made`` barrier values to include. ``None`` returns both\n  ``breakwater``\
-  \ and ``groyne``. Any other value is a typed input error.\n\n**Returns:** A ``LayerURI`` pointing at\
-  \ a FlatGeobuf in the cache bucket.\n``layer_type=\"vector\"``, ``role=\"context\"``, ``units=None``.\
-  \ Properties\nper feature: ``osm_id`` (int), ``name`` (str | None), ``man_made`` (str).\nAn AOI with\
-  \ no surveyed barrier returns a valid 0-feature layer -- that\nis an honest answer, and the open-water\
-  \ solve it implies is labeled.\n\n**Cross-tool dependencies:**\n- Pairs with ``artemis_harbor_agitation``\
-  \ (hand the layer to its\n  ``structure`` slot) and with ``fetch_topobathy`` for the bed beneath.\n\
-  - Overpass inserts a polite delay before each network request; cache\n  hits skip it."
+docstring: |-
+  Surveyed coastal wave BARRIERS (breakwaters, groynes) as LineStrings, from OpenStreetMap.
+
+  **What it does:** Queries the OpenStreetMap Overpass API for ways tagged
+  ``man_made=breakwater`` or ``man_made=groyne`` that touch the requested
+  bbox, and returns each one as a WHOLE LineString in EPSG:4326, serialized
+  to FlatGeobuf and cached for 30 days. Ways are deliberately NOT clipped
+  to the bbox: a barrier is a solid object, and cutting one at the AOI edge
+  would put a gap in the middle of a structure that has none. The vector
+  renders inline on the map automatically.
+
+  **When to use:**
+  - The user asks what protects a harbour, marina or berthing area, or
+    wants the breakwater drawn on the map.
+  - Feeding ``artemis_harbor_agitation``'s ``structure`` slot: fetch the
+    surveyed barrier, then hand the returned layer to the agitation run so
+    the solver meshes the REAL structure as a thin solid barrier rather
+    than solving open water.
+  - Any shoreline-protection inventory or coastal-structure context overlay.
+
+  **When NOT to use:**
+  - DO NOT use for PIERS or docks -- ``man_made=pier`` is excluded by
+    design. A pier is the berthing structure being sheltered, not a wave
+    barrier; meshing one solid answers a different question. Use
+    ``fetch_overpass_pois`` with an explicit tag if you want piers.
+  - DO NOT use for levees, seawalls or revetments -- those carry different
+    OSM tags and are not in this tool's closed vocabulary.
+  - DO NOT use for engineering-grade structure geometry: OSM breakwater
+    ways are volunteer-surveyed centrelines with no crest elevation and no
+    cross-section.
+
+  **Parameters:**
+  - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
+    max_lon, max_lat)`` in EPSG:4326. Required.
+  - ``structure_type`` (list[str] | None, default None): which OSM
+    ``man_made`` barrier values to include. ``None`` returns both
+    ``breakwater`` and ``groyne``. Any other value is a typed input error.
+
+  **Returns:** A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket.
+  ``layer_type="vector"``, ``role="context"``, ``units=None``. Properties
+  per feature: ``osm_id`` (int), ``name`` (str | None), ``man_made`` (str).
+  An AOI with no surveyed barrier returns a valid 0-feature layer -- that
+  is an honest answer, and the open-water solve it implies is labeled.
+

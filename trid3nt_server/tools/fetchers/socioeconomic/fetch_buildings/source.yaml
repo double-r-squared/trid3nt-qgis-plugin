@@ -1,6 +1,5 @@
-# Router source spec (trigger wave, ADR 0084) -- OSM building footprints + tags sidecar.
-# The footprints read through OSMnx; the executor writes the constrained
-# sibling-of-the-.fgb tags sidecar beside them.
+# OSM building footprints with a tags sidecar. The footprints read through OSMnx; the
+# executor writes the constrained sibling-of-the-.fgb tags sidecar beside them.
 schema_version: v1
 name: fetch_buildings
 source_class: buildings
@@ -64,28 +63,50 @@ caveats:
 - the full OSM tag bag per footprint is written to a sibling .tags.json sidecar consumed by /api/building-detail;
   the inline FGB is slim (osm_id/osm_type/fid)
 - an AOI with no OSM building footprints -> BUILDINGS_EMPTY (honest typed empty)
-docstring: "Fetch building footprints (polygons) for a bbox.\n\nUse this when: the agent needs building\
-  \ polygons for damage / exposure\nestimation, risk scoring, or display of the built environment.\n\n\
-  Sources (data-source fallback norm -- primary → fallback, never a silent\ndead-end):\n    - ``\"osm\"\
-  `` (DEFAULT, RELIABLE PRIMARY): OpenStreetMap building\n      footprints via the Overpass API. Global,\
-  \ free, no API key. Returns\n      building ``Polygon``s (closed ways) and ``MultiPolygon``s\n     \
-  \ (multipolygon relations with holes), clipped to the exact bbox.\n      This is the dependable path\
-  \ -- use it unless you have a specific\n      reason to prefer MS.\n    - ``\"msft\"`` (BEST-EFFORT\
-  \ FALLBACK): Microsoft Open Maps ML-derived\n      footprints via the Planetary Computer STAC catalog.\
-  \ Wider rural\n      coverage in some areas, but the public catalog often exposes only\n      ``abfs://``\
-  \ GeoParquet stores that cannot be downloaded by-asset, so\n      this path frequently fails -- treat\
-  \ it as best-effort only.\n\nRobustness: whichever ``source`` you request is tried FIRST; if it raises\n\
-  an ``UpstreamAPIError`` (upstream failure, no coverage, empty result), the\ntool automatically FALLS\
-  \ BACK to the other source. If BOTH fail, an honest\n``UpstreamAPIError`` naming both attempts is raised\
-  \ -- the agent never\nreceives a fabricated success. The cache key reflects the source actually\nused,\
-  \ so the two sources never collide and a fallback result is cached\nunder its real source.\n\nDo NOT\
-  \ use this for: live address/parcel lookups (those need a different\ncadastral source); per-structure\
-  \ replacement cost / occupancy / HAZUS\nattributes for loss modeling (use ``fetch_usace_nsi`` -- the\
-  \ National\nStructure Inventory point tool -- instead); 3D building heights (heights\nare a separate\
-  \ dataset); querying buildings by name or use class (filter\npost-fetch).\n\nParams:\n    bbox: ``(min_lon,\
-  \ min_lat, max_lon, max_lat)`` in EPSG:4326.\n    source: ``\"osm\"`` (default, reliable primary) or\
-  \ ``\"msft\"``\n        (best-effort fallback). The requested source is tried first; the\n        tool\
-  \ falls back to the other on ``UpstreamAPIError``.\n\nReturns:\n    A ``LayerURI`` (``layer_type=\"\
-  vector\"``) pointing at a FlatGeobuf in\n    the cache bucket:\n    ``s3://trid3nt-cache/cache/static-30d/buildings/<key>.fgb``.\n\
-  \    The ``name`` and ``layer_id`` reflect the source actually used.\n\nFR-CE-8: The fetch is routed\
-  \ through ``read_through`` so identical\nquantized-bbox + source calls reuse the cached artifact."
+docstring: |-
+  Fetch building footprints (polygons) for a bbox.
+
+  Use this when: the agent needs building polygons for damage / exposure
+  estimation, risk scoring, or display of the built environment.
+
+  Sources (data-source fallback norm -- primary -> fallback, never a silent
+  dead-end):
+      - ``"osm"`` (DEFAULT, RELIABLE PRIMARY): OpenStreetMap building
+        footprints via the Overpass API. Global, free, no API key. Returns
+        building ``Polygon``s (closed ways) and ``MultiPolygon``s
+        (multipolygon relations with holes), clipped to the exact bbox.
+        This is the dependable path -- use it unless you have a specific
+        reason to prefer MS.
+      - ``"msft"`` (BEST-EFFORT FALLBACK): Microsoft Open Maps ML-derived
+        footprints via the Planetary Computer STAC catalog. Wider rural
+        coverage in some areas, but the public catalog often exposes only
+        ``abfs://`` GeoParquet stores that cannot be downloaded by-asset, so
+        this path frequently fails -- treat it as best-effort only.
+
+  Robustness: whichever ``source`` you request is tried FIRST; if it raises
+  an ``UpstreamAPIError`` (upstream failure, no coverage, empty result), the
+  tool automatically FALLS BACK to the other source. If BOTH fail, an honest
+  ``UpstreamAPIError`` naming both attempts is raised -- the agent never
+  receives a fabricated success. The cache key reflects the source actually
+  used, so the two sources never collide and a fallback result is cached
+  under its real source.
+
+  Do NOT use this for: live address/parcel lookups (those need a different
+  cadastral source); per-structure replacement cost / occupancy / HAZUS
+  attributes for loss modeling (use ``fetch_usace_nsi`` -- the National
+  Structure Inventory point tool -- instead); 3D building heights (heights
+  are a separate dataset); querying buildings by name or use class (filter
+  post-fetch).
+
+  Params:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
+      source: ``"osm"`` (default, reliable primary) or ``"msft"``
+          (best-effort fallback). The requested source is tried first; the
+          tool falls back to the other on ``UpstreamAPIError``.
+
+  Returns:
+      A ``LayerURI`` (``layer_type="vector"``) pointing at a FlatGeobuf in
+      the cache bucket:
+      ``s3://trid3nt-cache/cache/static-30d/buildings/<key>.fgb``.
+      The ``name`` and ``layer_id`` reflect the source actually used.
+

@@ -1,7 +1,5 @@
-# Router source spec (keyed/misc-leftovers wave, chained_resolution enrich, ADR 0071).
-# Twin: fetch_climate_normals.py -- NCEI 1991-2020 U.S. Climate Normals. Inventory
-# resolve (build_request/parse_response) + per-station access-CSV enrich (PHASE E),
-# dropping stations without a usable annual normal (the twin's skip). Keyless.
+# NCEI 1991-2020 U.S. Climate Normals. An inventory resolve, then a per-station
+# access-CSV enrich, dropping stations without a usable annual normal. Keyless.
 schema_version: v1
 
 name: fetch_climate_normals

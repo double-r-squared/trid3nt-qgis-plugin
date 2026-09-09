@@ -136,26 +136,19 @@ docstring: |-
 
   Cross-tool dependencies:
       - Often paired with ``fetch_administrative_boundaries`` (TIGER county
-        / city polygon) → ``spatial_query`` to produce the "FEMA
+        / city polygon) -> ``spatial_query`` to produce the "FEMA
         flood zones in [place]" clipped output the user typically wants.
       - Feeds ``spatial_query`` for "% of [parcel] inside SFHA"
         summaries, and a structural-loss assessment for the NSI
-        structure inventory × NFHL intersection.
+        structure inventory x NFHL intersection.
       - Companion to a hydraulic model run (``build_mesh``,
         ``run_solver``) when the user wants regulatory-vs-modeled
         comparison side-by-side.
 
-  Cache: ``static-30d`` (FR-DC-2). NFHL is republished through LOMC updates
+  Cache: ``static-30d``. NFHL is republished through LOMC updates
   monthly and DFIRM panel revisions quarterly; a 30-day stale window is
   acceptable for hazard-modeling overlay use. Cache key is SHA-256 of
   ``(bbox-rounded-6dp, sfha_only, sorted(zone_filter))`` + month vintage.
-
-  External-API resilience (NFR-R-1): FEMA's hazards.fema.gov ArcGIS cluster
-  rate-limits unauthenticated clients and occasionally returns 5xx during
-  named-disaster traffic peaks. On network failure / non-2xx / malformed
-  JSON / ArcGIS error envelope the tool raises
-  ``FEMA_NFHL_ZONESUpstreamError(retryable=True)`` so the agent's FR-AS-11
-  surface decides whether to retry, clarify, or fall back.
 
 
   Payload estimation: ~0.5 MB per square degree, clipped to [0.05, 50] MB.

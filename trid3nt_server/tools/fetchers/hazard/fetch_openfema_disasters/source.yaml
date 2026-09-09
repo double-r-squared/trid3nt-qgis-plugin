@@ -1,6 +1,5 @@
-# Router source spec (data-router fold, chained-resolution mode, ADR 0064).
-# Twin: fetch_openfema_disasters.py -- FOLDED via chained-resolution hooks
-# (offset paging + attribute<-boundary FIPS enrich).
+# FEMA disaster declarations: offset paging over the attribute feed, then a
+# boundary-service FIPS enrich.
 schema_version: v1
 name: fetch_openfema_disasters
 source_class: openfema_disasters

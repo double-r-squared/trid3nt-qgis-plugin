@@ -1,7 +1,6 @@
-# Router source spec (data-router fold, phase-2 wave-10 tier-3 hooks, ADR 0056).
-# Twin: fetch_usgs_earthquakes.py -- FOLDED via hooks (single-GET FDSN GeoJSON point API).
-# Bespoke steps -> named PURE hooks: usgs_earthquakes.build_request (FDSN window+URL),
-# usgs_earthquakes.parse_response (GeoJSON decode, metadata.count cap, honest NO_EVENTS).
+# USGS FDSN event GeoJSON, a single GET. The bespoke steps are named PURE hooks: the
+# build hook constructs the FDSN window and URL, and the parse hook decodes the GeoJSON,
+# applies the result cap, and raises an honest no-events error.
 schema_version: v1
 name: fetch_usgs_earthquakes
 source_class: usgs_earthquakes
