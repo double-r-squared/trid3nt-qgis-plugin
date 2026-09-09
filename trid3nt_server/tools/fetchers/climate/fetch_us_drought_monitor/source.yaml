@@ -2,7 +2,7 @@
 # Twin: fetch_us_drought_monitor.py (SPEC-EXPRESSIBLE, vector-API-FGB / ArcGIS).
 # Uses the new date_compact param + param-conditioned endpoint_select (current
 # layer /3 vs archive layer /2) + declarative WHERE (period=) + column_map with
-# a dm->label lookup and an epoch-ms ddate -> ISO valid_date transform.
+# a dm->label lookup and a ddate -> ISO valid_date transform.
 schema_version: v1
 
 name: fetch_us_drought_monitor
@@ -42,7 +42,7 @@ ingest:
                          2: "D2 Severe Drought", 3: "D3 Extreme Drought",
                          4: "D4 Exceptional Drought"}}
     period:     {from: period, kind: str, default: ""}
-    valid_date: {from: ddate, kind: epoch_ms_iso, default: ""}
+    valid_date: {from: ddate, kind: date_iso, default: ""}
 
 normalize:
   crs: "EPSG:4326"

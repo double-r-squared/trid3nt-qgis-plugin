@@ -82,7 +82,7 @@ def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
 # raw-property -> output-column projection/rename/normalization WITHOUT a source
 # hardcode. Rule fields:
 #   from            source property key (case-insensitive when column_map_ci)
-#   kind            passthrough(default) | int | float | str | lookup | epoch_ms_iso
+#   kind            passthrough(default) | int | float | str | lookup | date_iso
 #   null_below      numeric: value <= this -> None (the -999 SVI sentinel)
 #   on_error        null(default) | skip_feature (drop the whole feature)
 #   key_from        lookup: an already-computed out_col to key the table on
@@ -172,7 +172,11 @@ def _resolve_column(
         return raw
     if kind == "str":
         return str(raw)
-    if kind == "epoch_ms_iso":
+    if kind == "date_iso":
+        # A date arrives typed where the driver read the service's own field type
+        # and as epoch milliseconds where it did not; both are the same day.
+        if isinstance(raw, (_dt.datetime, _dt.date)):
+            return (raw.date() if isinstance(raw, _dt.datetime) else raw).isoformat()
         if isinstance(raw, (int, float)) and not isinstance(raw, bool):
             try:
                 return _dt.datetime.fromtimestamp(raw / 1000.0, tz=_dt.timezone.utc).date().isoformat()

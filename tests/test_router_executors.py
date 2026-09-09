@@ -566,9 +566,9 @@ def test_column_map_lookup_and_skip_feature():
     assert out[1]["properties"] == {"dm": 7, "label": "D7"}
 
 
-def test_column_map_epoch_ms_iso_and_ci():
+def test_column_map_date_iso_and_ci():
     spec = _wave2_spec(ingest={"column_map_ci": True, "column_map": {
-        "valid_date": {"from": "ddate", "kind": "epoch_ms_iso", "default": ""},
+        "valid_date": {"from": "ddate", "kind": "date_iso", "default": ""},
         "ftype": {"from": "FType", "kind": "int"},
     }})
     feats = [{"type": "Feature", "geometry": None,
@@ -576,6 +576,18 @@ def test_column_map_epoch_ms_iso_and_ci():
     out = vector_fgb.apply_column_map(feats, spec)
     assert out[0]["properties"]["valid_date"] == "2022-08-02"   # epoch-ms -> ISO
     assert out[0]["properties"]["ftype"] == 390                 # case-insensitive match
+
+
+def test_column_map_date_iso_takes_a_typed_date():
+    """A driver that read the service's own field type hands back a datetime."""
+    import datetime as dt
+
+    spec = _wave2_spec(ingest={"column_map": {
+        "valid_date": {"from": "ddate", "kind": "date_iso", "default": ""}}})
+    feats = [{"type": "Feature", "geometry": None,
+              "properties": {"ddate": dt.datetime(2022, 8, 2, 0, 0, tzinfo=dt.timezone.utc)}}]
+    out = vector_fgb.apply_column_map(feats, spec)
+    assert out[0]["properties"]["valid_date"] == "2022-08-02"
 
 
 def test_resolve_endpoints_select_and_endpoint_fallback():

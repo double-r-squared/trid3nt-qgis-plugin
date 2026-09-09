@@ -19,7 +19,7 @@ from typing import Any
 from trid3nt_contracts.source_spec import EndpointSpec, SourceSpec
 
 from ..errors import router_input_error
-from ..executors import vector_fgb
+from ..executors import vector_fgb, vector_ogr
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.transforms.fan_out"
@@ -98,7 +98,7 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
             )
         url = url_template.replace("{service}", str(service))
         endpoint = EndpointSpec(url=url, query=dict(base_ep.query or {}))
-        feats = vector_fgb._fetch_from_endpoint(spec, endpoint, params)
+        feats = vector_ogr.fetch_from_endpoint(spec, endpoint, params)
         for feat in feats:
             if not isinstance(feat, dict):
                 continue

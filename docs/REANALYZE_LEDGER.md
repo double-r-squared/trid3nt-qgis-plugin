@@ -173,3 +173,23 @@ corrected in the fold: the driver's read is the closer of the two to
 what the service holds, and no consumer of a FlatGeobuf depends on
 ring orientation. Stated here so a later pass reads a winding flip as
 this decision rather than as a regression.
+
+Two more measured consequences of reading `f=json`, both the driver
+honoring what the service DECLARES where the geojson round trip lost
+it. (a) FIELD TYPES: a column the layer declares
+esriFieldTypeDouble arrives float64 rather than the int64 pandas
+inferred from a whole JSON number (VOLTAGE, ACRES, SYSTEM_ID,
+LEVEED_ID, attr_IncidentSize, attr_PercentContained), and a column the
+layer declares esriFieldTypeDate arrives as a datetime rather than as
+epoch milliseconds (SOURCEDATE, VAL_DATE, poly_DateCurrent). The one
+column_map rule that read epoch milliseconds is now `date_iso` and
+takes either. (b) POLYGON HOLES, and this one is a correctness win
+rather than a representation change: esri rings carry the hole in
+their winding, and ArcGIS's GeoJSON writer drops it. Measured against
+the live service on `fetch_us_drought_monitor` over a Texas bbox - the
+esri-json feature has 1,219 rings of which 56 are counter-clockwise
+(holes), the geojson feature has 1,219 outer polygons and zero holes -
+so the pre-fold layer painted 56 donut holes as filled drought and
+over-counted its own area by 16 percent (223.85 vs 193.11 square
+degrees on that one feature). The driver organizes them; every
+polygon row in this family was carrying the same error.

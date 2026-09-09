@@ -67,12 +67,11 @@ _config_lock = threading.Lock()
 class _ReadPolicy:
     """Install the read policy plus this source's headers for one driver read."""
 
-    def __init__(self, spec: SourceSpec, extra: dict[str, str]) -> None:
+    def __init__(self, spec: SourceSpec) -> None:
         ogr = (spec.ingest or {}).get("ogr") or {}
         headers = dict(ogr.get("headers") or {})
         ua = headers.pop("User-Agent", None) or (spec.auth.user_agent if spec.auth else None)
         self._opts: dict[str, str] = dict(_READ_PATH)
-        self._opts.update(extra)
         if ua:
             self._opts["GDAL_HTTP_USERAGENT"] = str(ua)
         if headers:
@@ -110,9 +109,10 @@ def build_query(
     """The ArcGIS ``/query`` URL the ESRIJSON driver opens (no offset, no page).
 
     ``f=json`` is what the driver reads; ``bbox=None`` omits the geometry envelope
-    (the global sweep). Paging is the driver's, so this carries no ``resultOffset``
-    - ``page_size`` pins ``resultRecordCount`` only where the caller capped the
-    sweep at its own count.
+    (the global sweep). Paging is the driver's, so this carries no ``resultOffset``.
+    ``page_size`` pins ``resultRecordCount``, which the driver reads off the URL and
+    carries into every page it asks for; unset, the page is the layer's own
+    ``maxRecordCount``.
     """
     ingest = spec.ingest or {}
     qt = ingest.get("query_template", {})
@@ -209,15 +209,13 @@ def fetch_from_endpoint(
         max_features = int(capped)
 
     read_kwargs: dict[str, Any] = {"max_features": max_features}
-    extra_config: dict[str, str] = {}
     if driver == "ESRIJSON":
+        if page_size is None and ogr.get("page_size"):
+            page_size = int(ogr["page_size"])
         url = build_query(
             spec, bbox, where=build_where(spec, params), endpoint=endpoint,
             page_size=page_size,
         )
-        declared_page = (ingest.get("pagination") or {}).get("page_size")
-        if page_size is None and declared_page:
-            extra_config["OGR_ESRIJSON_MAX_PAGE_SIZE"] = str(declared_page)
     else:
         url = endpoint.url or endpoint.url_template or ""
         if driver == "OAPIF":
@@ -227,7 +225,7 @@ def fetch_from_endpoint(
     path = open_path(spec, params, endpoint, url)
 
     try:
-        with _ReadPolicy(spec, extra_config):
+        with _ReadPolicy(spec):
             df = pyogrio.read_dataframe(path, **read_kwargs)
     except RouterError:
         raise

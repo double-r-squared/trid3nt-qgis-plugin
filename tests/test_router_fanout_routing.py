@@ -29,7 +29,7 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
     RouterUpstreamError,
 )
-from trid3nt_server.tools.fetchers._router.executors import vector_fgb
+from trid3nt_server.tools.fetchers._router.executors import vector_fgb, vector_ogr
 from trid3nt_server.tools.fetchers._router.transforms import fan_out
 
 
@@ -70,8 +70,9 @@ def _fanout_spec() -> SourceSpec:
                             "default": [1.0, 2.0, 3.0], "values": [0.5, 1.0, 2.0, 3.0]},
         },
         "ingest": {
-            "query_template": {"f": "geojson"},
-            "pagination": {"page_size": 1000},
+            "access": "ogr",
+            "ogr": {"driver": "ESRIJSON"},
+            "query_template": {"out_fields": "OBJECTID,Dissolve"},
             "properties": ["slr_ft", "scenario_label", "dissolve"],
             "fan_out": {
                 "param": "scenario_ft",
@@ -156,11 +157,11 @@ def test_fanout_merge_stamp_and_order(monkeypatch):
     spec = _fanout_spec()
     seen_urls = []
 
-    def _fake_page(spec_, url, params):
-        seen_urls.append(url)
+    def _fake_read(spec_, endpoint, params):
+        seen_urls.append(endpoint.url)
         return [{"type": "Feature", "geometry": _POLY, "properties": {"Dissolve": 1}}]
 
-    monkeypatch.setattr(vector_fgb, "_fetch_one_page", _fake_page)
+    monkeypatch.setattr(vector_ogr, "fetch_from_endpoint", _fake_read)
     params = router.validate_params(spec, {"bbox": [-82.0, 26.0, -81.9, 26.1]})
     gdf = _fgb_gdf(fan_out.execute(spec, params))
 
@@ -175,7 +176,7 @@ def test_fanout_merge_stamp_and_order(monkeypatch):
 
 def test_fanout_honest_empty_header(monkeypatch):
     spec = _fanout_spec()
-    monkeypatch.setattr(vector_fgb, "_fetch_one_page", lambda s, u, p: [])
+    monkeypatch.setattr(vector_ogr, "fetch_from_endpoint", lambda s, e, p: [])
     params = router.validate_params(spec, {"bbox": [-82.0, 26.0, -81.9, 26.1], "scenario_ft": 1.0})
     gdf = _fgb_gdf(fan_out.execute(spec, params))
     assert len(gdf) == 0
@@ -185,10 +186,10 @@ def test_fanout_honest_empty_header(monkeypatch):
 def test_fanout_forced_upstream(monkeypatch):
     spec = _fanout_spec()
 
-    def _boom(s, u, p):
+    def _boom(s, e, p):
         raise RouterUpstreamError("forced")
 
-    monkeypatch.setattr(vector_fgb, "_fetch_one_page", _boom)
+    monkeypatch.setattr(vector_ogr, "fetch_from_endpoint", _boom)
     params = router.validate_params(spec, {"bbox": [-82.0, 26.0, -81.9, 26.1], "scenario_ft": 1.0})
     with pytest.raises(RouterUpstreamError):
         fan_out.execute(spec, params)
