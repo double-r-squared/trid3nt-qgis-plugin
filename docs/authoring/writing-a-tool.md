@@ -324,11 +324,14 @@ cd services/agent && python -m pytest tests/test_<your_tool>.py -q
 
 ## Step 6 - the 1000-char docstring rule (front-load routing)
 
-The Bedrock adapter **always truncates the tool description to 1000 chars**
-(`trid3nt_server/bedrock_adapter.py`,
-`tool_declarations_to_bedrock_tools`: `(dumped.get("description") or name)[:1000]`;
-`adapter.py` applies the same `doc[:1000]` cap on the docstring-only fallback
-path). Everything past ~1000 chars is invisible to the model.
+The OpenAI adapter **always truncates the tool description to 1000 chars**
+(`trid3nt_server/adapters/openai_adapter.py`:
+`(dumped.get("description") or dumped["name"])[:1000]`; `adapter.py` applies
+the same `doc[:1000]` cap on the docstring-only fallback path). Provider
+selection itself is `adapters/model_selection.py` (`MODEL_PROVIDER`, `openai`
+default) - independent of any one adapter, so the cap is enforced per adapter
+rather than once upstream of all of them. Everything past ~1000 chars is
+invisible to the model.
 
 Therefore:
 
