@@ -1,52 +1,8 @@
-"""``compute_model_residuals`` composer tool -- observed-vs-modeled residuals.
+"""``compute_model_residuals`` - observed-vs-modeled residuals.
 
-Samples a MODEL raster (a simulated-head COG, a plume-concentration
-COG, or any single-band raster the uri registry resolves) at OBSERVATION
-points and returns a residuals point vector layer (``observed - simulated``
-per point) plus fit statistics -- the standard model-calibration diagnostic
-("how far off is the model from what was actually measured").
-
-Observations come from EITHER an existing vector layer (``observations_layer_uri``
--- e.g. the point layer ``fetch_usgs_groundwater_levels`` produces) OR, when
-``observations_layer_uri`` is omitted and a ``bbox`` is given, this tool fetches
-USGS groundwater readings itself via the ``fetch_usgs_groundwater_levels`` router
-seam (get_spec + validate_params + executor -- raw FGB bytes, no cache/publish
-round trip), not the LLM-facing tool wrapper -- so no extra round-trip is needed.
-
-HONEST UNITS/SEMANTICS (the load-bearing design constraint): USGS groundwater
-readings come in two families that are NOT interchangeable --
-
-- DEPTH-TO-WATER (pcodes 72019 / 61055, ft below land surface or a measuring
-  point) -- larger value = DEEPER water table (an INVERTED sign convention
-  vs. an elevation head).
-- ELEVATION-referenced water level (pcodes 72150 / 62610 / 62611, ft relative
-  to NAVD88/NGVD29) -- directly analogous to a simulated HEAD
-  (elevation), modulo matching vertical datum.
-
-A head raster is an ELEVATION. Comparing it against DEPTH-TO-WATER
-readings without converting first (elevation = land-surface elevation minus
-depth-to-water) produces a meaningless number, not a real residual. This tool
-NEVER silently mixes/ignores that: it detects the fetched reading family from
-the source schema (``parameter_code`` on the USGS layer), filters mixed
-fetches down to one consistent family when both appear, and always attaches
-an explicit ``units_warning`` to the result -- the tool is still useful for
-RELATIVE spatial-bias reading even when an absolute unit match cannot be
-confirmed, and the warning says so.
-
-Output: (a) a point ``LayerURI`` (FlatGeobuf, EPSG:4326) with per-point
-``observed`` / ``simulated`` / ``residual`` properties, a diverging
-(red-blue, centered on zero) continuous legend on ``residual``, named
-``"Model residuals (<n> points)"``; (b) fit statistics carried directly on
-the returned ``ModelResidualsLayerURI`` (mirrors the ``compute_flood_depth_
-damage`` / ``compute_exposure_summary`` pattern -- a ``LayerURI`` subclass IS
-the "result dict" the LLM reads from the function response, no separate
-publish step required for a vector layer).
-
-``cacheable=False`` (``live-no-cache``): a comparison composer over
-live/caller-supplied inputs; the artifact goes to the runs bucket (or
-``_output_dir`` for offline tests), mirroring ``compute_flood_depth_damage``.
+A head raster is an ELEVATION and USGS depth-to-water is not, so the family is
+detected from ``parameter_code`` and a ``units_warning`` is always attached.
 """
-
 from __future__ import annotations
 
 import logging
@@ -120,30 +76,13 @@ class ResidualsUpstreamError(ResidualsError):
 
 
 # ---------------------------------------------------------------------------
-# Result type -- LayerURI subclass carrying the fit-statistics side-channel.
+# Result type.
 # ---------------------------------------------------------------------------
 
 
 class ModelResidualsLayerURI(LayerURI):
-    """The residuals point ``LayerURI`` plus fit-statistics summary.
-
-    Extra fields beyond ``LayerURI``:
-
-    - ``n_points`` -- points used in the statistics (in-footprint, both
-      observed and simulated finite).
-    - ``mean_error`` / ``bias`` -- mean of ``observed - simulated`` (the same
-      statistic under both names; positive = model reads LOW vs. observed on
-      average, negative = model reads HIGH).
-    - ``rmse`` / ``mae`` -- root-mean-square / mean-absolute residual.
-    - ``min_residual`` / ``max_residual``.
-    - ``units_warning`` -- ALWAYS populated; states what is known (or not
-      known) about whether the observed and modeled values share units and a
-      vertical reference.
-    - ``interpretation`` -- one-line honest summary, e.g. "Model biased low
-      by 0.42 ft on average (n=14)."
-    - ``small_n_caveat`` -- True when ``n_points < 3`` (stats still computed
-      and returned, but flagged as not statistically meaningful).
-    - ``notes`` -- provenance + filtering/exclusion detail.
+    """The residuals point ``LayerURI`` plus fit statistics; ``mean_error`` and
+    ``bias`` are one number, positive meaning the model reads LOW.
     """
 
     n_points: int = 0
@@ -277,18 +216,11 @@ def _load_observations_from_uri(observations_layer_uri: str, tmpdir: str) -> Any
 def _fetch_observations_from_bbox(
     bbox: tuple[float, float, float, float], tmpdir: str, notes: list[str]
 ) -> Any:
-    """Fetch USGS groundwater readings over ``bbox`` via the router seam.
-
-    Resolves ``fetch_usgs_groundwater_levels``'s FGB bytes through the in-process
-    router (get_spec + validate_params + executor) -- not the LLM-facing tool
-    wrapper -- so this composer does not need a separate tool round-trip. Lazy
-    import mirrors ``compute_flood_depth_damage``'s ``fetch_usace_nsi`` pattern.
+    """USGS groundwater readings over ``bbox`` as a GeoDataFrame, resolved through
+    the in-process router rather than the LLM-facing wrapper.
     """
     import geopandas as gpd
 
-    # fetch_usgs_groundwater_levels is spec-driven; resolve its raw FGB
-    # bytes via the in-process router seam (get_spec + validate_params + executor,
-    # no cache/publish round trip) -- the admin_boundaries re-point precedent.
     from trid3nt_server.tools.fetchers._router import router
     from trid3nt_server.tools.fetchers._router.errors import RouterError
     from trid3nt_server.tools.fetchers._router.registration import get_spec
@@ -365,18 +297,8 @@ def _resolve_observed_field(gdf: Any, observed_value_field: str | None) -> str:
 def _apply_usgs_semantics(
     gdf: Any, field: str, notes: list[str]
 ) -> tuple[Any, str]:
-    """Honest units/semantics handling for the USGS groundwater schema.
-
-    No-op (returns ``gdf`` unchanged) unless ``field == "water_level"`` AND
-    the layer carries a ``parameter_code`` column (the
-    ``fetch_usgs_groundwater_levels`` schema) -- a generic caller-supplied
-    field/layer always gets the generic disclaimer instead. When BOTH
-    depth-to-water and elevation-referenced readings are present in the same
-    fetch, filters down to the elevation-referenced subset (directly
-    comparable to a head raster) and notes the drop -- never silently
-    averages incompatible units together.
-
-    Returns ``(gdf, units_warning)``; ``units_warning`` is NEVER empty.
+    """``(gdf, units_warning)``, the warning never empty; a fetch carrying both
+    families is filtered to the elevation-referenced subset, never averaged.
     """
     if field != "water_level" or "parameter_code" not in gdf.columns:
         return gdf, _GENERIC_UNITS_WARNING
@@ -441,16 +363,8 @@ def _apply_usgs_semantics(
 def _bilinear_sample(
     band: np.ndarray, transform: Any, xs: np.ndarray, ys: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Bilinear-sample ``band`` (NaN-filled nodata) at world coords (xs, ys).
-
-    Returns ``(in_bounds, samples)``:
-    - ``in_bounds`` -- True where the point's world coordinate falls inside
-      the raster's rectangular extent (footprint test, independent of
-      nodata).
-    - ``samples`` -- bilinear-interpolated value at each point; NaN where the
-      point falls outside the extent OR the interpolation stencil touches a
-      nodata / out-of-extent neighbor (points within ~half a pixel of the
-      raster edge may fall in this bucket -- honest, not a bug).
+    """``(in_bounds, samples)``: the footprint test ignores nodata, and a sample is
+    NaN when the point is outside it or its stencil touches a nodata neighbour.
     """
     from scipy.ndimage import map_coordinates
 
@@ -480,7 +394,9 @@ def _bilinear_sample(
 
 
 def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
-    """Persist the FGB; return its URI (local for tests, runs bucket live)."""
+    """Persist the FGB and return its URI: a local path when ``output_dir`` is
+    given, else an ``s3://`` key in the runs bucket.
+    """
     filename = f"model_residuals_{seed}.fgb"
     if output_dir is not None:
         path = os.path.join(output_dir, filename)
@@ -544,95 +460,22 @@ def compute_model_residuals(
 ) -> ModelResidualsLayerURI:
     """Observed-vs-modeled residuals: sample a MODEL raster at OBSERVATION points.
 
-    Use this to CALIBRATE / sanity-check a model result against real
-    measurements -- e.g. a simulated-head COG vs. USGS groundwater
-    monitoring wells, or a plume-concentration COG vs. any point layer of
-    measured concentrations. Samples the raster (bilinear) at every
-    observation point inside its footprint, computes
-    ``residual = observed - simulated`` per point, and returns the residual
-    points as a map layer plus fit statistics (mean error / RMSE / MAE /
-    bias).
+    Use to calibrate a model result against real measurements - a simulated-head
+    COG against USGS wells, a plume COG against measured concentrations. Samples
+    bilinearly in the footprint and returns ``observed - simulated`` per point
+    plus mean error, RMSE, MAE and bias. Not for zonal aggregation, for running
+    the model, or for a model-to-model diff, which has no observations.
 
-    **When to use:**
-    - "How well does this head raster match the observed wells?" -- right
-      after any solve produces a simulated-head COG.
-    - Model calibration / validation questions in general: any single-band
-      MODEL raster vs. any point layer of MEASURED values at the same kind
-      of quantity.
-    - "Is the model biased high or low, and where?" -- the per-point residual
-      map shows spatial bias pattern; the summary stats give a headline
-      number.
+    UNITS: the result ALWAYS carries a ``units_warning``. USGS depth-to-water is
+    NOT an elevation, so it is not a valid residual against a head raster
+    without converting; the family is detected and stated.
 
-    **When NOT to use:**
-    - Aggregating a raster within polygons (zones) -- use
-      the code_exec playground.
-    - Running the model itself -- this tool only COMPARES an already-produced
-      model raster against observations; it never simulates anything.
-    - Comparing two MODELED rasters against each other (no real
-      observations) -- that is a model-to-model diff, not a residuals
-      calibration check.
-
-    **HONEST UNITS WARNING (read this):** the result ALWAYS carries a
-    ``units_warning``. USGS groundwater readings split into DEPTH-TO-WATER
-    (pcodes 72019/61055, ft below land surface -- NOT an elevation) and
-    ELEVATION-referenced water level (pcodes 72150/62610/62611, ft relative
-    to NAVD88/NGVD29 -- directly analogous to a head raster). A depth-to-
-    water reading vs. a head-ELEVATION raster is NOT a valid residual
-    without converting first (elevation = land-surface elevation minus
-    depth-to-water); this tool detects which family the observations belong
-    to (from the USGS ``parameter_code``) and says so explicitly, filtering
-    to the elevation-referenced subset when both appear. A generic
-    non-USGS layer still yields useful RELATIVE spatial-bias reading; the
-    warning notes that too.
-
-    **Parameters:**
-    - ``model_layer_uri``: the MODEL raster to evaluate -- a layer handle
-      from a prior tool result (preferred) or an ``s3://`` COG URI. Any
-      single-band raster (simulated head, plume concentration, etc.).
-    - ``observations_layer_uri``: OPTIONAL. An existing point vector layer
-      handle/URI of real measurements (e.g. the layer
-      ``fetch_usgs_groundwater_levels`` produces). When given, ``bbox`` is
-      ignored.
-    - ``bbox``: OPTIONAL ``(west, south, east, north)`` in EPSG:4326. Used
-      ONLY when ``observations_layer_uri`` is omitted -- this tool then
-      fetches USGS groundwater observations itself over ``bbox`` (via
-      ``fetch_usgs_groundwater_levels``'s shared core; no separate tool call
-      needed). Exactly one of ``observations_layer_uri`` / ``bbox`` must be
-      given.
-    - ``observed_value_field``: OPTIONAL. The observations-layer property
-      holding the measured value. When omitted, auto-detected (tries
-      ``water_level`` first -- the ``fetch_usgs_groundwater_levels`` schema
-      -- then a short list of common field names). When given, used
-      VERBATIM (no auto-detection or pcode filtering).
-
-    **Returns:** ``ModelResidualsLayerURI`` -- a point vector ``LayerURI``
-    (FlatGeobuf, EPSG:4326; per-feature ``observed`` / ``simulated`` /
-    ``residual``, plus whatever properties the observations layer already
-    carried) named ``"Model residuals (<n> points)"``, with a diverging
-    red-blue continuous legend centered on zero over the ``residual``
-    property,
-    plus ``n_points`` / ``mean_error`` / ``bias`` / ``rmse`` / ``mae`` /
-    ``min_residual`` / ``max_residual`` / ``units_warning`` (always
-    populated) / ``interpretation`` (one-line honest summary) /
-    ``small_n_caveat`` (True when ``n_points < 3`` -- stats are still
-    returned, just flagged as not statistically meaningful) / ``notes``.
-
-    **Errors:** ``ResidualsInputError`` (bad/unreadable inputs, no
-    selector given, unresolvable ``observed_value_field``);
-    ``ResidualsNoObservationsError`` (zero observation points loaded, or none
-    fall inside the raster's footprint); ``ResidualsAllNodataError`` (points
-    exist in the footprint but every sample lands on nodata);
-    ``ResidualsUpstreamError`` (staging / USGS fetch / write failures).
-
-    Cross-tool dependencies:
-        Upstream (consumes):
-        - any solve that produces a simulated-head or concentration COG --
-          the ``model_layer_uri`` this tool samples.
-        - ``fetch_usgs_groundwater_levels`` -- produces the observed-wells
-          ``observations_layer_uri`` (or is called internally via ``bbox``).
-        Downstream (feeds):
-        - Agent narration reads ``interpretation`` / ``units_warning`` for the
-          headline calibration answer.
+    Params:
+        model_layer_uri: the MODEL raster to evaluate, any single band.
+        observations_layer_uri: a point layer of real measurements. Exactly
+            one of this and ``bbox`` is required.
+        bbox: EPSG:4326; USGS groundwater observations are fetched over it.
+        observed_value_field: taken VERBATIM when given, else auto-detected.
     """
     if not isinstance(model_layer_uri, str) or not model_layer_uri.strip():
         raise ResidualsInputError(
