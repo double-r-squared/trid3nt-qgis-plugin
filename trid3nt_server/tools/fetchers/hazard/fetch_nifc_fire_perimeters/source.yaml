@@ -24,12 +24,11 @@ params:
            values: [active, controlled, out, all]}
 
 ingest:
-  # Single-shot: page_size >> active-perimeter count -> one page, loop stops.
+  access: ogr
+  ogr: {driver: ESRIJSON}
   query_template:
     out_fields: "OBJECTID,poly_IncidentName,poly_FeatureCategory,poly_DateCurrent,poly_GISAcres,attr_IncidentSize,attr_PercentContained,attr_IncidentName,attr_FireCauseGeneral,attr_FireCause,attr_POOState,attr_IrwinID,attr_UniqueFireIdentifier"
-    f: geojson
     order_by: "OBJECTID ASC"
-  pagination: {mode: result_offset, page_size: 4000}
   json_coerce_nested: true
 
 normalize:
