@@ -1,20 +1,8 @@
-"""Shared contracts (SRS v0.3 Appendices A-D + + solver shapes).
+"""The types that cross a package boundary - one definition, imported everywhere.
 
-Single source of truth for every type that crosses a specialist boundary:
-- ``ws``: WebSocket protocol - envelope + every message type.
-- ``envelope``: AssessmentEnvelope + flood subtype.
-- ``collections``: the five MongoDB collection schemas + vector index configs
-  + TTL config.
-- ``catalog``: CatalogEntry - the public_hazard_catalog.yaml entry.
-- ``case``: Case persistence envelopes (CaseSummary/CaseChatMessage/
-  CaseSessionState) + Case-lifecycle WebSocket envelopes.
-- ``execution``: ModelSetup / ExecutionHandle / RunResult / LayerURI.
-- ``tool_metadata``: tool-docstring metadata + ``tool_category`` conventions
- - convention only; ``agent`` owns the registry code.
-
-All models subclass ``GraceModel`` (``extra="forbid"``, UTC-``Z`` datetimes).
-The canonical wire form is ``model_dump(mode="json")`` (add ``by_alias=True``
-for the ``_id``-aliased collection documents; see ``collections.MONGO_DUMP_KWARGS``).
+Every model subclasses ``GraceModel`` (``extra="forbid"``, UTC-``Z`` datetimes)
+and the canonical wire form is ``model_dump(mode="json")``; the ``_id``-aliased
+collection documents additionally take ``by_alias=True``.
 """
 
 from __future__ import annotations
@@ -107,23 +95,22 @@ __all__ = [
     "tool_metadata",
     "tool_registry",
     "user",
-    # case-workflow results
-    # worker -> agent publish-manifest reader (SFINCS postprocess offload Phase 4)
+    # publish manifest: worker -> agent
     "MANIFEST_SCHEMA_VERSION",
     "PublishManifest",
     "PublishManifestBandStats",
     "PublishManifestLayer",
     "parse_publish_manifest",
-    # emit-on-solve outputs.json manifest (writer + tolerant reader)
+    # outputs.json manifest: writer + tolerant reader
     "OUTPUTS_MANIFEST_SCHEMA_VERSION",
     "OUTPUT_KINDS",
     "OutputEntry",
     "OutputsManifest",
     "parse_outputs_manifest",
-    # chart-emission contracts (sprint-13 conversational analysis layer)
+    # chart emission
     "ChartEmissionPayload",
     "SessionChartRecord",
-    # python-sandbox code-exec contracts (sprint-13 conversational analysis layer)
+    # python-sandbox code exec
     "CodeExecRequestPayload",
     "CodeExecResultPayload",
     "CodeExecStatus",

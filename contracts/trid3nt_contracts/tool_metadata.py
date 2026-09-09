@@ -1,13 +1,8 @@
-"""Tool docstring metadata conventions and ``tool_category`` vocabulary.
+"""Tool docstring sections and the ``tool_category`` vocabulary.
 
-CONVENTION ONLY. This module documents the required docstring sections (
-) and the ``tool_category`` vocabulary used in the ``tool-call-start``
-WebSocket message. ``agent`` owns the tool registry / ``FunctionTool``
-code; ``schema`` owns these conventions and the message field they populate.
-
-The constants here are importable so ``agent`` and ``testing`` can assert that a
-registered tool's category is a known member and that its docstring carries the
-required sections — without re-stating the vocabulary in two places.
+Constants only, so the vocabulary is asserted against rather than restated.
+``tool_category`` is an OPEN enum: a value absent from it is still legal on
+the wire.
 """
 
 from __future__ import annotations
@@ -19,9 +14,8 @@ __all__ = [
 ]
 
 
-#: Required docstring sections for every registered tool.
-#: The agent's registry should reject (or flag) a tool whose docstring is
-#: missing any of these. ``testing`` asserts presence as a negative control.
+#: Required docstring sections for every registered tool. A registered tool
+#: whose docstring is missing any of these is malformed.
 REQUIRED_DOCSTRING_SECTIONS: tuple[str, ...] = (
     "summary",  # one-sentence summary (the first docstring line)
     "Use this when:",  # bullet list of trigger conditions
@@ -31,10 +25,9 @@ REQUIRED_DOCSTRING_SECTIONS: tuple[str, ...] = (
 )
 
 
-#: ``tool_category`` vocabulary for ``tool-call-start.tool_category`` (A.4).
-#: Open enum: a new engine may add a category without a breaking
-#: change. Members mirror the tool groupings. The pipeline strip uses
-#: the category to group/icon steps client-side.
+#: ``tool_category`` vocabulary for the ``tool-call-start`` field of the same
+#: name. Open enum - a new engine may add a category without a breaking change,
+#: so a receiver must tolerate a value that is not a member here.
 TOOL_CATEGORIES: tuple[str, ...] = (
     "workflow",  # deterministic workflows
     "discovery",  # public hazard layer discovery (catalog search / fetch / summarize)
@@ -52,9 +45,6 @@ TOOL_CATEGORIES: tuple[str, ...] = (
 
 def is_known_tool_category(category: str) -> bool:
     """Return True if ``category`` is a documented ``tool_category`` member.
-
-    Open-enum semantics: unknown categories are *allowed* on the wire (a new
-    engine may add one), but the agent/testing layers can use this to flag a
-    category that is not yet documented here so the vocabulary stays current.
-    """
+    False is not invalid - the enum is open and an undocumented category is
+    still legal on the wire."""
     return category in TOOL_CATEGORIES

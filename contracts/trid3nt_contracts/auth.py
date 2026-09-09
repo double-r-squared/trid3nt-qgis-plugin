@@ -1,42 +1,8 @@
-"""Auth handshake envelopes for the WebSocket connect flow.
+"""The two envelopes of the WebSocket connect handshake.
 
-Wave 2 of sprint-12-mega lands Firebase Authentication into the WebSocket
-connect handshake.  the agent verifies a Firebase ID token on
-connect, resolves it to a ``UserDocument._id`` via the Persistence
-interface, and binds the resolved user to the session context so
-every subsequent envelope is user-scoped.
-
-This module defines the **two envelopes** the auth handshake uses:
-
-- ``AuthTokenEnvelope`` (client → agent, type ``auth-token``) — the client
-  sends its Firebase ID token immediately after WebSocket connect. The token
-  is the credential; verification happens agent-side.
-- ``AuthAckEnvelope`` (agent → client, type ``auth-ack``) — the agent
-  confirms the resolved authenticated user id and whether the user is
-  anonymous. Sent once per connect after either successful ``verify_id_token``
-  or anonymous-fallback provisioning (scope).
-
-The H.5 ``token-refresh`` envelope is deferred to a follow-up job when
-token-refresh wiring lands.
-
-Invariants this module is responsible for:
-
-- **Invariant 9 (no cost theater).** No cost / spend / quota fields on either
-  envelope.
-- **(wire isolation).** The raw token NEVER appears in
-  ``AuthAckEnvelope`` — the agent discards it; only the resolved
-  ``user_id`` flows back to the client.
-
-SRS references:
-
-- Firebase Authentication as the identity provider.
-- Anonymous → authenticated upgrade (``is_anonymous`` flag).
-- Session validation: ``verify_id_token`` resolves to
-  ``UserDocument._id`` via Persistence.
-- Connection lifecycle (the handshake sits here once landed).
-- ``AUTH_TOKEN_EXPIRED`` / ``AUTH_TOKEN_INVALID`` error codes
-  (forward-looking; this module pins the envelope shapes so the codes have
-  somewhere to surface).
+``auth-token`` carries the credential up, ``auth-ack`` the resolved identity
+back. The raw credential NEVER appears on the ack and is never persisted: only
+the resolved ``user_id`` reaches the client.
 """
 
 from __future__ import annotations
@@ -58,37 +24,14 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Server-advertised sibling endpoints (remote-daemon access, 2026-07)
+# Server-advertised sibling endpoints
 # --------------------------------------------------------------------------- #
 
 
 class AdvertisedEndpoints(GraceModel):
-    """Server-advertised base URLs for the daemon's sibling services.
-
-    Remote-daemon access: a client (QGIS plugin / browser) that is configured
-    with ONLY the WebSocket server URL learns where the sibling surfaces live
-    directly from the connect handshake, so no second setting is required. The
-    server rides this object on the ``auth-ack`` -- the FIRST envelope the
-    client parses -- so the endpoints are known before any layer / data fetch.
-
-    - ``data_base`` -- the object-store (MinIO) http base, e.g.
-      ``http://<host>:9000``. Clients translate ``s3://bucket/key`` layer
-      URIs to path-style http against this base.
-    - ``http_base`` -- the agent's read-only HTTP surface (tool catalog etc.),
-      e.g. ``http://<host>:8766``.
-
-    The server DERIVES both from the connection's own local address (so a
-    client dialing ``100.x.x.x:8765`` over the tailnet gets ``100.x.x.x`` back
-    automatically) plus the known ports, OR from the
-    ``TRID3NT_ADVERTISED_DATA_BASE`` / ``TRID3NT_ADVERTISED_HTTP_BASE`` env
-    overrides when set.
-
-    Both fields are optional and the whole object is optional on the ack
-    (defaults ``None``): an old server / stub that never sets it, and an old
-    client that never reads it, are byte-identical on the wire. Clients MUST
-    treat it as best-effort and fall back to their own configured defaults
-    when it is absent.
-    """
+    """Base URLs for the daemon's sibling services, ridden on the ``auth-ack``.
+    Best-effort and wholly optional: a client that reads ``None`` falls back to
+    its own configured defaults rather than failing the connect."""
 
     #: Object-store (MinIO) http base, e.g. ``http://<host>:9000``. None when
     #: the server cannot derive it and no env override is set.
@@ -100,78 +43,47 @@ class AdvertisedEndpoints(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# Client → Agent: auth-token
+# Client -> agent: auth-token
 # --------------------------------------------------------------------------- #
 
 
 class AuthTokenEnvelope(GraceModel):
-    """``auth-token`` (client → agent): the Firebase ID token for verification.
-
-    The client sends this envelope immediately after WebSocket connect, before
-    any other client→agent envelope. The agent calls
-    ``firebase_admin.auth.verify_id_token(token)`` to resolve the Firebase
-    ``uid`` (and the tier custom-claim if present), then looks up or
-    auto-provisions the corresponding ``UserDocument`` via the
-    Persistence interface.
-
-    Wave 2 scope:
-    - ``token`` is a non-empty string — the JWT issued by Firebase Auth.
-    - ``anonymous`` may be sent as a hint by the client (e.g. when it
-      explicitly signed in anonymously). The agent does NOT trust this hint
-      blindly — verification flows from the JWT claims.
-    - Empty / missing ``token`` triggers the anonymous-fallback path
-      (server resolves an anonymous User with no IdP binding).
-
-    the raw token is consumed by the agent and discarded after
-    verification — it is NEVER persisted (Mongo) and NEVER re-emitted on the
-    wire (the ack carries only the resolved identity, not the credential).
-    """
+    """``auth-token`` (client -> agent): the credential, sent before any other
+    client envelope. An empty ``token`` selects the anonymous path, and
+    ``anonymous`` is an untrusted client hint rather than the decision."""
 
     MESSAGE_TYPE: ClassVar[str] = "auth-token"
 
-    #: The Firebase ID token (JWT). Empty string triggers anonymous fallback.
-    #: Upper-bounded at 8KB — well above any real JWT, well below any DOS
-    #: vector. Firebase JWTs are typically 800-1500 bytes.
+    #: The identity token (JWT). Empty string selects the anonymous fallback.
+    #: Consumed at verification and discarded - never persisted, never
+    #: re-emitted. Bounded at 8KB: far above any real JWT, far below a DOS.
     token: str = Field(default="", max_length=8192)
 
-    #: Client-side hint that this is an anonymous sign-in. The agent verifies
-    #: against the JWT claims; this field is informational only.
+    #: Client-side hint that this is an anonymous sign-in. Informational only:
+    #: the decision is taken from the token's own claims.
     anonymous: bool = False
 
 
 # --------------------------------------------------------------------------- #
-# Agent → Client: auth-ack
+# Agent -> client: auth-ack
 # --------------------------------------------------------------------------- #
 
 
 class AuthAckEnvelope(GraceModel):
-    """``auth-ack`` (agent → client): confirmation of the resolved identity.
-
-    Sent exactly once per WebSocket connect. TRID3NT is a local single-user
-    product with no identity provider: every connection resolves to the one
-    fixed local user (``is_anonymous=True``). The client learns its
-    ``user_id`` for the session — every subsequent envelope is implicitly
-    scoped to this user.
-
-    Scope:
-    - ``user_id`` is the ULID-shaped ``UserDocument._id`` (
-      and the ``User`` contract).
-    - ``is_anonymous`` is True for the local user.
-
-    Invariant 9: no cost / quota / spend field.
-    """
+    """``auth-ack`` (agent -> client): the resolved identity, sent exactly once
+    per connect. Every later envelope is implicitly scoped to this ``user_id``,
+    and no cost, quota or spend field ever lands here."""
 
     MESSAGE_TYPE: ClassVar[str] = "auth-ack"
 
-    #: The resolved ``UserDocument._id`` (ULID) for this session.
+    #: The resolved ``User`` id (ULID) this session is scoped to.
     user_id: ULIDStr
 
     #: True if this is an anonymous-fallback user (no identity provider).
     is_anonymous: bool = False
 
-    #: Remote-daemon access (2026-07): optional server-advertised sibling
-    #: endpoints (object store + agent HTTP). ``None`` on old servers / stubs
-    #: -- clients treat it as best-effort and fall back to their own configured
-    #: defaults when absent. Additive + default-None, so ``extra="forbid"`` and
-    #: the on-the-wire shape stay backward-compatible.
+    #: Optional server-advertised sibling endpoints (object store + agent
+    #: HTTP). ``None`` when the server does not advertise; a client treats it
+    #: as best-effort. Additive and default-``None``, so the wire shape stays
+    #: byte-identical against a server or client that ignores it.
     endpoints: AdvertisedEndpoints | None = Field(default=None)

@@ -1,13 +1,7 @@
-"""Generate JSON Schema files for every contract.
+"""Render the JSON Schema of every contract into ``contracts/schemas``.
 
-Run via the ``trid3nt-export-schemas`` console script or:
-
-    python -m trid3nt_contracts.export_schemas [OUTPUT_DIR]
-
-Default OUTPUT_DIR is ``contracts/schemas`` (resolved relative to this
-package's repo location). Each top-level contract model is written to
-``<name>.json``. Regeneration is idempotent: re-running produces byte-identical
-files for an unchanged contract set, so a CI drift check can ``git diff`` them.
+Regeneration is idempotent - an unchanged contract set produces byte-identical
+files - so a drift gate can compare committed bytes against a fresh render.
 """
 
 from __future__ import annotations
@@ -22,29 +16,25 @@ from . import catalog, collections, envelope, execution, tool_registry, ws
 
 # (filename stem, model) for every top-level contract we export.
 _EXPORTS: list[tuple[str, type[BaseModel]]] = [
-    #
     ("assessment_envelope", envelope.AssessmentEnvelope),
     # collections
     ("project_document", collections.ProjectDocument),
     ("run_document", collections.RunDocument),
     ("article_document", collections.ArticleDocument),
     ("session_document", collections.SessionDocument),
-    # sprint-08 additions (Mode 1 catalog substrate, §F.1.2)
+    # catalog substrate
     ("catalog_entry_document", collections.CatalogEntryDocument),
     ("catalog_audit_log_document", collections.CatalogAuditLogDocument),
-    # PipelineStepSummary - exported standalone so the
-    # extended field surface (progress_percent / error_code / error_message)
-    # is independently inspectable by the client mirror + agent emitter
-    # (sprint-06 M4 pre-flight; closes OQ-W-26).
+    # Exported standalone as well as inside its parent, so a client mirroring
+    # the step surface can type against it on its own.
     ("pipeline_step_summary", collections.PipelineStepSummary),
-    #
     ("catalog_entry", catalog.CatalogEntry),
     # solver shapes
     ("model_setup", execution.ModelSetup),
     ("execution_handle", execution.ExecutionHandle),
     ("run_result", execution.RunResult),
     ("layer_uri", execution.LayerURI),
-    # / atomic-tool registration metadata
+    # atomic-tool registration metadata
     ("atomic_tool_metadata", tool_registry.AtomicToolMetadata),
 ]
 
@@ -61,23 +51,19 @@ def _ws_message_exports() -> list[tuple[str, type[BaseModel]]]:
 
 def default_output_dir() -> Path:
     """``contracts/schemas`` relative to this file."""
-    # this file: contracts/trid3nt_contracts/export_schemas.py
-    # parents[0]=trid3nt_contracts, parents[1]=contracts -> contracts/schemas
+    # parents[0] is the package, parents[1] the distribution root.
     return Path(__file__).resolve().parents[1] / "schemas"
 
 
 #: The exact command that rewrites ``contracts/schemas`` from the live models.
-#: The drift gate quotes this verbatim, so it must stay runnable from repo root.
+#: Quoted verbatim by the drift gate, so it must stay runnable from repo root.
 REGEN_COMMAND = "./venvs/agent/bin/python -m trid3nt_contracts.export_schemas"
 
 
 def render_schemas() -> dict[str, str]:
     """Serialize every contract's JSON Schema IN MEMORY: filename -> file text.
-
-    The single serialization path. ``export`` writes exactly what this returns,
-    so a drift gate can compare committed bytes against it without touching the
-    filesystem. Rendering must therefore be pure: no I/O, no mkdir.
-    """
+    The one serialization path, and a pure one - no I/O, no mkdir - so a drift
+    gate can compare committed bytes against it without touching the disk."""
     rendered: dict[str, str] = {}
     for stem, model in [*_EXPORTS, *_ws_message_exports()]:
         schema = model.model_json_schema()
