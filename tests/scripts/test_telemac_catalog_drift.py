@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "instruments" / "extract_telemac_catalog.py"
+_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "instruments" / "extract_telemac_catalog.py"
 
 #: What the six exposed dictionaries hold together.
 _TOTAL_KEYWORDS = 1311

@@ -28,7 +28,7 @@ import numpy as np  # noqa: E402
 
 from trid3nt_server.emission import presets  # noqa: E402
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "packet" / "render_selafin_animation.py"
 
 #: The style row the synthetic field is drawn by - the same row the published

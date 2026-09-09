@@ -23,7 +23,7 @@ pytest.importorskip("PIL")
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 MODULE = REPO / "scripts" / "packet" / "merc_render.py"
 
 
