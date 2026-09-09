@@ -4051,3 +4051,11 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   TIMING: the move wave runs right after the lean sweep closes,
   before calibration. Projected: registered tools 174 -> 161; product
   py -3,800; tests -1,800; fetcher yaml -1,500.
+  RESEQUENCED (NATE 2026-09-08): the TWO-LENS FETCHER CENSUS and the
+  FETCHER FOLD WAVE move AHEAD of calibration. Order now: lean sweep
+  (running) -> scope-attic move -> fetcher fold (on the census's
+  per-family rulings; lands the stac-raster executor with OPERA DSWx
+  as its proving consumer) -> calibration (inherits the executor; adds
+  the SWOT fetchers) -> processing the workflow way -> rung 4. The
+  census is read-only and starts NOW beside the sweep; it excludes the
+  13 packages bound for the scope attic. Calibration spec rev 1c.
