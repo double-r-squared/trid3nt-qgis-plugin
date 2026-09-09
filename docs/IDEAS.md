@@ -4503,3 +4503,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   restructure); NOTHING is applied by the wave. After the docs wave
   NATE reads the ledger and either takes a batch as its own reviewed
   change per module (where behavior is verified as code) or moves on.
+  FOLD RESIDUE HYGIENE CLOSED (2026-09-09, check VERDICT CLEAN): the
+  five fixes re-proven live and by seeded break. Two LIVE REDS outside
+  those commits, REPORTED: (a) artemis_harbor_agitation, both variants
+  - TRID3NT_GSHHG_SHP unset on this machine (NATE's provisioning
+  step, still owed); (b) telemac_do_sag_refined -
+  TELEMAC_RELEASE_POINT_OUTSIDE_DOMAIN: the derived release point sits
+  69 m outside the domain the 24 m / 4 km mesh cuts while the same
+  point is inside the 12 m / 0.5 km smoke domain - the settle vs the
+  coarser domain, a real finding for the owning wave (queued). A
+  scripts-eval side effect caught and reverted: running module bodies
+  under --help rewrote the frozen bench report docs/reports/tool-
+  routing-failure-split.md; restored from HEAD - evals must never
+  execute a script's module body against frozen evidence.
