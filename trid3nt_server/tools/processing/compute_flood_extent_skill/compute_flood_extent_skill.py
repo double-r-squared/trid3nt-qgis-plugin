@@ -1,37 +1,8 @@
-"""``compute_flood_extent_skill`` atomic tool -- modeled vs benchmark wet/dry skill.
+"""``compute_flood_extent_skill`` - modeled vs benchmark wet/dry skill.
 
-Compares a MODELED flood-extent raster (a depth raster, thresholded at
-``model_wet_threshold``, or an already-binary wet/dry raster) against a
-BENCHMARK extent -- either another raster (e.g. a satellite-derived SAR wet
-mask) or a vector polygon (e.g. a FEMA/observed-extent polygon) -- and
-returns the standard 2x2 categorical confusion (hit / false-alarm / miss /
-correct-dry, in km2) plus Hit Rate (H), False Alarm Ratio (F), and Critical
-Success Index (CSI). Formulas per research.md section 2.1 (SEAMLESS-WAVE):
-
-    H   = hit / (hit + miss)
-    F   = false_alarm / (hit + false_alarm)
-    CSI = hit / (hit + miss + false_alarm)
-
-CRS/resolution alignment: the MODEL raster's grid is the reference. A raster
-benchmark is reprojected/resampled onto that grid with nearest-neighbor
-resampling (categorical data -- never interpolate a wet/dry mask); a vector
-benchmark is rasterized directly onto that grid (polygon interior = wet).
-The resample method actually used is always stated in the returned envelope.
-Nodata (in either input, after alignment) is EXCLUDED from every count/area
-and reported (count + area) -- never silently treated as dry.
-
-Published context (research.md section 2.2): CSI ~0.5-0.7 is the general
-"good agreement" convention (not agency-codified); published flood-extent
-CSI against satellite extent ranges ~0.29-0.75 depending on basin/event
-scale -- empirical context, not a target. This tool NEVER emits a pass/fail
-based on these numbers; they ride along as a ``published_context`` string.
-
-``cacheable=False`` (``live-no-cache``): a comparison compute over
-caller-supplied inputs, mirroring ``compute_skill_metrics`` /
-``compute_model_residuals``. Returns a plain JSON-serializable dict, not a
-``LayerURI`` -- this tool never produces a map layer.
+The MODEL grid is the reference: a raster benchmark resamples onto it NEAREST,
+never interpolated, and nodata is excluded from every count, never read as dry.
 """
-
 from __future__ import annotations
 
 import logging
@@ -113,7 +84,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Staging (mirrors compute_model_residuals._stage_uri_local).
+# Staging.
 # ---------------------------------------------------------------------------
 
 
@@ -212,11 +183,8 @@ def _load_benchmark_as_mask(
     benchmark_wet_threshold: float,
     notes: list[str],
 ) -> tuple[np.ndarray, np.ndarray, str, str]:
-    """Return (wet_mask, valid_mask, source_type, resample_method) on the MODEL grid.
-
-    ``source_type`` is "raster" or "vector_polygon"; ``resample_method`` is
-    "nearest" (raster path) or "rasterize" (vector path -- no interpolation
-    is involved, but the field is always populated per the honesty contract).
+    """``(wet_mask, valid_mask, source_type, resample_method)`` on the MODEL grid;
+    ``resample_method`` is always populated so the caller can see what was done.
     """
     if _is_raster(benchmark_local):
         import rasterio
@@ -262,7 +230,6 @@ def _load_benchmark_as_mask(
         )
         return wet, valid, "raster", "nearest"
 
-    # ---- Vector polygon path: rasterize onto the model grid. -------------
     import geopandas as gpd
     from rasterio.features import rasterize
 
@@ -311,14 +278,14 @@ def _load_benchmark_as_mask(
 
 
 # ---------------------------------------------------------------------------
-# Pixel-area helper (handles both projected and geographic model CRS).
+# Pixel-area helper.
 # ---------------------------------------------------------------------------
 
 
 def _pixel_area_km2_grid(transform: Any, crs: Any, shape: tuple[int, int]) -> np.ndarray:
-    """Per-pixel area (km2) grid; constant for a projected CRS, per-row
-    cosine-latitude approximation for a geographic CRS (documented, not
-    exact -- matches the example_bbox_area equirectangular approximation)."""
+    """Per-pixel area in km2: constant on a projected CRS, a per-row geodesic
+    approximation on a geographic one - documented, not exact.
+    """
     height, width = shape
     px_w = abs(transform.a)
     px_h = abs(transform.e)
@@ -326,7 +293,6 @@ def _pixel_area_km2_grid(transform: Any, crs: Any, shape: tuple[int, int]) -> np
         from pyproj import Geod
 
         row_idx = np.arange(height, dtype=np.float64)
-        # latitude at the center of each row
         lat = transform.f + (row_idx + 0.5) * transform.e
         geod = Geod(ellps="WGS84")
         lon0 = np.full(lat.shape, transform.c)
@@ -334,8 +300,7 @@ def _pixel_area_km2_grid(transform: Any, crs: Any, shape: tuple[int, int]) -> np
         cell_h_m = geod.inv(lon0, lat - 0.5 * px_h, lon0, lat + 0.5 * px_h)[2]
         row_area_km2 = cell_w_m * cell_h_m / 1.0e6
         return np.repeat(row_area_km2[:, np.newaxis], width, axis=1)
-    # Projected CRS: assume linear (meter) units -- the repo-wide convention
-    # for every projected CRS this tool is exercised against.
+    # A projected CRS is assumed to carry linear metre units.
     area_km2 = (px_w * px_h) / 1.0e6
     return np.full(shape, area_km2, dtype=np.float64)
 
@@ -355,67 +320,23 @@ def compute_flood_extent_skill(
 ) -> dict[str, Any]:
     """Score a modeled flood-extent raster against a benchmark wet/dry extent.
 
-    Use this to check whether a flood model's WET/DRY footprint matches a
-    reference extent -- a satellite-derived (SAR) wet mask, a FEMA/observed
-    flood-extent polygon, or any other benchmark raster/polygon. Computes
-    the standard 2x2 categorical confusion (hit / false-alarm / miss /
-    correct-dry, in km2) and Hit Rate (H), False Alarm Ratio (F), Critical
-    Success Index (CSI).
+    Use when you want to know whether a flood model's WET/DRY footprint matches
+    a reference extent - a satellite (SAR) wet mask, an observed flood-extent
+    polygon, any benchmark raster or polygon. Returns the 2x2 categorical
+    confusion in km2 plus Hit Rate, False Alarm Ratio and CSI. Not for
+    continuous time series (``compute_skill_metrics``) or per-pixel residuals
+    (``compute_model_residuals``).
 
-    **When to use:**
-    - "Does the modeled flood footprint match the satellite/observed
-      extent?" right after an engine run produces a flood-depth raster and
-      you have (or fetch) a benchmark extent.
-    - Comparing two categorical WET/DRY rasters/polygons in general.
+    Params:
+        model_extent_uri: the MODELED single-band raster, binarized by
+            ``model_wet_threshold``; pass an already-binary 0/1 raster with the
+            default 0.0 to use it as-is.
+        benchmark_extent_uri: the BENCHMARK, either a single-band raster
+            binarized by ``benchmark_wet_threshold`` or a vector polygon whose
+            interior is wet. Detected automatically.
 
-    **When NOT to use:**
-    - Comparing continuous stage/flow/head TIME SERIES -- use
-      ``compute_skill_metrics`` (NSE/KGE/PBIAS/RSR/RMSE/R2), not this
-      categorical extent tool.
-    - You need per-pixel spatial residuals rather than a categorical
-      confusion summary -- use ``compute_model_residuals``.
-
-    **Parameters:**
-    - ``model_extent_uri``: the MODELED raster -- a layer handle from a
-      prior tool result (preferred) or an ``s3://``/local raster URI. Any
-      single-band raster; ``model_wet_threshold`` binarizes it
-      (``value > threshold`` = wet). Pass an already-binary 0/1 raster with
-      the default ``threshold=0.0`` to use it as-is.
-    - ``benchmark_extent_uri``: the BENCHMARK -- EITHER a single-band raster
-      (binarized the same way via ``benchmark_wet_threshold``) OR a vector
-      polygon layer (interior = wet, rasterized directly onto the model
-      grid). Detected automatically (tries opening as a raster first, then
-      falls back to a vector reader).
-    - ``model_wet_threshold`` / ``benchmark_wet_threshold``: default 0.0
-      (``value > 0`` = wet -- the natural threshold for a depth raster or an
-      already-binary 0/1 mask). Ignored for a vector benchmark.
-
-    **Returns:** a plain dict -- ``hit_area_km2`` / ``false_alarm_area_km2``
-    / ``miss_area_km2`` / ``correct_dry_area_km2``, ``hit_rate`` (H),
-    ``false_alarm_ratio`` (F), ``CSI``, ``confusion_counts`` (pixel counts
-    for the same four classes), ``n_pixels_compared``, ``resample_method``
-    (``"nearest"`` for a raster benchmark, ``"rasterize"`` for a vector
-    benchmark), ``benchmark_source_type`` (``"raster"``/``"vector_polygon"``),
-    ``model_crs`` / ``compare_crs``, ``nodata_excluded`` (``count`` +
-    ``area_km2``, always populated), ``published_context`` (CSI reference
-    ranges from the literature -- context only, never a pass/fail),
-    ``notes``.
-
-    **Errors:** ``FloodExtentSkillInputError`` (unreadable
-    inputs, missing CRS, bad threshold); ``FloodExtentSkillNoOverlapError``
-    (zero valid overlapping pixels between model and benchmark);
-    ``FloodExtentSkillUpstreamError`` (staging / reproject / rasterize
-    failure).
-
-    Cross-tool dependencies:
-        Upstream (consumes):
-        - A flood-model raster (a modeled raster from a solver run, or
-          any depth/wet-dry raster) as ``model_extent_uri``.
-        - ``fetch_flood_extent_observation`` (or any other benchmark
-          extent source) as ``benchmark_extent_uri``.
-        Downstream (feeds):
-        - Agent narration reads ``CSI``/``hit_rate``/``false_alarm_ratio``
-          + ``published_context`` for the headline extent-validation answer.
+    ``published_context`` rides along as literature reference ranges, never as a
+    pass/fail. Unreadable inputs and zero valid overlap are typed errors.
     """
     if not isinstance(model_extent_uri, str) or not model_extent_uri.strip():
         raise FloodExtentSkillInputError(
