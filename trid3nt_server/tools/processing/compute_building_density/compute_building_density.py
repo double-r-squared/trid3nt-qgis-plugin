@@ -402,8 +402,7 @@ def _build_density_grid(
     cell_size_m: float,
 ):
     """``(array, transform, crs, height, width)``: centroid counts binned north-up
-    onto an EPSG:3857 grid, whose cell covers 1.13-1.41x ``cell_size_m`` of
-    ground at 28-45 deg latitude.
+    onto EPSG:3857, whose cell covers 1.13-1.41x ``cell_size_m`` at 28-45 deg lat.
     """
     import numpy as np
     from pyproj import Transformer
