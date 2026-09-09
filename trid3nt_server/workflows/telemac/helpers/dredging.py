@@ -1,16 +1,8 @@
 """NESTOR: the fields a maintenance dredge acts on, and the grade it digs to.
 
-The module reads three files on every action - the polygons that NAME the
-fields, the actions that say when and how deep, and the surface reference each
-node's chainage and design grade are interpolated from - so a run naming two of
-them is a run NESTOR cannot read. What is built here is their CONTENT; the three
-keywords that name them are the GAIA wrapper's dredging composite.
-
-A field is cut out of the reach's own mapped water rather than drawn: the
-cross-channel box at the stated station, intersected with the water held back
-from its banks by the declared setback, so the dig stops short of the toe it
-would otherwise undercut and a stretch too narrow to dredge excludes ITSELF.
-"""
+The module reads THREE files on every action - polygons, actions and the surface
+reference - so a run naming two of them is a run NESTOR cannot read. What is
+built here is their content; the keywords naming them are GAIA's composite."""
 
 from __future__ import annotations
 
@@ -50,14 +42,13 @@ def _channel_box(centerline: Any, station_frac: float, length_m: float,
                  width_m: float) -> Any:
     """A channel-crossing rectangle around one centerline station.
 
-    The corners are laid on the local along-channel tangent, so the box brackets
-    the wetted section rather than sitting square to the grid. It is deliberately
-    wider than any channel: what decides the CROSS-channel extent of a dredge
-    field is the water the reach was cut from, and the box only brackets the
-    along-channel stretch.
-    """
+    Deliberately wider than any channel: the water decides the cross extent."""
     import numpy as np
     from shapely.geometry import Polygon
+
+    # The corners are laid on the local along-channel tangent, so the box brackets
+    # the wetted section rather than sitting square to the grid; only the
+    # along-channel stretch is the box's to decide.
 
     line = np.asarray(centerline, dtype=float)
     arc = np.concatenate([[0.0], np.cumsum(
@@ -105,12 +96,11 @@ def _dredge_field(water: Any, box: Any, offset_m: float, length_m: float, *,
                   what: str) -> Any:
     """One field: the station box, cut to the water held back from its banks.
 
-    ONE mechanism, two behaviours. The inward offset is the BANK SETBACK, so the
-    dig stops short of the toe it would otherwise undercut; and a stretch
-    narrower than twice that setback has no inside left, so it excludes ITSELF
-    rather than being excluded by a width rule nobody measured.
-    """
+    A stretch narrower than twice the setback has no inside and excludes itself."""
     station = box.centroid
+    # The inward offset is the BANK SETBACK, so the dig stops short of the toe it
+    # would otherwise undercut; the self-exclusion above falls out of the same
+    # mechanism rather than out of a width rule nobody measured.
     field = _at_station(box.intersection(water.buffer(-float(offset_m))), station)
     if field is None:
         wetted = _at_station(box.intersection(water), station)
@@ -127,10 +117,7 @@ def _dredge_field(water: Any, box: Any, offset_m: float, length_m: float, *,
 def _at_station(cut: Any, station: Any) -> Any:
     """The one piece of ``cut`` at ``station``; ``None`` when the cut is empty.
 
-    A box wide enough to cross any channel also crosses a MEANDER: on a bend it
-    reaches the same reach's next loop, so the field is the water at THIS station
-    rather than the largest piece the box happened to touch.
-    """
+    A box wide enough for any channel crosses a MEANDER, so THIS station wins."""
     if cut.is_empty:
         return None
     if cut.geom_type == "Polygon":
@@ -165,11 +152,7 @@ def _dredge_zones(field: Mapping[str, Any], centerline: Any,
                   ) -> tuple[list, list | None, dict[str, Any]]:
     """The dig field, the dump field when asked for, and what was measured.
 
-    A SUPPLIED polygon wins and is validated inside the water. Otherwise the
-    field AUTO-FILLS from geometry the run already measured: the cross-channel
-    box at the stated station, cut to the reach polygon held back from its banks
-    by the declared setback.
-    """
+    A supplied polygon wins, validated inside the water; else the field auto-fills."""
     water = _reach_water(reach_polygon_utm)
     offset = float(field["bank_offset_m"])
     length = float(field["zone_len_m"])
@@ -219,10 +202,7 @@ def _action_file(rule: Mapping[str, Any], *, duration_s: float,
                  has_dump: bool) -> str:
     """NESTOR's action file - one action, in one of two modes.
 
-    SCHEDULED digs a target volume over a window. BY CRITERION triggers wherever
-    the silted bed rises within a tolerance of the design grade, digs down at a
-    stated rate, and re-arms across the run so re-siltation is dredged again.
-    """
+    SCHEDULED digs a volume over a window; BY CRITERION re-arms across the run."""
     mode = str(rule["mode"]).lower()
     start = _nestor_time(max(0.0, float(rule["start_frac"])) * duration_s)
     end = _nestor_time(min(1.0, float(rule["end_frac"])) * duration_s)
@@ -231,6 +211,9 @@ def _action_file(rule: Mapping[str, Any], *, duration_s: float,
     lines = ["/ NESTOR action file - channel maintenance dredging",
              f"/ mode={mode}", "RESTART = F", "ACTION"]
     if mode == "criterion":
+        # By criterion triggers wherever the silted bed rises within a tolerance
+        # of the design grade, digs down at a stated rate, and re-arms across the
+        # run so re-siltation is dredged again.
         rate = max(float(rule["rate_m_per_s"]), 1.0e-9)
         lines += [
             "  ActionType      = Dig_by_criterion",
@@ -266,13 +249,12 @@ def _surface_ref_file(centerline: Any, *, grade_m: float,
                       half_width_m: float) -> str:
     """NESTOR's surface reference file - a fence of channel-crossing profiles.
 
-    Every field node has to lie BETWEEN two profiles for its grade and chainage
-    to interpolate, and consecutive profiles have to stay near-parallel, so the
-    fence spans the whole reach at a spacing set by its own width and the end
-    profiles are nudged past the ends to enclose the extreme nodes.
-    """
+    Every field node must lie BETWEEN two profiles for its grade to interpolate."""
     import numpy as np
 
+    # Consecutive profiles have to stay near-parallel, so the fence spans the whole
+    # reach at a spacing set by its own width and the end profiles are nudged past
+    # the ends to enclose the extreme nodes.
     line = np.asarray(centerline, dtype=float)
     arc = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(line, axis=0).T))])
     total = float(arc[-1]) or 1.0
@@ -324,10 +306,7 @@ def dredge_field(*, field: Mapping[str, Any], rule: Mapping[str, Any],
                  design_grade_m: float | None = None) -> dict[str, Any]:
     """The three NESTOR files' CONTENT, and what was measured to cut them.
 
-    The design grade is the mean bed over the dig field when none was stated -
-    the grade a maintenance dredge digs back TO is the channel that is there,
-    not a number invented for the steering file.
-    """
+    An unstated design grade is the mean bed over the dig field, never invented."""
     from trid3nt_server.workflows.runtime import journal_note
 
     dig, dump, measured = _dredge_zones(field, centerline_utm, reach_polygon_utm)

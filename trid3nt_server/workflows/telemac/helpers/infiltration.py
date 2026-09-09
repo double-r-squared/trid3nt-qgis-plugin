@@ -1,9 +1,7 @@
 """The infiltration surface a rain-on-grid run reads: per-node CN2 and Manning n.
 
 The field the engine's own SCS-CN model reads out of ``FORMATTED DATA FILE 2``,
-sampled from land cover at the ACCEPTED mesh's own nodes. A declaration summons
-it; nothing here decides what question is being asked.
-"""
+sampled from land cover at the ACCEPTED mesh's own nodes."""
 
 from __future__ import annotations
 
@@ -36,23 +34,18 @@ async def node_infiltration_fields(*, mesh: dict[str, Any],
                                    antecedent_moisture: Any) -> dict[str, Any]:
     """Per-node CN2 + Manning n, sampled from land cover at the mesh nodes.
 
-    A uniform ``curve_number`` overrides the CN field and ONLY the CN field:
-    roughness is a separate physical property, so every node still takes its
-    land-cover Manning n.
-
-    ``steep_slope_correction`` applies the Huang (2006) rational correction to the
-    CN field HERE, before the file is written, because the branch that would have
-    done it inside the engine is compiled off in the installed 9.0.0 build. The
-    slopes come from the mesh's own piecewise-linear bed - the discretization the
-    solver sees - never from a finer raster the run does not resolve.
-
-    The nodes are the ACCEPTED mesh's own, read off the artifact's display face:
-    the field is written against the numbering the geometry file carries, so a
-    curve number lands on the node it was sampled for.
-    """
+    A uniform ``curve_number`` overrides the CN field alone, never Manning n."""
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.cn_infiltration import (
         amc_condition_for, landcover_cn_manning, node_curve_numbers,
     )
+
+    # ``steep_slope_correction`` applies the Huang (2006) rational correction to
+    # the CN field HERE, before the file is written, because the branch that would
+    # have done it inside the engine is compiled off in the installed 9.0.0 build.
+    # The slopes come from the mesh's own piecewise-linear bed - the discretization
+    # the solver sees - never from a finer raster the run does not resolve. The
+    # nodes are the accepted mesh's own, read off the display face, so a curve
+    # number lands on the node it was sampled for.
 
     def _sample() -> tuple[list[float], list[float], list[int]]:
         from trid3nt_server.tools.cache import read_object_bytes_s3

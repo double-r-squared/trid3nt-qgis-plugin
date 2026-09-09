@@ -1,18 +1,8 @@
 """Where a release is allowed to be: inside the domain, on the river, in water.
 
-A release point is a claim about where the substance enters the water, and three
-things make it a solvable claim - it has to lie inside the DOMAIN the run is
-solved over, it has to sit ON the river rather than beside it, and it has to land
-where the run actually holds water at t0. All three are answered here, on the
-server, before anything is staged: the domain polygon and the flowline are real
-fetched geometry the run already holds and the initial state is the one the deck
-declares, so a point that cannot be honored is refused while the user can still
-move it, and a point that can is moved by the shortest step there is.
-
-Nothing here invents a tolerance. A band around the flowline would be a second,
-softer domain standing in for the one the run actually has, and a point it
-admitted would be a release inside a shape nobody mapped.
-"""
+All three claims are answered before anything is staged, against geometry the run
+already holds. Nothing here invents a tolerance: a band around the flowline would
+be a softer second domain standing in for the one the run actually has."""
 
 from __future__ import annotations
 
@@ -35,10 +25,7 @@ __all__ = ["ContainedRelease", "contain_release_point", "derive_release_on_mesh"
 class ContainedRelease:
     """A release point the domain accepts, moved onto the flowline.
 
-    ``snap_distance_m`` is how far the supplied point travelled to reach the
-    river; 0 when it was already on it. The note is what the map layer and the
-    provenance row say out loud, so a moved point never reads as a placed one.
-    """
+    ``snap_distance_m`` is 0 when the supplied point was already on the river."""
 
     lon: float
     lat: float
@@ -55,15 +42,11 @@ class ContainedRelease:
 def domain_polygon_of(artifact: Any) -> Any:
     """The polygon the accepted mesh was cut from, or a typed refusal.
 
-    The mesh records the RECIPE it was built from, so the domain a containment
-    test has to be against is the mesh's own statement of it rather than a second
-    resolution of the same question.
-
-    There is ONE path. A mesh cut from a bbox is four numbers and no polygon, and
-    a release point tested against nothing is a release point nobody tested: the
-    reach templates declare a polygon domain, so a mesh without one is a mesh this
-    run was never meant to solve on and says so here.
-    """
+    A mesh cut from a bbox carries no polygon and is refused, never approximated."""
+    # The mesh records the RECIPE it was built from, so the domain a containment
+    # test runs against is the mesh's own statement of it rather than a second
+    # resolution of the same question. A release point tested against four numbers
+    # is a release point nobody tested.
     recipe = ((getattr(artifact, "provenance", None) or {}).get("recipe") or {})
     extent = recipe.get("extent")
     if isinstance(extent, (tuple, list)) or extent is None:
@@ -80,16 +63,13 @@ def derive_release_on_mesh(*, centerline_utm: Any, mesh: Any,
                            fraction: float) -> tuple[tuple[float, float], str | None]:
     """A DERIVED release: ``fraction`` along the centerline, inside the mesh.
 
-    The centerline is the whole navigated stretch; the accepted mesh is only the
-    part of it the mapped banks and the cleanup left, so a station on the line is
-    not a station in the domain. A source the solver cannot find an element for
-    stops the run at startup with nothing but "SOURCE POINT OUTSIDE DOMAIN", so
-    the station is walked DOWNSTREAM to the first one the triangulation actually
-    holds and the distance it travelled is said out loud.
-
-    Returns ``((lon, lat), note)`` in EPSG:4326; the note is ``None`` when the
-    declared station was already inside.
-    """
+    Returns ``((lon, lat), note)`` in EPSG:4326, the note ``None`` if unmoved."""
+    # The centerline is the whole navigated stretch; the accepted mesh is only the
+    # part of it the mapped banks and the cleanup left, so a station on the line is
+    # not a station in the domain. A source the solver cannot find an element for
+    # stops the run at startup with nothing but "SOURCE POINT OUTSIDE DOMAIN", so
+    # the station is walked DOWNSTREAM to the first one the triangulation holds and
+    # the distance it travelled is said out loud.
     import numpy as np
     import shapely
     from pyproj import Transformer
@@ -133,25 +113,22 @@ def derive_release_on_mesh(*, centerline_utm: Any, mesh: Any,
         "supplied mesh) or place the release explicitly.")
 
 
+# docstring-exempt: the engine solves a source at a mesh NODE, so which node and
+# whether it is wet are contracts no argument or return type carries.
 def snap_release_to_wetted(point_utm: tuple[float, float], *, node_xy: Any,
                            wet: Any, state: str) -> tuple[tuple[float, float],
                                                           float, int]:
     """Put a release where the run holds WATER at t0 -> where it went, how far.
 
-    The engine solves a source at a mesh NODE - ``proxim.f`` picks the nearest
-    vertex of the element the coordinates fall in - so the node nearest the
-    settled point is where the substance actually enters, and whether THAT node
-    is wet when the run opens is the question the domain tests upstream never
-    ask. A dry one discharges the substance into ground: the plume then starts
-    wherever the water later arrives rather than where it was released. So a dry
-    landing moves to the nearest node the initial state does hold water at, and a
-    wet one is left exactly where the user or the centerline put it.
+    The engine solves a source at a mesh NODE (``proxim.f`` picks the nearest
+    vertex of the element the coordinates fall in), so the node nearest the
+    settled point is where the substance enters and whether THAT node is wet is a
+    question the domain tests upstream never ask. A dry landing moves to the
+    nearest node the initial state holds water at; a wet one is left where it is.
 
-    ``wet`` is the initial state's own wet mask over the same node numbering and
-    ``state`` is what the deck says that state IS. A state with NO wet node
-    anywhere refuses: there is nowhere in this run for a release to be.
-
-    Returns ``((x, y), moved_m, node)`` in the mesh's own metres.
+    ``wet`` is the initial state's own mask over the same node numbering and
+    ``state`` is what the deck says that state IS; a state with no wet node
+    anywhere refuses. Returns ``((x, y), moved_m, node)`` in the mesh's metres.
     """
     import numpy as np
 
@@ -181,11 +158,7 @@ def contain_release_point(*, point: tuple[float, float], domain: Any,
                           flowline: Any) -> ContainedRelease:
     """Refuse a release outside ``domain``; snap one inside it onto ``flowline``.
 
-    ``domain`` and ``flowline`` are geometry sources - inline GeoJSON, an
-    object-store uri, or a path - read as they are, in EPSG:4326. Distances are
-    measured in the domain's own UTM zone, because a snap reported in degrees is
-    not a distance.
-    """
+    Both are geometry sources in EPSG:4326; distances are the domain's own UTM."""
     from shapely.geometry import Point, shape
     from shapely.ops import nearest_points, transform as _transform, unary_union
     from pyproj import Transformer

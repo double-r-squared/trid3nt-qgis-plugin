@@ -1,26 +1,8 @@
 """The reach front of every TELEMAC river plan: geocode, seed, water, mesh size.
 
-Three declared steps and one declared Data producer:
-
-* ``Geocode.reach`` - place/AOI to a reach centre, and it REBINDS THE DOMAIN, so
-  every spatial producer after it reads the reach AOI implicitly.
-* ``fetch_reach_flowline`` - the ``Data("rivers")`` producer (reference data:
-  fetched fresh for the domain, never supplied). It is an OSM waterway layer and
-  its job is to place the mid-reach seed; it is not the river the run models,
-  and the canvas says so.
-* ``ReachSeed`` - THE point the run's one centerline is navigated from, and where
-  the carrier-discharge lookup queries. The template's ``DATA.centerline`` reads
-  it, so the river the section cuts, the mesh holds and the canvas shows is the
-  river every downstream reader means.
-* ``measure_water_coverage`` - how much of that centerline the fetched water
-  polygons map, measured before the cut.
-* ``measure_mesh_coverage`` - how much of it the ACCEPTED mesh holds, measured
-  after the build. A distinct question with a distinct name: water coverage is
-  about what is mapped, mesh coverage about what is triangulated.
-
-The CFL timestep law lives here too: it is coupled to the edge the accepted mesh
-was measured at, so a refined mesh tightens dt without anybody restating it.
-"""
+The geocode REBINDS THE DOMAIN, so every spatial producer after it reads the reach
+AOI implicitly. The CFL timestep law is coupled to the edge the accepted mesh was
+measured at, so a refined mesh tightens dt without anybody restating it."""
 
 from __future__ import annotations
 
@@ -95,12 +77,11 @@ _TELEMAC_SOLVE_OVERHEAD_S: float = 45.0
 def suggest_time_step_s(mesh_size_m: float, *, mesh: Any = None) -> float:
     """CFL-safe TELEMAC timestep for the mesh a run will actually solve on.
 
-    A BUILT mesh knows its own shortest edge, and that is what the stability
-    criterion is about; ``mesh_size_m`` is the edge that was REQUESTED, which is
-    all an estimate made before any mesh exists can honestly use. So a mesh
-    artifact wins when one is supplied - refine a region at the gate and dt
-    tightens with it, without anybody restating the number.
-    """
+    A supplied mesh artifact wins over ``mesh_size_m``, the edge merely asked for."""
+    # A built mesh knows its own shortest edge, and that is what the stability
+    # criterion is about; the requested edge is all an estimate made before any
+    # mesh exists can honestly use. So refining a region at the gate tightens dt
+    # with it, without anybody restating the number.
     from trid3nt_server.workflows.mesh.artifact import measured_min_edge_m
 
     measured = measured_min_edge_m(mesh)
@@ -134,11 +115,7 @@ def coerce_lonlat_point(value: Any, *,
                         label: str = "release point") -> tuple[float, float] | None:
     """``(lon, lat)`` from a wire value, in TELEMAC's own error family.
 
-    The SHAPE rules are the user-input species' (one normalizer, whether the point
-    was clicked or typed); what this adds is the engine's error TYPE, because
-    callers whose contract is fail-open - the pre-dispatch gate builder, the mesh
-    preview - catch ``TelemacDyeScenarioError`` at the call site.
-    """
+    Adds the engine's error TYPE so a fail-open caller can catch at the call site."""
     try:
         return user_input.lonlat_point(value, label=label,
                                        code="TELEMAC_PARAMS_INVALID")
@@ -182,9 +159,7 @@ async def call_registry_tool(fn: Any, /, *args: Any, **kwargs: Any) -> Any:
 def _is_state_snap_geocode(geo: Any) -> bool:
     """True when the geocode fell back to a WHOLE-STATE bbox.
 
-    A state-snap centroid is the middle of the state - as a river-reach seed that
-    is 100+ km of drift, so it is never seeded from.
-    """
+    A state centroid is 100+ km of drift as a reach seed, so it is never used."""
     return isinstance(geo, dict) and (
         geo.get("source") == "state-bbox-fallback"
         or geo.get("fallback_reason") is not None
@@ -192,12 +167,9 @@ def _is_state_snap_geocode(geo: Any) -> bool:
 
 
 def _locality_tail(location: str) -> str | None:
-    """'Snake River near Twin Falls, Idaho' -> 'Twin Falls, Idaho'.
+    """The locality tail of a compound place name - what follows near/at/by/in.
 
-    Nominatim often has no feature for the compound query but pins the locality
-    fine, and the NLDI navigate snaps the locality seed to the nearest flowline
-    anyway.
-    """
+    The geocoder often has no feature for the compound query but pins the tail."""
     for sep in ("near", "at", "by", "outside", "in"):
         m = re.search(rf"\b{sep}\b(.+)$", location, flags=re.IGNORECASE)
         if m:
@@ -211,9 +183,7 @@ async def _geocode_seed_center(geocode_fn: Any, location: str,
                                geo: Any) -> tuple[float, float, str]:
     """(lon, lat, name) for the reach seed, REJECTING state-snaps.
 
-    On a state-snap, retry once with the locality tail; if that also snaps (or no
-    tail exists), refuse typed rather than simulating the wrong river.
-    """
+    One retry on the locality tail, then a typed refusal - never another river."""
     if _is_state_snap_geocode(geo):
         tail = _locality_tail(location)
         retry = None
@@ -247,10 +217,7 @@ async def _geocode_seed_center(geocode_fn: Any, location: str,
 def river_seed_from_geometry(river_uri: str) -> tuple[float, float] | None:
     """Mid-reach ``(lon, lat)`` on the LONGEST flowline in the fetched FlatGeobuf.
 
-    So the NLDI navigate starts on the main stem, not on a stray ditch. Returns
-    None on ANY failure - the caller then falls back to the geocoded centroid,
-    which the navigate snaps regardless.
-    """
+    The longest line is the main stem; ``None`` on any failure, never a guess."""
     try:
         from trid3nt_server.workflows.solver.solver import (
             _get_s3_client,
@@ -299,9 +266,7 @@ async def geocode_reach(*, location: str | None,
                         bbox: tuple[float, float, float, float] | None) -> dict[str, Any]:
     """Resolve the reach AOI: a geocoded place, or the centre of an explicit bbox.
 
-    The returned ``bbox`` is what REBINDS THE DOMAIN, so every spatial producer
-    after this step fetches over the reach AOI without being handed one.
-    """
+    The returned ``bbox`` REBINDS THE DOMAIN for every spatial producer after."""
     if bool(location and str(location).strip()):
         geocode_fn = registry_fn("geocode_location")
         geo = await call_registry_tool(geocode_fn, location)
@@ -321,10 +286,7 @@ async def geocode_reach(*, location: str | None,
 async def fetch_reach_flowline(*, prefetched: str | None = None) -> str | None:
     """The reach flowline FlatGeobuf over the CURRENT DOMAIN. Reference data.
 
-    ``prefetched`` reuses a flowline the caller already fetched for this reach -
-    the same dataset, not a substituted one, so no cross-dataset gate applies.
-    A non-object URI is a model-invented pseudo-call and is ignored.
-    """
+    ``prefetched`` reuses the SAME dataset; a non-object URI is ignored."""
     if prefetched and str(prefetched).startswith(("s3://", "gs://")):
         return str(prefetched)
     if prefetched:
@@ -385,17 +347,13 @@ def _read_vector_features(uri: str) -> list[dict[str, Any]]:
 async def measure_water_coverage(*, water: Any, centerline: Any) -> Any:
     """MEASURE how much of the reach the fetched water polygons map -> the water.
 
-    The gate between the water fetch and the section cut, so an unmapped reach
-    fails on its own cause instead of arriving at the cut as an empty section. A
-    pass-through: it hands back the water it measured, which is what puts it in
-    the chain rather than beside it.
-
-    NO threshold. Zero coverage is the terminal refusal - none of this reach is
-    polygon-mapped and no rung below can invent a shape for it. Anything above
-    zero PROCEEDS with the measured fraction journalled, because the pieces NHD
-    maps only as flowlines are exactly the ones a reader would otherwise assume
-    were modelled.
-    """
+    A pass-through, and NO threshold: zero refuses, anything above it proceeds."""
+    # The gate between the water fetch and the section cut, so an unmapped reach
+    # fails on its own cause instead of arriving at the cut as an empty section.
+    # Zero coverage is terminal - no rung below can invent a shape for a reach
+    # nothing maps - while a measured fraction above zero is journalled, because
+    # the stretches mapped only as flowlines are the ones a reader would otherwise
+    # assume were modelled.
     fraction = await asyncio.to_thread(_covered_fraction, water, centerline)
     if fraction <= 0.0:
         raise ReachWaterUnmapped()
@@ -409,10 +367,7 @@ async def measure_water_coverage(*, water: Any, centerline: Any) -> Any:
 def _covered_fraction(water: Any, centerline: Any) -> float:
     """Fraction of the centreline's LENGTH that lies inside the water polygons.
 
-    Measured in metres on the reach's own UTM zone: a fraction of a degree-space
-    length would weight the two axes differently and read as coverage that
-    depends on latitude.
-    """
+    Measured in metres on the reach's own UTM zone, never in degree space."""
     from pyproj import Transformer
     from shapely.geometry import shape
     from shapely.ops import transform as _transform, unary_union
@@ -448,20 +403,14 @@ def _covered_fraction(water: Any, centerline: Any) -> float:
 async def measure_mesh_coverage(*, mesh: Any, centerline: Any) -> Any:
     """MEASURE how much of the reach the ACCEPTED mesh actually holds.
 
-    Distinct from banks coverage: that one asks how much of the reach real water
-    polygons MAP, this one asks how much of it the triangulation the solve runs on
-    CONTAINS. A mesher handed a mapped polygon can still leave stretches out - a
-    channel narrower than the requested edge does not resolve - and the answer a
-    run publishes is about the stretch that was meshed, not the stretch that was
-    asked for.
-
-    A HEURISTIC, not a gate. Zero is terminal: none of the reach is in the domain,
-    so the solve would answer about a different river. Anything above zero
-    proceeds with the measured percent journalled, and what to do about it is the
-    user's call - re-run finer, declare a sizing function, author the mesh. No
-    automatic re-mesh: a resolution the run picked for itself is a decision the
-    ask never made.
-    """
+    A HEURISTIC, not a gate: zero is terminal, anything above it is journalled."""
+    # Distinct from water coverage: that one asks how much of the reach real
+    # polygons MAP, this one how much of it the triangulation the solve runs on
+    # CONTAINS - a mesher handed a mapped polygon can still leave stretches out,
+    # and what a run publishes is about the stretch that was meshed. What to do
+    # about a partial cover is the user's call: re-run finer, declare a sizing
+    # function, author the mesh. Nothing re-meshes automatically, because a
+    # resolution the run picked for itself is a decision the ask never made.
     fraction = await asyncio.to_thread(_meshed_fraction, mesh, centerline)
     if fraction <= 0.0:
         raise ReachMeshUncovered()
@@ -476,11 +425,10 @@ async def measure_mesh_coverage(*, mesh: Any, centerline: Any) -> Any:
 def _meshed_fraction(mesh: Any, centerline: Any) -> float:
     """Fraction of the centreline's LENGTH that lies inside the mesh's cells.
 
-    Summed over the cells the line touches rather than over their union: the
-    triangulation tiles its domain without overlap, so the per-cell intersected
-    lengths already add up to the length inside it, and no union of tens of
-    thousands of triangles has to be built to learn that.
-    """
+    Summed over the cells the line touches, never over a union of them."""
+    # The triangulation tiles its domain without overlap, so the per-cell
+    # intersected lengths already add up to the length inside it and no union of
+    # tens of thousands of triangles has to be built to learn that.
     import numpy as np
     import shapely
     from shapely.geometry import LineString
@@ -512,14 +460,11 @@ async def reach_seed(*, reach: dict[str, Any], rivers: str | None,
                      supplied: Any = None) -> dict[str, Any]:
     """THE point the run's one centerline is navigated downstream from.
 
-    A SUPPLIED point wins outright: naming where the substance enters the water is
-    a statement about which stretch to model, and the navigate has to start there
-    or the reach the user pinned is not the reach that gets meshed.
-
-    Otherwise the largest fetched flowline's midpoint, else the geocoded centroid -
-    which the NLDI navigate snaps to the nearest flowline COMID anyway, so the
-    degrade is honest rather than a dead end.
-    """
+    A SUPPLIED point wins outright over the flowline midpoint and the centroid."""
+    # Naming where the substance enters the water is a statement about which
+    # stretch to model, and the navigate has to start there or the reach the user
+    # pinned is not the reach that gets meshed. The geocoded centroid is the last
+    # rung and is honest: the navigate snaps it to the nearest flowline anyway.
     point = coerce_lonlat_point(supplied, label="reach seed point")
     if point is not None:
         return {"lon": point[0], "lat": point[1],

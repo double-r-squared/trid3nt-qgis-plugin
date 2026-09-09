@@ -1,11 +1,8 @@
 """The catchment a storm is solved over: its outlet, its window, its nodes.
 
-A rain-on-grid domain is a DELINEATED CATCHMENT - the terrain that drains to one
-point - and the delineation is a chained tool while the triangulation is the one
-mesh step. What lives here is the pair of facts everything downstream reads off
-that domain: where the analysis window around the outlet is, and what the
-accepted mesh's own nodes are.
-"""
+A rain-on-grid domain is a DELINEATED CATCHMENT, the terrain that drains to one
+point. What lives here is what everything downstream reads off that domain: the
+analysis window around the outlet, and the accepted mesh's own nodes."""
 
 from __future__ import annotations
 
@@ -21,14 +18,13 @@ __all__ = ["AcquireCatchment", "acquire_catchment", "catchment_aoi", "mesh_nodes
 _HELPERS = "trid3nt_server.workflows.telemac.helpers"
 
 
+# Centred on the outlet rather than on a geocoded place: a place bbox names a TOWN
+# and need not contain the UPSTREAM catchment.
 def catchment_aoi(pour_point: tuple[float, float],
                   half_deg: float) -> tuple[float, float, float, float]:
     """The analysis AOI a catchment is delineated inside, centred on its OUTLET.
 
-    Centred on the outlet rather than on a geocoded place, because a place bbox
-    names a TOWN and need not contain the UPSTREAM catchment. The delineation
-    truncates at the box edge, so this must OVER-cover.
-    """
+    The delineation truncates at the box edge, so this must OVER-cover."""
     lon, lat = float(pour_point[0]), float(pour_point[1])
     b = float(half_deg)
     return (max(lon - b, -180.0), max(lat - b, -90.0),
@@ -41,16 +37,7 @@ async def acquire_catchment(*, location: str | None, bbox: Any,
                             code_prefix: str = "TELEMAC_ROG") -> dict[str, Any]:
     """Resolve the outlet and the AOI the catchment is delineated INSIDE.
 
-    Order matters and is the opposite of every other domain here: the POUR POINT
-    comes first and the AOI is derived FROM it, because a geocoded place bbox
-    names a town and need not contain the upstream catchment. The live bug was
-    'Otto, NC' clipping the Coweeta basin mid-hillslope into a 20-cell sliver.
-
-    An explicit ``bbox`` still wins - it is the user's own extent, and squaring a
-    different one off around the outlet would model a domain nobody asked for. A
-    ``location`` names the run and nothing else here; the catchment's shape is the
-    terrain's answer, not the geocoder's.
-    """
+    The pour point comes first and the AOI derives from it; a ``bbox`` still wins."""
     from trid3nt_server.workflows.runtime import user_input
 
     point = user_input.lonlat_point(pour_point, label="pour_point",
@@ -88,10 +75,7 @@ def AcquireCatchment(*, location: Any, bbox: Any, pour_point: Any,  # noqa: N802
 def mesh_nodes(mesh: Mapping[str, Any]) -> tuple[Any, Any, Any, Any]:
     """The accepted catchment mesh's nodes, or the refusal that names what is missing.
 
-    Read off the artifact's display face, which is the one readable record of the
-    node numbering the geometry file carries: a curve number sampled here lands on
-    the node the solve holds it at.
-    """
+    Read off the display face, the one readable record of the file's numbering."""
     from trid3nt_server.workflows.mesh.shared.nodes import read_accepted_mesh_nodes
 
     utm_epsg = int(getattr(mesh.get("artifact"), "utm_epsg", 0) or 0)

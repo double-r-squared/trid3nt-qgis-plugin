@@ -1,21 +1,8 @@
 """Uniform flow over a measured section: the depth a channel conveys a flow at.
 
-ONE derivation, read two ways. A reach's outflow level is the depth at which the
-section its outflow face cuts conveys the discharge the deck prescribes upstream:
-that is the community default wherever the bed came from a surface rather than a
-survey, because it imports no gauge, no rating curve and no datum of its own. A
-catchment's outlet reads the SAME derivation swept over a range of discharges, so
-the level there rises and falls with the hydrograph.
-
-It is not a measured boundary and never claims to be. Uniform flow is a fiction
-near a structure, a confluence or a tidal cap, and the honest use of it is an
-outlet far enough downstream of the interest to be numerically convenient rather
-than physically load-bearing.
-
-Every input it cannot measure REFUSES by name: a reach with no fall has no
-uniform-flow depth at all, and defaulting past that would put a made-up level on
-the one boundary the run's water surface is anchored to.
-"""
+ONE derivation, read two ways - at one discharge for a reach outflow, swept over
+a range for a catchment outlet. It is not a measured boundary and imports no
+gauge or datum; every input it cannot measure REFUSES by name."""
 
 from __future__ import annotations
 
@@ -56,12 +43,10 @@ def _wetted(section: Sequence[tuple[float, float]],
             stage: float) -> tuple[float, float]:
     """Wetted area and perimeter of the measured section at a water elevation.
 
-    Each panel between two surveyed points is a trapezoid, cut at the waterline
-    where only one of its ends is under water. The two END points are the
-    section's walls: above the higher of them the section rises vertically rather
-    than spreading into ground the mesh does not hold, so a stage is defined
-    everywhere and a flat face is a rectangle rather than a division by zero.
-    """
+    Panels are trapezoids cut at the waterline; the end points are vertical walls."""
+    # Above the higher of the two end points the section rises vertically rather
+    # than spreading into ground the mesh does not hold, so a stage is defined
+    # everywhere and a flat face is a rectangle rather than a division by zero.
     area = perimeter = 0.0
     for (o1, z1), (o2, z2) in zip(section, section[1:]):
         d1, d2 = stage - z1, stage - z2
@@ -83,10 +68,7 @@ def _wetted(section: Sequence[tuple[float, float]],
 def _conveyance(law: int, coefficient: float) -> tuple[str, float, float]:
     """``(law name, radius exponent, conveyance)`` for a friction law -> refuses.
 
-    The conveyance is the coefficient the discharge is LINEAR in, which is the
-    coefficient itself under Strickler and Chezy and its reciprocal under
-    Manning; every caller multiplies by it rather than branching on the law.
-    """
+    Conveyance is what discharge is LINEAR in, so callers multiply, never branch."""
     if law not in _CONVEYANCE:
         raise UniformFlowError(
             "TELEMAC_OUTFLOW_FRICTION_UNREADABLE",
@@ -102,9 +84,7 @@ def _uniform_flow(section: Sequence[tuple[float, float]], *, law: int,
                   coefficient: float, slope: float) -> Callable[[float], float]:
     """The discharge this section conveys at a water elevation, under uniform flow.
 
-    One closure, so the stage a discharge is solved for and the discharge a stage
-    is evaluated at cannot come from two spellings of the same conveyance.
-    """
+    One closure, so solving and evaluating cannot spell conveyance differently."""
     _name, exponent, conveyance = _conveyance(law, coefficient)
     root_slope = math.sqrt(slope)
 
@@ -121,10 +101,7 @@ def _stage_conveying(discharge: Callable[[float], float], thalweg: float,
                      q_m3s: float, *, slope: float) -> float:
     """The elevation at which ``discharge`` reaches ``q_m3s`` -> refuses.
 
-    The bracket opens a decimetre over the section's lowest painted node and
-    doubles until the section carries the flow; a channel that needs a kilometre
-    of water to convey it is not the channel this discharge belongs to.
-    """
+    A channel needing a kilometre of water is not this discharge's channel."""
     from scipy.optimize import brentq
 
     top = thalweg + _STAGE_SEED_M
@@ -145,11 +122,7 @@ def normal_depth_stage(bed: Mapping[str, Any], *, law: int,
                        coefficient: float, discharge_q: float) -> dict[str, Any]:
     """The outflow stage as NORMAL DEPTH -> the elevation and what derived it.
 
-    ``bed`` is the reach MEASURED on the accepted mesh: the friction slope is the
-    fall it carries between its two role faces over the length of the line it was
-    built on, and the channel is the section its outflow face cuts through the
-    painted bed. The roughness and the discharge are the ones THIS deck writes.
-    """
+    ``bed`` is the reach measured on the accepted mesh, at THIS deck's roughness."""
     section = [(float(o), float(z))
                for o, z in (bed.get("outflow_section") or ())]
     if len(section) < 2:
@@ -201,20 +174,13 @@ def derive_rating_curve(section: Sequence[tuple[float, float]], *, law: int,
                         q_ceiling_m3s: float) -> dict[str, Any]:
     """The section's stage-discharge curve under uniform flow -> what derived it.
 
-    The SAME normal-depth derivation the outflow stage of a reach is, evaluated
-    over a range of discharges instead of at one: at each stage the section
-    conveys a discharge, and the pairs are the rating curve the engine reads a
-    level off. It imports no gauge - a gauged curve is the calibration-era swap
-    through this same keyword - and nothing here is fitted.
-
-    ``q_ceiling_m3s`` is the top of the range, and its BASIS is the caller's to
-    state; the curve is flat above it because the engine holds the last point,
-    so a ceiling below the flow that arrives caps the level rather than
-    extrapolating a channel nobody measured.
-
-    Returns the rows as ``(discharge, elevation)`` pairs, lowest first, with the
-    dry section at zero discharge as the first one.
-    """
+    Rows are ``(discharge, elevation)`` lowest first, the dry section at zero."""
+    # The same normal-depth derivation a reach's outflow stage is, evaluated over a
+    # range of discharges instead of at one; nothing here is fitted and no gauge is
+    # imported. ``q_ceiling_m3s`` is the top of the range and its BASIS is the
+    # caller's to state: the curve is flat above it because the engine holds the
+    # last point, so a ceiling below the flow that arrives caps the level rather
+    # than extrapolating a channel nobody measured.
     import numpy as np
 
     rows = [(float(o), float(z)) for o, z in section]

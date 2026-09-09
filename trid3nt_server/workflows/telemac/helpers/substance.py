@@ -1,13 +1,8 @@
 """What was released, and what its class arms under the hydrodynamic solve.
 
-A question is a TEMPLATE now, so nothing here classifies a word into a family.
-What survives is the two things a template still asks: the literature die-off a
-named decaying substance carries, and the GAIA sediment body a bed question
-couples the solve with. Both are values the composites on the wrappers expand;
-what decides which SHAPE a sediment body takes is the shape of the value the ask
-carried, which is why it is resolved in a producer rather than asserted in a
-body.
-"""
+Two values the wrappers' composites expand: the literature die-off a named
+decaying substance carries, and the GAIA sediment body a bed question couples the
+solve with. Which SHAPE a sediment body takes follows the shape of the ask."""
 
 from __future__ import annotations
 
@@ -122,11 +117,7 @@ def oil_preset(named: Any) -> str:
 def resolve_gradation(spec: list | str | None) -> list[list[float]] | None:
     """A gradation ask -> a clean fine-to-coarse ``[[d50_um, fraction], ...]``.
 
-    Accepts a :data:`GRADATION_PRESETS` key, an explicit list of pairs (or
-    ``{'d50_um','fraction'}`` dicts), or None. A surviving list of >= 2 classes is
-    a MIXTURE; a shorter one is not something that can sort, so it collapses to
-    None and the single-class bed stands.
-    """
+    Under two classes cannot sort, so it collapses and a single-class bed stands."""
     if spec is None:
         return None
     if isinstance(spec, str):
@@ -172,11 +163,7 @@ async def resolve_decay(*, substance: Any, half_life_hours: float | None,
                         rate_per_day: float | None) -> dict[str, Any]:
     """The WAQTEL degradation coupling -> ``{"coupling": [...] }`` or nothing.
 
-    An explicit half-life switches to first-order law 2 (k = ln2/hl, in h^-1) and
-    an explicit per-day rate to law 3; a named decaying substance carries its own
-    narrated literature default. Nothing named and nothing stated is NO decay,
-    and the composite reading this expands to no keyword at all.
-    """
+    A half-life takes law 2 (k = ln2/hl, h^-1), a per-day rate law 3, else none."""
     from trid3nt_server.workflows.telemac.modules import WAQTEL
 
     if half_life_hours is not None and float(half_life_hours) > 0.0:
@@ -203,10 +190,7 @@ def SedimentBed(*, gradation: Any, grain_size_um: Any,  # noqa: N802
                 settled: Any, injected: Any) -> Step:
     """The erodible bed this run scours, in the shape the ask carried.
 
-    It reads the SETTLED run rather than the dredge fields inside it: whether a
-    dredge rule was cut at all is this producer's question, and a ref to a field
-    the run holds as nothing is refused at binding.
-    """
+    Reads the SETTLED run, never the dredge fields inside it, which may be none."""
     return Step(runner=f"{_HELPERS}.substance.resolve_sediment_bed", stage="prep",
                 kwargs={"gradation": gradation, "grain_size_um": grain_size_um,
                         "bed_thickness_m": bed_thickness_m,
@@ -229,11 +213,7 @@ async def resolve_sediment_bed(*, gradation: Any, grain_size_um: float,
                                ) -> dict[str, Any]:
     """The GAIA body the bed is solved as -> the coupling and what it injected.
 
-    A MIXTURE and a single class are two shapes of one value, not two questions:
-    both scour the same bed with the same formula, and the mixture additionally
-    SORTS under a hiding factor. Which one this run is comes from the shape of
-    the gradation the ask carried.
-    """
+    A mixture and a single class scour identically; the mixture also SORTS."""
     from trid3nt_server.workflows.telemac.modules import GAIA
     from trid3nt_server.workflows.telemac.modules.gaia import Dredging
 
@@ -295,9 +275,7 @@ async def resolve_suspended_class(*, grain_size_um: float,
 def _injected_kg(injected: dict[str, Any]) -> float:
     """What the pulse PUT IN: discharge x concentration x window, in kilograms.
 
-    The deposit fraction is measured against this rather than against an assumed
-    load, so it is the run's own statement of what it released.
-    """
+    The deposit fraction is measured against this, never an assumed load."""
     return round(float(injected["q_m3s"])
                  * max(float(injected["concentration_mgl"]) * _MGL_TO_KGM3, 0.0)
                  * float(injected["window_s"]), 3)

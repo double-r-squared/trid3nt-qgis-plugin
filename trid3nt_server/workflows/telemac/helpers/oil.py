@@ -1,12 +1,8 @@
 """The oil module's own preset, and the per-run Fortran the release is compiled into.
 
-The module rides ON TOP of the tracer solve and the presence of its steering file
-activates it. What is built here is the CONTENT of both: the preset in the
-module reader's own format, and the engine's own ``oil_flot.f`` with this run's
-release step and coordinates in it - because the release the module gets has to
-be the clearance-snapped point the caller settled, and a release the flow never
-reaches produces a clean run and an empty slick.
-"""
+The module rides on top of the tracer solve and the presence of its steering file
+activates it. The release compiled in has to be the clearance-snapped point the
+caller settled: one the flow never reaches solves clean and slicks nothing."""
 
 from __future__ import annotations
 

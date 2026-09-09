@@ -1,17 +1,8 @@
 """Declared forcing DATA: the rain that falls, and the flow that carries.
 
-Three producers rather than steps: they are artifacts fetched for the current
-domain, and the plan Refs them into the sheet.
-
-Neither ever invents a number. The rain producer walks a DECLARED LADDER (a real
-gridMET storm total supersedes a user rate) and a gridMET failure REFUSES typed -
-degrading a requested real storm to zero rain would be a silent no-rain solve.
-The discharge producer refuses typed when the National Water Model has no
-coverage (at ``event_time`` when one was asked for, else the latest cycle), so
-the value that governs dilution is never a baked constant, and the cycle it
-actually read is pinned onto the note/provenance rather than left as an
-unpinned "latest".
-"""
+Producers, not steps: artifacts fetched for the current domain and Ref'd into the
+sheet. Neither invents a number - a gridMET or National Water Model miss REFUSES
+typed, and the cycle actually read is pinned onto the note, never "latest"."""
 
 from __future__ import annotations
 
@@ -95,9 +86,7 @@ def _gridmet_domain_mean_pr(bbox: tuple[float, float, float, float],
                             start_date: str, end_date: str) -> float:
     """Domain-mean daily precipitation (mm/day) from the wired gridMET fetcher.
 
-    Any failure REFUSES typed: a requested real storm never silently degrades to
-    zero rain.
-    """
+    Any failure REFUSES typed: a real storm never degrades to zero rain."""
     import numpy as np
     import rasterio
     from rasterio.io import MemoryFile
@@ -146,15 +135,12 @@ async def resolve_rain_forcing(*, rainfall_mm_per_day: float | None,
                                temporal: TemporalSpec | None = None) -> dict[str, Any]:
     """The SIGNED net rain-or-evaporation rate (mm/day) the sheet carries.
 
-    A dated gridMET window is the storm total for that window; without one, an
-    explicit user rate. Evaporation is then subtracted (TELEMAC's single signed
-    RAIN OR EVAPORATION keyword). A ``None`` rate means no forcing was asked for,
-    and the steering file stays byte-identical.
-
-    ``temporal`` is the declaration's own ``.resample()`` / ``.normalize()``,
-    checked against the cadence and units this producer actually delivers; the
-    transform it performs (or declines as unnecessary) is stamped onto the note.
-    """
+    A ``None`` rate is no forcing asked for, and the deck stays byte-identical."""
+    # A dated gridMET window is the storm total for that window; without one, an
+    # explicit user rate. Evaporation is then subtracted, because the engine has a
+    # single signed RAIN OR EVAPORATION keyword. ``temporal`` is the declaration's
+    # own resample/normalize, checked against the cadence and units this producer
+    # delivers, and what it performs or declines is stamped onto the note.
     return await asyncio.to_thread(
         _rain_forcing, rainfall_mm_per_day, evaporation_mm_per_day,
         gridmet_window, temporal)
@@ -209,17 +195,13 @@ def _rain_forcing(rainfall_mm_per_day: float | None,
 
 
 def coerce_event_time(value: Any) -> str | None:
-    """A UTC ISO-8601 timestamp from a date/datetime wire value; ``None`` reads
-    the MOST RECENT published NWM cycle.
+    """A UTC ISO-8601 timestamp from a wire date/datetime; ``None`` reads latest.
 
-    Accepts a bare date (midnight UTC) or a full ISO datetime, with or without a
-    ``Z``/offset. A MALFORMED value REFUSES rather than silently falling back to
-    the latest cycle - which discharge cycle governs dilution is a physically
-    consequential choice, and silently reading a different one than the one
-    asked for is the swallow class (the outfall-coordinate precedent). The NWM
-    PDS bucket retains only the last ~30 days; a request outside that window
-    still parses here and refuses later, typed, at the fetch itself.
-    """
+    A bare date is midnight UTC; a malformed value REFUSES, never falls back."""
+    # Which discharge cycle governs dilution is a physically consequential choice,
+    # so reading a different one than the one asked for is not available here. The
+    # NWM PDS bucket retains only the last ~30 days; a request outside that window
+    # still parses here and refuses later, typed, at the fetch itself.
     if value is None:
         return None
     s = str(value).strip()
@@ -264,10 +246,7 @@ def _fmt_cycle(reference_time: str | None) -> str:
 def _fmt_discharge(value: float) -> str:
     """A discharge for a NOTE, at a precision that cannot misstate it.
 
-    The decimals follow the magnitude: a fixed whole-number format prints a
-    2.2 m3/s carrier as "2", and the note is the only place a reader meets the
-    number that governs dilution.
-    """
+    The decimals follow the magnitude: whole numbers print 2.2 m3/s as "2"."""
     magnitude = abs(float(value))
     if magnitude >= 100.0:
         return f"{float(value):.0f}"
@@ -281,17 +260,12 @@ async def resolve_carrier_discharge(*, seed: dict[str, Any],
                                     event_time: str | None = None) -> dict[str, Any]:
     """The reach CARRIER discharge (m3/s) - real NWM streamflow, or a typed gate.
 
-    The carrier discharge governs dilution and transport. An explicit value
-    short-circuits the fetch; otherwise the NHDPlus reach nearest the seed in
-    the NOAA National Water Model is the carrier, read at ``event_time`` when
-    set (else the most recent published cycle). A fetch/read miss REFUSES typed
-    naming ``discharge_m3s`` - it is never reverted to a baked constant.
-
-    The returned ``note`` (and ``reference_time``) PIN the cycle the fetch
-    actually served, never the bare request word: a "latest" request resolves
-    to a real timestamp before it ever reaches provenance or the run's metrics
-    (replayability-by-declaration).
-    """
+    A fetch or read miss REFUSES typed naming ``discharge_m3s``, never a constant."""
+    # An explicit value short-circuits the fetch; otherwise the NHDPlus reach
+    # nearest the seed in the National Water Model is the carrier, read at
+    # ``event_time`` when set and at the most recent published cycle otherwise. The
+    # returned note and ``reference_time`` pin the cycle actually served, so a
+    # "latest" request is a real timestamp before it reaches provenance or metrics.
     seed_lon, seed_lat = float(seed["lon"]), float(seed["lat"])
     if explicit is not None:
         return {"m3s": float(explicit), "basis": "user", "real_source": None,
@@ -340,12 +314,7 @@ def ReviewResolvedInputs(*, carrier_discharge: Any,  # noqa: N802
                          workflow: str, input_mode: Any) -> Step:
     """Review the values the pipeline RESOLVED, before the expensive solve.
 
-    ``self_gating``: the review is over values no plan-level form can show,
-    because they do not exist until the fetch that produced them has run. A plan
-    that declares this step reviews its inputs there - the validator
-    refuses it, because a second card's edits would land on a sheet this review
-    never reads.
-    """
+    ``self_gating``: a plan declaring this step may hold no second review card."""
     return Step(runner=f"{_HELPERS}.forcing.review_resolved_inputs", stage="gates",
                 self_gating=True,
                 kwargs={"discharge": carrier_discharge,
@@ -357,10 +326,7 @@ async def review_resolved_inputs(*, discharge: dict[str, Any],
                                  input_mode: str | None) -> dict[str, Any]:
     """Present the RESOLVED carrier discharge before the expensive solve.
 
-    The carrier discharge governs dilution and is the physically dominant
-    reviewable input, so ``user_gated`` pauses on it here - after the fetch that
-    produced it and before the expensive solve. ``auto`` proceeds labeled.
-    """
+    ``user_gated`` pauses here, after the fetch; ``auto`` proceeds labeled."""
     from trid3nt_contracts.common import SyntheticInput as entry
 
     from trid3nt_server.gates.input_review import gate_input_review
@@ -390,16 +356,13 @@ async def review_resolved_inputs(*, discharge: dict[str, Any],
 
 
 async def _surface_discharge_station_layer(layer: Any) -> None:
-    """Publish the NWM point layer as a context input, its name PINNED to the
-    cycle actually served - never the bare request word.
+    """Publish the NWM point layer as a context input, named for the cycle served.
 
-    ``_nwm_nearest_streamflow`` fetches with ``visualize=False`` (suppressing
-    the generic auto-emission, which would only know the REQUESTED time, not
-    the resolved one), so this is the only station layer that reaches the
-    canvas: exactly one, honestly captioned. BEST-EFFORT (mirrors
-    the input-surfacing floor): never raises, and a missing
-    station layer never voids the discharge resolution.
-    """
+    Best-effort: never raises, and a missing layer never voids the resolution."""
+    # The fetch runs with ``visualize=False``, suppressing a generic auto-emission
+    # that would only know the REQUESTED time rather than the resolved one, so this
+    # is the only station layer that reaches the canvas: exactly one, and captioned
+    # with the cycle actually served rather than the bare request word.
     if layer is None:
         return
     try:
@@ -427,10 +390,7 @@ def _nwm_nearest_streamflow(seed_lon: float, seed_lat: float,
                             valid_time: str | None = None) -> dict[str, Any] | None:
     """The NWM reach nearest the seed: its discharge + the RESOLVED cycle served.
 
-    ``None`` on any miss - offline, no NHDPlus coverage at the seed, or
-    ``valid_time`` falling outside the ~30-day NWM PDS retention window. The
-    typed gate in ``resolve_carrier_discharge`` narrates the difference.
-    """
+    ``None`` on any miss: offline, no coverage at the seed, or outside retention."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     box = (seed_lon - _DISCHARGE_QUERY_HALF_DEG, seed_lat - _DISCHARGE_QUERY_HALF_DEG,
@@ -519,16 +479,12 @@ def resolve_rain_event(*, window: str | None, intensity_mm_per_hr: float,
                        sim_duration_hr: float | None) -> dict[str, Any]:
     """The storm, as either a real hourly hyetograph or a constant design rate.
 
-    A BRANCH ON THE ASK, not a fallback ladder: a dated ``window`` fetches the
-    hourly AORC accumulation over the catchment and the run is driven by the REAL
-    intensity structure, which is what resolves the hydrograph SHAPE. With no
-    window the storm is a constant design rate over a declared duration - a
-    hypothetical, and the returned ``note`` labels it as one.
-
-    AORC rather than MRMS despite the argument's history: MRMS only covers
-    ~2020-10 onward, and a replication window that predates it would silently
-    return nothing.
-    """
+    A BRANCH ON THE ASK, not a fallback ladder; the note labels a hypothetical."""
+    # A dated ``window`` fetches the hourly AORC accumulation over the catchment,
+    # so the run is driven by the real intensity structure, which is what resolves
+    # the hydrograph SHAPE; with no window the storm is a constant design rate over
+    # a declared duration. AORC rather than MRMS: MRMS covers ~2020-10 onward only,
+    # and a replication window predating it would silently return nothing.
     from trid3nt_server.tools import TOOL_REGISTRY
 
     if not window:

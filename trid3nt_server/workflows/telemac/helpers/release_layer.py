@@ -1,10 +1,7 @@
 """The reach's RELEASE point as a context layer.
 
-The discharge/outfall location is physics - it is where the source term enters
-the water and where the downstream distance is measured from - but it lived only
-as two numbers on a manifest. This puts it on the map beside the reach, labeled
-with whether the user placed it or the pipeline derived it.
-"""
+Where the source term enters the water and the downstream distance is measured
+from, put on the map beside the reach and labeled with who placed it."""
 
 from __future__ import annotations
 
@@ -34,10 +31,7 @@ async def publish_release_point(emitter: Any, *, lon: float, lat: float,
                                 label: str = "Outfall") -> bool:
     """Put the release point on the canvas. Best-effort: never fails a run.
 
-    ``user_supplied`` is what the name says out loud - a drawn or passed point is
-    the user's claim about the world, a derived one is the pipeline's, and the two
-    must not read the same on the map.
-    """
+    A user-supplied point and a derived one must not read the same on the map."""
     if emitter is None:
         return False
     basis = "user" if user_supplied else "derived"

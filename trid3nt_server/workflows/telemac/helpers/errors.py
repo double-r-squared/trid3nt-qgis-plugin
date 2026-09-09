@@ -1,10 +1,8 @@
 """Typed failures of the TELEMAC pipelines.
 
 Each carries an open-set ``error_code`` the emitter renders as a typed error
-frame. The RETRYABLE one is a GATE, not a failure: it carries ``.suggestions``
-the adapter harvests off the raised exception so the model can retry with
-corrected args, so it must PROPAGATE rather than flatten into an envelope.
-"""
+frame. The RETRYABLE one carries ``.suggestions`` the adapter harvests off the
+raised exception, so it must PROPAGATE rather than flatten into an envelope."""
 
 from __future__ import annotations
 
@@ -39,14 +37,7 @@ class TelemacDyeScenarioInputError(TelemacDyeScenarioError):
 
 
 class ReachWaterUnmapped(TelemacDyeScenarioError):
-    """No mapped water polygon covers this reach, so it has NO DOMAIN. TERMINAL.
-
-    A reach domain is the real mapped water polygon or nothing: a line has no
-    banks, so widening the flowline into a ribbon would answer a question about a
-    shape nobody surveyed. There is no rung to retry with - the three ways a
-    domain can be SUPPLIED are named in the message, and every one of them is an
-    act outside this call.
-    """
+    """No mapped water polygon covers this reach, so it has NO DOMAIN. TERMINAL."""
 
     def __init__(self) -> None:
         super().__init__(
@@ -64,12 +55,7 @@ class ReachWaterUnmapped(TelemacDyeScenarioError):
 class ReachMeshUncovered(TelemacDyeScenarioError):
     """The accepted mesh holds NO part of the reach, so the solve has no reach.
 
-    TERMINAL, and it is the only mesh-coverage outcome that stops the run: above
-    zero the measured percent is journalled and the user decides what to do with
-    it. Nothing here auto-adjusts the resolution - re-running finer, adding a
-    sizing function or authoring the mesh are the user's expressions of intent,
-    and picking one for them would take on a decision the ask never made.
-    """
+    The only coverage outcome that stops a run: above zero it is journalled."""
 
     def __init__(self) -> None:
         super().__init__(
@@ -84,11 +70,7 @@ class ReachMeshUncovered(TelemacDyeScenarioError):
 class TelemacReleaseOutsideDomainError(TelemacDyeScenarioError):
     """The supplied release point lies outside the domain polygon the run solves.
 
-    Decided before anything is staged, against the mapped polygon itself: a point
-    the domain does not contain is a release the run cannot put anywhere without
-    moving it somewhere else, which would answer a different question. Retryable:
-    the corrective args ride the tool-retry loop.
-    """
+    Retryable: the corrective args ride the tool-retry loop."""
 
     retryable = True
 
@@ -124,12 +106,6 @@ class RainOnGridError(DeclarativeError):
 
 
 class OpenWaterError(DeclarativeError):
-    """An AOI-domain TELEMAC run could not be staged, solved or read.
-
-    The harbour and the basin share it, because what can go wrong before the
-    engine starts is the same for both: a mesh nobody accepted, a manifest that
-    could not be written, a solve that did not complete, a result that did not
-    come back.
-    """
+    """An AOI-domain TELEMAC run could not be staged, solved or read."""
 
     error_code = "TELEMAC_OPEN_WATER_FAILED"
