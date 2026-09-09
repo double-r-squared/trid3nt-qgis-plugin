@@ -1,54 +1,27 @@
-"""Runaway-agent guard: per-turn step cap + wall-clock + loop watchdog.
+"""Runaway-agent guard: per-turn step cap, wall-clock and loop watchdog.
 
-SAFETY-CRITICAL (live incident 2026-06-25): a single prompt on Nova Lite ran
-away inside the per-turn model<->tool loop -- it kept emitting tool calls that
-made no progress, never terminated, pinned the shared EC2 box, wedged the SSM
-channel, and locked the user out behind a "connecting" loop. Only an
-``ec2 stop-instances`` killed it. It must never be able to wedge the shared box
-again.
-
-This module holds the small, env-overridable, fully unit-testable guard logic
-that the per-turn driver (``server._stream_model_reply``) consults each
-iteration. Keeping it here -- rather than inline in the 10k-line server -- makes
-the thresholds + watchdog testable in isolation and keeps normal-turn behavior
-untouched under the caps.
-
-Three independent guards, all OR'd into a single per-turn abort:
-
-  1. STEP CAP -- a hard cap on model<->tool ROUNDS within one user turn
-     (``TRID3NT_MAX_AGENT_STEPS``, default 30). This is the primary bound. It is
-     a TIGHTER lower bound than the historical ``MAX_TURN_ITERATIONS`` only for
-     cheap/loop-prone models (see #3); the server takes ``min`` of the two so a
-     normal Sonnet turn keeps its existing headroom.
-
-  2. WALL-CLOCK -- a per-turn deadline (``TRID3NT_MAX_TURN_SECONDS``, default
-     420s) that aborts a turn that is taking too long even if it is still under
-     the step cap (e.g. each round is slow). Bounds wall time, not just steps.
-
-  3. LOOP WATCHDOG -- detects no-progress looping: the SAME tool called with the
-     SAME args ``TRID3NT_LOOP_REPEAT_N`` (default 4) times in a row, or the model
-     emitting the SAME identical round-signature that many times running. Either
-     fires an abort. This catches the runaway that stays *under* the step cap by
-     re-issuing one identical call (Nova Lite's failure shape).
-
-CHEAP-MODEL TIGHTER CAP (#3): small / Nova / Haiku-tier models are materially
-more loop-prone, so they get HALF the step cap (rounded up, floored at a small
-minimum). Data-driven via ``_CHEAP_MODEL_SUBSTRINGS`` -- matched on the model id
-substring so future cheap profiles are covered without an edit, rather than a
-brittle exact-id table.
+Three independent bounds, all env-overridable, OR'd into one per-turn abort. A
+cheap / loop-prone model tier gets HALF the step cap, floored, so a legitimate
+short chain still fits.
 """
-
 from __future__ import annotations
 
 import math
 import os
 
 # --------------------------------------------------------------------------- #
-# Defaults (all env-overridable). Chosen to leave NORMAL turns untouched: the
-# server takes min(MAX_TURN_ITERATIONS, step cap), and MAX_TURN_ITERATIONS (12)
-# is the binding bound for full-tier models, so the default step cap of 30 only
-# bites a genuinely runaway turn -- while the cheap-model halving DOES tighten
-# Nova/Haiku, exactly the loop-prone tier from the incident.
+# The three guards these defaults arm:
+#   1. STEP CAP -- a hard cap on model<->tool ROUNDS within one user turn; the
+#      primary bound.
+#   2. WALL-CLOCK -- a per-turn deadline, so a turn whose rounds are individually
+#      slow aborts even while it is under the step cap.
+#   3. LOOP WATCHDOG -- the SAME tool with the SAME args, or the SAME round
+#      signature, repeated N rounds running. This catches the runaway that stays
+#      UNDER the step cap by re-issuing one identical call.
+# Chosen to leave NORMAL turns untouched: the turn driver takes the min of its
+# own iteration bound and this step cap, and that bound is the binding one for
+# full-tier models, so the default step cap only bites a genuinely runaway turn
+# -- while the cheap-model halving does tighten the loop-prone tier.
 # --------------------------------------------------------------------------- #
 
 #: Hard cap on model<->tool ROUNDS within a single user turn (full-tier models).
@@ -66,10 +39,8 @@ LOOP_REPEAT_N_DEFAULT: int = 4
 #: legitimate short chain (discover -> fetch -> publish -> narrate) still fits.
 _CHEAP_STEP_FLOOR: int = 6
 
-#: Substrings (lowercased) that mark a small / cheap / loop-prone Bedrock model
-#: tier. Matched against the model id; data-driven so new cheap profiles are
-#: covered without a code edit. Nova (lite/pro/micro) and Haiku are the live
-#: cheap tier; "mini"/"small"/"flash"/"deepseek" cover plausible future adds.
+#: Substrings (lowercased) that mark a small / cheap / loop-prone model tier,
+#: matched against the model id so a new cheap profile needs no code edit.
 _CHEAP_MODEL_SUBSTRINGS: tuple[str, ...] = (
     "nova",
     "haiku",
@@ -153,12 +124,9 @@ def loop_repeat_n() -> int:
 
 
 def is_cheap_model(model_id: str | None) -> bool:
-    """True when ``model_id`` is a small / cheap / loop-prone tier (Nova/Haiku).
+    """True when ``model_id`` is a small / cheap / loop-prone tier.
 
-    Matched on lowercased substring so future cheap profiles are covered without
-    an edit. ``None`` (the env default model) is treated as NOT cheap -- the
-    default is Sonnet, a full-tier model.
-    """
+    ``None`` is NOT cheap: the env default model is a full-tier one."""
     if not model_id:
         return False
     mid = model_id.lower()
@@ -168,11 +136,7 @@ def is_cheap_model(model_id: str | None) -> bool:
 def step_cap_for_model(model_id: str | None) -> int:
     """Resolve the per-turn step cap for ``model_id``.
 
-    Full-tier models get the full ``max_agent_steps()``. Cheap / loop-prone
-    models (Nova, Haiku, ...) get HALF that (rounded up), floored at
-    ``_CHEAP_STEP_FLOOR`` so a legitimate short chain still fits. This is the
-    #3 "tighter cap for cheap models" guard, kept data-driven.
-    """
+    A cheap tier gets HALF, rounded up, floored at ``_CHEAP_STEP_FLOOR``."""
     full = max_agent_steps()
     if not is_cheap_model(model_id):
         return full
@@ -181,47 +145,10 @@ def step_cap_for_model(model_id: str | None) -> int:
 
 
 class LoopWatchdog:
-    """Detect a turn looping with no progress (guard #2).
+    """Detect a turn looping with no progress, fed one ROUND at a time.
 
-    Fed one ROUND at a time via :meth:`record_round`, each round being the list
-    of ``(tool_name, args_hash)`` the model emitted that round. Trips when:
-
-      * the SAME single (tool, args_hash) is emitted ``loop_repeat_n()`` rounds
-        in a row (the classic "calls the same tool with the same args over and
-        over" runaway), OR
-      * the model emits the SAME identical round-signature (same set/order of
-        calls, e.g. a repeated fan-out) ``loop_repeat_n()`` rounds in a row.
-
-    A round that differs from the prior round RESETS the streak (real progress).
-    Text-only rounds (no tool calls) also reset -- the model is narrating, which
-    is progress toward a terminal turn. Cheap to call; O(1) state.
-
-    PROGRESS-AWARE RESET (reconciliation): a round that MADE PROGRESS
-    also resets the streak even when its signature repeats. ``made_progress`` is
-    the per-round witness the driver passes after dispatch:
-
-      * ``True`` when at least one call produced a real artifact (a published /
-        registered layer, a substantive result) -- a model that keeps producing
-        NEW output each round is advancing the Case, not wedging the box, so it
-        is allowed to run to the step cap / loop-exhausted envelope rather than
-        being watchdog-aborted. This is what separates an identical-but-PRODUCING
-        loop (-> ``MAX_ITERATIONS_REACHED`` at the cap) from the wedge shape.
-      * ``True`` ALSO when every call this round FAILED or was circuit-breaker
-        short-circuited -- the CIRCUIT BREAKER owns the failing-tool case (it
-        delivers ``CIRCUIT_BREAKER_TRIPPED`` so the model adapts, the turn
-        continues gracefully). The watchdog must NOT pre-empt a turn the breaker
-        is already handling, so a failure/short-circuit round does not load the
-        no-progress streak.
-
-    The watchdog therefore only counts a round toward its no-progress streak when
-    that round had calls, repeated the prior signature, AND made no progress
-    (``made_progress=False``): the genuine "ignored the result, re-issued the
-    same successful no-op call" runaway (Nova Lite's failure shape). Cheap to
-    call; O(1) state.
-
-    :meth:`tripped` returns the reason code (``ABORT_LOOP_WATCHDOG``) once the
-    streak hits the threshold, else ``None``.
-    """
+    Trips only on a repeated round signature that also made no progress; O(1)
+    state, cheap to call every round."""
 
     def __init__(self, threshold: int | None = None) -> None:
         self._threshold = threshold if threshold is not None else loop_repeat_n()
@@ -233,17 +160,20 @@ class LoopWatchdog:
     ) -> str | None:
         """Record one round's ``(tool_name, args_hash)`` calls.
 
-        Returns the abort reason code if this round trips the watchdog, else
-        ``None``. ``calls`` empty (a text-only / terminal round) resets the
-        streak -- narration is progress. ``made_progress=True`` ALSO resets the
-        streak (a producing round, or a round the circuit breaker owns), so the
-        watchdog only catches a repeated, SUCCESSFUL-but-NO-OP call.
-        """
+        Returns the abort reason code when this round trips, else ``None``."""
+        # A round resets the no-progress streak when it emitted no calls (a
+        # text-only / terminal round: narration is progress), and when it MADE
+        # PROGRESS. ``made_progress`` is True when at least one call produced a
+        # real artifact -- a model producing NEW output each round is advancing
+        # the Case, so it runs on to the step cap rather than being
+        # watchdog-aborted -- and ALSO when every call this round failed or was
+        # short-circuited, because the circuit breaker already owns the
+        # failing-tool case and the watchdog must not pre-empt it. So the streak
+        # counts only a round that had calls, repeated the prior signature, and
+        # made no progress: the re-issued successful no-op call.
         if not calls or made_progress:
-            # Text-only round, a producing round, or a breaker-owned (all-failed
-            # / short-circuited) round -> progress -> reset the no-progress
-            # streak. ``_last_signature`` is cleared so the NEXT repeat starts a
-            # fresh count rather than resuming an interrupted streak.
+            # ``_last_signature`` is cleared so the NEXT repeat starts a fresh
+            # count rather than resuming an interrupted streak.
             self._last_signature = None
             self._repeat_count = 0
             return None

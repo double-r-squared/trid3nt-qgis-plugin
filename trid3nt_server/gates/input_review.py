@@ -1,36 +1,9 @@
 """Two-mode INPUT_REQUIRED review gate -- the shared helper templates call.
 
-NATE's flagship review-before-run feature has TWO run modes:
-
-  * ``auto`` (session default): the run proceeds immediately. Every non-user
-    input is still LOUDLY LABELED via the 0106 ``synthetic_inputs`` machinery
-    (already carried on the result envelope) -- this helper is a no-op pass
-    through, it does not pause.
-  * ``user_gated``: AFTER the template has RESOLVED its inputs (fetched values,
-    prompt-interpreted values, demo defaults) and BEFORE the solver is
-    dispatched, the resolved input set is presented for review. The user
-    approves (``proceed``) or adjusts a value (``provide values`` == the
-    ``narrow_scope`` action carrying ``revised_args``); on approval the run
-    stamps EXACTLY the reviewed entries into its result so what-was-approved ==
-    what-ran. A ``provide values`` reply re-resolves + re-presents, bounded to
-    ``max_rounds`` rounds then an honest cancel.
-
-It rides the EXISTING #154 pause/resume spine -- no new WS event, no new
-confirmation envelope: the review is a ``tool-payload-warning`` carrying the
-resolved provenance (rendered into ``recommendation`` so the plugin's existing
-card shows it with NO new UI, plus the structured ``synthetic_inputs`` field for
-narration), and ``server``'s ``_PENDING_CONFIRMATIONS`` block-and-wait +
-``tool-payload-confirmation`` resume path handle it unchanged. The mode lever is
-shared with the mesh preview gate: ``user_gated`` also turns the mesh
-preview gate ON for regular grids.
-
-An in-tool gate cannot import ``server`` at module load (circular), so the helper
-reaches the spine through ``current_emitter()`` (the sink + session id) and the
-leaf ``agent.gates.pending`` registry. With NO live emitter (a direct-call /
-offline run with no session) the gate FAILS OPEN -- it proceeds with the resolved
-inputs labeled, never blocking a headless run.
+``auto`` proceeds immediately with every non-user input loudly labeled;
+``user_gated`` presents the resolved inputs for approval after resolution and
+before dispatch, bounded to ``max_rounds`` rounds then an honest cancel.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -59,27 +32,23 @@ __all__ = [
 InputGateMode = Literal["auto", "user_gated"]
 
 #: Session-level default when a run does not pass an explicit ``input_mode``.
-#: Env override so a whole session can opt into review-before-run; unset ==
-#: ``auto`` (the shipped behavior -- runs are not blocked by default).
+#: Env override so a whole session can opt into review-before-run; unset is
+#: ``auto``, so runs are not blocked by default.
 _INPUT_GATE_MODE_ENV = "TRID3NT_INPUT_GATE_MODE"
 
-#: Max review rounds before an honest cancel (NATE: "bounded: 3 rounds then
-#: honest cancel"). One round == one presentation; a ``provide values`` reply
-#: consumes a round and re-presents, so the user gets up to this many looks.
+#: Max review rounds before an honest cancel. One round == one presentation; a
+#: ``provide values`` reply consumes a round and re-presents, so the user gets
+#: up to this many looks.
 _DEFAULT_MAX_ROUNDS = 3
 
-#: Gate wait cap (seconds) mirroring the solver-confirm gate TTL.
+#: Gate wait cap (seconds); running out is a typed cancel, never a silent run.
 _DEFAULT_TTL_SECONDS = 300
 
 
 def resolve_input_gate_mode(mode: str | None) -> InputGateMode:
     """Resolve the effective run mode: explicit param wins, else session default.
 
-    A per-run ``input_mode`` (``"auto"`` / ``"user_gated"``) overrides; anything
-    else (None, unrecognized) falls to the ``TRID3NT_INPUT_GATE_MODE`` env
-    default, itself defaulting to ``auto`` so runs are never blocked unless the
-    user opted in.
-    """
+    Anything unrecognized falls to the env default, itself ``auto``."""
     if mode is not None:
         m = str(mode).strip().lower()
         if m in ("auto", "user_gated"):
@@ -95,11 +64,8 @@ def _entry_field(e: Any, name: str) -> Any:
 def render_input_review_lines(entries: Any) -> list[str]:
     """One compact line per resolved input: ``param = value [basis, source]``.
 
-    Concise-chat norm: a table-like block, one input per line. ``basis`` is
-    spelled human-readably (``fetched`` -> ``site-derived``, ``default_demo`` ->
-    ``demo default``); the ``source`` clause names the fetcher/dataset when the
-    value is fetched/derived.
-    """
+    ``basis`` is spelled human-readably; ``source`` names the fetcher or dataset
+    only where there is one."""
     basis_label = {
         "fetched": "site-derived",
         "derived": "derived",
@@ -126,11 +92,8 @@ def render_input_review_lines(entries: Any) -> list[str]:
 def _physics_demo_entries(entries: Any) -> list[Any]:
     """The entries that must REFUSE in auto: ``consequence="physics"`` demo defaults.
 
-    A physics-consequential value that fell back to a demo default with no real
-    data source is exactly what law 9 forbids running on - it silently ruins the
-    simulation. Scenario/numerical/aoi demo defaults are the user's question or a
-    solver knob, not a world invention, and are excluded here.
-    """
+    Scenario, numerical and aoi demo defaults are the user's question or a solver
+    knob, not a world invention, and are excluded."""
     out = []
     for e in entries or []:
         if (_entry_field(e, "basis") == "default_demo"
@@ -144,19 +107,8 @@ def physics_refusal_reason(tool_name: str, entries: Any, *,
                            no_review_surface: bool = False) -> str | None:
     """The typed ``*_PHYSICS_INPUT_REQUIRED`` refusal text, or None if none refuse.
 
-    Names every physics-consequential input that fell back to a demo default and
-    what it needs, then tells the caller how to satisfy the gate: supply the value,
-    let a real fetcher resolve it, or re-run in ``user_gated`` mode to approve the
-    demo default explicitly. Templates that resolve inputs outside the gate can
-    raise on this directly; the gate returns it as the ``cancel_reason``.
-
-    ``no_session`` is for the headless ``user_gated`` arm - the caller ASKED for
-    review and there is no live session to present it on. ``no_review_surface`` is
-    the other half: a live session that will never be asked, because the workflow
-    declares no card and no step that reviews its own inputs. Both remedies name
-    what is actually missing, rather than a ``user_gated`` lever the caller has
-    already pulled.
-    """
+    ``no_session`` (nothing live to present on) and ``no_review_surface`` (a
+    workflow with no card and no self-reviewing step) each pick their remedy."""
     refusing = _physics_demo_entries(entries)
     if not refusing:
         return None
@@ -195,15 +147,13 @@ def _build_review_envelope(
     ttl_seconds: int,
     param_sheet: "ParamSheet | None" = None,
 ) -> PayloadWarningEnvelopePayload:
-    """Build the input-review ``tool-payload-warning`` (rides the #154 spine).
+    """Build the input-review ``tool-payload-warning``.
 
-    The provenance is rendered into ``recommendation`` (so a client with no rich
-    renderer still surfaces the table) AND carried structured on
-    ``synthetic_inputs`` (for the narration seam). A step reviewing its own adds
-    ``param_sheet`` -- the resolved sheet as an EDIT SURFACE, which is what the
-    plugin's form card renders. The ``narrow_scope`` option is the "provide
-    values" action -- a reply with ``revised_args`` carries the edits.
-    """
+    ``param_sheet`` is the resolved sheet as an EDIT SURFACE; ``narrow_scope`` is
+    the "provide values" action, and its reply carries ``revised_args``."""
+    # The provenance is carried twice on purpose: rendered into
+    # ``recommendation`` so a client with no rich renderer still surfaces the
+    # table, and structured on ``synthetic_inputs`` for the narration seam.
     lines = render_input_review_lines(entries)
     header = (
         f"Review the resolved inputs for {tool_name} before it runs "
@@ -240,11 +190,8 @@ def _apply_revision(
 ) -> tuple[list[SyntheticInput], dict[str, Any]]:
     """Merge a ``provide values`` revision into the params + provenance entries.
 
-    For each revised key: update ``params[key]`` and, if a provenance entry names
-    it, rebuild that entry with ``basis="user"`` (a user-revised value is
-    user-provenance) preserving its units; an unknown key becomes a new
-    user-basis entry. Returns the merged ``(entries, params)``.
-    """
+    A revised value is re-stamped ``basis="user"`` with its units preserved; an
+    unknown key becomes a new user-basis entry."""
     revised = revised_args or {}
     if not revised:
         return entries, params
@@ -276,10 +223,8 @@ def _apply_revision(
 class ReviewOutcome:
     """The result of an input-review gate.
 
-    ``proceed`` True -> run with ``params`` and stamp ``entries`` into the
-    result. ``cancelled`` True -> the user declined (or the rounds/TTL ran out);
-    the template returns a typed cancel error and does NOT solve.
-    """
+    ``proceed`` means run with ``params`` and stamp ``entries`` into the result;
+    ``cancelled`` means the template returns a typed cancel error and does NOT solve."""
 
     proceed: bool
     entries: list[SyntheticInput]
@@ -304,28 +249,8 @@ async def gate_input_review(
 ) -> ReviewOutcome:
     """Present resolved inputs for review before solver dispatch.
 
-    ``mode``: the per-run lever (``auto`` / ``user_gated`` / None -> session
-    default). ``entries``: the resolved ``SyntheticInput`` provenance. ``params``:
-    the run params the review may revise. ``reresolve``: optional callback that,
-    given revised params, returns freshly resolved ``(entries, params)`` -- used
-    when a ``provide values`` reply should re-run fetchers (e.g. a revised dam
-    name -> a new NID lookup). When absent, a revision updates the affected
-    entries to user-basis without re-fetching.
-
-    ``param_sheet`` turns the card into the declarative FORM: every declared row
-    with its bounds, badge and advanced fold, editable in place. It also changes
-    what a ``narrow_scope`` reply MEANS -- submitting an edited sheet IS the
-    approval, because the whole sheet was on screen, so the gate proceeds instead
-    of re-presenting. Without it the text card keeps its adjust-and-re-present
-    rounds, where a revision the user could not see in full deserves another look.
-
-    Returns a :class:`ReviewOutcome`. In ``auto`` mode (or with no live session)
-    it returns ``proceed=True`` immediately with the inputs unchanged UNLESS a
-    physics-consequential demo default is present -- then it REFUSES (law 9): auto
-    mode and the headless no-emitter path cannot present the demo default for
-    approval, so a value that would silently ruin the simulation is not run on an
-    invention. Scenario/numerical/aoi demo defaults still proceed.
-    """
+    In ``auto``, and with no live session, the inputs proceed unchanged UNLESS a
+    physics-consequential demo default is present, which REFUSES."""
     resolved_mode = resolve_input_gate_mode(mode)
     physics_refusal = physics_refusal_reason(tool_name, entries)
     if resolved_mode == "auto":
@@ -352,9 +277,8 @@ async def gate_input_review(
     emitter = current_emitter()
     if emitter is None:
         # No live session to present the demo defaults for approval. A physics
-        # demo default still REFUSES (law 9 -- the value would silently ruin the
-        # run and there is no one to approve it); everything else fails open,
-        # labeled.
+        # demo default still REFUSES -- the value would silently ruin the run and
+        # there is nobody to approve it; everything else fails open, labeled.
         if physics_refusal is not None:
             logger.info(
                 "input-review gate REFUSE (user_gated, no emitter) tool=%s -- "
@@ -428,9 +352,10 @@ async def gate_input_review(
             cur_entries, cur_params, decision.revised_args
         )
         if param_sheet is not None:
-            # The form card showed the WHOLE sheet, so submitting it is the
-            # approval. Re-presenting would ask the user to confirm a table they
-            # just filled in, and the edits go on to re-seat + re-derive anyway.
+            # The form card showed the WHOLE sheet, so submitting it IS the
+            # approval and the gate proceeds instead of re-presenting. Without a
+            # sheet the text card keeps its adjust-and-re-present rounds, where a
+            # revision the user could not see in full deserves another look.
             logger.info(
                 "input-review gate submit-with-edits session=%s tool=%s revised=%s",
                 emitter.session_id, tool_name,
@@ -439,6 +364,9 @@ async def gate_input_review(
             return ReviewOutcome(proceed=True, entries=cur_entries,
                                  params=cur_params, mode="user_gated",
                                  rounds_used=round_idx)
+        # Without a reresolve callback a revision only re-stamps the affected
+        # entries to user basis; with one, revised params re-run their fetchers
+        # (a revised dam name reaching a new NID lookup, say).
         if reresolve is not None:
             try:
                 cur_entries, cur_params = await reresolve(cur_params)

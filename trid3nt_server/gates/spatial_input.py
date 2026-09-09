@@ -1,19 +1,8 @@
-"""Drawn ``FeatureCollection`` -> engine inputs.
+"""Drawn ``FeatureCollection`` -> engine inputs, for the spatial-input card.
 
-This is the AGENT-side consumer of the drawn output. The canonical role
-vocabulary + structural parser live in the mesh authoring layer at
-:mod:`trid3nt_server.gates.spatial_roles` so a breakline / breach /
-refine-region / aoi-clip means the same thing to every engine. This module is
-the ADAPTER over that shared parser: it holds the ``ParsedSpatialInput`` shape +
-the ``parse_spatial_input_features`` entry point the spatial-input card and the
-server import, and re-exports the shared primitives.
-
-``parse_spatial_input_features`` returns a ``ParsedSpatialInput`` carrying the
-AOI bbox, the points and the neutral line PLUS the generalized roles (breach
-points, refine regions, breaklines, boundary lines) so the card can surface them
-to whichever engine the user is driving.
+An adapter only: the role vocabulary and the structural parsing live in
+``spatial_roles``, which this module re-exports alongside its own shape.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -38,22 +27,9 @@ __all__ = [
 
 @dataclass
 class ParsedSpatialInput:
-    """The role-split result of a drawn ``FeatureCollection`` (adapter shape).
+    """The role-split result of a drawn ``FeatureCollection``, in adapter shape.
 
-    The drawn fields:
-        aoi_bbox: union extent of the clip polygons, or ``None``.
-        aoi_features: raw clip polygons (``aoi_clip`` + legacy ``aoi``).
-        points: ``[[lon, lat], ...]`` from the generic ``point`` role.
-        line_coords: the FIRST neutral ``line`` feature's vertices, or ``None``.
-        n_lines: count of neutral ``line`` features.
-
-    Generalized roles (surfaced for every engine):
-        breach_points: ``[[lon, lat], ...]`` interior breach sources
-            (the ``breach_point`` param).
-        refine_regions: ``[{"polygon", "target_size_m", "bbox"}]`` mesh sizing.
-        breaklines: ``[[[lon, lat], ...], ...]`` edge-constraining lines.
-        boundary_lines: ``[{"coords", "boundary_type"}]`` open boundaries.
-    """
+    ``line_coords`` is the FIRST neutral line only; ``n_lines`` counts them all."""
 
     aoi_bbox: tuple[float, float, float, float] | None = None
     aoi_features: list[dict[str, Any]] = field(default_factory=list)
@@ -69,12 +45,8 @@ class ParsedSpatialInput:
 def parse_spatial_input_features(fc: dict[str, Any]) -> ParsedSpatialInput:
     """Parse a drawn ``FeatureCollection`` into role-split engine inputs.
 
-    Delegates to :func:`trid3nt_server.gates.spatial_roles.parse_drawn_roles`
-    and adapts the canonical :class:`DrawnRoles` to :class:`ParsedSpatialInput`. Raises
-    :class:`~trid3nt_server.gates.spatial_roles.SpatialRoleError`
-    (aliased ``SpatialInputParseError``, typed ``error_code``) on any
-    structurally invalid input -- an honest typed error, never a silent success.
-    """
+    Structurally invalid input raises ``SpatialInputParseError``, a typed
+    ``error_code`` refusal -- never a silent success."""
     roles: DrawnRoles = parse_drawn_roles(fc)
     return ParsedSpatialInput(
         aoi_bbox=roles.aoi_bbox,

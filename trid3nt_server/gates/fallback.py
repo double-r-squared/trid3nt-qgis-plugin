@@ -1,26 +1,9 @@
 """The ONE fallback gate: the loudness floor over the pending-confirm spine.
 
-The floor, by consequence class:
-
-  * ``same_data`` -- another mirror of the SAME dataset. Walks silently; still
-    recorded on the activation.
-  * ``cross_dataset`` -- a different dataset, method or resolution. Narrates
-    loudly always; PAUSES for approval in ``user_gated`` mode.
-  * ``synthetic`` -- a value with no real data source. ALWAYS pauses, and its
-    labeled default is REFUSE (law 9: a physics-consequential invention never
-    runs unapproved).
-
-Declining is not a run-cancel: the walker treats a declined rung as one it may
-not take and descends to the next, ending at the ladder's typed REFUSE.
-
-WHO GETS ASKED is the gate MODE, not the presence of a channel: ``user_gated``
-asks, ``auto`` (and headless, and a run with no bound loop) applies the labeled
-default WITHOUT asking -- a synthetic rung therefore refuses in auto exactly as
-the input-review gate refuses a physics demo default in auto, on a live session
-or not. Once a card IS on a live user_gated session, an unanswered gate reads as
-a DECLINE. A canary never hangs either way.
+A ``synthetic`` rung ALWAYS pauses and its labeled default is REFUSE. Declining
+is not a run-cancel: the walker treats a declined rung as one it may not take
+and descends to the next, ending at the ladder's typed REFUSE.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -38,6 +21,12 @@ __all__ = ["gate_fires", "labeled_default", "confirm_fallback"]
 _TTL_SECONDS = 300
 
 
+# The floor, by consequence class: ``same_data`` (another mirror of the SAME
+# dataset) walks silently and is still recorded on the activation;
+# ``cross_dataset`` (a different dataset, method or resolution) narrates loudly
+# always and pauses in ``user_gated``; ``synthetic`` (a value with no real data
+# source) always pauses, because a physics-consequential invention never runs
+# unapproved.
 def gate_fires(consequence: str, gate_mode: str | None) -> bool:
     """Whether descending to a rung of ``consequence`` needs user approval."""
     if consequence == "synthetic":
@@ -81,15 +70,8 @@ def confirm_fallback(
 ) -> bool:
     """Ask (or apply the labeled default) before descending to ``rung``.
 
-    Returns True when the walker may take the rung. Only ``user_gated`` asks; in
-    auto the labeled default applies immediately, so a live emitter never turns
-    an auto run into a 5-minute stall. Callable from a worker thread (the fetch
-    path is off-loaded): the coroutine is driven onto the emitter's bound loop,
-    which is free while the composer is parked on the thread. On the loop thread
-    itself a blocking wait would deadlock, so the labeled default applies --
-    never a hang. Once the card IS on a live session, an unanswered gate is a
-    decline, not the labeled default.
-    """
+    True when the walker may take the rung; unanswered on a LIVE session is a
+    DECLINE, never the labeled default."""
     if not gate_fires(rung.consequence, gate_mode):
         if rung.consequence == "cross_dataset":
             logger.warning(
@@ -103,8 +85,8 @@ def confirm_fallback(
 
     if resolve_input_gate_mode(gate_mode) != "user_gated":
         # AUTO: nobody is being asked, whether or not a session happens to be
-        # attached. The labeled default is the answer -- for a synthetic rung
-        # that is REFUSE (law 9), the input-review gate's own auto semantics.
+        # attached. The labeled default is the answer, so a live emitter never
+        # turns an auto run into a five-minute stall.
         logger.warning(
             "fallback gate %s -> rung %s [%s] in auto mode: applying the labeled "
             "default (%s) without asking",
@@ -115,6 +97,10 @@ def confirm_fallback(
 
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
+    # Callable from a worker thread (the fetch path is off-loaded): the
+    # coroutine is driven onto the emitter's bound loop, which is free while the
+    # composer is parked on the thread. On the loop thread itself a blocking
+    # wait would deadlock, so the labeled default applies -- never a hang.
     emitter = current_emitter()
     loop = getattr(emitter, "_bound_loop", None) if emitter is not None else None
     on_loop = True
@@ -177,8 +163,7 @@ async def _present_and_wait(
     await emitter.send_envelope("tool-payload-warning", envelope)
     try:
         # An unanswered gate on a LIVE session is a DECLINE, not the labeled
-        # default: the card was delivered and nobody approved the substitution
-        # (input_review's timeout-is-cancel semantics, which this gate rides).
+        # default: the card was delivered and nobody approved the substitution.
         decision = await asyncio.wait_for(fut, timeout=float(envelope.ttl_seconds))
     except asyncio.TimeoutError:
         logger.warning(

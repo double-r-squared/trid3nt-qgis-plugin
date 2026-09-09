@@ -1,8 +1,6 @@
-"""Solver-confirm / granularity / fetch-resolution confirm-card builders.
+"""Solver-confirm, granularity and fetch-resolution confirm-card builders.
 
-Pure (no websocket, no session state) envelope + suggestion builders for the
-solver and heavy-fetch confirm gates. The transport-coupled gate orchestration
-(``_gate_on_solver_confirm`` etc.) stays in ``server``.
+Pure envelope and suggestion builders: no websocket, no session state.
 """
 from __future__ import annotations
 
@@ -24,16 +22,14 @@ logger = logging.getLogger("trid3nt_server.gates.cards.solver_confirm")
 MAX_FETCH_PX: int = 8192
 
 
-# Per-fetcher resolution ladders for the fetch-resolution gate. Finer =
-# smaller metres. fetch_dem can go to 1 m (3DEP); fetch_topobathy floors at
-# 3 m (CUDEM tiles). Both default to 10 m (the tools' resolution_m default).
-# fetch_landcover: NLCD native is 30 m; for large bboxes the gate coarsens
-# to 60/120/300/600 m so the MRLC WCS GetCoverage stays under 4000 px per
-# axis. fetch_dem's 90/300/900 m rungs exist because a state-scale AOI (e.g.
-# WA-state) needs ~150 m to stay under the tool's own 4000 px/axis budget
-# (data_fetch.py's _DEM_PIXEL_BUDGET_PX) -- without them the ladder-filtered
-# choices collapse to just the computed finest_allowed_m with no coarser
-# alternative, same as fetch_landcover's coarse rungs give for NLCD.
+# Per-fetcher resolution ladders for the fetch-resolution gate. Finer = smaller
+# metres. fetch_dem reaches 1 m (3DEP); fetch_topobathy floors at 3 m (CUDEM
+# tiles); both default to 10 m. fetch_landcover's native NLCD grid is 30 m and
+# the gate coarsens to 60/120/300/600 m on a large bbox so the MRLC WCS
+# GetCoverage stays under 4000 px per axis. fetch_dem's 90/300/900 m rungs exist
+# because a state-scale AOI needs roughly 150 m to stay under the tool's own
+# 4000 px/axis budget; without them the ladder-filtered choices collapse to the
+# computed finest_allowed_m alone, with no coarser alternative.
 _FETCH_RES_LADDERS: dict[str, list[float]] = {
     "fetch_dem": [1.0, 3.0, 10.0, 30.0, 90.0, 300.0, 900.0],
     "fetch_topobathy": [3.0, 10.0, 30.0],
@@ -44,15 +40,12 @@ _FETCH_DEFAULT_RES_M: float = 10.0
 # default (there is no finer rung, so the coarse default IS the native grid).
 _LANDCOVER_DEFAULT_RES_M: float = 30.0
 # Per-tool px-grid ceiling override for the fetch-resolution gate. The MRLC WCS
-# server rejects/times-out GetCoverage beyond ~4096 px per axis, so the
-# fetch_landcover card must bound its finest selectable rung to 4000 px (margin)
-# rather than the generic MAX_FETCH_PX -- otherwise the card would offer a rung
-# the tool cannot deliver (it clamps to 4000 px and would silently coarsen).
-# fetch_dem (2026-07-10): the tool itself now auto-coarsens against a 4000
-# px/axis budget (data_fetch.py's _DEM_PIXEL_BUDGET_PX) -- kept identical here
-# so the card's suggested rung matches what fetch_dem will actually deliver
-# (an honest suggestion instead of a stale 30 m that the tool would silently
-# coarsen past).
+# server rejects or times out a GetCoverage beyond roughly 4096 px per axis, so
+# the fetch_landcover card bounds its finest selectable rung to 4000 px rather
+# than the generic MAX_FETCH_PX; otherwise the card would offer a rung the tool
+# cannot deliver and would silently coarsen past. fetch_dem auto-coarsens
+# against its own 4000 px/axis budget, and the ceiling is identical here so the
+# card's suggested rung matches what the fetch will actually deliver.
 _FETCH_MAX_PX_BY_TOOL: dict[str, int] = {
     "fetch_landcover": 4000,
     "fetch_dem": 4000,
@@ -73,21 +66,10 @@ def _clamp_fetch_resolution(chosen_m: float, finest_allowed_m: float) -> float:
 async def _build_fetch_resolution_envelope(
     tool_name: str, params: dict
 ) -> tuple[Any, Any]:
-    """Build the fetch-resolution confirm card for ``fetch_dem`` / ``fetch_topobathy``.
+    """Build the fetch-resolution confirm card for a heavy raster fetcher.
 
-    the granularity gate widened to the two heavy raster
-    fetchers so the user controls the download/merge resolution before the big
-    fetch (memory: feedback_user_controlled_granularity). PURE arithmetic (no DEM
-    read / network): coerce the bbox, compute the bbox extent in metres, build the
-    per-fetcher ladder, and floor the finest selectable rung so a fine rung on a
-    huge AOI stays bounded to ``MAX_FETCH_PX`` px on the long axis.
-
-    Returns ``(envelope, fetch_suggestion)`` where ``fetch_suggestion`` is a
-    small namespace the decision tail reads (``coarse_default_m`` for proceed,
-    ``finest_allowed_m`` for the narrow_scope clamp, ``cap``). Raises on a
-    missing/invalid bbox so the caller's try/except fails OPEN (the fetch runs
-    with its own resolution_m default rather than being blocked by a gate error).
-    """
+    PURE arithmetic: no DEM read and no network. Raises on a missing or invalid
+    bbox so the caller fails OPEN rather than blocking the fetch on a gate error."""
     from trid3nt_contracts.payload_warning import (
         GranularitySuggestion,
         PayloadWarningEnvelopePayload,
@@ -211,6 +193,8 @@ async def _build_fetch_resolution_envelope(
         options=["proceed", "cancel", "narrow_scope"],
         granularity=granularity,
     )
+    # What the decision tail reads: ``coarse_default_m`` on a proceed,
+    # ``finest_allowed_m`` for the narrow_scope clamp, and the cell ``cap``.
     fetch_suggestion = SimpleNamespace(
         coarse_default_m=float(suggested),
         finest_allowed_m=float(finest_allowed_m),
@@ -222,17 +206,13 @@ async def _build_fetch_resolution_envelope(
 def _gate_memory_key(tool_name: str, params: dict[str, Any]) -> tuple[str, str]:
     """Turn-memory key for the solver-confirm / fetch-resolution gate.
 
-    Fix (bbox-gate-retry-loop, 2026-07-09): keys on ``(tool_name, bbox)`` -
-    a bbox rounded to ~6 decimal degrees (~0.1 m; matches the quantization
-    granularity the fetch tools already use for cache-key stability) - so a
-    retry of the SAME tool over the SAME AOI with a corrected non-bbox arg
-    (e.g. a typed-error retry that fixes ``dataset``) reuses the earlier
-    proceed/narrow_scope decision instead of re-gating. When the call
-    carries no ``bbox`` arg, falls back to keying on the FULL normalized
-    args dict (order-independent JSON), so any arg change still gates
-    fresh - this is the conservative default for gated tools without a
-    bbox-shaped AOI (e.g. the groundwater-contamination composers).
-    """
+    Keyed on ``(tool_name, rounded bbox)``, or on the FULL normalized args when
+    the call carries no bbox."""
+    # The bbox rounds to ~6 decimal degrees, the same quantization the fetch
+    # tools use for cache-key stability, so a retry of the SAME tool over the
+    # SAME AOI with a corrected non-bbox arg reuses the earlier decision instead
+    # of re-gating. Without a bbox-shaped AOI the full-args key is the
+    # conservative default: any arg change gates fresh.
     bbox = params.get("bbox")
     if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
         try:
@@ -252,12 +232,10 @@ def _gate_memory_key(tool_name: str, params: dict[str, Any]) -> tuple[str, str]:
 async def estimate_fetch_resolution(
     params: dict, *, tool_name: str, **_: Any
 ) -> CardEstimate:
-    """Estimate provider for the heavy raster fetchers (fetch_dem/topobathy/landcover).
+    """Estimate provider for the heavy raster fetchers.
 
-    Wraps :func:`_build_fetch_resolution_envelope`. Honours the fetch_landcover
-    no-coarsening skip by returning a ``CardEstimate(envelope=None)`` (dispatch as-is)
-    when the suggested rung IS the native 30 m grid and no finer was requested.
-    """
+    Returns ``CardEstimate(envelope=None)`` -- no gate -- when the suggested rung
+    IS the native grid and nothing finer was asked for."""
     envelope, suggestion = await _build_fetch_resolution_envelope(tool_name, params)
     if (
         tool_name == "fetch_landcover"
@@ -274,12 +252,10 @@ async def estimate_fetch_resolution(
 def pin_fetch_resolution(
     decision: str, revised_args: dict | None, params: dict, tail_state: dict
 ) -> dict | None:
-    """Pin provider for the fetch-resolution gate. No ``confirmed`` (fetchers ignore it).
+    """Pin provider for the fetch-resolution gate; no ``confirmed`` is injected.
 
-    proceed -> pin the SUGGESTED resolution_m the card showed. narrow_scope -> honour the
-    chosen resolution_m floored UP to finest_allowed_m so a fine rung on a huge AOI stays
-    bounded.
-    """
+    A proceed pins the SUGGESTED rung the card showed; a narrow_scope honours the
+    chosen rung floored UP to ``finest_allowed_m``."""
     suggestion = tail_state["fetch_suggestion"]
     if decision == "narrow_scope":
         revised = revised_args or {}

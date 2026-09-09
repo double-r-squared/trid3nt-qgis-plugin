@@ -1,106 +1,9 @@
 """Context-budget: per-model window discovery + client-side history management.
 
-TWO FAILURE MODES, one seam. Ollama silently CLIPS an over-long prompt rather
-than erroring -- the model never sees its own tool contract, can emit ZERO tool
-calls, and narrate a fabricated success as if the (non-existent) work had
-happened. Hosted providers instead REJECT it with a 400. Either way the fix is
-the same and it is ours: manage history CLIENT-SIDE, before the provider has to
-react. Provider-side compaction (e.g. the Anthropic compaction beta) is an
-opt-in extra layered on top, never a replacement.
-
-TWO INVARIANTS this module exists to hold:
-
-  * The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME -- never a
-    hardcoded constant. ``ContextWindow.source`` records where each number came
-    from, and a window we could not discover narrates as an assumption instead
-    of passing for a fact.
-  * The trim STRATEGY lives here, once. Adapters translate the planned
-    ``contents`` into their own wire shape and emit the compaction events; they
-    do not decide what to drop.
-
-Pieces:
-
-  0. WINDOW DISCOVERY (``discover_context_window``) -- provider-agnostic, cached
-     per ``(provider, model)``. Reads each provider's OWN metadata via the
-     resolvers in ``adapters.model_discovery`` (OpenRouter ``context_length``,
-     Anthropic ``max_input_tokens``, Ollama's runtime ``num_ctx``, and -- only
-     because Bedrock publishes no such fact -- a loudly-logged maintained
-     table), then ``TRID3NT_CONTEXT_WINDOW``, then a conservative default with
-     a WARNING. Never a silent guess.
-
-  0b. THE SHARED BUDGET SEAM (``plan_turn``) -- the single client-side
-     history-management entry point, used by the OpenAI-compatible, Anthropic
-     and Bedrock adapters alike. Always preserves the system prompt and tool
-     contracts (they are not in ``contents`` at all) plus the terminal user
-     message and the case-state note carrying the pending-confirmation spine.
-     CACHE-SAFE by construction: it rewrites only the conversation, and every
-     provider's cache breakpoints sit on tools/system, which render BEFORE
-     messages -- so trimming cannot invalidate a cached prefix.
-
-  1. NUM_CTX DISCOVERY (``discover_num_ctx``) -- the OpenAI-path-specific
-     back-compat wrapper over the above. Per-model, queries Ollama's
-     native ``/api/show`` and parses the RUNTIME-configured window out of the
-     ``parameters`` free-text field (NOT ``model_info.*.context_length``,
-     which is the architecture's max TRAINED context -- a different, much
-     larger number that would silently defeat this whole guard). Falls back
-     to a ``-<N>k`` name suffix, then ``TRID3NT_OPENAI_NUM_CTX`` (env, default
-     16384). Cached per model name for the process lifetime.
-
-  2. PROACTIVE BUDGET + COMPACTION LADDER (``compact_contents``) -- estimates
-     tokens as ``ceil(chars / 4)`` and, when over budget
-     (``num_ctx - output_reserve - safety_margin``), compacts with
-     HYSTERESIS (targets a FRACTION of budget so a borderline turn does not
-     re-trigger compaction every round): (a) drop oldest rows, (b) harden
-     long tool-result rows AND cap any oversized narration ``text`` Part,
-     (c) fold the remaining oldest rows into one digest row, (d) if still
-     over target with nothing left to drop, cap the text length of the
-     PROTECTED tail (case-state note / terminal user message) and log a
-     WARNING naming the oversized block. A defensive per-row
-     ``normalize_contents_row_sizes`` pass runs unconditionally at the top of
-     ``compact_contents``, capping every row's text to
-     ``CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT`` so a single runaway row never
-     survives even on a turn that sits under budget overall. Otherwise the
-     terminal user message and the case-state note immediately before it
-     (always the last <= 2 rows of ``contents`` per the
-     ``build_contents_from_history`` / server.py ``turn_history_for_contents``
-     contract) are NEVER touched.
-
-  3. REACTIVE CLIP GUARD (``is_prompt_clipped`` / ``ContextWindowExceededError``)
-     -- ``openai_adapter.stream_openai`` checks the ACTUAL reported
-     ``usage.prompt_tokens`` against ``num_ctx`` after every round; a value
-     ``>= num_ctx`` proves the send was clipped. One harder recompaction +
-     retry is attempted; a second clip raises the typed error, which
-     server.py surfaces as an honest ``CONTEXT_WINDOW_EXCEEDED`` envelope
-     (not the generic ``LLM_UNAVAILABLE`` bucket). ``max_tokens`` is also
-     capped on every request (``openai_max_output_tokens``, env
-     ``TRID3NT_OPENAI_MAX_TOKENS``, default 4096) and COUPLED to
-     ``reserve_output_tokens`` so the proactive budget can never drift from
-     the real request cap.
-
-  4. FABRICATION BACKSTOP (``looks_like_fabricated_action_claim``) -- cheap,
-     conservative regex over the closing narration of a turn that issued
-     ZERO tool calls: only fires when a completed-action verb (computed,
-     published, created, fetched, ...) pairs with a geospatial output noun
-     (layer, map, hillshade, dataset, ...) in the same sentence. Ordinary Q&A
-     answers and any turn that actually dispatched a tool never trigger it --
-     the structural (zero-tool-call) gate is the caller's job
-     (``server.py``), this module only judges the TEXT.
-     ``build_context_window_abort_note`` folds the same regex check into the
-     ``ContextWindowExceededError`` abort path, so a clipped/aborted turn
-     cannot persist an unqualified false completion claim either.
-
-  5. OVERFLOW CLASSIFICATION (``looks_like_context_overflow_error``) --
-     separates the one 400 worth retrying ("prompt is too long") from every
-     other 400, which is a genuine bug in our request and must fail loudly.
-     Adapters log the provider's message VERBATIM either way, trim harder,
-     retry ONCE, then raise the typed ``ContextWindowExceededError`` rather
-     than the generic provider-unavailable bucket.
-
-Every piece is individually unit-testable without a live provider or network
-access; window discovery is the only piece that makes a network call, and it
-degrades gracefully (best-effort) through its fallback chain on any fault.
+The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME, never a hardcoded
+constant, and one that could not be discovered narrates as an assumption rather
+than passing for a fact. The trim STRATEGY lives here, once.
 """
-
 from __future__ import annotations
 
 import json
@@ -118,22 +21,19 @@ from trid3nt_server.adapters.model_discovery import _ollama_root
 logger = logging.getLogger("trid3nt_server.gates.context_budget")
 
 # ---------------------------------------------------------------------------
-# Config (env-overridable, read at call time -- mirrors runaway_guard.py)
+# Config (env-overridable, read at call time)
 # ---------------------------------------------------------------------------
 
 #: Final fallback when neither /api/show discovery nor a ``-<N>k`` name
 #: suffix resolves a model's context window (``TRID3NT_OPENAI_NUM_CTX``).
 NUM_CTX_FALLBACK_DEFAULT = 16384
 
-#: The ``max_tokens`` cap sent on every LOCAL ``chat.completions`` request
-#: (``openai_adapter.stream_openai``) -- BUG 3, post-OPEN-14 acceptance
-#: rerun: an uncapped clipped-prompt turn streamed 16k-26k tokens of looped
-#: "Computing hillshade..." narration for ~22 minutes before the reactive
-#: clip guard could react at stream end (it only inspects usage AFTER the
-#: stream finishes). Also the single source of truth for
-#: ``reserve_output_tokens()`` below -- the proactive budget must reserve
-#: exactly what the request is allowed to generate, never a different
-#: number, or the two silently drift apart.
+#: The ``max_tokens`` cap sent on every LOCAL ``chat.completions`` request. An
+#: uncapped clipped-prompt turn can stream tens of thousands of tokens of looped
+#: narration before the reactive clip guard reacts, since that guard only
+#: inspects usage AFTER the stream finishes. Also the single source of truth for
+#: ``reserve_output_tokens()`` below: the proactive budget must reserve exactly
+#: what the request may generate, or the two silently drift apart.
 OPENAI_MAX_TOKENS_DEFAULT = 4096
 
 #: Extra fixed headroom below the raw arithmetic budget (tokenizer estimate
@@ -153,23 +53,20 @@ REACTIVE_TARGET_RATIO_DEFAULT = 0.60
 #: down to roughly this many chars by the hardening step.
 TOOL_RESULT_HARDEN_CHARS_DEFAULT = 200
 
-#: Step (b)/(d) narration cap: any ``text`` Part longer than this is
-#: truncated (ellipsis-marked) once the ladder is still over target after
-#: dropping (step a) and tool-result hardening -- covers (b) a row that
-#: mixes narration text with a ``function_call``/``function_response`` Part
-#: (never droppable, per ``_is_droppable_row``, and never touched by the old
-#: function-response-only harden) and (d) the PROTECTED tail as a last
-#: resort. Deliberately much smaller than ``CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT``
-#: -- this only fires once the turn is already proven over budget.
+#: Step (b)/(d) narration cap: any ``text`` Part longer than this is truncated
+#: (ellipsis-marked) once the ladder is still over target after dropping and
+#: tool-result hardening. It covers (b) a row mixing narration text with a
+#: ``function_call``/``function_response`` Part, which is never droppable, and
+#: (d) the PROTECTED tail as a last resort. Deliberately much smaller than
+#: ``CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT``: it fires only once the turn is
+#: already proven over budget.
 NARRATION_ROW_HARDEN_CHARS_DEFAULT = 2000
 
-#: Defensive per-row TEXT cap applied unconditionally, to every row, at the
-#: very top of ``compact_contents`` (the ladder's "normalization pass") --
-#: guards against a single history row carrying 100KB+ into a future turn's
-#: prompt even when the OVERALL total happens to sit under budget this turn
-#: (the live-log failure mode: 177KB single-row agent narration messages).
-#: NOT a persistence-side change -- persistence is untouched; this only
-#: shapes what ``compact_contents`` hands back for the CURRENT turn.
+#: Defensive per-row TEXT cap applied unconditionally, to every row, at the very
+#: top of ``compact_contents``. It guards against a single history row carrying
+#: 100KB+ into a future turn's prompt even when the OVERALL total sits under
+#: budget this turn. NOT a persistence-side change: persistence is untouched,
+#: and this only shapes what ``compact_contents`` hands back for THIS turn.
 CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT = 8000
 
 #: The token estimator: ``ceil(total_chars / CHARS_PER_TOKEN)``.
@@ -205,22 +102,17 @@ def num_ctx_env_fallback() -> int:
 
 
 def openai_max_output_tokens() -> int:
-    """``TRID3NT_OPENAI_MAX_TOKENS`` -- the ``max_tokens`` cap passed on every
-    LOCAL ``chat.completions`` request (BUG 3). Verified live against Ollama's
-    OpenAI-compat endpoint (2026-07-12, llama3.2:3b): ``max_tokens`` maps to
-    ``num_predict`` and the completion truncates at exactly that count
-    (``finish_reason="length"``, ``usage.completion_tokens == max_tokens``),
-    under both streaming and non-streaming requests.
-    """
+    """``TRID3NT_OPENAI_MAX_TOKENS`` -- the cap on every LOCAL request.
+
+    It maps to ``num_predict``, and the completion truncates at exactly that
+    count under both streaming and non-streaming requests."""
     return _env_int("TRID3NT_OPENAI_MAX_TOKENS", OPENAI_MAX_TOKENS_DEFAULT, minimum=1)
 
 
 def reserve_output_tokens() -> int:
-    """Tokens reserved for the model's own reply -- COUPLED to
-    ``openai_max_output_tokens()`` (BUG 3 fix, single source of truth): the
-    adapter now caps generation at that many tokens on every request, so the
-    proactive budget must reserve exactly that many, never a separately
-    configured number that could drift out of sync with the real cap."""
+    """Tokens reserved for the model's reply, COUPLED to the request's own cap.
+
+    A separately configured number would drift out of sync with the real cap."""
     return openai_max_output_tokens()
 
 
@@ -269,7 +161,7 @@ def compute_budget_tokens(num_ctx: int) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Token estimator (item 2): ceil(chars / 4) over the serialized payload.
+# Token estimator: ceil(chars / 4) over the serialized payload.
 # ---------------------------------------------------------------------------
 
 
@@ -318,10 +210,9 @@ _PARAM_NUM_CTX_RE = re.compile(r"^\s*num_ctx\s+(\d+)\s*$", re.IGNORECASE | re.MU
 
 
 def num_ctx_from_suffix(model_name: str | None) -> int | None:
-    """Parse a trailing ``-<N>k`` context-size suffix off a model name
-    (e.g. ``qwen3:8b-16k`` -> 16384, ``llama3.2:3b-32k`` -> 32768). Verified
-    live against the box's Modelfile ``PARAMETER num_ctx`` values: the ``k``
-    suffix means ``N * 1024``, not ``N * 1000``."""
+    """Parse a trailing ``-<N>k`` context-size suffix off a model name.
+
+    The ``k`` suffix means ``N * 1024``, not ``N * 1000``."""
     if not model_name:
         return None
     m = _SUFFIX_RE.search(model_name.strip())
@@ -335,26 +226,16 @@ def num_ctx_from_suffix(model_name: str | None) -> int | None:
 
 
 def _parse_num_ctx_from_show_response(payload: dict[str, Any]) -> int | None:
-    """Extract the runtime-configured ``num_ctx`` from an Ollama
-    ``POST /api/show`` response body.
+    """Extract the runtime ``num_ctx`` from an Ollama ``/api/show`` response body.
 
-    Verified live shape (2026-07-11, models on box -- qwen3.5-lowvram:9b-16k,
-    qwen3:8b-16k, llama3.2:3b-32k, and their un-suffixed base variants): the
-    RUNTIME override baked via ``PARAMETER num_ctx <n>`` in the Modelfile
-    shows up as a line inside the top-level ``parameters`` free-text field,
-    e.g.::
-
-        {"parameters": "top_k    20\\ntop_p    0.95\\nnum_ctx    16384\\n..."}
-
-    ``model_info.<family>.context_length`` is a DIFFERENT, much larger number
-    (the architecture's max TRAINED context -- 262144 for qwen3.5, 40960 for
-    qwen3 -- regardless of the runtime window) and must NOT be read here; a
-    model with no baked ``-16k``-style override has NO ``num_ctx`` line in
-    ``parameters`` at all, and this returns ``None`` so the caller falls
-    through to the name-suffix / env fallback.
-    """
+    ``None`` when the model has no baked override, and the caller falls through."""
     if not isinstance(payload, dict):
         return None
+    # The RUNTIME override baked via ``PARAMETER num_ctx <n>`` shows up as a
+    # line inside the top-level ``parameters`` free-text field. Its neighbour
+    # ``model_info.<family>.context_length`` is a DIFFERENT, much larger number
+    # -- the architecture's max TRAINED context, regardless of the runtime
+    # window -- and must NOT be read here.
     params_text = payload.get("parameters")
     if not isinstance(params_text, str) or not params_text.strip():
         return None
@@ -369,38 +250,23 @@ def _parse_num_ctx_from_show_response(payload: dict[str, Any]) -> int | None:
 
 
 async def discover_num_ctx(base_url: str | None, model_name: str) -> int:
-    """The OpenAI/local path's ``num_ctx``, as a plain int.
+    """The OpenAI/local path's ``num_ctx`` as a plain int, losing its source.
 
-    A THIN WRAPPER over :func:`discover_context_window` -- the ladder, the
-    cache and the honest fallback all live there, so the two can never drift.
-    Kept because the local path talks in bare ``num_ctx`` integers (the clip
-    guard compares reported ``usage.prompt_tokens`` against it); callers that
-    need to know WHERE the number came from should use the window directly.
-    """
+    A thin wrapper over :func:`discover_context_window`, so the two cannot drift."""
     window = await discover_context_window("openai", model_name, base_url=base_url)
     return window.tokens
 
 
 def reset_num_ctx_cache() -> None:
-    """Clear the process-lifetime ``num_ctx`` discovery cache.
+    """Clear the process-lifetime context-window discovery cache.
 
-    Public seam (OpenRouter model-extensibility, design 2026-07-19): a LIVE
-    provider/model switch pushed via ``POST /api/provider-config`` must let a
-    same-name model re-discover its context window on the next turn instead of
-    serving the stale cached value (e.g. the local ollama 16k default lingering
-    after a switch to a 32k OpenRouter preset). Named WITHOUT the
-    ``_for_tests`` suffix so production code can call it honestly.
-
-    Clears the provider-agnostic ``_WINDOW_CACHE`` too: a live switch changes
-    the PROVIDER as well as the model, and a window discovered from the old
-    provider must never be reused against the new one.
-    """
+    A live provider/model switch must not reuse a window discovered from the
+    old provider, so a same-name model re-discovers on the next turn."""
     _WINDOW_CACHE.clear()
 
 
 def _reset_num_ctx_cache_for_tests() -> None:
-    """Test-only alias of :func:`reset_num_ctx_cache` (kept for the existing
-    test-suite call sites)."""
+    """Test-only alias of :func:`reset_num_ctx_cache`."""
     reset_num_ctx_cache()
 
 
@@ -443,10 +309,7 @@ CONTEXT_WINDOW_FALLBACK_DEFAULT = 16384
 def context_window_env_override() -> int | None:
     """Operator-pinned window (``TRID3NT_CONTEXT_WINDOW``), or None when unset.
 
-    An explicit operator statement outranks the conservative default but NEVER
-    outranks a fact the provider itself reported -- if discovery succeeded, the
-    provider is right and the env var is stale.
-    """
+    Outranks the conservative default, but NEVER a fact the provider reported."""
     raw = os.environ.get("TRID3NT_CONTEXT_WINDOW", "").strip()
     if not raw:
         return None
@@ -464,10 +327,7 @@ def context_window_env_override() -> int | None:
 class ContextWindow:
     """A model's resolved input-token capacity PLUS where that number came from.
 
-    ``source`` is the honesty carrier: a caller can always tell a window the
-    provider stated from one we fell back to. Never construct this with a
-    made-up number and a discovered-looking source.
-    """
+    Never construct it with a made-up number and a discovered-looking source."""
 
     tokens: int
     source: str
@@ -482,9 +342,7 @@ class ContextWindow:
     def narration(self) -> str | None:
         """User-facing honesty note, or None when the window is a real fact.
 
-        Surfaced so an undiscoverable window is a stated assumption rather than
-        a silent guess that later shows up as a mysterious early compaction.
-        """
+        An undiscoverable window is a stated assumption, never a silent guess."""
         if self.discovered:
             return None
         return (
@@ -506,16 +364,14 @@ async def _resolve_window_tokens(
 ) -> tuple[int, str] | None:
     """Per-provider discovery ladder -> ``(tokens, source)``, or None.
 
-    Each branch asks the provider for its OWN metadata and gives up honestly:
-      openai-compatible -- OpenRouter ``/models.context_length`` when the base
-        URL is OpenRouter, else Ollama's native ``/api/show`` runtime ``num_ctx``
-        (NOT ``model_info.*.context_length``, the much larger TRAINED context --
-        see ``_parse_num_ctx_from_show_response``), then a ``-<N>k`` name suffix.
-      anthropic -- the Models API ``max_input_tokens`` field.
-      bedrock -- the maintained table (Bedrock publishes no runtime fact).
-    """
+    Each branch asks the provider for its OWN metadata and gives up honestly."""
     from trid3nt_server.adapters import model_discovery
 
+    # openai-compatible: OpenRouter's ``/models.context_length`` when the base
+    # URL is OpenRouter, else Ollama's native ``/api/show`` runtime ``num_ctx``,
+    # then a ``-<N>k`` name suffix.
+    # anthropic: the Models API ``max_input_tokens`` field.
+    # bedrock: the maintained table, because Bedrock publishes no runtime fact.
     if provider == "openai":
         if model_discovery.is_openrouter_base_url(base_url):
             tokens = await model_discovery.openrouter_context_length(
@@ -564,14 +420,9 @@ async def _resolve_window_tokens(
 async def discover_context_window(
     provider: str, model_name: str, *, base_url: str | None = None
 ) -> ContextWindow:
-    """Resolve ``model_name``'s context window for ``provider`` (cached).
+    """Resolve ``model_name``'s context window for ``provider``, cached.
 
-    Precedence: the provider's own metadata -> ``TRID3NT_CONTEXT_WINDOW`` ->
-    ``CONTEXT_WINDOW_FALLBACK_DEFAULT``. Discovery faults are swallowed (it is
-    best-effort, never a hard dependency of the model call), but a window that
-    ends up undiscovered logs a WARNING and comes back with a fallback
-    ``source`` so the caller can narrate the assumption honestly.
-    """
+    Provider metadata, then the env pin, then a conservative default that says so."""
     key = (provider, model_name)
     cached = _WINDOW_CACHE.get(key)
     if cached is not None:
@@ -634,32 +485,23 @@ class CompactionResult:
 
 
 def _protected_tail_len(contents: list[genai_types.Content]) -> int:
-    """Rows that must NEVER be dropped/hardened/folded: the terminal user
-    message, and (when present) the case-state note immediately before it.
+    """The rows that must NEVER be dropped, hardened or folded.
 
-    Both are always the LAST <= 2 rows of ``contents`` per the
-    ``adapter.build_contents_from_history`` / server.py
-    ``turn_history_for_contents`` contract (the case-state note, when built,
-    is appended as the final row of ``turn_history_for_contents`` BEFORE
-    ``build_contents_from_history`` appends the new ``user_text`` as the
-    terminal row). Protecting the tail structurally -- rather than
-    text-sniffing for the note's exact wording -- is correct even on a turn
-    where no note was built (it then just protects one extra real history
-    row, which is harmless)."""
+    Always the LAST <= 2: the case-state note and the terminal user message."""
+    # Protecting the tail STRUCTURALLY, rather than text-sniffing for the note's
+    # exact wording, is correct even on a turn where no note was built: it then
+    # protects one extra real history row, which is harmless.
     return min(2, len(contents))
 
 
 def _is_droppable_row(content: genai_types.Content) -> bool:
-    """True for a plain narration row (text only -- no ``function_call`` /
-    ``function_response`` Part). Step (a) only drops THESE, oldest first --
-    a tool call and its matching response live in separate ``Content`` rows
-    (see ``adapter.build_function_call_content`` /
-    ``build_function_response_content``), and dropping one side without the
-    other would leave an orphaned tool_call/tool_result pairing once
-    ``contents_to_openai_messages`` converts it to the OpenAI wire format
-    (an API-breaking shape). Tool rows are exempt from DROP and handled by
-    the HARDEN step (b) instead -- shrunk, never deleted outright, until the
-    FOLD step (c) (which only ever sees whatever step (a) could not remove)."""
+    """True for a plain narration row: text only, no call or response Part.
+
+    Step (a) drops only these; a tool row is hardened by (b), never deleted."""
+    # A tool call and its matching response live in SEPARATE rows, so dropping
+    # one side without the other leaves an orphaned tool_call/tool_result
+    # pairing once the rows are converted to the OpenAI wire format -- an
+    # API-breaking shape.
     for part in getattr(content, "parts", None) or []:
         if getattr(part, "function_call", None) is not None:
             return False
@@ -690,9 +532,9 @@ def _harden_function_response_part(
 def _harden_content(
     content: genai_types.Content, max_chars: int
 ) -> tuple[genai_types.Content, bool]:
-    """Re-summarize any long ``function_response`` Part in ``content`` down to
-    ``max_chars``. Text / function_call Parts are left untouched (only tool
-    RESULTS get hardened, per spec -- the call itself is small)."""
+    """Re-summarize any long ``function_response`` Part down to ``max_chars``.
+
+    Only tool RESULTS are hardened; text and call Parts are left untouched."""
     parts = list(getattr(content, "parts", None) or [])
     changed = False
     new_parts: list[genai_types.Part] = []
@@ -708,14 +550,9 @@ def _harden_content(
 def _cap_text_parts(
     content: genai_types.Content, max_chars: int
 ) -> tuple[genai_types.Content, bool]:
-    """Truncate any oversized ``text`` Part in ``content`` to ``max_chars``
-    (ellipsis-marked). ``function_call`` / ``function_response`` Parts are
-    left untouched -- those have their own dedicated hardening
-    (``_harden_function_response_part``). This is what actually shrinks a
-    giant AGENT NARRATION row, whether it lives alone or alongside a
-    ``function_call`` Part in the same row (the mixed-row shape the old
-    function-response-only harden could never reach -- see module
-    docstring, STILL-OVER-AFTER-STEP-A BUG)."""
+    """Truncate any oversized ``text`` Part to ``max_chars``, ellipsis-marked.
+
+    What shrinks a giant AGENT NARRATION row, alone or beside a call Part."""
     parts = list(getattr(content, "parts", None) or [])
     changed = False
     new_parts: list[genai_types.Part] = []
@@ -734,14 +571,9 @@ def _cap_text_parts(
 def normalize_contents_row_sizes(
     contents: list[genai_types.Content], max_chars: int | None = None
 ) -> list[genai_types.Content]:
-    """Defensive per-row TEXT cap (module docstring, SECONDARY fix) -- run
-    unconditionally at the top of ``compact_contents`` regardless of whether
-    the turn is over budget, so a single runaway narration row (the
-    177KB-message failure mode) never survives this function even on a turn
-    whose OVERALL total happens to sit under budget. Rows that need no
-    change keep their original object identity (callers -- notably the
-    existing test suite -- rely on protected-tail rows being untouched
-    verbatim when nothing was actually oversized)."""
+    """Defensive per-row TEXT cap, run whether or not the turn is over budget.
+
+    A row needing no change keeps its object identity, untouched verbatim."""
     if max_chars is None:
         max_chars = contents_normalize_char_cap()
     out: list[genai_types.Content] = []
@@ -752,9 +584,9 @@ def normalize_contents_row_sizes(
 
 
 def _protected_row_labels(n: int) -> list[str]:
-    """Human-readable names for the protected tail, in order, for the step
-    (d) WARNING log (``_protected_tail_len`` contract: last <=2 rows are
-    [case-state note, terminal user message])."""
+    """Human-readable names for the protected tail, in order, for the step (d) log.
+
+    The last <= 2 rows are [case-state note, terminal user message]."""
     if n == 2:
         return ["case-state note (protected)", "terminal user message (protected)"]
     if n == 1:
@@ -780,9 +612,9 @@ def _digest_line_for_content(content: genai_types.Content) -> str | None:
 
 
 def _build_digest_row(contents: list[genai_types.Content]) -> genai_types.Content:
-    """Extractive digest row (no LLM call in v1): one line per surviving row
-    (user asks / model answers / tool calls+outcomes), folded into a single
-    ``user``-role Content so it reads as durable context, not a live turn."""
+    """One extractive line per surviving row, folded into a single row.
+
+    The ``user`` role is what makes it read as durable context, not a live turn."""
     lines = [ln for ln in (_digest_line_for_content(c) for c in contents) if ln]
     body = "\n".join(f"- {ln}" for ln in lines) if lines else "(no further detail)"
     text = "Earlier in this case: " + body
@@ -797,44 +629,18 @@ def compact_contents(
     harden_chars: int | None = None,
     narration_chars: int | None = None,
 ) -> CompactionResult:
-    """Run the compaction ladder against ``contents`` until the estimated
-    token count is at/under ``budget_tokens * target_ratio`` (HYSTERESIS --
-    see module docstring). No-ops (returns ``changed=False``) when already
-    under target.
+    """Run the ladder until the estimate is at or under target, else no-op.
 
-    Ladder, each step checked before the next fires:
-      (a) drop the OLDEST unprotected DROPPABLE (plain-narration, no
-          function_call/function_response Part) row, one at a time;
-      (b) harden long tool-result rows, oldest first, THEN cap any
-          remaining oversized narration ``text`` Part directly -- covers a
-          row that mixes narration text with a function_call/function_response
-          Part, which (a) correctly refuses to drop and the old
-          function-response-only harden could never shrink (STILL-OVER-
-          AFTER-STEP-A BUG, module docstring);
-      (c) fold ALL remaining unprotected rows into one digest row;
-      (d) ONLY when still over target with nothing left in ``working`` --
-          i.e. the excess lives entirely in the PROTECTED tail -- cap any
-          oversized narration text there too and log a WARNING naming which
-          protected block was too big. This is the ONLY circumstance under
-          which a protected row is ever mutated: its POSITION/EXISTENCE stays
-          structurally protected (never dropped, never folded away), but a
-          narration row's TEXT LENGTH is not exempt from this defensive cap.
-
-    Guarantee: after this returns, either ``after_tokens <= target``, or the
-    excess is structurally irreducible (protected content alone, even after
-    step (d)'s cap, still exceeds target) -- in which case a WARNING is
-    logged naming the shortfall rather than failing silently.
-    """
+    The target is a FRACTION of budget, so a turn sitting at the edge does not
+    re-trigger compaction on every round."""
     if harden_chars is None:
         harden_chars = tool_result_harden_chars()
     if narration_chars is None:
         narration_chars = narration_row_harden_chars()
     target = max(int(budget_tokens * target_ratio), 1)
 
-    # Defensive normalization pass (SECONDARY fix, module docstring): cap
-    # every row's text BEFORE any budget math, so a single runaway row never
-    # survives this function even on a turn that ends up under budget
-    # overall.
+    # Cap every row's text BEFORE any budget math, so a single runaway row
+    # never survives this function even on a turn that ends up under budget.
     contents = normalize_contents_row_sizes(contents)
 
     protect_n = _protected_tail_len(contents)
@@ -879,11 +685,10 @@ def compact_contents(
                 working[i] = new_content
                 hardened += 1
 
-    # (b, continued) cap any remaining oversized narration text directly --
-    # the BUG FIX: a row step (a) could not drop (it carries a
-    # function_call/function_response Part alongside its text) and step
-    # (b)'s function-response-only harden could not shrink (its bulk is in a
-    # ``text`` Part, not the response) previously rode through untouched.
+    # (b, continued) cap any remaining oversized narration text directly. A row
+    # carrying a function_call/function_response Part alongside its text is one
+    # (a) must not drop and the response-only harden above cannot shrink,
+    # because its bulk is in a ``text`` Part rather than in the response.
     if working and _current_tokens() > target:
         for i in range(len(working)):
             if _current_tokens() <= target:
@@ -899,14 +704,13 @@ def compact_contents(
         working = [_build_digest_row(working)]
         folded = True
 
-    # (d) BUG FIX: previously, whenever (a) fully drained ``working`` (or it
-    # started empty) while the PROTECTED tail alone still exceeded target,
-    # both (b) and (c) silently no-op'd on ``if working and ...`` (an empty
-    # list is falsy) -- the 2x-reproduced live failure (module docstring,
-    # STILL-OVER-AFTER-STEP-A BUG). A narration row is never *structurally*
-    # protected from a defensive text cap the way it is from DROP/FOLD, so:
-    # cap any oversized text Part remaining in ``protected`` and log loudly
-    # naming which block was too big.
+    # (d) The excess can live entirely in the PROTECTED tail: (a) drains
+    # ``working`` (or it started empty) while the tail alone still exceeds
+    # target, and both (b) and (c) then no-op on their ``if working`` guard. A
+    # narration row is never STRUCTURALLY protected from a defensive text cap
+    # the way it is from DROP and FOLD, so cap any oversized text Part left in
+    # ``protected`` and log loudly naming which block was too big. This is the
+    # ONLY circumstance under which a protected row is ever mutated.
     if _current_tokens() > target:
         labels = _protected_row_labels(len(protected))
         any_capped = False
@@ -951,19 +755,14 @@ def compact_contents(
 
 
 # ---------------------------------------------------------------------------
-# Compaction UX (Part A) -- durable pipeline-card labels.
+# Compaction UX -- durable pipeline-card labels.
 # ---------------------------------------------------------------------------
 #
-# SUPERSEDES the OPEN-14 narration seam (a bare ``TextDeltaEvent`` note glued
-# onto the model's own reply -- ``PROACTIVE_COMPACTION_NOTE`` /
-# ``CLIP_RETRY_NOTE``, removed here). ``openai_adapter.stream_openai`` now
-# yields typed ``adapter.CompactionStartEvent`` / ``CompactionCompleteEvent``
-# instead; ``server.py``'s dispatch loop mints/completes a durable pipeline
-# card through ``pipeline_emitter.mint_compaction_card`` /
-# ``complete_compaction_card`` (the running-tool-card treatment, animated
-# live, persisted so it survives a Case reopen) using the two labels below.
-# No new envelope type: the card rides the EXISTING ``PipelineStep`` /
-# ``ToolCardRecord`` wire shape every atomic-tool card already uses.
+# The adapter yields typed compaction start / complete events, and the dispatch
+# loop mints and completes a durable pipeline card from them using the two
+# labels below -- the running-tool-card treatment, animated live and persisted
+# so it survives a Case reopen. No new envelope type: the card rides the
+# EXISTING wire shape every atomic-tool card already uses.
 
 #: The running card's label, from the instant compaction starts until it
 #: completes (mint time only -- never shown again once renamed).
@@ -973,12 +772,7 @@ COMPACTING_LABEL = "Compacting conversation..."
 def compaction_complete_label(before_tokens: int, after_tokens: int) -> str:
     """Terminal card label for a finished compaction pass.
 
-    ``before_tokens`` / ``after_tokens`` are
-    ``CompactionResult.before_tokens`` / ``.after_tokens`` -- rounded to the
-    nearest thousand (a nonzero count floors at 1k so a small budget never
-    misleadingly reads "0k"). Example: ``compaction_complete_label(12800,
-    3900)`` -> ``"Conversation compacted (13k -> 4k tokens)"``.
-    """
+    Counts round to the nearest thousand, a nonzero one floored at 1k."""
 
     def _k(n: int) -> str:
         if n <= 0:
@@ -988,12 +782,11 @@ def compaction_complete_label(before_tokens: int, after_tokens: int) -> str:
     return f"Conversation compacted ({_k(before_tokens)} -> {_k(after_tokens)} tokens)"
 
 
-#: Appended to the persisted partial-reply text (post-OPEN-14 acceptance
-#: rerun, BUG 1) when a turn aborts on ``ContextWindowExceededError``: the
-#: streamed narration up to that point is ALREADY persisted (the reader has
-#: no other signal it was cut short), so the abort verdict must land right
-#: after it in the SAME chat row, not only in the transient error envelope
-#: (which a dead/detached socket may never deliver).
+#: Appended to the persisted partial-reply text when a turn aborts on
+#: ``ContextWindowExceededError``. The streamed narration up to that point is
+#: ALREADY persisted and the reader has no other signal it was cut short, so
+#: the abort verdict must land right after it in the SAME chat row, not only in
+#: the transient error envelope a dead socket may never deliver.
 CONTEXT_WINDOW_ABORT_NOTE = (
     "\n\n[This reply exceeded the model's context window and was aborted - "
     "the statements above are unverified. Start a new case or switch to a "
@@ -1002,17 +795,10 @@ CONTEXT_WINDOW_ABORT_NOTE = (
 
 
 def build_context_window_abort_note(*, fabricated_claim: bool) -> str:
-    """The text appended to a turn's persisted partial reply on a
-    ``ContextWindowExceededError`` abort (BUG 1 + BUG 2).
+    """The text appended to a persisted partial reply on a context-window abort.
 
-    When ``fabricated_claim`` is True -- the aborting turn dispatched ZERO
-    tool calls AND its partial narration matches
-    ``looks_like_fabricated_action_claim`` (BUG 2: the same fabrication
-    backstop wired into the normal zero-tool-call terminal branch was being
-    skipped entirely on the abort path) -- the appended text LEADS with
-    ``FABRICATION_CAVEAT`` so the reader sees "no tools were executed" before
-    the context-window explanation, not after.
-    """
+    ``fabricated_claim`` puts the caveat FIRST, so the reader sees "no tools
+    were executed" ahead of the context-window explanation."""
     if fabricated_claim:
         return f"\n\n{FABRICATION_CAVEAT}{CONTEXT_WINDOW_ABORT_NOTE}"
     return CONTEXT_WINDOW_ABORT_NOTE
@@ -1024,15 +810,9 @@ def build_context_window_abort_note(*, fabricated_claim: bool) -> str:
 
 
 class ContextWindowExceededError(RuntimeError):
-    """Raised (LOCAL/OpenAI path only) when a model round's ACTUAL reported
-    usage proves the prompt was clipped by ``num_ctx`` even after one
-    recompaction + retry.
+    """Raised when a round's reported usage proves the prompt was clipped.
 
-    Caught by server.py's per-turn exception handler and surfaced as a
-    dedicated ``CONTEXT_WINDOW_EXCEEDED`` typed error envelope (not the
-    generic ``LLM_UNAVAILABLE`` bucket) -- honesty floor: tell the user
-    exactly why the turn stopped and what to do about it.
-    """
+    Surfaced as its own typed envelope, never the provider-unavailable bucket."""
 
     def __init__(self, num_ctx: int):
         self.num_ctx = num_ctx
@@ -1044,10 +824,9 @@ class ContextWindowExceededError(RuntimeError):
 
 
 def is_prompt_clipped(prompt_tokens: int | None, num_ctx: int) -> bool:
-    """True iff the model's reported ``usage.prompt_tokens`` reached (or
-    exceeded) ``num_ctx`` -- the tell-tale sign Ollama silently truncated the
-    prompt to fit the window (the 2x-reproduced incident: the "gemini usage"
-    log line read exactly ``prompt=16384`` for a 16384-``num_ctx`` model)."""
+    """True iff reported ``usage.prompt_tokens`` reached or exceeded ``num_ctx``.
+
+    The tell-tale sign the provider silently truncated the prompt to fit."""
     if prompt_tokens is None or num_ctx <= 0:
         return False
     return prompt_tokens >= num_ctx
@@ -1095,30 +874,27 @@ FABRICATION_CAVEAT = (
 
 
 def looks_like_fabricated_action_claim(text: str | None) -> bool:
-    """True when ``text`` claims a completed geospatial action (a completed-
-    action verb paired with a layer/map/result-ish noun in the same
-    sentence).
+    """True when ``text`` claims a completed geospatial action; TEXT only.
 
-    Conservative by construction: callers MUST additionally gate this on the
-    STRUCTURAL condition (zero tool calls fired the whole turn) -- this
-    function only judges the TEXT, never the tool-call history, so it will
-    happily match text from a turn that legitimately dispatched tools; it is
-    the caller's job to only consult this function when that turn did not.
-    """
+    It matches a turn that legitimately dispatched tools just as happily, so the
+    caller MUST additionally gate on the turn having fired ZERO tool calls."""
     if not text:
         return False
     return bool(_FABRICATION_RE.search(text))
 
 
 # ---------------------------------------------------------------------------
-# 5. THE SHARED BUDGET SEAM (one strategy, every provider)
+# THE SHARED BUDGET SEAM (one strategy, every provider)
 #
-# History management is CLIENT-SIDE: we trim/compact BEFORE the provider has to
-# reject us. What to trim, when to trim it, and what is untouchable lives HERE,
+# TWO FAILURE MODES, one seam. Ollama silently CLIPS an over-long prompt rather
+# than erroring, so the model never sees its own tool contract, can emit ZERO
+# tool calls, and can narrate a fabricated success as if the work had happened.
+# Hosted providers instead REJECT it with a 400. Either way the fix is the same
+# and it is ours: history management is CLIENT-SIDE, trimming BEFORE the
+# provider has to react. What to trim, when, and what is untouchable lives HERE,
 # once -- adapters only translate the planned ``contents`` into their own wire
-# shape and emit the compaction events. Provider-side compaction (e.g. the
-# Anthropic compaction beta) is an opt-in EXTRA layered on top, never a
-# replacement for this.
+# shape and emit the compaction events. Provider-side compaction is an opt-in
+# EXTRA layered on top, never a replacement for this.
 #
 # CACHE-PREFIX SAFETY: the plan only ever rewrites ``contents`` -- the
 # conversation. Prompt-cache breakpoints on every provider sit on the TOOL
@@ -1154,25 +930,12 @@ def plan_turn(
 ) -> TurnPlan:
     """Decide whether this turn's history must be compacted, and do it.
 
-    THE single client-side history-management entry point. ``window`` is the
-    discovered per-model fact; ``tool_tokens`` / ``system_tokens`` are the fixed
-    per-turn overhead the ladder cannot shrink; ``wire_tokens`` lets a caller
-    supply the AUTHORITATIVE TOTAL prompt size -- the OpenAI path measures the
-    real wire payload, and the Anthropic path hands over the provider's own
-    ``count_tokens`` result -- in place of the chars/4 heuristic. It must be the
-    WHOLE prompt (conversation + tools + system); nothing is added on top of it.
-    ``output_reserve`` is what THIS request may generate, which must be held
-    back from the same window.
-
-    Always preserved, by ``compact_contents``'s protected tail: the terminal
-    user message and the case-state note that carries the pending-confirmation
-    spine. The system prompt and tool contracts are never even candidates --
-    they are not part of ``contents``.
-
-    ``phase`` is "proactive" (pre-send estimate) or "reactive" (the provider
-    already told us we overflowed); the latter defaults to the tighter target
-    ratio so a retry actually gains headroom.
-    """
+    THE single client-side history-management entry point, for every provider.
+    The system prompt and tool contracts are never candidates: ``contents``
+    does not hold them."""
+    # ``phase`` is "proactive" (a pre-send estimate) or "reactive" (the provider
+    # has already said we overflowed); reactive takes the tighter target ratio
+    # so a retry actually gains headroom.
     if target_ratio is None:
         target_ratio = (
             reactive_target_ratio() if phase != "proactive" else proactive_target_ratio()
@@ -1289,11 +1052,8 @@ _CONTEXT_OVERFLOW_RE = re.compile(
 def looks_like_context_overflow_error(exc: BaseException | None) -> bool:
     """True when a provider error says the PROMPT DID NOT FIT.
 
-    Used to separate the one 400 worth retrying (trim harder, resend once) from
-    every other 400, which is a genuine bug in our request and must fail loudly.
-    The provider's message is logged VERBATIM by the caller either way -- this
-    only classifies it.
-    """
+    Separates the one 400 worth retrying from every other 400, which is our own
+    bug and must fail loudly; the caller logs the message VERBATIM either way."""
     if exc is None:
         return False
     return bool(_CONTEXT_OVERFLOW_RE.search(str(exc)))

@@ -1,35 +1,9 @@
-"""Per-turn top-k tool gating for the LOCAL (openai) provider path (Stage 3).
+"""Per-turn top-k tool gating for the LOCAL (openai) provider path.
 
-The routing bench's own recommendation: the openai adapter path sends ALL ~190
-tool schemas every round, which both burns local context (the schemas alone are
-most of a small model's num_ctx) and measurably hurts selection accuracy. This
-module trims the per-turn tool list to the retrieval top-k PLUS a set of
-always-include floors, mirroring the retrieval design already proven by
-``retrieve_visible_tools`` (tools/discovery/tool_retrieval.py).
-
-Scope (HARD): the gate applies ONLY when ``MODEL_PROVIDER=openai`` -- the
-bedrock / scripted / vertex paths are byte-unchanged. ``TRID3NT_TOOL_GATING_TOPK``
-sets k (default 24); ``0`` disables the gate entirely (all tools, the
-pre-feature behavior).
-
-The gated set for a turn is::
-
-    top-k ranked tools for the user text (retrieve_ranked_tools)
-    UNION the META floor (CORE_FLOOR + search_data_catalog/fetch_from_catalog +
-          web_fetch -- the discovery / render / analysis escape hatches that must
-          never be retrieved out; see tool_retrieval.CORE_FLOOR)
-    UNION every tool already visible this case-session (the Case's monotonic
-          visible set -- never hide a tool mid-task)
-    UNION any tool the user NAMED in the message (exact name or
-          space-separated form -- an explicit ask must always be honored)
-
-FAIL-OPEN: an empty/cold ranking, or any fault, leaves the registry ungated
-for that turn (over-inclusion is cheap; hiding the needed tool is a silent
-break). Pure functions -- the server owns wiring + logging.
-
-ASCII only.
+The gate applies ONLY when ``MODEL_PROVIDER=openai``; every other provider path
+is byte-unchanged. ``TRID3NT_TOOL_GATING_TOPK`` sets k and ``0`` disables the
+gate. Pure functions, and any fault leaves that turn UNGATED.
 """
-
 from __future__ import annotations
 
 import logging
@@ -46,12 +20,12 @@ __all__ = [
     "gating_topk",
     "named_tools_in_text",
     "gate_tool_registry",
-    # POOR-FIT WIDENING (task 3)
+    # POOR-FIT WIDENING
     "WIDEN_THRESHOLD_DEFAULT",
     "WIDEN_K",
     "gating_widen_threshold",
     "should_widen_for_poor_fit",
-    # BENCH pre-dispatch block hook (task 1)
+    # BENCH pre-dispatch block hook
     "BENCH_BLOCKED_WRONG_PICK",
     "BENCH_BLOCKED_CORRECT",
     "BenchBlockConfig",
@@ -62,14 +36,12 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.gates.tool_gating")
 
-#: Default top-k for the openai-provider tool gate (bench recommendation).
+#: Default top-k for the openai-provider tool gate.
 TOOL_GATING_TOPK_DEFAULT = 24
 
-#: The always-include META floor: the CORE_FLOOR (search_tools, spatial_query,
-#: code_exec_request, geocode_location, layer-bounds utilities, ...) plus the
-#: catalog discovery pair and web_fetch, which register outside
-#: tools/__init__ and are the "find anything else" escape hatches a gated model
-#: must always hold.
+#: The always-include META floor: the core floor plus the catalog discovery
+#: pair and web_fetch. These are the "find anything else" escape hatches a
+#: gated model must always hold, and they register outside the tools package.
 META_TOOL_FLOOR: frozenset[str] = frozenset(CORE_FLOOR) | frozenset(
     {
         "search_data_catalog",
@@ -82,9 +54,7 @@ META_TOOL_FLOOR: frozenset[str] = frozenset(CORE_FLOOR) | frozenset(
 def gating_topk() -> int:
     """Resolve ``TRID3NT_TOOL_GATING_TOPK`` (default 24; 0 disables the gate).
 
-    Read per-call so tests / runtime flips are honored. Malformed / negative
-    values fall back to the default (never silently disable).
-    """
+    Read per-call; a malformed or negative value falls back, never disables."""
     raw = os.environ.get("TRID3NT_TOOL_GATING_TOPK")
     if raw is None:
         return TOOL_GATING_TOPK_DEFAULT
@@ -99,13 +69,9 @@ _NON_WORD_RE = re.compile(r"[^a-z0-9_]+")
 
 
 def named_tools_in_text(user_text: Any, names: Any) -> set[str]:
-    """Registered tool names the user NAMED in the message (alias/anchor match).
+    """Registered tool names the user NAMED: an exact name or its spaced form.
 
-    Conservative on purpose: a tool is "named" when its exact registry name
-    (``fetch_dem``) appears in the text, or its space-separated form
-    (``fetch dem``) appears as a whole-word phrase. Never raises; a non-string
-    text returns the empty set.
-    """
+    Whole-word matches only; never raises, and non-string text gives ``set()``."""
     if not isinstance(user_text, str) or not user_text.strip():
         return set()
     # Normalize: lowercase, punctuation -> space, collapsed whitespace, padded
@@ -135,22 +101,16 @@ def gate_tool_registry(
 ) -> dict[str, Any] | None:
     """Subset ``registry`` to the gated per-turn set, or ``None`` = do not gate.
 
-    ``ranked`` is the scored retrieval ranking for the turn's user text
-    (``retrieve_ranked_tools``); ``used_tools`` is the case-session's
-    already-visible tool names (the Case's monotonic visible set). Returns
-    ``None`` (caller keeps the full registry) when:
-
-      * ``k <= 0`` (gate disabled), or
-      * ``ranked`` is empty (cold index / no match -- FAIL-OPEN), or
-      * the computed subset would not actually shrink the registry.
-
-    Pure; never raises (any internal fault returns ``None`` = ungated).
-    """
+    ``None``, and the caller keeps the full registry, when ``k <= 0``, when
+    ``ranked`` is empty, or when the subset would not shrink it; never raises."""
     try:
         if k <= 0 or not ranked:
             return None
         from trid3nt_server.tools import mounted_tool_names
 
+        # The gated set is the top-k ranking UNION the META floor UNION every
+        # tool already visible this case-session (never hide a tool mid-task)
+        # UNION any tool the user NAMED (an explicit ask is always honored).
         keep: set[str] = {name for name, _score in ranked[:k]}
         keep |= META_TOOL_FLOOR
         # A session-mounted tool is unrankable (the index predates it), so it
@@ -200,12 +160,10 @@ WIDEN_K = 40
 
 
 def gating_widen_threshold() -> float:
-    """Resolve ``TRID3NT_GATING_WIDEN_THRESHOLD`` (default WIDEN_THRESHOLD_DEFAULT).
+    """Resolve ``TRID3NT_GATING_WIDEN_THRESHOLD``, the poor-fit widen cutoff.
 
-    Read per-call so tests / runtime flips are honored. A malformed value (or a
-    negative one, which would widen on EVERY turn -- never the intent) falls
-    back to the calibrated default.
-    """
+    A malformed or negative value -- negative would widen EVERY turn -- falls
+    back to the calibrated default."""
     raw = os.environ.get("TRID3NT_GATING_WIDEN_THRESHOLD")
     if raw is None:
         return WIDEN_THRESHOLD_DEFAULT
@@ -221,11 +179,7 @@ def should_widen_for_poor_fit(
 ) -> bool:
     """True iff the turn's TOP retrieval score is under ``threshold`` (poor fit).
 
-    ``ranked`` is ``retrieve_ranked_tools``'s scored output for the turn. An
-    empty ranking (cold index / no match) is NOT a poor-fit widen signal -- the
-    whole gate already fails OPEN to the full registry on an empty ranking, so
-    widening there is moot; return False. Never raises.
-    """
+    An empty ranking is NOT a widen signal: the gate already fails open there."""
     try:
         if not ranked:
             return False
@@ -235,15 +189,13 @@ def should_widen_for_poor_fit(
 
 
 # ===========================================================================
-# BENCH PRE-DISPATCH BLOCK HOOK (task 1): a session-scoped, bench-only gate
-# that decides -- BEFORE the tool fn is invoked -- whether a model-picked tool
-# should be EXECUTED, BLOCKED as a wrong pick, or BLOCKED as a deliberately-not-
-# executed correct pick. Armed only in bench mode via the session-config path;
-# absent (the field is None) = normal operation with ZERO dispatch overhead.
-#
-# This replaces the routing_sweep engine's racy v1 client-side "cancel on the
-# first material tool-call" policy (the blocked tool could briefly START before
-# the cancel landed) with a server-side block that is airtight BEFORE any fetch.
+# BENCH PRE-DISPATCH BLOCK HOOK: a session-scoped, bench-only gate that decides
+# -- BEFORE the tool fn is invoked -- whether a model-picked tool should be
+# EXECUTED, BLOCKED as a wrong pick, or BLOCKED as a deliberately-not-executed
+# correct pick. Blocking server-side and pre-dispatch is what makes it airtight:
+# a client-side cancel lets the blocked tool briefly START before it lands.
+# Armed only in bench mode via the session-config path; absent (the field is
+# None) is normal operation with ZERO dispatch overhead.
 
 #: Typed function-response error_code for a NON-MEMBER (wrong) tool pick that
 #: was blocked without executing. The routing_sweep grader reads this off the
@@ -257,40 +209,31 @@ BENCH_BLOCKED_CORRECT = "BENCH_BLOCKED_CORRECT"
 
 @dataclass(frozen=True)
 class BenchBlockConfig:
-    """The armed bench block config (all three tool-name sets ride together).
+    """The armed bench block config: the three tool-name sets ride together."""
 
-    * ``allow`` -- the record's ACCEPTABLE picks (the correct tools). A picked
-      tool outside this set (and outside ``always_allowed`` /
-      ``block_at_invocation``) is a WRONG pick.
-    * ``always_allowed`` -- the routing MECHANISM tools (discovery / bookkeeping
-      meta-tools + any record-level always_allowed): they ride THROUGH and
-      execute normally so the model can actually discover its way to the pick.
-    * ``block_at_invocation`` -- member picks that must be validated but NOT
-      executed (the block tier: the deliberately-not-run correct answer).
-    """
-
+    #: The record's ACCEPTABLE picks. A tool outside all three sets is a WRONG
+    #: pick.
     allow: frozenset[str] = field(default_factory=frozenset)
+    #: The routing MECHANISM tools, which ride THROUGH and execute normally so
+    #: the model can discover its way to the pick.
     always_allowed: frozenset[str] = field(default_factory=frozenset)
+    #: Member picks that must be validated but NOT executed.
     block_at_invocation: frozenset[str] = field(default_factory=frozenset)
 
 
 class BenchBlockedError(RuntimeError):
     """Raised (bench mode only) to block a tool at dispatch without executing.
 
-    Carries the typed ``error_code`` (BENCH_BLOCKED_WRONG_PICK /
-    BENCH_BLOCKED_CORRECT) as an INSTANCE attribute so
-    ``adapter.summarize_tool_result`` harvests it into the function-response the
-    grader reads. ``retryable=False``: a bench block is a deliberate terminal
-    outcome, never a transient fault to retry. ``blocked_class`` is the coarse
-    decision ("wrong_pick" | "correct_blocked") the server reads to decide
-    whether to end the turn.
-    """
+    ``retryable=False`` -- a deliberate terminal outcome, never a transient
+    fault; ``blocked_class`` is what the caller ends the turn on."""
 
     retryable = False
 
     def __init__(self, blocked_class: str, tool_name: str) -> None:
         self.blocked_class = blocked_class
         self.tool_name = tool_name
+        # An INSTANCE attribute, not a class one: the tool-result summarizer
+        # harvests it into the function response the grader reads.
         self.error_code = (
             BENCH_BLOCKED_WRONG_PICK
             if blocked_class == "wrong_pick"
@@ -311,19 +254,12 @@ def _name_frozenset(value: Any) -> frozenset[str]:
 def parse_bench_block_config(payload: dict) -> BenchBlockConfig | None:
     """Parse a bench block config off a raw ``session-config`` payload dict.
 
-    Reads the namespaced ``bench_tool_block`` key DEFENSIVELY (the framework
-    lane owns the typed contract; this stays forward-compatible with a raw
-    dict). Returns:
-
-      * a ``BenchBlockConfig`` when the key holds an object with the three
-        name sets (armed),
-      * ``None`` when the key is absent (leave whatever is already armed
-        untouched -- the caller distinguishes "absent" from "disarm"),
-
-    Never raises: a malformed shape degrades to empty sets, never a crash.
-    """
+    ``None`` when the key is absent, which is NOT a disarm -- the caller leaves
+    whatever is armed alone; never raises, a malformed shape gives empty sets."""
     if not isinstance(payload, dict):
         return None
+    # Read off the raw dict defensively, so this stays forward-compatible with
+    # the typed contract the framework lane owns.
     raw = payload.get("bench_tool_block")
     if not isinstance(raw, dict):
         return None
@@ -335,24 +271,16 @@ def parse_bench_block_config(payload: dict) -> BenchBlockConfig | None:
 
 
 def bench_block_decision(cfg: Any, tool_name: str) -> str | None:
-    """Decide the pre-dispatch fate of ``tool_name`` under the armed config.
+    """The pre-dispatch fate of ``tool_name``: execute, wrong_pick, correct_blocked.
 
-    Returns one of:
-      * ``None`` -- execute normally (an always-allowed mechanism tool, or a
-        correct run-tier pick),
-      * ``"wrong_pick"`` -- a non-member pick: block + end the turn,
-      * ``"correct_blocked"`` -- a member pick in the block tier: validate args,
-        then block WITHOUT executing.
-
-    ``block_at_invocation`` is authoritative for a correct-block (it defines the
-    block tier), so it is checked before the allow-membership test -- a tool in
-    that set is by construction a member. Never raises (a non-config ``cfg``
-    yields ``None`` = execute).
-    """
+    ``None`` executes normally; never raises, so a non-config ``cfg`` executes."""
     if not isinstance(cfg, BenchBlockConfig):
         return None
     if tool_name in cfg.always_allowed:
         return None
+    # ``block_at_invocation`` defines the block tier and is authoritative for a
+    # correct-block, so it is tested before allow-membership: a tool in that set
+    # is a member by construction.
     if tool_name in cfg.block_at_invocation:
         return "correct_blocked"
     if tool_name not in cfg.allow:

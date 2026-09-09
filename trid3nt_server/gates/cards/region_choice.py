@@ -17,22 +17,17 @@ logger = logging.getLogger("trid3nt_server.gates.cards.region_choice")
 # Region-disambiguation picker (state-bbox-fallback narrowing).
 # --------------------------------------------------------------------------- #
 #
-# made ``geocode_location`` snap a vague/regional query ("south
-# Florida") to the WHOLE state bbox and stamp ``source="state-bbox-fallback"``
-# + an honest ``fallback_reason``. That state bbox stays the DEFAULT/automated
-# answer. ON TOP of it, when an interactive client is connected, surface a user
-# choice to NARROW to a sub-region (default: counties). This MIRRORS the
-# credential-request pause/resume seam above: emit a ``region-choice-request``,
-# pause the turn on a future keyed by the choice request_id, and on
-# ``region-choice-provided`` either narrow the geocode bbox (choice="region")
-# or keep the state bbox (choice="whole_state"). Fail-open: a headless client /
-# timeout keeps the state bbox unchanged, so the automated path never blocks.
+# A vague or regional query snaps to the WHOLE state bbox, stamped
+# ``source="state-bbox-fallback"`` with an honest ``fallback_reason``, and that
+# state bbox stays the DEFAULT automated answer. ON TOP of it, when an
+# interactive client is connected, the user is offered a NARROWER sub-region.
+# Fail-open: a headless client or a timeout keeps the state bbox unchanged, so
+# the automated path never blocks.
 
-# Default candidate granularity. Counties ship at v0.1; structured as a module
-# constant so a light state-size/goal heuristic can override it per request.
-# TODO(region-choice): coarser ("state_region" groupings) / finer ("place" /
-# "zcta") levels are a follow-up — the RegionAdminLevel Literal + the TIGER
-# fetch plumbing in fetch_administrative_boundaries gate that expansion.
+# Default candidate granularity, a module constant so a light state-size or
+# goal heuristic can override it per request. The ``RegionAdminLevel`` Literal
+# is CLOSED to ``"county"``, so any other value fails envelope validation until
+# the finer-level TIGER fetch plumbing exists.
 _DEFAULT_REGION_ADMIN_LEVEL = "county"
 
 # How many candidate regions to surface at most. A large state (e.g. Texas =
@@ -43,28 +38,18 @@ _MAX_REGION_CANDIDATES = 254
 
 
 def _region_admin_level_for(state_code: str, query: str) -> str:
-    """Choose the candidate admin granularity for ``state_code`` + ``query``.
+    """Choose the candidate admin granularity for ``state_code`` and ``query``.
 
-    DEFAULT is ``"county"`` for every state (the v0.1 shipping behaviour). This
-    is the single seam a future heuristic (or the agent) hooks to pick a
-    coarser/finer level by state size + query goal — kept as a function so the
-    policy lives in one place. Today it returns the county default unchanged;
-    the ``RegionAdminLevel`` Literal is closed to ``"county"`` so any other
-    return value would fail envelope validation (a deliberate guard until the
-    finer-level fetch plumbing lands).
-    """
+    The ONE seam where that policy lives; ``"county"`` for every state today."""
     return _DEFAULT_REGION_ADMIN_LEVEL
 
 
 def _admin_boundaries_fgb_bytes(
     level: str, bbox: tuple[float, float, float, float]
 ) -> bytes:
-    """Fetch TIGER admin-boundary FGB bytes in-process (no cache / no publish).
+    """Fetch TIGER admin-boundary FGB bytes in-process: no cache, no publish.
 
-    Runs the promoted ``fetch_administrative_boundaries`` router source's executor
-    directly (the ZIP-member driver read) -- the in-process counterpart to the
-    published tool. Validates + quantizes the params exactly as the tool does.
-    """
+    Params are validated and quantized exactly as the published tool does."""
     from trid3nt_server.tools.fetchers._router import registration, router
 
     spec = registration.get_spec("fetch_administrative_boundaries")
@@ -78,26 +63,13 @@ def _build_region_candidates(
     state_bbox: tuple[float, float, float, float],
     admin_level: str,
 ) -> list[RegionCandidate]:
-    """Build the candidate sub-regions for a snapped state via TIGER boundaries.
+    """Build the candidate sub-regions for a snapped state, one per feature.
 
-    Fetches the administrative boundaries for ``admin_level`` (default
-    ``"county"``) clipped to the whole-state ``state_bbox`` through the EXISTING
-    ``fetch_administrative_boundaries`` fetch path, reads the resulting
-    FlatGeobuf back with geopandas, and emits one ``RegionCandidate`` per
-    feature: ``region_id`` from the TIGER GEOID, ``name`` from the feature
-    NAME(LSAD), ``bbox`` from the feature polygon's ``total_bounds``.
-
-    Best-effort: any failure (geopandas missing, TIGER download hiccup, empty
-    clip) returns an EMPTY list — the caller then offers only the whole-state
-    default (honest degrade, fallback norm). Never raises.
-
-    Calls ``_admin_boundaries_fgb_bytes`` (the in-process router executor seam)
-    rather than the cache-wrapped ``fetch_administrative_boundaries`` so the
-    candidate build is decoupled from the layer-publish path: we only need the
-    geometry + attributes in-process, not a published LayerURI. The TIGER download
-    is itself cached for the published-boundary path, so this does not add a new
-    uncached fetch in practice.
-    """
+    Never raises: any failure returns an EMPTY list and the caller then offers
+    only the whole-state default."""
+    # Read through the in-process executor rather than the cache-wrapped tool,
+    # so the candidate build is decoupled from the layer-publish path: only the
+    # geometry and attributes are needed here, never a published LayerURI.
     try:
         import geopandas as gpd  # type: ignore[import-not-found]
         from io import BytesIO
@@ -176,15 +148,8 @@ def _build_region_choice_request_payload(
 ) -> "RegionChoiceRequestEnvelopePayload | None":
     """Build a validated ``region-choice-request`` from a state-snap geocode dict.
 
-    Derives the state name + 2-letter code from the geocode result's ``name``
-    (``"<State>, United States"``), uses its ``bbox`` as the whole-state extent,
-    builds the candidate sub-regions (default: counties), and composes an honest
-    prompt that says the agent snapped to the whole state and is offering a
-    narrower pick (the fallback honesty floor).
-
-    Returns ``None`` when the state cannot be resolved or the result is not a
-    valid state-snap shape — the caller then leaves the state bbox unchanged.
-    """
+    ``None`` when the state cannot be resolved or the shape is not a state-snap,
+    and the caller then leaves the state bbox unchanged."""
     from trid3nt_server.tools.fetchers.us_states import resolve_state_code, state_display_name
 
     bbox = geocode_result.get("bbox")
@@ -210,8 +175,8 @@ def _build_region_choice_request_payload(
     )
     candidates = _build_region_candidates(tuple(bbox), admin_level)
 
-    # Honest prompt — name the snap + the offer (fallback norm). Prefer the
-    # geocode's own fallback_reason as the lead so the narration is consistent.
+    # The prompt must NAME the snap as well as the offer, and it leads with the
+    # geocode's own fallback_reason so the narration stays consistent with it.
     reason = str(geocode_result.get("fallback_reason") or "").strip()
     level_word = "county" if admin_level == "county" else admin_level
     if candidates:

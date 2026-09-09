@@ -1,8 +1,6 @@
-"""Payload-warning gate card helpers: env thresholds + estimator resolution.
+"""Payload-warning gate card helpers: env thresholds and estimator resolution.
 
-Pure env readers + estimator lookup keyed off a tool name. The
-transport-coupled ``_maybe_gate_on_payload_warning`` orchestration stays in
-``server``.
+Pure env readers and an estimator lookup keyed off a tool name, no transport.
 """
 from __future__ import annotations
 
@@ -53,12 +51,9 @@ def _get_hard_cap_mb() -> float:
 def _resolve_payload_estimator(tool_name: str, estimator_name: str) -> Any | None:
     """Look up the named estimator callable on the tool's module.
 
-    The ``AtomicToolMetadata.payload_mb_estimator_name`` field
-    carries a Python identifier (not the callable itself) so the metadata
-    stays serializable. Resolution at gate-time walks
-    ``RegisteredTool.module`` to find the callable. Returns ``None`` if the
-    module/attribute lookup fails — the gate then skips for this call.
-    """
+    ``None`` when the module or attribute lookup fails, and the gate skips."""
+    # The metadata carries a Python IDENTIFIER rather than the callable, so the
+    # metadata stays serializable; resolution happens here, at gate time.
     try:
         from importlib import import_module
 

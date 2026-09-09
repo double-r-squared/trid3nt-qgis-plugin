@@ -1,14 +1,8 @@
 """The DRAW gate: ask the user to draw ONE declared param's value on the canvas.
 
-Rides the EXISTING ``spatial-input-request`` / ``spatial-input-response`` pair and
-its session-scoped pending registry - the same spine ``request_spatial_input``
-pauses on, reached from inside a tool through ``current_emitter()`` rather than
-through the turn loop's websocket handle.
-
-The gate never invents a geometry: no live session, a decline, or a wait that runs
-out all produce the same typed refusal naming the param that stayed empty.
+The gate never invents a geometry: no live session, a decline, or a wait that
+runs out all produce the same typed refusal naming the param that stayed empty.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -60,11 +54,9 @@ async def gate_draw_input(
     prompt: str,
     ttl_seconds: int = _DEFAULT_TTL_SECONDS,
 ) -> DrawOutcome:
-    """Present the draw card and WAIT for the geometry (the hybrid gate rule).
+    """Present the draw card and WAIT for the geometry.
 
-    Returns the drawn value stamped nowhere - the caller seats it through the USER
-    door - or a ``reason`` the caller turns into its typed refusal.
-    """
+    Returns an unstamped value, or a ``reason`` for the caller's typed refusal."""
     affordance = _AFFORDANCE.get(geometry)
     if affordance is None:
         return DrawOutcome(reason=f"{geometry!r} is not a draw kind")
@@ -126,11 +118,10 @@ async def gate_draw_input(
 def _value_from(response: Any, geometry: str) -> Any:
     """The PARAM value inside the reply - a handful of vertices, never a dataset.
 
-    Reads through the SAME user-input normalizers a typed wire value passes, so
-    the drawn vocabulary and the typed vocabulary cannot drift. The import is
-    function-local because the declarative library's interpreter imports this
-    module, and the package edge is the cycle.
-    """
+    Read through the SAME normalizers a typed wire value passes, so the drawn
+    vocabulary cannot drift from the typed one."""
+    # The import is function-local: the declarative library's interpreter
+    # imports this module, and the package edge is the cycle.
     from trid3nt_server.workflows.runtime.user_input import (
         lonlat_bbox,
         lonlat_point,

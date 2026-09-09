@@ -1,17 +1,8 @@
-"""Runtime confirm-card estimate + provider resolution (the gate-collapse engine side).
+"""The runtime half of the confirm-card contract: estimates and provider lookup.
 
-The RUNTIME half of the ADR 0273 gate-collapse contract (the declaration half is
-``trid3nt_contracts.gate_spec``): a :class:`CardEstimate` is what a tool's declared
-``estimate_provider`` returns -- the built confirm card (a
-``PayloadWarningEnvelopePayload``) plus the opaque per-engine ``tail_state`` the pin
-provider reads on a proceed / narrow_scope decision. It carries a live envelope, so it
-lives server-side, not in the serializable contract layer (mirroring the
-ResolutionSpec / ResolvedResolution split).
-
-The generic gate engine imports the estimate + pin providers by the dotted paths the
-:class:`~trid3nt_contracts.gate_spec.GateSpec` names, so engine knowledge stays in the
-engine module (the gate_input_review precedent) and the server dispatch is one uniform
-registry-driven call, not a per-engine ``if/elif`` chain.
+A :class:`CardEstimate` carries a LIVE envelope, so it lives server-side rather
+than in the serializable contract layer. Providers are named by dotted path so
+the contract carries no server import and engine knowledge stays in its engine.
 """
 from __future__ import annotations
 
@@ -25,34 +16,22 @@ __all__ = ["CardEstimate", "resolve_provider", "call_provider"]
 
 @dataclass(frozen=True)
 class CardEstimate:
-    """A built confirm card + the tail state its pin provider reads.
+    """A built confirm card plus the tail state its pin provider reads.
 
-    ``envelope`` is the ``PayloadWarningEnvelopePayload`` the gate emits on the wire
-    (the plugin-rendered ``tool-payload-warning`` card). Its ``granularity`` /
-    ``time_scale`` blocks already carry the generic surfaces a card shows -- estimated
-    cells / nodes, est runtime, the ladder rungs, preview stats -- so an engine fills in
-    what applies and leaves the rest ``None``. ``envelope=None`` is the "no gate needed"
-    signal (the fetch_landcover no-coarsening skip): the engine dispatches as-is.
+    ``envelope=None`` is the "no gate needed" signal: the engine dispatches as-is."""
 
-    ``tail_state`` is the OPAQUE per-engine state the declared pin provider consumes to
-    compute the approved-params delta on a decision (a rainfall-runoff autoscale result +
-    DEM path for the real-cap re-probe, the TELEMAC preview stats, the fetch suggestion,
-    the flood autoscale + resolved cadence). Empty for a plain proceed/cancel gate (no
-    levers).
-    """
-
+    #: The card the gate emits on the wire. An engine fills in the generic
+    #: surfaces that apply to it and leaves the rest ``None``.
     envelope: Any | None
+    #: OPAQUE per-engine state the pin provider consumes to compute the
+    #: approved-params delta. Empty for a lever-less proceed/cancel gate.
     tail_state: dict[str, Any] = field(default_factory=dict)
 
 
 def resolve_provider(dotted: str) -> Callable[..., Any]:
     """Import a ``module.path:attr`` (or ``module.path.attr``) provider reference.
 
-    The :class:`~trid3nt_contracts.gate_spec.GateSpec` names its estimate / pin providers
-    by dotted path so the contract carries no server import; the engine resolves them
-    lazily off the tool's own module here. Accepts both the ``:`` (module:attr) and the
-    dotted (module.attr) forms.
-    """
+    Both the ``:`` and the fully-dotted spelling resolve the same way."""
     if ":" in dotted:
         module_path, attr = dotted.split(":", 1)
     else:
@@ -62,16 +41,13 @@ def resolve_provider(dotted: str) -> Callable[..., Any]:
 
 
 async def call_provider(dotted: str, *args: Any, **kwargs: Any) -> Any:
-    """Call a dotted provider, awaiting it when it is a coroutine (async providers).
+    """Call a dotted provider, awaiting it when it is a coroutine.
 
-    The TELEMAC mesh-preview estimate provider runs an async mesh worker and a
-    rainfall-runoff real-cap pin provider offloads a DEM re-probe, so providers may be
-    coroutines; a plain proceed/cancel builder is sync. This normalizes the call so the
-    gate engine treats both uniformly. Unknown kwargs a sync provider does not accept (e.g. an
-    ``emitter`` only TELEMAC reads) are filtered against the callable's signature so
-    every provider gets a uniform call.
-    """
+    A provider that needs a worker or an offloaded probe is async; a plain
+    proceed/cancel builder is sync, and the gate engine sees one shape."""
     fn = resolve_provider(dotted)
+    # A kwarg a given provider does not declare is filtered out against its own
+    # signature, so every provider can be called uniformly.
     try:
         sig = inspect.signature(fn)
         accepts_kw = {

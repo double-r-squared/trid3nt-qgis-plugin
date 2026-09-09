@@ -1,42 +1,9 @@
-"""Per-session tool circuit breaker (Stage 3).
+"""Per-session tool circuit breaker over consecutive tool failures.
 
-Defends the multi-turn agent loop against unstable upstreams (STAC, ERDDAP,
-THREDDS, ArcGIS Hub, etc.) that enter a repeated-failure mode.  When a single
-tool fails 3 consecutive times **on a transient/upstream fault** (configurable
-via ``TRID3NT_CIRCUIT_THRESHOLD``) the breaker trips: subsequent calls to that
-tool are short-circuited for a 60s cooldown period (configurable via
-``TRID3NT_CIRCUIT_COOLDOWN_S``).
-
-CRITICAL (job 2026-06-17 — Oklahoma-tornado bug): the breaker counts ONLY
-upstream/transient failures (``UpstreamAPIError``, timeouts, connection
-errors, 5xx) toward the trip threshold.  Deterministic CLIENT/argument errors
-(the ``*ArgError`` classes, ``BboxInvalidError``, ``ValueError``/``TypeError``
-arg-shape errors — anything carrying ``retryable=False`` that is a model-side
-fault) do NOT increment the counter.  A bad-arg failure is the model's fault:
-it will fail identically every time, AND the model can self-correct the
-argument and retry — so it must NEVER trip a breaker that would then BLOCK the
-corrected retry.  Before this fix, ~24 parallel per-year storm-events calls
-with a full state name ("Oklahoma") tripped the breaker in 3 calls and the
-60s cooldown blocked the corrected-args retry.
-
-Wire points (server.py):
-    - ``SessionState.circuit_breaker: ToolCircuitBreaker``
-    - Before ``_invoke_tool_via_emitter``:
-        if state.circuit_breaker.is_tripped(call.name):
-            raise CircuitBreakerError(...)
-    - After successful ``_invoke_tool_via_emitter``:
-        state.circuit_breaker.record_success(call.name)
-    - In the exception handler after ``_invoke_tool_via_emitter`` fails:
-        state.circuit_breaker.record_failure(call.name)
-
-``CircuitBreakerError`` follows the same typed-exception contract as
-``ToolNotFoundError`` and every ``fetch_*`` error class: ``error_code`` is a
-SCREAMING_SNAKE_CASE string, ``retryable=False`` (the LLM cannot retry its way
-out of a cooldown).  ``summarize_tool_result`` in ``adapter.py`` harvests these
-attributes and emits the full structured envelope so Gemini reads the
-signal and narrates the cooldown honestly.
+Only UPSTREAM/transient faults count toward a trip. A deterministic client/arg
+fault fails identically every time and the model can self-correct it, so
+counting one would let the cooldown block the corrected retry.
 """
-
 from __future__ import annotations
 
 import logging
@@ -57,8 +24,7 @@ _DEFAULT_COOLDOWN_S = 60.0
 def _get_threshold() -> int:
     """Consecutive-failure threshold before the breaker trips.
 
-    Override via ``TRID3NT_CIRCUIT_THRESHOLD`` (integer).  Falls back to 3.
-    """
+    ``TRID3NT_CIRCUIT_THRESHOLD`` overrides; anything below 1 falls back to 3."""
     raw = os.environ.get("TRID3NT_CIRCUIT_THRESHOLD")
     if raw is None:
         return _DEFAULT_THRESHOLD
@@ -80,8 +46,7 @@ def _get_threshold() -> int:
 def _get_cooldown_s() -> float:
     """Cooldown duration in seconds after the breaker trips.
 
-    Override via ``TRID3NT_CIRCUIT_COOLDOWN_S`` (float).  Falls back to 60.0.
-    """
+    ``TRID3NT_CIRCUIT_COOLDOWN_S`` overrides; a negative value falls back to 60."""
     raw = os.environ.get("TRID3NT_CIRCUIT_COOLDOWN_S")
     if raw is None:
         return _DEFAULT_COOLDOWN_S
@@ -108,13 +73,8 @@ def _get_cooldown_s() -> float:
 class CircuitBreakerError(RuntimeError):
     """Raised when ``ToolCircuitBreaker.is_tripped`` is True for a tool.
 
-    ``retryable=False``: the LLM cannot retry its way out of a cooldown.  It
-    should narrate honestly that the tool is temporarily unavailable and
-    suggest the user try again after the cooldown expires.
-
-    ``error_code="CIRCUIT_BREAKER_TRIPPED"`` follows the
-    SCREAMING_SNAKE_CASE convention; ``summarize_tool_result`` harvests it.
-    """
+    ``retryable=False`` -- no retry escapes a cooldown, so the model narrates the
+    temporary unavailability instead of calling again."""
 
     error_code: str = "CIRCUIT_BREAKER_TRIPPED"
     retryable: bool = False
@@ -138,52 +98,29 @@ class CircuitBreakerError(RuntimeError):
 def is_client_arg_error(error: BaseException | None) -> bool:
     """Return True if ``error`` is a deterministic CLIENT/argument error.
 
-    A client/arg error is a model-side fault: the same args will fail
-    identically every time, and the model can self-correct and retry.  Such
-    errors must NOT count toward the circuit-breaker trip threshold — otherwise
-    a burst of bad-arg calls would trip the breaker and the cooldown would then
-    block the corrected-args retry (the Oklahoma-tornado bug, 2026-06-17).
-
-    Conversely, UPSTREAM/transient faults (timeouts, connection errors, 5xx,
-    ``UpstreamAPIError``) ARE the breaker's purpose and DO count.
-
-    Classification (mirrors ``adapter._classify_error`` so the breaker and the
-    function_response carry the same retry signal):
-
-    1. Honour the typed-tool exception's ``retryable`` class attribute when
-       present: ``retryable is False`` → client/arg error (skip the counter);
-       ``retryable is True`` → upstream/transient (count it).  Every
-       ``*ArgError`` / ``BboxInvalidError`` declares ``retryable=False``;
-       every ``*UpstreamError`` declares ``retryable=True``.
-    2. Untyped exceptions: ``ValueError`` / ``TypeError`` / ``KeyError`` /
-       ``AttributeError`` are programmer/arg-shape errors → client/arg.
-    3. Everything else (timeouts, ``ConnectionError``/``OSError``, bare
-       ``RuntimeError``) → treat as upstream/transient (count it) so a genuine
-       repeated-upstream-failure loop still trips the breaker.
-
-    ``None`` (no error) is not a client error — returns False.
-    """
+    A client/arg error never counts toward the trip threshold; ``None`` is not
+    one, and anything unrecognized is read as upstream and does count."""
     if error is None:
         return False
-    # 1. Typed-tool retry signal is authoritative.
+    # 1. A typed tool exception's own retry signal is authoritative: every
+    #    *ArgError / BboxInvalidError declares retryable=False, and every
+    #    *UpstreamError declares retryable=True.
     retry_attr = getattr(error, "retryable", None)
     if isinstance(retry_attr, bool):
         return retry_attr is False
     # 2. Untyped programmer/arg-shape errors are client errors.
     if isinstance(error, (ValueError, TypeError, KeyError, AttributeError)):
         return True
-    # 3. Default: transient/upstream — counts toward the trip threshold.
+    # 3. Everything else -- timeouts, ConnectionError/OSError, a bare
+    #    RuntimeError -- is read as upstream/transient and counts, so a genuine
+    #    repeated-upstream-failure loop still trips the breaker.
     return False
 
 
 def _is_operator_class_error(tool_name: str, error: BaseException) -> bool:
-    """True when ``error`` classifies as ``"operator"`` (observability/retention
-
-    batch item 3): a contract violation / internal exception, not a repeated
-    tool-side fault. Deferred import of the shared classifier (``agent.gates.
-    actionability``) avoids any import-time coupling between this module and
-    the credential registry it reaches into.
-    """
+    """True when ``error`` is a contract violation, not a repeated tool fault."""
+    # The import is function-local: the classifier reaches into the credential
+    # registry, and this module must carry no import-time edge to it.
     from .actionability import classify_actionability
 
     return classify_actionability(tool_name, error) == "operator"
@@ -196,20 +133,9 @@ def _is_operator_class_error(tool_name: str, error: BaseException) -> bool:
 
 @dataclass
 class ToolCircuitBreaker:
-    """Per-session circuit breaker that tracks consecutive failures per tool.
+    """Per-session breaker tracking consecutive failures per tool.
 
-    Lifecycle (per tool_name):
-        CLOSED (normal) → consecutive_failures increments on each failure.
-        OPEN (tripped)  → ``cooldown_until`` is set; ``is_tripped`` returns
-                          True until ``time.monotonic() >= cooldown_until``.
-        AUTO-CLOSE      → after the cooldown window elapses, the next call
-                          to ``is_tripped`` returns False and the counter resets;
-                          the tool is tried again (HALF-OPEN concept collapsed
-                          into CLOSED since we don't need a probe attempt here).
-
-    The threshold and cooldown are read once at construction time so a running
-    session is not affected by env changes mid-flight.
-    """
+    Threshold and cooldown are read once at construction, never mid-flight."""
 
     threshold: int = field(default_factory=_get_threshold)
     cooldown_s: float = field(default_factory=_get_cooldown_s)
@@ -218,11 +144,9 @@ class ToolCircuitBreaker:
     _cooldown_until: dict[str, float] = field(default_factory=dict, repr=False)
 
     def is_tripped(self, tool_name: str) -> bool:
-        """Return True if the breaker is currently open (cooling down) for this tool.
+        """True while the breaker is open (cooling down) for this tool.
 
-        Automatically resets the failure counter when the cooldown window has
-        elapsed so the tool becomes available again without explicit intervention.
-        """
+        Resets the failure counter once the cooldown window has elapsed."""
         deadline = self._cooldown_until.get(tool_name)
         if deadline is None:
             return False
@@ -238,10 +162,7 @@ class ToolCircuitBreaker:
         return True
 
     def cooldown_remaining_s(self, tool_name: str) -> float:
-        """Return seconds remaining in the cooldown for ``tool_name``.
-
-        Returns 0.0 if the tool is not currently tripped.
-        """
+        """Seconds left in the cooldown; 0.0 when the tool is not tripped."""
         deadline = self._cooldown_until.get(tool_name)
         if deadline is None:
             return 0.0
@@ -251,27 +172,13 @@ class ToolCircuitBreaker:
     def record_failure(
         self, tool_name: str, error: BaseException | None = None
     ) -> None:
-        """Increment the consecutive-failure counter; trip the breaker if threshold hit.
+        """Increment the consecutive-failure counter; trip it at the threshold.
 
-        Call this after a failure in ``_invoke_tool_via_emitter``, passing the
-        exception that was raised so the breaker can classify it.
-
-        Only UPSTREAM/transient faults count toward the trip threshold.  A
-        deterministic CLIENT/argument error (``*ArgError``, ``BboxInvalidError``,
-        ``ValueError``/``TypeError`` arg-shape errors — anything for which
-        ``is_client_arg_error`` returns True) is SKIPPED: it is a model-side
-        fault that will fail identically and that the model can self-correct,
-        so it must NOT trip a breaker that would then block the corrected-args
-        retry (the Oklahoma-tornado bug, 2026-06-17).
-
-        ``error=None`` (legacy call sites / unclassifiable failures) counts as a
-        failure — the conservative default preserves the original
-        repeated-failure-loop protection.
-        """
+        Client/arg and operator-class faults are SKIPPED; an unclassifiable
+        failure (``error=None``) counts, the conservative default."""
         if is_client_arg_error(error):
-            # Model-side / deterministic arg fault — does NOT count toward a
-            # trip.  Log at debug for telemetry but leave the counter alone so a
-            # corrected-args retry is never blocked.
+            # Model-side / deterministic arg fault: the counter is left alone so
+            # a corrected-args retry is never blocked by the cooldown.
             logger.debug(
                 "circuit-breaker: tool=%r failure is a client/arg error "
                 "(%s); NOT counting toward trip threshold",
@@ -280,10 +187,8 @@ class ToolCircuitBreaker:
             )
             return
         if error is not None and _is_operator_class_error(tool_name, error):
-            # Contract violation / internal exception (observability/retention
-            # batch item 3): OUR bug, not the tool's repeated upstream/arg
-            # fault — must NOT consume the tool's retry budget. Mirrors the
-            # client/arg exemption above.
+            # Contract violation / internal exception: OUR bug, not the tool's
+            # repeated fault, so it must not consume the tool's retry budget.
             logger.debug(
                 "circuit-breaker: tool=%r failure is operator-class "
                 "(contract violation/internal, %s); NOT counting toward "
@@ -315,15 +220,10 @@ class ToolCircuitBreaker:
             )
 
     def record_success(self, tool_name: str) -> None:
-        """Reset the consecutive-failure counter for this tool after a success.
-
-        Call this after a successful return from ``_invoke_tool_via_emitter``.
-        """
+        """Reset the consecutive-failure counter for this tool after a success."""
         had_failures = self._consecutive_failures.pop(tool_name, 0)
-        # If the tool was previously tripped but auto-closed, this is a no-op.
-        # If a success arrives while the breaker is still tripped (impossible
-        # under correct wiring since is_tripped would have short-circuited),
-        # we clear the cooldown defensively.
+        # A success cannot arrive while the breaker is open (is_tripped would
+        # have short-circuited the call), so clearing the cooldown is defensive.
         self._cooldown_until.pop(tool_name, None)
         if had_failures:
             logger.info(

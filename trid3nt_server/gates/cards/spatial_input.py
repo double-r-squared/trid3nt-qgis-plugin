@@ -1,4 +1,7 @@
-"""Spatial-input request-card builder + response-to-result translation (pure)."""
+"""Spatial-input request-card builder and response-to-result translation.
+
+Pure: no websocket and no session state.
+"""
 from __future__ import annotations
 
 import logging
@@ -20,11 +23,8 @@ def _build_spatial_input_request_payload(
 ) -> "SpatialInputRequestPayload | None":
     """Build a validated ``spatial-input-request`` from the LLM tool args.
 
-    ``call_args`` is what the LLM passed to ``request_spatial_input`` (mode /
-    title / description / optional suggested_view + reference_layers). Returns
-    ``None`` when the args cannot form a valid payload (the caller then surfaces a
-    typed param error — never silently emits a malformed prompt).
-    """
+    ``None`` when the args cannot form a valid payload, and the caller surfaces a
+    typed param error rather than emitting a malformed prompt."""
     mode = call_args.get("mode") or "vector_draw"
     title = str(call_args.get("title") or "Draw on the map")
     description = str(
@@ -78,23 +78,8 @@ def _spatial_response_to_result(
 ) -> dict[str, Any]:
     """Translate a ``spatial-input-response`` into the tool result the LLM reads.
 
-    The result the LLM sees after ``request_spatial_input`` resumes:
-
-    - timeout / no client (``response is None``)  ->
-      ``{status: "error", error_code: "SPATIAL_INPUT_TIMEOUT", ...}``.
-    - explicit cancellation                       ->
-      ``{status: "cancelled", ...}``.
-    - point / bbox reply                          ->
-      ``{status: "ok", geometry_type, coordinates}``.
-    - vector_draw reply                           ->
-      ``{status: "ok", geometry_type: "vector_draw", aoi_bbox, points, n_aoi,
-         n_lines}``. When a NEUTRAL line was drawn
-      (purpose="line"), ``line`` (``[[lon,lat],...]``) + ``linestring`` (a
-      GeoJSON LineString) carry it for ``compute_terrain_profile(line=...)``.
-    - structurally invalid drawn FC               ->
-      ``{status: "error", error_code: "SPATIAL_INPUT_<...>", ...}`` (honesty
-      floor — malformed geometry NEVER reads as a success).
-    """
+    Honesty floor: a structurally invalid drawn FeatureCollection becomes a TYPED
+    error result, never a silent success."""
     if response is None:
         return {
             "status": "error",

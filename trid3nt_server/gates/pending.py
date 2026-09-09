@@ -1,17 +1,9 @@
-"""Session-scoped pending-confirmation registry (the #154 pause/resume spine).
+"""Session-scoped pending-confirmation registry for the block-and-wait gates.
 
-Extracted from ``server`` so BOTH the transport-coupled gate orchestration
-(``server._gate_on_solver_confirm`` / ``_gate_on_code_exec`` /
-``_maybe_gate_on_payload_warning``) AND the in-tool input-review gate (
-``agent.gates.input_review``) register their block-and-wait futures into the SAME
-dict the inbound ``tool-payload-confirmation`` handler resolves. The registry is
-process-global (keyed by the unguessable ULID ``warning_id`` / ``code_exec_id``)
-and per-session-owned: a confirmation from a non-owning session is refused.
-
-``server`` re-imports these names, so ``server._PENDING_CONFIRMATIONS`` stays the
-SAME dict object (tests that reach through ``server.`` are unaffected).
+Every confirmation gate registers its future into the SAME dict the inbound
+``tool-payload-confirmation`` handler resolves. Process-global, keyed by an
+unguessable ULID, and per-session-owned: a non-owning session is refused.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -31,10 +23,9 @@ __all__ = [
 ]
 
 # warning_id / code_exec_id -> (owner_session_id, future). The
-# ``tool-payload-confirmation`` handler can resolve a pending gate as long as
-# the session matches, since the client can open multiple WebSocket
-# connections per browser session. Shared by every confirmation gate --
-# payload warning, code-exec, solver-confirm, and the input-review gate.
+# ``tool-payload-confirmation`` handler resolves a pending gate on a SESSION
+# match rather than a connection match, since the client can open multiple
+# WebSocket connections per browser session.
 _PENDING_CONFIRMATIONS: dict[str, tuple[str, asyncio.Future]] = {}
 
 
@@ -53,11 +44,8 @@ def _resolve_pending_confirmation(
 ) -> bool:
     """Complete the pending gate future for ``conf.warning_id``.
 
-    Returns True when a live future was resolved. False when the warning_id is
-    unknown/already-resolved, or when the confirming session is not the owner
-    (cross-session confirmation is refused loudly -- the warning_id is an
-    unguessable ULID, but defense-in-depth costs one string compare).
-    """
+    False when the id is unknown or already resolved, and when the confirming
+    session is not the owner -- cross-session confirmation is refused."""
     entry = _PENDING_CONFIRMATIONS.get(conf.warning_id)
     if entry is None:
         return False

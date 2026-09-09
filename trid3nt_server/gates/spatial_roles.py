@@ -1,40 +1,9 @@
-"""Shared drawn-geometry ROLE vocabulary + parser for the mesh authoring layer.
+"""Shared drawn-geometry ROLE vocabulary and parser for the mesh authoring layer.
 
-Every engine that lets the user draw spatial input (``request_spatial_input`` ->
-a role-tagged GeoJSON ``FeatureCollection``) routes that drawing through ONE
-canonical role vocabulary defined here, so a breakline, a breach point, a refine
-region or an AOI clip means the same thing to every engine. This is the mesh
-layer's DOMAIN stage: user-drawn geometry enters HERE, once, for every engine.
-
-Canonical roles (``properties.role`` on each drawn ``Feature``):
-
-  * ``breakline``      -- a LineString that CONSTRAINS mesh edges (a ridge, a
-                          channel bank); a tin/quadtree mesher forces edges along
-                          it.
-  * ``breach``         -- a Point interior levee/dam-breach source. Rides the
-                          drawn-POINT role; consumed as a ``breach_point`` param
-                          by solvers that accept one (drawn value PREFERRED over
-                          a plain tuple arg when a breach point is drawn).
-  * ``refine_region``  -- a Polygon over which the mesh is refined to a finer
-                          target size (``properties.target_size_m``); consumed
-                          worker-side by TELEMAC gmsh sizing fields.
-  * ``aoi_clip``       -- a Polygon that CLIPS the run domain (mask cells outside
-                          it). Legacy wire role ``aoi`` is an accepted alias.
-  * ``boundary``       -- a LineString open-boundary segment
-                          (``properties.boundary_type`` in {inflow, outflow}).
-  * ``point``          -- a generic Point (an ignition source, a probe).
-  * ``line``           -- a NEUTRAL elevation/section LineString
-                          (compute_terrain_profile / compute_cross_section); no
-                          mesh semantics.
-
-The module is a PURE structural translator -- no I/O, no asyncio, no geometry
-library -- so it is trivially unit-testable and importable in any context (it
-must NOT trigger the heavy ``workflows`` package). Honesty floor: a malformed
-``FeatureCollection`` NEVER degrades to a silent success -- every parser raises
-:class:`SpatialRoleError` (typed ``error_code``) so the caller narrates an
-honest error instead of fabricating geometry the user did not draw.
+A pure structural translator: no I/O, no asyncio, no geometry library. A
+malformed ``FeatureCollection`` NEVER degrades to a silent success -- every
+parser raises :class:`SpatialRoleError`.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -55,24 +24,39 @@ __all__ = [
 class SpatialRoleError(ValueError):
     """A drawn ``FeatureCollection`` could not be parsed into role inputs.
 
-    Carries an open-set ``error_code`` so the caller renders a typed error
-    result the LLM narrates honestly (never a silent success).
-    """
+    The open-set ``error_code`` is what the caller renders as a typed result."""
 
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
         self.error_code = error_code
 
 
-#: Backwards-compatible alias -- the original name from ``gates.spatial_input``.
+#: The same error type under its second accepted name.
 SpatialInputParseError = SpatialRoleError
 
 
-# Kept local so this module has no contracts dep at import time and stays a
-# pure-structure translator.
+# Local, so this module carries no contracts dependency at import time.
 _VALID_BOUNDARY_TYPES = frozenset({"inflow", "outflow"})
 
-#: The canonical role vocabulary every engine shares.
+#: The canonical role vocabulary every engine shares, read off
+#: ``properties.role`` on each drawn ``Feature``:
+#:   * ``breakline``     -- a LineString that CONSTRAINS mesh edges (a ridge, a
+#:                          channel bank); a tin/quadtree mesher forces edges
+#:                          along it.
+#:   * ``breach``        -- a Point interior levee/dam-breach source, riding the
+#:                          drawn-POINT role and consumed as a ``breach_point``
+#:                          param; a drawn value is PREFERRED over a plain tuple
+#:                          arg when both are present.
+#:   * ``refine_region`` -- a Polygon over which the mesh refines to a finer
+#:                          target size (``properties.target_size_m``), consumed
+#:                          worker-side by the mesher's sizing fields.
+#:   * ``aoi_clip``      -- a Polygon that CLIPS the run domain, masking cells
+#:                          outside it.
+#:   * ``boundary``      -- a LineString open-boundary segment, typed by
+#:                          ``properties.boundary_type``.
+#:   * ``point``         -- a generic Point (an ignition source, a probe).
+#:   * ``line``          -- a NEUTRAL elevation/section LineString with NO mesh
+#:                          semantics.
 CANONICAL_ROLES = frozenset(
     {
         "breakline",
@@ -85,8 +69,7 @@ CANONICAL_ROLES = frozenset(
     }
 )
 
-#: Legacy wire roles still accepted from older clients, aliased to canonical.
-#: ``aoi`` was the pre-generalization AOI role -> canonical ``aoi_clip``.
+#: Wire roles accepted as aliases for a canonical role.
 ROLE_ALIASES = {"aoi": "aoi_clip"}
 
 #: Every role string this parser accepts on the wire (canonical + legacy alias).
@@ -95,49 +78,34 @@ _ACCEPTED_ROLES = frozenset(CANONICAL_ROLES | set(ROLE_ALIASES))
 
 @dataclass
 class DrawnRoles:
-    """The role-split result of a drawn ``FeatureCollection`` (all engines).
+    """The role-split result of a drawn ``FeatureCollection``, for every engine.
 
-    Every field defaults empty so an engine reads only the roles it consumes.
-
-    Fields:
-        breaklines: ``[[[lon,lat],...], ...]`` -- each breakline's vertices.
-        breach_points: ``[[lon,lat], ...]`` -- interior breach sources
-            (the ``breach_point`` param).
-        refine_regions: ``[{"polygon": Feature, "target_size_m": float|None,
-            "bbox": (..4..)}]`` -- per-region mesh sizing.
-        aoi_clip_features: raw clip polygons (``aoi_clip`` + legacy ``aoi``).
-        aoi_bbox: union extent of the clip polygons, or ``None``.
-        boundary_lines: ``[{"coords": [[lon,lat],...], "boundary_type":
-            "inflow"|"outflow"|None}]``.
-        points: ``[[lon,lat], ...]`` from the generic ``point`` role.
-        line_coords: the FIRST neutral ``line`` feature's vertices, or ``None``.
-        n_lines: count of neutral ``line`` features.
-    """
+    Every field defaults empty, so an engine reads only the roles it consumes."""
 
     breaklines: list[list[list[float]]] = field(default_factory=list)
     breach_points: list[list[float]] = field(default_factory=list)
+    #: ``[{"polygon": Feature, "target_size_m": float|None, "bbox": (..4..)}]``
     refine_regions: list[dict[str, Any]] = field(default_factory=list)
+    #: The raw clip polygons, both role spellings merged.
     aoi_clip_features: list[dict[str, Any]] = field(default_factory=list)
+    #: Union extent of the clip polygons, or ``None``.
     aoi_bbox: tuple[float, float, float, float] | None = None
+    #: ``[{"coords": [[lon,lat],...], "boundary_type": inflow|outflow|None}]``
     boundary_lines: list[dict[str, Any]] = field(default_factory=list)
     points: list[list[float]] = field(default_factory=list)
+    #: The FIRST neutral ``line`` feature's vertices, or ``None``.
     line_coords: list[list[float]] | None = None
+    #: How many neutral ``line`` features there were, the first one included.
     n_lines: int = 0
 
 
 def split_features_by_role(
     fc: dict[str, Any],
 ) -> dict[str, list[dict[str, Any]]]:
-    """Bucket a drawn ``FeatureCollection``'s features by ``properties.role``.
+    """Bucket a drawn ``FeatureCollection``'s features by the RAW role string.
 
-    Buckets are keyed by the RAW role string as received (legacy ``aoi`` stays
-    ``aoi``); the returned dict pre-seeds every accepted role (canonical + legacy
-    alias) with an empty list so a consumer can index any role safely. Raises
-    :class:`SpatialRoleError` if the top-level shape is not a
-    ``FeatureCollection`` with a ``features`` list, or if any feature carries an
-    unknown / missing ``role`` (honesty floor -- we never silently drop a feature
-    the user drew).
-    """
+    Every accepted role is pre-seeded empty so a consumer can index any of them;
+    a bad shape or an unknown role RAISES, never drops a drawn feature."""
     if not isinstance(fc, dict) or fc.get("type") != "FeatureCollection":
         raise SpatialRoleError(
             "SPATIAL_INPUT_NOT_FEATURECOLLECTION",
@@ -174,10 +142,7 @@ def geometry_bbox(
 ) -> tuple[float, float, float, float] | None:
     """Compute a lon/lat bbox over any GeoJSON geometry's coordinate positions.
 
-    Walks the coordinate tree (Point / LineString / Polygon / multi-*) and
-    returns ``(min_lon, min_lat, max_lon, max_lat)``, or ``None`` if no valid
-    ``[lon, lat]`` position is found.
-    """
+    ``None`` when the coordinate tree holds no valid ``[lon, lat]`` position."""
     min_lon = min_lat = float("inf")
     max_lon = max_lat = float("-inf")
     found = False
@@ -211,9 +176,7 @@ def _linestring_coords(
 ) -> list[list[list[float]]]:
     """Validate + extract vertices from every LineString feature in ``feats``.
 
-    Returns ``[[[lon,lat],...], ...]`` (one vertex list per feature). Raises
-    :class:`SpatialRoleError` (role-labelled ``error_code``) on a malformed line.
-    """
+    One vertex list per feature; a malformed line raises, role-labelled."""
     out: list[list[list[float]]] = []
     for idx, feat in enumerate(feats):
         geom = feat.get("geometry") or {}
@@ -277,11 +240,8 @@ def _point_positions(
 def _refine_regions(feats: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Parse ``refine_region`` polygons into ``{polygon, target_size_m, bbox}``.
 
-    ``target_size_m`` is read from ``properties.target_size_m`` (or the alias
-    ``mesh_size_m``) when a positive number, else ``None`` (the consumer applies
-    its default refinement). Raises :class:`SpatialRoleError` on a polygon with
-    no valid coordinates or a non-positive ``target_size_m``.
-    """
+    ``target_size_m`` is ``None`` when unset, and the consumer then applies its
+    own default refinement; a non-positive one raises."""
     out: list[dict[str, Any]] = []
     for idx, feat in enumerate(feats):
         geom = feat.get("geometry")
@@ -301,6 +261,7 @@ def _refine_regions(feats: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 f"refine_region[{idx}].geometry has no valid coordinates",
             )
         props = feat.get("properties") or {}
+        # ``mesh_size_m`` is an accepted wire alias for ``target_size_m``.
         raw_size = props.get("target_size_m", props.get("mesh_size_m"))
         target_size_m: float | None = None
         if raw_size is not None:
@@ -320,10 +281,7 @@ def _refine_regions(feats: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _boundary_lines(feats: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Parse ``boundary`` LineStrings into ``{coords, boundary_type}``.
 
-    ``boundary_type`` is read from ``properties.boundary_type`` (in {inflow,
-    outflow}) or ``None`` when unset. Raises :class:`SpatialRoleError` on a
-    malformed line or an unknown ``boundary_type``.
-    """
+    ``boundary_type`` is ``None`` when unset; an unknown one raises."""
     coords_list = _linestring_coords(feats, role_label="boundary")
     out: list[dict[str, Any]] = []
     for idx, (feat, coords) in enumerate(zip(feats, coords_list)):
@@ -374,15 +332,11 @@ def _aoi_bbox(
 def parse_drawn_roles(fc: dict[str, Any]) -> DrawnRoles:
     """Parse a drawn ``FeatureCollection`` into the canonical :class:`DrawnRoles`.
 
-    The single entry point every engine's DOMAIN stage calls: splits by role,
-    then translates each bucket into its typed shape. Legacy wire role ``aoi``
-    is merged into ``aoi_clip``. Raises :class:`SpatialRoleError` (typed
-    ``error_code``) on any structurally invalid input so the caller surfaces an
-    honest typed error instead of a silently-wrong success.
-    """
+    The single entry point every engine's DOMAIN stage calls; structurally
+    invalid input raises, never a silently-wrong success."""
     buckets = split_features_by_role(fc)
 
-    # aoi_clip absorbs the legacy ``aoi`` bucket (ROLE_ALIASES).
+    # ``aoi_clip`` absorbs the aliased ``aoi`` bucket.
     aoi_feats = buckets["aoi_clip"] + buckets["aoi"]
     line_lists = _linestring_coords(buckets["line"], role_label="line")
 

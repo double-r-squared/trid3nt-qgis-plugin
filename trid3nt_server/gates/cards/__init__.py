@@ -1,7 +1,6 @@
-"""Confirm-card / gate-card builders extracted from ``server``.
+"""Confirm-card and gate-card builders for the tool-confirmation gates.
 
-Pure payload/envelope builders (no websocket, no session state) for the
-tool-confirmation gates. Transport-coupled orchestration stays in ``server``.
+Pure payload and envelope builders: no websocket, no session state.
 """
 from .credential import _build_credential_request_payload
 from .payload_warning import (

@@ -23,22 +23,15 @@ def _build_credential_request_payload(
 ) -> "CredentialRequestEnvelopePayload | None":
     """Build a validated ``CredentialRequestEnvelopePayload``.
 
-    Every registered provider's ``provider_id`` is a member of the closed
-    ``ProviderID`` Literal, so the payload is scoped to the REAL provider --
-    the same scope the resulting ``secret-add`` writes under and the same
-    scope the resolver's session cache re-reads on retry, so the round-trip
-    closes (no fallback scope ever mis-scopes the saved key).
-
-    If a ``provider.provider_id`` is somehow NOT a valid Literal member (an
-    unregistered provider slipped into the registry), we DO NOT fabricate a
-    fallback scope -- emitting under the wrong provider would save the key where
-    the retry can't re-resolve it. We log and return ``None`` so the caller
-    abandons the prompt and lets the original typed error surface (the agent
-    narrates honestly that it cannot request a key for an unknown provider).
-    """
+    ``None`` for an unregistered ``provider_id`` rather than a fabricated
+    fallback scope, so the caller surfaces the original typed error."""
     try:
         return CredentialRequestEnvelopePayload(
             request_id=request_id,
+            # The card must be scoped to the REAL provider: this is the scope
+            # the resulting ``secret-add`` writes under and the scope the
+            # resolver re-reads on retry, so a fallback scope would save the key
+            # where the retry cannot find it.
             provider_id=provider.provider_id,  # type: ignore[arg-type]
             provider_label=provider.label,
             signup_url=provider.signup_url,
