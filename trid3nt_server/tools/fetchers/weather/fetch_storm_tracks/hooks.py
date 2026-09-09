@@ -2,8 +2,8 @@
 
 ``fetch_storm_tracks`` folds onto the router as a ``library_delegate`` VECTOR source
 carrying BOTH of its modes under one name. The decisive blocker named was the
-ACTIVE mode's second fetch round: a BINARY zip-shapefile (the NHC forecast-track GIS
-product) that must be extracted + read via geopandas + reprojected -- I/O inside what
+ACTIVE mode's second fetch round: a zipped shapefile (the NHC forecast-track GIS
+product) read inside its archive by range request and reprojected -- I/O inside what
 would be a PURE enrich hook, which no chained-resolution phase carries. The fold
 expresses that binary-secondary-enrichment as the SANCTIONED delegate socket impurity
 (the topobathy precedent): the delegate hook owns BOTH network rounds, so the second
@@ -21,7 +21,7 @@ bespoke body lives here as the delegate:
   * ``storm_tracks.read`` (delegate) -- branch on ``active_only``: HISTORICAL subsets
     the IBTrACS v04r01 archive (basin CSV -> storm-wise full-track selection -> line /
     point features); ACTIVE resolves NHC CurrentStorms.json then, per storm, fetches
-    the ``forecastTrack.zipFile`` binary, extracts ``*_pts.shp`` to a tempdir, reads it
+    the ``forecastTrack.zipFile`` archive's ``*_pts`` layer in place, reads it
     via geopandas, and reprojects to EPSG:4326. Returns GeoJSON features for the shared
     ``vector_fgb`` serializer, and RECORDS the fetch-time mode provenance.
   * ``storm_tracks.envelope`` -- the twin's exact ``storm-tracks-{seed}`` layer_id +
@@ -44,11 +44,8 @@ import io
 import json
 import logging
 import math
-import os
-import tempfile
 import urllib.error
 import urllib.request
-import zipfile
 from typing import Any
 
 from trid3nt_server.tools.cache import record_provenance
@@ -588,38 +585,31 @@ def _fetch_forecast_track_points(
 ) -> list[dict[str, Any]]:
     """Best-effort: NHC 5-day forecast-track zipped shapefile -> point records.
 
-    This is the BINARY-SECONDARY-ENRICHMENT round: the delegate
-    fetches the ``forecastTrack`` zip, extracts ``*_pts.shp`` to a tempdir, and reads
-    it via geopandas + reproject -- I/O the delegate socket sanctions. Any failure
-    returns ``[]`` (the caller degrades to current-position-only, never fabricates).
+    The archive publishes three shapefiles per advisory - the track line, the
+    cone polygon and the forecast points - and the points are this leg. GDAL reads
+    the member inside the remote zip by range request, so nothing is downloaded
+    whole and nothing is extracted. Any failure returns ``[]`` (the caller degrades
+    to current-position-only, never fabricates).
     """
     try:
-        import geopandas as gpd  # type: ignore[import-not-found]
+        import pyogrio
     except ImportError:
         logger.warning(
-            "fetch_storm_tracks: geopandas unavailable; skipping forecast track"
+            "fetch_storm_tracks: pyogrio unavailable; skipping forecast track"
         )
         return []
 
-    tmpdir: tempfile.TemporaryDirectory[str] | None = None
     try:
-        raw = _http_get(zip_url)
-        tmpdir = tempfile.TemporaryDirectory(prefix="trid3nt_nhc_")
-        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-            zf.extractall(tmpdir.name)
-        pts_shp = None
-        for root, _dirs, files in os.walk(tmpdir.name):
-            for fn in files:
-                if fn.lower().endswith("_pts.shp"):
-                    pts_shp = os.path.join(root, fn)
-                    break
-        if pts_shp is None:
+        zipped = f"/vsizip//vsicurl/{zip_url}"
+        layers = [str(row[0]) for row in pyogrio.list_layers(zipped)]
+        pts = next((lyr for lyr in layers if lyr.lower().endswith("_pts")), None)
+        if pts is None:
             logger.warning(
-                "fetch_storm_tracks: no *_pts.shp in forecast-track zip %s",
-                zip_url,
+                "fetch_storm_tracks: no *_pts layer in forecast-track zip %s (has %s)",
+                zip_url, layers,
             )
             return []
-        gdf = gpd.read_file(pts_shp)
+        gdf = pyogrio.read_dataframe(zipped, layer=pts)
         if gdf.crs is not None:
             gdf = gdf.to_crs("EPSG:4326")
         cols = {c.lower(): c for c in gdf.columns}
@@ -671,15 +661,12 @@ def _fetch_forecast_track_points(
         return []
     except Exception as exc:  # noqa: BLE001 - best-effort enrichment boundary
         logger.warning(
-            "fetch_storm_tracks: forecast-track parse failed for %s (%s); "
+            "fetch_storm_tracks: forecast-track read failed for %s (%s); "
             "degrading to current position only",
             zip_url,
             exc,
         )
         return []
-    finally:
-        if tmpdir is not None:
-            tmpdir.cleanup()
 
 
 # ---------------------------------------------------------------------------
