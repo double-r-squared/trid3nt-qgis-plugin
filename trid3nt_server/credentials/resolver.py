@@ -1,30 +1,7 @@
 """Runtime credential resolver: in-memory session cache -> env fallback.
 
-The single runtime source of an API-key VALUE for a keyed tool. QgsAuthManager
-(plugin-side) is the credential HOME; the plugin brokers key values over the
-existing ``secret-add`` WS seam into this in-memory session cache. Env vars stay
-the headless / dev floor that must never die.
-
-Resolution order (``resolve_credential``):
-
-1. SESSION CACHE -- a value the plugin pushed over ``secret-add`` (connect-time
-   or in response to a ``credential-request``), keyed by
-   ``session_id -> provider_id``. Wins over env so a user-supplied key overrides
-   a dev env var.
-2. ENV fallback -- the SAME env var the tool's own ``_resolve_*_key`` reads, so
-   a headless canary / driver / CI run with the env set keeps every keyed
-   fetcher working with no plugin session at all.
-
-The resolver returns a raw key VALUE (a ``str``). The server injects it into the
-tool's ``params["secret_ref"]``; every keyed fetcher's ``_materialize_secret``
-accepts a ``str`` secret_ref verbatim, so no file vault and no Persistence read
-sit on the path. A ``None`` return means "no key here" -- the fetcher then falls
-to its own env path and, absent a key, raises its typed auth error, which the
-credential-request flow acts on.
-
-Wire isolation: the cache holds raw key material only in process
-memory for the session's lifetime; it is never persisted, logged, or echoed on
-any reply envelope.
+The cache holds raw key material only in process memory for the session's
+lifetime; it is never persisted, logged, or echoed on any reply envelope.
 """
 
 from __future__ import annotations
@@ -49,11 +26,8 @@ __all__ = [
 
 class MissingCredentialError(RuntimeError):
     """No credential value could be resolved for a keyed tool.
-
-    Typed, user-actionable: the credential-request flow surfaces a card so the
-    user supplies the key. Raised by callers that require a value; the resolver
-    itself returns ``None`` (the fetcher's own env path is still a valid floor).
-    """
+    Raised by callers that require a value; the resolver itself returns
+    ``None``, leaving the fetcher's own env path as the floor."""
 
 
 # --------------------------------------------------------------------------- #
@@ -69,11 +43,9 @@ _SESSION_CREDENTIALS: dict[str, dict[str, str]] = {}
 
 # --------------------------------------------------------------------------- #
 # Env fallback: provider_id -> the env var the tool's own resolver reads.
-# Single-key providers only. Movebank is intentionally absent: its credential is
-# a composite user + password pair (TRID3NT_MOVEBANK_USER / _PASSWORD) that its
-# own fetcher resolves; the session-cache path still serves a pushed Movebank
-# JSON blob, and the fetcher's own composite env fallback covers the headless
-# case, so the resolver never needs to reassemble it.
+# Single-key providers only. Movebank is deliberately absent: its credential is
+# a composite user + password pair its own fetcher resolves, so the resolver
+# never has to reassemble one.
 # --------------------------------------------------------------------------- #
 _PROVIDER_ENV_VARS: Final[dict[str, tuple[str, ...]]] = {
     "firms": ("TRID3NT_FIRMS_MAP_KEY",),
@@ -85,11 +57,8 @@ _PROVIDER_ENV_VARS: Final[dict[str, tuple[str, ...]]] = {
 
 def set_session_credential(session_id: str, provider_id: str, value: str) -> None:
     """Store a raw key value pushed over the ``secret-add`` seam.
-
-    The value NEVER appears in a log line. A blank ``session_id`` /
-    ``provider_id`` / ``value`` is ignored (a malformed push must not create a
-    ghost cache entry).
-    """
+    The value NEVER appears in a log line, and a blank argument is ignored so a
+    malformed push cannot create a ghost cache entry."""
     if not session_id or not provider_id or not value:
         return
     with _LOCK:
@@ -126,12 +95,8 @@ def _env_value_for_provider(provider_id: str) -> str | None:
 
 def resolve_credential(session_id: str, tool_name: str) -> str | None:
     """Resolve a keyed tool's credential value: session cache -> env fallback.
-
-    Returns the raw key ``str`` or ``None`` when the tool is not keyed or no
-    value is available in either source. Never raises for a missing key -- a
-    ``None`` lets the fetcher's own path run and raise its typed auth error,
-    which the credential-request flow then handles.
-    """
+    ``None`` when the tool is not keyed or neither source holds a value; never
+    raises for a missing key."""
     provider = provider_for_tool(tool_name)
     if provider is None:
         return None
