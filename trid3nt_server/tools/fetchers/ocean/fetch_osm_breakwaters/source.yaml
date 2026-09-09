@@ -26,11 +26,10 @@ params:
     - breakwater
     - groyne
 hooks:
-  build_request: overpass_breakwaters.build_request
-  parse_response: overpass_breakwaters.parse_response
+  delegate: osm_breakwaters.delegate
+  delegate_validate: osm_breakwaters.validate
 ingest:
-  http_source:
-    endpoint_fallback: true
+  delegate: {library: osmnx, timeout_s: 180}
   properties:
   - osm_id
   - name
