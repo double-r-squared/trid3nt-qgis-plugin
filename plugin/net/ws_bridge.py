@@ -1,39 +1,8 @@
 """Qt bridge for the pure-python connection layer.
 
-The WebSocket lives on a QThread-hosted worker; the dock only ever touches Qt
-signals (queued across threads, so slots run on the UI thread). Outbound sends
-(``send_chat`` / ``cancel`` / ``confirm_payload``) are safe to call from the
-UI thread directly: ``WebSocketConnection.send_text`` is mutex-guarded and a
-chat-sized ``sendall`` does not block meaningfully; while disconnected they
-buffer in the client's bounded outbound queue and flush on resume.
-
-QGIS freeze rule (product analysis section 7): the socket NEVER blocks the UI
-thread -- connect, handshake, the receive loop, AND the reconnect backoff all
-run on the worker.
-
-Milestone 2 reconnect policy (mirrors the web client, ws.ts):
-
-* The FIRST connect is fail-fast: a dead port / bad URL / rejected upgrade at
-  the moment the user presses Connect surfaces immediately as ``failed``
-  (milestone 1 behaviour preserved -- no silent retry against a stack that
-  was never up).
-* AFTER a successful first connect, any transport loss enters the
-  capped-jitter reconnect ladder (floor 1.5 s doubling to 5 s, jitter in
-  [0.5, 1.0) x base -- ``trid3nt_client.next_backoff``), emitting
-  ``reconnecting`` per attempt. Each re-dial reuses the SAME session_id and
-  sends ``session-resume`` with the current case_id so the server re-binds the
-  Case and replays its layers; queued outbound intent flushes FIFO.
-  ``resumed`` fires when the wire is back.
-* ``stop()`` exits the ladder immediately (the backoff sleep polls the stop
-  flag).
-
-Token-rejection policy: a failure that classifies as AUTH
-(``trid3nt_client.is_auth_failure`` -- the broker's pre-upgrade 401/403 on a
-rejected ``?st=`` shared token, or an in-band AUTH_REQUIRED error) emits
-``auth_expired`` and STOPS -- first connect and reconnect ladder alike.
-Retrying a rejected token forever is exactly the silent-reconnect-loop UX this
-kills; the dock tells the user to fix the shared token in Settings instead.
-"""
+The socket NEVER blocks the UI thread: connect, handshake, the receive loop and
+the reconnect backoff all run on the QThread-hosted worker. Outbound verbs are
+safe to call from the UI thread and buffer while disconnected."""
 
 from __future__ import annotations
 
@@ -57,13 +26,12 @@ from .trid3nt_client import (
 class AgentWorker(QObject):
     """Runs connect + handshake + case create + the receive/reconnect loop."""
 
-    # CRASH FIX (found live in QGIS 3.40.6): this signal was named ``event``,
-    # which SHADOWS the C++ virtual ``QObject.event()``. The first QEvent Qt
-    # delivered to the object (the ChildAdded from ``QThread(self)`` in
-    # AgentBridge.start) made PyQt call the attribute as the reimplemented
-    # event handler -> "TypeError: native Qt signal is not callable" -> qFatal
-    # abort of the whole QGIS process. NEVER name a pyqtSignal after a
-    # QObject virtual (event / eventFilter / timerEvent / childEvent / ...).
+    # NEVER name a pyqtSignal after a QObject virtual (event / eventFilter /
+    # timerEvent / childEvent / ...). A signal named ``event`` shadows the C++
+    # virtual ``QObject.event()``, so the first QEvent Qt delivers -- the
+    # ChildAdded from ``QThread(self)`` in AgentBridge.start -- makes PyQt call
+    # the attribute as the reimplemented handler: "native Qt signal is not
+    # callable", then a qFatal abort of the whole QGIS process.
     # user_id, is_anonymous, advertised_http_base ("" if none), advertised_data_base ("" if none)
     connected = pyqtSignal(str, bool, str, str)
     case_ready = pyqtSignal(str)       # case_id
@@ -106,7 +74,11 @@ class AgentWorker(QObject):
             self.client.credential_broker = AuthBroker()
         except Exception:  # noqa: BLE001 -- broker is optional, never fatal
             pass
-        # First connect: fail-fast (see module docstring).
+        # The FIRST connect is fail-fast: a dead port, a bad URL or a rejected
+        # upgrade at the moment the user presses Connect surfaces immediately
+        # rather than retrying silently against a stack that was never up. An
+        # AUTH-classified failure STOPS rather than retrying, here and in the
+        # ladder alike -- a rejected token cannot be fixed by looping on it.
         try:
             user_id = self.client.connect()
             self.connected.emit(
@@ -143,6 +115,10 @@ class AgentWorker(QObject):
                     self.reconnecting.emit(str(exc))
 
                 # -- capped-jitter reconnect ladder --------------------------- #
+                # Each re-dial reuses the SAME session_id and resumes with the
+                # current case_id, so the server re-binds the Case and replays
+                # its layers; queued outbound intent flushes FIFO. ``stop()``
+                # exits the ladder because the backoff sleep polls the flag.
                 while not self._stop:
                     delay_ms, backoff_ms = next_backoff(backoff_ms)
                     if not self._sleep_interruptible(delay_ms / 1000.0):
@@ -171,34 +147,15 @@ class AgentWorker(QObject):
             self.closed.emit(reason)
 
     def _bind_startup_case(self) -> str:
-        """Bind the fresh connection to a case; returns its case_id.
-
-        ``reuse_case=False``: always create a fresh case.
-
-        ``reuse_case=True`` (the dock's default, live-feedback 2026-07-09):
-        never mint a fresh case while the user already has one -- the old
-        always-create regrew case clutter on every dock-show. Decision ladder
-        (``choose_startup_case``, pure + unit-tested):
-
-          1. the resume handshake rebound a persisted active case -> keep it;
-          2. else the user HAS cases -> select the NEWEST live one;
-          3. else (zero cases) -> create, the only remaining path.
-
-        Both reuse rungs send a ``case-command select`` (even for the
-        resumed case): the server's full ``case-open`` rehydration then
-        flows through the normal event pump and rebinds the dock with the
-        authoritative title + persisted layers + bbox zoom -- the dock is
-        never left caseless (``case_ready`` fires with the target id either
-        way; the case-open refines it moments later).
-
-        The live server emits the ``case-list`` envelope right AFTER the
-        session-state the connect handshake consumed (the stub emits it
-        before, which the handshake drain stashes), so when neither a
-        resumed case nor a stashed list exists yet we pump events briefly
-        -- forwarding them to the dock as usual -- until the list lands.
-        A no-show inside the window falls through to an honest create.
-        """
+        """Bind the fresh connection to a case; returns its case_id. Under
+        ``reuse_case`` a fresh case is minted only when the user has none, and
+        every reuse rung still sends a select so case-open rehydration runs."""
         if self._reuse_case:
+            # The live server emits ``case-list`` right AFTER the session-state
+            # the connect handshake consumed, so with neither a resumed case
+            # nor a stashed list we pump events briefly -- forwarding them to
+            # the dock as usual -- until the list lands. A no-show inside the
+            # window falls through to an honest create.
             if self.client.case_id is None and self.client.last_case_list is None:
                 deadline = time.monotonic() + 5.0
                 while (
@@ -250,8 +207,9 @@ class AgentWorker(QObject):
             except Exception:  # noqa: BLE001
                 pass
 
-    # -- UI-thread-safe outbound verbs (socket writes are mutex-guarded; ---- #
-    # -- while disconnected they buffer in the client's bounded queue) ------ #
+    # -- UI-thread-safe outbound verbs. Socket writes are mutex-guarded and -- #
+    # -- buffer in the client's bounded queue while disconnected, so a paused - #
+    # -- turn never hangs. A raw key passes through and is never logged here. - #
 
     def send_chat(
         self,
@@ -275,9 +233,6 @@ class AgentWorker(QObject):
     def send_dev_tool_invoke(
         self, name: str, args: dict, raw_text: str = ""
     ) -> None:
-        # the parsed ``!run`` direct tool invocation. One
-        # ``dev-tool-invoke`` envelope, buffered while disconnected like every
-        # user-intent verb.
         if self.client is not None:
             self.client.send_dev_tool_invoke(name, args, raw_text=raw_text)
 
@@ -315,8 +270,6 @@ class AgentWorker(QObject):
     def submit_credential(
         self, request_id: str, provider_id: str, key_value: str
     ) -> None:
-        # LANE K: the raw key passes straight through to the client's
-        # secret-add + credential-provided pair -- never logged, never stored.
         if self.client is not None:
             self.client.submit_credential(request_id, provider_id, key_value)
 
@@ -330,9 +283,6 @@ class AgentWorker(QObject):
         tool_name: Optional[str] = None,
         free_text: Optional[str] = None,
     ) -> None:
-        # picker reply -- one tool-choice envelope (pick / guidance
-        # / let-agent-decide), buffered while disconnected like every
-        # user-intent verb.
         if self.client is not None:
             self.client.send_tool_choice(
                 request_id, tool_name=tool_name, free_text=free_text
@@ -345,9 +295,6 @@ class AgentWorker(QObject):
         selected_region_id: Optional[str] = None,
         selected_bbox: Optional[list] = None,
     ) -> None:
-        # region-choice gate reply -- one region-choice-provided envelope
-        # (region pick / whole-state default), buffered while disconnected so
-        # the server's paused turn never hangs.
         if self.client is not None:
             self.client.send_region_choice(
                 request_id,
@@ -364,9 +311,6 @@ class AgentWorker(QObject):
         features: Optional[dict] = None,
         cancelled: bool = False,
     ) -> None:
-        # spatial-input gate reply -- one spatial-input-response envelope
-        # (point / bbox / cancel), buffered while disconnected so the paused
-        # turn never hangs.
         if self.client is not None:
             self.client.send_spatial_input(
                 request_id,
@@ -380,8 +324,8 @@ class AgentWorker(QObject):
 class AgentBridge(QObject):
     """Owns the QThread + worker pair; the dock talks only to this."""
 
-    # ``agent_event``, NOT ``event`` -- see the AgentWorker signal block for
-    # the QObject.event() shadowing crash this name avoids.
+    # ``agent_event``, NOT ``event``: naming a signal after a QObject virtual
+    # aborts the QGIS process (see the AgentWorker signal block).
     # ``connected`` carries (user_id, is_anonymous, http_base, data_base) --
     # the signature MUST match the worker's 4-arg signal it forwards at
     # start(); a narrower signature here silently DROPS the advertised
@@ -449,7 +393,9 @@ class AgentBridge(QObject):
         self._worker = None
         self._thread = None
 
-    # -- outbound ------------------------------------------------------------ #
+    # -- outbound: pass-through to the worker's client. Socket writes are ----- #
+    # -- mutex-guarded and buffer while disconnected; the bridge stores ------- #
+    # -- nothing of what passes through it. ---------------------------------- #
 
     def send_chat(
         self,
@@ -473,8 +419,6 @@ class AgentBridge(QObject):
     def send_dev_tool_invoke(
         self, name: str, args: dict, raw_text: str = ""
     ) -> None:
-        # (!run) pass-through to the worker's client (mutex-guarded
-        # socket write; buffers while disconnected).
         if self._worker is not None:
             self._worker.send_dev_tool_invoke(name, args, raw_text=raw_text)
 
@@ -512,9 +456,6 @@ class AgentBridge(QObject):
     def submit_credential(
         self, request_id: str, provider_id: str, key_value: str
     ) -> None:
-        # LANE K: pass-through to the worker's client (mutex-guarded socket
-        # write; buffers while disconnected like every user-intent verb).
-        # The key is never logged or stored on the bridge.
         if self._worker is not None:
             self._worker.submit_credential(request_id, provider_id, key_value)
 
@@ -528,8 +469,6 @@ class AgentBridge(QObject):
         tool_name: Optional[str] = None,
         free_text: Optional[str] = None,
     ) -> None:
-        # picker reply: pass-through to the worker's client
-        # (mutex-guarded socket write; buffers while disconnected).
         if self._worker is not None:
             self._worker.send_tool_choice(
                 request_id, tool_name=tool_name, free_text=free_text
@@ -542,8 +481,6 @@ class AgentBridge(QObject):
         selected_region_id: Optional[str] = None,
         selected_bbox: Optional[list] = None,
     ) -> None:
-        # region-choice gate reply: pass-through to the worker's client
-        # (mutex-guarded socket write; buffers while disconnected).
         if self._worker is not None:
             self._worker.send_region_choice(
                 request_id,
@@ -560,8 +497,6 @@ class AgentBridge(QObject):
         features: Optional[dict] = None,
         cancelled: bool = False,
     ) -> None:
-        # spatial-input gate reply: pass-through to the worker's client
-        # (mutex-guarded socket write; buffers while disconnected).
         if self._worker is not None:
             self._worker.send_spatial_input(
                 request_id,

@@ -1,11 +1,7 @@
 """Cross-thread worker QObjects for the dock + settings dialog.
 
-Split out of dock.py (2026-07-21 flat->package restructure). Each task runs one
-net/case/render round trip OFF the Qt UI thread and emits the result via a
-cross-thread signal. They live in ``net/`` so both the dock (``ui/dock.py``) and
-the settings dialog (``ui/settings_dialog.py``) import them without a ui<->ui
-import cycle. Behavior identical -- this is a move.
-"""
+Each task runs exactly ONE round trip off the Qt UI thread and emits its result
+via a cross-thread signal, so a slow or dead agent never freezes a dialog."""
 from __future__ import annotations
 
 import threading
@@ -26,11 +22,7 @@ from ..render import probe
 
 
 class _CaseListTask(QObject):
-    """GET /api/case-list off the UI thread (items b/c, live-feedback
-    2026-07-09) -- the cross-thread signal-emit pattern (one net round trip
-    off the Qt UI thread) so a slow/dead agent HTTP listener never freezes the
-    Cases dialog.
-    """
+    """GET /api/case-list."""
 
     finished = pyqtSignal(list)  # list[CaseInfo]
     errored = pyqtSignal(str)    # honest message
@@ -55,12 +47,8 @@ class _CaseListTask(QObject):
 
 
 class _ProviderConfigTask(QObject):
-    """POST /api/provider-config off the UI thread (Feature 3, OpenRouter
-    model-extensibility 2026-07-19) -- follows the ``_CaseListTask`` pattern
-    (cross-thread signal emit) so a dead/asleep agent HTTP listener never
-    freezes the Settings dialog on Save. SECURITY: the payload carries the
-    provider api key; this task NEVER logs it, and the client helper
-    (``post_provider_config``) is likewise silent."""
+    """POST /api/provider-config. SECURITY: the payload carries the provider
+    api key and this task NEVER logs it."""
 
     finished = pyqtSignal(dict)  # {"ok", "model", "base_url_host"}
     errored = pyqtSignal(str)    # honest message (never contains the key)
@@ -86,11 +74,9 @@ class _ProviderConfigTask(QObject):
 
 
 class _ModelListTask(QObject):
-    """GET /api/local-models off the UI thread (Feature 2, OpenRouter
-    free-model dropdown 2026-07-19) -- follows the ``_CaseListTask`` pattern.
-    ``finished`` carries ``(model_ids, provider)`` so a stale fetch for a
-    since-changed provider is ignored at the call site; ``errored`` is a
-    silent fallback to the static shortlist."""
+    """GET /api/local-models. ``finished`` carries ``(model_ids, provider)``
+    so a stale fetch for a since-changed provider is ignored at the call
+    site."""
 
     finished = pyqtSignal(list, str)  # (model_ids, provider)
     errored = pyqtSignal(str)         # honest message
@@ -116,11 +102,9 @@ class _ModelListTask(QObject):
 
 
 class _EffectiveModelTask(QObject):
-    """GET the agent's EFFECTIVE (env-default) model id off the UI thread, so
-    the status strip can show the running model even when the user did not pick
-    one in Settings (e.g. NATE's nemotron set via .env.local). Reuses
-    ``fetch_model_list`` (its second return value is the agent default). Silent
-    on failure -- the label just keeps whatever it had. NATE 2026-07-20."""
+    """GET the agent's EFFECTIVE (env-default) model id, so the status strip
+    can name the running model when the user picked none. Silent on failure:
+    the label keeps whatever text it had."""
 
     finished = pyqtSignal(str)  # the agent default model id ("" if unknown)
 
@@ -140,12 +124,9 @@ class _EffectiveModelTask(QObject):
 
 
 class _PushLayerTask(QObject):
-    """Push the active QGIS layer into a case via ``push_layer.py``, off the
-    UI thread (cross-thread signal emit) -- the same off-thread pattern as
-    the other tasks here. One task = one export-to-tempfile + upload + register round
-    trip (``push_layer.push_active_layer``); the temp file is deleted by
-    ``push_exported_file`` whether the ingest POST succeeds or fails.
-    """
+    """Push the active QGIS layer into a case: one export-to-tempfile, upload
+    and register round trip. The temp file is deleted whether the ingest POST
+    succeeds or fails."""
 
     finished = pyqtSignal(str, dict)  # layer_name, result
     errored = pyqtSignal(str, str)    # layer_name, message
@@ -186,12 +167,8 @@ class _PushLayerTask(QObject):
 
 
 class _ProbePointTask(QObject):
-    """POST /api/probe-point off the UI thread, for one map click -- follows
-    the ``_PushLayerTask`` off-thread pattern (cross-thread signal
-    emit). One task = one round trip (``probe.post_probe_point``); the
-    result formatting (``probe.format_probe_result``) runs back on the UI
-    thread in the ``finished`` slot, matching every other worker task here.
-    """
+    """POST /api/probe-point for one map click. Only the round trip runs off
+    the UI thread; the result is formatted back in the ``finished`` slot."""
 
     finished = pyqtSignal(float, float, dict)  # lon, lat, result
     errored = pyqtSignal(float, float, str)    # lon, lat, message

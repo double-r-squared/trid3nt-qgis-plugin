@@ -1,24 +1,8 @@
 """QgsAuthManager credential broker (plugin side).
 
-QgsAuthManager is the credential HOME. This broker moves key VALUES between that
-store and the daemon over the existing ``secret-add`` WS seam:
-
-- CONNECT-TIME PUSH: on every connect the broker reads the stored trid3nt
-  credential entries and pushes each (one ``secret-add`` per provider, no new
-  bulk contract) into the daemon's in-memory resolver session cache, so a keyed
-  fetcher resolves with zero env set.
-- PROMPT STORE: when the user answers a ``credential-request``, the broker
-  writes the key to QgsAuthManager (so the NEXT connect re-pushes it) and the
-  client then submits it over ``secret-add`` for the mid-turn retry.
-
-The store degrades gracefully: with no QGIS master password established (or QGIS
-absent, e.g. a headless driver), every call is a no-op that returns ``{}`` /
-``False`` rather than raising -- connect-time push must never block the connect,
-and the daemon's env fallback covers the headless case.
-
-Key hygiene: a key value is never logged. It lives in QgsAuthManager and, in
-transit, only on the ``secret-add`` envelope.
-"""
+QgsAuthManager is the credential HOME; key values move between it and the daemon
+over ``secret-add``, one envelope per provider, and are NEVER logged. With no
+master password, or no QGIS, every call is a no-op rather than a raise."""
 
 from __future__ import annotations
 
@@ -44,12 +28,8 @@ class CredentialStore(Protocol):
 
 class QgsAuthManagerStore:
     """``QgsAuthManager``-backed credential store, keyed by ``provider_id``.
-
-    Every operation is best-effort: a locked / unprovisioned auth DB or a QGIS
-    import failure yields an empty read and a ``False`` write, never an
-    exception (the master-password UX is out of scope for this wave; env
-    fallback is the floor).
-    """
+    Best-effort: a locked or unprovisioned auth DB, or an absent QGIS, yields
+    an empty read and a ``False`` write, never an exception."""
 
     def __init__(self, auth_manager: object | None = None) -> None:
         self._am = auth_manager
@@ -141,11 +121,9 @@ class AuthBroker:
         self._store: CredentialStore = store or QgsAuthManagerStore()
 
     def push_all(self, push_fn: Callable[[str, str], None]) -> int:
-        """Push every stored credential via ``push_fn(provider_id, key_value)``.
-
-        Returns the count pushed (0 when the store is empty/unavailable). Never
-        raises -- a single bad entry is skipped, connect proceeds.
-        """
+        """Push every stored credential via ``push_fn(provider_id, key_value)``
+        and return the count pushed. Never raises: a single bad entry is
+        skipped and connect proceeds."""
         pushed = 0
         try:
             entries = self._store.providers()

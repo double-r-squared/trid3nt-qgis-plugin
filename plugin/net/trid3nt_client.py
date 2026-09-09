@@ -1,51 +1,8 @@
 """TRID3NT agent WebSocket client -- pure Python, stdlib only.
 
-This module is the plugin's CONNECTION LAYER. Hard rules:
-
-  * NO PyQGIS / PyQt imports -- it must be importable and unit-testable with
-    any plain CPython (the tests run it under the trid3nt-local agent venv,
-    outside QGIS entirely).
-  * stdlib only. QGIS's bundled Python does NOT reliably ship a WebSocket
-    library: on Debian/Ubuntu ``python3-qgis`` depends on neither
-    ``websockets`` nor ``websocket-client``, and ``python3-pyqt5.qtwebsockets``
-    is a separate package QGIS does not require. Shipping our own minimal
-    RFC 6455 client (~200 lines) removes the dependency gamble on every
-    platform and keeps the plugin zip pure-python (QGIS plugin repository
-    no-binaries rule).
-
-Protocol:
-
-  envelope   {"type", "id" (ULID), "ts" (ISO-8601 Z), "session_id",
-              "case_id", "payload"}
-  handshake  send ``auth-token`` -> expect ``auth-ack``;
-             send ``session-resume`` -> drain until ``session-state``
-  case       send ``case-command`` {command: "create", args: {title}} ->
-             drain until ``case-open``; case_id at
-             payload.session_state.case.case_id
-  chat       send ``user-message`` {text, case_id, aoi_bbox?}; the reply streams as
-             ``agent-message-chunk`` / ``pipeline-state`` / ``session-state``
-             (layers ride on ``loaded_layers``) and terminates with
-             ``turn-complete``.
-  remote     token rides BOTH as the ``?st=<token>`` query param (the cloud
-             broker's pre-upgrade carrier) AND inside the ``auth-token``
-             envelope. Local mode sends an empty token unless the user has
-             set an optional shared tailnet token (still OFF by default).
-  endpoints  ``auth-ack`` MAY carry server-advertised ``http_base`` /
-             ``data_base`` (flat fields, or nested under an ``endpoints``
-             dict -- both shapes read defensively since the field is still
-             optional on older daemons). When present they are the ONLY
-             source of truth for the agent's :8766 HTTP base and the object
-             store's endpoint; when absent, callers derive a fallback
-             (``resolve_http_base`` / ``resolve_data_base`` below) so a
-             tailnet daemon that predates advertisement still works. The
-             store endpoint is GDAL CONFIGURATION, not part of a layer's
-             uri: a layer reference is always ``s3://bucket/key`` and the
-             endpoint decides which host serves it.
-
-Threading: ``WebSocketConnection.send_text`` is mutex-guarded so a UI thread
-may send while a worker thread blocks in ``recv``. Everything else is
-single-consumer (one reader thread).
-"""
+No PyQGIS, no PyQt and no third-party package: QGIS's bundled Python ships no
+WebSocket library, so this module carries its own RFC 6455 client. ``send_text``
+is mutex-guarded; everything else is single-consumer (one reader thread)."""
 
 from __future__ import annotations
 
@@ -67,10 +24,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional, Tuple
 
-# Pure-python (no PyQGIS) numeric-finiteness helpers -- shared with the render
-# path so the WS-boundary sanitizer and the native styling clamps agree on
-# exactly what "a real number" is. Importing render.formatting keeps this file
-# stdlib-testable: formatting.py imports only ``math``/``typing``.
+# Numeric-finiteness helpers shared with the render path, so the WS-boundary
+# sanitizer and the native styling clamps agree on what "a real number" is.
 from ..render import formatting
 
 _LOG = logging.getLogger("trid3nt.trid3nt_client")
@@ -135,7 +90,7 @@ def new_ulid() -> str:
 
 
 def utc_ts() -> str:
-    """ISO-8601 UTC timestamp with a literal Z suffix (contract A.1)."""
+    """ISO-8601 UTC timestamp with a literal Z suffix."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -145,7 +100,7 @@ def make_envelope(
     payload: dict,
     case_id: Optional[str] = None,
 ) -> dict:
-    """Build a wire envelope dict (contract A.1)."""
+    """Build a wire envelope dict."""
     return {
         "type": type_,
         "id": new_ulid(),
@@ -157,13 +112,8 @@ def make_envelope(
 
 
 def build_ws_url(base_url: str, token: Optional[str] = None) -> str:
-    """Append the ``?st=<token>`` carrier the cloud broker authenticates on.
-
-    The broker reads the token from the query string BEFORE the WebSocket
-    upgrade completes (subprotocol-based carriers were stripped by CloudFront;
-    see the per-user-isolation deploy notes). No-op when ``token`` is falsy
-    (local anonymous mode).
-    """
+    """Append the ``?st=<token>`` carrier a broker authenticates on before the
+    WebSocket upgrade completes. No-op when ``token`` is falsy."""
     if not token:
         return base_url
     sep = "&" if "?" in base_url else "?"
@@ -200,13 +150,9 @@ class LayerEvent:
 
 
 def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
-    """Parse ``session-state.loaded_layers`` rows into ``LayerEvent``s.
-
-    Defensive on two axes: malformed rows are skipped (a bad layer row must not
-    take down the chat stream), AND a non-finite (NaN/inf) opacity is dropped
-    here at the WS boundary so no NaN reaches a native QGIS styling call. A
-    dropped value is logged once per row, never silently swallowed.
-    """
+    """Parse ``session-state.loaded_layers`` rows into ``LayerEvent``s. A
+    malformed row is skipped and a non-finite opacity is dropped -- logged once
+    per row, never silently swallowed -- so neither reaches the map."""
     events: list[LayerEvent] = []
     rows = session_state_payload.get("loaded_layers") or []
     if not isinstance(rows, list):
@@ -251,7 +197,7 @@ def parse_layer_events(session_state_payload: dict) -> list[LayerEvent]:
 
 @dataclass
 class PipelineStep:
-    """Subset of PipelineStepSummary (contract D.6) the dock renders."""
+    """The subset of a pipeline step the dock renders."""
 
     step_id: str
     name: str
@@ -260,15 +206,12 @@ class PipelineStep:
     parent_step_id: Optional[str] = None
     substep_label: Optional[str] = None
     error_message: Optional[str] = None
-    # Item R4 (live-feedback 2026-07-18): the two-card sim observability
-    # fields (contract ws.PipelineStep, task-149). ``role`` discriminates the
-    # off-box solver card ("compute", minted by
-    # pipeline_emitter.mint_dispatch_and_sim_cards with tool_name
-    # "<solver>:solve") from a plain tool card ("tool"); the dock routes
-    # compute steps to the collapsible SimCard instead of grey rows.
+    # ``role`` discriminates the off-box solver card ("compute", tool_name
+    # "<solver>:solve") from a plain tool card ("tool"); the dock routes a
+    # compute step to its collapsible sim card instead of a grey row.
     # ``batch_job_id`` is "local-docker:<run_id>" on the local seam;
-    # ``batch_status`` mirrors the control plane verbatim; ``duration_ms``
-    # is stamped on the terminal transition only.
+    # ``batch_status`` mirrors the control plane verbatim; ``duration_ms`` is
+    # stamped on the terminal transition only.
     role: str = "tool"
     batch_job_id: Optional[str] = None
     batch_status: Optional[str] = None
@@ -303,8 +246,8 @@ def parse_pipeline_steps(pipeline_state_payload: dict) -> list[PipelineStep]:
                 error_message=row.get("error_message")
                 if isinstance(row.get("error_message"), str)
                 else None,
-                # Item R4 (live-feedback 2026-07-18): sim-card fields; all
-                # optional on the wire, all default-preserving here.
+                # Sim-card fields: all optional on the wire, all
+                # default-preserving here.
                 role=str(row.get("role") or "tool"),
                 batch_job_id=row.get("batch_job_id")
                 if isinstance(row.get("batch_job_id"), str)
@@ -378,22 +321,11 @@ def choose_startup_case(
     resumed_case_id: Optional[str],
     cases: list,
 ) -> Tuple[str, Optional[str]]:
-    """Decide which case a fresh LOCAL connect should bind (PURE -- no
-    sockets, no Qt, so the startup decision is unit-testable).
-
-    Live-feedback 2026-07-09: ``connect_agent`` used to CREATE a fresh
-    "QGIS session ..." case on every dock-show, regrowing exactly the case
-    clutter the user just purged (157 junk cases). The decision ladder:
-
-      ("resume", id)   the session-resume handshake already rebound a
-                       persisted active case -- keep it.
-      ("select", id)   no resumed case, but the user HAS cases -- reuse the
-                       NEWEST live one (``updated_at`` desc; ISO-8601 Z
-                       strings sort lexicographically). Tombstoned
-                       (deleted/archived) and malformed rows are skipped.
-      ("create", None) zero usable cases -- only then is a fresh case
-                       created (or explicitly via the New case button).
-    """
+    """Decide which case a fresh connect binds: ``("resume" | "select" |
+    "create", case_id_or_None)``. PURE -- no sockets, no Qt."""
+    # The ladder: a resumed persisted case wins; else the NEWEST live case
+    # (``updated_at`` descending, ISO-8601 Z sorting lexicographically) with
+    # tombstoned and malformed rows skipped; else create, the last resort.
     if isinstance(resumed_case_id, str) and resumed_case_id:
         return ("resume", resumed_case_id)
     candidates = []
@@ -420,22 +352,8 @@ class CaseListRequestError(Exception):
 
 def fetch_case_list(base_url: str, timeout: float = 5.0) -> list:
     """``GET {base_url}/api/case-list`` -- the COLD case list, no WS session.
-
-    Live-feedback 2026-07-09: the QGIS dock previously could not show ANY
-    cases until the user pressed Connect, because ``case-list`` only ever
-    arrived as a WS envelope. The local agent's HTTP listener
-    (``catalog_http.py``) mirrors that same envelope's data over plain
-    HTTP for the local single-user seam, so the dock's Cases dialog can
-    populate BEFORE a connection exists. Plain ``urllib`` (stdlib only) -- no
-    WebSocket involved.
-
-    Returns ``[]`` (never raises) is NOT the contract here: a genuine failure
-    (agent HTTP listener down, route absent, bad body) raises
-    ``CaseListRequestError`` with an honest message so the caller can show
-    it -- never a silently-empty dialog that looks like "no cases exist".
-    Row-level parsing stays defensive (``parse_case_list`` skips malformed
-    rows; a partially-bad payload still yields the good rows).
-    """
+    A genuine failure RAISES rather than returning ``[]``, so an unreachable
+    agent never reads as "no cases exist"; bad rows are still skipped."""
     url = f"{base_url.rstrip('/')}/api/case-list"
     request = urllib.request.Request(url, method="GET")
     try:
@@ -468,8 +386,8 @@ def fetch_case_list(base_url: str, timeout: float = 5.0) -> list:
 
 
 # --------------------------------------------------------------------------- #
-# OpenRouter model-extensibility (design 2026-07-19) -- provider-config POST +
-# live model-list GET, both against the local agent's HTTP listener.
+# Provider-config POST + live model-list GET, both against the local agent's
+# HTTP listener.
 # --------------------------------------------------------------------------- #
 
 
@@ -480,18 +398,9 @@ class ProviderConfigRequestError(Exception):
 
 
 def post_provider_config(base_url: str, payload: dict, timeout: float = 5.0) -> dict:
-    """``POST {base_url}/api/provider-config`` -- push the LIVE provider config
-    to the agent so a provider/model/key switch applies on the NEXT message
-    with no agent restart (the agent's OpenAI adapter reads ``TRID3NT_OPENAI_*``
-    from ``os.environ`` at call time). ``payload`` = ``{base_url, api_key,
-    model, num_ctx}`` (any subset). Plain ``urllib`` (stdlib only, same posture
-    as ``fetch_case_list``) -- no WebSocket involved.
-
-    Returns the agent's ``{"ok", "model", "base_url_host"}`` result dict, or
-    raises ``ProviderConfigRequestError`` with an honest message on any fault.
-    SECURITY: the api_key rides the POST body but is NEVER logged here, and a
-    raised message never echoes it (the agent likewise scrubs it).
-    """
+    """``POST {base_url}/api/provider-config`` with any subset of ``{base_url,
+    api_key, model, num_ctx}`` -> the agent's result dict. SECURITY: the api
+    key rides the body, is never logged, and never echoes in a raised message."""
     url = f"{base_url.rstrip('/')}/api/provider-config"
     raw = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
@@ -539,15 +448,9 @@ class ModelListRequestError(Exception):
 def fetch_model_list(
     base_url: str, timeout: float = 8.0
 ) -> Tuple[list, Optional[str]]:
-    """``GET {base_url}/api/local-models`` -> ``(model_ids, default)``.
-
-    For an OpenRouter provider the agent returns the FREE + tool-capable model
-    ids (design 2026-07-19); for local Ollama it returns the installed models.
-    The plugin's model combo stays EDITABLE either way, so any id is still
-    typeable -- this list is a convenience dropdown, not a whitelist. Plain
-    ``urllib`` (stdlib only). Raises ``ModelListRequestError`` on any fault so
-    the caller can fall back to its static shortlist.
-    """
+    """``GET {base_url}/api/local-models`` -> ``(model_ids, default)``. The
+    list is a convenience dropdown, never a whitelist; any fault RAISES so the
+    caller can fall back to its static shortlist."""
     url = f"{base_url.rstrip('/')}/api/local-models"
     request = urllib.request.Request(url, method="GET")
     try:
@@ -595,37 +498,15 @@ def fetch_model_list(
 # --------------------------------------------------------------------------- #
 
 
-#: Cap on chat-history replay rows (ITEM B dock snappiness -- a Case that has
-#: chatted for hours must not stall the dock repainting hundreds of bubbles).
+#: Cap on chat-history replay rows: a Case that has chatted for hours must not
+#: stall the dock repainting hundreds of bubbles.
 CHAT_HISTORY_REPLAY_MAX = 50
 
 
 def parse_chat_history(session_state_payload: dict) -> list:
-    """Parse ``session_state.chat_history`` rows (``CaseChatMessage`` --
-    contracts ``case.py``) into plain ``{"role", "content"}`` dicts for the
-    dock's case-open chat replay.
-
-    ``user``/``agent`` rows surface as the plain CONVERSATION (user bubbles +
-    assistant bubbles). LANE PLUGIN (2026-07-22): an ``agent`` row also
-    surfaces its persisted ``thinking`` field (the reasoning channel the
-    live turn streamed as ``agent-thinking-chunk``, persisted on the row by
-    Lane CORE sharing the bubble's message_id) -- ``thinking`` is a
-    non-empty string when present, else an honest ``None`` (absent field,
-    non-string, or empty/whitespace value all default to None; never
-    raised on). Item H (qgis-ux-batch 2026-07-19):
-    ``role == "tool"`` rows are ALSO surfaced now (they were dropped, so a
-    reopened case lost its whole tool-call chain -- the dock lagged the web
-    client, which already replays ``tool_card`` on reopen). A tool row carries
-    the typed ``tool_card`` dict (the contract-blessed ``ToolCardRecord``
-    payload -- name/state/args/response) plus the ``content`` JSON twin; the
-    dock's ``_replay_chat_history`` renders it as a collapsed tool-card row.
-    ``system`` rows stay dropped. Defensive: a missing/non-list ``chat_history``,
-    a non-dict row, or a row with a missing/non-string ``role``/``content`` (and,
-    for tool rows, no usable ``tool_card`` either) is skipped, never raised on --
-    a bad persisted row must not break a case switch. Capped to the most recent
-    ``CHAT_HISTORY_REPLAY_MAX`` rows (persisted order is oldest-first, so the cap
-    keeps the TAIL -- the most recent conversation).
-    """
+    """``session_state.chat_history`` rows -> plain replay dicts. ``user``,
+    ``agent`` and ``tool`` rows survive and ``system`` rows are dropped; a bad
+    row is skipped, and the newest ``CHAT_HISTORY_REPLAY_MAX`` are kept."""
     rows = session_state_payload.get("chat_history") or []
     if not isinstance(rows, list):
         return []
@@ -636,8 +517,9 @@ def parse_chat_history(session_state_payload: dict) -> list:
         role = row.get("role")
         content = row.get("content")
         if role == "tool":
-            # Carry the typed tool_card dict (preferred render source) plus the
-            # content JSON twin; skip only when NEITHER is usable.
+            # The typed tool_card dict is the preferred render source; the
+            # content JSON twin is the fallback. Skip only when NEITHER is
+            # usable.
             tool_card = row.get("tool_card")
             if not isinstance(tool_card, dict) and not (
                 isinstance(content, str) and content
@@ -652,9 +534,8 @@ def parse_chat_history(session_state_payload: dict) -> list:
         if not isinstance(content, str) or not content:
             continue
         if role == "agent":
-            # LANE PLUGIN (2026-07-22): surface persisted reasoning so the
-            # dock can replay the grey collapsible thinking fold. Defensive:
-            # absent / non-string / blank -> honest None.
+            # Persisted reasoning, so the dock can replay the collapsible
+            # thinking fold. Absent, non-string or blank -> an honest None.
             thinking = row.get("thinking")
             if not isinstance(thinking, str) or not thinking.strip():
                 thinking = None
@@ -665,20 +546,9 @@ def parse_chat_history(session_state_payload: dict) -> list:
 
 
 def parse_charts(session_state_payload: dict) -> list:
-    """Parse ``session_state.charts`` rows (persisted ``ChartEmissionPayload``
-    dicts -- contracts ``chart_contracts.py``) for the dock's Charts panel
-    (OpenQuake result parity, live-feedback 2026-07-13).
-
-    The server hydrates the session document's append-only ``charts`` array
-    into every ``case-open`` rehydration (oldest-first), so the
-    envelope the plugin already receives carries them -- no extra fetch.
-    Each row is the exact payload a live ``chart-emission`` frame carries:
-    ``chart_id`` + ``title`` + ``caption`` + the Vega-Lite ``vega_lite_spec``.
-    Defensive like ``parse_chat_history``: a missing/non-list field, a
-    non-dict row, or a row without a usable chart_id/spec is skipped, never
-    raised on -- a bad persisted chart must not break a case switch. Order
-    is preserved (the panel shows the newest = last).
-    """
+    """``session_state.charts`` rows -> the persisted chart payloads, in
+    order (oldest first). A row without a usable ``chart_id`` and Vega-Lite
+    spec is skipped, never raised on."""
     rows = session_state_payload.get("charts") or []
     if not isinstance(rows, list):
         return []
@@ -698,27 +568,15 @@ def parse_charts(session_state_payload: dict) -> list:
 
 @dataclass
 class CaseOpenInfo:
-    """The rehydration a ``case-open`` envelope carries (select response).
-
-    ``session_state.case`` is the CaseSummary; ``loaded_layers`` rides in the
-    same session_state so the client can repaint the reopened Case's layers.
-    ``bbox`` (EPSG:4326 ``[lon_min, lat_min, lon_max, lat_max]``) lets the
-    dock zoom the canvas to the case instead of leaving it wherever it was
-    (the "canvas is just white" fix) -- may be absent/None on cases that
-    predate the #170 AOI-first bbox seeding. ``chat_messages`` (ITEM B) is
-    the same session_state's persisted ``chat_history``, defensively parsed
-    via ``parse_chat_history``, so the dock can replay the opened Case's
-    conversation instead of leaving the previous Case's bubbles on screen.
-    """
+    """Everything a ``case-open`` envelope rehydrates: the case, its layers,
+    its chat and its charts. ``bbox`` is EPSG:4326 ``[lon_min, lat_min,
+    lon_max, lat_max]`` and may be absent on a case that never carried one."""
 
     case_id: str
     title: str
     layers: list = field(default_factory=list)  # list[LayerEvent]
     bbox: Optional[Tuple[float, float, float, float]] = None
     chat_messages: list = field(default_factory=list)  # list[{"role","content"}]
-    # OpenQuake result parity (live-feedback 2026-07-13): the persisted
-    # ``session_state.charts`` replay set (ChartEmissionPayload dicts,
-    # oldest-first) -- feeds the dock's Charts panel on case open.
     charts: list = field(default_factory=list)
     raw: dict = field(default_factory=dict)
 
@@ -737,21 +595,12 @@ def _coerce_bbox(raw) -> Optional[Tuple[float, float, float, float]]:
 
 
 def find_fallback_bbox(payload: dict) -> Optional[Tuple[float, float, float, float]]:
-    """ITEM D (live-feedback 2026-07-10): scan a ``case-open`` payload for a
-    bbox OUTSIDE the primary ``session_state.case.bbox`` carrier ``parse_
-    case_open`` already extracts.
-
-    Today's wire contract (``CaseOpenEnvelopePayload`` / ``CaseSessionState``
-    / ``CaseSummary``) has exactly ONE bbox field, so in practice this only
-    re-finds what ``parse_case_open`` already found -- it exists so a
-    raster-only OLD case (no vector layers to fall back to, per the "canvas
-    is just white" fix's other rung) still gets a shot at SOME bbox before
-    the dock gives up and says so honestly, and so a future server-side
-    bbox carrier (e.g. per-layer or top-level) is picked up without another
-    client change. Checked in order: ``payload.bbox``, ``payload.
-    session_state.bbox``, ``payload.session_state.case.bbox``. Defensive:
-    never raises, returns None when nothing usable is found.
-    """
+    """Scan a ``case-open`` payload for a bbox in any carrier, checked in
+    order: ``payload.bbox``, ``session_state.bbox``, ``session_state.case.
+    bbox``. None when nothing usable is found; never raises."""
+    # Today's wire shape carries exactly ONE bbox field, so this normally
+    # re-finds the same value the case row already gave; it stands so a new
+    # server-side carrier is picked up without another client change.
     if not isinstance(payload, dict):
         return None
     direct = _coerce_bbox(payload.get("bbox"))
@@ -771,14 +620,9 @@ def find_fallback_bbox(payload: dict) -> Optional[Tuple[float, float, float, flo
 
 
 def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
-    """Parse a ``case-open`` payload into a ``CaseOpenInfo``.
-
-    Returns None when the server could not rehydrate -- per
-    ``CaseOpenEnvelopePayload`` semantics ``session_state`` is None (or the
-    ``case`` row is missing) and the client falls back to the empty state.
-    Defensive: never raises on a malformed payload -- a missing/malformed
-    ``bbox`` yields ``None`` on the field, never a crash.
-    """
+    """Parse a ``case-open`` payload into a ``CaseOpenInfo``. None means the
+    server could not rehydrate and the caller falls back to the empty state;
+    a malformed field degrades to None rather than raising."""
     if not isinstance(payload, dict):
         return None
     session_state = payload.get("session_state")
@@ -803,23 +647,14 @@ def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
 
 
 # --------------------------------------------------------------------------- #
-# Auth-failure classification (pure) -- milestone 3 token-expiry UX
+# Auth-failure classification (pure)
 # --------------------------------------------------------------------------- #
 
 
 def is_auth_failure(text: str) -> bool:
-    """Classify a connection failure as an AUTH failure (rejected shared
-    token) vs a transport failure.
-
-    The broker validates the ``?st=`` shared token BEFORE the WebSocket
-    upgrade, so a rejected token surfaces as ``HandshakeFailed("upgrade
-    rejected: HTTP/1.1 401/403 ...")``. An in-band rejection surfaces as an ``error``
-    envelope with ``error_code=AUTH_REQUIRED`` followed by a policy-violation
-    close (1008). Transport failures (connection refused, read timeout, a
-    mid-stream drop) must NOT classify as auth -- those drive the reconnect
-    ladder; an auth failure must STOP the ladder instead (retrying a dead
-    token is a silent reconnect loop, the exact UX this exists to kill).
-    """
+    """True for a REJECTED TOKEN, false for a transport failure. The
+    distinction decides policy: a transport failure drives the reconnect
+    ladder, an auth failure must stop it rather than loop on a dead token."""
     low = (text or "").lower()
     if not low:
         return False
@@ -837,12 +672,11 @@ def is_auth_failure(text: str) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Refresh debounce (pure) -- milestone 3 case-list refresh
+# Refresh debounce (pure)
 # --------------------------------------------------------------------------- #
 
-#: Minimum seconds between case-list refresh round trips (session-resume is
-#: cheap -- the web uses it as a ~25s keepalive -- but a click-happy user
-#: should not be able to queue a resume storm).
+#: Minimum seconds between case-list refresh round trips: session-resume is
+#: cheap, but a click-happy user must not be able to queue a resume storm.
 REFRESH_DEBOUNCE_S = 2.0
 
 
@@ -869,17 +703,17 @@ class Debouncer:
 
 
 # --------------------------------------------------------------------------- #
-# Reconnect backoff (pure) -- mirrors the web client (ws.ts)
+# Reconnect backoff (pure)
 # --------------------------------------------------------------------------- #
 
 #: Backoff FLOOR (ms): the first reconnect after a drop waits at least this
-#: long (web BUG 1b raised it from 500 to 1500 to stop reconnect storms).
+#: long, which is what keeps a drop from becoming a reconnect storm.
 RECONNECT_FLOOR_MS = 1500
 #: Backoff CEILING (ms): the doubling ladder caps here.
 RECONNECT_MAX_MS = 5000
 
-#: Outbound-queue bound (web ws.ts sendOrQueue MAX_QUEUE): beyond this the
-#: OLDEST frames are dropped first (keep the most recent intent).
+#: Outbound-queue bound: beyond this the OLDEST frames are dropped first, so
+#: the most recent intent is the intent that survives.
 OUTBOUND_QUEUE_MAX = 50
 
 
@@ -887,13 +721,9 @@ def next_backoff(
     base_ms: int,
     rng: Callable[[], float] = random.random,
 ) -> tuple[int, int]:
-    """One rung of the web client's capped-jitter reconnect ladder.
-
-    Returns ``(delay_ms, next_base_ms)``: the actual wait is jittered within
-    ``[0.5, 1.0) * base`` (up to 50 percent earlier, never later) and the base
-    DOUBLES toward ``RECONNECT_MAX_MS``. Reset the base to
-    ``RECONNECT_FLOOR_MS`` after a successful open (as the web does).
-    """
+    """One rung of the capped-jitter reconnect ladder -> ``(delay_ms,
+    next_base_ms)``. The wait jitters within ``[0.5, 1.0) * base``; the caller
+    resets the base to ``RECONNECT_FLOOR_MS`` after a successful open."""
     base = max(int(base_ms), 1)
     jitter_factor = 0.5 + 0.5 * rng()
     delay = int(round(base * jitter_factor))
@@ -906,12 +736,9 @@ def next_backoff(
 
 
 def s3_to_vsis3(uri: str) -> Optional[str]:
-    """``s3://bucket/key`` -> the ``/vsis3/bucket/key`` path GDAL reads natively.
-
-    The endpoint and credentials are GDAL configuration (``render.layers.
-    configure_store_access``), so nothing about the host appears here.
-    Returns None for anything that is not an ``s3://`` object uri.
-    """
+    """``s3://bucket/key`` -> the ``/vsis3/bucket/key`` path GDAL reads. The
+    endpoint and credentials are GDAL CONFIGURATION, so no host appears here;
+    anything that is not an ``s3://`` object uri returns None."""
     if not uri.startswith("s3://"):
         return None
     rest = uri[len("s3://"):]
@@ -921,24 +748,16 @@ def s3_to_vsis3(uri: str) -> Optional[str]:
     return f"/vsis3/{bucket}/{key}"
 
 
-#: The local agent's HTTP listener port (tool catalog + /api/* routes --
-#: ``catalog_http.py``). Old daemons that predate endpoint advertisement
-#: always bind this port, so it is the fallback-derivation constant.
+#: The local agent's HTTP listener port (tool catalog + /api/* routes). A
+#: daemon that advertises no endpoint still binds it, so it is the constant
+#: the fallback derivation uses.
 DEFAULT_HTTP_PORT = 8766
 
 
 def derive_http_base(ws_url: str, port: int = DEFAULT_HTTP_PORT) -> str:
-    """Fallback :8766 HTTP base derived from the WS URL's HOST -- used when
-    the daemon does not advertise ``http_base`` on ``auth-ack`` (older
-    daemons). ``ws://<host>:8765/ws`` -> ``http://<host>:8766``;
-    ``wss://<host>/ws`` -> ``https://<host>:8766``.
-
-    This is strictly better than a hardcoded ``127.0.0.1`` default: pointing
-    the plugin's ONE "Server URL" setting at a tailscale peer
-    (``ws://100.x.y.z:8765/ws``) now also reaches that SAME peer's :8766
-    listener for probe/ingest/export/case-list/provider-config/local-models,
-    with no second field to keep in sync.
-    """
+    """Fallback HTTP base derived from the WS URL's HOST, so ONE "Server URL"
+    setting reaches the same peer's :8766 listener: ``ws://<host>:8765/ws`` ->
+    ``http://<host>:8766``, ``wss://<host>/ws`` -> ``https://<host>:8766``."""
     parts = urllib.parse.urlsplit((ws_url or "").strip())
     scheme = "https" if parts.scheme == "wss" else "http"
     host = parts.hostname or "127.0.0.1"
@@ -946,11 +765,9 @@ def derive_http_base(ws_url: str, port: int = DEFAULT_HTTP_PORT) -> str:
 
 
 def resolve_http_base(advertised: Optional[str], ws_url: str) -> str:
-    """The effective :8766 HTTP base: the server-advertised ``http_base``
-    when present, else ``derive_http_base(ws_url)`` (see module docstring
-    "endpoints"). Every :8766 caller (probe-point, ingest-layer, export,
-    case-list, provider-config, local-models) resolves through this ONE
-    function so they can never drift out of sync."""
+    """The effective HTTP base: the server-advertised ``http_base`` when
+    present, else the WS-host derivation. EVERY :8766 caller resolves through
+    this one function, so they cannot drift out of sync."""
     if advertised:
         return advertised.rstrip("/")
     return derive_http_base(ws_url)
@@ -958,28 +775,22 @@ def resolve_http_base(advertised: Optional[str], ws_url: str) -> str:
 
 def resolve_data_base(advertised: Optional[str], fallback: str) -> str:
     """The object store's endpoint: the server-advertised ``data_base`` when
-    present, else ``fallback`` (old daemons never advertise this, and unlike
-    the HTTP API there is no WS-host-derivable port to fall back to, so the
-    caller's existing default/setting is the honest fallback)."""
+    present, else ``fallback``. There is no derivable port here, so the
+    caller's own setting is the only honest fallback."""
     if advertised:
         return advertised.rstrip("/")
     return fallback
 
 
 def qgis_xyz_uri(template: str, zmin: int = 0, zmax: int = 24) -> str:
-    """Build the QGIS ``wms`` provider uri for an XYZ tile TEMPLATE.
-
-    Encode as LITTLE as possible: the installed QGIS build does NOT
-    percent-decode the ``url`` component, so a fully-quoted template
-    produces a layer that reports valid yet never issues a single tile
-    request (proven 2026-07-10 with a request-logging stub server; the
-    prior full-quote version painted nothing). Only the template's own
-    query-string ampersands are escaped (``%26``) so the provider's
-    ``&``-splitting of uri parameters cannot eat them; scheme, slashes,
-    ``?``, ``=`` and the ``{z}/{x}/{y}`` placeholders stay literal, and
-    already-encoded query values (TiTiler ``url=s3%3A%2F%2F...``) pass
-    through verbatim exactly as the tile server expects.
-    """
+    """Build the QGIS ``wms`` provider uri for an XYZ tile TEMPLATE."""
+    # Encode as LITTLE as possible: QGIS does NOT percent-decode the ``url``
+    # component, so a fully-quoted template yields a layer that reports valid
+    # yet never issues a tile request. Only the template's own query-string
+    # ampersands are escaped, so the provider's ``&``-splitting of uri
+    # parameters cannot eat them; scheme, slashes, ``?``, ``=`` and the
+    # ``{z}/{x}/{y}`` placeholders stay literal, and an already-encoded query
+    # value passes through verbatim exactly as the tile server expects.
     return (
         f"type=xyz&url={template.replace('&', '%26')}"
         f"&zmin={zmin}&zmax={zmax}"
@@ -1014,11 +825,8 @@ _OP_CLOSE, _OP_PING, _OP_PONG = 0x8, 0x9, 0xA
 
 class WebSocketConnection:
     """Blocking RFC 6455 client over a stdlib socket (``ws://`` and ``wss://``).
-
-    Single reader thread; ``send_text``/``close`` are mutex-guarded so any
-    thread may write. Handles fragmentation, replies to pings, ignores
-    binary frames.
-    """
+    ONE reader thread, but ``send_text`` and ``close`` are mutex-guarded so any
+    thread may write. Fragments are joined, pings answered, binary ignored."""
 
     def __init__(
         self,
@@ -1135,13 +943,9 @@ class WebSocketConnection:
     # -- receive ------------------------------------------------------------ #
 
     def recv(self, timeout: Optional[float] = None) -> Optional[str]:
-        """Receive the next complete TEXT message.
-
-        Returns ``None`` if ``timeout`` expires while waiting for a NEW frame
-        (so a caller loop can poll a stop flag). Once a frame header has
-        started arriving the read switches to ``frame_timeout`` -- a timeout
-        mid-frame is a real transport failure and raises ``ConnectionClosed``.
-        """
+        """Receive the next complete TEXT message. ``None`` means ``timeout``
+        expired before a NEW frame started, so a caller loop can poll a stop
+        flag; a timeout MID-frame is a transport failure and raises."""
         fragments: list[bytes] = []
         while True:
             frame = self._recv_frame(timeout if not fragments else self.frame_timeout)
@@ -1260,50 +1064,18 @@ class WebSocketConnection:
 
 @dataclass
 class AgentEvent:
-    """One dispatched server frame, normalized for the UI bridge.
-
-    ``kind`` values the dock consumes in milestone 1:
-
-      chunk           {"message_id", "delta", "done"}
-      pipeline        {"pipeline_id", "steps": [PipelineStep, ...]}
-      session-state   {"payload": <raw>, "layers": [LayerEvent, ...]}
-      error           raw error payload (error_code, message, ...)
-      turn-complete   raw payload
-      case-open       raw payload
-      payload-warning raw payload (the dock renders the gate card; see gate.py)
-      code-exec-request raw payload (the code-exec HARD confirm gate,
-                      contracts sandbox_contracts.py -- the dock renders the
-                      approval card; the reply rides the EXISTING
-                      tool-payload-confirmation with warning_id ==
-                      code_exec_id. Live-feedback 2026-07-21)
-      credential-request raw payload (the JIT API-key prompt for a paused
-                      keyed tool, contracts secrets.py -- the dock renders
-                      the key-entry card; the reply is secret-add (raw key,
-) THEN credential-provided, or
-                      credential-provided provided=False on Skip. LANE K,
-                      2026-07-22)
-      case-list       {"cases": [CaseInfo, ...], "payload": <raw>}
-      chart           raw ChartEmissionPayload (live chart-emission frame;
-                      the dock's Charts panel renders it -- 2026-07-13)
-      solve-progress  raw SolveProgressPayload (live big-sim telemetry tick;
-                      the dock's SimCard consumes it -- item R4, 2026-07-18)
-      tool-io         raw ToolIoPayload (raw-args sidecar keyed by step_id;
-                      the dock's tool chips read a short arg summary from it
-                      -- item R2, 2026-07-18)
-      raw             {"type": <envelope type>, "payload": <raw>}
-    """
+    """One dispatched server frame, normalized for the UI bridge. ``kind`` is
+    the dock's dispatch key and ``next_event`` is the authority on the set;
+    ``"raw"`` carries anything this client does not name."""
 
     kind: str
     data: dict
 
 
 class AgentClient:
-    """Synchronous TRID3NT agent client (handshake + case + chat + events).
-
-    Intended use from the plugin: construct + ``connect()`` + ``create_case``
-    on a worker thread, then loop ``next_event`` on that same thread while the
-    UI thread calls ``send_chat``/``cancel`` (socket writes are mutex-guarded).
-    """
+    """Synchronous agent client: handshake, case, chat and the event pump.
+    Connect and pump on ONE worker thread; a UI thread may call the outbound
+    verbs concurrently, because socket writes are mutex-guarded."""
 
     def __init__(
         self,
@@ -1322,34 +1094,30 @@ class AgentClient:
         self.is_anonymous: Optional[bool] = None
         self.case_id: Optional[str] = None
         self.last_session_state: Optional[dict] = None
-        #: The most recent ``case-list`` observed -- stashed by BOTH the
-        #: handshake drain (``_wait_for``; the stub server emits it before
-        #: session-state) and the event pump (``next_event``; the live
-        #: server emits it after). None until one arrives. The startup
-        #: case-reuse decision (``choose_startup_case``) reads this.
+        #: The most recent ``case-list`` observed, stashed by BOTH the
+        #: handshake drain and the event pump because a server may emit it
+        #: either side of session-state. None until one arrives.
         self.last_case_list: Optional[list] = None
         #: The last ``error`` envelope payload seen while draining a handshake
-        #: wait (e.g. AUTH_REQUIRED before a 1008 close) -- the bridge folds it
-        #: into the failure text so token expiry is classifiable.
+        #: wait (AUTH_REQUIRED before a 1008 close, say). It is folded into the
+        #: failure text so a token rejection stays classifiable.
         self.last_handshake_error: Optional[dict] = None
-        #: Server-advertised endpoint bases from the last ``auth-ack``, read
-        #: defensively (flat or nested under ``endpoints``; the field is
-        #: still optional -- see module docstring "endpoints"). ``None``
-        #: until a daemon that advertises them acks; callers resolve a
-        #: fallback via ``resolve_http_base`` / ``resolve_data_base``.
+        #: Server-advertised endpoint bases from the last ``auth-ack``. When
+        #: present they are the ONLY source of truth for the agent's HTTP base
+        #: and the store's endpoint; ``None`` means the caller derives a
+        #: fallback instead.
         self.advertised_http_base: Optional[str] = None
         self.advertised_data_base: Optional[str] = None
         #: True between a completed handshake and the next transport loss.
         self.connected = False
-        #: Optional QgsAuthManager credential broker (``net.auth_broker``). When
-        #: set, connect pushes every stored credential over ``secret-add`` and a
-        #: prompt-answered key is stored back for the next connect. Left None in
-        #: headless drivers with no auth home (env fallback covers them).
+        #: Optional credential broker. When set, connect pushes every stored
+        #: credential over ``secret-add`` and a prompt-answered key is stored
+        #: back for the next connect. None where there is no auth home.
         self.credential_broker = None
         self._ws: Optional[WebSocketConnection] = None
-        # Outbound intent queue (web sendOrQueue): pre-serialized frames
-        # buffered while disconnected, flushed FIFO after the resume
-        # handshake. Bounded; OLDEST dropped first.
+        # Outbound intent queue: pre-serialized frames buffered while
+        # disconnected, flushed FIFO after the resume handshake. Bounded,
+        # OLDEST dropped first.
         self._outbound_queue: list[str] = []
         self._queue_lock = threading.Lock()
 
@@ -1360,19 +1128,9 @@ class AgentClient:
         return build_ws_url(self.base_url, self.token)
 
     def connect(self) -> str:
-        """Open the socket and run the auth + resume handshake.
-
-        Returns the resolved ``user_id``. Raises ``HandshakeFailed`` /
-        ``ConnectionClosed`` on any failure.
-
-        RECONNECT semantics (milestone 2): the SAME ``session_id`` is reused
-        and ``session-resume`` carries the current ``case_id`` so the server
-        RE-BINDS its active-Case pointer and replays that Case's layers
-        (contract ``SessionResumePayload.case_id``, job-CASE-AUTHORITY). Every
-        connection resolves to the ONE fixed local user server-side, so no
-        client identity hint is sent. Queued outbound frames are flushed FIFO
-        once the handshake completes.
-        """
+        """Open the socket and run the auth + resume handshake -> the resolved
+        ``user_id``. Re-callable: the SAME ``session_id`` is reused, so a
+        re-dial resumes the session rather than starting a new one."""
         self.connected = False
         self.last_handshake_error = None
         if self._ws is not None:
@@ -1387,11 +1145,12 @@ class AgentClient:
             raise HandshakeFailed(f"auth-ack without user_id: {payload!r}")
         self.user_id = user_id
         self.is_anonymous = bool(payload.get("is_anonymous", not self.token))
-        # Server-advertised endpoints (optional; coordinate with the server
-        # lane's contract). Read BOTH a flat shape (``payload["http_base"]``)
-        # and a nested ``endpoints`` dict defensively via ``.get`` so an
-        # older daemon (or a contract that lands the other shape) never
-        # raises -- absence just means the caller falls back.
+        # Endpoint advertisement is OPTIONAL and arrives in either of two
+        # shapes -- flat on the payload, or nested under ``endpoints`` -- so
+        # both are read defensively; absence just means the caller falls back.
+        # The store endpoint is GDAL CONFIGURATION, never part of a layer uri:
+        # a layer is always ``s3://bucket/key`` and the endpoint decides which
+        # host serves it.
         endpoints = payload.get("endpoints")
         if not isinstance(endpoints, dict):
             endpoints = {}
@@ -1410,13 +1169,10 @@ class AgentClient:
         self._send("session-resume", {"case_id": self.case_id})
         state = self._wait_for("session-state")
         self.last_session_state = state.get("payload") or {}
-        # Startup case reuse (live-feedback 2026-07-09): the server stamps
-        # the session-state reply's envelope ``case_id`` with the active
-        # case the resume rebound (its persisted ``last_active_case_id``).
-        # Adopt it when this client has no case yet, so the connect flow can
-        # KEEP the persisted case instead of minting a new one. A client
-        # that already carries a case (reconnect) keeps its own stamp -- the
-        # client is the authority there (job-CASE-AUTHORITY).
+        # The session-state reply's envelope ``case_id`` is the active case
+        # the resume rebound. Adopt it ONLY when this client has no case yet,
+        # so a fresh connect keeps the persisted case instead of minting one;
+        # a client that already carries a case is the authority on its own.
         resumed = state.get("case_id")
         if self.case_id is None and isinstance(resumed, str) and resumed:
             self.case_id = resumed
@@ -1426,12 +1182,9 @@ class AgentClient:
         return user_id
 
     def _broker_push_on_connect(self) -> None:
-        """Push every QgsAuthManager-stored credential over ``secret-add``.
-
-        Best-effort: no broker, an empty store, or a locked auth DB is a
-        silent no-op -- the daemon's env fallback covers the headless case and
-        connect must never block on the credential home.
-        """
+        """Push every stored credential over ``secret-add``. Best-effort: no
+        broker, an empty store or a locked auth DB is a silent no-op, because
+        connect must never block on the credential home."""
         broker = self.credential_broker
         if broker is None:
             return
@@ -1441,8 +1194,8 @@ class AgentClient:
             pass
 
     def reconnect(self) -> str:
-        """Re-dial after a transport loss (same session + case; see
-        ``connect``). The caller owns the backoff cadence."""
+        """Re-dial after a transport loss, same session and case. The caller
+        owns the backoff cadence."""
         return self.connect()
 
     def close(self) -> None:
@@ -1454,14 +1207,9 @@ class AgentClient:
     # -- protocol verbs ------------------------------------------------------ #
 
     def create_case(self, title: str, bbox: Optional[list] = None) -> str:
-        """Create a fresh case; returns its case_id.
-
-        ``bbox`` (optional) is the #170 AOI-first extent
-        ``[lon_min, lat_min, lon_max, lat_max]`` (EPSG:4326): the agent seeds
-        ``CaseSummary.bbox`` + ``state.case_bbox`` from ``args.bbox`` so the
-        FIRST turn's ``_turn_case_bbox`` returns the user's extent (exact web
-        mirror: useCases.ts createCase includes ``bbox`` only when supplied).
-        """
+        """Create a fresh case; returns its case_id. BLOCKS until the
+        ``case-open`` reply. An optional ``bbox`` (EPSG:4326) seeds the case
+        extent, so the very FIRST turn already has the user's AOI."""
         args: dict = {"title": title}
         if bbox is not None:
             args["bbox"] = list(bbox)
@@ -1480,16 +1228,10 @@ class AgentClient:
             # keep draining until the deadline.
 
     def select_case(self, case_id: str) -> None:
-        """Switch the active case (``case-command select``).
-
-        Exact web mirror (ws.ts ``sendCaseCommand``): the local ``case_id``
-        stamp updates AT SEND TIME so the very next ``session-resume`` /
-        ``user-message`` re-asserts the same case even if a queued select and
-        the resume race; the frame itself sendOrQueues (a select tapped
-        mid-reconnect must not be silently dropped -- LANE CASE-WEB). The
-        server replies with a full ``case-open`` rehydration (CaseSummary +
-        loaded_layers + chat history) which arrives through ``next_event``.
-        """
+        """Switch the active case. Does NOT block: the ``case-open``
+        rehydration arrives through ``next_event``."""
+        # The local stamp updates AT SEND TIME, so the next resume or message
+        # re-asserts the same case even if a queued select and a resume race.
         self.case_id = case_id
         self._send(
             "case-command",
@@ -1505,24 +1247,8 @@ class AgentClient:
         args: Optional[dict] = None,
     ) -> None:
         """Send a generic ``case-command`` (``create`` / ``delete`` /
-        ``set-bbox`` / ...) WITHOUT blocking on the reply -- unlike
-        ``create_case`` (used only during the initial connect handshake), the
-        reply here flows through the normal ``next_event`` pump like
-        ``select_case``'s does (a ``create`` reply arrives as a ``case-open``
-        the dock rebinds on; a ``delete`` reply arrives as a fresh
-        ``case-list``).
-
-        ``args`` (per-case-bbox 2026-07-19): the free-form
-        ``CaseCommandEnvelopePayload.args`` slot -- ``set-bbox`` rides its
-        edited AOI here as ``{"bbox": [w, s, e, n]}`` (EPSG:4326), the same
-        carrier ``create`` already uses for ``title`` / ``bbox``. Defaults to
-        an empty dict so every existing caller (create with no args, delete)
-        is byte-identical to before.
-
-        Mirrors ``select_case``'s envelope shape and queue-if-closed
-        behaviour: a New/Delete/set-bbox tapped mid-reconnect must not be
-        silently dropped.
-        """
+        ``set-bbox``) WITHOUT blocking; the reply flows through
+        ``next_event``. ``args`` is the command's own free-form slot."""
         payload: dict = {"command": command, "args": dict(args) if args else {}}
         if case_id is not None:
             payload["case_id"] = case_id
@@ -1531,18 +1257,13 @@ class AgentClient:
         )
 
     def request_case_list_refresh(self) -> bool:
-        """Refresh the case list via one ``session-resume`` round trip.
-
-        DOCUMENTED TRADEOFF (milestone 3 item 3): the protocol has NO
-        dedicated list-cases request verb -- ``case-list`` only ever arrives
-        as a server emission. The server's session-resume handler replies
-        with ``session-state`` + ``case-list`` and is ALREADY the web
-        client's ~25s keepalive (the server logs it at DEBUG), so a resume
-        round trip IS the cheap refresh. Cost: a redundant ``session-state``
-        frame rides along -- harmless, layer materialization dedups by
-        layer_id. Returns False when disconnected (nothing to ask; the
-        reconnect resume will refresh anyway). The caller debounces.
-        """
+        """Refresh the case list; False when disconnected, because there is
+        then nothing to ask and the reconnect resume refreshes anyway. The
+        caller debounces."""
+        # The protocol has NO list-cases verb: ``case-list`` only ever arrives
+        # as a server emission, and the session-resume reply carries one. The
+        # redundant ``session-state`` that rides along is harmless, since
+        # layer materialization dedups by layer_id.
         if not self.connected:
             return False
         self._send("session-resume", {"case_id": self.case_id})
@@ -1557,42 +1278,9 @@ class AgentClient:
         tool_choice_mode: str = "",
         drawn_geometry: Optional[dict] = None,
     ) -> None:
-        """Send a user chat message.
-
-        :param text: The message text -- CLEAN user prose. The AOI never rides
-            inside it anymore (see ``aoi_bbox``).
-        :param show_thinking: F9 (live-feedback 2026-07-09) - when True, ride
-            ``show_thinking=True`` on the payload so the local model's reasoning
-            channel is forwarded as ``agent-thinking-chunk`` envelopes. Only
-            meaningful locally; cloud agents ignore the field.
-        :param model_id: OpenRouter model-extensibility (design 2026-07-19) -
-            when truthy, ride ``model_id`` on the payload so the server's
-            ``resolve_selected_model`` picks THIS model for the turn (any
-            openai/OpenRouter model id passes verbatim). Empty = the agent's
-            env default (``TRID3NT_OPENAI_MODEL``). Mirrors the ``show_thinking``
-            add exactly: a LIVE per-turn switch, no agent restart. (Provider
-            base_url/api_key are agent-process env, NOT sent here.)
-        :param aoi_bbox: Structured per-message AOI (mechanism 2,
-            2026-07-22) - ``[min_lon, min_lat, max_lon, max_lat]`` (EPSG:4326).
-            Rides the ``UserMessagePayload.aoi_bbox`` contract field, replacing
-            the legacy bracketed in-text prose line ("[QGIS map canvas AOI
-            ...]"). ``None`` = no AOI this turn; the key is then OMITTED so a
-            plain message stays byte-identical to the pre-field payload
-            (mirrors the ``show_thinking`` / ``model_id`` omit convention).
-        :param tool_choice_mode: auto/ask modes (Stage 3, 2026-07-22)
-            - ``"ask"`` rides ``tool_choice_mode="ask"`` on the payload so the
-            server surfaces tool selection as ``tool-candidates`` picker cards
-            for this turn. Anything else (``""`` / ``"auto"``) OMITS the key --
-            the server's default IS auto, so a default send stays byte-identical
-            to the pre-field payload (the ``show_thinking`` omit convention;
-            AUTO's measured-ambiguity cards need no flag).
-        :param drawn_geometry: draw-a-region supply path -- the dock's
-            'Draw region' rubber-band rectangle as ``{"geometry_type":
-            "rectangle", "bbox": [min_lon, min_lat, max_lon, max_lat]}``
-            (EPSG:4326). Rides ``UserMessagePayload.drawn_geometry``; ``None``
-            (nothing drawn) OMITS the key. Consumed by composer input-review
-            gates as a ``basis="user"`` spatial knob (geoclaw amr_regions).
-        """
+        """Send a user chat message. ``text`` is CLEAN user prose: nothing
+        else rides inside it. Every optional field is OMITTED when falsy
+        rather than sent null, so a plain message stays byte-identical."""
         payload: dict = {"text": text, "case_id": self.case_id}
         if show_thinking:
             payload["show_thinking"] = True
@@ -1602,11 +1290,8 @@ class AgentClient:
             payload["aoi_bbox"] = [float(v) for v in aoi_bbox]
         if tool_choice_mode == "ask":
             payload["tool_choice_mode"] = "ask"
-        # the dock's 'Draw region' rubber-band rectangle rides
-        # ``drawn_geometry`` ({"geometry_type": "rectangle", "bbox": [4 floats]},
-        # EPSG:4326) exactly as ``aoi_bbox`` carries the canvas AOI. Omitted when
-        # nothing was drawn so a plain message stays byte-identical to the
-        # pre-field payload (the aoi_bbox / show_thinking omit convention).
+        # A drawn region rides as ``{"geometry_type": ..., "bbox": [4 floats]}``
+        # in EPSG:4326, exactly as ``aoi_bbox`` carries the canvas AOI.
         if drawn_geometry is not None:
             payload["drawn_geometry"] = drawn_geometry
         self._send(
@@ -1619,19 +1304,9 @@ class AgentClient:
     def send_dev_tool_invoke(
         self, name: str, args: dict, raw_text: str = ""
     ) -> None:
-        """Send a ``!run`` direct tool invocation.
-
-        The dock parses ``!run <tool>(...)`` CLIENT-side (``run_invocation``)
-        and calls this with the structured ``(name, args)``. The server runs
-        the named registry closure OUTSIDE the LLM loop through the SAME
-        emission pipeline a model-issued call uses (gates, sync-tool offload,
-        layer materialization, tool-card + turn-complete), so the result rides
-        the identical rendering path. ``raw_text`` carries the original
-        composer line so the server persists it as the turn's user row and a
-        Case reopen replays the ``!run`` signature above the tool card
-        (attribution durability). Buffered while disconnected like every
-        user-intent verb.
-        """
+        """Send a ``!run`` direct tool invocation: the named tool runs OUTSIDE
+        the LLM loop through the same emission pipeline. ``raw_text`` is the
+        original composer line, persisted as the turn's user row."""
         payload: dict = {"name": name, "args": args, "case_id": self.case_id}
         if raw_text:
             payload["raw_text"] = raw_text
@@ -1653,13 +1328,9 @@ class AgentClient:
         decision: str = "proceed",
         revised_args: Optional[dict] = None,
     ) -> None:
-        """Answer a ``tool-payload-warning`` gate (milestone 2 gate card).
-
-        Contract cross-rule (``PayloadConfirmationEnvelopePayload``):
-        ``narrow_scope`` REQUIRES a ``revised_args`` dict (may be empty);
-        ``proceed`` / ``cancel`` MUST send ``revised_args = None``. Enforced
-        here so a UI slip can never emit an envelope the agent rejects.
-        """
+        """Answer a ``tool-payload-warning`` gate. ``narrow_scope`` REQUIRES a
+        ``revised_args`` dict (possibly empty) while ``proceed`` and ``cancel``
+        forbid one; enforced here, so a UI slip cannot emit a rejected shape."""
         if decision == "narrow_scope":
             revised: Optional[dict] = revised_args if isinstance(revised_args, dict) else {}
         else:
@@ -1671,13 +1342,9 @@ class AgentClient:
         )
 
     def push_secret(self, provider_id: str, key_value: str) -> None:
-        """Push one credential VALUE over ``secret-add`` (no reply signal).
-
-        The connect-time broker path: the daemon writes the value to its
-        in-memory resolver session cache keyed by ``provider``. Carries no
-        ``credential-provided`` (there is no paused tool to resume). KEY
-        HYGIENE: ``key_value`` rides only this envelope, never logged.
-        """
+        """Push one credential VALUE over ``secret-add``, with no reply signal
+        and no ``credential-provided``: there is no paused tool to resume. KEY
+        HYGIENE: the value rides this envelope only and is never logged."""
         self._send(
             "secret-add",
             {
@@ -1691,27 +1358,15 @@ class AgentClient:
     def submit_credential(
         self, request_id: str, provider_id: str, key_value: str
     ) -> None:
-        """Answer a ``credential-request`` with the user's key (LANE K).
-
-        Contract (``contracts .../secrets.py``): the raw key rides
-        ONLY the ``secret-add`` envelope -- the daemon writes it to the
-        in-memory resolver session cache on receipt -- and the
-        ``credential-provided`` retry signal that follows carries NO key
-        material, just the echoed ``request_id`` + ``provided=True``. Order
-        matters and is safe on one socket: the server consumes envelopes
-        sequentially per connection, so the cache write completes before the
-        paused tool's future resolves and the retry re-resolves the key.
-
-        The key is ALSO stored to QgsAuthManager via the broker (best-effort)
-        so the NEXT connect re-pushes it without re-prompting.
-
-        ``secret_id`` is sent as None (contract-Optional): the server's resume
-        path re-resolves the credential itself; this synchronous client never
-        blocks waiting for a reply to learn a ULID.
-
-        KEY HYGIENE: ``key_value`` is serialized straight onto the wire and
-        never logged, stored on ``self``, or echoed back by the server.
-        """
+        """Answer a ``credential-request`` with the user's key. KEY HYGIENE:
+        the raw key rides the ``secret-add`` envelope ALONE and is never
+        logged or stored on ``self``."""
+        # ORDER matters and is safe on one socket, because the server consumes
+        # envelopes sequentially per connection: the cache write completes
+        # before the paused tool's future resolves and re-resolves the key.
+        # The retry signal that follows carries NO key material, and
+        # ``secret_id`` goes out None because the server re-resolves the
+        # credential itself rather than handing back a id to wait for.
         broker = self.credential_broker
         if broker is not None:
             try:
@@ -1734,12 +1389,9 @@ class AgentClient:
         )
 
     def decline_credential(self, request_id: str) -> None:
-        """Decline a ``credential-request`` (the card's Skip): the contract's
-        real negative path -- ``credential-provided`` with ``provided=False``
-        and NO preceding ``secret-add``. The server resolves the paused
-        tool's future, re-raises the original typed auth error, and the agent
-        narrates honestly (data-source fallback norm; never a silent
-        dead-end)."""
+        """Decline a ``credential-request``: ``provided=False`` and NO
+        preceding ``secret-add``. The gate still CLOSES -- the paused tool
+        resumes into its original typed auth error, never a dead end."""
         self._send(
             "credential-provided",
             {"request_id": request_id, "secret_id": None, "provided": False},
@@ -1752,16 +1404,9 @@ class AgentClient:
         tool_name: Optional[str] = None,
         free_text: Optional[str] = None,
     ) -> None:
-        """Answer a ``tool-candidates`` picker (auto/ask modes).
-
-        Contract (``ws.ToolChoicePayload``): ONE envelope, ``request_id`` echo
-        + exactly one of three shapes -- ``tool_name`` set (a candidate's name
-        echoed VERBATIM), ``free_text`` set (typed guidance), both None ("let
-        the agent decide" -- the server proceeds immediately with its own top
-        pick, the instant twin of its ``timeout_s`` fail-open). Both keys are
-        always sent (None-valued when unused) so the wire shape is the full
-        contract surface, mirroring ``credential-provided``'s explicit
-        ``secret_id=None``."""
+        """Answer a ``tool-candidates`` picker. Exactly one of three shapes:
+        ``tool_name`` echoed VERBATIM, ``free_text`` guidance, or both None,
+        which tells the server to proceed with its own top pick."""
         self._send(
             "tool-choice",
             {
@@ -1779,20 +1424,9 @@ class AgentClient:
         selected_region_id: Optional[str] = None,
         selected_bbox: Optional[list] = None,
     ) -> None:
-        """Answer a ``region-choice-request`` gate (state-bbox-fallback
-        narrowing).
-
-        Contract (``region_choice.RegionChoiceProvidedEnvelopePayload``): ONE
-        ``region-choice-provided`` envelope, ``request_id`` echo + ``choice``
-        (``"region"`` when the user narrowed / ``"whole_state"`` for the honest
-        already-resolved default) + ``selected_region_id`` (the candidate's id
-        on a region pick, else None -- the server re-resolves the bbox by this
-        id, authoritative over a client-sent bbox) + ``selected_bbox`` (the
-        candidate's bbox echo, a convenience/fallback; None for whole_state).
-        All keys are always sent (None-valued when unused) so the wire shape is
-        the full contract surface. Buffered while disconnected like every
-        user-intent verb -- a pick tapped mid-reconnect must not be dropped
-        (the paused turn would then hang)."""
+        """Answer a ``region-choice-request`` gate. ``choice`` is ``"region"``
+        or ``"whole_state"``; on a region pick the server re-resolves the bbox
+        from ``selected_region_id``, which outranks any bbox sent here."""
         self._send(
             "region-choice-provided",
             {
@@ -1814,18 +1448,9 @@ class AgentClient:
         features: Optional[dict] = None,
         cancelled: bool = False,
     ) -> None:
-        """Answer a ``spatial-input-request`` gate (the agent needs a picked
-        geometry).
-
-        Contract (``ws.SpatialInputResponsePayload``): ONE
-        ``spatial-input-response`` envelope, ``request_id`` echo +
-        ``geometry_type`` (``"point"`` / ``"bbox"`` / ``"vector_draw"``) +
-        ``coordinates`` (``[lon, lat]`` for point, ``[minLon, minLat, maxLon,
-        maxLat]`` for bbox) + ``features`` (the drawn FeatureCollection for
-        vector_draw) + ``cancelled`` (True = the decline path, every geometry
-        field None). All keys always sent (the explicit-None convention).
-        Buffered while disconnected like every user-intent verb -- the paused
-        turn would otherwise hang."""
+        """Answer a ``spatial-input-request`` gate. ``geometry_type`` is
+        ``"point"`` (``[lon, lat]``), ``"bbox"`` (four coordinates) or
+        ``"vector_draw"`` (``features``); ``cancelled`` is the decline path."""
         self._send(
             "spatial-input-response",
             {
@@ -1842,12 +1467,9 @@ class AgentClient:
     # -- event pump ---------------------------------------------------------- #
 
     def next_event(self, timeout: float = 1.0) -> Optional[AgentEvent]:
-        """Receive + normalize one server frame; None on timeout.
-
-        Raises ``ConnectionClosed`` when the socket dies -- the caller owns
-        reconnect policy (milestone 1: surface as disconnected, no auto
-        reconnect loop).
-        """
+        """Receive + normalize one server frame; None on timeout. Raises
+        ``ConnectionClosed`` when the socket dies -- the caller, not this
+        method, owns reconnect policy."""
         raw = self._recv(timeout)
         if raw is None:
             return None
@@ -1861,6 +1483,10 @@ class AgentClient:
         payload = env.get("payload") or {}
         if not isinstance(payload, dict):
             payload = {}
+        # Every envelope the dock acts on gets its OWN kind below. An
+        # unrecognized type falls through to ``"raw"`` and SURFACES there --
+        # a silently dropped gate envelope leaves the server's paused turn
+        # hanging forever.
         if etype == "agent-message-chunk":
             return AgentEvent(
                 "chunk",
@@ -1871,10 +1497,9 @@ class AgentClient:
                 },
             )
         if etype == "agent-thinking-chunk":
-            # F9 (live-feedback 2026-07-09): local model reasoning-channel
-            # tokens. Same payload shape as agent-message-chunk. Keyed by the
-            # same message_id as the subsequent answer chunk so the dock can
-            # attach the thinking block to the right assistant entry.
+            # Reasoning-channel tokens, keyed by the SAME message_id as the
+            # answer chunk that follows, so the dock attaches the thinking
+            # block to the right assistant entry.
             return AgentEvent(
                 "thinking-chunk",
                 {
@@ -1902,14 +1527,11 @@ class AgentClient:
         if etype == "turn-complete":
             return AgentEvent("turn-complete", payload)
         if etype == "case-open":
-            # F34 (live-proven 2026-07-10): adopt the server's authoritative
-            # rebind into the wire stamp. select_case stamps at send time,
-            # but the generic case_command("create") path did NOT - so every
-            # envelope after a New-case rebind (including user-message) kept
-            # carrying the PREVIOUS case_id and the turn ran/persisted into
-            # the wrong case. The case-open reply is the one signal every
-            # rebind path shares (create, select, startup reuse), so the
-            # stamp follows it unconditionally.
+            # The case-open reply is the ONE signal every rebind path shares
+            # -- create, select and startup reuse alike -- so the wire stamp
+            # follows it unconditionally. Without that, an envelope sent after
+            # a rebind carries the previous case_id and the turn persists into
+            # the wrong case.
             opened = ((payload.get("session_state") or {}).get("case") or {}).get(
                 "case_id"
             )
@@ -1919,111 +1541,59 @@ class AgentClient:
         if etype == "tool-payload-warning":
             return AgentEvent("payload-warning", payload)
         if etype == "code-exec-request":
-            # Code-exec approval gate (live-feedback 2026-07-21): the agent
-            # emits this BEFORE running sandbox Python and BLOCKS on its
-            # confirm seam until a ``tool-payload-confirmation`` whose
-            # ``warning_id == code_exec_id`` arrives (contracts
-            # sandbox_contracts.py / server._gate_on_code_exec). Previously
-            # fell through to "raw" and was dropped by the dock -- the agent
-            # then waited forever and the turn "just stopped". The dock now
-            # renders the approval card (ui/cards.CodeExecCard).
+            # The agent BLOCKS before running sandbox Python until a
+            # ``tool-payload-confirmation`` whose ``warning_id`` equals this
+            # request's ``code_exec_id`` arrives.
             return AgentEvent("code-exec-request", payload)
         if etype == "credential-request":
-            # Credential-request key-entry card (LANE K, 2026-07-22): a keyed
-            # tool (AirNow, FIRMS, ...) hit a missing/invalid key; the agent
-            # paused the tool and asks for the credential by name (contracts
-            # secrets.CredentialRequestEnvelopePayload -- request_id /
-            # provider_id / provider_label / signup_url / secret_key_name /
-            # message / tool_name). Previously fell through to "raw" and was
-            # dropped by the dock (the exact code-exec gap) -- the pause then
-            # waited out its server-side TTL and the tool failed. The dock now
-            # renders the key-entry card (ui/cards.CredentialCard); the reply
-            # goes out via submit_credential / decline_credential below.
+            # A keyed tool hit a missing or invalid key and the agent PAUSED
+            # it to ask for the credential by name. The pause has a
+            # server-side TTL: unanswered, the tool fails.
             return AgentEvent("credential-request", payload)
         if etype == "tool-candidates":
-            # Tool-selection picker (auto/ask modes, Stage 3
-            # 2026-07-22): the agent ranked several plausible tools for a
-            # step and asks which should run (contracts ws.
-            # ToolCandidatesPayload -- request_id / stage_label / candidates
-            # / reason / timeout_s). The dock renders the picker card
-            # (ui/cards.ToolCandidatesCard); the reply goes out via
-            # send_tool_choice below. Unanswered, the SERVER's timeout_s
-            # fail-open proceeds with its own top pick -- so this envelope
-            # must surface as its own kind (a "raw" fallthrough would
-            # silently waste the user's one-click error-kill window).
+            # The agent ranked several plausible tools and asks which runs.
+            # Unanswered, the server's own ``timeout_s`` fail-open proceeds
+            # with its top pick, so the user's window to redirect is finite.
             return AgentEvent("tool-candidates", payload)
         if etype == "chart-emission":
-            # OpenQuake result parity (live-feedback 2026-07-13): a live
-            # mid-turn chart (ChartEmissionPayload -- Vega-Lite spec + title
-            # + caption). Previously fell through to "raw" and was dropped
-            # by the dock; the persisted replay twin rides in the case-open
-            # ``session_state.charts`` (``parse_charts``).
+            # A live mid-turn chart. Its persisted replay twin rides in the
+            # case-open ``session_state.charts``.
             return AgentEvent("chart", payload)
         if etype == "solve-progress":
-            # Item R4 (live-feedback 2026-07-18): live big-sim telemetry tick
-            # (contract ws.SolveProgressPayload -- run_id / solver /
-            # grid_resolution_m / active_cell_count / vcpus / elapsed_seconds
-            # / eta_seconds / phase, emitted every ~10 s by
-            # workflows.solve_progress.drive_live_solve_progress). Previously
-            # fell through to "raw" and was dropped; the dock's SimCard now
-            # consumes it.
             return AgentEvent("solve-progress", payload)
         if etype == "tool-io":
-            # Item R2 (live-feedback 2026-07-18): the raw tool-args sidecar
-            # keyed by pipeline step_id (contract ws.ToolIoPayload; the server
-            # emits an input-only frame at dispatch START, then the full one
-            # on completion). The dock's tool chip rows render a short arg
-            # summary from ``raw_args``.
+            # The raw tool-args sidecar, keyed by pipeline step_id: an
+            # input-only frame arrives at dispatch START, the full one on
+            # completion.
             return AgentEvent("tool-io", payload)
         if etype == "region-choice-request":
-            # CRITICAL gate-WAIT (state-bbox-fallback narrowing, contracts
-            # region_choice.py): the server snapped a vague geocode to the
-            # WHOLE state and PAUSES the turn awaiting a
-            # ``region-choice-provided`` reply. Previously fell through to
-            # "raw" and was dropped -- the turn then hung on its paused future
-            # (the code-exec stall bug class). The dock renders the picker
-            # card (ui/cards.RegionChoiceCard); the reply goes out via
-            # send_region_choice below. A "whole_state" answer keeps the
-            # honest default, so the gate always closes.
+            # A gate WAIT: the server snapped a vague geocode to the whole
+            # state and PAUSES the turn until a reply arrives. A
+            # ``whole_state`` answer keeps that default, so the gate always
+            # has a closing move.
             return AgentEvent("region-choice-request", payload)
         if etype == "spatial-input-request":
-            # CRITICAL gate-WAIT (contracts ws.SpatialInputRequestPayload):
-            # the agent needs the user to pick a geometry (point / bbox /
-            # vector_draw) and PAUSES the turn awaiting a
-            # ``spatial-input-response``. Previously fell through to "raw" and
-            # was dropped -- the turn hung. The dock renders the pick card
-            # (ui/cards.SpatialInputCard) wired to the canvas point/AOI
-            # tools; the reply goes out via send_spatial_input below. Cancel
-            # (and the honest vector_draw degrade) sends cancelled=True and
-            # CLOSES the gate.
+            # A gate WAIT: the agent needs a picked geometry and PAUSES the
+            # turn until a response arrives. Cancel sends ``cancelled=True``
+            # and closes the gate.
             return AgentEvent("spatial-input-request", payload)
         if etype == "code-exec-result":
-            # The run OUTCOME that follows an approved code-exec-request
-            # (contracts sandbox_contracts.CodeExecResultPayload):
-            # status + stdout/stderr tails + the result descriptor. Fire-and-
-            # forget (no reply); the dock updates the approved code-exec
-            # card's folded chip with the outcome. Previously fell through to
-            # "raw" and was dropped, so an approved run showed no result.
+            # The run OUTCOME after an approved code-exec-request:
+            # fire-and-forget, no reply expected.
             return AgentEvent("code-exec-result", payload)
         if etype == "secrets-list":
-            # The per-user/per-Case secret roster (contracts
-            # secrets.SecretsListEnvelopePayload) -- emitted when the secrets
-            # surface opens and after every secret-add/revoke. Raw key values
-            # NEVER ride here (only vault_ref records). The dock stores it for
-            # the settings/secrets state. Previously fell through to "raw"
-            # (the credential round trip already emits one on secret-add).
+            # The per-Case secret roster. Raw key values NEVER ride here --
+            # only vault_ref records.
             return AgentEvent("secrets-list", payload)
         if etype == "case-list":
             cases = parse_case_list(payload)
-            # Mirror of the last_session_state stash above: the startup
+            # Stashed like ``last_session_state`` above, so the startup
             # case-reuse decision reads the freshest list either way.
             self.last_case_list = cases
             return AgentEvent("case-list", {"cases": cases, "payload": payload})
         if etype == "loop_exhausted":
-            # The agent hit its iteration/runaway guard (step cap,
-            # wall-clock, loop watchdog). Surface as an error so the
-            # dock shows the user WHY the turn stopped -- silent drops
-            # here are the same class of bug as the code-exec stall.
+            # The agent hit its runaway guard. Surfaced as an ERROR, so the
+            # user is told WHY the turn stopped.
             reason = (payload or {}).get("reason", "Agent reached its iteration limit.")
             return AgentEvent("error", {"message": reason, "source": "loop_exhausted"})
         return AgentEvent("raw", {"type": etype, "payload": payload})
@@ -2050,15 +1620,9 @@ class AgentClient:
         case_id: Optional[str] = None,
         queue_if_closed: bool = False,
     ) -> None:
-        """Send an envelope, or buffer it when disconnected.
-
-        ``queue_if_closed`` mirrors the web's ``sendOrQueue``: user-intent
-        verbs (chat / cancel / gate confirmations) issued while the socket is
-        down are pre-serialized and buffered (bounded ``OUTBOUND_QUEUE_MAX``,
-        OLDEST dropped first) instead of raising, then flushed FIFO after the
-        next resume handshake. Handshake verbs keep the raise-on-closed
-        behaviour -- queueing an auth-token would be nonsense.
-        """
+        """Send an envelope, or buffer it when disconnected. With
+        ``queue_if_closed`` a user-intent verb is buffered instead of raising
+        and flushed after the next resume; a handshake verb still raises."""
         env = make_envelope(type_, self.session_id, payload, case_id=case_id)
         raw = json.dumps(env)
         if queue_if_closed and (not self.connected or self._ws is None):
@@ -2114,13 +1678,9 @@ class AgentClient:
             raise
 
     def _wait_for(self, etype: str, deadline: Optional[float] = None) -> dict:
-        """Drain frames until one of ``etype`` arrives (handshake helper).
-
-        Non-matching frames are dropped -- EXCEPT ``error`` envelopes, whose
-        payload is stashed on ``last_handshake_error`` so a rejection that closes
-        the socket (AUTH_REQUIRED then 1008) stays classifiable after the
-        ``ConnectionClosed`` surfaces.
-        """
+        """Drain frames until one of ``etype`` arrives. Non-matching frames
+        are DROPPED, except an ``error`` and a ``case-list``, whose payloads
+        are stashed so a rejection or a list survives the drain."""
         if deadline is None:
             deadline = time.monotonic() + self.handshake_timeout
         while True:
@@ -2138,9 +1698,8 @@ class AgentClient:
                 continue
             if env.get("type") == "error" and isinstance(env.get("payload"), dict):
                 self.last_handshake_error = env["payload"]
-            # A ``case-list`` drained during the handshake wait (the stub
-            # server interleaves it BEFORE session-state) would otherwise be
-            # dropped -- stash it for the startup case-reuse decision.
+            # A ``case-list`` that lands mid-handshake would otherwise be
+            # dropped; stash it for the startup case-reuse decision.
             if env.get("type") == "case-list" and isinstance(env.get("payload"), dict):
                 self.last_case_list = parse_case_list(env["payload"])
             if env.get("type") == etype:

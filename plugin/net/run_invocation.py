@@ -1,39 +1,8 @@
-"""``!run`` chat-invocation parser (client parse-first).
+"""``!run`` chat-invocation parser -- PURE (no Qt, no network).
 
-NATE's feature: a chat message may invoke a tool DIRECTLY -- the same way the
-LLM or a workflow would -- by prefixing the composer text with ``!run`` and a
-tool signature. The dock parses this BEFORE the normal chat path (see
-``dock._send``): a match routes straight to the server as a ``dev-tool-invoke``
-envelope, a non-match flows to chat byte-identically.
-
-This module is PURE (no Qt, no network) so it unit-tests without QGIS. It only
-turns composer text into a structured intent; the dock owns rendering + the
-send.
-
-Grammar (the remainder after the anchored ``!run`` token):
-
-    !run                         -> help
-    !run help                    -> help
-    !run geocode_location(query="Boulder, Colorado")
-    !run fetch_dem(bbox=[-85.4, 29.9, -85.3, 30.0], source="3dep")
-    !run some_tool               -> bare call, no args
-    !run some_tool()             -> bare call, no args
-    !run some_tool {"bbox": [-85.4, 29.9, -85.3, 30.0]}   (JSON-object form)
-
-Two argument styles are accepted:
-
-* PYTHONIC KWARGS -- ``tool(k=v, ...)``. Parsed via ``ast`` in eval mode and
-  each value resolved with ``ast.literal_eval`` (a SAFE literal parser -- never
-  ``eval``). Positional args are rejected (the registry closures are
-  keyword-only post-fold), as are non-literal values (names, calls, operators).
-* JSON OBJECT -- ``tool {"k": v, ...}``. The brace object is ``json.loads``- d;
-  it must be a JSON object (dict).
-
-Prefix anchoring: the message must START with ``!run`` followed by whitespace
-or end-of-string. ``!running``, ``!runx``, and any message that merely MENTIONS
-``!run`` mid-sentence are NOT invocations -- they return ``None`` and flow to
-chat.
-"""
+An anchored ``!run`` prefix invokes a tool directly instead of flowing to chat;
+a mid-sentence mention does not. Argument values go through
+``ast.literal_eval``, never ``eval``, and positional args are rejected."""
 
 from __future__ import annotations
 
@@ -46,8 +15,8 @@ from typing import Optional
 #: The anchored prefix token.
 RUN_PREFIX = "!run"
 
-#: The one-line usage string ``!run help`` (and a bare ``!run``) render locally.
-#: Points at the existing tool-search surface rather than adding a new listing.
+#: The one-line usage string ``!run help`` (and a bare ``!run``) render
+#: locally.
 USAGE = (
     "!run <tool>(arg=value, ...)  or  !run <tool> {\"arg\": value}  -- invoke a "
     "tool directly (same call the model makes). "
@@ -64,14 +33,9 @@ _BARE_NAME = re.compile(r"^" + _IDENT + r"$")
 
 @dataclass
 class RunInvocation:
-    """Parsed outcome of a ``!run`` message.
-
-    Exactly one of ``help`` / ``error`` / (``name`` + ``args``) is the payload:
-
-    * ``help=True``      -- render ``USAGE`` locally; nothing sent.
-    * ``error`` set      -- render the honest error bubble locally; nothing sent.
-    * ``name`` set       -- a valid invocation; the dock sends ``dev-tool-invoke``.
-    """
+    """Parsed outcome of a ``!run`` message. Exactly one of ``help``, ``error``
+    or ``name`` + ``args`` carries the outcome, and only the last one is ever
+    sent."""
 
     help: bool = False
     error: Optional[str] = None
@@ -80,15 +44,9 @@ class RunInvocation:
 
 
 def is_run_prefix(text: str) -> bool:
-    """True when ``text`` is anchored as a ``!run`` invocation.
-
-    This is the ONE shared predicate: the dock's parse-first routing
-    (``parse_run_invocation`` returns non-``None`` iff this is True) AND the
-    composer's blue-``!run`` highlight both read it, so the visual signal can
-    never disagree with where the message routes. Prefix-anchored: the message
-    must START with the exact ``!run`` token followed by whitespace or
-    end-of-string. A mid-sentence mention (``use !run to ...``) is False.
-    """
+    """True when ``text`` is anchored as a ``!run`` invocation: the exact token
+    at the START, followed by whitespace or end-of-string. A mid-sentence
+    mention is False."""
     stripped = text.strip()
     if stripped == RUN_PREFIX:
         return True
@@ -104,19 +62,10 @@ def _syntax_error(detail: str) -> RunInvocation:
 
 
 def parse_run_invocation(text: str) -> Optional[RunInvocation]:
-    """Parse composer ``text`` as a ``!run`` invocation.
-
-    Returns ``None`` when ``text`` is NOT a ``!run`` message (route to chat
-    unchanged). Returns a :class:`RunInvocation` otherwise -- help, a typed
-    local error, or a valid ``(name, args)`` intent.
-
-    ``text`` is expected pre-stripped by the caller; a defensive ``.strip()``
-    here keeps the function correct in isolation (tests) without changing the
-    dock's behaviour.
-    """
+    """Parse composer ``text`` as a ``!run`` invocation. ``None`` means it is
+    not one and routes to chat unchanged; otherwise help, a typed local error,
+    or a valid ``(name, args)`` intent."""
     stripped = text.strip()
-    # Prefix anchoring via the ONE shared predicate (see is_run_prefix): a
-    # non-match routes to chat.
     if not is_run_prefix(stripped):
         return None
 
