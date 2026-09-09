@@ -101,3 +101,60 @@ module, the 1000-char front budget for an `@register_tool` body or a
   authoring template whose docstring and comment blocks ARE the artifact.
 
 files listed: 57 / files read: 57 / rows written: 57
+
+## Prose-lens pass applied
+
+Documentation only: no name, signature or body was changed. 57 files read, 22 code
+files and 3 data/doc files touched.
+
+- Docstring lines in scope: **2426 -> 773** across 218 docstrings, none of which
+  was deleted outright - every symbol that carried a docstring still carries one.
+- Every internal function, class and module docstring is now within the 3/5-line
+  limit; the 13 remaining over-line-limit docstrings are all `@register_tool`
+  bodies, governed by the 1000-char front budget instead.
+- LLM-facing fronts brought under 1000 chars: `show_nexrad_radar` 3396 -> 951,
+  `restyle_layer` 2116 -> 991, `code_exec_request` 2264 -> 996,
+  `compose_case_report` 1686 -> 1000, `list_run_frames` 1677 -> 909,
+  `request_spatial_input` 1555 -> 967, `_fetch_from_catalog_entry` 2977 -> 997,
+  `fetch_living_atlas_layer` 1835 -> 935, `search_data_catalog` 1918 -> 995,
+  `search_living_atlas` 2142 -> 998, `search_spatial_functions` 1452 -> 856,
+  `search_tools` 2310 -> 901, `web_fetch` 1606 -> 988. The routing block and every
+  refusal survive in each; the per-argument roll-calls and worked examples are what
+  came out.
+- ATTRIBUTION is gone from all five places, including
+  `search_living_atlas`'s registered docstring. The two-pool rule itself survives in
+  each, stated as a rule.
+- The per-fetcher fold ledger in `tools/__init__.py` (14 comment blocks, ~60 history
+  markers) is replaced by one statement of the constraint it was narrating: almost
+  every fetcher is spec-driven and registers through the tree walk, so only a
+  hand-written fetcher appears in the eager-import block.
+- Decommissioned-store drift corrected: the GCS layout rationale in `cache.py`, the
+  Mongo forward paths in `catalog_common.py` and `fetch_from_catalog.py`, the three
+  Mongo claims in `search_tools.py` that contradicted the same file's JSONL-only
+  statement, and the Vertex dense backend and Mongo channel in `tool_retrieval.py`.
+- Provider drift corrected: `tool_arg_normalizer.py`'s 38 Gemini references and
+  `web_fetch.py`'s one now read as "the model".
+- Dead names removed from the text the model routes on: `open_case_in_qgis`,
+  `run_model_*`, "the `run_*` engine doors", `modflow_contaminant_plume`.
+- Wrong counts removed rather than corrected, since none of them was load-bearing:
+  "190/191 tools", "~190-tool registry", "70+" twice, "the 57 tool implementations".
+  The live registry is 161, verified.
+- The line-number cross-reference in `tool_retrieval.py` and the five `server.py`
+  module references are gone.
+- The three dated provenance comment blocks in `meta/code_exec_tool/corpus.yaml`
+  were removed; all 36 phrasings stay.
+- `duckdb_spatial_functions.json`'s `generated_by` field named a script and a
+  decision record that do not describe it; it now names the dump it is.
+- Exemptions added: 2, both on `_example_tool_template.py`, on the regenerated
+  ledger at `docs/validation/docstring-exemptions.md`.
+- Readability-ledger rows written: 25, none applied.
+
+NOT acted on, recorded for the wave that owns these modules as code: the
+`FR-CE-8` spec label inside a raised error string in `tools/__init__.py` (a test
+asserts on it), the `v0.1` labels inside raised error strings in `ogc_adapter.py`
+and `fetch_from_catalog.py`, the `_LEX_REINFORCE_GATE_DOOR` dead branch, the
+`_PRODUCT_DESCRIPTIONS` constant with no readers, the `sfincs_flood` alias-table
+key naming no tool, and the unused imports in `fetch_from_catalog.py` and
+`search_data_catalog.py`. The `Hazard Modeling Agent` user-agent strings in
+`ogc_adapter.py` and `fetch_living_atlas_layer.py` are live wire values and stay
+for the vocabulary audit.
