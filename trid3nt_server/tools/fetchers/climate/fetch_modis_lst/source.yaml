@@ -1,6 +1,5 @@
-# Router source spec (fetcher-fold wave-7, stac_float continuous-float mode, ADR 0053).
-# Twin: fetch_modis_lst.py -- MODIS 8-day LST via PC STAC (most-recent item, DN
-# scale/offset to deg C, two-tier per-href sign). Continuous-float, NaN fill.
+# MODIS 8-day land-surface temperature over the Planetary Computer STAC catalog:
+# the most-recent item in the window, DN scaled to deg C, NaN fill.
 schema_version: v1
 
 name: fetch_modis_lst
@@ -26,11 +25,14 @@ gates:
   max_bbox_deg2: 6.0
 
 ingest:
-  access: stac_float
+  access: stac
+  render: float
   native_cell_m: 1000.0
   stac:
     root: "https://planetarycomputer.microsoft.com/api/stac/v1"
-    select: latest
+    sign: planetary_computer
+    select:
+      mode: latest
     datetime_window: true
     default_window_days: 120
     param_error_suffix: PARAM_INVALID
@@ -66,7 +68,6 @@ ingest:
     scale: 0.02
     offset: -273.15
     fill_dn: 0
-    src_nodata: 0
 
 normalize:
   crs: "EPSG:4326"
