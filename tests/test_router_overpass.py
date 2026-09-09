@@ -460,3 +460,26 @@ def test_pois_no_features_propagates(monkeypatch):
     with pytest.raises(RouterEmptyError) as ei:
         router.route(POIS_SPEC, {"bbox": list(_FORT_MYERS), "amenity": "hospital"})
     assert ei.value.error_code == "OVERPASS_POIS_NO_FEATURES"
+
+
+def test_every_pois_corpus_phrasing_surfaces_the_row_model_free():
+    """The row's phrasings are the questions IT answers, not a neighbour's.
+
+    A curated US critical-infrastructure category is ``fetch_hifld_*``'s question
+    and retrieves there; what only this row answers is an arbitrary OSM tag, and
+    the same class of feature anywhere on earth.
+    """
+    import yaml
+
+    import trid3nt_server.main as main
+    from trid3nt_server.tools.search.search_tools import search_tools as st
+    from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
+
+    main._import_tools_registry()
+    st._get_index()
+    corpus = yaml.safe_load(
+        (Path(pois.__file__).resolve().parent / "corpus.yaml").read_text()
+    )["fetch_overpass_pois"]
+    missed = [q for q in corpus
+              if "fetch_overpass_pois" not in retrieve_visible_tools(q, None, 8)]
+    assert not missed, f"phrasings that do not surface the row: {missed}"
