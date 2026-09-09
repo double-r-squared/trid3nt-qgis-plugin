@@ -1,13 +1,13 @@
 """Migrated coverage for the arcgis-odd fold wave (ADR 0066).
 
-The twins (fema_nfhl_zones, nwi_wetlands, usace_dams, epa_frs_facilities) were
+The twins (fema_nfhl_zones, usace_dams, epa_frs_facilities) were
 DELETED and folded onto the EXISTING tier-3 hooks
 (build_request / next_page / parse_response). Live twin-vs-router feature-set
 value-identity was proven at fold time; this file migrates the value-bearing
 UNIT coverage of the pure hook logic (offline, synthetic bodies): OBJECTID-cursor
-paging + tolerate, server-side sfha/zone/IN() where, prefix-strip normalizer,
-raise-on-unknown alias + fail-loud, USPS/hazard normalization, keyless-mirror
-endpoint selection, program-expansion union + point-from-LAT/LON synthesis.
+paging + tolerate, server-side sfha/zone/IN() where, USPS/hazard
+normalization, keyless-mirror endpoint selection, program-expansion union +
+point-from-LAT/LON synthesis.
 """
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ import pytest
 from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_server.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
 from trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones import hooks as nfhl
-from trid3nt_server.tools.fetchers.hydrology.fetch_nwi_wetlands import hooks as nwi
 from trid3nt_server.tools.fetchers.hazard.fetch_usace_dams import hooks as dams
 from trid3nt_server.tools.fetchers.hazard.fetch_epa_frs_facilities import hooks as frs
 
@@ -80,33 +79,6 @@ def test_nfhl_parse_strips_objectid_projects_14():
     props = feats[0]["properties"]
     assert "OBJECTID" not in props
     assert set(props) == set(nfhl._PRESERVED_PROPERTIES)
-
-
-# ------------------------------- NWI ------------------------------- #
-
-def test_nwi_prefix_strip_first_wins():
-    props = {"Wetlands.ATTRIBUTE": "PFO1A", "NWI_Wetland_Codes.ATTRIBUTE": "LOOKUP",
-             "Wetlands.WETLAND_TYPE": "Freshwater", "Wetlands.ACRES": 3.2, "Wetlands.OBJECTID": 1}
-    out = nwi._normalize_props(props)
-    assert out == {"attribute": "PFO1A", "wetland_type": "Freshwater", "acres": 3.2}
-
-
-def test_nwi_waf_headers_on_plan():
-    s = _spec("NWI_WETLANDS", "nwi_wetlands")
-    plan = nwi.build_request(s, {"bbox": [0, 0, 1, 1]})[0]
-    assert plan.headers.get("Referer", "").startswith("https://www.fws.gov")
-    assert "Mozilla" in plan.headers.get("User-Agent", "")
-
-
-def test_nwi_next_page_short_stops_full_continues():
-    s = _spec("NWI_WETLANDS", "nwi_wetlands")
-    short = json.dumps({"type": "FeatureCollection", "features": [{"a": 1}] * 10,
-                        "exceededTransferLimit": False}).encode()
-    assert nwi.next_page(s, {"bbox": [0, 0, 1, 1]}, [short]) is None
-    full = json.dumps({"type": "FeatureCollection", "features": [{"a": 1}] * nwi._PAGE_SIZE,
-                       "exceededTransferLimit": True}).encode()
-    nxt = nwi.next_page(s, {"bbox": [0, 0, 1, 1]}, [full])
-    assert nxt is not None and nxt.params["resultOffset"] == str(nwi._PAGE_SIZE)
 
 
 # ------------------------------- usace_dams ------------------------------- #

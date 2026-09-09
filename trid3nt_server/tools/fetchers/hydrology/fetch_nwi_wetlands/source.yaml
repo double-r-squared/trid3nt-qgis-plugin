@@ -17,15 +17,24 @@ params:
     type: bbox
     required: true
     quantize: round_6dp
-hooks:
-  build_request: nwi_wetlands.build_request
-  next_page: nwi_wetlands.next_page
-  parse_response: nwi_wetlands.parse_response
 ingest:
-  properties:
-  - attribute
-  - wetland_type
-  - acres
+  access: ogr
+  ogr:
+    driver: ESRIJSON
+    # The public MapServer answers a machine User-Agent with the WAF's HTML
+    # challenge; this trio is what gets JSON past it.
+    headers:
+      User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)
+        Chrome/120.0 Safari/537.36 trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)
+      Accept: application/json, text/plain, */*
+      Referer: https://www.fws.gov/program/national-wetlands-inventory
+  pagination: {page_size: 1000}
+  # Layer 0 is a join, so every column arrives table-prefixed; these three are the
+  # published spec of this row.
+  column_map:
+    attribute:    {from: "NWI_Wetland_Codes.ATTRIBUTE"}
+    wetland_type: {from: "Wetlands.WETLAND_TYPE"}
+    acres:        {from: "Wetlands.ACRES"}
 normalize:
   crs: EPSG:4326
 output:
@@ -71,7 +80,6 @@ docstring: "USFWS National Wetlands Inventory (NWI) wetland polygons as a vector
   \ bbox over open ocean / an unmapped area returns a valid\n    0-feature FlatGeobuf (NOT an error).\n\
   \nCross-tool dependencies:\n    - Composed by ``analyze_affected_habitats`` (the wetland channel of\
   \ the\n      habitat-impact assessment).\n    - Feeds ``spatial_query`` (wetland area by type inside\
-  \ a footprint, or\n      wetlands within a place / protected area).\n\nResilience (feedback_data_source_fallback_norm):\
-  \ PRIMARY geojson request ->\nFALLBACK Esri-JSON parse -> honest ``NWIWetlandsUpstreamError(retryable=True)``\n\
-  if both fail. Never fabricates a non-empty layer. Cache: ``static-30d``,\nkeyed on ``bbox-rounded-6dp``\
-  \ + month vintage."
+  \ a footprint, or\n      wetlands within a place / protected area).\n\nResilience: the read is one ESRIJSON driver query the\
+  \ driver pages\nitself; an upstream failure is an honest\n``NWIWetlandsUpstreamError(retryable=True)``.\
+  \ Never fabricates a non-empty\nlayer. Cache: ``static-30d``, keyed on ``bbox-rounded-6dp`` + month\nvintage."
