@@ -4449,3 +4449,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   reader from the caller at the docstring; LLM-facing tool docstrings
   keep the 1,000-char front budget, enforced on the 19 that exceed it
   today; docs/CONVENTIONS.md rewritten to state exactly this.
+  COMMENTS, THE CLEAN CODE CH. 4 DISCUSSION (NATE 2026-09-09): the
+  best comment is the one the code makes unnecessary - the declarative
+  style does this at the template level (rows named for datasets,
+  parts named for what they are, raw keywords carrying the engine's
+  own description). BUT THE HYGIENE WAVE DOES NOT APPLY THAT TEST
+  INSIDE FUNCTIONS: renaming or extracting to remove a comment is a
+  behavior surface and adds lines - "we could possibly risk behavior
+  changing or bloat" - so the wave is DOCUMENTATION ONLY: it deletes
+  the disallowed classes, trims docstrings to the contract, moves a
+  derivation into a comment block or drops it, and never touches a
+  name, a signature or a body. The naming-driven comment elimination
+  belongs to whichever wave owns a module for its own reasons, where
+  it is reviewed as code.
