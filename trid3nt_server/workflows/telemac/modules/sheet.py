@@ -1,25 +1,8 @@
 """The sheet: a module's slots, what filled each one, and the two acts on it.
 
-FILL is repeatable and decides nothing: it sets slots, expands the composites the
-wrapper registered, binds every late-bound read in dependency order, and hands
-back what the sheet now says - every filled slot with its PROVENANCE, and every
-OPEN slot, carrying the meaning and the choices that would answer it. Nothing
-runs.
-
-OPEN and REQUIRED are two different statements. Open is the whole set the
-dictionary gives no default for, lists included: it is what this run leaves to
-the engine, and it is informational. Required is the dictionary's own OBLIG
-files, and it is the only thing a run refuses on.
-
-RUN is the other act, and it is explicit. Execution is HELD until a sheet whose
-required slots are answered is handed to it; then the sheet is serialized into
-the engine's own steering file, the run directory is staged, and the box
-receives it.
-
 Resolution order, lowest to highest: the engine default (never written - the
-dictionary supplies it), the listed parts in order, the template, the fill. At
-most two opinion layers exist and both are templates.
-"""
+dictionary supplies it), the listed parts in order, the template, the fill. OPEN
+is informational; REQUIRED, the dictionary's OBLIG files, is what a run refuses on."""
 
 from __future__ import annotations
 
@@ -69,10 +52,7 @@ class Sheet:
     def open(self) -> tuple[Slot, ...]:
         """Every keyword the dictionary gives no default for and nothing has set.
 
-        Informational and COMPLETE: an open slot carries its meaning and its
-        choices and no engine default to grey out - there is none - so what the
-        reader sees is the whole of what this run leaves to the engine.
-        """
+        Informational and COMPLETE: what this run leaves to the engine, whole."""
         return tuple(slot for name, slot in self.body.CATALOG.items()
                      if slot.is_open and name not in self.filled)
 
@@ -83,9 +63,7 @@ class Sheet:
     def resolved(self) -> tuple[tuple[str, Any], ...]:
         """``(keyword, value)`` for everything the deck states, in catalog order.
 
-        An engine default is not among them: the dictionary already supplies it,
-        and writing it back would make the deck claim a choice nobody made.
-        """
+        An engine default is never among them; the dictionary supplies it."""
         return tuple((row.slot.keyword, row.value)
                      for name, row in _in_catalog_order(self.body, self.filled))
 
@@ -115,12 +93,7 @@ def fill(source: type | Sheet, *, produced: Mapping[str, Any] | None = None,
          params: Mapping[str, Any] | None = None, **slots: Any) -> Sheet:
     """Set slots on a body or on a sheet already filled -> the sheet that results.
 
-    Repeatable: an edit is another fill. A keyword the module does not have, and
-    a value the dictionary does not take, refuse BY NAME rather than reaching the
-    engine as a line nobody can account for. A value of None states nothing at
-    all, so the dictionary's default stands and the deck stays silent about a
-    choice nobody made.
-    """
+    Repeatable; an unknown keyword refuses BY NAME and None states nothing."""
     body, standing, pending = _standing(source)
     catalog = body.CATALOG
     composites = body.COMPOSITES
@@ -165,12 +138,7 @@ async def draw(source: type | Sheet, name: str, *, geometry: str = "point",
                prompt: str = "") -> Sheet:
     """Ask for ONE value on the canvas -> the sheet with it filled.
 
-    A fill, reached through the canvas rather than through an argument. It rides
-    the SAME gate a typed value rides, so the drawn vocabulary and the typed
-    vocabulary cannot drift: what comes back has passed the one set of
-    normalizers, and what comes back as nothing is a typed refusal naming the
-    slot that stayed empty. Nothing is invented on a decline.
-    """
+    Rides the SAME gate a typed value rides; a decline is a typed refusal."""
     from trid3nt_server.gates.draw_input import gate_draw_input
 
     body = source.body if isinstance(source, Sheet) else source
@@ -188,12 +156,7 @@ def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],
                                              dict[str, tuple[Any, str]]]:
     """What is on the sheet before this fill: the body's parts, or a sheet.
 
-    The body's own assertions are the TEMPLATE layer and beat every part; each
-    part's assertions are the PART's, named on the row - the same keyword can
-    mean something else in a new setting, and composed context never hides. A
-    composite assertion, and one carrying a late-bound read, are PENDING rather
-    than filled: neither is a value until the fill binds it.
-    """
+    A body's assertions beat its parts; a composite or a read is PENDING."""
     if isinstance(source, Sheet):
         return source.body, dict(source.filled), {}
     standing: dict[str, Filled] = {}
@@ -215,10 +178,7 @@ def _standing(source: type | Sheet) -> tuple[type, dict[str, Filled],
 def _measured(value: Any) -> bool:
     """Is this assertion a read of something the run MEASURED?
 
-    A ``Ref`` names a producer's result or a slot already resolved, so what it
-    resolves to was measured off the accepted artifact rather than written by an
-    author. A ``ParamRef`` is the invocation's own answer and is not this.
-    """
+    A ``Ref`` is; a ``ParamRef`` is the invocation's own answer and is not."""
     for _found in declared_reads(value, Ref):
         return True
     return False
@@ -227,10 +187,7 @@ def _measured(value: Any) -> bool:
 def _late(value: Any) -> bool:
     """Does ``value`` still hold a read? Then it is not a value until fill binds it.
 
-    Walked rather than tested with ``any``: a placeholder refuses its own truth
-    value, which is what keeps a description from being read as data anywhere
-    else, and this is a place that counts them rather than reading one.
-    """
+    Walked rather than tested: a placeholder refuses its own truth value."""
     for kind in (Ref, ParamRef):
         for _found in declared_reads(value, kind):
             return True
@@ -241,9 +198,7 @@ def _in_ref_order(pending: Mapping[str, tuple[Any, str]],
                   ) -> list[tuple[str, tuple[Any, str]]]:
     """The pending assignments, each after the ones it reads.
 
-    A value that reads another pending name waits for it; a cycle refuses naming
-    the names in it, because a producer that waits on its own result never runs.
-    """
+    A cycle refuses, naming the names in it."""
     waiting = dict(pending)
     ordered: list[tuple[str, tuple[Any, str]]] = []
     while waiting:
@@ -263,11 +218,7 @@ def _bind(value: Any, produced: Mapping[str, Any], params: Mapping[str, Any],
           filled: Mapping[str, Filled]) -> Any:
     """Substitute every late-bound read in ``value`` with what it names.
 
-    Two namespaces, because a body states both: a PARAM read is the sheet the
-    invocation resolved, and a Ref is a producer of this fill or a slot already
-    on it. Neither is a value while the body is being read - that is what makes
-    the body static - and both become one here.
-    """
+    A PARAM read is the invocation's sheet; a ``Ref`` is this fill's own."""
     if isinstance(value, ParamRef):
         if value.name not in params:
             raise SlotRefused(
@@ -320,17 +271,9 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
               continue_from: str | None = None) -> Any:
     """A complete sheet: serialize, stage, hand it to the box.
 
-    The sheet is checked FIRST, against the REQUIRED slots only - the files the
-    dictionary marks OBLIG. Everything else the engine wants it asks for by name
-    in its own listing, and a required set invented here would refuse runs the
-    engine would have taken.
-
-    WHICH box entry the staged run goes to is the caller's, not this function's:
-    the sequence is what is held here, and a module surface that picked a
-    dispatch would be holding an opinion.
-
-    The serialization is a container round trip and runs off the loop.
-    """
+    Checked against the REQUIRED slots only; the box entry is the caller's."""
+    # Everything past the OBLIG files the engine asks for by name in its own
+    # listing, so a required set invented here would refuse runs it would take.
     from ..authoring.assembler import new_rundir, stage_run
     from ..authoring.serializer import serialize
 
@@ -341,6 +284,7 @@ async def run(sheet: Sheet, *, dispatch: Callable[..., Any],
             + "; ".join(f"{slot.keyword} ({slot.desc[:60]})"
                         for slot in unanswered))
     run_tag, rundir = new_rundir()
+    # The serialization is a container round trip, so it runs off the loop.
     written = await asyncio.to_thread(serialize, sheet, rundir, steering=steering)
     staged = await stage_run(
         rundir, run_tag, module=sheet.module, steering=written["steering"],

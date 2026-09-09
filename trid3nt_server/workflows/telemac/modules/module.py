@@ -1,29 +1,8 @@
 """A TELEMAC module's keyword surface, as the engine publishes it.
 
-Every keyword in a module's dictionary is a SLOT: its raw name, the help the
-dictionary writes for it, its type, its allowed values, its engine default, its
-level and whether it names a file. The catalog under ``telemac/catalog/`` is that
-dictionary, extracted in-image; nothing here transcribes a keyword by hand.
-
-A MODULE is the class the catalog makes. It asserts NO value of its own - it is
-the analog of the engine's own defaults - and it carries the two other things a
-wrapper holds: COMPOSITES, where one value stands for several slots and the file
-they name, and OUTPUTS, where the module's results are bound to their readers.
-
-A class body extending a module asserts slots under the identifiers the image
-itself spells them by. A name the module has no keyword for refuses at IMPORT
-time, naming the nearest keyword it does have; a value of the wrong type, the
-wrong length or outside the dictionary's own choices refuses there too, naming
-what the dictionary allows.
-
-A body reuses another body by COMPOSITION: ``parts = [RIVER, TRACER]`` lists the
-shared bodies this one is made of, merged in the listed order, and a keyword two
-parts both set refuses by name unless this body settles it itself. A body never
-extends another body - what a part asserts stays visible as the part's, so a
-keyword that means something else in a new setting is seen rather than inherited
-into silence. Every assertion is DATA, fixed when the module is imported: a body
-reads no value any fill produced.
-"""
+Every assertion is DATA, fixed when the module is imported: a body reads no value
+any fill produced, and every refusal - an unknown keyword, a wrong type, a
+keyword two parts both set - is raised at IMPORT time."""
 
 from __future__ import annotations
 
@@ -108,31 +87,23 @@ class Slot:
     def is_open(self) -> bool:
         """The dictionary gives this keyword no default, so nothing answers it.
 
-        Lists included. A list the dictionary writes no DEFAUT for is empty until
-        something states it, and an emptiness that means a substitution - the
-        engine advecting a tracer by whatever the velocities are advected by -
-        is a fact a reader has to be able to see.
-        """
+        Lists included: an undefaulted list is empty until something states it."""
         return self.engine_default is UNSET
 
     @property
     def is_required(self) -> bool:
         """The engine will not start without this one: an OBLIG file, undefaulted.
 
-        The dictionary's OBLIG mark is the only statement anywhere about what a
-        run cannot begin without, so it is the only thing a run refuses on. What
-        else the engine demands, it demands from its own listing - LECDON names
-        the keyword - and inventing a required set here would be this code
-        guessing at the Fortran's conditions.
-        """
+        The dictionary's OBLIG mark is the only thing a run refuses on."""
+        # What else the engine demands it demands from its own listing, where
+        # LECDON names the keyword; a required set invented here would be this
+        # code guessing at the Fortran's conditions.
         return self.is_file and self.file_mandatory and self.is_open
 
     def check(self, value: Any) -> Any:
         """``value`` as this slot takes it, or the refusal that says why not.
 
-        A late-bound READ passes through: a body states what it will hold, and
-        the fill that substitutes the value is what the value is checked at.
-        """
+        A late-bound READ passes through and is checked at the fill instead."""
         if isinstance(value, (Ref, ParamRef)):
             return value
         if self.is_list:
@@ -188,11 +159,7 @@ _TYPES: Mapping[str, Any] = {
 class Composite:
     """One value standing for several slots, and the file they name.
 
-    ``expand`` is ``(value) -> (slots, files)``: the keyword assertions the value
-    means, under their identifiers, and the files those keywords name, by
-    basename. It lives in the wrapper because the keyword group is the module's,
-    not a template's private code.
-    """
+    ``expand`` is ``(value) -> (slots, files)``, keyed by identifier and basename."""
 
     name: str
     expand: Callable[[Any], tuple[Mapping[str, Any], Mapping[str, Any]]]
@@ -232,10 +199,7 @@ def load_catalog(module: str) -> Mapping[str, Slot]:
 class _Body(type):
     """The metaclass every wrapper and every body extending one is made by.
 
-    Calling :class:`Module` builds the wrapper class for a module; every other
-    class this creates is a BODY, and its namespace and its parts are checked
-    against that module's catalog while the module is still being imported.
-    """
+    A body's namespace and parts are checked against the catalog at import."""
 
     def __call__(cls, *args: str) -> type:
         if cls is not Module:
@@ -266,10 +230,7 @@ class _Body(type):
 def _refuse_extended_body(cls: type, bases: tuple) -> None:
     """A body extends the WRAPPER. Reuse between bodies is composition.
 
-    Subclassing a body would put its assertions on this one's chain under this
-    one's name, and per-slot provenance could then only say "inherited". A part
-    keeps its own name on every row it fills.
-    """
+    A part keeps its own name on every row it fills; an heir could not."""
     for base in bases:
         if getattr(base, "ASSERTED", None):
             raise SlotRefused(
@@ -295,10 +256,7 @@ def _parts(cls: type, declared: Any) -> tuple[type, ...]:
 def _refuse_unsettled(cls: type) -> None:
     """A keyword two parts both set is settled by this body, or it refuses.
 
-    Merging in the listed order would let the second part win silently, and the
-    reader of the later template would have no way to see that the first part
-    said something else about the same keyword.
-    """
+    Merging in the listed order would let the second part win silently."""
     seen: dict[str, str] = {}
     for part in cls.PARTS:
         for key in part.ASSERTED:
@@ -334,9 +292,7 @@ def _asserted(cls: type, namespace: Mapping[str, Any],
 def _is_method(value: Any) -> bool:
     """Is this namespace entry the body's own code rather than a slot's value?
 
-    A keyword's value is data. A body that carries a coupled-body constructor or
-    a shared helper is carrying code, and no dictionary spells a keyword as one.
-    """
+    A keyword's value is data; no dictionary spells a keyword as a callable."""
     return isinstance(value, (classmethod, staticmethod, FunctionType))
 
 
@@ -350,10 +306,7 @@ def _nearest(key: str, catalog: Mapping[str, Slot],
 class Module(metaclass=_Body):
     """A module's catalog, its composites and its outputs. It asserts nothing.
 
-    ``Module("telemac2d")`` is the wrapper class; a template body extends it.
-    There is deliberately no hook here for a default: the engine's default is the
-    wrapper's whole position, and every opinion above it lives in a template.
-    """
+    There is no hook for a default: the engine's default is the whole position."""
 
     #: The engine module this wraps, e.g. ``telemac2d``.
     MODULE: str = ""
@@ -394,12 +347,9 @@ class Module(metaclass=_Body):
 
     @classmethod
     def identify(cls, name: str) -> str:
-        """The identifier a caller's name is written under: RAW keyword, identifier
-        or composite. The dictionary spells the raw name, and the map from it to
-        the identifier is the catalog's own rather than a second transcription of
-        the image's spaces-and-hyphens rule. An unknown name refuses naming the
-        nearest keyword THE DICTIONARY spells, because that is the name the caller
-        was reaching for."""
+        """The identifier a name is written under: raw keyword, identifier or
+        composite. An unknown name refuses, naming the nearest keyword the
+        dictionary itself spells."""
         wanted = str(name).strip()
         by_keyword = {slot.keyword: identifier
                       for identifier, slot in cls.CATALOG.items()}

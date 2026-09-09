@@ -1,16 +1,8 @@
 """``describe_keywords``: the READ over a module's keyword catalog.
 
-A module's dictionary is between ninety and four hundred keywords, and the whole
-set across the exposed modules is more than a thousand. No tool docstring carries
-that, so the surface is REACHED rather than carried: a question in words - "what
-governs friction", "how do I write the results more often" - is answered out of
-the catalog itself, with each match's own help, its labeled choices, its engine
-default, its level and whether it names a file.
-
-Nothing here decides anything and nothing here runs: the answer is the
-dictionary, and what a caller does with a keyword it learns is state it on a
-fill, through the ``keywords={NAME: value}`` floor every template's wire carries.
-"""
+Nothing here decides anything and nothing here runs. What a caller does with a
+keyword it learns is state it on a fill, through the ``keywords={NAME: value}``
+floor every template's wire carries."""
 
 from __future__ import annotations
 
@@ -40,10 +32,7 @@ _WEIGHTS: Mapping[str, int] = {"keyword": 6, "mnemo": 4, "rubrique": 3, "help": 
 
 
 class DescribeKeywordsError(RuntimeError):
-    """The catalog cannot answer: no such module.
-
-    Codes: ``UNKNOWN_MODULE`` - the name is not one of the exposed modules.
-    """
+    """The catalog cannot answer: ``UNKNOWN_MODULE`` is the only code."""
 
     error_code: str
     retryable: bool = False
@@ -64,10 +53,7 @@ def _words(text: str) -> list[str]:
 def _score(slot: Any, wanted: set[str], phrase: str) -> int:
     """How well one slot answers the query. Deterministic, and model-free.
 
-    A whole-phrase hit in the keyword's own name outranks any accumulation of
-    single words, because "law of bottom friction" typed in full is the caller
-    naming the keyword rather than describing it.
-    """
+    A whole-phrase hit in the name outranks any accumulation of single words."""
     fields = {"keyword": slot.keyword, "mnemo": slot.mnemo,
               "rubrique": " ".join(slot.rubrique), "help": slot.desc}
     score = 0
@@ -117,36 +103,23 @@ def describe_keywords(module: str = "telemac2d", query: str = "",
                       limit: int = 12) -> dict[str, Any]:
     """Look up TELEMAC steering keywords: what governs friction, turbulence, output.
 
-    Use this when a run has to state something the template's own params do not
-    name - a friction law, a turbulence model, a printout period, an advection
-    scheme - and you need the engine's own keyword for it. What comes back is the
-    module dictionary's own entry: the keyword, its help, its allowed values, the
-    engine default it has when nobody states it, and whether it names a file. Set
-    what you learn on the call: `keywords={"LAW OF BOTTOM FRICTION": 4}` on any
-    telemac template, which fills that keyword on the sheet and shows it in the
-    review as user-set.
-
-    Do NOT use this to run anything - it reads the dictionary and nothing else -
-    and do NOT use it to pick a template: the template answers the QUESTION, the
-    keywords tune the deck it writes.
+    Use it when a run must state what the template's own params do not name - a
+    friction law, a turbulence model, a printout period, an advection scheme.
+    Set what you learn on the call:
+    `keywords={"LAW OF BOTTOM FRICTION": 4}` on any telemac template. Do NOT use
+    it to run anything, and do NOT use it to pick a template.
 
     Args:
-        module: Which engine module's dictionary to read - ``telemac2d`` (2D
-            shallow water), ``telemac3d``, ``artemis`` (waves), ``waqtel`` (water
-            quality), ``gaia`` (sediment), ``tomawac``. Defaults to telemac2d.
-        query: What you are looking for, in words ("bottom friction", "how often
-            are results written", "turbulence model"). Matched against every
-            keyword's name, its dictionary section and its help text. EMPTY
-            returns the module's section index instead of keywords.
-        limit: How many matches to return, at most 50.
+        module: telemac2d (default), telemac3d, artemis, waqtel, gaia, tomawac.
+        query: What you want, in words ("bottom friction", "turbulence model"),
+            matched against keyword names, sections and help. EMPTY returns the
+            module's section index.
+        limit: How many matches, at most 50.
 
     Returns:
-        ``{module, query, keyword_count, match_count, matches: [{rubrique,
-        keywords: [{keyword, help, type, choices, engine_default, level,
-        is_file}, ...]}, ...]}`` - matches grouped under the dictionary's own
-        section, best first. With an empty ``query``: ``{module, keyword_count,
-        sections: [{rubrique, keywords: n}, ...]}``. An unknown module raises
-        naming the modules that exist.
+        ``{module, query, keyword_count, match_count, matches}``, each match a
+        rubrique holding its keywords - keyword, help, type, choices,
+        engine_default, level, is_file - best first. An unknown module raises.
     """
     name = str(module or "").strip().lower()
     if name not in _exposed():

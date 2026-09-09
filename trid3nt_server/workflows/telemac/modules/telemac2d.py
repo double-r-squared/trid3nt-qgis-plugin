@@ -1,20 +1,8 @@
 """The TELEMAC-2D wrapper: its catalog, its composites, and its outputs.
 
-The wrapper asserts NO value of its own. The engine's default is its whole
-position, and every opinion above it lives in a template.
-
-What it does hold, beyond the catalog, is the keyword GROUPS that are repetitive
-and failure-prone to write one keyword at a time. A point source is five
-keywords plus a time series whose columns are sized to the tracer count; a wind
-is five keywords plus the meteorological from-direction transform; a coupled
-module is a steering file of its own plus the three keywords the carrier names it
-by. Each of those is ONE value here, so the group cannot half-arrive.
-
-The OUTPUTS are the other half of the wrapper: the module's results bound to the
-readers that publish them. The bindings live here rather than in a template
-because what a TELEMAC-2D result file holds is the module's fact, not the
-question's.
-"""
+The wrapper asserts NO value of its own. Each composite is ONE value standing for
+a keyword group, so the group cannot half-arrive; the OUTPUTS bind the module's
+results to their readers, because what a result file holds is the module's fact."""
 
 from __future__ import annotations
 
@@ -65,17 +53,13 @@ def Release(*, at: Any, q: Any, tracers: Any,  # noqa: N802 - a value constructo
             until_s: Any, window_s: Any = None) -> Mapping[str, Any]:
     """ONE point source: where it discharges, how much, of what, and for how long.
 
-    ``at`` is the settled release point in the mesh's own metres. ``tracers`` is
-    the value this source carries for EVERY tracer the run declares, in the
-    order the names are declared, because the engine reads the array by position.
-    ``window_s`` is a finite release - held, then stepped to nothing, so the slug
-    advects and passes; ``None`` is a permitted discharge, held flat for the
-    whole run. ``until_s`` is the horizon the series is written over.
-
-    A MAPPING and not an object, because the sheet's one ref walk descends
-    mappings: a late-bound read inside a release is bound by fill before the
-    composite ever expands it.
-    """
+    A MAPPING, not an object: the sheet's one ref walk descends mappings."""
+    # ``at`` is the settled release point in the mesh's own metres. ``tracers`` is
+    # the value this source carries for EVERY tracer the run declares, in the
+    # order the names are declared, because the engine reads the array by
+    # position. ``window_s`` is a finite release - held, then stepped to nothing,
+    # so the slug advects and passes - while ``None`` is a permitted discharge
+    # held flat for the whole run; ``until_s`` is the horizon it is written over.
     return MappingProxyType({"at": at, "q": q, "tracers": tracers,
                              "window_s": window_s, "until_s": until_s})
 
@@ -96,10 +80,7 @@ def Oil(*, steering: Any, fortran: Any, release_step: Any,  # noqa: N802
         drogues: Any, drogues_period_steps: Any) -> Mapping[str, Any]:
     """The oil module riding on top of the tracer solve.
 
-    ``steering`` is the module's own preset file and ``fortran`` the per-run
-    source the release coordinates are compiled into; both are content, written
-    beside the deck that names them.
-    """
+    ``steering`` and ``fortran`` are CONTENT, written beside the deck naming them."""
     return MappingProxyType({"steering": steering, "fortran": fortran,
                              "release_step": release_step, "drogues": drogues,
                              "drogues_period_steps": drogues_period_steps})
@@ -108,11 +89,7 @@ def Oil(*, steering: Any, fortran: Any, release_step: Any,  # noqa: N802
 def _releases(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """N releases -> the source keywords they mean, and the series they name.
 
-    Every array is written in ONE order - the order the releases were declared -
-    so the abscissa, the ordinate, the discharge and the tracer block of source
-    number i are the same source. The tracer block is flattened by position
-    because that is how the engine reads it.
-    """
+    Every array is written in the declared order and flattened by position."""
     releases = list(value)
     if not releases:
         raise ValueError("a releases composite with no release in it states "
@@ -138,13 +115,7 @@ def _releases(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
 def _series(releases: Sequence[Mapping[str, Any]]) -> str:
     """The sources time series, on the scenario's own absolute clock.
 
-    The declared scenario is written over whatever stretch of that clock this run
-    covers: a release opens at zero because that is when it was declared, and the
-    last row runs past where the run stops. A continued run therefore carries the
-    SAME scenario forward - a pulse whose window has already elapsed continues as
-    zero, which is what a finite release means, rather than being re-released
-    into a second experiment.
-    """
+    A continued run carries the SAME scenario forward, never a re-release."""
     horizon = max(float(r["until_s"]) for r in releases) + _SERIES_TAIL_S
     breaks = {0.0, horizon}
     for release in releases:
@@ -176,10 +147,7 @@ def _on(release: Mapping[str, Any], t: float) -> float:
 def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """A from-direction -> the velocity components the engine reads.
 
-    The meteorological direction names where the wind comes FROM; the engine
-    reads where it blows TOWARD, in the mesh's own frame. Wind from the north
-    drives water southward, wind from the west drives it eastward.
-    """
+    Meteorological FROM, engine TOWARD, in the mesh's own frame."""
     if not value["speed_mps"]:
         # A wind of no speed is not a wind. Stating one would put the whole wind
         # block in the deck for a run nobody asked a wind about.
@@ -198,16 +166,14 @@ def _continue_from(value: Mapping[str, Any]
                    ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """The previous computation this run starts from.
 
-    Naming a previous computation file IS the continuation from release 9.0 - the
-    boolean that used to arm it left the dictionary - and the engine then reads
-    that file's last record as the initial state, so the file's own
-    initial-condition statements go unread. The FORMAT that file is read at is a
-    choice among three the dictionary offers, so a template asserting a
-    non-default one states it beside the file it writes.
-    """
+    Naming the file IS the continuation; its last record is the initial state."""
     if not value["previous"]:
         # This run continues nothing, so it states its own initial conditions.
         return ({}, {})
+    # The engine reads that file's last record as the initial state, so the deck's
+    # own initial-condition statements go unread. The FORMAT it is read at is a
+    # choice among three the dictionary offers, so a template wanting a
+    # non-default one states it beside the file it writes.
     return ({"PREVIOUS_COMPUTATION_FILE": str(value["previous"])}, {})
 
 
@@ -225,11 +191,7 @@ def _oil(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]
 def _rain(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """Distributed rain or evaporation, sized to the run's own tracer count.
 
-    Signed: positive rains, negative evaporates. With tracers present DAMOCLES
-    REQUIRES a rainwater concentration per tracer, and rainwater carries none of
-    them - which is exactly the array a hand-written deck gets wrong when a
-    coupling adds a tracer behind it.
-    """
+    Signed; with tracers present DAMOCLES demands one rainwater value each."""
     if value["mm_per_day"] is None:
         # No rate was resolved, so this run states no rain at all.
         return ({}, {})
@@ -249,10 +211,7 @@ def _rain(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any
 def TimeOrigin(*, at: Any) -> Mapping[str, Any]:  # noqa: N802
     """The absolute instant this run's clock starts at, or nothing at all.
 
-    A module that reads DATES rather than sim seconds - NESTOR's actions - maps
-    them through the engine's own origin, so a run that carries one states it and
-    every other run leaves the dictionary's own.
-    """
+    A module reading DATES rather than sim seconds maps them through this."""
     return MappingProxyType({"at": at})
 
 
@@ -276,12 +235,7 @@ def Rain(*, mm_per_day: Any, tracers: Any, hours: Any = None  # noqa: N802
 def _coupling(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """The coupled bodies a template named -> what the CARRIER states about them.
 
-    The body's own slots are not the carrier's; they go to the coupled module's
-    own steering file, which the serializer writes against that module's own
-    dictionary. What lands here is the three things the carrier says: which
-    modules it couples with, what each one's steering file is called, and - for
-    WAQTEL - which process it runs.
-    """
+    A coupled body's own slots go to that module's steering file, never here."""
     bodies = list(value)
     slots: dict[str, Any] = {
         "COUPLING_WITH": ";".join(body["module"].upper() for body in bodies)}
@@ -297,15 +251,7 @@ def _coupling(value: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
 def Boundaries(*, measured: Any, tracers: Any) -> Mapping[str, Any]:  # noqa: N802
     """The three PRESCRIBED lists, in the order the engine numbers its boundaries.
 
-    ``measured`` is what the accepted mesh reported: the walk order of the liquid
-    boundaries and what each one's own code quad makes the engine READ. The three
-    lists are written from that one measurement, so a level can never be stated at
-    a number the boundary file leaves free.
-
-    ``tracers`` is the value EVERY liquid boundary carries, one per tracer the run
-    declares - the arity of this carrier slot moves with the question, which is
-    why each template states it in its own body.
-    """
+    Written from ``measured``, the mesh's own walk; ``tracers`` is one each."""
     return MappingProxyType({"measured": measured, "tracers": tracers})
 
 
@@ -313,13 +259,7 @@ def _boundaries(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                    Mapping[str, Any]]:
     """The measured boundary walk -> the three lists the engine reads down.
 
-    WHICH list carries a boundary's value comes from what its ``.cli`` quad
-    prescribes, never from the role name, so the steering file cannot state a
-    level where the code file states a free exit. A quad that prescribes NOTHING
-    is legal under the free-exit role and refuses under any other: the first is a
-    face declared to state no condition, the second is two files describing
-    different boundaries.
-    """
+    WHICH list carries a value comes from the ``.cli`` quad, not the role."""
     from trid3nt_server.workflows.mesh.topology import FREE_EXIT_ROLE
 
     measured = value["measured"]
@@ -362,11 +302,7 @@ def _runoff(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                Mapping[str, Any]]:
     """The curve-number field -> the runoff keywords and the scatter they name.
 
-    The scatter points ARE the mesh nodes, so the interpolation the engine does
-    onto them is an identity. WHICH rainfall-runoff model reads them is a choice
-    among the four the dictionary offers, so the template that wants one states
-    it; a curve-number field is the SCS model's input either way.
-    """
+    The scatter points ARE the mesh nodes, so the interpolation is identity."""
     import numpy as np
 
     xy = np.asarray(value["node_xy"], dtype=float)
@@ -377,6 +313,9 @@ def _runoff(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     rows = ["#X Y CN2 (curve number, AMC-II)",
             *(f"{a:.3f} {b:.3f} {c:.3f}"
               for (a, b), c in zip(xy[:, :2], cn2))]
+    # WHICH rainfall-runoff model reads the scatter is a choice among the four the
+    # dictionary offers, so the template that wants one states it; a curve-number
+    # field is the SCS model's input either way.
     return ({"ANTECEDENT_MOISTURE_CONDITIONS": int(value["antecedent_moisture"]),
              "OPTION_FOR_INITIAL_ABSTRACTION_RATIO": int(
                  value["initial_abstraction"]),
@@ -393,9 +332,7 @@ def _friction(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                  Mapping[str, Any]]:
     """Per-node Manning -> the zone laws, the zone map, and the keywords naming them.
 
-    Distinct values become zones. The laws file is TERMINATED, because the scan
-    reads past the end of an unterminated one.
-    """
+    Distinct values become zones; the laws file is TERMINATED or the scan runs on."""
     import numpy as np
 
     values = np.round(np.clip(np.asarray(value["manning_per_node"], dtype=float),
@@ -426,10 +363,7 @@ def _rating(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                Mapping[str, Any]]:
     """The derived Z(Q) -> the curve keywords and the file the engine reads it from.
 
-    ``bord.f`` reads the curve at every prescribed-depth boundary whose entry is
-    1, so the selector is one number per liquid boundary in the engine's own
-    walk order.
-    """
+    The selector is one number per liquid boundary, in the walk order."""
     # ``read_fic_curves.f`` reads a block per curve: a header naming the
     # boundary, a UNITS line it skips without checking, then two columns until a
     # blank or a ``#``. Under a ``Q(n)`` header the first column is the
@@ -438,6 +372,8 @@ def _rating(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
     rows = [(float(q), float(z)) for q, z in value["rows"]]
     lines = [f"#{value['note']}", f"Q({at}) Z({at})", "m3/s m",
              *(f"{q:.6f} {z:.4f}" for q, z in rows)]
+    # ``bord.f`` reads the curve at every prescribed-depth boundary whose entry is
+    # 1, so the selector is one number per liquid boundary in the walk order.
     return ({"STAGE_DISCHARGE_CURVES": [
                  1 if n == at else 0
                  for n in range(1, int(value["of_boundaries"]) + 1)],
@@ -456,10 +392,7 @@ def _hyetograph(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                    Mapping[str, Any]]:
     """The storm blocks -> the data file and the user Fortran that reads them.
 
-    Each block is ``[t_end_s, gross_mm]`` over the interval since the previous
-    one. A dry tail past the last simulated instant is appended so the reader
-    never runs off the end at the final timestep.
-    """
+    Each block is ``[t_end_s, gross_mm]``, with a dry tail past the last instant."""
     if not value["blocks"]:
         # A constant design rate drives this run, so no block file is read and
         # the engine's own compiled branch stands.

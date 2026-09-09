@@ -1,21 +1,8 @@
 """The TELEMAC-3D wrapper: its catalog, its composites, and its output.
 
-The wrapper asserts NO value of its own. The engine's default is its whole
-position, and every opinion above it lives in a template.
-
-What it holds beyond the catalog is the two keyword groups a 3D run cannot state
-a keyword at a time. The VERTICAL GRID is a pair - the sigma transformation and
-the stretching coefficients it is steered by - decided by a planner that either
-finds a grid able to HOLD the declared column or refuses; a grid that silently
-carried an initial condition it cannot represent would report a discretisation
-error as a physical signal. The COLUMN is the initial tracer field, which the
-engine reads from a user Fortran hook rather than from any keyword, so it is a
-source file this composite writes and a FORTRAN FILE statement naming it.
-
-The two read the SAME three numbers through the SAME planner, so the thermocline
-thickness the Fortran writes and the layer thickness the grid achieves cannot
-disagree.
-"""
+The wrapper asserts NO value of its own. The VERTICAL GRID and the COLUMN read
+the SAME three numbers through the SAME planner, so the thermocline thickness the
+Fortran writes and the layer thickness the grid achieves cannot disagree."""
 
 from __future__ import annotations
 
@@ -68,12 +55,11 @@ _UNIFORM_SIGMA, _ZOOMED_SIGMA = 1, 4
 def _sigma_planes(nplan: int, dl: float, du: float) -> Any:
     """The plane distribution ``condim.f`` builds, bed(0) -> free surface(1).
 
-    ``ZSTAR(k) = (TANH((DL+DU)*s - DL) + TANH(DL)) / (TANH(DL) + TANH(DU))`` over
-    ``s = (k-1)/(NPLAN-1)``. Both coefficients at zero is the uniform sigma the
-    solver falls back to.
-    """
+    Both coefficients at zero is the uniform sigma the solver falls back to."""
     import numpy as np
 
+    # ``ZSTAR(k) = (TANH((DL+DU)*s - DL) + TANH(DL)) / (TANH(DL) + TANH(DU))``
+    # over ``s = (k-1)/(NPLAN-1)``.
     s = np.arange(int(nplan), dtype=float) / max(int(nplan) - 1, 1)
     if dl <= 0.0 and du <= 0.0:
         return s
@@ -93,10 +79,7 @@ def _stretch_stats(nplan: int, dl: float, du: float,
 def _min_surface_coef(nplan: int, depth_m: float, dz_target_m: float) -> float | None:
     """The SMALLEST surface coefficient reaching ``dz_target_m``, or ``None``.
 
-    Minimum-distortion by construction: the near-surface thickness falls
-    monotonically with the coefficient, so the bisection returns the least stretch
-    that meets the target rather than starving the interior.
-    """
+    Near-surface thickness falls monotonically with it, so bisection is exact."""
     lo, hi = 0.0, _STRETCH_SURFACE_MAX
     if _stretch_stats(nplan, _STRETCH_BOTTOM, hi, depth_m)[0] > dz_target_m:
         return None
@@ -123,21 +106,20 @@ def _min_planes_for(depth_m: float, thermocline_depth_m: float,
     return cap
 
 
+# docstring-exempt: the refusal, the transform reproduced and the sizing of the
+# returned thickness are three contracts no argument or return type carries.
 def plan_vertical_grid(nplan: int, max_depth_m: float,
                        thermocline_depth_m: float) -> dict[str, Any]:
     """The vertical discretisation that can HOLD the declared column, or refuse.
 
-    A uniform sigma spreads the levels evenly, so the near-surface layer over the
-    deepest column is ``depth/(NPLAN-1)``: a deep lake against a metres-thick
-    thermocline gets a ONE-NODE epilimnion and the initial condition is
-    unrepresentable however the profile is written. Transformation 4 clusters the
-    planes with the GOTM tanh stretch instead, and this reproduces that exact
-    transform to solve for the surface coefficient.
+    A uniform sigma spreads the levels evenly, so a deep lake against a
+    metres-thick thermocline gets a ONE-NODE epilimnion and the initial condition
+    is unrepresentable; transformation 4 clusters the planes with the GOTM tanh
+    stretch instead, and this reproduces that exact transform.
 
     What comes back is the keyword pair the grid IS, the achieved near-surface
-    layer thickness, and the thermocline THICKNESS the initial condition must use -
-    which is sized off that achieved layer, because a step profile's column heat
-    anomaly is O(dz) wrong and reads as a physical signal.
+    layer thickness, and the thermocline THICKNESS the initial condition must
+    use, sized off that achieved layer. No admissible stretch REFUSES.
     """
     nplan = int(nplan)
     depth = float(max_depth_m)
@@ -193,9 +175,7 @@ def _vertical_grid(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                       Mapping[str, Any]]:
     """The planned grid -> the transformation keyword and its coefficients.
 
-    A UNIFORM sigma is the dictionary's own transformation, so a run that needs no
-    zooming states NOTHING here and the engine reads its own default.
-    """
+    Uniform sigma is the dictionary's own, so a run needing none states NOTHING."""
     plan = plan_vertical_grid(int(value["levels"]), float(value["max_depth_m"]),
                               float(value["thermocline_depth_m"]))
     if plan["mesh_transformation"] == _UNIFORM_SIGMA:
@@ -210,10 +190,7 @@ def Column(*, levels: Any, max_depth_m: Any,  # noqa: N802
            surface_m: Any) -> Mapping[str, Any]:
     """The water column this run OPENS with: warm over cold, joined at a depth.
 
-    ``surface_m`` is the elevation the free surface stands at, because the
-    thermocline is stated as a depth BELOW THE WATER TOP and the hook below has
-    only the node's elevation to work from.
-    """
+    ``surface_m`` is the free-surface elevation the thermocline depth is under."""
     return MappingProxyType({"levels": levels, "max_depth_m": max_depth_m,
                              "thermocline_depth_m": thermocline_depth_m,
                              "warm_c": warm_c, "cold_c": cold_c,
@@ -224,11 +201,7 @@ def _column(value: Mapping[str, Any]) -> tuple[Mapping[str, Any],
                                                Mapping[str, Any]]:
     """The declared column -> the initial-condition hook the engine compiles.
 
-    No keyword carries a non-uniform initial tracer field, so the engine's own
-    ``USER_CONDI3D_TRAC`` hook is where one is stated. The thermocline THICKNESS
-    is planned from the same three numbers the grid is planned from, in this same
-    file, so the profile the Fortran writes is one the grid can hold.
-    """
+    No keyword carries a non-uniform initial tracer field; the hook does."""
     plan = plan_vertical_grid(int(value["levels"]), float(value["max_depth_m"]),
                               float(value["thermocline_depth_m"]))
     return ({"FORTRAN_FILE": USER_FORTRAN_DIR},
@@ -257,13 +230,11 @@ def _condi_thermocline(depth_m: float, warm_c: float, cold_c: float,
                        delta_m: float, surface_m: float) -> str:
     """A warm epilimnion over a cold hypolimnion, joined by a tanh thermocline.
 
-    ``T = Tc + (Tw - Tc) * 0.5 * (1 - TANH((DPTH - DTHERM)/DELTA))``. ``Z`` is the
-    elevation the engine's own ``CALCOT`` populates before this hook, on the same
-    datum the free surface was initialized on, so the depth below the water top is
-    ``ZS - Z``. The tanh is resolved whenever DELTA is at least twice the
-    near-surface layer, and the column anomaly then converges - which is why
-    ``delta_m`` comes from the grid plan and never from a literal.
-    """
+    ``T = Tc + (Tw - Tc) * 0.5 * (1 - TANH((DPTH - DTHERM)/DELTA))``."""
+    # The tanh resolves whenever DELTA is at least twice the near-surface layer
+    # and the column anomaly then converges, which is why ``delta_m`` comes from
+    # the grid plan and never from a literal. ``Z`` is on the same datum the free
+    # surface was initialized on, so the depth below the water top is ``ZS - Z``.
     return (_CONDI_HEAD
             + "      DO I3=1,NPOIN3\n"
             + f"        DPTH={surface_m:.4f}D0-Z(I3)\n"
@@ -281,10 +252,7 @@ def Wind(*, speed_mps: Any, from_deg: Any) -> Mapping[str, Any]:  # noqa: N802
 def _wind(value: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """A from-direction -> the velocity components the engine reads.
 
-    The meteorological direction names where the wind comes FROM; the engine reads
-    where it blows TOWARD, in the mesh's own frame. Wind from the north drives
-    water southward, wind from the west drives it eastward.
-    """
+    Meteorological FROM, engine TOWARD, in the mesh's own frame."""
     import math
 
     if not value["speed_mps"]:

@@ -1,23 +1,8 @@
 """The GAIA wrapper: its catalog, the sediment bodies, and the NESTOR composite.
 
-GAIA runs UNDER a hydrodynamic module. A carrier's template names one of the
-bodies here; the body's slots serialize into GAIA's own steering file, and the
-carrier's COUPLING WITH and GAIA STEERING FILE land on the carrier's sheet.
-
-What each body READS BACK - the variables GAIA prints and the balance it closes
-- is its caller's ask, handed in, and so is every formula that is a choice among
-the ones GAIA offers. The wrapper states none of them.
-
-The three bodies are three different questions, not three settings of one:
-GRADED sorts a mixture over an erodible bed, ERODIBLE scours and re-deposits one
-class, and SUSPENDED carries one settling class over a bed with no stock at all,
-so only what was injected can deposit. Cohesive sediment is approximated as very
-fine non-cohesive; the Krone/Partheniades path is not exposed.
-
-GAIA writes its own result SELAFIN and its own share of the listing balance, so
-it carries OUTPUTS of its own: the bed evolution the deposition COG is built
-from, the surface grading a graded bed sorts into, and the sediment balance.
-"""
+GAIA runs UNDER a hydrodynamic module and states no value of its own. Cohesive
+sediment is approximated as very fine non-cohesive; the Krone/Partheniades path
+is not exposed."""
 
 from __future__ import annotations
 
@@ -47,14 +32,9 @@ class _Gaia(Module("gaia")):  # type: ignore[misc]
                hiding_factor_formula: Any, morphological_factor: Any,
                printouts: Any, mass_balance: Any,
                dredging: Any = None) -> Mapping[str, Any]:
-        """A MIXTURE of non-cohesive classes over one erodible bed.
+        """A MIXTURE of non-cohesive classes over one erodible bed, which SORTS.
 
-        The classes are coupled by a hiding factor, so the bed SORTS under a
-        flood: fines winnow out of the high-shear thalweg and settle in slack
-        water. ``classes`` is the fine-to-coarse ``[(d50_um, fraction), ...]``
-        the four parallel CLASSES lists are written from, so the four cannot
-        disagree about how many classes there are.
-        """
+        ``classes`` is the fine-to-coarse pairs all four CLASSES lists come from."""
         return _body(cls._sediment(
             geometry, boundary, dredging, printouts, mass_balance,
             CLASSES_TYPE_OF_SEDIMENT=["NCO" for _ in classes],
@@ -74,10 +54,7 @@ class _Gaia(Module("gaia")):  # type: ignore[misc]
                  dredging: Any = None) -> Mapping[str, Any]:
         """ONE non-cohesive class over a real sediment stock: bedload scour.
 
-        The bed erodes where the flow steepens and re-deposits where it slackens.
-        Suspension stays off, which is also what keeps the carrier's dye the sole
-        hydrodynamic tracer.
-        """
+        Suspension stays off, so the carrier's dye is the sole tracer."""
         return _body(cls._sediment(
             geometry, boundary, dredging, printouts, mass_balance,
             CLASSES_TYPE_OF_SEDIMENT=["NCO"],
@@ -96,10 +73,7 @@ class _Gaia(Module("gaia")):  # type: ignore[misc]
                   mass_balance: Any) -> Mapping[str, Any]:
         """ONE settling class over a bed with NO stock: supply-limited.
 
-        Zero initial thickness, so nothing erodes and only the injected pulse
-        deposits. The class arrives at the carrier as a SECOND tracer, which is
-        why the carrier's tracer count and its boundary values move with it.
-        """
+        Zero thickness, so only the pulse deposits; a SECOND carrier tracer."""
         return _body(cls._sediment(
             geometry, boundary, None, printouts, mass_balance,
             CLASSES_TYPE_OF_SEDIMENT=["NCO"],
@@ -129,11 +103,7 @@ def Dredging(*, action: Any, polygon: Any, surface_ref: Any  # noqa: N802
              ) -> Mapping[str, Any]:
     """NESTOR dig and dump on the erodible bed, as one value.
 
-    The three files ride together because the module reads all three on every
-    action: the polygons name the fields, the actions say when and how deep, and
-    the surface reference is what each node's chainage and design grade are
-    interpolated from - so a run naming two of them is a run NESTOR cannot read.
-    """
+    The three files ride together: a run naming two is one NESTOR cannot read."""
     return {"action": action, "polygon": polygon,
             "surface_ref": surface_ref}
 
