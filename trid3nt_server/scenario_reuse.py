@@ -104,21 +104,21 @@ _BBOX_QUANT_DEG: float = 0.02
 
 
 # --------------------------------------------------------------------------- #
-# Fetched / context-layer kind (— extend reuse to fetch_* tools)
+# Fetched / context-layer kind
 # --------------------------------------------------------------------------- #
 #
-# covered REUSE for run_model_* (expensive SIMULATION) results. (live,
-# "South Florida protected areas" repeat): on a "resize the bbox
-# to encompass all protected areas" follow-up the agent RE-FETCHED WDPA — already
-# loaded — producing TWO identical choropleth layers. A fit / zoom / resize / show
-# follow-up must REUSE the already-loaded fetched layer (call compute_layer_bounds
-# on its handle), NEVER re-fetch.
+# Reuse covers run_model_* (expensive SIMULATION) results; a FETCHED layer needs
+# the same protection. On a "resize the bbox to take in the whole floodplain"
+# follow-up the model must not re-run fetch_fema_nfhl_zones over a layer already
+# loaded -- that mints TWO identical choropleth layers. A fit / zoom / resize /
+# show follow-up must REUSE the already-loaded fetched layer (call
+# compute_layer_bounds on its handle), NEVER re-fetch.
 #
 # A fetched layer has no scenario_type (it is not a simulation RESULT), so the
-# reuse machinery needs a parallel notion of "kind" — the data FAMILY a fetch
+# reuse machinery needs a parallel notion of "kind" -- the data FAMILY a fetch
 # produces (landcover / dem / roads / buildings / admin / population / ...). Two loaded
 # layers of the same kind covering the same (or an enclosing) AOI are the SAME
-# data — a second fetch is redundant. Recognition is prefix/substring based on the
+# data -- a second fetch is redundant. Recognition is prefix/substring based on the
 # layer_id and name so the per-place suffix (``dem-{lon}-{lat}``) does not defeat
 # it. Kept CONSERVATIVE: an unrecognized fetched layer returns ``None`` (the model
 # falls back to the existing INPUT guidance), never a false reuse.

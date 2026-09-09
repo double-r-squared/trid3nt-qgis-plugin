@@ -329,7 +329,7 @@ except Exception:  # pragma: no cover -- websockets absent in a minimal env
 # Conservative by construction: an unrecognized display URL degrades to the
 # full ``uri`` key, so nothing that did not previously dedup starts
 # collapsing unexpectedly. The QGIS WMS ``LAYERS=`` param is NOT used as a
-# key -- it carries a GENERIC layer name (e.g. ``LAYERS=wdpa``) shared across
+# key -- it carries a GENERIC layer name (e.g. ``LAYERS=landcover``) shared across
 # genuinely-distinct fetches, so collapsing on it would wrongly merge two
 # independent map layers.
 

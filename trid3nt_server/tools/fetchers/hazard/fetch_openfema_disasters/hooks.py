@@ -3,7 +3,7 @@ declarations aggregated per county, joined to Census TIGERweb county polygons.
 
 Two ratchets retired at once here:
 1. OFFSET paging ($skip/$top, stop-on-short-page) -- the ``next_page`` hook reuses
-   the offset-paging primitive (gbif's sibling): one combined OData query
+   the offset-paging primitive (nwi_wetlands' sibling): one combined OData query
    over the selector's states, paged to a short page / a row cap.
 2. ATTRIBUTE-FEED <- BOUNDARY-SERVICE FIPS join -- the PHASE-E enrichment: the
    declarations are the attribute feed; ``enrich_plan`` emits one TIGERweb county

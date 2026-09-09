@@ -87,9 +87,10 @@ def _validate_style_row(name: str, row: Any, *, where: str = "output.style") -> 
 # Enums (contract sec 1.1)
 # --------------------------------------------------------------------------- #
 
-#: The ingestion shape that selects the base executor (contract sec 2). The
-#: two HYBRID pilots (esri_landcover, census_acs) declare a base shape PLUS a
-#: transform block (``ingest.mosaic`` / ``join``) that wraps the base executor.
+#: The ingestion shape that selects the base executor (contract sec 2). A HYBRID
+#: spec declares a base shape PLUS a transform block that wraps the base
+#: executor: ``fetch_esri_landcover_10m`` is ``raster-cog`` + ``ingest.mosaic``,
+#: ``fetch_noaa_slr_scenarios`` is ``vector-fgb`` + ``ingest.fan_out``.
 SourceShape = Literal[
     "raster-cog",
     "vector-fgb",
@@ -122,13 +123,12 @@ AuthMode = Literal["none", "api_key_env", "cds", "vault", "token"]
 #: include_series). Coerced with ``bool(value)`` (the twin's ``bool(flag)``
 #: contract); the promoted signature annotates it ``bool`` (chained-resolution
 #: mode). No prior spec declares it (strict no-op).
-#: ``datetime_range`` = a 2-element ``[start, end]`` ISO datetime-pair list
-#: (movebank ``time_range``). Each entry parses as an ISO date OR datetime; the
-#: router coerces to a ``(datetime, datetime)`` tuple with ``start <= end`` and
-#: echoes ``[start.isoformat(), end.isoformat()]`` for cache-key stability -- the
-#: datetime sibling of ``int_range`` no ``iso_date`` pair carries (a raw
-#: datetime-pair kwarg, LayerURI-envelope wave). No prior spec declares
-#: it (strict no-op).
+#: ``datetime_range`` = a 2-element ``[start, end]`` ISO datetime-pair list. Each
+#: entry parses as an ISO date OR datetime; the router coerces to a
+#: ``(datetime, datetime)`` tuple with ``start <= end`` and echoes
+#: ``[start.isoformat(), end.isoformat()]`` for cache-key stability -- the
+#: datetime sibling of ``int_range``, carrying the sub-day window no ``iso_date``
+#: pair can express. No in-scope spec declares it (strict no-op).
 ParamType = Literal[
     "bbox", "iso_date", "enum", "int", "float", "str", "int_range", "date_compact",
     "point", "float_list", "str_list", "bool", "datetime_range",
@@ -443,27 +443,30 @@ class HookSpec(GraceModel):
     # --- are the source-specific PURE compute at each edge. -------------------- #
 
     #: PHASE R (resolve, PRE-cache-key). ``(spec, params) -> list[RequestPlan]``.
-    #: Build the round-1 resolution request(s) (name -> id: a ``species/match`` /
-    #: ``/v1/taxa`` GET). Returns ``[]`` to signal "params already carry the
-    #: canonical id, skip the round trip" (gbif int taxonKey, inat digit string).
+    #: Build the round-1 resolution request(s) (name -> id: ``fetch_high_water_marks``
+    #: GETs the STN event list to turn a flood-event NAME into its ``event_id``).
+    #: Returns ``[]`` to signal "params already select without a round trip, skip
+    #: it" (the same spec with no ``event``, selecting by bbox and state alone).
     #: Runs in ``route()`` BEFORE ``read_through`` so the resolved id enters the
-    #: cache key (a name query and its id query collapse to one cache entry, the
-    #: twin's contract).
+    #: cache key -- a name query and its id query collapse to one cache entry.
     resolve_build: str | None = None
 
     #: PHASE R. ``(spec, params, bodies: list[bytes]) -> dict[str, Any]``. Decode
-    #: the resolution body/bodies into a params-MERGE dict (``{"taxon_key": 12345}``)
+    #: the resolution body/bodies into a params-MERGE dict (``{"event_id": 7}``)
     #: the router folds into ``params`` before the main fetch. Raises the typed
-    #: INPUT (unknown / ambiguous name) / UPSTREAM (bad body) errors -- the twin's
-    #: matchType / no-results gate is this one irreducible step.
+    #: INPUT (unknown / ambiguous name) / UPSTREAM (bad body) errors -- the
+    #: exact-then-substring match with an ambiguity refusal is this one
+    #: irreducible step.
     resolve_parse: str | None = None
 
     #: MAIN-FETCH offset paging. ``(spec, params, bodies: list[bytes]) -> RequestPlan
     #: | None``. Given every page fetched so far (``bodies``), return the NEXT page's
-    #: request or ``None`` to STOP -- the pure offset/endOfRecords/total_results loop
-    #: control the ``totalPages`` declarative pager cannot express (gbif offset+=300
-    #: to ``endOfRecords``; inat page+=1 to ``total_results``). ``build_request``
-    #: still builds page 1; the router owns the loop + a hard ``max_pages`` ceiling.
+    #: request or ``None`` to STOP -- the pure offset / short-page / record-cap loop
+    #: control the ``totalPages`` declarative pager cannot express
+    #: (``fetch_nwi_wetlands`` advances ``resultOffset`` until a short page with no
+    #: ``exceededTransferLimit``; ``fetch_openaq_measurements`` walks ``/v3/locations``
+    #: pages to a 2000-station cap). ``build_request`` still builds page 1; the
+    #: router owns the loop + a hard ``max_pages`` ceiling.
     next_page: str | None = None
 
     #: PHASE E (enrich). ``(spec, params, features: list[dict]) -> list[tuple[str,

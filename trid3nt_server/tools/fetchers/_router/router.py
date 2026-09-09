@@ -301,7 +301,7 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
             out[pname] = [a, b]
 
         elif pspec.type == "datetime_range":
-            # A 2-element [start, end] ISO datetime-pair (movebank time_range).
+            # A 2-element [start, end] ISO datetime-pair.
             # Each entry parses as an ISO date OR datetime; start must be <= end.
             # Echoed as [start.isoformat(), end.isoformat()] for cache stability;
             # a build hook re-parses to the source's wire format.

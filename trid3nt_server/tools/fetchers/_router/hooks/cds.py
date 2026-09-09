@@ -117,7 +117,7 @@ def _resolve_key(params: dict[str, Any]) -> str | None:
     Returns ``None`` when every path misses (NOT an error): cdsapi falls back to
     ``~/.cdsapirc`` and, absent that, raises the missing-config error the retrieve
     classifier maps to the source's ``*_MISSING_KEY``. A str ``secret_ref`` is a
-    ref/shortcut passed verbatim (the ebird keyed precedent).
+    ref/shortcut passed verbatim (the firms_active_fire keyed precedent).
     """
     api_key = params.get("api_key")
     if api_key:

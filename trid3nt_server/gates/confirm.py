@@ -35,7 +35,8 @@ logger = logging.getLogger("trid3nt_server.server")
 # These live here rather than in a shared exceptions module because they are
 # raised exclusively inside ``_invoke_tool_via_emitter`` -- the server-side
 # routing layer. They follow the same typed-exception contract as the tool-level
-# typed exceptions (``WDPAError``, ``HRSLError``, etc.): ``error_code`` is a
+# typed exceptions (``NexradProductError``, the router's per-source
+# ``GRIDMET_UPSTREAM_ERROR`` stamp, etc.): ``error_code`` is a
 # SCREAMING_SNAKE_CASE string and ``retryable`` is False for both (the LLM
 # cannot retry its way out of a missing tool registration; it must revise its
 # function-call decision).

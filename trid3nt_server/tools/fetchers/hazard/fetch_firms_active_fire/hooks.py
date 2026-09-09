@@ -3,8 +3,8 @@ NASA FIRMS active-fire / thermal-anomaly detections, keyed by a MAP_KEY.
 
 FIRMS carries the key IN THE URL PATH (not a header), so ``build_request`` resolves
 the key (kwarg -> str secret_ref -> ``TRID3NT_FIRMS_MAP_KEY`` env), raising a
-credential-shaped FIRMS_MISSING_KEY pre-network when none resolves (the ebird
-precedent), and emits ONE GET of the AREA-endpoint CSV URL. The key wrinkle: FIRMS
+credential-shaped FIRMS_MISSING_KEY pre-network when none resolves (the
+openaq_measurements precedent), and emits ONE GET of the AREA-endpoint CSV URL. The key wrinkle: FIRMS
 signals a bad/rate-limited key via a 200-WITH-ERROR-BODY (not always a non-2xx), so
 the auth split lives in BOTH ``parse_response`` (the 200-body envelope check IS the
 doctrine) and ``classify_status`` (the same body markers on a non-2xx TransportError).
@@ -61,7 +61,7 @@ def _resolve_map_key(sc: str, params: dict[str, Any]) -> str:
     """Resolve the FIRMS MAP_KEY: kwarg -> str secret_ref -> env; else MISSING_KEY.
 
     Raises a credential-shaped FIRMS_MISSING_KEY BEFORE any network call when no key
-    resolves (the ebird parity surface). The env var is the local-dev / live-drive
+    resolves (the openaq_measurements precedent). The env var is the local-dev / live-drive
     path and is NOT threaded through the cache key (the detections do not vary by key).
     """
     import os
