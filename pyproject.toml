@@ -278,13 +278,16 @@ dependencies = [
     # so the mirror chain and the verbatim-error mapping are wrappers around
     # it, not replacements for it.
     "osmnx==2.1.1",
-    # pygeohydro carries the domain's own code tables (NID dam type/purpose,
-    # the STN high-water-mark query set); pynhd carries NLDI navigation.
-    # pygeohydro caps pynhd<0.20 while PyPI's latest pynhd is 0.20.0, so the
-    # pair is pinned exactly and moves together. Every call site passes
-    # status_to_retry=(429,500,502,503,504) and an explicit cache expiry.
+    # pygeohydro owns the STN high-water-mark query set and the NFHL flood-zone
+    # service. Its HTTP layer has no retry and returns a JSON-bodied 4xx as data,
+    # so every call goes through the shared shim in _router/hooks/hyriver.py,
+    # which also pins the library's response-cache expiry and location.
+    # pynhd is NOT declared here: nothing imports it, NLDI navigation stays on
+    # dataretrieval, and pygeohydro's own pynhd<0.20 cap holds the line.
     "pygeohydro==0.19.4",
-    "pynhd==0.19.3",
+    # pynldas2 reads hourly NLDAS-2 CONUS forcing, the same HyRiver line and the
+    # same shim.
+    "pynldas2==0.19.3",
     # pyogrio is GDAL's vector I/O, imported directly for the ESRIJSON, OAPIF
     # and /vsizip//vsicurl/ read paths. It vendors its OWN GDAL, distinct from
     # rasterio's: GDAL_HTTP_* config set through rasterio.Env does not reach
