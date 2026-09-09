@@ -252,7 +252,7 @@ def test_no_dead_corpus_keys():
     EXCEPT a DECLARED PARKED template, whose corpus is part of the declaration and
     comes back with it in one keyword. The retrieval visible set is derived from
     the registry, so a parked template's phrasings never reach the model."""
-    from tests.test_door_dissolution import PARKED_TEMPLATES
+    from tests.search.test_door_dissolution import PARKED_TEMPLATES
 
     corpus = _load_corpus()
     dead = sorted(set(corpus) - _full_registry_names() - set(PARKED_TEMPLATES))
