@@ -26,7 +26,7 @@ from trid3nt_server.gates.input_review import (
 )
 from trid3nt_server.emission import pipeline_emitter as pe
 
-_SERVER_ROOT = pathlib.Path(__file__).resolve().parents[1] / "trid3nt_server"
+_SERVER_ROOT = pathlib.Path(__file__).resolve().parents[2] / "trid3nt_server"
 
 
 # --------------------------------------------------------------------------- #
