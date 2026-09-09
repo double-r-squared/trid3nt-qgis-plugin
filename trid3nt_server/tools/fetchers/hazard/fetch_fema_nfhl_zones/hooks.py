@@ -1,18 +1,41 @@
-"""fema_nfhl_zones hooks (tier-3 chained-resolution mode/0066): FEMA NFHL
-regulatory flood-zone polygons, OBJECTID-cursor paged.
+"""fema_nfhl_zones: FEMA NFHL regulatory flood-zone polygons through pygeohydro.
 
-The wave-11 deferral was OBJECTID-cursor pagination: the NFHL endpoint
-500s on ``resultOffset>0`` against a bbox-filtered selection, so the twin walks an
-``OBJECTID>watermark`` cursor instead. That cursor IS a ``next_page`` variant -- the
-pure offset/endOfRecords loop control the declarative pager cannot express
--- so it folds onto the EXISTING chained-resolution ``next_page`` hook with ZERO new
-machinery: ``build_request`` builds page 1 (``OBJECTID>0`` + the sfha/zone server
-filter), ``next_page`` advances the cursor to the page's max OBJECTID (stop on a short
-page), ``parse_response`` projects to the regulatory-zone semantic columns.
+``pygeohydro.NFHL`` owns the service - the layer lookup by name, the object-id
+selection, the request. It also owns the thing this row could not do for itself: the
+NFHL endpoint answers a deep page 200-WITH-ERROR, so a cursor walk over it silently
+stops early, while an object-id read cannot lose a feature without saying so.
+MEASURED on one Tampa Bay bbox: the cursor walk returned 6,000 of the 9,894 polygons
+the service itself counts there and called it an answer.
 
-sfha_only (``SFHA_TF='T'``) and zone_filter (``FLD_ZONE IN (...)``) are applied
-SERVER-side in the where clause (the twin filtered zone_filter client-side; the feature
-SET is value-identical -- divergence). All I/O stays router-owned.
+THE OUTPUT FORMAT IS LOAD-BEARING, so it is named here rather than left at the
+client's default. Asked for Esri JSON the client hands the rings to a converter whose
+containment test is a LINE that contains a point, which no interior ring's vertex
+lies on - so every hole comes back as another filled outer ring. MEASURED on a
+326-polygon bbox: 18 features carry 629 holes, the Esri-JSON read returned zero of
+them, over-stating those features by 13.8 percent and the AOI by 7.8. An X-zone hole
+inside an AE polygon IS the regulatory answer, so it cannot be filled.
+
+THE BATCHES ARE READ ONE AT A TIME, which is the other half of coming back complete.
+The service throttles: MEASURED over the same bbox, batches 1-3 answered and 4-9
+returned HTTP 500 and then reset the connection outright, the ninth answering again
+after a pause. The library issues every batch in ONE gather, so a single throttled
+batch fails the whole read; read one batch per call and each one carries the shared
+shim's own backoff, under a batch size the service can actually deliver. Within a
+batch the library's own retry stays on and names any id it still could not read.
+
+Three more things ride here.
+
+THE ZONE VOCABULARY. ``sfha_only`` and ``zone_filter`` are server-side clauses over
+the D_FLD_ZONE domain, and the domain itself is this row's data: an unknown zone code
+is refused by name rather than passed to the service to return nothing.
+
+THE REGULATORY CORE. The service publishes far more columns than a flood-zone
+question needs; the fourteen that carry the regulatory answer are the spec's.
+
+THE COMPLETENESS GUARD. When some object ids fail even after the library's own
+retry, it WARNS and returns what it has. A partial regulatory layer that looks whole
+is the failure this row exists to have stopped, so a non-zero miss count is a typed
+upstream error instead.
 """
 
 from __future__ import annotations
@@ -24,16 +47,23 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._router import hooks as _hooks
 from ..._router.errors import router_input_error, router_upstream_error
+from ..._router.hooks.hyriver import hyriver_call
 
-__all__ = ["build_request", "next_page", "parse_response", "VALID_FLOOD_ZONES"]
+__all__ = ["delegate", "VALID_FLOOD_ZONES"]
 
-_NFHL_URL = (
-    "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query"
-)
+#: The service and the layer, both named the way the library names them.
+_SERVICE = "NFHL"
+_LAYER = "flood hazard zones"
 
-#: NFHL FeatureServer page size. maxRecordCount is 2000, but a documented FEMA
-#: quirk 500s the cursor-paged request at 2000; 1000 reliably round-trips.
-_PAGE_SIZE = 1000
+#: The one format whose ring assembly keeps a zone polygon's holes; the client
+#: defaults to Esri JSON, which fills them.
+_OUTFORMAT = "geojson"
+
+#: The service ADVERTISES maxRecordCount 2000 and cannot deliver it: MEASURED over a
+#: Tampa Bay bbox, a 2,000-id read of these zone polygons answers HTTP 500 (both
+#: formats, repeatably, direct as well as through the library) while the same ids at
+#: 500 answer in ~11 s. The advertised number is the cap the request must stay under.
+_MAX_IDS_PER_REQUEST = 500
 
 #: Properties preserved from each NFHL feature (the regulatory-flood semantic core).
 _PRESERVED_PROPERTIES: tuple[str, ...] = (
@@ -41,10 +71,6 @@ _PRESERVED_PROPERTIES: tuple[str, ...] = (
     "LEN_UNIT", "VELOCITY", "VEL_UNIT", "DFIRM_ID", "FLD_AR_ID", "STUDY_TYP",
     "SOURCE_CIT", "GFID",
 )
-
-#: outFields includes OBJECTID so the cursor can read the watermark; OBJECTID is
-#: NOT part of the regulatory core and is stripped from the FGB output.
-_OUT_FIELDS = "OBJECTID," + ",".join(_PRESERVED_PROPERTIES)
 
 #: Canonical FEMA flood-zone designations accepted by zone_filter (D_FLD_ZONE domain).
 VALID_FLOOD_ZONES: frozenset[str] = frozenset({
@@ -81,112 +107,78 @@ def _validate_zone_filter(sc: str, raw: Any) -> list[str] | None:
     return sorted(out) or None
 
 
-def _server_where(sc: str, params: dict[str, Any], last_oid: int) -> str:
-    """Build the cursor where clause: OBJECTID>watermark [AND SFHA_TF='T'] [AND FLD_ZONE IN (...)]."""
-    parts = [f"OBJECTID>{int(last_oid)}"]
-    if bool(params.get("sfha_only")):
+def _sql_clause(sc: str, params: dict[str, Any]) -> str:
+    """The server-side selection: [SFHA_TF='T'] [AND FLD_ZONE IN (...)]."""
+    parts: list[str] = []
+    if not isinstance(params.get("sfha_only", False), bool):
+        raise router_input_error(sc, "sfha_only must be bool", "INPUT_INVALID")
+    if params.get("sfha_only"):
         parts.append("SFHA_TF='T'")
     zones = _validate_zone_filter(sc, params.get("zone_filter"))
     if zones:
-        ins = ",".join(f"'{z}'" for z in zones)
-        parts.append(f"FLD_ZONE IN ({ins})")
+        parts.append("FLD_ZONE IN (" + ",".join(f"'{z}'" for z in zones) + ")")
     return " AND ".join(parts)
 
 
-def _page_plan(spec: SourceSpec, params: dict[str, Any], last_oid: int) -> "_hooks.RequestPlan":
-    b = params["bbox"]
-    q = {
-        "where": _server_where(spec.error_code_prefix, params, last_oid),
-        "geometry": f"{b[0]},{b[1]},{b[2]},{b[3]}",
-        "geometryType": "esriGeometryEnvelope",
-        "spatialRel": "esriSpatialRelIntersects",
-        "inSR": "4326",
-        "outFields": _OUT_FIELDS,
-        "outSR": "4326",
-        "f": "geojson",
-        "resultRecordCount": str(_PAGE_SIZE),
-        "orderByFields": "OBJECTID",
-    }
-    return _hooks.RequestPlan(url=_NFHL_URL, params=q, headers={"User-Agent": spec.auth.user_agent})
-
-
-@_hooks.register_hook("fema_nfhl_zones.build_request")
-def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.RequestPlan"]:
-    """Validate sfha_only/zone_filter, build page 1 (OBJECTID>0 cursor start)."""
-    sc = spec.error_code_prefix
-    if not isinstance(params.get("sfha_only", False), bool):
-        raise router_input_error(sc, "sfha_only must be bool", "INPUT_INVALID")
-    _validate_zone_filter(sc, params.get("zone_filter"))  # raise early on bad zone
-    return [_page_plan(spec, params, 0)]
-
-
-def _page_features(sc: str, body: bytes) -> list[dict[str, Any]]:
-    if not body:
-        return []
-    try:
-        obj = json.loads(body.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise router_upstream_error(sc, f"FEMA NFHL returned non-JSON: {exc}")
-    if isinstance(obj, dict) and "error" in obj:
-        raise router_upstream_error(sc, f"FEMA NFHL query returned error envelope: {obj['error']}")
-    if not isinstance(obj, dict) or obj.get("type") != "FeatureCollection":
-        raise router_upstream_error(
-            sc, f"FEMA NFHL response is not a GeoJSON FeatureCollection: "
-                f"type={obj.get('type') if isinstance(obj, dict) else type(obj).__name__!r}"
-        )
-    return obj.get("features", []) or []
-
-
-@_hooks.register_hook("fema_nfhl_zones.next_page")
-def next_page(
-    spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
-) -> "_hooks.RequestPlan | None":
-    """Advance the OBJECTID cursor to the page's max OBJECTID; stop on a short page."""
-    sc = spec.error_code_prefix
-    page = _page_features(sc, bodies[-1])
-    if len(page) < _PAGE_SIZE:
-        return None
-    oids = [
-        int((f.get("properties") or {}).get("OBJECTID", 0))
-        for f in page
-        if (f.get("properties") or {}).get("OBJECTID") is not None
-    ]
-    if not oids:
-        return None
-    new_last = max(oids)
-    # Compute the cumulative max seen so far as the cursor floor (guards a
-    # non-advancing server).
-    prev_max = 0
-    for b in bodies:
-        for f in _page_features(sc, b):
-            oid = (f.get("properties") or {}).get("OBJECTID")
-            if oid is not None:
-                prev_max = max(prev_max, int(oid))
-    if new_last <= 0 or new_last < prev_max:
-        return None
-    return _page_plan(spec, params, new_last)
-
-
-@_hooks.register_hook("fema_nfhl_zones.parse_response")
-def parse_response(
-    spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
+@_hooks.register_hook("fema_nfhl_zones.delegate")
+def delegate(
+    spec: SourceSpec, params: dict[str, Any], *, timeout_s: float
 ) -> list[dict[str, Any]]:
-    """Decode all pages; project to the 14 regulatory columns (OBJECTID stripped)."""
+    """Read the flood-hazard zones in the bbox, projected to the regulatory core."""
+    from pygeohydro import NFHL
+
     sc = spec.error_code_prefix
+    bbox = tuple(float(v) for v in params["bbox"])
+    clause = _sql_clause(sc, params)
+
+    nfhl = hyriver_call(spec, f"pygeohydro.NFHL({_SERVICE!r}, {_LAYER!r})", NFHL, _SERVICE, _LAYER)
+    client = nfhl.client.client
+    client.outformat = _OUTFORMAT
+    client.max_nrecords = _MAX_IDS_PER_REQUEST
+
+    batches = list(
+        hyriver_call(
+            spec,
+            f"pygeohydro.NFHL.oids_bygeom(bbox={bbox}, sql_clause={clause!r})",
+            nfhl.client.oids_bygeom,
+            bbox,
+            geo_crs=4326,
+            sql_clause=clause or None,
+        )
+    )
+
     out: list[dict[str, Any]] = []
-    for body in bodies:
-        for feat in _page_features(sc, body):
-            if not isinstance(feat, dict):
-                continue
-            geom = feat.get("geometry")
-            if geom is None:
-                continue
-            props = feat.get("properties") or {}
-            row: dict[str, Any] = {}
-            for key in _PRESERVED_PROPERTIES:
-                v = props.get(key)
-                if isinstance(v, (dict, list)):
-                    v = json.dumps(v)
-                row[key] = v
-            out.append({"type": "Feature", "geometry": geom, "properties": row})
+    missing = 0
+    for i, batch in enumerate(batches, 1):
+        client.n_missing = 0
+        pages = hyriver_call(
+            spec,
+            f"pygeohydro.NFHL.get_features(batch {i}/{len(batches)}, {len(batch)} ids)",
+            nfhl.client.get_features,
+            #: A LIST, not an iterator: a retry re-invokes with the same argument,
+            #: and a consumed iterator would send an empty request instead.
+            [batch],
+        )
+        missing += int(getattr(client, "n_missing", 0) or 0)
+        for page in pages:
+            for rec in page.get("features") or ():
+                geom = rec.get("geometry")
+                if geom is None:
+                    continue
+                props = rec.get("properties") or {}
+                row: dict[str, Any] = {}
+                for key in _PRESERVED_PROPERTIES:
+                    v = props.get(key)
+                    if isinstance(v, (dict, list)):
+                        v = json.dumps(v)
+                    row[key] = v
+                out.append({"type": "Feature", "geometry": geom, "properties": row})
+
+    if missing:
+        raise router_upstream_error(
+            sc,
+            f"FEMA NFHL returned {len(out)} zone polygons but {missing} object id(s) "
+            "the service listed could not be read, so the layer would be a partial "
+            "regulatory answer; retry rather than publish it.",
+        )
     return out

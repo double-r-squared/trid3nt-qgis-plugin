@@ -26,10 +26,9 @@ params:
     required: false
     schema_optional: true
 hooks:
-  build_request: fema_nfhl_zones.build_request
-  next_page: fema_nfhl_zones.next_page
-  parse_response: fema_nfhl_zones.parse_response
+  delegate: fema_nfhl_zones.delegate
 ingest:
+  delegate: {library: pygeohydro, timeout_s: 2400}
   properties:
   - FLD_ZONE
   - ZONE_SUBTY
@@ -45,8 +44,6 @@ ingest:
   - STUDY_TYP
   - SOURCE_CIT
   - GFID
-  chained:
-    tolerate_page_error: true
 normalize:
   crs: EPSG:4326
 output:
@@ -66,9 +63,15 @@ payload_estimate:
   floor_mb: 0.05
   ceil_mb: 50.0
 caveats:
-- FEMA NFHL regulatory flood-zone polygons via the public MapServer (layer 28). OBJECTID-cursor paged
-  (the endpoint 500s on resultOffset>0). Regulatory static product, NOT live flood extent. US + territories;
-  bbox required.
+- FEMA NFHL regulatory flood-zone polygons via the public MapServer (layer 28). Regulatory static product,
+  NOT live flood extent. US + territories; bbox required.
+- 'Read by OBJECT ID in batches, so a page the service refuses can never pass as the end of the layer: a
+  cursor walk over this endpoint stops early on a deep page and looks whole. A batch it will not serve is a
+  typed upstream error, never a partial regulatory layer.'
+- 'MEASURED LIMIT: the service will not serve a metro-scale AOI to one client. Over a 0.2 deg^2 Tampa Bay
+  bbox (9,894 polygons by its own count) it answers the first two or three batches and then refuses the rest
+  with HTTP 500 and connection resets, through the library and by direct request alike, at every batch size
+  and pacing measured. Keep the AOI to a few hundred polygons.'
 docstring: |-
   FEMA NFHL regulatory flood-zone polygons as a FlatGeobuf vector layer.
 

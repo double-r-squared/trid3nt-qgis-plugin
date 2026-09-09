@@ -46,39 +46,122 @@ def _poly(oid, zone="AE"):
 
 # ------------------------------- NFHL ------------------------------- #
 
-def test_nfhl_where_sfha_and_zone_in():
+
+class _FakeBase:
+    """The service client the library wraps: the two knobs the hook sets."""
+
+    def __init__(self):
+        self.outformat = "json"
+        self.max_nrecords = 2000
+        self.n_missing = 0
+
+
+class _FakeClient:
+    """The object-id read, offline: two batches, one feature each."""
+
+    def __init__(self, base):
+        self.client = base
+
+    def oids_bygeom(self, bbox, geo_crs=4326, sql_clause=None):
+        _FakeNFHL.last |= {"bbox": bbox, "geo_crs": geo_crs, "sql_clause": sql_clause,
+                           "outformat": self.client.outformat,
+                           "max_nrecords": self.client.max_nrecords}
+        return iter([("1", "2"), ("3",)])
+
+    def get_features(self, featureids, return_m=False, return_geom=True):
+        batches = list(featureids)
+        _FakeNFHL.last.setdefault("batches", []).append([len(b) for b in batches])
+        props = dict.fromkeys(nfhl._PRESERVED_PROPERTIES, None)
+        return [{"type": "FeatureCollection", "features": [
+            {"type": "Feature",
+             "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]]},
+             "properties": {**props, "FLD_ZONE": "AE", "SFHA_TF": "T", "OBJECTID": 7}}
+        ]} for _ in batches]
+
+
+class _FakeNFHL:
+    """The library client, answering offline; records what it was asked for."""
+
+    last: dict = {}
+
+    def __init__(self, service, layer):
+        _FakeNFHL.last = {"service": service, "layer": layer}
+        self.client = _FakeClient(_FakeBase())
+
+
+def _stub_nfhl(monkeypatch, cls=_FakeNFHL):
+    import pygeohydro
+
+    monkeypatch.setattr(pygeohydro, "NFHL", cls)
+    return cls
+
+
+def test_nfhl_sql_clause_sfha_and_zone_in(monkeypatch):
+    _stub_nfhl(monkeypatch)
     s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
-    plan = nfhl.build_request(s, {"bbox": [0, 0, 1, 1], "sfha_only": True, "zone_filter": ["ve", "V"]})[0]
-    w = plan.params["where"]
-    assert w.startswith("OBJECTID>0")
-    assert "SFHA_TF='T'" in w
-    assert "FLD_ZONE IN ('V','VE')" in w  # uppercased + sorted
-    assert plan.params["orderByFields"] == "OBJECTID"
+    nfhl.delegate(s, {"bbox": [0, 0, 1, 1], "sfha_only": True, "zone_filter": ["ve", "V"]},
+                  timeout_s=30.0)
+    c = _FakeNFHL.last["sql_clause"]
+    assert "SFHA_TF='T'" in c
+    assert "FLD_ZONE IN ('V','VE')" in c  # uppercased + sorted
+    assert _FakeNFHL.last["service"] == "NFHL" and _FakeNFHL.last["layer"] == "flood hazard zones"
 
 
-def test_nfhl_bad_zone_raises_input_invalid():
+def test_nfhl_asks_for_geojson_so_the_holes_survive(monkeypatch):
+    """Esri JSON fills a zone polygon's holes; the format is named, not defaulted."""
+    _stub_nfhl(monkeypatch)
+    s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
+    nfhl.delegate(s, {"bbox": [0, 0, 1, 1]}, timeout_s=30.0)
+    assert _FakeNFHL.last["outformat"] == "geojson"
+
+
+def test_nfhl_bad_zone_raises_input_invalid(monkeypatch):
+    _stub_nfhl(monkeypatch)
     s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
     with pytest.raises(RouterInputError) as e:
-        nfhl.build_request(s, {"bbox": [0, 0, 1, 1], "zone_filter": ["ZZZ"]})
+        nfhl.delegate(s, {"bbox": [0, 0, 1, 1], "zone_filter": ["ZZZ"]}, timeout_s=30.0)
     assert e.value.error_code == "FEMA_NFHL_ZONES_INPUT_INVALID"
 
 
-def test_nfhl_cursor_advances_and_stops_short():
+def test_nfhl_projects_the_regulatory_fourteen(monkeypatch):
+    _stub_nfhl(monkeypatch)
     s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
-    full = _fc([_poly(i) for i in range(1, nfhl._PAGE_SIZE + 1)])
-    nxt = nfhl.next_page(s, {"bbox": [0, 0, 1, 1]}, [full])
-    assert nxt is not None and "OBJECTID>1000" in nxt.params["where"]
-    short = _fc([_poly(i) for i in range(1, 10)])
-    assert nfhl.next_page(s, {"bbox": [0, 0, 1, 1]}, [full, short]) is None
-
-
-def test_nfhl_parse_strips_objectid_projects_14():
-    s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
-    feats = nfhl.parse_response(s, {}, [_fc([_poly(7)])])
-    assert len(feats) == 1
+    feats = nfhl.delegate(s, {"bbox": [0, 0, 1, 1]}, timeout_s=30.0)
+    assert len(feats) == 2  # one feature per object-id batch
     props = feats[0]["properties"]
     assert "OBJECTID" not in props
     assert set(props) == set(nfhl._PRESERVED_PROPERTIES)
+
+
+def test_nfhl_reads_one_batch_at_a_time_under_the_deliverable_size(monkeypatch):
+    """The service advertises 2000 and 500s on it; one batch per call carries the retry."""
+    _stub_nfhl(monkeypatch)
+    s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
+    nfhl.delegate(s, {"bbox": [0, 0, 1, 1]}, timeout_s=30.0)
+    assert _FakeNFHL.last["max_nrecords"] == nfhl._MAX_IDS_PER_REQUEST < 2000
+    assert _FakeNFHL.last["batches"] == [[2], [1]]
+
+
+def test_nfhl_unread_object_ids_are_never_a_partial_layer(monkeypatch):
+    """The library warns and returns what it has; a regulatory layer may not."""
+
+    class _Lossy(_FakeNFHL):
+        def __init__(self, service, layer):
+            super().__init__(service, layer)
+            outer = self
+
+            def get_features(featureids, return_m=False, return_geom=True):
+                out = _FakeClient.get_features(outer.client, featureids)
+                outer.client.client.n_missing = 4
+                return out
+
+            self.client.get_features = get_features
+
+    _stub_nfhl(monkeypatch, _Lossy)
+    s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
+    with pytest.raises(RouterUpstreamError) as e:
+        nfhl.delegate(s, {"bbox": [0, 0, 1, 1]}, timeout_s=30.0)
+    assert "8 object id(s)" in str(e.value)  # 4 unread reported per batch
 
 
 # ------------------------------- usace_dams ------------------------------- #
@@ -151,33 +234,3 @@ def test_frs_superfund_drops_bad_latlon():
     s = _spec("EPA_FRS", "epa_frs_facilities")
     body = json.dumps({"features": [{"attributes": {"LATITUDE": None, "LONGITUDE": -95.2}}]}).encode()
     assert frs.parse_response(s, {"facility_program": "superfund"}, [body]) == []
-
-
-# ------------------------------- chained tolerate_page_error ------------------------------- #
-
-def test_tolerate_page_error_returns_partial():
-    from trid3nt_server.tools.fetchers._router.executors import chained_resolution as ch
-    s = SourceSpec.model_validate({
-        "schema_version": "v1", "name": "t", "source_class": "sc", "shape": "vector-fgb",
-        "endpoints": {"data": {"url": "https://x"}}, "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
-        "cache": {"ttl_class": "static-30d"}, "payload_estimate": {"model": "per_feature"},
-        "hooks": {"build_request": "fema_nfhl_zones.build_request", "next_page": "fema_nfhl_zones.next_page",
-                  "parse_response": "fema_nfhl_zones.parse_response"},
-        "ingest": {"chained": {"tolerate_page_error": True}},
-    })
-    calls = {"n": 0}
-
-    def fake_get(spec, plan):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            return _fc([_poly(i) for i in range(1, ch.__dict__.get("_PAGE", 0) or 1001)])
-        raise RouterUpstreamError("boom")
-
-    import trid3nt_server.tools.fetchers._router.executors.chained_resolution as CH
-    orig = CH._get
-    CH._get = fake_get
-    try:
-        bodies = CH._fetch_main(s, {"bbox": [0, 0, 1, 1]})
-    finally:
-        CH._get = orig
-    assert len(bodies) == 1  # first page kept, later-page failure tolerated
