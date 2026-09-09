@@ -328,7 +328,7 @@ def test_river_gauge_id_detail_mode():
 # --------------------------------------------------------------------------- #
 
 from trid3nt_server.tools.fetchers._router.executors import http_json as _HJ
-from trid3nt_server.tools.fetchers._router.hooks import openfema_disasters as _OF
+from trid3nt_server.tools.fetchers.hazard.fetch_openfema_disasters import hooks as _OF
 from trid3nt_server.tools.fetchers._router.hooks import storm_events_db as _SE
 
 

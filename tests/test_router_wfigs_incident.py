@@ -24,7 +24,7 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
 )
 from trid3nt_server.tools.fetchers._router.executors import http_json
-from trid3nt_server.tools.fetchers._router.hooks import wfigs_incident as wfh
+from trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident import hooks as wfh
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 WFIGS_SPEC = load_spec_from_path(

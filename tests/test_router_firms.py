@@ -20,7 +20,7 @@ import pytest
 from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
-from trid3nt_server.tools.fetchers._router.hooks import firms_active_fire as fh
+from trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire import hooks as fh
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
 _HEADER = (

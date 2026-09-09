@@ -22,7 +22,7 @@ import pytest
 from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
-from trid3nt_server.tools.fetchers._router.hooks import fault_sources as fsh
+from trid3nt_server.tools.fetchers.hazard.fetch_fault_sources import hooks as fsh
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
 _SF_BBOX = [-122.55, 37.45, -122.15, 37.90]

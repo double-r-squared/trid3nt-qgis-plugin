@@ -27,12 +27,10 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..errors import router_input_error, router_upstream_error
-from . import RequestPlan, register_hook
+from ..._router.errors import router_input_error, router_upstream_error
+from ..._router.hooks import RequestPlan, register_hook
 
-logger = logging.getLogger(
-    "trid3nt_server.tools.fetchers._router.hooks.wfigs_incident"
-)
+logger = logging.getLogger(__name__)
 
 _OUT_FIELDS = (
     "IncidentName", "FireDiscoveryDateTime", "InitialLatitude", "InitialLongitude",
