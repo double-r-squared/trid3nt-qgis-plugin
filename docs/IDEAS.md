@@ -4323,3 +4323,12 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   product tree with suite slices by directory replacing the
   alphabetical globs. Both evals run beside the docs census; NATE
   rules on each before anything moves.
+  HISTORY IN CODE (NATE 2026-09-09): the standing rule holds - NO
+  history, dates, job/milestone/ADR labels or person attribution in
+  comments and docstrings; constraints only. NATE noticed residue in
+  plugin/: measured 302 markers across 15 non-test plugin modules
+  (milestone labels, dated live-feedback notes, decision labels,
+  "NATE" attributions); the docs and docstring wave takes the plugin
+  and every other tree in the same read-every-comment pass (a regex
+  census cannot finish it), with a suite grep-gate on the marker
+  classes afterwards so it does not return.
