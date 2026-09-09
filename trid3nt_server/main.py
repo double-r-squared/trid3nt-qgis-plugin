@@ -80,7 +80,7 @@ def _import_tools_registry() -> int:
     # in clip_raster_to_bbox). compute_zonal_statistics demoted to the code_exec
     # playground (docs/playbooks/zonal-statistics-recipe.md).
     from .tools.processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: F401
-    # fetch_administrative_boundaries: spec-driven (zip_vector extract executor +
+    # fetch_administrative_boundaries: spec-driven (the ZIP-member driver read +
     # FIPS planner), registered via register_specs_from_tree (agent.tools import above).
     # register compute_hillshade (gdaldem hillshade; 5 style presets; swiss_double multiply-blend).
     from .tools.processing.compute_hillshade import compute_hillshade  # noqa: F401

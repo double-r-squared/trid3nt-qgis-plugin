@@ -125,16 +125,18 @@ def test_a_staged_uri_is_refused_by_name():
 def test_an_unknown_driver_is_a_typed_input_error():
     spec = _spec({"access": "ogr", "ogr": {"driver": "WFS3"}})
     with pytest.raises(RouterError) as exc:
-        vector_ogr.open_path(spec, {}, spec.endpoints["data"], "https://x.test")
+        vector_ogr.open_path(spec, "https://x.test")
     assert exc.value.error_code == "SYNTH_INPUT_INVALID"
 
 
-def test_the_vsizip_path_names_the_member():
-    spec = _spec({"access": "ogr",
-                  "ogr": {"driver": "vsizip", "member": "tl_2024_us_county.shp"}})
-    path = vector_ogr.open_path(
-        spec, {}, spec.endpoints["data"], "https://census.test/county.zip")
-    assert path == "/vsizip/vsicurl/https://census.test/county.zip/tl_2024_us_county.shp"
+def test_the_vsizip_path_reads_the_member_inside_the_remote_zip():
+    spec = _spec({"access": "ogr", "ogr": {"driver": "vsizip"}})
+    assert vector_ogr.open_path(spec, "https://census.test/county.zip") == (
+        "/vsizip//vsicurl/https://census.test/county.zip")
+    named = _spec({"access": "ogr",
+                   "ogr": {"driver": "vsizip", "member": "tl_2024_us_county.shp"}})
+    assert vector_ogr.open_path(named, "https://census.test/county.zip") == (
+        "/vsizip//vsicurl/https://census.test/county.zip/tl_2024_us_county.shp")
 
 
 # --------------------------------------------------------------------------- #
@@ -145,7 +147,7 @@ def test_the_vsizip_path_names_the_member():
 def _read_local(spec, path, params=None, monkeypatch=None):
     """Drive fetch_from_endpoint against a LOCAL file the driver opens."""
     monkeypatch.setattr(vector_ogr, "build_query", lambda *a, **k: path)
-    monkeypatch.setattr(vector_ogr, "open_path", lambda *a, **k: f"ESRIJSON:{path}")
+    monkeypatch.setattr(vector_ogr, "open_path", lambda spec_, url: f"ESRIJSON:{path}")
     return vector_ogr.fetch_from_endpoint(spec, spec.endpoints["data"], params or {})
 
 

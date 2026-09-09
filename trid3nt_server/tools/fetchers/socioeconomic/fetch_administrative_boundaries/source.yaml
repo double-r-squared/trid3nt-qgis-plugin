@@ -30,12 +30,11 @@ params:
 hooks:
   build_request: admin_boundaries.build_request
 ingest:
-  zip_vector:
-    member_pattern: .shp
-    merge_levels:
-    - place
-    merge_level_param: level
-    reproject_to: EPSG:4326
+  access: ogr
+  ogr:
+    driver: vsizip
+    # A bbox the archive does not reach is out of coverage, not an empty answer.
+    empty_is_typed_error: true
 normalize:
   crs: EPSG:4326
 output:
@@ -54,12 +53,12 @@ payload_estimate:
   floor_mb: 0.05
   ceil_mb: 20.0
 caveats:
-- US Census TIGER/Line 2024 administrative polygons (state/county/place/zcta), clipped to bbox. Whole-object
-  ZIP download + shapefile extract (ADR 0067); place fans out per intersecting state FIPS. US + territories
-  only. No feature in bbox -> ADMIN_BOUNDARY_EMPTY.
+- US Census TIGER/Line 2024 administrative polygons (state/county/place/zcta), clipped to bbox. The
+  shapefile is read inside the remote ZIP by range request; place fans out per intersecting state FIPS.
+  US + territories only. No feature in bbox -> ADMIN_BOUNDARY_EMPTY.
 docstring: "Fetch US Census TIGER/Line 2024 administrative-boundary polygons clipped to a bbox.\n\n**What\
-  \ it does:** Downloads the TIGER/Line 2024 shapefile for the requested\nadministrative level from ``census.gov``,\
-  \ clips it to the requested bbox\nvia geopandas, and returns a FlatGeobuf vector layer. Cached ``static-30d``\n\
+  \ it does:** Reads the TIGER/Line 2024 shapefile for the requested\nadministrative level inside its ZIP on ``census.gov``,\
+  \ by range request,\nselecting the features that intersect the bbox, and returns a FlatGeobuf\nvector layer. Cached ``static-30d``\n\
   (boundaries change at most once per census year). Four levels supported:\nstate, county, place (cities/CDPs),\
   \ and ZIP Code Tabulation Areas (zcta).\n\n**When to use:**\n- Agent needs administrative outlines for\
   \ spatial context alongside a\n  hazard layer (e.g. county boundaries over a flood inundation surface).\n\

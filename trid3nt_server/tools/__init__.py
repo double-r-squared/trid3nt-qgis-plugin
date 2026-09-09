@@ -401,10 +401,9 @@ def clear_registry_for_tests() -> None:
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
 
 # -- fetchers/socioeconomic --
-# fetch_administrative_boundaries: data-router fold zip/multi-file wave --
-# twin DELETED, now spec-driven (source.yaml + admin_boundaries.build_request FIPS
-# planner + the zip_vector whole-object extract executor), registered by
-# _register_router_specs() below.
+# fetch_administrative_boundaries: spec-driven (source.yaml +
+# admin_boundaries.build_request FIPS planner + the ogr-vector executor reading the
+# shapefile inside the remote ZIP), registered by _register_router_specs() below.
 # fetch_buildings: sidecar-write fold (trigger wave) -- twin DELETED, now
 # spec-driven (source.yaml + buildings.build_request/parse hooks + the overpass_sidecar
 # executor's constrained tags.json side write), promoted by _register_router_specs().

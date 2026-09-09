@@ -1,11 +1,11 @@
 """admin_boundaries hooks: the TIGER/Line ZIP URL planner.
 
-The one irreducible per-source step for the ``zip_vector`` executor: turn a
-``(level, bbox)`` request into the TIGER/Line 2024 ZIP URL(s) to fetch. Nationwide
+The one irreducible per-source step, and the only hook this row keeps: turn a
+``(level, bbox)`` request into the TIGER/Line 2024 ZIP URL(s) to read. Nationwide
 levels (state / county / zcta) are one whole-US file; ``place`` fans out to the
 per-state PLACE ZIP of every state whose envelope intersects the bbox (a bespoke
 state-FIPS routing table + the antimeridian Aleutian tail). PURE: no I/O -- the
-``zip_vector`` executor owns the download + extract + read + spatial filter + merge.
+driver reads the member inside each archive and the parts concatenate.
 """
 
 from __future__ import annotations
