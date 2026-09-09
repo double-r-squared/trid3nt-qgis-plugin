@@ -438,6 +438,11 @@ def test_a_composite_sets_only_what_its_value_s_presence_defines():
                         literal = value.value
                     elif isinstance(value, ast.Name) and value.id in constants:
                         literal = constants[value.id]
+                    elif (isinstance(value, ast.UnaryOp)
+                          and isinstance(value.op, (ast.USub, ast.UAdd))
+                          and isinstance(value.operand, ast.Constant)):
+                        literal = (-value.operand.value if isinstance(value.op, ast.USub)
+                                   else value.operand.value)
                     else:
                         continue
                     if slot.is_file or (slot.type == "LOGICAL"
