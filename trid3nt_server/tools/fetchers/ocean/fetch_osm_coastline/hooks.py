@@ -1,14 +1,12 @@
 """osm_coastline delegate: ``natural=coastline`` ways as whole land/water edges.
 
-UNCLIPPED, and the vertex ORDER is carried through untouched: the LAND IS ON THE
-LEFT of a coastline way's direction, and that is the only thing that makes an open
-line a land/water edge. A way cut at the AOI edge loses the side it was carrying at
-the cut, and reversing one would put the sea where the town is.
+UNCLIPPED, with the vertex ORDER carried through untouched: the LAND IS ON THE LEFT of a
+coastline way's direction, and that is the only thing making an open line an edge. A way
+cut at the AOI edge loses the side it was carrying at the cut."""
 
-A lake is deliberately absent: OSM maps inland water as ``natural=water`` polygons
-and gives it no coastline way, so an inland box comes back with nothing rather than
-with a shore that is not one.
-"""
+# A lake is deliberately absent: inland water is mapped as polygons with no coastline
+# way, so an inland box comes back with nothing rather than with a shore that is not
+# one.
 
 from __future__ import annotations
 
@@ -23,11 +21,9 @@ __all__ = ["delegate"]
 
 
 def _line_coords(geom: Any) -> list[list[float]] | None:
-    """The way's vertices in the order OSM drew them, whatever shape it closed into.
-
-    A closed coastline way (an island) reaches the library as a Polygon; its
-    exterior ring is the same node sequence, so the edge keeps its side.
-    """
+    """The way's vertices in the ORDER they were drawn, whatever shape it closed into. A
+    closed way reaches the library as a Polygon, whose exterior ring is the same node
+    sequence, so the edge keeps its side."""
     if geom is None or geom.is_empty:
         return None
     if geom.geom_type == "LineString":
@@ -43,11 +39,8 @@ def _line_coords(geom: Any) -> list[list[float]] | None:
 def delegate(
     spec: SourceSpec, params: dict[str, Any], *, timeout_s: float
 ) -> list[dict[str, Any]]:
-    """Coastline ways in the bbox as whole LineStrings.
-
-    Empty is a legitimate answer - an inland box has no coastline - and the
-    consumer decides what absence means.
-    """
+    """Coastline ways in the bbox as whole LineStrings. Empty is a legitimate answer --
+    an inland box has no coastline -- and the consumer decides what absence means."""
     gdf = overpass_features(spec, params, {"natural": "coastline"}, timeout_s=timeout_s)
     out: list[dict[str, Any]] = []
     for idx, row in gdf.iterrows():

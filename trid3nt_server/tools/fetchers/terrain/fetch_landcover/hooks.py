@@ -1,24 +1,17 @@
-"""landcover hooks (landcover + flood-extent wave): NLCD via MRLC WCS.
+"""landcover hooks: NLCD through the MRLC WCS.
 
-The irreducible per-source steps the declarative wcs_getcoverage access mode
-cannot carry, both PURE (no I/O):
-- ``pre_resolve`` -- the dataset-alias + vintage parse + auto-coarsen derivation:
-  normalizes the bare ``nlcd`` / ``nlcd_`` aliases to the default vintage, parses
-  ``nlcd_YYYY`` into a vintage year, and (the auto-coarsen) computes the effective
-  resolution from the AOI size + a 4000-px MRLC budget and re-quantizes the bbox
-  to that grid -- all merged into params BEFORE read_through so the effective
-  resolution + quantized bbox enter the cache key (a bypassed gate never delivers
-  a rung finer than the AOI honestly supports). The ESA WorldCover branch raises
-  the twin's reserved/not-implemented typed error here.
-- ``envelope`` -- the Manning's-validation SIDECAR (nlcd_vintage_year / dataset /
-  source / effective_resolution_m / native_resolution_m / downsampled /
-  downsampling_note) the SFINCS builder reads (-> LandcoverResult). ``LayerURI`` is
-  a FROZEN ``extra="forbid"`` contract, so these live on the subclass, not the base.
+Two irreducible per-source steps, both PURE. ``pre_resolve`` normalizes the dataset
+alias, parses the vintage year, and derives the auto-coarsen; ``envelope`` builds the
+validation sidecar the downstream builder reads."""
 
-Everything else -- the WCS GetCoverage GET (ogc adapter), the NLCD background(0)->
-nodata remap, the palette COG serialize, transport/cache/payload/LayerURI -- is the
-shared router (the wcs_getcoverage mode + array_to_cog_bytes).
-"""
+# The auto-coarsen computes the effective resolution from the AOI size against the
+# service's pixel budget and re-quantizes the bbox to that grid, all merged into params
+# BEFORE read_through, so the effective resolution and quantized bbox enter the cache
+# key: a bypassed gate never delivers a rung finer than the AOI honestly supports.
+#
+# The sidecar fields -- vintage year, dataset, source, effective and native resolution,
+# whether it was downsampled and the note saying so -- live on the result SUBCLASS,
+# because ``LayerURI`` is a frozen extra-forbid contract.
 
 from __future__ import annotations
 
@@ -40,13 +33,9 @@ _PIXEL_BUDGET = 4000  # max px/side the MRLC WCS server serves (auto-coarsen dri
 
 @_hooks.register_hook("landcover.pre_resolve")
 def pre_resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
-    """Normalize dataset + parse vintage + auto-coarsen the resolution (PURE).
-
-    Returns a params-MERGE dict carrying the resolved ``dataset`` / ``vintage_year``
-    / effective ``resolution_m`` / re-quantized ``bbox`` / ``downsampled`` -- all
-    entering the cache key. The 5e6 km^2 hard ceiling is the spec's ``gates.max_bbox_km2``
-    (applied before this hook); this only sizes the grid inside it.
-    """
+    """Normalize the dataset, parse the vintage and auto-coarsen the resolution, PURE.
+    Returns a params-merge carrying the resolved dataset, vintage year, effective
+    resolution, re-quantized bbox and downsample flag, all entering the cache key."""
     sc = spec.error_code_prefix
     isfx = spec.input_error_suffix
     dataset = params.get("dataset") or _DEFAULT_NLCD_DATASET

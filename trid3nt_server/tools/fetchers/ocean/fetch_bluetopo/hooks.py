@@ -1,28 +1,20 @@
-"""NOAA BlueTopo delegate hooks: the ``fetch_bluetopo`` AOI -> tiles -> merge.
+"""NOAA BlueTopo delegate hooks: AOI to tiles to merge.
 
-BlueTopo is NOAA's National Bathymetric Source compiled surface for
-navigationally significant US waters. It is BATHYMETRY ONLY -- there is no land
-in it -- and it is published on NAVD88, an orthometric datum rather than a
-navigational or tidal one, which is what lets it merge with a NAVD88 land DEM
-with no vertical transformation.
+BlueTopo is BATHYMETRY ONLY, with no land in it, and is published on NAVD88 -- an
+orthometric datum rather than a tidal one -- which is what lets it merge with a NAVD88
+land DEM with no vertical transformation."""
 
-The bespoke step this delegate owns is DISCOVERY: the bucket's tile scheme is a
-GeoPackage of tile polygons carrying each delivered tile's GeoTIFF link, its
-resolution tier and its UTM zone. That file is the coverage truth -- a tile row
-with no link is a tile the programme defined and has not delivered -- so the AOI
-is intersected against it rather than against any assumption about the grid. The
-warp-merge onto one target grid is NOT bespoke and is not reimplemented here:
-the coastal composite's per-source reprojecting compositor is called directly.
-
-  * ``bluetopo.validate`` -- bbox finiteness + the US envelope, raised pre-cache
-    / pre-network as a ``BlueTopoInputError``.
-  * ``bluetopo.read`` -- tile-scheme select + per-tile NAVD88 gate + merge ->
-    ``(array, transform, crs)`` for the shared COG writer, recording the
-    fetch-time provenance (datum, tiles, tiers, measured coverage) on the
-    provenance channel so it survives a cache hit.
-  * ``bluetopo.envelope`` -- the layer_id / name and the provenance fields read
-    back from the channel into a ``BlueTopoResult``.
-"""
+# The bespoke step this delegate owns is DISCOVERY. The bucket's tile scheme is a
+# GeoPackage of tile polygons carrying each delivered tile's raster link, its resolution
+# tier and its UTM zone. That file is the coverage truth -- a tile row with no link is a
+# tile the programme defined and has not delivered -- so the AOI is intersected against
+# it rather than against any assumption about the grid. The warp-merge onto one target
+# grid is NOT bespoke and is not reimplemented here: the coastal composite's per-source
+# reprojecting compositor is called directly.
+#
+# ``read`` records the fetch-time provenance -- datum, tiles, tiers, measured coverage
+# -- on the provenance channel, so it survives a cache hit and ``envelope`` can replay
+# it into the result.
 
 from __future__ import annotations
 
@@ -60,7 +52,7 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Typed errors (the A.6 codes the router preserves through the delegate wrapper).
+# Typed errors, whose codes the router preserves through the delegate wrapper.
 # ---------------------------------------------------------------------------
 
 
@@ -86,25 +78,18 @@ class BlueTopoUpstreamError(BlueTopoError):
 
 
 class BlueTopoDatumError(BlueTopoError):
-    """A selected tile does not state NAVD88.
-
-    BlueTopo publishes NAVD88 and says so in the tile's own vertical CRS and in
-    its ``VERTICALDATUMWKT`` tag. A tile that says otherwise is refused rather
-    than merged onto a NAVD88 bed, because a silent cross-datum merge is exactly
-    the substitution the correct-data-class law forbids.
-    """
+    """A selected tile does not state NAVD88. It is refused rather than merged onto a
+    NAVD88 bed, because a silent cross-datum merge is exactly the substitution the
+    correct-data-class law forbids."""
 
     error_code = "BLUETOPO_DATUM_MISMATCH"
     retryable = False
 
 
 class BlueTopoCoverageGapError(BlueTopoError):
-    """No delivered BlueTopo tile intersects the AOI.
-
-    BlueTopo concentrates on navigationally significant water, so an AOI over a
-    minor creek or an undeveloped bay legitimately has none. The terminal answer
-    is this refusal naming the gap, never a surface built from something else.
-    """
+    """No delivered tile intersects the AOI. The source concentrates on navigationally
+    significant water, so a minor creek legitimately has none, and the terminal answer
+    is this refusal rather than a surface built from something else."""
 
     error_code = "BLUETOPO_COVERAGE_GAP"
     retryable = False
@@ -154,11 +139,9 @@ _scheme_memo: tuple[float, str] | None = None
 
 
 def latest_tile_scheme_key(*, timeout_s: float = 60.0) -> str:
-    """The newest tile-scheme GeoPackage key under the scheme prefix.
-
-    Listed rather than pinned: the key carries a publish timestamp, so a pinned
-    one goes stale silently and a stale scheme reports coverage that has moved.
-    """
+    """The newest tile-scheme GeoPackage key under the scheme prefix, LISTED rather than
+    pinned: the key carries a publish timestamp, so a pinned one goes stale silently
+    and a stale scheme reports coverage that has moved."""
     client = public_s3_client()
     try:
         resp = client.list_objects_v2(
@@ -209,16 +192,13 @@ def _tile_scheme_path(*, timeout_s: float) -> str:
 def select_bluetopo_tiles(
     bbox: tuple[float, float, float, float], *, timeout_s: float = 120.0
 ) -> list[dict[str, Any]]:
-    """Tiles whose footprint intersects the AOI: id, https link, tier, UTM zone.
+    """Tiles whose footprint intersects the AOI, as id, link, tier and UTM zone. A row
+    the scheme defines but has NOT delivered is dropped: a defined tile is not data."""
 
-    Rows the scheme defines but has NOT delivered (no GeoTIFF link) are dropped:
-    a defined tile is not data.
-
-    A footprint is a SELECTION, never a coverage measure. BlueTopo publishes bed
-    for navigationally significant water only, so a delivered tile over a coastal
-    AOI is mostly nodata; how much of the AOI carries a bed is measured off the
-    painted grid, not off these polygons.
-    """
+    # A footprint is a SELECTION, never a coverage measure. The source publishes bed for
+    # navigationally significant water only, so a delivered tile over a coastal AOI is
+    # mostly nodata; how much of the AOI carries a bed is measured off the painted grid,
+    # not off these polygons.
     import geopandas as gpd
     from shapely.geometry import box
 
@@ -267,14 +247,9 @@ def _tier_metres(label: str) -> float:
 
 
 def assert_navd88_tile(vsicurl_path: str) -> str:
-    """Return the tile's stated vertical datum, or refuse.
-
-    BlueTopo carries its vertical datum twice -- in the compound CRS's vertical
-    component and in the private ``VERTICALDATUMWKT`` tag the product
-    documentation points at. Both are read; a tile that states neither is
-    refused rather than assumed, because the whole reason this source is on a
-    bed ladder is that its datum is known.
-    """
+    """Return the tile's stated vertical datum, or refuse. It is carried twice -- in the
+    compound CRS's vertical component and in a private tag -- and BOTH are read; a tile
+    stating neither is refused, since a known datum is why this source is on a ladder."""
     import rasterio
 
     from ..._router.hooks.topobathy import _VSICURL_ENV_KW

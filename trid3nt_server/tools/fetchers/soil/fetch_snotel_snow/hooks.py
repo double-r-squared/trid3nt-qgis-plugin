@@ -1,17 +1,11 @@
-"""snotel_snow hooks (chained-resolution mode/0065): NRCS SNOTEL/SCAN
-snow stations (AWDB REST).
+"""snotel_snow hooks: NRCS SNOTEL/SCAN snow stations.
 
-The batched-snapshot shape folds onto the EXISTING main-fetch + enrich phases, zero
-new machinery. The MAIN FETCH is the stations catalog GET (``build_request`` single
-plan); ``parse_response`` parses the SNTL/SCAN catalog, bbox-filters it, and emits one
-station Point feature (raising SNOTEL_NO_STATIONS when the bbox holds none -- the
-spatial primary). PHASE E is ONE batched data GET for all triplets (``enrich_plan``
-emits a single ``batch`` ref); ``enrich_merge`` folds the latest non-null WTEQ/SNWD
-per station, null-tolerantly. The chained mode's best-effort per-ref survival IS the
-data-source degrade-to-locations fallback (a failed batch keeps every station with
-null readings). ``output.bbox_from_features`` stamps LayerURI.bbox = station extent.
-All I/O stays router-owned; these hooks only compute.
-"""
+The MAIN FETCH is the station catalog, bbox-filtered into station Points, raising the
+typed no-stations error when the bbox holds none. PHASE E is ONE batched data GET for
+every triplet, folding the latest non-null readings in null-tolerantly."""
+
+# The chained mode's best-effort per-ref survival IS the degrade-to-locations fallback:
+# a failed batch keeps every station with null readings rather than losing the stations.
 
 from __future__ import annotations
 

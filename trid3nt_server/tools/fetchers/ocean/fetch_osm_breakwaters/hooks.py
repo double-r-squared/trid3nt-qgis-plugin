@@ -1,14 +1,12 @@
 """osm_breakwaters delegate: ``man_made`` wave barriers as whole structures.
 
-Deliberately NOT bbox-clipped. A breakwater is meshed as a SOLID BARRIER: clipping
-one at the AOI edge opens a gap in the middle of a structure that has none, and
-waves would pour through a hole the survey does not contain. A road is a network
-you measure inside an area; this is an object you either have or do not.
+Deliberately NOT bbox-clipped. A breakwater is meshed as a SOLID BARRIER, so clipping
+one at the AOI edge opens a gap in the middle of a structure that has none. A road is a
+network you measure inside an area; this is an object you either have or do not."""
 
-``man_made=pier`` is excluded on purpose: a pier is the berthing dock being
-sheltered, not a wave barrier, and meshing one solid answers a different question.
-``groyne`` and ``breakwater`` are both barriers and both ride.
-"""
+# ``man_made=pier`` is excluded on purpose: a pier is the berthing dock being sheltered,
+# not a wave barrier, and meshing one solid answers a different question. ``groyne`` and
+# ``breakwater`` are both barriers and both ride.
 
 from __future__ import annotations
 
@@ -77,11 +75,9 @@ def _line_coords(geom: Any) -> list[list[float]] | None:
 def delegate(
     spec: SourceSpec, params: dict[str, Any], *, timeout_s: float
 ) -> list[dict[str, Any]]:
-    """Barrier ways touching the bbox as WHOLE LineStrings.
-
-    Empty is a legitimate answer, not an error: an open-water AOI with no structure
-    is exactly the case a harbour-agitation run has to be able to solve and label.
-    """
+    """Barrier ways touching the bbox as WHOLE LineStrings. Empty is a legitimate answer,
+    not an error: an open-water AOI with no structure is exactly the case an agitation
+    run has to be able to solve and label."""
     values = _resolve_barrier_values(
         spec.error_code_prefix, spec.input_error_suffix, params.get("structure_type"))
     gdf = overpass_features(spec, params, {"man_made": values}, timeout_s=timeout_s)

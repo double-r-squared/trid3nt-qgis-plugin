@@ -1,38 +1,29 @@
-"""USGS 3DEP DEM delegate hooks: the ``fetch_dem`` fold.
+"""USGS 3DEP DEM delegate hooks.
 
-``fetch_dem`` folds onto the router as a ``library_delegate`` raster source: the
-maintained ``py3dep`` library owns 3DEP discovery + the socket, so the router
-DELEGATES the one network step to :func:`read_dem` and keeps params / gates /
-cache / stamps / typed-errors. The bespoke DEM behaviour the declarative surface
-cannot express lives here as four hooks:
+The maintained library owns 3DEP discovery and the socket, so the router delegates that
+one network step and keeps params, gates, cache, stamps and typed errors. Four hooks
+carry the DEM behaviour the declarative surface cannot express."""
 
-  * ``dem_3dep.validate`` (delegate_validate) -- the continent-ceiling hard cap +
-    the auto-path US out-of-coverage pre-flight (both twin-identical), raised
-    pre-cache / pre-network.
-  * ``dem_3dep.coarsen`` (pre_resolve) -- the pixel-budget auto-coarsen: recompute
-    the effective resolution + re-quantize the bbox to that coarser grid BEFORE
-    read_through so the cache key keys on the delivered grid (twin behaviour). The
-    original requested resolution rides ``requested_res_m`` ONLY when coarsening
-    happened, so a non-coarsened request keeps the twin's exact ``{bbox,
-    resolution_m}`` cache key byte-for-byte.
-  * ``dem_3dep.read`` (delegate) -- ``py3dep.get_dem`` under a hard wall-clock
-    watchdog + the reproject-bounds partial-coverage gate + the SOURCE-CONDITIONAL
-    error gating (auto -> DemAutoFallbackGateError; pinned 3dep -> a plain suggesting
-    UpstreamAPIError). Returns ``(array, transform, crs)`` for the shared COG writer.
-  * ``dem_3dep.envelope`` -- the ``dem-{lon}-{lat}-{Nm}`` layer_id + ``USGS 3DEP DEM
-    (Nm)`` name with the coarsen stamp (the router's build_layer_uri hardcodes
-    ``{source_class}-{variable}``; this is the only naming override seam).
-
-The ``source="copernicus"`` leg is NOT here -- it is the spec's cross-sibling
-``dispatch`` block, served verbatim from ``fetch_copernicus_dem``
-before this pipeline runs.
-
-The ``Dem*Error`` twins live HERE (their stable importable home now that the
-coded ``fetch_dem`` module is deleted): they are ``UpstreamAPIError`` subclasses
-carrying PINNED ``error_code``s, and ``library_delegate.invoke`` passes any
-``FetchError`` through unchanged so those codes survive the delegate
-wrapper verbatim.
-"""
+# ``validate`` is the continent-ceiling hard cap plus the auto-path out-of-coverage
+# pre-flight, raised pre-cache and pre-network.
+#
+# ``coarsen`` is the pixel-budget auto-coarsen: it recomputes the effective resolution
+# and re-quantizes the bbox to that coarser grid BEFORE read_through, so the cache key
+# keys on the DELIVERED grid. The original requested resolution rides
+# ``requested_res_m`` ONLY when coarsening happened, so a non-coarsened request keeps
+# the plain ``{bbox, resolution_m}`` key.
+#
+# ``read`` runs the library call under a hard wall-clock watchdog, gates partial
+# coverage on the reprojected bounds, and gates its errors on the SOURCE: an automatic
+# request raises the fallback gate, while a pinned one raises a plain suggesting
+# upstream error.
+#
+# ``envelope`` is the only naming override seam, because the router's own layer builder
+# hardcodes ``{source_class}-{variable}``.
+#
+# The ``source="copernicus"`` leg is NOT here: it is the spec's cross-sibling dispatch,
+# served verbatim from its sibling before this pipeline runs. The ``Dem*Error`` classes
+# live HERE, carrying PINNED codes that survive the delegate wrapper's passthrough.
 
 from __future__ import annotations
 
@@ -66,78 +57,58 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Typed DEM errors (the stable home after the coded twin's deletion).
+# Typed DEM errors.
 # --------------------------------------------------------------------------- #
 
 
 class DemPartialCoverageError(UpstreamAPIError):
-    """3DEP returned a DEM that materially under-covers the requested bbox.
+    """3DEP returned a DEM that materially UNDER-COVERS the requested bbox. A DATA
+    signal, not a service-health one: it PROPAGATES and does NOT drive the
+    cross-dataset fallback gate."""
 
-    3DEP coverage gaps / edge clipping leave the returned raster smaller than the
-    requested extent (the live south-edge clip -> 79% height hillshade); without a
-    check we would silently mesh / hillshade a partial DEM (the honesty floor
-    forbids that). A TYPED, RETRYABLE upstream signal: it subclasses
-    ``UpstreamAPIError`` so the urban workflow's ``except Exception`` 1m->10m
-    fallback still fires, and the standalone tool surfaces the distinct
-    ``error_code`` so the agent narrates the partial coverage. This is a DATA
-    signal, not a service-health one -- it PROPAGATES, it does NOT drive the
-    cross-dataset fallback gate.
-    """
+    # Coverage gaps and edge clipping leave the returned raster smaller than the
+    # requested extent, and without this check a partial DEM would silently be meshed or
+    # hillshaded. It stays an ``UpstreamAPIError`` subclass so a caller's coarse-retry
+    # fallback still fires, while the distinct code lets the surface narrate the gap.
 
     error_code = "DEM_PARTIAL_COVERAGE"
     retryable = True
 
 
 class DemPrimaryTimeoutError(UpstreamAPIError):
-    """The 3DEP DEM attempt exceeded its hard wall-clock budget.
-
-    ``py3dep.get_dem`` exposes no timeout arg and grinds inside its own WMS retry
-    loop with no per-fetch cap; on a 3DEP outage it eats the whole turn budget.
-    This is raised when the bounded watchdog blows ``TRID3NT_DEM_PRIMARY_TIMEOUT_S``
-    (default 90 s) and is treated EXACTLY like a 3DEP service failure (drives the
-    auto gate; the pinned ``source="3dep"`` path surfaces it suggesting Copernicus).
-    """
+    """The DEM attempt exceeded its hard wall-clock budget, and is treated EXACTLY like a
+    service failure. The library exposes no timeout and grinds inside its own retry loop
+    with no per-fetch cap, so on an outage it would eat the whole turn budget."""
 
     error_code = "DEM_PRIMARY_TIMEOUT"
     retryable = True
 
 
 class DemAutoFallbackGateError(UpstreamAPIError):
-    """3DEP failed on the auto path; a Copernicus swap needs USER approval.
+    """3DEP failed on the AUTO path, and the coarser global substitute needs USER
+    approval. The error names what failed, names the substitute as an explicit retry,
+    and states the tradeoff, so the swap is approved conversationally."""
 
-    NORM (IDEAS.md "Loud, user-gated cross-dataset fallbacks"): 3DEP (US, 1-10 m
-    LIDAR) -> Copernicus GLO-30 (global, 30 m RADAR) is a DIFFERENT measurement
-    method at a COARSER resolution; swapping it silently degrades map integrity
-    while looking like success. On a 3DEP SERVICE failure (outage / 5xx / timeout
-    budget blow) the ``source="auto"`` path raises THIS typed retryable error,
-    which (a) states 3DEP failed and why, (b) NAMES the substitute as an explicit
-    retry ``source="copernicus"``, (c) states the tradeoff plainly -- and rides the
-    tool-retry loop (``summarize_tool_result`` surfaces ``.suggestions``) so the
-    USER approves the swap conversationally.
-    """
+    # A LIDAR product at 1-10 m and a RADAR one at 30 m are a DIFFERENT measurement
+    # method at a coarser resolution, so swapping them silently degrades map integrity
+    # while looking like success. Only a SERVICE failure -- an outage, a 5xx, a blown
+    # timeout budget -- reaches here.
 
     error_code = "DEM_FALLBACK_GATE"
     retryable = True
 
 
 class DemOutOfCoverageError(UpstreamAPIError):
-    """The requested bbox lies outside USGS 3DEP's coverage (US) entirely.
-
-    A pre-flight envelope check catches a clearly NON-US AOI BEFORE the 3DEP
-    attempt, so the user gets an immediate DISTINCT "3DEP has no coverage there"
-    error naming ``source="copernicus"`` rather than waiting out a guaranteed-miss
-    attempt or reading the outage gate. Kept distinct from
-    ``DemAutoFallbackGateError`` (3DEP covers the AOI but the SERVICE failed). The
-    envelope is deliberately GENEROUS so a border-straddling bbox falls through to
-    a real 3DEP attempt, never a false out-of-coverage error.
-    """
+    """The requested bbox lies outside 3DEP's US coverage entirely, caught pre-flight so
+    a guaranteed miss is not waited out. Kept DISTINCT from the service-failure gate,
+    and the envelope is GENEROUS so a border-straddling bbox still gets a real try."""
 
     error_code = "DEM_OUT_OF_COVERAGE"
     retryable = True
 
 
 # --------------------------------------------------------------------------- #
-# Constants (twin-identical).
+# Constants.
 # --------------------------------------------------------------------------- #
 
 #: Coverage shortfall (deg) tolerated before a DEM is flagged partial (~90 m).
@@ -187,7 +158,7 @@ _US_3DEP_COVERAGE_ENVELOPES: tuple[tuple[float, float, float, float], ...] = (
 
 
 # --------------------------------------------------------------------------- #
-# Pure geometry helpers (twin-identical).
+# Pure geometry helpers.
 # --------------------------------------------------------------------------- #
 
 
@@ -275,15 +246,9 @@ def _bbox_covers(
 def _fetch_3dep_dem_array(
     bbox: tuple[float, float, float, float], resolution_m: int
 ) -> tuple[Any, Any, Any]:
-    """Call ``py3dep.get_dem``, run the coverage gate, return ``(array, transform, crs)``.
-
-    Raises ``UpstreamAPIError`` on any 3DEP service failure and
-    ``DemPartialCoverageError`` when the returned raster materially under-covers the
-    requested bbox. The array is nodata-masked to NaN (the pfdf_3dep pattern) so the
-    shared COG writer serializes NaN-nodata; the EPSG:5070 array / transform / CRS
-    are re-encoded by ``array_to_cog_bytes`` (the accepted divergence class,
-    same array / CRS / nodata as the twin's ``rio.to_raster`` COG).
-    """
+    """Call the library, run the coverage gate, and return ``(array, transform, crs)``
+    with nodata masked to NaN for the shared COG writer. A service failure raises
+    upstream; a raster that materially under-covers the bbox raises partial coverage."""
     try:
         import py3dep  # type: ignore[import-not-found]
         import rioxarray  # noqa: F401 -- registers the .rio accessor
@@ -350,14 +315,9 @@ def _fetch_3dep_dem_array_bounded(
     resolution_m: int,
     timeout_s: float,
 ) -> tuple[Any, Any, Any]:
-    """Run :func:`_fetch_3dep_dem_array` under a hard wall-clock budget.
-
-    ``py3dep`` exposes no timeout, so the budget is enforced with a DAEMON thread +
-    ``join(timeout)``. On expiry the worker is ABANDONED (its eventual result/exc is
-    written only to the local ``box`` and discarded -- never reaches the cache, since
-    this ``fetch_fn`` RAISES instead of returning). The daemon flag keeps an in-flight
-    grind from blocking interpreter shutdown.
-    """
+    """Run the read under a hard wall-clock budget, enforced with a DAEMON thread and a
+    join timeout because the library exposes none. On expiry the worker is ABANDONED:
+    its eventual result is discarded and never reaches the cache, since this raises."""
     import threading
 
     box: dict[str, Any] = {}
@@ -394,14 +354,9 @@ def _fetch_3dep_dem_array_bounded(
 
 @register_hook("dem_3dep.validate")
 def validate_dem(spec: SourceSpec, params: dict[str, Any]) -> None:
-    """Pre-cache DEM input gate (twin-identical): continent ceiling then out-of-coverage.
-
-    Runs in ``route()`` AFTER type/gate validation and BEFORE read_through. Raises
-    ``BboxInvalidError`` (the continent-scale hard cap, the twin's exact message) or
-    ``DemOutOfCoverageError`` (a clearly non-US AOI on the AUTO path only) -- both
-    pre-network, offline-testable, and both propagate through ``pre_validate``
-    unwrapped.
-    """
+    """Pre-cache DEM input gate: the continent-scale hard cap, then the out-of-coverage
+    check on the AUTO path only. Both run AFTER type validation and BEFORE
+    read_through, so both are pre-network and testable offline."""
     bbox = tuple(float(v) for v in params["bbox"])
     rough_area = _bbox_area_km2(bbox)
     if rough_area > _DEM_CONTINENT_CEILING_KM2:
@@ -436,17 +391,13 @@ def validate_dem(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 @register_hook("dem_3dep.coarsen")
 def coarsen_dem(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
-    """Pixel-budget auto-coarsen: return the coarsened ``bbox`` + effective ``resolution_m``.
+    """Pixel-budget auto-coarsen, returning the coarsened bbox and effective resolution.
+    The effective resolution is NEVER finer than requested, and the bbox is re-quantized
+    to the DELIVERED grid so a coarsened fetch cannot collide with a native one."""
 
-    If the requested resolution would put > ``_DEM_PIXEL_BUDGET_PX`` pixels on the
-    bbox's long axis, coarsen to fit. ``effective_res`` is NEVER finer than
-    requested, so a small-bbox site-scale request is byte-identical. The bbox is
-    re-quantized to the EFFECTIVE grid so a coarsened fetch never collides on the
-    cache key with a native fetch of the same bbox (twin behaviour). ``requested_res_m``
-    is returned ONLY when coarsening actually happened -- so a non-coarsened request
-    keeps the twin's exact ``{bbox, resolution_m}`` cache key byte-for-byte, and the
-    envelope hook reads it back to stamp the honest coarsening note.
-    """
+    # ``requested_res_m`` is returned ONLY when coarsening actually happened, so a
+    # non-coarsened request keeps the plain ``{bbox, resolution_m}`` cache key, and the
+    # envelope hook reads it back to stamp the honest coarsening note.
     requested_res = int(params["resolution_m"])
     min_lon, min_lat, max_lon, max_lat = tuple(float(v) for v in params["bbox"])
     mid_lat = 0.5 * (min_lat + max_lat)
@@ -473,18 +424,14 @@ def coarsen_dem(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
 
 @register_hook("dem_3dep.read")
 def read_dem(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> tuple[Any, Any, Any]:
-    """Read a 3DEP DEM via py3dep and return ``(array, transform, crs)``.
+    """Read a 3DEP DEM and return ``(array, transform, crs)``. The DEM watchdog owns its
+    own env-tunable budget; the spec's delegate timeout is a nominal outer bound."""
 
-    The wall-clock budget is the twin's env-tunable ``TRID3NT_DEM_PRIMARY_TIMEOUT_S``
-    (default 90 s); the spec's ``ingest.delegate.timeout_s`` is a nominal outer bound
-    the delegate wrapper passes but the DEM watchdog owns its own budget (twin-faithful,
-    honoring the test env override). SOURCE-CONDITIONAL gating on a SERVICE failure:
-      * partial coverage -> propagates (DATA signal, not a fallback trigger);
-      * pinned source="3dep" -> a plain suggesting UpstreamAPIError (no fallback);
-      * auto -> DemAutoFallbackGateError (loud, user-gated cross-dataset swap).
-    Every raised error is a ``FetchError`` so ``library_delegate.invoke`` passes its
-    pinned code through unchanged.
-    """
+    # Gating on a SERVICE failure is SOURCE-CONDITIONAL: partial coverage propagates, a
+    # data signal rather than a fallback trigger; a pinned source raises a plain
+    # suggesting upstream error with no fallback; the auto path raises the loud
+    # user-gated cross-dataset swap. Every raise is a FetchError, so the delegate
+    # wrapper passes its pinned code through unchanged.
     bbox = tuple(float(v) for v in params["bbox"])
     resolution_m = int(params["resolution_m"])
     pinned = _pinned_3dep(params)
@@ -544,13 +491,9 @@ def read_dem(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> t
 def envelope_dem(
     spec: SourceSpec, params: dict[str, Any], layer: Any, data: bytes | None
 ) -> dict[str, Any]:
-    """Override the emitted ``layer_id`` + ``name`` to the twin's exact forms.
-
-    ``dem-{lon:.4f}-{lat:.4f}-{Nm}`` and ``USGS 3DEP DEM (Nm)``, plus the honest
-    pixel-budget coarsen stamp when ``requested_res_m`` shows the delivered grid is
-    coarser than requested. Pure (reads only the already-resolved params); the
-    router strips uri/layer_type so this can only enrich, never re-point the layer.
-    """
+    """Build the emitted ``layer_id`` and ``name``, plus the honest coarsen stamp when
+    ``requested_res_m`` shows the delivered grid is coarser than asked. Pure over the
+    resolved params, and the router strips the identity keys, so it can only enrich."""
     bbox = tuple(float(v) for v in params["bbox"])
     effective_res = int(params["resolution_m"])
     requested_res = params.get("requested_res_m")
