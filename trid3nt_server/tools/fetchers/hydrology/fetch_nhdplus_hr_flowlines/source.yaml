@@ -41,11 +41,11 @@ gates:
   max_features: 5000
 
 ingest:
+  access: ogr
+  ogr: {driver: ESRIJSON}
   geometry_envelope: json
   query_template:
     out_fields: "gnis_name,streamorde,totdasqkm"
-    f: geojson
-  pagination: {mode: exceeded_transfer_limit, page_size: 500}
   where_clauses:
     - {template: "UPPER(gnis_name)=UPPER('{gnis_name}')", require: [gnis_name]}
   properties:
