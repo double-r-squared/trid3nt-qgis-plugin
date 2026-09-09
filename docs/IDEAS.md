@@ -4285,3 +4285,29 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   fetch_overpass_pois loses 3 of 8 corpus phrasings and
   fetch_copernicus_dem has no corpus. STILL YOURS: the Earthdata
   .netrc (DSWx + NLDAS-2 live), the support-page re-cut step.
+
+- DOCS AND DOCSTRING WAVE SHAPED (NATE 2026-09-09, before calibration):
+  (1) LOC = PURE CODE from here on - scripts/loc_report.py is the
+  standing measure (no blank, comment or docstring lines; no YAML,
+  JSON, docs/); baseline server 75,531 pure of 134,806 raw; product
+  97,983; tests 79,680; docstrings 36,228 and comments 17,267 in
+  product. (2) WHERE TRUTH LIVES (proposed, under discussion): each
+  fact in exactly one place, the checkable place over the readable
+  one - code (names/types/signatures) -> inline constraint comments
+  -> the docstring as the CALLER'S CONTRACT (what it is, what it
+  refuses, a constraint the signature cannot carry; never why,
+  history, examples, architecture, neighbours) -> the SysML model
+  (structure + requirements, suite-checked) -> docs/ (method,
+  rulings, maps) -> tests. Proposed limits: 3 lines for functions and
+  classes, 5 for modules, LLM-facing tool/template docstrings kept
+  under their routing budget; a lint test enforces. NATE: "3 lines
+  seems ok but I don't know exactly where we should put our limit ...
+  good code with some inline comments or comment blocks can do the
+  work of a large docstring" - the census measures before the limit
+  is set. (3) DIRECTORY MAP READMEs STAY as short maps (one paragraph
+  + file table); anything longer moves under docs/. (4) SUPERSEDED or
+  DEAD decision records are DELETED outright (git is the archive);
+  docs/ is used for what it is - stale material removed or ignored;
+  the repo README rewritten to the product as it is. A read-only
+  census (docstrings by audience and content; every ADR classified;
+  the docs tree and READMEs against the tree) precedes the wave.
