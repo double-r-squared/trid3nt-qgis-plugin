@@ -1,7 +1,6 @@
 # Router source spec (trigger wave, ADR 0084) -- OSM building footprints + tags sidecar.
-# Twin: fetch_buildings.py (Overpass polygon fetch + a click-to-enrich .tags.json S3
-# side write). Folds onto the overpass_sidecar executor: build_request QL + a
-# (features, tags) parse + the constrained sibling-of-the-.fgb sidecar write.
+# The footprints read through OSMnx; the executor writes the constrained
+# sibling-of-the-.fgb tags sidecar beside them.
 schema_version: v1
 name: fetch_buildings
 source_class: buildings
@@ -31,11 +30,11 @@ params:
 gates:
   max_bbox_km2: 5000.0
 hooks:
-  build_request: buildings.build_request
+  delegate: buildings.features
 ingest:
+  delegate: {library: osmnx, timeout_s: 180}
   sidecar_write:
     ext: tags.json
-    parse: buildings.parse
   properties:
   - osm_id
   - osm_type

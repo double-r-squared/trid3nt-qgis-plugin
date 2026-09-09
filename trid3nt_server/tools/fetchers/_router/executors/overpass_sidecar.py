@@ -12,9 +12,10 @@ the library_delegate:
   still renders; enrich degrades to a live Overpass-by-id query) -- the honesty floor is
   untouched (``read_through`` still owns the ``.fgb`` success/error).
 
-The transport (endpoint_fallback mirror chain) + serialization stay shared; the source's
-QL + polygon decode + tag capture are the ``hooks.build_request`` + the
-``ingest.sidecar_write.parse`` pure hooks.
+The read and the serialization stay shared: the row reads through the ordinary
+library-delegate seam, whose hook returns BOTH halves at once - the slim features
+and the tag bag keyed by the same fid. This module is the side write and nothing
+else.
 """
 
 from __future__ import annotations
@@ -27,8 +28,7 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_empty_error
-from ..hooks import resolve_hook
-from .http_json import _fetch_endpoint_fallback
+from .library_delegate import invoke
 from .vector_fgb import features_to_fgb_bytes
 
 logger = logging.getLogger(
@@ -81,13 +81,9 @@ def _write_sidecar(spec: SourceSpec, params: dict[str, Any], ext: str, payload: 
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Overpass fetch -> (features, tags) -> serialize FGB + write the tags sidecar."""
-    build = resolve_hook(spec.hooks.build_request)  # type: ignore[union-attr]
-    bodies = _fetch_endpoint_fallback(spec, build(spec, params))
-
+    """(features, tags) -> serialize the FGB + write the tags sidecar beside it."""
     sw = (spec.ingest or {}).get("sidecar_write") or {}
-    parse = resolve_hook(sw["parse"])
-    features, tags_by_fid = parse(spec, params, bodies)
+    features, tags_by_fid = invoke(spec, params)
 
     if not features:
         # The twin raised on an empty AOI (it triggered the dead msft fallback);

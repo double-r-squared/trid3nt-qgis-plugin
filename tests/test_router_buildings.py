@@ -11,14 +11,15 @@ sibling-key derivation, empty -> BUILDINGS_EMPTY, and param validation.
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from pathlib import Path
 from typing import Any
 
 import geopandas as gpd
+import pandas as pd
 import pytest
+from shapely.geometry import Point, Polygon
 
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import RouterEmptyError, RouterInputError
@@ -40,35 +41,34 @@ def _vp(**raw: Any) -> dict[str, Any]:
     return router.validate_params(SPEC, raw)
 
 
-def _payload_bytes(elements: list[dict[str, Any]]) -> bytes:
-    return json.dumps({"elements": elements}).encode("utf-8")
+def _frame(rows: list[tuple[str, int, Any, dict]]) -> gpd.GeoDataFrame:
+    """A frame shaped as the library returns one: a (element, id) index plus tags."""
+    index = pd.MultiIndex.from_tuples(
+        [(et, oid) for et, oid, _g, _t in rows], names=["element", "id"])
+    keys: list[str] = []
+    for _et, _oid, _g, tags in rows:
+        keys.extend(k for k in tags if k not in keys)
+    cols = {k: [tags.get(k) for _et, _oid, _g, tags in rows] for k in keys}
+    return gpd.GeoDataFrame(
+        cols, geometry=[g for _et, _oid, g, _t in rows], index=index, crs="EPSG:4326")
 
 
-_ELEMENTS = [
-    {
-        "type": "way", "id": 111, "tags": {"building": "yes", "name": "Block A"},
-        "geometry": [
-            {"lat": 26.60, "lon": -81.85}, {"lat": 26.60, "lon": -81.84},
-            {"lat": 26.61, "lon": -81.84}, {"lat": 26.61, "lon": -81.85},
-            {"lat": 26.60, "lon": -81.85},
-        ],
-    },
-    {
-        "type": "relation", "id": 222, "tags": {"building": "commercial"},
-        "members": [
-            {"type": "way", "role": "outer", "geometry": [
-                {"lat": 26.62, "lon": -81.87}, {"lat": 26.62, "lon": -81.86},
-                {"lat": 26.63, "lon": -81.86}, {"lat": 26.63, "lon": -81.87},
-                {"lat": 26.62, "lon": -81.87}]},
-            {"type": "way", "role": "inner", "geometry": [
-                {"lat": 26.625, "lon": -81.868}, {"lat": 26.625, "lon": -81.862},
-                {"lat": 26.628, "lon": -81.862}, {"lat": 26.625, "lon": -81.868}]},
-        ],
-    },
-    {"type": "node", "id": 333, "lat": 26.6, "lon": -81.8},           # not a polygon -> drop
-    {"type": "way", "id": 444, "tags": {"building": "yes"}, "geometry": [
-        {"lat": 26.60, "lon": -81.85}, {"lat": 26.60, "lon": -81.84}]},  # degenerate -> drop
+#: A way footprint, an assembled multipolygon relation with its courtyard, and a
+#: node the library kept because it carried the tag but which is not a footprint.
+_BLOCK_A = Polygon([(-81.85, 26.60), (-81.84, 26.60), (-81.84, 26.61), (-81.85, 26.61)])
+_COURTYARD = Polygon(
+    [(-81.87, 26.62), (-81.86, 26.62), (-81.86, 26.63), (-81.87, 26.63)],
+    [[(-81.868, 26.625), (-81.862, 26.625), (-81.862, 26.628), (-81.868, 26.625)]])
+_ROWS = [
+    ("way", 111, _BLOCK_A, {"building": "yes", "name": "Block A"}),
+    ("relation", 222, _COURTYARD, {"building": "commercial"}),
+    ("node", 333, Point(-81.8, 26.6), {"building": "yes"}),   # not areal -> dropped
 ]
+
+
+def _serve(monkeypatch, rows):
+    monkeypatch.setattr(BH, "overpass_features",
+                        lambda spec, params, tags, *, timeout_s: _frame(rows))
 
 
 def _to_gdf(b: bytes) -> gpd.GeoDataFrame:
@@ -92,9 +92,9 @@ def test_spec_identity():
     assert SPEC.shape == "vector-fgb" and SPEC.output.layer_type == "vector"
     assert SPEC.output.role == "input" and SPEC.output.style["kind"] == "reference"
     assert SPEC.output.emit_bbox is False
-    assert SPEC.hooks.build_request == "buildings.build_request"
-    sw = SPEC.ingest["sidecar_write"]
-    assert sw == {"ext": "tags.json", "parse": "buildings.parse"}
+    assert SPEC.hooks.delegate == "buildings.features"
+    assert SPEC.ingest["delegate"] == {"library": "osmnx", "timeout_s": 180}
+    assert SPEC.ingest["sidecar_write"] == {"ext": "tags.json"}
     assert SPEC.cache.ttl_class == "static-30d"
     assert SPEC.docstring and "footprint" in SPEC.docstring.lower()
     assert SPEC.corpus
@@ -112,31 +112,14 @@ def test_promoted_signature_matches_twin():
 
 
 # --------------------------------------------------------------------------- #
-# build_request -- the Overpass QL.
+# features -- the slim layer and the tag bag off one read.
 # --------------------------------------------------------------------------- #
 
 
-def test_build_request_ql_selects_ways_and_relations():
-    params = _vp(bbox=list(_AOI))
-    plans = BH.build_request(SPEC, params)
-    assert len(plans) == 1 and plans[0].method == "POST"
-    ql = plans[0].data["data"]
-    assert 'way["building"]' in ql and 'relation["building"]' in ql
-    assert "out geom;" in ql
-    # bbox corners are (south, west, north, east) -- lat first (on the quantized bbox).
-    w, s, e, n = params["bbox"]
-    assert f"{s},{w},{n},{e}" in ql
-
-
-# --------------------------------------------------------------------------- #
-# parse -- (features, tags) assembly.
-# --------------------------------------------------------------------------- #
-
-
-def test_parse_assembles_polygons_relations_slim_props_and_tags():
-    params = _vp(bbox=list(_AOI))
-    features, tags = BH.parse(SPEC, params, [_payload_bytes(_ELEMENTS)])
-    assert len(features) == 2
+def test_features_keeps_areal_footprints_slim_and_captures_the_tag_bag(monkeypatch):
+    _serve(monkeypatch, _ROWS)
+    features, tags = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
+    assert len(features) == 2                       # the node is not a footprint
     assert {f["geometry"]["type"] for f in features} <= {"Polygon", "MultiPolygon"}
     assert {f["properties"]["osm_id"] for f in features} == {111, 222}
     # SLIM inline props: id-only, no building/name.
@@ -148,39 +131,26 @@ def test_parse_assembles_polygons_relations_slim_props_and_tags():
     assert tags["r222"] == {"building": "commercial"}
 
 
-def test_parse_drops_footprints_entirely_outside_bbox():
-    # A footprint well outside the AOI is dropped (intersects filter).
-    outside = [{
-        "type": "way", "id": 999, "tags": {"building": "yes"},
-        "geometry": [
-            {"lat": 10.0, "lon": -50.0}, {"lat": 10.0, "lon": -49.99},
-            {"lat": 10.01, "lon": -49.99}, {"lat": 10.0, "lon": -50.0}],
-    }]
-    features, _ = BH.parse(SPEC, _vp(bbox=list(_AOI)), [_payload_bytes(_ELEMENTS + outside)])
-    assert {f["properties"]["osm_id"] for f in features} == {111, 222}
+def test_a_relation_keeps_its_courtyard(monkeypatch):
+    _serve(monkeypatch, _ROWS)
+    features, _ = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
+    courtyard = next(f for f in features if f["properties"]["osm_id"] == 222)
+    assert len(courtyard["geometry"]["coordinates"]) == 2     # an outer ring and a hole
 
 
-def test_parse_serializes_to_slim_fgb():
-    features, _ = BH.parse(SPEC, _vp(bbox=list(_AOI)), [_payload_bytes(_ELEMENTS)])
+def test_features_serializes_to_slim_fgb(monkeypatch):
+    _serve(monkeypatch, _ROWS)
+    features, _ = BH.features(SPEC, _vp(bbox=list(_AOI)), timeout_s=1)
     gdf = _to_gdf(features_to_fgb_bytes(features, SPEC, _vp(bbox=list(_AOI))))
     assert len(gdf) == 2
     assert set(gdf.columns) == {"osm_id", "osm_type", "fid", "geometry"}
 
 
-def test_empty_features_raise_buildings_empty():
-    from trid3nt_server.tools.fetchers._router.executors import http_json
-
-    # Monkeypatch the transport at the executor's fetch seam to return an empty
-    # Overpass body, so execute() reaches the empty-features gate without a network hit.
-    import trid3nt_server.tools.fetchers._router.executors.overpass_sidecar as osx
-    orig = osx._fetch_endpoint_fallback
-    osx._fetch_endpoint_fallback = lambda spec, plans: [_payload_bytes([])]
-    try:
-        with pytest.raises(RouterEmptyError) as ei:
-            osx.execute(SPEC, _vp(bbox=list(_AOI)))
-        assert ei.value.error_code == "BUILDINGS_EMPTY"
-    finally:
-        osx._fetch_endpoint_fallback = orig
+def test_empty_features_raise_buildings_empty(monkeypatch):
+    _serve(monkeypatch, [])
+    with pytest.raises(RouterEmptyError) as ei:
+        overpass_sidecar.execute(SPEC, _vp(bbox=list(_AOI)))
+    assert ei.value.error_code == "BUILDINGS_EMPTY"
 
 
 # --------------------------------------------------------------------------- #

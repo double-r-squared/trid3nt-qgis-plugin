@@ -548,6 +548,12 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if spec.shape == "record":
         from .executors import record as record_executor
         return record_executor.execute
+    # Sidecar-write path: a source whose read ALSO yields ONE declared sidecar object
+    # written next to the .fgb (fetch_buildings' tags.json). Its read is the delegate
+    # seam below, so this wins over it.
+    if (spec.ingest or {}).get("sidecar_write"):
+        from .executors import overpass_sidecar
+        return overpass_sidecar.execute
     if spec.hooks is not None and spec.hooks.delegate:
         if spec.shape == "raster-cog":
             return raster_cog.execute
@@ -577,12 +583,6 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if spec.hooks is not None and (spec.hooks.next_page or spec.hooks.enrich_plan):
         from .executors import chained_resolution
         return chained_resolution.execute
-    # Sidecar-write path: a source that ALSO writes ONE declared sidecar object next
-    # to the .fgb (fetch_buildings' tags.json) routes to the overpass_sidecar executor,
-    # which returns both halves off one read.
-    if (spec.ingest or {}).get("sidecar_write"):
-        from .executors import overpass_sidecar
-        return overpass_sidecar.execute
     # Tier-3 hook-driven path: a spec that names a build_request hook
     # routes to the http_json executor (source-specific request + parse via named
     # pure hooks). No-op for every prior spec (none declare hooks).
