@@ -1,43 +1,8 @@
-"""``compute_idf_curve`` atomic tool -- full NOAA Atlas 14 IDF curve chart.
+"""``compute_idf_curve`` - the full NOAA Atlas 14 IDF curve chart for a point.
 
-Builds the complete intensity-duration-frequency (IDF) curve family for a
-point from the NOAA Atlas 14 Precipitation Frequency Data Server (PFDS) --
-the SAME endpoint ``lookup_precip_return_period`` queries, but instead of
-extracting one (duration x ARI) cell this tool consumes the FULL matrix the
-PFDS CSV already returns (19 durations from 5-min to 60-day x 10 ARIs from
-1-yr to 1000-yr) and renders it as the house chart-emission payload
-(``chart_tools.build_chart_payload`` -> Vega-Lite v5, inline data):
-
-    x     duration (hours, LOG scale)
-    y     intensity (in/hr, LOG scale; default) or depth (inches)
-    color one line per return period (1..1000 yr)
-
-This is the classic engineering IDF chart used to pick a design storm for
-a rainfall-runoff analysis (SCS-CN) or a ``telemac_rain_on_grid`` run; the
-companion scalar lookup stays ``lookup_precip_return_period``.
-
-Data source / reuse
-===================
-
-NOAA HDSC PFDS point CSV (Tier 3 direct HTTPS point query) via the EXACT
-fetch + parse helpers ``lookup_precip_return_period`` uses
-(``lookup_precip_return_period._fetch_atlas14_pfds_bytes`` + ``._parse_atlas14_csv``),
-with the same 1/120-degree grid quantization for cache-key stability. Routed
-through ``read_through`` (``static-30d`` / ``idf_curve``) so repeat calls at
-the same snapped point reuse the cached CSV.
-
-Coverage honesty: the PFDS covers the Atlas 14 project areas (most of CONUS +
-PR/USVI; NOT the Pacific Northwest / most of the Intermountain West). An
-out-of-area point raises a typed ``IdfCurveNoCoverageError`` pointing at
-``lookup_precip_return_period``'s Atlas-2 (Western US) single-value fallback
--- the Atlas-2 parameterization is a 2-anchor reconstruction and is NOT
-faithful enough to present as a full 190-point published IDF family.
-
-The tool returns the ``ChartEmissionPayload`` dict (``envelope_type ==
-"chart-emission"``): the agent loop emits the chart card + persists a
-``SessionChartRecord``; no map layer is produced.
+A point outside the Atlas 14 project areas raises a typed no-coverage error: the
+Atlas-2 two-anchor reconstruction is not a published IDF family.
 """
-
 from __future__ import annotations
 
 import logging
@@ -108,11 +73,7 @@ _METADATA = AtomicToolMetadata(
 
 
 def _fetch_pfds_matrix_bytes(lat: float, lon: float) -> bytes:
-    """Fetch the full Atlas 14 PFDS CSV at the snapped point.
-
-    Module-level seam (tests monkeypatch it with a canned PFDS response);
-    delegates to the EXACT fetcher ``lookup_precip_return_period`` uses.
-    """
+    """The full Atlas 14 PFDS CSV at the snapped point."""
     return _df._fetch_atlas14_pfds_bytes(lat, lon)
 
 
@@ -122,11 +83,8 @@ def _fetch_pfds_matrix_bytes(lat: float, lon: float) -> bytes:
 
 
 def _resolve_latlon(location: Any) -> tuple[float, float]:
-    """Accept ``(lat, lon)`` or a 4-element bbox (its center is used).
-
-    A 2-tuple is ``(lat, lon)`` (the ``lookup_precip_return_period``
-    convention: lat first). A 4-tuple/list is treated as a ``(min_lon,
-    min_lat, max_lon, max_lat)`` EPSG:4326 bbox and reduced to its center.
+    """A 2-element ``location`` is ``(lat, lon)``, lat FIRST; a 4-element one is a
+    ``(min_lon, min_lat, max_lon, max_lat)`` bbox reduced to its centre.
     """
     if not isinstance(location, (tuple, list)) or len(location) not in (2, 4):
         raise IdfCurveInputError(
@@ -163,9 +121,7 @@ def _resolve_latlon(location: Any) -> tuple[float, float]:
 
 @register_tool(
     _METADATA,
-    # Annotations: hits the external NOAA PFDS API (like
-    # lookup_precip_return_period), so open_world_hint=True is honest --
-    # listed in test_tool_annotations._OPEN_WORLD_COMPUTE_EXCEPTIONS.
+    # Hits the external NOAA PFDS API, so open_world_hint=True is honest.
     open_world_hint=True,
 )
 def compute_idf_curve(
@@ -191,10 +147,8 @@ def compute_idf_curve(
         y_axis: ``"intensity"`` (default, in/hr, log y) or ``"depth"``
             (inches, linear y).
 
-    Returns:
-        ``ChartEmissionPayload`` (``envelope_type="chart-emission"``):
-        Vega-Lite v5 spec with the full duration x ARI matrix (19
-        durations x 10 return periods), title, and provenance caption.
+    Returns a Vega-Lite chart of the full duration x ARI matrix, 19 durations by
+    10 return periods, with a provenance caption.
     """
     lat, lon = _resolve_latlon(location)
     mode = str(y_axis or "intensity").strip().lower()
@@ -220,10 +174,9 @@ def compute_idf_curve(
             fetch_fn=lambda: _fetch_pfds_matrix_bytes(lat_q, lon_q),
         )
     except _df.UpstreamAPIError as exc:
-        # The PFDS answers "not within a project area" for out-of-coverage
-        # points (data_fetch raises UpstreamAPIError for both that and true
-        # network failures; the message disambiguates). Treat the documented
-        # out-of-area body as an honest coverage miss.
+        # The PFDS answers "not within a project area" for an out-of-coverage
+        # point, and the fetcher raises the same error class for that and for a
+        # true network failure, so only the message separates them.
         if "project area" in str(exc):
             raise IdfCurveNoCoverageError(
                 f"NOAA Atlas 14 does not cover (lat={lat_q}, lon={lon_q}); no "
@@ -243,7 +196,7 @@ def compute_idf_curve(
             "to an empty duration x ARI matrix."
         )
 
-    # ---- Build the inline rows: one per (duration, ARI) cell. -------------
+    # One inline row per (duration, ARI) cell.
     intensity = mode == "intensity"
     rows: list[dict[str, Any]] = []
     for label, hours in _df._ATLAS14_DURATIONS_HR.items():
