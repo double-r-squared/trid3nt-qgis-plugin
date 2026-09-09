@@ -1,21 +1,8 @@
-"""``restyle_layer`` - THE presentation surface for layers already on the map.
-
-Presentation is DISPLAY STATE. Changing a ramp, a title, a scale, or whether a
-layer is on the canvas at all recomputes nothing and moves no number, so all of
-it is available after the fact rather than only as a declaration up front. That
-is what makes "rescale that to 0-30 so I can see the tail" a one-second answer
-instead of a re-solve.
-
-Two things this tool deliberately cannot do. It cannot CREATE a layer - emission
-is automatic, and a uri nothing published is a typed refusal. And it cannot
-invent a renderer: every layer is drawn by one of four preset shapes, and a
-restyle parameterises one of those four.
-
-The COMPARISON mode is the reason it takes a LIST. Two layers a reader is
-comparing - before and after an override, a coarse run against its refined
-rematch, two calibration iterations - must be painted on ONE range or the
-picture is of two different colour maps rather than of a difference.
-"""
+"""``restyle_layer`` - THE presentation surface for layers already on the map. It
+cannot CREATE one (a uri nothing published is a typed refusal) and it cannot invent
+a renderer (every layer is drawn by one of four preset shapes, and a restyle only
+parameterises one of them). It takes a LIST because two layers being compared must
+be painted on ONE range or the picture is of two colour maps, not of a difference."""
 
 from __future__ import annotations
 
@@ -74,39 +61,20 @@ async def restyle_layer(
 ) -> dict[str, Any]:
     """RE-PAINT, RETITLE or HIDE layers already on the map - zero recompute.
 
-    ROUTING: use this for "rescale that layer", "the plume is all one colour, stretch
-    it", "put these two on the same scale so I can compare them", "show that on a log
-    scale", "change the colour ramp", "clip the outliers out of the legend", "call
-    that layer X", "hide that layer", "bring it back". Presentation is DISPLAY STATE:
-    nothing is re-solved, no number changes, and the data is untouched. NOT for
-    creating a layer - a layer must already be published; use the tool that produces
-    the quantity for that.
+    ROUTING: "rescale that layer", "the plume is all one colour, stretch it", "put
+    these two on the same scale", "show that on a log scale", "change the colour
+    ramp", "clip the outliers out of the legend", "call that layer X", "hide that
+    layer", "bring it back". Presentation is DISPLAY STATE: nothing is re-solved and
+    no number changes. NOT for creating a layer - it must already be published.
 
-    Args:
-        layer_ids: the layer id (or ids) to restyle. Several ids plus
-            `shared_scale=True` paints them all on ONE range - the honest way to
-            compare a before against an after.
-        hide: `True` takes the layers off the canvas, `False` puts them back.
-            When set, nothing else is applied.
-        kind: re-shape how the layer is drawn - `continuous` (a ramp over a
-            range), `classed` (declared breaks), `reference` (drawn, not
-            measured), `mesh` (an MDAL dataset group). Omit to keep its own.
-        ramp: a colour ramp name (viridis, blues, reds, rdbu, ...).
-        title: the legend title the layer is read under.
-        units: the units the legend annotates the numbers with.
-        policy: `data` scales to the layer's own values; `fixed` uses min_value /
-            max_value. Omit to keep the declared policy.
-        min_value / max_value: the fixed range, when policy is `fixed`.
-        transform: linear | log | sqrt | percentile.
-        clip_low / clip_high: percentile bounds under `percentile` (e.g. 2 and 98).
-        shared_scale: with several layer_ids, compute ONE range across all of them
-            and paint every one on it.
+    `hide` suppresses every other argument. `policy="fixed"` needs both min_value
+    and max_value; `data` scales to the layer's own values. `shared_scale` over
+    several layer_ids paints them all on ONE range. `clip_low`/`clip_high` are
+    percentile bounds. An omitted argument keeps what the layer was published with.
 
-    Returns:
-        `status="ok"` plus, per layer, the resolved shape and the LEGEND SENTENCE
-        stating which scale policy ran and over what range - narrate that sentence,
-        because the colours cannot say it themselves. On failure `status="error"`
-        with `error_code`.
+    Returns `status="ok"` and, per layer, the resolved shape plus the LEGEND
+    SENTENCE naming the scale policy and its range - narrate that sentence, the
+    colours cannot say it. On failure `status="error"` with `error_code`.
     """
     ids = _ids(layer_ids)
     if not ids:
