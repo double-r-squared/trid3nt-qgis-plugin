@@ -50,7 +50,7 @@ from typing import Any, Literal
 
 import requests
 
-from trid3nt_server.tools.fetchers.imagery import _pc_stac
+from trid3nt_server.tools.fetchers._fetch_common import bbox_pixel_dims
 
 __all__ = [
     "OGCAdapterError",
@@ -363,7 +363,7 @@ def fetch_ogc_layer(
     # the builders that consume them always receive concrete pixel counts.
     if width_px is None and height_px is None:
         grid_bbox = bbox or (-180.0, -90.0, 180.0, 90.0)
-        width_px, height_px = _pc_stac.bbox_pixel_dims(
+        width_px, height_px = bbox_pixel_dims(
             grid_bbox,
             target_resolution_m if target_resolution_m is not None else _DEFAULT_OGC_CELL_M,
             px_max=_OGC_PX_MAX,

@@ -21,7 +21,7 @@ PC collection ``sentinel-2-l2a`` (Sentinel-2 Level-2A, 10 m surface reflectance)
              inside the requested datetime window.
 
 Assets are Azure-Blob COGs behind SAS tokens; this tool signs each asset href
-via the PC SAS REST endpoint (see ``_pc_stac.sas_sign_href``) and reads a
+signed by the planetary-computer SDK at the catalog client and reads a
 bbox-windowed, EPSG:4326-warped array per band through GDAL ``/vsicurl/``. NDVI
 is computed in-memory and re-emitted as a single-band float32 COG (-1..1) with a
 green vegetation colormap (an RdYlGn ramp over the index's own -1..1 domain).
@@ -51,7 +51,8 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.fetchers.imagery import _pc_stac
+from trid3nt_server.tools.fetchers._fetch_common import bbox_pixel_dims
+from trid3nt_server.tools.processing import _pc_search
 from trid3nt_server.tools.cache import read_through
 
 __all__ = [
@@ -118,7 +119,7 @@ _NATIVE_CELL_M = 10.0
 _DEFAULT_MAX_CLOUD = 30.0
 
 #: bbox area guardrail (deg^2). This is NOT a memory ceiling: the emitted
-#: grid is already px-clamped to [16,4096]/axis by _pc_stac.bbox_pixel_dims,
+#: grid is already px-clamped to [16,4096]/axis by bbox_pixel_dims,
 #: so an AOI up to this cap clamps to 4096x4096 and auto-coarsens to
 #: ~20-24 m/px -- COG byte size stays bounded regardless of bbox area.
 #: ~1.0 deg^2 ~ a county-ish extent; beyond it we still raise.
@@ -206,7 +207,7 @@ def _validate_bbox(bbox: tuple[float, float, float, float]) -> None:
             "native 10 m."
         )
     # between the native-10m comfort window and the cap we do
-    # NOT raise -- the px-clamp ([16,4096]/axis in _pc_stac.bbox_pixel_dims)
+    # NOT raise -- the px-clamp ([16,4096]/axis in bbox_pixel_dims)
     # already coarsens the grid so the COG stays bounded. Log an honest note so
     # the user understands the resolution trade (native 10 m -> ~20-24 m/px).
     if area > _NATIVE_COMFORT_DEG2:
@@ -262,7 +263,7 @@ def _read_band_window(
 
     vsicurl = "/vsicurl/" + signed_href
     try:
-        with rasterio.Env(**_pc_stac.VSICURL_ENV_KW):
+        with rasterio.Env(**_pc_search.VSICURL_ENV_KW):
             with rasterio.open(vsicurl) as src:
                 # Destination grid: the requested bbox at the requested size in
                 # EPSG:4326. reproject() resamples the source (UTM) into it.
@@ -307,19 +308,19 @@ def _compute_ndvi_cog_bytes(
 
     # 1. Pick the least-cloudy intersecting scene in the window.
     try:
-        item = _pc_stac.search_least_cloudy_item(
+        item = _pc_search.search_least_cloudy_item(
             collection=_COLLECTION,
             bbox=bbox,
             datetime_range=datetime_range,
             max_cloud_cover=max_cloud_cover,
             sort_by_cloud=True,
         )
-    except _pc_stac.PCStacNoItemsError as exc:
+    except _pc_search.PCStacNoItemsError as exc:
         raise NDVINoImageryError(
             f"no Sentinel-2 imagery for bbox={bbox} in {datetime_range} "
             f"under {max_cloud_cover}% cloud cover: {exc}"
         ) from exc
-    except _pc_stac.PCStacError as exc:
+    except _pc_search.PCStacError as exc:
         raise NDVIUpstreamError(f"Sentinel-2 STAC search failed: {exc}") from exc
 
     assets = getattr(item, "assets", {}) or {}
@@ -329,10 +330,10 @@ def _compute_ndvi_cog_bytes(
             f"{_RED_BAND}/{_NIR_BAND} assets (have {sorted(assets)[:8]})"
         )
 
-    red_href = _pc_stac.sas_sign_href(assets[_RED_BAND].href, _COLLECTION)
-    nir_href = _pc_stac.sas_sign_href(assets[_NIR_BAND].href, _COLLECTION)
+    red_href = assets[_RED_BAND].href
+    nir_href = assets[_NIR_BAND].href
 
-    width_px, height_px = _pc_stac.bbox_pixel_dims(bbox, _NATIVE_CELL_M)
+    width_px, height_px = bbox_pixel_dims(bbox, _NATIVE_CELL_M)
 
     # 2. Read each band warped+windowed to the bbox, compute NDVI.
     red = _read_band_window(red_href, bbox, width_px, height_px)

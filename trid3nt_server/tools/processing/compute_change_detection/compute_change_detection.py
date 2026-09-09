@@ -24,8 +24,8 @@ Data source
 
 Sentinel-2 L2A via the Microsoft Planetary Computer STAC -- the EXACT search /
 sign / windowed-read helpers ``compute_ndvi`` and ``fetch_sentinel2_truecolor``
-use (``_pc_stac.search_least_cloudy_item`` + ``sas_sign_href`` +
-``bbox_pixel_dims``; one least-cloudy scene per date window). Bands:
+use (``_pc_search.search_least_cloudy_item`` + ``bbox_pixel_dims``; one
+least-cloudy scene per date window). Bands:
 
     ndvi: B04 (Red, 10 m) + B08 (NIR, 10 m)
     ndwi: B03 (Green, 10 m) + B08 (NIR, 10 m)
@@ -66,7 +66,8 @@ from trid3nt_contracts.execution import LayerURI, LegendKey
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.fetchers.imagery import _pc_stac
+from trid3nt_server.tools.fetchers._fetch_common import bbox_pixel_dims
+from trid3nt_server.tools.processing import _pc_search
 
 __all__ = [
     "compute_change_detection",
@@ -314,7 +315,7 @@ def _read_band_window(
 
     vsicurl = "/vsicurl/" + signed_href
     try:
-        with rasterio.Env(**_pc_stac.VSICURL_ENV_KW):
+        with rasterio.Env(**_pc_search.VSICURL_ENV_KW):
             with rasterio.open(vsicurl) as src:
                 dst_transform = rasterio.transform.from_bounds(
                     bbox[0], bbox[1], bbox[2], bbox[3], width_px, height_px
@@ -352,19 +353,19 @@ def _fetch_index_for_window(
     """Search PC STAC for the least-cloudy scene in the window; return the
     masked index array on the shared bbox grid + the scene id."""
     try:
-        item = _pc_stac.search_least_cloudy_item(
+        item = _pc_search.search_least_cloudy_item(
             collection=_COLLECTION,
             bbox=bbox,
             datetime_range=datetime_range,
             max_cloud_cover=max_cloud_cover,
             sort_by_cloud=True,
         )
-    except _pc_stac.PCStacNoItemsError as exc:
+    except _pc_search.PCStacNoItemsError as exc:
         raise ChangeDetectionNoImageryError(
             f"no Sentinel-2 imagery for {label} window {datetime_range} over "
             f"bbox={bbox} under {max_cloud_cover}% cloud cover: {exc}"
         ) from exc
-    except _pc_stac.PCStacError as exc:
+    except _pc_search.PCStacError as exc:
         raise ChangeDetectionUpstreamError(
             f"Sentinel-2 STAC search failed for {label} window: {exc}"
         ) from exc
@@ -377,8 +378,8 @@ def _fetch_index_for_window(
             f"{b1_key}/{b2_key} assets (have {sorted(assets)[:8]})"
         )
 
-    b1_href = _pc_stac.sas_sign_href(assets[b1_key].href, _COLLECTION)
-    b2_href = _pc_stac.sas_sign_href(assets[b2_key].href, _COLLECTION)
+    b1_href = assets[b1_key].href
+    b2_href = assets[b2_key].href
     b1 = _read_band_window(b1_href, bbox, width_px, height_px)
     b2 = _read_band_window(b2_href, bbox, width_px, height_px)
 
@@ -700,7 +701,7 @@ def compute_change_detection(
                 max_cc = float(max_cloud_cover)
             except (TypeError, ValueError):
                 max_cc = _DEFAULT_MAX_CLOUD
-            width_px, height_px = _pc_stac.bbox_pixel_dims(q_bbox, _NATIVE_CELL_M)
+            width_px, height_px = bbox_pixel_dims(q_bbox, _NATIVE_CELL_M)
             idx_a, scene_a_id = _fetch_index_for_window(
                 q_bbox, window_a, idx_name, max_cc, width_px, height_px, "date_a"
             )

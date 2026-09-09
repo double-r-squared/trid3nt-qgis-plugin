@@ -11,7 +11,7 @@ Coverage:
   cache hit on the second identical call does not re-invoke the fetcher.
 - Style preset registry: the ``ndvi`` preset resolves to a real rescale+colormap.
 
-Network is fully mocked: ``_pc_stac`` search/sign + the per-band window reader
+Network is fully mocked: ``_pc_search`` (the catalog client signs) + the per-band window reader
 are patched so no real Sentinel-2 scene is fetched.
 """
 
@@ -197,8 +197,7 @@ def test_ndvi_happy_path_roundtrips_to_cog() -> None:
     fake = _FakeStore()
     rt = _make_read_through_injector(fake)
 
-    with patch.object(ndvi_mod._pc_stac, "search_least_cloudy_item", return_value=_fake_item()), \
-         patch.object(ndvi_mod._pc_stac, "sas_sign_href", side_effect=lambda href, c: href), \
+    with patch.object(ndvi_mod._pc_search, "search_least_cloudy_item", return_value=_fake_item()), \
          patch.object(ndvi_mod, "_read_band_window", _patched_band_read()), \
          patch.object(ndvi_mod, "read_through", rt):
         layer = compute_ndvi(bbox=_SC_BBOX, start_date="2024-04-01", end_date="2024-09-30")
@@ -230,8 +229,7 @@ def test_cache_hit_does_not_refetch() -> None:
         calls["n"] += 1
         return reader(href, bbox, w, h)
 
-    with patch.object(ndvi_mod._pc_stac, "search_least_cloudy_item", return_value=_fake_item()), \
-         patch.object(ndvi_mod._pc_stac, "sas_sign_href", side_effect=lambda href, c: href), \
+    with patch.object(ndvi_mod._pc_search, "search_least_cloudy_item", return_value=_fake_item()), \
          patch.object(ndvi_mod, "_read_band_window", counting_reader), \
          patch.object(ndvi_mod, "read_through", rt):
         compute_ndvi(bbox=_SC_BBOX, start_date="2024-04-01", end_date="2024-09-30")
@@ -253,9 +251,9 @@ def test_no_imagery_raises_typed_error() -> None:
     rt = _make_read_through_injector(fake)
 
     def raise_no_items(**kw):
-        raise ndvi_mod._pc_stac.PCStacNoItemsError("no items")
+        raise ndvi_mod._pc_search.PCStacNoItemsError("no items")
 
-    with patch.object(ndvi_mod._pc_stac, "search_least_cloudy_item", side_effect=raise_no_items), \
+    with patch.object(ndvi_mod._pc_search, "search_least_cloudy_item", side_effect=raise_no_items), \
          patch.object(ndvi_mod, "read_through", rt):
         with pytest.raises(NDVINoImageryError):
             compute_ndvi(bbox=_SC_BBOX, start_date="2024-04-01", end_date="2024-09-30")

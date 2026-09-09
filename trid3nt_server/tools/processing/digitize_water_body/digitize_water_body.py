@@ -32,7 +32,7 @@ PC collection ``sentinel-2-l2a`` (Sentinel-2 Level-2A, 10 m surface reflectance)
              / spurious NDWI, so the cleanest scene gives the sharpest mask).
 
 Assets are Azure-Blob COGs behind SAS tokens; this tool signs each asset href
-via the PC SAS REST endpoint (``_pc_stac.sas_sign_href``) and reads a
+signed by the planetary-computer SDK at the catalog client and reads a
 bbox-windowed, EPSG:4326-warped array per band through GDAL ``/vsicurl/``  --  the
 same fetch path ``compute_ndvi`` uses. The water mask is vectorized with
 ``rasterio.features.shapes`` and the polygons are re-emitted as a FlatGeobuf
@@ -69,7 +69,8 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.tools import register_tool
-from trid3nt_server.tools.fetchers.imagery import _pc_stac
+from trid3nt_server.tools.fetchers._fetch_common import bbox_pixel_dims
+from trid3nt_server.tools.processing import _pc_search
 from trid3nt_server.tools.cache import read_through
 
 __all__ = [
@@ -309,7 +310,7 @@ def _read_band_window(
 
     vsicurl = "/vsicurl/" + signed_href
     try:
-        with rasterio.Env(**_pc_stac.VSICURL_ENV_KW):
+        with rasterio.Env(**_pc_search.VSICURL_ENV_KW):
             with rasterio.open(vsicurl) as src:
                 dst_transform = rasterio.transform.from_bounds(
                     bbox[0], bbox[1], bbox[2], bbox[3], width_px, height_px
@@ -355,19 +356,19 @@ def _digitize_water_fgb_bytes(
 
     # 1. Pick the least-cloudy intersecting scene in the window.
     try:
-        item = _pc_stac.search_least_cloudy_item(
+        item = _pc_search.search_least_cloudy_item(
             collection=_COLLECTION,
             bbox=bbox,
             datetime_range=datetime_range,
             max_cloud_cover=max_cloud_cover,
             sort_by_cloud=True,
         )
-    except _pc_stac.PCStacNoItemsError as exc:
+    except _pc_search.PCStacNoItemsError as exc:
         raise WaterBodyNoImageryError(
             f"no Sentinel-2 imagery for bbox={bbox} in {datetime_range} "
             f"under {max_cloud_cover}% cloud cover: {exc}"
         ) from exc
-    except _pc_stac.PCStacError as exc:
+    except _pc_search.PCStacError as exc:
         raise WaterBodyUpstreamError(
             f"Sentinel-2 STAC search failed: {exc}"
         ) from exc
@@ -379,10 +380,10 @@ def _digitize_water_fgb_bytes(
             f"{_GREEN_BAND}/{_NIR_BAND} assets (have {sorted(assets)[:8]})"
         )
 
-    green_href = _pc_stac.sas_sign_href(assets[_GREEN_BAND].href, _COLLECTION)
-    nir_href = _pc_stac.sas_sign_href(assets[_NIR_BAND].href, _COLLECTION)
+    green_href = assets[_GREEN_BAND].href
+    nir_href = assets[_NIR_BAND].href
 
-    width_px, height_px = _pc_stac.bbox_pixel_dims(bbox, _NATIVE_CELL_M)
+    width_px, height_px = bbox_pixel_dims(bbox, _NATIVE_CELL_M)
 
     # 2. Read both bands warped+windowed to the bbox, compute NDWI.
     green = _read_band_window(green_href, bbox, width_px, height_px)

@@ -15,7 +15,7 @@ Coverage:
   ``WaterBodyNoWaterError`` (not retryable)  --  never an empty success layer.
 - min_area_m2 speck filter: water below the area floor raises no-water.
 
-Network is fully mocked: ``_pc_stac`` search/sign + the per-band window reader
+Network is fully mocked: ``_pc_search`` (the catalog client signs) + the per-band window reader
 are patched so no real Sentinel-2 scene is fetched. The vectorization
 (rasterio.features.shapes), area filter (geopandas), and FlatGeobuf write run
 for real on the synthetic mask  --  that is the compute-correctness surface.
@@ -228,8 +228,7 @@ def test_happy_path_digitizes_water_and_roundtrips() -> None:
     fake = _FakeStore()
     rt = _make_read_through_injector(fake)
 
-    with patch.object(wb_mod._pc_stac, "search_least_cloudy_item", return_value=_fake_item()), \
-         patch.object(wb_mod._pc_stac, "sas_sign_href", side_effect=lambda href, c: href), \
+    with patch.object(wb_mod._pc_search, "search_least_cloudy_item", return_value=_fake_item()), \
          patch.object(wb_mod, "_read_band_window", _half_water_reader()), \
          patch.object(wb_mod, "read_through", rt):
         layer = digitize_water_body(
@@ -285,8 +284,7 @@ def test_cache_hit_does_not_refetch() -> None:
         calls["n"] += 1
         return real_fetch(*a, **k)
 
-    with patch.object(wb_mod._pc_stac, "search_least_cloudy_item", return_value=_fake_item()), \
-         patch.object(wb_mod._pc_stac, "sas_sign_href", side_effect=lambda href, c: href), \
+    with patch.object(wb_mod._pc_search, "search_least_cloudy_item", return_value=_fake_item()), \
          patch.object(wb_mod, "_read_band_window", _half_water_reader()), \
          patch.object(wb_mod, "_digitize_water_fgb_bytes", counting_fetch), \
          patch.object(wb_mod, "read_through", rt):
@@ -308,9 +306,9 @@ def test_no_imagery_raises_typed_not_retryable() -> None:
     rt = _make_read_through_injector(fake)
 
     def _raise_no_items(**kw):
-        raise wb_mod._pc_stac.PCStacNoItemsError("no items")
+        raise wb_mod._pc_search.PCStacNoItemsError("no items")
 
-    with patch.object(wb_mod._pc_stac, "search_least_cloudy_item", side_effect=_raise_no_items), \
+    with patch.object(wb_mod._pc_search, "search_least_cloudy_item", side_effect=_raise_no_items), \
          patch.object(wb_mod, "read_through", rt):
         with pytest.raises(WaterBodyNoImageryError) as exc_info:
             digitize_water_body(bbox=_AOI, start_date="2025-04-01", end_date="2026-06-01")
@@ -323,8 +321,7 @@ def test_no_water_raises_typed_not_retryable() -> None:
     fake = _FakeStore()
     rt = _make_read_through_injector(fake)
 
-    with patch.object(wb_mod._pc_stac, "search_least_cloudy_item", return_value=_fake_item()), \
-         patch.object(wb_mod._pc_stac, "sas_sign_href", side_effect=lambda href, c: href), \
+    with patch.object(wb_mod._pc_search, "search_least_cloudy_item", return_value=_fake_item()), \
          patch.object(wb_mod, "_read_band_window", _all_land_reader()), \
          patch.object(wb_mod, "read_through", rt):
         with pytest.raises(WaterBodyNoWaterError) as exc_info:
@@ -345,8 +342,7 @@ def test_min_area_floor_rejects_specks_as_no_water() -> None:
             return np.ma.array(np.full((h, w), 4000.0, dtype="float32"))
         return np.ma.array(np.full((h, w), 1000.0, dtype="float32"))
 
-    with patch.object(wb_mod._pc_stac, "search_least_cloudy_item", return_value=_fake_item()), \
-         patch.object(wb_mod._pc_stac, "sas_sign_href", side_effect=lambda href, c: href), \
+    with patch.object(wb_mod._pc_search, "search_least_cloudy_item", return_value=_fake_item()), \
          patch.object(wb_mod, "_read_band_window", all_water), \
          patch.object(wb_mod, "read_through", rt):
         with pytest.raises(WaterBodyNoWaterError, match="min_area_m2"):

@@ -95,7 +95,7 @@ async def _build_fetch_resolution_envelope(
     from types import SimpleNamespace
 
     from trid3nt_server.tools.tool_arg_normalizer import coerce_bbox_value
-    from trid3nt_server.tools.fetchers.imagery._pc_stac import bbox_pixel_dims
+    from trid3nt_server.tools.fetchers._fetch_common import bbox_pixel_dims
 
     coerced = coerce_bbox_value(params.get("bbox"))
     if coerced is None or len(coerced) != 4:
