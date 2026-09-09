@@ -57,49 +57,63 @@ class _FakeBase:
 
 
 class _FakeClient:
-    """The object-id read, offline: two batches, one feature each."""
+    """The object-id read, offline: one feature per id, tile by tile."""
 
     def __init__(self, base):
         self.client = base
 
     def oids_bygeom(self, bbox, geo_crs=4326, sql_clause=None):
-        _FakeNFHL.last |= {"bbox": bbox, "geo_crs": geo_crs, "sql_clause": sql_clause,
-                           "outformat": self.client.outformat,
-                           "max_nrecords": self.client.max_nrecords}
-        return iter([("1", "2"), ("3",)])
+        last = _FakeNFHL.last
+        last |= {"bbox": bbox, "geo_crs": geo_crs, "sql_clause": sql_clause,
+                 "outformat": self.client.outformat,
+                 "max_nrecords": self.client.max_nrecords}
+        last.setdefault("tiles", []).append(tuple(bbox))
+        # id 3 is listed by every tile: the polygon that straddles the edges, and so
+        # the case the merge has to de-duplicate.
+        return iter([("1", "2"), ("3",)] if len(last["tiles"]) == 1 else [("3",)])
 
     def get_features(self, featureids, return_m=False, return_geom=True):
         batches = list(featureids)
         _FakeNFHL.last.setdefault("batches", []).append([len(b) for b in batches])
+        if len(_FakeNFHL.last["tiles"]) in _FakeNFHL.refuse:
+            raise RuntimeError("ServiceError: the tile was refused")
         props = dict.fromkeys(nfhl._PRESERVED_PROPERTIES, None)
         return [{"type": "FeatureCollection", "features": [
             {"type": "Feature",
              "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]]},
-             "properties": {**props, "FLD_ZONE": "AE", "SFHA_TF": "T", "OBJECTID": 7}}
-        ]} for _ in batches]
+             "properties": {**props, "FLD_ZONE": "AE", "SFHA_TF": "T", "OBJECTID": int(i)}}
+            for i in ids]} for ids in batches]
 
 
 class _FakeNFHL:
     """The library client, answering offline; records what it was asked for."""
 
     last: dict = {}
+    #: 1-based tile numbers the service refuses to serve features for.
+    refuse: set = set()
 
     def __init__(self, service, layer):
         _FakeNFHL.last = {"service": service, "layer": layer}
         self.client = _FakeClient(_FakeBase())
 
 
-def _stub_nfhl(monkeypatch, cls=_FakeNFHL):
+def _stub_nfhl(monkeypatch, cls=_FakeNFHL, refuse=()):
     import pygeohydro
 
+    _FakeNFHL.refuse = set(refuse)
     monkeypatch.setattr(pygeohydro, "NFHL", cls)
+    monkeypatch.setattr(nfhl.time, "sleep", lambda _s: None)
     return cls
+
+
+#: One tile wide, so a test that is not about tiling reads exactly one.
+_ONE_TILE = [0.0, 0.0, 0.1, 0.1]
 
 
 def test_nfhl_sql_clause_sfha_and_zone_in(monkeypatch):
     _stub_nfhl(monkeypatch)
     s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
-    nfhl.delegate(s, {"bbox": [0, 0, 1, 1], "sfha_only": True, "zone_filter": ["ve", "V"]},
+    nfhl.delegate(s, {"bbox": _ONE_TILE, "sfha_only": True, "zone_filter": ["ve", "V"]},
                   timeout_s=30.0)
     c = _FakeNFHL.last["sql_clause"]
     assert "SFHA_TF='T'" in c
@@ -111,7 +125,7 @@ def test_nfhl_asks_for_geojson_so_the_holes_survive(monkeypatch):
     """Esri JSON fills a zone polygon's holes; the format is named, not defaulted."""
     _stub_nfhl(monkeypatch)
     s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
-    nfhl.delegate(s, {"bbox": [0, 0, 1, 1]}, timeout_s=30.0)
+    nfhl.delegate(s, {"bbox": _ONE_TILE}, timeout_s=30.0)
     assert _FakeNFHL.last["outformat"] == "geojson"
 
 
@@ -119,15 +133,15 @@ def test_nfhl_bad_zone_raises_input_invalid(monkeypatch):
     _stub_nfhl(monkeypatch)
     s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
     with pytest.raises(RouterInputError) as e:
-        nfhl.delegate(s, {"bbox": [0, 0, 1, 1], "zone_filter": ["ZZZ"]}, timeout_s=30.0)
+        nfhl.delegate(s, {"bbox": _ONE_TILE, "zone_filter": ["ZZZ"]}, timeout_s=30.0)
     assert e.value.error_code == "FEMA_NFHL_ZONES_INPUT_INVALID"
 
 
 def test_nfhl_projects_the_regulatory_fourteen(monkeypatch):
     _stub_nfhl(monkeypatch)
     s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
-    feats = nfhl.delegate(s, {"bbox": [0, 0, 1, 1]}, timeout_s=30.0)
-    assert len(feats) == 2  # one feature per object-id batch
+    feats = nfhl.delegate(s, {"bbox": _ONE_TILE}, timeout_s=30.0)
+    assert len(feats) == 3  # one feature per object id, over the tile's two batches
     props = feats[0]["properties"]
     assert "OBJECTID" not in props
     assert set(props) == set(nfhl._PRESERVED_PROPERTIES)
@@ -137,7 +151,7 @@ def test_nfhl_reads_one_batch_at_a_time_under_the_deliverable_size(monkeypatch):
     """The service advertises 2000 and 500s on it; one batch per call carries the retry."""
     _stub_nfhl(monkeypatch)
     s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
-    nfhl.delegate(s, {"bbox": [0, 0, 1, 1]}, timeout_s=30.0)
+    nfhl.delegate(s, {"bbox": _ONE_TILE}, timeout_s=30.0)
     assert _FakeNFHL.last["max_nrecords"] == nfhl._MAX_IDS_PER_REQUEST < 2000
     assert _FakeNFHL.last["batches"] == [[2], [1]]
 
@@ -160,8 +174,58 @@ def test_nfhl_unread_object_ids_are_never_a_partial_layer(monkeypatch):
     _stub_nfhl(monkeypatch, _Lossy)
     s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
     with pytest.raises(RouterUpstreamError) as e:
-        nfhl.delegate(s, {"bbox": [0, 0, 1, 1]}, timeout_s=30.0)
+        nfhl.delegate(s, {"bbox": _ONE_TILE}, timeout_s=30.0)
     assert "8 object id(s)" in str(e.value)  # 4 unread reported per batch
+
+
+def test_nfhl_tiles_a_wide_aoi_and_merges_it_by_object_id(monkeypatch):
+    """One client cannot read a metro AOI in one pass, so the AOI is read in tiles."""
+    _stub_nfhl(monkeypatch)
+    s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
+    feats = nfhl.delegate(s, {"bbox": [0.0, 0.0, 0.3, 0.2]}, timeout_s=30.0)
+    tiles = _FakeNFHL.last["tiles"]
+    assert len(tiles) == 6  # 0.3 x 0.2 deg at a 0.1 deg tile
+    assert all(x1 - x0 <= nfhl._TILE_DEG and y1 - y0 <= nfhl._TILE_DEG
+               for x0, y0, x1, y1 in tiles)
+    # id 3 is listed by all six tiles and survives once; ids 1 and 2 by the first.
+    assert len(feats) == 3
+
+
+def test_nfhl_pauses_between_tiles_at_the_measured_pace(monkeypatch):
+    """The pause is the pace the service was measured to serve reads at."""
+    _stub_nfhl(monkeypatch)
+    waits: list[float] = []
+    monkeypatch.setattr(nfhl.time, "sleep", waits.append)
+    s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
+    nfhl.delegate(s, {"bbox": [0.0, 0.0, 0.3, 0.1]}, timeout_s=30.0)
+    assert waits == [nfhl._TILE_PAUSE_S] * 2  # between the three tiles, not before
+
+
+def test_nfhl_a_refused_tile_is_named_with_what_it_would_have_carried(monkeypatch):
+    """A tile the service still refuses is reported, never quietly dropped."""
+    from trid3nt_server.workflows.runtime import journal
+
+    _stub_nfhl(monkeypatch, refuse=(2,))
+    s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
+    token = journal.bind_notes()
+    try:
+        feats = nfhl.delegate(s, {"bbox": [0.0, 0.0, 0.3, 0.1]}, timeout_s=30.0)
+        notes = journal.drain_notes(token)
+    finally:
+        journal._NOTES.set(None)
+    assert len(feats) == 3  # tiles 1 and 3 still answered
+    assert len(notes) == 1
+    assert "1 of 3 tiles" in notes[0] and "at least 1 were not" in notes[0]
+    assert "[0.1000,0.0000,0.2000,0.1000]" in notes[0]
+
+
+def test_nfhl_an_aoi_no_tile_answered_is_an_upstream_error(monkeypatch):
+    """Nothing read and something lost is a refusal, not an honest-empty layer."""
+    _stub_nfhl(monkeypatch, refuse=(1, 2, 3))
+    s = _spec("FEMA_NFHL_ZONES", "fema_nfhl")
+    with pytest.raises(RouterUpstreamError) as e:
+        nfhl.delegate(s, {"bbox": [0.0, 0.0, 0.3, 0.1]}, timeout_s=30.0)
+    assert "3 of 3 tiles were refused" in str(e.value)
 
 
 # ------------------------------- usace_dams ------------------------------- #

@@ -68,10 +68,15 @@ caveats:
 - 'Read by OBJECT ID in batches, so a page the service refuses can never pass as the end of the layer: a
   cursor walk over this endpoint stops early on a deep page and looks whole. A batch it will not serve is a
   typed upstream error, never a partial regulatory layer.'
-- 'MEASURED LIMIT: the service will not serve a metro-scale AOI to one client. Over a 0.2 deg^2 Tampa Bay
-  bbox (9,894 polygons by its own count) it answers the first two or three batches and then refuses the rest
-  with HTTP 500 and connection resets, through the library and by direct request alike, at every batch size
-  and pacing measured. Keep the AOI to a few hundred polygons.'
+- 'MEASURED LIMIT: the service will not serve a metro-scale AOI to one client in one pass. Over a 0.2 deg^2
+  Tampa Bay bbox (9,894 polygons by its own count) it answers the first two or three batches and then refuses
+  the rest with HTTP 500 and connection resets, at every batch size and pacing measured. A wide AOI is
+  therefore read TILE BY TILE - 0.1 deg sub-bboxes, one servable read each at that AOI''s density, 10 s apart
+  - and the tiles are merged and de-duplicated by object id.'
+- 'Every tile the service still refuses after its attempts is NAMED, with the polygon count it would have
+  carried, in the log and in the run''s notes; an AOI where no tile answered is a typed upstream error. A
+  truncated regulatory layer is never returned quietly. A wide AOI therefore takes minutes, and may still
+  come back short of what the service counts - read its notes before publishing it.'
 docstring: |-
   FEMA NFHL regulatory flood-zone polygons as a FlatGeobuf vector layer.
 
@@ -100,9 +105,10 @@ docstring: |-
   Parameters:
       bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
           REQUIRED -- NFHL does not support a global query (the polygon corpus
-          is millions of features). Recommended ≤ ~2 deg on a side (≈220 km
-          at the equator); larger envelopes risk hitting the 100k-feature
-          pagination ceiling. Example for Fort Myers, FL:
+          is millions of features). An envelope wider than 0.1 deg is read as
+          a grid of 0.1-deg tiles 10 s apart, so a metro AOI takes minutes and
+          any tile the service refuses is named in the run's notes rather than
+          dropped. Example for Fort Myers, FL:
           ``(-81.95, 26.55, -81.80, 26.70)``.
       sfha_only: If True, filter server-side to Special Flood Hazard Area
           polygons only (``SFHA_TF='T'``: zones A, AE, AH, AO, AR, A99,
