@@ -13,12 +13,14 @@ emission record.
 
 Styling comes from the PRODUCT, never from a palette invented here: a raster with
 a data-driven ``legend`` renders through that key, otherwise through
-``publish_layer.resolve_layer_style`` for its declared style row.
-A preset that resolves to EMPTY style params is the terrain / RGBA passthrough -
-QGIS auto-scales it, and so does the panel, captioned as such. Vector presets are
-QGIS-side symbology with no server-side colour to read, so vectors get honest
-neutral geometry (lines, points, outlines) with the declared preset named on the
-panel.
+``publish_layer.resolve_layer_style`` for its declared style row. A raster that
+resolves to NO preset is one that paints itself, and the panel paints it the way
+QGIS does: through the band-1 colour table when the file carries one (land cover
+in its own class colours, read NEAREST so no class is averaged into one that does
+not exist), and on an auto-scaled grey ramp only when there is no table to read.
+Vector presets are QGIS-side symbology with no server-side colour to read, so
+vectors get honest neutral geometry (lines, points, outlines) with the declared
+preset named on the panel.
 
 Env (MinIO): set -a; source .env.local; set +a
 Usage:
@@ -198,6 +200,16 @@ def _load_raster(uri: str) -> dict:
     path = _download(uri) if uri.startswith("s3://") else uri
     try:
         with rasterio.open(path) as src:
+            colormap = None
+            try:
+                colormap = src.colormap(1)
+            except (ValueError, IndexError):
+                pass
+            # A class code is a NAME, not a quantity: averaging 41 and 82 gives
+            # 61, which is a class the file never held. A paletted band is read
+            # and warped NEAREST so every pixel keeps a code the table can paint.
+            how = Resampling.nearest if colormap else Resampling.average
+            warp_how = Resampling.nearest if colormap else Resampling.bilinear
             scale = max(1, int(max(src.width, src.height) / _MAX_READ_PX))
             out_h, out_w = max(1, src.height // scale), max(1, src.width // scale)
             bands = min(src.count, 3)
@@ -205,7 +217,7 @@ def _load_raster(uri: str) -> dict:
                 src.width / out_w, src.height / out_h)
             data = src.read(list(range(1, bands + 1)),
                             out_shape=(bands, out_h, out_w),
-                            resampling=Resampling.average, masked=False)
+                            resampling=how, masked=False)
             dst_transform, w, h = calculate_default_transform(
                 src.crs, "EPSG:3857", out_w, out_h, *src.bounds)
             arr = np.full((bands, h, w), np.nan, dtype="float32")
@@ -213,17 +225,12 @@ def _load_raster(uri: str) -> dict:
                 reproject(source=data[i].astype("float32"), destination=arr[i],
                           src_transform=src_transform, src_crs=src.crs,
                           dst_transform=dst_transform, dst_crs="EPSG:3857",
-                          resampling=Resampling.bilinear,
+                          resampling=warp_how,
                           src_nodata=src.nodata, dst_nodata=np.nan)
             left, top = dst_transform * (0, 0)
             right, bottom = dst_transform * (w, h)
             bounds_ll = rasterio.warp.transform_bounds(src.crs, "EPSG:4326",
                                                        *src.bounds)
-            colormap = None
-            try:
-                colormap = src.colormap(1)
-            except (ValueError, IndexError):
-                pass
     finally:
         if path != uri:
             Path(path).unlink(missing_ok=True)
@@ -318,7 +325,15 @@ def _draw_raster(ax, payload: dict, *, alpha: float):
                          alpha=alpha, zorder=2)
     band = np.ma.masked_invalid(arr[0])
     vmin, vmax, cmap = payload["vmin"], payload["vmax"], payload["cmap"]
-    if cmap is None:  # passthrough: QGIS auto-scales, so the panel does too
+    if cmap is None and payload.get("colormap"):
+        # The file paints itself, so the panel paints it the SAME way QGIS does:
+        # through the band-1 table. A grey ramp over class codes is a picture of
+        # a quantity nobody measured, and its colourbar reads 30 to 80 of
+        # nothing - so this arm returns no artist and gets no colourbar.
+        ax.imshow(_paletted_rgba(band, payload["colormap"]),
+                  extent=payload["extent"], origin="upper", alpha=alpha, zorder=2)
+        return None
+    if cmap is None:  # no table to read: QGIS auto-scales, so the panel does too
         finite = band.compressed()
         if finite.size:
             vmin, vmax = (float(np.percentile(finite, 2)),
@@ -327,6 +342,23 @@ def _draw_raster(ax, payload: dict, *, alpha: float):
     return ax.imshow(band, extent=payload["extent"], origin="upper",
                      cmap=_mpl_cmap(cmap),
                      vmin=vmin, vmax=vmax, alpha=alpha, zorder=2)
+
+
+def _paletted_rgba(band, colormap: dict):
+    """A class-code band painted through the file's own ``{code: (r,g,b,a)}``.
+
+    Codes outside the table, and the masked cells, come out fully transparent -
+    a colour invented for a code the file does not define would be this side
+    making up a class.
+    """
+    table = np.zeros((256, 4), dtype="float32")
+    for code, rgba in colormap.items():
+        if 0 <= int(code) < 256:
+            table[int(code)] = [c / 255.0 for c in (list(rgba) + [255])[:4]]
+    codes = np.clip(np.nan_to_num(band.filled(0.0)), 0, 255).astype("uint8")
+    rgba = table[codes]
+    rgba[..., 3] *= (~np.ma.getmaskarray(band)).astype("float32")
+    return rgba
 
 
 def _mpl_cmap(name: str):
@@ -537,7 +569,9 @@ def _panel_caption(index: int, layer: dict, payload: dict,
             f"role={layer.get('role')}  kind={kind}  "
             f"style={_preset_label(layer)}"]
     if kind == "raster":
-        rng = ("auto-scaled" if payload.get("cmap") is None
+        rng = (f"{len(payload['colormap'])}-entry class table"
+               if payload.get("cmap") is None and payload.get("colormap")
+               else "auto-scaled" if payload.get("cmap") is None
                else f"{payload['vmin']:.4g} to {payload['vmax']:.4g}"
                if payload.get("vmin") is not None else "unrescaled")
         bits.append(f"{payload['bands']}-band, {rng}, via {payload['style_basis']}")

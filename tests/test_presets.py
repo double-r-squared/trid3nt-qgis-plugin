@@ -40,9 +40,12 @@ def test_the_family_is_four_kinds_and_every_one_of_them_writes_a_document():
 
 def test_a_preset_with_nothing_to_say_about_this_layer_writes_no_document():
     # QGIS binds a mesh dataset group BY NAME and silently drops an unbound
-    # block; a reference symbol of the wrong shape loads and draws nothing.
+    # block; a reference symbol of the wrong shape loads and draws nothing; a
+    # shader with no items paints one flat colour over a file that already
+    # carries its own class table.
     assert presets.qml(presets.resolve(Preset(kind="mesh"))) is None
     assert presets.qml(presets.resolve(Preset(kind="reference"))) is None
+    assert presets.qml(presets.resolve(Preset(kind="classed"))) is None
 
 
 def test_a_declaration_that_names_no_parameters_gets_its_kinds_bare_default():

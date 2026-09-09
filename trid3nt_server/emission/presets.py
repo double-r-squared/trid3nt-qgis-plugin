@@ -590,14 +590,19 @@ def qml(resolved: Resolved) -> str | None:
 
     ``None`` when the preset has nothing it can honestly say about THIS layer:
     a mesh preset with no named dataset group (QGIS binds a group by name, and
-    an unbound block is silently dropped), or a reference preset whose geometry
-    was never declared (a symbol of the wrong shape loads and then draws
-    nothing). QGIS's own default rendering stands in both cases.
+    an unbound block is silently dropped), a reference preset whose geometry was
+    never declared (a symbol of the wrong shape loads and then draws nothing), or
+    a classed preset with no breaks - a shader with no items paints the whole
+    raster one flat colour, which is what a land-cover COG carrying its own class
+    table gets when a document is written over it. QGIS's own default rendering
+    stands in all three cases, and for a paletted file that default IS its table.
 
     """
     if resolved.preset.kind == "mesh" and not resolved.preset.dataset_group:
         return None
     if resolved.preset.kind == "reference" and resolved.preset.geometry is None:
+        return None
+    if resolved.preset.kind == "classed" and not resolved.preset.classes:
         return None
     body = {
         "continuous": lambda: _continuous_qml(resolved),

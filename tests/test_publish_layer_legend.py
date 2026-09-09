@@ -198,8 +198,9 @@ def test_rgba_passthrough_has_no_legend() -> None:
 
 
 def test_legend_fail_open_returns_none_on_unreadable_bytes() -> None:
+    """Bytes that are not a raster cost the RANGE, never the key or the document."""
     legend = legend_for_published_layer(
-        {"kind": "classed"}, "s3://b/junk.tif", raster_bytes=b"not-a-geotiff")
+        {"kind": "continuous"}, "s3://b/junk.tif", raster_bytes=b"not-a-geotiff")
     assert legend is not None and legend.qml is not None
 
 
