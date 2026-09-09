@@ -1,51 +1,8 @@
-"""Atomic tool ``compute_layer_bounds`` - fast layer-extent + fit-the-map primitive.
+"""Atomic tool ``compute_layer_bounds`` - layer extent, and fit the map to it.
 
-ONE atomic tool that answers "what is this layer's geographic extent?" and
-"fit/zoom/resize the map so all of <these features> are in view" WITHOUT the
-Python sandbox.
-
-    ``compute_layer_bounds(layer_uri, pad_fraction=0.0, pad_m=0.0) → dict``
-
-**Why this tool exists (the bug it fixes):**
-
-Live finding: when the user asked to "resize the bounding box
-to encompass all the <features>", the agent reached for the PYTHON SANDBOX
-(``code_exec_request``) to compute ``gdf.total_bounds`` -- which is slow, gated
-behind a user-confirm, frequently orphaned, and (worst of all) the computed
-extent was never applied, so the AOI stayed a tiny box "around a random house".
-The agent also wrongly claimed "I cannot pan/zoom your map" even though a
-``zoom-to`` map-command (Map.tsx ``fitBounds``) has existed since.
-
-This tool replaces both failure modes:
-
-1. It computes the layer's EPSG:4326 bounding box deterministically with
-   geopandas (vector) or rasterio (raster) -- the standard reproject-to-4326
-   pattern. Sub-second, no LLM, no sandbox, no user-confirm gate.
-2. It EMITS a ``map-command(zoom-to, bbox=<computed bbox>)`` so the VIEW
-   actually fits all features. The emission goes through the same
-   ``current_emitter()`` ContextVar + ``emit_map_command`` seam that
-   ``model_flood_scenario`` uses for zoom-on-area-first, so it is
-   server→client consistent with the existing zoom-to envelope.
-
-**Auto-detection (vector vs raster):**
-
-- Extensions ``.tif`` / ``.tiff`` / ``.vrt`` / ``.img`` / ``.nc`` → raster
-  (opens via ``rasterio``).
-- Extensions ``.fgb`` / ``.geojson`` / ``.json`` / ``.gpkg`` / ``.shp`` /
-  ``.parquet`` → vector (opens via ``geopandas`` / ``pyogrio``).
-- Unknown extension → rasterio is tried first; on failure, geopandas is tried.
-
-**Cross-cutting invariants:**
-
-- **Invariant 1 (Determinism boundary): preserves.** Pure geopandas/rasterio
-  bbox extraction; no LLM, no estimate. The emitted bbox is workflow-attributed.
-- **(cacheable): honors.** ``cacheable=False`` /
-  ``ttl_class="live-no-cache"`` -- the tool has a side effect (it drives the map
-  view) and is sub-second, so caching is both wrong and pointless.
-- **(typed errors): honors.** Every failure raises
-  ``ComputeLayerBoundsError`` with a SCREAMING_SNAKE_CASE ``error_code``.
+Extent math never goes through ``code_exec_request``: this is the deterministic
+path, and it also emits the ``zoom-to`` that makes the view follow the answer.
 """
-
 from __future__ import annotations
 
 import logging
@@ -73,22 +30,11 @@ logger = logging.getLogger("trid3nt_server.tools.processing.compute_layer_bounds
 # ---------------------------------------------------------------------------
 
 
+# ``error_code`` is one of UNKNOWN_LAYER_URI, DOWNLOAD_FAILED,
+# RASTER_OPEN_FAILED, VECTOR_OPEN_FAILED, GEOPANDAS_UNAVAILABLE, EMPTY_LAYER,
+# DEGENERATE_BOUNDS.
 class ComputeLayerBoundsError(RuntimeError):
-    """Raised when layer-bounds computation fails.
-
-    ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the pipeline
-    strip / function_response (typed-error requirement).
-
-    Codes:
-    - ``UNKNOWN_LAYER_URI`` -- uri is neither an s3:// URI nor a readable
-      local file.
-    - ``DOWNLOAD_FAILED`` -- object-store download for an s3:// URI failed.
-    - ``RASTER_OPEN_FAILED`` -- the raster could not be opened by rasterio.
-    - ``VECTOR_OPEN_FAILED`` -- the vector could not be opened by geopandas.
-    - ``GEOPANDAS_UNAVAILABLE`` -- geopandas / pyogrio not importable.
-    - ``EMPTY_LAYER`` -- the layer has no features / no valid extent.
-    - ``DEGENERATE_BOUNDS`` -- the computed bounds are non-finite (NaN/inf).
-    """
+    """Layer-bounds computation failed."""
 
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
@@ -96,8 +42,7 @@ class ComputeLayerBoundsError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
-# Metadata -- NOT cacheable: this tool has a side effect (drives the map view)
-# and is sub-second. live-no-cache is the uncacheable-consistent declaration.
+# Metadata. Never cached: the tool drives the map view and is sub-second.
 # ---------------------------------------------------------------------------
 
 _COMPUTE_LAYER_BOUNDS_METADATA = AtomicToolMetadata(
@@ -112,14 +57,14 @@ _VECTOR_EXTENSIONS = {".fgb", ".geojson", ".json", ".gpkg", ".shp", ".gml", ".km
 
 
 # ---------------------------------------------------------------------------
-# URI → local path materialization (gs:// / s3:// / local): boto3 for s3,
-# GCS client for gs.
+# URI to local path materialization
 # ---------------------------------------------------------------------------
 
 
 def _infer_suffix(uri: str) -> str:
-    """Pick a temp-file suffix matching the URI extension so geopandas/rasterio
-    auto-detect the driver from the path. Falls back to ``.bin``."""
+    """A temp-file suffix matching the URI extension, so the driver is detected
+    off the path; ``.bin`` when nothing matches.
+    """
     base = uri.split("?")[0].rstrip("/")
     lower = base.lower()
     for ext in (*_RASTER_EXTENSIONS, *_VECTOR_EXTENSIONS):
@@ -131,14 +76,10 @@ def _infer_suffix(uri: str) -> str:
 def _resolve_layer_to_local_path(
     uri: str, storage_client: object | None = None
 ) -> tuple[str, bool]:
-    """Resolve ``uri`` to a local file path.
-
-    Returns ``(path, is_temp)`` -- caller deletes the path iff ``is_temp``.
-    Supports ``s3://`` (boto3, EC2 instance-role - lesson) and local
-    paths. GCP is decommissioned, so ``storage_client`` is ignored. Raises
-    ``ComputeLayerBoundsError`` on failure.
+    """Resolve an ``s3://`` URI or a local path to ``(path, is_temp)``; the caller
+    deletes the path iff ``is_temp``. ``storage_client`` is ignored.
     """
-    del storage_client  # GCP decommissioned -- S3/local only.
+    del storage_client
     # A chained row hands over whatever the producing tool RETURNED, so a
     # LayerURI enters here exactly as a typed path does; refusing the object
     # while accepting the uri it carries would make a chain depend on the author
@@ -171,13 +112,14 @@ def _resolve_layer_to_local_path(
 
 
 # ---------------------------------------------------------------------------
-# Layer-type detection + per-type bbox extraction (reproject → EPSG:4326)
+# Layer-type detection and per-type bbox extraction
 # ---------------------------------------------------------------------------
 
 
 def _detect_layer_type(uri: str) -> str | None:
-    """Return ``"raster"``/``"vector"`` from the extension, or ``None`` if
-    unknown (caller probes rasterio then geopandas)."""
+    """``"raster"`` or ``"vector"`` from the extension, else None for the caller
+    to probe rasterio and then geopandas.
+    """
     ext = os.path.splitext(uri.split("?")[0].rstrip("/"))[-1].lower()
     if ext in _RASTER_EXTENSIONS:
         return "raster"
@@ -187,8 +129,9 @@ def _detect_layer_type(uri: str) -> str | None:
 
 
 def _bounds_from_raster(path: str) -> tuple[float, float, float, float]:
-    """Open a raster and return its (min_lon, min_lat, max_lon, max_lat),
-    reprojecting the dataset bounds to EPSG:4326 when the CRS differs."""
+    """A raster's ``(min_lon, min_lat, max_lon, max_lat)``, reprojected to
+    EPSG:4326 when its CRS differs.
+    """
     try:
         import rasterio  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover -- rasterio is a hard dep
@@ -221,8 +164,7 @@ def _bounds_from_raster(path: str) -> tuple[float, float, float, float]:
 
 
 def _bounds_from_vector(path: str) -> tuple[float, float, float, float]:
-    """Open a vector and return its (min_lon, min_lat, max_lon, max_lat) via the
-    standard reproject-to-4326 pattern."""
+    """A vector's ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326."""
     try:
         import geopandas as gpd  # type: ignore[import-not-found]
     except ImportError as exc:
@@ -253,12 +195,8 @@ def _bounds_from_vector(path: str) -> tuple[float, float, float, float]:
 
 
 def _bbox_from_gdf(gdf: Any) -> tuple[float, float, float, float]:
-    """Return (minLon, minLat, maxLon, maxLat) from the gdf's total_bounds.
-
-    Best-effort reprojects to EPSG:4326 when the CRS is set and differs. A CRS of
-    None falls back to the raw total_bounds: the caller bears the cost of that
-    assumption, and a world bbox is the honest answer when the bounds are not
-    finite at all.
+    """``(minLon, minLat, maxLon, maxLat)`` from ``total_bounds``, reprojected when
+    a differing CRS is set; a CRS of None or non-finite bounds take the world.
     """
     try:
         crs = getattr(gdf, "crs", None)
@@ -281,7 +219,7 @@ def _bbox_from_gdf(gdf: Any) -> tuple[float, float, float, float]:
             float(bounds[2]),
             float(bounds[3]),
         )
-        # A single-point / degenerate layer can report NaN bounds.
+        # A single-point or degenerate layer can report NaN bounds.
         if not all(math.isfinite(v) for v in (minx, miny, maxx, maxy)):
             return (-180.0, -90.0, 180.0, 90.0)
         return (minx, miny, maxx, maxy)
@@ -293,18 +231,14 @@ def _bbox_from_gdf(gdf: Any) -> tuple[float, float, float, float]:
 def _apply_pad(
     bbox: tuple[float, float, float, float], pad_fraction: float
 ) -> tuple[float, float, float, float]:
-    """Pad a 4326 bbox by ``pad_fraction`` of its width/height on each side.
-
-    A point/degenerate-line layer (zero width or height) gets a small absolute
-    pad (~0.001 deg, ~100 m) so the resulting box is not a zero-area sliver the
-    map cannot fit. Longitudes/latitudes are clamped to valid ranges.
+    """Pad a 4326 bbox by ``pad_fraction`` per side, clamped; a zero-width or
+    zero-height layer takes an absolute 0.001 deg so it is never a sliver.
     """
     minx, miny, maxx, maxy = bbox
     w = maxx - minx
     h = maxy - miny
     pad_x = w * pad_fraction if w > 0 else 0.001
     pad_y = h * pad_fraction if h > 0 else 0.001
-    # Always give a degenerate (point) layer a minimum pad even at pad=0.
     if w == 0:
         pad_x = max(pad_x, 0.001)
     if h == 0:
@@ -328,14 +262,12 @@ _PAD_MAX_DEG = 90.0
 def _apply_pad_m(
     bbox: tuple[float, float, float, float], pad_m: float
 ) -> tuple[float, float, float, float]:
-    """Pad a 4326 bbox by ``pad_m`` METRES on each side.
-
-    A DISTANCE rather than a fraction, because what a query window has to reach
-    past its subject is a distance: a channel a kilometre off the centreline is
-    the same kilometre whether the reach is one km long or fifty. The degrees
-    that distance buys are geodesic, walked west and north from the bbox with
-    ``pyproj.Geod.fwd``, so the longitude pad widens with latitude as it should.
-    """
+    """Pad a 4326 bbox by ``pad_m`` METRES on each side."""
+    # A distance, not a fraction: what a query window must reach past its
+    # subject is a distance, and a channel a kilometre off the centreline is the
+    # same kilometre whether the reach is one km long or fifty. The degrees that
+    # distance buys are walked geodesically west and north, so the longitude pad
+    # widens with latitude as it should.
     from pyproj import Geod
 
     minx, miny, maxx, maxy = bbox
@@ -358,9 +290,6 @@ def _apply_pad_m(
 
 @register_tool(
     _COMPUTE_LAYER_BOUNDS_METADATA,
-    # readOnlyHint=True (reads the input layer; no mutation beyond the
-    # transient map-command verb), openWorldHint=False (pure local GDAL),
-    # destructiveHint=False, idempotentHint=True (same layer → same bbox).
     read_only_hint=True,
     open_world_hint=False,
     destructive_hint=False,
@@ -373,39 +302,26 @@ async def compute_layer_bounds(
     *,
     fit_map: bool = True,
     _storage_client: object | None = None,
-    # absorb any LLM-invented kwargs (also centralized at server.py
-    # via tool_arg_normalizer, but kept here belt-and-suspenders).
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Get a layer's geographic extent AND fit/zoom/resize the map to it.
 
-    Use this when: the user asks to "fit the map to the layer", "zoom to
-    all the points", "resize the bbox to encompass <features>", or wants
-    the extent of a layer. NEVER use ``code_exec_request`` for bbox/extent
-    math -- this is the deterministic path and it drives the map view too
-    (emits a ``zoom-to`` map-command).
+    Use when the user asks to fit the map to a layer, zoom to all the points,
+    resize the bbox to encompass features, or wants a layer's extent. NEVER use
+    ``code_exec_request`` for extent math - this is the deterministic path and
+    it moves the view too.
 
     Params:
-        layer_uri: the layer's ``layer_id`` handle (preferred) from
-            [Case state]/loaded_layers, or an s3:// URI / local path.
-            Vector opens via geopandas, raster via rasterio; extent is
-            reprojected to EPSG:4326.
-        pad_fraction: fractional padding per side (0.0=exact, 0.05=5%
-            breathing room). Default 0.0.
-        pad_m: padding per side in METRES, for a QUERY WINDOW that has to
-            reach a stated distance past the layer - the pad a fetch is
-            reasoned in. Applied after ``pad_fraction``. Default 0.0.
-        fit_map: ``True`` (default) emits the zoom-to command; ``False``
-            computes the extent only, no camera move.
+        layer_uri: the layer's ``layer_id`` handle, or an s3:// URI or local
+            path. The extent is reprojected to EPSG:4326.
+        pad_fraction: fractional pad per side; 0.0 (default) is exact.
+        pad_m: pad per side in METRES, for a query window that must reach a
+            stated distance past the layer. Applied after ``pad_fraction``.
+        fit_map: True (default) also emits the zoom-to.
 
-    Returns:
-        ``{"min_lon", "min_lat", "max_lon", "max_lat", "bbox": [...],
-        "layer_type": "vector"|"raster", "crs": "EPSG:4326",
-        "pad_fraction", "pad_m", "map_fitted", "layer_uri", "computed_at"}``.
-
-    Raises:
-        ComputeLayerBoundsError: unreadable URI, open failure, empty
-            layer, or degenerate bounds.
+    Returns the four EPSG:4326 corners, the bbox list, the layer type and
+    whether the map was fitted.
     """
     computed_at = datetime.now(timezone.utc).isoformat()
 
@@ -417,7 +333,6 @@ async def compute_layer_bounds(
         elif layer_type == "vector":
             raw_bbox = _bounds_from_vector(local_path)
         else:
-            # Unknown extension -- probe raster first, then vector.
             try:
                 raw_bbox = _bounds_from_raster(local_path)
                 layer_type = "raster"
@@ -441,13 +356,8 @@ async def compute_layer_bounds(
                         max(0.0, float(pad_m)))
     min_lon, min_lat, max_lon, max_lat = bbox
 
-    # --- Fit the map: emit a zoom-to map-command via the existing seam.
-    # Mirrors model_flood_scenario: read the active emitter from the
-    # _CURRENT_EMITTER ContextVar (bound by PipelineEmitter.emit_tool_call) and
-    # fire ``map-command(zoom-to)``. Outside an emit_tool_call scope (direct
-    # call, smoke harness, unit test without an emitter) current_emitter()
-    # returns None and we skip silently -- emitting is a UX action, not a
-    # correctness gate, and the bbox is still returned for the agent / server.
+    # Emitting is a UX action, not a correctness gate: outside an emitter scope
+    # there is nothing to fire at, and the bbox is still returned.
     map_fitted = False
     if fit_map:
         from trid3nt_server.emission.pipeline_emitter import current_emitter
