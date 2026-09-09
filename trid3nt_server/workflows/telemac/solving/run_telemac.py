@@ -1,22 +1,8 @@
 """The TELEMAC local-docker solve seam - three solver names, one image, one spec.
 
-Every leg of the family runs the SAME worker image the SAME way: the launcher
-writes ``<rundir>/manifest.json`` and stages every input beside it, bind-mounts
-the rundir at ``/data``, and the agent-side supervisor uploads the mounted
-outputs and writes ``completion.json``. The worker therefore needs no boto3 and
-runs ``--network none``: everything it reads arrives staged.
-
-The three NAMES stay because a run listing is read by a human - a harbour
-agitation field and a river-dye plume are not the same kind of run and must not
-share a row identity. What they share is everything else, so the spec is one
-factory and the exit classification is one closure over the label the error
-sentence names.
-
 Status is the worker's exit code AND the CORRECT-END flag in
 ``telemac_metrics.json`` together: a clean process that never reached the end of
-the run is an error. The metrics subset rides into ``completion.json`` as
-``extra`` so a run summary carries the physics without a second object read.
-"""
+the run is an error. The worker runs ``--network none``: everything is staged."""
 
 from __future__ import annotations
 
@@ -92,11 +78,7 @@ def _build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
 def _why(metrics: dict[str, Any], fallback: str) -> str:
     """Why the run stopped, with the engine's own demand named where it made one.
 
-    A sheet refuses only on the dictionary's OBLIG files; every other keyword the
-    engine will not start without, the engine asks for by name in its listing.
-    Carrying that sentence out is what keeps this side from inventing a required
-    set the Fortran never agreed to.
-    """
+    The listing's own sentence, so this side invents no required set."""
     from ..products.run_reads import engine_demand
 
     said = str(metrics.get("error") or fallback)
@@ -108,9 +90,7 @@ def _classify(label: str) -> Callable[[Path, int], tuple[str, int, str | None,
                                                          dict[str, Any]]]:
     """The exit classifier for one leg -> ``(status, exit_code, error, extra)``.
 
-    ``label`` names the leg in the error sentence a human reads; nothing else
-    about the classification differs across the family.
-    """
+    ``label`` names the leg in the error sentence; nothing else differs."""
     def classify_exit(rundir: Path, exit_code: int
                       ) -> tuple[str, int, str | None, dict[str, Any]]:
         metrics: dict[str, Any] = {}
@@ -137,9 +117,7 @@ def _classify(label: str) -> Callable[[Path, int], tuple[str, int, str | None,
 def make_spec(solver: str, stream_prefix: str) -> Callable[[], Any]:
     """The ``LocalSolverSpec`` factory for one solver name.
 
-    ``stream_prefix`` names the leg's stdout/stderr objects so a run directory
-    reads as the run it was, rather than as five files called ``telemac.*``.
-    """
+    ``stream_prefix`` names the leg's stdout and stderr objects."""
     def spec() -> Any:
         from trid3nt_server.workflows.solver.solver import (
             LOCAL_DOCKER_WORKFLOW_NAME,
@@ -171,13 +149,9 @@ _SOLVERS: dict[str, str] = {
 
 
 def register_telemac_solvers() -> None:
-    """Register every leg in the solver + local-spec registries.
+    """Register every leg in the solver + local-spec registries. Idempotent.
 
-    The ``SOLVER_WORKFLOW_REGISTRY`` value is consumed purely as a PRESENCE GATE
-    by ``run_solver``; the live routing comes from the backend sentinel. TELEMAC
-    is local-docker only - the engine lives in the worker image, never the agent
-    venv. Idempotent ``setdefault``.
-    """
+    TELEMAC is local-docker only: the engine lives in the worker image."""
     from trid3nt_server.workflows.solver.solver import (
         LOCAL_DOCKER_WORKFLOW_NAME,
         SOLVER_WORKFLOW_REGISTRY,

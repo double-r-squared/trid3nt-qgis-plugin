@@ -1,15 +1,8 @@
 """The SOLVE step: stage the manifest, dispatch the worker, wait, surface the gates.
 
-TELEMAC is LOCAL-DOCKER / worker-image only, so the dispatch always goes through
-the generic ``run_solver`` seam. The container is the ENGINE ROOM: it meshes
-nothing and fetches nothing, so no refusal about the reach's geometry can arise
-in it. The server chain refuses those before a manifest is ever staged - which is
-why nothing here re-raises a worker gate.
-
-This is the plan's only CONSEQUENTIAL node, and its result carries the result
-SELAFIN's URI - so a ledger replay probes that the solved artifact still exists
-before a rerun skips a 30-minute solve.
-"""
+The container is the ENGINE ROOM: it meshes nothing and fetches nothing, so
+nothing here re-raises a worker gate. This is the plan's only CONSEQUENTIAL node
+and its result carries the result SELAFIN's URI, which a ledger replay probes."""
 
 from __future__ import annotations
 
@@ -39,9 +32,9 @@ __all__ = [
 
 _SOLVING = "trid3nt_server.workflows.telemac.solving"
 
-#: Floor on the completion wait. The worst honest mesh (the node cap) with 1.5x
-#: headroom bounds the rest: a cap-sized solve once outran the default wait and
-#: the publish leg was lost to the timeout.
+#: Floor on the completion wait: the worst honest mesh (the node cap) with 1.5x
+#: headroom bounds the rest. A cap-sized solve outruns the default wait, and the
+#: publish leg is then lost to the timeout.
 _MIN_WAIT_S = 1800.0
 _WAIT_HEADROOM = 1.5
 
@@ -59,14 +52,7 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, compute_class: st
                            active_cell_count: int | None = None) -> tuple[Any, str]:
     """Dispatch a staged manifest, drive the cards, wait, and hand back the result.
 
-    The supervision dance every TELEMAC front performs identically: mint the
-    dispatch and sim cards, bind the emitter so the worker's own progress reaches
-    them, poll to completion, and route the terminal card whichever way the run
-    ends - CANCELLED included, which is the clause a hand-copied version drops.
-    Returns ``(run_result, batch_run_id)`` and judges nothing: what a non-complete
-    status MEANS is the caller's typed error to raise, because the code it carries
-    is the caller's contract.
-    """
+    Judges nothing: a non-complete status is the caller's error to raise."""
     from trid3nt_server.emission.pipeline_emitter import (
         current_emitter,
         mint_dispatch_and_sim_cards,
@@ -114,10 +100,7 @@ async def dispatch_and_wait(*, solver: str, manifest_uri: str, compute_class: st
 def read_run_metrics(run_id: str) -> dict[str, Any]:
     """Best-effort read of ``<run_id>/telemac_metrics.json``; ``{}`` on any miss.
 
-    The worker uploads this even on a FAILED run (outputs are uploaded before
-    completion.json is written), so it is the channel through which a worker-side
-    typed error_code reaches the server.
-    """
+    Uploaded even on a FAILED run, so a worker-side error_code reaches here."""
     from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
@@ -137,14 +120,7 @@ def download_result(run_id: str, basename: str, *,
                     error_code: str = "TELEMAC_OUTPUT_MISSING") -> str:
     """Download one of a run's result files to a local path a postprocess reads.
 
-    ONE downloader for every question, because what a run wrote is under the run
-    prefix whatever wrote it, and the only thing that varies is which file the
-    reader wants and what its absence is called.
-
-    The UTM zone is NOT re-read here: it is the server's own measurement, carried
-    through the run's metrics and already on the solve result. Reading it a second
-    time from the same file was a second answer that could disagree with the first.
-    """
+    The UTM zone is NOT re-read here; it is already on the solve result."""
     from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
@@ -169,11 +145,7 @@ async def solve_reach(*, run: dict[str, Any],
                       compute_class: str = "medium") -> dict[str, Any]:
     """Run the staged reach through the TELEMAC worker and return the run handle.
 
-    The manifest was written by the assembler, so what happens here is dispatch
-    and supervision alone. The returned ``uri`` is the result SELAFIN under the
-    run prefix: it is what a ledger replay probes, so a resumed rerun can only
-    skip the solve while the solved artifact is still there.
-    """
+    The returned ``uri`` is the result SELAFIN a ledger replay probes."""
     from trid3nt_server.workflows.solver.solver import (
         EmitterBinding,
         run_solver,
@@ -264,17 +236,13 @@ async def solve_reach(*, run: dict[str, Any],
 def _run_start_iso(run_result: Any) -> str | None:
     """When the solve began, as the mesh's time origin.
 
-    A SELAFIN counts seconds from an origin it never records, so the layer the
-    client scrubs needs the run to say when zero was. The solver's own
-    ``started_at`` is that instant; a run that never reported one states nothing
-    rather than inventing a clock.
-    """
+    A SELAFIN records no origin; a run with no ``started_at`` states none."""
     started = getattr(run_result, "started_at", None)
     return started.isoformat() if started is not None else None
 
 
 #: The compute ladder the dispatcher knows. Anything outside it is a model
-#: invention that used to crash the dispatch AFTER the geocode and river fetch.
+#: invention, and it crashes the dispatch after the geocode and river fetch.
 _ALLOWED_COMPUTE = frozenset(
     {"small", "medium", "standard", "large", "xlarge", "gpu"})
 
@@ -282,12 +250,7 @@ _ALLOWED_COMPUTE = frozenset(
 def compute_class() -> Any:
     """A coercion pinning a SUPPLIED ``compute_class`` to a rung the dispatcher serves.
 
-    An ABSENT rung leaves no row at all. A coercion's output is merged into the
-    door-1 supplied sheet, so a value emitted for an argument nobody sent resolves
-    through the USER door and the run's provenance reports the template's own
-    default as "supplied on this invocation" - the falsification this abstention
-    exists to prevent. The declared constant-door default seats itself instead.
-    """
+    An ABSENT rung leaves no row: it would resolve as user-supplied."""
 
     def _coerce(args: Any) -> dict[str, Any]:
         raw = args.get("compute_class")
@@ -313,16 +276,7 @@ async def solve_case(*, run: dict[str, Any],
                      compute_class: str = "medium") -> dict[str, Any]:
     """Dispatch the staged case to the worker and wait -> the run handle.
 
-    ONE dispatch for every run authored on a mesh this server built: the manifest
-    was written by the assembler, so what happens here is dispatch and supervision
-    alone, and WHICH question it answers is a fact the run already carries.
-
-    The returned ``uri`` is the result SELAFIN under the run prefix - what a ledger
-    replay probes, so a resumed rerun can only skip the solve while the solved
-    artifact is still there. The UTM zone comes from the ASSEMBLER rather than
-    from the worker's metrics: the mesh is projected agent-side, so the zone is a
-    fact the template already knows and the worker never learns.
-    """
+    The UTM zone comes from the ASSEMBLER: the worker never learns it."""
     from trid3nt_server.workflows.solver.solver import _get_runs_bucket
 
     facts = run["case"]["server_facts"]
