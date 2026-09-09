@@ -102,6 +102,7 @@ The model can also be switched live from the plugin's Settings (no restart).
 ```
 plugin/                the QGIS plugin (net/ ui/ render/ case/ + plugin.py; installs as trid3nt/)
 plugin/tests/          plugin test harnesses + headless E2E drivers
+tests/                 the server suite, one directory per subsystem (see tests/README.md)
 server/                the server (WS + tool dispatch + turn loop + persistence)
 contracts/             shared pydantic contracts (trid3nt-contracts package)
 workers/               the telemac solver worker + the oceanmesh environment image

@@ -454,3 +454,43 @@ files. This manifest measures 79,450 pure LOC against the eval's 79,680: the eva
 taken at an earlier HEAD, and the difference is drift in the tree, not in the method.
 
 files listed: 395 / files read: 395 / rows written: 395 (the import-mode checkpoint deleted `tests/__init__.py`, `tests/workflows/__init__.py` and `contracts/tests/__init__.py` and added `tests/_fakes/__init__.py`; the four rows are kept above, struck where the file is gone)
+
+## LANDED - what the wave executed against the map above  (2026-09-09)
+
+The fates above are discharged. This section carries the rows the execution
+ADDED or CHANGED; every other row above stands as written, with `tests/<file>`
+now read as `tests/<destination>/<file>`.
+
+### Files this stage created (each read end to end as it was written)
+
+| path | pure | hist | fate | note |
+|---|---:|---:|---|---|
+| `tests/README.md` | - | 0 | NEW | the directory map, the six slice invocations with their collect counts, and the standing-exception list the ruling asks for |
+| `tests/telemac/conftest.py` | 34 | 0 | NEW | `_offline_cas_parse` + `telemac_result`, moved verbatim out of `tests/conftest.py` |
+| `tests/_fakes/read_through.py` | 23 | 0 | NEW | `make_read_through_s3_injector`, moved verbatim; a conftest is not a module |
+| `plugin/tests/test_gate_cards.py` | 139 | 0 | NEW (split of test_milestone2.py) | gate card parsing + the round trip |
+| `plugin/tests/test_canvas_aoi.py` | 81 | 0 | NEW (split of test_milestone2.py) | the pure canvas bbox math |
+| `plugin/tests/test_reconnect.py` | 89 | 0 | NEW (split of test_milestone2.py) | backoff + the outbound queue |
+| `plugin/tests/test_case_list_parsing.py` | 50 | 0 | NEW (split of test_milestone2.py) | case-list parsing |
+| `plugin/tests/test_case_layer_grouping.py` | 258 | 0 | NEW (split of test_milestone2.py) | the layer group a case opens into |
+| `plugin/tests/test_case_list_fetch.py` | 246 | 0 | NEW (split of test_milestone3.py) | cold case-list fetch + the case switch |
+| `plugin/tests/test_chat_history_replay.py` | 140 | 1 | NEW (split of test_milestone3.py) | chat-history replay extraction |
+| `plugin/tests/test_fallback_bbox.py` | 43 | 1 | NEW (split of test_milestone3.py) | the auto-focus fallback bbox scan |
+| `plugin/tests/test_case_command.py` | 85 | 1 | NEW (split of test_milestone3.py) | the New / Delete case plumbing |
+| `plugin/tests/test_startup_case_choice.py` | 151 | 1 | NEW (split of test_milestone3.py) | resume > select-newest > create |
+| `plugin/tests/test_case_list_refresh.py` | 41 | 0 | NEW (split of test_milestone3.py) | the resume round trip + debounce |
+| `plugin/tests/test_selection_aoi.py` | 38 | 0 | NEW (split of test_milestone3.py) | selection AOI precedence |
+| `plugin/tests/test_auth_failure.py` | 52 | 0 | NEW (split of test_milestone3.py) | token-expiry classification |
+| `plugin/tests/test_qt_bridge.py` | 57 | 0 | NEW (split of test_milestone3.py) | STANDING EXCEPTION: the `QT-BRIDGE-OK` subprocess shim, now marked |
+| `plugin/tests/test_dock_settings.py` | 208 | 0 | NEW (split of test_milestone3.py) | the settings the dock stores |
+
+### Rows whose stated fate the execution corrected
+
+| path | as ruled | as landed | why |
+|---|---|---|---|
+| `tests/conftest.py` (`empty_registry`) | -> `tests/tools/conftest.py` | STAYS at the root | measured users are `tests/tools/test_tools_registry.py` and `tests/search/test_tool_annotations.py`; `tests/tools/` is not their common parent. The evaluation's third and fourth users were name matches inside two test names in `test_uri_registry.py` |
+| `tests/test_pandas_pin_regression.py` | DELETE, pins go with it | file DELETED, pins QUEUED | removing a dependency and lifting a version cap is a build-surface change, outside a documentation-and-structure wave |
+| `plugin/tests/test_install_dependencies.py` | STANDING EXCEPTION (ninth shim) | NOT an exception, NO marker | read end to end it drives no Qt harness: `TestMain` asserts the product's own return codes over a mocked `subprocess.run`. Eight shims carry `qt_harness_shim` |
+| `tests/adapters/test_gemini_schema_compliance.py` | MOVE only | MOVE + the startup registry import | the catalog tools register through the daemon startup import, not through `trid3nt_server.tools`; in the mirror this module collects before whatever used to trigger that, and its sweep silently lost two tools. It runs the import itself now, and its case count is back to 181 |
+| four package-relative walk-ups | (not stated) | depth unchanged | `Path(<package>.__file__).resolve().parents[1]` is relative to the package, not to the test file, so the move does not shift it: `test_tool_description_surface.py`, `test_mesh_gate_loop.py`, `test_build_mesh_tool.py`, `test_door_dissolution.py` |
+

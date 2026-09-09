@@ -37,22 +37,20 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
 
 ## The laws
 
-1. Five-slice suite from repo root with `venvs/agent`. Slices 1-4 are
-   the offline suite:
-   `env -u TRID3NT_CACHE_BUCKET python -m pytest tests/test_[a-e]*.py
-   -p no:cacheprovider --timeout=300 -q` (then `[f-o]`, `[p-r]`,
-   `[s-z]`). Slice 5 is the contracts suite:
-   `env -u TRID3NT_CACHE_BUCKET python -m pytest contracts/tests
-   -p no:cacheprovider --timeout=300 -q`. The five slices are five
-   invocations by convention, not by force: the root
-   `[tool.pytest.ini_options]` sets `--import-mode=importlib` and
-   neither `tests/` nor `contracts/tests/` carries an `__init__.py`, so
-   `pytest tests contracts/tests` collects and runs as one.
-   Baseline is EXACTLY ZERO failures in
-   every slice; the live per-slice counts are the baseline table in
-   `docs/decisions/0323-suite-re-baseline-after-the-test-cull.md`
-   (read its LAST amendment). Anything else: investigate - a flake
-   claim requires an isolation rerun as proof.
+1. Six-slice suite from repo root with `venvs/agent`, one target per
+   subsystem, each its own foreground invocation:
+   `make test-fetchers`, `make test-spatial`, `make test-engines`,
+   `make test-server`, `make test-model-surface`, `make test-packages`
+   (`make test` runs all six). Each expands to
+   `env -u TRID3NT_CACHE_BUCKET venvs/agent/bin/python -m pytest <dirs>
+   -p no:cacheprovider --timeout=300 -q`, paths unquoted. The six slices
+   are six invocations by convention, not by force: the root
+   `[tool.pytest.ini_options]` sets `--import-mode=importlib` and no
+   test directory carries an `__init__.py`, so the whole suite collects
+   and runs as one. Baseline is EXACTLY ZERO failures in every slice;
+   the directory map and the live per-slice counts are `tests/README.md`.
+   Anything else: investigate - a flake claim requires an isolation
+   rerun as proof.
 2. Run gates FOREGROUND and wait for each summary line. Never
    background a gate and exit - your run dies with your process, and
    unverified work is not done work.

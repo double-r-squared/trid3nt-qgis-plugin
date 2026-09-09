@@ -4480,6 +4480,23 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Qt-shim tests that assert only "the harness exited 0" are NAMED AS
   STANDING EXCEPTIONS now and reshaped in their own change. The
   staged-dataset conformance helper is a follow-on.
+  TESTS RULED LANDED (2026-09-09): the mirror tree is in place (308
+  files, one commit per destination directory), the six Makefile
+  targets are the invocation and AGENTS.md law 1 states them, and
+  tests/README.md is the map. Collected per slice: fetchers 1563,
+  spatial 1189, engines 1155, server 1058, model-surface 870, packages
+  816. Three measurements in the evaluation did not survive contact and
+  are corrected in place rather than relitigated: empty_registry STAYS
+  at the root (its two real users are tests/tools/ and tests/search/;
+  the third and fourth were name matches inside two test names), the
+  ninth Qt shim is not one (test_install_dependencies.py drives no Qt
+  harness - eight carry the qt_harness_shim marker), and the cull's
+  pyproject condition is NOT discharged here (removing a dependency
+  and lifting a version cap is a build-surface change; QUEUED in the
+  deletion ledger). The mirror also exposed a collection-order
+  dependency: the catalog tools register through the daemon startup
+  import, so a registry sweep in an early directory saw two fewer
+  tools; test_gemini_schema_compliance.py runs that import itself now.
   FOLD RESIDUE HYGIENE (2026-09-09, five commits pushed): the double
   retry collapsed to one authority (11 requests -> 7 on a hard 500,
   and the 500's error envelope now reaches the caller); the land-
