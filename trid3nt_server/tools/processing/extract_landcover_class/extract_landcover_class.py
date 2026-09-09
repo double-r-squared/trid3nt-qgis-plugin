@@ -1,68 +1,8 @@
-"""Atomic tool ``extract_landcover_class`` - NLCD binary-mask extractor (, FR-DC).
+"""Atomic tool ``extract_landcover_class`` - NLCD binary-mask extractor.
 
-This module registers one atomic tool that filters an NLCD landcover raster to a
-set of requested class codes and returns a binary mask raster:
-
-    ``extract_landcover_class(landcover_uri, classes, bbox=None) → LayerURI``
-
-The result is a single-band uint8 GeoTIFF where pixels matching any of the
-requested NLCD class codes are 1, other valid pixels are 0, and nodata pixels
-are preserved as 255. The output is LZW-compressed and is stored under the
-cache shim at:
-
-    ``s3://trid3nt-cache/cache/static-30d/landcover_class/<key>.tif``
-
-**Typical use cases:**
-
-- Building a "water" mask from NLCD class 11 (Open Water) for zonal statistics
-  via the code_exec playground (rasterio/numpy zonal-stats recipe).
-- Forest extent mask from NLCD classes 41 (Deciduous), 42 (Evergreen),
-  43 (Mixed) for habitat / fuel-availability analysis.
-- Developed extent mask from NLCD classes 21-24 for exposure analysis.
-
-**NLCD class codes (most common, NLCD 2021 / Annual NLCD Collection 1.0):**
-
-- 11 = Open Water
-- 12 = Perennial Ice/Snow
-- 21-24 = Developed (Open, Low, Medium, High intensity)
-- 31 = Barren Land
-- 41-43 = Forest (Deciduous, Evergreen, Mixed)
-- 52 = Shrub/Scrub
-- 71-74 = Herbaceous (Grassland, Sedge, Lichens, Moss)
-- 81-82 = Planted/Cultivated (Pasture, Cropland)
-- 90-95 = Wetlands (Woody, Emergent Herbaceous)
-
-**bbox window-read:** when ``bbox`` is provided, the tool reads only the window
-of the source raster that intersects the bbox (rasterio ``window=from_bounds``).
-This avoids loading large national rasters into memory when only a small AOI is
-needed. The output raster covers exactly the bbox (clipped to the source
-extent); when ``bbox`` is None the entire source raster is processed.
-
-**Cache key** is derived from ``(landcover_uri, sorted(classes), bbox_rounded_6dp,
-year="2021")`` -- all four parameters materially affect the output pixels. The
-``year`` tag pins to NLCD 2021 (the default vintage for ``fetch_landcover``)
-and is reserved for a future-vintage opt-in.
-
-**Cross-cutting invariants:**
-
-- **Invariant 1 (Determinism boundary): preserves.** Tool returns a typed
-  ``LayerURI`` with provenance metadata; no LLM-generated numbers.
-- **Invariant 2 (Deterministic workflows): preserves.** Pure rasterio + numpy
-  pipeline, no LLM calls, deterministic given inputs.
-- **(cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
-  ``source_class="landcover_class"`` -- a binary mask of a static NLCD COG is
-  stable for the 30-day window.
-- **(resilience): preserves.** Read / parse failures surface as
-  ``LandcoverClassError`` (typed; never an unhandled exception).
-- **Geographic-correctness check (codified lesson):** the live test asserts
-  that the mask aligns with the known geography of the source raster -- a pixel
-  classified as Open Water (NLCD 11) must remain 1 in the mask after
-  extraction, and a Developed (NLCD 21-24) pixel must become 0 if those classes
-  aren't requested. The mask is verified against ``np.isin`` of the source array
-  in the same projection, so an in-memory axis mirror or transform bug shows up
-  as a count mismatch rather than passing silently.
+The output is uint8: 1 where a pixel matches a requested class, 0 for any other
+valid pixel, 255 for nodata. 255 is therefore reserved and cannot be extracted.
 """
-
 from __future__ import annotations
 
 import contextlib
@@ -95,20 +35,10 @@ logger = logging.getLogger("trid3nt_server.tools.processing.extract_landcover_cl
 # ---------------------------------------------------------------------------
 
 
+# ``error_code`` is one of CLASSES_EMPTY, CLASSES_INVALID, BBOX_INVALID,
+# RASTER_OPEN_FAILED, WINDOW_EMPTY, WRITE_FAILED.
 class LandcoverClassError(RuntimeError):
-    """Raised when extract_landcover_class cannot read / process the input.
-
-    ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (typed-error requirement).
-
-    Codes:
-    - ``CLASSES_EMPTY`` -- ``classes`` argument was empty.
-    - ``CLASSES_INVALID`` -- a class code is out of NLCD uint8 range (0-254).
-    - ``BBOX_INVALID`` -- bbox is malformed (wrong arity, non-finite, degenerate).
-    - ``RASTER_OPEN_FAILED`` -- rasterio cannot open the landcover raster.
-    - ``WINDOW_EMPTY`` -- the requested bbox does not intersect the source raster.
-    - ``WRITE_FAILED`` -- rasterio could not write the output GeoTIFF.
-    """
+    """The input could not be read or processed."""
 
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
@@ -143,11 +73,7 @@ _NLCD_MAX_CLASS = 254
 
 
 def _validate_classes(classes: list[int]) -> list[int]:
-    """Validate + normalize the requested class codes.
-
-    Returns the sorted, de-duplicated class list. Raises
-    ``LandcoverClassError`` if empty or out of range.
-    """
+    """The sorted, de-duplicated class list; empty or out-of-range raises."""
     if not classes:
         raise LandcoverClassError(
             "CLASSES_EMPTY",
@@ -190,37 +116,26 @@ def _validate_bbox(bbox: tuple[float, float, float, float] | None) -> None:
 def _round_bbox(
     bbox: tuple[float, float, float, float],
 ) -> tuple[float, float, float, float]:
-    """Round bbox coordinates to 6 decimal places (~0.1m) for cache-key stability."""
+    """Round bbox coordinates to 6 decimal places for cache-key stability."""
     return tuple(round(v, 6) for v in bbox)  # type: ignore[return-value]
 
 
 # ---------------------------------------------------------------------------
-# Source-raster opener (s3:// via boto3 stage-then-open, local paths native)
+# Source-raster opener
 # ---------------------------------------------------------------------------
 
 
 @contextlib.contextmanager
 def _open_source(landcover_uri: str) -> Any:
-    """Open the landcover raster with rasterio for read (context manager).
-
-    GCP is decommissioned: ``s3://`` URIs are staged via boto3 and opened
-    in-memory; local paths open natively.
-
-    this is a CONTEXT MANAGER (was a plain return-the-dataset
-    function). For the s3:// in-memory path the prior code did
-    ``MemoryFile(...).open()`` and returned the dataset, ORPHANING the
-    MemoryFile -- Python could GC it (freeing the /vsimem/ buffer) mid-read, so
-    reads returned valid pixels PLUS uninitialized garbage. Yielding the
-    dataset from inside a nested ``with MemoryFile(...)`` pins the buffer for
-    the dataset's whole lifetime (the same bug + fix pattern used elsewhere
-    for staged-raster validation gates). The sole caller already uses ``with``.
+    """Open the landcover raster for read: ``s3://`` bytes are staged and opened
+    in-memory, a local path opens natively.
     """
-    # s3:// reads via boto3 stage-then-open -
-    # GDAL's /vsis3/ creds don't resolve the EC2 instance role in this env
-    # (see clip modules), so we open from staged bytes in-memory. NOTE: only
-    # the OPEN is wrapped in the RASTER_OPEN_FAILED try; ``yield src`` (the
-    # caller's block) runs in a separate try/finally so a downstream error is
-    # never mis-attributed to the open, and the MemoryFile is always closed.
+    # This is a context manager because a MemoryFile whose dataset outlives it
+    # is GC'd mid-read - the /vsimem/ buffer is freed and reads return valid
+    # pixels PLUS uninitialized garbage. Yielding the dataset from inside the
+    # ``with MemoryFile(...)`` pins the buffer for the dataset's whole lifetime.
+    # boto3 stages the bytes because GDAL's own /vsis3/ credential chain does
+    # not resolve the instance role in this environment.
     if landcover_uri.startswith("s3://"):
         from rasterio.io import MemoryFile
         from trid3nt_server.tools.cache import read_object_bytes_s3
@@ -232,9 +147,8 @@ def _open_source(landcover_uri: str) -> Any:
                 "RASTER_OPEN_FAILED",
                 f"rasterio could not open {landcover_uri!r}: {exc}",
             ) from exc
-        # ``with mf`` pins the /vsimem/ buffer; ``dataset`` closes on exit. The
-        # yield is OUTSIDE the open's try/except so a caller-side error is never
-        # mis-attributed to the open.
+        # The yield sits OUTSIDE the open's try/except, so a caller-side error
+        # is never mis-attributed to the open.
         with mf, dataset as src:
             yield src
         return
@@ -261,14 +175,13 @@ def _extract_mask_bytes(
     classes_sorted: list[int],
     bbox: tuple[float, float, float, float] | None,
 ) -> bytes:
-    """Read the source raster (optionally windowed), build the binary mask,
-    write LZW-compressed COG-style GeoTIFF, return its bytes.
+    """The binary mask as LZW GeoTIFF bytes, read from a bbox window when one is
+    given, else from the whole source raster.
     """
     with _open_source(landcover_uri) as src:
         src_nodata = src.nodata
         src_crs = src.crs
 
-        # Resolve the read window.
         if bbox is None:
             window: Window = Window(0, 0, src.width, src.height)
             src_array = src.read(1, window=window)
@@ -285,9 +198,8 @@ def _extract_mask_bytes(
                     f"src_bounds={src.bounds}: {exc}",
                 ) from exc
 
-            # Clip the requested window to the source extent. rasterio's
-            # ``Window`` does not provide an "intersection" helper but
-            # ``round_lengths`` + clipping the offsets does the right thing.
+            # rasterio's Window carries no intersection helper, so the offsets
+            # are clipped to the source extent by hand.
             col_off = max(0, int(math.floor(window_full.col_off)))
             row_off = max(0, int(math.floor(window_full.row_off)))
             col_max = min(
@@ -433,51 +345,38 @@ def extract_landcover_class(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """NLCD landcover-class binary mask extractor.
 
-    Use this when: you have an NLCD landcover raster (e.g. from
-    ``fetch_landcover``) and need a single/multi-class binary mask -- a
-    "water" mask from class 11 for zonal flood-depth stats, a forest mask
-    from 41/42/43 for habitat analysis, a developed mask from 21-24. Do
-    NOT use for: non-NLCD landcover (ESA WorldCover has different codes);
-    per-pixel stats across classes (the code_exec playground directly).
+    Use when you have an NLCD landcover raster and need a binary mask: water
+    from class 11 for zonal flood-depth stats, forest from 41/42/43 for habitat,
+    developed from 21-24 for exposure. Not for non-NLCD land cover, whose codes
+    differ, and not for per-pixel stats across classes.
 
     Params:
-        landcover_uri: NLCD-coded GeoTIFF (canonical class integers, not
-            palette indices); ``fetch_landcover(...)["raster_uri"]`` works.
-        classes: NLCD integer codes to extract (at least one). Common
-            NLCD 2021: 11=Open Water, 21-24=Developed (Open/Low/Med/High),
-            31=Barren, 41/42/43=Forest (Decid/Evergreen/Mixed),
-            52=Shrub/Scrub, 71-74=Herbaceous, 81/82=Pasture/Cropland,
-            90/95=Wetlands (Woody/Emergent). ``255`` is rejected (nodata
-            sentinel).
-        bbox: optional clip window; ``None`` processes the full raster.
+        landcover_uri: NLCD-coded GeoTIFF of canonical class integers, not
+            palette indices - the ``fetch_landcover`` layer.
+        classes: NLCD codes to extract, at least one. 11=Open Water,
+            21-24=Developed, 31=Barren, 41/42/43=Forest, 52=Shrub, 71-74=
+            Herbaceous, 81/82=Pasture/Cropland, 90/95=Wetlands. 255 is
+            rejected: it is the nodata sentinel.
+        bbox: clip window; None processes the full raster.
 
-    Returns:
-        ``LayerURI`` for a binary uint8 mask GeoTIFF (1=match, 0=other,
-        255=nodata; cache bucket, TTL 30d; ). Suitable as a zone mask for a
-        code_exec playground zonal-stats recipe.
-
-    Raises:
-        LandcoverClassError: empty/out-of-range classes, malformed bbox,
-            unopenable source, no bbox intersection, write failure.
+    Returns a uint8 mask - 1 match, 0 other, 255 nodata - usable as a zone mask.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 
-    # Argument validation up-front so bad calls fail BEFORE the cache lookup.
+    # Validation runs before the cache lookup, so a bad call fails on its own
+    # terms rather than on a key miss.
     classes_sorted = _validate_classes(classes)
     _validate_bbox(bbox)
 
-    # Quantize bbox to 6dp for cache-key stability (cache.py convention).
     bbox_rounded = _round_bbox(bbox) if bbox is not None else None
 
-    # Cache key on (landcover_uri, sorted classes, bbox, year tag). The year
-    # tag pins to NLCD 2021 -- when the engine bumps the default vintage the
-    # cache key naturally changes, avoiding silent staleness.
+    # The year tag pins the vintage, so bumping the default changes the key
+    # rather than serving a stale mask under it.
     params: dict[str, object] = {
         "landcover_uri": landcover_uri,
         "classes": classes_sorted,
@@ -501,12 +400,10 @@ def extract_landcover_class(
         "extract_landcover_class is cacheable; uri must be set by read_through"
     )
 
-    # Build a stable, readable layer_id.
     src_key = landcover_uri.rstrip("/").rsplit("/", 1)[-1].replace(".tif", "")
     classes_tag = "-".join(str(c) for c in classes_sorted)
     layer_id = f"landcover-class-{src_key}-{classes_tag}"
 
-    # Name surfaces in the LayerPanel; keep it short but informative.
     if len(classes_sorted) == 1:
         cls_label = f"NLCD {classes_sorted[0]}"
     else:
