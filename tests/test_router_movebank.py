@@ -20,7 +20,7 @@ import pytest
 from trid3nt_server.tools.fetchers._router.executors.vector_fgb import (
     features_to_fgb_bytes,
 )
-from trid3nt_server.tools.fetchers._router.hooks import movebank_tracks as mbh
+from trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks import hooks as mbh
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
 _CSV = (

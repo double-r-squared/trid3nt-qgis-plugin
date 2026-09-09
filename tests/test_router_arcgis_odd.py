@@ -18,13 +18,11 @@ import pytest
 
 from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_server.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
-from trid3nt_server.tools.fetchers._router.hooks import (
-    fema_nfhl_zones as nfhl,
-    nwi_wetlands as nwi,
-    wdpa_protected_areas as wdpa,
-    usace_dams as dams,
-    epa_frs_facilities as frs,
-)
+from trid3nt_server.tools.fetchers._router.hooks import fema_nfhl_zones as nfhl
+from trid3nt_server.tools.fetchers._router.hooks import nwi_wetlands as nwi
+from trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas import hooks as wdpa
+from trid3nt_server.tools.fetchers._router.hooks import usace_dams as dams
+from trid3nt_server.tools.fetchers._router.hooks import epa_frs_facilities as frs
 
 
 def _spec(prefix: str, source_class: str) -> SourceSpec:
