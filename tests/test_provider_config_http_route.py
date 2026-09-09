@@ -217,6 +217,11 @@ def test_provider_config_partial_body_only_sets_present(monkeypatch):
 def test_provider_config_empty_values_do_not_clobber(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     monkeypatch.setenv("TRID3NT_OPENAI_API_KEY", "existing-key")
+    # A non-OpenRouter base URL, set explicitly rather than left ambient: an
+    # OpenRouter endpoint demands a namespaced `vendor/model`, so reading
+    # whatever this box's .env.local happens to export made this test's
+    # result depend on the sourcing box rather than on this test's own setup.
+    monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
     # Empty api_key string must NOT overwrite an existing key.
     writer = _dispatch("/api/provider-config", b'{"api_key":"","model":"m"}')
     assert _status(bytes(writer.buffer)) == 200
