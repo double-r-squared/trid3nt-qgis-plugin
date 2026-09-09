@@ -1,16 +1,8 @@
 """Engine template ``telemac_river_scour`` - a mobile bed under a river reach.
 
-THE QUESTION: where the river bed SCOURS and where it re-deposits - below a dam,
-a weir or a bridge contraction, under a flood, and whether a graded mixture SORTS
-as it goes. TELEMAC-2D coupled with GAIA over a real reach, with the bed
-evolution animated from the native time-stepped mesh; the NESTOR dig/dump rule
-layers a channel-maintenance dredge on top of the same bed.
-
-The recipe on one page: the STEERING body of raw keywords, the door that fills
-and runs it, the ANSWER fields and the chart. The declared params and the
-model-facing prose are one file over in ``declarations.py``; the reach itself is
-the shared ``river`` part this body lists.
-"""
+TELEMAC-2D coupled with GAIA over a real reach: where the bed scours and
+re-deposits, and whether a graded mixture SORTS as it goes. The NESTOR dig/dump
+rule layers a channel-maintenance dredge on top of the same bed."""
 
 from __future__ import annotations
 
@@ -142,10 +134,7 @@ ANSWER = ("max_deposition_mm", "max_scour_mm", "deposited_mass_kg",
 def build_bed_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     """The marker tracer's HISTORY beside the bed change the run reports.
 
-    The bed evolution is a map, not a curve; what a curve can say is when the
-    flow that moved it arrived, which is the tracer's own reach maximum at each
-    written frame. ``None`` when the run persisted no history.
-    """
+    The bed evolution is a map, not a curve; ``None`` when none persisted."""
     times = getattr(result, "dye_curve_time_s", None)
     values = getattr(result, "dye_curve_cmax_mgl", None)
     if not times or not values:

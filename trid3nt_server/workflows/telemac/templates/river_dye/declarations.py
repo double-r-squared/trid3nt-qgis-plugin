@@ -1,9 +1,4 @@
-"""The CONTRACT of ``telemac_river_dye``: its declared params and its prose.
-
-One file over from the recipe. ``river_dye.py`` reads on one page - the question,
-the data, the plan, the answer, the chart - because the fifty rows that describe
-every value it can take live here instead of in front of them.
-"""
+"""The CONTRACT of ``telemac_river_dye``: its declared params and its prose."""
 
 from __future__ import annotations
 

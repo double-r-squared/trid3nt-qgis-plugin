@@ -1,5 +1,5 @@
-# Template routing phrasings (ADR 0196): walked into the main retrieval index
-# directly -- the engine templates are ordinary retrieval-pool tools.
+# Template routing phrasings: walked into the main retrieval index directly, so
+# an engine template is an ordinary retrieval-pool tool.
 telemac_rain_on_grid:
 - rainfall-runoff on a watershed, how much runoff and peak discharge from a storm over the catchment
 - rain falls on the basin and floods the valley, simulate the flash flood from an intense storm

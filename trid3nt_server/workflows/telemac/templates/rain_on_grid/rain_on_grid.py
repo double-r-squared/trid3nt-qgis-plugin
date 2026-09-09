@@ -1,19 +1,8 @@
 """Engine template ``telemac_rain_on_grid`` - a storm over a delineated watershed.
 
-THE QUESTION: how much RUNOFF a storm produces from a WATERSHED, and where the
-water stands while it drains. A design storm or a real hourly hyetograph falls on
-a catchment DELINEATED at a pour point and triangulated from a real bare-earth
-DEM; it infiltrates by the SCS curve-number method with per-node curve numbers
-from land cover, and the excess runs off overland to the outlet - producing an
-OUTLET HYDROGRAPH plus a peak flood-depth map.
-
-Applicability envelope (Godara, Bruland and Alfredsen 2024, Front. Water
-6:1384205): rain-on-grid reproduces SINGLE-STORM flash-flood events (~10-20 h) in
-small steep catchments. Multi-peak and sustained rain-on-snow are NOT reproduced -
-infiltrated water is permanently lost, so there is no subsurface return flow and
-no inter-peak baseflow. TELEMAC-2D's triangular mesh is stable on steep terrain
-where a structured grid is not, which is the paper's own finding against HEC-RAS.
-"""
+APPLICABILITY (Godara, Bruland and Alfredsen 2024, Front. Water 6:1384205):
+single-storm flash floods in small steep catchments; infiltrated water is
+permanently lost, so there is no subsurface return flow and no baseflow."""
 
 from __future__ import annotations
 
@@ -235,15 +224,10 @@ ANSWER = ("catchment_area_km2", "peak_discharge_m3s", "peak_discharge_time_s",
 def build_hydrograph_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     """The OUTLET HYDROGRAPH spec: discharge against time, off the run's own series.
 
-    The hydrograph IS the rainfall-runoff answer - a flood-depth raster says where
-    the water stood, and this says how much left the basin and when. The series is
-    the solver's own outflow across the outlet boundary, never a fitted curve, and
-    it arrives outflow-positive from the one reader that states the convention.
-    ``None`` when the run measured no series, which is the honest "there is no
-    hydrograph to draw". A series of ZEROS is not that case: the solver measured
-    the outlet and the answer was nothing left through it, so the chart is drawn
-    and the caption says the flat line is a measurement.
-    """
+    The solver's own outflow, outflow-positive; ``None`` when there is none."""
+    # A series of ZEROS is not that case: the solver measured the outlet and the
+    # answer was nothing left through it, so the chart is drawn and the caption
+    # says the flat line is a measurement.
     times = getattr(result, "outlet_hydrograph_t_s", None)
     flows = getattr(result, "outlet_hydrograph_q_m3s", None)
     if not times or not flows or len(times) != len(flows):

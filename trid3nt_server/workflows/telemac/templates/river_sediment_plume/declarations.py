@@ -1,9 +1,4 @@
-"""The CONTRACT of ``telemac_river_sediment_plume``: its declared params + prose.
-
-One file over from the recipe. The rows every river run reads, and the rows every
-point RELEASE reads, are the shared river part's; what is here is what only a
-suspended-plume question asks.
-"""
+"""The CONTRACT of ``telemac_river_sediment_plume``: what only a plume asks."""
 
 from __future__ import annotations
 

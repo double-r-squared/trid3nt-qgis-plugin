@@ -1,16 +1,7 @@
 """Engine template ``telemac_river_dye`` - a conservative plume down a river reach.
 
-THE QUESTION: how far a DYE / TRACER / CONTAMINANT spill travels DOWNSTREAM in a
-river reach, and what its peak concentration is. TELEMAC-2D shallow water over a
-real reach, with the plume animated from the native time-stepped mesh.
-
-The recipe on one page: the STEERING body of raw keywords, the data this run
-consumes past the shared chain, the door that fills and runs it, the ANSWER
-fields and the chart. The declared params and the model-facing prose are one
-file over in ``declarations.py``; the reach itself - its chain, its mesh recipe
-and everything a river deck states about the water - is the shared ``river``
-part this body lists.
-"""
+TELEMAC-2D shallow water over a real reach: how far a dye, tracer or contaminant
+spill travels downstream and what its peak concentration is."""
 
 from __future__ import annotations
 
@@ -149,11 +140,7 @@ def _bed_of(result: Any) -> str:
 def build_dye_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     """The plume's concentration HISTORY: one point per frame the solver wrote.
 
-    Every point is the reach maximum at that output time, measured off the
-    postprocessed field, so the curve is the arrival, the peak and the flush-out
-    as the run produced them. ``None`` when the run persisted no history, which
-    is the honest "there was no curve to draw".
-    """
+    Every point is the reach maximum at that time; ``None`` when none persisted."""
     times = getattr(result, "dye_curve_time_s", None)
     values = getattr(result, "dye_curve_cmax_mgl", None)
     cmax = getattr(result, "dye_cmax_mgl", None)

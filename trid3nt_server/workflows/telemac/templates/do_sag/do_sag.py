@@ -1,16 +1,8 @@
 """Engine template ``telemac_do_sag`` - the dissolved-oxygen sag below an outfall.
 
-THE QUESTION: the DISSOLVED-OXYGEN SAG below a permitted discharge / WWTP outfall
-in a river reach (the US TMDL / Clean Water Act permit question). Where does DO
-bottom out downstream, and does it VIOLATE the water-quality standard?
-TELEMAC-2D + WAQTEL O2 - the Streeter-Phelps oxygen sag - over a real NHDPlus
-reach.
-
-The recipe on one page: the STEERING body of raw keywords, the door that fills
-and runs it, the ANSWER fields and the chart. The declared params and the
-model-facing prose are one file over in ``declarations.py``; the reach itself is
-the shared ``river`` part this body lists.
-"""
+TELEMAC-2D coupled with WAQTEL O2 - the Streeter-Phelps oxygen sag - over a real
+NHDPlus reach: where DO bottoms out downstream, and whether it violates the
+water-quality standard."""
 
 from __future__ import annotations
 
@@ -119,12 +111,7 @@ ANSWER = ("do_min_mgl", "do_min_distance_m", "do_standard_mgl",
 def build_sag_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     """The DO-sag chart SPEC: DO + CBOD vs distance, against the closed form.
 
-    Honest postprocess scalars off the published layer (the binned centerline
-    curve), never a fabricated line; ``None`` when the curve is absent. The
-    Streeter-Phelps profile rides as a DASHED second series computed in the read
-    from the run's own mix point, load and velocity, and the caption states how
-    far the solve sits from it - the deterministic grading, not a judgement.
-    """
+    Scalars come off the published layer; ``None`` when the curve is absent."""
     xs = getattr(result, "sag_curve_distance_m", None)
     do = getattr(result, "sag_curve_do_mgl", None)
     bod = getattr(result, "sag_curve_bod_mgl", None)

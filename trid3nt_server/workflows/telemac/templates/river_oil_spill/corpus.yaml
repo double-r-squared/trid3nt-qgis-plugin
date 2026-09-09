@@ -1,5 +1,5 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
+# Template routing phrasings: walked into the main retrieval index directly, so
+# an engine template is an ordinary retrieval-pool tool.
 telemac_river_oil_spill:
 - an oil spill from a barge on the river, where does the oil slick go downstream
 - a diesel or crude oil release into a river reach, tracking the floating slick

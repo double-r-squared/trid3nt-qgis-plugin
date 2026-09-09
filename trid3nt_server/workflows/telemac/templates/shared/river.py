@@ -1,25 +1,8 @@
 """RIVER - the body, the chain and the mesh recipe every river template lists.
 
-A reach is one question asked five ways: a dye plume, an oil slick, a scouring
-bed, a settling plume and an oxygen sag all run the same shallow-water solve over
-the same stretch of mapped water, and differ in which slots they fill on top of
-it. What that sameness IS lives here: the DATA chain that cuts the reach out of
-real geometry, the MESH recipe that triangulates it, the acquisition steps that
-establish the modelled world, and the keyword assertions the deck makes about the
-water rather than about the substance in it.
-
-Every assertion below was a hardcoded literal in the steering-file writer this
-body replaces. What is NOT here is as deliberate: a keyword whose stated value
-was the dictionary's own default is unwritten, because the engine already
-supplies it and restating it would make the deck claim a choice nobody made.
-
-The three slots the boundary and the initial state are set from are DERIVED
-producers rather than numbers: the outflow level is a normal depth over the
-section the accepted mesh's outflow face cuts, at the roughness THIS deck writes
-and for the discharge it prescribes, and the run opens at that same depth laid
-bed-parallel - so the reach starts at the equilibrium its own downstream boundary
-holds it to instead of draining a blanket depth into it over the first minutes.
-"""
+A keyword whose value would be the dictionary's own default is unwritten. The
+boundary and initial-state slots are DERIVED producers rather than numbers, so
+the reach opens at the equilibrium its own downstream boundary holds it to."""
 
 from __future__ import annotations
 
@@ -74,10 +57,7 @@ _BANK_QUERY_PAD_M = 3000.0
 class PARAMS:
     """The rows the SHARED chain and the shared settle read, on every river run.
 
-    A template declares its own question's rows beside these; what is here is
-    what the part itself reads, so a body that lists RIVER cannot be missing a
-    value the part goes looking for.
-    """
+    What is here is what the PART reads, never what a question adds beside it."""
 
     river_geometry_uri = Param(
         door=doors.USER, optional=True, consequence="aoi",
@@ -144,10 +124,7 @@ class PARAMS:
 class RELEASE:
     """The rows a run that RELEASES something at a point in the reach declares.
 
-    Where it enters, how much of it, for how long, and the two forcings that act
-    on the water it enters - all identical whatever is released, which is why
-    they are here and the substance's own rows are in its template.
-    """
+    Identical whatever is released; the substance's own rows are its template's."""
 
 
     release_coords = Param(
@@ -231,10 +208,7 @@ RELEASE_ROWS = param_rows(RELEASE)
 class DATA:
     """The reach chain, one row per artifact, in the order it is read.
 
-    The carrier discharge is a STEP rather than a row: it reads the resolved
-    mid-reach seed, which is a step result and not something a producer
-    declaration can name.
-    """
+    The carrier discharge is a STEP, because it reads the resolved seed."""
 
     rivers = tool(f"{_HELPERS}.reach.fetch_reach_flowline",
                   prefetched=ParamRef("river_geometry_uri"))
@@ -304,12 +278,7 @@ MESH = tool.build_mesh(
 def acquire(*, seed_coords: Any) -> tuple[Step, ...]:
     """The steps that establish the modelled world and the flow that carries it.
 
-    Three, because the world is not established until the flow through it is: the
-    seed is the point the discharge is read at, so it cannot be declared
-    independently of the reach. ``seed_coords`` pins that seed - a template whose
-    ask names where the substance enters the water is naming which stretch to
-    model, and the one centerline is navigated from there.
-    """
+    ``seed_coords`` pins the seed the one centerline is navigated from."""
     return (
         Geocode.reach(ParamRef("location"), ParamRef("bbox")).named("reach"),
         ReachSeed(reach=Ref("reach"), rivers=DATA.rivers,
@@ -326,10 +295,7 @@ def settle(*, release_coords: Any, spill_fraction: Any,
            dredge: Any = None) -> Step:
     """Measure the reach the accepted mesh holds -> what the sheet is filled from.
 
-    Everything a keyword cannot be set without: the bed at the mesh's declared
-    roles, the section its outflow face cuts, the uniform-flow depth that section
-    conveys the prescribed discharge at, and where the release actually lands.
-    """
+    The bed at the declared roles, the outflow section, the depth, the release."""
     return Step(runner=f"{_AUTHORING}.assembler.settle_reach", stage="author",
                 kwargs={
                     "reach": Ref("reach"), "seed": Ref("seed"),

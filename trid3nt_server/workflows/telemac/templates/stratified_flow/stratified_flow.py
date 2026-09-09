@@ -1,25 +1,8 @@
 """Engine template ``telemac3d_stratified_flow`` - what a 2D model cannot see.
 
-THE QUESTION: the VERTICAL structure of a lake. TELEMAC-3D solves the
-three-dimensional hydrostatic equations with active-tracer baroclinic density
-coupling over sigma layers, so ONE run answers both halves of it:
-
-  * a warm surface layer over a cold bottom either keeps its thermocline (calm)
-    or is mixed away (wind), and the metric is the top-to-bottom difference that
-    SURVIVES. The run has NO surface heat exchange, so heat is CONSERVED: a
-    falling surface temperature is the warm layer MIXING DOWNWARD, never the lake
-    cooling;
-  * the same wind drives surface water downwind and a return flow at depth, and
-    the depth average of the two is near zero - which is exactly why a 2D model
-    reports nothing. Those velocities are read off the same baroclinic run and
-    join the answer beside the temperature.
-
-THE DOMAIN IS THE WATER BODY. The mesh is cut from the lake's own mapped polygon
-narrowed to the AOI, not from the shoreline the ocean is described by: a lake is
-not in the land-ocean polygons, and a bbox domain over one would mesh the streets
-as open water. The basin that leaves is CLOSED - it names no liquid boundary, the
-mesh's topology bundle records that fact, and the water in it is conserved.
-"""
+TELEMAC-3D over sigma layers with active-tracer baroclinic coupling. The run has
+NO surface heat exchange, so a falling surface temperature is the warm layer
+MIXING DOWNWARD. The basin is CLOSED: it names no liquid boundary."""
 
 from __future__ import annotations
 
@@ -75,15 +58,7 @@ _STEERING_FILE = "t3d_basin.cas"
 class DATA:
     """What the run consumes from the world: the water body, narrowed to the ask.
 
-    NHD answers with WHOLE features, so a harbour question comes back holding the
-    whole of the lake; the domain is the part of it the question is about, and the
-    narrowing is the CHAIN's rather than the mesher's.
-
-    THE BED IS FETCHED HERE, once, because two things read it: the clip that
-    narrows the water to the part anybody sounded, and the paint that gives every
-    node its elevation. THE LEVEL is fetched beside it because a bed alone does
-    not say where the water top is.
-    """
+    The narrowing is the CHAIN's; the bed is fetched ONCE and read twice."""
 
     water = tool("fetch_nhd_waterbodies", bbox=Ref("aoi.bbox"))
     mapped = tool("section", polygon=water, within=Ref("aoi.bbox"))
@@ -228,15 +203,10 @@ ANSWER = ("stratification_metric", "stratification_dt", "variable_label",
 def build_profile_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     """The VERTICAL profile SPEC: what the column started as, and what survived.
 
-    Two lines against sigma (0 = bed, 1 = surface) - the initial condition and the
-    final state - because the 3D answer IS the difference between them, and a map
-    of the surface alone carries no depth at all. ``None`` when the run measured
-    no profile, which is the honest "there is nothing to plot".
-
-    The run exchanges NO heat with the atmosphere, so the two lines enclose the
-    same heat: the caption reads the change as REDISTRIBUTION (mixing), never as
-    the lake losing heat.
-    """
+    Two lines against sigma (0 = bed, 1 = surface); ``None`` when unmeasured."""
+    # The run exchanges NO heat with the atmosphere, so the two lines enclose the
+    # same heat and the caption reads the change as redistribution (mixing),
+    # never as the lake losing heat.
     sigma = getattr(result, "profile_sigma", None)
     final = getattr(result, "profile_values", None)
     if not sigma or not final or len(sigma) != len(final):

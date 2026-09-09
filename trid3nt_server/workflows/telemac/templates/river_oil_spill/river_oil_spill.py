@@ -1,15 +1,8 @@
 """Engine template ``telemac_river_oil_spill`` - an oil slick down a river reach.
 
-THE QUESTION: where an OIL SPILL goes after it enters a river - the floating
-slick's drift and the dissolved fraction's plume. TELEMAC-2D shallow water over a
-real reach with the engine's own oil-spill module riding on the solve: the module
-tracks floating particles and the tracer carries what dissolved.
-
-The recipe on one page: the STEERING body of raw keywords, the door that fills
-and runs it, the ANSWER fields and the chart. The declared params and the
-model-facing prose are one file over in ``declarations.py``; the reach itself is
-the shared ``river`` part this body lists.
-"""
+TELEMAC-2D shallow water over a real reach with the engine's own oil-spill module
+riding on the solve: the module tracks floating particles and the tracer carries
+what dissolved."""
 
 from __future__ import annotations
 
@@ -126,10 +119,7 @@ ANSWER = ("dye_cmax_mgl", "dye_peak_time_s", "plume_reach_m", "active_frames",
 def build_slick_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     """The dissolved fraction's concentration HISTORY, one point per written frame.
 
-    The slick itself is a particle layer on the canvas; what a curve can say is
-    how the DISSOLVED fraction arrived, peaked and flushed out, measured off the
-    postprocessed field. ``None`` when the run persisted no history.
-    """
+    The slick itself is a particle layer; ``None`` when no history persisted."""
     times = getattr(result, "dye_curve_time_s", None)
     values = getattr(result, "dye_curve_cmax_mgl", None)
     cmax = getattr(result, "dye_cmax_mgl", None)

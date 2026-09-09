@@ -1,5 +1,5 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
+# Template routing phrasings: walked into the main retrieval index directly, so
+# an engine template is an ordinary retrieval-pool tool.
 telemac_river_dye:
 - run a TELEMAC-2D shallow-water solve with an advected dye tracer over a real river reach
 - a dye plume moving downstream through the river channel with the current, animated

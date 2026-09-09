@@ -1,5 +1,5 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
+# Template routing phrasings: walked into the main retrieval index directly, so
+# an engine template is an ordinary retrieval-pool tool.
 telemac_river_sediment_plume:
 - a sediment / silt slurry spilled into the river, settling and depositing on the bed
 - prescribed upstream sediment supply rate depositing downstream, reservoir-inflow sedimentation

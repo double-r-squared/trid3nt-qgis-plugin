@@ -1,15 +1,6 @@
 """The CONTRACT of ``telemac_rain_on_grid``: its declared params and its prose.
 
-One file over from the recipe. ``rain_on_grid.py`` reads on one page - the
-question, the data, the plan, the answer, the chart - because the twenty-odd rows
-that describe every value it can take live here instead of in front of them.
-
-Every number the run uses is on this page or is a labeled constant below it. The
-migration inventory recorded seventeen bare signature defaults, an invented
-pour point, an unreachable slope correction and a duplicated UTM formula in the
-composer this replaces; the point of the shape is that a value with nowhere to be
-declared has nowhere to hide.
-"""
+Every number the run uses is on this page or is a labeled constant below it."""
 
 from __future__ import annotations
 
@@ -30,10 +21,7 @@ __all__ = [
 #: watershed-primitive clamp, and generous enough to contain one headwater basin
 #: upstream of its outlet. The delineation TRUNCATES at the box edge, so this must
 #: over-cover; a box that clips the basin mid-hillslope answers a smaller
-#: question and says nothing. It is a labeled constant rather than a form row for
-#: the same reason the other four AOI half-widths in this engine are: the
-#: granularity-gate wave owns turning the extent knobs into user levers, and five
-#: new rows across five templates belong to that wave rather than to this one.
+#: question and says nothing.
 POUR_POINT_BUFFER_DEG: float = 0.14
 
 #: The edge-length BAND a catchment interior is triangulated between: fine in the

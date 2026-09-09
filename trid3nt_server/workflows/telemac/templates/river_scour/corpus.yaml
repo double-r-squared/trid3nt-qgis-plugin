@@ -1,5 +1,5 @@
-# Template routing phrasings (door dissolution, ADR 0094): walked into the main
-# retrieval index directly -- the engine templates are ordinary retrieval-pool tools.
+# Template routing phrasings: walked into the main retrieval index directly, so
+# an engine template is an ordinary retrieval-pool tool.
 telemac_river_scour:
 - where does the river bed scour below a dam, weir or bridge contraction and where does it re-deposit
 - erodible-bed morphodynamics under a flood hydrograph, bed scour and deposition pattern along a reach

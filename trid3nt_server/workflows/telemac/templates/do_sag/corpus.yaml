@@ -1,5 +1,5 @@
-# Template routing phrasings (door dissolution, ADR 0094 / ADR 0169): the WAQTEL
-# O2 dissolved-oxygen sag walks into the main retrieval index as an ordinary tool.
+# Template routing phrasings: walked into the main retrieval index directly, so
+# an engine template is an ordinary retrieval-pool tool.
 telemac_do_sag:
 - where does dissolved oxygen bottom out downstream of this wastewater discharge
 - dissolved-oxygen sag below a WWTP outfall, does DO violate the water-quality standard

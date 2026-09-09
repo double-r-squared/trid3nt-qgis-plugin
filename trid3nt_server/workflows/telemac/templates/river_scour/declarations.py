@@ -1,9 +1,4 @@
-"""The CONTRACT of ``telemac_river_scour``: its declared params and its prose.
-
-One file over from the recipe. The rows every river run reads, and the rows every
-point RELEASE reads, are the shared river part's; what is here is what only a
-mobile-bed question asks.
-"""
+"""The CONTRACT of ``telemac_river_scour``: what only a mobile-bed question asks."""
 
 from __future__ import annotations
 

@@ -1,22 +1,8 @@
 """The basin's free surface, read from the gauge that watches it.
 
-A lake has a level, and the run has to open at it. Left at the dictionary's own
-zero the free surface sits ON the chart datum, so every node the survey sounded
-at datum carries no water at all and the rim of the domain is dry ground the
-solver still has to integrate over.
-
-The level is an OBSERVATION, not a knob: the nearest CO-OPS gauge inside the AOI,
-at the day the run is about. Data is assumed true and nothing here thresholds it.
-
-WHAT MAKES THE ARITHMETIC LEGAL is that both documents state their zero. The
-gauge reading and the bed elevation are counted from the same lake datum, which
-each source row says in its own words, so the offset between them is zero and the
-reading IS the elevation. Two rows stating different zeros refuse by name rather
-than adding numbers that are not on the same axis.
-
-Only this question reads a lake level, so it lives beside the recipe that
-declares it; a second question asking for one is what earns it a shared home.
-"""
+The level is an OBSERVATION, not a knob: the nearest gauge inside the AOI, at the
+day the run is about. The arithmetic is legal only because both documents state
+the same zero, so the reading IS the elevation; two zeros refuse by name."""
 
 from __future__ import annotations
 
@@ -33,11 +19,7 @@ __all__ = ["observed_lake_level", "reading_day"]
 async def reading_day(*, event_time: str | None = None) -> dict[str, Any]:
     """The DAY the gauge is read over, as the window the fetch asks for.
 
-    Unset is TODAY, resolved here rather than defaulted onto the param: a value
-    seated on the invocation would report on the card as something the caller
-    supplied. A value that is not a date REFUSES - silently reading a different
-    day than the one asked for is the swallow class.
-    """
+    Unset is TODAY; a value that is not a date REFUSES, never falls back."""
     import datetime as dt
 
     from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
@@ -62,11 +44,7 @@ async def observed_lake_level(*, level: Any, gauge_source: str,
                               ) -> dict[str, Any]:
     """The observed level -> the elevation the run's free surface opens at.
 
-    Returns the reading, the gauge it came from and the sentence the journal says
-    the datum arithmetic in. An AOI no gauge watches REFUSES: the answer to "no
-    instrument reports this water" is a wider domain or a stated level, never a
-    number this step made up.
-    """
+    Returns the reading, its gauge and the datum sentence; no gauge REFUSES."""
     return await asyncio.to_thread(_observed, level, gauge_source, bed_source,
                                    aoi)
 
@@ -118,10 +96,7 @@ def _observed(level: Any, gauge_source: str, bed_source: str,
 def _one_datum(gauge_source: str, bed_source: str) -> str:
     """The zero BOTH rows state, or the refusal that names the two they state.
 
-    Neither document's numbers can be read against the other's until they are
-    counted from the same place, and what they are counted from is stated on the
-    source row rather than readable out of the values.
-    """
+    What a document counts from is on its source row, never in its values."""
     from trid3nt_server.tools.fetchers._router.registration import get_spec
     from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
 
@@ -179,9 +154,7 @@ def _in_4326(frame: Any) -> Any:
 def _last_reading(row: Any, gauge_source: str) -> tuple[str, float]:
     """The LAST sample the gauge published in the window -> ``(stamp, metres)``.
 
-    The window is one day, so its last sample is the level as that day closed -
-    and for a run about today, the most recent reading there is.
-    """
+    The window is one day, so its last sample is the level as that day closed."""
     from trid3nt_server.workflows.telemac.helpers.errors import OpenWaterError
 
     for line in reversed(str(row.get("time_series_csv") or "").splitlines()):

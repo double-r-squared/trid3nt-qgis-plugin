@@ -1,19 +1,8 @@
 """The water domain, narrowed to the part of it anybody has measured a bed for.
 
-A mapped water polygon and a bathymetric survey are two different documents. The
-polygon says where the water is; the survey says where its floor was sounded, and
-over a harbour arm or a slip the two disagree - the survey stops at its own
-coverage and the polygon carries on. Meshing the difference builds elements the
-bed painter has nothing to give, and a water domain has no bed where nobody
-measured.
-
-The footprint is read off the raster's own MASK, never off a threshold on the
-values: a nodata cell and a cell sounded at zero depth are different statements,
-and only the mask tells them apart.
-
-Only this question declares the clip, so it lives beside the recipe that does; a
-second question asking for it is what earns it a shared home.
-"""
+The polygon says where the water is and the survey where its floor was sounded;
+meshing the difference builds elements the bed painter has nothing to give. The
+footprint is read off the raster's own MASK, never off a threshold on values."""
 
 from __future__ import annotations
 
@@ -30,11 +19,7 @@ __all__ = ["basin_on_measured_bed"]
 async def basin_on_measured_bed(*, polygon: Any, bed: Any) -> dict[str, Any]:
     """The water polygon INTERSECT the bed's measured footprint -> the domain.
 
-    Returns the domain inline, with the two areas it was measured between and the
-    sentence the run's journal says them in. A clip that meets nothing REFUSES:
-    the answer to "the survey does not reach this water" is to name a bed that
-    does, never a domain nobody sounded.
-    """
+    Returned inline with the two areas; a clip that meets nothing REFUSES."""
     return await asyncio.to_thread(_clip, polygon, bed)
 
 

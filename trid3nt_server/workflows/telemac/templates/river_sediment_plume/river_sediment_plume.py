@@ -1,15 +1,7 @@
 """Engine template ``telemac_river_sediment_plume`` - a settling plume in a reach.
 
-THE QUESTION: where a SUSPENDED SEDIMENT plume released into a river settles out
-and deposits. TELEMAC-2D coupled with GAIA over a real reach: ONE settling class
-over a bed with NO stock at all, so nothing erodes and only what was injected can
-deposit - a supply-limited answer.
-
-The recipe on one page: the STEERING body of raw keywords, the door that fills
-and runs it, the ANSWER fields and the chart. The declared params and the
-model-facing prose are one file over in ``declarations.py``; the reach itself is
-the shared ``river`` part this body lists.
-"""
+TELEMAC-2D coupled with GAIA over a real reach: ONE settling class over a bed
+with NO stock at all, so nothing erodes and only what was injected can deposit."""
 
 from __future__ import annotations
 
@@ -123,10 +115,7 @@ ANSWER = ("dye_cmax_mgl", "dye_peak_time_s", "plume_reach_m", "active_frames",
 def build_plume_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     """The suspended concentration's HISTORY: one point per frame the solver wrote.
 
-    Every point is the reach maximum at that output time, so the curve is the
-    arrival, the peak and the settling-out as the run produced them. ``None``
-    when the run persisted no history.
-    """
+    Every point is the reach maximum at that time; ``None`` when none persisted."""
     times = getattr(result, "dye_curve_time_s", None)
     values = getattr(result, "dye_curve_cmax_mgl", None)
     cmax = getattr(result, "dye_cmax_mgl", None)

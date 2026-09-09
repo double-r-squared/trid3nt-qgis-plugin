@@ -1,14 +1,8 @@
 """The declared structure, as a footprint the mesher can remove water with.
 
-A survey maps a breakwater as a CENTRELINE, and a centreline bounds no area:
-subtracting it from the water domain removes nothing and the triangulation closes
-straight over it, leaving conformal nodes on a barrier that is not there. The
-footprint is that centreline given a DECLARED width, which is what
-``set_obstacle`` can actually punch out.
-
-Only this question needs it, so it lives beside the recipe that declares it
-rather than in a shared tree.
-"""
+A survey maps a breakwater as a CENTRELINE, and a centreline bounds no area, so
+subtracting it removes nothing and the triangulation closes straight over it.
+The footprint is that centreline given a DECLARED width."""
 
 from __future__ import annotations
 
@@ -26,11 +20,7 @@ async def barrier_footprint(*, structure: Any,
                             width_m: float) -> dict[str, Any]:
     """The declared structure -> the water-removing footprint, as GeoJSON.
 
-    Returns the footprint inline rather than as a file, because the mesh op that
-    reads it stages whatever it is handed into the rundir the container mounts,
-    and a second object-store round trip for a shape this small would be a file
-    nobody but the next call opens.
-    """
+    Returned inline: the mesh op stages whatever it is handed into the rundir."""
     import asyncio
 
     return await asyncio.to_thread(_footprint, structure, float(width_m))

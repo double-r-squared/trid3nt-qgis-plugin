@@ -1,24 +1,8 @@
 """Engine template ``artemis_harbor_agitation`` - does the structure shelter the water.
 
-THE QUESTION: how much swell reaches the water BEHIND a declared structure, and
-how much less that is than in front of it. ARTEMIS is the phase-RESOLVING
-elliptic mild-slope (Berkhoff) solver - the complement to TOMAWAC's phase-AVERAGED
-spectral tier - so the answer is a steady-state agitation coefficient Kd = Hs/H0
-in which diffraction fringes and standing waves are visible rather than averaged
-away.
-
-THE STRUCTURE IS THE QUESTION. A sheltering question is meaningless without the
-thing that shelters, and WHICH thing is the caller's to name: hand the slot a
-surveyed breakwater layer, a line drawn on the canvas, or a barrier that does not
-exist yet - the last is the design question this tool is actually for, and a baked
-"go fetch the real one" could never have answered it.
-
-THE DOMAIN IS THE WATER. The mesh is cut from the real shoreline over the AOI,
-the structure is punched out of it as a conformal obstacle, the shoreline sizing
-is built over what is left, the bed is painted from surveyed topobathy and every
-boundary stretch deep enough to be open is designated the edge the incident wave
-enters through.
-"""
+ARTEMIS is the phase-RESOLVING elliptic mild-slope solver, so the answer is a
+steady-state agitation coefficient Kd = Hs/H0 in which diffraction fringes and
+standing waves are visible rather than averaged away."""
 
 from __future__ import annotations
 
@@ -69,12 +53,7 @@ _STEERING_FILE = "art_agitation.cas"
 class DATA:
     """What the run consumes from the world.
 
-    ONE row, and it is a SLOT rather than a producer: this template will not name
-    a default source for somebody's breakwater. It says what SHAPE it accepts and
-    stops, because "which structure" is the caller's question and not the
-    engine's. The bed and the shoreline the domain is cut from are the MESH
-    recipe's, declared there under the ops that read them.
-    """
+    ONE row, and a SLOT: this template names no default source for a structure."""
 
     structure = Data.supplied(geometry="polyline")
     #: The domain itself, when the caller has one. Unfilled, MESH below cuts it
@@ -160,11 +139,7 @@ ANSWER = ("kd_max", "hs_max_m", "kd_sheltered", "kd_exposed", "wave_period_s",
 def build_agitation_chart(*, result: Any, params: Any) -> dict[str, Any] | None:
     """The agitation chart SPEC: Kd along the structure's own shadow strip.
 
-    The curve is the RUN's own, carried on the layer, so the chart and the
-    narrated sheltered/exposed pair are one measurement rather than two
-    resamplings that nearly agree. ``None`` when the run measured no curve, which
-    is the honest "there is nothing to plot".
-    """
+    The curve is the RUN's own; ``None`` when the run measured no curve."""
     xs = getattr(result, "agitation_curve_m", None)
     kd = getattr(result, "agitation_curve_kd", None)
     if not xs or not kd or len(xs) != len(kd):

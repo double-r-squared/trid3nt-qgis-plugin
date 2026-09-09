@@ -1,9 +1,4 @@
-"""The CONTRACT of ``artemis_harbor_agitation``: its declared params and its prose.
-
-One file over from the recipe. ``agitation.py`` reads on one page - the question,
-the data, the mesh, the deck, the answer, the chart - because the rows that
-describe every value it can take live here instead of in front of them.
-"""
+"""The CONTRACT of ``artemis_harbor_agitation``: its declared params and its prose."""
 
 from __future__ import annotations
 
