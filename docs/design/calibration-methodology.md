@@ -183,14 +183,17 @@ Bay.** A CO-OPS-only holdout is therefore impossible at any domain size we
 would want to solve, which is why the USGS STN network below carries the
 holdout role.
 
-**Datum chain, verified end to end.** The template fetches on MLLW
-(`fetch_noaa_coops_tides` hardcodes `datum: MLLW`) and reconciles to the
-NAVD88 bed with the station's OWN published datum table
-(`workflows/shared/tide_series.py:datum_offset_m`, which raises rather
+**Datum chain, verified end to end (as it stood at this writing).** The
+template fetched on MLLW (`fetch_noaa_coops_tides` hardcodes `datum: MLLW`)
+and reconciled to the NAVD88 bed with the station's OWN published datum
+table (`workflows/shared/tide_series.py:datum_offset_m`, which raised rather
 than returning zero on any miss). Cross-check: the committed canary
 records `wl_max_m = 2.845` on MLLW and `datum_offset_m = -0.232`, giving
 `sl_peak_m = 2.613`. My independent NAVD88 probe returns 2.613. **The
-datum chain is correct and needs no change.**
+datum chain was correct and needed no change.** `tide_series.py` is GONE
+(lean sweep D6: `resolve_tide_series` had no caller outside its own test) -
+a coastal forcing path that resolves a tide series again authors this datum
+reconciliation fresh, against the datum contract of the day.
 
 The NHC report corroborates independently: "the NOS gauge in Apalachicola
 measured a peak water level of 7.7 ft MHHW".
@@ -315,7 +318,9 @@ Named here because a value nobody named is a value nobody chose:
   phases (section 4.4), never varied WITHIN a loop.
 - `datum_offset_m`. Derived from the station's own table. If it were free,
   the loop would happily calibrate the vertical datum, which is the exact
-  defect `tide_series.py` was written to prevent.
+  defect the (now-deleted, lean sweep D6) `tide_series.py` was written to
+  prevent - a rebuilt forcing path re-derives this fresh rather than
+  exposing it as a free parameter.
 - `bathy_source = noaa_demall`, `series_type = observed`, `ocean_edge`.
 
 ### 2.4 A candidate that does NOT earn its place yet
