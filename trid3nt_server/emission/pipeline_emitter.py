@@ -2616,18 +2616,25 @@ async def mint_dispatch_and_sim_cards(
     route the terminal there. Best-effort: ``emitter is None`` (direct/smoke/unit
     call) OR any emit failure returns ``None`` and the solve proceeds unchanged --
     the two cards are an observability affordance, never a correctness gate.
+
+    The cards are named for the CASE, not the solver: a family whose legs share
+    one registered solver id (every TELEMAC template dispatches
+    ``telemac_river_dye``) would otherwise label every run after one of its
+    siblings. Outside an ``emit_tool_call`` bracket there is no case, and the
+    solver id is the only identity there is.
     """
     if emitter is None:
         return None
+    case = dispatched_tool_name() or solver
     job_id = str(getattr(handle, "workflows_execution_id", "") or "")
     backend = str(getattr(handle, "workflow_name", "") or "local-docker")
     try:
         # Card 1 "Dispatch": a normal tool step recording the submit.
-        dispatch_label = f"Dispatch {solver} solve"
+        dispatch_label = f"Dispatch {case} solve"
         if compute_class:
             dispatch_label = f"{dispatch_label} ({compute_class})"
         dispatch_id = await emitter.add_step(
-            name=dispatch_label, tool_name=f"{solver}:dispatch"
+            name=dispatch_label, tool_name=f"{case}:dispatch"
         )
         await emitter.mark_running(dispatch_id)
         await emitter.mark_complete(dispatch_id)
@@ -2636,8 +2643,8 @@ async def mint_dispatch_and_sim_cards(
         await emitter.persist_terminal_dispatch_card(dispatch_id)
         # Card 2 "Sim": the compute card bound to the dispatched run id.
         sim_id = await emitter.add_compute_step(
-            name=f"{solver} solve",
-            tool_name=f"{solver}:solve",
+            name=f"{case} solve",
+            tool_name=f"{case}:solve",
             batch_job_id=job_id,
             batch_status="SUBMITTED",
         )
@@ -2648,7 +2655,8 @@ async def mint_dispatch_and_sim_cards(
         await emitter.persist_running_compute_card(sim_id)
         logger.info(
             "two-card sim observability: minted dispatch + compute cards "
-            "solver=%s backend=%s jobId=%s sim_step_id=%s",
+            "case=%s solver=%s backend=%s jobId=%s sim_step_id=%s",
+            case,
             solver,
             backend,
             job_id,

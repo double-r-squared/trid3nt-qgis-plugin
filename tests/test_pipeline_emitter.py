@@ -1513,6 +1513,32 @@ async def test_mint_dispatch_and_sim_cards_emits_two_cards(
 
 
 @pytest.mark.asyncio
+async def test_mint_cards_name_the_case_not_the_shared_solver_id(
+    emitter: PipelineEmitter, sink: _CapturingSink
+) -> None:
+    """A family whose legs share one solver id still labels each run its own.
+
+    Every TELEMAC template dispatches the ``telemac_river_dye`` solver, so the
+    solver id cannot name the card without labelling every sibling after one leg.
+    """
+    from trid3nt_server.emission import pipeline_emitter as pe
+
+    handle = type("H", (), {"workflows_execution_id": "j", "workflow_name": "local-docker"})()
+    token = pe._DISPATCHED_TOOL.set("telemac_do_sag")
+    try:
+        await pe.mint_dispatch_and_sim_cards(
+            emitter=emitter, solver="telemac_river_dye", handle=handle
+        )
+    finally:
+        pe._DISPATCHED_TOOL.reset(token)
+
+    steps = _pipeline_frames(sink)[-1]["payload"]["steps"]
+    assert [s["tool_name"] for s in steps] == [
+        "telemac_do_sag:dispatch", "telemac_do_sag:solve"
+    ]
+
+
+@pytest.mark.asyncio
 async def test_mint_dispatch_and_sim_cards_none_emitter_is_noop() -> None:
     """``emitter is None`` (direct/smoke call) returns ``None`` and emits
     nothing — the two cards are an observability affordance, never required."""
