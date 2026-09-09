@@ -1,15 +1,11 @@
-"""nws_alerts_conus hooks (chained-resolution mode): NWS active alerts +
-per-alert zone-polygon enrichment.
+"""nws_alerts_conus hooks: active alerts with zone-polygon enrichment.
 
-The main fetch is a single ``/alerts/active`` GET (nationwide, or ``?area=<state>``);
-``parse_response`` decodes the FeatureCollection, applies the client-side event-type
-filter, projects the preserved props, and stashes each alert's zone references. Alerts
-that carry NULL inline geometry (zone/county watches) are then ENRICHED: the router
-fetches each distinct zone URL best-effort (deduped, capped), and ``enrich_merge``
-attaches the union of the resolved zone polygons so they draw on the map. An alert
-whose zones cannot be resolved keeps its row with NULL geometry (never fabricated,
-never silently dropped). All I/O stays router-owned.
-"""
+The main fetch is a single active-alerts GET, decoded, event-type filtered and
+projected, stashing each alert's zone references. An alert carrying NULL inline geometry
+is then ENRICHED with the union of its resolved zone polygons, so it draws on the map."""
+
+# The zone fetches are best-effort, deduped and capped. An alert whose zones cannot be
+# resolved KEEPS its row with null geometry: never fabricated, never silently dropped.
 
 from __future__ import annotations
 
@@ -28,7 +24,7 @@ _NWS_BASE = "https://api.weather.gov"
 _ALERTS_URL = f"{_NWS_BASE}/alerts/active"
 _VALID_STATUSES = frozenset({"actual", "exercise", "system", "test", "draft"})
 
-#: Properties preserved from each NWS alert feature (the twin's exact set).
+#: Properties preserved from each NWS alert feature.
 _PRESERVED_PROPERTIES = (
     "event", "headline", "description", "severity", "urgency", "certainty",
     "effective", "onset", "ends", "expires", "senderName", "sender",

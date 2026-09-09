@@ -1,32 +1,24 @@
 """glm frames hooks: GOES GLM group-energy-density point-gridding.
 
-Folds fetch_glm_lightning onto shape: animation_frames. The DEFAULT output is now
-an ORDERED ``list[LayerURI]`` of group-energy-density (GED) frames -- the
-single-accumulation case is a ONE-frame list, and ``accumulation_window_s`` fans a
-window into N scrubber-steppable frames (STOP dissolved: the frames-list
-shape carries the single-vs-list variant for free, the single case is just N=1).
+The output is an ORDERED list of energy-density frames: a single accumulation is a ONE-
+frame list, and an ``accumulation_window_s`` fans a window into N scrubber-steppable
+frames."""
 
-The router owns the per-frame read_through loop + honesty floor + LayerURI emission;
-these two hooks own the GLM-specific steps:
-
-- ``frames_plan`` -- normalize the satellite, resolve the window, split it into
-  accumulation buckets (ONE bucket in single mode), even-subsample to the frame cap,
-  and build the ordered per-frame plans (each with the twin's byte-identical
-  cache_params + the ``step <N>`` scrubber name-token + layer_id + bbox). No network:
-  each bucket's own S3 listing happens in frame_bytes.
-- ``frame_bytes`` -- for ONE bucket window: list the GLM-L2-LCFA granules (anonymous
-  NOAA S3), download them, bin GROUP energy onto the ABI-co-registered EPSG:4326 grid
-  via numpy.add.at (GLM lat/lon carry parallax -> bin directly, NEVER warp), bake the
-  purple log-ramp RGBA, and serialize to COG bytes. Raises :class:`FrameDegraded` for
-  a bucket with no granules / no in-AOI groups / an upstream failure (the executor
-  records + drops it; the honesty floor raises the typed EMPTY only when EVERY bucket
-  degrades -- so a single empty window still surfaces as a hard typed no-data).
-
-The GLM point-gridding math (bin + purple ramp) is bespoke to this source, so it
-lives here; the shared ABI grid + RGBA COG writer are reused from
-``imagery._goes_archive_core`` so the GED overlay co-registers pixel-for-pixel with
-the GOES ABI products. ASCII only.
-"""
+# ``frames_plan`` normalizes the satellite, resolves the window, splits it into
+# accumulation buckets, even-subsamples to the frame cap and builds the ordered plans.
+# It does NO network: each bucket's own listing happens in ``frame_bytes``.
+#
+# ``frame_bytes`` takes ONE bucket window: list the granules on the anonymous bucket,
+# download them, bin GROUP energy onto the ABI-co-registered EPSG:4326 grid, bake the
+# purple log ramp, serialize. GLM lat/lon carry parallax, so the energy is BINNED
+# directly and NEVER warped. A bucket with no granules, no in-AOI groups or an upstream
+# failure raises ``FrameDegraded``, which the executor records and drops; only EVERY
+# bucket degrading raises the typed EMPTY, so a single empty window is still hard
+# no-data.
+#
+# The point-gridding math is bespoke to this source and lives here; the shared ABI grid
+# and RGBA COG writer are reused, so the overlay co-registers pixel-for-pixel with the
+# ABI products.
 
 from __future__ import annotations
 
@@ -58,7 +50,7 @@ __all__ = ["frames_plan", "frame_bytes"]
 
 
 # --------------------------------------------------------------------------- #
-# Constants (byte-identical to the twin).
+# Constants.
 # --------------------------------------------------------------------------- #
 #: GLM Level-2 Lightning Cluster-Filter Algorithm product (events/groups/flashes).
 _GLM_PRODUCT = "GLM-L2-LCFA"
@@ -221,12 +213,9 @@ def _bin_ged(
     lat: Any, lon: Any, eng: Any, bbox: tuple[float, float, float, float],
     width: int, height: int,
 ) -> tuple[Any, int]:
-    """Bin GROUP energy (J) onto the EPSG:4326 grid via ``numpy.add.at``.
-
-    GLM lat/lon are POINTS carrying parallax; bin them DIRECTLY (never warp). Row 0
-    is the TOP (max_lat) because ``_grid_for_bbox`` builds a north-up transform.
-    Returns ``(ged_joules (H,W) float64, n_groups_inside_bbox)``.
-    """
+    """Bin GROUP energy onto the EPSG:4326 grid, returning ``(ged_joules, n_groups)``.
+    The lat/lon are POINTS carrying parallax, so they are binned DIRECTLY and never
+    warped; row 0 is the TOP, the grid transform being north-up."""
     import numpy as np
 
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -291,11 +280,9 @@ def _fetch_glm_ged_cog_bytes(
     start_dt: datetime,
     end_dt: datetime,
 ) -> bytes:
-    """List + download GLM granules in [start, end), bin GED, bake purple RGBA -> COG bytes.
-
-    Raises ``_GLMEmpty`` when the window has no granules OR no lightning groups inside
-    the AOI (the per-bucket honesty floor -- never a blank overlay).
-    """
+    """List and download the granules in [start, end), bin the energy density, bake the
+    purple RGBA and serialize. A window with no granules, or none inside the AOI, raises
+    empty rather than producing a blank overlay."""
     keys_times = _list_glm_keys_in_window(satellite, start_dt, end_dt)
     if not keys_times:
         raise _GLMEmpty(
@@ -333,12 +320,9 @@ def _fetch_glm_ged_cog_bytes(
 # frames-plan helpers.
 # --------------------------------------------------------------------------- #
 def _resolve_satellite(spec: SourceSpec, satellite: Any) -> str:
-    """Normalize the GOES spelling zoo -> canonical bird, then gate to the GLM set.
-
-    Re-wraps the shared normalizer's GOESInputError as the source's typed
-    ``*_INPUT_INVALID`` (byte-identical to the twin's GLMInputError re-wrap: the
-    base GOES error type never leaks out of the GLM surface).
-    """
+    """Normalize the spelling zoo to a canonical bird, then gate to the GLM set,
+    re-wrapping the shared normalizer's error as this source's own so the base GOES
+    error type never leaks out of the GLM surface."""
     sc, sfx = spec.error_code_prefix, spec.input_error_suffix
     try:
         sat = _normalize_satellite(str(satellite))
@@ -376,11 +360,9 @@ def _resolve_window(spec: SourceSpec, params: dict[str, Any]) -> tuple[datetime,
 # --------------------------------------------------------------------------- #
 @register_hook("glm.frames_plan")
 def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
-    """Split the window into accumulation buckets -> ordered per-frame plans.
-
-    Single mode (``accumulation_window_s`` unset) yields ONE bucket (the whole
-    window) -> a one-frame list, the new default contract. No network.
-    """
+    """Split the window into accumulation buckets and build the ordered per-frame plans.
+    An unset ``accumulation_window_s`` yields ONE bucket, the whole window, so the
+    default is a one-frame list. No network."""
     sc, sfx = spec.error_code_prefix, spec.input_error_suffix
     q_bbox = _round_bbox(params["bbox"])
     satellite = _resolve_satellite(spec, params.get("satellite", "goes-19"))
@@ -456,12 +438,9 @@ def frames_plan(spec: SourceSpec, params: dict[str, Any]) -> list[FramePlan]:
 # --------------------------------------------------------------------------- #
 @register_hook("glm.frame_bytes")
 def frame_bytes(spec: SourceSpec, params: dict[str, Any], frame: FramePlan) -> bytes:
-    """Build ONE bucket's GED COG bytes; a no-lightning / failed bucket -> FrameDegraded.
-
-    The executor records + drops a degraded frame; the honesty floor raises the typed
-    EMPTY only when EVERY bucket degrades -- so a single empty window (one-frame list)
-    still surfaces as a hard typed no-data, byte-for-byte the twin's per-bucket skip.
-    """
+    """Build ONE bucket's COG bytes; a bucket with no lightning, or one that failed,
+    raises ``FrameDegraded`` for the executor to record and drop. Only EVERY bucket
+    degrading raises the typed EMPTY, so a single empty window is still hard no-data."""
     ctx = frame.fetch_context
     bbox = tuple(frame.cache_params["bbox"])  # type: ignore[assignment]
     try:

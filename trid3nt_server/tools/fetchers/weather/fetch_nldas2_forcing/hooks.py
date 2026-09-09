@@ -1,23 +1,20 @@
 """fetch_nldas2_forcing record hook: NASA NLDAS-2 hourly land-surface forcing.
 
-``pynldas2`` owns the GES DISC time-series service - the per-variable URL set, the
-1/8 degree cell grid the AOI expands to, the ascii decode and the assembly into an
-xarray Dataset. Three things it does not own ride here.
+The library owns the time-series service -- the per-variable URL set, the cell grid the
+AOI expands to, the decode and the assembly. Three things it does not own ride here."""
 
-THE LOGIN IS CHECKED BEFORE THE READ, not after. GES DISC answers an
-unauthenticated request 200 WITH ITS SIGN-IN PAGE, which the library's ascii parser
-reads as malformed data - so an absent credential would surface as a parse error
-about column counts rather than as the missing account it is. The check names the
-file and the host instead.
-
-THE VARIABLE VOCABULARY and its units are read off the library's own table rather
-than restated, so they cannot drift from what the service sends; an unknown name is
-refused by name rather than sent to the service to come back empty.
-
-THE DELIVERABLE IS A FORCING SERIES: each requested variable averaged over the AOI
-into an hourly series, plus the precipitation accumulation, as a bare JSON record
-rather than a renderable layer.
-"""
+# THE LOGIN IS CHECKED BEFORE THE READ, not after. The service answers an
+# unauthenticated request 200 WITH ITS SIGN-IN PAGE, which the library's ascii parser
+# reads as malformed data, so an absent credential would surface as a parse error about
+# column counts rather than as the missing account it is. The check names the file and
+# the host instead.
+#
+# THE VARIABLE VOCABULARY and its units are read off the library's OWN table rather than
+# restated, so they cannot drift from what the service sends; an unknown name is refused
+# by name rather than sent to the service to come back empty.
+#
+# THE DELIVERABLE IS A FORCING SERIES: each requested variable averaged over the AOI
+# into an hourly series, plus the precipitation accumulation, as a bare JSON record.
 
 from __future__ import annotations
 
@@ -41,10 +38,8 @@ _DEFAULT_VARIABLES = ("prcp", "temp")
 
 
 def _vocabulary() -> dict[str, dict[str, str]]:
-    """The forcing vocabulary and its units, read off the library's own table.
-
-    Restating the units here would let them drift from what the service sends.
-    """
+    """The forcing vocabulary and its units, read off the library's OWN table: restating
+    the units here would let them drift from what the service sends."""
     from pynldas2.pynldas2 import NLDAS2_VARS
 
     return NLDAS2_VARS

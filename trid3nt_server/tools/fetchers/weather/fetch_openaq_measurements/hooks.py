@@ -1,23 +1,13 @@
-"""openaq_measurements hooks (chained-resolution mode/0065): OpenAQ v3
-global air-quality latest measurements (keyed).
+"""openaq_measurements hooks: OpenAQ v3 latest global air-quality measurements.
 
-The paginated-locations + per-location-latest + sensor->parameter join shape folds onto
-the EXISTING offset-paging + enrich phases, zero new machinery. The MAIN FETCH is the
-paginated ``/v3/locations`` sweep: ``build_request`` resolves the key (X-API-Key header)
-and builds page 1; ``next_page`` walks pages until a short page or the 2000-station cap;
-``parse_response`` collects the stations (id + coords + sensors). PHASE E is the
-per-location latest fan-out: ``enrich_plan`` emits one ``/locations/{id}/latest`` ref per
-station (best-effort, bounded); ``enrich_merge`` joins each latest sensor value to its
-parameter/units via the station's sensor map, bbox-hard-filters, and EXPANDS into one
-point per (station, parameter) latest reading.
+The MAIN FETCH is the paginated locations sweep, walking pages until a short page or the
+station cap. PHASE E fans out one latest-reading request per station and EXPANDS into
+one point per station and parameter."""
 
-The key resolves kwarg -> str secret_ref -> ``TRID3NT_OPENAQ_API_KEY`` env (the twin's
-headless path; OpenAQ is NOT in TOOL_PROVIDER). No key -> credential-shaped
-``OPENAQ_KEY_REQUIRED`` (recognised via the message-text credential detector, exactly as
-the twin's own message is). The key is NEVER registered/required by this wave -- the
-parity surface proved is the key-ABSENT typed error + input-validation errors. All I/O
-(the locations pages, the latest fan-out, retry, cache, FGB serialize) stays router-owned.
-"""
+# Each latest value is joined to its parameter and units through the station's own
+# sensor map, then bbox-hard-filtered. The key rides as a header, resolved from the
+# kwarg, then a str secret_ref, then the env var; with no key the build raises a
+# credential-shaped ``OPENAQ_KEY_REQUIRED``, recognized from its message text.
 
 from __future__ import annotations
 

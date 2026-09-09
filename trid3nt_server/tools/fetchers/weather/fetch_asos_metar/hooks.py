@@ -1,16 +1,8 @@
-"""asos_metar hooks (chained-resolution mode/0065): Iowa State IEM
-ASOS/METAR station observations.
+"""asos_metar hooks: IEM ASOS/METAR station observations.
 
-The station-observations shape folds onto the EXISTING resolve phase + main fetch,
-zero new machinery. PHASE R (``resolve_build`` / ``resolve_parse``) is the
-multi-state station discovery: the router GETs the per-state ASOS network GeoJSON
-for every state overlapping the bbox, and ``resolve_parse`` bbox-filters the
-features into station ids + the resolved observation window, merging both into
-``params``. The MAIN FETCH is ONE bulk IEM CGI request for all discovered stations
-over the window (``build_request``); ``parse_response`` decodes the comma-CSV into
-one Point feature per OBSERVATION ROW. All I/O (the discovery GETs, the bulk CSV
-download, retry, cache, FGB serialize) stays router-owned; these hooks only compute.
-"""
+PHASE R discovers stations: the router GETs the per-state network file for every state
+overlapping the bbox, and the parse bbox-filters them into station ids plus the resolved
+window. The MAIN FETCH is ONE bulk request, decoded to one Point per observation ROW."""
 
 from __future__ import annotations
 
@@ -105,7 +97,7 @@ def _parse_dt(sc: str, s: str, field: str) -> datetime:
 
 
 def _resolve_window(sc: str, params: dict[str, Any]) -> tuple[datetime, datetime]:
-    """Parse + default + gate the observation window (the twin's body contract)."""
+    """Parse, default and gate the observation window."""
     now_utc = datetime.now(timezone.utc)
     end_raw = params.get("end_time")
     end_dt = now_utc if end_raw is None else _parse_dt(sc, str(end_raw), "end_time")

@@ -1,39 +1,24 @@
-"""Hurricane / tropical-cyclone track delegate hooks: the ``fetch_storm_tracks`` fold.
+"""Hurricane track delegate hooks: both modes under one name.
 
-``fetch_storm_tracks`` folds onto the router as a ``library_delegate`` VECTOR source
-carrying BOTH of its modes under one name. The decisive blocker named was the
-ACTIVE mode's second fetch round: a zipped shapefile (the NHC forecast-track GIS
-product) read inside its archive by range request and reprojected -- I/O inside what
-would be a PURE enrich hook, which no chained-resolution phase carries. The fold
-expresses that binary-secondary-enrichment as the SANCTIONED delegate socket impurity
-(the topobathy precedent): the delegate hook owns BOTH network rounds, so the second
-round's zip read is just more delegate I/O, not a new executor phase. The whole tool's
-bespoke body lives here as the delegate:
+The ACTIVE mode's second round reads a zipped shapefile inside its archive by range
+request -- I/O no pure enrich hook could carry -- so BOTH network rounds are the
+delegate's, and the second round is simply more delegate I/O."""
 
-  * ``storm_tracks.validate`` (delegate_validate) -- the historical-mode bbox-required
-    gate + geometry / storm_name shape checks the declarative param surface cannot
-    express (bbox is required for historical, OPTIONAL for active), raised pre-cache /
-    pre-network as a ``StormTracksInputError``.
-  * ``storm_tracks.resolve`` (pre_resolve) -- canonicalize ``storm_name`` (upper) and
-    resolve the historical season window (default = the last 3 seasons) BEFORE
-    read_through so the resolved years enter the cache key (a default-year request is
-    deterministic per day and refreshes yearly, the twin's contract).
-  * ``storm_tracks.read`` (delegate) -- branch on ``active_only``: HISTORICAL subsets
-    the IBTrACS v04r01 archive (basin CSV -> storm-wise full-track selection -> line /
-    point features); ACTIVE resolves NHC CurrentStorms.json then, per storm, fetches
-    the ``forecastTrack.zipFile`` archive's ``*_pts`` layer in place, reads it
-    via geopandas, and reprojects to EPSG:4326. Returns GeoJSON features for the shared
-    ``vector_fgb`` serializer, and RECORDS the fetch-time mode provenance.
-  * ``storm_tracks.envelope`` -- the twin's exact ``storm-tracks-{seed}`` layer_id +
-    ``Storm tracks - <mode> (<scope>)`` name, plus the mode / storm-attribution
-    provenance read back from the channel (declared defaults on a pre-channel cache
-    object).
-
-The ``StormTracks*Error`` classes live HERE (their stable importable home now that the
-coded twin is deleted). Their base is ``FetchError`` so ``library_delegate.invoke``
-passes them through unchanged (its ``except FetchError: raise`` passthrough),
-preserving the pinned ``error_code`` through the delegate wrapper.
-"""
+# ``validate`` carries the shape checks the declarative param surface cannot express:
+# bbox is REQUIRED for historical and optional for active, plus the geometry and
+# storm-name checks, raised pre-cache and pre-network.
+#
+# ``resolve`` canonicalizes the storm name and resolves the historical season window,
+# defaulting to the last three seasons, BEFORE read_through, so the resolved years enter
+# the cache key: a default-year request is deterministic per day and refreshes yearly.
+#
+# ``read`` branches on ``active_only``. Historical subsets the archive basin CSV into
+# storm-wise full tracks; active resolves the current-storms index, then per storm reads
+# the forecast-track archive's points layer in place and reprojects it. It also RECORDS
+# the fetch-time mode provenance, which ``envelope`` replays.
+#
+# The ``StormTracks*Error`` classes live HERE, and their base is ``FetchError`` so the
+# delegate wrapper's passthrough preserves each pinned ``error_code``.
 
 from __future__ import annotations
 
@@ -113,7 +98,7 @@ class StormTracksNoActiveStormsError(StormTracksError):
 
 
 # ---------------------------------------------------------------------------
-# Constants (twin-identical).
+# Constants.
 # ---------------------------------------------------------------------------
 
 #: IBTrACS v04r01 points-CSV base URL (NOAA NCEI).
@@ -583,14 +568,9 @@ def _fetch_forecast_track_points(
     zip_url: str,
     storm: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Best-effort: NHC 5-day forecast-track zipped shapefile -> point records.
-
-    The archive publishes three shapefiles per advisory - the track line, the
-    cone polygon and the forecast points - and the points are this leg. GDAL reads
-    the member inside the remote zip by range request, so nothing is downloaded
-    whole and nothing is extracted. Any failure returns ``[]`` (the caller degrades
-    to current-position-only, never fabricates).
-    """
+    """Best-effort read of the forecast-track points out of the advisory's zipped
+    shapefile, the member read in place by range request so nothing is downloaded whole.
+    Any failure returns ``[]``, and the caller degrades to the current position."""
     try:
         import pyogrio
     except ImportError:
@@ -932,7 +912,7 @@ def read_storm_tracks(
 
 
 # ---------------------------------------------------------------------------
-# HOOK: envelope -- twin layer_id/name + mode provenance (channel replay).
+# HOOK: envelope -- layer_id, name and the mode provenance replayed from the channel.
 # ---------------------------------------------------------------------------
 
 
@@ -944,7 +924,7 @@ def envelope_storm_tracks(
     data: bytes | None,
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build the twin's exact layer_id / name + the mode-provenance fields."""
+    """Build the layer_id and name, plus the mode-provenance fields."""
     active_only = bool(params.get("active_only", False))
     name_canon = params.get("storm_name")
     if isinstance(name_canon, str):
@@ -952,7 +932,7 @@ def envelope_storm_tracks(
     else:
         name_canon = None
 
-    # Reconstruct the twin's params-hash seed (deterministic from validated params).
+    # Reconstruct the params-hash seed, deterministic from the validated params.
     if active_only:
         seed_params: dict[str, Any] = {
             "mode": "active",

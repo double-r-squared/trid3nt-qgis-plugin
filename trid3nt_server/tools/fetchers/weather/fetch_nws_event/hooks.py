@@ -1,20 +1,13 @@
-"""nws_event hooks (tier-3 hook wave): NWS active alerts -> alert polygons.
+"""nws_event hooks: NWS active alerts as alert polygons.
 
-The one irreducible step: the ``api.weather.gov/alerts/active`` request
-construction (canonicalize the ``area`` string to a 2-letter state code or a
-5-digit county FIPS, then build the ``?area=&status=&message_type=&event=...``
-query) and the GeoJSON FeatureCollection decode (project each alert to the
-preserved NWS property set, JSON-coerce nested props, drop the geometry-less
-zone-only alerts pyogrio cannot write). Transport / retry / cache / FGB serialize
-/ LayerURI stay router-owned.
+The one irreducible step is the request construction -- canonicalizing the area string
+to a 2-letter state code or a 5-digit county FIPS, then building the query -- and the
+FeatureCollection decode."""
 
-The twin's ``area`` accepted a bbox tuple too (converted to a point center), but
-the tool schema collapses ``str | tuple`` to ``str`` (adapter
-_simplify_annotation), so the bbox-tuple path was already unreachable from the
-agent; the hook carries the STRING canonicalization only (documented divergence).
-Empty result -> a header-only FGB (the twin's behaviour), never an
-honest-empty typed error.
-"""
+# The decode projects each alert to the preserved property set, JSON-coerces the nested
+# props, and DROPS the geometry-less zone-only alerts the writer cannot write. An empty
+# result is a header-only FGB, not a typed empty. ``area`` is a string only: the tool
+# schema collapses a union to str, so a bbox tuple could never reach here anyway.
 
 from __future__ import annotations
 
@@ -37,7 +30,7 @@ NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
 #: state code via zone lookup).
 _FIPS_PATTERN = re.compile(r"^\d{5}$")
 
-#: Properties preserved from each NWS alert feature (the twin's exact set).
+#: Properties preserved from each NWS alert feature.
 _PRESERVED_PROPERTIES = (
     "event", "headline", "description", "severity", "urgency", "certainty",
     "effective", "onset", "ends", "expires", "senderName", "sender",
@@ -47,12 +40,9 @@ _PRESERVED_PROPERTIES = (
 
 
 def _canonicalize_area(sc: str, sfx: str, area: Any) -> str:
-    """Reduce the ``area`` string to the NWS ``?area=`` value (state code or FIPS).
-
-    Accepts a 2-letter state/marine-zone code, a 5-digit county FIPS, or a full
-    state/territory name (resolved to its 2-letter code). An unrecognized value
-    is a source-stamped input error.
-    """
+    """Reduce the ``area`` string to the query's own value: a 2-letter state or
+    marine-zone code, a 5-digit county FIPS, or a full state name resolved to its code.
+    An unrecognized value is a source-stamped input error."""
     s = str(area).strip().upper()
     if _FIPS_PATTERN.match(s):
         return s
@@ -121,7 +111,7 @@ def parse_response(
             continue
         geom = feat.get("geometry")
         # NWS zone-based alerts (statewide watches) carry NULL geometry; pyogrio
-        # rejects them and they have no map footprint -- drop them (the twin does).
+        # rejects them and they have no map footprint, so they are dropped.
         if geom is None:
             continue
         props = feat.get("properties") or {}

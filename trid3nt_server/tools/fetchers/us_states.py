@@ -71,8 +71,7 @@ _LEADING_NOISE = re.compile(r"^(?:the\s+)?(?:state\s+of\s+)?", re.IGNORECASE)
 
 def resolve_state_code(text: str) -> str | None:
     """Resolve free-form state text to a 2-letter NWS area code, or ``None``.
-
-    Case-insensitive, whitespace-tolerant, and tolerant of a leading "state of ";
+    Case-insensitive, whitespace-tolerant and tolerant of a leading "state of ";
     anything unrecognized returns ``None`` rather than raising."""
     if not isinstance(text, str):
         return None

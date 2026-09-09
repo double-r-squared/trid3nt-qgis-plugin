@@ -1,20 +1,12 @@
-"""airnow_air_quality hooks (tier-3 http_json/0065): EPA AirNow current-hour
-AQI observations (keyed).
+"""airnow_air_quality hooks: EPA AirNow current-hour AQI observations, keyed.
 
-A single bounded-box GET folds onto the EXISTING http_json main-fetch path, zero new
-machinery. ``build_request`` resolves the API key (api_key kwarg -> str secret_ref ->
-``TRID3NT_AIRNOW_API_KEY`` env -- the twin's headless path; AirNow is NOT in TOOL_PROVIDER,
-so this is byte-identical to the twin's runtime), validates the pollutant filter, and
-builds the ``aq/data`` query with the key injected. When NO key resolves it raises a
-credential-shaped ``AIRNOW_MISSING_KEY`` (``is_credential_shaped_error`` recognises the
-``_MISSING_KEY`` suffix, so the server still surfaces the NAME-ONLY credential card).
-``parse_response`` keeps the LATEST row per (lat, lon, parameter) and appends the derived
-AQI-category + parameter-name columns; an empty result is an honest header-only FGB.
+``build_request`` resolves the API key, validates the pollutant filter and builds the
+bounded-box query; ``parse_response`` keeps the LATEST row per (lat, lon, parameter) and
+appends the derived category and parameter-name columns."""
 
-The key is NEVER registered/required by this wave: the parity surface proved is the
-key-ABSENT typed error (byte-identical) + the input-validation errors. All I/O
-(the aq/data GET, retry, cache, FGB serialize) stays router-owned.
-"""
+# With NO key the build raises a credential-shaped ``AIRNOW_MISSING_KEY``: the
+# ``_MISSING_KEY`` suffix is what the surface recognizes to show a name-only credential
+# card rather than an opaque failure. An empty result is an honest header-only FGB.
 
 from __future__ import annotations
 

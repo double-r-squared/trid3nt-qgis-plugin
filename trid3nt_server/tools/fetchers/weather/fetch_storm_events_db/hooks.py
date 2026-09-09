@@ -1,16 +1,11 @@
-"""storm_events_db hooks (chained-resolution mode): NOAA Storm Events DB
-bulk-gzip-CSV behind an HTML directory index.
+"""storm_events_db hooks: NOAA Storm Events bulk CSV behind an HTML index.
 
-The bulk-file-behind-an-index shape retired here reuses the EXISTING resolve phase
- -- no new machinery. The index-scrape is the PHASE-R resolve: the router
-GETs the NCEI directory listing (``resolve_build``), and ``resolve_parse`` regex-scrapes
-it for the window's year(s), picks the newest processed-date file per year, and merges
-the resolved bulk-CSV URL(s) into ``params`` (pure regex over a router-fetched body,
-exactly like a JSON resolve_parse). The main fetch then GETs each gzip CSV
-(``build_request``), and ``parse_response`` decompresses, parses, filters, and
-synthesizes points. All I/O (the index GET, the bulk downloads, retry, cache, FGB
-serialize) stays router-owned; these hooks only compute.
-"""
+The index scrape IS the resolve phase: the router GETs the directory listing and the
+parse scrapes the window's years, picks the newest processed-date file per year, and
+merges the resolved bulk URLs into params."""
+
+# The main fetch then GETs each gzip CSV, and the parse decompresses, filters and
+# synthesizes points. Every round trip stays the router's; these hooks only compute.
 
 from __future__ import annotations
 

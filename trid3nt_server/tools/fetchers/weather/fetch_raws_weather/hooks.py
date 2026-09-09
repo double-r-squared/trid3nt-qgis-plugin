@@ -1,18 +1,14 @@
-"""raws_weather hooks (chained-resolution mode/0065): Iowa Mesonet RAWS
-fire-weather stations.
+"""raws_weather hooks: Iowa Mesonet RAWS fire-weather stations.
 
-The nested station x day observation shape folds onto the EXISTING resolve + enrich
-phases, zero new machinery. PHASE R (``resolve_build`` / ``resolve_parse``) is the
-multi-state RAWS discovery: the router GETs the per-state DCP network GeoJSON for
-every state overlapping the bbox, and ``resolve_parse`` keeps the RAWS-named stations
-and merges them + the resolved date window into ``params`` (pre-cache-key, so the
-now-relative default window enters the cache key -- the twin's contract). The MAIN
-FETCH is a no-op (``build_request`` returns ``[]``; ``parse_response`` synthesizes one
-station feature per resolved station). PHASE E (``enrich_plan`` / ``enrich_merge``) is
-the per-station-per-day obhistory matrix: best-effort, deduped, bounded; ``enrich_merge``
-EXPANDS the station features into one point per observation row (a station with no
-obs contributes no rows; all-empty -> RAWS_WEATHER_EMPTY). All I/O stays router-owned.
-"""
+PHASE R discovers stations across every state overlapping the bbox and merges them, with
+the resolved date window, into params pre-cache-key, so a now-relative default window
+still enters the cache key."""
+
+# The MAIN FETCH is a no-op: the build returns no plan and the parse synthesizes one
+# feature per resolved station. PHASE E is the per-station-per-day observation matrix,
+# best-effort, deduped and bounded, and the merge EXPANDS each station into one point
+# per observation row. A station with no observations contributes no row, and every
+# station empty raises the typed empty error.
 
 from __future__ import annotations
 
@@ -92,7 +88,7 @@ def _parse_date(sc: str, s: str, field: str) -> _date:
 
 
 def _resolve_dates(sc: str, params: dict[str, Any]) -> tuple[_date, _date]:
-    """Parse + default + gate the date window (the twin's body contract)."""
+    """Parse, default and gate the date window."""
     today = datetime.now(timezone.utc).date()
     end_raw = params.get("end_time")
     end_d = today if end_raw is None else _parse_date(sc, str(end_raw), "end_time")

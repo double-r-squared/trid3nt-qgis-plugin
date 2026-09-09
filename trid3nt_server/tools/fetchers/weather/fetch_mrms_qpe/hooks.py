@@ -1,16 +1,12 @@
-"""mrms_qpe hooks (grib_object + resolve phase): NOAA MRMS MultiSensor
-QPE gauge-corrected precipitation, a whole-object ``.grib2.gz`` behind an S3 key.
+"""mrms_qpe hooks: NOAA MRMS gauge-corrected precipitation behind an object key.
 
-The MRMS key is discovered by an S3 list-objects walk -- ``latest`` (newest file in
-the most-recent date directory) or a targeted ``valid_time`` (the nearest-earlier
-published hour within a 24 h walkback). Both fit the SINGLE-round resolve phase
-: ``resolve_build`` emits the candidate list-object probes (all return
-HTTP 200 with-or-without the key, never a 404), the router GETs them, and
-``resolve_parse`` scrapes the ``<Key>`` set + picks the resolved key, merging it into
-``params`` PRE-cache-key. The main fetch is the ``grib_object`` raster access mode
-(whole-object GET + gunzip + GRIB decode + window + sentinel-nodata). These hooks are
-PURE: the router owns every round trip, the transport, the cache, and the COG serialize.
-"""
+The key is discovered by a list-objects walk -- the newest file in the most-recent date
+directory, or the nearest-earlier published hour within a 24 h walkback -- and merged
+into params PRE-cache-key. These hooks are PURE: the router owns every round trip."""
+
+# ``resolve_build`` emits the candidate list-object probes, which return HTTP 200 with
+# or without a key and never a 404, and ``resolve_parse`` scrapes the key set and picks
+# the resolved one. The main fetch is then the ordinary whole-object GRIB access mode.
 
 from __future__ import annotations
 
@@ -28,7 +24,7 @@ __all__ = ["resolve_build", "resolve_parse"]
 _QPE_PASS = "Pass2"
 _KEY_RE = re.compile(r"<Key>([^<]+\.grib2\.gz)</Key>")
 
-#: user-facing accumulation -> canonical S3 product token (the twin's alias map).
+#: user-facing accumulation -> canonical product token.
 _ACCUM_ALIAS_MAP: dict[str, str] = {
     "1h": "01H", "3h": "03H", "6h": "06H", "12h": "12H",
     "24h": "24H", "48h": "48H", "72h": "72H",
@@ -36,18 +32,17 @@ _ACCUM_ALIAS_MAP: dict[str, str] = {
     "24H": "24H", "48H": "48H", "72H": "72H",
 }
 
-#: number of trailing date directories the latest walk lists (Pass2 lags ~2 h, so
-#: the newest file is within today or yesterday UTC); the twin lists ALL date
-#: prefixes then the newest date's files -- listing the last two date dirs + picking
-#: the max key resolves the identical latest file in the normal case ((a)).
+#: number of trailing date directories the latest walk lists. The gauge-corrected pass
+#: lags about 2 h, so the newest file is within today or yesterday UTC, and listing the
+#: last two date directories then picking the max key resolves it.
 _LATEST_DATE_DIRS = 2
 
-#: targeted-mode walkback ceiling (hours), the twin's 24 h nearest-earlier probe.
+#: targeted-mode walkback ceiling in hours for the nearest-earlier probe.
 _WALKBACK_HOURS = 24
 
 
 def _normalize_accumulation(spec: SourceSpec, accumulation: Any) -> str:
-    """Canonicalize a user accumulation ('24h'/'24H'/...) or raise (twin parity)."""
+    """Canonicalize a user accumulation ('24h', '24H', ...) or raise."""
     canonical = _ACCUM_ALIAS_MAP.get(str(accumulation))
     if canonical is None:
         raise router_input_error(

@@ -1,24 +1,17 @@
-"""fetch_aorc_precip record hook: NOAA AORC v1.1 hourly precipitation.
+"""fetch_aorc_precip record hook: NOAA AORC hourly precipitation.
 
-The Analysis Of Record for Calibration (AORC) v1.1 is a ~800 m (30 arc-second)
-gridded, hourly CONUS weather record spanning 1979-02 to ~10 days before present,
-published as per-year cloud-optimized Zarr stores on the public AWS bucket
-``noaa-nws-aorc-v1-1-1km`` (us-east-1, anonymous). Total precipitation is the
-``APCP_surface`` variable (kg m-2 == mm, one-hour accumulation ending at the top
-of each hour).
+The deliverable is an AREA-MEAN HYETOGRAPH -- the hourly series averaged over the bbox,
+plus the window accumulation stats -- as a bare JSON record rather than a renderable
+layer, so the hook OWNS the Zarr socket."""
 
-Deliverable: an AREA-MEAN HYETOGRAPH -- the hourly precipitation series averaged
-over the request bbox (the rain-on-grid forcing series for a small basin) plus the
-window accumulation stats. It is a bare structured JSON dict (``shape: record``),
-not a renderable layer, so the router runs this hook through the pure-record path
-(no build_request) and the hook OWNS the Zarr socket (the sanctioned library
-impurity, mirroring the library_delegate rasters). ``_open_year`` is the single
-injectable I/O seam so the windowing / mean / dict-shaping logic is unit-tested
-offline against a synthetic xarray Dataset.
-
-AORC complements ``fetch_mrms_qpe`` (MRMS QPE Pass2 begins ~2020-10): AORC is the
-pre-2020 / any-historical-year precipitation forcing MRMS cannot reach.
-"""
+# The record is a ~800 m gridded hourly CONUS analysis published as per-year
+# cloud-optimized Zarr stores on a public anonymous bucket, spanning 1979 to about ten
+# days before present; total precipitation is a one-hour accumulation ending at the top
+# of each hour, in mm. That reach is what makes it the pre-2020 and any-historical-year
+# forcing a radar QPE product cannot supply.
+#
+# ``_open_year`` is the single injectable I/O seam, so the windowing, the mean and the
+# dict-shaping are unit-tested offline against a synthetic dataset.
 
 from __future__ import annotations
 
@@ -48,12 +41,9 @@ _COVERAGE_START = _dt.date(1979, 2, 1)
 
 
 def _open_year(year: int) -> Any:
-    """Open one AORC year Zarr store as an xarray Dataset (anonymous S3).
-
-    The single injectable I/O seam: tests monkeypatch this to return a synthetic
-    Dataset so the windowing / mean / dict logic runs offline. Any library failure
-    propagates; ``build_record`` maps it to a typed upstream error.
-    """
+    """Open one year's Zarr store as an xarray Dataset. The single injectable I/O seam,
+    so the windowing, mean and dict logic run offline against a synthetic Dataset. A
+    library failure propagates, to be mapped to a typed upstream error."""
     import s3fs
     import xarray as xr
 
@@ -74,13 +64,9 @@ def _open_year(year: int) -> Any:
 
 
 def _bbox_subset(da: Any, w: float, s: float, e: float, n: float) -> Any:
-    """Select the bbox cells; snap to the nearest single cell when the slice is empty.
-
-    AORC latitude/longitude are ascending, so ``slice(low, high)`` selects the
-    intersecting cells. A bbox narrower than the ~0.0083 deg grid that falls
-    between cell centres yields an empty slice; fall back to the nearest cell so a
-    point-scale AOI still returns a series.
-    """
+    """Select the bbox cells, snapping to the NEAREST single cell when the slice comes
+    back empty: a bbox narrower than the grid that falls between cell centres selects
+    nothing, and a point-scale AOI should still return a series."""
     sub = da.sel(longitude=slice(w, e), latitude=slice(s, n))
     if sub.sizes.get("latitude", 0) == 0 or sub.sizes.get("longitude", 0) == 0:
         sub = da.sel(
@@ -93,14 +79,9 @@ def _bbox_subset(da: Any, w: float, s: float, e: float, n: float) -> Any:
 def build_record(
     spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 ) -> dict[str, Any]:
-    """Build the AOI-mean hyetograph + accumulation record over the request window.
-
-    Pure-record path: ``bodies`` is empty; the hook opens each spanned AORC year
-    store, selects the bbox + time window, averages over space into the hourly
-    hyetograph, and sums to the window accumulation. Raises the source's typed
-    NOT_AVAILABLE (window outside coverage), EMPTY (no hours in window), or UPSTREAM
-    (Zarr/S3 failure) errors -- never a fabricated success.
-    """
+    """Build the AOI-mean hyetograph and accumulation over the request window: open each
+    spanned year, select the bbox and window, average over space, sum. A window outside
+    coverage, an empty one, or a store failure each raise their own typed error."""
     import numpy as np
 
     sc = spec.error_code_prefix
