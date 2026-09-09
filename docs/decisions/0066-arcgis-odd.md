@@ -1,5 +1,11 @@
 # 0066 - arcgis-odd: the wave-11 ArcGIS deferrals fold onto the EXISTING hooks
 
+PARTLY SUPERSEDED (2026-09-09, `12c8471e`): `ingest.chained.tolerate_page_error` and
+the fema_nfhl_zones OBJECTID cursor it served are gone. The flag's whole purpose was to
+return the pages so far when a later one failed, and that partial is the failure the
+object-id read replaces - measured, the cursor returned 6,000 of the 9,894 polygons the
+service counts over a Tampa Bay bbox. The rest of this ADR stands.
+
 Context: ADR 0059 (wave-11) DEFERRED six ArcGIS-family twins with per-source
 STOP-RULE evidence, each judged to need a NEW mode/primitive the router did not yet
 have: fema_nfhl_zones (OBJECTID-cursor paging vs the resultOffset-only executor +
