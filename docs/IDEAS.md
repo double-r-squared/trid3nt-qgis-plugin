@@ -4373,3 +4373,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   size, composites, outputs and a link into the keyword lookup. One
   generator script over the template registry (an instrument), run at
   every acceptance beside the packet renderer. In the docs wave.
+  TEMPLATE DOCS, THE MODFLOW 6 EXAMPLES NOTE (NATE 2026-09-09):
+  REPRODUCTION IS THE DOCUMENT - each MODFLOW 6 example is a script
+  that builds, runs and plots; its page is generated from the script
+  with the parameter table of every value used, the figures it drew,
+  and the script as the recipe. Ours: each template page carries THE
+  SHEET OF THE PROVING RUN as the parameter table (every filled slot,
+  value, provenance; engine defaults folded), a REPRODUCE block (the
+  exact fill/run invocation with run id and commit), the figures with
+  captions under the freshness rule, and the proving runs double as
+  the regression set (the canaries). In the docs wave's generator.
