@@ -1,17 +1,8 @@
 """viirs_day_fire frames hooks: the JPSS/VIIRS Day Fire polar animation.
 
-Folds fetch_viirs_day_fire onto the frames-list output shape (shape:
-animation_frames). The router owns the per-frame read_through loop + honesty floor +
-LayerURI emission; these two hooks own the source-specific steps:
-
-- ``frames_plan`` -- resolve the SLIDER jpss overpass index (the merged
-  multi-satellite pass set), window + day-filter (local-solar-time) + merge/sort +
-  cap, and build the ordered per-frame plans labelled with the REAL irregular pass
-  times.
-- ``frame_bytes`` -- stitch + reproject ONE VIIRS overpass -> RGB COG.
-
-ASCII only.
-"""
+``frames_plan`` resolves the overpass index, windows and day-filters it by local solar
+time, merges, sorts and caps it into ordered plans labelled with the REAL irregular pass
+times; ``frame_bytes`` stitches and reprojects ONE overpass."""
 
 from __future__ import annotations
 
@@ -51,7 +42,7 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Constants (carried verbatim from the fetch_viirs_day_fire twin).
+# Constants.
 # --------------------------------------------------------------------------- #
 
 #: Conceptual JPSS satellite subsets. 'all' = the merged SLIDER jpss pass list.

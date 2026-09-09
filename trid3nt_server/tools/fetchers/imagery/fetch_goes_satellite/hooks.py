@@ -1,32 +1,17 @@
-"""GOES ABI single-band imagery delegate hooks: the ``fetch_goes_satellite`` fold.
+"""GOES ABI single-band imagery delegate hooks.
 
-``fetch_goes_satellite`` folds onto the router as a ``library_delegate`` RASTER source
-(``ingest.access: library_delegate``): the delegate owns the S3-listing + netCDF socket
-and returns ``(array, transform, crs)`` for the shared COG writer, exactly the dem /
-topobathy raster-delegate pattern. It is a THIRD GOES access surface distinct
-from the archive per-frame builder: a SINGLE-band float32 PHYSICAL-units COG with
-most-recent-frame semantics (no window) and a 15-minute ``valid_time`` cache rounding.
-The bespoke body the declarative surface cannot express lives here as four hooks:
+The delegate owns the listing and the netCDF socket and returns ``(array, transform,
+crs)`` for the shared COG writer. A SINGLE-band float32 PHYSICAL-units COG with most-
+recent-frame semantics and a 15-minute ``valid_time`` cache rounding."""
 
-  * ``goes_satellite.validate`` (delegate_validate) -- bbox-required (the twin's exact
-    ``BBOX_REQUIRED`` code), band + satellite normalization, and the CONUS-sector
-    pre-gate (an honest fast-reject before the S3 round-trip), raised pre-cache.
-  * ``goes_satellite.resolve`` (pre_resolve) -- round ``valid_time`` DOWN to the nearest
-    15 minutes and normalize the satellite token, merged into params BEFORE read_through
-    so both enter the cache key (the twin's exact caching semantics: a same-band /
-    same-bbox fetch within the 15-min slot reuses the cached COG).
-  * ``goes_satellite.read`` (delegate) -- list the most-recent MCMIPC key, download the
-    netCDF, apply the per-band CF scale/offset, reproject to EPSG:4326 over the bbox, and
-    return ``(array, transform, crs)`` for the shared COG writer. RECORDS the fetch-time
-    scan provenance (satellite + scan-time) -- the scan-time is UNRECOVERABLE
-    from the COG on a cache hit, so the channel is what makes it durable.
-  * ``goes_satellite.envelope`` -- the twin's exact ``goes-{sat}-{band}-{lon}-{lat}``
-    layer_id + the ``GOES Satellite -- <label> (<SAT>)`` name (the display em-dash is
-    preserved byte-identical for parity note) + the scan provenance replay.
-
-The GOES typed errors are the shared ``_goes_common`` classes (base ``FetchError``, so
-``library_delegate.invoke`` passes the pinned ``error_code`` through unchanged).
-"""
+# The four hooks. ``validate`` refuses a missing bbox by name, normalizes the band and
+# satellite, and pre-gates the sector, an honest fast-reject before the round trip.
+# ``resolve`` rounds ``valid_time`` DOWN to the nearest 15 minutes and normalizes the
+# satellite token BEFORE read_through, so both enter the cache key and a same-band,
+# same-bbox fetch inside one slot reuses the cached COG. ``read`` lists the most-recent
+# key, downloads the netCDF, applies the per-band CF scale and offset, reprojects over
+# the bbox, and RECORDS the scan provenance, which is UNRECOVERABLE from the COG on a
+# cache hit. ``envelope`` builds the layer_id and name and replays that provenance.
 
 from __future__ import annotations
 
@@ -66,11 +51,11 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Constants (twin-identical).
+# Constants.
 # ---------------------------------------------------------------------------
 
 # Band-name -> CMI variable mapping in the MCMIPC netCDF (one variable per ABI
-# channel). Kept ASCII (the twin's inline micron/degree symbols were commentary).
+# channel). Kept ASCII: a micron or degree symbol here would be commentary.
 _BAND_TO_VARIABLE: dict[str, str] = {
     "visible": "CMI_C02",      # ABI band 2: 0.64 um "Red" -- reflectance
     "ir_window": "CMI_C13",    # ABI band 13: 10.35 um clean IR longwave -- BT
@@ -247,13 +232,9 @@ def _reproject_and_clip(
     bbox: tuple[float, float, float, float],
     target_res_deg: float = 0.02,
 ) -> tuple[Any, Any, str]:
-    """Reproject ``variable`` to EPSG:4326 over ``bbox``; return (array, transform, crs).
-
-    The twin's ``_reproject_and_clip`` but returning the ARRAY (not COG bytes) for the
-    shared ``array_to_cog_bytes`` writer (DEFLATE float32 NaN-nodata, byte-format
-    identical to the twin). CMI variables are scaled int16 with CF scale/offset/fill;
-    warp the raw int16 with a sentinel then apply scale/offset to float32 physical units.
-    """
+    """Reproject ``variable`` to EPSG:4326 over ``bbox``, returning the ARRAY for the
+    shared COG writer. A CMI variable is scaled int16, so the RAW int16 is warped with
+    a sentinel and the CF scale and offset applied after, to float32 physical units."""
     import numpy as np
     import rasterio
     from rasterio.transform import from_bounds
@@ -430,7 +411,7 @@ def read_goes_satellite(
 
 
 # ---------------------------------------------------------------------------
-# HOOK: envelope -- twin layer_id/name (em-dash preserved) + scan provenance.
+# HOOK: envelope -- layer_id, display name and the scan provenance.
 # ---------------------------------------------------------------------------
 
 
@@ -442,16 +423,13 @@ def envelope_goes_satellite(
     data: bytes | None,
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Override layer_id + name to the twin's exact forms + the scan provenance.
-
-    The display em-dash (U+2014) in the twin's name is preserved BYTE-IDENTICAL for
-    parity (note; the source file itself stays ASCII via the escape).
-    """
+    """Build the layer_id and display name, and replay the scan provenance. The display
+    name carries a typographic dash, written as an escape so this file stays ASCII."""
     band = str(params.get("band", "visible"))
     satellite = _normalize_satellite(str(params.get("satellite", "goes-19")))
     q_bbox = tuple(float(v) for v in params["bbox"])
     layer_label = _BAND_LABEL.get(band, band)
-    # Preserved twin display string (em-dash U+2014); ASCII source via the escape.
+    # The display string carries a typographic dash, written as an escape.
     name = f"GOES Satellite \u2014 {layer_label} ({satellite.upper()})"
     prov = provenance or {}
     return {

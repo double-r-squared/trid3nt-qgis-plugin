@@ -1,15 +1,7 @@
-"""GOES ABI shared SUBSTRATE: the satellite-identifier normalizer + the
-public-S3 listing / download primitives the whole GOES family shares.
+"""GOES ABI shared substrate: the satellite normalizer and the public-S3 primitives.
 
-Relocated here from the deleted ``fetch_goes_satellite`` coded twin (which folded onto
-the router as a ``library_delegate`` spec). These low-level helpers have NO registered
-tool and NO dependency on the router / read_through / slider stitch, so they live in
-this leaf substrate and every GOES consumer imports FROM here:
-``hooks/goes_satellite`` (the fold), ``_goes_archive_core`` (the animation substrate),
-and ``hooks/goes_archive`` / ``hooks/goes_animation`` / ``hooks/glm`` (the frame hooks).
-This mirrors the move that relocated the archive-animation twin's body into
-``_goes_archive_core``. ASCII only.
-"""
+Low-level helpers with NO registered tool and no dependency on the router, the cache or
+the stitch, so every GOES consumer imports them from this leaf."""
 
 from __future__ import annotations
 
@@ -54,27 +46,18 @@ __all__ = [
 
 
 class GOESError(FetchError):
-    """Base class for GOES satellite failures.
-
-    ``error_code`` maps to the WebSocket A.6 error frame emitted by the
-    agent surface. ``retryable`` guides retry logic. Base is
-    ``FetchError`` (still a ``RuntimeError``, so ``isinstance`` holds) so the
-    pinned ``error_code`` survives ``library_delegate.invoke``'s passthrough
-    when the ``fetch_goes_satellite`` delegate raises it.
-    """
+    """Base class for GOES satellite failures: ``error_code`` is the stable wire code
+    and ``retryable`` guides the retry decision. The base is ``FetchError``, so a
+    pinned code survives the delegate wrapper's passthrough."""
 
     error_code: str = "GOES_SATELLITE_ERROR"
     retryable: bool = True
 
 
 class GOESBboxRequiredError(GOESError):
-    """``bbox`` was None or otherwise missing.
-
-    Required because the full ABI fixed-grid CONUS rasters are ~50MB
-    uncompressed per band; allowing ``bbox=None`` would make the tool a
-    foot-gun for both the agent (paying egress + cache-write cost) and
-    the user (unintended global queries).
-    """
+    """``bbox`` was None or otherwise missing. It is required because a full fixed-grid
+    CONUS raster is around 50 MB uncompressed per band, so an unbounded request costs
+    egress and a cache write for an area nobody asked about."""
 
     error_code = "BBOX_REQUIRED"
     retryable = False
@@ -143,29 +126,14 @@ _GOES_WEST = "goes-18"  # operational West (was goes-17)
 
 
 def _normalize_satellite(satellite: str) -> str:
-    """Map any accepted human/LLM satellite spelling to the canonical token.
+    """Map any accepted satellite spelling to the canonical lowercase-hyphenated token
+    that keys the bucket and filename tables. An unrecognized token fails LOUD, listing
+    the accepted forms, rather than reaching a silent 404 or an empty fetch."""
 
-    The canonical token is the lowercase-hyphenated form ("goes-19") that keys
-    ``_SATELLITE_BUCKETS`` / ``_SATELLITE_FILENAME_CODE``. This is the fix for
-    the "goes18 vs goes-18" identifier-format bug class: the AWS bucket spelling
-    glues the digits ("noaa-goes18") while humans and LLM prompts write a zoo of
-    forms -- "GOES-18", "GOES 18", "goes18", "G18", "GOES-East", "west", or a
-    bare "18". All of those normalize here, case- and hyphen-insensitive, BEFORE
-    the allow-list check, so a recognized bird is accepted and an unrecognized
-    token fails LOUD (typed ``GOESInputError`` listing the accepted forms) --
-    never a silent 404, empty fetch, or hallucinated success.
-
-    Accepted forms (any case, hyphen/space/underscore-insensitive):
-      - canonical: ``goes-16`` .. ``goes-19``
-      - glued / spaced: ``goes18``, ``GOES 18``, ``GOES_18``
-      - filename code: ``G18`` .. ``G19``
-      - bare number: ``18``, ``19`` (assumed GOES-NN)
-      - directional: ``goes-east``/``east`` -> current East (goes-19),
-        ``goes-west``/``west`` -> current West (goes-18)
-
-    Raises:
-        ``GOESInputError``: if ``satellite`` is not a recognized form.
-    """
+    # The bucket spelling GLUES the digits while callers write a zoo of forms:
+    # canonical goes-16 through goes-19, glued or spaced, the G18-style filename code, a
+    # bare number, or a direction (east and west resolving to the current birds). All
+    # normalize here, case- and separator-insensitive, BEFORE the allow-list check.
     if not isinstance(satellite, str):
         raise GOESInputError(
             f"satellite must be a string; got {type(satellite).__name__}; "
@@ -209,11 +177,8 @@ _KEY_START_TIME_RE = re.compile(r"_s(\d{14})_")
 
 
 def _doy_hour(when: datetime) -> tuple[int, int, int]:
-    """Return ``(year, doy, hour)`` in UTC for ``when``.
-
-    NOAA Big-Data Program GOES keys are partitioned
-    ``ABI-L2-MCMIPC/<year>/<doy>/<hour>/...``.
-    """
+    """Return ``(year, doy, hour)`` in UTC for ``when``, the three levels the archive
+    keys are partitioned by."""
     from datetime import timezone
 
     if when.tzinfo is None:
@@ -230,12 +195,9 @@ def _list_keys_for_prefix(
     max_keys: int = 1000,
     session: requests.Session | None = None,
 ) -> list[str]:
-    """List S3 object keys under ``prefix`` in ``bucket`` via the public REST API.
-
-    Uses the unauthenticated ``?list-type=2`` endpoint (no boto3; the NOAA
-    buckets do not require signed requests). Returns up to ``max_keys`` keys
-    (one page; the GOES per-hour prefixes contain at most ~12 frames).
-    """
+    """List object keys under ``prefix`` through the unauthenticated list endpoint, since
+    the buckets require no signed request. Returns ONE page, up to ``max_keys``; a
+    per-hour prefix holds at most about a dozen frames."""
     url = (
         f"https://{bucket}.s3.amazonaws.com/"
         f"?list-type=2&prefix={prefix}&max-keys={max_keys}"
@@ -257,10 +219,8 @@ def _list_keys_for_prefix(
 
 
 def _download_to_tempfile(url: str, *, session: requests.Session | None = None) -> str:
-    """Stream-download ``url`` to a temp ``.nc`` file; return the path.
-
-    Caller is responsible for ``os.unlink``-ing the returned path.
-    """
+    """Stream-download ``url`` to a temp ``.nc`` file and return the path, which the
+    caller is responsible for unlinking."""
     sess = session or requests
     try:
         resp = sess.get(

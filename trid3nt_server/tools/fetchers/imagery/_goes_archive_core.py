@@ -1,10 +1,8 @@
-"""GOES raw-MCMIPC archive SUBSTRATE: the netcdf_cf_object per-frame
-core shared by the folded fetch_goes_archive_animation + fetch_goes_active_fire
-specs (via hooks/goes_archive.py) and by fetch_glm_lightning. Holds the S3 window
-listing, the CF scale/offset netCDF band read + reproject, the Fire-Temperature /
-true-color / hotspot composite math, and the per-frame COG builder. Pure helpers +
-typed errors ONLY -- no registered tool (the two tools are spec-driven). ASCII only.
-"""
+"""GOES raw-archive substrate: the per-frame netCDF core.
+
+Holds the object-window listing, the CF scale and offset band read with its reproject,
+the Fire-Temperature, true-colour and hotspot composite math, and the per-frame COG
+builder. Pure helpers and typed errors only; no registered tool."""
 
 from __future__ import annotations
 
@@ -187,9 +185,8 @@ TRUE_COLOR_GREEN_COEFFS = (0.45, 0.10, 0.45)
 #     fire pixel's 3.9um runs 10-60+ K hotter than its 11um. Tunable UP (e.g.
 #     15-20 K) to demand a stronger, less-ambiguous fire signal.
 #
-# These two gates together are the self-contained raster detector the kickoff
-# requires (FIRMS is a separate VECTOR cross-reference, not needed for this
-# raster product). Overridable via env for box-side tuning.
+# These two gates together are the self-contained raster detector: a separate vector
+# fire product is a cross-reference, not an input here. Overridable via env.
 
 #: The DETECTION bands: the shortwave window C07 (3.9um BT) plus a longwave window
 #: band. Both are CMI brightness-temperature bands in the SAME MCMIPC netCDF the
@@ -284,15 +281,12 @@ _BAND_ALIASES: dict[str, str] = {
 
 
 def _resolve_res_deg(band: str, true_color_res_deg: float | None) -> float:
-    """Pick the output cell size (degrees) for ``band``.
+    """Pick the output cell size in degrees for ``band``."""
 
-    The thermal/fire products (``fire_temperature`` / ``fire_hotspots`` /
-    ``fire_baked``) ALWAYS use ``_OUT_RES_DEG`` (0.02 deg ~2 km) -- the C07/C13
-    bands are 2 km native, so a finer grid would only upsample. ``true_color``
-    uses the caller override when given, else the finer ``_TRUE_COLOR_RES_DEG``
-    (~0.5 km) so the 0.5 km native C02 detail survives. Keeping the thermal bands
-    pinned to ``_OUT_RES_DEG`` is what makes the existing products byte-identical.
-    """
+    # The thermal and fire products ALWAYS use ``_OUT_RES_DEG`` (~2 km): the C07 and C13
+    # bands are 2 km native, so a finer grid would only upsample. ``true_color`` takes
+    # the caller's override, else the finer ``_TRUE_COLOR_RES_DEG`` (~0.5 km), so the
+    # 0.5 km native C02 detail survives.
     if band == "true_color":
         if true_color_res_deg is None:
             return _TRUE_COLOR_RES_DEG
@@ -313,11 +307,9 @@ def _resolve_res_deg(band: str, true_color_res_deg: float | None) -> float:
 
 
 def _parse_utc(value: Any) -> datetime:
-    """Parse an ISO-8601 (or 'YYYY-MM-DD HH:MM') string / datetime -> aware UTC.
-
-    Accepts a trailing 'Z', '+00:00', a space or 'T' separator, and a bare date.
-    Raises ``GOESArchiveInputError`` for an unparseable value.
-    """
+    """Parse an ISO-8601 string or datetime to aware UTC, accepting a trailing 'Z' or
+    '+00:00', a space or 'T' separator, and a bare date. An unparseable value raises
+    ``GOESArchiveInputError``."""
     if isinstance(value, datetime):
         dt = value
         return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
@@ -344,12 +336,9 @@ def _parse_utc(value: Any) -> datetime:
 
 
 def _key_start_datetime(key: str) -> datetime | None:
-    """Parse the ``_s<YYYYDOYHHMMSSf>`` start-time of an MCMIPC key -> aware UTC.
-
-    The ABI naming convention is ``_s`` + 4-digit year + 3-digit day-of-year +
-    2-digit hour + 2-digit minute + 2-digit second + 1-digit tenth-of-second
-    (14 digits total). Returns ``None`` if the key has no recognizable start-time.
-    """
+    """Parse the ``_s<YYYYDOYHHMMSSf>`` start time of an MCMIPC key to aware UTC: the
+    ABI convention is 4-digit year, 3-digit day-of-year, hour, minute, second and a
+    tenth. A key with no recognizable start time returns ``None``."""
     m = _KEY_START_TIME_RE.search(key)
     if not m:
         return None
@@ -380,13 +369,9 @@ def _iso_z(dt: datetime) -> str:
 
 
 def _select_window_keys(keys: list[str], cap: int = MAX_ARCHIVE_FRAMES) -> list[str]:
-    """Even-subsample an ASCENDING list of keys down to ``cap``, endpoints kept.
-
-    Mirrors ``fetch_goes_animation._select_frame_indices`` /
-    ``postprocess_flood._select_frame_time_indices``: when ``len(keys) <= cap`` the
-    list is returned unchanged; otherwise an even ``linspace`` (rounded + unique)
-    keeps the first + last and subsamples the middle. Logs a subsample. Pure.
-    """
+    """Even-subsample an ASCENDING list of keys down to ``cap``, keeping both endpoints.
+    At or under the cap the list is returned unchanged; over it, a rounded linspace
+    keeps the first and last and subsamples the middle."""
     n = len(keys)
     if n <= 0:
         return []
@@ -407,12 +392,9 @@ def _select_window_keys(keys: list[str], cap: int = MAX_ARCHIVE_FRAMES) -> list[
 
 
 def _hours_in_window(start_utc: datetime, end_utc: datetime) -> list[datetime]:
-    """Return every top-of-hour datetime whose hour overlaps [start, end] (UTC).
-
-    The MCMIPC S3 keys are partitioned by ``<YYYY>/<DOY>/<HH>/``; a frame at
-    HH:MM lives under the HH partition, so we must list every hour partition the
-    window touches (inclusive of the hour containing ``end_utc``).
-    """
+    """Every top-of-hour datetime whose hour overlaps [start, end] in UTC. The archive
+    keys are partitioned by hour and a frame at HH:MM lives under the HH partition, so
+    every partition the window touches must be listed, the end hour included."""
     start_h = start_utc.replace(minute=0, second=0, microsecond=0)
     out: list[datetime] = []
     cur = start_h
@@ -431,18 +413,9 @@ def _list_archive_keys_in_window(
     *,
     session: Any = None,
 ) -> list[tuple[datetime, str]]:
-    """List MCMIPC ``(start_time, key)`` pairs in [start, end] from the S3 archive.
-
-    Walks every ``ABI-L2-MCMIPC/<YYYY>/<DOY>/<HH>/`` partition the window touches
-    (JULIAN day-of-year key layout), parses each key's ``_s<...>`` start-time, and
-    keeps the ones with ``start_utc <= t <= end_utc``. Returns the pairs ORDERED
-    ASCENDING by start time. Reuses ``fetch_goes_satellite``'s anonymous
-    ``?list-type=2`` lister + ``_doy_hour``.
-
-    Raises:
-        ``GOESArchiveInputError``: unknown satellite.
-        ``GOESArchiveUpstreamError``: every probed hour partition failed.
-    """
+    """List ``(start_time, key)`` pairs inside [start, end], ORDERED ASCENDING, by
+    walking every hour partition the window touches. An unknown satellite is an input
+    error; every probed partition failing is an upstream error."""
     # Normalize any human/LLM spelling (GOES-18 / goes18 / G18 / "GOES West" / 18)
     # to the canonical "goes-NN" token BEFORE the bucket lookup; a truly-unknown
     # bird raises the shared loud typed error. (Belt-and-suspenders: this helper is
@@ -511,11 +484,9 @@ def _list_archive_keys_in_window(
 
 
 def _stretch_brightness_temp_red(bt_kelvin: Any) -> Any:
-    """Stretch a C07 brightness-temperature (K) array to [0,1] RED per the recipe.
-
-    Linear 273.15 K (0 C) -> 0.0, 333.15 K (60 C) -> 1.0, clipped to [0,1],
-    gamma 1 (no exponent). NaN -> 0.0 (transparent / no-data reads dark).
-    """
+    """Stretch a C07 brightness-temperature array to the RED channel: linear from
+    273.15 K to 333.15 K, clipped to [0, 1] at gamma 1. NaN reads 0.0, so no-data is
+    dark."""
     import numpy as np
 
     lo, hi = FIRE_TEMP_RED_KELVIN_RANGE
@@ -527,12 +498,8 @@ def _stretch_brightness_temp_red(bt_kelvin: Any) -> Any:
 
 
 def _stretch_reflectance(refl: Any, refl_max: float) -> Any:
-    """Stretch a reflectance (0..1 factor) array to [0,1] per ``refl_max``.
-
-    Linear 0.0 -> 0.0, ``refl_max`` -> 1.0, clipped to [0,1], gamma 1. NaN -> 0.0.
-    Used for GREEN (C06, refl_max=1.0 == 100 %) and BLUE (C05, refl_max=0.75 ==
-    75 %).
-    """
+    """Stretch a reflectance factor to [0, 1] linearly against ``refl_max``, clipped, at
+    gamma 1. NaN reads 0.0. GREEN uses a 100 % ceiling and BLUE a 75 % one."""
     import numpy as np
 
     arr = np.asarray(refl, dtype=np.float32)
@@ -548,18 +515,12 @@ def _fire_temperature_rgb(
     c06_reflectance: Any,
     c05_reflectance: Any,
 ) -> Any:
-    """Composite the Fire Temperature RGB from the three CF-scaled CMI band arrays.
+    """Composite the Fire Temperature RGB to a ``(3, H, W)`` uint8 array, band-first.
+    Inputs must already carry PHYSICAL units and be co-registered."""
 
-    R = C07 (3.9um) BT stretched 273.15-333.15 K.
-    G = C06 (2.2um) reflectance stretched 0-100 %.
-    B = C05 (1.6um) reflectance stretched 0-75 %.
-    Each channel clipped to [0,1], gamma 1, scaled to 0-255 uint8. Returns a
-    ``(3, H, W)`` uint8 array (band-first, the rasterio write order).
-
-    Inputs must already carry physical units (CF scale_factor/add_offset applied)
-    and be co-registered (same shape) -- the per-frame reproject upstream ensures
-    that. Pure function (the testable Fire-Temp core).
-    """
+    # R is the C07 3.9um brightness temperature stretched 273.15-333.15 K, G the C06
+    # 2.2um reflectance stretched to 100 %, B the C05 1.6um reflectance stretched to
+    # 75 %; each channel is clipped to [0, 1] at gamma 1 and scaled to 0-255.
     import numpy as np
 
     red = _stretch_brightness_temp_red(c07_bt_kelvin)
@@ -581,22 +542,14 @@ def _true_color_rgb(
     *,
     gamma: float = TRUE_COLOR_GAMMA,
 ) -> Any:
-    """Composite the daytime TRUE COLOR RGB from the visible CMI reflectance bands.
+    """Composite the daytime TRUE COLOR RGB to a ``(3, H, W)`` uint8 array, band-first.
+    Inputs must already carry PHYSICAL reflectance units and be co-registered; NaN
+    reads 0, so no-data is black."""
 
-    R = C02 (0.64um red) reflectance.
-    B = C01 (0.47um blue) reflectance.
-    synthetic GREEN = a*R + b*C03(0.86um veggie) + c*B (CIMSS ABI true-color
-        approximation; ``TRUE_COLOR_GREEN_COEFFS`` == (0.45, 0.10, 0.45)). The ABI
-        has no native green band, so green is synthesized from red/blue/NIR.
-    Each channel clipped to [0,1], gamma-stretched (default ~1/2.2 to brighten the
-    dim visible reflectances), scaled to 0-255 uint8. Returns a ``(3, H, W)`` uint8
-    array (band-first, the rasterio write order). NaN -> 0 (no-data reads black).
-    Pure function (the testable true-color core).
-
-    Inputs must already carry physical reflectance units (CF scale_factor/
-    add_offset applied) and be co-registered (same shape) -- the per-frame
-    reproject upstream ensures that.
-    """
+    # R is the C02 0.64um red and B the C01 0.47um blue. The ABI has NO native green
+    # band, so green is synthesized from red, the C03 0.86um veggie band and blue under
+    # ``TRUE_COLOR_GREEN_COEFFS``. Each channel is clipped to [0, 1], gamma-stretched to
+    # brighten the dim visible reflectances, and scaled to 0-255.
     import numpy as np
 
     red = np.nan_to_num(np.asarray(c02_red_refl, dtype=np.float32), nan=0.0)
@@ -630,23 +583,19 @@ def _detect_active_fire_mask(
     bt_c07_min_k: float = FIRE_BT_C07_MIN_K,
     bt_diff_min_k: float = FIRE_BT_DIFF_MIN_K,
 ) -> Any:
-    """Boolean active-fire mask from the C07 + longwave brightness-temp arrays.
+    """Boolean active-fire mask from the C07 and longwave brightness-temperature arrays.
+    NaN in either band yields False at that pixel, masked explicitly so the contract
+    does not rest on NaN comparison semantics."""
 
-    The STANDARD shortwave-vs-longwave fire discriminator (Matson & Dozier; the
-    MODIS/Giglio + GOES-R ABI FDC / WFABBA heritage). A pixel is flagged active
-    fire when BOTH gates pass:
-
-      1. ABSOLUTE: ``BT_C07 >= bt_c07_min_k`` -- the 3.9um is intrinsically hot.
-      2. DIFFERENCE: ``(BT_C07 - BT_longwave) >= bt_diff_min_k`` -- the 3.9um runs
-         far hotter than the 10.3um (a sub-pixel flame dominates the shortwave
-         while the longwave stays near ambient), which is what separates a true
-         fire from uniformly warm land/cloud (there C07 ~ C13 so the difference is
-         only a few K).
-
-    NaN in either band (no-data / off-disk) yields False at that pixel (a NaN
-    comparison is False, but we mask explicitly so the contract is unambiguous).
-    Returns a boolean ndarray the shape of the inputs. Pure function.
-    """
+    # The STANDARD shortwave-versus-longwave fire discriminator (Matson & Dozier, with
+    # the MODIS/Giglio and GOES-R ABI FDC heritage). A pixel is flagged only when BOTH
+    # gates pass:
+    #
+    #   1. ABSOLUTE: BT_C07 >= bt_c07_min_k -- the 3.9um is intrinsically hot.
+    #   2. DIFFERENCE: (BT_C07 - BT_longwave) >= bt_diff_min_k -- the 3.9um runs far
+    #      hotter than the 10.3um, because a sub-pixel flame dominates the shortwave
+    #      while the longwave stays near ambient. That is what separates a true fire
+    #      from uniformly warm land or cloud, where the two bands differ by a few K.
     import numpy as np
 
     c07 = np.asarray(c07_bt_kelvin, dtype=np.float32)
@@ -664,12 +613,8 @@ def _detect_active_fire_mask(
 
 
 def _hotspot_intensity_ramp(c07_bt_kelvin: Any) -> Any:
-    """Map a C07 brightness-temperature (K) array to a 0..1 fire-intensity ramp.
-
-    Linear ``FIRE_HOTSPOT_RAMP_KELVIN_RANGE`` (310 K -> 0.0, 350 K -> 1.0),
-    clipped to [0, 1]. Drives the orange -> yellow -> white hot ramp (hotter core
-    = whiter). NaN -> 0.0. Pure helper for ``_fire_hotspots_rgba``.
-    """
+    """Map a C07 brightness-temperature array to a 0..1 fire-intensity ramp, linear over
+    ``FIRE_HOTSPOT_RAMP_KELVIN_RANGE`` and clipped. NaN reads 0.0."""
     import numpy as np
 
     lo, hi = FIRE_HOTSPOT_RAMP_KELVIN_RANGE
@@ -680,17 +625,13 @@ def _hotspot_intensity_ramp(c07_bt_kelvin: Any) -> Any:
 
 
 def _hot_ramp_rgb(intensity: Any) -> tuple[Any, Any, Any]:
-    """Map a 0..1 fire-intensity array to (R, G, B) float arrays on a hot ramp.
+    """Map a 0..1 fire-intensity array to (R, G, B) float arrays in [0, 255] on a hot
+    ramp; the caller rounds to uint8."""
 
-    The ramp is orange (low) -> yellow (mid) -> white (high), a perceptually
-    fire-like sequence:
-      t in [0, 0.5]:  orange (255, 80, 0) -> yellow (255, 230, 0)
-      t in [0.5, 1]:  yellow (255, 230, 0) -> white (255, 255, 255)
-    R is pinned at 255 across the ramp (fire is always red-saturated); G climbs
-    from 80 -> 230 -> 255; B stays 0 until the top quarter then climbs to 255 so
-    only the very hottest cores whiten. Returns three float arrays in [0, 255]
-    (the caller rounds to uint8). Pure.
-    """
+    # The ramp runs orange at the low end to yellow at the middle to white at the top:
+    # R is pinned at 255 throughout, since fire is always red-saturated; G climbs 80 to
+    # 230 to 255; B stays 0 until the top quarter and then climbs to 255, so only the
+    # very hottest cores whiten.
     import numpy as np
 
     t = np.clip(np.asarray(intensity, dtype=np.float32), 0.0, 1.0)
@@ -717,17 +658,9 @@ def _fire_hotspots_rgba(
     bt_c07_min_k: float = FIRE_BT_C07_MIN_K,
     bt_diff_min_k: float = FIRE_BT_DIFF_MIN_K,
 ) -> Any:
-    """Build the TRANSPARENT RGBA fire-only isolation array.
-
-    Detects active fire (``_detect_active_fire_mask``), colors ONLY the flagged
-    pixels on the orange -> yellow -> white hot ramp (by C07 intensity), and sets
-    EVERY non-fire pixel fully transparent (alpha 0). Flagged pixels get alpha
-    255 (fully opaque fire color) so they bake cleanly over any base.
-
-    Returns a ``(4, H, W)`` uint8 array (band-first R, G, B, A -- the rasterio
-    write order). Pure function (the testable isolation core). The detection is
-    self-contained from the two BT bands (no FIRMS needed).
-    """
+    """Build the TRANSPARENT fire-only RGBA array: only detected pixels are coloured, on
+    the hot ramp by C07 intensity and at alpha 255 so they bake cleanly over any base,
+    and EVERY non-fire pixel is fully transparent."""
     import numpy as np
 
     mask = _detect_active_fire_mask(
@@ -747,18 +680,9 @@ def _fire_hotspots_rgba(
 
 
 def _bake_fire_over_base(base_rgb: Any, fire_rgba: Any) -> Any:
-    """Alpha-composite the fire-only RGBA OVER a 3-band base RGB -> one RGB array.
-
-    ``out = base*(1-a) + fire_rgb*a`` per channel, with ``a = fire_alpha/255``.
-    Where the fire alpha is 0 (every non-fire pixel) the base shows through
-    UNCHANGED; where the fire alpha is 255 (a detected fire pixel) the fire color
-    fully replaces the base. The result is an opaque 3-band RGB the user gets as
-    "fire baked onto the satellite image" -- one layer, no new style
-    (publish_layer's multiband passthrough renders the 3-band RGB directly).
-
-    ``base_rgb`` is ``(3, H, W)`` uint8; ``fire_rgba`` is ``(4, H, W)`` uint8.
-    Returns ``(3, H, W)`` uint8. Pure function.
-    """
+    """Alpha-composite a ``(4, H, W)`` fire RGBA over a ``(3, H, W)`` base RGB to one
+    opaque ``(3, H, W)`` RGB. Where the fire alpha is 0 the base shows through
+    UNCHANGED; where it is 255 the fire colour fully replaces it."""
     import numpy as np
 
     base = np.asarray(base_rgb, dtype=np.float32)
@@ -792,17 +716,15 @@ _DEFAULT_VALID_DN_RANGE = (0, 16383)
 
 
 def _band_valid_dn_range(ncvar: Any) -> tuple[int, int]:
-    """Return the ``(lo, hi)`` valid raw-DN range for a CMI band variable.
+    """The ``(lo, hi)`` valid raw-DN range for a CMI band variable, read off its own CF
+    ``valid_range`` and falling back to the 14-bit default only when that attribute is
+    absent or malformed."""
 
-    Reads the CF ``valid_range`` attribute -- which DIFFERS BY BAND: the
-    emissive/thermal C07 (3.9um) is a 14-bit product (``[0, 16383]``) while the
-    reflective C05/C06 are 12-bit (``[0, 4095]``). The Fire Temperature RED
-    channel is C07, so masking it with the 12-bit ``4095`` ceiling drops
-    essentially every warm-land pixel (a 320 K BT is DN ~9368) and the RED
-    channel reads 0 across the whole frame. Falls back to
-    ``_DEFAULT_VALID_DN_RANGE`` (14-bit) only when ``valid_range`` is absent or
-    malformed -- a wide fallback never masks real DN, where the narrow 4095 did.
-    """
+    # The range DIFFERS BY BAND: the emissive C07 is a 14-bit product while the
+    # reflective C05 and C06 are 12-bit. Masking C07 with the 12-bit ceiling drops
+    # essentially every warm-land pixel -- a 320 K brightness temperature is DN ~9368 --
+    # and the RED channel then reads 0 across the whole frame. A wide fallback never
+    # masks real DN, where the narrow one did.
     raw = getattr(ncvar, "valid_range", None)
     try:
         if raw is not None and len(raw) >= 2:
@@ -819,18 +741,9 @@ def _grid_for_bbox(
     bbox: tuple[float, float, float, float],
     res_deg: float = _OUT_RES_DEG,
 ) -> tuple[Any, int, int]:
-    """Build the output EPSG:4326 ``(transform, width, height)`` for ``bbox``.
-
-    Shared by every product so the Fire-Temp, hotspots, and baked frames land on
-    the IDENTICAL grid (the detection bands, the base, and the fire overlay are
-    therefore always co-registered with no extra resample). Lifted out of
-    ``_reproject_fire_temperature`` so the read core is not duplicated.
-
-    ``res_deg`` is the output cell size in degrees; it defaults to ``_OUT_RES_DEG``
-    (0.02 deg ~2 km) so every existing caller produces the SAME grid as before. A
-    finer override (e.g. ``_TRUE_COLOR_RES_DEG`` 0.005 deg ~0.5 km) yields a
-    proportionally larger grid for the visible true-color bands.
-    """
+    """Build the output EPSG:4326 ``(transform, width, height)`` for ``bbox`` at
+    ``res_deg``. Shared by every product, so the base, the detection bands and the fire
+    overlay always land co-registered with no extra resample."""
     from rasterio.transform import from_bounds
 
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -847,26 +760,14 @@ def _warp_band_to_physical(
     width: int,
     height: int,
 ) -> Any:
-    """Read one CMI band, CF-scale + reproject to the EPSG:4326 grid -> physical units.
+    """Read one CMI band, CF-scale it and reproject it onto the EPSG:4326 grid, to a
+    ``(H, W)`` float32 array in PHYSICAL units with NaN where invalid. A missing
+    variable, or an open or reproject failure, raises the upstream error."""
 
-    The SHARED single-band read/reproject core: the Fire-Temp composite AND
-    the C13 fire-detection longwave band reuse the SAME netCDF read + warp +
-    CF-unscale code (no duplication).
-
-      1. Read CF ``scale_factor`` / ``add_offset`` / ``_FillValue`` + the per-band
-         ``valid_range`` (netCDF4).
-      2. Read the raw int16 DN + inherit the geostationary CRS (rasterio NETCDF
-         subdataset), warp to the EPSG:4326 grid with nearest-neighbor (clean
-         int16 fill propagation).
-      3. Apply ``scale_factor * DN + add_offset`` -> physical units (K for the
-         emissive C07/C13/C15, reflectance for C05/C06), masking the warp
-         sentinel + CF fill + out-of-valid-range DN to NaN.
-
-    Returns a ``(H, W)`` float32 physical-unit array (NaN where invalid).
-
-    Raises ``GOESArchiveUpstreamError`` on a missing variable / open / reproject
-    failure.
-    """
+    # The order matters: read the CF scale, offset, fill and per-band valid_range; read
+    # the raw DN and inherit the geostationary CRS, warping nearest so the int16 fill
+    # propagates cleanly; then apply scale and offset, masking the warp sentinel, the CF
+    # fill and any out-of-valid-range DN to NaN.
     import numpy as np
     import netCDF4  # type: ignore[import-not-found]
     import rasterio
@@ -955,15 +856,9 @@ def _read_archive_bands(
     variables: tuple[str, ...],
     res_deg: float = _OUT_RES_DEG,
 ) -> tuple[dict[str, Any], Any, int, int]:
-    """Read + CF-scale + reproject a set of CMI bands onto ONE shared EPSG:4326 grid.
-
-    Returns ``({variable: phys_array}, transform, width, height)``. Every band is
-    on the identical grid (``_grid_for_bbox`` at ``res_deg``), so the Fire-Temp
-    composite, the fire detection (C07 vs C13), and the bake overlay are all
-    co-registered with no extra resample. ``res_deg`` defaults to ``_OUT_RES_DEG``
-    (0.02 deg) so the thermal/fire products are unchanged; the true-color path
-    forwards the finer ``_TRUE_COLOR_RES_DEG``.
-    """
+    """Read, CF-scale and reproject a set of CMI bands onto ONE shared grid, returning
+    ``({variable: phys_array}, transform, width, height)``. Every band lands on the
+    identical grid, so composite, detection and overlay need no extra resample."""
     out_transform, width, height = _grid_for_bbox(bbox, res_deg)
     arrays: dict[str, Any] = {}
     for var in variables:
@@ -978,18 +873,9 @@ def _reproject_fire_temperature(
     bbox: tuple[float, float, float, float],
     res_deg: float = _OUT_RES_DEG,
 ) -> Any:
-    """Read C07/C06/C05 from an MCMIPC netCDF, CF-scale + reproject each to EPSG:4326 over ``bbox``, composite Fire Temperature.
-
-    Returns a ``(3, H, W)`` uint8 RGB array plus the output ``(transform, W, H)``:
-    ``(rgb, transform, width, height)``. Delegates the per-band netCDF read +
-    warp + CF-unscale to the shared ``_read_archive_bands`` core (no duplicated
-    I/O). ``res_deg`` defaults to ``_OUT_RES_DEG`` so the Fire-Temp grid is
-    unchanged.
-
-    Raises:
-        ``GOESArchiveUpstreamError``: rasterio/netCDF open / reproject failure.
-        ``GOESArchiveEmptyError``: bbox produces no valid pixels (off the disk).
-    """
+    """Read C07, C06 and C05 over ``bbox`` and composite Fire Temperature, returning
+    ``(rgb, transform, width, height)``. An open or reproject failure is an upstream
+    error; a bbox that produces no valid pixel, off the disk, is empty."""
     import numpy as np
 
     arrays, out_transform, width, height = _read_archive_bands(
@@ -1025,20 +911,9 @@ def _reproject_true_color(
     bbox: tuple[float, float, float, float],
     res_deg: float = _TRUE_COLOR_RES_DEG,
 ) -> Any:
-    """Read C02/C01/C03 from an MCMIPC netCDF, CF-scale + reproject each to EPSG:4326 over ``bbox``, composite daytime TRUE COLOR.
-
-    Mirrors ``_reproject_fire_temperature`` but reads the ``TRUE_COLOR_BANDS``
-    triple (red C02 / blue C01 / veggie C03) on the FINER ``res_deg`` grid
-    (``_TRUE_COLOR_RES_DEG`` ~0.5 km) so the 0.5 km native C02 detail survives.
-    Returns ``(rgb (3,H,W) uint8, transform, width, height)``. Delegates the
-    per-band read + warp + CF-unscale to the shared ``_read_archive_bands`` core
-    (no duplicated I/O).
-
-    Raises:
-        ``GOESArchiveUpstreamError``: rasterio/netCDF open / reproject failure.
-        ``GOESArchiveEmptyError``: bbox produces no valid visible pixels (off the
-            disk, or a fully nighttime AOI with no daytime reflectance).
-    """
+    """Read the visible triple over ``bbox`` on the FINER grid, so the 0.5 km native C02
+    detail survives, and composite daytime TRUE COLOR. No valid visible pixel -- off
+    the disk, or a fully nighttime AOI -- is empty, not an error."""
     import numpy as np
 
     arrays, out_transform, width, height = _read_archive_bands(
@@ -1076,20 +951,9 @@ def _reproject_fire_hotspots(
     bt_diff_min_k: float = FIRE_BT_DIFF_MIN_K,
     res_deg: float = _OUT_RES_DEG,
 ) -> Any:
-    """Read C07 (3.9um) + C13 (10.3um) BT from an MCMIPC netCDF -> the fire-only RGBA array.
-
-    Reuses the SHARED ``_read_archive_bands`` core (NO extra fetch -- C07 and C13
-    are both CMI bands in the SAME netCDF the Fire-Temp composite downloads),
-    runs the shortwave-vs-longwave active-fire discriminator, and isolates the
-    flagged pixels on the transparent hot-ramp RGBA. Returns
-    ``(rgba (4,H,W) uint8, transform, width, height)``.
-
-    Honesty floor: an all-NaN crop (bbox off the disk) raises
-    ``GOESArchiveEmptyError``. Unlike Fire-Temp, an all-transparent frame (NO fire
-    detected in the AOI) is NOT an error -- a window with no active fire is a
-    legitimate empty hotspot frame; the per-frame caller decides whether to keep
-    it (it does, so the scrubber stays time-aligned with the Fire-Temp group).
-    """
+    """Read the C07 and C13 brightness temperatures -- both bands of the SAME netCDF, so
+    no extra fetch -- and isolate the flagged pixels on the transparent hot ramp. An
+    all-NaN crop is EMPTY; an all-transparent frame with no fire is NOT."""
     import numpy as np
 
     arrays, out_transform, width, height = _read_archive_bands(
@@ -1118,15 +982,9 @@ def _reproject_fire_baked(
     bt_diff_min_k: float = FIRE_BT_DIFF_MIN_K,
     res_deg: float = _OUT_RES_DEG,
 ) -> Any:
-    """Read all bands once -> Fire-Temp base + fire-only RGBA -> bake fire over base.
-
-    Reads C07/C06/C05 (the Fire-Temp base) AND C13 (the detection longwave) in ONE
-    pass on the shared grid, composites the Fire-Temp RGB base, detects + isolates
-    the fire RGBA, and alpha-composites the fire OVER the base. Returns the baked
-    ``(rgb (3,H,W) uint8, transform, width, height)`` -- "fire baked onto the
-    satellite image" as one opaque RGB layer. (The base is the Fire-Temp COG the
-    tool already produces; a caller-supplied base is handled at the frame level.)
-    """
+    """Read every band in ONE pass on the shared grid, composite the Fire-Temp base,
+    isolate the fire, and alpha-composite one over the other, returning the baked
+    opaque RGB."""
     import numpy as np
 
     arrays, out_transform, width, height = _read_archive_bands(
@@ -1173,16 +1031,9 @@ def _rgba_array_to_cog_bytes(
     width: int,
     height: int,
 ) -> bytes:
-    """Write a ``(4, H, W)`` uint8 EPSG:4326 RGBA array to COG bytes (alpha band).
-
-    The transparent fire-only layer is a 4-band RGBA COG: band 4 is the ALPHA
-    channel (0 = transparent off-fire, 255 = opaque fire), tagged with
-    ColorInterp alpha so TiTiler + MapLibre honor transparency. publish_layer's
-    ``_is_rgba_or_multiband`` returns True (count >= 3 / alpha band) -> empty
-    style_params -> the baked colors + alpha render directly (no new style preset
-    needed). Mirrors ``rgb_array_to_cog_bytes`` (COG driver -> GTiff fallback) but
-    for 4 bands with an alpha mask.
-    """
+    """Write a ``(4, H, W)`` uint8 RGBA array to COG bytes, band 4 being the ALPHA
+    channel and tagged ColorInterp alpha so the tile server and the map honour
+    transparency. The baked colours then render with no style row."""
     import numpy as np
     import rasterio
     import tempfile
@@ -1245,17 +1096,9 @@ def _fetch_archive_frame_cog_bytes(
     bt_diff_min_k: float = FIRE_BT_DIFF_MIN_K,
     res_deg: float = _OUT_RES_DEG,
 ) -> bytes:
-    """Download one MCMIPC netCDF -> the requested product COG bytes.
-
-    Dispatches on ``band``:
-      - ``fire_temperature`` -> 3-band Fire-Temp RGB COG (unchanged).
-      - ``true_color``       -> 3-band daytime true-color RGB COG (finer res).
-      - ``fire_hotspots``    -> 4-band transparent fire-only RGBA COG.
-      - ``fire_baked``       -> 3-band fire-baked-over-Fire-Temp RGB COG.
-    All share the one netCDF download + the shared reproject core. ``res_deg``
-    defaults to ``_OUT_RES_DEG`` (the thermal/fire grid); the true-color path
-    forwards the finer ``_TRUE_COLOR_RES_DEG`` so the visible detail survives.
-    """
+    """Download ONE netCDF and build the requested product's COG bytes, dispatching on
+    ``band``: a Fire-Temp RGB, a daytime true-colour RGB on the finer grid, a
+    transparent fire-only RGBA, or the fire baked over the Fire-Temp base."""
     bucket = _SATELLITE_BUCKETS[satellite]
     url = f"https://{bucket}.s3.amazonaws.com/{key}"
     nc_path = _download_to_tempfile(url)

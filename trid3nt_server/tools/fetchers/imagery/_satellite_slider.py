@@ -1,41 +1,19 @@
-"""Shared CIRA/RAMMB SLIDER tile substrate for the satellite fire-animation fetchers.
+"""Shared SLIDER tile substrate for the satellite fire-animation fetchers.
 
-Both ``fetch_goes_animation`` (GOES geostationary) and ``fetch_viirs_day_fire``
-(JPSS polar) pull READY-MADE pre-rendered RGB imagery from the CIRA/RAMMB SLIDER
-tile service and reproject it to an EPSG:4326 COG over an AOI. This module owns
-the shared primitives so neither fetcher re-implements them:
+Owns the three primitives neither fetcher re-implements: the JSON time-index reader, the
+tile-grid stitch into one square mosaic in the satellite's fixed-grid pixel space, and
+the reproject and COG write with its all-NaN honesty guard."""
 
-1. The SLIDER JSON time-index reader (``fetch_slider_timestamps``) -- reads
-   ``latest_times.json`` -> the ``timestamps_int`` array (14-digit YYYYMMDDHHMMSS
-   ints, reverse-chronological) for a (sat, sector, product).
-2. The tile-grid stitch (``stitch_slider_mosaic``) -- downloads the
-   ``2^zoom x 2^zoom`` PNG tile grid for one timestamp and pastes it into one
-   square mosaic in the satellite fixed grid pixel space.
-3. The approximate fixed-grid -> EPSG:4326 reproject + COG write
-   (``mosaic_to_cog_bytes``) -- lifts the rasterio warp + COG-write + all-NaN
-   honesty guard CORE from ``fetch_goes_satellite._reproject_and_clip`` and
-   applies it to a stitched RGB mosaic using a documented per-sector lat/lon
-   extent (see GEOREFERENCING below).
-
-GEOREFERENCING (honest accuracy statement -- read this):
-    SLIDER itself carries NO projection metadata -- it is a pure pixel-mosaic
-    service (the SLIDER-cli source exposes no proj4 / no scan-angle extents).
-    The PRECISE georeference for the GOES sectors is the ABI fixed-grid
-    geostationary projection (recoverable from the GOES-R PUG); the JPSS polar
-    sectors are a CIRA remap whose exact projection is not published. To keep
-    BOTH demos honest AND working without an unrecoverable extent table, this
-    module uses an APPROXIMATE linear pixel -> lon/lat mapping over a documented
-    per-sector lat/lon bounding box (``_SECTOR_LATLON_EXTENT``). The error is
-    small for CONUS-interior / well-inside-sector AOIs (the fire demos) and
-    large near the limb. The emitted layer is explicitly labelled "approximate
-    georeferencing" so the honesty floor holds: the imagery is the real CIRA
-    product at the real cadence, but the pixel-to-ground registration is a
-    sector-extent approximation pending the exact fixed-grid extents
-    (LIVE-VERIFY against a matching ABI fixed-grid NetCDF for sub-pixel
-    accuracy). An all-transparent / empty AOI crop NEVER reads as success.
-
-ASCII only.
-"""
+# GEOREFERENCING, stated so no caller over-reads a frame. SLIDER carries NO projection
+# metadata: it is a pure pixel-mosaic service, exposing no proj4 and no scan-angle
+# extents. The PRECISE georeference for the geostationary sectors is the ABI fixed-grid
+# projection; the polar sectors are a remap whose exact projection is not published. So
+# this module uses an APPROXIMATE linear pixel-to-lon/lat mapping over a documented
+# per-sector bounding box (``_SECTOR_LATLON_EXTENT``). The error is small for
+# well-inside-sector AOIs and LARGE near the limb, and the emitted layer is labelled
+# "approximate georeferencing": the imagery is the real product at the real cadence,
+# but the pixel-to-ground registration is a sector-extent approximation. An
+# all-transparent or empty AOI crop NEVER reads as success.
 
 from __future__ import annotations
 
@@ -246,14 +224,9 @@ def fetch_slider_timestamps(
     *,
     session: requests.Session | None = None,
 ) -> list[int]:
-    """Return the SLIDER ``timestamps_int`` list (ascending) for a product.
-
-    Reads ``latest_times.json`` (key ``timestamps_int``, reverse-chronological)
-    and returns it SORTED ASCENDING so callers can window + order frames
-    naturally.
-
-    Raises ``SliderUpstreamError`` on network / parse failure.
-    """
+    """Return the ``timestamps_int`` list for a product, SORTED ASCENDING -- the index
+    publishes it reverse-chronological -- so a caller can window and order frames
+    naturally. A network or parse failure raises the typed upstream error."""
     url = build_times_url(sat, sector, product)
     sess = session or requests
     try:
@@ -304,15 +277,9 @@ def pick_zoom_for_aoi(
     target_px: int = 768,
     max_tiles: int = 16,
 ) -> int:
-    """Pick a SLIDER zoom level that resolves the AOI at roughly ``target_px``.
-
-    Higher zoom = finer detail but more tiles to stitch. We choose the smallest
-    zoom whose AOI-spanning tile count stays at or below ``max_tiles`` (a 4x4
-    stitch ceiling that bounds per-frame download cost) while giving at least
-    ``target_px`` across the AOI. Always within [0, sector max zoom].
-
-    Pure function (no network).
-    """
+    """Pick the SMALLEST zoom whose AOI-spanning tile count stays at or below
+    ``max_tiles`` while giving at least ``target_px`` across the AOI, clamped to the
+    sector's own zoom range. The tile ceiling is what bounds per-frame download cost."""
     max_zoom = SECTOR_MAX_ZOOM.get((sat, sector), 4)
     ext = _SECTOR_LATLON_EXTENT.get((sat, sector))
     tsize = TILE_SIZE.get((sat, sector), 625)
@@ -352,13 +319,9 @@ def _aoi_to_pixel_window(
     bbox: tuple[float, float, float, float],
     side_px: int,
 ) -> tuple[int, int, int, int]:
-    """Map an AOI bbox to a pixel window (px_min_x, px_min_y, px_max_x, px_max_y).
-
-    Uses the approximate linear sector lat/lon extent. Row 0 = north (top),
-    col 0 = west (left). Clamped to [0, side_px]. Returns an INCLUSIVE-min /
-    EXCLUSIVE-max pixel box (a small margin is added by the caller via tile
-    rounding).
-    """
+    """Map an AOI bbox to an inclusive-min, exclusive-max pixel window under the
+    approximate linear sector extent. Row 0 is north and column 0 is west, and the
+    window is clamped to the sector side."""
     west, south, east, north = _SECTOR_LATLON_EXTENT[(sat, sector)]
     sec_w = east - west
     sec_h = north - south
@@ -392,22 +355,9 @@ def stitch_slider_mosaic(
     *,
     session: requests.Session | None = None,
 ) -> tuple[Any, tuple[float, float, float, float]]:
-    """Download + stitch the SLIDER tiles covering an AOI for one timestamp.
-
-    Returns ``(rgb_array, mosaic_latlon_extent)`` where ``rgb_array`` is an
-    ``(H, W, 3)`` uint8 numpy array of the STITCHED AOI-covering tile block (a
-    sub-rectangle of the full sector square, NOT the whole square -- only the
-    tiles that intersect the AOI are fetched), and ``mosaic_latlon_extent`` is
-    the ``(west, south, east, north)`` lat/lon box of that stitched block under
-    the approximate sector mapping.
-
-    Only the tiles intersecting the AOI are downloaded (bounded by
-    ``pick_zoom_for_aoi``'s tile ceiling), so per-frame cost stays small. A tile
-    that 404s (sparse polar coverage) is treated as transparent.
-
-    Raises ``SliderUpstreamError`` (all tiles failed) / ``SliderEmptyError``
-    (AOI maps outside the tile grid).
-    """
+    """Download and stitch the tiles covering an AOI for one timestamp, returning the
+    ``(H, W, 3)`` block and its lat/lon box. ONLY intersecting tiles are fetched, and a
+    404 tile is treated as transparent; every tile failing raises upstream."""
     import numpy as np
     from PIL import Image
 
@@ -507,23 +457,14 @@ def mosaic_to_cog_bytes(
     *,
     out_res_deg: float = 0.01,
 ) -> bytes:
-    """Reproject + clip a stitched RGB mosaic to an EPSG:4326 3-band COG over the AOI.
+    """Reproject and clip a stitched RGB mosaic to a 3-band EPSG:4326 COG over the AOI.
+    A crop with NO non-zero pixel -- the AOI fell on a transparent or off-grid region --
+    raises the typed empty error rather than writing a blank layer."""
 
-    Lifts the rasterio warp + COG-write + all-NaN/empty honesty guard CORE from
-    ``fetch_goes_satellite._reproject_and_clip``, adapted to a 3-band uint8 RGB
-    mosaic that is already (approximately) in EPSG:4326 lon/lat under the linear
-    sector mapping. We:
-
-    1. Build the source transform from ``mosaic_extent`` (the stitched block's
-       lat/lon box) over the array's (H, W).
-    2. ``reproject`` each band onto a regular EPSG:4326 grid clipped to
-       ``aoi_bbox`` at ``out_res_deg``.
-    3. Write a 3-band uint8 COG (publish_layer's multiband passthrough renders it
-       directly, no colormap).
-
-    A crop with NO non-zero pixels raises ``SliderEmptyError`` (the AOI fell on a
-    transparent / off-grid region) so the honesty floor holds.
-    """
+    # The source transform is built from the stitched block's own lat/lon box over its
+    # (H, W); each band then reprojects onto a regular grid clipped to the AOI at
+    # ``out_res_deg``; the result is written as a 3-band uint8 COG, which the publish
+    # seam renders directly with no colormap.
     import numpy as np
     import rasterio
     from rasterio.transform import from_bounds
@@ -586,13 +527,9 @@ def rgb_array_to_cog_bytes(
     out_w: int,
     out_h: int,
 ) -> bytes:
-    """Write a ``(3, H, W)`` uint8 EPSG:4326 RGB array to COG bytes.
-
-    The COG-write CORE (COG driver -> GTiff fallback) lifted out of
-    ``mosaic_to_cog_bytes`` so the blend path can re-emit a composited RGB array
-    through the identical writer. ``publish_layer``'s multiband passthrough
-    renders the 3-band RGB directly (no colormap).
-    """
+    """Write a ``(3, H, W)`` uint8 EPSG:4326 RGB array to COG bytes, falling back from
+    the COG driver to GTiff. The publish seam renders a 3-band RGB directly, with no
+    colormap."""
     import numpy as np
     import rasterio
 
@@ -634,13 +571,9 @@ def rgb_array_to_cog_bytes(
 
 
 def rgb_cog_bytes_to_array(cog_bytes: bytes) -> tuple[Any, Any, int, int]:
-    """Read 3-band RGB COG bytes -> ``(rgb (3,H,W) uint8, transform, W, H)``.
-
-    Uses a rasterio in-memory dataset (``MemoryFile``) so no temp file is needed.
-    Returns the first three bands as a ``(3, H, W)`` uint8 array plus the affine
-    transform + width/height (the georeference the blend preserves). Raises
-    ``SliderUpstreamError`` on an unreadable / sub-3-band raster.
-    """
+    """Read 3-band RGB COG bytes in memory to ``(rgb, transform, W, H)``, the first three
+    bands plus the georeference a blend must preserve. An unreadable or sub-3-band
+    raster raises the typed upstream error."""
     import numpy as np
     import rasterio
 
@@ -666,16 +599,9 @@ def reproject_rgb_to_grid(
     dst_w: int,
     dst_h: int,
 ) -> Any:
-    """Reproject a ``(3,H,W)`` EPSG:4326 RGB array onto a target grid.
-
-    Used only as the DEFENSIVE co-registration step in the blend: the GeoColor
-    and Fire Temperature COGs are produced by the same ``mosaic_to_cog_bytes``
-    over the identical AOI bbox at the same ``out_res_deg``, so they are already
-    pixel-aligned (same transform + shape). When -- for any reason -- the two
-    frames differ in grid, this warps the Fire Temperature frame onto the
-    GeoColor grid so the per-pixel blend stays valid. Both rasters are EPSG:4326,
-    so this is a same-CRS regrid (a resample), never a CRS change.
-    """
+    """Reproject a ``(3, H, W)`` EPSG:4326 RGB array onto a target grid: a same-CRS
+    regrid, never a CRS change. The DEFENSIVE co-registration step in the blend, for
+    when two frames that should be pixel-aligned are not."""
     import numpy as np
     from rasterio.warp import Resampling, reproject
 
@@ -737,23 +663,15 @@ def blend_geocolor_fire_temperature(
     geocolor_cog_bytes: bytes,
     fire_temp_cog_bytes: bytes,
 ) -> bytes:
-    """Blend a co-temporal GeoColor + Fire Temperature RGB COG pair into ONE COG.
+    """Blend a co-temporal GeoColor and Fire Temperature pair into ONE COG, preserving
+    the GeoColor frame's georeference. A composite with no non-zero pixel raises the
+    typed empty error, so the honesty floor holds at the blend too."""
 
-    GeoColor is the BASE; the Fire Temperature fire color is alpha-overlaid ONLY
-    where an active-fire mask is hot (high red 3.9um BT AND red-over-blue), so
-    smoke / clouds / terrain stay true-color and the active fire glows -- the
-    CIRA "GeoColor and Fire Temperature" composite look. The output preserves the
-    GeoColor frame's georeference (same transform / CRS / extent / shape).
-
-    Co-registration: both inputs come from ``mosaic_to_cog_bytes`` over the
-    identical AOI bbox at the same resolution, so they are already pixel-aligned;
-    if the Fire Temperature grid differs (shape / transform), it is reprojected
-    onto the GeoColor grid first (``reproject_rgb_to_grid``) so the per-pixel
-    blend is always valid.
-
-    Raises ``SliderEmptyError`` when the composite has no non-zero pixels (both
-    inputs empty -> the honesty floor holds at the blend layer too).
-    """
+    # GeoColor is the BASE and the fire colour is alpha-overlaid ONLY where the
+    # active-fire mask is hot -- a high red 3.9um brightness temperature AND red over
+    # blue -- so smoke, cloud and terrain stay true-colour while the fire glows. If the
+    # two grids differ at all, the fire frame is reprojected onto the base grid first,
+    # so the per-pixel blend is always valid.
     import numpy as np
 
     base_rgb, base_transform, base_w, base_h = rgb_cog_bytes_to_array(

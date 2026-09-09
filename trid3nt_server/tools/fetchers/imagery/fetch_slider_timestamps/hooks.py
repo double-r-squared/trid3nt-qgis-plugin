@@ -1,14 +1,8 @@
-"""slider_timestamps record hooks: CIRA/RAMMB SLIDER availability index.
+"""slider_timestamps record hooks: the SLIDER availability index.
 
-Folds the fetch_slider_timestamps twin onto the record-return output shape
- as a LIVE-NO-CACHE source: one GET of the SLIDER ``latest_times.json``
-availability index, parsed + enriched into the availability + cadence dict the
-frame-animation recipe stands on. The router owns the transport + the live-no-cache
-short-circuit (no cache write: the index turns over every few minutes). These PURE
-hooks reuse the shared ``_satellite_slider`` URL builder + timestamp helpers (UNCHANGED
--- still owned by the animation cluster, which imports the raw list[int] helper
-directly) and shape the fetched JSON body into the enriched dict.
-"""
+One GET of the availability index, parsed and enriched into the availability and cadence
+dict the frame-animation recipe stands on. LIVE-NO-CACHE: the router short-circuits the
+cache, because the index turns over every few minutes."""
 
 from __future__ import annotations
 
@@ -21,7 +15,7 @@ from ...imagery import _satellite_slider
 from ..._router.errors import router_upstream_error
 from ..._router.hooks import RequestPlan, register_hook
 
-#: The twin fetched with the shared SLIDER User-Agent; reused verbatim.
+#: The shared SLIDER User-Agent.
 _USER_AGENT = _satellite_slider._USER_AGENT
 
 
@@ -54,12 +48,9 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list[RequestPlan]
 def record(
     spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 ) -> dict[str, Any] | None:
-    """Parse the availability index into the enriched availability + cadence dict.
-
-    A missing ``timestamps_int`` key or a non-JSON body raises the honest typed
-    SLIDER_UPSTREAM_ERROR (the twin's ``SliderUpstreamError``); an empty index is a
-    VALID zero-frame result (count 0), never a None-advance -- there is one plan.
-    """
+    """Parse the availability index into the enriched availability and cadence dict. A
+    missing ``timestamps_int`` key or a non-JSON body raises the typed upstream error;
+    an EMPTY index is a valid zero-frame result, never a None advance."""
     sc = spec.error_code_prefix
     body = bodies[0] if bodies else b""
     try:
