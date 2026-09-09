@@ -657,121 +657,121 @@ package DataSeam {
     satisfy requirement PerWaterBodyClassLadders by bedLadderRegistry;
     satisfy requirement PerWaterBodyClassLadders by fetcherRouter;
     verify requirement PerWaterBodyClassLadders by
-        "tests/test_bathymetry_data_seam.py::test_the_coastal_ladder_puts_bluetopo_above_the_cudem_composite";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_the_coastal_ladder_puts_bluetopo_above_the_cudem_composite";
     verify requirement PerWaterBodyClassLadders by
-        "tests/test_bathymetry_data_seam.py::test_every_declared_class_either_ladders_or_stops_by_name";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_every_declared_class_either_ladders_or_stops_by_name";
     verify requirement PerWaterBodyClassLadders by
-        "tests/test_bathymetry_data_seam.py::test_an_undeclared_class_keeps_the_rows_unclassed_ladder";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_an_undeclared_class_keeps_the_rows_unclassed_ladder";
     verify requirement PerWaterBodyClassLadders by
-        "tests/test_bathymetry_data_seam.py::test_every_class_ladder_ends_at_refuse_with_the_rows_own_error_code";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_every_class_ladder_ends_at_refuse_with_the_rows_own_error_code";
 
     satisfy requirement ACatalogReaderCarriesNoProvenance by stacRasterReader;
     satisfy requirement ACatalogReaderCarriesNoProvenance by copernicusDeclaration;
     verify requirement ACatalogReaderCarriesNoProvenance by
-        "tests/test_router_stac_raster.py::test_float_render_applies_scale_offset_and_fill";
+        "tests/fetchers/test_router_stac_raster.py::test_float_render_applies_scale_offset_and_fill";
     verify requirement ACatalogReaderCarriesNoProvenance by
-        "tests/test_router_stac_raster.py::test_mosaic_fuse_is_first_valid_in_search_order";
+        "tests/fetchers/test_router_stac_raster.py::test_mosaic_fuse_is_first_valid_in_search_order";
     verify requirement ACatalogReaderCarriesNoProvenance by
-        "tests/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum";
 
     satisfy requirement WaterBodyClassComesFromHeldData by waterBodyClassifier;
     satisfy requirement WaterBodyClassComesFromHeldData by coastalDeclaration;
     verify requirement WaterBodyClassComesFromHeldData by
-        "tests/test_bathymetry_data_seam.py::test_a_tidal_ftype_classifies_the_reach_as_coastal_estuary";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_a_tidal_ftype_classifies_the_reach_as_coastal_estuary";
     verify requirement WaterBodyClassComesFromHeldData by
-        "tests/test_bathymetry_data_seam.py::test_no_mapped_water_surface_classifies_the_reach_as_a_small_inland_stream";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_no_mapped_water_surface_classifies_the_reach_as_a_small_inland_stream";
     verify requirement WaterBodyClassComesFromHeldData by
-        "tests/test_bathymetry_data_seam.py::test_a_wide_inland_river_refuses_naming_what_would_have_decided_it";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_a_wide_inland_river_refuses_naming_what_would_have_decided_it";
     verify requirement WaterBodyClassComesFromHeldData by
-        "tests/test_bathymetry_data_seam.py::test_the_classifier_never_guesses_a_class_from_an_unknown_ftype";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_the_classifier_never_guesses_a_class_from_an_unknown_ftype";
     verify requirement WaterBodyClassComesFromHeldData by
-        "tests/test_bathymetry_data_seam.py::test_the_topobathy_row_declares_the_water_body_class_it_ladders_on";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_the_topobathy_row_declares_the_water_body_class_it_ladders_on";
 
     satisfy requirement SubstitutionIsDeclared by waterBodyClassifier;
     satisfy requirement SubstitutionIsDeclared by ladderWalker;
     satisfy requirement SubstitutionIsDeclared by coastalComposite;
     verify requirement SubstitutionIsDeclared by
-        "tests/test_bathymetry_data_seam.py::test_falling_from_bluetopo_to_the_cudem_composite_is_a_declared_cross_dataset_rung";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_falling_from_bluetopo_to_the_cudem_composite_is_a_declared_cross_dataset_rung";
     verify requirement SubstitutionIsDeclared by
-        "tests/test_bathymetry_data_seam.py::test_a_partial_bluetopo_cover_is_reported_as_a_gap_not_a_whole_bed";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_a_partial_bluetopo_cover_is_reported_as_a_gap_not_a_whole_bed";
     verify requirement SubstitutionIsDeclared by
-        "tests/test_fallback_ladder.py::test_declared_rung_fills_the_gap_and_splits_coverage";
+        "tests/fetchers/test_fallback_ladder.py::test_declared_rung_fills_the_gap_and_splits_coverage";
 
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeLevelDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by lakeDeclaration;
     satisfy requirement AFreeSurfaceAndABedShareOneStatedDatum by freeSurfaceReader;
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/test_open_water_domains.py::test_the_level_is_the_nearest_gauges_last_reading";
+        "tests/telemac/test_open_water_domains.py::test_the_level_is_the_nearest_gauges_last_reading";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/test_open_water_domains.py::test_a_level_and_a_bed_on_two_datums_refuse_by_name";
+        "tests/telemac/test_open_water_domains.py::test_a_level_and_a_bed_on_two_datums_refuse_by_name";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/test_open_water_domains.py::test_water_no_gauge_watches_refuses_rather_than_opening_at_the_datum";
+        "tests/telemac/test_open_water_domains.py::test_water_no_gauge_watches_refuses_rather_than_opening_at_the_datum";
     verify requirement AFreeSurfaceAndABedShareOneStatedDatum by
-        "tests/test_open_water_domains.py::test_the_thermocline_is_stated_below_the_water_top_not_the_datum";
+        "tests/telemac/test_open_water_domains.py::test_the_thermocline_is_stated_below_the_water_top_not_the_datum";
 
     satisfy requirement BedSourceStatesItsDatum by blueTopoSource;
     satisfy requirement BedSourceStatesItsDatum by blueTopoDeclaration;
     satisfy requirement BedSourceStatesItsDatum by bedResultModel;
     verify requirement BedSourceStatesItsDatum by
-        "tests/test_bathymetry_data_seam.py::test_a_tile_that_states_navd88_passes_the_datum_gate";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_a_tile_that_states_navd88_passes_the_datum_gate";
     verify requirement BedSourceStatesItsDatum by
-        "tests/test_bathymetry_data_seam.py::test_a_tile_that_states_no_navd88_refuses_rather_than_merging";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_a_tile_that_states_no_navd88_refuses_rather_than_merging";
     verify requirement BedSourceStatesItsDatum by
-        "tests/test_bathymetry_data_seam.py::test_the_envelope_states_the_datum_in_provenance";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_the_envelope_states_the_datum_in_provenance";
     verify requirement BedSourceStatesItsDatum by
-        "tests/test_bathymetry_data_seam.py::test_the_bluetopo_spec_declares_the_delegate_hooks_and_the_result_model";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_the_bluetopo_spec_declares_the_delegate_hooks_and_the_result_model";
 
     satisfy requirement OneSourceReadsOnOneStatedDatum by bedPainter;
     satisfy requirement OneSourceReadsOnOneStatedDatum by lakeDeclaration;
     satisfy requirement OneSourceReadsOnOneStatedDatum by coastalDeclaration;
     satisfy requirement OneSourceReadsOnOneStatedDatum by blueTopoDeclaration;
     verify requirement OneSourceReadsOnOneStatedDatum by
-        "tests/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum";
     verify requirement OneSourceReadsOnOneStatedDatum by
-        "tests/test_bathymetry_data_seam.py::test_the_lake_row_pins_one_product_of_the_mixed_mosaic";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_the_lake_row_pins_one_product_of_the_mixed_mosaic";
     verify requirement OneSourceReadsOnOneStatedDatum by
-        "tests/test_mesh_topology_and_bed.py::test_a_source_row_that_states_no_datum_is_not_a_bed";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_a_source_row_that_states_no_datum_is_not_a_bed";
     verify requirement OneSourceReadsOnOneStatedDatum by
-        "tests/test_mesh_topology_and_bed.py::test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_the_bed_card_states_the_datum_and_the_native_cell_of_its_source";
     verify requirement OneSourceReadsOnOneStatedDatum by
-        "tests/test_emit_on_fetch_seam.py::test_input_layer_name_shape_and_purpose";
+        "tests/fetchers/test_emit_on_fetch_seam.py::test_input_layer_name_shape_and_purpose";
 
     satisfy requirement AStoppedRungNeverShips by waterBodyClassifier;
     satisfy requirement AStoppedRungNeverShips by coastalComposite;
     verify requirement AStoppedRungNeverShips by
-        "tests/test_bathymetry_data_seam.py::test_a_small_inland_stream_has_no_ladder_and_refuses_naming_both_gaps";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_a_small_inland_stream_has_no_ladder_and_refuses_naming_both_gaps";
     verify requirement AStoppedRungNeverShips by
-        "tests/test_bathymetry_data_seam.py::test_a_navigable_river_has_no_ladder_and_refuses_naming_its_stopped_primary";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_a_navigable_river_has_no_ladder_and_refuses_naming_its_stopped_primary";
     verify requirement AStoppedRungNeverShips by
-        "tests/test_bathymetry_data_seam.py::test_no_ladder_anywhere_ships_an_ehydro_rung";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_no_ladder_anywhere_ships_an_ehydro_rung";
     verify requirement AStoppedRungNeverShips by
-        "tests/test_bathymetry_data_seam.py::test_a_stopped_class_refuses_before_the_cache_and_before_the_network";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_a_stopped_class_refuses_before_the_cache_and_before_the_network";
     verify requirement AStoppedRungNeverShips by
-        "tests/test_bathymetry_data_seam.py::test_a_tile_row_with_no_delivered_link_is_not_data";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_a_tile_row_with_no_delivered_link_is_not_data";
     verify requirement AStoppedRungNeverShips by
-        "tests/test_bathymetry_data_seam.py::test_an_aoi_no_delivered_tile_reaches_refuses_by_name";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_an_aoi_no_delivered_tile_reaches_refuses_by_name";
     verify requirement AStoppedRungNeverShips by
-        "tests/test_bathymetry_data_seam.py::test_the_synthetic_slot_is_stated_as_deferred_rather_than_forgotten";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_the_synthetic_slot_is_stated_as_deferred_rather_than_forgotten";
 
     satisfy requirement TheShorelineIsALadderWithStatedFidelity by shorelineLadder;
     satisfy requirement TheShorelineIsALadderWithStatedFidelity by
         coastlineDeclaration;
     verify requirement TheShorelineIsALadderWithStatedFidelity by
-        "tests/test_mesh_shoreline_ladder.py::test_a_coarse_ask_is_served_by_the_local_file_without_a_fetch";
+        "tests/mesh/test_mesh_shoreline_ladder.py::test_a_coarse_ask_is_served_by_the_local_file_without_a_fetch";
     verify requirement TheShorelineIsALadderWithStatedFidelity by
-        "tests/test_mesh_shoreline_ladder.py::test_a_harbour_ask_climbs_past_a_shoreline_that_cannot_describe_it";
+        "tests/mesh/test_mesh_shoreline_ladder.py::test_a_harbour_ask_climbs_past_a_shoreline_that_cannot_describe_it";
     verify requirement TheShorelineIsALadderWithStatedFidelity by
-        "tests/test_mesh_shoreline_ladder.py::test_an_ask_no_rung_resolves_refuses_naming_every_rung";
+        "tests/mesh/test_mesh_shoreline_ladder.py::test_an_ask_no_rung_resolves_refuses_naming_every_rung";
     verify requirement TheShorelineIsALadderWithStatedFidelity by
-        "tests/test_mesh_shoreline_ladder.py::test_an_unset_shoreline_variable_is_named_rather_than_exported";
+        "tests/mesh/test_mesh_shoreline_ladder.py::test_an_unset_shoreline_variable_is_named_rather_than_exported";
     verify requirement TheShorelineIsALadderWithStatedFidelity by
-        "tests/test_mesh_shoreline_ladder.py::test_the_land_is_on_the_left_of_the_way_the_way_was_drawn";
+        "tests/mesh/test_mesh_shoreline_ladder.py::test_the_land_is_on_the_left_of_the_way_the_way_was_drawn";
 
     satisfy requirement ThalwegBurningIsNeverABedSource by blueTopoSource;
     satisfy requirement ThalwegBurningIsNeverABedSource by waterBodyClassifier;
     satisfy requirement ThalwegBurningIsNeverABedSource by coastalComposite;
     verify requirement ThalwegBurningIsNeverABedSource by
-        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
     verify requirement ThalwegBurningIsNeverABedSource by
-        "tests/test_bathymetry_data_seam.py::test_the_selected_tiles_run_coarsest_first_so_the_finest_paints_last";
+        "tests/fetchers/test_bathymetry_data_seam.py::test_the_selected_tiles_run_coarsest_first_so_the_finest_paints_last";
 }

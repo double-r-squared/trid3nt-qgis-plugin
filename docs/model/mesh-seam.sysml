@@ -754,110 +754,110 @@ package MeshSeam {
     satisfy requirement RecipeIsTheOneMeshDefiningObject by meshRouter;
     satisfy requirement RecipeIsTheOneMeshDefiningObject by meshSession;
     verify requirement RecipeIsTheOneMeshDefiningObject by
-        "tests/test_build_mesh_tool.py::test_a_recipe_builds_nothing";
+        "tests/mesh/test_build_mesh_tool.py::test_a_recipe_builds_nothing";
     verify requirement RecipeIsTheOneMeshDefiningObject by
-        "tests/test_build_mesh_tool.py::test_editing_a_recipe_returns_a_new_frozen_one";
+        "tests/mesh/test_build_mesh_tool.py::test_editing_a_recipe_returns_a_new_frozen_one";
     verify requirement RecipeIsTheOneMeshDefiningObject by
-        "tests/test_build_mesh_tool.py::test_engine_vocabulary_is_not_a_param_of_the_generalization";
+        "tests/mesh/test_build_mesh_tool.py::test_engine_vocabulary_is_not_a_param_of_the_generalization";
     verify requirement RecipeIsTheOneMeshDefiningObject by
-        "tests/test_build_mesh_tool.py::test_accept_freezes_the_recipe_as_the_artifacts_provenance";
+        "tests/mesh/test_build_mesh_tool.py::test_accept_freezes_the_recipe_as_the_artifacts_provenance";
     verify requirement RecipeIsTheOneMeshDefiningObject by
-        "tests/test_mesh_declaration_travel.py::test_the_mesh_step_carries_the_recipe_whole";
+        "tests/telemac/test_mesh_declaration_travel.py::test_the_mesh_step_carries_the_recipe_whole";
 
     satisfy requirement RegenerationIsWholesale by meshSession;
     satisfy requirement RegenerationIsWholesale by opTool;
     verify requirement RegenerationIsWholesale by
-        "tests/test_build_mesh_tool.py::test_the_same_recipe_builds_the_same_mesh_twice";
+        "tests/mesh/test_build_mesh_tool.py::test_the_same_recipe_builds_the_same_mesh_twice";
     verify requirement RegenerationIsWholesale by
-        "tests/test_build_mesh_tool.py::test_reset_puts_the_recipe_back_to_the_declaration";
+        "tests/mesh/test_build_mesh_tool.py::test_reset_puts_the_recipe_back_to_the_declaration";
     verify requirement RegenerationIsWholesale by
-        "tests/test_build_mesh_tool.py::test_the_journal_replays_to_an_identical_mesh";
+        "tests/mesh/test_build_mesh_tool.py::test_the_journal_replays_to_an_identical_mesh";
     verify requirement RegenerationIsWholesale by
-        "tests/test_build_mesh_tool.py::test_a_recipe_edit_after_a_hand_edit_refuses_rather_than_discarding_it";
+        "tests/mesh/test_build_mesh_tool.py::test_a_recipe_edit_after_a_hand_edit_refuses_rather_than_discarding_it";
     verify requirement RegenerationIsWholesale by
-        "tests/test_mesh_gate_loop.py::test_mesh_op_appends_regenerates_and_re_presents";
+        "tests/mesh/test_mesh_gate_loop.py::test_mesh_op_appends_regenerates_and_re_presents";
 
     satisfy requirement CorrectDataClassAtSetBed by sharedPrimitives;
     verify requirement CorrectDataClassAtSetBed by
-        "tests/test_mesh_topology_and_bed.py::test_the_bed_op_permits_no_ladder_rung_on_the_authors_behalf";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_the_bed_op_permits_no_ladder_rung_on_the_authors_behalf";
     verify requirement CorrectDataClassAtSetBed by
-        "tests/test_mesh_topology_and_bed.py::test_a_source_naming_nothing_refuses_rather_than_leaving_a_bedless_mesh";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_a_source_naming_nothing_refuses_rather_than_leaving_a_bedless_mesh";
     verify requirement CorrectDataClassAtSetBed by
-        "tests/test_mesh_topology_and_bed.py::test_a_conditioning_this_primitive_does_not_perform_refuses";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_a_conditioning_this_primitive_does_not_perform_refuses";
     verify requirement CorrectDataClassAtSetBed by
-        "tests/test_mesh_topology_and_bed.py::test_the_interpolation_is_a_visible_default_off_a_declared_roster";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_the_interpolation_is_a_visible_default_off_a_declared_roster";
     verify requirement CorrectDataClassAtSetBed by
-        "tests/test_mesh_topology_and_bed.py::test_the_journal_names_the_rung_that_ACTUALLY_painted_the_bed";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_the_journal_names_the_rung_that_ACTUALLY_painted_the_bed";
 
     satisfy requirement BoundaryRolesAreContiguousRuns by sharedPrimitives;
     satisfy requirement BoundaryRolesAreContiguousRuns by om2dAdapter;
     verify requirement BoundaryRolesAreContiguousRuns by
-        "tests/test_mesh_topology_and_bed.py::test_a_scattered_candidate_boundary_resolves_into_two_contiguous_runs";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_a_scattered_candidate_boundary_resolves_into_two_contiguous_runs";
     verify requirement BoundaryRolesAreContiguousRuns by
-        "tests/test_mesh_topology_and_bed.py::test_a_run_that_wraps_the_contours_origin_stays_one_run";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_a_run_that_wraps_the_contours_origin_stays_one_run";
     verify requirement BoundaryRolesAreContiguousRuns by
-        "tests/test_mesh_topology_and_bed.py::test_one_role_declared_across_two_faces_lands_as_two_sections";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_one_role_declared_across_two_faces_lands_as_two_sections";
     verify requirement BoundaryRolesAreContiguousRuns by
-        "tests/test_mesh_topology_and_bed.py::test_a_node_two_declared_faces_both_claim_refuses";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_a_node_two_declared_faces_both_claim_refuses";
     verify requirement BoundaryRolesAreContiguousRuns by
-        "tests/test_mesh_topology_and_bed.py::test_a_face_the_mesh_never_reaches_refuses_rather_than_going_unprescribed";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_a_face_the_mesh_never_reaches_refuses_rather_than_going_unprescribed";
 
     satisfy requirement TopologyIsWrittenForEveryMesh by om2dAdapter;
     satisfy requirement TopologyIsWrittenForEveryMesh by topologyWriter;
     verify requirement TopologyIsWrittenForEveryMesh by
-        "tests/test_mesh_topology_and_bed.py::test_a_bundle_naming_no_liquid_boundary_states_the_closed_basin";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_a_bundle_naming_no_liquid_boundary_states_the_closed_basin";
     verify requirement TopologyIsWrittenForEveryMesh by
-        "tests/test_mesh_topology_and_bed.py::test_the_bundle_states_the_numbering_a_steering_author_reads";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_the_bundle_states_the_numbering_a_steering_author_reads";
     verify requirement TopologyIsWrittenForEveryMesh by
-        "tests/test_mesh_topology_and_bed.py::test_an_empty_role_is_not_a_role";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_an_empty_role_is_not_a_role";
 
     satisfy requirement APinchedBoundaryIsRefusedByName by selafinCliDriver;
     verify requirement APinchedBoundaryIsRefusedByName by
-        "tests/test_telemac_boundary_contract.py::test_a_walk_whose_rings_share_a_node_refuses_naming_them";
+        "tests/telemac/test_telemac_boundary_contract.py::test_a_walk_whose_rings_share_a_node_refuses_naming_them";
     verify requirement APinchedBoundaryIsRefusedByName by
-        "tests/test_telemac_boundary_contract.py::test_a_walk_that_visits_every_node_once_states_nothing";
+        "tests/telemac/test_telemac_boundary_contract.py::test_a_walk_that_visits_every_node_once_states_nothing";
     verify requirement APinchedBoundaryIsRefusedByName by
-        "tests/test_telemac_boundary_contract.py::test_the_host_re_raises_the_walks_own_refusal_typed";
+        "tests/telemac/test_telemac_boundary_contract.py::test_the_host_re_raises_the_walks_own_refusal_typed";
 
     satisfy requirement SignatureIsTheSchema by mesherRegistry;
     satisfy requirement SignatureIsTheSchema by om2dAdapter;
     verify requirement SignatureIsTheSchema by
-        "tests/test_mesh_meshers.py::test_an_op_a_mesher_never_registered_is_refused_by_name";
+        "tests/mesh/test_mesh_meshers.py::test_an_op_a_mesher_never_registered_is_refused_by_name";
     verify requirement SignatureIsTheSchema by
-        "tests/test_mesh_om2d.py::test_an_unknown_op_refuses_with_the_nearest_names";
+        "tests/mesh/test_mesh_om2d.py::test_an_unknown_op_refuses_with_the_nearest_names";
     verify requirement SignatureIsTheSchema by
-        "tests/test_mesh_om2d.py::test_the_wrapper_registers_the_librarys_own_names_tagged_by_phase";
+        "tests/mesh/test_mesh_om2d.py::test_the_wrapper_registers_the_librarys_own_names_tagged_by_phase";
     verify requirement SignatureIsTheSchema by
-        "tests/test_mesh_om2d.py::test_a_library_op_records_the_note_that_its_kwargs_bound_elsewhere";
+        "tests/mesh/test_mesh_om2d.py::test_a_library_op_records_the_note_that_its_kwargs_bound_elsewhere";
     verify requirement SignatureIsTheSchema by
-        "tests/test_mesh_om2d.py::test_a_required_parameter_the_domain_cannot_supply_refuses_by_name";
+        "tests/mesh/test_mesh_om2d.py::test_a_required_parameter_the_domain_cannot_supply_refuses_by_name";
 
     satisfy requirement ModelShrinksWithTheTree by om2dAdapter;
     satisfy requirement ModelShrinksWithTheTree by regGridAdapter;
     satisfy requirement ModelShrinksWithTheTree by om2dBox;
     verify requirement ModelShrinksWithTheTree by
-        "tests/test_mesh_meshers.py::test_the_roster_is_the_meshers_the_tree_carries";
+        "tests/mesh/test_mesh_meshers.py::test_the_roster_is_the_meshers_the_tree_carries";
     verify requirement ModelShrinksWithTheTree by
-        "tests/test_mesh_om2d.py::test_the_roster_is_the_two_meshers_and_nothing_else";
+        "tests/mesh/test_mesh_om2d.py::test_the_roster_is_the_two_meshers_and_nothing_else";
     verify requirement ModelShrinksWithTheTree by
-        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement TheBoxNeverImportsTheServer by om2dBox;
     satisfy requirement TheBoxNeverImportsTheServer by selafinCliDriver;
     satisfy requirement TheBoxNeverImportsTheServer by telemacCasDriver;
     satisfy requirement TheBoxNeverImportsTheServer by telemacResultDriver;
     verify requirement TheBoxNeverImportsTheServer by
-        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
     verify requirement TheBoxNeverImportsTheServer by
-        "tests/test_mesh_om2d.py::test_the_drivers_live_in_the_product_tree_beside_their_callers";
+        "tests/mesh/test_mesh_om2d.py::test_the_drivers_live_in_the_product_tree_beside_their_callers";
 
     satisfy requirement TheMeshFrontIsEngineAgnostic by meshRouter;
     satisfy requirement TheMeshFrontIsEngineAgnostic by meshGate;
     satisfy requirement TheMeshFrontIsEngineAgnostic by mesherRegistry;
     verify requirement TheMeshFrontIsEngineAgnostic by
-        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
     verify requirement TheMeshFrontIsEngineAgnostic by
-        "tests/test_mesh_gate_loop.py::test_no_mesher_has_card_code_of_its_own";
+        "tests/mesh/test_mesh_gate_loop.py::test_no_mesher_has_card_code_of_its_own";
     verify requirement TheMeshFrontIsEngineAgnostic by
-        "tests/test_build_mesh_tool.py::test_reg_grid_conforms_with_a_near_empty_default_recipe";
+        "tests/mesh/test_build_mesh_tool.py::test_reg_grid_conforms_with_a_near_empty_default_recipe";
 }

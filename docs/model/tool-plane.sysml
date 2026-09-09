@@ -299,46 +299,46 @@ package ToolPlane {
 
     satisfy requirement ASurfaceTooLargeToCarryIsReached by keywordLookup;
     verify requirement ASurfaceTooLargeToCarryIsReached by
-        "tests/test_describe_keywords.py::test_a_question_in_words_reaches_the_keyword_that_answers_it";
+        "tests/search/test_describe_keywords.py::test_a_question_in_words_reaches_the_keyword_that_answers_it";
     verify requirement ASurfaceTooLargeToCarryIsReached by
-        "tests/test_describe_keywords.py::test_a_match_carries_the_dictionary_s_own_help_choices_and_default";
+        "tests/search/test_describe_keywords.py::test_a_match_carries_the_dictionary_s_own_help_choices_and_default";
     verify requirement ASurfaceTooLargeToCarryIsReached by
-        "tests/test_describe_keywords.py::test_the_same_question_is_answered_the_same_way_twice";
+        "tests/search/test_describe_keywords.py::test_the_same_question_is_answered_the_same_way_twice";
     verify requirement ASurfaceTooLargeToCarryIsReached by
-        "tests/test_describe_keywords.py::test_a_module_with_no_catalog_refuses_naming_the_ones_there_are";
+        "tests/search/test_describe_keywords.py::test_a_module_with_no_catalog_refuses_naming_the_ones_there_are";
     verify requirement ASurfaceTooLargeToCarryIsReached by
-        "tests/test_describe_keywords.py::test_every_corpus_phrasing_surfaces_the_tool_model_free";
+        "tests/search/test_describe_keywords.py::test_every_corpus_phrasing_surfaces_the_tool_model_free";
 
     satisfy requirement SandboxIsNetworkNone by sandboxBox;
     satisfy requirement SandboxIsNetworkNone by sandboxDriver;
     verify requirement SandboxIsNetworkNone by
-        "tests/test_sandbox_box.py::test_the_box_runs_with_the_network_off";
+        "tests/sandbox/test_sandbox_box.py::test_the_box_runs_with_the_network_off";
     verify requirement SandboxIsNetworkNone by
-        "tests/test_sandbox_box.py::test_a_snippet_cannot_reach_the_network";
+        "tests/sandbox/test_sandbox_box.py::test_a_snippet_cannot_reach_the_network";
     verify requirement SandboxIsNetworkNone by
-        "tests/test_sandbox_box.py::test_a_denied_egress_is_reported_as_blocked_rather_than_as_a_bug";
+        "tests/sandbox/test_sandbox_box.py::test_a_denied_egress_is_reported_as_blocked_rather_than_as_a_bug";
     verify requirement SandboxIsNetworkNone by
-        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement DataEntersStaged by sandboxBox;
     satisfy requirement DataEntersStaged by sandboxDriver;
     verify requirement DataEntersStaged by
-        "tests/test_sandbox_box.py::test_a_local_raster_is_staged_and_opens_as_a_handle";
+        "tests/sandbox/test_sandbox_box.py::test_a_local_raster_is_staged_and_opens_as_a_handle";
     verify requirement DataEntersStaged by
-        "tests/test_sandbox_box.py::test_a_remote_ref_is_fetched_by_the_host_before_the_box_starts";
+        "tests/sandbox/test_sandbox_box.py::test_a_remote_ref_is_fetched_by_the_host_before_the_box_starts";
     verify requirement DataEntersStaged by
-        "tests/test_sandbox_box.py::test_frames_stage_as_an_ordered_list";
+        "tests/sandbox/test_sandbox_box.py::test_frames_stage_as_an_ordered_list";
     verify requirement DataEntersStaged by
-        "tests/test_sandbox_box.py::test_a_ref_that_cannot_be_staged_is_named_rather_than_crashing_the_run";
+        "tests/sandbox/test_sandbox_box.py::test_a_ref_that_cannot_be_staged_is_named_rather_than_crashing_the_run";
     verify requirement DataEntersStaged by
-        "tests/test_sandbox_box.py::test_the_box_reaches_for_nothing_from_the_inside";
+        "tests/sandbox/test_sandbox_box.py::test_the_box_reaches_for_nothing_from_the_inside";
 
     satisfy requirement OffloadKeepsTheLoopUnblocked by codeExecTool;
     satisfy requirement OffloadKeepsTheLoopUnblocked by toolDispatch;
     verify requirement OffloadKeepsTheLoopUnblocked by
-        "tests/test_sandbox_box.py::test_the_tool_that_drives_the_box_is_always_offloaded";
+        "tests/sandbox/test_sandbox_box.py::test_the_tool_that_drives_the_box_is_always_offloaded";
     verify requirement OffloadKeepsTheLoopUnblocked by
-        "tests/test_sandbox_box.py::test_the_offload_keeps_the_loop_unblocked";
+        "tests/sandbox/test_sandbox_box.py::test_the_offload_keeps_the_loop_unblocked";
     verify requirement OffloadKeepsTheLoopUnblocked by
-        "tests/test_sync_tool_offload_stage0.py::test_gate_refuses_emitting_sync_tool";
+        "tests/tools/test_sync_tool_offload_stage0.py::test_gate_refuses_emitting_sync_tool";
 }

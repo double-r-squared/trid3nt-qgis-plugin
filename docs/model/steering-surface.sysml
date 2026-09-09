@@ -700,200 +700,200 @@ package SteeringSurface {
     satisfy requirement KeywordNamesAreRaw by catalogExtractor;
     satisfy requirement KeywordNamesAreRaw by slot;
     verify requirement KeywordNamesAreRaw by
-        "tests/test_telemac_module_surface.py::test_every_slot_carries_the_dictionary_s_own_name_and_help";
+        "tests/telemac/test_telemac_module_surface.py::test_every_slot_carries_the_dictionary_s_own_name_and_help";
     verify requirement KeywordNamesAreRaw by
-        "tests/test_telemac_module_surface.py::test_the_identifier_is_the_keyword_and_nothing_invented";
+        "tests/telemac/test_telemac_module_surface.py::test_the_identifier_is_the_keyword_and_nothing_invented";
     verify requirement KeywordNamesAreRaw by
-        "tests/test_telemac_module_surface.py::test_a_keyword_the_module_does_not_have_refuses_naming_the_nearest";
+        "tests/telemac/test_telemac_module_surface.py::test_a_keyword_the_module_does_not_have_refuses_naming_the_nearest";
 
     satisfy requirement EverySlotDescribed by catalogExtractor;
     satisfy requirement EverySlotDescribed by slot;
     verify requirement EverySlotDescribed by
-        "tests/test_telemac_module_surface.py::test_every_slot_carries_the_dictionary_s_own_name_and_help";
+        "tests/telemac/test_telemac_module_surface.py::test_every_slot_carries_the_dictionary_s_own_name_and_help";
     verify requirement EverySlotDescribed by
-        "tests/test_telemac_catalog_drift.py::test_the_help_carries_no_markup_into_the_surface";
+        "tests/scripts/test_telemac_catalog_drift.py::test_the_help_carries_no_markup_into_the_surface";
 
     satisfy requirement EngineDefaultSurfaced by slot;
     satisfy requirement EngineDefaultSurfaced by sheet;
     satisfy requirement EngineDefaultSurfaced by door;
     verify requirement EngineDefaultSurfaced by
-        "tests/test_telemac_module_surface.py::test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody";
+        "tests/telemac/test_telemac_module_surface.py::test_an_open_slot_under_the_fold_says_the_dictionary_answers_it_for_nobody";
     verify requirement EngineDefaultSurfaced by
-        "tests/test_telemac_module_surface.py::test_the_engine_default_is_on_the_slot_or_the_slot_is_a_question";
+        "tests/telemac/test_telemac_module_surface.py::test_the_engine_default_is_on_the_slot_or_the_slot_is_a_question";
     verify requirement EngineDefaultSurfaced by
-        "tests/test_telemac_module_surface.py::test_an_engine_default_is_never_written_into_the_deck";
+        "tests/telemac/test_telemac_module_surface.py::test_an_engine_default_is_never_written_into_the_deck";
     verify requirement EngineDefaultSurfaced by
-        "tests/test_telemac_module_surface.py::test_the_bare_sheet_opens_every_keyword_the_dictionary_answers_for_nobody";
+        "tests/telemac/test_telemac_module_surface.py::test_the_bare_sheet_opens_every_keyword_the_dictionary_answers_for_nobody";
 
     satisfy requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by door;
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
-        "tests/test_telemac_module_surface.py::test_every_required_file_is_the_template_s_own_statement";
+        "tests/telemac/test_telemac_module_surface.py::test_every_required_file_is_the_template_s_own_statement";
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
-        "tests/test_telemac_module_surface.py::test_the_artemis_forcing_composite_carries_the_file_and_not_its_name";
+        "tests/telemac/test_telemac_module_surface.py::test_the_artemis_forcing_composite_carries_the_file_and_not_its_name";
     satisfy requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by slot;
     satisfy requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by sheet;
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
-        "tests/test_telemac_module_surface.py::test_the_bare_sheet_opens_every_keyword_the_dictionary_answers_for_nobody";
+        "tests/telemac/test_telemac_module_surface.py::test_the_bare_sheet_opens_every_keyword_the_dictionary_answers_for_nobody";
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
-        "tests/test_telemac_module_surface.py::test_a_defaulted_oblig_file_is_not_a_question_the_sheet_asks";
+        "tests/telemac/test_telemac_module_surface.py::test_a_defaulted_oblig_file_is_not_a_question_the_sheet_asks";
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
-        "tests/test_telemac_module_surface.py::test_the_open_row_says_whether_the_run_cannot_begin_without_it";
+        "tests/telemac/test_telemac_module_surface.py::test_the_open_row_says_whether_the_run_cannot_begin_without_it";
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
-        "tests/test_telemac_module_surface.py::test_run_does_not_refuse_an_open_keyword_the_engine_may_yet_default";
+        "tests/telemac/test_telemac_module_surface.py::test_run_does_not_refuse_an_open_keyword_the_engine_may_yet_default";
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
-        "tests/test_telemac_run_reads.py::test_the_engine_s_own_demand_is_read_by_name_out_of_the_listing";
+        "tests/telemac/test_telemac_run_reads.py::test_the_engine_s_own_demand_is_read_by_name_out_of_the_listing";
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
-        "tests/test_run_telemac_chain.py::test_classify_exit_names_the_keyword_lecdon_asked_for";
+        "tests/telemac/test_run_telemac_chain.py::test_classify_exit_names_the_keyword_lecdon_asked_for";
     verify requirement TheOpenSetIsCompleteAndRequiredIsTheObligFiles by
-        "tests/test_run_telemac_chain.py::test_classify_exit_invents_no_demand_where_the_engine_made_none";
+        "tests/telemac/test_run_telemac_chain.py::test_classify_exit_invents_no_demand_where_the_engine_made_none";
 
     satisfy requirement ANoDefaultKeywordIsTheTemplatesToState by slot;
     satisfy requirement ANoDefaultKeywordIsTheTemplatesToState by sheet;
     verify requirement ANoDefaultKeywordIsTheTemplatesToState by
-        "tests/test_telemac_module_surface.py::test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling";
+        "tests/telemac/test_telemac_module_surface.py::test_the_basin_states_how_its_tracer_is_carried_and_under_what_ceiling";
     verify requirement ANoDefaultKeywordIsTheTemplatesToState by
-        "tests/test_telemac_module_surface.py::test_the_engine_default_is_on_the_slot_or_the_slot_is_a_question";
+        "tests/telemac/test_telemac_module_surface.py::test_the_engine_default_is_on_the_slot_or_the_slot_is_a_question";
 
     satisfy requirement WrapperHasNoOpinion by wrapper;
     verify requirement WrapperHasNoOpinion by
-        "tests/test_telemac_module_surface.py::test_a_wrapper_asserts_nothing_and_has_no_hook_to";
+        "tests/telemac/test_telemac_module_surface.py::test_a_wrapper_asserts_nothing_and_has_no_hook_to";
     verify requirement WrapperHasNoOpinion by
-        "tests/test_telemac_module_surface.py::test_a_wrapper_is_a_declaration_and_refuses_to_be_a_value";
+        "tests/telemac/test_telemac_module_surface.py::test_a_wrapper_is_a_declaration_and_refuses_to_be_a_value";
     verify requirement WrapperHasNoOpinion by
-        "tests/test_telemac_module_surface.py::test_a_coupled_body_states_only_what_its_caller_handed_it";
+        "tests/telemac/test_telemac_module_surface.py::test_a_coupled_body_states_only_what_its_caller_handed_it";
 
     satisfy requirement EverythingOverridable by wrapper;
     satisfy requirement EverythingOverridable by sheet;
     satisfy requirement EverythingOverridable by canvasGate;
     satisfy requirement EverythingOverridable by door;
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_a_raw_keyword_on_the_wire_fills_the_slot_it_names";
+        "tests/telemac/test_telemac_module_surface.py::test_a_raw_keyword_on_the_wire_fills_the_slot_it_names";
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_a_raw_keyword_the_module_does_not_have_refuses_naming_the_nearest";
+        "tests/telemac/test_telemac_module_surface.py::test_a_raw_keyword_the_module_does_not_have_refuses_naming_the_nearest";
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_a_raw_keyword_value_outside_the_choices_refuses_naming_the_choices";
+        "tests/telemac/test_telemac_module_surface.py::test_a_raw_keyword_value_outside_the_choices_refuses_naming_the_choices";
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_two_releases_on_the_floor_are_two_sources_in_the_deck";
+        "tests/telemac/test_telemac_module_surface.py::test_two_releases_on_the_floor_are_two_sources_in_the_deck";
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_every_template_wire_carries_the_raw_keyword_floor";
+        "tests/telemac/test_telemac_module_surface.py::test_every_template_wire_carries_the_raw_keyword_floor";
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_a_floor_that_is_not_a_mapping_refuses_by_name";
+        "tests/telemac/test_telemac_module_surface.py::test_a_floor_that_is_not_a_mapping_refuses_by_name";
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_resolution_order_is_engine_then_the_parts_then_template_then_fill";
+        "tests/telemac/test_telemac_module_surface.py::test_resolution_order_is_engine_then_the_parts_then_template_then_fill";
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
+        "tests/telemac/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_a_fill_is_repeatable_and_the_later_one_stands";
+        "tests/telemac/test_telemac_module_surface.py::test_a_fill_is_repeatable_and_the_later_one_stands";
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_a_drawn_point_is_a_fill";
+        "tests/telemac/test_telemac_module_surface.py::test_a_drawn_point_is_a_fill";
     verify requirement EverythingOverridable by
-        "tests/test_telemac_module_surface.py::test_a_canvas_that_answers_nothing_refuses_and_invents_nothing";
+        "tests/telemac/test_telemac_module_surface.py::test_a_canvas_that_answers_nothing_refuses_and_invents_nothing";
 
     satisfy requirement CatalogMatchesImage by catalogExtractor;
     verify requirement CatalogMatchesImage by
-        "tests/test_telemac_catalog_drift.py::test_the_committed_catalog_is_what_the_image_says_today";
+        "tests/scripts/test_telemac_catalog_drift.py::test_the_committed_catalog_is_what_the_image_says_today";
     verify requirement CatalogMatchesImage by
-        "tests/test_telemac_catalog_drift.py::test_every_exposed_module_has_a_committed_catalog";
+        "tests/scripts/test_telemac_catalog_drift.py::test_every_exposed_module_has_a_committed_catalog";
 
     satisfy requirement CompositesLiveInWrappers by composite;
     satisfy requirement CompositesLiveInWrappers by wrapper;
     verify requirement CompositesLiveInWrappers by
-        "tests/test_telemac_module_surface.py::test_a_composite_becomes_several_slots_and_the_file_they_name";
+        "tests/telemac/test_telemac_module_surface.py::test_a_composite_becomes_several_slots_and_the_file_they_name";
     verify requirement CompositesLiveInWrappers by
-        "tests/test_telemac_module_surface.py::test_a_composite_lives_on_the_wrapper_and_may_not_shadow_a_keyword";
+        "tests/telemac/test_telemac_module_surface.py::test_a_composite_lives_on_the_wrapper_and_may_not_shadow_a_keyword";
     verify requirement CompositesLiveInWrappers by
-        "tests/test_telemac_module_surface.py::test_a_composite_the_wrapper_never_registered_refuses_by_name";
+        "tests/telemac/test_telemac_module_surface.py::test_a_composite_the_wrapper_never_registered_refuses_by_name";
     verify requirement CompositesLiveInWrappers by
-        "tests/test_telemac_module_surface.py::test_a_release_becomes_the_source_keywords_and_the_series_they_name";
+        "tests/telemac/test_telemac_module_surface.py::test_a_release_becomes_the_source_keywords_and_the_series_they_name";
     verify requirement CompositesLiveInWrappers by
-        "tests/test_telemac_module_surface.py::test_a_coupling_states_only_what_the_carrier_names_it_by";
+        "tests/telemac/test_telemac_module_surface.py::test_a_coupling_states_only_what_the_carrier_names_it_by";
     verify requirement CompositesLiveInWrappers by
-        "tests/test_telemac_module_surface.py::test_a_coupled_body_is_checked_against_its_own_module_s_dictionary";
+        "tests/telemac/test_telemac_module_surface.py::test_a_coupled_body_is_checked_against_its_own_module_s_dictionary";
 
     satisfy requirement OneTemplatePerQuestion by door;
     verify requirement OneTemplatePerQuestion by
-        "tests/test_telemac_module_surface.py::test_a_structural_fork_is_a_template_and_never_a_switch";
+        "tests/telemac/test_telemac_module_surface.py::test_a_structural_fork_is_a_template_and_never_a_switch";
     verify requirement OneTemplatePerQuestion by
-        "tests/test_telemac_module_surface.py::test_no_flipped_body_branches_on_anything";
+        "tests/telemac/test_telemac_module_surface.py::test_no_flipped_body_branches_on_anything";
     verify requirement OneTemplatePerQuestion by
-        "tests/test_door_dissolution.py::test_all_templates_registered_and_callable";
+        "tests/search/test_door_dissolution.py::test_all_templates_registered_and_callable";
     verify requirement OneTemplatePerQuestion by
-        "tests/test_telemac_module_surface.py::test_every_template_names_the_reader_its_own_question_needs";
+        "tests/telemac/test_telemac_module_surface.py::test_every_template_names_the_reader_its_own_question_needs";
     verify requirement OneTemplatePerQuestion by
-        "tests/test_postprocess_telemac.py::test_the_peak_layer_handle_carries_the_product_that_wrote_it";
+        "tests/telemac/test_postprocess_telemac.py::test_the_peak_layer_handle_carries_the_product_that_wrote_it";
 
     satisfy requirement ReviewIsTheDoorsView by door;
     verify requirement ReviewIsTheDoorsView by
-        "tests/test_telemac_module_surface.py::test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique";
+        "tests/telemac/test_telemac_module_surface.py::test_the_card_shows_what_is_set_and_open_and_folds_the_rest_by_rubrique";
     verify requirement ReviewIsTheDoorsView by
-        "tests/test_telemac_module_surface.py::test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots";
+        "tests/telemac/test_telemac_module_surface.py::test_the_fill_docstring_names_the_module_its_rubriques_and_its_open_slots";
     verify requirement ReviewIsTheDoorsView by
-        "tests/test_telemac_module_surface.py::test_the_review_is_the_doors_view_and_never_a_step_of_its_own";
+        "tests/telemac/test_telemac_module_surface.py::test_the_review_is_the_doors_view_and_never_a_step_of_its_own";
     verify requirement ReviewIsTheDoorsView by
-        "tests/test_declarative_library.py::test_do_sag_declares_no_gate_in_front_of_its_self_gating_review";
+        "tests/runtime/test_declarative_library.py::test_do_sag_declares_no_gate_in_front_of_its_self_gating_review";
 
     satisfy requirement CompositesSetOnlyPresence by composite;
     satisfy requirement CompositesSetOnlyPresence by wrapper;
     verify requirement CompositesSetOnlyPresence by
-        "tests/test_telemac_module_surface.py::test_a_composite_sets_only_what_its_value_s_presence_defines";
+        "tests/telemac/test_telemac_module_surface.py::test_a_composite_sets_only_what_its_value_s_presence_defines";
     verify requirement CompositesSetOnlyPresence by
-        "tests/test_telemac_module_surface.py::test_a_wind_from_the_north_drives_the_water_south";
+        "tests/telemac/test_telemac_module_surface.py::test_a_wind_from_the_north_drives_the_water_south";
     verify requirement CompositesSetOnlyPresence by
-        "tests/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_leaves_its_format_to_the_template";
+        "tests/telemac/test_telemac_module_surface.py::test_a_continuation_names_the_file_and_leaves_its_format_to_the_template";
     verify requirement CompositesSetOnlyPresence by
-        "tests/test_telemac_module_surface.py::test_a_curve_number_field_names_no_model_and_the_template_does";
+        "tests/telemac/test_telemac_module_surface.py::test_a_curve_number_field_names_no_model_and_the_template_does";
 
     satisfy requirement SharedBodyHasTwoUsers by sharedBody;
     satisfy requirement SharedBodyHasTwoUsers by sheet;
     verify requirement SharedBodyHasTwoUsers by
-        "tests/test_telemac_module_surface.py::test_every_shared_body_has_at_least_two_users";
+        "tests/telemac/test_telemac_module_surface.py::test_every_shared_body_has_at_least_two_users";
 
     satisfy requirement CompositionNotInheritance by sheet;
     verify requirement CompositionNotInheritance by
-        "tests/test_telemac_module_surface.py::test_a_body_is_reused_by_composition_and_never_by_extension";
+        "tests/telemac/test_telemac_module_surface.py::test_a_body_is_reused_by_composition_and_never_by_extension";
     verify requirement CompositionNotInheritance by
-        "tests/test_telemac_module_surface.py::test_the_parts_merge_in_the_listed_order";
+        "tests/telemac/test_telemac_module_surface.py::test_the_parts_merge_in_the_listed_order";
     verify requirement CompositionNotInheritance by
-        "tests/test_telemac_module_surface.py::test_a_keyword_two_parts_both_set_refuses_unless_the_template_settles_it";
+        "tests/telemac/test_telemac_module_surface.py::test_a_keyword_two_parts_both_set_refuses_unless_the_template_settles_it";
     verify requirement CompositionNotInheritance by
-        "tests/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
+        "tests/telemac/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
 
     satisfy requirement ATemplateNumberIsMetToTheMeshsPrecision by door;
     satisfy requirement ATemplateNumberIsMetToTheMeshsPrecision by sheet;
     verify requirement ATemplateNumberIsMetToTheMeshsPrecision by
-        "tests/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width";
+        "tests/telemac/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width";
     verify requirement ATemplateNumberIsMetToTheMeshsPrecision by
-        "tests/test_open_water_domains.py::test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline";
+        "tests/telemac/test_open_water_domains.py::test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline";
     verify requirement ATemplateNumberIsMetToTheMeshsPrecision by
-        "tests/test_open_water_domains.py::test_a_lone_node_between_two_of_another_kind_is_not_a_face";
+        "tests/telemac/test_open_water_domains.py::test_a_lone_node_between_two_of_another_kind_is_not_a_face";
 
     satisfy requirement ProvenanceNamesTheLayerThatAnswered by sheet;
     satisfy requirement ProvenanceNamesTheLayerThatAnswered by door;
     verify requirement ProvenanceNamesTheLayerThatAnswered by
-        "tests/test_telemac_module_surface.py::test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it";
+        "tests/telemac/test_telemac_module_surface.py::test_a_value_the_run_measured_reads_as_derived_not_as_the_body_that_named_it";
     verify requirement ProvenanceNamesTheLayerThatAnswered by
-        "tests/test_telemac_module_surface.py::test_a_measured_value_a_fill_overrides_still_reads_as_the_users";
+        "tests/telemac/test_telemac_module_surface.py::test_a_measured_value_a_fill_overrides_still_reads_as_the_users";
     verify requirement ProvenanceNamesTheLayerThatAnswered by
-        "tests/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
+        "tests/telemac/test_telemac_module_surface.py::test_a_composed_slot_says_which_part_asserted_it";
 
     satisfy requirement BodiesAreStatic by sheet;
     verify requirement BodiesAreStatic by
-        "tests/test_telemac_module_surface.py::test_a_body_is_static_and_no_fill_changes_what_it_asserts";
+        "tests/telemac/test_telemac_module_surface.py::test_a_body_is_static_and_no_fill_changes_what_it_asserts";
     verify requirement BodiesAreStatic by
-        "tests/test_telemac_module_surface.py::test_a_param_a_body_reads_binds_from_the_sheet_the_invocation_resolved";
+        "tests/telemac/test_telemac_module_surface.py::test_a_param_a_body_reads_binds_from_the_sheet_the_invocation_resolved";
 
     satisfy requirement RunIsHeld by sheet;
     satisfy requirement RunIsHeld by serializer;
     satisfy requirement RunIsHeld by stager;
     verify requirement RunIsHeld by
-        "tests/test_telemac_module_surface.py::test_run_refuses_an_incomplete_sheet_naming_the_required_file";
+        "tests/telemac/test_telemac_module_surface.py::test_run_refuses_an_incomplete_sheet_naming_the_required_file";
     verify requirement RunIsHeld by
-        "tests/test_telemac_module_surface.py::test_run_serializes_then_stages_then_dispatches";
+        "tests/telemac/test_telemac_module_surface.py::test_run_serializes_then_stages_then_dispatches";
     verify requirement RunIsHeld by
-        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement TheSteeringFormatHasOneWriter by serializer;
     satisfy requirement TheSteeringFormatHasOneWriter by steeringDriver;
     verify requirement TheSteeringFormatHasOneWriter by
-        "tests/test_telemac_module_surface.py::test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck";
+        "tests/telemac/test_telemac_module_surface.py::test_the_serializer_is_the_only_module_that_writes_a_keyword_into_a_deck";
 }

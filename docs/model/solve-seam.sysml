@@ -877,76 +877,76 @@ package SolveSeam {
 
     satisfy requirement OneNumberDefinesTheStructure by assembler;
     verify requirement OneNumberDefinesTheStructure by
-        "tests/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width";
+        "tests/telemac/test_open_water_domains.py::test_the_footprint_and_the_solid_faces_are_cut_at_the_same_width";
     verify requirement OneNumberDefinesTheStructure by
-        "tests/test_open_water_domains.py::test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline";
+        "tests/telemac/test_open_water_domains.py::test_a_boundary_node_is_on_the_structure_when_it_stands_on_the_punched_outline";
     verify requirement OneNumberDefinesTheStructure by
-        "tests/test_open_water_domains.py::test_a_lone_node_between_two_of_another_kind_is_not_a_face";
+        "tests/telemac/test_open_water_domains.py::test_a_lone_node_between_two_of_another_kind_is_not_a_face";
 
     satisfy requirement AWaterDomainIsClippedToItsMeasuredBed by basinDomainClip;
     verify requirement AWaterDomainIsClippedToItsMeasuredBed by
-        "tests/test_open_water_domains.py::test_the_basin_is_the_water_the_survey_actually_sounded";
+        "tests/telemac/test_open_water_domains.py::test_the_basin_is_the_water_the_survey_actually_sounded";
     verify requirement AWaterDomainIsClippedToItsMeasuredBed by
-        "tests/test_open_water_domains.py::test_water_the_survey_never_reached_refuses_rather_than_meshing";
+        "tests/telemac/test_open_water_domains.py::test_water_the_survey_never_reached_refuses_rather_than_meshing";
     verify requirement AWaterDomainIsClippedToItsMeasuredBed by
-        "tests/test_open_water_domains.py::test_the_basin_reads_the_same_survey_it_was_clipped_to";
+        "tests/telemac/test_open_water_domains.py::test_the_basin_reads_the_same_survey_it_was_clipped_to";
 
     satisfy requirement BoundaryCodesMatchTheSteering by topologyWriter;
     satisfy requirement BoundaryCodesMatchTheSteering by assembler;
     satisfy requirement BoundaryCodesMatchTheSteering by steeringStatements;
     verify requirement BoundaryCodesMatchTheSteering by
-        "tests/test_telemac_boundary_contract.py::test_flipping_the_strategy_moves_the_quad_and_the_keyword_together";
+        "tests/telemac/test_telemac_boundary_contract.py::test_flipping_the_strategy_moves_the_quad_and_the_keyword_together";
     verify requirement BoundaryCodesMatchTheSteering by
-        "tests/test_telemac_boundary_contract.py::test_the_engine_numbers_from_its_own_south_west_corner_not_from_row_order";
+        "tests/telemac/test_telemac_boundary_contract.py::test_the_engine_numbers_from_its_own_south_west_corner_not_from_row_order";
     verify requirement BoundaryCodesMatchTheSteering by
-        "tests/test_telemac_boundary_contract.py::test_a_liquid_run_that_straddles_the_first_row_is_ONE_boundary";
+        "tests/telemac/test_telemac_boundary_contract.py::test_a_liquid_run_that_straddles_the_first_row_is_ONE_boundary";
     verify requirement BoundaryCodesMatchTheSteering by
-        "tests/test_telemac_boundary_contract.py::test_the_run_prescribes_at_the_number_whose_quad_reads_it";
+        "tests/telemac/test_telemac_boundary_contract.py::test_the_run_prescribes_at_the_number_whose_quad_reads_it";
     verify requirement BoundaryCodesMatchTheSteering by
-        "tests/test_telemac_boundary_contract.py::test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing";
+        "tests/telemac/test_telemac_boundary_contract.py::test_a_boundary_whose_quad_prescribes_nothing_refuses_rather_than_writing";
     verify requirement BoundaryCodesMatchTheSteering by
-        "tests/test_telemac_boundary_contract.py::test_the_free_exit_role_prescribes_nothing_as_a_stated_choice";
+        "tests/telemac/test_telemac_boundary_contract.py::test_the_free_exit_role_prescribes_nothing_as_a_stated_choice";
     verify requirement BoundaryCodesMatchTheSteering by
-        "tests/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses";
+        "tests/mesh/test_mesh_topology_and_bed.py::test_a_bundle_that_states_no_prescription_per_boundary_refuses";
 
     satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by assembler;
     satisfy requirement CatchmentOutletHoldsADerivedRatingCurve by uniformFlow;
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
-        "tests/test_telemac_outflow_stage.py::test_the_rating_curve_starts_dry_and_ends_at_the_stated_ceiling";
+        "tests/telemac/test_telemac_outflow_stage.py::test_the_rating_curve_starts_dry_and_ends_at_the_stated_ceiling";
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
-        "tests/test_telemac_outflow_stage.py::test_the_curve_rises_monotonically_so_the_engine_can_interpolate_it";
+        "tests/telemac/test_telemac_outflow_stage.py::test_the_curve_rises_monotonically_so_the_engine_can_interpolate_it";
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
-        "tests/test_telemac_outflow_stage.py::test_every_point_is_the_normal_depth_the_reachs_own_stage_would_be";
+        "tests/telemac/test_telemac_outflow_stage.py::test_every_point_is_the_normal_depth_the_reachs_own_stage_would_be";
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
-        "tests/test_telemac_outflow_stage.py::test_the_curve_file_is_written_in_the_engines_own_block_format";
+        "tests/telemac/test_telemac_outflow_stage.py::test_the_curve_file_is_written_in_the_engines_own_block_format";
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
-        "tests/test_telemac_outflow_stage.py::test_the_catchments_outlet_slope_is_the_bed_over_the_elements_it_touches";
+        "tests/telemac/test_telemac_outflow_stage.py::test_the_catchments_outlet_slope_is_the_bed_over_the_elements_it_touches";
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
-        "tests/test_telemac_outflow_stage.py::test_a_flat_outlet_refuses_rather_than_holding_a_level_nobody_measured";
+        "tests/telemac/test_telemac_outflow_stage.py::test_a_flat_outlet_refuses_rather_than_holding_a_level_nobody_measured";
     verify requirement CatchmentOutletHoldsADerivedRatingCurve by
-        "tests/test_telemac_outflow_stage.py::test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area";
+        "tests/telemac/test_telemac_outflow_stage.py::test_the_flow_range_is_the_gross_rain_rate_on_the_meshed_area";
 
     satisfy requirement OutflowStageIsNormalDepth by uniformFlow;
     satisfy requirement OutflowStageIsNormalDepth by assembler;
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge";
+        "tests/telemac/test_telemac_outflow_stage.py::test_the_stage_is_the_depth_at_which_the_section_conveys_the_discharge";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_friction_slope_is_the_measured_fall_over_the_measured_length";
+        "tests/telemac/test_telemac_outflow_stage.py::test_the_friction_slope_is_the_measured_fall_over_the_measured_length";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_outflow_face_is_measured_as_a_transect_of_the_painted_bed";
+        "tests/telemac/test_telemac_outflow_stage.py::test_the_outflow_face_is_measured_as_a_transect_of_the_painted_bed";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_the_reach_length_is_walked_along_the_line_the_mesh_was_built_over";
+        "tests/telemac/test_telemac_outflow_stage.py::test_the_reach_length_is_walked_along_the_line_the_mesh_was_built_over";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_a_bigger_discharge_stands_higher_in_the_same_channel";
+        "tests/telemac/test_telemac_outflow_stage.py::test_a_bigger_discharge_stands_higher_in_the_same_channel";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_strickler_and_its_reciprocal_manning_derive_the_same_stage";
+        "tests/telemac/test_telemac_outflow_stage.py::test_strickler_and_its_reciprocal_manning_derive_the_same_stage";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_an_input_the_stage_cannot_be_derived_from_refuses_by_name";
+        "tests/telemac/test_telemac_outflow_stage.py::test_an_input_the_stage_cannot_be_derived_from_refuses_by_name";
 
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_module_surface.py::test_the_reach_body_is_written_at_the_derivation_it_was_solved_for";
+        "tests/telemac/test_telemac_module_surface.py::test_the_reach_body_is_written_at_the_derivation_it_was_solved_for";
     verify requirement OutflowStageIsNormalDepth by
-        "tests/test_telemac_outflow_stage.py::test_a_flatter_reach_stands_higher_for_the_same_flow";
+        "tests/telemac/test_telemac_outflow_stage.py::test_a_flatter_reach_stands_higher_for_the_same_flow";
 
     satisfy requirement MetricsAlways by workerEntrypoint;
     verify requirement MetricsAlways by
@@ -982,24 +982,24 @@ package SolveSeam {
     verify requirement CorrectEndIsTheSuccessConvention by
         "workers/telemac/test_entrypoint.py::test_a_clean_exit_that_wrote_no_result_is_not_a_solve";
     verify requirement CorrectEndIsTheSuccessConvention by
-        "tests/test_run_telemac_chain.py::test_classify_exit_clean_exit_but_no_correct_end_is_error";
+        "tests/telemac/test_run_telemac_chain.py::test_classify_exit_clean_exit_but_no_correct_end_is_error";
 
     satisfy requirement WorkersNeverImportServer by workerEntrypoint;
     satisfy requirement WorkersNeverImportServer by telapyChild;
     verify requirement WorkersNeverImportServer by
-        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement NoSecondParserOfTheFormat by resultReader;
     satisfy requirement NoSecondParserOfTheFormat by resultPostprocess;
     satisfy requirement NoSecondParserOfTheFormat by runReader;
     satisfy requirement NoSecondParserOfTheFormat by assembler;
     verify requirement NoSecondParserOfTheFormat by
-        "tests/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format";
+        "tests/telemac/test_telemac_result_reader.py::test_no_reader_on_this_side_parses_the_format";
     verify requirement NoSecondParserOfTheFormat by
-        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement ReadersNeverImportTheWorker by runReader;
     satisfy requirement ReadersNeverImportTheWorker by diagnosticsReader;
     verify requirement ReadersNeverImportTheWorker by
-        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 }

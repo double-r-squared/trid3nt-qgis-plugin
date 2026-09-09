@@ -47,7 +47,7 @@ verifies it.
 
 A model nobody can check rots, so nothing here is prose alone.
 `scripts/instruments/model_check.py` reads these files and validates four rules against the
-live code, and `tests/test_model_conformance.py` runs it in the offline suite:
+live code, and `tests/model/test_model_conformance.py` runs it in the offline suite:
 
 1. every non-optional item of every interface USAGE is named by the module at
    that hop's writer end and by the module at its consumer end - resolved

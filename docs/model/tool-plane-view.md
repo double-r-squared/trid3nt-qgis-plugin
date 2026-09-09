@@ -1,6 +1,6 @@
 # ToolPlane - derived view
 
-GENERATED from `docs/model/tool-plane.sysml` by `scripts/instruments/model_check.py --view`. Never hand-edited: regenerate it, and `tests/test_model_conformance.py` fails while it is stale.
+GENERATED from `docs/model/tool-plane.sysml` by `scripts/instruments/model_check.py --view`. Never hand-edited: regenerate it, and `tests/model/test_model_conformance.py` fails while it is stale.
 
 Plane: **tool**. System: **code-exec**. One seam of the system of systems indexed by [`README.md`](README.md) - never the whole picture.
 
@@ -70,10 +70,10 @@ The tool name the dispatch routes off the loop unconditionally. It is declared a
 
 | requirement | satisfied by | verified by |
 | --- | --- | --- |
-| **ASurfaceTooLargeToCarryIsReached** | `keywordLookup` | `tests/test_describe_keywords.py::test_a_question_in_words_reaches_the_keyword_that_answers_it`<br/>`tests/test_describe_keywords.py::test_a_match_carries_the_dictionary_s_own_help_choices_and_default`<br/>`tests/test_describe_keywords.py::test_the_same_question_is_answered_the_same_way_twice`<br/>`tests/test_describe_keywords.py::test_a_module_with_no_catalog_refuses_naming_the_ones_there_are`<br/>`tests/test_describe_keywords.py::test_every_corpus_phrasing_surfaces_the_tool_model_free` |
-| **DataEntersStaged** | `sandboxBox`, `sandboxDriver` | `tests/test_sandbox_box.py::test_a_local_raster_is_staged_and_opens_as_a_handle`<br/>`tests/test_sandbox_box.py::test_a_remote_ref_is_fetched_by_the_host_before_the_box_starts`<br/>`tests/test_sandbox_box.py::test_frames_stage_as_an_ordered_list`<br/>`tests/test_sandbox_box.py::test_a_ref_that_cannot_be_staged_is_named_rather_than_crashing_the_run`<br/>`tests/test_sandbox_box.py::test_the_box_reaches_for_nothing_from_the_inside` |
-| **OffloadKeepsTheLoopUnblocked** | `codeExecTool`, `toolDispatch` | `tests/test_sandbox_box.py::test_the_tool_that_drives_the_box_is_always_offloaded`<br/>`tests/test_sandbox_box.py::test_the_offload_keeps_the_loop_unblocked`<br/>`tests/test_sync_tool_offload_stage0.py::test_gate_refuses_emitting_sync_tool` |
-| **SandboxIsNetworkNone** | `sandboxBox`, `sandboxDriver` | `tests/test_sandbox_box.py::test_the_box_runs_with_the_network_off`<br/>`tests/test_sandbox_box.py::test_a_snippet_cannot_reach_the_network`<br/>`tests/test_sandbox_box.py::test_a_denied_egress_is_reported_as_blocked_rather_than_as_a_bug`<br/>`tests/test_model_conformance.py::test_the_model_conforms_to_the_tree` |
+| **ASurfaceTooLargeToCarryIsReached** | `keywordLookup` | `tests/search/test_describe_keywords.py::test_a_question_in_words_reaches_the_keyword_that_answers_it`<br/>`tests/search/test_describe_keywords.py::test_a_match_carries_the_dictionary_s_own_help_choices_and_default`<br/>`tests/search/test_describe_keywords.py::test_the_same_question_is_answered_the_same_way_twice`<br/>`tests/search/test_describe_keywords.py::test_a_module_with_no_catalog_refuses_naming_the_ones_there_are`<br/>`tests/search/test_describe_keywords.py::test_every_corpus_phrasing_surfaces_the_tool_model_free` |
+| **DataEntersStaged** | `sandboxBox`, `sandboxDriver` | `tests/sandbox/test_sandbox_box.py::test_a_local_raster_is_staged_and_opens_as_a_handle`<br/>`tests/sandbox/test_sandbox_box.py::test_a_remote_ref_is_fetched_by_the_host_before_the_box_starts`<br/>`tests/sandbox/test_sandbox_box.py::test_frames_stage_as_an_ordered_list`<br/>`tests/sandbox/test_sandbox_box.py::test_a_ref_that_cannot_be_staged_is_named_rather_than_crashing_the_run`<br/>`tests/sandbox/test_sandbox_box.py::test_the_box_reaches_for_nothing_from_the_inside` |
+| **OffloadKeepsTheLoopUnblocked** | `codeExecTool`, `toolDispatch` | `tests/sandbox/test_sandbox_box.py::test_the_tool_that_drives_the_box_is_always_offloaded`<br/>`tests/sandbox/test_sandbox_box.py::test_the_offload_keeps_the_loop_unblocked`<br/>`tests/tools/test_sync_tool_offload_stage0.py::test_gate_refuses_emitting_sync_tool` |
+| **SandboxIsNetworkNone** | `sandboxBox`, `sandboxDriver` | `tests/sandbox/test_sandbox_box.py::test_the_box_runs_with_the_network_off`<br/>`tests/sandbox/test_sandbox_box.py::test_a_snippet_cannot_reach_the_network`<br/>`tests/sandbox/test_sandbox_box.py::test_a_denied_egress_is_reported_as_blocked_rather_than_as_a_bug`<br/>`tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree` |
 
 ## What each requirement says
 

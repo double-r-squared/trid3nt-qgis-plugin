@@ -651,44 +651,44 @@ package EmissionSeam {
     satisfy requirement PresentationNeverInDeclarations by restyleSurface;
     satisfy requirement PresentationNeverInDeclarations by restyleTool;
     verify requirement PresentationNeverInDeclarations by
-        "tests/test_declarative_library.py::test_a_declaration_carries_no_presentation_vocabulary";
+        "tests/runtime/test_declarative_library.py::test_a_declaration_carries_no_presentation_vocabulary";
     verify requirement PresentationNeverInDeclarations by
-        "tests/test_router_hrrr.py::test_units_and_style_by_param";
+        "tests/fetchers/test_router_hrrr.py::test_units_and_style_by_param";
     verify requirement PresentationNeverInDeclarations by
-        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 
     satisfy requirement OneScalePerQuantity by presetFamily;
     satisfy requirement OneScalePerQuantity by publishPath;
     verify requirement OneScalePerQuantity by
-        "tests/test_presets.py::test_one_range_spans_a_compared_set";
+        "tests/emission/test_presets.py::test_one_range_spans_a_compared_set";
     verify requirement OneScalePerQuantity by
-        "tests/test_presets.py::test_a_shared_range_beats_a_read_and_the_legend_stops_naming_percentiles";
+        "tests/emission/test_presets.py::test_a_shared_range_beats_a_read_and_the_legend_stops_naming_percentiles";
     verify requirement OneScalePerQuantity by
-        "tests/test_presets.py::test_a_data_policy_reads_the_range_off_the_layer_and_says_so";
+        "tests/emission/test_presets.py::test_a_data_policy_reads_the_range_off_the_layer_and_says_so";
     verify requirement OneScalePerQuantity by
-        "tests/test_animation_legend_stability.py::test_the_scale_is_resolved_over_the_whole_run_never_one_frame";
+        "tests/scripts/test_animation_legend_stability.py::test_the_scale_is_resolved_over_the_whole_run_never_one_frame";
     verify requirement OneScalePerQuantity by
-        "tests/test_animation_legend_stability.py::test_the_animation_paints_what_the_published_raster_of_that_quantity_paints";
+        "tests/scripts/test_animation_legend_stability.py::test_the_animation_paints_what_the_published_raster_of_that_quantity_paints";
     verify requirement OneScalePerQuantity by
-        "tests/test_publish_layer_legend.py::test_the_layer_ships_the_qml_the_map_loads_over_that_same_range";
+        "tests/emission/test_publish_layer_legend.py::test_the_layer_ships_the_qml_the_map_loads_over_that_same_range";
     verify requirement OneScalePerQuantity by
-        "tests/test_outputs_seam.py::test_a_mesh_entry_paints_the_group_it_declares_on_the_published_range";
+        "tests/emission/test_outputs_seam.py::test_a_mesh_entry_paints_the_group_it_declares_on_the_published_range";
     verify requirement OneScalePerQuantity by
-        "tests/test_animation_legend_stability.py::test_the_published_range_is_found_by_quantity_not_by_the_title_it_was_painted_under";
+        "tests/scripts/test_animation_legend_stability.py::test_the_published_range_is_found_by_quantity_not_by_the_title_it_was_painted_under";
     verify requirement OneScalePerQuantity by
-        "tests/test_animation_legend_stability.py::test_a_log_ramp_takes_the_published_top_and_its_own_declared_floor";
+        "tests/scripts/test_animation_legend_stability.py::test_a_log_ramp_takes_the_published_top_and_its_own_declared_floor";
 
     satisfy requirement UserChoiceBeatsPreset by presetFamily;
     satisfy requirement UserChoiceBeatsPreset by restyleSurface;
     satisfy requirement UserChoiceBeatsPreset by restyleTool;
     verify requirement UserChoiceBeatsPreset by
-        "tests/test_presets.py::test_the_override_wins_field_by_field_over_the_declaration";
+        "tests/emission/test_presets.py::test_the_override_wins_field_by_field_over_the_declaration";
     verify requirement UserChoiceBeatsPreset by
-        "tests/test_restyle_surface.py::test_the_ask_beats_the_declared_row_field_by_field";
+        "tests/emission/test_restyle_surface.py::test_the_ask_beats_the_declared_row_field_by_field";
     verify requirement UserChoiceBeatsPreset by
-        "tests/test_restyle_surface.py::test_an_ask_nobody_made_leaves_the_declaration_alone";
+        "tests/emission/test_restyle_surface.py::test_an_ask_nobody_made_leaves_the_declaration_alone";
     verify requirement UserChoiceBeatsPreset by
-        "tests/test_restyle_surface.py::test_a_comparison_paints_every_layer_on_the_one_range";
+        "tests/emission/test_restyle_surface.py::test_a_comparison_paints_every_layer_on_the_one_range";
     verify requirement UserChoiceBeatsPreset by
         "plugin/tests/test_raster_render.py::test_a_case_reopen_adopts_its_own_layers_and_loads_no_style_over_them";
     verify requirement UserChoiceBeatsPreset by
@@ -699,13 +699,13 @@ package EmissionSeam {
     satisfy requirement EmissionIsAutomatic by pipelineEmitter;
     satisfy requirement EmissionIsAutomatic by restyleSurface;
     verify requirement EmissionIsAutomatic by
-        "tests/test_auto_publish_droppable_raster.py::test_intermediate_publishes_too_there_is_no_opt_out";
+        "tests/emission/test_auto_publish_droppable_raster.py::test_intermediate_publishes_too_there_is_no_opt_out";
     verify requirement EmissionIsAutomatic by
-        "tests/test_auto_publish_droppable_raster.py::test_publish_for_emission_is_the_only_seam";
+        "tests/emission/test_auto_publish_droppable_raster.py::test_publish_for_emission_is_the_only_seam";
     verify requirement EmissionIsAutomatic by
-        "tests/test_restyle_surface.py::test_hiding_a_layer_is_the_un_emit_and_unhiding_puts_it_back";
+        "tests/emission/test_restyle_surface.py::test_hiding_a_layer_is_the_un_emit_and_unhiding_puts_it_back";
     verify requirement EmissionIsAutomatic by
-        "tests/test_restyle_surface.py::test_hiding_a_layer_nobody_published_refuses_rather_than_creating_one";
+        "tests/emission/test_restyle_surface.py::test_hiding_a_layer_nobody_published_refuses_rather_than_creating_one";
     verify requirement EmissionIsAutomatic by
         "plugin/tests/test_raster_render.py::test_a_visibility_flip_on_a_row_already_seen_reaches_the_layer_tree";
 
@@ -715,25 +715,25 @@ package EmissionSeam {
     satisfy requirement StyleIsDeclaredOrKindDefault by publishPath;
     satisfy requirement StyleIsDeclaredOrKindDefault by layerMaterializer;
     verify requirement StyleIsDeclaredOrKindDefault by
-        "tests/test_presets.py::test_the_family_is_four_kinds_and_every_one_of_them_writes_a_document";
+        "tests/emission/test_presets.py::test_the_family_is_four_kinds_and_every_one_of_them_writes_a_document";
     verify requirement StyleIsDeclaredOrKindDefault by
-        "tests/test_presets.py::test_a_declaration_that_names_no_parameters_gets_its_kinds_bare_default";
+        "tests/emission/test_presets.py::test_a_declaration_that_names_no_parameters_gets_its_kinds_bare_default";
     verify requirement StyleIsDeclaredOrKindDefault by
-        "tests/test_presets.py::test_a_quantity_parameterises_the_preset_it_never_mints_one";
+        "tests/emission/test_presets.py::test_a_quantity_parameterises_the_preset_it_never_mints_one";
     verify requirement StyleIsDeclaredOrKindDefault by
-        "tests/test_router_spec_loader.py::test_a_style_row_naming_a_kind_outside_the_family_is_refused_at_registration";
+        "tests/fetchers/test_router_spec_loader.py::test_a_style_row_naming_a_kind_outside_the_family_is_refused_at_registration";
     verify requirement StyleIsDeclaredOrKindDefault by
-        "tests/test_router_spec_loader.py::test_a_style_row_naming_a_geometry_outside_the_family_is_refused";
+        "tests/fetchers/test_router_spec_loader.py::test_a_style_row_naming_a_geometry_outside_the_family_is_refused";
     verify requirement StyleIsDeclaredOrKindDefault by
         "plugin/tests/test_raster_render.py::test_the_legends_qml_reaches_load_named_style";
     verify requirement StyleIsDeclaredOrKindDefault by
         "plugin/tests/test_raster_render.py::test_a_vectors_declared_symbol_is_what_the_read_back_reports";
     verify requirement StyleIsDeclaredOrKindDefault by
-        "tests/test_publish_layer_legend.py::test_a_vector_row_resolves_through_the_same_seam_without_reading_the_object";
+        "tests/emission/test_publish_layer_legend.py::test_a_vector_row_resolves_through_the_same_seam_without_reading_the_object";
     verify requirement StyleIsDeclaredOrKindDefault by
-        "tests/test_publish_layer_legend.py::test_a_mesh_row_resolves_bound_to_the_group_it_declares";
+        "tests/emission/test_publish_layer_legend.py::test_a_mesh_row_resolves_bound_to_the_group_it_declares";
     verify requirement StyleIsDeclaredOrKindDefault by
-        "tests/test_publish_layer_legend.py::test_the_emission_seam_stamps_the_resolved_row_on_a_vector_it_passes";
+        "tests/emission/test_publish_layer_legend.py::test_the_emission_seam_stamps_the_resolved_row_on_a_vector_it_passes";
     verify requirement StyleIsDeclaredOrKindDefault by
-        "tests/test_model_conformance.py::test_the_model_conforms_to_the_tree";
+        "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 }
