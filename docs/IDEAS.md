@@ -4083,3 +4083,42 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   row - internally inconsistent until it resolves); the inventory's
   contracts/plugin baselines included tests (product-only 8,832 and
   14,997).
+
+- FETCHER FOLD RULED (NATE 2026-09-08, docs/validation/fetcher-fold-
+  census.md - the two-lens census by protocol family; 97 specs in
+  scope, 19 families). HONEST HEADLINE: the measured fold is -3,490
+  LOC (-4,102 with the two deferred rows), of which the RASTER half is
+  -450 - the STAC FOLD ruling's 4,500-6,000 estimate was WRONG: HRRR,
+  AORC and gridMET already open Zarr/NetCDF through xarray in-hook,
+  landcover is WCS, topobathy a urllist composite, BlueTopo a tile
+  join, CHIRPS/MRMS whole-object gzip; only eight specs are STAC. The
+  VECTOR half is -3,040: ESRI services (15 specs) on GDAL's ESRIJSON
+  driver via pyogrio, OGC API Features on the OAPIF driver, Overpass
+  (6) on OSMnx, the TIGER shapefile on /vsizip//vsicurl/, the US hydro
+  rows on HyRiver. RULINGS: (1) HyRiver ADOPTED, pinned
+  pygeohydro==0.19.4 + pynhd==0.19.3, its response cache given an
+  explicit expiry under our provenance rules, status_to_retry=(429,
+  500,502,503,504) at every call site (the deciding reason: it holds
+  the domain's own code tables - NID dam types/purposes, the STN
+  high-water-mark query set - that we hand-maintain). (2) READ PATHS:
+  STAC rasters through GDAL's HTTP gated on Stage 0 Probe A (a
+  throttled read logs the upstream error verbatim; else the odc-stac
+  custom reader driver over our transport is the fallback); ESRI on
+  the ESRIJSON driver gated on Probe B (paging proven 391 rows/4
+  pages; the 26 s latency absorbed by the cache classes; HyRiver's
+  ArcGISRESTful the reserve pager); Overpass on OSMnx with its 55 s
+  429 pause documented, a ~30 LOC mirror wrapper and a ~10 LOC
+  verbatim-error hook. (3) fetch_usgs_nwis_gauges is HELD until
+  calibration signs off (34 consumers; one moving part under the
+  proof); fetch_high_water_marks folds now; CO-OPS does not fold.
+  (4) fetch_dem is OUT of both folds for good (already a py3dep
+  delegate; STAC would be a cross-dataset substitution - same for
+  GOES ABI, NLCD, LANDFIRE, MODIS mirrors: an author decision, never
+  a fold shim); the bespoke JSON family does NOT fold except the
+  storm-tracks zip leg (-200); no noaa-coops dependency; topobathy's
+  warp-merge core stays closed; the fold PAYS _pc_stac.py's debt by
+  migrating compute_ndvi and digitize_water_body to
+  planetary_computer.sign and deleting the module; the join
+  transform (342) travels with the scope attic. The fold wave runs
+  after the scope-move wave closes; its charter is the census + these
+  rulings; conformance table at close.
