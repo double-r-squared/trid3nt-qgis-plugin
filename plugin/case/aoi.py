@@ -1,29 +1,8 @@
 """AOI helpers -- PURE PYTHON (no PyQGIS / PyQt imports).
 
-CRS math + guard logic for the dock's explicit AOI (the drawn Set-AOI
-rectangle / rehydrated case bbox, A2 NATE 2026-07-20).
-
-How the AOI rides the wire (mechanism 2, 2026-07-22):
-
-* The PERSISTENT Case bbox carrier is unchanged: ``case-command create`` /
-  ``set-bbox`` accept ``args.bbox = [lon_min, lat_min, lon_max, lat_max]``
-  (EPSG:4326) -- the web's #170 "AOI-first" path. The agent seeds
-  ``CaseSummary.bbox`` + ``state.case_bbox`` from it, and ``_turn_case_bbox``
-  (server.py) anchors every turn's tool dispatch on that value.
-
-* The PER-MESSAGE AOI is now a STRUCTURED payload field:
-  ``UserMessagePayload.aoi_bbox = [min_lon, min_lat, max_lon, max_lat]``
-  (EPSG:4326, ``None``/omitted when no AOI is set) -- contracts ws.py. This
-  REPLACED the legacy bracketed in-text context line ("[QGIS map canvas AOI
-  (EPSG:4326): bbox = ...]") that used to be appended to the message text;
-  the chat text now ships CLEAN and the numbers can never be re-typed wrong
-  by the LLM (the 0014/0017 hallucination-surface argument). The element
-  order mirrors the Case bbox carrier exactly.
-
-Guard (honest-clamp culture): an extent wider than ``AOI_MAX_DEG`` per side
-is NOT attached -- a whole-country box is not a usable simulation AOI, and
-silently sending it would invite a giant fetch. The dock notes why instead.
-"""
+CRS math and the guard for the dock's explicit AOI. An extent wider than
+``AOI_MAX_DEG`` per side is NOT attached: a whole-country box is not a usable
+simulation AOI, and sending it silently would invite a giant fetch."""
 
 from __future__ import annotations
 
@@ -64,13 +43,8 @@ def extent_to_bbox4326(
     crs_authid: str,
 ) -> Optional[Tuple[float, float, float, float]]:
     """Canvas extent in ``crs_authid`` -> ``(lon_min, lat_min, lon_max, lat_max)``.
-
-    PURE math for the two CRS that cover virtually every QGIS web-mapping
-    project: EPSG:4326 (passthrough + clamp) and EPSG:3857. Any other CRS
-    returns None -- the caller (dock) falls back to QGIS's own
-    ``QgsCoordinateTransform``, which knows the full proj database. Degenerate
-    or non-finite extents also return None (never a fabricated bbox).
-    """
+    Only EPSG:4326 and EPSG:3857 are handled; any other CRS, a degenerate extent
+    or a non-finite value returns None rather than a fabricated bbox."""
     values = (xmin, ymin, xmax, ymax)
     if any(not math.isfinite(v) for v in values):
         return None
@@ -116,21 +90,12 @@ def choose_aoi(
     canvas_bbox: Optional[Tuple[float, float, float, float]],
     prefer_selection: bool,
 ) -> Tuple[Optional[Tuple[float, float, float, float]], Optional[str]]:
-    """Pick which AOI rides this send: ``(bbox, source)``.
-
-    Milestone 3 item 4 (selected-polygon AOI): when the selection toggle is
-    ON and an actual selection resolved, the SELECTION bbox wins (v1: the
-    bbox of the selection, not the exact ring -- the agent's structured AOI
-    carriers, ``args.bbox`` on case-create/set-bbox and the per-message
-    ``aoi_bbox`` payload field, are both 4-number boxes; no ring field
-    exists). Otherwise the canvas extent (when resolved) is used. ``source``
-    is ``"selection"`` / ``"canvas"`` / None -- the status line names it so
-    the user always knows WHICH extent went out.
-
-    The 2-deg guard is deliberately NOT applied here: a too-large selection
-    must surface as "selection ... too large", not silently fall back to the
-    canvas the user explicitly overrode.
-    """
+    """Pick which AOI rides this send: ``(bbox, source)``, ``source`` being
+    ``"selection"``, ``"canvas"`` or None so the status line can name which
+    extent went out."""
+    # The guard is deliberately NOT applied here: a too-large selection must
+    # surface as "selection ... too large", never fall back to the canvas the
+    # user explicitly overrode.
     if prefer_selection and selection_bbox is not None:
         return selection_bbox, "selection"
     if canvas_bbox is not None:
@@ -140,7 +105,7 @@ def choose_aoi(
 
 def format_bbox(bbox: Tuple[float, float, float, float], precision: int = 6) -> str:
     """``[lon_min, lat_min, lon_max, lat_max]`` with fixed precision -- the
-    exact element order the agent's ``args.bbox`` / ``_coerce_bbox4`` expect."""
+    element order every bbox carrier on the wire expects."""
     return "[" + ", ".join(f"{v:.{precision}f}" for v in bbox) + "]"
 
 
@@ -150,14 +115,8 @@ def aoi_status_text(
     max_deg: float = AOI_MAX_DEG,
     source: str = "canvas",
 ) -> str:
-    """The dock's one-line AOI status.
-
-    - toggle off               -> "AOI: off"
-    - no resolvable bbox       -> honest unresolved note
-    - within guard             -> "AOI: canvas 0.12 x 0.09 deg"
-      (or "AOI: selection ..." when the selection override supplied it)
-    - exceeds guard            -> "... too large (> 2.0 deg/side), sent without AOI"
-    """
+    """The dock's one-line AOI status: off, unresolved, the span, or a
+    too-large note that states the AOI was NOT sent."""
     label = "selection" if source == "selection" else "canvas"
     if not enabled:
         return "AOI: off"

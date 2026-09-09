@@ -1,30 +1,9 @@
-"""Push-layer support -- PURE PYTHON (no PyQGIS / PyQt imports) except the ONE
-QGIS-only export helper at the bottom.
+"""Push-layer support -- PURE PYTHON except the ONE QGIS-only export helper
+at the bottom.
 
-Bidirectional layer push (the reverse seam of layer materialization): the
-user's ACTIVE QGIS layer (vector or raster) is sent INTO the current case as a
-first-class input layer, via the agent's HTTP listener
-(``catalog_http.py``, default ``http://127.0.0.1:8766``):
-
-    1. POST /api/ingest-layer-file?filename=<name>  (raw request-body upload;
-       Content-Type: application/octet-stream, NOT multipart/form-data -- this
-       plugin has no boto3 and this codebase has no multipart parser anywhere,
-       so a raw-body PUT-shaped POST is the simplest correct single-file
-       upload). -> 200 {"s3_uri": "s3://..."}
-    2. POST /api/ingest-layer {"case_id", "name", "kind", "s3_uri",
-       "crs_authid"?, "make_aoi"?} -- registers the uploaded object onto the
-       case. -> 200 {"status": "ok", "layer_id", "name", "layer_type", "uri",
-       "bbox", "aoi_pinned", "feature_count"} | 4xx {"error": "<honest msg>"}
-
-Pure-testable pieces: both HTTP calls (stdlib urllib against any host) and the
-finished-note formatter. The ONE QGIS-touching piece --
-``export_active_layer_to_tempfile`` -- is isolated at the bottom of this
-module so it is the ONLY thing a headless test cannot drive; everything else
-(``push_exported_file``, the orchestration used once a temp file already
-exists) is plain file + network I/O and is exercised end-to-end in
-``tests/headless_push_layer_proof.py`` against a stub HTTP server standing in
-for the two routes above.
-"""
+The user's active QGIS layer goes INTO the current case in two calls against
+the agent's HTTP listener: a raw-body (never multipart) file upload returning
+an ``s3://`` URI, then a JSON register that returns the case layer's row."""
 
 from __future__ import annotations
 
@@ -60,8 +39,7 @@ class PushLayerRequestError(Exception):
 
 def _http_error_detail(exc: urllib.error.HTTPError) -> str:
     """The server's own ``{"error": ...}`` message, prefixed with the HTTP
-    status so a 404 vs 413 is distinguishable at a glance. Mirrors
-    ``probe._http_error_detail``."""
+    status so a 404 and a 413 are distinguishable at a glance."""
     detail = ""
     try:
         payload = json.loads(exc.read().decode("utf-8", "replace"))
@@ -77,10 +55,7 @@ def upload_layer_bytes(
 ) -> str:
     """``POST {base_url}/api/ingest-layer-file?filename=<filename>`` with
     ``data`` as the raw request body -> the staged ``s3://`` object URI.
-
-    Blocking -- the caller runs this OFF the UI thread (see ``_PushLayerTask``
-    in ``net/tasks.py``).
-    """
+    BLOCKING: the caller runs this off the UI thread."""
     if not data:
         raise PushLayerRequestError("nothing to upload -- the exported file is empty")
     url = (
@@ -159,8 +134,7 @@ def post_ingest_layer(
 
 
 def format_push_note(name: str, result: Dict[str, Any]) -> str:
-    """The dock's success note for a completed push (design point 3: "<name>
-    pushed to case (vector, N features)")."""
+    """The dock's success note for a completed push."""
     kind = result.get("layer_type") or "layer"
     if kind == "vector":
         fc = result.get("feature_count")
@@ -190,13 +164,8 @@ def push_exported_file(
     timeout: float = DEFAULT_INGEST_TIMEOUT,
 ) -> Dict[str, Any]:
     """Upload an ALREADY-exported local file and register it on ``case_id``.
-
-    The pure (no PyQGIS) half of the push flow -- everything past "a file
-    exists on disk". Deletes ``local_path`` when done, success or failure
-    (the temp export is single-use). Raises ``PushLayerRequestError`` on any
-    failure; never partially registers (the upload step's failure never
-    reaches the ingest POST).
-    """
+    Deletes ``local_path`` on success AND on failure; never partially
+    registers, because a failed upload never reaches the ingest POST."""
     try:
         with open(local_path, "rb") as f:
             data = f.read()
@@ -230,9 +199,8 @@ def push_active_layer(
     timeout: float = DEFAULT_INGEST_TIMEOUT,
 ) -> Dict[str, Any]:
     """Full push: export ``layer`` (a ``QgsMapLayer``) to a temp file, upload
-    it, and register it on ``case_id``. The single entry point
-    ``_PushLayerTask`` (dock.py) calls off the UI thread.
-    """
+    it, and register it on ``case_id``. BLOCKING, and the one entry point a
+    caller needs."""
     local_path, kind = export_active_layer_to_tempfile(layer)
     crs_authid = None
     try:
@@ -264,16 +232,9 @@ def push_active_layer(
 
 
 def export_active_layer_to_tempfile(layer: Any) -> Tuple[str, str]:
-    """Export ``layer`` (the active QGIS layer) to a temp file.
-
-    Returns ``(local_path, kind)`` where ``kind`` is ``"vector"`` (written as
-    a GeoPackage via ``QgsVectorFileWriter``) or ``"raster"`` (written as a
-    GeoTIFF via the ``gdal:translate`` Processing algorithm -- simpler and
-    more robust across raster provider types than hand-building a
-    ``QgsRasterFileWriter`` pipe). Raises ``PushLayerRequestError`` when
-    ``layer`` is ``None``, of an unsupported type, or the export itself
-    fails.
-    """
+    """Export ``layer`` to a temp file, returning ``(local_path, kind)`` with
+    ``kind`` either ``"vector"`` (GeoPackage) or ``"raster"`` (GeoTIFF). A
+    ``None``, unsupported or unexportable layer raises."""
     from qgis.core import QgsRasterLayer, QgsVectorLayer
 
     if layer is None:
