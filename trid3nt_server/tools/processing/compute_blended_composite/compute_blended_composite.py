@@ -350,20 +350,20 @@ def compute_blended_composite(
 ) -> LayerURI:
     """Bake/blend/drape TWO raster layers into ONE composite COG, server-side.
 
-    Blends per-pixel: shaded land cover (land-cover RGB x hillshade), shaded
-    relief (colored relief x hillshade), any drape of A over B. NEVER tell the
-    user to set a blend mode in QGIS instead - baking here IS the delivery. Not
-    for vector layers, for layers meant to stay toggleable, or to produce the
-    hillshade or colored relief itself.
+    Blends per-pixel: shaded land cover (land cover x hillshade), shaded relief
+    (colored relief x hillshade), any drape of A over B. NEVER tell the user to
+    set a blend mode in QGIS - baking here IS the delivery. Not for vector
+    layers, for layers meant to stay toggleable, or to make the hillshade or
+    colored relief itself.
 
     Params:
         base_layer_uri: BASE raster, keeps its hue. A PALETTED base (NLCD from
-            fetch_landcover) is auto-colorized through its embedded table - pass
+            fetch_landcover) is colorized through its embedded table - pass
             that handle directly, do not pre-colorize it.
         overlay_layer_uri: OVERLAY raster, typically a grayscale hillshade;
             reprojected onto the base grid, multi-band averaged to gray.
-        blend_mode: "multiply" (default, the hillshade drape), "screen"
-            (lightens), "overlay" (contrast-preserving), "normal" (alpha).
+        blend_mode: "multiply" (default, the hillshade drape), "screen",
+            "overlay" (contrast-preserving), "normal" (alpha).
         overlay_opacity: 0.0 (base unchanged) to 1.0 (full effect).
 
     Output keeps the base CRS and grid, clipped to the overlap.
