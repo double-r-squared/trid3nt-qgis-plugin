@@ -1,67 +1,8 @@
 """Layer materialization -- turn agent LayerEvents into native QGIS layers.
 
-The differentiator: every layer the agent publishes lands in the QGIS layer
-tree, grouped under "TRID3NT <case>".
-
-ONE STORE, ONE SCHEME: every layer reference is an ``s3://bucket/key`` uri and
-GDAL reads it natively through ``/vsis3/`` (``s3_to_vsis3``). The endpoint and
-credentials are process-wide GDAL configuration applied once
-(``configure_store_access``), so pointing at a remote store is an endpoint
-VALUE, never a second code path -- there is no local-path-versus-remote branch
-anywhere below.
-
-  raster  ``QgsRasterLayer("/vsis3/<bucket>/<key>", name, "gdal")`` styled by
-          ``loadNamedStyle`` from the ``.qml`` the event's ``legend`` carries -
-          the resolved preset, in QGIS's own style format. A COG that already
-          carries its colours (RGB(A), an embedded colour table) ships no
-          ``.qml`` and keeps QGIS's own default renderer, which is already the
-          correct render. Ranged reads: overviews and windows only.
-  vector  ``QgsVectorLayer("/vsis3/<bucket>/<key>", name, "ogr")`` -- FlatGeobuf
-          reads its spatial index ranged, so QGIS fetches only the intersecting
-          features, NO local copy. The agent's additive ``inline_geojson`` merge
-          is INLINE data (not a store object), so it stages to the session temp
-          dir as a small ``.geojson`` -> ogr layer, labeled as staged.
-  mesh    the ONE cache hop: MDAL has no ``/vsi`` layer, so the object is copied
-          out of the store through GDAL's own VSI reader into a SESSION-scoped
-          temp dir (``trid3nt_session_<tag>`` under the platform temp), cleaned
-          up on dock disconnect/close, with a stale-session sweep at plugin
-          start for crash leftovers. Every layer note says STREAMED vs STAGED --
-          nothing ever lands outside the session temp, and a staged layer is
-          always labeled.
-
-Dedup: by ``layer_id`` -- session-state is replayed on every emit (A.7
-replace-not-reconcile), so the same rows arrive many times per turn. A case-open
-seeds that same set from the layers the PROJECT already holds, so a layer the
-user has since restyled in QGIS is adopted rather than rebuilt: the declared
-preset is a BIRTH default, and the project's own persistence owns every choice
-made after.
-
-Temporal: a layer states its own clock and this side stamps it. One frame of
-a sequence carries the ``valid_from``/``valid_to`` window its producer already
-held, so the built-in Temporal Controller plays the sequence with no name to
-parse and no synthetic clock. A mesh carries a ``reference_time``: MDAL owns
-the time axis inside a SELAFIN but the file records no origin for it, so the
-row says when zero was and ``setReferenceTime`` moves the whole extent onto
-the run's own clock.
-
-Mesh outputs (MDAL, the ONE staged format): a ``layer_type == "mesh"`` event
-(SFINCS ``sfincs_map.nc`` and kin) STAGES to the session temp dir first --
-QGIS's MDAL provider demands a local path -- then loads
-``QgsMeshLayer(local_path, name, "mdal")`` (``_add_mesh``). QGIS's MDAL
-provider reports an EMPTY crs() for a SELAFIN and for a SFINCS quadtree NetCDF
-(proven live), so ``setCrs(QgsCoordinateReferenceSystem(crs_authid))`` is applied
-explicitly from the event's ``crs_authid`` (carried on the row); when that is
-unresolved the layer is still added with an honest dock note instead of a
-silent wrong-CRS render. Its declared preset paints ONE dataset group, and the
-binding is made HERE, against the groups the open layer reports
-(``bind_declared_mesh_style``) -- MDAL spells a SELAFIN's groups in the
-fixed-width names the file carries, and a quantity no group answers to is a
-visible note, never a blank render. The libhdf5 "File Type" attribute warnings
-QGIS's MDAL/netCDF backend prints on open are benign (proven live) and are not
-treated as failure -- only ``layer.isValid()`` gates success. The staged ``.nc``
-lives under the session temp dir and is swept on disconnect/close (session TTL)
--- never a persistent download.
-"""
+ONE STORE ONE SCHEME: every reference is an ``s3://`` uri read through
+``/vsis3``, and the ONE cache hop is MDAL, which has no ``/vsi`` layer. A
+preset is a BIRTH default: an adopted layer is never repainted."""
 
 from __future__ import annotations
 
@@ -95,8 +36,7 @@ _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
 
 #: The row a mesh preset binds its dataset group with. QGIS remaps the
 #: document's own group index through this NAME when it loads the style, so
-#: the name has to be one the OPEN layer carries -- see
-#: ``bind_declared_mesh_style``.
+#: the name has to be one the OPEN layer carries.
 _MESH_GROUP_BINDING = re.compile(
     r"(<name-to-global-index\b[^>]*\bname=)(\"[^\"]*\"|'[^']*')")
 
@@ -104,10 +44,9 @@ _MESH_GROUP_BINDING = re.compile(
 _OSM_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 _OSM_LAYER_NAME = "OpenStreetMap"
 
-# BK-1: base-map preset library (Settings dropdown). Each entry = (layer name,
-# XYZ template, zmax). Names double as the QGIS layer names so switching
-# presets can find + remove the previous one. ESRI imagery is the satellite
-# view NATE wants under the TELEMAC mesh wireframe.
+# Base-map preset library. Each entry is (layer name, XYZ template, zmax), and
+# the names double as the QGIS layer names, so switching presets can find and
+# remove the previous one.
 BASEMAP_PRESETS = {
     "OpenStreetMap": (_OSM_LAYER_NAME, _OSM_TEMPLATE, 19),
     "ESRI World Imagery (satellite)": (
@@ -124,13 +63,10 @@ BASEMAP_PRESETS = {
 }
 _ALL_BASEMAP_LAYER_NAMES = [v[0] for v in BASEMAP_PRESETS.values()]
 
-#: Prefix of every TRID3NT-owned layer-tree group -- the live per-case group
-#: ("TRID3NT <case>", ``LayerMaterializer.set_case``). ITEM A (case-switch
-#: clear) matches on this prefix so every such group is swept on a case-open
-#: rebind (a legacy "TRID3NT export <case>" group from a pre-streaming session
-#: still matches and is cleaned too). The OpenStreetMap basemap is added
-#: directly at layerTreeRoot (never inside a group -- see ``ensure_basemap``)
-#: so it never matches this prefix and is never touched.
+#: Prefix of every TRID3NT-owned layer-tree group. A case-open rebind sweeps
+#: every group matching it, so a group left by another case is cleaned. A
+#: basemap is added directly at layerTreeRoot, never inside a group, so it
+#: never matches this prefix and is never touched.
 _GROUP_PREFIX = "TRID3NT "
 
 #: The case a TRID3NT group belongs to, stamped on the group node. A title can
@@ -159,10 +95,9 @@ _OWNER_PID_FILE = ".owner_pid"
 
 
 def _pid_alive(pid: int) -> bool:
-    """True when ``pid`` names a live process. ``os.kill(pid, 0)`` is the POSIX
-    liveness probe; any error other than "no such process" (permission, or a
-    platform where signal 0 is unsupported) is treated as ALIVE so the stale
-    sweep never deletes a dir it cannot prove is dead."""
+    """True when ``pid`` names a live process. Any error other than "no such
+    process" reads as ALIVE, so the stale sweep never deletes a dir it cannot
+    PROVE is dead."""
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -173,10 +108,9 @@ def _pid_alive(pid: int) -> bool:
 
 
 def sweep_stale_session_dirs() -> int:
-    """Remove crash-leftover session temp dirs at plugin start; return the count
-    swept. A ``trid3nt_session_*`` dir is removed only when its owner PID is
-    DEAD (or unreadable) -- a dir owned by a live process (a concurrent QGIS
-    instance, or this one) is left alone. Best-effort: never raises."""
+    """Remove crash-leftover session temp dirs; return the count swept. A dir
+    goes only when its owner PID is DEAD or unreadable, so a concurrent live
+    instance's staging is never deleted under it. Never raises."""
     swept = 0
     try:
         root = tempfile.gettempdir()
@@ -202,9 +136,8 @@ def sweep_stale_session_dirs() -> int:
 
 
 def _streamed_note(kind: str, extra: str = "") -> str:
-    """The STREAMED label (no local copy) -- the honesty-floor marker every
-    /vsis3 layer carries so a remote-streamed layer is never confused with a
-    downloaded one."""
+    """The STREAMED label every ``/vsis3`` layer carries, so a streamed layer
+    is never confused with a downloaded one."""
     tail = f", {extra}" if extra else ""
     return f"{kind} streamed via /vsis3 (no local copy{tail})"
 
@@ -215,20 +148,18 @@ def _streamed_note(kind: str, extra: str = "") -> str:
 def configure_store_access(
     endpoint: str, access_key: str, secret_key: str, region: str
 ) -> Optional[str]:
-    """Point GDAL's ``/vsis3`` at the object store. Called once per session.
-
-    ``endpoint`` is the store's base url (``http://host:9000``); GDAL wants the
-    host:port alone plus an explicit ``AWS_HTTPS`` flag, and MinIO serves
-    path-style buckets, so virtual hosting is off. PAM is disabled process-wide
-    because GDAL writes a ``.aux.xml`` sidecar BESIDE the dataset it opened --
-    against ``/vsis3`` that is a write into the store on every read.
-
-    Returns an honest note on failure (GDAL absent / unusable), else None.
-    """
+    """Point GDAL's ``/vsis3`` at the object store, ONCE per session. A remote
+    store is this endpoint VALUE, never a second code path. Returns an honest
+    note when GDAL is absent or unusable, else None."""
     try:
         from osgeo import gdal
     except Exception as exc:  # noqa: BLE001 -- no GDAL bindings: honest note
         return f"store access not configured ({type(exc).__name__}: {exc})"
+    # ``endpoint`` is a base url, but GDAL wants the host:port alone plus an
+    # explicit ``AWS_HTTPS`` flag, and MinIO serves path-style buckets, so
+    # virtual hosting goes off. PAM is disabled process-wide because GDAL
+    # writes a ``.aux.xml`` sidecar BESIDE the dataset it opened -- against
+    # ``/vsis3`` that is a write into the store on every read.
     scheme, _, rest = (endpoint or "").strip().rpartition("://")
     host = rest.strip("/")
     for key, value in (
@@ -249,12 +180,9 @@ def configure_store_access(
 
 
 def ensure_basemap(preset: str = "OpenStreetMap") -> Optional[str]:
-    """Ensure the CHOSEN base-map preset (BK-1 Settings dropdown) is the one
-    on the map: adds it if missing (inserted LAST -- bottom of the stack) and
-    removes any OTHER preset's layer so switching in Settings swaps cleanly.
-    Returns a status note, or None when the chosen preset is already there.
-    Never raises -- a rejected uri is an honest note, not a crash.
-    """
+    """Make the CHOSEN base-map preset the one on the map, inserted LAST so it
+    sits at the bottom of the stack, and remove any OTHER preset's layer. None
+    when the chosen preset is already there; never raises."""
     name, template, zmax = BASEMAP_PRESETS.get(
         preset, BASEMAP_PRESETS["OpenStreetMap"]
     )
@@ -279,11 +207,9 @@ def ensure_basemap(preset: str = "OpenStreetMap") -> Optional[str]:
 
 
 def zoom_to_extent(canvas, rect: Optional["QgsRectangle"], margin: float = 0.1) -> bool:
-    """Zoom ``canvas`` to ``rect`` (already in the canvas' own CRS), scaled
-    out by ``margin`` (10% default) so features are not flush against the
-    view edge. Returns False (no-op) on an empty/None rect or any failure --
-    never raises.
-    """
+    """Zoom ``canvas`` to ``rect``, already in the canvas' own CRS, scaled out
+    by ``margin`` so features are not flush against the view edge. False is a
+    no-op on an empty, absent or non-finite rect; never raises."""
     try:
         if rect is None or rect.isEmpty():
             return False
@@ -311,11 +237,8 @@ def zoom_to_bbox4326(
     canvas, bbox: Tuple[float, float, float, float], margin: float = 0.1
 ) -> bool:
     """Zoom ``canvas`` to an EPSG:4326 ``(lon_min, lat_min, lon_max, lat_max)``
-    bbox, transformed to the canvas' destination CRS via
-    ``QgsCoordinateTransform`` (the project's transform context), scaled out
-    by ``margin``. Returns False (no-op) on any transform failure -- never
-    raises.
-    """
+    bbox, transformed into the canvas' destination CRS. False is a no-op on any
+    transform failure; never raises."""
     try:
         lon_min, lat_min, lon_max, lat_max = bbox
         rect = QgsRectangle(lon_min, lat_min, lon_max, lat_max)
@@ -336,10 +259,7 @@ def zoom_to_bbox4326(
 
 def _temporal_qdt(text) -> Optional[QDateTime]:
     """A DECLARED ISO-8601 UTC instant -> ``QDateTime``, else ``None``.
-
-    The trailing Z parses as UTC on both Qt5 and Qt6; anything the parser
-    refuses is an absent time, never a guessed one.
-    """
+    Anything the parser refuses is an ABSENT time, never a guessed one."""
     if not isinstance(text, str) or not text.strip():
         return None
     stamp = QDateTime.fromString(text.strip(), Qt.DateFormat.ISODate)
@@ -378,13 +298,9 @@ def _fixed_temporal_mode(props):
 
 
 def stamp_raster_temporal(layer, event: LayerEvent) -> Optional[str]:
-    """Stamp a raster with the validity window its row DECLARED.
-
-    One frame of a sequence carries its own ``valid_from``/``valid_to``, so the
-    Temporal Controller plays the sequence from the producer's own instants --
-    there is no name to parse and no synthetic clock to invent. A row that
-    declares no window is not a frame and is left alone. Never raises.
-    """
+    """Stamp a raster with the validity window its row DECLARED, so the
+    Temporal Controller plays the sequence off the producer's own instants. A
+    row declaring no window is not a frame and is left alone; never raises."""
     begin = _temporal_qdt((event.raw or {}).get("valid_from"))
     end = _temporal_qdt((event.raw or {}).get("valid_to"))
     if begin is None or end is None:
@@ -405,11 +321,8 @@ def stamp_raster_temporal(layer, event: LayerEvent) -> Optional[str]:
 
 def stamp_mesh_temporal(layer, event: LayerEvent) -> Optional[str]:
     """Point a mesh layer's time axis at the instant its run DECLARED as zero.
-
-    MDAL activates a mesh layer's temporal properties itself, but a SELAFIN
-    records no origin for the seconds it counts, so the controller scrubs 1900
-    until the run says when zero was. Never raises.
-    """
+    A SELAFIN records no origin for the seconds it counts, so without this the
+    controller scrubs 1900. Never raises."""
     reference = _temporal_qdt((event.raw or {}).get("reference_time"))
     if reference is None:
         return None
@@ -453,22 +366,16 @@ def _active_scalar_group(layer) -> int:
 
 def bind_declared_mesh_style(layer, legend: Optional[dict], temp_dir: str) -> str:
     """Load the declared preset onto a mesh, bound to one of ITS OWN groups.
-
-    A mesh preset paints ONE dataset group and QGIS binds that group BY NAME:
-    the document's ``name-to-global-index`` row is remapped against the open
-    layer's groups on load, and a name no group carries leaves the layer with
-    NO active scalar group at all -- a document that loads and then renders
-    nothing. MDAL spells a SELAFIN's groups in the fixed-width names the file
-    itself carries (``dye             mgl``), so the DECLARED quantity is
-    resolved against the names the OPEN layer reports and the matched one is
-    written into the document before QGIS reads it. Reproducing MDAL's
-    spelling on the producer side would be a second parser of a format QGIS
-    has already parsed.
-
-    Returns the note tail the dock shows. Always something: an unbound
-    quantity is a fact about the render, never a silence. Never raises -- a
-    styling failure is a note, never a lost layer.
-    """
+    ALWAYS returns a note tail: an unbound quantity is a fact about the render,
+    never a silence. Never raises -- a styling failure is a note, not a loss."""
+    # A mesh preset paints ONE dataset group and QGIS binds that group BY NAME,
+    # remapping the document's ``name-to-global-index`` row against the open
+    # layer's groups on load; a name no group carries leaves the layer with NO
+    # active scalar group -- a document that loads and renders nothing. MDAL
+    # spells a SELAFIN's groups in the fixed-width names the file itself
+    # carries (``dye             mgl``), so the declared quantity is resolved
+    # against the names the OPEN layer reports and the match is written into
+    # the document before QGIS reads it.
     qml = (legend or {}).get("qml") if isinstance(legend, dict) else None
     if not isinstance(qml, str) or not qml.strip():
         return " -- no declared preset on the row; MDAL's own default group stands"
@@ -515,33 +422,20 @@ def bind_declared_mesh_style(layer, legend: Optional[dict], temp_dir: str) -> st
 
 
 def _clamp_mesh_scalar_classification(layer) -> Optional[str]:
-    """Pin EVERY scalar dataset group's colour classification to a FINITE range.
-
-    The mesh analogue of the raster ``sane_range`` guard, and the reason it is
-    load-bearing on arm64: an MDAL scalar group whose statistics are degenerate
-    -- an all-nodata timestep, an all-dry SFINCS depth field, a group the
-    temporal scrubber steps onto that carries no wet cell -- reports a NaN/inf
-    (or zero-span) ``minimum()/maximum()``. Left to itself QGIS builds the mesh
-    colour-ramp legend from exactly that range, and the SAME non-finite ->
-    INT_MAX precision saturation that crashes the raster path in
-    ``qt_doubleToAscii`` fires here (the 0.3.8 fix never covered meshes).
-
-    We clamp ALL groups, not merely the initially-active one. The active group
-    is set once at add time, but the user drives the mesh live: switching the
-    active scalar group from the layer styling panel hands that group's
-    classification straight to the native renderer, so a single degenerate
-    NON-active group is a latent mid-session crash (the SFINCS/TELEMAC meshes
-    here carry many groups -- depth, water level, velocity magnitude, tracer --
-    and any one can be all-dry / all-nodata). Pinning a user-set classification
-    on every group additionally stops QGIS re-deriving a per-timestep range
-    while the Temporal Controller scrubs, so an empty timestep inside an
-    otherwise-wet group cannot regenerate a NaN range either. Each group's
-    extremes route through ``formatting.sane_range`` and are written back with
-    ``setClassificationMinimumMaximum`` BEFORE the layer reaches the canvas.
-    Returns an honest substitution note counting the degenerate groups, or
-    ``None`` when every range was already sane / there is nothing to classify.
-    Never raises -- a defensive no-op beats a lost mesh.
-    """
+    """Pin EVERY scalar dataset group's classification to a FINITE range,
+    before the layer reaches the canvas. Returns a substitution note counting
+    the degenerate groups, or None when every range was already sane."""
+    # A degenerate group -- an all-nodata timestep, an all-dry depth field --
+    # reports a NaN/inf or zero-span minimum and maximum, and QGIS builds the
+    # colour-ramp legend from exactly that, firing the same non-finite ->
+    # INT_MAX precision saturation the raster path guards against.
+    #
+    # ALL groups are clamped, not merely the initially-active one: the user
+    # switches the active scalar group live from the styling panel, which hands
+    # that group's classification straight to the native renderer, so one
+    # degenerate NON-active group is a latent mid-session crash. Pinning every
+    # group also stops QGIS re-deriving a per-timestep range while the Temporal
+    # Controller scrubs, so an empty timestep cannot regenerate a NaN range.
     try:
         settings = layer.rendererSettings()
         group_count = int(layer.datasetGroupCount())
@@ -583,20 +477,11 @@ def _clamp_mesh_scalar_classification(layer) -> Optional[str]:
 
 
 def load_declared_style(layer, legend: Optional[dict], temp_dir: str) -> Optional[str]:
-    """Load the layer's RESOLVED preset onto it, and say what happened.
-
-    The legend carries the preset already resolved into a ``.qml`` - QGIS's own
-    declarative style format - so the render is QGIS reading its own document
-    rather than this side rebuilding a renderer out of a colour-ramp name and a
-    range. ``qml`` is absent for a layer whose file already carries its colours
-    (an RGB(A) composite, a COG with a band-1 colour table): QGIS's own default
-    renderer IS the correct render for those, and overriding it would repaint a
-    picture the producer had already painted.
-
-    ``loadNamedStyle``'s boolean is well-formedness only, so a document that
-    loads without changing the renderer still reports honestly. Never raises --
-    a styling failure is a note, never a lost layer.
-    """
+    """Load the layer's RESOLVED preset onto it and say what happened. An
+    ABSENT ``qml`` means the file already carries its own colours and QGIS's
+    default IS the correct render, so nothing is overridden."""
+    # ``loadNamedStyle``'s boolean is well-formedness only, so a document that
+    # loads without changing the renderer still has to report honestly.
     qml = (legend or {}).get("qml") if isinstance(legend, dict) else None
     if not isinstance(qml, str) or not qml.strip():
         return None
@@ -614,12 +499,9 @@ def load_declared_style(layer, legend: Optional[dict], temp_dir: str) -> Optiona
 
 
 def _load_style_document(layer, document: str, temp_dir: str) -> Tuple[bool, str]:
-    """Hand QGIS a ``.qml`` to read; return ``(loaded, message)``.
-
-    ``loadNamedStyle`` takes a PATH, so the document is written into the
-    session temp dir and removed again -- a style is a message, not an
-    artifact.
-    """
+    """Hand QGIS a ``.qml`` to read -> ``(loaded, message)``. ``loadNamedStyle``
+    takes a PATH, so the document is written into the session temp dir and
+    removed again: a style is a message, not an artifact."""
     path = os.path.join(temp_dir, f"style_{uuid.uuid4().hex[:12]}.qml")
     try:
         with open(path, "w", encoding="utf-8") as fh:
@@ -635,12 +517,8 @@ def _load_style_document(layer, document: str, temp_dir: str) -> Tuple[bool, str
 
 def _renderer_tag(layer) -> str:
     """The layer's current rendering identity, for the before/after read-back.
-
-    The renderer TYPE alone does not discriminate on a vector: QGIS's own
-    default for one is already a single-symbol renderer, so a document that
-    loaded its declared symbol would read as "unchanged". The SYMBOL is what
-    changed, so the symbol is what the tag carries.
-    """
+    Renderer TYPE alone does not discriminate on a vector -- QGIS's default is
+    already single-symbol -- so the tag carries the SYMBOL too."""
     try:
         renderer = layer.renderer()
         if renderer is None:
@@ -677,17 +555,12 @@ class LayerMaterializer:
     # -- lifecycle ------------------------------------------------------------- #
 
     def set_case(self, case_id: str, title: Optional[str] = None) -> None:
-        """Bind to a case: adopt the layers this case already has in the
-        project, clear every OTHER TRID3NT layer-tree group (a previous case's,
-        and any "Open case in QGIS" export group, which otherwise accumulate
-        across switches), and name the case's group.
-
-        A layer this project already holds for this case is ADOPTED, never
-        rebuilt: its id joins the dedup set, so the replay treats it as
-        already-materialized and no preset is loaded over it. That is what
-        makes a preset a BIRTH default -- the user's own restyling of a layer
-        is the project's to keep, and repainting it on reopen would be this
-        side overruling a choice the user made in QGIS."""
+        """Bind to a case: adopt the layers the project already holds for it,
+        clear every OTHER TRID3NT group, and name this case's group. An adopted
+        layer is NEVER rebuilt and no preset is loaded over it."""
+        # That adoption is what makes a preset a BIRTH default: the user's own
+        # restyling is the project's to keep, and repainting it on reopen would
+        # overrule a choice the user made in QGIS.
         label = title or case_id[:8]
         self._group_name = f"TRID3NT {label}"
         self._case_id = case_id
@@ -697,18 +570,11 @@ class LayerMaterializer:
         self._added_ids.update(self._adopt_existing_layers())
 
     def _clear_stale_groups(self, case_id: str) -> None:
-        """Remove every TRID3NT layer-tree group EXCEPT this case's own.
-
-        The prefix matches the live per-case group and any "Open case in QGIS"
-        export group; a group is this case's when it carries the case id this
-        materializer was just bound to (the id is stamped at creation, so a
-        second case whose title happens to collide is still a different group).
-
-        NEVER touches the OpenStreetMap basemap (added directly at
-        layerTreeRoot, never inside a group -- see ``ensure_basemap``) or
-        any non-TRID3NT group/layer the user added themselves. Never raises
-        -- a half-torn-down project tree must not crash a case switch.
-        """
+        """Remove every TRID3NT layer-tree group EXCEPT this case's own. A
+        basemap, and anything the user added themselves, is never touched.
+        Never raises: a half-torn-down tree must not crash a case switch."""
+        # Ownership is by the stamped case ID, not the group name, so a second
+        # case whose title happens to collide is still a different group.
         try:
             project = QgsProject.instance()
             root = project.layerTreeRoot()
@@ -727,12 +593,9 @@ class LayerMaterializer:
             pass
 
     def _adopt_existing_layers(self) -> set:
-        """The layer ids this case's surviving group already holds.
-
-        A project restored from disk (or a reconnect within one session) brings
-        its layers back WITH the styling they carry, the user's own included.
-        Adopting their ids is what stops the replay adding a second copy and
-        what stops a preset being loaded over a choice already made."""
+        """The layer ids this case's surviving group already holds. Adopting
+        them stops the replay adding a second copy, and stops a preset loading
+        over a styling choice already made."""
         adopted: set = set()
         try:
             for layer in QgsProject.instance().mapLayers().values():
@@ -744,9 +607,8 @@ class LayerMaterializer:
         return adopted
 
     def _ensure_temp_dir(self) -> str:
-        """The SESSION staging dir (``trid3nt_session_<tag>`` under the platform
-        temp), created on first use with an owner-PID marker so a later plugin
-        start can distinguish this dir's crash leftover from a concurrent live
+        """The SESSION staging dir, created on first use with an owner-PID
+        marker so a later start can tell a crash leftover from a live
         instance's. Recreated if it was swept underneath us."""
         if self._temp_dir is None or not os.path.isdir(self._temp_dir):
             path = os.path.join(
@@ -762,10 +624,9 @@ class LayerMaterializer:
         return self._temp_dir
 
     def cleanup_session(self) -> None:
-        """Remove this session's staging dir and everything staged in it (the
-        session-TTL cleanup): called on dock disconnect and on dock
-        close/plugin unload. Best-effort -- a cleanup failure is never a crash,
-        and any residue is caught by ``sweep_stale_session_dirs`` next start."""
+        """Remove this session's staging dir and everything staged in it.
+        Best-effort: a failure is never a crash, and residue is caught by the
+        stale sweep at the next start."""
         path = self._temp_dir
         self._temp_dir = None
         if path and os.path.isdir(path):
@@ -789,12 +650,9 @@ class LayerMaterializer:
     # -- materialization -------------------------------------------------------- #
 
     def materialize(self, events: List[LayerEvent]) -> List[str]:
-        """Add any NEW layers from a session-state snapshot.
-
-        Returns human-readable status notes (one per action/skip) for the
-        dock's status lines. Never raises -- a bad layer yields a note, not a
-        crash (honesty floor: failures are visible, not silent).
-        """
+        """Add any NEW layers from a session-state snapshot -> one status note
+        per action or skip. Never raises: a bad layer yields a note, so a
+        failure is VISIBLE rather than silent."""
         notes: List[str] = []
         self.last_added_layers = []
         for event in events:
@@ -875,12 +733,9 @@ class LayerMaterializer:
         return f"vector '{event.name}' added ({source_label}{tail})"
 
     def _stage_s3_to_session(self, s3_uri: str, filename: str) -> Optional[str]:
-        """Copy a store object into the SESSION temp dir; return the local path.
-
-        The ONE cache hop, for MDAL alone -- read through the SAME ``/vsis3``
-        GDAL uses for everything else, so there is no second credential path.
-        Returns None on any failure; the caller turns that into an honest skip
-        note. The staged file is swept on disconnect/close."""
+        """Copy a store object into the SESSION temp dir -> the local path.
+        The ONE cache hop, read through the SAME ``/vsis3`` as everything else
+        so there is no second credential path. None on any failure."""
         src = s3_to_vsis3(s3_uri)
         if src is None:
             return None
@@ -905,17 +760,9 @@ class LayerMaterializer:
         return dest
 
     def _add_mesh(self, event: LayerEvent) -> str:
-        """Native MDAL mesh (SFINCS ``sfincs_map.nc``, TELEMAC ``*.slf`` and kin)
-        -- a STAGED format. QGIS's MDAL provider demands a local path, so the
-        object stages to the session temp dir first, then loads as
-        ``QgsMeshLayer(local_path, name, "mdal")``. The staged filename PRESERVES
-        the source object's extension (``.slf`` for a SELAFIN, ``.nc`` for a
-        netCDF): MDAL selects its driver partly by extension, so a SELAFIN staged
-        as ``.nc`` would be rejected. CRS comes from the row's ``crs_authid`` (MDAL
-        reports an empty crs() for a SELAFIN and a SFINCS quadtree grid); the active
-        scalar group is the one the declared preset binds to
-        (``bind_declared_mesh_style``). Every outcome is an honest note; never
-        raises."""
+        """Native MDAL mesh, the one STAGED format: the provider demands a
+        local path. CRS comes from the row, because MDAL reports an empty
+        ``crs()`` for a SELAFIN and a quadtree grid. Every outcome is a note."""
         uri = event.uri or ""
         if uri.startswith("s3://"):
             # Preserve the source extension so MDAL's extension-sensitive driver
@@ -963,12 +810,9 @@ class LayerMaterializer:
     # -- project insertion helper -------------------------------------------- #
 
     def _add_to_group(self, layer, event: LayerEvent, note: str, group=None) -> str:
-        """Add ``layer`` to the project + insert its tree node into
-        ``group`` (default: this materializer's flat case group). ``group``
-        lets ITEM C place a frame-sequence member straight into its
-        animation subgroup at construction time -- see the module docstring
-        above the animation-grouping helpers for why members are never
-        relocated into a subgroup after the fact."""
+        """Add ``layer`` to the project and insert its tree node into
+        ``group``, defaulting to this materializer's case group. Placement is
+        at CONSTRUCTION time: a node is never relocated afterwards."""
         if formatting.is_finite_number(event.opacity):
             # ``max(0, min(1, nan))`` returns NaN (NaN defeats both bounds), so
             # guard finiteness BEFORE the native ``setOpacity`` rather than rely
@@ -979,9 +823,8 @@ class LayerMaterializer:
             except (AttributeError, TypeError, ValueError):
                 pass
         QgsProject.instance().addMapLayer(layer, False)
-        # Charts-window 2026-08-04: stamp the source uri + layer id so the
-        # ChartsWindow "Locate on map" affordance can match a chart's
-        # ``source_layer_uri`` back to the loaded layer it was computed from.
+        # Stamp the source uri and layer id, so a chart's ``source_layer_uri``
+        # can be matched back to the loaded layer it was computed from.
         try:
             if event.uri:
                 layer.setCustomProperty("trid3nt/source_uri", event.uri)
@@ -1008,14 +851,12 @@ class LayerMaterializer:
         except Exception:  # noqa: BLE001 -- visibility is best-effort, never fatal
             pass
 
-    # -- extent union (canvas-zoom fallback, item 1) ---------------------------- #
+    # -- extent union (canvas-zoom fallback) ----------------------------------- #
 
     def combined_extent(self, dest_crs, layers: Optional[List] = None) -> Optional["QgsRectangle"]:
-        """Combined extent of ``layers`` (default: ``self.last_added_layers``),
-        each transformed into ``dest_crs``. Layers with an empty extent or an
-        unresolvable CRS transform are skipped, never raised on. Returns None
-        when nothing usable was found.
-        """
+        """Combined extent of ``layers``, default the most recent additions,
+        each transformed into ``dest_crs``. An empty extent or an unresolvable
+        transform is skipped; None when nothing usable was found."""
         combined: Optional[QgsRectangle] = None
         for layer in (self.last_added_layers if layers is None else layers):
             try:
@@ -1038,8 +879,7 @@ class LayerMaterializer:
 
     def last_added_vector_extent(self, dest_crs) -> Optional["QgsRectangle"]:
         """Combined extent of the VECTOR layers added by the most recent
-        live ``materialize()`` call. XYZ raster layers (the live tile
-        publishes) report a whole-world extent, so only vectors count here --
-        the canvas-zoom fallback when a case-open carries no bbox."""
+        materialize call. Only vectors count, because an XYZ raster reports a
+        whole-world extent that would swallow the zoom."""
         vectors = [l for l in self.last_added_layers if isinstance(l, QgsVectorLayer)]
         return self.combined_extent(dest_crs, vectors)

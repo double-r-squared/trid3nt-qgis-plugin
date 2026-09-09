@@ -2,8 +2,7 @@
 
 A value either rides the wire per turn (model id, thinking, tool-choice mode) or
 is agent-process ENV the plugin cannot inject: provider and its API key persist
-here and take effect only when the agent restarts.
-"""
+here and take effect only when the agent restarts."""
 
 from __future__ import annotations
 

@@ -1,31 +1,8 @@
 """Map-click point probe -- PURE PYTHON (no PyQGIS / PyQt imports).
 
-The dock's "Probe" map tool: click the QGIS canvas and the dock shows the
-value (or a mini time series, for a detected animation-frame sequence) of
-every raster layer loaded on the current case at that point. Deterministic
--- no LLM in the loop -- driven by the agent's HTTP listener
-(``catalog_http.py``, default ``http://127.0.0.1:8766``):
-
-    POST /api/probe-point {"case_id", "lon", "lat"}  (EPSG:4326)
-    -> 200 {"status": "ok", "point": {"lon", "lat"}, "case_id", "results": [
-             {"layer_id", "name", "value", "units"?, "note"?, "error"?} |
-             {"name", "series": [{"label", "value", "note"?, "error"?}, ...],
-              "units"?, "layer_ids"}
-           ], "truncated", "computed_at"}
-       | 4xx {"error": "<honest msg>"}
-
-The server (``src/.../tools/probe_point.py``) already groups
-animation-frame sequences into ONE ``series`` entry (the same stem/token
-classifier ``extract_timeseries_at_point`` and the web LayerPanel scrubber
-use) -- this module has no grouping logic of its own, only request-building,
-response-parsing, and the compact note-block formatter the dock renders.
-
-Pure-testable pieces: the whole module (stdlib urllib against any host) --
-mirrors ``push_layer.py``'s split. The ONE PyQGIS-touching piece (the
-``QgsMapToolEmitPoint`` install/restore + the canvas-CRS -> EPSG:4326
-transform of the clicked point) lives in ``dock.py``'s ``_ProbePointTask`` /
-``_toggle_probe_tool``, NOT here.
-"""
+One POST per click, deterministic and with no LLM in the loop. The SERVER
+groups an animation-frame sequence into one ``series`` entry, so nothing here
+groups: this builds the request, parses the reply, formats the note block."""
 
 from __future__ import annotations
 
@@ -49,13 +26,12 @@ DEFAULT_PROBE_TIMEOUT = 30.0
 
 class ProbePointRequestError(Exception):
     """The probe API call failed -- carries the server's honest message, or
-    an honest local description (agent unreachable, non-JSON reply).
-    Mirrors ``push_layer.PushLayerRequestError``."""
+    an honest local description (agent unreachable, non-JSON reply)."""
 
 
 def _http_error_detail(exc: urllib.error.HTTPError) -> str:
     """The server's own ``{"error": ...}`` message, prefixed with the HTTP
-    status. Mirrors ``push_layer._http_error_detail``."""
+    status."""
     detail = ""
     try:
         payload = json.loads(exc.read().decode("utf-8", "replace"))
@@ -67,18 +43,15 @@ def _http_error_detail(exc: urllib.error.HTTPError) -> str:
 
 
 def _build_probe_body(case_id: str, lon: float, lat: float) -> bytes:
-    """The request-builder half: ``{"case_id", "lon", "lat"}`` as JSON bytes."""
+    """``{"case_id", "lon", "lat"}`` as JSON bytes; the point is EPSG:4326."""
     return json.dumps(
         {"case_id": case_id, "lon": lon, "lat": lat}
     ).encode("utf-8")
 
 
 def _parse_probe_response(raw: bytes) -> Dict[str, Any]:
-    """The response-parser half: raw HTTP body bytes -> the result dict.
-
-    Raises ``ProbePointRequestError`` on non-JSON / non-object bodies -- the
-    honest local description a malformed reply deserves.
-    """
+    """Raw HTTP body bytes -> the result dict. A non-JSON or non-object body
+    raises rather than degrading to an empty result."""
     try:
         result = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -96,10 +69,7 @@ def post_probe_point(
     timeout: float = DEFAULT_PROBE_TIMEOUT,
 ) -> Dict[str, Any]:
     """``POST {base_url}/api/probe-point`` -> the parsed result dict.
-
-    Blocking -- the caller runs this OFF the UI thread (see
-    ``_ProbePointTask`` in ``dock.py``, mirroring ``_PushLayerTask``).
-    """
+    BLOCKING: the caller runs this off the UI thread."""
     url = f"{base_url.rstrip('/')}/api/probe-point"
     request = urllib.request.Request(
         url,
@@ -145,10 +115,9 @@ def _format_single_line(entry: Dict[str, Any]) -> str:
 
 
 def _format_series_line(entry: Dict[str, Any]) -> str:
-    """One series result entry -> a compact chain line, e.g. ``"Flood depth:
-    0.02 -> 0.15 -> 0.31 -> 0.28 m (4 steps, peak 0.31)"``. A step with no
-    value renders as ``"--"`` in the chain rather than being dropped, so the
-    step count always matches the frame count."""
+    """One series result entry -> a compact chain line with a step count and
+    a peak. A step with no value renders ``"--"`` rather than being dropped,
+    so the step count always matches the frame count."""
     name = str(entry.get("name") or "series")
     series = entry.get("series") or []
     units = entry.get("units")
@@ -174,14 +143,9 @@ def _format_series_line(entry: Dict[str, Any]) -> str:
 
 
 def format_probe_result(result: Dict[str, Any]) -> List[str]:
-    """The dock's compact note-block lines for one probe click.
-
-    One line per ``results`` entry: a plain ``"name: value units"`` line for
-    a single-layer entry, a compact chain line for a ``series`` entry. An
-    empty ``results`` -- a case with no raster layers, or nothing at this
-    point -- returns a single honest line rather than an empty block. A
-    ``truncated`` response appends one more honest line.
-    """
+    """The dock's compact note-block lines for one probe click, one per
+    ``results`` entry. An empty ``results`` returns a single honest line
+    rather than an empty block, and a truncated reply appends another."""
     results = result.get("results") or []
     if not results:
         return ["No layers to probe at this point."]

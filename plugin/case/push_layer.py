@@ -1,9 +1,8 @@
-"""Push-layer support -- PURE PYTHON except the ONE QGIS-only export helper
-at the bottom.
+"""Push-layer support -- PURE PYTHON but for the QGIS-only export at the end.
 
-The user's active QGIS layer goes INTO the current case in two calls against
-the agent's HTTP listener: a raw-body (never multipart) file upload returning
-an ``s3://`` URI, then a JSON register that returns the case layer's row."""
+The user's active QGIS layer goes INTO the current case in two calls against the
+agent's HTTP listener: a raw-body (never multipart) file upload returning an
+``s3://`` URI, then a JSON register that returns the case layer's row."""
 
 from __future__ import annotations
 
