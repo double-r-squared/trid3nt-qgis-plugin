@@ -4407,3 +4407,31 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   tracked files, 7,902 pure LOC; 2,923 pure LOC leave the public
   repo. Executes inside the hygiene and docs wave under the full-
   coverage law.
+  DOCS CENSUS RULED (NATE 2026-09-09, docs/validation/docs-census.md;
+  the LIMITS themselves still under discussion): (a) THE FORTY
+  LONGEST docstrings are CUT WITH THE SWEEP - NO docs/method/
+  directory; a derivation or ladder that governs a line of code
+  becomes a full-line COMMENT BLOCK at that line (comment blocks have
+  no length cap - they are the constraint at its point of use); what
+  constrains nothing goes (git is the archive). (b) THE RECORDS: the
+  220 superseded/dead decision records DELETED outright and the
+  folder's "never rewrite history" convention replaced; the seven
+  binding records that contradict later rulings AMENDED in place (the
+  US-only clause, the wheels path, AGENTS.md's laws naming an absent
+  script and an unlocated constant, the naming ADR's unmet Layer B
+  stated, the spec-format ADR vs the model); the six "STATUS:
+  THINKING" notes folded into the calibration methodology or deleted;
+  IDEAS re-sectioned - one heading per ruling and an index, nothing
+  deleted; the DELETION_LEDGER's 353 terminal rows rolled up per wave
+  AFTER the doc wave; system-uml.html demoted to a rendering of the
+  model; the two content migrations run BEFORE any deletion. (c) THE
+  GUARDS: tests/test_docstring_standard.py with a per-symbol
+  "# docstring-exempt: <reason>" marker and a regenerated exemptions
+  ledger (no glob or directory exemptions; past ~10 entries the limit
+  is re-argued); the same test checks every map README names files
+  that exist and covers every top-level module (lands LAST, after the
+  twelve new maps); frozen evidence: the SWAN and TOMAWAC proof
+  directories DELETED (engines gone), coastal_tidal_surge kept until
+  the coastal split, a proof-coverage assertion (three live templates
+  have none), the proof README stating that the four-variant law
+  governs renders, not evidence blobs.
