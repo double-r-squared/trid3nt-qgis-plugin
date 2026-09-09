@@ -29,7 +29,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Path setup — allow running tests from the services/agent/ directory.
 # ---------------------------------------------------------------------------
-_SRC = Path(__file__).parent.parent
+_SRC = Path(__file__).parent.parent.parent
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
@@ -41,7 +41,13 @@ from trid3nt_server.adapters.adapter import (  # noqa: E402
     _strip_private_params,
     build_tool_declarations,
 )
-from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402,F401 — populated on import
+import trid3nt_server.main as _main  # noqa: E402
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402,F401
+
+# The catalog tools register through the daemon startup import, not through
+# ``trid3nt_server.tools``, so a module that sweeps the registry must run that
+# import itself or its case list depends on which test module loaded first.
+_main._import_tools_registry()
 
 
 # ---------------------------------------------------------------------------
