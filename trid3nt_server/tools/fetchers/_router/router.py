@@ -54,7 +54,7 @@ from .errors import (
     router_not_available_error,
     router_upstream_error,
 )
-from .executors import raster_cog, station_timeseries, vector_fgb
+from .executors import raster_cog, station_timeseries
 from .transforms import tiled_mosaic
 
 logger = logging.getLogger("trid3nt_server.tools.fetchers._router.router")
@@ -577,11 +577,9 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if spec.hooks is not None and (spec.hooks.next_page or spec.hooks.enrich_plan):
         from .executors import chained_resolution
         return chained_resolution.execute
-    # Sidecar-write path (trigger wave): an overpass source that ALSO writes
-    # ONE declared sidecar object next to the .fgb (fetch_buildings' tags.json). Routes
-    # to the overpass_sidecar executor (build_request QL + a (features, tags) parse +
-    # the constrained side write). MUST win over the http_json build_request branch
-    # below (it also declares build_request). No-op for every prior spec.
+    # Sidecar-write path: a source that ALSO writes ONE declared sidecar object next
+    # to the .fgb (fetch_buildings' tags.json) routes to the overpass_sidecar executor,
+    # which returns both halves off one read.
     if (spec.ingest or {}).get("sidecar_write"):
         from .executors import overpass_sidecar
         return overpass_sidecar.execute
@@ -613,7 +611,13 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
             return stac_raster.execute
         return raster_cog.execute
     if spec.shape == "vector-fgb":
-        return vector_fgb.execute
+        raise router_input_error(
+            spec.error_code_prefix,
+            "a vector-fgb row must declare HOW it is read - ingest.access: ogr for a "
+            "driver-published layer, hooks.delegate for a library-owned one, or a "
+            "hooks.build_request pair for a bespoke API",
+            spec.input_error_suffix,
+        )
     if spec.shape == "station-timeseries-fgb":
         return station_timeseries.execute
     raise router_input_error(

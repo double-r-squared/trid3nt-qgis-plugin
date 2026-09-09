@@ -7,7 +7,7 @@ monkeypatched -- NO live calls. Coverage:
 - raster_cog: ``array_to_cog_bytes`` roundtrip (band/dtype/crs/nodata/bounds);
   ``execute`` with a monkeypatched ``fetch_source_array``.
 - vector_fgb: ``features_to_fgb_bytes`` non-empty + honest-empty header-only FGB;
-  ``fetch_features`` pagination + ``max_features`` cap via a fake page source.
+  the ``max_features`` cap the driver read carries.
 - station_timeseries: ``stations_to_point_fgb`` scalars + inline time_series_csv;
   typed ``*_EMPTY`` on all-empty; ``fetch_station_records`` via monkeypatch.
 - tiled_mosaic: ``plan_tile_grid`` math; ``mosaic_tile_files`` over 2 synthetic
@@ -316,37 +316,38 @@ def test_features_to_fgb_empty_is_header_only_not_error():
     assert len(gdf) == 0
 
 
-def test_fetch_features_paginates_and_caps(monkeypatch):
+def test_max_features_caps_the_driver_read(monkeypatch):
+    """The cap is the read's, not a page loop's: the driver stops at max_features."""
+    from trid3nt_server.tools.fetchers._router.executors import vector_ogr
+
     spec = _vector_spec(page_size=2, max_features=5)
-    pages = [
-        [_feature(-100.0, 40.0, "a", "x"), _feature(-100.1, 40.1, "b", "x")],  # full page
-        [_feature(-100.2, 40.2, "c", "x"), _feature(-100.3, 40.3, "d", "x")],  # full page
-        [_feature(-100.4, 40.4, "e", "x"), _feature(-100.5, 40.5, "f", "x")],  # would exceed cap
-    ]
-    calls = {"n": 0}
+    spec = spec.model_copy(update={"ingest": {**(spec.ingest or {}),
+                                              "access": "ogr", "ogr": {"driver": "ESRIJSON"}}})
+    seen: dict = {}
 
-    def _fake_page(s, url, params):
-        i = calls["n"]
-        calls["n"] += 1
-        return pages[i] if i < len(pages) else []
+    def _fake_read(path, **kwargs):
+        seen.update(kwargs)
+        import geopandas as gpd
+        return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
 
-    monkeypatch.setattr(vector_fgb, "_fetch_one_page", _fake_page)
-    feats = vector_fgb.fetch_features(spec, {"bbox": [-101, 39, -100, 41]})
-    assert len(feats) == 5  # capped at max_features
+    import pyogrio
+    monkeypatch.setattr(pyogrio, "read_dataframe", _fake_read)
+    vector_ogr.fetch_from_endpoint(spec, spec.endpoints["data"], {"bbox": [-101, 39, -100, 41]})
+    assert seen["max_features"] == 5
 
 
-def test_vector_fgb_staged_uri_is_typed_error_not_handed_to_httpx():
-    """A staged s3:// endpoint reaching the ArcGIS-query executor is a closed
-    trap (ADR 0297 follow-up): it needs the raster_cog direct_window bucket/key
-    resolution, which this executor does not have -- a typed error, never a raw
-    httpx failure on an unsupported scheme."""
+def test_vector_ogr_staged_uri_is_typed_error_not_handed_to_a_driver():
+    """A staged s3:// endpoint reaching the query builder is a closed trap: it needs
+    the raster_cog direct_window bucket/key resolution, which no vector read has."""
+    from trid3nt_server.tools.fetchers._router.executors import vector_ogr
+
     spec = _vector_spec()
     spec = spec.model_copy(update={
         "endpoints": {"data": spec.endpoints["data"].model_copy(update={
             "url": "s3://trid3nt-cache/staged/demo/x.fgb"})}
     })
     with pytest.raises(RouterUpstreamError):
-        vector_fgb.fetch_features(spec, {"bbox": [-101, 39, -100, 41]})
+        vector_ogr.build_query(spec, (-101, 39, -100, 41))
 
 
 # --------------------------------------------------------------------------- #

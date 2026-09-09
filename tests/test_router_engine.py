@@ -221,17 +221,18 @@ def test_route_end_to_end_writes_cache_and_emits_layeruri(fake_s3, monkeypatch):
 
 
 def test_route_vector_source_class_in_uri(fake_s3, monkeypatch):
-    from trid3nt_server.tools.fetchers._router.executors import vector_fgb
+    from trid3nt_server.tools.fetchers._router.executors import vector_ogr
 
     spec = SourceSpec.model_validate({
         "name": "fetch_demo_vector", "source_class": "demo_vector", "shape": "vector-fgb",
         "endpoints": {"data": {"url": "http://x/query"}},
         "params": {"bbox": {"type": "bbox", "required": True}},
+        "ingest": {"access": "ogr", "ogr": {"driver": "ESRIJSON"}},
         "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
         "cache": {"ttl_class": "semi-static-7d"},
         "payload_estimate": {"model": "per_feature", "kb_per_feature": 1.0},
     })
-    monkeypatch.setattr(vector_fgb, "fetch_features", lambda s, p: [])  # honest-empty
+    monkeypatch.setattr(vector_ogr, "fetch_features", lambda s, p: [])  # honest-empty
     layer = router.route(spec, {"bbox": [-100.0, 40.0, -99.0, 41.0]})
     assert layer.layer_type == "vector"
     assert "cache/semi-static-7d/demo_vector/" in layer.uri

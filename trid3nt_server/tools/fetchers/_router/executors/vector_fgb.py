@@ -1,14 +1,17 @@
-"""vector-fgb executor (contract sec 2.2), incl. the ArcGIS paging mode.
+"""vector-fgb serializer (contract sec 2.2): the shape every vector row ends in.
 
-Query -> GeoJSON/esri-json -> FlatGeobuf via ``geopandas ... driver="FlatGeobuf",
-engine="pyogrio"``. ``pagination.mode`` selects ``result_offset`` (hifld/census)
-or ``exceeded_transfer_limit``; the loop mirrors ``_fetch_features_paginated``
-with the ``max_features`` cap. ALWAYS emits a valid FGB -- an empty result is a
-header-only FGB (honest-empty, never a fabricated error), matching the twins.
+GeoJSON features -> FlatGeobuf via ``geopandas ... driver="FlatGeobuf",
+engine="pyogrio"``, plus the declarative frame normalizer every vector executor
+runs first: the ordered ``column_map`` projection, the geometry filter, the
+nested-JSON coercion and the derived columns. ALWAYS emits a valid FGB -- an empty
+result is a header-only FGB carrying the declared/derived schema (honest-empty,
+never a fabricated error).
 
-The pure serializer ``features_to_fgb_bytes`` is offline-testable with synthetic
-GeoJSON features; the network path routes through ``fetch_features`` which tests
-monkeypatch (or drive against a fake ``_fetch_one_page``).
+Two spec-vocabulary resolvers live here beside them because they answer the same
+question - what this call is asking for - rather than how it is fetched:
+``build_where`` turns ``ingest.where_clauses`` into the server-side ``where=``, and
+``resolve_endpoints`` picks the primary and its same-dataset mirrors. Everything
+here is pure and offline-testable; the reads live in the executors.
 """
 
 from __future__ import annotations
@@ -24,8 +27,6 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import router_upstream_error
-from ..shape_classifier import classify_response
-from ..transport import TransportError, get_bytes, get_client, is_staged_uri
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.executors.vector_fgb"
@@ -37,9 +38,6 @@ __all__ = [
     "apply_column_map",
     "build_where",
     "resolve_endpoints",
-    "build_query_params",
-    "fetch_features",
-    "execute",
 ]
 
 
@@ -469,46 +467,6 @@ def features_to_fgb_bytes(
                 pass
 
 
-# --------------------------------------------------------------------------- #
-# ArcGIS query build + paginated fetch (network).
-# --------------------------------------------------------------------------- #
-
-
-def _esri_geometry_to_geojson(g: Any) -> dict[str, Any] | None:
-    """Decode one esri-json geometry to a GeoJSON geometry (rings/point/paths).
-
-    Polygon ``rings`` keep ALL rings under a single Polygon (the standard
-    ArcGIS->GeoJSON convention; pyogrio repairs winding on write); degenerate
-    rings (< 4 vertices) are dropped.
-    """
-    if not isinstance(g, dict):
-        return None
-    if "rings" in g:
-        good = [r for r in (g.get("rings") or []) if isinstance(r, list) and len(r) >= 4]
-        return {"type": "Polygon", "coordinates": good} if good else None
-    if "paths" in g:
-        paths = [p for p in (g.get("paths") or []) if isinstance(p, list) and len(p) >= 2]
-        if not paths:
-            return None
-        if len(paths) == 1:
-            return {"type": "LineString", "coordinates": paths[0]}
-        return {"type": "MultiLineString", "coordinates": paths}
-    if "x" in g and "y" in g:
-        x, y = g.get("x"), g.get("y")
-        if isinstance(x, (int, float)) and isinstance(y, (int, float)):
-            return {"type": "Point", "coordinates": [x, y]}
-    return None
-
-
-def _esri_feature_to_geojson(feat: dict[str, Any]) -> dict[str, Any]:
-    """Esri ``{attributes, geometry}`` -> GeoJSON ``{properties, geometry}``."""
-    return {
-        "type": "Feature",
-        "geometry": _esri_geometry_to_geojson(feat.get("geometry")),
-        "properties": feat.get("attributes") or {},
-    }
-
-
 def resolve_endpoints(spec: SourceSpec, params: dict[str, Any]) -> list[Any]:
     """Ordered endpoint chain for the fetch: the SELECTED primary + fallbacks.
 
@@ -541,184 +499,3 @@ def resolve_endpoints(spec: SourceSpec, params: dict[str, Any]) -> list[Any]:
         if ep is not None and ep is not primary:
             chain.append(ep)
     return chain
-
-
-def build_query_params(
-    spec: SourceSpec,
-    bbox: tuple[float, float, float, float] | None,
-    *,
-    result_offset: int = 0,
-    where: str = "1=1",
-    endpoint: Any | None = None,
-) -> tuple[str, dict[str, str]]:
-    """Build an ArcGIS FeatureServer ``/query`` URL + params for one page.
-
-    Reads ``ingest.query_template`` (page_size, out_fields, order_by) with the
-    hifld defaults. ``endpoint`` overrides the ``data`` endpoint (fallback /
-    select chain). ``bbox=None`` omits the geometry envelope (the global-query
-    sweep, supports_global_query sources: nifc). Returns ``(url, params)``.
-    """
-    ingest = spec.ingest or {}
-    qt = ingest.get("query_template", {})
-    if endpoint is None:
-        endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
-    url = endpoint.url or endpoint.url_template or ""
-    # A staged s3:// object needs the raster_cog direct_window resolution
-    # (bucket/key -> the active endpoint); this executor hands its URL straight
-    # to an ArcGIS FeatureServer query over httpx, which cannot serve one. Full
-    # staged-vector support is future work -- this closes the trap with a typed
-    # error instead of a raw httpx failure on an s3:// scheme.
-    if is_staged_uri(url):
-        raise router_upstream_error(
-            spec.error_code_prefix,
-            f"a staged s3:// uri is not readable by the vector query executor: {url!r}",
-        )
-    page_size = int(ingest.get("pagination", {}).get("page_size", 2000))
-    params: dict[str, str] = {
-        "where": where,
-        "outFields": str(qt.get("out_fields", "*")),
-        "outSR": "4326",
-        "f": str(qt.get("f", "geojson")),
-        "resultOffset": str(result_offset),
-        "resultRecordCount": str(page_size),
-    }
-    # orderByFields only when the spec pins one: some hosted services (CDC onemap)
-    # reject an orderByFields they do not support, so it is opt-in (the twins that
-    # need stable paging set it; those that omit it do not).
-    order_by = qt.get("order_by")
-    if order_by:
-        params["orderByFields"] = str(order_by)
-    # esri-json sources (f=json layers that reject f=geojson) need the
-    # geometry as a JSON envelope object + returnGeometry; a no-op for geojson.
-    if bool(ingest.get("esri_json")):
-        params["returnGeometry"] = "true"
-    if bbox is not None:
-        min_lon, min_lat, max_lon, max_lat = bbox
-        if ingest.get("geometry_envelope") == "json":
-            params["geometry"] = json.dumps({
-                "xmin": min_lon, "ymin": min_lat, "xmax": max_lon, "ymax": max_lat,
-                "spatialReference": {"wkid": 4326},
-            })
-        else:
-            params["geometry"] = f"{min_lon},{min_lat},{max_lon},{max_lat}"
-            params["inSR"] = "4326"
-        params["geometryType"] = "esriGeometryEnvelope"
-        params["spatialRel"] = "esriSpatialRelIntersects"
-    # merge static endpoint query
-    for k, v in (endpoint.query or {}).items():
-        params[str(k)] = str(v)
-    return url, params
-
-
-def _fetch_one_page(spec: SourceSpec, url: str, params: dict[str, str]) -> list[dict[str, Any]]:
-    """GET one page of an ArcGIS query; return GeoJSON features. Network.
-
-    Routes through the shared transport (``..transport.get_bytes`` over the
-    pooled ``get_client()``) -- the ONE retry authority (429/5xx/timeout backoff
-    + Retry-After) instead of a bare per-call client. Any ``TransportError``
-    (typed >=400, or retry-exhaustion) is converted to the existing
-    ``router_upstream_error`` framing so callers see no shape change.
-
-    Body-shape classification (JSON-parse / ArcGIS ``{"error": ...}`` envelope
-    / not-a-JSON-object) runs through the shared ``classify_response`` (item 4
-    of the observability/retention batch) -- same typed exception + same
-    message wording as before the migration, just sourced from ONE shape
-    classifier instead of ad hoc parsing here.
-    """
-    ua = spec.auth.user_agent
-    try:
-        body, _ct, _final_url = get_bytes(
-            get_client(), url, headers={"User-Agent": ua}, params=params
-        )
-    except TransportError as exc:
-        raise router_upstream_error(spec.error_code_prefix, f"request failed url={url}: {exc}")
-
-    verdict = classify_response(body.decode("utf-8", "replace"))
-    if verdict.kind == "unparseable":
-        raise router_upstream_error(
-            spec.error_code_prefix,
-            f"non-JSON response url={url}: {verdict.excerpt!r}",
-        )
-    if verdict.kind == "error_envelope":
-        raise router_upstream_error(
-            spec.error_code_prefix, f"error envelope url={url}: {verdict.error_message}"
-        )
-    body = verdict.body
-    if not isinstance(body, dict):
-        raise router_upstream_error(spec.error_code_prefix, "response is not a JSON object")
-    features = body.get("features", []) or []
-    # esri-json (f=json) sources hand back {attributes, geometry:{rings/x,y/paths}};
-    # decode to GeoJSON {properties, geometry} so the shared transforms + serializer
-    # see the uniform shape. No-op for f=geojson features.
-    if bool((spec.ingest or {}).get("esri_json")):
-        return [_esri_feature_to_geojson(f) for f in features if isinstance(f, dict)]
-    return features
-
-
-def _fetch_from_endpoint(spec: SourceSpec, endpoint: Any, params: dict[str, Any]) -> list[dict[str, Any]]:
-    """Page through ONE endpoint's FeatureServer query up to ``max_features``."""
-    bbox = params.get("bbox")   # None -> global-query sweep (supports_global_query)
-    max_features = spec.gates.max_features or 30000
-    page_size = int((spec.ingest or {}).get("pagination", {}).get("page_size", 2000))
-    # A caller may CAP the sweep at its own count, and that is a single-shot
-    # request rather than a paging hint: page size and ceiling move together, so
-    # the first page returns exactly the cap in server order and the loop stops.
-    # It exists because a consumer reproducing a hand-written query has to
-    # reproduce its resultRecordCount - two different counts against the same
-    # layer are two different answers when the layer holds more rows than either.
-    capped = params.get("max_records")
-    if capped is not None:
-        page_size = max_features = int(capped)
-    where = build_where(spec, params)
-
-    accumulated: list[dict[str, Any]] = []
-    offset = 0
-    while True:
-        url, qparams = build_query_params(
-            spec, bbox, result_offset=offset, where=where, endpoint=endpoint
-        )
-        page = _fetch_one_page(spec, url, qparams)
-        accumulated.extend(page)
-        if len(page) < page_size:
-            break
-        if len(accumulated) >= max_features:
-            accumulated = accumulated[:max_features]
-            break
-        offset += page_size
-    return accumulated
-
-
-def fetch_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
-    """Fetch features across the resolved endpoint chain (primary -> fallback).
-
-    The primary is the selected/`data` endpoint; on an upstream failure each
-    ordered ``spec.endpoint_fallback`` mirror is tried before the error is
-    surfaced (nhd HR -> medium-res). Every mirror publishes the SAME dataset, so
-    the hop is silent by the loudness floor. A single endpoint (the common case)
-    is one call with no mirror.
-    """
-    chain = resolve_endpoints(spec, params)
-    last_exc: Exception | None = None
-    for i, endpoint in enumerate(chain):
-        try:
-            return _fetch_from_endpoint(spec, endpoint, params)
-        except Exception as exc:  # noqa: BLE001 -- try the next endpoint in the chain
-            last_exc = exc
-            if i < len(chain) - 1:
-                logger.warning(
-                    "router.vector_fgb: endpoint %d/%d failed (%s); trying fallback",
-                    i + 1, len(chain), exc,
-                )
-    assert last_exc is not None
-    if len(chain) > 1:
-        raise router_upstream_error(
-            spec.error_code_prefix,
-            f"all {len(chain)} endpoints failed; last error: {last_exc}",
-        )
-    raise last_exc
-
-
-def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
-    """Fetch features and serialize to FGB bytes (the ``fetch_fn`` body)."""
-    features = fetch_features(spec, params)
-    return features_to_fgb_bytes(features, spec, params)

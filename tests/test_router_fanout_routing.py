@@ -10,9 +10,8 @@ fixtures, NO live calls:
 - endpoint_by_param: enum -> sub-layer endpoint selection (usace_levees layer).
 - properties_by_param: per-enum column projection + json_coerce of list fields +
   honest-empty header carrying the per-value column set.
-- edge matrix: forced HTTP 404 / 403 / 429, ArcGIS error-envelope, unparseable
-  body, honest-empty -- each asserting the typed ``*_UPSTREAM_ERROR`` class +
-  retryable flag (actionability of the upstream class).
+- edge matrix: a failed driver read, an ArcGIS error-envelope 200, and an
+  honest-empty answer -- each asserting the typed class + retryable flag.
 """
 
 from __future__ import annotations
@@ -28,6 +27,7 @@ from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
     RouterUpstreamError,
+    router_upstream_error,
 )
 from trid3nt_server.tools.fetchers._router.executors import vector_fgb, vector_ogr
 from trid3nt_server.tools.fetchers._router.transforms import fan_out
@@ -212,9 +212,9 @@ def test_properties_by_param_projection_and_json_coerce(monkeypatch):
     spec = _levees_like_spec()
     feats = [{"type": "Feature", "geometry": _POLY,
               "properties": {"SYSTEM_ID": "S1", "STATES": ["LA", "MS"], "EXTRA": "drop"}}]
-    monkeypatch.setattr(vector_fgb, "_fetch_one_page", lambda s, u, p: feats)
+    monkeypatch.setattr(vector_ogr, "fetch_from_endpoint", lambda s, e, p: feats)
     params = router.validate_params(spec, {"bbox": [-90.1, 29.9, -90.0, 30.0], "layer": "leveed_areas"})
-    gdf = _fgb_gdf(vector_fgb.execute(spec, params))
+    gdf = _fgb_gdf(vector_ogr.execute(spec, params))
     cols = [c for c in gdf.columns if c != "geometry"]
     assert cols == ["SYSTEM_ID", "STATES"]              # projected to per-layer set, EXTRA dropped
     assert gdf["STATES"].iloc[0] == '["LA", "MS"]'      # list -> JSON string (json_coerce_nested)
@@ -222,9 +222,9 @@ def test_properties_by_param_projection_and_json_coerce(monkeypatch):
 
 def test_properties_by_param_honest_empty_header(monkeypatch):
     spec = _levees_like_spec()
-    monkeypatch.setattr(vector_fgb, "_fetch_one_page", lambda s, u, p: [])
+    monkeypatch.setattr(vector_ogr, "fetch_from_endpoint", lambda s, e, p: [])
     params = router.validate_params(spec, {"bbox": [-90.1, 29.9, -90.0, 30.0], "layer": "system_routes"})
-    gdf = _fgb_gdf(vector_fgb.execute(spec, params))
+    gdf = _fgb_gdf(vector_ogr.execute(spec, params))
     assert len(gdf) == 0
     assert [c for c in gdf.columns if c != "geometry"] == ["SYSTEM_ID", "MAX_HEIGHT"]
 
@@ -234,51 +234,39 @@ def test_properties_by_param_honest_empty_header(monkeypatch):
 # --------------------------------------------------------------------------- #
 
 
-class _FakeResp:
-    def __init__(self, status_code=200, text=""):
-        self.status_code = status_code
-        self.text = text
-        self.content = text.encode("utf-8")
-        self.headers: dict[str, str] = {}
-        self.url = "http://example.test/fake"
-
-
-@pytest.mark.parametrize("status", [404, 403, 429, 500])
-def test_edge_http_status_typed_upstream(monkeypatch, status):
+def test_a_failed_driver_read_is_the_typed_upstream_class(monkeypatch):
     spec = _levees_like_spec()
-    monkeypatch.setattr("httpx.Client.get", lambda self, *a, **k: _FakeResp(status_code=status, text="boom"))
+    monkeypatch.setattr(
+        vector_ogr, "fetch_from_endpoint",
+        lambda s, e, p: (_ for _ in ()).throw(
+            router_upstream_error(s.error_code_prefix, "HTTP response code: 503")))
     params = router.validate_params(spec, {"bbox": [-90.1, 29.9, -90.0, 30.0], "layer": "leveed_areas"})
     with pytest.raises(RouterUpstreamError) as ei:
-        vector_fgb.execute(spec, params)
+        vector_ogr.execute(spec, params)
     assert ei.value.error_code == "DEMO_ROUTED_UPSTREAM_ERROR"
     assert ei.value.retryable is True
     assert ei.value.actionability == "agent"
 
 
-def test_edge_arcgis_error_envelope(monkeypatch):
+def test_an_error_envelope_reaches_the_caller_verbatim(monkeypatch):
+    """A rejected ArcGIS query answers 200-with-an-error-body, which the driver can
+    only call a missing 'features' member; the service's own message is recovered."""
     spec = _levees_like_spec()
-    body = '{"error": {"code": 400, "message": "Invalid query"}}'
-    monkeypatch.setattr("httpx.Client.get", lambda self, *a, **k: _FakeResp(status_code=200, text=body))
-    params = router.validate_params(spec, {"bbox": [-90.1, 29.9, -90.0, 30.0], "layer": "leveed_areas"})
-    with pytest.raises(RouterUpstreamError) as ei:
-        vector_fgb.execute(spec, params)
-    assert "Invalid query" in str(ei.value)
-
-
-def test_edge_unparseable_body(monkeypatch):
-    spec = _levees_like_spec()
-    monkeypatch.setattr("httpx.Client.get", lambda self, *a, **k: _FakeResp(status_code=200, text="<html>nope"))
-    params = router.validate_params(spec, {"bbox": [-90.1, 29.9, -90.0, 30.0], "layer": "leveed_areas"})
-    with pytest.raises(RouterUpstreamError):
-        vector_fgb.execute(spec, params)
+    body = b'{"error": {"code": 400, "message": "Invalid query"}}'
+    monkeypatch.setattr(vector_ogr, "get_client", lambda: object())
+    monkeypatch.setattr(vector_ogr, "get_bytes",
+                        lambda client, url, **kw: (body, "application/json", url))
+    exc = vector_ogr._verbatim_upstream(
+        spec, "https://service.test/q", RuntimeError("Missing 'features' member."))
+    assert isinstance(exc, RouterUpstreamError)
+    assert "Invalid query" in str(exc)
 
 
 def test_edge_empty_is_header_not_error(monkeypatch):
     spec = _levees_like_spec()
-    monkeypatch.setattr("httpx.Client.get",
-                        lambda self, *a, **k: _FakeResp(status_code=200, text='{"type":"FeatureCollection","features":[]}'))
+    monkeypatch.setattr(vector_ogr, "fetch_from_endpoint", lambda s, e, p: [])
     params = router.validate_params(spec, {"bbox": [-90.1, 29.9, -90.0, 30.0], "layer": "leveed_areas"})
-    gdf = _fgb_gdf(vector_fgb.execute(spec, params))   # honest-empty, NEVER an error
+    gdf = _fgb_gdf(vector_ogr.execute(spec, params))   # honest-empty, NEVER an error
     assert len(gdf) == 0
 
 
@@ -299,9 +287,9 @@ def _esri_json_indicator_spec() -> SourceSpec:
                           "lowercase": True, "values": ["pm25", "ozone"]},
         },
         "ingest": {
-            "esri_json": True, "geometry_envelope": "json",
-            "query_template": {"out_fields": "*", "f": "json"},
-            "pagination": {"mode": "result_offset", "page_size": 2000},
+            "access": "ogr", "ogr": {"driver": "ESRIJSON"},
+            "geometry_envelope": "json",
+            "query_template": {"out_fields": "*"},
             "column_map": {
                 "bg_id": {"from": "ID"},
                 "indicator": {"kind": "param", "param": "indicator"},
@@ -317,15 +305,6 @@ def _esri_json_indicator_spec() -> SourceSpec:
     })
 
 
-def test_esri_geometry_decode_variants():
-    poly = vector_fgb._esri_geometry_to_geojson({"rings": [[[0, 0], [1, 0], [1, 1], [0, 0]]]})
-    assert poly["type"] == "Polygon"
-    assert vector_fgb._esri_geometry_to_geojson({"rings": [[[0, 0], [1, 0]]]}) is None  # degenerate
-    assert vector_fgb._esri_geometry_to_geojson({"x": -95.0, "y": 29.0})["type"] == "Point"
-    assert vector_fgb._esri_geometry_to_geojson({"paths": [[[0, 0], [1, 1]]]})["type"] == "LineString"
-    assert vector_fgb._esri_geometry_to_geojson({"paths": [[[0, 0], [1, 1]], [[2, 2], [3, 3]]]})["type"] == "MultiLineString"
-
-
 @pytest.mark.parametrize("kind,val,expect", [
     ("percentile", 83.4, 83.4), ("percentile", -999, None), ("percentile", 150.0, None),
     ("fraction", 0.62, 0.62), ("fraction", -999, None), ("fraction", 1.5, None),
@@ -337,14 +316,15 @@ def test_norm_env_sentinels(kind, val, expect):
 
 def test_esri_json_projection_from_param(monkeypatch):
     spec = _esri_json_indicator_spec()
-    esri = [{"attributes": {"ID": "48", "P_PM25": 83.4, "P_OZONE": -999, "MINORPCT": 0.62,
-                            "PM25": 9.1, "ACSTOTPOP": 1500},
-             "geometry": {"rings": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}}]
-    monkeypatch.setattr("httpx.Client.get",
-                        lambda self, *a, **k: _FakeResp(status_code=200, text=__import__("json").dumps({"features": esri})))
+    feats = [{"type": "Feature",
+              "geometry": {"type": "Polygon",
+                           "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]},
+              "properties": {"ID": "48", "P_PM25": 83.4, "P_OZONE": -999,
+                             "MINORPCT": 0.62, "PM25": 9.1, "ACSTOTPOP": 1500}}]
+    monkeypatch.setattr(vector_ogr, "fetch_from_endpoint", lambda s, e, p: feats)
     params = router.validate_params(spec, {"bbox": [-95.3, 29.7, -95.2, 29.8], "indicator": "PM25"})
     assert params["indicator"] == "pm25"                 # enum lowercase
-    gdf = _fgb_gdf(vector_fgb.execute(spec, params))
+    gdf = _fgb_gdf(vector_ogr.execute(spec, params))
     assert [c for c in gdf.columns if c != "geometry"] == ["bg_id", "indicator", "value", "minority_pct", "pm25_raw", "total_pop"]
     row = gdf.iloc[0]
     assert row["indicator"] == "pm25"                    # kind=param echo
@@ -353,8 +333,10 @@ def test_esri_json_projection_from_param(monkeypatch):
 
 
 def test_esri_json_geometry_envelope_is_json():
+    from urllib.parse import parse_qs, urlsplit
+
     spec = _esri_json_indicator_spec()
-    _url, qp = vector_fgb.build_query_params(spec, (-95.3, 29.7, -95.2, 29.8),
-                                             endpoint=spec.endpoints["data"])
-    assert qp["f"] == "json" and qp["returnGeometry"] == "true"
-    assert qp["geometry"].startswith("{") and '"xmin"' in qp["geometry"]   # JSON envelope, not comma
+    qp = parse_qs(urlsplit(vector_ogr.build_query(
+        spec, (-95.3, 29.7, -95.2, 29.8), endpoint=spec.endpoints["data"])).query)
+    assert qp["f"] == ["json"] and qp["returnGeometry"] == ["true"]
+    assert qp["geometry"][0].startswith("{") and '"xmin"' in qp["geometry"][0]
