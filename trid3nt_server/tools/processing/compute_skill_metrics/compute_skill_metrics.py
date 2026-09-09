@@ -1,44 +1,8 @@
-"""``compute_skill_metrics`` atomic tool -- paired obs-vs-model skill metrics.
+"""``compute_skill_metrics`` - paired obs-vs-model skill metrics.
 
-Computes the standard hydrologic/hydraulic model-skill metrics over an
-ALREADY-PAIRED observed/simulated series: NSE, KGE, PBIAS, RSR, RMSE, R2,
-plus two simple derived quantities (peak error percent, peak-timing error).
-Every metric that ``spotpy.objectivefunctions`` provides is computed via
-spotpy directly -- NO bespoke reimplementation of NSE/KGE/PBIAS/RSR/RMSE/R2
-math lives in this file (per the V&V build contract, section 3.2/5.4).
-
-Input is EITHER:
-
-- ``paired_table_uri`` -- a lane-C ``extract_model_at_observations`` paired
-  table (FlatGeobuf, EPSG:4326, one feature per sample, columns ``obs_id`` /
-  ``observed`` / ``simulated`` / ``time`` per the build contract section 3.3
-  storage format). Read with ``geopandas.read_file``; this tool consumes the
-  ``observed`` / ``simulated`` (and ``time`` for peak-timing) columns and
-  does NO sampling/pairing of its own -- that math lives entirely upstream in
-  ``extract_model_at_observations`` (this tool never duplicates it).
-- OR explicit ``observed`` + ``simulated`` arrays (+ optional ``time``) --
-  the direct-array path for a caller that already has aligned series (e.g.
-  from ``fetch_usgs_nwis_gauges`` + a model timeseries extracted elsewhere).
-
-``variable="head"`` adds SRMS (RMSE / observed head range) -- the fold of the
-former standalone ``compute_head_calibration_stats`` primitive (Anderson and
-Woessner convention, groundwater-model research brief).
-
-Honesty floor: any metric spotpy cannot compute (zero-variance denominator,
-mismatched lengths, all-NaN pair) comes back ``null``, never a fabricated
-number; ``verdict_is_heuristic`` is ALWAYS ``true`` -- the Moriasi/published
-bands are a decision-support heuristic, not a pass/fail gate. A small paired
-sample (``n < 5``) still returns full metric values but downgrades
-``suggested_verdict`` to ``"indeterminate"`` with a caveat rather than a
-graded verdict that would overstate confidence.
-
-``cacheable=False`` (``live-no-cache``): a comparison compute over
-live/caller-supplied inputs, mirroring ``compute_model_residuals`` /
-``compute_flood_extent_skill``. Returns a plain JSON-serializable dict (the
-build-contract section 3.2 envelope), not a ``LayerURI`` -- this tool never
-produces a map layer.
+Every metric delegates to ``spotpy.objectivefunctions``, one spotpy cannot
+compute comes back null, and ``verdict_is_heuristic`` is always true.
 """
-
 from __future__ import annotations
 
 import logging
@@ -102,7 +66,7 @@ class SkillMetricsUpstreamError(SkillMetricsError):
 
 
 class SkillMetricsDependencyMissingError(SkillMetricsError):
-    """``spotpy`` is not importable in this environment (section 5.4)."""
+    """``spotpy`` is not importable in this environment."""
 
     error_code = "SKILL_METRICS_DEPENDENCY_MISSING"
     retryable = True
@@ -118,10 +82,9 @@ class SkillMetricsDependencyMissingError(SkillMetricsError):
 #: "indeterminate" with a caveat.
 _MIN_N_FOR_VERDICT = 5
 
-#: Moriasi 2007 / 2015 published acceptance bands (streamflow calibration).
-#: Applied as a general-reference heuristic regardless of ``variable``
-#: (research.md section 2.2); a caveat notes the streamflow provenance when
-#: ``variable`` is not "streamflow".
+#: Published acceptance bands from streamflow calibration, applied as a
+#: general-reference heuristic whatever the ``variable``; a caveat notes the
+#: streamflow provenance when the variable is something else.
 _MORIASI_2007 = "Moriasi et al. 2007 (https://swat.tamu.edu/media/90109/moriasimodeleval.pdf)"
 _KNOBEN_2019 = "Knoben et al. 2019 HESS (https://hess.copernicus.org/preprints/hess-2019-327/hess-2019-327.pdf)"
 _ANDERSON_WOESSNER = (
@@ -129,9 +92,8 @@ _ANDERSON_WOESSNER = (
     "heuristic, not a hard rule)"
 )
 
-#: Per-metric acceptance bands (contract 3.2 shape: satisfactory/good/very_good
-#: ONLY -- no per-band ``source`` key). Citations are consolidated into the
-#: single top-level ``bands_source`` string (see ``_BANDS_SOURCE``).
+#: Per-metric acceptance bands: satisfactory / good / very_good only. Every
+#: citation is consolidated into the single ``_BANDS_SOURCE`` string.
 _BANDS: dict[str, dict[str, str | None] | None] = {
     "NSE": {"satisfactory": ">0.50", "good": "0.65-0.75", "very_good": ">0.75"},
     "PBIAS": {"satisfactory": "<=25", "good": "<=15", "very_good": "<=10"},
@@ -144,8 +106,7 @@ _BANDS: dict[str, dict[str, str | None] | None] = {
     "SRMS": None,
 }
 
-#: Single top-level citation string for every band (FIX 4a -- replaces the
-#: per-band ``source`` keys that were not in the pinned envelope).
+#: The one citation string covering every band.
 _BANDS_SOURCE = (
     f"NSE/PBIAS/RSR bands: {_MORIASI_2007}. KGE has no graded acceptance band "
     f"({_KNOBEN_2019}). SRMS band (variable='head' only): {_ANDERSON_WOESSNER}."
@@ -172,33 +133,25 @@ def _import_spotpy_objectivefunctions() -> Any:
         raise SkillMetricsDependencyMissingError(
             f"spotpy is not importable in this environment "
             f"({type(exc).__name__}: {exc}); compute_skill_metrics requires "
-            "spotpy.objectivefunctions for NSE/KGE/PBIAS/RSR/RMSE/R2 -- see "
-            "server/pyproject.toml."
+            "spotpy.objectivefunctions for NSE/KGE/PBIAS/RSR/RMSE/R2."
         ) from exc
     return sof
 
 
 # ---------------------------------------------------------------------------
-# Paper-exact hydrograph-validation primitives (shared, importable). The two
-# metrics the rain-on-grid validation protocol (Godara, Bruland and Alfredsen
-# 2024, Front. Water 6:1384205) reports for a computed-vs-observed discharge
-# hydrograph: NSE (eq 14) and the Pearson coefficient of determination R2
-# (eq 13). Both delegate to spotpy.objectivefunctions (the V&V build contract
-# forbids bespoke metric math); spotpy implements exactly the paper equations.
-# Usable from the code_exec playground and imported directly by validation
-# templates; the compute_skill_metrics tool above is the full paired-table
-# scoring surface, these are the two bare scalars.
+# Paper-exact hydrograph-validation primitives: NSE and the Pearson coefficient
+# of determination R2, the two a computed-vs-observed discharge hydrograph is
+# reported against (Godara, Bruland and Alfredsen 2024, Front. Water 6:1384205,
+# eq 14 and eq 13). Both delegate to spotpy, which implements exactly those
+# equations; nothing here reimplements metric math.
 # ---------------------------------------------------------------------------
 
 
 def _finite_pairs(
     observed: Any, simulated: Any
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Coerce two aligned series to float and drop any non-finite pair.
-
-    Raises ``SkillMetricsInputError`` on a length mismatch; returns the paired
-    finite ``(obs, sim)`` arrays (possibly length 0 -- the caller decides how a
-    short/empty sample degrades).
+    """The paired finite ``(obs, sim)`` arrays, possibly empty, so the caller
+    decides how a short sample degrades; a length mismatch raises.
     """
     obs_all = _to_float_array(list(observed))
     sim_all = _to_float_array(list(simulated))
@@ -212,15 +165,8 @@ def _finite_pairs(
 
 
 def nash_sutcliffe_efficiency(observed: Any, simulated: Any) -> float | None:
-    """Nash-Sutcliffe Efficiency over a paired observed/simulated series (eq 14).
-
-    ``NSE = 1 - sum((O_i - S_i)^2) / sum((O_i - Obar)^2)`` where ``O`` = observed,
-    ``S`` = simulated, ``Obar`` = mean observed (Godara et al. 2024 eq 14). The
-    math is ``spotpy.objectivefunctions.nashsutcliffe`` (no bespoke
-    reimplementation, per the V&V build contract); spotpy computes exactly this
-    expression. Non-finite pairs are dropped first. Returns ``None`` -- never a
-    fabricated number -- when fewer than 2 usable pairs remain or the observed
-    series has zero variance (the denominator is undefined).
+    """Nash-Sutcliffe Efficiency over a paired series, non-finite pairs dropped;
+    None under two usable pairs, or on a zero-variance observed series.
     """
     obs, sim = _finite_pairs(observed, simulated)
     if obs.shape[0] < 2 or float(np.var(obs)) == 0.0:
@@ -231,15 +177,8 @@ def nash_sutcliffe_efficiency(observed: Any, simulated: Any) -> float | None:
 
 
 def pearson_r2(observed: Any, simulated: Any) -> float | None:
-    """Pearson coefficient of determination R2 over a paired series (eq 13).
-
-    ``R2 = [sum((O_i - Obar)(S_i - Sbar))]^2 / [sum((O_i - Obar)^2) *
-    sum((S_i - Sbar)^2)]`` -- the SQUARE of the Pearson correlation coefficient
-    (Godara et al. 2024 eq 13). The math is
-    ``spotpy.objectivefunctions.rsquared`` (correlation-coefficient squared; no
-    bespoke reimplementation). Non-finite pairs are dropped first. Returns
-    ``None`` when fewer than 2 usable pairs remain or either series has zero
-    variance (the correlation is undefined).
+    """The squared Pearson correlation over a paired series, non-finite pairs
+    dropped; None under two usable pairs, or when either has zero variance.
     """
     obs, sim = _finite_pairs(observed, simulated)
     if obs.shape[0] < 2 or float(np.var(obs)) == 0.0 or float(np.var(sim)) == 0.0:
@@ -250,7 +189,7 @@ def pearson_r2(observed: Any, simulated: Any) -> float | None:
 
 
 # ---------------------------------------------------------------------------
-# Staging + loading (mirrors compute_model_residuals._stage_uri_local).
+# Staging and loading.
 # ---------------------------------------------------------------------------
 
 
@@ -318,7 +257,7 @@ def _load_paired_table(
     time_field: str,
     notes: list[str],
 ) -> tuple[np.ndarray, np.ndarray, list[datetime | None] | None, int]:
-    """Load a lane-C paired table; return (observed, simulated, times, n_id_groups)."""
+    """Load a paired table into ``(observed, simulated, times, n_id_groups)``."""
     import geopandas as gpd
 
     with tempfile.TemporaryDirectory(prefix="trid3nt_skill_metrics_") as tmpdir:
@@ -377,7 +316,7 @@ def _load_paired_table(
 
 
 def _clean(value: Any) -> float | None:
-    """NaN/inf -> None (never fabricate a metric value); else round(6)."""
+    """NaN or inf to None - a metric is never fabricated - else round to 6."""
     try:
         fv = float(value)
     except (TypeError, ValueError):
@@ -432,18 +371,14 @@ def _peak_metrics(
     is_time_series: bool,
     caveats: list[str],
 ) -> tuple[float | None, float | None]:
-    """Peak-magnitude error (percent) + peak-timing error (seconds).
-
-    Peak error compares each series' OWN maximum (index-independent, the
-    standard peak-flow-error convention); peak-timing error compares WHEN each
-    series' maximum occurred, and is meaningful ONLY when the pairs form a real
-    TIME SERIES sharing a model+obs time axis. A STATIC spatial pairing (one
-    sample per location / distinct obs_id, e.g. a max-flood raster sampled at
-    surveyed high-water marks) has NO simulated time axis: the ``time`` column
-    holds per-point survey dates, so comparing argmax(obs)-time to
-    argmax(sim)-time fabricates a sentinel (the live Harvey run's -86400 s).
-    In that case peak_timing_error stays ``null`` -- never faked.
+    """Peak-magnitude error in percent and peak-timing error in seconds, the
+    timing null unless the pairs share a real model and observation time axis.
     """
+    # Peak error compares each series' OWN maximum, index-independent. Timing is
+    # different: a STATIC spatial pairing - one sample per location, a max-flood
+    # raster read at surveyed marks - has no simulated time axis, and its time
+    # column holds per-point survey dates, so an argmax-to-argmax comparison
+    # would fabricate a sentinel.
     idx_obs = int(np.argmax(observed))
     idx_sim = int(np.argmax(simulated))
     obs_peak = float(observed[idx_obs])
@@ -457,7 +392,7 @@ def _peak_metrics(
 
     peak_timing_error: float | None = None
     if times is None:
-        pass  # no time axis at all -> null (never fabricated)
+        pass
     elif not is_time_series:
         caveats.append(
             "peak_timing_error is null: the paired data is a STATIC spatial "
@@ -528,90 +463,22 @@ def compute_skill_metrics(
 ) -> dict[str, Any]:
     """Score a paired observed-vs-model series: NSE, KGE, PBIAS, RSR, RMSE, R2.
 
-    Use this to grade how well a model result matches real measurements once
-    they are already paired point-for-point -- e.g. after
-    ``extract_model_at_observations`` produces a paired table from a model
-    raster/timeseries + observation points, or with any two aligned series
-    you already have (a gauge timeseries + a model timeseries). Wraps
-    ``spotpy.objectivefunctions`` for every metric it provides -- no bespoke
-    metric math.
+    Use to grade a model result against real measurements once they are paired
+    point-for-point, from ``extract_model_at_observations`` or from two aligned
+    series. Not for unpaired values, not for a WET/DRY extent raster
+    (``compute_flood_extent_skill``), not for a residual map
+    (``compute_model_residuals``); this returns metrics, no layer.
 
-    **When to use:**
-    - "How well does this simulated timeseries match the USGS gauge?" or
-      any observed-vs-simulated skill scoring once the pairs are aligned.
-    - Groundwater head calibration: pass ``variable="head"`` to also get
-      SRMS (RMSE / observed head range, the groundwater-model convention).
-    - After a calibration parameter change, to check whether the fit
-      improved (compare ``suggested_verdict`` / metric values run to run).
+    Params:
+        paired_table_uri: a paired-table handle. Exactly one of this and
+            (observed, simulated).
+        observed / simulated: explicit aligned numeric arrays.
+        time: ISO8601 strings aligned with them; enables peak_timing_error.
+        variable: "streamflow", "stage", "head" or any label; "head" adds
+            SRMS, the ratio RMSE / observed head range.
 
-    **When NOT to use:**
-    - You do not yet have paired values -- call
-      ``extract_model_at_observations`` first to sample a model raster/
-      timeseries AT observation points/times.
-    - Comparing a flood WET/DRY extent raster against a benchmark extent --
-      use ``compute_flood_extent_skill`` (categorical, not continuous).
-    - Point-by-point spatial residual mapping -- use
-      ``compute_model_residuals`` (returns a per-point residual map layer;
-      this tool returns summary skill metrics only, no layer).
-
-    **Parameters:**
-    - ``paired_table_uri``: OPTIONAL. A lane-C paired-table handle/URI
-      (FlatGeobuf with ``obs_id``/``observed``/``simulated``/``time``
-      columns -- the ``extract_model_at_observations`` output shape). When
-      given, ``observed``/``simulated``/``time`` args are ignored.
-    - ``observed`` / ``simulated``: OPTIONAL. Explicit aligned numeric
-      arrays (same length) -- used when ``paired_table_uri`` is omitted.
-      Exactly one of ``paired_table_uri`` or ``(observed, simulated)`` must
-      be given.
-    - ``time``: OPTIONAL. ISO8601 timestamp strings aligned with
-      ``observed``/``simulated`` (direct-array path only) -- enables
-      ``peak_timing_error``.
-    - ``variable``: ``"streamflow"`` / ``"stage"`` / ``"head"`` / any label.
-      ``"head"`` adds ``SRMS`` to the metrics. Purely descriptive otherwise
-      (echoed back, used in ``units``/notes context).
-    - ``observed_field`` / ``simulated_field`` / ``time_field``: column
-      names on ``paired_table_uri`` (defaults match the lane-C storage
-      format: ``"observed"`` / ``"simulated"`` / ``"time"``).
-    - ``units``: OPTIONAL physical units of the paired quantity (e.g.
-      ``"m3/s"``, ``"ft"``) -- echoed back verbatim; ``null`` if not given
-      and not auto-detectable from the table.
-
-    **Returns:** a plain dict -- ``variable``, ``n`` (paired sample count
-    used), ``metrics`` (``NSE``/``KGE``/``PBIAS``/``RSR``/``RMSE``/``R2``/
-    ``peak_error`` [percent]/``peak_timing_error`` [seconds, null unless a
-    time column is present]/``SRMS`` [null unless ``variable=="head"``]),
-    ``bands`` (Moriasi 2007 acceptance bands per metric, ``null`` where no
-    codified band exists), ``suggested_verdict``
-    (``very_good``/``good``/``satisfactory``/``unsatisfactory``/
-    ``indeterminate``), ``verdict_is_heuristic`` (always ``true``),
-    ``bands_source`` (single citation string for every band), ``caveats``
-    (list, always populated when any metric is null or n is small), ``units``,
-    ``notes`` (provenance).
-
-    **PBIAS sign convention (IMPORTANT):** this tool reports spotpy's PBIAS =
-    ``100*sum(sim-obs)/sum(obs)``, so a POSITIVE PBIAS means the model
-    OVER-predicts (simulated > observed). That is the OPPOSITE sign of the
-    Moriasi 2007 tables (where positive PBIAS = model under-estimation). The
-    graded-verdict band lookup keys off ``abs(PBIAS)``, so the convention
-    difference never misbands a result; only the reported sign differs.
-
-    **SRMS** (``variable=="head"`` only) is a PLAIN RATIO
-    ``RMSE / (max(obs)-min(obs))`` (not a percent); the Anderson-Woessner
-    ``<0.10`` band means RMSE within 10% of the observed head range.
-
-    **Errors:** ``SkillMetricsInputError`` (no selector given,
-    mismatched array lengths, unresolvable column); ``SkillMetricsNoDataError``
-    (zero usable paired samples after dropping non-finite entries);
-    ``SkillMetricsUpstreamError`` (S3 download / table read failed);
-    ``SkillMetricsDependencyMissingError`` (spotpy not importable).
-
-    Cross-tool dependencies:
-        Upstream (consumes):
-        - ``extract_model_at_observations`` -- produces ``paired_table_uri``.
-        Downstream (feeds):
-        - Agent narration reads ``suggested_verdict`` / ``caveats`` for the
-          headline calibration answer; NEVER treats the verdict as a hard
-          pass/fail gate (``verdict_is_heuristic`` is always true).
+    PBIAS follows spotpy's sign, so POSITIVE means the model OVER-predicts, the
+    opposite of Moriasi; banding keys off its absolute value.
     """
     has_table = isinstance(paired_table_uri, str) and paired_table_uri.strip()
     has_arrays = observed is not None and simulated is not None
