@@ -1,10 +1,9 @@
-# Router source spec (fetcher-fold wave-8, stac_float continuous-float mode, ADR 0054).
-# INTERNAL SEAM (wave-11, ADR 0059): the Copernicus GLO-30 global 30 m DEM via PC STAC
-# (first-wins intersect_all mosaic, meters, -9999 nodata, per-href PC signing). It is
-# tier="internal" -- registry-resolvable but off the model-facing surface. The public
+# INTERNAL SEAM: the Copernicus GLO-30 global 30 m DEM over the Planetary Computer
+# STAC catalog (first-valid mosaic, metres, -9999 nodata). tier="internal" --
+# registry-resolvable but off the model-facing surface: the public
 # fetch_dem source="copernicus" mode (plus _hydrology_common, model_debris_flow,
-# compute_sediment_yield) resolves it in-process via TOOL_REGISTRY. The corpus
-# phrasings now re-home onto fetch_dem so copernicus-intent asks route to fetch_dem.
+# compute_sediment_yield) resolves it in-process via TOOL_REGISTRY, and the corpus
+# phrasings live on fetch_dem so copernicus-intent asks route there.
 schema_version: v1
 
 name: fetch_copernicus_dem
@@ -36,14 +35,16 @@ gates:
   max_bbox_deg2: 4.0
 
 ingest:
-  access: stac_float
+  access: stac
+  render: float
   native_cell_m: 30.0
   stac:
     root: "https://planetarycomputer.microsoft.com/api/stac/v1"
     collection: cop-dem-glo-30
     data_asset: data
-    select: intersect_all
-    datetime_window: false
+    sign: planetary_computer
+    select:
+      mode: mosaic
   serialize:
     nodata: -9999.0
     dtype: float32
