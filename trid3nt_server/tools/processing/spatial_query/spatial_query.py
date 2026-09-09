@@ -1,71 +1,8 @@
-"""``spatial_query`` atomic tool - read-only SQL over the Case's vector layers.
+"""``spatial_query`` - read-only SQL over the Case's vector layers.
 
-The DuckDB spatial-query fold: ONE SQL surface
-replaces the three fixed-shape analytical Q&A tools
-(``summarize_layer_statistics`` / ``count_features_above_threshold`` /
-``aggregate_property_within_zone``). Their fixed result shapes were
-each a single SQL query; folding them into a general read-only SELECT surface
-covers the same questions plus every group-by / spatial-join / multi-layer
-variant the old trio could not express, while shrinking the LLM-visible
-catalog by two declarations.
-
-How it works:
-
-1. ``layer_refs`` maps ``{alias: layer handle}``. The parameter is NAMED
-   ``layer_refs`` deliberately: the dispatch seam
-   (``SessionUriRegistry.resolve_params`` -> ``NESTED_REF_PARAMS``) already
-   resolves every string VALUE of a ``layer_refs`` dict from an ``L<n>`` /
-   layer_id handle to the exact storage URI before the tool body runs - the
-   tool inherits handle resolution with zero new resolver code.
-2. Each resolved vector URI is exposed as a DuckDB VIEW named ``alias`` via
-   the spatial extension's ``ST_Read`` (geometry column: ``geom``).
-   ``s3://`` URIs try DuckDB httpfs against the MinIO env block first
-   (AWS_ENDPOINT_URL / key env vars, the offline-first object store), then
-   fall back to staging bytes locally through the shared boto3 reader
-   (``cache.read_object_bytes_s3`` - the instance-role-correct
-   path). Local paths are read in place.
-3. The user SQL runs under a READ-ONLY guard: exactly one statement, first
-   keyword ``SELECT`` (or ``WITH``), and no write/side-effect keywords
-   (INSERT / UPDATE / DELETE / CREATE / COPY / ATTACH / INSTALL / SET / ...)
-   anywhere outside string literals and comments - an allowlist, not a
-   best-effort blocklist.
-4. Results are capped at ``_ROW_CAP`` rows and returned with columns + a
-   compact LLM-facing summary. Bad SQL surfaces the DuckDB error message
-   VERBATIM in a typed error so the retry loop can self-correct.
-5. RESULT MATERIALIZATION: a "show me all X in Y" query PAINTS a layer rather
-   than just tabulating. When the SELECT result carries a geometry column and
-   more than zero rows, the TOOL (not the model's SQL - the read-only
-   allowlist on the user statement is untouched) writes the FULL result set
-   as FlatGeobuf, persists it under the runs bucket
-   (``s3://$TRID3NT_RUNS_BUCKET/spatial_query/<ulid>.fgb`` via the same
-   boto3/MinIO seam the solvers use), and returns a
-   ``SpatialQueryLayerURI`` - a ``LayerURI`` subclass (the
-   ``FloodDepthDamageLayerURI`` pattern) carrying the compact row summary +
-   a small row preview. ``isinstance(result, LayerURI)`` holds, so the
-   dispatch seam mints an ``L<n>`` handle and the emit seam paints
-   the layer. Geometry-less or empty results keep the v1 tabular dict.
-   Export path: DuckDB ``COPY ... TO ... WITH (FORMAT gdal, DRIVER
-   'FlatGeobuf')`` first, geopandas/pyogrio fallback when the gdal write
-   fails (e.g. wide DECIMAL columns); a materialization failure degrades
-   honestly to the tabular dict with a note in ``summary``.
-
-Rasters are OUT OF SCOPE for v1: a raster ref raises a typed error naming
-the ``code_exec_request`` Python playground (rasterio/numpy zonal statistics,
-docs/playbooks/zonal-statistics-recipe.md) as the alternative
-(analysis-is-playground norm).
-
-Determinism (Invariant 1): pure DuckDB over already-fetched artifacts, no LLM
-calls. Caching: ``ttl_class="live-no-cache"`` - the query is CPU-cheap and
-depends on the LLM-supplied SQL verbatim. Honesty floor: every failure path
-is a typed ``SpatialQueryError``; nothing is fabricated.
-
-Offline-first note: the DuckDB ``spatial`` / ``httpfs`` extensions download
-from extensions.duckdb.org on FIRST ``INSTALL`` and are cached under
-``~/.duckdb/extensions/<version>/`` afterwards (subsequent LOADs are
-offline). A truly cold offline box degrades honestly with
-``EXTENSION_UNAVAILABLE``.
+The user statement runs under an ALLOWLIST: one statement, first keyword SELECT
+or WITH, no write keyword outside literals and comments. Rasters refuse by name.
 """
-
 from __future__ import annotations
 
 import logging
@@ -159,26 +96,12 @@ _WORD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # ---------------------------------------------------------------------------
 
 
+# ``error_code`` is one of SQL_NOT_ALLOWED (the guard rejected the statement),
+# SQL_ERROR (DuckDB's own message, verbatim, so a retry can self-correct),
+# BAD_LAYER_REF, RASTER_UNSUPPORTED, LAYER_OPEN_FAILED, DOWNLOAD_FAILED,
+# EXTENSION_UNAVAILABLE, DUCKDB_UNAVAILABLE.
 class SpatialQueryError(RuntimeError):
-    """Raised when ``spatial_query`` cannot produce a result.
-
-    ``error_code`` values:
-
-    - ``SQL_NOT_ALLOWED``       - the read-only guard rejected the statement
-      (not a single SELECT, or a forbidden keyword present). Not retryable
-      with the same shape; the message says exactly what to change.
-    - ``SQL_ERROR``             - DuckDB rejected the SQL; the DuckDB error
-      message is carried VERBATIM so the LLM retry loop can self-correct
-      (retryable).
-    - ``BAD_LAYER_REF``         - ``layer_refs`` malformed (bad alias, non-string
-      ref, unsupported scheme).
-    - ``RASTER_UNSUPPORTED``    - a raster URI was referenced; v1 is vector-only.
-    - ``LAYER_OPEN_FAILED``     - ``ST_Read`` could not open a resolved vector.
-    - ``DOWNLOAD_FAILED``       - the s3/MinIO staging read failed.
-    - ``EXTENSION_UNAVAILABLE`` - the DuckDB spatial extension could not be
-      installed/loaded (cold offline box).
-    - ``DUCKDB_UNAVAILABLE``    - the duckdb package itself is not importable.
-    """
+    """``spatial_query`` could not produce a result."""
 
     def __init__(self, error_code: str, message: str, *, retryable: bool = False) -> None:
         super().__init__(message)
@@ -192,12 +115,8 @@ class SpatialQueryError(RuntimeError):
 
 
 def _strip_literals_and_comments(sql: str) -> str:
-    """Return ``sql`` with string literals, quoted identifiers and comments
-    blanked out (replaced by spaces) so the keyword scan cannot be fooled by
-    ``'DROP'`` inside a string or ``-- create`` in a comment.
-
-    Handles: ``'...'`` (with ``''`` escapes), ``"..."`` quoted identifiers,
-    ``-- line`` comments, ``/* block */`` comments (non-nested).
+    """``sql`` with literals, quoted identifiers and ``--`` / ``/* */`` comments
+    blanked to spaces, so a keyword inside one cannot fool the scan.
     """
     out: list[str] = []
     i, n = 0, len(sql)
@@ -296,14 +215,8 @@ def _open_connection() -> Any:
 
 
 def _try_configure_httpfs(con: Any) -> bool:
-    """Best-effort httpfs + MinIO/S3 settings from the env block.
-
-    Primary s3 path per the fold design: DuckDB httpfs reads ``s3://`` URIs
-    directly (the spatial extension bridges DuckDB filesystems into GDAL, so
-    ``ST_Read('s3://...')`` routes through these settings). Uses the same env
-    the daemon's boto3 clients use - AWS_ENDPOINT_URL[_S3] (MinIO),
-    AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION. Returns False on
-    any failure; the caller falls back to boto3 staging.
+    """Configure httpfs from the AWS env block so ``ST_Read('s3://...')`` routes
+    through it; False on any failure, and the caller stages via boto3 instead.
     """
     try:
         con.execute("INSTALL httpfs; LOAD httpfs;")
@@ -485,22 +398,8 @@ def _summarize(columns: list[str], rows: list[list[Any]], truncated: bool) -> st
 
 
 class SpatialQueryLayerURI(LayerURI):
-    """A materialized query-result layer + the compact tabular summary.
-
-    Returned INSTEAD of the tabular dict when the SELECT result carries a
-    geometry column and >0 rows. Extends ``LayerURI`` field-for-field (the
-    ``FloodDepthDamageLayerURI`` pattern) so the dispatch seam mints
-    an ``L<n>`` handle for the layer and the emit seam paints it, while the
-    LLM narrates from typed fields:
-
-    - ``columns`` / ``row_count`` / ``truncated`` / ``row_cap`` - the same
-      tabular contract the dict path carries (``row_count`` is capped at
-      ``row_cap``; the LAYER always carries the FULL result set).
-    - ``preview_rows`` - the first few JSON-safe rows (never the full set).
-    - ``feature_count`` - total rows written to the FlatGeobuf layer.
-    - ``summary`` - the honest one-line headline incl. the layer reference.
-    - ``layer_views`` - {alias: resolved source uri} provenance.
-    - ``computed_at`` - iso8601 UTC stamp.
+    """A materialized query-result layer plus the tabular summary; ``row_count``
+    is capped, but the LAYER always holds the FULL result set.
     """
 
     columns: list[str]
@@ -515,9 +414,9 @@ class SpatialQueryLayerURI(LayerURI):
 
 
 def _sql_body(sql: str) -> str:
-    """User SQL with any single trailing semicolon stripped, safe to embed as
-    ``COPY (<body>) TO ...`` / ``FROM (<body>)`` (the guard already proved the
-    statement is a single SELECT/WITH)."""
+    """User SQL with a trailing semicolon stripped, safe to embed as a subquery;
+    the guard has already proved it is a single SELECT or WITH.
+    """
     body = sql.strip()
     if body.endswith(";"):
         body = body[:-1].rstrip()
@@ -525,10 +424,8 @@ def _sql_body(sql: str) -> str:
 
 
 def _geometry_columns(con: Any, body: str) -> list[str]:
-    """Names of GEOMETRY-typed result columns (binder-only DESCRIBE; cheap).
-
-    Best-effort: any failure returns ``[]`` so the caller keeps the tabular
-    path (the query itself already succeeded).
+    """The GEOMETRY-typed result column names; any failure returns ``[]`` so the
+    caller keeps the tabular path, the query itself having already succeeded.
     """
     try:
         described = con.execute(f"DESCRIBE {body}").fetchall()
@@ -543,13 +440,10 @@ def _geometry_columns(con: Any, body: str) -> list[str]:
 
 
 def _copy_via_duckdb_gdal(con: Any, body: str, out_path: str) -> None:
-    """Tool-side DuckDB ``COPY (<body>) TO out_path`` as FlatGeobuf via GDAL.
-
-    This is NOT the model's SQL - the read-only allowlist on the user
-    statement is untouched; the tool composes and runs this COPY itself.
-    ``SRS 'EPSG:4326'`` stamps the pipeline-wide CRS (every vector layer the
-    tools produce/consume is EPSG:4326).
+    """Tool-side ``COPY (<body>) TO out_path`` as FlatGeobuf, stamped EPSG:4326.
     """
+    # This COPY is composed by the tool, never by the model: the read-only
+    # allowlist over the user statement is untouched.
     quoted = out_path.replace("'", "''")
     con.execute(
         f"COPY ({body}) TO '{quoted}' "
@@ -560,11 +454,8 @@ def _copy_via_duckdb_gdal(con: Any, body: str, out_path: str) -> None:
 def _export_via_geopandas(
     con: Any, body: str, geom_cols: list[str], out_path: str
 ) -> None:
-    """Fallback FlatGeobuf export: WKB rewrite -> fetchdf -> geopandas/pyogrio.
-
-    The first geometry column becomes THE layer geometry; any additional
-    geometry columns are dropped (FlatGeobuf carries one geometry per
-    feature). Raises on failure - the caller degrades to tabular.
+    """Fallback FlatGeobuf export through geopandas; the FIRST geometry column
+    becomes the layer geometry and any others are dropped, one per feature.
     """
     import geopandas as gpd  # type: ignore[import-not-found]
 
@@ -583,8 +474,7 @@ def _export_via_geopandas(
 
 
 def _export_fgb(con: Any, body: str, geom_cols: list[str], out_path: str) -> str:
-    """Write the FULL result set as FlatGeobuf; return the export path used
-    (``"duckdb-gdal"`` or ``"geopandas"``)."""
+    """Write the FULL result set as FlatGeobuf; returns which export path ran."""
     if len(geom_cols) == 1:
         try:
             _copy_via_duckdb_gdal(con, body, out_path)
@@ -595,7 +485,8 @@ def _export_fgb(con: Any, body: str, geom_cols: list[str], out_path: str) -> str
                 "falling back to geopandas export",
                 exc,
             )
-    # Multi-geometry results skip straight to geopandas (drops secondaries).
+    # A multi-geometry result goes straight to geopandas, which drops the
+    # secondary geometry columns.
     _export_via_geopandas(con, body, geom_cols, out_path)
     return "geopandas"
 
@@ -624,12 +515,8 @@ def _result_count_and_bbox(
 
 
 def _persist_fgb(local_path: str, output_dir: str | None) -> str:
-    """Persist the FlatGeobuf; return its URI.
-
-    ``output_dir`` set (tests): copy into it and return the local path - the
-    ``compute_flood_depth_damage._write_output`` local-file scheme. Otherwise
-    upload to ``s3://$TRID3NT_RUNS_BUCKET/spatial_query/<ulid>.fgb`` through
-    the solver's shared boto3 seam (MinIO env block / ``set_s3_client``).
+    """Persist the FlatGeobuf and return its URI: a local path when ``output_dir``
+    is given, else an ``s3://`` key under the runs bucket.
     """
     filename = f"{new_ulid()}.fgb"
     if output_dir is not None:
@@ -666,11 +553,8 @@ def _materialize_result(
     result_name: str | None,
     output_dir: str | None,
 ) -> "SpatialQueryLayerURI | None":
-    """Materialize a geometry-bearing result set as a painted vector layer.
-
-    Returns ``None`` when the result carries no geometry column (tabular
-    path). Raises on export/upload failure - the caller degrades to tabular
-    with an honest note.
+    """Materialize a geometry-bearing result as a painted vector layer, None when
+    it carries none; an export failure raises, for the caller to degrade.
     """
     body = _sql_body(sql)
     geom_cols = _geometry_columns(con, body)
@@ -743,79 +627,24 @@ def spatial_query(
     _output_dir: str | None = None,
     **_extra_ignored: Any,
 ) -> dict[str, Any] | SpatialQueryLayerURI:
-    """Summary statistics, counts, averages, sums and feature selection over
-    the Case's VECTOR layers - one READ-ONLY SQL (DuckDB + spatial) surface.
+    """Summary statistics, counts, averages, sums and feature selection over the
+    Case's VECTOR layers - one READ-ONLY SQL (DuckDB + spatial) surface.
 
-    Use this for any quantitative or analytical question about vector layers
-    (buildings, parcels, zones, features): summarize a layer's attribute
-    statistics ("summary statistics for the building layer - min, max, mean,
-    sum"), count features / answer "how many" ("how many buildings have flood
-    depth over 1 meter"), average or total an attribute, aggregate within
-    zones ("total replacement cost inside the flood-zone polygons"), spatial
-    joins, group-bys, and multi-layer joins. Also SELECTS features: "show me
-    all X in Y" queries whose result includes the geometry column return the
-    matching features as a NEW painted map layer.
+    Use for any quantitative question about vector layers: summary statistics,
+    "how many" counts, averages and totals, aggregation within zones, spatial
+    joins, group-bys, multi-layer joins. A SELECT that KEEPS the geometry column
+    returns the matching features as a new painted map layer. Not for rasters -
+    use the code_exec playground - and not for charts (``generate_chart``).
 
-    Usage pattern: (1) fetch the data first - every ``layer_refs`` alias needs
-    an existing layer HANDLE, so run the fetcher(s) that produce it before
-    calling this tool; (2) if unsure which DuckDB spatial SQL function to use,
-    call ``search_spatial_functions`` with a free-text ask (e.g. "distance
-    between two points") to get the exact function name + signature; (3)
-    compose the SQL and call this tool.
-
-    Do NOT use for: rasters (v1 is vector-only - use the code_exec_request
-    playground for raster zonal statistics); charts (generate_chart);
-    looking up a DuckDB spatial function by name (use
-    ``search_spatial_functions``, not this docstring).
+    Fetch the data first: every alias needs an existing layer handle. When
+    unsure which spatial function to use, call ``search_spatial_functions``.
 
     Params:
-        sql: ONE read-only SELECT (WITH/CTEs allowed). Each layer_refs alias
-            is a table (view); the geometry column is ``geom``. The full
-            DuckDB ``spatial`` extension function set is available (ST_*) -
-            call ``search_spatial_functions`` for an unfamiliar one rather
-            than guessing. Results cap at 5000 rows.
-        layer_refs: dict {alias: layer HANDLE}. Use the L<n>/layer_id handles
-            from prior tool results (PREFERRED - the server resolves them to
-            storage URIs; never construct s3:// paths by hand). Example:
-            {"buildings": "L2", "zones": "L5"}.
-        result_name: optional display name for the materialized result layer
-            (geometry results only). Default: "Query result (<n> features)".
-
-    Example queries (the folded analytical surface, as SQL):
-        - Layer summary stats:
-          SELECT count(*) AS n, min(value_usd), max(value_usd),
-                 avg(value_usd), sum(value_usd) FROM buildings
-        - Count features above a threshold ("how many buildings ..."):
-          SELECT count(*) AS n_damaged FROM buildings WHERE damage_ratio >= 0.5
-        - Select the matching features AS A MAP LAYER (keep geom in the
-          SELECT list; the result paints):
-          SELECT * FROM buildings WHERE flood_depth_m > 1.0
-        - Aggregate a property within zone polygons (centroid-in-zone):
-          SELECT sum(b.value_usd) AS total FROM buildings b, zones z
-          WHERE ST_Within(ST_Centroid(b.geom), z.geom)
-        - Spatial join, per-zone counts:
-          SELECT z.zone_id, count(*) AS n FROM pts p JOIN zones z
-          ON ST_Within(p.geom, z.geom) GROUP BY z.zone_id ORDER BY n DESC
-
-    Returns:
-        Geometry-less (or empty) results - the tabular dict:
-        {"columns": [...], "rows": [[...], ...], "row_count": int,
-         "truncated": bool, "row_cap": 5000, "summary": str,
-         "layer_views": {alias: resolved_uri}, "computed_at": iso8601}
-
-        Results carrying a geometry column with >0 rows - a
-        ``SpatialQueryLayerURI``: the full result set is written as a
-        FlatGeobuf vector layer (runs bucket) and PAINTED on the map; the
-        response carries the layer reference plus the compact summary,
-        ``columns``, ``feature_count`` and ``preview_rows`` (first
-        10 rows) instead of the full row table.
-
-    Raises:
-        SpatialQueryError with a typed ``error_code``:
-        SQL_NOT_ALLOWED (read-only guard - single SELECT only),
-        SQL_ERROR (DuckDB's message verbatim - fix the SQL and retry),
-        BAD_LAYER_REF / RASTER_UNSUPPORTED / LAYER_OPEN_FAILED /
-        DOWNLOAD_FAILED / EXTENSION_UNAVAILABLE / DUCKDB_UNAVAILABLE.
+        sql: ONE read-only SELECT, CTEs allowed. Each alias is a view and its
+            geometry column is ``geom``. Results cap at 5000 rows.
+        layer_refs: {alias: layer HANDLE} - the L<n> handles from prior
+            results, never a hand-built s3:// path.
+        result_name: display name for a materialized result layer.
     """
     _validate_read_only(sql)
 
