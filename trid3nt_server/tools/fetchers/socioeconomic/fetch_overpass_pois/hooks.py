@@ -1,14 +1,12 @@
 """overpass_pois delegate: any ``key=value`` OSM element as a Point.
 
-The tool's surface is five ways of naming ONE tag - ``tag='key=value'``,
-``amenity``, ``category``, ``value`` - because that is how a caller asks for a
-point of interest; the resolution between them is this row's vocabulary.
+The surface is five ways of naming ONE tag, because that is how a caller asks for a
+point of interest, and resolving between them is this row's vocabulary."""
 
-A node is its own coordinate. A way or a relation is reported at the CENTRE OF ITS
-BOUNDING BOX, not its centroid: it is the representative point Overpass itself
-publishes for an element, it is stable under a re-mapped interior, and a courtyard
-building would otherwise be pinned outside its own walls.
-"""
+# A node is its own coordinate. A way or a relation is reported at the CENTRE OF ITS
+# BOUNDING BOX, not its centroid: that is the representative point the service itself
+# publishes for an element, it is stable under a re-mapped interior, and a courtyard
+# building would otherwise be pinned outside its own walls.
 
 from __future__ import annotations
 
@@ -46,12 +44,9 @@ def _is_clean_token(s: str) -> bool:
 
 
 def _resolve_tag(sc: str, sfx: str, params: dict[str, Any]) -> tuple[str, str]:
-    """Resolve the caller's tag inputs to one ``(key, value)`` pair.
-
-    Priority: ``amenity`` (value-only), then ``tag`` (key=value or a bare aliased
-    value), then ``category``, then ``value``. A missing selector or an unmappable
-    bare value is a typed non-retryable input error.
-    """
+    """Resolve the caller's tag inputs to ONE ``(key, value)`` pair, in priority order:
+    ``amenity``, then ``tag``, then ``category``, then ``value``. A missing selector or
+    an unmappable bare value is a typed non-retryable input error."""
     tag, amenity = params.get("tag"), params.get("amenity")
     category, value = params.get("category"), params.get("value")
 
@@ -126,12 +121,9 @@ def _tag_bag(row: Any) -> dict[str, Any]:
 def delegate(
     spec: SourceSpec, params: dict[str, Any], *, timeout_s: float
 ) -> list[dict[str, Any]]:
-    """Elements carrying the resolved tag, as Points strictly inside the bbox.
-
-    Zero features is a typed non-retryable ``*_NO_FEATURES``, never a fabricated
-    empty-success layer: an ask for hospitals that finds none is an answer the
-    caller has to see as one.
-    """
+    """Elements carrying the resolved tag, as Points strictly inside the bbox. Zero
+    features is a typed non-retryable refusal, never an empty-success layer: an ask
+    that finds none is an answer the caller has to see as one."""
     sc, sfx = spec.error_code_prefix, spec.input_error_suffix
     key, value = _resolve_tag(sc, sfx, params)
     gdf = overpass_features(spec, params, {key: value}, timeout_s=timeout_s)

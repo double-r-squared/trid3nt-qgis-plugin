@@ -1,20 +1,16 @@
-"""usace_nsi hooks (tier-3 hook wave): USACE National Structure Inventory points.
+"""usace_nsi hooks: USACE National Structure Inventory points.
 
-The one irreducible step: the NSI ``structures`` request is a POST whose query
-is a JSON body -- a FeatureCollection wrapping the bbox as a polygon (NSI has no
-query-string bbox) -- and the GeoJSON FeatureCollection decode (project each
-structure to the preserved NSI property set, JSON-coerce nested props, and derive
-the two Pelicun-consumer columns ``component_type`` <- ``occtype`` and
-``replacement_value`` <- ``val_struct``). The per-axis 1-degree span cap the NSI
-server enforces (oversized envelopes 500) is the one bespoke pre-fetch gate the
-declarative bbox validation does not carry. Transport (the shared POST path) /
-retry / cache / FGB serialize / LayerURI stay router-owned.
+The one irreducible step is that the structures request is a POST whose query is a JSON
+body wrapping the bbox as a polygon -- the service has no query-string bbox -- plus the
+decode of the returned FeatureCollection."""
 
-The POST body shape is expressed via ``RequestPlan(method="POST", json_body=...)``
-(the tier-3 transport extension); the hook stays pure (it DESCRIBES the
-request, the router owns the socket). Empty result -> a header-only FGB (a bbox
-over open water is legitimate), never an honest-empty typed error.
-"""
+# The decode projects each structure to the preserved property set, JSON-coerces the
+# nested props, and derives the two consumer columns from the occupancy type and the
+# structure value. The per-axis 1-degree span cap the server enforces is the one
+# bespoke pre-fetch gate the declarative bbox validation does not carry.
+#
+# The hook stays pure: it DESCRIBES the POST and the router owns the socket. An empty
+# result is a header-only FGB, since a bbox over open water is legitimate.
 
 from __future__ import annotations
 
@@ -34,7 +30,7 @@ NSI_STRUCTURES_URL = "https://nsi.sec.usace.army.mil/nsiapi/structures"
 #: NSI rejects envelopes wider than ~1 degree per axis with a 500.
 NSI_BBOX_MAX_SPAN_DEG = 1.0
 
-#: Properties preserved from each NSI feature (the twin's exact subset).
+#: Properties preserved from each NSI feature.
 _PRESERVED_PROPERTIES = (
     "fd_id", "occtype", "st_damcat", "bldgtype", "found_type", "found_ht",
     "num_story", "sqft", "med_yr_blt", "val_struct", "val_cont", "val_vehic",

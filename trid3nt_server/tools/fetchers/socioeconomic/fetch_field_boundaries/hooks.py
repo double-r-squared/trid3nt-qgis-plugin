@@ -1,22 +1,14 @@
 """FTW/fiboa field-boundary delegate hooks: geopandas owns the pushdown socket.
 
-fetch_field_boundaries reads PUBLISHED agricultural field-boundary GeoParquet from
-Source Cooperative over an fsspec HTTPS handle, with CRS-aware GeoParquet 1.1 row-group
-bbox PUSHDOWN happening INSIDE ``geopandas.read_parquet(fh, bbox=...)`` -- the parquet
-reader issues its own HTTP range requests to prune row groups. That is a maintained
-LIBRARY owning discovery + the socket (the pfdf / HRRR-Zarr pattern), so it folds onto
-the VECTOR ``library_delegate`` mode: the "needs a new pushdown TRANSPORT"
-concern is refuted -- the pushdown is not a router transport, it lives in geopandas, which
-this delegate hook legitimately owns (the sanctioned impurity).
+The published GeoParquet is read over an fsspec handle with CRS-aware row-group bbox
+PUSHDOWN happening INSIDE the parquet reader, which issues its own range requests to
+prune row groups. That pushdown is the library's, not a router transport."""
 
-Two hooks:
-  * ``field_boundaries.select`` (pre_resolve, PURE): bbox -> dataset key selection from
-    the declared ``ingest.field_boundaries.datasets`` table (or an explicit ``dataset``
-    param), merged into params before read_through so the resolved key enters the cache
-    key. Raises the twin's FIELDS_NO_COVERAGE / FIELDS_INPUT_INVALID pre-cache.
-  * ``field_boundaries.read`` (delegate): the geopandas GeoParquet pushdown read -> WGS84
-    GeoJSON polygon features (crop_name property) for the shared vector_fgb serializer.
-"""
+# ``select`` is PURE: it resolves the bbox to a dataset key from the declared table, or
+# takes an explicit ``dataset`` param, and merges the key into params before
+# read_through so it enters the cache key, raising the no-coverage or invalid-input
+# error pre-cache. ``read`` is the pushdown read itself, returning WGS84 polygon
+# features for the shared serializer.
 
 from __future__ import annotations
 
@@ -58,12 +50,9 @@ def _bbox_intersects(a: Any, b: Any) -> bool:
 
 @register_hook("field_boundaries.select")
 def select_dataset(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
-    """Pick the FTW dataset covering ``bbox`` (or honor an explicit ``dataset`` key).
-
-    Merges ``{"dataset": <key>}`` into params so the resolved key enters the cache key.
-    Raises FIELDS_INPUT_INVALID (unknown key) / FIELDS_NO_COVERAGE (no overlap) -- the
-    twin's ``_select_dataset``, byte-identical codes.
-    """
+    """Pick the dataset covering ``bbox``, or honour an explicit ``dataset`` key, merging
+    the resolved key into params so it enters the cache key. An unknown key is an
+    invalid input; no overlap is a no-coverage refusal."""
     sc = spec.error_code_prefix
     bbox = tuple(float(v) for v in params["bbox"])
     requested = params.get("dataset")
@@ -136,12 +125,9 @@ def _has_covering(parquet_file: Any) -> bool:
 
 @register_hook("field_boundaries.read")
 def read_fields(spec: SourceSpec, params: dict[str, Any], *, timeout_s: float) -> list[dict[str, Any]]:
-    """Read field-boundary polygons for ``bbox`` from the selected dataset (twin ``_read_fields_gdf``).
-
-    CRS-aware GeoParquet 1.1 row-group bbox pushdown over an fsspec HTTPS handle (the
-    library owns the range reads), clip to the exact bbox, cap, normalize the crop label
-    to ``crop_name`` -> WGS84 GeoJSON polygon features. A read failure -> FIELDS_UPSTREAM_ERROR.
-    """
+    """Read field-boundary polygons for ``bbox`` from the selected dataset: a row-group
+    bbox pushdown, then a clip to the exact bbox, a cap, and a crop-label normalization
+    to WGS84 polygon features. A read failure raises the typed upstream error."""
     import geopandas as gpd
     import pyarrow.parquet as pq
     import pyproj

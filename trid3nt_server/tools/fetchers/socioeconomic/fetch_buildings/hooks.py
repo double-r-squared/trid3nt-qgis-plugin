@@ -1,13 +1,8 @@
 """buildings: OSM footprints, slim inline, with the full tag bag beside them.
 
-The inline FGB stays SLIM (osm_id / osm_type / fid) so the frontend GeoJSON is
-tiny; the full OSM tag bag per footprint goes to the ``.tags.json`` sidecar the
-executor writes next to it, read back cross-module by the building-detail route.
-
-EVERY footprint whose geometry intersects the bbox is kept WHOLE, never clipped: a
-building straddling an AOI edge is one building, and half of one is not a smaller
-building.
-"""
+The inline FGB stays SLIM so the frontend payload is tiny, and the full tag bag per
+footprint goes to the sidecar the executor writes next to it. EVERY footprint
+intersecting the bbox is kept WHOLE: half a building is not a smaller building."""
 
 from __future__ import annotations
 
@@ -33,12 +28,9 @@ def _building_fid(el_type: Any, osm_id: Any) -> str:
 def features(
     spec: SourceSpec, params: dict[str, Any], *, timeout_s: float
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
-    """``(geojson_features, tags_by_fid)`` for every building footprint in the bbox.
-
-    The library assembles the multipolygon relations - a courtyard block is one
-    footprint with its hole - and hands back the tag bag as frame columns, so both
-    halves come off one read.
-    """
+    """``(geojson_features, tags_by_fid)`` for every footprint in the bbox. The library
+    assembles the multipolygon relations -- a courtyard block is one footprint with its
+    hole -- and hands back the tags as columns, so both halves come off one read."""
     import pandas as pd
     from shapely.geometry import mapping
 

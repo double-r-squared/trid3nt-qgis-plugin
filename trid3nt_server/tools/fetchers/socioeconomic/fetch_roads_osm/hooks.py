@@ -1,10 +1,8 @@
 """roads_osm delegate: ``highway`` ways CLIPPED to the exact bbox.
 
-A road is a network you measure INSIDE an area, so unlike the coastal structures
-this family clips: Overpass returns the whole way for any way with a node in the
-bbox, and a way crossing the boundary several times yields several in-AOI segments
-that share the way's attributes.
-"""
+A road is a network you measure INSIDE an area, so unlike the coastal structures this
+family clips: the service returns the whole way for any way with a node in the bbox, and
+a way crossing the boundary yields several in-AOI segments sharing its attributes."""
 
 from __future__ import annotations
 
@@ -35,11 +33,9 @@ _DEFAULT_ROAD_CLASSES: tuple[str, ...] = (
 
 
 def _resolve_road_classes(sc: str, sfx: str, road_classes: Any) -> list[str]:
-    """Validate the highway-tag set (sorted); an unknown value is a typed error.
-
-    An explicitly-empty list is the ambiguous case: pass None for the default set
-    or name at least one value.
-    """
+    """Validate the highway-tag set, sorted; an unknown value is a typed error. An
+    EXPLICITLY empty list is the ambiguous case and refuses: pass None for the default
+    set, or name at least one value."""
     if road_classes is None:
         return sorted(_DEFAULT_ROAD_CLASSES)
     if not isinstance(road_classes, (list, tuple)):
