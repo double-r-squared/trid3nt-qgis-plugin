@@ -4222,3 +4222,31 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   collection exposes a state property". fetch_usace_dams and
   fetch_epa_frs_facilities stay on their hooks (contract extensions
   they would need are stated, not built).
+  FOLD HYDRO STAGE + RULINGS (NATE 2026-09-09; stage record docs/
+  validation/fetcher-fold-hydro-stage.md): landed - the one HyRiver
+  shim (hooks/hyriver.py, 160 lines: 58 code + 62 docstring, four
+  measured refusal shapes; the cache at $TRID3NT_RUNS_DIR/hyriver-
+  cache, expiry 3600 s), high-water marks on pygeohydro (parity 722/
+  722), FEMA NFHL on pygeohydro's client by object id (parity 326/326,
+  629 interior rings preserved, 42 s -> 19 s), fetch_nldas2_forcing
+  NEW on pynldas2 (refuses by name until the Earthdata .netrc exists);
+  pynhd dropped as a direct dependency (nothing imports it). HONEST
+  LOC: the fold half is +120 against the census's -810 - the NLDI
+  halves did not fold, HWM is -14 and NFHL -5 on their own, the shim
+  is +160; NLDAS-2 is +301 of new capability. REJECTED with the
+  measurement: fetch_usace_dams (we never hand-carried NID's tables -
+  the census's deciding reason did not hold), fetch_usace_levees
+  (already on the driver, zero hook LOC). RULINGS: (a) THE MANNING
+  TABLE STAYS OURS (Godara 2024 - CN and n from one study; the
+  library's Liu 2019 table agrees on zero of 17 codes, is 5-8x rougher
+  on open vegetated land, 40x smoother on water, NaN on one code); the
+  comparison is recorded in docs/validation/nlcd-manning-tables.md;
+  the calibration multiplier carries the uncertainty. (b) NFHL at
+  metro scale: the service degrades under any large read (9,894
+  polygons: the old cursor returned 6,000 and called it complete;
+  the patient paced read 5,894 in 37 min) - the row TILES a wide AOI
+  into sub-bbox reads with pauses (~50 LOC) and REPORTS what it lost
+  by tile; never a silent truncation. (c) docs/site/tool-support.md:
+  RE-CUT with a live tool sweep as its own step after the fold (75 of
+  176 names dead, 60 registered tools unlisted); until then a dated
+  coverage caveat on the page.
