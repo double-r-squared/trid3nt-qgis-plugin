@@ -4169,3 +4169,27 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   generated artifact left. CORRECTED NOW: the fetcher-fold census
   said join.py travels to the attic; it STAYED (ledgered QUEUED, the
   demographic MANIFEST requires it) - the census reads so.
+  FOLD STAGE 0 RULINGS (NATE 2026-09-09, docs/validation/fetcher-fold-
+  stage0.md): (a) the eight STAC specs read through GDAL's HTTP path
+  - the status is verbatim (404/403/429 proven), retries fire on
+  429/503, the S3 error BODY is lost and Retry-After is NOT honored
+  (GDAL's cpl_http backoff ignores the header - measured and source-
+  confirmed): the deviation from the norm's Retry-After and verbatim-
+  body clauses is LEDGERED for this family with the measurement; (b)
+  HyRiver's NLDI client is broken at the pinned pynhd (the USGS
+  endpoint moved; the fix is pynhd 0.20, capped out by pygeohydro) -
+  the NLDI halves of the two delegate specs KEEP our working
+  dataretrieval path; the swap is a ledger row with CONDITION
+  "pygeohydro admits pynhd >= 0.20"; (c) HyRiver's HTTP layer has no
+  retry, no status filter, and returns a JSON-bodied 4xx as data - ONE
+  shared shim (~40 LOC, the tenacity pattern) wraps every HyRiver
+  call: backoff on 429/5xx, a JSON error body raised as a typed error
+  verbatim; (d) OPERA DSWx is BLOCKED on an Earthdata Login (NATE's
+  interactive step: an Earthdata account, credentials in ~/.netrc for
+  urs.earthdata.nasa.gov, plus GDAL_HTTP_COOKIEFILE/COOKIEJAR); the
+  STAC executor is proven on Copernicus DEM and JRC (Planetary
+  Computer, no auth); the DSWx spec is written and refuses by name
+  until the .netrc exists, its Stage 0 cell re-run then. Measured
+  corrections to the census: the ESRI driver costs 1.05x, not 26 s;
+  HyRiver's default cache expiry is 604800 s; the OSMnx shims measure
+  62 LOC, not 40.
