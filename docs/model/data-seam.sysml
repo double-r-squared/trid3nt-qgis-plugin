@@ -55,6 +55,17 @@ package DataSeam {
         */
     }
 
+    part def CatalogRasterReader {
+        doc /*
+        The reader a catalog-published raster row is served by. It takes the
+        row's catalog coordinates - which collection, which asset, at which
+        cell, signed how, rendered how - and returns the window. It knows
+        nothing about the DATA: the vertical datum, the resolution and the style
+        stay on the source row, because a library that fetches bytes cannot say
+        what they are referenced to.
+        */
+    }
+
     part def WaterBodyClassifier {
         doc /*
         Which water this is, decided from the rows the reach chain already
@@ -175,6 +186,21 @@ package DataSeam {
         item min_pixel_m : Real [0..1];
     }
 
+    interface def CatalogReadDeclaration {
+        doc /*
+        What a source row tells a catalog reader. Every key is a coordinate INTO
+        a catalog, never a claim about the pixels: the reader can find the asset
+        and put it on a grid, and it still cannot say which datum the numbers
+        are on. That is why a bed source published through a catalog states its
+        datum on its own row and the reader carries none.
+        */
+        item collection : String;
+        item data_asset : String;
+        item native_cell_m : Real;
+        item render : String;
+        item sign : String;
+    }
+
     interface def BedLadderRung {
         doc /*
         One alternative on a bed ladder. ``consequence`` is what descending to
@@ -276,6 +302,20 @@ package DataSeam {
         port choiceIn : ChoiceIn;
     }
 
+    part stacRasterReader : CatalogRasterReader {
+        doc /*
+        code: trid3nt_server/tools/fetchers/_router/executors/stac_raster.py
+        */
+        port declarationIn : DeclarationIn;
+    }
+
+    part copernicusDeclaration : BedSourceDeclaration {
+        doc /*
+        code: trid3nt_server/tools/fetchers/terrain/fetch_copernicus_dem/source.yaml
+        */
+        port declarationOut : DeclarationOut;
+    }
+
     part waterBodyClassifier : WaterBodyClassifier {
         doc /*
         code: trid3nt_server/tools/fetchers/_router/hooks/topobathy_class.py
@@ -369,6 +409,9 @@ package DataSeam {
     interface bedSourceDeclared : BedSourceParams
         connect blueTopoDeclaration.declarationOut to blueTopoSource.declarationIn;
 
+    interface catalogBedDeclared : CatalogReadDeclaration
+        connect copernicusDeclaration.declarationOut to stacRasterReader.declarationIn;
+
     interface bedProvenanceCarried : BedProvenance
         connect blueTopoSource.provenanceOut to bedResultModel.provenanceIn;
 
@@ -416,6 +459,18 @@ package DataSeam {
         A row that declares no class keeps the unclassed ladder. A class nobody
         declared is not a class anybody may assume, so the per-class ladders
         govern the row that states which water it is and nothing else.
+        */
+    }
+
+    requirement def ACatalogReaderCarriesNoProvenance {
+        doc /*
+        RULING 2026-09-09 (docs/IDEAS.md, "FOLD STAGE 0 RULINGS"): the STAC rows
+        read through a maintained catalog library rather than hand-written
+        search-and-warp code. The library owns the socket, the grid and the
+        pixel fuse; it owns nothing else. Provenance facts - the vertical datum,
+        the resolution and the style row - stay on the source row whatever
+        library performs the fetch, so a bed published through a catalog is as
+        mergeable after the fold as before it.
         */
     }
 
@@ -609,6 +664,15 @@ package DataSeam {
         "tests/test_bathymetry_data_seam.py::test_an_undeclared_class_keeps_the_rows_unclassed_ladder";
     verify requirement PerWaterBodyClassLadders by
         "tests/test_bathymetry_data_seam.py::test_every_class_ladder_ends_at_refuse_with_the_rows_own_error_code";
+
+    satisfy requirement ACatalogReaderCarriesNoProvenance by stacRasterReader;
+    satisfy requirement ACatalogReaderCarriesNoProvenance by copernicusDeclaration;
+    verify requirement ACatalogReaderCarriesNoProvenance by
+        "tests/test_router_stac_raster.py::test_float_render_applies_scale_offset_and_fill";
+    verify requirement ACatalogReaderCarriesNoProvenance by
+        "tests/test_router_stac_raster.py::test_mosaic_fuse_is_first_valid_in_search_order";
+    verify requirement ACatalogReaderCarriesNoProvenance by
+        "tests/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum";
 
     satisfy requirement WaterBodyClassComesFromHeldData by waterBodyClassifier;
     satisfy requirement WaterBodyClassComesFromHeldData by coastalDeclaration;

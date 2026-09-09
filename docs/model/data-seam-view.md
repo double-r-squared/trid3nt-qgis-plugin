@@ -16,15 +16,18 @@ flowchart LR
     coastalComposite["CoastalComposite<br/>trid3nt_server/tools/fetchers/_router/hooks/topobathy.py"]
     coastalDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_topobathy/source.yaml"]
     coastlineDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/source.yaml"]
+    copernicusDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/terrain/fetch_copernicus_dem/source.yaml"]
     fetcherRouter["FetcherRouter<br/>trid3nt_server/tools/fetchers/_router/router.py"]
     freeSurfaceReader["FreeSurfaceReader<br/>trid3nt_server/workflows/telemac/templates/stratified_flow/lake_level.py"]
     ladderWalker["LadderWalker<br/>trid3nt_server/fallbacks/walker.py"]
     lakeDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_bathymetry/source.yaml"]
     lakeLevelDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_greatlakes_water_level/source.yaml"]
     shorelineLadder["ShorelineLadder<br/>trid3nt_server/workflows/mesh/shoreline.py"]
+    stacRasterReader["CatalogRasterReader<br/>trid3nt_server/tools/fetchers/_router/executors/stac_raster.py"]
     waterBodyClassifier["WaterBodyClassifier<br/>trid3nt_server/tools/fetchers/_router/hooks/topobathy_class.py"]
     blueTopoSource -- "BedProvenance" --> bedResultModel
     blueTopoDeclaration -- "BedSourceParams" --> blueTopoSource
+    copernicusDeclaration -- "CatalogReadDeclaration" --> stacRasterReader
     waterBodyClassifier -- "PartialCoverGap" --> ladderWalker
     waterBodyClassifier -- "BedLadderDeclaration" --> bedLadderRegistry
     waterBodyClassifier -- "BedLadderRung" --> bedLadderRegistry
@@ -86,6 +89,18 @@ The request a bed source takes. ``min_pixel_m`` only COARSENS: it never invents 
 | `timeout_s` | Real | required |
 | `min_pixel_m` | Real | optional |
 
+### `CatalogReadDeclaration`
+
+What a source row tells a catalog reader. Every key is a coordinate INTO a catalog, never a claim about the pixels: the reader can find the asset and put it on a grid, and it still cannot say which datum the numbers are on. That is why a bed source published through a catalog states its datum on its own row and the reader carries none.
+
+| item | type | required |
+| --- | --- | --- |
+| `collection` | String | required |
+| `data_asset` | String | required |
+| `native_cell_m` | Real | required |
+| `render` | String | required |
+| `sign` | String | required |
+
 ### `PartialCoverGap`
 
 A rung that served PART of the request, and how much. The walker reads both off it: the share already painted, and the note the gate shows the person being asked to accept the substitution that fills the rest.
@@ -129,6 +144,7 @@ The class vocabulary, declared on the row and read by the classifier. Three name
 
 | requirement | satisfied by | verified by |
 | --- | --- | --- |
+| **ACatalogReaderCarriesNoProvenance** | `stacRasterReader`, `copernicusDeclaration` | `tests/test_router_stac_raster.py::test_float_render_applies_scale_offset_and_fill`<br/>`tests/test_router_stac_raster.py::test_mosaic_fuse_is_first_valid_in_search_order`<br/>`tests/test_bathymetry_data_seam.py::test_every_bed_capable_source_row_states_its_vertical_datum` |
 | **AFreeSurfaceAndABedShareOneStatedDatum** | `lakeLevelDeclaration`, `lakeDeclaration`, `freeSurfaceReader` | `tests/test_open_water_domains.py::test_the_level_is_the_nearest_gauges_last_reading`<br/>`tests/test_open_water_domains.py::test_a_level_and_a_bed_on_two_datums_refuse_by_name`<br/>`tests/test_open_water_domains.py::test_water_no_gauge_watches_refuses_rather_than_opening_at_the_datum`<br/>`tests/test_open_water_domains.py::test_the_thermocline_is_stated_below_the_water_top_not_the_datum` |
 | **AStoppedRungNeverShips** | `waterBodyClassifier`, `coastalComposite` | `tests/test_bathymetry_data_seam.py::test_a_small_inland_stream_has_no_ladder_and_refuses_naming_both_gaps`<br/>`tests/test_bathymetry_data_seam.py::test_a_navigable_river_has_no_ladder_and_refuses_naming_its_stopped_primary`<br/>`tests/test_bathymetry_data_seam.py::test_no_ladder_anywhere_ships_an_ehydro_rung`<br/>`tests/test_bathymetry_data_seam.py::test_a_stopped_class_refuses_before_the_cache_and_before_the_network`<br/>`tests/test_bathymetry_data_seam.py::test_a_tile_row_with_no_delivered_link_is_not_data`<br/>`tests/test_bathymetry_data_seam.py::test_an_aoi_no_delivered_tile_reaches_refuses_by_name`<br/>`tests/test_bathymetry_data_seam.py::test_the_synthetic_slot_is_stated_as_deferred_rather_than_forgotten` |
 | **BedSourceStatesItsDatum** | `blueTopoSource`, `blueTopoDeclaration`, `bedResultModel` | `tests/test_bathymetry_data_seam.py::test_a_tile_that_states_navd88_passes_the_datum_gate`<br/>`tests/test_bathymetry_data_seam.py::test_a_tile_that_states_no_navd88_refuses_rather_than_merging`<br/>`tests/test_bathymetry_data_seam.py::test_the_envelope_states_the_datum_in_provenance`<br/>`tests/test_bathymetry_data_seam.py::test_the_bluetopo_spec_declares_the_delegate_hooks_and_the_result_model` |
@@ -141,6 +157,7 @@ The class vocabulary, declared on the row and read by the classifier. Three name
 
 ## What each requirement says
 
+- **ACatalogReaderCarriesNoProvenance** - RULING 2026-09-09 (docs/IDEAS.md, "FOLD STAGE 0 RULINGS"): the STAC rows read through a maintained catalog library rather than hand-written search-and-warp code. The library owns the socket, the grid and the pixel fuse; it owns nothing else. Provenance facts - the vertical datum, the resolution and the style row - stay on the source row whatever library performs the fetch, so a bed published through a catalog is as mergeable after the fold as before it.
 - **AFreeSurfaceAndABedShareOneStatedDatum** - RULING 2026-09-06 (docs/IDEAS.md, "REMEDY RULINGS" (b)): a water body's LEVEL is an observation, fetched the way a river's discharge is - the nearest gauge to the AOI, at the day the run is about - and the run's free surface opens at it. Data is assumed true; nothing thresholds the reading. WHAT MAKES THE ARITHMETIC LEGAL is that both documents state their zero. The gauge row and the bed row each state a vertical datum, and the subtraction between a level and an elevation is only defined when the two statements agree. Two rows stating different zeros, with no offset stated anywhere, REFUSE BY NAME - both names and both datums - rather than adding numbers that are not on one axis. A row stating none refuses for the reason OneSourceReadsOnOneStatedDatum already gives. Left at the dictionary's own zero the free surface sits ON the chart datum, which is where the bed is counted from, so the rim of a surveyed basin carries no water at all. Clipping that rim away would be a threshold on values; giving it its real water is the observation.
 - **AStoppedRungNeverShips** - SIGNED DECISION - load-bearing unverified items are verified live before any rung ships, and a dead assumption stops its rung rather than shipping it. Two rungs the methodology names stopped on measured grounds and are absent here rather than declared: eHydro, the navigable primary: its queryable surface is one layer of survey-boundary polygons carrying a horizontal projection and no vertical datum field at all, with the soundings behind per-survey bulk archives on another host. A bed whose datum is unknowable from its index cannot state its datum, so it cannot be on this ladder. What the methodology leaves under it is BlueTopo alone, and one source is not a degradation path - so the navigable class has no ladder either and refuses, naming the stopped primary. NXSDB, the small-stream primary: its measurements carry depth below the water surface and no bed elevation and no vertical datum, published as one national GeoPackage on a host serving no range requests. That is a producer's input, not a bed anyone can fetch. So the small-stream class likewise has no rung and REFUSES, naming both gaps and the synthetic slot below them. That slot is DEFERRED BY RULING, not merely unbuilt (HAPPY PATH FIRST, SYNTHETIC DEFERRED, 2026-09-02, amending the signed methodology): no synthetic bathymetry is produced now, the Bieger regression the methodology named as the candidate does not build, and whether a fabricated bed may ever stand in for a survey is a USER decision rather than a gap for an implementation to close. Best-case behaviour is established first and never intertwined with sad-path interpolation. The slot is therefore STATED and EMPTY - an absence somebody decided, so that a later reader finds a ruling where they would otherwise find an oversight. Empty, it is a refusal, and the refusal is the honest floor working.
 - **BedSourceStatesItsDatum** - SIGNED DECISION - the bed's vertical datum is stated in provenance, not assumed by a reader. BlueTopo publishes NAVD88 and says so twice in each tile; a tile that states neither is refused rather than merged, because the whole reason this source outranks the alternatives is that its datum is known. The datum, the tiles, the tiers and the measured coverage ride on the returned layer, since none of them survives in the raster bytes.
