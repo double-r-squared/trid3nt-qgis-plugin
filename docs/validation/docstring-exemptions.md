@@ -1,0 +1,11 @@
+# Docstring exemptions
+
+Every `# docstring-exempt: <reason>` marker in the tree. A docstring past the
+limit (3 physical lines for a function or class, 5 for a module) carries one, and
+the reason has to name the contract the limit cannot hold. Past roughly ten
+entries the limit is re-argued rather than routed around.
+
+| symbol | file:line | reason |
+| --- | --- | --- |
+| `reseat_revised` | trid3nt_server/workflows/runtime/resolver.py:139 | The two user-authority doors seat identically - both stamp `basis=user` - and differ only in what they record, which no signature can say; the undeclared-name rule and the changed-names return are separate facts. |
+| `rederive_revised` | trid3nt_server/workflows/runtime/resolver.py:170 | The three-element return is under-specified by `tuple[ResolvedParams, list[str], list[str]]`, and the pin on a `basis=user` row is a rule no signature carries. |
