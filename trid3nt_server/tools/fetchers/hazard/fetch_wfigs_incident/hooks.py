@@ -1,21 +1,12 @@
-"""wfigs_incident record hooks: NIFC/WFIGS named-incident lookup.
+"""wfigs_incident record hooks: a named wildland-fire incident lookup.
 
-The proof-by-migration for the record-return output shape. The source resolves a
-NAMED wildland-fire incident to an authoritative point + padded AOI bbox + discovery
-record -- a bare structured JSON dict, NOT a renderable map layer. The router owns the
-transport + cache; these PURE hooks own the bespoke resolution the declarative surface
-cannot carry:
+The source resolves a NAMED incident to an authoritative point, a padded AOI bbox and
+a discovery record -- a structured JSON dict, NOT a renderable layer. ``build_request``
+builds the query and the ordered plan set; ``record`` picks the best feature."""
 
-- ``build_request`` -- the token-OR ``UPPER(IncidentName) LIKE`` query builder + the
-  ordered 2-endpoint plan set (the live "Current" active feed first, then the
-  "YearToDate" all-incidents sibling that also carries recently-contained fires) +
-  the bespoke state-code + pad-degree input validation.
-- ``record`` -- best-feature-by-size selection over ONE feed's features (returning
-  None to signal "no usable feature in this feed, try the next endpoint" -- the
-  record executor walks the plans in order and stops at the first non-None dict,
-  reproducing the twin's Current->YearToDate short-circuit) + the authoritative
-  point + bbox-from-point + epoch->ISO discovery record.
-"""
+# ``record`` returns None to mean "no usable feature in this feed, try the next", and
+# the executor walks the plans in order to the first non-None dict: the live active
+# feed first, then the all-incidents sibling that also carries recently-contained fires.
 
 from __future__ import annotations
 

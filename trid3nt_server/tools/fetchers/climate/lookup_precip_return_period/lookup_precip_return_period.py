@@ -1,5 +1,5 @@
-"""NOAA Atlas 14 PFDS point precipitation-frequency lookup (``lookup_precip_return_period``) with the Atlas-2 western-US anchor fallback.
-"""
+"""NOAA Atlas 14 point precipitation-frequency lookup, with the western-US
+Atlas-2 anchor fallback for points Atlas 14 does not cover."""
 
 from __future__ import annotations
 
@@ -37,45 +37,22 @@ logger = logging.getLogger("trid3nt_server.tools.fetchers.climate.lookup_precip_
 
 
 class PrecipForcingUnavailableError(FetchError):
-    """No design-storm precip source covers the requested point.
-
-    Raised when BOTH NOAA Atlas 14 AND the NOAA Atlas 2 (Western US) fallback
-    miss the location -- a genuinely-uncovered AOI. This is an HONEST,
-    NOT-retryable failure: the agent surfaces it as ``status=error`` with a
-    clear remediation (supply observed precip via ``forcing_raster_uri`` /
-    the observed-precip path, or pick an AOI inside Atlas-14/Atlas-2 coverage).
-    Distinct ``error_code`` so the agent can narrate the actionable alternative
-    rather than a generic upstream-API failure.
-    """
+    """No design-storm precip source covers the requested point: BOTH Atlas 14 and the
+    western-US Atlas 2 fallback miss it. An honest, NOT-retryable failure with its own
+    ``error_code``, so the caller can narrate the alternative rather than a 5xx."""
 
     error_code = "PRECIP_FORCING_UNAVAILABLE"
     retryable = False
 
 # ---------------------------------------------------------------------------
-# lookup_precip_return_period - NOAA Atlas 14 PFDS (Stage B).
+# NOAA Atlas 14 PFDS.
 # ---------------------------------------------------------------------------
 #
-# Access pattern tier -- LIVE-VERIFIED matches kickoff inference (2026-06-07):
-#
-#   * NWS HDSC publishes the Precipitation Frequency Data Server (PFDS) as a
-#     point-query CSV endpoint at ``hdsc.nws.noaa.gov/cgi-bin/new/
-#     fe_text_mean.csv?lat=&lon=&data=depth&units=english&series=pds`` (the
-#     ORIGINAL ``/cgi-bin/hdsc/new/`` path 301-redirects here -- pointed at
-#     the final URL directly).
-#     Live probe at (lat=26.6, lon=-81.9) -- Fort Myers FL -- returned an HTTP
-#     200 with a 1598-byte CSV: header rows naming "NOAA Atlas 14 Volume 9
-#     Version 2" + "Project area: Southeastern States", then a matrix of
-#     precipitation depths (inches) indexed by duration (5-min, 10-min, …,
-#     60-day) × ARI (1, 2, 5, …, 1000 years).
-#   * Per-coordinate / point-only query surface -- no native bbox lookup. The
-#     fetcher routes by ``location=(lat, lon)`` quantized to Atlas 14's native
-#     source grid (1/120 degree, per the kickoff's per-source quantization
-#     rule).
-#
-# This is the **Tier 3 (direct HTTPS + Range-irrelevant point query)**
-# pattern in §F.1.1 -- small textual responses keyed by point coordinates.
-# Cache key is bbox-equivalent: the quantized (lat, lon) tuple per the
-# 1/120-degree source grid; ARI + duration are part of the params.
+# PFDS is a point-query CSV endpoint with no native bbox lookup: header rows
+# naming the atlas volume and project area, then a matrix of depths in inches
+# indexed by duration and ARI. The cache key is bbox-equivalent -- the (lat, lon)
+# pair quantized to the 1/120-degree source grid -- with ARI and duration as
+# ordinary params.
 
 
 _LOOKUP_PRECIP_RETURN_PERIOD_METADATA = AtomicToolMetadata(
@@ -85,11 +62,9 @@ _LOOKUP_PRECIP_RETURN_PERIOD_METADATA = AtomicToolMetadata(
     cacheable=True,
 )
 
-# NWS HDSC retired /cgi-bin/hdsc/new/ in favor of /cgi-bin/new/ (live-
-# verified 2026-08-06: the old path 301-redirects to the new one). Point at the
-# final URL directly to save the extra round trip; ``requests.get`` still
-# follows redirects by default (allow_redirects=True, untouched below), so a
-# FUTURE HDSC path change degrades to one extra hop rather than a hard break.
+# The ``/cgi-bin/hdsc/new/`` path 301-redirects to this one, so pointing at the
+# final URL saves a round trip; redirects are still followed, so a later path
+# change degrades to one extra hop rather than a hard break.
 _ATLAS14_PFDS_URL = "https://hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv"
 
 #: Atlas 14 native source grid: 1/120 degree (≈ 30 arc-seconds).
@@ -125,13 +100,9 @@ _ATLAS14_DURATIONS_HR: dict[str, float] = {
 def _quantize_lonlat_to_atlas14_grid(
     lat: float, lon: float
 ) -> tuple[float, float]:
-    """Quantize a (lat, lon) pair to Atlas 14's 1/120-degree native grid.
-
-    Per the per-source bbox quantization rule (acceptance criterion 3 of
-    the kickoff): Atlas 14 PFDS is reported on a 1/120-degree source grid.
-    We snap to the nearest grid intersection so two callers within the same
-    grid cell hit the same cache entry.
-    """
+    """Quantize a (lat, lon) pair to Atlas 14's 1/120-degree native grid, snapping to
+    the nearest intersection so two callers inside one grid cell hit the same cache
+    entry."""
     if not math.isfinite(lat) or not math.isfinite(lon):
         raise BboxInvalidError(f"non-finite location ({lat!r}, {lon!r})")
     if not (-90.0 <= lat <= 90.0):
@@ -143,13 +114,9 @@ def _quantize_lonlat_to_atlas14_grid(
     return round(lat_q, 9), round(lon_q, 9)
 
 def _parse_atlas14_csv(body: str) -> dict[str, Any]:
-    """Parse the Atlas 14 PFDS CSV into a structured dict.
-
-    The PFDS CSV is a small textual document -- header lines naming the
-    volume / version / project area, then a matrix indexed by duration × ARI.
-    We surface both the full matrix and a top-level ``vintage_volume`` field
-    for provenance (e.g. "NOAA Atlas 14 Volume 9 Version 2").
-    """
+    """Parse the PFDS CSV -- header lines naming the volume and project area, then a
+    matrix indexed by duration and ARI -- into a dict carrying the full matrix and a
+    top-level ``vintage_volume`` for provenance."""
     vintage_volume = "unknown"
     project_area = "unknown"
     lines = body.splitlines()
@@ -186,13 +153,9 @@ def _parse_atlas14_csv(body: str) -> dict[str, Any]:
     }
 
 def _fetch_atlas14_pfds_bytes(lat: float, lon: float) -> bytes:
-    """Fetch the Atlas 14 PFDS CSV at (lat, lon) and return raw response bytes.
-
-    Tier 3 access pattern: HTTPS GET with the location as a query parameter,
-    text/csv (well, text/html with CSV body -- see the parser for the body
-    shape). The bytes returned are the verbatim Atlas 14 response so
-    downstream re-parsing is possible without a re-fetch.
-    """
+    """Fetch the PFDS CSV at (lat, lon) and return the VERBATIM response bytes, so a
+    downstream re-parse needs no re-fetch. The body arrives as text/html carrying the
+    CSV rather than as text/csv."""
     try:
         resp = requests.get(
             _ATLAS14_PFDS_URL,
@@ -214,11 +177,9 @@ def _fetch_atlas14_pfds_bytes(lat: float, lon: float) -> bytes:
 
     body = resp.text
     if "NOAA Atlas 14" not in body:
-        # The PFDS returns an HTML "out of project area" page if the point
-        # falls outside Atlas 14 coverage; surface that as a typed error.
-        # (Live-confirmed body for an out-of-area point: ``result = 'none';
-        # ErrorMsg = 'Error 3.0: Selected location is not within a project
-        # area';`` -- the "NOAA Atlas 14" header is absent, so this guard trips.)
+        # The PFDS answers an out-of-coverage point with an HTML "not within a
+        # project area" page carrying no atlas header, which this guard trips on and
+        # surfaces as a typed error.
         raise UpstreamAPIError(
             f"NOAA Atlas 14 PFDS returned no precip-frequency data for "
             f"(lat={lat}, lon={lon}) -- point may be outside the Atlas 14 "
@@ -230,30 +191,21 @@ def _fetch_atlas14_pfds_bytes(lat: float, lon: float) -> bytes:
 # NOAA Atlas 2 (Western US) design-storm fallback
 # --------------------------------------------------------------------------- #
 #
-# WHY THIS EXISTS. The Pacific Northwest (WA / OR / ID) and most of the
-# Intermountain West are NOT in NOAA Atlas 14 -- they remain covered only by the
-# legacy NOAA Atlas 2 ("Precipitation-Frequency Atlas of the Western United
-# States", Miller / Frederick / Tracey, NWS 1973). The Atlas-14 PFDS point
-# endpoint answers ``Error 3.0: ... not within a project area`` for these
-# points (live-confirmed for the Toutle / Mount St. Helens point lat=46.325
-# lon=-122.733). Before this fallback existed the workflow died in 1-3s at the
-# precip fetcher and the agent silently reported "ok".
+# The Pacific Northwest and most of the Intermountain West are NOT in Atlas 14 --
+# they remain covered only by the legacy NOAA Atlas 2, "Precipitation-Frequency
+# Atlas of the Western United States" (Miller / Frederick / Tracey, NWS 1973) --
+# and the Atlas-14 point endpoint answers "not within a project area" for them.
 #
-# WHAT IT DOES. NOAA Atlas 2 is a 1973 isopluvial-MAP atlas -- there is no clean
-# machine-readable lat/lon point CSV endpoint comparable to the Atlas-14 PFDS
-# (the digital grids are state-by-state raster / contour products, not a live
-# point API, and the HDSC PFDS server explicitly does NOT serve them as CSV).
-# So this fallback is a BUNDLED parameterization of the published Atlas-2
-# Western-US precipitation-frequency surface: regional 2-yr and 100-yr
-# 6-hr / 24-hr anchor depths (the four values Atlas 2 maps directly), combined
-# with the Atlas-2 / NWS HYDRO-35 documented log-Pearson frequency scaling and
-# duration scaling to synthesize the requested ARI x duration depth. This is
-# the standard hydrologic reconstruction used when only the Atlas-2 mapped
-# anchors are available; it is DETERMINISTIC and NETWORK-FREE (so it can never
-# wedge or silently fail), and the provenance is honest about which atlas
-# answered (``source="noaa-atlas2"``, ``vintage_volume="NOAA Atlas 2 (Western
-# US)"``). Outside the Western-US coverage envelope it raises a typed miss --
-# never an empty / fabricated success.
+# Atlas 2 is an isopluvial-MAP atlas with no machine-readable point endpoint: its
+# digital grids are state-by-state raster and contour products, and the PFDS server
+# does not serve them as CSV. So this fallback is a BUNDLED parameterization of the
+# published Atlas-2 surface: the regional 2-year and 100-year 6-hour and 24-hour
+# anchor depths that atlas maps directly, combined with its documented log-Pearson
+# frequency scaling and duration scaling to synthesize the requested ARI and
+# duration. That is the standard hydrologic reconstruction where only the mapped
+# anchors are available; it is DETERMINISTIC and NETWORK-FREE, so it can never wedge,
+# and the provenance names which atlas answered. Outside the Western-US envelope it
+# raises a typed miss, never a fabricated success.
 
 #: Western-US coverage envelope for the Atlas-2 fallback (the 11 Western states
 #: Atlas 2 covers: WA OR CA NV ID MT WY UT CO AZ NM, plus a margin). A bbox
@@ -333,14 +285,9 @@ def _point_in_bbox(
 def _atlas2_anchor_grid_for_point(
     lat: float, lon: float
 ) -> tuple[dict[float, dict[int, float]], str]:
-    """Pick the Atlas-2 regional anchor grid + region label for a Western-US point.
-
-    Cascade-crest split (~ -120.5 lon): west = maritime PNW regime, east =
-    drier interior-West regime. Coarse but honest -- the two regimes differ by
-    ~2x in total, so a wrong-side pick would be a meaningful error; the split
-    keeps a windward-Cascades AOI (Toutle) on the maritime curve and an interior
-    AOI on the dry curve.
-    """
+    """Pick the Atlas-2 regional anchor grid and region label for a western-US point,
+    split at the Cascade crest near -120.5 lon: maritime to the west, drier interior to
+    the east. The two regimes differ by about 2x, so a wrong-side pick is meaningful."""
     if lon <= -120.5 and lat >= 41.0:
         return _ATLAS2_PNW_ANCHORS_IN, "Pacific Northwest (windward Cascades)"
     return _ATLAS2_INTERIOR_WEST_ANCHORS_IN, "Interior Western US"
@@ -351,18 +298,9 @@ def _fetch_atlas2_precip_bytes(
     return_period_years: int,
     duration_hours: float,
 ) -> bytes:
-    """Synthesize an Atlas-2 (Western US) precip-frequency depth for a point.
-
-     fallback for the WHY-IT-FAILS Toutle die. Returns a small CSV-like
-    body in the SAME shape ``_parse_atlas14_csv`` consumes (a ``NOAA Atlas 2``
-    header line, a ``Project area:`` line, and one duration row of comma-
-    separated depths across the fixed ARI columns) so the existing parser path
-    works unchanged. DETERMINISTIC + NETWORK-FREE (no upstream call to wedge).
-
-    Raises ``PrecipForcingUnavailableError`` when the point is outside the
-    Western-US Atlas-2 coverage envelope (an honest miss, never an empty
-    success). ``BboxInvalidError`` on a duration Atlas 2 cannot synthesize.
-    """
+    """Synthesize a western-US Atlas-2 depth for a point, DETERMINISTIC and
+    NETWORK-FREE, as a CSV-like body in the shape the Atlas-14 parser already
+    consumes. Outside the Atlas-2 envelope it raises an honest typed miss."""
     if not _point_in_bbox(lat, lon, _ATLAS2_WESTERN_US_BBOX):
         raise PrecipForcingUnavailableError(
             f"NOAA Atlas 2 (Western US) does not cover (lat={lat}, lon={lon}); "
@@ -384,16 +322,15 @@ def _fetch_atlas2_precip_bytes(
     dur_ratio = _ATLAS2_DURATION_RATIO_TO_24HR[duration_hours]
 
     def _depth_at(ari: int) -> float:
-        """Atlas-2 depth (inches) at an ARI for this point's duration.
+        """Atlas-2 depth in inches at an ARI for this point's duration."""
 
-        Anchors on BOTH directly-mapped Atlas-2 values (2-yr and 100-yr) at
-        the 24-hr duration: log-linear in return period between/around them
-        (the documented Atlas-2 / log-Pearson frequency growth), so the 2-yr
-        and 100-yr depths reproduce the MAPPED anchors EXACTLY rather than a
-        ratio approximation. Then scaled to the requested duration by the
-        depth-duration ratio. The 2-yr-relative growth table provides the
-        curve SHAPE; it is calibrated so f(2)=anchor_2 and f(100)=anchor_100.
-        """
+        # Anchored on BOTH directly-mapped values, the 2-year and the 100-year at the
+        # 24-hour duration, and log-linear in return period between and around them per
+        # the documented log-Pearson frequency growth, so those two depths reproduce the
+        # MAPPED anchors EXACTLY rather than a ratio approximation. The result is then
+        # scaled to the requested duration by the depth-duration ratio; the 2-year
+        # relative growth table supplies the curve SHAPE, calibrated so f(2) and f(100)
+        # land on their anchors.
         d2 = anchors[24.0][2]
         d100 = anchors[24.0][100]
         # Calibrate the published 2-yr-relative growth ratios so the 100-yr
@@ -431,13 +368,9 @@ def _fetch_atlas2_precip_bytes(
     return ("\n".join(body_lines) + "\n").encode("utf-8")
 
 def _pick_duration_label(duration_hours: float) -> str:
-    """Find the Atlas 14 duration row whose hours match ``duration_hours`` exactly.
-
-    Atlas 14 reports a fixed set of durations (5-min through 60-day). We
-    require an exact match against the known set so the caller can't ask
-    for an interpolated value (Atlas 14 doesn't publish interpolations and
-    we don't fabricate them -- Invariant 7).
-    """
+    """Find the Atlas 14 duration row matching ``duration_hours`` EXACTLY. The atlas
+    publishes a fixed set from 5 minutes to 60 days and no interpolations, so an
+    unpublished duration is refused rather than interpolated."""
     for label, hrs in _ATLAS14_DURATIONS_HR.items():
         if abs(hrs - duration_hours) < 1e-9:
             return label
@@ -461,76 +394,32 @@ def lookup_precip_return_period(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Look up a precipitation return-period depth at a point via NOAA Atlas 14 PFDS.
+    """Look up a design-storm precipitation depth at a point, in inches.
 
-    Access pattern: Tier 3 (direct HTTPS point query to the NOAA PFDS endpoint).
+    Returns ONE (return period, duration) depth from NOAA Atlas 14 as a scalar
+    dict, not a layer. Coverage is CONUS plus Puerto Rico and the US Virgin
+    Islands; a western-US point Atlas 14 omits is answered from the Atlas-2
+    anchors instead, and a point neither atlas covers raises rather than guessing.
 
-    **What it does:** Issues a point query to the NOAA Hydrometeorological Design
-    Studies Center (HDSC) Precipitation Frequency Data Server (PFDS) at
-    ``hdsc.nws.noaa.gov/cgi-bin/new/fe_text_mean.csv``, parses the returned
-    duration × ARI matrix, and returns the requested depth in inches. Input
-    coordinates are snapped to Atlas 14's 1/120° (~30 arc-second) grid before
-    the cache key is computed (dedup). This is a point query, not a
-    raster -- it returns a scalar dict, not a ``LayerURI``. Tier-1 free, no
-    API key, CONUS + Puerto Rico / US Virgin Islands only.
+    Use this when: a design storm is the question ("the 100-year 24-hour rainfall
+    here"), a historical storm total needs ranking against its return period, or a
+    rainfall-runoff model needs an intensity-duration-frequency input.
 
-    **When to use:**
+    Do NOT use this for: OBSERVED precipitation, which a radar or gauge product
+    answers; future-climate design storms, since Atlas 14 is historical; or a
+    spatial raster of return-period precipitation, since this is a point service.
 
-    - Design-storm precipitation depth for a pluvial-flood scenario
-      ("what is the 100-year, 24-hour rainfall for Miami?"). Example:
-      ``location=(25.77, -80.19)``, ``return_period_years=100``,
-      ``duration_hours=24.0``.
-    - Characterising a published historical storm by its return-period equivalence
-      ("Harvey's 48-hour total at Houston -- what ARI?"). Run the tool for
-      multiple ARIs and compare.
-    - Providing IDF (intensity-duration-frequency) input for a rainfall-runoff
-      model (SCS CN, Green-Ampt).
+    Params:
+        location: ``(lat, lon)`` in EPSG:4326 -- latitude FIRST, the opposite of
+            the bbox convention. Snapped to the 1/120-degree grid before caching.
+        return_period_years: ARI in years. Atlas 14 publishes 1, 2, 5, 10, 25, 50,
+            100, 200, 500 and 1000; anything else raises.
+        duration_hours: storm duration. Atlas 14 publishes 5 minutes through 60
+            days and never interpolates, so an unpublished duration raises.
 
-    **When NOT to use:**
-
-    - Observed precipitation totals -- use ``fetch_mrms_qpe`` (gauge-corrected
-      radar accumulation) or NWIS / NEXRAD for measurements.
-    - Future-climate design storms -- Atlas 14 is based on historical records
-      (Atlas 15, in development, will integrate non-stationarity).
-    - Locations outside CONUS / PR / USVI -- Atlas 14 OCONUS coverage is partial;
-      Alaska, Hawaii, and Pacific Islands are not in the v0.1 substrate.
-    - Spatial rasters of return-period precipitation -- Atlas 14 PFDS is a point
-      service; for a spatial map use a pre-computed gridded Atlas 14 dataset.
-
-    **Parameters:**
-
-    - ``location``: ``(lat, lon)`` decimal degrees EPSG:4326. Note: lat first,
-      lon second (opposite of the ``bbox`` convention). Example: ``(29.76, -95.37)``
-      for Houston.
-    - ``return_period_years``: ARI in years; Atlas 14 publishes
-      ``{1, 2, 5, 10, 25, 50, 100, 200, 500, 1000}``; values outside this set
-      raise ``BboxInvalidError``.
-    - ``duration_hours``: storm duration in hours; Atlas 14 publishes durations
-      from 5 min (5/60 h) to 60 days (1440 h); unsupported durations raise
-      ``BboxInvalidError``.
-
-    **Returns:**
-
-    A ``dict`` with keys: ``precip_inches`` (float, precipitation depth in
-    inches), ``units`` (``"inches"``), ``location`` ([lat, lon] of the snapped
-    Atlas 14 grid point), ``return_period_years`` (ARI echo), ``duration_hours``
-    (duration echo), ``vintage_volume`` (e.g. ``"NOAA Atlas 14 Volume 9 Version
-    2"``), ``project_area`` (e.g. ``"Southeastern States"``),
-    ``source`` (``"noaa-atlas14-pfds"``).
-
-    **Cross-tool dependencies:**
-
-    - Consumed by: ``telemac_rain_on_grid`` to construct a synthetic
-      design-storm hyetograph and drive the pluvial rainfall input.
-    - Compare with: ``fetch_mrms_qpe`` for observed accumulations vs Atlas 14
-      design depths; the ratio gives the storm's return-period rank.
-    - Pair with: ``fetch_gcn250_curve_numbers`` or NLCD-derived CNs when
-      converting depth → runoff volume via SCS CN method.
-
-    Routed through ``read_through`` with ``ttl_class="static-30d"``;
-    cache key = SHA-256 of ``(lat-quantized, lon-quantized, return_period_years,
-    duration_label)`` -- snapping ensures callers within the same 30 arc-second
-    cell dedup.
+    Returns: a dict carrying ``precip_inches``, ``units``, the snapped
+    ``location``, the return-period and duration echoes, ``vintage_volume``,
+    ``project_area`` and ``source``.
     """
     if not isinstance(location, (tuple, list)) or len(location) != 2:
         raise BboxInvalidError(

@@ -1,11 +1,8 @@
-"""ncei_tsunami hooks: NCEI Global Historical Tsunami DB -> point features.
+"""ncei_tsunami hooks: NCEI Global Historical Tsunami DB as point features.
 
-The irreducible step: the NCEI hazard-service request (mode-selected endpoint,
-year-window resolution + validation, bbox lat/lon params, page number) and the
-per-mode JSON item decode (``events`` vs ``runups`` carry different source fields).
-The paging LOOP is a declarative router mode (``ingest.http_source.paging``); this
-hook builds one page's request and decodes the concatenated item bodies.
-"""
+The irreducible step is the hazard-service request -- mode-selected endpoint, validated
+year window, bbox params, page number -- and the per-mode decode, since ``events`` and
+``runups`` carry different fields. The paging loop is the router's."""
 
 from __future__ import annotations
 

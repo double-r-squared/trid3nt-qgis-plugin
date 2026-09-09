@@ -1,11 +1,8 @@
-"""usgs_volcano hooks: USGS HANS volcano alerts -> point features.
+"""usgs_volcano hooks: USGS HANS volcano alerts as point features.
 
-The irreducible step: a TWO-endpoint static request (the alert list keyed by vnum
-+ the geographic list keyed by vnum) that the parse hook inner-joins on vnum, then
-filters to the request bbox in-process (HANS has no server-side spatial query).
-build_request returns both plans; the router GETs both and hands the two bodies to
-parse_response in order.
-"""
+The irreducible step is a TWO-endpoint static request -- the alert list and the
+geographic list, both keyed by vnum -- inner-joined on vnum and then bbox-filtered in
+process, because HANS has no server-side spatial query."""
 
 from __future__ import annotations
 

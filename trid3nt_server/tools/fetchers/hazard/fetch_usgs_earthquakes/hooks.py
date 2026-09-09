@@ -1,12 +1,8 @@
-"""usgs_earthquakes hooks: USGS FDSN Event GeoJSON -> point features.
+"""usgs_earthquakes hooks: USGS FDSN Event GeoJSON as point features.
 
-The one irreducible step the declarative surface cannot carry: the FDSN request
-construction (a bespoke relative-window resolution + magnitude/window validation,
-not an ArcGIS ``/query``) and the FDSN GeoJSON decode (id from the feature top
-level, depth from the geometry Z coordinate, epoch-ms times, the ``metadata.count``
-result-cap gate). Everything around them -- transport, retry, cache, payload gate,
-FGB serialize, LayerURI, camera bbox -- is the shared router.
-"""
+The irreducible steps are the FDSN request construction -- a relative window with
+magnitude validation, not an ArcGIS query -- and the FDSN decode: id at the feature top
+level, depth off the geometry Z, epoch-ms times, the result-cap gate."""
 
 from __future__ import annotations
 
@@ -31,12 +27,9 @@ FDSN_RESULT_LIMIT = 20000
 
 
 def _resolve_window(sc: str, sfx: str, start_date: Any, end_date: Any) -> tuple[str, str]:
-    """Resolve the (starttime, endtime) FDSN window as ISO UTC strings.
-
-    Both omitted -> the most-recent ``DEFAULT_WINDOW_DAYS``. One-sided -> a
-    30-day span anchored to the supplied bound. Raises the source-stamped input
-    error on a bad date / reversed range / over-``MAX_WINDOW_DAYS`` span.
-    """
+    """Resolve the (starttime, endtime) FDSN window as ISO UTC strings: both omitted
+    gives the default recent window, one-sided a 30-day span anchored to the bound. A
+    bad date, reversed range or over-long span raises the source's input error."""
     now = _dt.datetime.now(_dt.timezone.utc)
 
     def _parse(s: str, *, is_end: bool) -> _dt.datetime:
@@ -154,12 +147,9 @@ def _epoch_ms_to_iso(ms: Any) -> str | None:
 def parse_response(
     spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 ) -> list[dict[str, Any]]:
-    """Decode the FDSN GeoJSON FeatureCollection into point features.
-
-    Raises the source-stamped RESULT_TOO_LARGE on the FDSN cap, the EMPTY error
-    on zero events (honest-empty, never a fabricated layer), and UPSTREAM on a
-    non-JSON / non-FeatureCollection body.
-    """
+    """Decode the FDSN FeatureCollection into point features. The service's own cap
+    raises RESULT_TOO_LARGE, zero events raises EMPTY rather than a fabricated layer,
+    and a non-FeatureCollection body raises UPSTREAM."""
     import json
 
     sc = spec.error_code_prefix

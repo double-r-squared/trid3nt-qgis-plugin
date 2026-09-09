@@ -1,19 +1,14 @@
-"""epa_frs_facilities hooks (tier-3 http_json mode/0066): EPA regulated-facility
-points by program, multi-layer UNION.
+"""epa_frs_facilities hooks: EPA regulated-facility points, multi-layer UNION.
 
-The wave-11 deferral was a 5-layer fan-out UNION plus a Superfund geometry
-synthesized from LAT/LON attribute columns. Both fold onto the EXISTING multi-plan
-build_request/parse_response path with ZERO new machinery: ``build_request`` expands the
-facility_program enum into the ordered layer set (the "frs" union = 5 point layers, a
-single program = 1, superfund = 1 esri-json layer) and emits one RequestPlan per layer;
-``parse_response`` decodes the bodies IN THAT ORDER (point layers -> common point schema;
-superfund -> point-from-LAT/LON synthesis), stamps program/label, and unions.
+``build_request`` expands the facility_program enum into the ordered layer set and
+emits one plan per layer; ``parse_response`` decodes the bodies IN THAT ORDER, with
+the Superfund layer's geometry synthesized from its LAT/LON columns, then unions."""
 
-Single-page per layer (no next_page) caps each layer at the server maxRecordCount (2000)
-where the twin paged to 20000/layer -- a realistic small-AOI query is value-identical; a
-dense state-scale bbox truncates earlier (divergence, advisory payload gate warns
-first). All I/O stays router-owned.
-"""
+# One page per layer, so each layer is capped at the server's own maxRecordCount: a
+# dense state-scale bbox truncates there, and the advisory payload gate warns first.
+
+# One page per layer, so each layer is capped at the server's own maxRecordCount: a
+# dense state-scale bbox truncates there, and the advisory payload gate warns first.
 
 from __future__ import annotations
 
@@ -30,7 +25,7 @@ __all__ = ["build_request", "parse_response", "FACILITY_PROGRAMS", "PROGRAM_ALIA
 
 
 def router_input_error(sc, msg, suffix="INPUT_INVALID"):
-    """Stamp the twin's EPA_FRS_INPUT_INVALID suffix (EpaFrsInputError)."""
+    """Stamp the source's EPA_FRS_INPUT_INVALID suffix."""
     return _router_input_error(sc, msg, suffix)
 
 _EPA_BASE = (

@@ -1,48 +1,45 @@
 """fema_nfhl_zones: FEMA NFHL regulatory flood-zone polygons through pygeohydro.
 
-``pygeohydro.NFHL`` owns the service - the layer lookup by name, the object-id
-selection, the request. It also owns the thing this row could not do for itself: the
-NFHL endpoint answers a deep page 200-WITH-ERROR, so a cursor walk over it silently
-stops early, while an object-id read cannot lose a feature without saying so.
-MEASURED on one Tampa Bay bbox: the cursor walk returned 6,000 of the 9,894 polygons
-the service itself counts there and called it an answer.
+The library owns the service. Reading by OBJECT ID is what this row needs: the endpoint
+answers a deep page 200-WITH-ERROR, so a cursor walk silently stops early, while an
+object-id read cannot lose a feature without saying so."""
 
-THE OUTPUT FORMAT IS LOAD-BEARING, so it is named here rather than left at the
-client's default. Asked for Esri JSON the client hands the rings to a converter whose
-containment test is a LINE that contains a point, which no interior ring's vertex
-lies on - so every hole comes back as another filled outer ring. MEASURED on a
-326-polygon bbox: 18 features carry 629 holes, the Esri-JSON read returned zero of
-them, over-stating those features by 13.8 percent and the AOI by 7.8. An X-zone hole
-inside an AE polygon IS the regulatory answer, so it cannot be filled.
-
-THE BATCHES ARE READ ONE AT A TIME, which is the other half of coming back complete.
-The service throttles: MEASURED over the same bbox, batches 1-3 answered and 4-9
-returned HTTP 500 and then reset the connection outright, the ninth answering again
-after a pause. The library issues every batch in ONE gather, so a single throttled
-batch fails the whole read; read one batch per call and each one carries the shared
-shim's own backoff, under a batch size the service can actually deliver. Within a
-batch the library's own retry stays on and names any id it still could not read.
-
-A WIDE AOI IS READ TILE BY TILE, in sequence, with a pause between tiles - because
-one client cannot read a metro AOI in one pass at any batch size measured, and a
-refusal that kills the whole read is the same lost answer as a silent truncation.
-Every tile the service still refuses after its attempts is NAMED, with the polygon
-count it would have carried, in the log, on the run journal and in the run's notes.
-
-Three more things ride here.
-
-THE ZONE VOCABULARY. ``sfha_only`` and ``zone_filter`` are server-side clauses over
-the D_FLD_ZONE domain, and the domain itself is this row's data: an unknown zone code
-is refused by name rather than passed to the service to return nothing.
-
-THE REGULATORY CORE. The service publishes far more columns than a flood-zone
-question needs; the fourteen that carry the regulatory answer are the spec's.
-
-THE COMPLETENESS GUARD. When some object ids fail even after the library's own
-retry, it WARNS and returns what it has. A partial regulatory layer that looks whole
-is the failure this row exists to have stopped, so a non-zero miss count is a typed
-upstream error instead.
-"""
+# MEASURED on one bbox: the cursor walk returned 6,000 of the 9,894 polygons the
+# service itself counts there and called it an answer.
+#
+# THE OUTPUT FORMAT IS LOAD-BEARING, so it is named here rather than left at the
+# client's default. Asked for Esri JSON the client hands the rings to a converter whose
+# containment test is a LINE that contains a point, which no interior ring's vertex
+# lies on, so every hole comes back as another filled outer ring. MEASURED on a
+# 326-polygon bbox: 18 features carry 629 holes, the Esri-JSON read returned zero of
+# them, over-stating those features by 13.8 percent and the AOI by 7.8. An X-zone hole
+# inside an AE polygon IS the regulatory answer, so it cannot be filled.
+#
+# THE BATCHES ARE READ ONE AT A TIME, which is the other half of coming back complete.
+# The service throttles: MEASURED over the same bbox, batches 1-3 answered and 4-9
+# returned HTTP 500 and then reset the connection outright, the ninth answering again
+# after a pause. The library issues every batch in ONE gather, so a single throttled
+# batch fails the whole read; read one batch per call and each one carries the shared
+# shim's own backoff, under a batch size the service can actually deliver. Within a
+# batch the library's own retry stays on and names any id it still could not read.
+#
+# A WIDE AOI IS READ TILE BY TILE, in sequence, with a pause between tiles, because one
+# client cannot read a metro AOI in one pass at any batch size measured, and a refusal
+# that kills the whole read is the same lost answer as a silent truncation. Every tile
+# the service still refuses after its attempts is NAMED, with the polygon count it
+# would have carried, in the log, on the run journal and in the run's notes.
+#
+# THE ZONE VOCABULARY. ``sfha_only`` and ``zone_filter`` are server-side clauses over
+# the D_FLD_ZONE domain, and the domain itself is this row's data: an unknown zone code
+# is refused by name rather than passed to the service to return nothing.
+#
+# THE REGULATORY CORE. The service publishes far more columns than a flood-zone
+# question needs; the fourteen that carry the regulatory answer are the spec's.
+#
+# THE COMPLETENESS GUARD. When some object ids fail even after the library's own retry,
+# it WARNS and returns what it has. A partial regulatory layer that looks whole is the
+# failure this row exists to prevent, so a non-zero miss count is a typed upstream
+# error instead.
 
 from __future__ import annotations
 

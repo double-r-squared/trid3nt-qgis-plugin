@@ -1,21 +1,16 @@
-"""usace_dams hooks (tier-3 chained-resolution mode/0066): USACE National
-Inventory of Dams points, offset-paged, KEYED (missing-key parity).
+"""usace_dams hooks: USACE National Inventory of Dams points, offset-paged, keyed.
 
-The wave-11 deferral was a credential-gated dual-endpoint with a non-maskable
-auth error + list IN filters. Both fold onto the EXISTING hooks under the
-keyed-source rule (never register a real key; the keyless path is the parity surface):
-``build_request`` resolves the token (kwarg -> str secret_ref -> ``TRID3NT_USACE_NID_TOKEN``
-env), normalizes the hazard_potential / state / min_height filters into an ``IN (...)`` /
-``DAM_HEIGHT >=`` where clause (the bespoke controlled-vocab + USPS normalization is the
-one irreducible pure step), and builds the page-1 query; ``next_page`` does offset paging;
-``parse_response`` decodes the geojson into the NID point schema.
+``build_request`` resolves the token, normalizes the hazard-potential, state and
+minimum-height filters into an ``IN (...)`` and ``DAM_HEIGHT >=`` where clause -- the
+one irreducible pure step -- and builds page 1; ``next_page`` offset-pages."""
 
-KEYLESS path (no token resolves) -> the PUBLIC ESRI Living Atlas mirror -> byte-parity
-provable. The AUTHORITATIVE endpoint + the non-maskable auth-card path + the
-authoritative->mirror non-auth fallback are only reachable WITH a token, which this wave
-never registers: they are honestly BLOCKED-ON-KEY (divergence), not blocked-on-mode.
-All I/O stays router-owned.
-"""
+# With no token the read falls to the PUBLIC mirror. The authoritative endpoint, its
+# non-maskable auth card, and the authoritative-to-mirror non-auth fallback are
+# reachable only WITH one.
+
+# With no token the read falls to the PUBLIC mirror. The authoritative endpoint, its
+# non-maskable auth card, and the authoritative-to-mirror non-auth fallback are
+# reachable only WITH one.
 
 from __future__ import annotations
 
@@ -33,7 +28,7 @@ __all__ = ["build_request", "next_page", "parse_response", "VALID_HAZARD_POTENTI
 
 
 def router_input_error(sc, msg, suffix="INPUT_INVALID"):
-    """Stamp the twin's USACE_DAMS_INPUT_INVALID suffix (USACEDAMSInputError)."""
+    """Stamp the source's USACE_DAMS_INPUT_INVALID suffix."""
     return _router_input_error(sc, msg, suffix)
 
 _NID_BASE = (

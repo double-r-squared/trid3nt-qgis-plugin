@@ -1,23 +1,18 @@
-"""fault_sources hooks (finisher-mechanisms wave): GEM active faults.
+"""fault_sources hooks: GEM active faults.
 
-The irreducible steps the declarative surface cannot carry, all PURE:
-- ``build_request`` -- ONE GET of the whole-world GEM GAF harmonized GeoJSON
-  (the constant source file; the AOI never enters the URL). Fetched through the
-  router's ``ingest.constant_cache`` two-tier cache so the 10.6 MB file downloads
-  once per 30-day window and every AOI re-filters the same cached bytes.
-- ``parse_response`` -- parse the GeoJSON, bbox-filter + kinematic-parse the
-  features into fault-source records (verbatim from the twin: '(best,min,max)'
-  triple parse, >=2-distinct-vertex + slip>0 gate, GEM depth/dip/rake defaults),
-  and shape one LineString feature per fault. A zero-fault AOI returns ``[]`` (a
-  feature-empty FGB), which the ``output.variant_by_emptiness`` switch turns into
-  the honest empty-record dict -- no fabricated layer.
-- ``envelope`` -- the POST-EMIT kinematic-record + legend + count read back from
-  the produced FGB (-> FaultSourcesResult).
-- ``empty_record`` -- the variant_by_emptiness dict for a zero-fault AOI.
+``build_request`` is ONE GET of the whole-world harmonized GeoJSON -- the AOI never
+enters the URL -- and ``parse_response`` bbox-filters and kinematic-parses it. A zero-
+fault AOI returns no feature, so the emptiness switch answers with a record."""
 
-Everything else -- transport, retry, the two-tier cache, payload gate, LayerURI --
-is the shared router.
-"""
+# The kinematic parse is the irreducible step: the '(best,min,max)' triple, the
+# two-distinct-vertex and positive-slip gate, and the published depth, dip and rake
+# defaults. ``envelope`` reads the kinematic record, legend and count back off the
+# produced FGB, and ``empty_record`` is the dict a zero-fault AOI answers with.
+
+# The kinematic parse is the irreducible step: the '(best,min,max)' triple, the
+# two-distinct-vertex and positive-slip gate, and the published depth, dip and rake
+# defaults. ``envelope`` reads the kinematic record, legend and count back off the
+# produced FGB, and ``empty_record`` is the dict a zero-fault AOI answers with.
 
 from __future__ import annotations
 
@@ -52,16 +47,14 @@ _PROPS = (
 
 
 # --------------------------------------------------------------------------- #
-# GEM-property parsing helpers (verbatim from the fetch_fault_sources twin).
+# GEM-property parsing helpers.
 # --------------------------------------------------------------------------- #
 
 
 def first_num(v: Any, default: float | None = None) -> float | None:
-    """Take the FIRST (best-estimate) value of a GEM property.
-
-    GEM harmonized fields are strings like ``'(15.15,10.49,19.18)'`` (best,
-    min, max) or ``'(38,,)'`` (best only). Tolerates plain numbers and lists.
-    """
+    """Take the FIRST (best-estimate) value of a GEM property, whose harmonized fields
+    are strings like ``'(15.15,10.49,19.18)'`` for best, min and max or ``'(38,,)'``
+    for best alone. Tolerates plain numbers and lists."""
     if v is None:
         return default
     if isinstance(v, bool):  # guard: bool is an int subclass
@@ -80,11 +73,9 @@ def first_num(v: Any, default: float | None = None) -> float | None:
 
 
 def trace_coords(geometry: dict[str, Any] | None) -> list[list[float]]:
-    """Flatten a fault geometry to an ordered ``[[lon, lat], ...]`` vertex list.
-
-    Handles ``LineString`` and ``MultiLineString`` (the only shapes GEM GAF uses);
-    a 3rd ``z`` ordinate is dropped. Anything else yields an empty list.
-    """
+    """Flatten a fault geometry to an ordered ``[[lon, lat], ...]`` vertex list, from a
+    ``LineString`` or ``MultiLineString`` and dropping any z ordinate. Anything else
+    yields an empty list."""
     if not isinstance(geometry, dict):
         return []
     gtype = geometry.get("type")
@@ -163,12 +154,9 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
 def parse_response(
     spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 ) -> list[dict[str, Any]]:
-    """Parse the GEM GAF GeoJSON, bbox-filter + kinematic-parse -> fault features.
-
-    A zero-fault AOI returns ``[]`` (a feature-empty FGB) -- the router's
-    ``output.variant_by_emptiness`` switch turns that into the honest empty
-    record dict. A bad body raises the source-stamped UPSTREAM error.
-    """
+    """Parse the GeoJSON, bbox-filter and kinematic-parse it into fault features. A
+    zero-fault AOI returns ``[]``, which the emptiness switch turns into the honest
+    empty record; a bad body raises the source-stamped UPSTREAM error."""
     sc = spec.error_code_prefix
     raw = bodies[0] if bodies else b""
     try:

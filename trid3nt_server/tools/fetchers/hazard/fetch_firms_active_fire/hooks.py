@@ -1,16 +1,18 @@
-"""firms_active_fire hooks (quick-folds wave, keyed CSV http_json):
-NASA FIRMS active-fire / thermal-anomaly detections, keyed by a MAP_KEY.
+"""firms_active_fire hooks: NASA FIRMS active-fire detections, keyed by MAP_KEY.
 
-FIRMS carries the key IN THE URL PATH (not a header), so ``build_request`` resolves
-the key (kwarg -> str secret_ref -> ``TRID3NT_FIRMS_MAP_KEY`` env), raising a
-credential-shaped FIRMS_MISSING_KEY pre-network when none resolves (the
-openaq_measurements precedent), and emits ONE GET of the AREA-endpoint CSV URL. The key wrinkle: FIRMS
-signals a bad/rate-limited key via a 200-WITH-ERROR-BODY (not always a non-2xx), so
-the auth split lives in BOTH ``parse_response`` (the 200-body envelope check IS the
-doctrine) and ``classify_status`` (the same body markers on a non-2xx TransportError).
-``parse_response`` decodes the CSV into Point features carrying the retained schema;
-an empty (header-only) body is an honest 0-feature FGB, never a typed error.
-"""
+FIRMS carries the key IN THE URL PATH, so ``build_request`` resolves it and raises a
+credential-shaped missing-key error pre-network when none does. An empty header-only
+CSV body is an honest 0-feature FGB, never a typed error."""
+
+# FIRMS signals a bad or rate-limited key with a 200-WITH-ERROR-BODY as often as with
+# a non-2xx, so the auth split lives in BOTH hooks: ``parse_response`` checks the
+# 200-body envelope, and ``classify_status`` checks the same markers on a transport
+# error's body.
+
+# FIRMS signals a bad or rate-limited key with a 200-WITH-ERROR-BODY as often as with
+# a non-2xx, so the auth split lives in BOTH hooks: ``parse_response`` checks the
+# 200-body envelope, and ``classify_status`` checks the same markers on a transport
+# error's body.
 
 from __future__ import annotations
 
@@ -32,7 +34,7 @@ _KEY_ENV = "TRID3NT_FIRMS_MAP_KEY"
 #: Columns emitted in the FGB properties -- drops latitude/longitude (they ARE the
 #: geometry). Only columns PRESENT in a given source's CSV are populated per-row
 #: (VIIRS names its brightness bands bright_ti4/ti5, not brightness/bright_t31, so
-#: those read null for a VIIRS source -- the twin dropped them entirely).
+#: those read null for a VIIRS source).
 _RETAINED_COLUMNS = (
     "brightness", "scan", "track", "acq_date", "acq_time", "satellite",
     "instrument", "confidence", "version", "bright_t31", "frp", "daynight",
@@ -40,12 +42,9 @@ _RETAINED_COLUMNS = (
 
 
 def _is_auth_body(body: str) -> str | None:
-    """Return an auth-failure reason when the FIRMS body signals a bad/limited key.
-
-    FIRMS returns a plain-text error body (sometimes under HTTP 200, sometimes a
-    4xx): an unknown key -> ``Invalid MAP_KEY.``; a rate-limited key -> wording
-    containing ``exceeded your transaction`` (or rate + limit). None otherwise.
-    """
+    """The auth-failure reason when the body signals a bad or rate-limited key, else
+    None. The plain-text error body arrives under HTTP 200 as often as a 4xx: an
+    unknown key names the key, a limited one names the exceeded transaction."""
     low = body.strip().lower()
     if "invalid map_key" in low:
         return (
@@ -58,12 +57,9 @@ def _is_auth_body(body: str) -> str | None:
 
 
 def _resolve_map_key(sc: str, params: dict[str, Any]) -> str:
-    """Resolve the FIRMS MAP_KEY: kwarg -> str secret_ref -> env; else MISSING_KEY.
-
-    Raises a credential-shaped FIRMS_MISSING_KEY BEFORE any network call when no key
-    resolves (the openaq_measurements precedent). The env var is the local-dev / live-drive
-    path and is NOT threaded through the cache key (the detections do not vary by key).
-    """
+    """Resolve the MAP_KEY -- kwarg, then str secret_ref, then env -- raising a
+    credential-shaped missing-key error BEFORE any network call when none does. The key
+    never enters the cache key: the detections do not vary by it."""
     import os
 
     map_key = params.get("map_key")
@@ -86,12 +82,9 @@ def _resolve_map_key(sc: str, params: dict[str, Any]) -> str:
 
 @_hooks.register_hook("firms_active_fire.build_request")
 def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.RequestPlan"]:
-    """Resolve the key, build the AREA-endpoint CSV URL (key in the path), one GET.
-
-    A ``date`` (single historical acquisition day) forces the day-range to 1 -- the
-    FIRMS trailing ``/{YYYY-MM-DD}`` idiom. The rolling URL is byte-identical when
-    ``date`` is omitted.
-    """
+    """Resolve the key and build the AREA-endpoint CSV URL, which carries the key in its
+    path, as one GET. A ``date`` names a single historical acquisition day and forces
+    the day range to 1; omitted, the URL is the rolling window."""
     sc = spec.error_code_prefix
     key = _resolve_map_key(sc, params)  # raises MISSING_KEY pre-network when absent
     source = params["source"]
@@ -110,12 +103,9 @@ def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.Requ
 def parse_response(
     spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
 ) -> list[dict[str, Any]]:
-    """Decode the FIRMS CSV into Point features (200-body auth check first).
-
-    A 200-with-error-body (bad / rate-limited key) raises a credential-shaped
-    FIRMS_AUTH_ERROR. A blank body / a body missing the latitude/longitude columns
-    is an upstream defect. A header-only body is a valid 0-feature result.
-    """
+    """Decode the CSV into Point features, checking the 200 body for an auth failure
+    first. A blank body, or one missing the coordinate columns, is an upstream defect;
+    a header-only body is a valid 0-feature result."""
     sc = spec.error_code_prefix
     raw = bodies[0] if bodies else b""
     try:
@@ -165,12 +155,9 @@ def parse_response(
 def classify_status(
     spec: SourceSpec, status: int | None, body: str | None
 ) -> RouterError | None:
-    """Bad-key body on a non-2xx -> FIRMS_AUTH_ERROR; else the default upstream.
-
-    FIRMS returns the ``Invalid MAP_KEY.`` body under HTTP 400 as well as 200, so the
-    same body-marker split runs here on a transport failure. A non-auth non-2xx keeps
-    the default retryable upstream mapping (the twin's FirmsUpstreamError).
-    """
+    """A bad-key body on a non-2xx raises the auth error; anything else keeps the default
+    retryable upstream mapping. The same body markers appear under a 400 as under a
+    200, so the split runs on a transport failure too."""
     sc = spec.error_code_prefix
     auth_reason = _is_auth_body(body or "")
     if auth_reason is not None:

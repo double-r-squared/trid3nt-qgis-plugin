@@ -1,16 +1,8 @@
-"""climate_normals hooks (chained_resolution enrich/0071): NOAA NCEI
-1991-2020 U.S. Climate Normals as station points.
+"""climate_normals hooks: NOAA NCEI 1991-2020 U.S. Climate Normals as stations.
 
-The twin's two-stage shape folds onto the EXISTING enrich phase with zero new
-machinery: ``build_request`` GETs the fixed-width station inventory; ``parse_response``
-slices it, spatially filters to the bbox, caps at ``gates.max_stations``, and emits one
-Point feature per station (no normals yet), raising a typed CLIMATE_NORMALS_EMPTY when
-the bbox holds no stations. PHASE E (``enrich_plan`` emits one per-station access-CSV
-ref; ``enrich_merge`` decodes each CSV, folds the annual normals back, and DROPS a
-station with no usable annual normal -- the twin's skip) produces the final records,
-raising CLIMATE_NORMALS_EMPTY when none survive. All I/O (inventory GET, per-station
-GETs, retry, cache, FGB serialize) stays router-owned; the hooks only compute.
-"""
+``build_request`` GETs the station inventory; ``parse_response`` bbox-filters and caps
+it into station Points; the enrich phase folds in each station's annual normals and
+DROPS one with none usable. No survivor raises the typed empty error."""
 
 from __future__ import annotations
 

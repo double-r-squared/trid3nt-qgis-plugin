@@ -1,22 +1,14 @@
-"""openfema_disasters hooks (chained-resolution mode): FEMA disaster
-declarations aggregated per county, joined to Census TIGERweb county polygons.
+"""openfema_disasters hooks: FEMA disaster declarations aggregated per county.
 
-Two ratchets retired at once here:
-1. OFFSET paging ($skip/$top, stop-on-short-page) -- the ``next_page`` hook reuses
-   the offset-paging primitive (nwi_wetlands' sibling): one combined OData query
-   over the selector's states, paged to a short page / a row cap.
-2. ATTRIBUTE-FEED <- BOUNDARY-SERVICE FIPS join -- the PHASE-E enrichment: the
-   declarations are the attribute feed; ``enrich_plan`` emits one TIGERweb county
-   FeatureServer GET per state-in-scope, and ``enrich_merge`` left-joins each
-   aggregate onto its county polygon by the 5-digit GEOID (bbox-clipping the
-   selector path). This is the enrich shape, NOT ``transforms/join.py`` (that
-   transform is geometry-first single-value choropleth; openfema is
-   attributes-first multi-field aggregate -- the shapes diverge on purpose).
+``next_page`` offset-pages one combined OData query over the selector's states to a
+short page or a row cap; ``enrich_plan`` emits one county-boundary GET per state in
+scope and ``enrich_merge`` left-joins each aggregate onto its polygon by GEOID."""
 
-All I/O (both round-trip families, the paging loop, the deduped/bounded/best-effort
-county-geometry loop, retry, cache, FGB serialize, LayerURI) stays router-owned;
-these hooks only compute.
-"""
+# This is the enrich shape rather than a join transform: a join is geometry-first and
+# single-value, while this is attributes-first over a multi-field aggregate.
+
+# This is the enrich shape rather than a join transform: a join is geometry-first and
+# single-value, while this is attributes-first over a multi-field aggregate.
 
 from __future__ import annotations
 
@@ -40,8 +32,7 @@ _TIGER_COUNTY_URL = (
 
 #: OpenFEMA page size ($top); pages by $skip until a short page or the row cap.
 _PAGE_SIZE = 1000
-#: Safety cap on total declaration rows pulled over the combined query (the twin's
-#: per-state cap; the combined-query cap is total).
+#: Safety cap on TOTAL declaration rows pulled over the combined query.
 _MAX_ROWS = 12000
 
 #: 2-letter USPS code -> 2-digit FIPS state code (50 states + DC + 5 territories).
@@ -178,11 +169,9 @@ def _validate_start_year(sc: str, start_year: Any) -> int | None:
 
 
 def _resolve(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
-    """Resolve the selector + optional filters (pure, idempotent, twin-identical).
-
-    ``state_code`` wins over ``bbox``; a bbox derives the intersecting states and
-    becomes the clip envelope. Neither given -> OPENFEMA_INPUT_ERROR.
-    """
+    """Resolve the selector and optional filters: ``state_code`` wins over ``bbox``, and
+    a bbox derives the intersecting states and becomes the clip envelope. Neither given
+    raises the source's input error."""
     sc = spec.error_code_prefix
     state_code = params.get("state_code")
     bbox = params.get("bbox")
@@ -393,11 +382,9 @@ def _geom_by_geoid(sc: str, results: dict[str, Any]) -> dict[str, dict[str, Any]
 def enrich_merge(
     spec: SourceSpec, params: dict[str, Any], features: list[dict[str, Any]], results: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    """Left-join county polygons by GEOID, bbox-clip the selector path, drop unmatched.
-
-    Raises OPENFEMA_NO_DECLARATIONS when nothing joins (twin-identical honesty), never
-    an empty success-shaped layer.
-    """
+    """Left-join county polygons by GEOID, bbox-clip the selector path and drop the
+    unmatched. Nothing joining raises the no-declarations error, never an empty
+    success-shaped layer."""
     sc = spec.error_code_prefix
     resolved = _resolve(spec, params)
     clip_bbox = resolved["clip_bbox"]
