@@ -1,39 +1,9 @@
-"""``compose_case_report`` atomic tool -- markdown situation report for a Case.
+"""``compose_case_report`` - a markdown situation report for a Case, written into
+the case artifacts dir.
 
-Generates a plain-markdown situation report for the current Case and writes it
-into the case artifacts dir (the ``open_case_in_qgis`` output convention:
-``${TRID3NT_EXPORT_DIR or ~/trid3nt-exports}/<case>-<hash>/``). Sections:
-
-    1. Title + generation date + Case id.
-    2. AOI bbox (EPSG:4326) when the Case carries one.
-    3. Layers: one row per loaded layer with key stats -- raster min/max/mean
-       + valid-cell count (via the shared ``emission.charts``
-       ``_summarize_raster`` / ``_summarize_vector`` helpers, called
-       directly on the staged artifact so no cache write happens), vector
-       feature count + leading numeric attributes.
-    4. Simulation parameters, when the case record carries any (the Case
-       contract has no typed sim-params field today; this section probes the
-       record defensively and states the honest absence otherwise).
-    5. Exposure summary, when ``compute_exposure_summary`` ran THIS SESSION
-       for this Case (read from its in-memory session store) -- never
-       recomputed or invented here.
-
-Honesty
-=======
-
-- A layer whose artifact cannot be read gets an explicit
-  "statistics unavailable: <reason>" row -- the report never fabricates
-  stats and never silently drops a layer.
-- A Case with zero layers still produces a report, with an explicit
-  "no layers loaded" line (the report IS the artifact; it states emptiness
-  honestly rather than refusing).
-- The returned dict is deliberately LayerURI-free: this tool writes a local
-  file, not a map layer, so nothing must trip the ``add_loaded_layer``
-  isinstance gate.
-
-``cacheable=False`` (``ttl_class="live-no-cache"``): writes a local artifact
-and reads live session/case state.
-"""
+Nothing here recomputes or invents: a layer whose artifact cannot be read gets an
+explicit "statistics unavailable" row, a Case with zero layers still produces a
+report that says so, and the exposure section appears only if it was measured."""
 
 from __future__ import annotations
 
@@ -130,14 +100,9 @@ def _fmt(v: Any) -> str:
 
 
 def _layer_stats_line(layer: dict[str, Any], tmpdir: str) -> str:
-    """One honest stats fragment for a layer (never raises).
-
-    Reuses the shared layer-stats machinery directly
-    (``emission.charts._materialize_uri`` + ``_summarize_raster`` /
-    ``_summarize_vector``; relocated there from the retired ``analytical_qa``
-    module by the ``spatial_query`` fold) on the staged artifact -- same
-    numbers, without routing the report through the cache bucket.
-    """
+    """One honest stats fragment for a layer; NEVER raises - an unreadable layer
+    comes back as a "statistics unavailable" sentence. The staged artifact is read
+    directly, so the report never routes through the cache bucket."""
     from trid3nt_server.emission.charts import (
         _layer_type,
         _materialize_uri,
@@ -185,13 +150,9 @@ def _layer_stats_line(layer: dict[str, Any], tmpdir: str) -> str:
 
 
 def _simulation_parameters(case: Any) -> dict[str, Any]:
-    """Best-effort simulation parameters off the case record.
-
-    The Case contract (``CaseSummary``) carries no typed sim-params field
-    today; ``primary_hazard`` is the one denormalized run hint. Probe a few
-    plausible attribute names defensively so a future/extended record is
-    picked up without a contract change here.
-    """
+    """Best-effort simulation parameters off the case record. The Case contract
+    carries no typed sim-params field, so a few plausible attribute names are
+    probed defensively and an absence is stated rather than filled in."""
     params: dict[str, Any] = {}
     hazard = getattr(case, "primary_hazard", None)
     if hazard:
@@ -204,7 +165,8 @@ def _simulation_parameters(case: Any) -> dict[str, Any]:
 
 
 def _resolve_output_dir(case_id: str, title: str, output_dir: str | None) -> Path:
-    """The case artifacts dir -- the open_case_in_qgis convention."""
+    """The case artifacts dir: ``$TRID3NT_EXPORT_DIR`` (or ``~/trid3nt-exports``)
+    over ``<case>-<hash>/``, created if absent."""
     if output_dir:
         out = Path(output_dir).expanduser()
     else:
@@ -233,46 +195,25 @@ async def compose_case_report(
     case_id: str | None = None,
     output_dir: str | None = None,
     include_layer_stats: bool = True,
-    # absorb LLM-invented kwargs.
+    # Absorb model-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Generate a markdown situation report for the current Case.
+    """Write a markdown situation report for the current Case and return its path.
 
-    **What it does:** Writes a plain-markdown situation report --
-    title, generation date, AOI bbox, a table of every loaded layer with key
-    statistics (raster min/max/mean via the shared layer-stats
-    machinery; vector feature counts), simulation parameters when the case
-    record carries any, and the exposure numbers when
-    ``compute_exposure_summary`` ran this session for this Case -- into the
-    case artifacts dir and returns the file path.
+    ROUTING: "write up this case", "give me a situation report", "export a briefing
+    of what we found" - the closing step after a solve and an exposure analysis. NOT
+    for a single number, NOT a bundle of the layers; this writes ONE markdown file.
 
-    **When to use:**
-    - "Write up / summarize this case", "give me a situation report",
-      "export a briefing of what we found".
-    - As the closing step after a hazard solve + exposure analysis.
+    The report carries the title and date, the AOI bbox, a row per loaded layer with
+    its statistics, simulation parameters when the case record has any, and exposure
+    numbers only when they were actually measured this session.
 
-    **When NOT to use:**
-    - A desktop-GIS bundle of the layers themselves -- use
-      ``open_case_in_qgis``.
-    - A single number ("how many people are flooded") -- use
-      ``compute_exposure_summary`` directly.
-
-    **Parameters:**
-    - ``case_id``: the Case to report on. Default: the turn's bound Case.
-    - ``output_dir``: destination folder. Default:
-      ``${TRID3NT_EXPORT_DIR or ~/trid3nt-exports}/<case>-<hash>/``.
-    - ``include_layer_stats``: compute per-layer statistics (default True;
-      pass False for a fast layer listing without staging artifacts).
-
-    **Returns:** a LayerURI-free dict:
-    ``{status: "ok", report_path, output_dir, case_id, case_title,
-    layer_count, stats_computed_count, stats_unavailable_count,
-    has_exposure_summary, generated_at}``. Per-layer stat failures appear
-    INSIDE the report as honest "statistics unavailable" rows (and in the
-    counts); they never fabricate numbers.
-
-    **Errors:** ``CaseReportInputError`` (no case identifiable),
-    ``CaseReportNotFoundError`` (case missing / persistence unreachable).
+    `case_id` defaults to the turn's Case, `output_dir` to the case artifacts dir,
+    and `include_layer_stats=False` gives a fast listing that stages nothing.
+    Returns {status, report_path, output_dir, case_id, case_title, layer_count,
+    stats_computed_count, stats_unavailable_count, has_exposure_summary,
+    generated_at} - no map layer. A per-layer stat failure shows INSIDE the report as
+    an honest "statistics unavailable" row and in the counts; nothing is invented.
     """
     resolved_case = resolve_case_id(case_id, CaseReportInputError)
     layers, case_bbox, case_title, case = await layers_from_case(

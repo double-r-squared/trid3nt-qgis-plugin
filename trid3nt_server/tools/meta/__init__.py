@@ -1,6 +1,2 @@
-"""Meta / utility tools: web_fetch, code exec, case report,
-run-frame + point-probe utilities, spatial input.
-
-Case-layer serving (hydrate/manifest, layer ingest) lives in the platform-side
-``cases/`` package, not here -- everything under this ``meta/`` tree is a
-registered LLM tool (or the search/infra it needs)."""
+"""Meta tools: ``code_exec_request``, ``compose_case_report``, ``list_run_frames``
+and ``request_spatial_input``."""

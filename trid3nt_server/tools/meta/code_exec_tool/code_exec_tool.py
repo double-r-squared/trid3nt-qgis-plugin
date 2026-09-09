@@ -1,52 +1,9 @@
-"""``code_exec_request`` - user-confirmed Python sandbox atomic tool.
+"""``code_exec_request`` - the LLM-facing entry to the network-denied code-exec box.
 
-This is the LLM-facing entry point to the network-denied code-exec box
-(``trid3nt_server/sandbox/``). It lets the agent run **ad-hoc Python over
-layers already on the map** — "compute the 95th-percentile flood depth over the
-city polygon", "cross-tabulate damage by land-cover class" — when no existing
-atomic tool fits, then narrate the structured result.
-
-The mandatory user-confirm gate (reused, not reinvented)
---------------------------------------------------------
-Running arbitrary code is a consequential action. The user MUST approve the exact
-Python before it runs. The gate is implemented at the server dispatch layer
-(``server.py`` ``_gate_on_code_exec``), which:
-
-1. emits a ``code-exec-request`` envelope (the confirm card — the verbatim code,
-   the layer refs, the agent's rationale), and
-2. blocks on the EXISTING ``pending_payload_warnings`` future seam (the same
-   plumbing the payload-warning gate uses) until the client returns a
-   ``tool-payload-confirmation`` whose ``warning_id`` equals the ``code_exec_id``.
-
-On approval the server injects ``confirmed=True`` (+ the ``code_exec_id`` it
-already minted + emitted) into this tool's params; on ``cancel`` / timeout it
-raises a typed error and this tool body never runs. So the gate cannot be
-bypassed from the LLM side — the LLM calls ``code_exec_request(python_code=...)``
-WITHOUT ``confirmed``, and only the server's post-approval re-dispatch carries
-``confirmed=True``. A direct programmatic caller (tests, a future trusted
-composer) may pass ``confirmed=True`` explicitly — that is the single documented
-bypass, and it is honest: there is no hidden auto-approve.
-
-The flow once confirmed
------------------------
-``confirmed=True`` -> dispatch into the box (``sandbox.box``) -> shape a
-:class:`CodeExecResultPayload` -> return a dict carrying BOTH a compact
-function_response summary (for the model's narration —
-status + the result descriptor + bounded stdout tail, NEVER the full payload) AND
-the full result payload under ``_code_exec_result`` so ``server.py`` emits the
-``code-exec-result`` envelope (the chart-emission detect-and-emit precedent).
-
-Determinism boundary
----------------------------------------------------------
-Every number the agent narrates from a sandbox run is the structured ``result``
-descriptor the deterministic sandbox computed, fed back as the function_response —
-never free-text. No cost field anywhere (Invariant 9): the only quantitative
-fields are ``duration_s`` (a latency) and ``truncated`` (an honesty flag).
-
-Caching: ``ttl_class="live-no-cache"`` (uncacheable-by-construction —
-each run is a fresh interactive computation), so ``cacheable=False`` and
-``source_class`` is omitted (the cross-field rule).
-"""
+The tool body REFUSES without ``confirmed=True``: the dispatch layer gates on user
+approval and only then re-dispatches with the flag, so the gate cannot be bypassed
+from the model's side. A direct programmatic caller passing ``confirmed=True`` is
+the one documented bypass; there is no hidden auto-approve."""
 
 from __future__ import annotations
 
@@ -71,32 +28,20 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.meta.code_exec_tool.code_exec_tool")
 
-#: The key under which the tool result dict carries the FULL
-#: ``CodeExecResultPayload`` (JSON dict) for ``server.py`` to detect + emit the
-#: ``code-exec-result`` envelope. Stripped from the function_response by
-#: ``adapter.summarize_tool_result`` so the model never sees the full payload.
+#: The key under which a tool result carries the FULL ``CodeExecResultPayload``
+#: for the dispatch layer to detect and emit as a ``code-exec-result`` envelope.
+#: It is stripped from the function_response, so the model never sees the payload.
 CODE_EXEC_RESULT_KEY = "_code_exec_result"
 
-#: Char cap on the stdout/stderr tails fed back to the model in the
-#: function_response summary (the wire envelope's own caps are larger; the LLM
-#: only needs a short tail to narrate).
+#: Char cap on the stdout/stderr tails fed back to the model. The wire envelope's
+#: own caps are larger; a short tail is all the model needs to narrate.
 _LLM_TAIL_CHARS = 2000
 
 
 class CodeExecConfirmationRequired(RuntimeError):
-    """Raised when ``code_exec_request`` is invoked without ``confirmed=True``.
-
-    This is the fail-closed guard (Invariant 9 spirit): the tool body refuses to
-    dispatch a sandbox run that the user has not approved. In normal operation
-    the server's ``_gate_on_code_exec`` obtains approval and re-dispatches with
-    ``confirmed=True``, so the LLM never sees this error on the happy path — it
-    surfaces only if the gate is somehow bypassed (a coding error) or a direct
-    caller forgets the flag.
-
-    ``error_code`` / ``retryable`` follow the typed-exception
-    convention. ``retryable=False``: the LLM cannot retry its way past a missing
-    user approval; the gate must run.
-    """
+    """Raised when ``code_exec_request`` is invoked without ``confirmed=True`` -
+    the fail-closed guard. ``retryable=False``: no retry gets past a missing user
+    approval, the gate has to run."""
 
     error_code: str = "CODE_EXEC_CONFIRMATION_REQUIRED"
     retryable: bool = False
@@ -120,12 +65,9 @@ class CodeExecConfirmationRequired(RuntimeError):
 def build_code_exec_result_payload(
     code_exec_id: str, envelope: dict[str, Any]
 ) -> CodeExecResultPayload:
-    """Map a sandbox executor envelope -> a validated :class:`CodeExecResultPayload`.
-
-    ``envelope`` is the dict the box returns: ``{stdout, stderr, result,
-    status, error, stdout_truncated, stderr_truncated, duration_s,
-    wallclock_cap_seconds}``. The single honest ``truncated`` flag is the union
-    of the stdout/stderr truncation flags and the result descriptor's own."""
+    """Map a sandbox executor envelope -> a validated
+    :class:`CodeExecResultPayload`. The single honest ``truncated`` flag is the
+    UNION of the stdout, stderr and result-descriptor truncation flags."""
     status = envelope.get("status", "error")
     if status not in ("ok", "error", "timeout", "blocked"):
         status = "error"
@@ -180,13 +122,9 @@ def _tail(text: str, cap: int) -> str:
 
 
 def summarize_code_exec_for_llm(payload: CodeExecResultPayload) -> dict[str, Any]:
-    """Build the COMPACT function_response the model sees (never the full payload).
-
-    Carries the status, the structured ``result`` descriptor (the numbers the
-    model narrates), a short stdout tail, the ``truncated`` honesty
-    flag, and the duration. Deliberately omits the wire payload's larger
-    stdout/stderr fields and the envelope plumbing — the LLM narrates from
-    ``result``, not from raw logs."""
+    """The COMPACT function_response the model sees, never the full payload. It
+    deliberately omits the wire payload's larger stdout/stderr fields: every number
+    the model narrates comes from the structured ``result`` descriptor, not logs."""
     return {
         "status": payload.status,
         "result": payload.result,
@@ -201,12 +139,9 @@ def summarize_code_exec_for_llm(payload: CodeExecResultPayload) -> dict[str, Any
 
 
 def is_code_exec_result(result: Any) -> bool:
-    """True when a tool result carries a code-exec-result payload to emit.
-
-    The key signal is the :data:`CODE_EXEC_RESULT_KEY` field holding a
-    ``code-exec-result``-shaped dict (``envelope_type == "code-exec-result"``).
-    ``server.py`` uses this to fire the ``code-exec-result`` WS envelope in
-    addition to the standard function_response (chart-emission precedent)."""
+    """True when a tool result carries a code-exec-result payload to emit: the
+    :data:`CODE_EXEC_RESULT_KEY` field holding a dict whose ``envelope_type`` is
+    ``"code-exec-result"``."""
     if not isinstance(result, dict):
         return False
     payload = result.get(CODE_EXEC_RESULT_KEY)
@@ -240,61 +175,32 @@ def code_exec_request(
     confirmed: bool = False,
     code_exec_id: str | None = None,
 ) -> dict[str, Any]:
-    """Run user-confirmed ad-hoc Python over on-map layers in a secure sandbox.
+    """Run user-confirmed ad-hoc Python over on-map layers in a sealed sandbox.
 
-    Use this when: the user asks a quantitative follow-up about a layer
-    already on the map that no existing tool answers directly -- a custom
-    aggregation, percentile, cross-tabulation, derived field, or
-    multi-panel figure -- computed from the layer's actual pixels/features.
-    Write a snippet that assigns the answer to ``result`` (scalar, dict,
-    DataFrame, or matplotlib Figure); the user sees the exact code and
-    must approve it first. Do NOT use for: fetching new data
-    (``fetch_*``), running a hazard model (``run_model_*``), a standard
-    chart (``generate_chart``), or
-    anything a purpose-built tool already does -- this is the escape
-    hatch for ad-hoc computation only.
+    ROUTING: a quantitative follow-up about an on-map layer no other tool answers -
+    a custom aggregation, percentile, cross-tabulation, derived field or figure over
+    its real pixels or features. NOT for fetching data, running an
+    engine, or a standard chart. Assign the answer to `result` (scalar, dict,
+    DataFrame or Figure); the user approves the exact code first.
 
-    DATA ACCESS (the sandbox has NO network and NO guessable file paths):
-    you cannot ``rasterio.open("s3://...")`` / ``urllib`` / ``requests`` /
-    ``boto3`` from inside it. To use a layer, list its URI in
-    ``layer_refs``; the sandbox pre-fetches it off-loop and injects it as
-    a variable named EXACTLY the ``layer_refs`` key -- already open
-    (raster -> open rasterio dataset, vector -> geopandas GeoDataFrame).
-    For key ``"peak"`` you get variable ``peak`` (use ``peak.read(1)``
-    directly, never ``rasterio.open(peak)``). Also injected: ``<name>_uri``
-    (staged local path) and ``layers`` (name -> handle). Use simple
-    identifier keys (letters/digits/underscore). A failed open leaves the
-    key as the raw string with the reason in ``result["layer_errors"]``.
+    NO NETWORK, NO guessable paths: `rasterio.open("s3://...")`, urllib, requests and
+    boto3 all fail inside. List every layer the snippet reads in `layer_refs`
+    ({var_name: layer_uri}); each is pre-fetched and injected ALREADY
+    OPEN under exactly that key - raster as a rasterio dataset, vector as a
+    GeoDataFrame - plus `<name>_uri` and `layers`. A failed open leaves the raw
+    string and a reason in `result["layer_errors"]`.
 
-    Example::
-
-        layer_refs = {"peak": "s3://.../peak.tif", "f20": "s3://.../frame_20.tif"}
-        # peak is ALREADY an open rasterio dataset
-        arr = peak.read(1)
-
-    Args:
-        python_code: Python to run; assign the answer to ``result``.
-            ``numpy``/``pandas``/``rasterio``/``geopandas``/``matplotlib``
-            importable.
-        layer_refs: ``{var_name: layer_uri}`` for every layer/COG the
-            snippet reads -- required since the sandbox has no network.
-            Omit only for pure-compute snippets.
-        rationale: optional one-line reason shown on the confirm card.
-
-    Returns:
-        ``{status, result, stdout_tail, truncated, duration_s, ...}``.
-        On non-``ok`` status, narrate the honest reason (``timeout``/
-        ``blocked``/``error``) -- never claim a result it didn't produce.
+    Returns {status, result, stdout_tail, truncated, duration_s}. Narrate a non-ok
+    status honestly; never claim a result the run did not produce.
     """
-    # MANDATORY confirm gate (fail-closed). The server obtains user approval and
-    # re-dispatches with confirmed=True; a call without it never runs the sandbox.
+    # MANDATORY confirm gate, fail-closed: a call without confirmed=True never
+    # reaches the sandbox.
     if not confirmed:
         raise CodeExecConfirmationRequired(code_exec_id)
 
-    # The server mints + emits the code_exec_id with the request card and passes
-    # it through on re-dispatch so the request/result cards correlate. If we were
-    # somehow called confirmed=True without one (direct programmatic caller), mint
-    # a fresh id so the result payload is still well-formed.
+    # The id is minted with the request card and passed back on re-dispatch so the
+    # request and result cards correlate. A direct caller may arrive confirmed with
+    # no id; mint one so the result payload is still well-formed.
     cx_id = code_exec_id or new_ulid()
 
     logger.info(
@@ -308,6 +214,6 @@ def code_exec_request(
 
     payload = build_code_exec_result_payload(cx_id, envelope)
     summary = summarize_code_exec_for_llm(payload)
-    # Attach the FULL wire payload for server.py to emit as code-exec-result.
+    # Attach the FULL wire payload for the dispatch layer to emit.
     summary[CODE_EXEC_RESULT_KEY] = payload.model_dump(mode="json")
     return summary
