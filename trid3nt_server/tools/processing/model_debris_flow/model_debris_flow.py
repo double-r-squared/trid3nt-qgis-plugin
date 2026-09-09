@@ -1,77 +1,8 @@
-"""``model_debris_flow`` composer tool -- USGS post-fire debris-flow hazard (v1).
+"""``model_debris_flow`` - USGS post-fire debris-flow hazard over a burned AOI.
 
-Implements the standard USGS post-fire debris-flow hazard-assessment workflow
-over an AOI using the ``pfdf`` library (vendored wheel, pfdf 3.0.4):
-
-    DEM -> pfdf.watershed (condition / flow / slopes / relief / accumulation)
-        -> pfdf.segments.Segments (stream-segment network delineation)
-        -> pfdf.models.staley2017 M1 (segment debris-flow LIKELIHOOD at a
-           design-storm rainfall; Staley et al. 2017 logistic regression)
-        -> pfdf.models.gartner2014.emergency (potential sediment VOLUME m^3;
-           Gartner et al. 2014 emergency assessment model)
-        -> pfdf.models.cannon2010.hazard (combined relative HAZARD class from
-           the USGS likelihood x volume matrix; Cannon et al. 2010)
-
-Exact pfdf calls used (verified against the installed pfdf 3.0.4):
-
-    pfdf.watershed.condition(dem)
-    pfdf.watershed.flow(conditioned)
-    pfdf.watershed.slopes(conditioned, flow)          # slope GRADIENTS
-    pfdf.watershed.relief(conditioned, flow)          # vertical relief (m)
-    pfdf.watershed.accumulation(flow)                 # upslope pixel counts
-    pfdf.severity.mask(severity, [...])               # BARC4 class masks
-    pfdf.severity.estimate(dnbr)                      # dNBR -> BARC4 (uri path)
-    pfdf.segments.Segments(flow, mask, max_length=500)
-    Segments.area / burn_ratio / burned_area / relief / keep / geojson
-    staley2017.M1.parameters(durations=[15])          # B, Ct, Cf, Cs
-    staley2017.M1.variables(segments, moderate_high, slopes, dnbr, kf,
-                            omitnan=True)             # T, F, S
-    staley2017.likelihood(R15, B, Ct, T, Cf, F, Cs, S)
-    gartner2014.emergency(i15, Bmh, relief)           # V, Vmin, Vmax
-    cannon2010.hazard(likelihoods, volumes)           # combined class 1..3
-
-Input substrate (each with an explicit override URI so the tool is testable
-offline):
-
-    DEM       -- ``dem_uri`` override, else ``fetch_copernicus_dem`` (GLO-30).
-    severity  -- ``severity_uri`` override (a BARC4 class raster 1-4, or a
-                 continuous dNBR raster which is auto-detected + classified via
-                 ``pfdf.severity.estimate``), else the MTBS burned-area
-                 PERIMETERS from ``fetch_mtbs_burn_severity`` rasterized onto
-                 the DEM grid. HONEST FALLBACK NOTE: the MTBS atomic tool
-                 returns fire-perimeter POLYGONS, not the per-pixel BARC4
-                 raster, so the perimeter interior is assumed uniformly
-                 moderate severity (BARC4 class 3, dNBR 375 -- the midpoint of
-                 pfdf's default moderate class thresholds [250, 500]). This is
-                 recorded in ``notes``.
-    KF-factor -- ``kf_uri`` override, else ``fetch_statsgo_soils`` KFFACT
-                 (30 m CONUS), else a documented constant fallback (0.2).
-
-If the AOI contains no burn data (no MTBS fire polygons, or the burned
-fraction of the AOI is below ``min_burned_fraction``), the tool raises the
-typed honest ``NoBurnDataError`` telling the user to pick a burned area or
-pass ``severity_uri`` -- this model is only meaningful for POST-FIRE terrain.
-
-CPU bound: the AOI is clamped to <= 0.15 degrees per side (``AoiTooLargeError``
-above that), keeping the 30 m watershed analysis to a few-hundred-pixel grid.
-
-Output: the stream-segment network as GeoJSON LineStrings (one feature per
-segment) with properties ``likelihood`` (0-1), ``volume_m3``, and
-``hazard_class`` (Low / Moderate / High per the USGS combined matrix), written
-to the runs bucket (or ``_output_dir`` for offline tests) and returned as a
-``DebrisFlowLayerURI`` -- a ``LayerURI`` subclass (the ``FaultSourcesResult`` /
-``TopobathyResult`` house pattern) carrying the summary counts and honest
-``notes`` for every fallback used as extra fields. Returning the typed
-``LayerURI`` (not a LayerURI-SHAPED dict) matters: the ``emit_tool_call``
-wrap-site fires ``add_loaded_layer`` only on ``isinstance(result, LayerURI)``,
-which is what persists the layer to the case record -- a dict return rendered
-live but was invisible to case export / cold view.
-
-``cacheable=False`` (``ttl_class="live-no-cache"``): this is a modeling
-composer, not a fetcher -- results depend on the design storm and the freshest
-inputs, and the artifact is written to the runs bucket, not the cache.
+These are POST-FIRE models, so unburned terrain refuses. The MTBS fallback ships
+PERIMETERS, so an interior is assumed moderate and every run notes it.
 """
-
 from __future__ import annotations
 
 import json
@@ -109,10 +40,8 @@ logger = logging.getLogger("trid3nt_server.tools.processing.model_debris_flow.mo
 
 
 class DebrisFlowError(RuntimeError):
-    """Base class for model_debris_flow failures.
-
-    ``error_code`` maps to the WebSocket A.6 error frame emitted by the agent
-    surface. ``retryable`` guides retry/clarify/fallback logic.
+    """Base class for model_debris_flow failures; ``error_code`` is the code the
+    agent surface reports and ``retryable`` guides the retry decision.
     """
 
     error_code: str = "DEBRIS_FLOW_ERROR"
@@ -134,11 +63,8 @@ class AoiTooLargeError(DebrisFlowInputError):
 
 
 class NoBurnDataError(DebrisFlowError):
-    """The AOI has no burn-severity data -- no fire, no debris-flow model.
-
-    Honest typed error: the Staley 2017 / Gartner 2014 models are POST-FIRE
-    models; running them on unburned terrain would be fabrication. The user
-    should pick a burned area (an MTBS-mapped fire) or pass ``severity_uri``.
+    """The AOI has no burn-severity data. Running a post-fire model on unburned
+    terrain would be fabrication, so it refuses and asks for a burned area.
     """
 
     error_code = "DEBRIS_FLOW_NO_BURN_DATA"
@@ -160,38 +86,13 @@ class DebrisFlowUpstreamError(DebrisFlowError):
 
 
 # ---------------------------------------------------------------------------
-# Result type -- a renderable stream-segment ``LayerURI`` that ALSO carries the
-# assessment summary (v2 return-type fix).
-#
-# Before this, ``model_debris_flow`` returned a plain dict whose ``layer`` field
-# was LayerURI-SHAPED. The ``emit_tool_call`` ``add_loaded_layer`` gate -- which
-# fires only on an ``isinstance(result, LayerURI)`` return -- is the ONLY path
-# that persists a layer into the case record, so the hazard layer rendered live
-# but was missing from case export and the box-off cold view.
-# ``DebrisFlowLayerURI`` subclasses ``LayerURI`` (mirrors
-# ``fetch_fault_sources.FaultSourcesResult`` / ``fetch_topobathy.
-# TopobathyResult``): the gate persists + renders the vector layer, while the
-# summary scalars and honest ``notes`` ride along as extra fields for the
-# function-response summary the LLM narrates from.
+# Result type.
 # ---------------------------------------------------------------------------
 
 
 class DebrisFlowLayerURI(LayerURI):
-    """The debris-flow segment-network ``LayerURI`` plus assessment summary.
-
-    Extra fields beyond ``LayerURI``:
-
-    - ``segment_count`` -- retained stream segments in the network.
-    - ``high_hazard_count`` / ``moderate_hazard_count`` / ``low_hazard_count``
-      -- per-class totals (Cannon 2010 combined matrix); segments with
-      insufficient data are "Unknown" and counted only in ``segment_count``.
-    - ``likelihood_max`` -- max per-segment Staley 2017 M1 likelihood (0-1);
-      None when no segment produced a finite likelihood.
-    - ``volume_max_m3`` -- max per-segment Gartner 2014 volume (m^3); None
-      when no segment produced a finite volume.
-    - ``rainfall_intensity_mm_h`` -- the design storm actually used.
-    - ``burned_fraction`` -- burned fraction of the AOI (0-1).
-    - ``notes`` -- honest provenance + every fallback used.
+    """The segment-network ``LayerURI`` plus per-class counts, the maximum
+    likelihood and volume, the design storm used and the burned fraction.
     """
 
     segment_count: int = 0
@@ -366,8 +267,8 @@ def _load_dem(
     except Exception as exc:  # noqa: BLE001
         raise DebrisFlowInputError(f"could not open DEM raster {local!r}: {exc}") from exc
 
-    # Watershed slope/relief math needs a projected (meters) grid. Reproject a
-    # geographic DEM to its UTM zone; keep an already-projected DEM as-is.
+    # Watershed slope and relief math needs a projected (metre) grid, so a
+    # geographic DEM goes to its UTM zone and a projected one stays as it is.
     try:
         crs_is_geographic = bool(getattr(dem.crs, "is_geographic", False))
     except Exception:  # noqa: BLE001
@@ -394,12 +295,8 @@ def _align_to_dem(raster: Any, dem: Any) -> Any:
 def _severity_from_uri(
     severity_uri: str, dem: Any, tmpdir: str, notes: list[str]
 ) -> tuple[Any, Any]:
-    """Load severity from an override URI -> (BARC4 severity, dNBR) rasters.
-
-    Auto-detects the raster kind: values entirely within [0, 4] are treated as
-    BARC4 classes (dNBR is then assigned per class from the documented
-    midpoints); anything else is treated as a continuous dNBR raster and
-    classified via ``pfdf.severity.estimate``.
+    """``(BARC4 severity, dNBR)`` from an override URI; values entirely within
+    [0, 4] are read as BARC4 classes, anything else as continuous dNBR.
     """
     from pfdf import severity as pfdf_severity
     from pfdf.raster import Raster
@@ -425,7 +322,6 @@ def _severity_from_uri(
         )
 
     if float(finite.max()) <= 4.0 and float(finite.min()) >= 0.0:
-        # BARC4 class raster.
         classes = np.zeros(values.shape, dtype=np.int16)
         classes[valid] = np.clip(np.rint(finite), 0, 4).astype(np.int16)
         barc4 = Raster.from_array(classes, spatial=dem, nodata=0)
@@ -462,18 +358,11 @@ def _severity_from_uri(
 def _severity_from_mtbs(
     bbox: tuple[float, float, float, float], dem: Any, tmpdir: str, notes: list[str]
 ) -> tuple[Any, Any]:
-    """Fetch MTBS fire perimeters and rasterize them as a severity substrate.
-
-    HONEST FALLBACK: ``fetch_mtbs_burn_severity`` returns burned-area boundary
-    POLYGONS (one per fire), not the per-pixel BARC4 raster. The perimeter
-    interior is assumed uniformly MODERATE severity (BARC4 class 3,
-    dNBR 375). Raises ``NoBurnDataError`` when no MTBS fire intersects the AOI.
+    """Rasterize MTBS fire perimeters as a severity substrate; they are boundary
+    POLYGONS, so the interior is assumed uniformly MODERATE severity.
     """
     from pfdf.raster import Raster
 
-    # fetch_mtbs_burn_severity is now spec-driven (data-router fold, phase-2
-    # wave-2): resolve it through the registry seam (indistinguishable callable)
-    # and catch the router's shared FetchError base (was the twin's MTBSError).
     try:
         from trid3nt_server.tools import TOOL_REGISTRY
         from trid3nt_server.tools.fetchers._fetch_common import FetchError
@@ -569,8 +458,7 @@ def _load_kf(
         return kf
 
     try:
-        # Registry seam: fetch_statsgo_soils is now a spec-driven
-        # library-delegate router tool (pfdf), resolved by name (twin deleted).
+
         from trid3nt_server.tools import TOOL_REGISTRY
         fetch_statsgo_soils = TOOL_REGISTRY["fetch_statsgo_soils"].fn
 
@@ -602,11 +490,8 @@ def _load_kf(
 def _write_segments_geojson(
     fc: dict[str, Any], seed: str, output_dir: str | None
 ) -> str:
-    """Persist the segment FeatureCollection; return its URI.
-
-    ``output_dir`` (tests / offline) -> local file path. Otherwise the durable
-    runs bucket via the shared solver S3 seam (the same
-    ``s3://<runs_bucket>/<run_id>/...`` convention every run layer uses).
+    """Persist the segment FeatureCollection and return its URI: a local path when
+    ``output_dir`` is given, else an ``s3://`` key in the runs bucket.
     """
     payload = json.dumps(fc).encode("utf-8")
     filename = f"debris_flow_segments_{seed}.geojson"
@@ -640,8 +525,7 @@ def _write_segments_geojson(
 
 @register_tool(
     _METADATA,
-    # Annotations: read-only w.r.t. user state (writes only its own run
-    # artifact); open-world when fetching DEM/MTBS/STATSGO inputs.
+    # Writes only its own run artifact; open-world when fetching its inputs.
     open_world_hint=True,
 )
 def model_debris_flow(
@@ -653,47 +537,28 @@ def model_debris_flow(
     min_burned_fraction: float = 0.01,
     *,
     _output_dir: str | None = None,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> DebrisFlowLayerURI:
     """USGS post-fire debris-flow hazard assessment over a burned AOI (pfdf: Staley/Gartner/Cannon models).
 
-    Use this when: "debris-flow risk below the <X> fire", "post-fire
-    debris flow hazard for this burned watershed", or after a wildfire
-    discussion when the user asks what happens when it rains on the burn
-    scar. Chain: DEM -> watershed -> stream segments -> Staley 2017 M1
-    LIKELIHOOD -> Gartner 2014 VOLUME (m^3) -> Cannon 2010 HAZARD class.
-    Do NOT use for: unburned terrain (raises ``NoBurnDataError``); rainfall-
-    driven flooding (``telemac_rain_on_grid``). Generic landslide
-    susceptibility is not currently modeled here.
+    Use for debris-flow risk below a fire, or what happens when it rains on a
+    burn scar. The chain is DEM -> watershed -> stream segments -> Staley 2017
+    LIKELIHOOD -> Gartner 2014 VOLUME -> Cannon 2010 HAZARD class. Not for
+    unburned terrain, nor for rainfall flooding (``telemac_rain_on_grid``).
 
     Params:
-        bbox: EPSG:4326, clamped to <= 0.15 deg per side.
-        rainfall_intensity_mm_h: peak 15-min design-storm intensity
-            (default 24); drives both models.
-        dem_uri: optional override DEM; default Copernicus GLO-30.
-        severity_uri: optional override burn-severity raster (BARC4 or
-            dNBR); default MTBS perimeters at uniform moderate severity.
-        kf_uri: optional override soil KF-factor raster; default STATSGO
-            KFFACT then a noted 0.2 fallback.
-        min_burned_fraction: min burned AOI fraction (default 0.01) below
-            which ``NoBurnDataError`` fires.
+        bbox: EPSG:4326, clamped to 0.15 deg per side.
+        rainfall_intensity_mm_h: peak 15-min design storm, default 24, driving
+            both models.
+        dem_uri: override DEM; default Copernicus GLO-30.
+        severity_uri: override BARC4 or dNBR raster; default MTBS perimeters
+            at uniform moderate severity.
+        kf_uri: override soil KF raster; default STATSGO, then a noted 0.2.
+        min_burned_fraction: burned fraction below which it refuses.
 
-    Returns:
-        ``DebrisFlowLayerURI`` -- stream-segment vector (GeoJSON
-        LineStrings per-feature
-        ``likelihood``, ``volume_m3``, ``hazard_class``) with
-        ``segment_count``/``high_hazard_count``/``moderate_hazard_count``/
-        ``low_hazard_count``, ``likelihood_max``/``volume_max_m3``,
-        ``rainfall_intensity_mm_h``, ``burned_fraction``, ``notes``.
-
-    Raises:
-        AoiTooLargeError: AOI over the 0.15-deg clamp.
-        NoBurnDataError: no fire / burned fraction below minimum.
-        DebrisFlowInputError: bad bbox/intensity/unreadable URI.
-        DebrisFlowDependencyError: pfdf/rasterio/geopandas missing.
-        DebrisFlowUpstreamError: input fetch or write failure.
+    Returns GeoJSON LineStrings carrying ``likelihood``, ``volume_m3`` and
+    ``hazard_class`` per segment, with per-class counts and honest notes.
     """
     q_bbox = _validate_bbox(bbox)
     intensity = _validate_intensity(rainfall_intensity_mm_h)
@@ -721,7 +586,6 @@ def model_debris_flow(
     notes: list[str] = []
 
     with tempfile.TemporaryDirectory(prefix="trid3nt_debris_flow_") as tmpdir:
-        # ---- 1. Inputs (DEM, burn severity + dNBR, KF-factor). -----------
         dem = _load_dem(q_bbox, dem_uri, tmpdir, notes)
         if severity_uri is not None:
             barc4, dnbr = _severity_from_uri(severity_uri, dem, tmpdir, notes)
@@ -729,7 +593,6 @@ def model_debris_flow(
             barc4, dnbr = _severity_from_mtbs(q_bbox, dem, tmpdir, notes)
         kf = _load_kf(q_bbox, kf_uri, dem, tmpdir, notes)
 
-        # ---- 2. Honest no-burn gate. --------------------------------------
         try:
             isburned = pfdf_severity.mask(barc4, ["low", "moderate", "high"])
             moderate_high = pfdf_severity.mask(barc4, ["moderate", "high"])
@@ -747,7 +610,6 @@ def model_debris_flow(
                 "BARC4/dNBR burn-severity raster."
             )
 
-        # ---- 3. Watershed analysis (pfdf.watershed). ----------------------
         try:
             conditioned = watershed.condition(dem)
             flow = watershed.flow(conditioned)
@@ -769,7 +631,6 @@ def model_debris_flow(
                 "may be too small or too flat for a debris-flow assessment."
             )
 
-        # ---- 4. Stream-segment network. -----------------------------------
         from pfdf.raster import Raster
 
         try:
@@ -784,8 +645,8 @@ def model_debris_flow(
                 "stream-segment delineation produced zero segments."
             )
 
-        # Filter to the USGS assessment domain: upland catchments
-        # (<= 8 km^2) whose catchment intersects the burn.
+        # The USGS assessment domain is upland catchments that intersect the
+        # burn; a larger drainage responds as a flood, not a debris flow.
         catch_km2 = np.asarray(segments.area(units="kilometers"), dtype=np.float64)
         burn_ratio = np.asarray(segments.burn_ratio(isburned), dtype=np.float64)
         keep = (catch_km2 <= _MAX_CATCHMENT_AREA_KM2) & (burn_ratio > 0.0)
@@ -806,7 +667,6 @@ def model_debris_flow(
                 f"{segments.size} segment(s) retained."
             )
 
-        # ---- 5. Staley 2017 M1 likelihood at the design storm. ------------
         try:
             B, Ct, Cf, Cs = s17.M1.parameters(durations=[15])
             T, F, S = s17.M1.variables(
@@ -824,7 +684,6 @@ def model_debris_flow(
                 f"Staley 2017 M1 likelihood model failed: {exc}"
             ) from exc
 
-        # ---- 6. Gartner 2014 emergency volume. -----------------------------
         try:
             bmh_km2 = np.asarray(
                 segments.burned_area(moderate_high, units="kilometers"),
@@ -841,7 +700,6 @@ def model_debris_flow(
                 f"Gartner 2014 emergency volume model failed: {exc}"
             ) from exc
 
-        # ---- 7. Combined hazard class (Cannon 2010 matrix). ----------------
         try:
             hazard = np.asarray(
                 c10.hazard(likelihoods, volumes), dtype=np.float64
@@ -864,7 +722,6 @@ def model_debris_flow(
                 "severity/soil data in the catchment)."
             )
 
-        # ---- 8. Export the styled segment network. --------------------------
         try:
             fc = segments.geojson(
                 properties={
@@ -895,8 +752,8 @@ def model_debris_flow(
         high_hazard_count,
         burned_fraction,
     )
-    # Return the typed LayerURI (NOT a LayerURI-shaped dict): the emit_tool_call
-    # wrap-site persists to the case record only on isinstance(result, LayerURI).
+    # Only an isinstance(result, LayerURI) return persists to the case record,
+    # so a LayerURI-SHAPED dict here renders live and vanishes from export.
     return DebrisFlowLayerURI(
         layer_id=f"debris-flow-{seed}",
         name=(
