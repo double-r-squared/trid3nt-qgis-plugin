@@ -4122,3 +4122,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   transform (342) travels with the scope attic. The fold wave runs
   after the scope-move wave closes; its charter is the census + these
   rulings; conformance table at close.
+  HYRIVER, THE WIDER MAP (NATE 2026-09-08, from HEC-Commander's HyRiver
+  assistant prompt): beyond the fetchers, the suite holds (a)
+  pygeohydro.overland_roughness - NLCD class -> Manning n from a
+  published table: the domain's own table for the hand-carried one in
+  rain_on_grid's infiltration helper; swapping tables CHANGES RUN
+  NUMBERS, so the fold wave MEASURES the two side by side and NATE
+  picks (an author decision, never a fold shim); (b) HydroSignatures
+  (baseflow, flow-duration curve, flashiness, exceedance) - signature
+  objectives for the calibration seam beside NSE/KGE (spec note); (c)
+  pynhd.flowline_xsection + py3dep.elevation_profile - candidate
+  equivalents for the section helper and elevation-along-a-line,
+  measured; (d) PyNLDAS2 - hourly NLDAS-2 CONUS forcing since 1979, a
+  precipitation source we do not fetch, one spec on HyRiver, added to
+  the fold wave's hydro stage; (e) cover_statistics - overlaps two held
+  processing tools, noted for the processing pass.
