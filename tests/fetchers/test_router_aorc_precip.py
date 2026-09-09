@@ -27,7 +27,7 @@ from trid3nt_server.tools.fetchers.weather.fetch_aorc_precip import hooks as ap
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 AORC_SPEC = load_spec_from_path(
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
     / "trid3nt_server/tools/fetchers/weather/fetch_aorc_precip/source.yaml"
 )
 

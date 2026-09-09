@@ -26,7 +26,7 @@ from trid3nt_server.tools.fetchers._router.emit_on_fetch import (
 )
 
 _WORKFLOWS = (
-    pathlib.Path(__file__).resolve().parents[1]
+    pathlib.Path(__file__).resolve().parents[2]
     / "trid3nt_server" / "workflows"
 )
 

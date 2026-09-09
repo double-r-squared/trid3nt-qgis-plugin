@@ -35,7 +35,7 @@ from trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois import hook
 from trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm import hooks as roads
 
 _SPEC_BASE = (
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
     / "trid3nt_server/tools/fetchers/socioeconomic"
 )
 ROADS_SPEC = load_spec_from_path(_SPEC_BASE / "fetch_roads_osm/source.yaml")

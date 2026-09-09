@@ -26,7 +26,7 @@ from trid3nt_server.tools.fetchers.hydrology.fetch_lter_records import hooks as 
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 LTER_SPEC = load_spec_from_path(
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
     / "trid3nt_server/tools/fetchers/hydrology/fetch_lter_records/source.yaml"
 )
 

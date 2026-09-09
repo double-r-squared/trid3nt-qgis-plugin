@@ -27,7 +27,7 @@ from trid3nt_server.fallbacks import (
     registered_ladders,
 )
 
-_REPO = pathlib.Path(__file__).resolve().parents[1]
+_REPO = pathlib.Path(__file__).resolve().parents[2]
 _SERVER = _REPO / "trid3nt_server"
 
 

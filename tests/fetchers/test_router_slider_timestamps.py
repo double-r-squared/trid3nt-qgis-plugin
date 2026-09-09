@@ -25,7 +25,7 @@ from trid3nt_server.tools.fetchers.imagery.fetch_slider_timestamps import hooks 
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 SLIDER_SPEC = load_spec_from_path(
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
     / "trid3nt_server/tools/fetchers/imagery/fetch_slider_timestamps/source.yaml"
 )
 

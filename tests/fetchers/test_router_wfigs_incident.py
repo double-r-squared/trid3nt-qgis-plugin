@@ -28,7 +28,7 @@ from trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident import hooks as w
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 WFIGS_SPEC = load_spec_from_path(
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
     / "trid3nt_server/tools/fetchers/hazard/fetch_wfigs_incident/source.yaml"
 )
 _CURRENT = WFIGS_SPEC.endpoints["current"].url

@@ -29,7 +29,7 @@ from trid3nt_server.tools.fetchers._router.executors import library_delegate, ra
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 STATSGO_SPEC = load_spec_from_path(
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
     / "trid3nt_server/tools/fetchers/soil/fetch_statsgo_soils/source.yaml"
 )
 

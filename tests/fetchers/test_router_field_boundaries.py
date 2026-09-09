@@ -22,7 +22,7 @@ from trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries import h
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 SPEC = load_spec_from_path(
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
     / "trid3nt_server/tools/fetchers/socioeconomic/fetch_field_boundaries/source.yaml"
 )
 
