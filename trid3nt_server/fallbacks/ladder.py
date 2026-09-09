@@ -1,9 +1,7 @@
 """Fallback ladders as DATA: the rung schema and the ladder registry.
 
-A ladder is an ordered list of rungs a capability may descend when its declared
-first choice cannot serve a request. Every rung names the ACTUAL alternative
-(a registered source, a dotted-path callable, or an override of the primary
-request) and the CONSEQUENCE of taking it. The terminal rung is always REFUSE.
+A ladder is the ordered set of rungs a capability may descend, each naming its
+alternative and the CONSEQUENCE of taking it; the terminal rung always REFUSES.
 """
 
 from __future__ import annotations
@@ -35,7 +33,7 @@ Consequence = Literal[
     "same_data", "cross_dataset", "synthetic", "refuse",
 ]
 
-#: The classes the loudness floor keys on (rule 4 of the ladder contract).
+#: The classes the loudness floor keys on.
 DEGRADATION_CLASSES: frozenset[str] = frozenset(
     {"same_data", "cross_dataset", "synthetic"}
 )
@@ -52,15 +50,8 @@ _EMPTY: Mapping[str, Any] = MappingProxyType({})
 @dataclass(frozen=True)
 class Rung:
     """One alternative on a ladder.
-
-    ``describes`` is user-facing text: it is what the narration and the gate card
-    say the alternative IS. Exactly one invocation form is declared: ``source``
-    (a registered tool name), ``call`` (a ``module:function`` dotted path), or
-    neither -- meaning "the primary request again, with ``params`` merged in",
-    the form a composite source uses to switch one of its own legs on.
-    ``supplies_param`` marks the user-supplied rung: the request param whose
-    presence means the caller brought their own data.
-    """
+    ``describes`` is user-facing text: what the narration and the gate card say
+    the alternative IS."""
 
     name: str
     consequence: Consequence
@@ -71,11 +62,17 @@ class Rung:
     supplies_param: str | None = None
 
     def __post_init__(self) -> None:
+        # Exactly one invocation form: ``source`` (a registered tool name),
+        # ``call`` (a ``module:function`` dotted path), or neither -- meaning
+        # the primary request again with ``params`` merged in, the form a
+        # composite source uses to switch one of its own legs on.
         if self.source and self.call:
             raise ValueError(
                 f"rung {self.name!r} declares BOTH source and call; a rung has "
                 "exactly one invocation form"
             )
+        # ``supplies_param`` marks the user-supplied rung: the request param
+        # whose presence means the caller brought their own data.
         if self.consequence == "user_supplied" and not self.supplies_param:
             raise ValueError(
                 f"rung {self.name!r} is user_supplied but names no supplies_param; "
@@ -99,14 +96,8 @@ REFUSE = Rung(
 @dataclass(frozen=True)
 class Ladder:
     """A capability's declared degradation path.
-
-    ``rungs`` is ordered top-down: an optional ``user_supplied`` rung first, then
-    exactly one ``primary``, then the rungs below it -- the degradations a call
-    site may permit by name through ``fallback=``, and any ``enhancement`` rung
-    the capability switches on itself. ``refuse_error_code`` is the typed code the
-    terminal rung raises, so a refusal keeps the capability's own error
-    vocabulary.
-    """
+    ``refuse_error_code`` is the typed code the terminal rung raises, so a
+    refusal keeps the capability's own error vocabulary."""
 
     capability: str
     rungs: tuple[Rung, ...]
@@ -115,14 +106,17 @@ class Ladder:
     #: Request params whose presence EXEMPTS the capability's own coverage
     #: check. With the check exempted nothing measures what each rung actually
     #: painted, so the walker stamps NO activation rather than a coverage claim
-    #: it cannot stand behind. Declared here because promise and measurement
-    #: belong to the same owner.
+    #: it cannot stand behind.
     coverage_exempt_params: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         names = [r.name for r in self.rungs]
         if len(names) != len(set(names)):
             raise ValueError(f"ladder {self.capability!r} has duplicate rung names")
+        # ``rungs`` is ordered top-down: an optional ``user_supplied`` rung
+        # first, then exactly one ``primary``, then the rungs below it -- the
+        # degradations a call site may permit by name through ``fallback=``,
+        # and any ``enhancement`` rung the capability switches on itself.
         primaries = [i for i, r in enumerate(self.rungs) if r.consequence == "primary"]
         if len(primaries) != 1:
             raise ValueError(
@@ -160,10 +154,8 @@ class Ladder:
     @property
     def alternatives(self) -> tuple[Rung, ...]:
         """The DEGRADATION rungs a call site may permit through ``fallback=``.
-
         An ``enhancement`` rung is deliberately absent: permitting a rung is how
-        a caller accepts a cost, and this one has none to accept.
-        """
+        a caller accepts a cost, and this one has none to accept."""
         return tuple(r for r in self.rungs if r.consequence in DEGRADATION_CLASSES)
 
     def alternative(self, name: str) -> Rung | None:
@@ -200,11 +192,8 @@ def register_ladder_selector(
     capability: str, selector: Callable[[Mapping[str, Any]], Ladder | None]
 ) -> None:
     """Register the per-request ladder chooser for ``capability``.
-
-    The selector returns None to mean "no per-request ladder applies", which
-    falls back to the capability's own registered ladder. A capability with no
-    selector behaves exactly as before.
-    """
+    A selector returning ``None`` means no per-request ladder applies, which
+    falls back to the capability's own registered ladder."""
     _SELECTORS[capability] = selector
 
 

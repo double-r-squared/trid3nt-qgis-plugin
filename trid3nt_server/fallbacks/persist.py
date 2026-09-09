@@ -1,14 +1,7 @@
 """Persist a run's fallback activations as a bucket-side audit artifact.
 
-An activation that only ever rode the session envelope is gone the moment the
-chat scrolls: spot-checking a solved run from the bucket could not answer "what
-actually served the inputs?". This writes ONE object per run,
-``s3://<runs-bucket>/<run_id>/fallback_activations.json``, next to the worker's
-``completion.json`` / ``publish_manifest.json``.
-
-A sidecar rather than a field inside ``publish_manifest.json`` because that file
-is WORKER-written (inert until an image rebuild) and the activations are a
-SERVER-side fact about the inputs the composer fetched.
+One object per run at
+``s3://<runs-bucket>/<run_id>/fallback_activations.json``.
 """
 
 from __future__ import annotations
@@ -39,11 +32,8 @@ def persist_run_activations(
     capability_note: str | None = None,
 ) -> str | None:
     """Write ``activations`` under the run prefix; return the uri or ``None``.
-
-    BEST-EFFORT: never raises. An audit artifact that fails to write must not
-    fail a solved run -- the rows are still on the layer and in the narration.
-    Returns ``None`` when there is nothing to record or the write degraded.
-    """
+    BEST-EFFORT: never raises - an audit write must not fail a solved run.
+    ``None`` means nothing to record, or a write that degraded."""
     if not run_id or not activations:
         return None
     try:
@@ -60,6 +50,10 @@ def persist_run_activations(
         }
         from trid3nt_server.workflows.solver.solver import _get_s3_client
 
+        # A sidecar rather than a field inside ``publish_manifest.json``: that
+        # file is worker-written and inert until an image rebuild, while the
+        # activations are a server-side fact about the inputs the composer
+        # fetched.
         _get_s3_client().put_object(
             Bucket=bucket,
             Key=key,

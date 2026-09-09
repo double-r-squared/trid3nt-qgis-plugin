@@ -1,8 +1,4 @@
-"""Declared-degradation machinery: ladders as data + the one walker.
-
-Capability-neutral by design -- fetchers, mesh builders and worker legs all
-declare their ladders here and share one execution + recording path.
-"""
+"""Declared-degradation machinery: ladders as data + the one walker."""
 
 from .ladder import (
     BELOW_PRIMARY_CLASSES,
