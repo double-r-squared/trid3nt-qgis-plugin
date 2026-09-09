@@ -1,47 +1,8 @@
-"""``compute_flood_depth_damage`` composer tool -- HAZUS-curve flood damage screening.
+"""``compute_flood_depth_damage`` - HAZUS-curve flood damage screening.
 
-Lightweight depth-damage estimator. Takes ANY flood-depth raster (a modeled or
-observed depth COG, s3:// or local),
-samples the depth at each structure point, applies the FEMA HAZUS-style
-residential depth-damage curve below, multiplies by the structure replacement
-value when the asset carries one (USACE NSI ``val_struct`` does), and returns
-a point vector layer styled by damage fraction plus headline totals.
-
-Structures default to the USACE National Structure Inventory fetched over the
-depth raster's bounds (``fetch_usace_nsi``); pass ``assets_uri`` (FlatGeobuf /
-GeoJSON points with optional ``val_struct`` / ``found_ht`` / ``occtype``
-properties) to override -- the offline-test seam and the
-bring-your-own-buildings path.
-
-Depth-damage curve (documented source)
-======================================
-
-``DEPTH_DAMAGE_CURVE_FT`` is the generic ONE-STORY, NO-BASEMENT residential
-STRUCTURE curve from USACE Economic Guidance Memorandum (EGM) 04-01,
-"Generic Depth-Damage Relationships for Residential Structures with
-Basements" companion tables (the no-basement relationship, derived from the
-FIA/National Flood Insurance Program claims-based curves), which is also the
-FEMA HAZUS-MH Flood Model default residential (RES1) structure curve family
-(HAZUS Flood Model Technical Manual, FEMA 2013, Ch. 5). Damage fraction of
-structure replacement value vs water depth ABOVE THE FIRST FLOOR in feet;
-linear interpolation between the published 1-ft rows; 0 below 0 ft; capped at
-the 16-ft table maximum (0.807).
-
-When the asset carries the NSI ``found_ht`` (foundation height, ft), the
-sampled ground-referenced depth is reduced by it before entering the curve
-(depth above first floor); otherwise the ground depth is used directly
-(noted).
-
-HONESTY: this is a SCREENING estimate -- one aggregate claims-based curve
-applied to every occupancy class, structure value only (no contents, no
-inventory, no downtime), no uncertainty treatment. It is NOT a component-level
-loss assessment, and none is modeled here, so defensible per-asset loss work
-belongs outside this product. Every result carries that note.
-
-``cacheable=False`` (``live-no-cache``): modeling composer; the artifact goes
-to the runs bucket (or ``_output_dir`` for offline tests).
+A SCREENING estimate: one aggregate claims-based curve over every occupancy
+class, structure value only, no contents, downtime or uncertainty treatment.
 """
-
 from __future__ import annotations
 
 import logging
@@ -107,21 +68,13 @@ class FloodDamageUpstreamError(FloodDamageError):
 
 
 # ---------------------------------------------------------------------------
-# Result type -- LayerURI subclass carrying the summary (house side-channel).
+# Result type.
 # ---------------------------------------------------------------------------
 
 
 class FloodDepthDamageLayerURI(LayerURI):
-    """The depth-damage point ``LayerURI`` plus assessment summary.
-
-    Extra fields beyond ``LayerURI``:
-
-    - ``n_structures`` -- structure points assessed.
-    - ``n_flooded`` -- points with positive sampled depth.
-    - ``n_with_value`` -- points carrying a replacement value (USD).
-    - ``total_damage_usd`` -- sum of fraction x value over valued points.
-    - ``mean_damage_fraction`` / ``max_damage_fraction`` -- over all points.
-    - ``notes`` -- honest provenance incl. the screening-estimate caveat.
+    """The depth-damage point ``LayerURI`` plus the assessment summary: counts,
+    total damage in USD over valued points, fraction statistics, honest notes.
     """
 
     n_structures: int = 0
@@ -139,10 +92,9 @@ class FloodDepthDamageLayerURI(LayerURI):
 
 #: Generic one-story no-basement residential STRUCTURE depth-damage curve:
 #: (depth above first floor, ft) -> damage fraction of structure replacement
-#: value. Source: USACE EGM 04-01 generic depth-damage relationships
-#: (FIA/NFIP claims-based, no-basement structure table), the FEMA HAZUS-MH
-#: Flood Model default RES1 curve family (HAZUS FTM, FEMA 2013, Ch. 5).
-#: Linear interpolation between rows; 0.0 below 0 ft; capped above 16 ft.
+#: value. USACE EGM 04-01 generic depth-damage relationships, the FEMA HAZUS-MH
+#: flood default RES1 family. Linear interpolation between the published 1-ft
+#: rows; 0.0 below 0 ft; capped at the 16-ft maximum.
 DEPTH_DAMAGE_CURVE_FT: tuple[tuple[float, float], ...] = (
     (0.0, 0.134),
     (1.0, 0.233),
@@ -208,10 +160,8 @@ _METADATA = AtomicToolMetadata(
 
 
 def damage_fraction_at_depth(depth_ft: float) -> float:
-    """Damage fraction for a depth above first floor (ft); linear interp.
-
-    0.0 below the 0-ft table entry (water below the first floor of a
-    no-basement structure); capped at the 16-ft table maximum.
+    """Damage fraction for a depth above first floor in feet: linear between the
+    table rows, 0.0 below its 0-ft entry, capped at its 16-ft maximum.
     """
     if not math.isfinite(depth_ft) or depth_ft < DEPTH_DAMAGE_CURVE_FT[0][0]:
         return 0.0
@@ -225,11 +175,11 @@ def damage_fraction_at_depth(depth_ft: float) -> float:
                 return f1
             t = (depth_ft - d0) / (d1 - d0)
             return f0 + t * (f1 - f0)
-    return 0.0  # unreachable; defensive
+    return 0.0
 
 
 # ---------------------------------------------------------------------------
-# Staging helpers (mirror compute_sediment_yield / chart_tools).
+# Staging helpers.
 # ---------------------------------------------------------------------------
 
 
@@ -288,8 +238,6 @@ def _load_assets(
                 "depth raster (clip_raster_to_polygon) and re-run per tile."
             )
         try:
-            # fetch_usace_nsi is spec-driven (data-router fold); resolve
-            # the promoted router closure by name (the twin module is deleted).
             from trid3nt_server.tools import TOOL_REGISTRY
 
             layer = TOOL_REGISTRY["fetch_usace_nsi"].fn(bbox=raster_bbox_4326)
@@ -320,7 +268,7 @@ def _load_assets(
     if gdf.crs is None:
         gdf = gdf.set_crs(4326)
         notes.append("Assets carried no CRS; assumed EPSG:4326.")
-    # Non-point geometries degrade to centroids (screening resolution).
+    # A non-point geometry degrades to its centroid at screening resolution.
     geom_types = set(gdf.geometry.geom_type.unique())
     if not geom_types.issubset({"Point"}):
         gdf = gdf.copy()
@@ -338,7 +286,9 @@ def _load_assets(
 
 
 def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
-    """Persist the FGB; return its URI (local for tests, runs bucket live)."""
+    """Persist the FGB and return its URI: a local path when ``output_dir`` is
+    given, else an ``s3://`` key in the runs bucket.
+    """
     filename = f"flood_depth_damage_{seed}.fgb"
     if output_dir is not None:
         path = os.path.join(output_dir, filename)
@@ -370,11 +320,8 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
 
 @register_tool(
     _METADATA,
-    # Annotations: fetches its own NSI structure inventory (external USACE
-    # API) unless assets_uri is passed, and stages s3 rasters -- an
-    # input-fetching composer like compute_sediment_yield, so
-    # open_world_hint=True is honest (listed in
-    # test_tool_annotations._OPEN_WORLD_COMPUTE_EXCEPTIONS).
+    # Fetches its own NSI structure inventory from the external USACE API
+    # unless assets_uri is passed, so open_world_hint=True is honest.
     open_world_hint=True,
 )
 def compute_flood_depth_damage(
@@ -388,38 +335,23 @@ def compute_flood_depth_damage(
 ) -> FloodDepthDamageLayerURI:
     """Screen flood damage per structure from a depth raster (HAZUS-style curve).
 
-    Use this when a flood DEPTH raster ALREADY exists and you want a quick
-    per-structure damage screen -- "roughly how much building damage does
-    this flood cause?", or ranking scenarios. It reads a depth raster; it does
-    NOT simulate the flood that produced one.
-    HONEST SCOPE: a SCREENING estimate (one aggregate curve,
-    structure value only, no contents/uncertainty) -- NOT a component-level
-    assessment, and none is modeled here. Do NOT use for:
-    non-flood hazards; areas outside NSI coverage (CONUS+AK/HI/territories)
-    without a caller ``assets_uri``.
+    Use when a flood DEPTH raster ALREADY exists and you want a per-structure
+    damage screen, or a scenario ranking. It reads a depth raster; it does NOT
+    simulate the flood. HONEST SCOPE: one aggregate curve, structure value
+    only, no contents or uncertainty - not a component-level assessment. Not
+    for non-flood hazards, nor outside NSI coverage without ``assets_uri``.
 
     Params:
-        depth_raster_uri: flood-depth COG/GeoTIFF; positive=depth above
-            ground, nodata/<=0=dry.
-        assets_uri: optional structure points (FlatGeobuf/GeoJSON) with
-            optional ``val_struct``/``replacement_value``, ``found_ht``,
-            ``occtype``. Default: ``fetch_usace_nsi`` over the raster
-            bounds (must span <= ~1 degree).
-        depth_units: ``"m"`` (default) or ``"ft"``.
+        depth_raster_uri: depth COG; positive is depth above ground, nodata
+            or <= 0 is dry.
+        assets_uri: structure points with optional ``val_struct``,
+            ``found_ht``, ``occtype``. Default ``fetch_usace_nsi`` over the
+            raster bounds, which must span 1 degree or less.
+        depth_units: "m" (default) or "ft".
 
-    Returns:
-        ``FloodDepthDamageLayerURI`` -- point vector ``LayerURI``
-        (FlatGeobuf, EPSG:4326; per-feature ``depth_ft``,
-        ``depth_above_ffe_ft``, ``damage_fraction``, ``damage_usd``,
-        ``val_struct``, ``occtype``) plus ``n_structures``/``n_flooded``/
-        ``n_with_value``/``total_damage_usd``/``mean_damage_fraction``/
-        ``max_damage_fraction`` and honest ``notes``.
-
-    Raises:
-        FloodDamageNoStructuresError: no assets over the footprint.
-        FloodDamageInputError: unreadable inputs, bad units, or raster
-            too large for NSI.
-        FloodDamageUpstreamError: staging/NSI/write failure.
+    Returns FlatGeobuf points carrying per-structure depth, damage fraction and
+    damage in USD, plus headline totals and honest notes. No assets over the
+    footprint is a typed error, never an empty layer.
     """
     units = str(depth_units or "m").strip().lower()
     if units not in ("m", "ft"):
@@ -467,7 +399,7 @@ def compute_flood_depth_damage(
 
             gdf = _load_assets(assets_uri, bbox_4326, tmpdir, notes)
 
-            # Sample the raster at each point (in the raster's own CRS).
+            # src.sample takes coordinates in the raster's own CRS.
             pts = gdf.to_crs(src.crs)
             coords = [(geom.x, geom.y) for geom in pts.geometry]
             nodata = src.nodata
