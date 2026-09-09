@@ -32,11 +32,10 @@ params:
 gates:
   max_bbox_km2: 5000.0
 hooks:
-  build_request: overpass_river.build_request
-  parse_response: overpass_river.parse_response
+  delegate: river_geometry.delegate
+  delegate_validate: river_geometry.validate
 ingest:
-  http_source:
-    endpoint_fallback: true
+  delegate: {library: osmnx, timeout_s: 180}
   properties:
   - osm_id
   - name
