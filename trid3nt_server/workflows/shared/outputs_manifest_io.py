@@ -1,20 +1,7 @@
-"""Host-exec ``outputs.json`` writer -- the agent-side producer half.
+"""Host-exec ``outputs.json`` writer - the agent-side producer half.
 
-A docker-worker engine can write ``outputs.json`` from inside its container
-entrypoint. A HOST-EXEC engine has no separate worker process to own the write
--- the AGENT itself, in the same postprocess that rasterizes the frames, is the
-writer (schema §5.1 "host-exec engines"). This module is that writer's
-object-store shim: it serializes the entries via the PURE-STDLIB contracts
-writer (``trid3nt_contracts.outputs_manifest``) and PUTs the whole array to
-``<scheme>://<runs_bucket>/<run_id>/outputs.json`` -- the EXACT prefix
-``outputs_seam.read_outputs_manifest`` reads back.
-
-Scheme-aware: ``s3`` via the solver boto3 client, ``gs``/``file`` via
-fsspec. The bucket
-resolves through the SAME ``_get_runs_bucket`` the seam reader uses, so the
-write target and the read target never drift. Best-effort by contract -- the
-caller wraps this in a try/except and degrades to peak-only (never sinks the
-run), per "failure retracts nothing".
+PUTs the serialized entries to ``<scheme>://<runs_bucket>/<run_id>/outputs.json``,
+the exact prefix the outputs seam reads back, resolving the bucket the same way.
 """
 
 from __future__ import annotations
@@ -27,8 +14,7 @@ logger = logging.getLogger("trid3nt_server.workflows.shared.outputs_manifest_io"
 
 __all__ = ["write_outputs_manifest"]
 
-#: gs:// fallback bucket (parity with the COG uploaders); AWS/local set
-#: TRID3NT_RUNS_BUCKET explicitly.
+#: Last-resort bucket name; a deployment sets TRID3NT_RUNS_BUCKET explicitly.
 RUNS_BUCKET_DEFAULT: str = "trid3nt-runs"
 
 
@@ -40,15 +26,8 @@ def write_outputs_manifest(
     runs_bucket: str | None = None,
 ) -> str:
     """Serialize + PUT ``outputs.json`` under the run prefix; return its URI.
-
-    ``entries`` are pre-built via ``trid3nt_contracts.outputs_manifest.build_entry``
-    (the flat ``{kind, quantity, name, uri, t?, units?}`` core + the OPTIONAL
-    ``bbox`` / ``band_stats`` render hints). The whole array is written as ONE
-    atomic-per-object PUT (schema §2 safe-append; a host-exec engine produces all
-    entries in one postprocess pass, so the degenerate at-exit whole-array write
-    is the only path here). Raises on an object-store failure so the caller can
-    log + degrade to peak-only (best-effort -- never sinks the run).
-    """
+    ``entries`` are pre-built manifest entries and the whole array goes in ONE PUT;
+    raises on an object-store failure for the caller to degrade on."""
     from trid3nt_contracts.outputs_manifest import append_entries
 
     from trid3nt_server.tools.cache import storage_scheme

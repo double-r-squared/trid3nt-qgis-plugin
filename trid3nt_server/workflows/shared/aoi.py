@@ -1,12 +1,7 @@
-"""AOI coercion and AOI ACQUISITION - engine-agnostic, for any workflow that
-models a place.
+"""AOI coercion and AOI ACQUISITION - engine-agnostic, for any workflow that models a place.
 
-A workflow's door-1 sheet needs exactly ONE area of interest. Turning whatever
-the model sent into that one AOI is the same job for every engine, so it is
-declared once here and named by the templates that need it. So is the step that
-turns that one AOI into the bound DOMAIN: geocoding a place name to an extent is
-not TELEMAC mechanism, and by the placement rule it lives at the highest layer
-that needs no specialization.
+A door-1 sheet needs exactly ONE area of interest, and turning what the model sent
+into that AOI, then into the bound DOMAIN, is the same job for every engine.
 """
 
 from __future__ import annotations
@@ -27,24 +22,15 @@ _SHARED = "trid3nt_server.workflows.shared.aoi"
 def location_or_bbox(tool: str, *, code_prefix: str, hint: str = "",
                      location_wins: bool = True) -> Any:
     """A coercion resolving ``location`` / ``bbox`` down to exactly one AOI.
+    ``code_prefix`` is REQUIRED: this module is engine-agnostic, so it has no error
+    codes of its own and the template is the one caller that knows them."""
 
-    ``code_prefix`` is REQUIRED. This file is engine-agnostic by placement, so a
-    default engine prefix here would hand every future caller TELEMAC's error codes
-    silently - a SWMM template refusing with ``TELEMAC_PARAMS_INVALID`` is a wrong
-    answer that no test asks about. The one caller who knows the prefix is the
-    template.
-
-    Three real behaviours, each of them a bug the field taught us:
-
-    * a NON-NUMERIC ``bbox`` is almost always a place name the model put in the
-      wrong field - it shifts to ``location`` rather than dead-ending the call;
-    * neither supplied REFUSES typed, naming what to send;
-    * both supplied with ``location_wins`` drops the bbox - a model that
-      fabricates one alongside a real place name has been observed to put it on
-      open water at a river MOUTH, and the geocoded place is ground truth. A
-      user-drawn AOI arrives through case state, not through this argument.
-    """
-
+    # Three behaviours, each of them a wrong answer if it went the other way: a
+    # NON-NUMERIC bbox is almost always a place name in the wrong field and shifts
+    # to ``location``; neither supplied REFUSES typed, naming what to send; both
+    # supplied with ``location_wins`` drops the bbox, because a fabricated box
+    # beside a real place name has been observed on open water at a river mouth.
+    # A user-drawn AOI arrives through case state, not through this argument.
     def _coerce(args: Mapping[str, Any]) -> dict[str, Any]:
         location, bbox = args.get("location"), args.get("bbox")
         coerced: tuple[float, float, float, float] | None = None
@@ -89,11 +75,8 @@ def aoi_slug(name: str, *, default: str) -> str:
 
 def _geo_field(geo: Any, keys: tuple[str, ...]) -> float | None:
     """One coordinate off whatever shape the geocoder answered with.
-
-    Geocoders answer as an object, a dict, or either of those nested under a
-    ``center`` / ``geometry`` / ``location`` / ``result`` key, and a reader that
-    knows only one of those shapes reports a successful geocode as a failure.
-    """
+    An object, a dict, or either nested under ``center`` / ``geometry`` /
+    ``location`` / ``result``; a reader of one shape alone would report a failure."""
     if geo is None:
         return None
     for key in keys:
@@ -120,23 +103,9 @@ async def acquire_aoi(*, location: str | None,
                       half_deg: float | tuple[float, float] = 0.06,
                       default_name: str = "aoi",
                       code_prefix: str = "AOI") -> dict[str, Any]:
-    """Resolve the modeled AOI: an explicit extent, or a geocoded place around one.
-
-    The returned ``bbox`` is what REBINDS THE DOMAIN, so every producer after this
-    step reads the AOI implicitly instead of being handed one. An explicit bbox is
-    used VERBATIM - it is the user's own extent and squaring it off around its
-    centre would model a different place than the one drawn.
-
-    ``half_deg`` is one number for a square box or a ``(dlon, dlat)`` pair where
-    the question is not square - a lake fetch runs along the wind and a coastal
-    strip across the shore, and forcing both into a square would model a different
-    domain than the one asked about.
-
-    ``default_name`` is what an AOI with no place name is called; it becomes the
-    slug the worker manifest and the published layer names are keyed on, so it is
-    the caller's word ("coast", "harbor", "lake"), never a generic one invented
-    here.
-    """
+    """Resolve the modeled AOI: an explicit extent used VERBATIM, or a geocoded place
+    around one. Rebinds the DOMAIN; ``half_deg`` takes a ``(dlon, dlat)`` pair where
+    the question is not square; ``default_name`` becomes the AOI slug."""
     coerced = coerce_bbox_value(bbox) if bbox is not None else None
     if coerced is not None:
         extent = tuple(float(v) for v in coerced)

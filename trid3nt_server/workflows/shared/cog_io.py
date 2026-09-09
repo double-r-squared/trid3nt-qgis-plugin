@@ -1,44 +1,7 @@
 """Shared Cloud-Optimized-GeoTIFF write / reproject / CRS-guard / upload helpers.
 
-STEP 1 of the engine-coverage-levers refactor (pure dedupe, NO behavior change).
-Five on-box postprocess modules (``postprocess_swmm`` / ``_modflow`` / ``_geoclaw``
-/ ``_landlab`` / ``_openquake``) each hand-rolled a near-identical
-``_write_*_cog_4326`` / ``_reproject_field_cog_4326`` / ``_upload_cog*`` /
-``_cog_bbox_4326`` family. This module is the single implementation; each engine
-now calls it through a thin shim and produces BYTE-IDENTICAL output.
-
-CRITICAL design rule (kickoff): every per-engine nuance is a DECLARED PARAMETER,
-never flattened. The nuances preserved here, with the engine that needs each:
-
-  - ``mask``: the per-cell mask applied before write. The plume + OpenQuake mask
-    cells AT/BELOW a positive floor to NaN (render only the hazard); the MODFLOW
-    RIV seepage layer writes AS-IS so the NEGATIVE (gaining) reach values survive
-    (a positive-floor mask would wrongly drop every gaining cell); SWMM/GeoClaw
-    pass an already-masked grid through. Declared via the ``mask`` callable
-    (default: identity / no mask).
-  - ``resampling``: warp resampling. SWMM/Landlab use ``nearest`` (preserve the
-    NaN dry-mask without smearing); MODFLOW plume uses ``bilinear`` (a smooth
-    concentration field). Declared via ``resampling``.
-  - ``crs_roundtrip_guard``: the TiTiler-wedge / mistagged-raster guard
-    (re-open + assert the CRS tag round-trips + the geographic/projected
-    magnitude check). SWMM/GeoClaw/Landlab run it; MODFLOW/OpenQuake historically
-    did NOT (they relied on the upstream tag). Declared via ``crs_roundtrip_guard``
-    (and ``guard_projected_check`` for the projected-CRS magnitude leg, which only
-    SFINCS' on-NetCDF path uses; the 4326 writers only need the geographic leg).
-  - ``content_type``: the S3 ``ContentType`` header. SWMM/GeoClaw/Landlab set
-    ``image/tiff``; OpenQuake's ``put_object`` set NONE (byte-identical: omit it).
-    Declared via ``content_type`` (None -> header omitted).
-  - ``gs_fallback_to_file``: the non-s3-scheme branch. GCP is decommissioned
-    (no gs:// backend exists); SWMM/GeoClaw/Landlab RAISE ``stage="UPLOAD"``
-    on that path, while MODFLOW/OpenQuake set ``gs_fallback_to_file=True``
-    and degrade straight to a ``file://`` URI. ``gs_backend`` is kept on the
-    signature for caller compatibility but no longer selects a writer.
-  - ``error_map``: every engine raises its OWN typed error subclass with its OWN
-    ``error_code`` per stage. cog_io raises a generic :class:`CogIoError` carrying
-    a normalized ``stage`` token; the engine shim catches it and re-raises its
-    typed error via the ``error_map`` it passes (stage -> (error_code, message)).
-    This is how the byte-identical typed-error contract is preserved without
-    flattening five error enums into one.
+Every per-caller nuance is a DECLARED PARAMETER, never flattened; a failure raises
+a staged :class:`CogIoError` for the caller to map onto its own error codes.
 """
 
 from __future__ import annotations
@@ -81,32 +44,14 @@ NODATA_DEPTH_M: float = 0.05
 
 
 def _read_crs_from_dataset(ds: Any) -> str:
-    """Read CRS from a SFINCS-family netCDF dataset; CF-convention compliant.
-
-    SFINCS (and the sibling engines that emit SFINCS-shaped ``sfincs_map.nc``)
-    store the CRS in a **data variable** named ``crs``, not in ``ds.attrs``. The
-    variable carries EPSG information either in its attributes (CF conventions)
-    OR -- for the cht_sfincs quadtree writer -- as the variable's SCALAR VALUE
-    (the bare int EPSG code, e.g. ``32616``, with a useless ``attrs={'EPSG':'-'}``).
-    We try the known encodings in order:
-
-    1. ``crs_var.attrs["epsg_code"]`` -- SFINCS emits ``"EPSG:32617"`` (string
-       already prefixed); strip any accidental whitespace and return as-is.
-    2. ``crs_var.attrs["epsg"]`` / ``["EPSG"]`` -- a bare int EPSG attr (when it
-       is a usable number, not the cht placeholder ``"-"``).
-    3. ``crs_var.attrs["crs_wkt"]`` -- CF canonical WKT string; parse via
-       pyproj and return the EPSG authority string.
-    4. ``crs_var.attrs["spatial_ref"]`` / ``["wkt"]`` -- OGC WKT variants used by
-       some GDAL writers; parse via pyproj.
-    5. The crs VARIABLE VALUE itself -- the cht_sfincs quadtree writer stores the
-       bare int EPSG code (32616) AS the variable value, not in an attr; read it
-       as ``int(crs_var.values)`` -> ``"EPSG:32616"``.
-    6. Fallback: ``ds.attrs.get("crs", "EPSG:3857")`` -- retained for any dataset
-       that does not carry the ``crs`` variable.
-
-    A logged warning is emitted whenever the fallback fires so the mismatch is
-    visible in the pipeline-strip log rather than silently using EPSG:3857.
-    """
+    """Read the CRS off a netCDF dataset that carries it in a ``crs`` DATA VARIABLE
+    rather than in ``ds.attrs``. Falls back to ``ds.attrs`` and finally EPSG:3857,
+    logging a warning whenever it does, so a mismatch is never silent."""
+    # The known encodings, tried in this order: the ``epsg_code`` attr (already
+    # "EPSG:nnnnn"); a bare numeric ``epsg`` / ``EPSG`` attr; the CF canonical
+    # ``crs_wkt``; the ``spatial_ref`` / ``wkt`` OGC variants some GDAL writers
+    # use; and the crs VARIABLE VALUE itself, which a quadtree writer stores as
+    # the bare int EPSG code with a placeholder attr.
     if "crs" in ds.variables:
         crs_var = ds["crs"]
         attrs = crs_var.attrs
@@ -167,11 +112,9 @@ def _read_crs_from_dataset(ds: Any) -> str:
 
 
 class CogIoError(RuntimeError):
-    """A staged COG-IO failure the engine shim re-raises as its typed error.
-
-    ``stage`` is one of the normalized :data:`CogStage` tokens; the shim looks it
-    up in its ``error_map`` to recover the engine-specific ``error_code``.
-    """
+    """A staged COG-IO failure the caller re-raises as its own typed error.
+    ``stage`` is one of the normalized :data:`CogStage` tokens, which the caller
+    maps onto its own error code."""
 
     def __init__(
         self,
@@ -197,11 +140,8 @@ def safe_unlink(p: Path) -> None:
 
 def cog_bbox_4326(cog_path: Path) -> tuple[float, float, float, float] | None:
     """Return the COG's ``(min_lon, min_lat, max_lon, max_lat)`` for zoom-to.
-
-    The byte-identical ``_cog_bbox_4326`` shared by SWMM / MODFLOW / OpenQuake
-    (and the inline bbox read in Landlab's guard). Degrades to ``None`` on any
-    read failure (never raises - a missing zoom-to bbox is not fatal).
-    """
+    Degrades to ``None`` on any read failure and never raises: a missing zoom-to
+    bbox is not fatal."""
     try:
         import rasterio  # type: ignore[import-not-found]
 
@@ -220,15 +160,11 @@ def _run_crs_roundtrip_guard(
     *,
     dst_crs: str,
 ) -> tuple[float, float, float, float]:
-    """Re-open the written COG and assert the CRS tag round-trips.
-
-    The shared guard SWMM/GeoClaw/Landlab run AFTER writing a 4326 COG: the CRS
-    tag must read back EXACTLY ``dst_crs``, and (EPSG:4326 being geographic) the
-    bounds magnitude must be <= 360 (a |x|>360 implies the tag is wrong and the
-    pixels are really projected metres - the classic mistagged-raster bug).
-    Raises :class:`CogIoError` with ``stage="CRS_MISMATCH"``. Returns the COG
-    bounds tuple (Landlab uses it as the zoom-to bbox).
-    """
+    """Re-open the written COG and assert the CRS tag round-trips, returning its
+    bounds. Raises :class:`CogIoError` with ``stage="CRS_MISMATCH"``."""
+    # The tag must read back EXACTLY ``dst_crs``, and for a geographic CRS the
+    # bounds magnitude must be <= 360: a larger one means the tag is wrong and the
+    # pixels are really projected metres.
     import rasterio  # type: ignore[import-not-found]
 
     with rasterio.open(cog_path, "r") as verify:
@@ -277,13 +213,11 @@ def _write_4326_cog(
     dst_suffix: str,
 ) -> Path:
     """Write a float32 2D array to an EPSG:4326 COG, warping when asked.
-
-    The destination grid is ``calculate_default_transform``'s and is handed to
-    rioxarray explicitly: rioxarray otherwise re-derives the source affine from
-    its coordinate arrays, which perturbs the pixel size in the last float bit
-    and changes the written bytes. NaN is the destination no-data whatever the
-    source tags, matching the profile every engine shim already expects.
-    """
+    NaN is the destination no-data whatever the source tags."""
+    # The destination grid is ``calculate_default_transform``'s and is handed to
+    # rioxarray explicitly: rioxarray would otherwise re-derive the source affine
+    # from its coordinate arrays, perturbing the pixel size in the last float bit
+    # and changing the written bytes.
     import numpy as np  # type: ignore[import-not-found]
     import rasterio  # type: ignore[import-not-found]
     import rioxarray  # type: ignore[import-not-found]  # noqa: F401  (.rio accessor)
@@ -333,25 +267,9 @@ def write_cog_4326_from_grid(
     crs_roundtrip_guard: bool = False,
     dst_suffix: str = "_4326.tif",
 ) -> Path:
-    """Write a 2D ``grid`` to an EPSG:4326 COG, optionally reprojecting.
-
-    Two code paths, selected by ``reproject``:
-
-    - ``reproject=False`` (GeoClaw / OpenQuake): the grid is ALREADY in EPSG:4326
-      (``src_crs`` must be ``"EPSG:4326"`` and ``src_transform`` the ``from_bounds``
-      affine). The COG is written directly - NO warp.
-    - ``reproject=True`` (SWMM / MODFLOW): the grid is in a projected CRS
-      (``src_crs`` + ``src_transform``) and is warped to EPSG:4326 using
-      ``resampling`` (caller declares ``nearest`` vs ``bilinear``).
-
-    ``mask`` (declared per engine) is applied to the float32 array before write
-    (e.g. mask-below-floor for the plume / OpenQuake; identity for the seepage /
-    already-masked SWMM/GeoClaw grids). ``crs_roundtrip_guard`` runs the
-    TiTiler-wedge guard after the write (SWMM/GeoClaw on; MODFLOW/OpenQuake off).
-
-    Raises :class:`CogIoError` (stage ``DEPENDENCY`` / ``WRITE`` / ``REPROJECT`` /
-    ``CRS_MISMATCH``). Returns the staged COG path.
-    """
+    """Write a 2D ``grid`` to an EPSG:4326 COG. ``reproject=False`` requires the grid
+    to be ALREADY in 4326 and does NO warp, ``reproject=True`` warps from ``src_crs``
+    using ``resampling``, and ``mask`` runs before write. Raises :class:`CogIoError`."""
     try:
         import numpy as np  # type: ignore[import-not-found]
         from rasterio.warp import Resampling  # type: ignore[import-not-found]
@@ -402,18 +320,9 @@ def reproject_cog_file_to_4326(
     crs_roundtrip_guard: bool = True,
     dst_suffix: str = "_4326.tif",
 ) -> tuple[Path, tuple[float, float, float, float] | None]:
-    """Reproject a metric-CRS COG FILE to EPSG:4326 (the Landlab worker-field path).
-
-    Unlike :func:`write_cog_4326_from_grid`, the SOURCE is an existing single-band
-    COG on disk (the Batch worker's field output), not an in-memory array. Default
-    resampling is ``nearest`` - preserve the NaN no-data without smearing. When
-    ``crs_roundtrip_guard`` is set (the default) the TiTiler-wedge guard runs and
-    its bounds become the returned zoom-to bbox; otherwise the bbox is read via
-    :func:`cog_bbox_4326`.
-
-    Raises :class:`CogIoError` (stage ``DEPENDENCY`` / ``READ`` / ``REPROJECT`` /
-    ``CRS_MISMATCH``). Returns ``(dst_cog_path, bbox_4326)``.
-    """
+    """Reproject an existing single-band metric-CRS COG FILE to EPSG:4326.
+    Default resampling is ``nearest``, preserving NaN no-data without smearing; raises
+    :class:`CogIoError` and returns ``(dst_cog_path, bbox_4326)``."""
     try:
         import rasterio  # type: ignore[import-not-found]
         from rasterio.warp import Resampling  # type: ignore[import-not-found]
@@ -484,24 +393,8 @@ def upload_cog(
     log_label: str = "COG",
 ) -> str:
     """Upload a COG to ``{scheme}://<runs_bucket>/<run_id>/<dest_filename>``.
-
-    Scheme-aware via ``cache.storage_scheme()`` (the lesson):
-
-    - ``s3``: upload via boto3 through the solver module's shared S3 client. The
-      runs bucket MUST come from ``TRID3NT_RUNS_BUCKET`` / the explicit
-      ``runs_bucket`` arg (no GCP-named default on AWS) - a missing bucket raises
-      ``stage="UPLOAD"``. ``content_type`` is passed as the S3 ``ContentType``
-      header (OpenQuake omitted it - pass ``None`` for byte-identical behavior).
-    - any other scheme (only reachable via a forced ``storage_scheme()`` in
-      tests -- GCP is decommissioned, there is no live gs:// path): no cloud
-      client is ever constructed. When ``gs_fallback_to_file`` is set this
-      degrades straight to a ``file://`` URI (MODFLOW/OpenQuake offline-dev
-      path); otherwise it RAISES ``stage="UPLOAD"`` naming the backend as
-      absent (SWMM/GeoClaw/Landlab - no silent file:// on the cloud path).
-      ``gs_backend`` is accepted for caller-signature compatibility only.
-
-    Raises :class:`CogIoError` (stage ``UPLOAD``). Returns the object URI.
-    """
+    On ``s3`` the bucket MUST come from ``TRID3NT_RUNS_BUCKET`` or ``runs_bucket``;
+    every failure raises :class:`CogIoError` with ``stage="UPLOAD"``."""
     from trid3nt_server.tools.cache import storage_scheme
 
     scheme = storage_scheme()
@@ -526,6 +419,7 @@ def upload_cog(
             }
             if content_type is not None:
                 kwargs["ContentType"] = content_type
+            # ``content_type=None`` omits the ContentType header entirely.
             with local_cog.open("rb") as fh:
                 kwargs["Body"] = fh
                 _get_s3_client().put_object(**kwargs)
@@ -538,15 +432,12 @@ def upload_cog(
         logger.info("uploaded %s to %s (boto3)", log_label, dest)
         return dest
 
-    # --- non-s3 scheme: GCP is decommissioned, no gs:// backend ------------ #
-    # ``storage_scheme()`` always resolves to "s3" in production; a non-s3
-    # scheme is only reachable in tests that force it. Honest handling: no
-    # gs client is ever constructed. ``gs_fallback_to_file`` (unchanged
-    # per-engine semantics: OpenQuake/MODFLOW opt in, SWMM/GeoClaw/Landlab
-    # don't) degrades straight to a ``file://`` URI; otherwise this raises
+    # --- non-s3 scheme: there is no non-s3 backend ------------------------- #
+    # ``storage_scheme()`` resolves to "s3" in production, so a non-s3 scheme is
+    # only reachable when a caller forces one. No client is ever constructed:
+    # ``gs_fallback_to_file`` degrades to a ``file://`` URI, otherwise this raises
     # the typed ``CogIoError`` naming the absent backend. ``gs_backend`` is
-    # accepted for caller-signature compatibility but no longer selects
-    # anything -- both "fsspec" and "gcs_client" hit this same honest path.
+    # accepted for signature compatibility and selects nothing.
     if gs_fallback_to_file:
         return f"file://{local_cog}"
     raise CogIoError(

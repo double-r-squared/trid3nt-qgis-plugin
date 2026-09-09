@@ -1,36 +1,7 @@
 """Register-only fast path for the worker-written ``publish_manifest.json``.
 
-SFINCS postprocess offload (Phase 4 - agent thin-out). The Batch worker now runs
-the heavy NetCDF/.mat -> COG conversion ON THE WORKER (it has the raw output
-local, the geo stack in-image, and a big box), writes display-ready
-overview-bearing COGs to deterministic keys, and writes a thin typed
-``publish_manifest.json`` alongside ``completion.json`` (pointed to by
-``completion.json.publish_manifest_uri``).
-
-The agent then collapses to REGISTER-ONLY:
-  1. Read ``completion.json.publish_manifest_uri`` (this module, ``read_publish_manifest``).
-  2. For each manifest layer: emit the bare ``cog_uri`` AS the layer uri
-     (TiTiler exit / QGIS-native swap - the plugin reads the raw ``s3://`` COG
-     via /vsicurl/, mirroring ``publish_layer``'s raw-cog return), resolve the
-     style params from the agent-owned registry + ``band_stats`` (NO COG
-     download) purely to STASH the data-driven legend keyed by that ``cog_uri``
-     (``_stash_legend_for_uri``; the pipeline emitter lifts it by ``layer.uri``),
-     mint ``layer_id = f"{layer_id_stem}-{run_id}"``, call
-     ``observe_published_layer``, build a ``LayerURI``.
-  3. SHORT-CIRCUIT the on-box heavy path: NO ``_resolve_run_output_to_local``,
-     NO ``postprocess_sfincs``, NO ``_ensure_raster_has_overviews``
-     (``has_overviews`` is true).
-
-TiTiler exit: the former ``TRID3NT_TILE_SERVER_BASE`` publish-or-honest-drop gate
-is GONE - no tile server is needed to display a raster anymore, so no manifest
-layer is dropped for lack of one (``dropped_count`` stays for the result shape
-but is always 0 on this path).
-
-FALLBACK (one-release safety): when the manifest is ABSENT or carries an UNKNOWN
-schema_version, ``read_publish_manifest`` returns ``None`` and the caller runs
-the EXISTING on-box postprocess path unchanged (the raw ``sfincs_map.nc`` is
-still uploaded). This is a clean if/else so nothing breaks before the worker
-images rebuild.
+The worker writes display-ready COGs and a thin typed manifest; the agent only
+REGISTERS - the bare ``cog_uri`` becomes the layer uri and no COG is downloaded.
 """
 
 from __future__ import annotations
@@ -63,20 +34,8 @@ logger = logging.getLogger("trid3nt_server.workflows.shared.register_published_m
 
 def read_publish_manifest(run_result: Any) -> PublishManifest | None:
     """Read + schema-gate the worker's ``publish_manifest.json`` for a run.
-
-    Resolves ``completion.json.publish_manifest_uri`` (the explicit pointer the
-    worker writes so the agent never globs) and parses it through the typed,
-    schema-gated reader.
-
-    Returns ``None`` (the FALLBACK trigger - the caller runs the legacy on-box
-    path) when:
-      - the completion manifest cannot be read,
-      - it carries no ``publish_manifest_uri`` (pre-rebuild worker image),
-      - the manifest object cannot be read, OR
-      - the manifest body is malformed / carries an UNKNOWN schema_version.
-
-    NEVER raises - any failure degrades to ``None`` (one-release safety).
-    """
+    Resolves the explicit ``completion.json.publish_manifest_uri`` rather than globbing,
+    and NEVER raises: every failure degrades to ``None`` for the caller to branch on."""
     run_id = getattr(run_result, "run_id", None)
     if not run_id:
         return None
@@ -161,17 +120,8 @@ class RegisteredLayer:
 
 class ManifestRegisterResult:
     """The register-only outcome consumed by the workflow tails.
-
-    ``layers`` is in manifest order: ``layers[0]`` is the PEAK primary. A
-    manifest MAY carry frame/context layers after it (a legacy run, or a producer
-    that has not moved its frames onto ``outputs.json``); the docker raster
-    workers write the peak alone. ``metrics`` is the manifest's top-level peak
-    aggregates (the ``FloodMetrics`` source).
-    TiTiler exit: rasters emit as their raw ``s3://`` COG uri (plugin
-    /vsicurl/), so the no-tile-server drop path is gone -- ``dropped_count`` is
-    always 0 and ``tile_publish_available`` is always True (both kept for the
-    callers' result shape).
-    """
+    ``layers`` is in manifest order with the PEAK primary first; ``dropped_count`` is
+    always 0 and ``tile_publish_available`` always True - there is no tile server."""
 
     __slots__ = ("layers", "metrics", "dropped_count", "tile_publish_available")
 
@@ -196,13 +146,8 @@ def _register_one_layer(
     bbox: tuple[float, float, float, float] | None,
 ) -> RegisteredLayer:
     """Resolve ONE manifest layer to a registered ``LayerURI``.
-
-    Mirrors the on-box ``publish_layer`` s3 branch in shape: resolve the
-    declared style row against the manifest's own band stats (NO COG read),
-    stash the RESOLVED style keyed by the raw ``cog_uri``, register the COG via
-    ``observe_published_layer``, return a ``LayerURI`` carrying the raw
-    ``cog_uri`` as ``uri``.
-    """
+    The declared style row resolves against the manifest's own band stats, with NO
+    COG read, and the returned uri is the raw ``cog_uri``."""
     stem = entry.layer_id_stem
     cog_uri = entry.cog_uri
     layer_id = f"{stem}-{run_id}"
@@ -261,13 +206,9 @@ def register_manifest_layers(
     run_id: str,
     bbox: tuple[float, float, float, float] | None = None,
 ) -> ManifestRegisterResult:
-    """Register every manifest layer (raw ``s3://`` COG uri + observe + legend
-    stash), no COG conversion.
-
-    Pure given the active dispatch registry; runs on the loop (it does NO heavy
-    I/O - the worker already produced the COGs + band_stats). TiTiler exit: no
-    tile server is required to display, so no layer is dropped for lack of one.
-    """
+    """Register every manifest layer - raw ``s3://`` COG uri, observe, legend stash.
+    Safe to run ON the loop: the worker already produced the COGs and band stats,
+    so nothing here does heavy I/O and no layer is ever dropped."""
     layers: list[LayerURI] = []
     dropped = 0
     for entry in manifest.layers:

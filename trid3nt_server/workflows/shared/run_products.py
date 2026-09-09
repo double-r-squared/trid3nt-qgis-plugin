@@ -1,9 +1,7 @@
 """Persist a run's own CHART SPEC and physical-answer METRICS under its prefix.
 
-Verification reads the product, never a rebuild of it: a chart re-derived from
-the scalars is a second implementation that can agree with the run by accident
-and disagree with it silently. These land beside the worker's ``completion.json``
-in the run prefix, so the artifacts outlive the chat turn that emitted them.
+They land beside the worker's ``completion.json`` in the run prefix, so the
+artifacts outlive the chat turn that emitted them.
 """
 
 from __future__ import annotations
@@ -25,10 +23,8 @@ async def persist_run_products(run_id: str | None, *,
                                charts: Mapping[str, Any] | None,
                                metrics: Mapping[str, Any] | None) -> list[str]:
     """Write the chart specs + metrics under ``s3://<runs>/<run_id>/``.
-
-    BEST-EFFORT: never raises. A record of a solved run that fails to write must
-    not retract the run. Returns the uris that landed.
-    """
+    BEST-EFFORT: never raises, because a record that fails to write must not
+    retract the run it records. Returns the uris that landed."""
     if not run_id:
         return []
     written: list[str] = []

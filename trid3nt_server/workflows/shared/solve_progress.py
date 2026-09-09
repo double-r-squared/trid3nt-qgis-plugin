@@ -1,20 +1,7 @@
-"""Shared LIVE solve-progress heartbeat (extracted seam).
+"""Shared LIVE solve-progress heartbeat.
 
-This is the **shared extraction** of the live solve-progress driver. It is a
-verbatim copy of the proven SFINCS inline driver in
-``model_flood_scenario.py`` (``_drive_live_solve_progress`` +
-``_LIVE_SOLVE_PROGRESS_INTERVAL_S``); SFINCS keeps its inline copy for now (the
-duplication is deliberate so the proven SFINCS path is not touched), and the
-SWMM / MODFLOW local solves import ``drive_live_solve_progress`` from here.
-
-the long local solves (SWMM, MODFLOW)
-run off-loop in ``asyncio.to_thread`` and emit nothing for minutes, so the
-running tool/pipeline card shows a silent spinner. This driver runs as a side
-task **on the event loop** (the emitter is loop-bound) alongside the off-loop
-solve, ticking grid/cells/vCPU/elapsed/ETA every
-``_LIVE_SOLVE_PROGRESS_INTERVAL_S`` seconds. The caller launches it via
-``asyncio.ensure_future`` BEFORE the ``to_thread`` solve and cancels + awaits it
-in a ``finally`` (success, failure, OR cancel).
+A long solve runs off-loop and emits nothing for minutes, so this runs ON the loop
+where the emitter is bound: launched BEFORE the solve, cancelled in a ``finally``.
 """
 
 from __future__ import annotations
@@ -27,8 +14,8 @@ logger = logging.getLogger("trid3nt_server.workflows.shared.solve_progress")
 
 
 #: Cadence (seconds) for the LIVE solve-progress envelope during the long solve.
-#: Independent of the solver poll cadence — this is a UX tick on the running
-#: card; conservative so a 10-20-min solve emits a steady (not chatty) stream.
+#: Independent of the solver poll cadence - a UX tick on the running card, kept
+#: conservative so a 10-20-min solve emits a steady rather than chatty stream.
 _LIVE_SOLVE_PROGRESS_INTERVAL_S = 10.0
 
 
@@ -43,17 +30,8 @@ async def drive_live_solve_progress(
     eta_seconds: float | None,
 ) -> None:
     """Background loop: emit the LIVE solve-progress envelope every N seconds.
-
-    Runs alongside the off-loop solve so the running tool/pipeline card shows
-    grid/cells/vCPU/elapsed/ETA ticking during the long solve (rather than a
-    silent multi-minute spinner). ``elapsed_seconds`` is wall-clock from this
-    coroutine's start (Invariant 1: never an LLM estimate); ``eta_seconds`` is
-    the perf-model ``estimated_solve_seconds`` when available, else ``None``.
-
-    Best-effort + cancellation-safe: the caller cancels this task when the solve
-    returns; any emit failure is swallowed (live telemetry is a UX hint, never a
-    correctness gate). No-op when ``emitter`` is ``None`` (direct/smoke/test
-    call without a WS emitter)."""
+    ``elapsed_seconds`` is wall-clock, never an estimate; best-effort and
+    cancellation-safe, and ``emitter=None`` is a no-op."""
     if emitter is None:
         return
     from trid3nt_server.telemetry import build_live_solve_progress
@@ -74,7 +52,7 @@ async def drive_live_solve_progress(
             )
             try:
                 await emitter.emit_solve_progress(payload)
-            except Exception as exc:  # noqa: BLE001 — UX hint, never fatal
+            except Exception as exc:  # noqa: BLE001 -- UX hint, never fatal
                 logger.debug(
                     "solve_progress: live solve-progress emit failed "
                     "(non-fatal): %s",
@@ -82,7 +60,7 @@ async def drive_live_solve_progress(
                 )
             await asyncio.sleep(_LIVE_SOLVE_PROGRESS_INTERVAL_S)
     except asyncio.CancelledError:
-        # Normal teardown when the solve completes — re-raise so the task
+        # Normal teardown when the solve completes - re-raise so the task
         # finalizes cleanly.
         raise
 
