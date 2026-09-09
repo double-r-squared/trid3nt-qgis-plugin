@@ -4342,3 +4342,19 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   memory. Frozen proof packets stay full size in docs/proof. The
   README's template gallery links the pages. Lands in the docs and
   docstring wave.
+  FULL COVERAGE LAW FOR THE HYGIENE AND DOCS WAVE (NATE 2026-09-09):
+  "we keep coming back and finding out there were gaps caused by
+  grepping and missing things mechanically." The wave carries a
+  COVERAGE MANIFEST - every product file, test file, script, README
+  and doc in scope listed with the agent that READ it and a per-file
+  verdict row (docstrings, comments, history markers, dead references,
+  fate); a file with no row FAILS the gate. Fan-out by DIRECTORY, one
+  agent per directory reading every file end to end; greps are sweep
+  GUARDS after the fact, never the census. A sweep guard per class
+  lands in the suite (docstring limit, history-marker classes,
+  references to deleted modules, README entries vs the tree), each
+  proven on a seeded break. A COMPLETENESS CRITIC runs before verify
+  (a directory with no rows, a class with no guard, a doc with no
+  owner) until two rounds come back dry. The three read-only evals in
+  flight are the shape; the wave's own inventory replaces their
+  samples with full rows before anything changes.
