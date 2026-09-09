@@ -57,11 +57,9 @@ def register_tool(
     destructive_hint: bool | None = None,
     idempotent_hint: bool | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Return a decorator that records ``fn`` + ``metadata`` in ``TOOL_REGISTRY``
-    and gives back ``fn`` UNCHANGED, so a registered tool is still directly
-    callable. Every kwarg left ``None`` keeps what the metadata already declares;
-    a duplicate ``metadata.name`` raises ``ToolRegistrationError`` at import time,
-    so a misconfigured service never starts."""
+    """A decorator recording ``fn`` + ``metadata`` in ``TOOL_REGISTRY`` and giving
+    back ``fn`` UNCHANGED. A kwarg left ``None`` keeps what the metadata declares;
+    a duplicate name raises ``ToolRegistrationError`` at IMPORT time."""
     if not isinstance(metadata, AtomicToolMetadata):
         raise TypeError(
             f"register_tool expects AtomicToolMetadata, got {type(metadata).__name__}"

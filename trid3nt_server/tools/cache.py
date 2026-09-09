@@ -233,12 +233,9 @@ def _split_s3_uri(uri: str) -> tuple[str, str]:
 
 
 def read_object_bytes_s3(uri: str) -> bytes:
-    """Read an ``s3://`` object fully into memory through the ONE store seam.
-
-    Shared by every tool download-helper. It delegates rather than building its
-    own client so a test that injects one client sees every read - boto3, never
-    s3fs, because s3fs falls back to anonymous access and returns corrupt bytes.
-    """
+    """Read an ``s3://`` object fully into memory through the ONE store seam, so an
+    injected client sees every read. boto3 only, never s3fs: s3fs falls back to
+    anonymous access here and returns corrupt bytes."""
     from trid3nt_server.workflows.solver.solver import _read_object_bytes
 
     return _read_object_bytes(uri)
@@ -353,10 +350,8 @@ def read_through(
     provenance: "ProvenanceRecorder | None" = None,
 ) -> ReadThroughResult:
     """Read-through / write-on-miss for one atomic-tool fetch. An uncacheable tool
-    always misses and returns ``uri=None`` without writing; a ``fetch_fn`` failure
-    is re-raised rather than cached as a sentinel, so the caller decides whether to
-    retry or fall back. ``storage_client`` is accepted and ignored. Sync, and
-    blocking: call it where the cancel chain can interrupt it."""
+    always misses and returns ``uri=None``; a ``fetch_fn`` failure is RE-RAISED,
+    never cached as a sentinel. ``storage_client`` is accepted and ignored."""
     del storage_client
     # The env override WINS over a caller-supplied bucket: several tools pass the
     # CACHE_BUCKET constant explicitly, and an explicit wrong bucket degrades every

@@ -1,5 +1,4 @@
 """``list_run_frames`` - the ordered animation-frame COG URIs for one run layer.
-
 The URIs are READ from the run's ``outputs.json``, never invented, and ordered by
 the physical time ``t`` each entry carries. A run with no manifest or no matching
 frames returns an HONEST empty result with a typed ``reason``, never a fabricated

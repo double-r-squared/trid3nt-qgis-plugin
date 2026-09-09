@@ -1,10 +1,8 @@
 """Projected emitted-COG size from a measured sample of the real source.
-
-Source-agnostic: a tool supplies the ``sample_fn`` that measures its own source;
-caching, area-scaling and labelling live here. A failed sample never raises -- it
-falls back to the caller's analytic model, LABELED, so no quoted number is ever
-claimed as measured when it is not.
-"""
+Source-agnostic: a tool supplies the ``sample_fn`` that measures its own source,
+while caching, area-scaling and labelling live here. A failed sample never raises
+- it falls back to the caller's analytic model, LABELED, so no quoted number is
+ever claimed as measured when it is not."""
 from __future__ import annotations
 
 import logging
@@ -117,9 +115,8 @@ def estimate_mb(
     analytic_native_res_m: float = 10.0,
 ) -> SampledEstimate:
     """Projected emitted-COG MB for ``bbox`` at ``resolution_m`` (``None`` = native).
-
-    ``analytic_mb`` is the caller's NATIVE-resolution estimate and is used, labelled
-    ``kind="analytic"``, whenever no measured density is available."""
+    ``analytic_mb`` is the caller's NATIVE-resolution estimate, used and labelled
+    ``kind="analytic"`` whenever no measured density is available."""
     w, s, e, n = bbox
     sq_deg = max(0.0, e - w) * max(0.0, n - s)
     density = get_density(source_key, bbox, sample_fn, region_deg=region_deg) if sample_fn else None

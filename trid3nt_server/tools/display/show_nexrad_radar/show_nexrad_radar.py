@@ -1,7 +1,6 @@
 """``show_nexrad_radar`` - a live NEXRAD radar overlay as an Iowa Mesonet WMS URL.
-
 A DISPLAY tool, not a fetcher: it composes a GetMap service URL and returns it as a
-``LayerURI`` the client renders directly, downloading and caching NOTHING. The
+``LayerURI`` the client renders directly, downloading and caching NOTHING - the
 mosaic refreshes every few minutes, so a cached pixel snapshot would misrepresent
 the live storm state."""
 

@@ -1,9 +1,8 @@
 """``compose_case_report`` - a markdown situation report for a Case, written into
-the case artifacts dir.
-
-Nothing here recomputes or invents: a layer whose artifact cannot be read gets an
-explicit "statistics unavailable" row, a Case with zero layers still produces a
-report that says so, and the exposure section appears only if it was measured."""
+the case artifacts dir. Nothing here recomputes or invents: a layer whose artifact
+cannot be read gets an explicit "statistics unavailable" row, a Case with zero
+layers still produces a report saying so, and the exposure section appears only
+when it was actually measured."""
 
 from __future__ import annotations
 

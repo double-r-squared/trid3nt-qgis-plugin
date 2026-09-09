@@ -1,10 +1,8 @@
 """The one decision + transform seam for a vector FeatureCollection on the
-inline-GeoJSON emit path.
-
-Below ``DENSE_VECTOR_THRESHOLD`` the FC is returned unchanged. Above it,
-simplification only DROPS vertices or DROPS whole features - it never invents a
-coordinate, and the geometry families are unchanged, so styling is unaffected.
-"""
+inline-GeoJSON emit path. Below ``DENSE_VECTOR_THRESHOLD`` the FC comes back
+unchanged; above it, simplification only DROPS vertices or DROPS whole features -
+it never invents a coordinate, and the geometry families are unchanged, so nothing
+about the styling moves with it."""
 
 from __future__ import annotations
 

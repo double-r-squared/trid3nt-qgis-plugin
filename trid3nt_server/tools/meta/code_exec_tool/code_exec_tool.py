@@ -1,5 +1,4 @@
 """``code_exec_request`` - the LLM-facing entry to the network-denied code-exec box.
-
 The tool body REFUSES without ``confirmed=True``: the dispatch layer gates on user
 approval and only then re-dispatches with the flag, so the gate cannot be bypassed
 from the model's side. A direct programmatic caller passing ``confirmed=True`` is

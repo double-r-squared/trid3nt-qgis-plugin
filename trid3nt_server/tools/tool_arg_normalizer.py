@@ -475,10 +475,9 @@ def snake_case(name: str) -> str:
 
 
 def coerce_bbox_value(value: Any) -> list[float] | None:
-    """Parse an LLM-emitted bbox into ``[min_lon, min_lat, max_lon, max_lat]``.
-    Accepts a 4-element sequence or a string of 4 comma/space-separated numbers with
-    optional brackets; ``None`` when it is not a recognizable 4-number bbox, so the
-    caller leaves the value untouched and the tool's own validator speaks."""
+    """A bbox as ``[min_lon, min_lat, max_lon, max_lat]``, from a 4-element sequence
+    or a string of 4 comma/space-separated numbers. ``None`` when unrecognizable, so
+    the caller leaves the value alone and the tool's own validator speaks."""
     if isinstance(value, (list, tuple)):
         if len(value) != 4:
             return None
@@ -512,10 +511,9 @@ def coerce_bbox_value(value: Any) -> list[float] | None:
 
 
 def coerce_latlon(value: Any) -> list[float]:
-    """Coerce an LLM-emitted lat/lon point into ``[lat, lon]``, accepting a
-    2-element sequence or ``"lat,lon"`` / ``"[lat, lon]"`` / ``"lat lon"``. Order is
-    preserved verbatim and nothing is range-checked - two parsed floats is the whole
-    guarantee. Raises ``LatLonCoercionError`` when the value is not two numbers."""
+    """A lat/lon point as ``[lat, lon]``, from a 2-element sequence or a
+    ``"lat,lon"`` string. Order is preserved verbatim and NOTHING is range-checked;
+    a value that is not two numbers raises ``LatLonCoercionError``."""
     if value is None:
         raise LatLonCoercionError("lat/lon is required (got None)")
     # Real list/tuple path -- pass through with float coercion.
@@ -638,10 +636,9 @@ def autofill_missing_bbox(
     active_aoi: Any = None,
     case_bbox: Any = None,
 ) -> dict[str, Any]:
-    """Fill a REQUIRED bbox-like param the model OMITTED, first valid wins in the
+    """Fill a REQUIRED bbox-like param the model OMITTED - first valid wins, in the
     order explicit arg > active canvas AOI > Case bbox. An explicit value is NEVER
-    overridden and an optional param never fills. Returns a fresh dict when it
-    fires, the original otherwise; never raises, one log line per filled param."""
+    overridden and an optional param never fills; never raises."""
     try:
         sig = inspect.signature(fn)
     except (TypeError, ValueError):
@@ -763,9 +760,8 @@ def fuzzy_correct_enum_args(
     fn: Callable[..., Any],
 ) -> dict[str, Any]:
     """difflib-correct string args that miss their param's ``Literal`` choices. A
-    case/separator-insensitive hit maps straight to the canonical choice; below the
-    cutoff the value is left as-is so the tool's typed error still owns it. Returns
-    a fresh dict when a correction fires, the original otherwise."""
+    case/separator-insensitive hit maps straight to the canonical choice; BELOW the
+    cutoff the value is left alone, so the tool's typed error still owns it."""
     if not params or not _enum_fuzzy_enabled():
         return params
     choices_by_param = _literal_choices(fn)
@@ -812,9 +808,8 @@ def normalize_args(
     fn: Callable[..., Any],
 ) -> dict[str, Any]:
     """Normalize ``raw_args`` so ``fn(**normalized)`` will not raise on a model's
-    kwarg quirks. ``tool_name`` is the ``TOOL_REGISTRY`` key; ``fn`` is inspected,
-    never called. A function declaring ``**kwargs`` keeps every unknown kwarg,
-    otherwise unknowns are dropped rather than raised. Never raises."""
+    kwarg quirks; ``fn`` is INSPECTED, never called. A function declaring
+    ``**kwargs`` keeps every unknown kwarg, otherwise unknowns are dropped."""
     if not raw_args:
         return {}
     # A model may pack the release point into ONE 'spill_location_latlon' string
