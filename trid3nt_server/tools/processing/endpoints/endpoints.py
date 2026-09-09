@@ -1,16 +1,8 @@
 """``endpoints``: a line layer -> the TWO points it begins and ends at.
 
-The generic composition link between a fetched centerline and every tool that
-takes a pair of points. A reach is named by its flowline, and the cut that turns
-mapped banks into that reach is taken BETWEEN two points - so the two facts are
-joined by measuring the line rather than by asking somebody to click twice at
-coordinates the line already states.
-
-Nothing is inferred: the points are vertices OF the supplied line, in its own
-vertex order. A source whose parts do not join into one continuous line is
-refused, because which two of several loose ends were meant is not measurable.
+Nothing is inferred: the points are vertices OF the line, in its own order, and
+parts that do not join into one line are refused as not measurable.
 """
-
 from __future__ import annotations
 
 import logging
@@ -34,13 +26,8 @@ logger = logging.getLogger("trid3nt_server.tools.processing.endpoints.endpoints"
 
 
 class EndpointsError(RuntimeError):
-    """A typed endpoints refusal: an error code plus what to supply instead.
-
-    Codes:
-    - ``ENDPOINTS_NO_LINE`` -- the source carries no polyline geometry.
-    - ``ENDPOINTS_NOT_CONTINUOUS`` -- the parts do not join into one line, so the
-      two ends are not measurable.
-    - ``ENDPOINTS_SOURCE_UNREADABLE`` -- the source could not be read.
+    """A typed refusal: ``ENDPOINTS_NO_LINE``, ``ENDPOINTS_NOT_CONTINUOUS`` (the
+    parts stay separate, so the ends are not measurable), or _SOURCE_UNREADABLE.
     """
 
     error_code: str
@@ -52,13 +39,8 @@ class EndpointsError(RuntimeError):
 
 
 class EndpointsLayerURI(LayerURI):
-    """The two end points as a point layer, plus the pair a cut is taken between.
-
-    Extra fields beyond ``LayerURI``: ``between`` (``[[lon, lat], [lon, lat]]`` -
-    the pair, ready for ``section(between=...)``), ``start`` / ``end`` (the same
-    two points, named in the line's own vertex order), ``length_m`` (the line
-    measured in its local UTM zone), ``part_count`` (how many parts were joined),
-    ``notes``.
+    """The two end points as a point layer, plus ``between`` - the same pair in
+    the shape a cut takes - the length in its local UTM zone, and the part count.
     """
 
     between: list[list[float]] = []
@@ -164,16 +146,8 @@ def endpoints(
             shapefile) or inline GeoJSON. Several parts are joined first; parts
             that do not join into one continuous line are refused.
 
-    Returns:
-        ``EndpointsLayerURI`` -- the two points as a GeoJSON point layer
-        (EPSG:4326) with ``between`` (the pair,
-        as ``section`` takes it), ``start``, ``end``, ``length_m``,
-        ``part_count`` and honest ``notes``.
-
-    Raises:
-        EndpointsError: ``ENDPOINTS_NO_LINE`` (the source maps no polyline),
-            ``ENDPOINTS_NOT_CONTINUOUS`` (the parts stay separate),
-            ``ENDPOINTS_SOURCE_UNREADABLE`` (the source could not be read).
+    Returns the two points as a GeoJSON point layer, with ``between`` in the
+    shape ``section`` takes, ``start``, ``end``, ``length_m`` and honest notes.
     """
     notes: list[str] = []
     parts = _lines(line)
