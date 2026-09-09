@@ -174,9 +174,9 @@ def test_parts_blob_round_trips_function_call_with_signature():
     exact function_call Part with the original thought_signature bytes."""
     sig = b"sig-bytes-\x00\x01\x02"
     original = build_function_call_content(
-        "fetch_wdpa_protected_areas",
+        "fetch_fema_nfhl_zones",
         {"bbox": [-82.0, 26.5, -81.7, 26.8]},
-        call_id="call-wdpa",
+        call_id="call-nfhl",
         thought_signature=sig,
     )
     blob = encode_parts_blob(original.parts)
@@ -193,9 +193,9 @@ def test_parts_blob_round_trips_function_call_with_signature():
     assert len(rehydrated.parts) == 1
     part = rehydrated.parts[0]
     assert part.function_call is not None
-    assert part.function_call.name == "fetch_wdpa_protected_areas"
+    assert part.function_call.name == "fetch_fema_nfhl_zones"
     assert part.function_call.args == {"bbox": [-82.0, 26.5, -81.7, 26.8]}
-    assert part.function_call.id == "call-wdpa"
+    assert part.function_call.id == "call-nfhl"
     assert part.thought_signature == sig, (
         f"signature did not survive blob round-trip: {part.thought_signature!r}"
     )
@@ -206,9 +206,9 @@ def test_parts_blob_round_trips_function_response():
     from trid3nt_server.adapters.adapter import build_function_response_content
 
     original = build_function_response_content(
-        "fetch_wdpa_protected_areas",
-        {"tool": "fetch_wdpa_protected_areas", "status": "ok", "result": {"count": 2}},
-        call_id="call-wdpa",
+        "fetch_fema_nfhl_zones",
+        {"tool": "fetch_fema_nfhl_zones", "status": "ok", "result": {"count": 2}},
+        call_id="call-nfhl",
     )
     blob = encode_parts_blob(original.parts)
     chat_history = [{"role": "user", "parts_blob": blob}]
@@ -216,9 +216,9 @@ def test_parts_blob_round_trips_function_response():
     assert len(contents) == 2
     part = contents[0].parts[0]
     assert part.function_response is not None
-    assert part.function_response.name == "fetch_wdpa_protected_areas"
+    assert part.function_response.name == "fetch_fema_nfhl_zones"
     assert part.function_response.response["status"] == "ok"
-    assert part.function_response.id == "call-wdpa"
+    assert part.function_response.id == "call-nfhl"
 
 
 def test_parts_blob_takes_precedence_over_text():

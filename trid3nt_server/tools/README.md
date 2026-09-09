@@ -23,7 +23,7 @@ registry and the cache shim are the two seams they all pass through.
 | folder | what it is |
 | --- | --- |
 | `display/` | Tools that change what the canvas SHOWS rather than what it holds: `restyle_layer`, `show_nexrad_radar`. |
-| `fetchers/` | Data fetchers, one folder per phenomenon measured (`biodiversity`, `climate`, `hazard`, `hydrology`, `imagery`, `ocean`, `socioeconomic`, `soil`, `terrain`, `weather`), plus the shared helpers at its root and `_router/`. See below. |
+| `fetchers/` | Data fetchers, one folder per phenomenon measured (`climate`, `hazard`, `hydrology`, `imagery`, `ocean`, `socioeconomic`, `soil`, `terrain`, `weather`), plus the shared helpers at its root and `_router/`. See below. |
 | `meta/` | Utility tools: `code_exec_tool`, `compose_case_report`, `list_run_frames`, `spatial_input_tool`. |
 | `processing/` | Compute / clip / extract / vector-edit / chart tools, one folder per tool, flat, plus the shared GDAL, geometry, hydrology and chart cores. |
 | `search/` | Dataset and tool discovery: the YAML catalog tools, the Living Atlas index, the OGC adapter, `search_tools` retrieval and `web_fetch`. |

@@ -116,10 +116,10 @@ _BBOX_QUANT_DEG: float = 0.02
 #
 # A fetched layer has no scenario_type (it is not a simulation RESULT), so the
 # reuse machinery needs a parallel notion of "kind" — the data FAMILY a fetch
-# produces (wdpa / landcover / dem / roads / buildings / admin / ...). Two loaded
+# produces (landcover / dem / roads / buildings / admin / population / ...). Two loaded
 # layers of the same kind covering the same (or an enclosing) AOI are the SAME
 # data — a second fetch is redundant. Recognition is prefix/substring based on the
-# layer_id and name so the per-place suffix (``wdpa-{lon}-{lat}``) does not defeat
+# layer_id and name so the per-place suffix (``dem-{lon}-{lat}``) does not defeat
 # it. Kept CONSERVATIVE: an unrecognized fetched layer returns ``None`` (the model
 # falls back to the existing INPUT guidance), never a false reuse.
 
@@ -130,10 +130,6 @@ _BBOX_QUANT_DEG: float = 0.02
 #: persistent map layer are listed — an absent tool simply gets no fetched-kind
 #: hint (CONSERVATIVE).
 _FETCH_TOOL_KIND: dict[str, str] = {
-    "fetch_wdpa_protected_areas": "wdpa",
-    "fetch_gbif_occurrences": "gbif",
-    "fetch_inaturalist_observations": "inaturalist",
-    "fetch_ebird_observations": "ebird",
     "fetch_administrative_boundaries": "admin",
     "fetch_roads_osm": "roads",
     "fetch_river_geometry": "rivers",
@@ -148,10 +144,6 @@ _FETCH_TOOL_KIND: dict[str, str] = {
 #: each kind. Substring based against the lowercased ``"layer_id name"`` haystack.
 #: Order matters only for disjoint kinds; the markers are chosen to be unambiguous.
 _FETCHED_KIND_MARKERS: dict[str, tuple[str, ...]] = {
-    "wdpa": ("wdpa", "protected area"),
-    "gbif": ("gbif",),
-    "inaturalist": ("inaturalist", "inat-"),
-    "ebird": ("ebird",),
     "admin": ("admin-", "administrative boundar", "boundaries"),
     "roads": ("osm-roads", "osm_roads", "-roads", " roads"),
     "rivers": ("river", "waterway", "stream", "nhd"),
@@ -194,7 +186,7 @@ def fetched_kind_for_tool(tool_name: str) -> str | None:
 def fetched_layer_kind(layer_id: str | None, name: str | None = None) -> str | None:
     """Classify a loaded FETCHED / context layer (by id / name) into a kind.
 
-    Returns the ``kind`` token (e.g. ``"wdpa"``, ``"landcover"``, ``"dem"``) when
+    Returns the ``kind`` token (e.g. ``"buildings"``, ``"landcover"``, ``"dem"``) when
     the layer looks like the OUTPUT of a fetch_* tool, else ``None``. A layer that
     classifies as a simulation RESULT (``layer_id_scenario_type``) is deliberately
     NOT a fetched kind — results route through the scenario-reuse path. Used by the

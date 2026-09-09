@@ -124,4 +124,4 @@ docstring: |-
 
   **Cross-tool dependencies:** pairs with ``fetch_noaa_slr_scenarios`` +
   ``fetch_noaa_slr_confidence`` (the three NOAA OCM SLR Viewer products); feeds
-  conservation / wetland overlays with ``fetch_wdpa_protected_areas``.
+  wetland overlays with ``fetch_nwi_wetlands``.

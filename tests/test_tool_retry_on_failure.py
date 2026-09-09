@@ -85,29 +85,29 @@ def test_summarize_tool_result_error_harvests_typed_attributes():
     tool already knew.
     """
 
-    class WDPABboxError(RuntimeError):
-        error_code = "WDPA_BBOX_INVALID"
+    class NFHLBboxError(RuntimeError):
+        error_code = "NFHL_BBOX_INVALID"
         retryable = False
 
-    err = WDPABboxError("bbox out of range")
-    summary = summarize_tool_result("fetch_wdpa_protected_areas", None, error=err)
+    err = NFHLBboxError("bbox out of range")
+    summary = summarize_tool_result("fetch_fema_nfhl_zones", None, error=err)
     assert summary["status"] == "error"
-    assert summary["error_code"] == "WDPA_BBOX_INVALID"
+    assert summary["error_code"] == "NFHL_BBOX_INVALID"
     assert summary["retryable"] is False
     assert summary["message"] == "bbox out of range"
-    assert summary["error_type"] == "WDPABboxError"
+    assert summary["error_type"] == "NFHLBboxError"
 
 
 def test_summarize_tool_result_error_typed_upstream_is_retryable():
     """An upstream-flavor typed exception flags retryable=True."""
 
-    class WDPAUpstreamError(RuntimeError):
-        error_code = "WDPA_UPSTREAM_ERROR"
+    class NFHLUpstreamError(RuntimeError):
+        error_code = "NFHL_UPSTREAM_ERROR"
         retryable = True
 
-    err = WDPAUpstreamError("WDPA ArcGIS REST 503")
-    summary = summarize_tool_result("fetch_wdpa_protected_areas", None, error=err)
-    assert summary["error_code"] == "WDPA_UPSTREAM_ERROR"
+    err = NFHLUpstreamError("NFHL ArcGIS REST 503")
+    summary = summarize_tool_result("fetch_fema_nfhl_zones", None, error=err)
+    assert summary["error_code"] == "NFHL_UPSTREAM_ERROR"
     assert summary["retryable"] is True
 
 

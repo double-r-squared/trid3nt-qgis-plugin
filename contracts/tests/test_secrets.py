@@ -62,7 +62,7 @@ from trid3nt_contracts.secrets import (
 # --------------------------------------------------------------------------- #
 
 
-def _record(provider: str = "ebird", case_id: str | None = None) -> SecretRecord:
+def _record(provider: str = "firms", case_id: str | None = None) -> SecretRecord:
     """A realistic SecretRecord for round-trip tests."""
     return SecretRecord(
         secret_id=new_ulid(),
@@ -70,9 +70,9 @@ def _record(provider: str = "ebird", case_id: str | None = None) -> SecretRecord
         case_id=case_id if case_id is not None else new_ulid(),
         vault_ref=(
             "gcp-sm://projects/legacy-cloud-project/secrets/"
-            "case-eb-01k-ebird-key/versions/latest"
+            "case-fk-01k-firms-key/versions/latest"
         ),
-        label="personal eBird key",
+        label="personal FIRMS key",
         added_at=datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc),
         last_used_at=None,
         is_active=True,
@@ -95,7 +95,7 @@ def test_secret_record_roundtrip_idempotent() -> None:
 
     # Wire-shape sanity
     assert a["schema_version"] == "v1"
-    assert a["provider"] == "ebird"
+    assert a["provider"] == "firms"
     assert a["is_active"] is True
     assert a["added_at"].endswith("Z"), "datetime must serialize with Z suffix"
     assert a["last_used_at"] is None
@@ -118,14 +118,14 @@ def test_secrets_list_envelope_roundtrip_idempotent() -> None:
 
     # Populated path: two records, different providers
     populated = SecretsListEnvelopePayload(
-        secrets=[_record("ebird"), _record("iucn_red_list")]
+        secrets=[_record("firms"), _record("ecmwf_cds")]
     )
     a = populated.model_dump(mode="json")
     text_a = json.dumps(a, sort_keys=True)
     b = SecretsListEnvelopePayload.model_validate(json.loads(text_a)).model_dump(mode="json")
     assert text_a == json.dumps(b, sort_keys=True)
     assert len(a["secrets"]) == 2
-    assert {s["provider"] for s in a["secrets"]} == {"ebird", "iucn_red_list"}
+    assert {s["provider"] for s in a["secrets"]} == {"firms", "ecmwf_cds"}
 
 
 # --------------------------------------------------------------------------- #
@@ -142,9 +142,9 @@ def test_secret_add_envelope_roundtrip_idempotent() -> None:
     fresh client sends to the server (which DOES include the value).
     """
     add = SecretAddEnvelopePayload(
-        provider="ebird",
+        provider="firms",
         case_id=new_ulid(),
-        label="personal eBird key",
+        label="personal FIRMS key",
         key_value="ABCD1234EXAMPLEKEYDONOTUSE",
     )
     a = add.model_dump(mode="json")
@@ -200,7 +200,7 @@ def test_secret_add_repr_redacts_key_value() -> None:
     """
     sensitive = "REAL-LOOKING-KEY-DO-NOT-LEAK-12345"
     add = SecretAddEnvelopePayload(
-        provider="ebird",
+        provider="firms",
         case_id=new_ulid(),
         label="personal key",
         key_value=sensitive,
@@ -232,7 +232,7 @@ def test_envelope_type_literal_validation() -> None:
     # SecretAddEnvelopePayload
     bad = {
         "envelope_type": "add-secret",  # wrong direction in the kebab-case
-        "provider": "ebird",
+        "provider": "firms",
         "case_id": new_ulid(),
         "key_value": "x",
     }
@@ -270,9 +270,9 @@ def test_provider_id_literal_validation() -> None:
 
     # All declared providers are constructible
     for provider in (
-        "ebird",
-        "iucn_red_list",
-        "movebank",
+        "firms",
+        "ecmwf_cds",
+        "gtsm",
         "nws",
         "openweathermap",
         "openai",
@@ -345,7 +345,7 @@ def test_secret_record_no_cost_field_invariant9() -> None:
 
     # Same for the add envelope
     add_base = SecretAddEnvelopePayload(
-        provider="ebird", case_id=new_ulid(), key_value="x"
+        provider="firms", case_id=new_ulid(), key_value="x"
     ).model_dump(mode="json")
     for forbidden in ("cost_usd", "estimated_cost"):
         bad = {**add_base, forbidden: 0.0}

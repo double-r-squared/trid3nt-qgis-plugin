@@ -86,8 +86,6 @@ def _import_tools_registry() -> int:
     from .tools.processing.compute_hillshade import compute_hillshade  # noqa: F401
     # register web_fetch (generic web-page ingest with 4 extraction modes).
     from .tools.search.web_fetch import web_fetch  # noqa: F401
-    # fetch_inaturalist_observations + fetch_gbif_occurrences: spec-driven
-    # (resolve-then-fetch hooks), registered via register_specs_from_tree.
     # fetch_storm_events_db: spec-driven (directory-index resolve -> bulk
     # gzip-CSV point decode), registered via register_specs_from_tree.
     # fetch_nws_event: spec-driven (source.yaml + nws_event hooks),
@@ -120,10 +118,6 @@ def _import_tools_registry() -> int:
     # fetch_mtbs_burn_severity + fetch_nifc_fire_perimeters: spec-driven
     # (source.yaml + router), registered by register_specs_from_tree() via
     # agent.tools import (no eager module import here).
-    # register fetch_ebird_observations (Cornell Lab eBird Tier-2 recent sightings; per-Case secret_ref).
-    # register fetch_iucn_red_list_range (IUCN Red List Tier-2 species range info fetcher; per-Case secret_ref).
-    # fetch_movebank_tracks: spec-driven (source.yaml + movebank_tracks
-    # hooks), auto-registered via register_specs_from_tree().
     # fetch_era5_reanalysis + fetch_gtsm_tide_surge: spec-driven (source.yaml
     # + cds hooks), auto-registered via register_specs_from_tree().
 

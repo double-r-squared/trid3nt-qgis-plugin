@@ -122,7 +122,7 @@ def _os_environ() -> dict:
 #: noticed rather than absorbed; the catalog arms never change it, they only
 #: shrink the declarable POOL. Update this number only alongside the landing or
 #: the removal that moves it.
-_REGISTRY_SIZE = 172
+_REGISTRY_SIZE = 165
 
 
 # --------------------------------------------------------------------------- #
@@ -136,7 +136,7 @@ def test_default_config_identity():
     # The roster PIN: a tool that leaves the registry has to be noticed, so the
     # arms assert the same number and a silent drop fails four tests at once.
     assert r["registry_size"] == _REGISTRY_SIZE
-    assert r["n_specs"] == 108  # the lake level +fetch_greatlakes_water_level; shoreline ladder +fetch_osm_coastline; ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water; ADR 0317 +fetch_greatlakes_bathymetry; TELEMAC wave B +fetch_osm_breakwaters; ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity (staged-dataset specs); ADR 0297 +fetch_groundwater_recharge (staged-dataset spec); ADR 0112 +nwm_streamflow (fetcher finale); ADR 0203 +fetch_aorc_precip +fetch_lter_records; bathymetry seam +fetch_bluetopo
+    assert r["n_specs"] == 101
     # They stay ambient (tier=general) and IN the declarable pool.
     assert r["gridmet_tier"] == "general"
     assert r["any_spec_in_declarable"] is True
@@ -156,18 +156,11 @@ def test_arm2_specs_leave_pool_but_stay_indexed():
     assert r["registry_size"] == _REGISTRY_SIZE
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
-    # -57, not -58: fetch_copernicus_dem is tier="internal" (wave-11 absorption into
-    # fetch_dem), so it is ALREADY out of the ambient pool in the None baseline; the
-    # arm moves the remaining general->catalog (incl. the 4 chained-resolution folds
-    # ADR 0063, the 2 ADR 0064 folds openfema / storm_events, the 5 ADR 0065
-    # station-sibling folds, the 2 ADR 0068 SLR-raster mapserver_export folds, the
-    # 2 ADR 0070 Overpass folds roads / pois, the 5 ADR 0071 keyed/misc folds
-    # mobi / climate_normals / ebird / iucn / usgs_groundwater_levels, and the ADR
-    # 0073 envelope fold high_water_marks; + ADR 0074 river fold; + ADR 0075 3dep fold;
-    # + ADR 0076 wfigs record fold; + ADR 0077 movebank keyed-CSV fold; + ADR 0079
-    # quick-folds firms / noaa_sst / sentinel1; + ADR 0080 STAC-composite trio
-    # landsat / sentinel2 / naip; + ADR 0081 fault_sources constant-cache fold).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 107  # the lake level +fetch_greatlakes_water_level; shoreline ladder +fetch_osm_coastline; ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water leave the arm-ON pool too; ADR 0317 +fetch_greatlakes_bathymetry; TELEMAC wave B +fetch_osm_breakwaters leaves the arm-ON pool too; ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity; ADR 0297 +fetch_groundwater_recharge; ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool; bathymetry seam +fetch_bluetopo
+    # Every promoted spec leaves the ambient pool under this arm EXCEPT the ones
+    # already outside it in the None baseline (tier="internal" absorptions). The
+    # number is the measured difference, and it moves only when a spec lands or
+    # leaves.
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 100
     # Still searchable + rankable so a search hit can gate-expand it.
     assert r["gridmet_in_index"] is True
     assert r["gridmet_ranked_top25"] is True
@@ -272,8 +265,7 @@ def test_arm3_specs_leave_pool_and_source_param():
     assert r["registry_size"] == _REGISTRY_SIZE
     assert r["gridmet_tier"] == "catalog"
     assert r["any_spec_in_declarable"] is False  # every spec leaves the ambient pool
-    # -70, not -71: fetch_copernicus_dem is tier="internal" (already out of the pool).
-    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 107  # the lake level +fetch_greatlakes_water_level; shoreline ladder +fetch_osm_coastline; ADR 0318 +fetch_nhdplus_hr_flowlines +fetch_nhd_area_water leave the arm-ON pool too; ADR 0317 +fetch_greatlakes_bathymetry; TELEMAC wave B +fetch_osm_breakwaters leaves the arm-ON pool too; ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity; ADR 0297 +fetch_groundwater_recharge; ADR 0112 +nwm_streamflow; ADR 0203 +aorc_precip +lter_records leave the arm-ON pool; bathymetry seam +fetch_bluetopo
+    assert r["declarable_size"] == _run_arm(None)["declarable_size"] - 100
     assert r["gridmet_in_index"] is True
     # fetch_from_catalog exposes the source branch under Arm 3 (like Arm 1).
     assert r["ffc_params"] == ["entry_id", "params", "source", "_extra_ignored"]

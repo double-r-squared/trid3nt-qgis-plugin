@@ -160,13 +160,13 @@ ANCHOR_PROMPTS: list[dict] = [
     {
         "id": "A2_existing_endpoint_chain",
         "prompt": (
-            "Show me protected areas in Big Cypress National Preserve, Florida. "
-            "Use fetch_wdpa_protected_areas. Don't ask follow-up questions, "
+            "Show me FEMA flood zones in Cape Coral, Florida. "
+            "Use fetch_fema_nfhl_zones. Don't ask follow-up questions, "
             "just dispatch the tools."
         ),
-        "expected_tool_first": ["geocode_location", "fetch_wdpa_protected_areas"],
+        "expected_tool_first": ["geocode_location", "fetch_fema_nfhl_zones"],
         "expected_chain_contains": [
-            "fetch_wdpa_protected_areas",
+            "fetch_fema_nfhl_zones",
         ],
         "routing_dimension": "named-existing-endpoint",
         "watchdog_seconds": 240,

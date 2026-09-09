@@ -1,8 +1,8 @@
 """F96 (NATE 2026-06-17): extend layer REUSE to fetch_* tools.
 
-PROBLEM (live, "South Florida protected areas" repeat): on a "resize the bbox to
-encompass all protected areas" follow-up the agent RE-FETCHED WDPA — already
-loaded — producing TWO identical choropleth layers. job-0333 added reuse only for
+PROBLEM (live, "South Florida buildings" repeat): on a "resize the bbox to
+encompass all the buildings" follow-up the agent RE-FETCHED the footprints —
+already loaded — producing TWO identical layers. job-0333 added reuse only for
 run_model_* (expensive SIMULATION) results; it did NOT cover fetch_* layers, so a
 fit / resize / re-show follow-up re-fetched a layer already on the map.
 
@@ -17,8 +17,8 @@ compute_layer_bounds) instead of re-fetching:
   3. ``find_reusable_fetched_layer`` returns an existing same-kind layer that
      covers the request (so the caller does NOT re-fetch), and refuses on a
      different kind / a genuinely larger area / a missing-AOI ambiguity.
-  4. The enriched ``build_layers_present_note`` tags an already-loaded WDPA layer
-     INPUT[wdpa] and carries the fetched-reuse / no-duplicate directive.
+  4. The enriched ``build_layers_present_note`` tags an already-loaded buildings
+     layer INPUT[buildings] and carries the fetched-reuse / no-duplicate directive.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from trid3nt_server.scenario_reuse import (
     find_reusable_fetched_layer,
 )
 
-# "South Florida"-ish AOI the WDPA layer was fetched at.
+# "South Florida"-ish AOI the buildings layer was fetched at.
 SOUTH_FL_BBOX = [-82.0, 25.0, -80.0, 27.0]
 # A tighter box that fits inside it (a "resize to encompass the features" follow-up).
 TIGHTER_BBOX = [-81.5, 25.5, -80.5, 26.5]
@@ -41,12 +41,12 @@ TIGHTER_BBOX = [-81.5, 25.5, -80.5, 26.5]
 LARGER_BBOX = [-84.0, 24.0, -79.0, 29.0]
 
 
-def _wdpa_layer(bbox=SOUTH_FL_BBOX, layer_id="wdpa--82.0000-25.0000"):
+def _buildings_layer(bbox=SOUTH_FL_BBOX, layer_id="buildings--82.0000-25.0000"):
     return {
         "layer_id": layer_id,
-        "name": "Protected Areas — WDPA",
+        "name": "Building Footprints — OSM",
         "layer_type": "vector",
-        "uri": "s3://grace2-cache/wdpa/south-fl.fgb",
+        "uri": "s3://grace2-cache/buildings/south-fl.fgb",
         "role": "context",
         "bbox": bbox,
     }
@@ -58,7 +58,7 @@ def _wdpa_layer(bbox=SOUTH_FL_BBOX, layer_id="wdpa--82.0000-25.0000"):
 
 
 def test_fetched_kind_for_tool_maps_fetchers() -> None:
-    assert fetched_kind_for_tool("fetch_wdpa_protected_areas") == "wdpa"
+    assert fetched_kind_for_tool("fetch_buildings") == "buildings"
     assert fetched_kind_for_tool("fetch_landcover") == "landcover"
     assert fetched_kind_for_tool("fetch_dem") == "dem"
     # Non-fetcher / unknown tools have no fetched kind.
@@ -67,7 +67,7 @@ def test_fetched_kind_for_tool_maps_fetchers() -> None:
 
 
 def test_fetched_layer_kind_classifies_fetched_layers() -> None:
-    assert fetched_layer_kind("wdpa--82.0-25.0", "Protected Areas — WDPA") == "wdpa"
+    assert fetched_layer_kind("buildings--82.0-25.0", "Building Footprints — OSM") == "buildings"
     assert fetched_layer_kind("nlcd-landcover-xyz", "NLCD Landcover") == "landcover"
     assert fetched_layer_kind("usgs-dem-123", "DEM") == "dem"
     assert fetched_layer_kind("admin-county-...", "Administrative Boundaries") == "admin"
@@ -100,52 +100,52 @@ def test_bbox_encloses_refuses_larger() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_refetch_of_loaded_wdpa_reuses_existing_layer() -> None:
-    # The headline case: WDPA is already loaded; a "resize the bbox to encompass
-    # all protected areas" follow-up (a fit, no bbox of its own) must REUSE the
-    # existing layer, NOT re-fetch.
+def test_refetch_of_loaded_buildings_reuses_existing_layer() -> None:
+    # The headline case: the buildings layer is already loaded; a "resize the
+    # bbox to encompass all the buildings" follow-up (a fit, no bbox of its own)
+    # must REUSE the existing layer, NOT re-fetch.
     match = find_reusable_fetched_layer(
-        "fetch_wdpa_protected_areas",
+        "fetch_buildings",
         {},  # fit/resize follow-up carries no bbox — targets the loaded layer
-        [_wdpa_layer()],
+        [_buildings_layer()],
         case_bbox=SOUTH_FL_BBOX,
     )
     assert isinstance(match, FetchedLayerMatch)
-    assert match.kind == "wdpa"
-    assert match.layer_id == "wdpa--82.0000-25.0000"
-    assert match.uri == "s3://grace2-cache/wdpa/south-fl.fgb"
+    assert match.kind == "buildings"
+    assert match.layer_id == "buildings--82.0000-25.0000"
+    assert match.uri == "s3://grace2-cache/buildings/south-fl.fgb"
 
 
 def test_refetch_with_tighter_bbox_reuses_existing_layer() -> None:
     # An explicit tighter bbox (resize to a sub-window of the loaded extent) is
     # still answered by the existing layer.
     match = find_reusable_fetched_layer(
-        "fetch_wdpa_protected_areas",
+        "fetch_buildings",
         {"bbox": TIGHTER_BBOX},
-        [_wdpa_layer()],
+        [_buildings_layer()],
     )
     assert match is not None
-    assert match.layer_id == "wdpa--82.0000-25.0000"
+    assert match.layer_id == "buildings--82.0000-25.0000"
 
 
 def test_refetch_with_larger_bbox_does_not_reuse() -> None:
     # A genuinely larger area pokes outside the loaded extent → real new data →
     # re-fetch (no match).
     match = find_reusable_fetched_layer(
-        "fetch_wdpa_protected_areas",
+        "fetch_buildings",
         {"bbox": LARGER_BBOX},
-        [_wdpa_layer()],
+        [_buildings_layer()],
     )
     assert match is None
 
 
 def test_refetch_of_different_kind_does_not_reuse() -> None:
-    # A WDPA layer is loaded but the user fetches LANDCOVER — different kind, no
-    # reuse.
+    # A buildings layer is loaded but the user fetches LANDCOVER — different
+    # kind, no reuse.
     match = find_reusable_fetched_layer(
         "fetch_landcover",
         {"bbox": SOUTH_FL_BBOX},
-        [_wdpa_layer()],
+        [_buildings_layer()],
     )
     assert match is None
 
@@ -153,7 +153,7 @@ def test_refetch_of_different_kind_does_not_reuse() -> None:
 def test_no_loaded_layer_does_not_reuse() -> None:
     assert (
         find_reusable_fetched_layer(
-            "fetch_wdpa_protected_areas", {"bbox": SOUTH_FL_BBOX}, []
+            "fetch_buildings", {"bbox": SOUTH_FL_BBOX}, []
         )
         is None
     )
@@ -164,7 +164,7 @@ def test_no_aoi_resolvable_does_not_reuse() -> None:
     # conservative re-fetch (no match).
     assert (
         find_reusable_fetched_layer(
-            "fetch_wdpa_protected_areas", {}, [_wdpa_layer()]
+            "fetch_buildings", {}, [_buildings_layer()]
         )
         is None
     )
@@ -177,7 +177,7 @@ def test_non_fetcher_tool_does_not_reuse() -> None:
         find_reusable_fetched_layer(
             "sfincs_flood",
             {"bbox": SOUTH_FL_BBOX},
-            [_wdpa_layer()],
+            [_buildings_layer()],
         )
         is None
     )
@@ -186,20 +186,20 @@ def test_non_fetcher_tool_does_not_reuse() -> None:
 def test_loaded_layer_without_bbox_reuses_on_case_aoi() -> None:
     # A persisted summary may carry no bbox; a same-kind layer in this Case
     # answers a fit/resize to the Case AOI.
-    no_bbox = _wdpa_layer()
+    no_bbox = _buildings_layer()
     no_bbox.pop("bbox")
     match = find_reusable_fetched_layer(
-        "fetch_wdpa_protected_areas",
+        "fetch_buildings",
         {"bbox": SOUTH_FL_BBOX},
         [no_bbox],
         case_bbox=SOUTH_FL_BBOX,
     )
     assert match is not None
-    assert match.layer_id == "wdpa--82.0000-25.0000"
+    assert match.layer_id == "buildings--82.0000-25.0000"
     # ...but not when the request bbox differs from the Case AOI.
     assert (
         find_reusable_fetched_layer(
-            "fetch_wdpa_protected_areas",
+            "fetch_buildings",
             {"bbox": LARGER_BBOX},
             [no_bbox],
             case_bbox=SOUTH_FL_BBOX,
@@ -218,13 +218,13 @@ def test_bbox_equivalent_still_works_for_fetch_paths() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_layers_present_note_tags_fetched_wdpa_as_reusable_input_kind() -> None:
-    note = build_layers_present_note([_wdpa_layer()], case_bbox=SOUTH_FL_BBOX)
+def test_layers_present_note_tags_fetched_buildings_as_reusable_input_kind() -> None:
+    note = build_layers_present_note([_buildings_layer()], case_bbox=SOUTH_FL_BBOX)
     assert note is not None
-    # The WDPA layer is tagged INPUT[wdpa] (a recognized reusable fetched kind)...
-    assert "INPUT[wdpa]" in note
+    # The buildings layer is tagged INPUT[buildings] (a recognized reusable kind)...
+    assert "INPUT[buildings]" in note
     # ...its reusable handle is surfaced...
-    assert "handle=wdpa--82.0000-25.0000" in note
+    assert "handle=buildings--82.0000-25.0000" in note
     # ...and the note carries the fetched-reuse / no-duplicate directive so a
     # fit/resize follow-up reuses it instead of re-fetching.
     assert "compute_layer_bounds" in note

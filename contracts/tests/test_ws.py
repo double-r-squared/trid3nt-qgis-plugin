@@ -851,19 +851,19 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
         ),
         # — §F.3 per-Case secrets envelopes (OQ-0100-WS-REGISTRY-WIRING)
         "secret-add": lambda: ws.SecretAddEnvelopePayload(
-            provider="ebird", case_id=new_ulid(), key_value="x"
+            provider="firms", case_id=new_ulid(), key_value="x"
         ),
         "secret-revoke": lambda: ws.SecretRevokeEnvelopePayload(secret_id=new_ulid()),
         "secrets-list": lambda: ws.SecretsListEnvelopePayload(),
         # §F.3 amendment — just-in-time credential-request flow
         "credential-request": lambda: ws.CredentialRequestEnvelopePayload(
             request_id=new_ulid(),
-            provider_id="ebird",
-            provider_label="eBird",
-            signup_url="https://ebird.org/api/keygen",
-            secret_key_name="EBIRD_API_KEY",
-            message="I need an eBird API key to fetch observations for this Case.",
-            tool_name="fetch_ebird_observations",
+            provider_id="firms",
+            provider_label="NASA FIRMS",
+            signup_url="https://firms.modaps.eosdis.nasa.gov/api/map_key/",
+            secret_key_name="FIRMS_MAP_KEY",
+            message="I need a FIRMS MAP_KEY to fetch active-fire detections for this Case.",
+            tool_name="fetch_firms_active_fire",
         ),
         "credential-provided": lambda: ws.CredentialProvidedEnvelopePayload(
             request_id=new_ulid(), secret_id=new_ulid()

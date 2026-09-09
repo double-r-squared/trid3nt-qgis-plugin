@@ -21,7 +21,7 @@ body-code extraction onto ``classify_response`` (item 4) while keeping its own
 status-first branching and typed-exception return shape untouched.
 
 Importable by BOTH the router executors (``executors/vector_fgb.py``) and
-bespoke fetchers (``fetch_wdpa_protected_areas``, ``fetch_usace_dams``, ...) --
+bespoke fetchers (``fetch_fema_nfhl_zones``, ``fetch_usace_dams``, ...) --
 callers keep composing their OWN exception text/type from a ``ShapeVerdict``;
 this module never raises and never picks an exception class, so a migration
 onto it changes WHERE the shape logic lives, not what a caller does with it

@@ -5,9 +5,9 @@ mocked Gemini that emits a sequence of ``function_call`` chunks followed by a
 final narrative.  Prints the verbatim send-transcript to stdout so the audit
 can compare against the kickoff acceptance:
 
-    "Show me protected areas in Fort Myers"
+    "Show me flood zones in Fort Myers"
       → Gemini calls geocode_location → gets bbox
-      → Gemini calls fetch_wdpa_protected_areas with the bbox
+      → Gemini calls fetch_fema_nfhl_zones with the bbox
       → Gemini narrates the result and the loop terminates.
 
 NOT a unit test — this is the live, end-to-end transcript evidence the
@@ -66,7 +66,7 @@ async def run() -> None:
     print("JOB-0169 LIVE EVIDENCE — multi-turn function_call → function_response")
     print("=" * 70)
     print()
-    print('User: "Show me protected areas in Fort Myers"')
+    print('User: "Show me flood zones in Fort Myers"')
     print()
 
     # Three pre-canned Gemini turns mirroring the kickoff scenario.
@@ -74,13 +74,13 @@ async def run() -> None:
         "geocode_location", {"query": "Fort Myers, FL"}, "call-geo-1"
     )
     turn2 = _make_chunk_with_function_call(
-        "fetch_wdpa_protected_areas",
+        "fetch_fema_nfhl_zones",
         {"bbox": [-82.0, 26.5, -81.7, 26.8]},
-        "call-wdpa-1",
+        "call-nfhl-1",
     )
     turn3 = _make_chunk_with_text(
-        "Found 2 protected areas inside the Fort Myers bbox (J.N. \"Ding\" "
-        "Darling NWR + Estero Bay Aquatic Preserve). Layer is now on the map."
+        "Found 2 flood zones inside the Fort Myers bbox (AE and VE, "
+        "the 1% and coastal-velocity zones). Layer is now on the map."
     )
 
     # Scripted-provider harness: pins MODEL_PROVIDER=scripted so the REAL
@@ -92,7 +92,7 @@ async def run() -> None:
     sa.reset_harness()
     sa.install_harness([turn1, turn2, turn3])
 
-    # Stub tool dispatch so we don't need GCS / Nominatim / WDPA live.
+    # Stub tool dispatch so we don't need GCS / Nominatim / NFHL live.
     dispatch_log: list[tuple[str, dict]] = []
 
     async def _fake_invoke(_ws, _state, name, args):
@@ -103,10 +103,10 @@ async def run() -> None:
                 "bbox": [-82.0, 26.5, -81.7, 26.8],
                 "precision_class": "precise",
             }
-        if name == "fetch_wdpa_protected_areas":
+        if name == "fetch_fema_nfhl_zones":
             return {
-                "layer_id": "wdpa-fort-myers",
-                "wms_url": "https://qgis.example.com/wms?LAYERS=wdpa-fort-myers",
+                "layer_id": "nfhl-fort-myers",
+                "wms_url": "https://qgis.example.com/wms?LAYERS=nfhl-fort-myers",
                 "feature_count": 2,
                 "metrics": {"total_area_km2": 87.4},
             }
@@ -127,7 +127,7 @@ async def run() -> None:
             sock,
             state,
             settings,
-            "Show me protected areas in Fort Myers",
+            "Show me flood zones in Fort Myers",
             "research",
         )
 
@@ -208,13 +208,13 @@ async def run() -> None:
     print("=" * 70)
     assert [n for (n, _) in dispatch_log] == [
         "geocode_location",
-        "fetch_wdpa_protected_areas",
+        "fetch_fema_nfhl_zones",
     ], dispatch_log
-    print("  [PASS] geocode_location → fetch_wdpa_protected_areas dispatched in order")
+    print("  [PASS] geocode_location → fetch_fema_nfhl_zones dispatched in order")
 
     # Second tool got the bbox from the first tool's response.
     assert dispatch_log[1][1].get("bbox") == [-82.0, 26.5, -81.7, 26.8]
-    print("  [PASS] fetch_wdpa received bbox synthesized from geocode response")
+    print("  [PASS] fetch_fema_nfhl_zones received bbox synthesized from geocode response")
 
     # Turn 2 contents contain the function_response for turn 1.
     turn2_kinds = [k for (_role, k, _n, _p) in contents_log[1]]
@@ -224,13 +224,13 @@ async def run() -> None:
 
     # Turn 3 contents contain BOTH (call,response) pairs.
     turn3_calls = [n for (_role, k, n, _p) in contents_log[2] if k == "function_call"]
-    assert turn3_calls == ["geocode_location", "fetch_wdpa_protected_areas"]
+    assert turn3_calls == ["geocode_location", "fetch_fema_nfhl_zones"]
     print("  [PASS] turn-3 contents include both call+response pairs in order")
 
     # Terminal narrative reached the client.
     chunks = [json.loads(m) for m in sock.sent if "agent-message-chunk" in m]
     text_seen = "".join(c["payload"]["delta"] for c in chunks if c["payload"].get("delta"))
-    assert "protected areas" in text_seen.lower()
+    assert "flood zones" in text_seen.lower()
     print(f"  [PASS] narrative delivered to client: {text_seen!r}")
 
     # Loop terminated cleanly (pipeline-state complete).

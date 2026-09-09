@@ -99,7 +99,7 @@ class TestScenarioPublishedSignal:
         """A LayerURI from a NON-scenario tool (e.g. a fetcher) must NOT get the
         published signal - it falls through to the normal summary path."""
         layer = _published_flood_layer_uri("R")
-        summary = summarize_tool_result("fetch_wdpa_protected_areas", layer)
+        summary = summarize_tool_result("fetch_fema_nfhl_zones", layer)
         assert "published" not in summary
         assert "on_map" not in summary
 
@@ -213,16 +213,16 @@ class TestDedupByIdentity:
         emitter = PipelineEmitter(session_id=new_ulid(), sink=_Sink())
 
         first = LayerURI(
-            layer_id="wdpa-aaaaaaaaaaaaaaaaaaaaaaaaaa",
+            layer_id="nfhl-aaaaaaaaaaaaaaaaaaaaaaaaaa",
             name="Protected Areas",
             layer_type="raster",
-            uri="s3://trid3nt-cache/wdpa/1.tif",
+            uri="s3://trid3nt-cache/nfhl/1.tif",
         )
         second = LayerURI(
-            layer_id="wdpa-bbbbbbbbbbbbbbbbbbbbbbbbbb",
+            layer_id="nfhl-bbbbbbbbbbbbbbbbbbbbbbbbbb",
             name="Protected Areas",
             layer_type="raster",
-            uri="s3://trid3nt-cache/wdpa/2.tif",
+            uri="s3://trid3nt-cache/nfhl/2.tif",
         )
         await emitter.add_loaded_layer(first)
         await emitter.add_loaded_layer(second)

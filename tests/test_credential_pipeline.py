@@ -48,7 +48,7 @@ from trid3nt_server.tools import (
 # FirmsArgError/FirmsAuthError/FirmsMissingKeyError classes + the vault-first
 # ``_resolve_map_key`` / ``set_persistence_for_secrets`` machinery were removed (the
 # fold resolves the key in the firms_active_fire hook: kwarg -> str secret_ref -> env
-# -> a pre-network FIRMS_MISSING_KEY, the ebird/movebank precedent). The credential
+# -> a pre-network FIRMS_MISSING_KEY). The credential
 # pipeline consumes only the typed ``error_code`` (FIRMS_AUTH_ERROR / FIRMS_MISSING_KEY
 # / FIRMS_ARG_INVALID), so these lightweight stubs drive the classifier + server flow
 # byte-identically to the deleted twin's exceptions.
@@ -98,7 +98,7 @@ class MockWebSocket:
 # ``set_persistence_for_secrets`` binding + a ``demo`` literal fallback + a key_fp
 # cache fingerprint) folded into the ``firms_active_fire.build_request`` hook, which
 # resolves kwarg -> str secret_ref -> ``TRID3NT_FIRMS_MAP_KEY`` env -> a pre-network
-# FIRMS_MISSING_KEY (the ebird/movebank keyed-fold precedent; no Persistence binding,
+# FIRMS_MISSING_KEY (no Persistence binding,
 # no demo fallback, no key_fp). That hook resolution is covered offline by
 # test_router_firms.py; the removed twin-internal resolver tests are dropped here
 # rather than disabled (clean-as-you-go).
@@ -219,11 +219,8 @@ def test_registry_all_keyed_tools_have_providers():
     """Every keyed fetch tool routes to a registered provider."""
     for tool_name in (
         "fetch_firms_active_fire",
-        "fetch_ebird_observations",
         "fetch_era5_reanalysis",
         "fetch_gtsm_tide_surge",
-        "fetch_movebank_tracks",
-        "fetch_iucn_red_list_range",
     ):
         p = cr.provider_for_tool(tool_name)
         assert p is not None, f"{tool_name} must map to a provider"
@@ -258,10 +255,7 @@ def test_generic_classifier_matches_auth_error_suffix_for_any_tool():
         "fetch_gtsm_tide_surge", _ErrWithCode("nope", "GTSM_MISSING_KEY")
     )
     assert cr.is_credential_error(
-        "fetch_movebank_tracks", _ErrWithCode("nope", "MOVEBANK_AUTH_ERROR")
-    )
-    assert cr.is_credential_error(
-        "fetch_iucn_red_list_range", _ErrWithCode("nope", "IUCN_AUTH_ERROR")
+        "fetch_firms_active_fire", _ErrWithCode("nope", "FIRMS_MISSING_KEY")
     )
 
 
@@ -269,7 +263,7 @@ def test_generic_classifier_matches_code_substrings():
     """A code containing API_KEY / UNAUTHORIZED classifies even if it's not in
     the per-tool TOOL_AUTH_ERROR_CODES set."""
     assert cr.is_credential_error(
-        "fetch_ebird_observations", _ErrWithCode("x", "EBIRD_BAD_API_KEY")
+        "fetch_firms_active_fire", _ErrWithCode("x", "FIRMS_BAD_API_KEY")
     )
     assert cr.is_credential_error(
         "fetch_era5_reanalysis", _ErrWithCode("x", "ERA5_UNAUTHORIZED")
@@ -293,13 +287,13 @@ def test_generic_classifier_matches_message_text():
     """A body/message that reads like a missing-key signal classifies even with
     no error_code at all (the 'body that says you need an api key' case)."""
     assert cr.is_credential_error(
-        "fetch_movebank_tracks", RuntimeError("This endpoint requires an API key.")
+        "fetch_firms_active_fire", RuntimeError("This endpoint requires an API key.")
     )
     assert cr.is_credential_error(
-        "fetch_iucn_red_list_range", RuntimeError("401 Unauthorized")
+        "fetch_era5_reanalysis", RuntimeError("401 Unauthorized")
     )
     assert cr.is_credential_error(
-        "fetch_ebird_observations", RuntimeError("Invalid key supplied")
+        "fetch_gtsm_tide_surge", RuntimeError("Invalid key supplied")
     )
 
 
@@ -375,9 +369,9 @@ def test_classifier_config_missing_phrases_narrow_no_false_positive():
 def test_signup_url_none_provider_round_trips_end_to_end():
     """A registered provider with signup_url=None still builds a valid payload
     (the no-URL / out-of-band mode is fully supported end to end — NATE
-    principle 2). Movebank is the registered None-URL... actually it has a URL;
-    construct a None-URL provider over a real provider_id to prove the wire
-    path accepts signup_url=None."""
+    principle 2). Every registered provider carries a signup URL, so construct
+    a None-URL provider over a real provider_id to prove the wire path accepts
+    signup_url=None."""
     none_url_provider = cr.CredentialProvider(
         provider_id="ecmwf_cds",  # a real ProviderID Literal member
         label="Copernicus CDS (out-of-band)",
@@ -426,8 +420,8 @@ def test_derive_generic_credential_name_humanizes_tool():
     assert cr.derive_generic_credential_name("fetch_usgs_water_gauges") == (
         "USGS Water Gauges API key"
     )
-    assert cr.derive_generic_credential_name("get_gbif_occurrences") == (
-        "GBIF Occurrences API key"
+    assert cr.derive_generic_credential_name("get_nwis_gauges") == (
+        "NWIS Gauges API key"
     )
     assert cr.derive_generic_credential_name("fetch_noaa_tides") == (
         "NOAA Tides API key"

@@ -57,8 +57,8 @@ docstring: "USFWS National Wetlands Inventory (NWI) wetland polygons as a vector
   \ WETLANDS. Fetch\n  both when the user wants \"all water + wetland habitat\".\n- ``fetch_jrc_global_surface_water``\
   \ -- that is a global surface-water RASTER\n  (occurrence %), not classified wetland polygons.\n- ``digitize_water_body``\
   \ -- that CV-vectorizes one water body from imagery;\n  NWI is the pre-mapped national inventory.\n\
-  Do NOT use for: FEMA regulatory flood zones (``fetch_fema_nfhl_zones``),\nprotected-area boundaries\
-  \ (``fetch_wdpa_protected_areas``), or soil types\n(``fetch_soilgrids`` / ``fetch_statsgo_soils``).\n\
+  Do NOT use for: FEMA regulatory flood zones (``fetch_fema_nfhl_zones``),\nadministrative boundaries\
+  \ (``fetch_administrative_boundaries``), or soil types\n(``fetch_soilgrids`` / ``fetch_statsgo_soils``).\n\
   \nParameters:\n    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. REQUIRED -- NWI does\
   \ not support a global query (national-scale polygon corpus).\n        Recommended <= ~1 deg on a side;\
   \ larger envelopes risk the\n        100k-feature pagination ceiling. Example (Naples, FL):\n      \

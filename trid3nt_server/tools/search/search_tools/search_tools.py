@@ -13,7 +13,7 @@ space without forcing the LLM to scan all 70+ atomic tools.
 Implementation choices (stage 2):
 - **BM25** via `rank_bm25.BM25Okapi`. Whitespace + lowercase tokenization;
   no stemming (the corpus and queries are English natural language + a few
-  domain terms that don't stem well -- "USGS", "WDPA", "NWS", etc).
+  domain terms that don't stem well -- "USGS", "NFHL", "NWS", etc).
 - **Dense retrieval** is opportunistic:
     1. If `sentence-transformers` is importable, encode with the
        `all-MiniLM-L6-v2` checkpoint (384-dim).
@@ -976,7 +976,7 @@ def _reciprocal_rank_fusion(
 # lexical #1 beneath general tools that merely rank mid on BOTH channels.
 # Observed BM25=1 targets drowned to fused rank 4-9: run_sfincs "model
 # flooding" (dense 19), fetch_dem "elevation Grand Canyon" (dense 8),
-# fetch_wdpa_protected_areas "show me national parks" (dense 25), run_modflow
+# fetch_fema_nfhl_zones "show me flood zones" (dense 25), run_modflow
 # "dewater this open pit mine" (dense 23).
 #
 # The engine-name DOORS are hit hardest: run_sfincs never earns a name-channel
@@ -1056,9 +1056,9 @@ def _match_synthetic_queries(
 
 #: Generic operator/shape tokens that appear in many utility tool names but
 #: that the LLM uses descriptively in queries. Skipped by the name-substring
-#: ranker so e.g. "national parks polygons" doesn't over-boost
+#: ranker so e.g. "flood zone polygons" doesn't over-boost
 #: ``clip_raster_to_polygon`` over the
-#: data-intent target ``fetch_wdpa_protected_areas``.
+#: data-intent target ``fetch_fema_nfhl_zones``.
 _NAME_RANKER_GENERICS: set[str] = {
     "polygon",
     "polygons",

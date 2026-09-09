@@ -219,17 +219,17 @@ async def test_error_fields_populated() -> None:
     try:
         await _emit(
             path,
-            tool_name="fetch_wdpa_protected_areas",
+            tool_name="fetch_fema_nfhl_zones",
             success=False,
             latency_ms=1234.5,
-            error_code="WDPAERROR",
+            error_code="NFHLERROR",
             retry_attempt=1,
         )
         records = _read_jsonl(path)
         assert len(records) == 1
         r = records[0]
         assert r["success"] is False
-        assert r["error_code"] == "WDPAERROR"
+        assert r["error_code"] == "NFHLERROR"
         assert r["retry_attempt"] == 1
         assert r["latency_ms"] == pytest.approx(1234.5, rel=1e-3)
     finally:

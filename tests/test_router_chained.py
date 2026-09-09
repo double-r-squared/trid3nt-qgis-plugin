@@ -68,12 +68,11 @@ def _err(name: str, raw: dict, url_map):
 
 
 # --------------------------------------------------------------------------- #
-# All four specs load + register their hooks.
+# Every spec loads + registers its hooks.
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize("name", [
-    "fetch_gbif_occurrences", "fetch_inaturalist_observations",
     "fetch_nws_alerts_conus", "fetch_nws_river_forecast",
 ])
 def test_spec_loads_and_hooks_resolve(name):
@@ -119,111 +118,6 @@ def test_fetch_detail_set_dedup_cap_besteffort():
     assert res["boom"].error is not None                # honest error, kept
     assert res["c"].error == "detail-fetch cap reached"  # capped, not silent-dropped
     assert set(res) == {"a", "boom", "b", "c"}
-
-
-# --------------------------------------------------------------------------- #
-# GBIF: resolve gate + offset paging + bbox-clip.
-# --------------------------------------------------------------------------- #
-
-def _gbif_page(results, end):
-    return {"results": results, "endOfRecords": end}
-
-def _occ(lon, lat, gid=1):
-    return {"decimalLongitude": lon, "decimalLatitude": lat, "gbifID": gid,
-            "species": "Puma concolor", "eventDate": "2020", "basisOfRecord": "HUMAN_OBSERVATION"}
-
-
-def test_gbif_taxonkey_fastpath_bbox_clip():
-    gdf = _run("fetch_gbif_occurrences",
-               {"species_key": "212", "bbox": [-82.0, 26.0, -81.0, 27.0], "max_records": 300},
-               {"occurrence/search": _gbif_page([_occ(-81.5, 26.5, 1), _occ(-90.0, 26.5, 2)], True)})
-    assert len(gdf) == 1  # the out-of-bbox point is clipped
-    assert set(gdf.columns) >= {"gbifID", "species", "eventDate", "coordinateUncertaintyInMeters", "basisOfRecord"}
-
-
-def test_gbif_name_resolve_exact_then_search():
-    gdf = _run("fetch_gbif_occurrences",
-               {"species_key": "Puma concolor", "bbox": [-82.0, 26.0, -81.0, 27.0], "max_records": 300},
-               {"species/match": {"usageKey": 2435099, "matchType": "EXACT", "scientificName": "Puma concolor"},
-                "occurrence/search": _gbif_page([_occ(-81.5, 26.5)], True)})
-    assert len(gdf) == 1
-
-
-def test_gbif_fuzzy_match_rejected():
-    e = _err("fetch_gbif_occurrences",
-             {"species_key": "Puma concoler", "bbox": [-82.0, 26.0, -81.0, 27.0]},
-             {"species/match": {"usageKey": 2435099, "matchType": "FUZZY", "confidence": 95,
-                                "scientificName": "Puma concolor", "rank": "SPECIES"}})
-    assert isinstance(e, RouterInputError) and e.error_code == "GBIF_INPUT_ERROR"
-
-
-def test_gbif_unknown_name_rejected():
-    e = _err("fetch_gbif_occurrences",
-             {"species_key": "Zxqwv notaname", "bbox": [-82.0, 26.0, -81.0, 27.0]},
-             {"species/match": {"matchType": "NONE"}})
-    assert isinstance(e, RouterInputError) and e.error_code == "GBIF_INPUT_ERROR"
-
-
-def test_gbif_offset_paging_walks_to_endofrecords():
-    # page 1 full (300) not endOfRecords -> page 2 fetched; page 2 endOfRecords -> stop.
-    p1 = _gbif_page([_occ(-81.5, 26.5, i) for i in range(300)], False)
-    p2 = _gbif_page([_occ(-81.6, 26.6, 999)], True)
-    spec = _spec("fetch_gbif_occurrences")
-    seen = []
-
-    def fake_get(_spec, plan):
-        off = plan.params.get("offset")
-        seen.append(off)
-        return json.dumps(p1 if off == 0 else p2).encode()
-
-    orig = C._get
-    C._get = fake_get
-    try:
-        params = R.validate_params(spec, {"species_key": "212", "bbox": [-82.0, 26.0, -81.0, 27.0], "max_records": 5000})
-        C.execute(spec, params)
-    finally:
-        C._get = orig
-    assert seen == [0, 300]  # exactly two pages, then endOfRecords stops
-
-
-def test_gbif_empty_header_only():
-    gdf = _run("fetch_gbif_occurrences",
-               {"species_key": "212", "bbox": [-82.0, 26.0, -81.0, 27.0]},
-               {"occurrence/search": _gbif_page([], True)})
-    assert len(gdf) == 0
-    assert set(gdf.columns) >= {"gbifID", "species", "basisOfRecord"}
-
-
-# --------------------------------------------------------------------------- #
-# iNat: resolve + page-number paging + extraction.
-# --------------------------------------------------------------------------- #
-
-def _inat_obs(lon, lat, oid=1):
-    return {"geojson": {"coordinates": [lon, lat]}, "id": oid, "observed_on": "2021-01-01",
-            "user": {"login": "obs"}, "photos": [{"url": "u"}], "species_guess": "gator", "place_guess": "FL"}
-
-
-def test_inat_digit_id_fastpath():
-    gdf = _run("fetch_inaturalist_observations",
-               {"taxon_id": "43584", "bbox": [-82.0, 26.0, -81.0, 27.0], "max_records": 200},
-               {"observations": {"results": [_inat_obs(-81.5, 26.5)], "total_results": 1}})
-    assert len(gdf) == 1
-    assert set(gdf.columns) >= {"id", "observed_on", "user_login", "photo_url", "species_guess", "place_guess"}
-
-
-def test_inat_name_resolve_then_fetch():
-    gdf = _run("fetch_inaturalist_observations",
-               {"taxon_id": "American alligator", "bbox": [-82.0, 26.0, -81.0, 27.0], "max_records": 200},
-               {"/taxa": {"results": [{"id": 26039}]},
-                "observations": {"results": [_inat_obs(-81.5, 26.5)], "total_results": 1}})
-    assert len(gdf) == 1
-
-
-def test_inat_unknown_name_input_invalid():
-    e = _err("fetch_inaturalist_observations",
-             {"taxon_id": "Zxqwv", "bbox": [-82.0, 26.0, -81.0, 27.0]},
-             {"/taxa": {"results": []}})
-    assert isinstance(e, RouterInputError) and e.error_code == "INAT_INPUT_INVALID"
 
 
 # --------------------------------------------------------------------------- #

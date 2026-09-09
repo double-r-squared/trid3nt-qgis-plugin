@@ -1,7 +1,7 @@
-"""Shared Microsoft Planetary Computer STAC helpers (conservation reference scenario).
+"""Shared Microsoft Planetary Computer STAC helpers.
 
-The conservation tool set (``compute_ndvi`` / ``fetch_naip`` / ``fetch_mobi``)
-all read Cloud-Optimized GeoTIFF assets from the Microsoft Planetary Computer
+The PC readers (``compute_ndvi`` / ``fetch_naip``)
+read Cloud-Optimized GeoTIFF assets from the Microsoft Planetary Computer
 (PC) STAC catalog. PC assets live in Azure Blob storage behind short-lived SAS
 tokens; an unsigned ``/vsicurl/`` read of a raw blob href 404s. The official
 ``planetary-computer`` SDK signs assets, but it is NOT installed in the agent

@@ -16,11 +16,9 @@ the server needs, per provider:
 This module is the single per-provider map. It is intentionally tiny and
 data-only: each entry is one ``CredentialProvider`` dataclass, keyed by the
 ``ProviderID`` value. ALL keyed atomic-tool data sources are members:
-FIRMS (``fetch_firms_active_fire``), eBird (``fetch_ebird_observations``),
-Copernicus CDS -- ERA5 + GTSM share one CDS key
-(``fetch_era5_reanalysis`` / ``fetch_gtsm_tide_surge``), Movebank
-(``fetch_movebank_tracks``), and the IUCN Red List
-(``fetch_iucn_red_list_range``). A provider joins by adding one row here plus
+FIRMS (``fetch_firms_active_fire``) and Copernicus CDS -- ERA5 + GTSM share one
+CDS key (``fetch_era5_reanalysis`` / ``fetch_gtsm_tide_surge``).
+A provider joins by adding one row here plus
 its tool-name → provider mapping in ``TOOL_PROVIDER`` and its auth/missing error
 codes in ``TOOL_AUTH_ERROR_CODES``; ``credentials.resolver`` then resolves its
 value (session cache -> env) at dispatch time.
@@ -128,16 +126,6 @@ CREDENTIAL_PROVIDERS: dict[str, CredentialProvider] = {
             "Add your FIRMS MAP_KEY and I'll retry the fetch."
         ),
     ),
-    "ebird": CredentialProvider(
-        provider_id="ebird",
-        label="eBird",
-        signup_url="https://ebird.org/api/keygen",
-        secret_key_name="EBIRD_API_KEY",
-        default_message=(
-            "eBird needs a free API key to fetch observation records. "
-            "Add your eBird API key and I'll retry the fetch."
-        ),
-    ),
     # Copernicus CDS -- ONE key (TRID3NT_COPERNICUS_CDS_API_KEY) serves BOTH the
     # ERA5 reanalysis tool and the GTSM tide/surge tool. They share this single
     # ``ecmwf_cds`` provider scope so a CDS key saved for either tool resolves
@@ -152,27 +140,6 @@ CREDENTIAL_PROVIDERS: dict[str, CredentialProvider] = {
             "key. Add your CDS key and I'll retry the fetch."
         ),
     ),
-    "movebank": CredentialProvider(
-        provider_id="movebank",
-        label="Movebank",
-        signup_url="https://www.movebank.org/cms/movebank-login",
-        secret_key_name="MOVEBANK_CREDENTIALS",
-        default_message=(
-            "Movebank needs your account credentials to fetch animal-tracking "
-            "data. Add your Movebank login (as a JSON object with 'username' "
-            "and 'password') and I'll retry the fetch."
-        ),
-    ),
-    "iucn_red_list": CredentialProvider(
-        provider_id="iucn_red_list",
-        label="IUCN Red List",
-        signup_url="https://api.iucnredlist.org/users/sign_up",
-        secret_key_name="TRID3NT_IUCN_RED_LIST_API_KEY",
-        default_message=(
-            "The IUCN Red List API needs a free access token. "
-            "Add your IUCN Red List token and I'll retry the fetch."
-        ),
-    ),
 }
 
 
@@ -183,11 +150,8 @@ CREDENTIAL_PROVIDERS: dict[str, CredentialProvider] = {
 
 TOOL_PROVIDER: dict[str, str] = {
     "fetch_firms_active_fire": "firms",
-    "fetch_ebird_observations": "ebird",
     "fetch_era5_reanalysis": "ecmwf_cds",
     "fetch_gtsm_tide_surge": "ecmwf_cds",
-    "fetch_movebank_tracks": "movebank",
-    "fetch_iucn_red_list_range": "iucn_red_list",
 }
 
 
@@ -206,20 +170,11 @@ TOOL_AUTH_ERROR_CODES: dict[str, frozenset[str]] = {
     "fetch_firms_active_fire": frozenset(
         {"FIRMS_AUTH_ERROR", "FIRMS_MISSING_KEY"}
     ),
-    "fetch_ebird_observations": frozenset(
-        {"EBIRD_AUTH_ERROR", "EBIRD_MISSING_KEY"}
-    ),
     "fetch_era5_reanalysis": frozenset(
         {"ERA5_AUTH_ERROR", "ERA5_MISSING_KEY"}
     ),
     "fetch_gtsm_tide_surge": frozenset(
         {"GTSM_AUTH_ERROR", "GTSM_MISSING_KEY"}
-    ),
-    "fetch_movebank_tracks": frozenset(
-        {"MOVEBANK_AUTH_ERROR"}
-    ),
-    "fetch_iucn_red_list_range": frozenset(
-        {"IUCN_AUTH_ERROR"}
     ),
 }
 

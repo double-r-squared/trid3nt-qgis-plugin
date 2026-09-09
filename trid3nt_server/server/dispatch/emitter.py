@@ -250,14 +250,13 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_goes_archive_animation",
         "fetch_goes_active_fire",
         "fetch_gtsm_tide_surge",
-        # conservation reference scenario: PC STAC raster fetchers that do
-        # multi-second sync work (SAS sign + windowed /vsicurl warp-read +
-        # COG-write). Bodies are emit-free (the surrounding emit_tool_call
-        # wrapper does the emit), so off-load so they never stall the WS
-        # heartbeat (feedback_no_sync_blocking_on_asyncio_loop).
+        # Planetary-Computer STAC raster readers that do multi-second sync work
+        # (SAS sign + windowed /vsicurl warp-read + COG-write). Bodies are
+        # emit-free (the surrounding emit_tool_call wrapper does the emit), so
+        # off-load so they never stall the WS heartbeat
+        # (feedback_no_sync_blocking_on_asyncio_loop).
         "compute_ndvi",
         "fetch_naip",
-        "fetch_mobi",
         # fetch_glm_lightning (GOES GLM optical-lightning): heavy SYNC fetcher
         # now LIVE on the box (multi-granule netCDF download + per-granule
         # in-AOI group filter + raster/COG write). Emit-free body (the
@@ -811,7 +810,7 @@ async def _invoke_tool_via_emitter(
 
     # job VAULT-READ: thread the user's per-Case ``secret_ref`` into a keyed
     # tool so its ``_resolve_*_key`` reads the VAULT key first (then env). This
-    # mirrors the eBird secret_ref convention. No-op for non-keyed tools and
+    # mirrors the FIRMS secret_ref convention. No-op for non-keyed tools and
     # when no active secret exists (the tool falls back to env / typed
     # auth-error, which the credential-request flow below acts on).
     params = await _inject_secret_ref(state, tool_name, params, turn_case_id)
@@ -844,8 +843,8 @@ async def _invoke_tool_via_emitter(
     _card_io_error: bool = False
 
     # F97: mint a UNIQUE layer_id for every FRESHLY-fetched layer so two
-    # layers from the SAME source (e.g. two `fetch_wdpa_protected_areas`
-    # calls for the same bbox -> identical source-derived `wdpa-<lon>-<lat>`
+    # layers from the SAME source (e.g. two `fetch_fema_nfhl_zones`
+    # calls for the same bbox -> identical source-derived `nfhl-<lon>-<lat>`
     # id) never collide. A collision made Map.tsx (which keys MapLibre
     # sources by layer_id) skip the second add AND, on delete-by-id, tear
     # down the shared source so BOTH layers vanished. We replace the tool's

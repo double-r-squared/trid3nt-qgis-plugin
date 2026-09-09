@@ -7,7 +7,7 @@ Coverage:
 2. Top-3 routing fidelity for the kickoff's five canonical queries:
    - "weather alerts" → ``fetch_nws_alerts_conus``
    - "show flood zones" → ``fetch_fema_nfhl_zones``
-   - "national parks polygons" → ``fetch_wdpa_protected_areas``
+   - "national wetlands inventory polygons" → ``fetch_nwi_wetlands``
    - "elevation Grand Canyon" → ``fetch_dem``
    - "model flooding" → ``run_sfincs``
 3. ``top_k`` is honored (returns at most ``top_k`` results).
@@ -104,7 +104,7 @@ def _run_top_k(query: str, k: int = 5) -> list[str]:
     [
         ("weather alerts", "fetch_nws_alerts_conus"),
         ("show flood zones", "fetch_fema_nfhl_zones"),
-        ("national parks polygons", "fetch_wdpa_protected_areas"),
+        ("national wetlands inventory polygons", "fetch_nwi_wetlands"),
         ("elevation Grand Canyon", "fetch_dem"),
         # Door dissolution (ADR 0094): a template is an ordinary retrieval-pool
         # member. A bare "model flooding" is genuinely ambiguous across the
@@ -309,10 +309,10 @@ def test_result_shape_is_complete():
 def test_matched_queries_populated_for_corpus_hit():
     """A query that lexically overlaps a synthetic-corpus entry surfaces it
     via ``matched_queries`` (diagnostic for the LLM)."""
-    out = asyncio.run(search_tools("show me national parks", top_k=3))
-    wdpa = [r for r in out["results"] if r["tool_name"] == "fetch_wdpa_protected_areas"]
-    assert wdpa, "expected fetch_wdpa_protected_areas in top results"
-    matched = wdpa[0]["matched_queries"]
+    out = asyncio.run(search_tools("show me wetlands", top_k=3))
+    nwi = [r for r in out["results"] if r["tool_name"] == "fetch_nwi_wetlands"]
+    assert nwi, "expected fetch_nwi_wetlands in top results"
+    matched = nwi[0]["matched_queries"]
     assert isinstance(matched, list) and len(matched) > 0
 
 

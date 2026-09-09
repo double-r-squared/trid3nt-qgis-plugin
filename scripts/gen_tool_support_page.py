@@ -49,17 +49,9 @@ KEY_EARMARKS = {
         "`TRID3NT_AIRNOW_API_KEY`",
         "free key from docs.airnowapi.org; also accepted per-call as `api_key`/`secret_ref`",
     ),
-    "fetch_ebird_observations": (
-        "`TRID3NT_EBIRD_API_KEY`",
-        "free key from ebird.org/api/keygen",
-    ),
     "fetch_era5_reanalysis": (
         "`TRID3NT_COPERNICUS_CDS_API_KEY`",
         "Copernicus CDS credentials (a `~/.cdsapirc` file also works via cdsapi)",
-    ),
-    "fetch_iucn_red_list_range": (
-        "`TRID3NT_IUCN_RED_LIST_API_KEY`",
-        "IUCN Red List API token (apiv3.iucnredlist.org)",
     ),
     "fetch_openaq_measurements": (
         "`TRID3NT_OPENAQ_API_KEY`",

@@ -330,8 +330,9 @@ _FETCHES: list[dict] = []
 
 @pytest.fixture()
 def _stub_fetch_tool():
-    """Shadow fetch_wdpa_protected_areas (fetch-class, not confirm-gated)."""
-    name = "fetch_wdpa_protected_areas"
+    """Shadow fetch_buildings (fetch-class, not confirm-gated, and a
+    recognized F96 fetched KIND so the dedupe has something to key on)."""
+    name = "fetch_buildings"
     original = agent_tools.TOOL_REGISTRY.get(name)
     _FETCHES.clear()
     reset_scenario_indexes_for_tests()
@@ -342,10 +343,10 @@ def _stub_fetch_tool():
         # Raster-shaped so the emitter keeps the layer without attempting a
         # vector densify read.
         return LayerURI(
-            layer_id=f"wdpa-{len(_FETCHES)}",
-            name="WDPA Protected Areas",
+            layer_id=f"buildings-{len(_FETCHES)}",
+            name="Building Footprints",
             layer_type="raster",
-            uri=f"s3://x/wdpa-{len(_FETCHES)}.tif",
+            uri=f"s3://x/buildings-{len(_FETCHES)}.tif",
             bbox=tuple(bbox),
         )
 
@@ -364,7 +365,7 @@ def _stub_fetch_tool():
         reset_uri_registries_for_tests()
 
 
-_WDPA_BBOX = [-81.0, 25.0, -80.0, 26.0]
+_BUILDINGS_BBOX = [-81.0, 25.0, -80.0, 26.0]
 
 
 @pytest.mark.asyncio
@@ -375,15 +376,15 @@ async def test_fetch_reuse_kill_switch_disables_short_circuit(
     # Same Case-AOI anchor as the fire test below -- the ONLY variable in
     # this pair is the kill-switch.
     monkeypatch.setattr(
-        agent_server, "_turn_case_bbox", lambda state: list(_WDPA_BBOX)
+        agent_server, "_turn_case_bbox", lambda state: list(_BUILDINGS_BBOX)
     )
     ws = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "fetch_wdpa_protected_areas", {"bbox": list(_WDPA_BBOX)}
+        ws, state, "fetch_buildings", {"bbox": list(_BUILDINGS_BBOX)}
     )
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "fetch_wdpa_protected_areas", {"bbox": list(_WDPA_BBOX)}
+        ws, state, "fetch_buildings", {"bbox": list(_BUILDINGS_BBOX)}
     )
     assert len(_FETCHES) == 2, (
         "TRID3NT_FETCH_REUSE=0 must disable the refetch dedupe"
@@ -397,14 +398,14 @@ async def test_fetch_reuse_default_still_fires(_stub_fetch_tool, monkeypatch):
     # ProjectLayerSummary carries no per-layer bbox, so the F96 comparison
     # anchors on the Case AOI (same hermetic seam the F96 dispatch test uses).
     monkeypatch.setattr(
-        agent_server, "_turn_case_bbox", lambda state: list(_WDPA_BBOX)
+        agent_server, "_turn_case_bbox", lambda state: list(_BUILDINGS_BBOX)
     )
     ws = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "fetch_wdpa_protected_areas", {"bbox": list(_WDPA_BBOX)}
+        ws, state, "fetch_buildings", {"bbox": list(_BUILDINGS_BBOX)}
     )
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "fetch_wdpa_protected_areas", {"bbox": list(_WDPA_BBOX)}
+        ws, state, "fetch_buildings", {"bbox": list(_BUILDINGS_BBOX)}
     )
     assert len(_FETCHES) == 1, "F96 refetch dedupe regressed"

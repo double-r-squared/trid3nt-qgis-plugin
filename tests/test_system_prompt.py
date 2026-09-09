@@ -1,8 +1,8 @@
 """System-prompt snapshot tests (job B-sys, Wave 4.10 Stage-0 anchor A2/A5).
 
 Stage 0 baseline anchor A2 surfaced: when a user prompt names a verbatim tool
-(e.g. "show me protected areas in Big Cypress" → expects
-``fetch_wdpa_protected_areas``) and the agent successfully geocodes a
+(e.g. "show me flood zones in Cape Coral" → expects
+``fetch_fema_nfhl_zones``) and the agent successfully geocodes a
 precursor location, the agent CURRENTLY ENDS the turn without dispatching the
 named tool. job B-sys amends ``SYSTEM_PROMPT`` with an explicit "Named-tool
 follow-on dispatch" instruction so Gemini does not stop at the precursor step.
@@ -114,12 +114,12 @@ def test_system_prompt_lists_named_data_source_triggers() -> None:
     # A representative subset — full keyword list is in the prompt; the test
     # just guards against accidental deletion of the trigger vocabulary.
     for keyword in (
-        "WDPA",
+        "FEMA NFHL",
         "NEXRAD",
         "NWS alerts",
         "NLCD",
         "MRMS",
-        "GBIF",
+        "NWI",
         "MTBS",
         "LANDFIRE",
     ):
@@ -139,9 +139,9 @@ def test_system_prompt_carries_named_tool_example() -> None:
     # NEXRAD + Florida is the canonical worked example.
     assert "show_nexrad_radar" in SYSTEM_PROMPT
     assert "geocode_location" in SYSTEM_PROMPT
-    # And the WDPA Big Cypress example that anchored the baseline finding.
-    assert "fetch_wdpa_protected_areas" in SYSTEM_PROMPT
-    assert "Big Cypress" in SYSTEM_PROMPT
+    # And the flood-zone pair that carries the precursor-then-tool shape.
+    assert "fetch_fema_nfhl_zones" in SYSTEM_PROMPT
+    assert "Cape Coral" in SYSTEM_PROMPT
 
 
 # ---------------------------------------------------------------------------

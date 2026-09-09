@@ -107,10 +107,6 @@ __all__ = [
 # at the schema level would let the server accept a record it can't actually
 # use.
 ProviderID = Literal[
-    # Tier-2 conservation fetchers (sprint-12 Case 1 substrate)
-    "ebird",
-    "iucn_red_list",
-    "movebank",
     # Hazard / earth-observation keyed fetchers (job credential-pipeline-generic)
     # — each is a keyed atomic-tool data source with a self-serve signup page;
     # the agent JIT-requests the key when the upstream rejects/lacks one.
@@ -168,7 +164,7 @@ class SecretRecord(GraceModel):
       ``infra`` (which provisions the vault) and ``agent`` (which calls it).
       We treat it as a free-form non-empty string for forward compatibility
       with alternative vault backends.
-    - ``label`` — optional free-text user-supplied label (e.g. "personal eBird
+    - ``label`` — optional free-text user-supplied label (e.g. "personal FIRMS
       key — expires 2027-01"); max 200 chars to keep MongoDB documents tame.
     - ``added_at`` — ISO-8601-Z UTC creation timestamp.
     - ``last_used_at`` — ISO-8601-Z UTC of last successful tool invocation
@@ -309,7 +305,7 @@ class CredentialRequestEnvelopePayload(GraceModel):
     """``credential-request`` (A.4 amendment): server -> client JIT key prompt.
 
     Emitted when a tool dispatch needs a credential that is missing or
-    invalid for a keyed provider (e.g. an eBird fetch with no eBird key on the
+    invalid for a keyed provider (e.g. a FIRMS fetch with no FIRMS key on the
     Case, or an expired OpenWeatherMap key). The agent pauses the offending
     tool, names what it needs, and the client surfaces a credential-entry
     affordance (typically the same form the ``SecretsPanel`` renders, scoped
@@ -332,7 +328,7 @@ class CredentialRequestEnvelopePayload(GraceModel):
       provider the tool needs. Drives the per-provider help / signup copy and
       scopes the ``secret-add`` the client emits in response.
     - ``provider_label`` — human-readable provider name for the prompt UI
-      (e.g. "eBird", "OpenWeatherMap"). The web side does NOT hardcode a
+      (e.g. "NASA FIRMS", "OpenWeatherMap"). The web side does NOT hardcode a
       provider -> label table; it renders whatever the agent sends.
     - ``signup_url`` — the URL where the user can obtain a key for this
       provider (e.g. the provider's API-key registration page). Free-form
@@ -340,12 +336,12 @@ class CredentialRequestEnvelopePayload(GraceModel):
       when no public self-serve signup exists (the message then explains the
       out-of-band path).
     - ``secret_key_name`` — the canonical name of the secret the tool is
-      looking for (e.g. "EBIRD_API_KEY"). Surfaced in the prompt so the user
+      looking for (e.g. "FIRMS_MAP_KEY"). Surfaced in the prompt so the user
       knows exactly which credential to paste; the ``secret-add`` the client
       emits in response is scoped to this provider.
     - ``message`` — the agent's user-facing explanation of why the credential
-      is needed right now (e.g. "I need an eBird API key to fetch the
-      observation records for this Case."). Plain prose; ≤1024 chars.
+      is needed right now (e.g. "I need a NASA FIRMS MAP_KEY to fetch the
+      active-fire detections for this Case."). Plain prose; ≤1024 chars.
     - ``tool_name`` — the registry tool that paused waiting for the
       credential. Lets the client correlate the prompt with the inline tool
       card and lets the agent resume the right dispatch on

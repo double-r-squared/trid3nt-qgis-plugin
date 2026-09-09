@@ -398,16 +398,6 @@ def clear_registry_for_tests() -> None:
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
 
-# -- fetchers/biodiversity --
-# fetch_gbif_occurrences / fetch_inaturalist_observations: data-router fold chained-
-# resolution mode -- twins DELETED, now spec-driven (source.yaml + the
-# resolve-then-fetch hooks: name->id species/match | /v1/taxa GET, then the offset-paged
-# occurrence / observation search), registered by _register_router_specs() below.
-# fetch_movebank_tracks: keyed CSV http_json fold -- twin DELETED, now
-# spec-driven (source.yaml + movebank_tracks build_request/parse_response/classify_status
-# hooks; composite Basic-Auth via the resolver blob path), auto-registered by
-# _register_router_specs() below.
-
 # -- fetchers/socioeconomic --
 # fetch_administrative_boundaries: data-router fold zip/multi-file wave --
 # twin DELETED, now spec-driven (source.yaml + admin_boundaries.build_request FIPS

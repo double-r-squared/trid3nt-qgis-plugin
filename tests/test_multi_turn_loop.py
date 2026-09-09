@@ -18,7 +18,7 @@ Tests:
 3. ``_stream_model_reply`` drives the multi-turn loop end-to-end:
    - First turn: Gemini emits a function_call (``geocode_location``).
    - Second turn: Gemini sees the function_response (with bbox) and emits
-     another function_call (``fetch_wdpa_protected_areas`` with the bbox).
+     another function_call (``fetch_fema_nfhl_zones`` with the bbox).
    - Third turn: Gemini emits a final narrative text and no function_call,
      so the loop terminates.
    - Asserts: both tools dispatched in order, ``contents`` passed to Gemini
@@ -234,17 +234,17 @@ class _FakeSocket:
 
 @pytest.mark.asyncio
 async def test_stream_model_reply_multi_turn_loop(fake_llm):
-    """Proper recovery flow: geocode → search_tools → wdpa → narrative.
+    """Proper recovery flow: geocode -> search_tools -> flood zones -> narrative.
 
     Scenario mirrors "Show me protected areas in Fort Myers": the model
-    discovers its way to fetch_wdpa_protected_areas via search_tools (the
+    discovers its way to fetch_fema_nfhl_zones via search_tools (the
     discovery escape hatch), then dispatches it. This test exercises the
     multi-turn re-stream loop (function_call + function_response bundled between
     turns), not the routing itself.
 
     Turn 1: model calls ``geocode_location`` (always in the core floor).
-    Turn 2: model calls ``search_tools`` — surfaces fetch_wdpa_protected_areas.
-    Turn 3: model calls ``fetch_wdpa_protected_areas`` with the bbox from
+    Turn 2: model calls ``search_tools`` — surfaces fetch_fema_nfhl_zones.
+    Turn 3: model calls ``fetch_fema_nfhl_zones`` with the bbox from
             the geocode result.
     Turn 4: model emits a final narrative text and stops.
     """
@@ -261,9 +261,9 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
         "call-search",
     )
     turn3_chunk = _make_fake_chunk_with_function_call(
-        "fetch_wdpa_protected_areas",
+        "fetch_fema_nfhl_zones",
         {"bbox": [-82.0, 26.5, -81.7, 26.8]},
-        "call-wdpa",
+        "call-nfhl",
     )
     turn4_chunk = _make_fake_chunk_with_text(
         "Found 2 protected areas in Fort Myers — listing them now."
@@ -272,7 +272,7 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
     fake_llm.script([turn1_chunk, turn2_chunk, turn3_chunk, turn4_chunk])
 
     # Stub the registry-dispatch helper so we can assert exactly which tools
-    # were dispatched without bringing up GCS / Nominatim / WDPA.
+    # were dispatched without bringing up GCS / Nominatim / NFHL.
     dispatch_log: list[tuple[str, dict]] = []
 
     async def _fake_invoke(_ws, _state, name, args):
@@ -288,13 +288,13 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
             # (server unions the ranked names into the visible gate).
             return {
                 "results": [
-                    {"tool_name": "fetch_wdpa_protected_areas", "score": 0.9},
+                    {"tool_name": "fetch_fema_nfhl_zones", "score": 0.9},
                 ],
             }
-        if name == "fetch_wdpa_protected_areas":
+        if name == "fetch_fema_nfhl_zones":
             return {
-                "layer_id": "wdpa-fort-myers",
-                "wms_url": "https://qgis.example.com/wms?LAYERS=wdpa-fort-myers",
+                "layer_id": "nfhl-fort-myers",
+                "wms_url": "https://qgis.example.com/wms?LAYERS=nfhl-fort-myers",
                 "feature_count": 2,
             }
         return None
@@ -336,10 +336,10 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
     assert [name for (name, _) in dispatch_log] == [
         "geocode_location",
         "search_tools",
-        "fetch_wdpa_protected_areas",
+        "fetch_fema_nfhl_zones",
     ], f"unexpected dispatch order: {dispatch_log}"
 
-    # The wdpa call received the bbox Gemini synthesized from the geocode
+    # The flood-zone call received the bbox Gemini synthesized from the geocode
     # result — proving the function_response was fed back through.
     assert dispatch_log[2][1].get("bbox") == [-82.0, 26.5, -81.7, 26.8]
 
@@ -384,7 +384,7 @@ async def test_stream_model_reply_multi_turn_loop(fake_llm):
     assert turn4_call_names == [
         "geocode_location",
         "search_tools",
-        "fetch_wdpa_protected_areas",
+        "fetch_fema_nfhl_zones",
     ], f"turn 4 function_call sequence wrong: {turn4_call_names}"
 
     # The terminal narrative text reached the wire as an agent-message-chunk.

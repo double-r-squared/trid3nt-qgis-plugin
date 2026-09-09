@@ -1,7 +1,7 @@
 """Migrated coverage for the arcgis-odd fold wave (ADR 0066).
 
-The five twins (fema_nfhl_zones, nwi_wetlands, wdpa_protected_areas, usace_dams,
-epa_frs_facilities) were DELETED and folded onto the EXISTING tier-3 hooks
+The twins (fema_nfhl_zones, nwi_wetlands, usace_dams, epa_frs_facilities) were
+DELETED and folded onto the EXISTING tier-3 hooks
 (build_request / next_page / parse_response). Live twin-vs-router feature-set
 value-identity was proven at fold time; this file migrates the value-bearing
 UNIT coverage of the pure hook logic (offline, synthetic bodies): OBJECTID-cursor
@@ -20,7 +20,6 @@ from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_server.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
 from trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones import hooks as nfhl
 from trid3nt_server.tools.fetchers.hydrology.fetch_nwi_wetlands import hooks as nwi
-from trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas import hooks as wdpa
 from trid3nt_server.tools.fetchers.hazard.fetch_usace_dams import hooks as dams
 from trid3nt_server.tools.fetchers.hazard.fetch_epa_frs_facilities import hooks as frs
 
@@ -108,43 +107,6 @@ def test_nwi_next_page_short_stops_full_continues():
                        "exceededTransferLimit": True}).encode()
     nxt = nwi.next_page(s, {"bbox": [0, 0, 1, 1]}, [full])
     assert nxt is not None and nxt.params["resultOffset"] == str(nwi._PAGE_SIZE)
-
-
-# ------------------------------- WDPA ------------------------------- #
-
-@pytest.mark.parametrize("raw,canon", [
-    ("NP", "National Park"), ("national parks", "National Park"),
-    ("N.P.", "National Park"), ("nwr", "National Wildlife Refuge"),
-    ("ramsar", "Ramsar Site, Wetland of International Importance"),
-])
-def test_wdpa_alias_resolves(raw, canon):
-    assert wdpa._normalize_one("WDPA", raw) == canon
-
-
-def test_wdpa_unknown_raises_designation_invalid():
-    with pytest.raises(RouterInputError) as e:
-        wdpa._normalize_one("WDPA", "Narnia Park")
-    assert e.value.error_code == "WDPA_DESIGNATION_INVALID"
-
-
-def test_wdpa_fail_loud_when_filter_empties_nonempty():
-    s = _spec("WDPA", "wdpa")
-    body = _fc([{"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]]},
-                "properties": {"desig_eng": "National Park"}}])
-    with pytest.raises(RouterInputError) as e:
-        wdpa.parse_response(s, {"designation_filter": ["Wilderness Area"]}, [body])
-    assert e.value.error_code == "WDPA_DESIGNATION_INVALID"
-    assert "National Park" in str(e.value)
-
-
-def test_wdpa_casefold_filter_keeps_match():
-    s = _spec("WDPA", "wdpa")
-    body = _fc([
-        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}, "properties": {"desig_eng": "national park"}},
-        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 1]}, "properties": {"desig_eng": "State Park"}},
-    ])
-    out = wdpa.parse_response(s, {"designation_filter": ["NP"]}, [body])
-    assert len(out) == 1 and out[0]["properties"]["desig_eng"] == "national park"
 
 
 # ------------------------------- usace_dams ------------------------------- #

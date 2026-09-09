@@ -326,8 +326,8 @@ _KNOWN_PROBLEMATIC_TOOLS = [
     "clip_raster_to_polygon",     # B11: tuple[float,4] bbox + -> LayerURI return
     "fetch_mrms_qpe",             # B11: bbox: tuple[float,4] | None
     "fetch_nws_event",            # B11: area: str | tuple[...]
-    "fetch_gbif_occurrences",     # B11: year_range: tuple[int,int] | None
-    "fetch_iucn_red_list_range",  # B11: secret_ref: SecretRecord | None
+    "fetch_mtbs_burn_severity",   # B11: year_range: tuple[int,int] | None
+    "fetch_firms_active_fire",    # B11: secret_ref: SecretRecord | None
     "fetch_nhdplus_nldi_navigate", # B11: seed_point: tuple[float,2] | None
     "fetch_noaa_slr_scenarios",   # B11: scenario_ft: float | list[float] | None
 ]

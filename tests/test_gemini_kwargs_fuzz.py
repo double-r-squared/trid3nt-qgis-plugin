@@ -174,10 +174,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
     },
     "fetch_buildings": {"bbox": _SAMPLE_BBOX},
     "fetch_dem": {"bbox": _SAMPLE_BBOX},
-    "fetch_ebird_observations": {
-        "species_code": "norcar",
-        "bbox": _SAMPLE_BBOX,
-    },
     "fetch_era5_reanalysis": {
         "bbox": _SAMPLE_BBOX,
         "variable": "2m_temperature",
@@ -185,10 +181,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "end_date": "2022-09-30",
     },
     "fetch_firms_active_fire": {"bbox": _SAMPLE_BBOX},
-    "fetch_gbif_occurrences": {
-        "species_key": 2435098,
-        "bbox": _SAMPLE_BBOX,
-    },
     "fetch_gcn250_curve_numbers": {"bbox": _SAMPLE_BBOX},
     "fetch_goes_satellite": {"bbox": _SAMPLE_BBOX},
     "fetch_gtsm_tide_surge": {
@@ -197,14 +189,8 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "end_date": "2022-09-30",
     },
     "fetch_hrsl_population": {"bbox": _SAMPLE_BBOX},
-    "fetch_inaturalist_observations": {
-        "taxon_id": 47126,
-        "bbox": _SAMPLE_BBOX,
-    },
-    "fetch_iucn_red_list_range": {"species_name": "Panthera leo"},
     "fetch_landcover": {"bbox": _SAMPLE_BBOX},
     "fetch_landfire_fuels": {"bbox": _SAMPLE_BBOX},
-    "fetch_movebank_tracks": {"study_id": 2911040},
     "fetch_mrms_qpe": {},
     "fetch_mtbs_burn_severity": {"bbox": _SAMPLE_BBOX},
     "show_nexrad_radar": {},
@@ -215,7 +201,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
     "fetch_river_geometry": {"bbox": _SAMPLE_BBOX},
     "fetch_roads_osm": {"bbox": _SAMPLE_BBOX},
     "fetch_storm_events_db": {"year": 2022},
-    "fetch_wdpa_protected_areas": {"bbox": _SAMPLE_BBOX},
     "geocode_location": {"query": "Fort Myers, FL"},
     "lookup_precip_return_period": {
         "location": (-81.87, 26.64),

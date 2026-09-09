@@ -463,9 +463,9 @@ result = fig                  # assign a matplotlib Figure (or scalar/dict) to r
 
 Named-tool follow-on dispatch (CRITICAL — Stage 0 anchor A2):
 When a user prompt explicitly names a specific data source, dataset, or tool
-(e.g. "WDPA", "NEXRAD", "NWS alerts", "NLCD", "MRMS", "HRRR", "GBIF",
-"iNaturalist", "eBird", "MTBS", "LANDFIRE", "USACE NSI", "FEMA NFHL",
-"protected areas", "burn severity", "radar reflectivity"), you MUST dispatch
+(e.g. "NEXRAD", "NWS alerts", "NLCD", "MRMS", "HRRR", "NHD", "3DEP",
+"MTBS", "LANDFIRE", "USACE NSI", "FEMA NFHL", "NWI",
+"flood zones", "burn severity", "radar reflectivity"), you MUST dispatch
 that tool after completing any precursor steps (geocoding, admin-boundary
 lookup, etc.). DO NOT end the turn at the precursor step — the precursor only
 exists to feed the named tool.
@@ -475,9 +475,9 @@ Example: user asks "show me NEXRAD radar in Florida"
   2. THEN call show_nexrad_radar with the geocoded bbox →
   3. THEN narrate the result.
 
-Example: user asks "show me protected areas in Big Cypress"
-  1. Call geocode_location for "Big Cypress" (precursor) →
-  2. THEN call fetch_wdpa_protected_areas with the geocoded bbox →
+Example: user asks "show me flood zones in Cape Coral"
+  1. Call geocode_location for "Cape Coral" (precursor) →
+  2. THEN call fetch_fema_nfhl_zones with the geocoded bbox →
   3. THEN narrate the result.
 
 If a precursor tool succeeds, the named follow-on tool is still pending — keep
@@ -759,11 +759,11 @@ slow, gated, and the result never reaches the map.
 
 Fit / resize NEVER re-fetches an already-loaded layer (CRITICAL — F96,
 NATE 2026-06-17): when the user asks to FIT, ZOOM, RESIZE the box, or
-"encompass all the <features>" (all protected areas, all buildings, all points)
+"encompass all the <features>" (all flood zones, all buildings, all points)
 for data that is ALREADY on the map, that is a VIEW change, NOT a data fetch.
 Call compute_layer_bounds on the EXISTING layer's handle (from the [Case state]
 note) — do NOT call the fetch_* tool again. Re-fetching a layer already present
-mints a SECOND identical layer (e.g. two identical WDPA choropleths stacked on
+mints a SECOND identical layer (e.g. two identical flood-zone choropleths stacked on
 the map). Check the [Case state] note FIRST: if a layer of the requested data
 kind is already listed for this AOI, reuse its handle. Only fetch fresh data
 when the user names a genuinely DIFFERENT or LARGER area than the loaded extent,
@@ -1568,7 +1568,7 @@ def build_layers_present_note(
         # An expensive-simulation output (recognized scenario family) OR a
         # ``role="primary"`` layer is a RESULT; everything else is an INPUT /
         # context layer. RESULT labelling is what stops the re-run. F96: a
-        # recognized FETCHED layer (wdpa / landcover / dem / roads / ...) is an
+        # recognized FETCHED layer (buildings / landcover / dem / roads / ...) is an
         # INPUT tagged with its KIND so a fit / resize / re-show follow-up
         # reuses it (compute_layer_bounds on its handle) instead of re-fetching
         # a duplicate.
@@ -1597,7 +1597,7 @@ def build_layers_present_note(
             "Lines tagged RESULT[...] are finished simulation / analysis OUTPUTS "
             "(e.g. a flood-depth or plume RESULT for this AOI) — the work that "
             "made them is DONE. Lines tagged INPUT (or INPUT[<kind>], e.g. "
-            "INPUT[wdpa], INPUT[landcover], INPUT[dem]) are fetched / context "
+            "INPUT[buildings], INPUT[landcover], INPUT[dem]) are fetched / context "
             "layers ALREADY on the map. "
             "REUSE these (pass their handle/uri DIRECTLY to the next tool) — do "
             "NOT re-run, re-fetch, or recompute them:\n"
@@ -1612,8 +1612,8 @@ def build_layers_present_note(
             "\nFETCHED LAYER REUSE (F96 — HARD RULE): a fetched layer "
             "(INPUT[<kind>]) for this AOI is ALREADY on the map. A follow-up to "
             "FIT, ZOOM, RESIZE the box, or 'encompass all the <features>' for "
-            "that SAME data (e.g. 'resize the bbox to encompass all protected "
-            "areas' when an INPUT[wdpa] layer is already listed) is NOT a fetch — "
+            "that SAME data (e.g. 'resize the bbox to encompass all the "
+            "buildings' when an INPUT[buildings] layer is already listed) is NOT a fetch — "
             "call compute_layer_bounds on the EXISTING layer's handle to fit the "
             "view. Re-calling the fetch_* tool produces a SECOND identical layer "
             "(a real duplicate on the map), which is FORBIDDEN. Only re-fetch when "
@@ -1804,9 +1804,9 @@ def _classify_error(error: BaseException) -> tuple[str, bool]:
 
     typed tool exceptions across the registry already declare
     ``error_code`` (str) and ``retryable`` (bool) class attributes
-    (``WDPAError``, ``HRSLError``, ``MTBSError``, ``MRMSError``,
-    ``INatError``, ``IUCNError``, ``FIRMSError``, ``GTSMError``,
-    ``LANDFIREError``, ``OSMRoadsError``, ``GBIFError``,
+    (``HRSLError``, ``MTBSError``, ``MRMSError``,
+    ``FIRMSError``, ``GTSMError``,
+    ``LANDFIREError``, ``OSMRoadsError``,
     ``GOESError``, ``CompFireError``,
     ``ColoredReliefError``, ``NIFCError``, ``NWSAlertsError``, etc.).
     Harvest those directly so the function_response the multi-turn loop

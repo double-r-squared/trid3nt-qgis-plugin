@@ -167,7 +167,6 @@ def test_global_query_scope_audit():
         "fetch_nifc_fire_perimeters",   # active national fire perimeters
         "fetch_usace_dams",             # NID CONUS sweep (ArcGIS query)
         "fetch_usace_levees",           # NLD CONUS sweep (ArcGIS query)
-        "fetch_iucn_red_list_range",    # queried by species name, not bbox
         "fetch_usgs_earthquakes",       # FDSN is global; "recent major quakes worldwide" is bounded (limit=20000, <=366d window)
         "fetch_usgs_volcano_alerts",    # HANS alert list is ~70 volcanoes, tiny/bounded
         "fetch_chirps_precipitation",   # quasi-global 0.05deg rainfall grid (~14MB), bounded like ERA5
@@ -200,7 +199,7 @@ def test_global_query_scope_audit():
         "fetch_buildings",
         "fetch_firms_active_fire",   # FIRMS AREA endpoint rejects a global bbox
         "fetch_hrsl_population",
-        "fetch_gbif_occurrences",
+        "fetch_nwi_wetlands",
         "clip_raster_to_polygon",
     ):
         assert bbox_required in registry, f"{bbox_required} not registered"

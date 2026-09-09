@@ -29,7 +29,7 @@ Everything below cites real code. Line numbers drift; grep the symbol.
    module under `trid3nt_server/tools/<subpackage>/` -- pick the
    folder by what the tool IS: `fetchers/<domain>/` (one file per fetch tool,
    filed by the phenomenon measured: weather / hydrology / ocean / terrain /
-   imagery / climate / biodiversity / socioeconomic / hazard / soil),
+   imagery / climate / socioeconomic / hazard / soil),
    `processing/` (compute_* / clip_* / extract_* / charts, flat),
    `simulation/` (run_* engine bridges, model_* engines, the solver seam),
    `discovery/` (catalog + retrieval), or `meta/` (utilities).

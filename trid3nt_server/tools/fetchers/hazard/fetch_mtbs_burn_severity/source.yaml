@@ -74,8 +74,6 @@ docstring: |-
     flow, post-fire flood, or erosion risk assessment.
   - Wildfire history overlay: "show all fires larger than 500 acres that
     burned in this watershed since 2010."
-  - Conservation context: filter species occurrence queries by
-    recently-burned habitat (GBIF/iNat occurrences inside MTBS polygons).
   - Mapping wildfire risk exposure near critical infrastructure using
     historical burn frequency.
 
@@ -105,7 +103,7 @@ docstring: |-
   **Cross-tool dependencies:**
   - Pairs with: ``fetch_nifc_fire_perimeters`` (current active fires),
     ``fetch_firms_active_fire`` (near-real-time detections in or near scars).
-  - Upstream of: debris-flow / post-fire flood risk workflows, species habitat
-    analysis via ``fetch_gbif_occurrences`` / ``fetch_inaturalist_observations``.
+  - Upstream of: debris-flow / post-fire flood risk workflows
+    (``model_debris_flow``, ``fetch_gcn250_curve_numbers``).
   - Complements: ``fetch_dem`` + ``compute_slope`` for post-fire watershed
     erosion context.
