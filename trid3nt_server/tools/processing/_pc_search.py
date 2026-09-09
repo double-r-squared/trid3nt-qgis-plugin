@@ -60,9 +60,8 @@ def search_least_cloudy_item(
     max_cloud_cover: float | None = None,
     sort_by_cloud: bool = False,
 ) -> Any:
-    """The single best-matching item, with its asset hrefs already signed.
-    ``sort_by_cloud`` picks the least-cloudy match, else the first. Zero matches
-    raise :class:`PCStacNoItemsError`, a network failure :class:`PCStacUpstreamError`.
+    """The single best-matching item, hrefs already signed; ``sort_by_cloud`` picks
+    the least-cloudy. No match raises PCStacNoItemsError, a network failure PCStacUpstreamError.
     """
     import planetary_computer
     from pystac_client import Client
