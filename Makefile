@@ -5,6 +5,7 @@ RUN_DIR   := $(REPO_ROOT)/run
 LOG_DIR   := $(REPO_ROOT)/logs
 
 .PHONY: binaries minio agent venv status stop setup up down plugin env help plugin-zip plugin-repo
+.PHONY: test test-fetchers test-spatial test-engines test-server test-model-surface test-packages
 
 # ---- orchestration (the clone -> run flow) ----------------------------------
 help:
@@ -16,6 +17,23 @@ help:
 	@echo "  make plugin    install the QGIS plugin into your QGIS profile (then reload it)"
 	@echo "  make status    health-check the running services"
 	@echo "  make down      stop everything"
+	@echo "  make test      the six suite slices, zero failures"
+
+# ---- suite -------------------------------------------------------------
+# Six slices by subsystem, run from the repo root. Globs are unquoted so the
+# shell expands them; TRID3NT_CACHE_BUCKET is unset so no test can reach a live
+# cache bucket; cacheprovider is off so a slice leaves nothing behind.
+PYTEST = env -u TRID3NT_CACHE_BUCKET venvs/agent/bin/python -m pytest \
+         -p no:cacheprovider --timeout=300 -q
+
+test-fetchers:      ; $(PYTEST) tests/fetchers
+test-spatial:       ; $(PYTEST) tests/processing tests/emission tests/mesh
+test-engines:       ; $(PYTEST) tests/telemac tests/runtime tests/solver tests/search
+test-server:        ; $(PYTEST) tests/server tests/gates tests/credentials tests/sandbox tests/model tests/scripts
+test-model-surface: ; $(PYTEST) tests/adapters tests/tools
+test-packages:      ; $(PYTEST) contracts/tests plugin/tests tests/plugin
+
+test: test-fetchers test-spatial test-engines test-server test-model-surface test-packages
 
 # One-time bootstrap: env template + binaries (minio/mf6/...) + the agent venv.
 setup: env binaries venv

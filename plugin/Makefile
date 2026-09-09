@@ -3,7 +3,7 @@
 # Usage:
 #   make zip       build trid3nt.zip (install-by-zip artifact, trid3nt/ root)
 #   make install   unzip straight into the default QGIS profile plugin dir
-#   make test      run the pure-python client tests (no QGIS required)
+#   make test      run the packages slice (this suite + contracts) from the root
 #   make clean     remove build artifacts
 #
 # The plugin package lives at THIS Makefile's own dir (plugin/); the shipped
@@ -42,7 +42,7 @@ install: zip
 	@echo "Installed to $(QGIS_PLUGIN_DIR)/$(PLUGIN_NAME) -- enable it in the QGIS Plugin Manager"
 
 test:
-	$(PYTHON) -m unittest discover -s tests -v
+	cd .. && $(MAKE) test-packages
 
 clean:
 	rm -f $(ZIP_FILE)

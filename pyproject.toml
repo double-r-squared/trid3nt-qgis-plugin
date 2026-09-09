@@ -316,6 +316,9 @@ trid3nt-server = "trid3nt_server.main:run"
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib -p no:cacheprovider"
 testpaths = ["tests", "contracts/tests", "plugin/tests"]
+markers = [
+    "qt_harness_shim: asserts only that a Qt subprocess harness exited 0 and printed its marker - a standing exception to 'a test tests a product behavior', listed in tests/README.md",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
