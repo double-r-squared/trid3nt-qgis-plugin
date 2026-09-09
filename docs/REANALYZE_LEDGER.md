@@ -193,3 +193,15 @@ so the pre-fold layer painted 56 donut holes as filled drought and
 over-counted its own area by 16 percent (223.85 vs 193.11 square
 degrees on that one feature). The driver organizes them; every
 polygon row in this family was carrying the same error.
+
+TWO CORRECTIONS to numbers stated in this wave's own commit messages,
+which cannot be edited once written. (1) `fetch_hifld_critical_
+infrastructure` was described as byte-identical to its pre-fold
+artifact. It is not, and no row in this family can be: the FGB the
+serializer writes carries a packed Hilbert index over the features in
+the order they arrived, and the driver's page order is not the pager's.
+The two files are the same length (19,880 bytes) and differ in 165 of
+them, all inside that index; the layer itself is identical - 23 Points,
+same columns, dtypes, values and bounds. Read "byte-identical" there as
+"same length, value-identical, index bytes reordered". (2) The
+storm-track hook measures 1004 -> 991 lines, not 1004 -> 992.
