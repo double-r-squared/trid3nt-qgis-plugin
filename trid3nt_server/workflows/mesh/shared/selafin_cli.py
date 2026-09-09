@@ -1,16 +1,8 @@
 """The TELEMAC geometry pair - a SELAFIN and the ``.cli`` numbered from it.
 
 The two files are ONE artifact: the ``.cli`` rows are ordered by the geometry's
-own IPOBO, so a boundary file written against any other node numbering silently
-classifies the wrong nodes. They are therefore written together, in one pass,
-inside ``trid3nt-local/telemac:latest`` - the only place telapy and pretel are
-installed. The host stages the node arrays, mounts the driver and the rundir,
-and reads back the stats the driver measured.
-
-Shared rather than per-mesher: any mesher that can hand over nodes, cells and a
-bed writes its TELEMAC geometry through here, so the numbering agreement is made
-once instead of once per wrapper.
-"""
+own IPOBO, so a boundary file written against any other numbering classifies the
+wrong nodes. They are written together, in one pass, inside the image."""
 
 from __future__ import annotations
 
@@ -42,15 +34,7 @@ def write_telemac_pair(rundir: Path | str, *, x: Any, y: Any, cells: Any,
                        title: str = "TRID3NT MESH") -> dict[str, Any]:
     """Write the SELAFIN geometry and its ``.cli`` -> the two paths and the stats.
 
-    ``roles`` maps a boundary role (``inflow``, ``outflow``, ``open``,
-    ``rating_curve``, ``free_exit``) to the node indices carrying it; every other
-    boundary node is written as a solid wall.
-    The stats carry what the driver MEASURED - the boundary node count, the
-    liquid-boundary numbering AND the role of each numbered liquid boundary,
-    whether the IPOBO it wrote is the permutation TELEMAC requires - so a caller
-    reports the numbering rather than asserting it, and a steering file is
-    authored once against the order the solver will use.
-    """
+    ``roles`` maps a boundary role to its node indices; the rest are wall."""
     import numpy as np
 
     rundir = Path(rundir)

@@ -1,23 +1,8 @@
-"""Coastal-TIN -> solver-mesh format writers, and the repo's ONE topology pass.
+"""TIN -> solver-mesh format writers, over ONE topology pass.
 
-The boundary walk here is product code: ``workflows/mesh/shared/nodes.py`` imports
-this module for ``extract_boundary_loops`` on every mesh build, so the walk and the
-orient/clean pass have one home rather than a copy beside each writer.
-
-Given the oceanmesh worker's raw output (``points`` (N,2) lon/lat + ``cells`` (M,3)
-0-indexed triangles), it emits two unstructured formats:
-
-  * SCHISM ``hgrid.gr3`` -- delegated to the ALREADY-PROVEN in-repo bridge
-    ``schism_gr3.tin_to_hgrid`` (pure numpy). This is
-    the format SCHISM's own grid check (AQUIRE_HGRID / ipre) validates.
-  * ADCIRC ``fort.14`` -- the classic node/element/boundary ASCII that SWAN
-    (unstructured) and ADCIRC read, and the format ADCIRC-family tooling round-
-    trips. Written here by REUSING the same schism_gr3 boundary helpers
-    (pinch-point cleaning, CCW normalization, Eulerian boundary-loop
-    extraction) so gr3 and fort.14 come from ONE topology pass.
-
-No trid3nt/server imports; numpy only.
-"""
+``points`` (N,2) lon/lat and ``cells`` (M,3) 0-indexed triangles in, an SMS
+``2dm`` or an ADCIRC ``fort.14`` out. The boundary walk, the pinch clean and the
+orientation happen once here: two formats from one mesh carry one numbering."""
 
 from __future__ import annotations
 
@@ -81,10 +66,7 @@ def _open_nodes_on_side(
 def _contiguous_runs(loop: list[int], removed: set[int]) -> list[list[int]]:
     """The maximal runs of ``loop`` that avoid ``removed``, walked as a cycle.
 
-    A boundary segment a solver reads is one continuous walk, so removing the
-    open stretches from a loop yields SEVERAL land segments rather than one list
-    that jumps across them.
-    """
+    A boundary segment a solver reads is one continuous walk."""
     if not loop:
         return []
     if not removed:
@@ -117,17 +99,9 @@ def write_fort14(
     open_boundary_side: str | None = None,
     open_sections: Sequence[Sequence[int]] | None = None,
 ) -> str:
-    """Emit ADCIRC ``fort.14`` text from a coastal TIN.
+    """Emit ADCIRC ``fort.14`` text from a TIN -> the fort.14 string.
 
-    ``points`` (N,2) lon/lat (EPSG:4326); ``cells`` (M,3) 0-indexed triangles.
-    ``depths`` positive-down bathymetry (scalar or per-node). ``open_sections``
-    are node runs already identified as contiguous ocean stretches and each
-    becomes one IBTYPEE 0 elevation-specified boundary; failing that,
-    ``open_boundary_side`` cuts one from the exterior loop. Every other stretch
-    is a mainland/island flux boundary (IBTYPE 0 mainland exterior, IBTYPE 1
-    island), split at the open stretches so each land boundary is contiguous
-    too. Returns the fort.14 string.
-    """
+    ``depths`` is positive-down; ``open_sections`` are the ocean node runs."""
     points = np.asarray(points, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
     n0 = points.shape[0]
@@ -169,7 +143,11 @@ def write_fort14(
     for e in range(n_elem):
         a, b, c = cells[e] + 1
         L.append(f"{e + 1} 3 {a} {b} {c}")
-
+    # Each open section becomes one IBTYPEE 0 elevation-specified boundary;
+    # every other stretch is a flux boundary (IBTYPE 0 mainland exterior,
+    # IBTYPE 1 island), split at the open stretches so each land boundary is
+    # contiguous too.
+    # Open boundary block (elevation-specified forcing boundaries).
     # Open boundary block (elevation-specified forcing boundaries).
     total_open = sum(len(seg) for seg in sections)
     if sections:
@@ -204,18 +182,15 @@ def write_2dm(
     z: float | Sequence[float] | np.ndarray = 0.0,
     material_id: int = 1,
 ) -> str:
-    """Emit an SMS ``2dm`` mesh (the simplest QGIS/MDAL-readable unstructured
-    format). ``points`` (N,2) X/Y; ``cells`` (M,3) 0-indexed triangles; ``z``
-    per-node elevation (positive-up), written as the node Z so MDAL surfaces the
-    bathymetry as the mesh dataset. Returns the 2dm text.
+    """Emit an SMS ``2dm`` mesh (MDAL-readable) -> the 2dm text.
 
-    Layout (MDAL 2DM reader): ``MESH2D`` header, ``E3T id n1 n2 n3 mat`` element
-    lines (1-indexed CCW), ``ND id x y z`` node lines.
-    """
+    ``z`` is the per-node positive-up elevation, written as the node Z."""
     points = np.asarray(points, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
     n = points.shape[0]
     zz = np.full(n, float(z)) if np.isscalar(z) else np.asarray(z, dtype=float)
+    # Layout (MDAL 2DM reader): ``MESH2D`` header, ``E3T id n1 n2 n3 mat``
+    # element lines (1-indexed CCW), ``ND id x y z`` node lines.
     L = ["MESH2D"]
     for e in range(cells.shape[0]):
         a, b, c = cells[e] + 1
@@ -226,10 +201,9 @@ def write_2dm(
 
 
 def mesh_quality_report(points: np.ndarray, cells: np.ndarray) -> dict:
-    """Independent V&V of the TIN in a LOCAL metric frame (not the worker's own
-    stats): equilateral quality q_E per triangle, inverted-element count (signed
-    area sign disagreement), and boundary closure (every boundary node even
-    boundary-degree == closed loops). Metres via the lat/lon degree scaling."""
+    """Independent V&V of the TIN in a LOCAL metric frame, in metres.
+
+    Equilateral quality per triangle, inverted elements, boundary closure."""
     points = np.asarray(points, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
     mid_lat = float(np.mean(points[:, 1]))

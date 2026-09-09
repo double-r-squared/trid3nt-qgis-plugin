@@ -1,19 +1,8 @@
-"""tin_to_hgrid -- the coastal-TIN -> SCHISM hgrid.gr3 format bridge (SCHISM spike).
+"""Boundary topology over a TIN, and the ``hgrid.gr3`` writer built on it.
 
-SCHISM consumes its native triangular mesh as ``hgrid.gr3`` (a simple ASCII
-format: a node table with per-node depth, an element connectivity table, then
-open/land boundary segment blocks). The oceanmesh ``coastal_tin`` worker
- already produces exactly the geometry SCHISM needs -- lon/lat nodes
-(EPSG:4326) + triangle connectivity -- so this module is the thin translator
-that lets a TRID3NT-meshed coastal domain feed SCHISM.
-
-This is the SPIKE's mesh-supply proof: the FORMAT bridge, not a full simulation.
-Depths here are a documented placeholder (a real run samples bathymetry via
-fetch_dem at the landing); boundary classification is geometric (exterior loops,
-one edge optionally flagged open) -- SCHISM's ipre grid check reads and validates
-the topology, which is the acceptance bar. Pure-Python + numpy; no SCHISM/server
-imports, so it imports flat from this directory and stays offline-suite-neutral.
-"""
+The loop extraction, the CCW test and the pinch cleaning are the topology pass
+every writer in this package shares; ``hgrid.gr3`` is an ASCII node table with
+per-node depth, an element table, then boundary segment blocks. numpy only."""
 
 from __future__ import annotations
 
@@ -47,16 +36,14 @@ def _boundary_degree(cells: np.ndarray) -> dict[int, int]:
 def remove_boundary_pinch_points(
     points: np.ndarray, cells: np.ndarray, *, max_passes: int = 25
 ) -> np.ndarray:
-    """Drop the triangles that make the mesh boundary non-manifold.
+    """Drop the triangles that make the mesh boundary non-manifold -> the cells.
 
-    SCHISM's grid check (``AQUIRE_HGRID``) rejects a "pinch"/bowtie boundary
-    vertex -- a node whose element ball has more than one boundary opening
-    (boundary degree > 2), which SCHISM flags as an "Illegal bnd node". Coastal
-    TINs from oceanmesh can leave a few of these where two shoreline strands
-    touch at a single node. We resolve each by deleting the smallest-area
-    triangle incident to the pinch node (opening the bowtie), iterating until
-    every boundary node is a simple degree-2 vertex. Only a handful of slivers
-    are removed on a real coastal mesh. Returns the cleaned cells."""
+    A boundary vertex of degree > 2 loses its smallest incident triangle."""
+    # An hgrid consumer rejects a "pinch"/bowtie boundary vertex - a node whose
+    # element ball has more than one boundary opening - and a coastal TIN can
+    # leave a few where two shoreline strands touch at a single node. Deleting
+    # the smallest-area incident triangle opens the bowtie; the pass iterates
+    # until every boundary node is a simple degree-2 vertex.
     cells = np.asarray(cells, dtype=np.int64)
     for _ in range(max_passes):
         deg = _boundary_degree(cells)
@@ -84,12 +71,9 @@ def remove_boundary_pinch_points(
 
 
 def signed_area_ccw(points: np.ndarray, cells: np.ndarray) -> np.ndarray:
-    """Signed area (shoelace) per triangle in the node XY plane. Positive == CCW.
+    """Signed area (shoelace) per triangle in the node XY plane; positive == CCW.
 
-    SCHISM requires counter-clockwise element node ordering (positive area) so
-    the finite-volume geometry is consistent. Computed in the raw node units
-    (degrees for a lon/lat mesh) -- only the SIGN is load-bearing for orientation,
-    and sign is invariant under the anisotropic lon/lat scaling."""
+    Only the SIGN is load-bearing, and it survives the lon/lat scaling."""
     tri = points[cells]  # (M, 3, 2)
     x = tri[:, :, 0]
     y = tri[:, :, 1]
@@ -102,15 +86,12 @@ def signed_area_ccw(points: np.ndarray, cells: np.ndarray) -> np.ndarray:
 def extract_boundary_loops(cells: np.ndarray) -> list[list[int]]:
     """Assemble the mesh boundary into ordered node loops (0-indexed).
 
-    A boundary edge belongs to exactly one triangle. SCHISM requires EVERY
-    boundary node to appear in a boundary segment (an unlisted boundary node
-    fails its "incomplete ball" ring check), so completeness is load-bearing.
-    A naive node-walk strands nodes at pinch points -- boundary nodes of degree
-    4 where two loops touch (oceanmesh's cleanup can leave a few). We instead
-    consume boundary EDGES exactly once (an Eulerian-circuit decomposition:
-    every boundary node has even boundary degree, so greedy edge-following
-    closes every loop and covers every edge/node). Returns loops sorted
-    longest-first (the longest is the domain exterior / mainland)."""
+    Longest loop first - the domain exterior; every boundary node appears."""
+    # Boundary EDGES are consumed exactly once - an Eulerian-circuit
+    # decomposition: every boundary node has even boundary degree, so greedy
+    # edge-following closes every loop and covers every edge and node. A naive
+    # node-walk strands nodes at pinch points, where two loops touch, and a
+    # reader's ring check fails on a boundary node no segment lists.
     edge_count: dict[tuple[int, int], int] = {}
     for tri in cells:
         for a, b in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
@@ -153,10 +134,7 @@ def extract_boundary_loops(cells: np.ndarray) -> list[list[int]]:
 def _contiguous_runs(loop: list[int], removed: set[int]) -> list[list[int]]:
     """The maximal runs of ``loop`` that avoid ``removed``, walked as a cycle.
 
-    A boundary segment SCHISM reads is one continuous walk, so removing the open
-    stretches from a loop yields SEVERAL land segments rather than one list that
-    jumps across them.
-    """
+    A boundary segment a solver reads is one continuous walk."""
     if not loop:
         return []
     n = len(loop)
@@ -188,22 +166,9 @@ def tin_to_hgrid(
     open_sections: Sequence[Sequence[int]] | None = None,
     clean_boundary: bool = True,
 ) -> str:
-    """Convert a coastal TIN (lon/lat nodes + triangle cells) to hgrid.gr3 text.
+    """Convert a TIN (lon/lat nodes + triangle cells) to ``hgrid.gr3`` text.
 
-    ``points`` (N,2) are lon/lat (EPSG:4326). ``cells`` (M,3) are 0-indexed
-    triangle node references (the oceanmesh ``coastal_tin`` output). ``depth`` is
-    positive-down bathymetry -- a scalar placeholder (spike) or a per-node array
-    (landing, sampled from fetch_dem). Element orientation is normalized to CCW
-    (SCHISM's requirement); boundary loops are extracted and written as land
-    segments.
-
-    ``open_sections`` are node runs a mesher already identified as contiguous
-    ocean stretches; each becomes one open-boundary segment, so NOPE equals the
-    number of stretches the mesh actually has. Failing that,
-    ``open_boundary_side`` ('south'|'north'|'east'|'west') cuts one segment from
-    the exterior loop. Land segments are the runs BETWEEN the open stretches, so
-    every written segment is a continuous walk. Returns the gr3 ASCII string.
-    """
+    ``depth`` is positive-down, scalar or per node; elements come out CCW."""
     points = np.asarray(points, dtype=float)
     cells = np.asarray(cells, dtype=np.int64)
     n_nodes = points.shape[0]
@@ -273,6 +238,11 @@ def tin_to_hgrid(
     # nodes on the named side.
     open_nodes: list[int] = []
     sections: list[list[int]] = []
+    # ``open_sections`` are node runs a mesher already identified as contiguous
+    # ocean stretches; each becomes one open-boundary segment, so NOPE equals the
+    # number of stretches the mesh actually has. Failing that,
+    # ``open_boundary_side`` ('south'|'north'|'east'|'west') cuts one segment
+    # from the exterior loop, and the land segments are the runs between them.
     if open_sections:
         sections = [[int(n) for n in seg] for seg in open_sections if len(seg)]
         open_nodes = [n for seg in sections for n in seg]

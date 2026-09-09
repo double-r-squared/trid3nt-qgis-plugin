@@ -1,21 +1,8 @@
 """The SHARED op primitives: what we impose on a mesh that no library does.
 
 This module IS a namespace - it rides along for every mesher, and an op names
-one of these by its real ``def`` name. Both impose state on a built mesh, so
-both carry the ``set`` verb, and both take the data class they are DEFINED OVER:
-acquiring that class is the DATA row's problem, and neither of these carries a
-branch that compensates for the wrong one.
-
-A bed is TOPOBATHY - the channel bottom and the sea floor. A standard DEM
-measures the water SURFACE, so painting a bed from one is a substitution: legal
-only as the author's visible declared choice (``set_bed(source=DATA.dem)``
-written into the recipe), and the journal names the row it was painted from.
-
-An elevation is counted from somewhere, and a bed whose datum nobody carried is
-a bed nobody can merge. A source ROW states its vertical datum on its own
-declaration; ``set_bed`` refuses a source row that states none, journals the one
-it does state, and refuses a painted bed that came back on two of them.
-"""
+one of these by its real ``def`` name. Both take the data class they are DEFINED
+OVER, and neither carries a branch that compensates for the wrong one."""
 
 from __future__ import annotations
 
@@ -52,28 +39,11 @@ _PIT_FILL = "pit_fill"
 #: span. The mesh has nodes ON the extent's corners and a raster's rim rows carry
 #: the warp's fill, so the grid has to reach past where the domain ends.
 _BED_MARGIN_FRAC = 0.02
-
-
 def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
             condition: str | None = None) -> Mesh:
     """Paint every node's elevation from a TOPOBATHY source -> the mesh, bedded.
 
-    ``source`` is the data the bed IS: a registered raster fetcher's name (asked
-    for over this mesh's own extent, on its PRIMARY source and nothing else), an
-    object-store uri, or the layer a chained row produced. A domain the primary
-    does not cover REFUSES there, in the fetcher's own words - neither a DEM nor a
-    coarser global relief is quietly put in its place. A substitution is a DATA
-    row's declaration: fetch the bed yourself with the rung permitted and hand
-    THAT layer over, and the fallback gate sees the ask it is there to see.
-
-    ``interp`` says how the surface is read between cell centres and is a visible
-    default (``nearest``). ``condition`` names the one conditioning a source is
-    put through on the way in (``pit_fill``).
-
-    What ACTUALLY painted the bed - the ladder rungs that served, the vertical
-    datum the row states, the note a substitution carried, the row named - rides
-    back on the mesh so the journal can say it.
-    """
+    ``source`` is a raster fetcher's name, an object-store uri, or a layer."""
     from trid3nt_server.workflows.mesh.shared.nodes import sample_raster_at_nodes
 
     if str(interp) not in _INTERPOLATIONS:
@@ -99,38 +69,24 @@ def set_bed(mesh: Mesh, source: Any, interp: str = "nearest",
                      "domain's bathymetry"}])
 
 
+# docstring-exempt: **roles accepts four face shapes and a run-not-node-set
+# contract the signature cannot carry
 def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
     """Which CONTIGUOUS runs of the boundary carry which role -> the mesh, roled.
 
     ``roles`` is ``{role: face}`` or ``{role: [face, ...]}`` - ``inflow``,
     ``outflow``, ``open``, ``rating_curve``, ``free_exit`` - each face a geometry
-    the chain measured
-    (a section's end transect) or the two ends of one. Every boundary node on the
-    run a face names takes that role; the rest are solid wall. The role decides
-    the TELEMAC code quad the pair writer stamps on those nodes, which is where
-    the vocabulary is defined and where an unknown name refuses.
+    the chain measured, or the two ends of one. Every boundary node on the run a
+    face names takes that role; the rest are solid wall.
 
-    A role is a RUN, not a node set: a TELEMAC liquid boundary is numbered by
-    walking the boundary, so a scatter of nodes that happen to sit near a face is
-    not a boundary. A declared TRANSECT names the run between the contour nodes
-    nearest its two ends; a declared POINT names the run standing within the
-    mesh's own mean boundary edge of it; a declared RING names the whole stretch
-    it stands along, which on a domain outline is the whole rim.
+    A role is a RUN, not a node set: a declared TRANSECT names the run between
+    the contour nodes nearest its two ends, a declared POINT the run standing
+    within the mesh's own mean boundary edge of it, and a declared RING the whole
+    stretch it stands along.
 
-    SEVERAL FACES, ONE ROLE. A two-mouth estuary has one open boundary in two
-    SECTIONS, and a role that could name only one face made the second mouth a
-    wall. Each face lands its own run, the role carries their union, and how many
-    runs each role landed as rides back on the mesh - the number the solver's own
-    liquid-boundary numbering will agree with. A node two faces both claim
-    refuses: it carries one boundary condition, and picking silently would put a
-    flowrate on a stretch the caller meant to hold at a level.
-
-    The tolerance is measured off the mesh and gates the FACE, not its anchors: a
-    triangulator conforms to a polygon within an edge along its sides and cuts its
-    corners by more, so a tolerance on the two end anchors would reject the very
-    reach whose middle the boundary follows exactly. A face NO boundary node lies
-    on refuses - that one is a mesh and a face describing different domains.
-    """
+    SEVERAL FACES, ONE ROLE: each face lands its own run and the role carries
+    their union, with the number of runs riding back on the mesh. A node two
+    faces both claim refuses, and so does a face NO boundary node lies on."""
     import numpy as np
     from pyproj import Transformer
     from shapely.geometry import shape as _shape
@@ -158,6 +114,10 @@ def set_boundary_roles(mesh: Mesh, **roles: Any) -> Mesh:
                          for face in _faces(role, value)]
              for role, value in roles.items()}
     xy = np.asarray(points_m, dtype=float)
+    # The tolerance is measured off the mesh and gates the FACE, not its anchors:
+    # a triangulator conforms to a polygon within an edge along its sides and
+    # cuts its corners by more, so a tolerance on the two end anchors would
+    # reject the very reach whose middle the boundary follows exactly.
     tolerance = _mean_boundary_edge_m(xy, contours)
     matched = _runs(xy, contours, faces, tolerance_m=tolerance)
     unmatched = [f"{role}[{i}]" for role, declared in faces.items()
@@ -199,9 +159,7 @@ def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
                 ) -> tuple[Path, str, str | None]:
     """Stage the bed as a local EPSG:4326 raster -> ``(path, provenance, note)``.
 
-    EPSG:4326 because the nodes are sampled with lon/lat, so a projected bed
-    would put every query out of bounds and read its fill value as depth.
-    """
+    EPSG:4326: the nodes are sampled in lon/lat, and a projected bed reads fill."""
     from trid3nt_server.tools import TOOL_REGISTRY
     from trid3nt_server.workflows.shared.geometry import source_uri
 
@@ -212,8 +170,10 @@ def _bed_raster(source: Any, bbox: tuple[float, float, float, float]
             "set_bed was given no source, so the mesh has no elevation to carry.")
     if name in TOOL_REGISTRY:
         _refuse_undated_source(name)
-        # No ladder rung is permitted from here. Which substitutions a bed
-        # tolerates is the DATA row's declaration, and a rung this op permitted on
+        # The PRIMARY source and nothing else: no ladder rung is permitted from
+        # here. A bed is TOPOBATHY - the channel bottom and the sea floor - and a
+        # standard DEM measures the water SURFACE, so which substitutions a bed
+        # tolerates is the DATA row's declaration; a rung this op permitted on
         # the author's behalf would be a cross-dataset bed nobody wrote down.
         layer = TOOL_REGISTRY[name].fn(bbox=bbox, target_crs="EPSG:4326")
         return (op_raster(layer), _provenance(name, layer),
@@ -231,11 +191,7 @@ def _source_row(name: str) -> Any:
 def _refuse_undated_source(name: str) -> None:
     """A SOURCE ROW states its vertical datum, or it is not a bed.
 
-    The bytes cannot be asked: a raster carries numbers, and what they are
-    counted from lives in the dataset's documentation. So a row that states no
-    datum is refused here rather than painted and read later as if it were on
-    whatever the run assumed.
-    """
+    The bytes cannot be asked: only the dataset's own row states it."""
     spec = _source_row(name)
     if spec is not None and not spec.vertical_datum:
         raise MeshToolError(
@@ -247,12 +203,9 @@ def _refuse_undated_source(name: str) -> None:
 
 
 def _provenance(name: str, layer: Any) -> str:
-    """What ACTUALLY painted the bed, and on what the elevations are counted from.
+    """What ACTUALLY painted the bed, and what its elevations are counted from.
 
-    The datum, the acquisition instant and the native cell ride with the name
-    because a bed the user is shown to refine is a bed they may stitch another
-    source onto, and that is the metadata the two have to be compared on.
-    """
+    The datum, the acquisition instant and the native cell ride with the name."""
     rows = fetch_activation_rows(layer)
     note = fetch_fallback_note(layer)
     if rows:
@@ -330,9 +283,7 @@ def _lonlat_nodes(mesh: Mesh) -> Any:
 def _metre_nodes(mesh: Mesh) -> tuple[Any, int]:
     """This mesh's nodes in METRES, and the zone they are in.
 
-    A tolerance and a boundary edge are lengths, and a length in degrees weights
-    the two axes differently.
-    """
+    A tolerance is a length, and a length in degrees weights the axes apart."""
     import numpy as np
 
     from trid3nt_server.workflows.mesh.shared.nodes import reproject_nodes_to_utm
@@ -372,10 +323,7 @@ def _with_meta(mesh: Mesh, **meta: Any) -> Mesh:
 def _faces(role: str, value: Any) -> list[dict[str, Any]]:
     """One declared role's faces as GeoJSON, whichever way they were declared.
 
-    A sequence is read by what it HOLDS: coordinate pairs are the two ends of one
-    transect, anything else is several faces. The two readings cannot collide - a
-    coordinate is a pair of numbers and a face is a document or a handle.
-    """
+    A sequence of coordinate pairs is ONE transect; anything else is faces."""
     if isinstance(value, (list, tuple)):
         if all(isinstance(item, (list, tuple)) and len(item) == 2
                and all(isinstance(c, (int, float)) for c in item)
@@ -411,10 +359,7 @@ def _runs(points_utm: Any, contours: Any, faces_utm: Mapping[str, Any], *,
           tolerance_m: float) -> dict[str, list[list[int]]]:
     """``{role: [run, ...]}``, each run a stretch of ONE contour in walk order.
 
-    One run per DECLARED FACE, in the order the faces were declared, so a role
-    declared across two sections lands as two - a face that matched nothing keeps
-    its empty slot, which is what lets the refusal name which one.
-    """
+    One run per DECLARED FACE, in declared order; an unmatched face stays empty."""
     import numpy as np
     from shapely.geometry import Point
 
@@ -451,9 +396,7 @@ def _runs(points_utm: Any, contours: Any, faces_utm: Mapping[str, Any], *,
 def _arc(ring: Any, start: int, end: int) -> list[int]:
     """The shorter of the two ways round ``ring`` from ``start`` to ``end``.
 
-    A transect cuts one end off the domain, so the stretch it names is the short
-    way between its two anchors; the long way is the rest of the boundary.
-    """
+    A transect cuts one end off the domain: the short way is the stretch."""
     size = len(ring)
     forward = (end - start) % size
     if 2 * forward <= size:
@@ -464,11 +407,7 @@ def _arc(ring: Any, start: int, end: int) -> list[int]:
 def _window(ring: Any, index: int, offset: Any, tolerance_m: float) -> list[int]:
     """The run of ``ring`` about ``index`` that stays within ``tolerance_m``.
 
-    Walking outward from the nearest node and STOPPING at the first node beyond
-    the tolerance is what keeps a point-declared role one stretch: a node past a
-    gap is on the far side of something, and a boundary with a hole in it numbers
-    as two.
-    """
+    The walk STOPS at the first node past the tolerance and never resumes."""
     size = len(ring)
     sides: dict[int, list[int]] = {1: [], -1: []}
     for step in (1, -1):
