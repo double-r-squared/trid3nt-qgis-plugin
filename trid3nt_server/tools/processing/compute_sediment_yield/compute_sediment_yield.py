@@ -1,58 +1,8 @@
-"""``compute_sediment_yield`` composer tool -- RUSLE annual soil loss (v1).
+"""``compute_sediment_yield`` - RUSLE annual soil loss, ``A = R*K*LS*C*P``.
 
-Computes the Revised Universal Soil Loss Equation (RUSLE; Renard et al. 1997,
-USDA Agriculture Handbook 703) over an AOI:
-
-    A = R * K * LS * C * P        [t/ha/yr]
-
-where:
-
-    R  -- rainfall-runoff erosivity (MJ mm ha^-1 h^-1 yr^-1). Caller-supplied
-          ``rainfall_erosivity``; when omitted a documented CONSTANT default of
-          300 is used with an HONEST note (no fake per-site precision -- 300 is
-          a mid-range CONUS value; humid Southeast is ~4000+, arid West ~10-50).
-    K  -- soil erodibility (t ha h ha^-1 MJ^-1 mm^-1). ``k_uri`` override, else
-          ``fetch_statsgo_soils`` KFFACT (30 m CONUS), else a documented
-          constant fallback (0.2) with a note.
-    LS -- slope length x steepness factor, derived from the DEM (``dem_uri``
-          override, else ``fetch_copernicus_dem`` GLO-30). Slope comes from the
-          numpy gradient of the DEM; the classic Wischmeier & Smith (1978)
-          unit-plot form is used:
-
-              L = (lambda / 22.13) ** m
-              S = 65.41*sin(theta)^2 + 4.56*sin(theta) + 0.065
-
-          with theta the local slope angle and m the standard slope-percent
-          exponent bands (>=5% -> 0.5, 3.5-5% -> 0.4, 1-3.5% -> 0.3,
-          <1% -> 0.2). HONEST SIMPLIFICATION (noted in ``notes``): the slope
-          length lambda is fixed at the DEM cell size (no flow-accumulation
-          routing), i.e. a per-cell unit-slope-length estimate -- adequate for
-          relative hot-spot mapping, not for engineering design.
-    C  -- cover-management factor mapped from ``fetch_esri_landcover_10m``
-          (Impact Observatory io-lulc-annual-v02 classes; ``landcover_uri``
-          override) via the literature-standard table ``C_BY_IO_LULC_CLASS``
-          below (Wischmeier & Smith 1978; Panagos et al. 2015 European-mean
-          C-factors).
-    P  -- support-practice factor, fixed at 1.0 (no terracing/contouring data).
-
-Output: a single-band float32 COG of A in t/ha/yr (raw values -- NOT
-color-baked, so downstream zonal stats read real numbers), written to the runs
-bucket (or ``_output_dir`` for offline tests) and returned as a
-``SedimentYieldLayerURI`` -- a ``LayerURI`` subclass (the ``FaultSourcesResult``
-house pattern) carrying summary scalars + honest ``notes``. The raster renders
-through the SAME publish path as every other compute_* raster tool: the
-wrap-site auto-publishes the s3 COG via ``publish_layer``, which resolves this
-tool's declared CLASSED style row -- a LOG-SCALED break table (1/5/10/50/100/500 t/ha/yr --
-half-decade steps -- because soil loss spans orders of magnitude; a linear
-rescale would render everything but the worst gullies as one flat color).
-
-AOI clamp: <= 0.2 degrees per side (``SedimentYieldAoiTooLargeError`` above) --
-the 10-30 m analysis is CPU/memory bounded on the agent box.
-
-``cacheable=False`` (``ttl_class="live-no-cache"``): this is a modeling
-composer, not a fetcher -- the artifact goes to the runs bucket, not the cache.
+The slope length is fixed at the cell size with no flow routing and P is fixed
+at 1.0; both ride in the notes, and the output is raw t/ha/yr, never baked.
 """
-
 from __future__ import annotations
 
 import json
@@ -126,19 +76,13 @@ class SedimentYieldUpstreamError(SedimentYieldError):
 
 
 # ---------------------------------------------------------------------------
-# Result type -- LayerURI subclass carrying the summary (house side-channel).
+# Result type.
 # ---------------------------------------------------------------------------
 
 
 class SedimentYieldLayerURI(LayerURI):
-    """The RUSLE soil-loss ``LayerURI`` plus assessment summary.
-
-    Extra fields beyond ``LayerURI``:
-
-    - ``mean_soil_loss_t_ha_yr`` / ``max_soil_loss_t_ha_yr`` /
-      ``p95_soil_loss_t_ha_yr`` -- headline statistics over valid cells.
-    - ``rainfall_erosivity`` -- the R-factor actually used.
-    - ``notes`` -- honest provenance + every fallback/simplification used.
+    """The RUSLE soil-loss ``LayerURI`` plus headline statistics over valid cells,
+    the R-factor actually used, and notes carrying every fallback taken.
     """
 
     mean_soil_loss_t_ha_yr: float | None = None
@@ -155,10 +99,10 @@ class SedimentYieldLayerURI(LayerURI):
 #: CPU/memory-bound AOI clamp (degrees per side).
 _MAX_AOI_DEG: float = 0.2
 
-#: Documented constant R-factor default (MJ mm ha^-1 h^-1 yr^-1) when the
-#: caller supplies no ``rainfall_erosivity``. 300 is a mid-range CONUS value;
-#: real R spans ~10 (arid West) to ~6000+ (Gulf Coast). We do NOT fake per-site
-#: precision -- the honest note tells the user to pass a local value.
+#: Constant R-factor default (MJ mm ha^-1 h^-1 yr^-1) when the caller supplies
+#: no ``rainfall_erosivity``. 300 is a mid-range CONUS value against a real span
+#: of ~10 (arid West) to ~6000+ (Gulf Coast), so the note tells the user to pass
+#: a local value rather than faking per-site precision here.
 _DEFAULT_R: float = 300.0
 
 #: R-factor sanity range.
@@ -349,11 +293,8 @@ def _open_band(path: str, label: str) -> tuple[np.ndarray, Any]:
 def _resample_to_grid(
     path: str, label: str, dem_src: Any, *, categorical: bool
 ) -> np.ndarray:
-    """Reproject/resample ``path`` band 1 onto the DEM grid (float64, NaN nodata).
-
-    ``categorical=True`` -> nearest neighbour (class codes must not blend);
-    otherwise bilinear. An input already on the exact DEM grid passes through
-    value-identical.
+    """``path`` band 1 resampled onto the DEM grid, float64 with NaN nodata;
+    ``categorical=True`` takes nearest neighbour, so class codes do not blend.
     """
     try:
         import rasterio
@@ -398,11 +339,8 @@ def _resample_to_grid(
 
 
 def _cell_size_m(dem_src: Any) -> tuple[float, float]:
-    """(dx_m, dy_m) cell size in METERS, handling geographic-CRS DEMs.
-
-    Projected CRS: the transform's pixel sizes are already meters. Geographic
-    CRS: degrees are converted at the raster's center latitude (dx scales with
-    cos(lat)); adequate over a <=0.2-degree AOI.
+    """``(dx_m, dy_m)`` cell size in METRES: the transform's own pixel sizes on a
+    projected CRS, converted at the centre latitude on a geographic one.
     """
     t = dem_src.transform
     res_x, res_y = abs(t.a), abs(t.e)
@@ -424,15 +362,13 @@ def _cell_size_m(dem_src: Any) -> tuple[float, float]:
 
 
 def _ls_factor(dem: np.ndarray, dx_m: float, dy_m: float, notes: list[str]) -> np.ndarray:
-    """Wischmeier & Smith (1978) LS from the DEM gradient.
-
-    L = (lambda/22.13)^m with lambda fixed at the cell size (documented
-    no-flow-routing simplification); S = 65.41 sin^2(theta) + 4.56 sin(theta)
-    + 0.065; m banded on slope percent (>=5 -> 0.5, 3.5-5 -> 0.4,
-    1-3.5 -> 0.3, <1 -> 0.2).
-    """
+    """Wischmeier & Smith (1978) LS from the DEM gradient."""
+    # L = (lambda/22.13)^m with lambda fixed at the cell size - the
+    # no-flow-routing simplification - and S = 65.41 sin^2(theta) +
+    # 4.56 sin(theta) + 0.065, with m banded on slope percent:
+    # >=5 -> 0.5, 3.5-5 -> 0.4, 1-3.5 -> 0.3, <1 -> 0.2.
     gy, gx = np.gradient(dem, dy_m, dx_m)
-    grad = np.hypot(gx, gy)  # rise/run
+    grad = np.hypot(gx, gy)
     theta = np.arctan(grad)
     slope_pct = grad * 100.0
 
@@ -461,7 +397,7 @@ def _load_k(
     tmpdir: str,
     notes: list[str],
 ) -> np.ndarray:
-    """K-factor grid (override / STATSGO KFFACT / constant fallback)."""
+    """The K-factor grid: ``k_uri``, else STATSGO KFFACT, else a noted constant."""
     if k_uri is not None:
         local = _stage_uri_local(k_uri, tmpdir, "k")
         k = _resample_to_grid(local, "k", dem_src, categorical=False)
@@ -494,7 +430,9 @@ def _load_c(
     tmpdir: str,
     notes: list[str],
 ) -> np.ndarray:
-    """C-factor grid mapped from IO LULC classes (override or fetched)."""
+    """The C-factor grid, mapped from IO LULC classes; a class carrying no cover
+    information stays NaN rather than taking a fabricated factor.
+    """
     if landcover_uri is not None:
         local = _stage_uri_local(landcover_uri, tmpdir, "landcover")
         source_note = f"C-factor land cover from caller-supplied landcover_uri ({landcover_uri})"
@@ -548,7 +486,7 @@ def _load_c(
 def _write_cog_bytes(
     a: np.ndarray, dem_src: Any, tmpdir: str
 ) -> bytes:
-    """Encode the soil-loss grid as COG bytes on the DEM grid (float32)."""
+    """The soil-loss grid as float32 COG bytes on the DEM grid."""
     try:
         import rasterio
     except ImportError as exc:
@@ -578,7 +516,9 @@ def _write_cog_bytes(
 
 
 def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
-    """Persist the COG; return its URI (local for tests, runs bucket live)."""
+    """Persist the COG and return its URI: a local path when ``output_dir`` is
+    given, else an ``s3://`` key in the runs bucket.
+    """
     filename = f"sediment_yield_{seed}.tif"
     if output_dir is not None:
         path = os.path.join(output_dir, filename)
@@ -639,40 +579,27 @@ def compute_sediment_yield(
     landcover_uri: str | None = None,
     *,
     _output_dir: str | None = None,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> SedimentYieldLayerURI:
     """Map annual soil loss over an AOI with the RUSLE erosion model (A = R*K*LS*C*P, t/ha/yr).
 
-    Use this when: "where is erosion worst in this watershed", soil-loss/
-    sediment-yield maps for fields, erosion risk after land-use change, or
-    sediment-source screening upstream of a reservoir. Do NOT use for:
-    in-channel sediment transport/deposition (hillslope sheet+rill erosion
-    only); post-fire debris flows (``model_debris_flow``); single-storm
-    event loss (RUSLE is a long-term ANNUAL average).
+    Use for where erosion is worst in a watershed, soil-loss maps for fields,
+    erosion risk after land-use change, sediment-source screening above a
+    reservoir. Hillslope sheet and rill erosion only: not in-channel transport,
+    not post-fire debris flows (``model_debris_flow``), and not a single storm -
+    RUSLE is a long-term ANNUAL average.
 
     Params:
-        bbox: EPSG:4326, clamped to <= 0.2 deg per side.
-        rainfall_erosivity: R-factor MJ mm/(ha h yr); default a noted
-            coarse constant 300 -- pass the local R for absolute accuracy.
+        bbox: EPSG:4326, clamped to 0.2 deg per side.
+        rainfall_erosivity: R in MJ mm/(ha h yr); the default is a noted
+            constant 300 - pass the local R for absolute accuracy.
         dem_uri: override DEM; default Copernicus GLO-30.
-        k_uri: override K-factor raster; default STATSGO KFFACT, then a
-            noted 0.2 fallback.
-        landcover_uri: override land-cover raster; default
-            ``fetch_esri_landcover_10m``.
+        k_uri: override K raster; default STATSGO KFFACT, then a noted 0.2.
+        landcover_uri: override; default ``fetch_esri_landcover_10m``.
 
-    Returns:
-        ``SedimentYieldLayerURI`` -- raster ``LayerURI`` (single-band
-        float32 log-scaled)
-        with ``mean_soil_loss_t_ha_yr``/``max_soil_loss_t_ha_yr``/
-        ``p95_soil_loss_t_ha_yr``, ``rainfall_erosivity``, honest ``notes``.
-
-    Raises:
-        SedimentYieldAoiTooLargeError: AOI over the 0.2-deg clamp.
-        SedimentYieldInputError: bad bbox/erosivity/unreadable URI.
-        SedimentYieldDependencyError: rasterio missing.
-        SedimentYieldUpstreamError: input fetch or write failure.
+    Returns raw t/ha/yr with headline statistics and honest notes. Slope length
+    is the cell size and P is 1.0, so this maps hot spots, not design values.
     """
     q_bbox = _validate_bbox(bbox)
     notes: list[str] = []
@@ -684,7 +611,6 @@ def compute_sediment_yield(
         raise SedimentYieldDependencyError(f"rasterio not importable: {exc}") from exc
 
     with tempfile.TemporaryDirectory(prefix="trid3nt_sediment_yield_") as tmpdir:
-        # ---- 1. DEM (override or fetch). ---------------------------------
         if dem_uri is not None:
             dem_local = _stage_uri_local(dem_uri, tmpdir, "dem")
             notes.append(f"DEM from caller-supplied dem_uri ({dem_uri}).")
@@ -708,13 +634,13 @@ def compute_sediment_yield(
                     f"DEM raster {dem_local!r} has no valid cells over the AOI."
                 )
 
-            # ---- 2. RUSLE factors. ---------------------------------------
+
             dx_m, dy_m = _cell_size_m(dem_src)
             ls = _ls_factor(dem, dx_m, dy_m, notes)
             k = _load_k(q_bbox, k_uri, dem_src, tmpdir, notes)
             c = _load_c(q_bbox, landcover_uri, dem_src, tmpdir, notes)
 
-            # ---- 3. A = R * K * LS * C * P. ------------------------------
+
             a = r_factor * k * ls * c * _P_FACTOR
             a = np.where(np.isfinite(dem), a, np.nan)
             finite = a[np.isfinite(a)]
@@ -724,7 +650,7 @@ def compute_sediment_yield(
                     "DEM grid, or every cell is nodata/cloud)."
                 )
 
-            # ---- 4. Write the styled COG. --------------------------------
+
             payload = _write_cog_bytes(a, dem_src, tmpdir)
         finally:
             dem_src.close()
