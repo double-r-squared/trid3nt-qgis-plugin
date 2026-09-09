@@ -31,10 +31,10 @@ gates:
   max_features: 20000                        # twin _MAX_PAGES(20) * _PAGE_SIZE(1000)
 
 ingest:
+  access: ogr
+  ogr: {driver: ESRIJSON}
   query_template:
-    out_fields: "*"                           # twin requests all fields, projects client-side
-    f: geojson
-  pagination: {mode: exceeded_transfer_limit, page_size: 1000}
+    out_fields: "*"                           # all fields server-side, projected below
   endpoint_by_param:                          # layer enum -> sub-layer endpoint
     param: layer
     map: {leveed_areas: areas, system_routes: routes, embankments: embankments}
