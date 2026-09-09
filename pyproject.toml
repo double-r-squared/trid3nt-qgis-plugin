@@ -246,6 +246,23 @@ dependencies = [
     # aiohttp: HTTP server replacement target (L1); was supplied
     # transitively by aiobotocore / s3fs / async-retriever.
     "aiohttp==3.14.1",
+    # shapely, pyproj, scipy and xarray are likewise imported directly by
+    # product code and were likewise supplied only transitively, so their
+    # versions were set by whichever resolver run installed the geospatial
+    # stack. Pinned at the versions installed in venvs/agent.
+    # shapely: 41 direct importers (geometry predicates, bbox overlap tests,
+    # mesh boundary work); supplied transitively by geopandas / hydromt /
+    # openquake.engine.
+    "shapely==2.1.2",
+    # pyproj: 34 direct importers (CRS axis units, geodesic area and
+    # distance); supplied transitively by geopandas / rioxarray / hydromt.
+    "pyproj==3.7.2",
+    # scipy: 9 direct importers (interpolation, ndimage sampling, spatial
+    # trees); supplied transitively by landlab / hydromt / pysheds.
+    "scipy==1.15.3",
+    # xarray: 6 direct importers (gridded fetch decode, the COG write path);
+    # supplied transitively by rioxarray / hydromt / landlab.
+    "xarray==2026.4.0",
     # Consumed verbatim from contracts/ in this repo (editable install).
     "trid3nt-contracts>=0.1,<0.2",
 ]
