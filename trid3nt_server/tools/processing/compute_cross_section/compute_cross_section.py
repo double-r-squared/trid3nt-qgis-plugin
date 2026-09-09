@@ -1,64 +1,8 @@
-"""Atomic tool ``compute_cross_section`` -- sample raster value(s) along a line.
+"""Atomic tool ``compute_cross_section`` - sample raster value(s) along a line.
 
-The "draw-a-line, see-a-profile" capability (cross-section / transect / long
-profile). Given a polyline and one or more height/depth rasters already in the
-Case, it samples each raster at N evenly-spaced stations along the line and
-returns the resulting (distance, value) series as a **Vega-Lite v5 line chart**
-the QGIS plugin's chart panel renders inline (the same chart-emission
-envelope ``generate_chart`` emits). x = cumulative geodesic distance along the line in
-metres; y = elevation or depth in the raster's native units; one coloured line
-per sampled layer (DESIGN CALL B = multi-layer overlay).
-
-This is the canonical hydraulics/terrain "section view" -- ground vs water
-surface (freeboard / inundation depth), DEM vs bathymetry (bank-to-channel),
-head surface vs land surface (groundwater seepage), pre vs post event. A single
-terrain profile is commodity; overlaying N surfaces on one shared distance axis
-is the differentiator (per ``reports/design/spike_cross_section_profile_tool.md``).
-
-DATA FLOW (the spike's happy path, steps 1-6)
----------------------------------------------
-1. Resolve ``line`` to a shapely LineString in EPSG:4326 (accepts a GeoJSON
-   LineString, a list of ``[lon, lat]`` vertices, or a FeatureCollection -- the
-   last lets the agent feed the drawn FC from ``request_spatial_input`` straight
-   through, OR pass a self-constructed line inline with zero user draw).
-2. Open each ``layer_uri`` with rasterio (s3:// staged via ``read_object_bytes_s3``
-   + ``MemoryFile`` -- the same /vsis3/-credential workaround documented in
-   ``clip_raster_to_polygon._get_source_crs``).
-3. Interpolate N stations at equal arc-length along the line in lon/lat
-   (``line.interpolate``), and compute the cumulative GEODESIC distance from the
-   start vertex (``pyproj.Geod``) so the x-axis is metres on the ground, not
-   degrees.
-4. For each layer: reproject the station coordinates into the raster CRS
-   (``rasterio.warp.transform``) and read all stations in ONE vectorized
-   ``src.sample(...)`` call; nodata / out-of-bounds -> ``None`` (surfaced
-   honestly, never silently dropped -- the honesty floor).
-5. Concatenate to a series ``[{distance_m, value, lon, lat, layer}, ...]`` and
-   build the Vega-Lite line spec (``color`` encoding on ``layer`` when >1 layer;
-   single-y when units match, dual-axis when they differ).
-6. Wrap with ``build_chart_payload(...)`` -> a ChartEmissionPayload dict
-   (``envelope_type="chart-emission"``) the agent loop emits + persists +
-   summarizes for narration, EXACTLY like the four ``chart_tools`` charts.
-
-DETERMINISM (Invariant 2): zero LLM calls, zero randomness -- the profile is a
-pure function of (line, layers, n_stations). The numbers the agent narrates are
-reproducible from the inputs.
-
-CACHING: ``cacheable=False`` / ``ttl_class="live-no-cache"`` -- the result is a
-fresh chart-emission envelope minting a new ``chart_id`` per call (the same
-in-process emit pattern as ``chart_tools``; caching would re-use a stale
-chart_id). The expensive part -- the raster read -- is already cached upstream
-by the fetcher that produced the layer.
-
-LIMITATIONS (honest -- this is a sampler, not a hydraulic solver):
-- Stations are sampled by nearest-cell (``src.sample``); for a coarse raster a
-  finer ``n_stations`` does not add information the grid does not carry.
-- Multi-layer overlay caps at ``_MAX_LAYERS`` layers; layers need not co-cover
-  the line -- uncovered stations read ``None`` and the line breaks there.
-- No vertical datum reconciliation across layers: if two layers use different
-  vertical datums the overlay is only meaningful when they share one (the caller
-  owns datum hygiene, same as a code_exec playground zonal-stats recipe).
+Stations sample the NEAREST CELL, so a finer ``n_stations`` adds nothing a coarse
+raster lacks; no vertical datum is reconciled, so an overlay needs a shared one.
 """
-
 from __future__ import annotations
 
 import logging
@@ -103,23 +47,10 @@ _VEGA_LITE_V5_SCHEMA = "https://vega.github.io/schema/vega-lite/v5.json"
 # ---------------------------------------------------------------------------
 
 
+# ``error_code`` is one of LINE_INVALID, NO_LAYERS, TOO_MANY_LAYERS,
+# LAYER_OPEN_FAILED, DOWNLOAD_FAILED, LINE_REPROJECT_FAILED, LINE_OUTSIDE_RASTER.
 class CrossSectionError(RuntimeError):
-    """Raised when ``compute_cross_section`` cannot produce a profile.
-
-    ``error_code`` carries a SCREAMING_SNAKE_CASE code consumed by
-    ``summarize_tool_result`` (retry surface):
-
-    - ``LINE_INVALID``        -- ``line`` is not a usable LineString (wrong shape,
-      < 2 distinct vertices, non-numeric coordinates).
-    - ``NO_LAYERS``           -- no ``layer_uri`` (and no ``extra_layer_uris``)
-      was supplied.
-    - ``TOO_MANY_LAYERS``     -- more than ``_MAX_LAYERS`` layers requested.
-    - ``LAYER_OPEN_FAILED``   -- a raster could not be opened with rasterio.
-    - ``DOWNLOAD_FAILED``     -- an s3:// download for a layer failed.
-    - ``LINE_REPROJECT_FAILED``-- reprojecting the line into a raster CRS failed.
-    - ``LINE_OUTSIDE_RASTER`` -- every station fell on nodata / outside EVERY
-      layer (the profile would be entirely null -- surfaced, not faked).
-    """
+    """No profile could be produced."""
 
     def __init__(self, error_code: str, message: str, *, retryable: bool = False) -> None:
         super().__init__(message)
@@ -131,10 +62,9 @@ class CrossSectionError(RuntimeError):
 # Tool metadata
 # ---------------------------------------------------------------------------
 
+# Never cached: every call mints a fresh chart_id, and a cached envelope would
+# hand the panel a stale one. The raster read is already cached upstream.
 _METADATA = AtomicToolMetadata(
-    # Deterministic in-process emit tool -> never touches the cache shim
-    # (mirrors chart_tools' chart_id-per-call rationale and the analytic
-    # compute_wave_nomograph live-no-cache choice).
     name="compute_cross_section",
     ttl_class="live-no-cache",
     source_class="workflow_dispatch",
@@ -144,7 +74,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Line resolution -- accept GeoJSON LineString / [lon,lat] list / FeatureCollection
+# Line resolution
 # ---------------------------------------------------------------------------
 
 
@@ -161,18 +91,8 @@ def _coords_from_geojson_geometry(geom: dict[str, Any]) -> list[list[float]]:
 
 
 def _resolve_line_coords(line: Any) -> list[list[float]]:
-    """Resolve ``line`` to a list of ``[lon, lat]`` vertices.
-
-    Accepts (in priority order):
-      1. A GeoJSON ``LineString`` geometry dict ``{"type": "LineString",
-         "coordinates": [[lon,lat], ...]}``.
-      2. A GeoJSON ``Feature`` wrapping a LineString.
-      3. A GeoJSON ``FeatureCollection`` -- the FIRST LineString feature is used
-         (so the drawn FC from ``request_spatial_input`` feeds straight
-         through; extra lines are ignored for v1).
-      4. A bare list of ``[lon, lat]`` vertices (the agent-derived inline path).
-
-    Raises ``CrossSectionError(LINE_INVALID)`` on any unusable input.
+    """Resolve ``line`` to ``[lon, lat]`` vertices from a GeoJSON LineString,
+    Feature, FeatureCollection (its FIRST) or a bare vertex list; else LINE_INVALID.
     """
     if line is None:
         raise CrossSectionError("LINE_INVALID", "line is required (got None).")
@@ -222,7 +142,6 @@ def _resolve_line_coords(line: Any) -> list[list[float]]:
             f"list of [lon, lat] vertices; got {type(line).__name__}.",
         )
 
-    # Validate + coerce each vertex to a float [lon, lat] pair.
     cleaned: list[list[float]] = []
     for i, pt in enumerate(coords):
         if not isinstance(pt, (list, tuple)) or len(pt) < 2:
@@ -240,8 +159,8 @@ def _resolve_line_coords(line: Any) -> list[list[float]]:
             ) from exc
         cleaned.append([lon, lat])
 
-    # Drop consecutive duplicate vertices (a zero-length segment carries no
-    # profile information and breaks arc-length interpolation).
+    # A zero-length segment carries no profile information and breaks
+    # arc-length interpolation, so consecutive duplicates go.
     deduped: list[list[float]] = []
     for pt in cleaned:
         if not deduped or deduped[-1] != pt:
@@ -257,18 +176,16 @@ def _resolve_line_coords(line: Any) -> list[list[float]]:
 
 
 # ---------------------------------------------------------------------------
-# Raster open helper (mirrors clip_raster_to_polygon._get_source_crs staging)
+# Raster open helper
 # ---------------------------------------------------------------------------
 
 
 def _open_raster_source(layer_uri: str) -> tuple[Any, bool]:
-    """Return (bytes-or-path, is_memory) for opening ``layer_uri`` with rasterio.
-
-    For ``s3://`` URIs the bytes are staged via the shared boto3 reader (GDAL's
-    /vsis3/ credential chain does not resolve the EC2 instance role in this env;
-    boto3 does -- the documented clip_raster_to_polygon workaround). Returns the
-    raw bytes for an s3:// URI (open via MemoryFile) or the local path for a file.
+    """``(bytes-or-path, is_memory)`` for opening ``layer_uri``: staged bytes for
+    an ``s3://`` URI, the path itself for a local file.
     """
+    # boto3 stages the s3:// bytes because GDAL's own /vsis3/ credential chain
+    # does not resolve the instance role in this environment.
     if layer_uri.startswith("s3://"):
         from trid3nt_server.tools.cache import read_object_bytes_s3
 
@@ -299,14 +216,8 @@ def _open_raster_source(layer_uri: str) -> tuple[Any, bool]:
 def _interpolate_stations(
     coords: list[list[float]], n_stations: int
 ) -> tuple[list[tuple[float, float]], list[float]]:
-    """Return (station lon/lat list, cumulative geodesic distance_m list).
-
-    Stations are equally spaced by PLANAR arc-length along the densified line in
-    lon/lat (``shapely.LineString.interpolate``), then the cumulative GEODESIC
-    distance from the start vertex is computed with ``pyproj.Geod`` so the x-axis
-    is metres on the ground (a 1-degree step is ~111 km near the equator but
-    shrinks toward the poles; planar interpolation only sets WHERE the stations
-    land, geodesic sets their DISTANCE labels).
+    """``(station lon/lat list, cumulative geodesic distance_m list)``: planar
+    interpolation sets WHERE they land, the geodesic sum their DISTANCE labels.
     """
     from shapely.geometry import LineString
 
@@ -318,8 +229,6 @@ def _interpolate_stations(
         pt = geom.interpolate(frac * total_len)
         stations.append((pt.x, pt.y))
 
-    # Cumulative geodesic distance: sum the geodesic length of each prefix
-    # segment. WGS84 ellipsoid.
     from pyproj import Geod
 
     geod = Geod(ellps="WGS84")
@@ -341,12 +250,8 @@ def _sample_layer(
     layer_uri: str,
     stations_4326: list[tuple[float, float]],
 ) -> tuple[list[float | None], str | None, int]:
-    """Sample one raster at ``stations_4326`` (lon/lat). Return (values, units, n_valid).
-
-    Reprojects the stations into the raster CRS, reads band 1 at every station in
-    one vectorized ``src.sample`` call, and maps nodata / out-of-bounds reads to
-    ``None`` (honesty floor -- never a fabricated value). ``units`` is read from
-    the raster's band-1 units tag when present.
+    """Sample one raster at ``stations_4326``, returning ``(values, units,
+    n_valid)``; a nodata or out-of-bounds read is None, never a filled value.
     """
     import rasterio
     from rasterio.io import MemoryFile
@@ -367,8 +272,7 @@ def _sample_layer(
 
         xs = [lon for lon, _ in stations_4326]
         ys = [lat for _, lat in stations_4326]
-        # Reproject stations into the raster CRS so src.sample reads the right
-        # cells (src.sample takes coordinates in the raster's own CRS).
+        # src.sample takes coordinates in the raster's own CRS.
         if raster_crs is not None and raster_crs.to_epsg() != 4326:
             try:
                 xs, ys = transform("EPSG:4326", raster_crs, xs, ys)
@@ -382,10 +286,9 @@ def _sample_layer(
         coords = list(zip(xs, ys))
         values: list[float | None] = []
         n_valid = 0
-        # src.sample is a generator yielding a band-array per coordinate.
         for arr in src.sample(coords, indexes=1):
             v = float(arr[0])
-            # NaN-safe nodata test: ``v != v`` is True only for NaN.
+            # v != v is True only for NaN, so the test stays NaN-safe.
             is_nan = v != v
             is_nodata = nodata is not None and v == nodata
             if is_nan or is_nodata:
@@ -418,7 +321,7 @@ def _sample_layer(
 
 
 def _layer_label(layer_uri: str) -> str:
-    """A short human label for a layer (the basename without extension)."""
+    """A short label for a layer: the basename without its extension."""
     base = layer_uri.rstrip("/").rsplit("/", 1)[-1]
     if "." in base:
         base = base.rsplit(".", 1)[0]
@@ -432,9 +335,6 @@ def _layer_label(layer_uri: str) -> str:
 
 @register_tool(
     _METADATA,
-    # readOnlyHint=True (samples input rasters; emits a chart, no side effects),
-    # openWorldHint=False (local GDAL read, no external API), destructiveHint=False,
-    # idempotentHint=True (deterministic: same line+layers -> same profile).
     read_only_hint=True,
     open_world_hint=False,
     destructive_hint=False,
@@ -447,45 +347,27 @@ def compute_cross_section(
     extra_layer_uris: list[str] | None = None,
     *,
     _created_turn_id: str | None = None,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Sample raster value(s) along a line and chart the cross-section profile.
 
-    Use this when: the user wants a "section view"/"long profile"/"transect"
-    ALONG a line -- "elevation profile across this valley", "flood depth
-    along the road". The only chart keyed on DISTANCE (``generate_chart``
-    handles a caller-composed distribution or time-series shape instead).
-    Pass ``extra_layer_uris`` (up to 3) to overlay multiple surfaces on the
-    same line/axis (ground vs water surface, DEM vs bathymetry). Do NOT use
-    for: a distribution or a time series (``generate_chart``); a single
-    number for the line (the code_exec playground with a buffered line);
-    the line itself renders on the map automatically.
+    Use when the user wants a section view, long profile or transect ALONG a
+    line: elevation across a valley, flood depth along a road. The only chart
+    keyed on DISTANCE - a distribution or time series is ``generate_chart``.
+    Pass ``extra_layer_uris`` (up to 3) to overlay surfaces on the same axis.
 
     Params:
-        layer_uri: primary raster to profile (DEM, flood depth, head
-            surface, bathymetry COG).
-        line: GeoJSON LineString/Feature/FeatureCollection or
-            ``[[lon,lat],...]`` list (EPSG:4326), >=2 vertices. Use a
-            user-drawn line via ``request_spatial_input(mode="vector_draw")``
-            or construct endpoints directly.
-        n_stations: evenly-spaced sample count along the line (default 200,
-            clamped [2, 2000]).
-        extra_layer_uris: optional up to 3 additional rasters overlaid on
-            the same stations; uncovered stations read null.
+        layer_uri: primary raster to profile (DEM, depth, head, bathymetry).
+        line: GeoJSON LineString / Feature / FeatureCollection or
+            ``[[lon,lat],...]`` in EPSG:4326, at least 2 vertices; a drawn line
+            from ``request_spatial_input(mode="vector_draw")`` feeds straight in.
+        n_stations: sample count along the line, default 200, clamped [2, 2000].
+        extra_layer_uris: up to 3 more rasters on the same stations; a station
+            no layer covers reads null rather than a filled value.
 
-    Returns:
-        ``ChartEmissionPayload`` (``envelope_type="chart-emission"``):
-        Vega-Lite v5 line chart (x=distance_m, y=value, one line per
-        layer), title, and a profile-drop/range caption.
-
-    Raises:
-        CrossSectionError: LINE_INVALID, NO_LAYERS, TOO_MANY_LAYERS,
-            LAYER_OPEN_FAILED, DOWNLOAD_FAILED, LINE_REPROJECT_FAILED,
-            LINE_OUTSIDE_RASTER.
+    Returns a Vega-Lite line chart, x=distance_m, one line per layer.
     """
-    # ---- validate inputs ---------------------------------------------------
     if not isinstance(layer_uri, str) or not layer_uri.strip():
         raise CrossSectionError(
             "NO_LAYERS", f"layer_uri must be a non-empty URI string; got {layer_uri!r}."
@@ -516,7 +398,6 @@ def compute_cross_section(
     coords = _resolve_line_coords(line)
     stations, distances = _interpolate_stations(coords, n)
 
-    # ---- sample every layer over the SAME stations -------------------------
     rows: list[dict[str, Any]] = []
     per_layer_units: list[str | None] = []
     per_layer_label: list[str] = []
@@ -526,7 +407,7 @@ def compute_cross_section(
     for layer_idx, uri in enumerate(layer_uris):
         values, units, n_valid = _sample_layer(uri, stations)
         label = _layer_label(uri)
-        # Disambiguate identical basenames so the color legend stays 1:1.
+        # Identical basenames would collapse the colour legend.
         if label in per_layer_label:
             label = f"{label} ({layer_idx + 1})"
         per_layer_label.append(label)
@@ -557,13 +438,11 @@ def compute_cross_section(
             retryable=False,
         )
 
-    # ---- units handling: single-y when units match, dual-axis otherwise ----
     distinct_units = {u for u in per_layer_units if u}
     multi_layer = len(layer_uris) > 1
     units_match = len(distinct_units) <= 1
     y_title = next(iter(distinct_units)) if distinct_units else "value"
 
-    # ---- build the Vega-Lite line spec -------------------------------------
     spec = _build_profile_spec(
         rows=rows,
         multi_layer=multi_layer,
@@ -619,12 +498,8 @@ def _build_profile_spec(
     per_layer_label: list[str],
     per_layer_units: list[str | None],
 ) -> dict[str, Any]:
-    """Build the Vega-Lite v5 line-chart spec for the profile.
-
-    Same line-chart shape ``generate_chart`` would emit, with a distance x-axis.
-    Single-layer: one line. Multi-layer with matching units: one shared y-axis,
-    a ``color`` encoding on ``layer``. Multi-layer with DIFFERING units: a
-    dual-axis ``layer`` (two independent y scales) -- the spike's units fallback.
+    """The Vega-Lite v5 line-chart spec: one line, or a shared y-axis coloured by
+    layer, or two independent y scales when the layers' units differ.
     """
     x_enc = {
         "field": "distance_m",
@@ -654,7 +529,6 @@ def _build_profile_spec(
         }
 
     if units_match:
-        # One shared y-axis; color distinguishes the overlaid layers.
         return {
             "$schema": _VEGA_LITE_V5_SCHEMA,
             "title": "Cross-section profile",
@@ -669,8 +543,8 @@ def _build_profile_spec(
             "width": "container",
         }
 
-    # Differing units -> dual independent y scales via a layered spec. Split the
-    # first layer (left axis) from the rest (right axis); both share the x-axis.
+    # Differing units take two independent y scales: the first layer on the
+    # left axis, the rest on the right, both sharing the x-axis.
     primary_label = per_layer_label[0]
     primary_units = per_layer_units[0] or "value"
     secondary_units = next((u for u in per_layer_units[1:] if u), "value")
@@ -726,7 +600,7 @@ def _build_caption(
     layer_value_extent: list[tuple[float, float] | None],
     per_layer_units: list[str | None],
 ) -> str:
-    """One-line caption carrying the computed profile numbers (determinism boundary)."""
+    """One caption line carrying the computed profile numbers."""
     parts = [f"{total_len_m:.0f} m line", f"{n_stations} stations"]
     for i, label in enumerate(per_layer_label):
         extent = layer_value_extent[i] if i < len(layer_value_extent) else None
