@@ -54,7 +54,7 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 
-from .test_persistence import MockMCPClient, _fresh_case_summary
+from tests._fakes import MockMCPClient, _fresh_case_summary
 
 # The bbox _fresh_case_summary stamps onto every seeded Case (Fort Myers).
 _CASE_AOI = (-82.0, 26.5, -81.8, 26.7)

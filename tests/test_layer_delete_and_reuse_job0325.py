@@ -42,7 +42,7 @@ from trid3nt_contracts.case import CaseSummary
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from .test_persistence import MockMCPClient
+from tests._fakes import MockMCPClient
 
 
 # --------------------------------------------------------------------------- #

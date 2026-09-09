@@ -20,11 +20,12 @@ Fates in this scope: `MOVE -> <dir>` (the mirror), `MERGE -> <file>`, `SPLIT in 
 `KEEP` (the two separate distributions and `tests/fixtures/`). No file in this scope is an
 EXEMPT candidate: the docstring limit is not what this wave applies here.
 
-## tests/ - the mirror move  (316 files)
+## tests/ - the mirror move  (315 files)
 
 | path | pure | hist | fate | note |
 |---|---:|---:|---|---|
-| `tests/__init__.py` | 0 | 0 | DELETE | dies with --import-mode=importlib (the FIRST checkpoint) |
+| `tests/_fakes/__init__.py` | 91 | 0 | KEEP | the shared doubles, extracted at the import-mode checkpoint: `MockMCPClient` and `_fresh_case_summary` from `test_persistence.py`, `MockWebSocket` from `test_server_case_handlers.py`, all three verbatim |
+| ~~`tests/__init__.py`~~ | 0 | 0 | DELETED | died with --import-mode=importlib (the FIRST checkpoint, landed) |
 | `tests/audit_gemini_schema_compliance.py` | 162 | 4 | DELETE | ORPHAN + DUPLICATE of test_gemini_schema_compliance.py; zero references |
 | `tests/card_client.py` | 60 | 0 | DELETE | ORPHAN: claims to be shared by every gate test; shared by zero |
 | `tests/conftest.py` | 123 | 0 | KEEP tests/conftest.py + SPLIT | root keeps _default_scripted_provider / _reset_fake_llm_harness / fake_s3 / fake_llm; _offline_cas_parse + telemac_result -> tests/telemac/conftest.py; empty_registry -> tests/tools/conftest.py; make_read_through_s3_injector -> tests/_fakes/ |
@@ -166,7 +167,7 @@ EXEMPT candidate: the docstring limit is not what this wave applies here.
 | `tests/test_pandas_pin_regression.py` | 25 | 13 | DELETE | ORPHAN: hydromt-sfincs is gone; also asserts pandas, not a product behaviour |
 | `tests/test_parallel_call_bundling.py` | 203 | 0 | MOVE -> tests/adapters/ |  |
 | `tests/test_payload_warning_flow.py` | 390 | 2 | MOVE -> tests/server/ |  |
-| `tests/test_persistence.py` | 226 | 4 | MOVE -> tests/server/ + TRIM | surrenders MockMCPClient / _fresh_case_summary to tests/_fakes/ BEFORE any file moves |
+| `tests/test_persistence.py` | 226 | 4 | MOVE -> tests/server/ + TRIM | SURRENDERED MockMCPClient / _fresh_case_summary to tests/_fakes/ BEFORE any file moves |
 | `tests/test_persistence_sessions.py` | 223 | 5 | MOVE -> tests/server/ |  |
 | `tests/test_persistence_singleton_wiring.py` | 65 | 0 | MOVE -> tests/server/ |  |
 | `tests/test_pipeline_emitter.py` | 1235 | 20 | MOVE -> tests/emission/ |  |
@@ -271,7 +272,7 @@ EXEMPT candidate: the docstring limit is not what this wave applies here.
 | `tests/test_search_tools_mongo_backend.py` | 178 | 6 | MOVE -> tests/search/ |  |
 | `tests/test_section_tool.py` | 140 | 0 | MOVE -> tests/processing/ |  |
 | `tests/test_server.py` | 60 | 1 | MOVE -> tests/emission/ |  |
-| `tests/test_server_case_handlers.py` | 420 | 6 | MOVE -> tests/server/ + TRIM | surrenders MockWebSocket to tests/_fakes/ BEFORE any file moves |
+| `tests/test_server_case_handlers.py` | 420 | 6 | MOVE -> tests/server/ + TRIM | SURRENDERED MockWebSocket to tests/_fakes/ BEFORE any file moves |
 | `tests/test_session_durability_jobs_bc.py` | 323 | 0 | MOVE -> tests/emission/ |  |
 | `tests/test_show_nexrad_radar.py` | 115 | 6 | MOVE -> tests/processing/ |  |
 | `tests/test_sim_card_persistence_task208.py` | 295 | 4 | MOVE -> tests/emission/ |  |
@@ -339,7 +340,7 @@ EXEMPT candidate: the docstring limit is not what this wave applies here.
 | `tests/test_workflow_skeleton.py` | 273 | 2 | MOVE -> tests/runtime/ |  |
 | `tests/test_ws_bridge_signal_signatures.py` | 102 | 0 | MOVE -> tests/plugin/ | asserts against plugin/net/ws_bridge.py by ast parse; must stay collectable offline |
 | `tests/test_ws_heartbeat.py` | 67 | 0 | MOVE -> tests/server/ |  |
-| `tests/workflows/__init__.py` | 0 | 0 | DELETE | ORPHAN: the directory holds nothing else |
+| ~~`tests/workflows/__init__.py`~~ | 0 | 0 | DELETED | ORPHAN: the directory held nothing else and went with it |
 
 ## tests/fixtures/ - data, not code  (16 files)
 
@@ -415,7 +416,7 @@ EXEMPT candidate: the docstring limit is not what this wave applies here.
 
 | path | pure | hist | fate | note |
 |---|---:|---:|---|---|
-| `contracts/tests/__init__.py` | 0 | 0 | KEEP (contracts/tests/) | separate distribution; joins the run as slice 6, not the tree |
+| ~~`contracts/tests/__init__.py`~~ | 0 | 0 | DELETED | the KEEP fate did not survive measurement: while it existed, pytest named `contracts/tests/conftest.py` `tests.conftest` under importlib too, and the combined invocation still died (`Plugin already registered under a different name`). Empty file; removing it names that conftest `contracts.tests.conftest` and `tests` + `contracts/tests` collect together (9,507 cases). The distribution is unchanged - `contracts/tests` is not a package in the wheel |
 | `contracts/tests/conftest.py` | 9 | 0 | KEEP (contracts/tests/) | separate distribution; joins the run as slice 6, not the tree |
 | `contracts/tests/test_auth.py` | 85 | 4 | KEEP (contracts/tests/) | separate distribution; joins the run as slice 6, not the tree |
 | `contracts/tests/test_case.py` | 547 | 11 | KEEP (contracts/tests/) | separate distribution; joins the run as slice 6, not the tree |
@@ -452,4 +453,4 @@ The DELETE pure-LOC total is the ORPHAN class only; the charter's 1,627 adds the
 files. This manifest measures 79,450 pure LOC against the eval's 79,680: the eval was
 taken at an earlier HEAD, and the difference is drift in the tree, not in the method.
 
-files listed: 397 / files read: 397 / rows written: 397
+files listed: 395 / files read: 395 / rows written: 395 (the import-mode checkpoint deleted `tests/__init__.py`, `tests/workflows/__init__.py` and `contracts/tests/__init__.py` and added `tests/_fakes/__init__.py`; the four rows are kept above, struck where the file is gone)

@@ -8,7 +8,7 @@ the wave's scope must carry exactly one row, written by the agent that READ it.
     git ls-files trid3nt_server plugin contracts scripts workers tests docs
     git ls-files | grep -iE '(^|/)README(\.[a-z]+)?$'
     git ls-files | grep -E '^(AGENTS\.md|CONVENTIONS\.md|README\.md)$'
-      union, minus '^docs/proof/'                                    -> 1,909
+      union, minus '^docs/proof/'                                    -> 1,907
 
 `docs/CONVENTIONS.md` is a member of the first set; there is no root
 `CONVENTIONS.md`. `docs/proof/` is excluded by the charter, as are untracked
@@ -16,11 +16,14 @@ files (`__pycache__`, `.pytest_cache`, the four untracked GSHHS shapefile parts
 under `scripts/sandbox/oceanmesh/shoreline/`, and the thirteen untracked docs
 siblings the `docs-and-readmes` lens names).
 
-Scope by top-level path: `trid3nt_server` 836, `docs` 498, `tests` 332,
-`contracts` 93, `plugin` 79, `scripts` 61, `workers` 8, `AGENTS.md` 1,
+Scope by top-level path: `trid3nt_server` 836, `docs` 498, `tests` 331,
+`contracts` 92, `plugin` 79, `scripts` 61, `workers` 8, `AGENTS.md` 1,
 `README.md` 1. The mesh-format move took two files from `scripts` into
 `trid3nt_server` and added the package `__init__.py` that came with them; the
-three rows are in `workflows-mesh.md`.
+three rows are in `workflows-mesh.md`. The import-mode checkpoint then deleted
+`tests/__init__.py`, `tests/workflows/__init__.py` and
+`contracts/tests/__init__.py` and added `tests/_fakes/__init__.py`; those four
+rows are in `tests-plugin-contracts.md`, struck where the file is gone.
 
 OPEN GAP, not closed here: `git ls-files docs | grep -v '^docs/proof/'` now
 counts 514, sixteen above the 498 this census enumerated. Those sixteen landed
@@ -32,10 +35,10 @@ the tree today.
 
 | measure | count |
 | --- | --- |
-| files in scope | 1,909 |
-| files with a row | **1,909 (100%)** |
+| files in scope | 1,907 |
+| files with a row | **1,907 (100%)** |
 | files with NO row | **0** (three at the start of this pass; see below) |
-| census rows across all lenses | 1,960 |
+| census rows across all lenses | 1,958 |
 | files with TWO rows | 49 (34 self-declared restatements + 15 cross-lens overlaps) |
 
 Rows per lens (census tables only; guard, findings, summary and roll-up tables
@@ -44,7 +47,7 @@ below a lens's census are not rows and are not counted):
 | lens | rows |
 | --- | --- |
 | `trid3nt_server-tools-fetchers.md` | 405 |
-| `tests-plugin-contracts.md` | 397 |
+| `tests-plugin-contracts.md` | 395 |
 | `docs-decisions.md` | 328 |
 | `docs-and-readmes.md` | 188 (+3 for `docs/proof` READMEs, outside this scope) |
 | `tools-processing.md` | 141 |

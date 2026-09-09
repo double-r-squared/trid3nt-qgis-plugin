@@ -37,9 +37,7 @@ Coverage (>=10 unit tests + 1 integration):
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import datetime, timezone
-from typing import Any
 
 import pytest
 
@@ -65,31 +63,7 @@ from trid3nt_contracts.case import (
 )
 from trid3nt_contracts.common import new_ulid
 
-from .test_persistence import MockMCPClient, _fresh_case_summary
-
-
-# --------------------------------------------------------------------------- #
-# Mocks
-# --------------------------------------------------------------------------- #
-
-
-class MockWebSocket:
-    """Collects every envelope ``send`` would have written to the wire.
-
-    Each entry is the parsed envelope as a dict. The tests assert on
-    ``type`` + ``payload`` fields.
-    """
-
-    def __init__(self) -> None:
-        self.sent: list[dict] = []
-
-    async def send(self, raw: Any) -> None:
-        if isinstance(raw, (bytes, bytearray)):
-            raw = raw.decode("utf-8")
-        if isinstance(raw, str):
-            self.sent.append(json.loads(raw))
-        else:
-            self.sent.append(raw)
+from tests._fakes import MockMCPClient, MockWebSocket, _fresh_case_summary
 
 
 @pytest.fixture()

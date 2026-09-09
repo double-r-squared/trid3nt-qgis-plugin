@@ -44,8 +44,8 @@ from trid3nt_contracts.case import (
 )
 from trid3nt_contracts.common import new_ulid
 
-from .test_persistence import MockMCPClient
-from .test_server_case_handlers import MockWebSocket
+from tests._fakes import MockMCPClient
+from tests._fakes import MockWebSocket
 
 
 # --------------------------------------------------------------------------- #

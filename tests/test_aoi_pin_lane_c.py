@@ -49,7 +49,7 @@ from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from .test_persistence import MockMCPClient, _fresh_case_summary
+from tests._fakes import MockMCPClient, _fresh_case_summary
 
 # The solve domain (the live Austin AOI from the root-cause case).
 _SOLVE_DOMAIN = (-97.755, 30.26, -97.725, 30.285)

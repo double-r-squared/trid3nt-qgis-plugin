@@ -55,8 +55,8 @@ from trid3nt_server.server import (
 )
 from trid3nt_contracts.common import new_ulid
 
-from .test_persistence import MockMCPClient, _fresh_case_summary
-from .test_server_case_handlers import MockWebSocket
+from tests._fakes import MockMCPClient, _fresh_case_summary
+from tests._fakes import MockWebSocket
 
 
 @pytest.fixture()

@@ -830,7 +830,7 @@ class TestReconnectSeedsRegistryFromCase:
         from trid3nt_server.server import SessionState, _emit_case_open, get_persistence, set_persistence
         from trid3nt_contracts.common import new_ulid
 
-        from .test_persistence import MockMCPClient, _fresh_case_summary
+        from tests._fakes import MockMCPClient, _fresh_case_summary
 
         saved = get_persistence()
         set_persistence(Persistence(MockMCPClient()))
@@ -879,7 +879,7 @@ class TestReconnectSeedsRegistryFromCase:
         from trid3nt_server.server import SessionState, _emit_case_open, get_persistence, set_persistence
         from trid3nt_contracts.common import new_ulid
 
-        from .test_persistence import MockMCPClient, _fresh_case_summary
+        from tests._fakes import MockMCPClient, _fresh_case_summary
 
         saved = get_persistence()
         set_persistence(Persistence(MockMCPClient()))

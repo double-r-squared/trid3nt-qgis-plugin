@@ -313,6 +313,10 @@ local-engines = [
 [project.scripts]
 trid3nt-server = "trid3nt_server.main:run"
 
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib -p no:cacheprovider"
+testpaths = ["tests", "contracts/tests", "plugin/tests"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["trid3nt_server*"]

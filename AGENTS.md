@@ -41,10 +41,12 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
    -p no:cacheprovider --timeout=300 -q` (then `[f-o]`, `[p-r]`,
    `[s-z]`). Slice 5 is the contracts suite:
    `env -u TRID3NT_CACHE_BUCKET python -m pytest contracts/tests
-   -p no:cacheprovider --timeout=300 -q`. Slice 5 must stay its OWN
-   invocation: `tests/` and `contracts/tests/` are both packages named
-   `tests`, so a single pytest run covering both dies on
-   ImportPathMismatchError. Baseline is EXACTLY ZERO failures in
+   -p no:cacheprovider --timeout=300 -q`. The five slices are five
+   invocations by convention, not by force: the root
+   `[tool.pytest.ini_options]` sets `--import-mode=importlib` and
+   neither `tests/` nor `contracts/tests/` carries an `__init__.py`, so
+   `pytest tests contracts/tests` collects and runs as one.
+   Baseline is EXACTLY ZERO failures in
    every slice; the live per-slice counts are the baseline table in
    `docs/decisions/0323-suite-re-baseline-after-the-test-cull.md`
    (read its LAST amendment). Anything else: investigate - a flake

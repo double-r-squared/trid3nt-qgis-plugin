@@ -3421,3 +3421,20 @@ and the mesh worker image carries `oceanmesh` and a driver, never these writers.
 This closes the DESIGN-STOP held open at the SCHISM worker relocation above
 ("where those three pure-numpy helpers should live is a structural choice"): they
 live in the product tree, in the package the one topology pass belongs to.
+
+## The import-mode checkpoint - three empty packages - 2026-09-09
+
+`--import-mode=importlib` lands in the root `[tool.pytest.ini_options]`, and the
+package markers that only prepend mode needed go with it.
+
+| Deleted | Pure LOC | Evidence | Condition |
+|---|---:|---|---|
+| `tests/__init__.py` | 0 | Empty. Only prepend mode's directory-to-package-name inference read it; the ten `from .test_persistence import ...` / `from .test_server_case_handlers import ...` imports it enabled are repointed at `tests/_fakes/`. | MET: no relative import remains under `tests/` (`grep -rn '^from \.' tests/*.py` -> 0). |
+| `tests/workflows/__init__.py` | 0 | Empty, and the only file in `tests/workflows/`. The directory goes with it. | MET: zero test files, zero references. |
+| `contracts/tests/__init__.py` | 0 | Empty, and the reason `pytest tests contracts/tests` still died under importlib: with it present pytest walked the `__init__` chain and named `contracts/tests/conftest.py` `tests.conftest`, which `tests/conftest.py` already owned (`ValueError: Plugin already registered under a different name`). Without it the name is `contracts.tests.conftest`. | MET: the combined invocation collects 9,507 cases; the standalone contracts slice still runs green (425). The wheel is unaffected - `contracts/tests` was never a shipped package (`[tool.setuptools.packages.find]` takes `trid3nt_contracts*`). |
+
+Extracted, not deleted: `MockMCPClient` + `_fresh_case_summary` left
+`tests/test_persistence.py` and `MockWebSocket` left
+`tests/test_server_case_handlers.py`, verbatim, for `tests/_fakes/__init__.py`.
+Both modules now import them back. The test tree stays FLAT; the mirror move is a
+later change.
