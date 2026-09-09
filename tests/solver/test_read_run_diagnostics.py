@@ -30,7 +30,7 @@ from trid3nt_server.workflows.solver.diagnostics import (
 
 _resolve_run_handle = _diag._resolve_run_handle
 
-FIX = os.path.join(os.path.dirname(__file__), "fixtures", "validation")
+FIX = os.path.join(os.path.dirname(os.path.dirname(__file__)), "fixtures", "validation")
 
 _TELEMAC_FAIL_RID = "01KXHE0B8V025C9DRZ0B180HHT"
 _TELEMAC_OK_RID = "01KXHE0B8V025C9DRZ0B180OK0"
