@@ -1399,6 +1399,19 @@
       "unresolved_calls": 99
     },
     {
+      "module": "scripts.loc_report",
+      "package": "scripts",
+      "path": "scripts/loc_report.py",
+      "loc": 83,
+      "reachable": false,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": true,
+      "is_marker": false,
+      "unresolved_calls": 61
+    },
+    {
       "module": "scripts.model_check",
       "package": "scripts",
       "path": "scripts/model_check.py",
@@ -1545,14 +1558,14 @@
       "module": "scripts.render_all_layers_proof",
       "package": "scripts",
       "path": "scripts/render_all_layers_proof.py",
-      "loc": 862,
+      "loc": 896,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": true,
       "is_marker": false,
-      "unresolved_calls": 410
+      "unresolved_calls": 427
     },
     {
       "module": "scripts.render_fidelity_proof_generic",
@@ -2078,7 +2091,7 @@
       "module": "tests.test_aoi_pin_lane_c",
       "package": "tests",
       "path": "tests/test_aoi_pin_lane_c.py",
-      "loc": 360,
+      "loc": 346,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -2650,14 +2663,14 @@
       "module": "tests.test_compute_ndvi",
       "package": "tests",
       "path": "tests/test_compute_ndvi.py",
-      "loc": 288,
+      "loc": 286,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 54
+      "unresolved_calls": 52
     },
     {
       "module": "tests.test_compute_sediment_yield",
@@ -2845,14 +2858,14 @@
       "module": "tests.test_digitize_water_body",
       "package": "tests",
       "path": "tests/test_digitize_water_body.py",
-      "loc": 358,
+      "loc": 354,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 88
+      "unresolved_calls": 84
     },
     {
       "module": "tests.test_discovery_expands_gate_lane_a",
@@ -4197,27 +4210,27 @@
       "module": "tests.test_router_arcgis_odd",
       "package": "tests",
       "path": "tests/test_router_arcgis_odd.py",
-      "loc": 211,
+      "loc": 300,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 51
+      "unresolved_calls": 76
     },
     {
       "module": "tests.test_router_buildings",
       "package": "tests",
       "path": "tests/test_router_buildings.py",
-      "loc": 219,
+      "loc": 189,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 46
+      "unresolved_calls": 52
     },
     {
       "module": "tests.test_router_cds",
@@ -4275,7 +4288,7 @@
       "module": "tests.test_router_engine",
       "package": "tests",
       "path": "tests/test_router_engine.py",
-      "loc": 312,
+      "loc": 313,
       "reachable": false,
       "test_only": false,
       "script_only": false,
@@ -4288,40 +4301,40 @@
       "module": "tests.test_router_envelope",
       "package": "tests",
       "path": "tests/test_router_envelope.py",
-      "loc": 268,
+      "loc": 290,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 41
+      "unresolved_calls": 47
     },
     {
       "module": "tests.test_router_executors",
       "package": "tests",
       "path": "tests/test_router_executors.py",
-      "loc": 1127,
+      "loc": 964,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 272
+      "unresolved_calls": 248
     },
     {
       "module": "tests.test_router_fanout_routing",
       "package": "tests",
       "path": "tests/test_router_fanout_routing.py",
-      "loc": 359,
+      "loc": 341,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 69
+      "unresolved_calls": 63
     },
     {
       "module": "tests.test_router_fault_sources",
@@ -4480,17 +4493,30 @@
       "unresolved_calls": 65
     },
     {
-      "module": "tests.test_router_jrc",
+      "module": "tests.test_router_hyriver",
       "package": "tests",
-      "path": "tests/test_router_jrc.py",
-      "loc": 211,
+      "path": "tests/test_router_hyriver.py",
+      "loc": 131,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 55
+      "unresolved_calls": 28
+    },
+    {
+      "module": "tests.test_router_jrc",
+      "package": "tests",
+      "path": "tests/test_router_jrc.py",
+      "loc": 218,
+      "reachable": false,
+      "test_only": false,
+      "script_only": false,
+      "is_test": true,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 56
     },
     {
       "module": "tests.test_router_keyed_misc",
@@ -4545,6 +4571,19 @@
       "unresolved_calls": 58
     },
     {
+      "module": "tests.test_router_nldas2",
+      "package": "tests",
+      "path": "tests/test_router_nldas2.py",
+      "loc": 112,
+      "reachable": false,
+      "test_only": false,
+      "script_only": false,
+      "is_test": true,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 30
+    },
+    {
       "module": "tests.test_router_noaa_sst",
       "package": "tests",
       "path": "tests/test_router_noaa_sst.py",
@@ -4584,17 +4623,30 @@
       "unresolved_calls": 82
     },
     {
-      "module": "tests.test_router_overpass",
+      "module": "tests.test_router_opera_dswx",
       "package": "tests",
-      "path": "tests/test_router_overpass.py",
-      "loc": 406,
+      "path": "tests/test_router_opera_dswx.py",
+      "loc": 100,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 98
+      "unresolved_calls": 24
+    },
+    {
+      "module": "tests.test_router_overpass",
+      "package": "tests",
+      "path": "tests/test_router_overpass.py",
+      "loc": 462,
+      "reachable": false,
+      "test_only": false,
+      "script_only": false,
+      "is_test": true,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 135
     },
     {
       "module": "tests.test_router_population",
@@ -4626,14 +4678,14 @@
       "module": "tests.test_router_river",
       "package": "tests",
       "path": "tests/test_router_river.py",
-      "loc": 294,
+      "loc": 292,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 84
+      "unresolved_calls": 81
     },
     {
       "module": "tests.test_router_sentinel1",
@@ -4646,7 +4698,7 @@
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 40
+      "unresolved_calls": 41
     },
     {
       "module": "tests.test_router_slider_timestamps",
@@ -4691,14 +4743,27 @@
       "module": "tests.test_router_stac_composite",
       "package": "tests",
       "path": "tests/test_router_stac_composite.py",
-      "loc": 244,
+      "loc": 256,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 107
+      "unresolved_calls": 110
+    },
+    {
+      "module": "tests.test_router_stac_raster",
+      "package": "tests",
+      "path": "tests/test_router_stac_raster.py",
+      "loc": 487,
+      "reachable": false,
+      "test_only": false,
+      "script_only": false,
+      "is_test": true,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 257
     },
     {
       "module": "tests.test_router_stations",
@@ -4756,14 +4821,27 @@
       "module": "tests.test_router_transport",
       "package": "tests",
       "path": "tests/test_router_transport.py",
-      "loc": 426,
+      "loc": 399,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 109
+      "unresolved_calls": 103
+    },
+    {
+      "module": "tests.test_router_vector_ogr",
+      "package": "tests",
+      "path": "tests/test_router_vector_ogr.py",
+      "loc": 277,
+      "reachable": false,
+      "test_only": false,
+      "script_only": false,
+      "is_test": true,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 84
     },
     {
       "module": "tests.test_router_viirs_day_fire",
@@ -4808,14 +4886,14 @@
       "module": "tests.test_router_zip_multifile",
       "package": "tests",
       "path": "tests/test_router_zip_multifile.py",
-      "loc": 249,
+      "loc": 253,
       "reachable": false,
       "test_only": false,
       "script_only": false,
       "is_test": true,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 75
+      "unresolved_calls": 76
     },
     {
       "module": "tests.test_run_journal",
@@ -6147,7 +6225,7 @@
       "module": "trid3nt_contracts.source_spec",
       "package": "trid3nt_contracts",
       "path": "contracts/trid3nt_contracts/source_spec.py",
-      "loc": 854,
+      "loc": 857,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -6719,7 +6797,7 @@
       "module": "trid3nt_server.gates.cards.region_choice",
       "package": "trid3nt_server.gates",
       "path": "trid3nt_server/gates/cards/region_choice.py",
-      "loc": 250,
+      "loc": 249,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -6771,7 +6849,7 @@
       "module": "trid3nt_server.gates.confirm",
       "package": "trid3nt_server.gates",
       "path": "trid3nt_server/gates/confirm.py",
-      "loc": 1222,
+      "loc": 1223,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -6901,7 +6979,7 @@
       "module": "trid3nt_server.main",
       "package": "trid3nt_server.main",
       "path": "trid3nt_server/main.py",
-      "loc": 303,
+      "loc": 302,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -7395,7 +7473,7 @@
       "module": "trid3nt_server.testing.live_run",
       "package": "trid3nt_server.testing",
       "path": "trid3nt_server/testing/live_run.py",
-      "loc": 518,
+      "loc": 522,
       "reachable": false,
       "test_only": true,
       "script_only": false,
@@ -7434,7 +7512,7 @@
       "module": "trid3nt_server.testing.ws_client",
       "package": "trid3nt_server.testing",
       "path": "trid3nt_server/testing/ws_client.py",
-      "loc": 108,
+      "loc": 112,
       "reachable": false,
       "test_only": true,
       "script_only": false,
@@ -7577,14 +7655,14 @@
       "module": "trid3nt_server.tools.fetchers._fetch_common",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/_fetch_common.py",
-      "loc": 170,
+      "loc": 195,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 28
+      "unresolved_calls": 41
     },
     {
       "module": "trid3nt_server.tools.fetchers._public_s3",
@@ -7603,7 +7681,7 @@
       "module": "trid3nt_server.tools.fetchers._router",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/_router/__init__.py",
-      "loc": 22,
+      "loc": 21,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -7668,14 +7746,14 @@
       "module": "trid3nt_server.tools.fetchers._router.executors.chained_resolution",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/_router/executors/chained_resolution.py",
-      "loc": 205,
+      "loc": 190,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 31
+      "unresolved_calls": 26
     },
     {
       "module": "trid3nt_server.tools.fetchers._router.executors.dataretrieval_delegate",
@@ -7720,27 +7798,27 @@
       "module": "trid3nt_server.tools.fetchers._router.executors.overpass_sidecar",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/_router/executors/overpass_sidecar.py",
-      "loc": 108,
+      "loc": 104,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 18
+      "unresolved_calls": 16
     },
     {
       "module": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/_router/executors/raster_cog.py",
-      "loc": 2846,
+      "loc": 1820,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 1157
+      "unresolved_calls": 740
     },
     {
       "module": "trid3nt_server.tools.fetchers._router.executors.record",
@@ -7754,6 +7832,19 @@
       "is_script": false,
       "is_marker": false,
       "unresolved_calls": 9
+    },
+    {
+      "module": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
+      "package": "trid3nt_server.tools",
+      "path": "trid3nt_server/tools/fetchers/_router/executors/stac_raster.py",
+      "loc": 875,
+      "reachable": true,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 401
     },
     {
       "module": "trid3nt_server.tools.fetchers._router.executors.station_timeseries",
@@ -7772,27 +7863,27 @@
       "module": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/_router/executors/vector_fgb.py",
-      "loc": 720,
+      "loc": 501,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 255
+      "unresolved_calls": 192
     },
     {
-      "module": "trid3nt_server.tools.fetchers._router.executors.zip_vector",
+      "module": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
       "package": "trid3nt_server.tools",
-      "path": "trid3nt_server/tools/fetchers/_router/executors/zip_vector.py",
-      "loc": 187,
+      "path": "trid3nt_server/tools/fetchers/_router/executors/vector_ogr.py",
+      "loc": 318,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 45
+      "unresolved_calls": 78
     },
     {
       "module": "trid3nt_server.tools.fetchers._router.hooks",
@@ -7860,17 +7951,30 @@
       "unresolved_calls": 99
     },
     {
-      "module": "trid3nt_server.tools.fetchers._router.hooks.overpass",
+      "module": "trid3nt_server.tools.fetchers._router.hooks.hyriver",
       "package": "trid3nt_server.tools",
-      "path": "trid3nt_server/tools/fetchers/_router/hooks/overpass.py",
-      "loc": 733,
+      "path": "trid3nt_server/tools/fetchers/_router/hooks/hyriver.py",
+      "loc": 160,
       "reachable": false,
       "test_only": true,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 216
+      "unresolved_calls": 47
+    },
+    {
+      "module": "trid3nt_server.tools.fetchers._router.hooks.osm",
+      "package": "trid3nt_server.tools",
+      "path": "trid3nt_server/tools/fetchers/_router/hooks/osm.py",
+      "loc": 174,
+      "reachable": false,
+      "test_only": true,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 31
     },
     {
       "module": "trid3nt_server.tools.fetchers._router.hooks.pfdf_raster",
@@ -7928,7 +8032,7 @@
       "module": "trid3nt_server.tools.fetchers._router.router",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/_router/router.py",
-      "loc": 1104,
+      "loc": 1113,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -7990,36 +8094,23 @@
       "unresolved_calls": 51
     },
     {
-      "module": "trid3nt_server.tools.fetchers._router.transforms.join",
-      "package": "trid3nt_server.tools",
-      "path": "trid3nt_server/tools/fetchers/_router/transforms/join.py",
-      "loc": 340,
-      "reachable": true,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": false,
-      "is_marker": false,
-      "unresolved_calls": 94
-    },
-    {
       "module": "trid3nt_server.tools.fetchers._router.transforms.tiled_mosaic",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/_router/transforms/tiled_mosaic.py",
-      "loc": 197,
+      "loc": 203,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 44
+      "unresolved_calls": 49
     },
     {
       "module": "trid3nt_server.tools.fetchers._router.transport",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/_router/transport/__init__.py",
-      "loc": 48,
+      "loc": 49,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -8032,14 +8123,14 @@
       "module": "trid3nt_server.tools.fetchers._router.transport.client",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/_router/transport/client.py",
-      "loc": 239,
+      "loc": 264,
       "reachable": true,
       "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 49
+      "unresolved_calls": 51
     },
     {
       "module": "trid3nt_server.tools.fetchers._router.transport.errors",
@@ -8318,14 +8409,14 @@
       "module": "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.hooks",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/hazard/fetch_fema_nfhl_zones/hooks.py",
-      "loc": 192,
+      "loc": 279,
       "reachable": false,
       "test_only": true,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 57
+      "unresolved_calls": 68
     },
     {
       "module": "trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire",
@@ -8695,14 +8786,14 @@
       "module": "trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks.hooks",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/hydrology/fetch_high_water_marks/hooks.py",
-      "loc": 354,
+      "loc": 340,
       "reachable": false,
       "test_only": true,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 128
+      "unresolved_calls": 121
     },
     {
       "module": "trid3nt_server.tools.fetchers.hydrology.fetch_jrc_global_surface_water",
@@ -8840,25 +8931,12 @@
       "path": "trid3nt_server/tools/fetchers/hydrology/fetch_nwi_wetlands/__init__.py",
       "loc": 0,
       "reachable": false,
-      "test_only": true,
+      "test_only": false,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": true,
       "unresolved_calls": 0
-    },
-    {
-      "module": "trid3nt_server.tools.fetchers.hydrology.fetch_nwi_wetlands.hooks",
-      "package": "trid3nt_server.tools",
-      "path": "trid3nt_server/tools/fetchers/hydrology/fetch_nwi_wetlands/hooks.py",
-      "loc": 134,
-      "reachable": false,
-      "test_only": true,
-      "script_only": false,
-      "is_test": false,
-      "is_script": false,
-      "is_marker": false,
-      "unresolved_calls": 34
     },
     {
       "module": "trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast",
@@ -8887,9 +8965,9 @@
       "unresolved_calls": 149
     },
     {
-      "module": "trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry",
+      "module": "trid3nt_server.tools.fetchers.hydrology.fetch_opera_dswx",
       "package": "trid3nt_server.tools",
-      "path": "trid3nt_server/tools/fetchers/hydrology/fetch_river_geometry/__init__.py",
+      "path": "trid3nt_server/tools/fetchers/hydrology/fetch_opera_dswx/__init__.py",
       "loc": 0,
       "reachable": false,
       "test_only": false,
@@ -8898,6 +8976,32 @@
       "is_script": false,
       "is_marker": true,
       "unresolved_calls": 0
+    },
+    {
+      "module": "trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry",
+      "package": "trid3nt_server.tools",
+      "path": "trid3nt_server/tools/fetchers/hydrology/fetch_river_geometry/__init__.py",
+      "loc": 0,
+      "reachable": false,
+      "test_only": true,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": true,
+      "unresolved_calls": 0
+    },
+    {
+      "module": "trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry.hooks",
+      "package": "trid3nt_server.tools",
+      "path": "trid3nt_server/tools/fetchers/hydrology/fetch_river_geometry/hooks.py",
+      "loc": 129,
+      "reachable": false,
+      "test_only": true,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 33
     },
     {
       "module": "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels",
@@ -8982,8 +9086,8 @@
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/imagery/__init__.py",
       "loc": 1,
-      "reachable": true,
-      "test_only": false,
+      "reachable": false,
+      "test_only": true,
       "script_only": false,
       "is_test": false,
       "is_script": false,
@@ -9015,19 +9119,6 @@
       "is_script": false,
       "is_marker": false,
       "unresolved_calls": 30
-    },
-    {
-      "module": "trid3nt_server.tools.fetchers.imagery._pc_stac",
-      "package": "trid3nt_server.tools",
-      "path": "trid3nt_server/tools/fetchers/imagery/_pc_stac.py",
-      "loc": 262,
-      "reachable": true,
-      "test_only": false,
-      "script_only": false,
-      "is_test": false,
-      "is_script": false,
-      "is_marker": false,
-      "unresolved_calls": 41
     },
     {
       "module": "trid3nt_server.tools.fetchers.imagery._satellite_slider",
@@ -9381,6 +9472,19 @@
       "unresolved_calls": 0
     },
     {
+      "module": "trid3nt_server.tools.fetchers.ocean.fetch_osm_breakwaters.hooks",
+      "package": "trid3nt_server.tools",
+      "path": "trid3nt_server/tools/fetchers/ocean/fetch_osm_breakwaters/hooks.py",
+      "loc": 102,
+      "reachable": false,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 28
+    },
+    {
       "module": "trid3nt_server.tools.fetchers.ocean.fetch_osm_coastline",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/__init__.py",
@@ -9392,6 +9496,19 @@
       "is_script": false,
       "is_marker": true,
       "unresolved_calls": 0
+    },
+    {
+      "module": "trid3nt_server.tools.fetchers.ocean.fetch_osm_coastline.hooks",
+      "package": "trid3nt_server.tools",
+      "path": "trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/hooks.py",
+      "loc": 66,
+      "reachable": false,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 10
     },
     {
       "module": "trid3nt_server.tools.fetchers.ocean.fetch_topobathy",
@@ -9462,14 +9579,14 @@
       "module": "trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings.hooks",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/socioeconomic/fetch_buildings/hooks.py",
-      "loc": 229,
+      "loc": 66,
       "reachable": false,
       "test_only": true,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 60
+      "unresolved_calls": 12
     },
     {
       "module": "trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries",
@@ -9529,12 +9646,25 @@
       "path": "trid3nt_server/tools/fetchers/socioeconomic/fetch_overpass_pois/__init__.py",
       "loc": 0,
       "reachable": false,
-      "test_only": false,
+      "test_only": true,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": true,
       "unresolved_calls": 0
+    },
+    {
+      "module": "trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.hooks",
+      "package": "trid3nt_server.tools",
+      "path": "trid3nt_server/tools/fetchers/socioeconomic/fetch_overpass_pois/hooks.py",
+      "loc": 168,
+      "reachable": false,
+      "test_only": true,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 45
     },
     {
       "module": "trid3nt_server.tools.fetchers.socioeconomic.fetch_population",
@@ -9568,12 +9698,25 @@
       "path": "trid3nt_server/tools/fetchers/socioeconomic/fetch_roads_osm/__init__.py",
       "loc": 0,
       "reachable": false,
-      "test_only": false,
+      "test_only": true,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": true,
       "unresolved_calls": 0
+    },
+    {
+      "module": "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.hooks",
+      "package": "trid3nt_server.tools",
+      "path": "trid3nt_server/tools/fetchers/socioeconomic/fetch_roads_osm/hooks.py",
+      "loc": 95,
+      "reachable": false,
+      "test_only": true,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 21
     },
     {
       "module": "trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi",
@@ -9992,6 +10135,32 @@
       "unresolved_calls": 49
     },
     {
+      "module": "trid3nt_server.tools.fetchers.weather.fetch_nldas2_forcing",
+      "package": "trid3nt_server.tools",
+      "path": "trid3nt_server/tools/fetchers/weather/fetch_nldas2_forcing/__init__.py",
+      "loc": 0,
+      "reachable": false,
+      "test_only": true,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": true,
+      "unresolved_calls": 0
+    },
+    {
+      "module": "trid3nt_server.tools.fetchers.weather.fetch_nldas2_forcing.hooks",
+      "package": "trid3nt_server.tools",
+      "path": "trid3nt_server/tools/fetchers/weather/fetch_nldas2_forcing/hooks.py",
+      "loc": 156,
+      "reachable": false,
+      "test_only": true,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 38
+    },
+    {
       "module": "trid3nt_server.tools.fetchers.weather.fetch_nws_alerts_conus",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/weather/fetch_nws_alerts_conus/__init__.py",
@@ -10138,14 +10307,14 @@
       "module": "trid3nt_server.tools.fetchers.weather.fetch_storm_tracks.hooks",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/fetchers/weather/fetch_storm_tracks/hooks.py",
-      "loc": 1004,
+      "loc": 991,
       "reachable": false,
       "test_only": true,
       "script_only": false,
       "is_test": false,
       "is_script": false,
       "is_marker": false,
-      "unresolved_calls": 328
+      "unresolved_calls": 323
     },
     {
       "module": "trid3nt_server.tools.meta",
@@ -10315,6 +10484,19 @@
       "is_script": false,
       "is_marker": false,
       "unresolved_calls": 93
+    },
+    {
+      "module": "trid3nt_server.tools.processing._pc_search",
+      "package": "trid3nt_server.tools",
+      "path": "trid3nt_server/tools/processing/_pc_search.py",
+      "loc": 100,
+      "reachable": true,
+      "test_only": false,
+      "script_only": false,
+      "is_test": false,
+      "is_script": false,
+      "is_marker": false,
+      "unresolved_calls": 11
     },
     {
       "module": "trid3nt_server.tools.processing.charts",
@@ -10502,7 +10684,7 @@
       "module": "trid3nt_server.tools.processing.compute_change_detection.compute_change_detection",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/processing/compute_change_detection/compute_change_detection.py",
-      "loc": 788,
+      "loc": 789,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -10814,7 +10996,7 @@
       "module": "trid3nt_server.tools.processing.compute_ndvi.compute_ndvi",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/processing/compute_ndvi/compute_ndvi.py",
-      "loc": 495,
+      "loc": 496,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -10944,7 +11126,7 @@
       "module": "trid3nt_server.tools.processing.digitize_water_body.digitize_water_body",
       "package": "trid3nt_server.tools",
       "path": "trid3nt_server/tools/processing/digitize_water_body/digitize_water_body.py",
-      "loc": 623,
+      "loc": 624,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -13011,7 +13193,7 @@
       "module": "trid3nt_server.workflows.telemac.templates.rain_on_grid.cn_infiltration",
       "package": "trid3nt_server.workflows",
       "path": "trid3nt_server/workflows/telemac/templates/rain_on_grid/cn_infiltration.py",
-      "loc": 401,
+      "loc": 404,
       "reachable": true,
       "test_only": false,
       "script_only": false,
@@ -16067,13 +16249,6 @@
       "static": 2,
       "dynamic": 0,
       "refs": 2
-    },
-    {
-      "importer": "tests.test_aoi_pin_lane_c",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
     },
     {
       "importer": "tests.test_aoi_pin_lane_c",
@@ -21043,21 +21218,14 @@
       "imported": "trid3nt_contracts.source_spec",
       "static": 1,
       "dynamic": 0,
-      "refs": 2
+      "refs": 1
     },
     {
       "importer": "tests.test_router_arcgis_odd",
       "imported": "trid3nt_server.tools.fetchers._router.errors",
       "static": 2,
       "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "tests.test_router_arcgis_odd",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.chained_resolution",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
+      "refs": 0
     },
     {
       "importer": "tests.test_router_arcgis_odd",
@@ -21071,7 +21239,7 @@
       "imported": "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.hooks",
       "static": 1,
       "dynamic": 0,
-      "refs": 5
+      "refs": 10
     },
     {
       "importer": "tests.test_router_arcgis_odd",
@@ -21082,10 +21250,10 @@
     },
     {
       "importer": "tests.test_router_arcgis_odd",
-      "imported": "trid3nt_server.tools.fetchers.hydrology.fetch_nwi_wetlands.hooks",
+      "imported": "trid3nt_server.workflows.runtime.journal",
       "static": 1,
       "dynamic": 0,
-      "refs": 4
+      "refs": 2
     },
     {
       "importer": "tests.test_router_buildings",
@@ -21103,15 +21271,8 @@
     },
     {
       "importer": "tests.test_router_buildings",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.http_json",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "tests.test_router_buildings",
       "imported": "trid3nt_server.tools.fetchers._router.executors.overpass_sidecar",
-      "static": 2,
+      "static": 1,
       "dynamic": 0,
       "refs": 2
     },
@@ -21148,7 +21309,7 @@
       "imported": "trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings.hooks",
       "static": 1,
       "dynamic": 0,
-      "refs": 4
+      "refs": 3
     },
     {
       "importer": "tests.test_router_cds",
@@ -21355,7 +21516,7 @@
     },
     {
       "importer": "tests.test_router_engine",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
       "static": 1,
       "dynamic": 0,
       "refs": 0
@@ -21449,7 +21610,7 @@
       "imported": "trid3nt_contracts.source_spec",
       "static": 1,
       "dynamic": 0,
-      "refs": 12
+      "refs": 10
     },
     {
       "importer": "tests.test_router_executors",
@@ -21463,7 +21624,7 @@
       "imported": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
       "static": 1,
       "dynamic": 0,
-      "refs": 34
+      "refs": 28
     },
     {
       "importer": "tests.test_router_executors",
@@ -21477,7 +21638,14 @@
       "imported": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
       "static": 1,
       "dynamic": 0,
-      "refs": 13
+      "refs": 12
+    },
+    {
+      "importer": "tests.test_router_executors",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 2
     },
     {
       "importer": "tests.test_router_executors",
@@ -21485,13 +21653,6 @@
       "static": 3,
       "dynamic": 0,
       "refs": 6
-    },
-    {
-      "importer": "tests.test_router_executors",
-      "imported": "trid3nt_server.tools.fetchers._router.transforms.join",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 10
     },
     {
       "importer": "tests.test_router_executors",
@@ -21517,23 +21678,30 @@
     {
       "importer": "tests.test_router_fanout_routing",
       "imported": "trid3nt_server.tools.fetchers._router.errors",
-      "static": 2,
+      "static": 3,
       "dynamic": 0,
-      "refs": 1
+      "refs": 2
     },
     {
       "importer": "tests.test_router_fanout_routing",
       "imported": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
       "static": 1,
       "dynamic": 0,
-      "refs": 16
+      "refs": 3
+    },
+    {
+      "importer": "tests.test_router_fanout_routing",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 7
     },
     {
       "importer": "tests.test_router_fanout_routing",
       "imported": "trid3nt_server.tools.fetchers._router.router",
       "static": 1,
       "dynamic": 0,
-      "refs": 19
+      "refs": 17
     },
     {
       "importer": "tests.test_router_fanout_routing",
@@ -22054,11 +22222,32 @@
       "refs": 2
     },
     {
-      "importer": "tests.test_router_jrc",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
+      "importer": "tests.test_router_hyriver",
+      "imported": "trid3nt_server.tools.fetchers._router.errors",
       "static": 1,
       "dynamic": 0,
-      "refs": 8
+      "refs": 0
+    },
+    {
+      "importer": "tests.test_router_hyriver",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks.hyriver",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 10
+    },
+    {
+      "importer": "tests.test_router_hyriver",
+      "imported": "trid3nt_server.tools.fetchers._router.spec",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "tests.test_router_jrc",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 4
     },
     {
       "importer": "tests.test_router_jrc",
@@ -22073,13 +22262,6 @@
       "static": 1,
       "dynamic": 0,
       "refs": 1
-    },
-    {
-      "importer": "tests.test_router_jrc",
-      "imported": "trid3nt_server.tools.fetchers._router.transport",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
     },
     {
       "importer": "tests.test_router_jrc",
@@ -22278,6 +22460,27 @@
       "refs": 1
     },
     {
+      "importer": "tests.test_router_nldas2",
+      "imported": "trid3nt_server.tools.fetchers._router.errors",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "tests.test_router_nldas2",
+      "imported": "trid3nt_server.tools.fetchers._router.spec",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "tests.test_router_nldas2",
+      "imported": "trid3nt_server.tools.fetchers.weather.fetch_nldas2_forcing.hooks",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 7
+    },
+    {
       "importer": "tests.test_router_noaa_sst",
       "imported": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
       "static": 1,
@@ -22362,6 +22565,20 @@
       "refs": 19
     },
     {
+      "importer": "tests.test_router_opera_dswx",
+      "imported": "trid3nt_server.tools.fetchers._router.router",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 8
+    },
+    {
+      "importer": "tests.test_router_opera_dswx",
+      "imported": "trid3nt_server.tools.fetchers._router.spec",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
       "importer": "tests.test_router_overpass",
       "imported": "trid3nt_server.tools",
       "static": 1,
@@ -22384,13 +22601,6 @@
     },
     {
       "importer": "tests.test_router_overpass",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.http_json",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "tests.test_router_overpass",
       "imported": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
       "static": 1,
       "dynamic": 0,
@@ -22398,17 +22608,10 @@
     },
     {
       "importer": "tests.test_router_overpass",
-      "imported": "trid3nt_server.tools.fetchers._router.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks.osm",
       "static": 1,
       "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "tests.test_router_overpass",
-      "imported": "trid3nt_server.tools.fetchers._router.hooks.overpass",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 18
+      "refs": 7
     },
     {
       "importer": "tests.test_router_overpass",
@@ -22426,10 +22629,17 @@
     },
     {
       "importer": "tests.test_router_overpass",
-      "imported": "trid3nt_server.tools.fetchers._router.transport",
-      "static": 2,
+      "imported": "trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.hooks",
+      "static": 1,
       "dynamic": 0,
-      "refs": 3
+      "refs": 8
+    },
+    {
+      "importer": "tests.test_router_overpass",
+      "imported": "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.hooks",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 7
     },
     {
       "importer": "tests.test_router_population",
@@ -22545,24 +22755,10 @@
     },
     {
       "importer": "tests.test_router_river",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.http_json",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "tests.test_router_river",
       "imported": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
       "static": 1,
       "dynamic": 0,
       "refs": 2
-    },
-    {
-      "importer": "tests.test_router_river",
-      "imported": "trid3nt_server.tools.fetchers._router.hooks.overpass",
-      "static": 1,
-      "dynamic": 0,
-      "refs": 6
     },
     {
       "importer": "tests.test_router_river",
@@ -22579,8 +22775,15 @@
       "refs": 1
     },
     {
+      "importer": "tests.test_router_river",
+      "imported": "trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry.hooks",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 6
+    },
+    {
       "importer": "tests.test_router_sentinel1",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
       "static": 1,
       "dynamic": 0,
       "refs": 3
@@ -22692,7 +22895,7 @@
     },
     {
       "importer": "tests.test_router_stac_composite",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
       "static": 1,
       "dynamic": 0,
       "refs": 5
@@ -22712,11 +22915,18 @@
       "refs": 1
     },
     {
-      "importer": "tests.test_router_stac_composite",
-      "imported": "trid3nt_server.tools.fetchers._router.transport",
+      "importer": "tests.test_router_stac_raster",
+      "imported": "trid3nt_contracts.source_spec",
       "static": 1,
       "dynamic": 0,
-      "refs": 0
+      "refs": 1
+    },
+    {
+      "importer": "tests.test_router_stac_raster",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 26
     },
     {
       "importer": "tests.test_router_stations",
@@ -22891,14 +23101,14 @@
       "imported": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
       "static": 1,
       "dynamic": 0,
-      "refs": 8
+      "refs": 5
     },
     {
       "importer": "tests.test_router_transport",
       "imported": "trid3nt_server.tools.fetchers._router.transport",
       "static": 7,
       "dynamic": 0,
-      "refs": 28
+      "refs": 30
     },
     {
       "importer": "tests.test_router_transport",
@@ -22906,6 +23116,27 @@
       "static": 1,
       "dynamic": 0,
       "refs": 0
+    },
+    {
+      "importer": "tests.test_router_vector_ogr",
+      "imported": "trid3nt_contracts.source_spec",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "tests.test_router_vector_ogr",
+      "imported": "trid3nt_server.tools.fetchers._router.errors",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "tests.test_router_vector_ogr",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
+      "static": 1,
+      "dynamic": 0,
+      "refs": 15
     },
     {
       "importer": "tests.test_router_viirs_day_fire",
@@ -23070,7 +23301,7 @@
     },
     {
       "importer": "tests.test_router_zip_multifile",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.zip_vector",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
       "static": 1,
       "dynamic": 0,
       "refs": 3
@@ -23101,7 +23332,7 @@
       "imported": "trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.hooks",
       "static": 1,
       "dynamic": 0,
-      "refs": 7
+      "refs": 5
     },
     {
       "importer": "tests.test_run_journal",
@@ -26815,7 +27046,7 @@
     },
     {
       "importer": "trid3nt_server.gates.cards.solver_confirm",
-      "imported": "trid3nt_server.tools.fetchers.imagery._pc_stac",
+      "imported": "trid3nt_server.tools.fetchers._fetch_common",
       "static": 2,
       "dynamic": 0,
       "refs": 1
@@ -28930,7 +29161,7 @@
     {
       "importer": "trid3nt_server.testing.live_run",
       "imported": "trid3nt_server.testing.ws_client",
-      "static": 7,
+      "static": 8,
       "dynamic": 0,
       "refs": 9
     },
@@ -29755,7 +29986,7 @@
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.executors.overpass_sidecar",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.http_json",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.library_delegate",
       "static": 2,
       "dynamic": 0,
       "refs": 1
@@ -29766,13 +29997,6 @@
       "static": 2,
       "dynamic": 0,
       "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.executors.overpass_sidecar",
-      "imported": "trid3nt_server.tools.fetchers._router.hooks",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.executors.overpass_sidecar",
@@ -29793,7 +30017,7 @@
       "imported": "trid3nt_server.tools.fetchers._router.errors",
       "static": 6,
       "dynamic": 0,
-      "refs": 117
+      "refs": 82
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
@@ -29804,24 +30028,10 @@
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
-      "imported": "trid3nt_server.tools.fetchers._router.hooks",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
       "imported": "trid3nt_server.tools.fetchers._router.transport",
-      "static": 54,
+      "static": 42,
       "dynamic": 0,
-      "refs": 29
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
-      "imported": "trid3nt_server.tools.fetchers.imagery._pc_stac",
-      "static": 8,
-      "dynamic": 0,
-      "refs": 6
+      "refs": 21
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
@@ -29859,6 +30069,41 @@
       "refs": 2
     },
     {
+      "importer": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
+      "imported": "trid3nt_contracts.source_spec",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
+      "imported": "trid3nt_server.tools.fetchers._fetch_common",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
+      "imported": "trid3nt_server.tools.fetchers._router.errors",
+      "static": 5,
+      "dynamic": 0,
+      "refs": 16
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 3
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
       "importer": "trid3nt_server.tools.fetchers._router.executors.station_timeseries",
       "imported": "trid3nt_contracts.source_spec",
       "static": 2,
@@ -29891,49 +30136,49 @@
       "imported": "trid3nt_server.tools.fetchers._router.errors",
       "static": 2,
       "dynamic": 0,
-      "refs": 8
+      "refs": 2
     },
     {
-      "importer": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
-      "imported": "trid3nt_server.tools.fetchers._router.shape_classifier",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
-      "imported": "trid3nt_server.tools.fetchers._router.transport",
-      "static": 5,
-      "dynamic": 0,
-      "refs": 3
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.executors.zip_vector",
+      "importer": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
       "imported": "trid3nt_contracts.source_spec",
       "static": 2,
       "dynamic": 0,
       "refs": 0
     },
     {
-      "importer": "trid3nt_server.tools.fetchers._router.executors.zip_vector",
+      "importer": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
       "imported": "trid3nt_server.tools.fetchers._router.errors",
-      "static": 4,
+      "static": 5,
       "dynamic": 0,
-      "refs": 9
+      "refs": 8
     },
     {
-      "importer": "trid3nt_server.tools.fetchers._router.executors.zip_vector",
+      "importer": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 3
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
       "imported": "trid3nt_server.tools.fetchers._router.hooks",
       "static": 2,
       "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "trid3nt_server.tools.fetchers._router.executors.zip_vector",
+      "importer": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
+      "imported": "trid3nt_server.tools.fetchers._router.shape_classifier",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
       "imported": "trid3nt_server.tools.fetchers._router.transport",
       "static": 5,
       "dynamic": 0,
-      "refs": 2
+      "refs": 3
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.hooks",
@@ -30076,25 +30321,32 @@
       "refs": 3
     },
     {
-      "importer": "trid3nt_server.tools.fetchers._router.hooks.overpass",
+      "importer": "trid3nt_server.tools.fetchers._router.hooks.hyriver",
       "imported": "trid3nt_contracts.source_spec",
       "static": 2,
       "dynamic": 0,
       "refs": 0
     },
     {
-      "importer": "trid3nt_server.tools.fetchers._router.hooks.overpass",
+      "importer": "trid3nt_server.tools.fetchers._router.hooks.hyriver",
       "imported": "trid3nt_server.tools.fetchers._router.errors",
-      "static": 4,
-      "dynamic": 0,
-      "refs": 15
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.hooks.overpass",
-      "imported": "trid3nt_server.tools.fetchers._router.hooks",
       "static": 2,
       "dynamic": 0,
-      "refs": 11
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers._router.hooks.osm",
+      "imported": "trid3nt_contracts.source_spec",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers._router.hooks.osm",
+      "imported": "trid3nt_server.tools.fetchers._router.errors",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.hooks.pfdf_raster",
@@ -30353,7 +30605,7 @@
       "imported": "trid3nt_server.tools.fetchers._router.errors",
       "static": 5,
       "dynamic": 0,
-      "refs": 45
+      "refs": 47
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.router",
@@ -30413,6 +30665,13 @@
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.router",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers._router.router",
       "imported": "trid3nt_server.tools.fetchers._router.executors.station_timeseries",
       "static": 2,
       "dynamic": 0,
@@ -30420,14 +30679,7 @@
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.router",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.router",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.zip_vector",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
       "static": 2,
       "dynamic": 0,
       "refs": 0
@@ -30452,13 +30704,6 @@
       "static": 2,
       "dynamic": 0,
       "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.router",
-      "imported": "trid3nt_server.tools.fetchers._router.transforms.join",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 1
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.router",
@@ -30493,46 +30738,11 @@
       "imported": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
       "static": 2,
       "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.transforms.join",
-      "imported": "trid3nt_contracts.source_spec",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.transforms.join",
-      "imported": "trid3nt_server.tools.fetchers._router.errors",
-      "static": 3,
-      "dynamic": 0,
-      "refs": 5
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.transforms.join",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.http_json",
-      "static": 2,
-      "dynamic": 0,
       "refs": 1
     },
     {
-      "importer": "trid3nt_server.tools.fetchers._router.transforms.join",
-      "imported": "trid3nt_server.tools.fetchers._router.executors.vector_fgb",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.transforms.join",
-      "imported": "trid3nt_server.tools.fetchers._router.hooks",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 2
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers._router.transforms.join",
-      "imported": "trid3nt_server.tools.fetchers._router.transport",
+      "importer": "trid3nt_server.tools.fetchers._router.transforms.fan_out",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.vector_ogr",
       "static": 2,
       "dynamic": 0,
       "refs": 1
@@ -30556,12 +30766,19 @@
       "imported": "trid3nt_server.tools.fetchers._router.executors.raster_cog",
       "static": 2,
       "dynamic": 0,
-      "refs": 4
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers._router.transforms.tiled_mosaic",
+      "imported": "trid3nt_server.tools.fetchers._router.executors.stac_raster",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.transport",
       "imported": "trid3nt_server.tools.fetchers._router.transport.client",
-      "static": 6,
+      "static": 7,
       "dynamic": 0,
       "refs": 0
     },
@@ -30605,7 +30822,7 @@
       "imported": "trid3nt_server.tools.fetchers._router.transport.errors",
       "static": 3,
       "dynamic": 0,
-      "refs": 15
+      "refs": 16
     },
     {
       "importer": "trid3nt_server.tools.fetchers._router.transport.errors",
@@ -30771,16 +30988,37 @@
     {
       "importer": "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.hooks",
       "imported": "trid3nt_server.tools.fetchers._router.errors",
-      "static": 3,
+      "static": 4,
       "dynamic": 0,
-      "refs": 7
+      "refs": 6
     },
     {
       "importer": "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.hooks",
       "imported": "trid3nt_server.tools.fetchers._router.hooks",
       "static": 2,
       "dynamic": 0,
-      "refs": 4
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks.hyriver",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 3
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.hooks",
+      "imported": "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones",
+      "static": 0,
+      "dynamic": 1,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.hooks",
+      "imported": "trid3nt_server.workflows.runtime.journal",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
     },
     {
       "importer": "trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire.hooks",
@@ -30976,14 +31214,21 @@
       "imported": "trid3nt_server.tools.fetchers._router.errors",
       "static": 4,
       "dynamic": 0,
-      "refs": 9
+      "refs": 7
     },
     {
       "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks.hooks",
       "imported": "trid3nt_server.tools.fetchers._router.hooks",
       "static": 2,
       "dynamic": 0,
-      "refs": 7
+      "refs": 5
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks.hyriver",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
     },
     {
       "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_jrc_global_surface_water.hooks",
@@ -31049,27 +31294,6 @@
       "refs": 3
     },
     {
-      "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_nwi_wetlands.hooks",
-      "imported": "trid3nt_contracts.source_spec",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 0
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_nwi_wetlands.hooks",
-      "imported": "trid3nt_server.tools.fetchers._router.errors",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 4
-    },
-    {
-      "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_nwi_wetlands.hooks",
-      "imported": "trid3nt_server.tools.fetchers._router.hooks",
-      "static": 2,
-      "dynamic": 0,
-      "refs": 4
-    },
-    {
       "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast.hooks",
       "imported": "trid3nt_contracts.source_spec",
       "static": 2,
@@ -31089,6 +31313,34 @@
       "static": 2,
       "dynamic": 0,
       "refs": 8
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry.hooks",
+      "imported": "trid3nt_contracts.source_spec",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.errors",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 4
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks.osm",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 3
     },
     {
       "importer": "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels.hooks",
@@ -31273,6 +31525,55 @@
       "refs": 2
     },
     {
+      "importer": "trid3nt_server.tools.fetchers.ocean.fetch_osm_breakwaters.hooks",
+      "imported": "trid3nt_contracts.source_spec",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.ocean.fetch_osm_breakwaters.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.errors",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.ocean.fetch_osm_breakwaters.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.ocean.fetch_osm_breakwaters.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks.osm",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.ocean.fetch_osm_coastline.hooks",
+      "imported": "trid3nt_contracts.source_spec",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.ocean.fetch_osm_coastline.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.ocean.fetch_osm_coastline.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks.osm",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
       "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.hooks",
       "imported": "trid3nt_contracts.source_spec",
       "static": 2,
@@ -31302,15 +31603,15 @@
     },
     {
       "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings.hooks",
-      "imported": "trid3nt_server.tools.fetchers._router.errors",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks",
       "static": 2,
       "dynamic": 0,
-      "refs": 2
+      "refs": 1
     },
     {
       "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings.hooks",
-      "imported": "trid3nt_server.tools.fetchers._router.hooks",
-      "static": 2,
+      "imported": "trid3nt_server.tools.fetchers._router.hooks.osm",
+      "static": 3,
       "dynamic": 0,
       "refs": 3
     },
@@ -31336,6 +31637,34 @@
       "refs": 2
     },
     {
+      "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.hooks",
+      "imported": "trid3nt_contracts.source_spec",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.errors",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 4
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks.osm",
+      "static": 3,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
       "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_population.hooks",
       "imported": "trid3nt_contracts.source_spec",
       "static": 2,
@@ -31355,6 +31684,34 @@
       "static": 2,
       "dynamic": 0,
       "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.hooks",
+      "imported": "trid3nt_contracts.source_spec",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.errors",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 3
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 2
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks.osm",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 3
     },
     {
       "importer": "trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.hooks",
@@ -31621,6 +31978,34 @@
       "static": 2,
       "dynamic": 0,
       "refs": 4
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.weather.fetch_nldas2_forcing.hooks",
+      "imported": "trid3nt_contracts.source_spec",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 0
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.weather.fetch_nldas2_forcing.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.errors",
+      "static": 4,
+      "dynamic": 0,
+      "refs": 3
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.weather.fetch_nldas2_forcing.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.tools.fetchers.weather.fetch_nldas2_forcing.hooks",
+      "imported": "trid3nt_server.tools.fetchers._router.hooks.hyriver",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
     },
     {
       "importer": "trid3nt_server.tools.fetchers.weather.fetch_nws_alerts_conus.hooks",
@@ -32149,10 +32534,17 @@
     },
     {
       "importer": "trid3nt_server.tools.processing.compute_change_detection.compute_change_detection",
-      "imported": "trid3nt_server.tools.fetchers.imagery._pc_stac",
+      "imported": "trid3nt_server.tools.fetchers._fetch_common",
       "static": 2,
       "dynamic": 0,
-      "refs": 4
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.tools.processing.compute_change_detection.compute_change_detection",
+      "imported": "trid3nt_server.tools.processing._pc_search",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
     },
     {
       "importer": "trid3nt_server.tools.processing.compute_change_detection.compute_change_detection",
@@ -32583,10 +32975,17 @@
     },
     {
       "importer": "trid3nt_server.tools.processing.compute_ndvi.compute_ndvi",
-      "imported": "trid3nt_server.tools.fetchers.imagery._pc_stac",
+      "imported": "trid3nt_server.tools.fetchers._fetch_common",
       "static": 2,
       "dynamic": 0,
-      "refs": 4
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.tools.processing.compute_ndvi.compute_ndvi",
+      "imported": "trid3nt_server.tools.processing._pc_search",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
     },
     {
       "importer": "trid3nt_server.tools.processing.compute_sediment_yield.compute_sediment_yield",
@@ -32751,10 +33150,17 @@
     },
     {
       "importer": "trid3nt_server.tools.processing.digitize_water_body.digitize_water_body",
-      "imported": "trid3nt_server.tools.fetchers.imagery._pc_stac",
+      "imported": "trid3nt_server.tools.fetchers._fetch_common",
       "static": 2,
       "dynamic": 0,
-      "refs": 4
+      "refs": 1
+    },
+    {
+      "importer": "trid3nt_server.tools.processing.digitize_water_body.digitize_water_body",
+      "imported": "trid3nt_server.tools.processing._pc_search",
+      "static": 2,
+      "dynamic": 0,
+      "refs": 1
     },
     {
       "importer": "trid3nt_server.tools.processing.endpoints.endpoints",
@@ -33283,7 +33689,7 @@
     },
     {
       "importer": "trid3nt_server.tools.search.ogc_adapter",
-      "imported": "trid3nt_server.tools.fetchers.imagery._pc_stac",
+      "imported": "trid3nt_server.tools.fetchers._fetch_common",
       "static": 2,
       "dynamic": 0,
       "refs": 1
