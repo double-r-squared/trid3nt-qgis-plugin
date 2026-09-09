@@ -1,56 +1,8 @@
-"""``compute_change_detection`` composer tool -- two-date Sentinel-2 index change.
+"""``compute_change_detection`` - two-date Sentinel-2 index change.
 
-Detects surface change between two dates over a bbox by differencing a
-spectral index computed from Sentinel-2 L2A surface reflectance:
-
-    index = NDVI = (NIR - Red) / (NIR + Red)          (default; vegetation)
-    index = NDWI = (Green - NIR) / (Green + NIR)      (``index="ndwi"``; water)
-
-    delta = index(date_b) - index(date_a)
-
-Pixels where ``|delta| >= threshold`` (default 0.15) are classified as
-
-    gain  -- delta >= +threshold  (greening / water gain)
-    loss  -- delta <= -threshold  (vegetation loss / water loss)
-
-and vectorized to change polygons (``rasterio.features.shapes``), returned as
-a FlatGeobuf vector layer styled by gain/loss (a categorical ``LegendKey`` on
-the per-feature ``change`` property) with per-class counts + areas riding on a
-``ChangeDetectionLayerURI`` (the ``DebrisFlowLayerURI`` /
-``SedimentYieldLayerURI`` house side-channel pattern).
-
-Data source
-===========
-
-Sentinel-2 L2A via the Microsoft Planetary Computer STAC -- the EXACT search /
-sign / windowed-read helpers ``compute_ndvi`` and ``fetch_sentinel2_truecolor``
-use (``_pc_search.search_least_cloudy_item`` + ``bbox_pixel_dims``; one
-least-cloudy scene per date window). Bands:
-
-    ndvi: B04 (Red, 10 m) + B08 (NIR, 10 m)
-    ndwi: B03 (Green, 10 m) + B08 (NIR, 10 m)
-
-Offline / precomputed path: ``imagery_a_uri`` / ``imagery_b_uri`` accept
-ALREADY-COMPUTED single-band index rasters (s3:// or local GeoTIFF). When both
-are supplied no STAC call is made; raster B is resampled onto raster A's grid
-(bilinear) before differencing. This is the offline-test seam and also lets a
-caller difference indices produced elsewhere (e.g. two ``compute_ndvi`` runs).
-
-Honesty (data-source fallback norm)
-===================================
-
-- No scene for a date window: typed ``ChangeDetectionNoImageryError``.
-- Both dates read but NO pixel crosses the threshold: typed
-  ``ChangeDetectionNoChangeError`` -- an honest "no significant change"
-  narration, never an empty layer that reads as success.
-
-AOI clamp: <= 0.2 degrees per side (CPU-bounded two-scene read + vectorize).
-
-``cacheable=False`` (``ttl_class="live-no-cache"``): this is a modeling
-composer, not a fetcher -- the artifact goes to the runs bucket (or
-``_output_dir`` for offline tests), not the cache prefix.
+Both honest refusals are typed: no scene in a date window, and no pixel crossing
+the threshold. Neither ever returns an empty layer that reads as success.
 """
-
 from __future__ import annotations
 
 import logging
@@ -117,10 +69,8 @@ class ChangeDetectionNoImageryError(ChangeDetectionError):
 
 
 class ChangeDetectionNoChangeError(ChangeDetectionError):
-    """Both dates were read but no pixel crosses the change threshold.
-
-    Honest no-change signal -- the agent narrates "no significant change
-    detected" rather than emitting an empty layer that reads as success.
+    """Both dates read, no pixel crossing the threshold: an honest no-change
+    signal to narrate, never an empty layer.
     """
 
     error_code = "CHANGE_DETECTION_NO_CHANGE"
@@ -135,22 +85,13 @@ class ChangeDetectionUpstreamError(ChangeDetectionError):
 
 
 # ---------------------------------------------------------------------------
-# Result type -- LayerURI subclass carrying the summary (house side-channel).
+# Result type.
 # ---------------------------------------------------------------------------
 
 
 class ChangeDetectionLayerURI(LayerURI):
-    """The change-polygon ``LayerURI`` plus assessment summary.
-
-    Extra fields beyond ``LayerURI``:
-
-    - ``gain_count`` / ``loss_count`` -- change polygons per class.
-    - ``gain_area_m2`` / ``loss_area_m2`` -- total area per class.
-    - ``index`` -- the spectral index differenced (``"ndvi"`` / ``"ndwi"``).
-    - ``threshold`` -- the |delta| threshold actually used.
-    - ``scene_a_id`` / ``scene_b_id`` -- Sentinel-2 scene ids (None on the
-      precomputed ``imagery_*_uri`` path).
-    - ``notes`` -- honest provenance + every fallback/simplification used.
+    """The change-polygon ``LayerURI`` plus counts and areas per class, the index
+    and threshold used, the scene ids (None when precomputed), and honest notes.
     """
 
     gain_count: int = 0
@@ -263,7 +204,7 @@ def _validate_threshold(threshold: Any) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Input staging (mirrors compute_sediment_yield).
+# Input staging.
 # ---------------------------------------------------------------------------
 
 
@@ -295,7 +236,7 @@ def _stage_uri_local(uri: str, tmpdir: str, label: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Index computation -- fetched (PC STAC) and precomputed paths.
+# Index computation.
 # ---------------------------------------------------------------------------
 
 
@@ -305,10 +246,8 @@ def _read_band_window(
     width_px: int,
     height_px: int,
 ) -> Any:
-    """Read ``signed_href`` warped to EPSG:4326 windowed to ``bbox``.
-
-    Returns a 2-D float32 numpy masked array -- the exact read path
-    ``compute_ndvi`` / ``digitize_water_body`` use.
+    """``signed_href`` warped to EPSG:4326 and windowed to ``bbox``, as a 2-D
+    float32 masked array.
     """
     import rasterio
     from rasterio.warp import Resampling, reproject
@@ -422,10 +361,8 @@ def _open_index_raster(path: str, label: str) -> tuple[np.ndarray, Any]:
 def _resample_onto(
     path: str, label: str, ref_src: Any
 ) -> np.ndarray:
-    """Reproject/resample ``path`` band 1 onto ``ref_src``'s grid (bilinear).
-
-    An input already on the exact reference grid passes through
-    value-identical (the compute_sediment_yield same-grid shortcut).
+    """``path`` band 1 resampled bilinearly onto ``ref_src``'s grid; an input
+    already on that exact grid passes through value-identical.
     """
     import rasterio  # noqa: F401
     from rasterio.warp import Resampling, reproject
@@ -511,8 +448,7 @@ def _vectorize_change(
             f"change-mask vectorization failed for bbox={bbox}: {exc}"
         ) from exc
 
-    # Area in m^2 via Web-Mercator (adequate for a speck filter at AOI scale;
-    # the digitize_water_body convention).
+    # Web Mercator area is adequate for a speck filter at AOI scale.
     gdf["area_m2"] = gdf.geometry.to_crs(3857).area
     if min_area_m2 > 0.0:
         gdf = gdf[gdf["area_m2"] >= min_area_m2].copy()
@@ -540,7 +476,9 @@ def _write_fgb_bytes(gdf: Any, tmpdir: str) -> bytes:
 
 
 def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
-    """Persist the FGB; return its URI (local for tests, runs bucket live)."""
+    """Persist the FGB and return its URI: a local path when ``output_dir`` is
+    given, else an ``s3://`` key in the runs bucket.
+    """
     filename = f"change_detection_{seed}.fgb"
     if output_dir is not None:
         path = os.path.join(output_dir, filename)
@@ -566,9 +504,9 @@ def _write_output(payload: bytes, seed: str, output_dir: str | None) -> str:
 
 
 def _build_legend(index: str) -> LegendKey:
-    """What this layer is read as. A gain/loss polygon set is classified by a
-    STRING field, which no preset shape writes a .qml for, so the key states
-    the quantity and QGIS's own default draws it."""
+    """What this layer is read as. A gain/loss set is classified by a STRING
+    field, which no preset writes a .qml for, so QGIS's own default draws it.
+    """
     return LegendKey(kind="classed", label=f"{index.upper()} change")
 
 
@@ -579,10 +517,8 @@ def _build_legend(index: str) -> LegendKey:
 
 @register_tool(
     _METADATA,
-    # Annotations: fetches its own Sentinel-2 inputs (external PC STAC API)
-    # unless both imagery_*_uri overrides are passed -- an input-fetching
-    # composer like compute_sediment_yield, so open_world_hint=True is honest
-    # (listed in test_tool_annotations._OPEN_WORLD_COMPUTE_EXCEPTIONS).
+    # Fetches its own Sentinel-2 inputs from the PC STAC API unless both
+    # imagery_*_uri overrides are passed, so open_world_hint=True is honest.
     open_world_hint=True,
 )
 def compute_change_detection(
@@ -604,38 +540,22 @@ def compute_change_detection(
 ) -> ChangeDetectionLayerURI:
     """Detect surface change between two dates by differencing Sentinel-2 NDVI/NDWI.
 
-    Use this (not ``compute_ndvi``, which is one date) when you want the
-    DIFFERENCE between two dates -- deforestation/clearing/regrowth
-    (``index="ndvi"``), reservoir draw-down/flood-scar (``index="ndwi"``),
-    or before/after screening. Do NOT use for: single-date vegetation
-    (``compute_ndvi``); land-cover class transitions (compare
-    ``fetch_esri_landcover_10m`` years instead); cross-season comparisons
-    (two dates in different seasons read as false "change").
+    Use this, not ``compute_ndvi`` (one date), when you want the DIFFERENCE
+    between two dates: clearing or regrowth (``index="ndvi"``), reservoir
+    draw-down or flood scar (``index="ndwi"``), before/after screening. Not for
+    single-date vegetation, land-cover class transitions, or cross-season
+    comparisons, which read as false change.
 
     Params:
-        bbox: EPSG:4326, clamped to <= 0.2 deg per side.
-        date_a_start/date_a_end, date_b_start/date_b_end: "YYYY-MM-DD"
-            before/after windows (required unless both ``imagery_*_uri``
-            are supplied).
-        index: ``"ndvi"`` (default) or ``"ndwi"``.
-        threshold: |delta| cutoff for real change (default 0.15).
-        max_cloud_cover: per-window scene cloud ceiling (default 30.0).
-        min_area_m2: drop change polygons smaller than this (default 1000).
-        imagery_a_uri/imagery_b_uri: precomputed single-band index rasters;
-            skips the STAC fetch when both given.
+        bbox: EPSG:4326, clamped to 0.2 deg per side.
+        date_a_start/end, date_b_start/end: "YYYY-MM-DD" before and after
+            windows, required unless both ``imagery_*_uri`` are supplied.
+        index: "ndvi" (default) or "ndwi". threshold: |delta| cutoff (0.15).
+        max_cloud_cover: per-window ceiling (30.0). min_area_m2: speck floor
+            (1000). imagery_a_uri/imagery_b_uri: precomputed index rasters.
 
-    Returns:
-        ``ChangeDetectionLayerURI`` -- vector ``LayerURI`` (FlatGeobuf,
-        EPSG:4326; ``change`` in {"gain","loss"} + ``area_m2`` per feature)
-        plus ``gain_count``/``loss_count``/``gain_area_m2``/``loss_area_m2``/
-        ``scene_a_id``/``scene_b_id``/``notes``.
-
-    Raises:
-        ChangeDetectionNoImageryError: no scene in a window.
-        ChangeDetectionNoChangeError: honest no-change result (nothing
-            crosses threshold) -- never an empty layer.
-        ChangeDetectionAoiTooLargeError / ChangeDetectionInputError /
-        ChangeDetectionUpstreamError.
+    Returns FlatGeobuf polygons with ``change`` in {gain, loss} and per-class
+    counts and areas. No scene, or nothing over threshold, is a typed error.
     """
     q_bbox = _validate_bbox(bbox)
     idx_name = _validate_index(index)
