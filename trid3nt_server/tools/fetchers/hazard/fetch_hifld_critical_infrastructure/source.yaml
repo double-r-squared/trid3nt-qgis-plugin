@@ -34,7 +34,7 @@ ingest:
   access: ogr
   ogr: {driver: ESRIJSON}
   query_template: {out_fields: "*", order_by: "OBJECTID ASC"}
-  # Twin _features_to_flatgeobuf parity (declarative, not hardcoded):
+  # The declarative feature filter, not a hardcode:
   #  - keep only Point features with finite coords (drops null/non-Point rows)
   #  - coerce nested (dict/list) HIFLD props to JSON strings (FGB-safe)
   #  - add derived facility_type (== the request) + facility_label (routing label)

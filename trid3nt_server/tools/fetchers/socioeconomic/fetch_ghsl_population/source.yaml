@@ -64,7 +64,7 @@ payload_estimate:
   floor_mb: 0.2
 caveats:
 - JRC GHS-POP R2023A epoch 2020, ~100 m EPSG:4326; modeled gridded residential population (persons/cell),
-  not a live count. Global 10-deg ZIP tiles; whole-object per intersecting tile (ADR 0067). bbox required
+  not a live count. Global 10-deg ZIP tiles; whole-object per intersecting tile. bbox required
   (global mosaic ~12 GB). Empty over open ocean / outside coverage -> GHSL_POPULATION_EMPTY.
 docstring: |-
   Fetch JRC GHSL GHS-POP gridded population (persons/cell) for a bbox.

@@ -60,7 +60,7 @@ caveats:
 - OpenStreetMap waterway ways (river/stream/canal by default) via the Overpass API (3-mirror fallback),
   clipped to the exact bbox. Global, keyless. An area with no OSM waterways returns a valid 0-feature layer,
   not an error.
-- The vestigial NHDPlus HR HUC4 FileGDB fallback leg was removed (ADR 0074, NATE-decided 2026-08-01); all
+- The vestigial NHDPlus HR HUC4 FileGDB fallback leg was removed; all
   requests now use the OSM Overpass waterway path regardless of the source label.
 docstring: |-
   Fetch river and stream flowline geometry for a bbox (OSM Overpass waterways).

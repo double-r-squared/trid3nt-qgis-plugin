@@ -1,6 +1,6 @@
 schema_version: v1
 name: fetch_topobathy
-# ADR 0273 -- declared confirm gate: the heavy raster fetch gets the canonical
+# Declared confirm gate: the heavy raster fetch gets the canonical
 # fetch-resolution confirm card (user controls resolution before the big fetch).
 confirm_gate: fetch_resolution
 source_class: topobathy
@@ -94,7 +94,7 @@ payload_estimate:
   model: bbox_area
   mb_per_sq_deg: 400.0
   floor_mb: 0.5
-# ADR 0225 -- DATA-native resolution declaration. The coastal composite's native cells:
+# DATA-native resolution declaration. The coastal composite's native cells:
 # CUDEM 1/9 arc-second (~3 m) nearshore, ETOPO 2022 15 arc-second (~450 m) offshore
 # fallback, 3DEP land grid via resolution_m. The gate card quotes this beside a
 # consuming surge/flood solver's declared range (two-layer truth).
@@ -116,7 +116,7 @@ caveats:
   primary where the fallback loudness gate would not see it. Only if bathy AND land are both unavailable does it
   raise. A LABELED land_absent degrade names a failed 3DEP land leg rather than silently dropping it.'
 - A CUDEM tile whose vertical datum is not NAVD88 (and no documented navd88_offset_m) raises TOPOBATHY_DATUM_MISMATCH
-  -- never a silent cross-datum merge (Invariant 7).
+  -- never a silent cross-datum merge.
 docstring: |-
   Fetch a SEAMLESS coastal topo-bathymetry DEM (land + sea floor) for a bbox.
 
@@ -161,7 +161,7 @@ docstring: |-
           a CUDEM tile's elevations to bring a tidal-datum (MHW/MSL/LMSL) tile
           onto NAVD88. Leave ``None`` for the normal NAVD88 path -- a
           non-NAVD88 tile with no offset raises ``TopobathyDatumError`` rather
-          than silently merging (Invariant 7).
+          than silently merging (a datum gate).
       timeout_s: tile-index download timeout (seconds, default 120).
       force_bathy_base: when True (the tsunami / coastal caller), lay
           the seamless GLOBAL ETOPO 2022 topo-bathy down as the ALWAYS-ON base
@@ -236,7 +236,7 @@ docstring: |-
         (retryable=False). The message names the covered fraction, the CUDEM
         footprint, and how to proceed (``force_bathy_base=true``).
       - ``TopobathyDatumError``: a CUDEM tile is non-NAVD88 with no offset
-        (retryable=False) -- Invariant 7.
+        (retryable=False) .
       - ``TopobathyUpstreamError``: tile read / merge / COG failure
         (retryable=True).
       - ``TopobathyEmptyError``: no CUDEM AND no 3DEP for the AOI

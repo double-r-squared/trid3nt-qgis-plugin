@@ -47,7 +47,7 @@ ingest:
     pr:     {long_name: precipitation_amount, units: mm}
     srad:   {long_name: surface_downwelling_shortwave_flux_in_air, units: "W m-2"}
 
-# --- normalization stamps (indistinguishability) -------------------------
+# --- normalization stamps -------------------------------------------------
 # NOTE: units are per-variable upstream; the router carries ONE units string
 # on the emitted LayerURI, so this stamps the fm100/fm1000/rmin/rmax value
 # ("Percent"). Per-variable LayerURI.units is a router single-string limitation.

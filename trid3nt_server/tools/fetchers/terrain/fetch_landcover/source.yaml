@@ -4,7 +4,7 @@
 # the cache key, and the envelope carries the validation sidecar.
 schema_version: v1
 name: fetch_landcover
-# ADR 0273 -- declared confirm gate: the heavy raster fetch gets the canonical
+# Declared confirm gate: the heavy raster fetch gets the canonical
 # fetch-resolution confirm card (user controls resolution before the big fetch).
 confirm_gate: fetch_resolution
 source_class: landcover
@@ -88,7 +88,7 @@ docstring: |-
   clipped to the requested bbox via the MRLC WCS 1.0.0 GeoServer endpoint.
   Returns a dict containing a ``LayerURI`` plus a ``nlcd_vintage_year``
   sidecar field that downstream hydraulic model setup uses to validate
-  Manning's roughness mappings before model invocation (Invariant 7 --
+  Manning's roughness mappings before model invocation (the datum-and-class gate --
   no silent wrong answers).
 
   **When to use:**

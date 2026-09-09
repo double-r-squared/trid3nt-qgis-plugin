@@ -80,7 +80,7 @@ params:
     type: float
     schema_optional: true
 
-# netcdf_cf_object per-frame mode config (ADR 0088): the split-window active-fire
+# netcdf_cf_object per-frame mode config: the split-window active-fire
 # hotspot surface (fixed fire_hotspots band, 24-frame cap, most-recent ~20min window).
 ingest:
   archive:

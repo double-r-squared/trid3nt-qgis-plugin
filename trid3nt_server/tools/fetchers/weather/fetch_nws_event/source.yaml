@@ -92,7 +92,7 @@ docstring: |-
   5-digit county FIPS, or a bbox (converted to a point center for the NWS
   forecast-zone lookup). Returns alert polygons with severity, headline,
   event type, onset/ends timestamps, and instruction text as a FlatGeobuf
-  vector layer. Cached ``dynamic-1h`` (FR-DC-2 active-state).
+  vector layer. Cached ``dynamic-1h``.
 
   **When to use:**
   - User asks about current weather hazards in a specific state or county
@@ -132,4 +132,3 @@ docstring: |-
   ``severity``, ``urgency``, ``certainty``, ``effective``, ``onset``,
   ``ends``, ``expires``, ``senderName``, ``areaDesc``, ``instruction``,
   ``response``, ``id``.
-

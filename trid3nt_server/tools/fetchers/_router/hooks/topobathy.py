@@ -1690,7 +1690,7 @@ def read_topobathy(
 
 
 # ---------------------------------------------------------------------------
-# HOOK: envelope -- twin layer_id/name + the 4 provenance fields (channel replay).
+# HOOK: envelope -- layer_id, name and the four provenance fields replayed.
 # ---------------------------------------------------------------------------
 
 

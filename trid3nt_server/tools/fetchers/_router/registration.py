@@ -323,7 +323,7 @@ def register_specs_from_tree(root: Path | None = None) -> list[str]:
 
 
 def registered_spec_names() -> set[str]:
-    """Twin names now served by a promoted spec-driven tool."""
+    """The names now served by a promoted spec-driven tool."""
     return set(_SPEC_REGISTRY)
 
 

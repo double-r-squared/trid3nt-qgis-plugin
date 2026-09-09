@@ -1413,7 +1413,7 @@ def _categorical_tile_grid_to_array(spec: SourceSpec, params: dict[str, Any]) ->
         try:
             tile_bytes, _ct, _u = get_bytes(get_client(), url, headers={"User-Agent": ua})
         except TransportNotFound:
-            continue  # a missing tile is a coverage gap (twin: b"" -> skip)
+            continue  # a missing tile is a coverage gap
         except TransportError as exc:
             raise router_upstream_error(spec.error_code_prefix, f"MCDWD tile fetch failed url={url}: {exc}")
         if not tile_bytes:

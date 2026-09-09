@@ -140,7 +140,7 @@ params:
     type: float
     schema_optional: true
 
-# netcdf_cf_object per-frame mode config (ADR 0088): the band-selectable archive-
+# netcdf_cf_object per-frame mode config: the band-selectable archive-
 # animation surface (144-frame cap, most-recent ~6.5h default window).
 ingest:
   archive:

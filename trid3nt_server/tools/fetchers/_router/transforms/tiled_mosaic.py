@@ -144,7 +144,7 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
         return source.execute(spec, {**params, "bbox": list(tiles[0])})
 
     # Categorical (esri_landcover): uint8 tiles carrying nodata + the embedded
-    # palette merged first-non-nodata -> palette COG (twin _fetch_landcover_cog_bytes).
+    # palette merged first-non-nodata -> palette COG.
     categorical = ingest.get("palette") == "passthrough" or str(ingest.get("dtype")) == "uint8"
     nodata = int(mosaic_cfg.get("nodata", 0)) if categorical else None
     method = mosaic_cfg.get("method", "first")

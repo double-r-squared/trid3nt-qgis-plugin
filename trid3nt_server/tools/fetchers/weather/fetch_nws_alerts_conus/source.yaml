@@ -147,5 +147,4 @@ docstring: |-
   ``onset``, ``ends``, ``expires``, ``senderName``, ``areaDesc``,
   ``instruction``. ``layer_type="vector"``, ``role="primary"``.
   Cached for 1 hour (``dynamic-1h``), keyed per (status, area, event_types).
-  Source-tier FR-HEP-2 Tier 1.
-
+  A Tier 1 authoritative source.

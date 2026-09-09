@@ -73,7 +73,7 @@ _CONUS_BBOX: tuple[float, float, float, float] = (-124.77, 25.05, -67.06, 49.40)
 
 
 # --------------------------------------------------------------------------- #
-# Metadata + payload-estimator synthesis (indistinguishability seams).
+# Metadata and payload-estimator synthesis.
 # --------------------------------------------------------------------------- #
 
 
