@@ -1,26 +1,30 @@
-"""usgs_stn_hwm hooks: USGS STN flood high-water marks + envelope.
+"""usgs_stn_hwm: USGS STN flood high-water marks through pygeohydro, + the envelope.
 
-The irreducible steps the declarative surface cannot carry:
-- ``resolve_build`` / ``resolve_parse`` -- resolve a named flood EVENT to its STN
-  ``event_id`` (Events.json substring match; ``[]`` to skip when no event named).
-- ``build_request`` -- derive the US STATE(S) the bbox overlaps (STN has no
-  server-side bbox filter), the "US-only, needs a state or an event" input gate,
-  and the FilteredHWMs request (Event-scoped when an event resolved, else
-  State-scoped).
-- ``parse_response`` -- decode the FilteredHWMs records, CLIP to the bbox
-  client-side, stamp the WSE quantity per mark, and raise the honest HWM_NO_MARKS
-  (an empty AOI is a typed error here, never a fabricated empty layer).
-- ``envelope`` -- the POST-EMIT quality/type/datum breakdown + caveats/notes read
-  back from the produced FGB (-> HighWaterMarksLayerURI).
+``pygeohydro.STNFloodEventData`` owns the STN service - the accepted query-parameter
+set, the request, the decode, and the geo-referencing of each mark. Four things it
+does not own ride here.
 
-Everything else -- transport, retry, cache, payload gate, LayerURI, camera bbox --
-is the shared router.
+THE STATE DERIVATION. STN has no server-side bbox filter, so an AOI with no named
+event is fetched by the US STATE(S) the bbox overlaps and clipped afterwards; an AOI
+overlapping no state, with no event, is the honest input error (STN is US +
+territories only).
+
+THE EVENT RESOLVE. The client publishes no event list, so a named flood event is
+still resolved to its ``event_id`` over the router's own transport
+(``resolve_build`` / ``resolve_parse``, substring match) - and the resolve runs
+pre-cache-key, so a name query and its id query collapse to one entry.
+
+THE QUANTITY STAMP AND THE HONEST EMPTY. ``elev_ft`` is a WATER-SURFACE ELEVATION
+above the mark's stated vertical datum, not a depth above ground, and every feature
+says so. An AOI with no marks is a typed error, never a fabricated empty layer.
+
+THE ENVELOPE. The post-emit quality/type/datum breakdown read back from the produced
+FGB is product contract, not fetch code.
 """
 
 from __future__ import annotations
 
 import json
-import urllib.parse
 from collections import Counter
 from typing import Any
 
@@ -28,13 +32,12 @@ from trid3nt_contracts.source_spec import SourceSpec
 
 from ..._router import hooks as _hooks
 from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
+from ..._router.hooks.hyriver import hyriver_call
 
-__all__ = ["build_request", "parse_response", "resolve_build", "resolve_parse", "envelope"]
+__all__ = ["delegate", "resolve_build", "resolve_parse", "envelope"]
 
-#: STN flood-event list (event_id <-> event_name).
+#: STN flood-event list (event_id <-> event_name); the client publishes no equivalent.
 EVENTS_URL = "https://stn.wim.usgs.gov/STNServices/Events.json"
-#: STN filtered high-water-mark query (Event / States filters; no bbox param).
-FILTERED_HWMS_URL = "https://stn.wim.usgs.gov/STNServices/HWMs/FilteredHWMs.json"
 
 _CAVEATS = [
     "HWM elevation accuracy varies by surveyor QUALITY rating (Excellent "
@@ -153,67 +156,54 @@ def resolve_parse(
 
 
 # --------------------------------------------------------------------------- #
-# MAIN FETCH -- states-overlap gate + FilteredHWMs request.
+# MAIN FETCH -- the library read, scoped by event or by overlapping state.
 # --------------------------------------------------------------------------- #
 
 
-@_hooks.register_hook("usgs_stn_hwm.build_request")
-def build_request(spec: SourceSpec, params: dict[str, Any]) -> list["_hooks.RequestPlan"]:
-    """Build the FilteredHWMs request (Event-scoped, else State-scoped).
+def _query_params(spec: SourceSpec, params: dict[str, Any]) -> dict[str, Any]:
+    """The STN filter: Event when one resolved, else the overlapping States.
 
-    Derives the US state(s) the bbox overlaps; a US-outside AOI with no event
-    named is the honest HWM_INPUT_ERROR (STN is US + territories only). An
-    event-scoped query fetches by Event only -- after the bbox clip a State
-    filter cannot add an in-AOI mark (bbox is a subset of the overlapping
-    states), so the twin's redundant event+states fallback is a no-op and is
-    dropped for the byte-identical result.
+    After the bbox clip a State filter cannot add an in-AOI mark to an event-scoped
+    query (the bbox is a subset of the overlapping states), so the two are exclusive.
     """
-    sc = spec.error_code_prefix
     bbox = tuple(float(v) for v in params["bbox"])
     event_id = params.get("event_id")
+    if event_id is not None:
+        return {"Event": str(int(event_id))}
     states = _states_overlapping_bbox(bbox)  # type: ignore[arg-type]
-    if event_id is None and not states:
+    if not states:
         raise router_input_error(
-            sc,
+            spec.error_code_prefix,
             f"bbox={tuple(round(v, 3) for v in bbox)} does not overlap any US "
             "state, and no event was named. USGS STN covers the US + territories "
             "only; pass a US AOI or a named flood event.",
             spec.input_error_suffix,
         )
-    query: list[tuple[str, str]] = []
-    if event_id is not None:
-        query.append(("Event", str(int(event_id))))
-    else:
-        query.append(("States", ",".join(states)))
-    url = FILTERED_HWMS_URL + "?" + urllib.parse.urlencode(query)
-    return [_hooks.RequestPlan(url=url, headers={"User-Agent": spec.auth.user_agent})]
+    return {"States": ",".join(states)}
 
 
-@_hooks.register_hook("usgs_stn_hwm.parse_response")
-def parse_response(
-    spec: SourceSpec, params: dict[str, Any], bodies: list[bytes]
+@_hooks.register_hook("usgs_stn_hwm.delegate")
+def delegate(
+    spec: SourceSpec, params: dict[str, Any], *, timeout_s: float
 ) -> list[dict[str, Any]]:
-    """Decode FilteredHWMs, clip to the bbox, stamp the WSE quantity per mark.
+    """Fetch the filtered marks, clip to the bbox, stamp the WSE quantity per mark."""
+    from pygeohydro import STNFloodEventData
 
-    Raises the source-stamped HWM_NO_MARKS on zero in-AOI marks (an empty AOI is
-    a typed error, never a fabricated empty layer) and UPSTREAM on a bad body.
-    """
     sc = spec.error_code_prefix
     west, south, east, north = (float(v) for v in params["bbox"])
-    raw = bodies[0] if bodies else b""
-    try:
-        recs = json.loads(raw.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise router_upstream_error(sc, f"STN FilteredHWMs is not valid JSON: {exc}")
-    if not isinstance(recs, list):
-        raise router_upstream_error(sc, "STN FilteredHWMs response was not a JSON array.")
+    query = _query_params(spec, params)
+    records = hyriver_call(
+        spec,
+        f"pygeohydro.STNFloodEventData.get_filtered_data(hwms, {query})",
+        STNFloodEventData.get_filtered_data,
+        "hwms",
+        query_params=query,
+        as_list=True,
+    )
 
     features: list[dict[str, Any]] = []
-    for r in recs:
-        if not isinstance(r, dict):
-            continue
-        lat = _f(r.get("latitude"))
-        lon = _f(r.get("longitude"))
+    for r in records:
+        lat, lon = _f(r.get("latitude")), _f(r.get("longitude"))
         if lat is None or lon is None:
             continue
         if not (west <= lon <= east and south <= lat <= north):
@@ -250,11 +240,7 @@ def parse_response(
         )
 
     if not features:
-        scope = (
-            f"event_id={params.get('event_id')}"
-            if params.get("event_id") is not None
-            else f"states={_states_overlapping_bbox((west, south, east, north))}"
-        )
+        scope = ", ".join(f"{k}={v}" for k, v in query.items())
         raise router_empty_error(
             sc,
             f"No USGS STN high-water marks found inside the AOI for {scope}. "

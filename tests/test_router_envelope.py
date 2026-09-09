@@ -3,10 +3,9 @@
 Covers the post-emit envelope hook contract (registration validation of the
 ``envelope`` hook + ``output.result_model`` pairing/resolution; the honesty-floor
 protected-key strip; strict no-op for the priors) and the fetch_high_water_marks
-migration (event resolve, states-overlap build_request + US-outside gate, the
-bbox-clip / NO_MARKS parse, and the quality/type/datum envelope read back from the
-produced FGB -> HighWaterMarksLayerURI). Migrates the value-bearing coverage from
-the deleted test_fetch_high_water_marks.py.
+fold (event resolve, the states-overlap query scope + US-outside gate, the
+bbox-clip / NO_MARKS delegate, and the quality/type/datum envelope read back from
+the produced FGB -> HighWaterMarksLayerURI).
 """
 
 from __future__ import annotations
@@ -40,8 +39,8 @@ from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 _SPECS = compose_specs_from_tree()
 _HWM = _SPECS["fetch_high_water_marks"]
 
-# One event body + a FilteredHWMs body: two marks inside a small FL bbox, one
-# outside, one missing coords (skipped).
+# One event body, and the record list the STN client returns: two marks inside a
+# small FL bbox, one outside, one missing coords (skipped).
 _BBOX = [-85.0, 30.0, -84.0, 31.0]
 
 
@@ -55,21 +54,36 @@ def _events_body() -> bytes:
     ).encode()
 
 
-def _hwms_body() -> bytes:
-    return json.dumps(
-        [
-            {"hwm_id": 1, "latitude": 30.5, "longitude": -84.5, "elev_ft": 12.3,
-             "hwmQualityName": "Excellent", "hwmTypeName": "Seed line",
-             "verticalDatumName": "NAVD88", "eventName": "2018 Michael",
-             "stateName": "Florida"},
-            {"hwm_id": 2, "latitude": 30.7, "longitude": -84.2, "elev_ft": 9.1,
-             "hwmQualityName": "Unknown/Historical", "hwmTypeName": "Mud line",
-             "verticalDatumName": "NGVD29", "eventName": "2018 Michael"},
-            {"hwm_id": 3, "latitude": 45.0, "longitude": -120.0, "elev_ft": 5.0,
-             "hwmQualityName": "Good", "verticalDatumName": "NAVD88"},
-            {"hwm_id": 4, "latitude": None, "longitude": -84.5, "elev_ft": 1.0},
-        ]
-    ).encode()
+def _hwms_records() -> list[dict]:
+    return [
+        {"hwm_id": 1, "latitude": 30.5, "longitude": -84.5, "elev_ft": 12.3,
+         "hwmQualityName": "Excellent", "hwmTypeName": "Seed line",
+         "verticalDatumName": "NAVD88", "eventName": "2018 Michael",
+         "stateName": "Florida"},
+        {"hwm_id": 2, "latitude": 30.7, "longitude": -84.2, "elev_ft": 9.1,
+         "hwmQualityName": "Unknown/Historical", "hwmTypeName": "Mud line",
+         "verticalDatumName": "NGVD29", "eventName": "2018 Michael"},
+        {"hwm_id": 3, "latitude": 45.0, "longitude": -120.0, "elev_ft": 5.0,
+         "hwmQualityName": "Good", "verticalDatumName": "NAVD88"},
+        {"hwm_id": 4, "latitude": None, "longitude": -84.5, "elev_ft": 1.0},
+    ]
+
+
+def _stub_stn(monkeypatch, records):
+    """Answer the ONE library call the delegate makes, offline."""
+    import pygeohydro
+
+    seen = {}
+
+    def _filtered(data_type, query_params=None, **kwds):
+        seen["data_type"] = data_type
+        seen["query_params"] = query_params
+        return records
+
+    monkeypatch.setattr(
+        pygeohydro.STNFloodEventData, "get_filtered_data", staticmethod(_filtered)
+    )
+    return seen
 
 
 # --------------------------------------------------------------------------- #
@@ -185,23 +199,27 @@ def test_resolve_parse_not_found_and_ambiguous():
     assert ea.value.error_code == "HWM_EVENT_NOT_FOUND"
 
 
-def test_build_request_states_scope_and_event_scope():
+def test_query_scope_states_and_event(monkeypatch):
     # No event -> States filter over the FL-overlapping states.
-    plans = hwm.build_request(_HWM, {"bbox": _BBOX})
-    assert len(plans) == 1 and "States=" in plans[0].url and "FilteredHWMs" in plans[0].url
+    seen = _stub_stn(monkeypatch, _hwms_records())
+    hwm.delegate(_HWM, {"bbox": _BBOX}, timeout_s=30.0)
+    assert seen["data_type"] == "hwms"
+    assert "States" in seen["query_params"] and "Event" not in seen["query_params"]
     # Event resolved -> Event filter, NO States.
-    ev = hwm.build_request(_HWM, {"bbox": _BBOX, "event_id": 7})
-    assert "Event=7" in ev[0].url and "States=" not in ev[0].url
+    hwm.delegate(_HWM, {"bbox": _BBOX, "event_id": 7}, timeout_s=30.0)
+    assert seen["query_params"] == {"Event": "7"}
 
 
-def test_build_request_us_outside_gate():
+def test_us_outside_gate(monkeypatch):
+    _stub_stn(monkeypatch, _hwms_records())
     with pytest.raises(RouterInputError) as ei:
-        hwm.build_request(_HWM, {"bbox": [10.0, 40.0, 11.0, 41.0]})  # Europe, no event
+        hwm.delegate(_HWM, {"bbox": [10.0, 40.0, 11.0, 41.0]}, timeout_s=30.0)  # Europe
     assert ei.value.error_code == "HWM_INPUT_ERROR"
 
 
-def test_parse_response_clips_and_stamps_quantity():
-    feats = hwm.parse_response(_HWM, {"bbox": _BBOX, "event_id": 7}, [_hwms_body()])
+def test_delegate_clips_and_stamps_quantity(monkeypatch):
+    _stub_stn(monkeypatch, _hwms_records())
+    feats = hwm.delegate(_HWM, {"bbox": _BBOX, "event_id": 7}, timeout_s=30.0)
     assert len(feats) == 2  # in-bbox marks 1 + 2; mark 3 (OR) + mark 4 (no coords) dropped
     ids = {f["properties"]["hwm_id"] for f in feats}
     assert ids == {1, 2}
@@ -210,22 +228,26 @@ def test_parse_response_clips_and_stamps_quantity():
         assert f["geometry"]["type"] == "Point"
 
 
-def test_parse_response_no_marks_raises():
-    empty = json.dumps([{"hwm_id": 9, "latitude": 0.0, "longitude": 0.0}]).encode()
+def test_delegate_no_marks_raises(monkeypatch):
+    _stub_stn(monkeypatch, [{"hwm_id": 9, "latitude": 0.0, "longitude": 0.0}])
     with pytest.raises(Exception) as ei:  # RouterEmptyError
-        hwm.parse_response(_HWM, {"bbox": _BBOX, "event_id": 7}, [empty])
+        hwm.delegate(_HWM, {"bbox": _BBOX, "event_id": 7}, timeout_s=30.0)
     assert ei.value.error_code == "HWM_NO_MARKS"
     assert ei.value.retryable is False
 
 
-def test_parse_response_bad_body_upstream():
+def test_delegate_upstream_refusal_is_typed(monkeypatch):
+    """The library returns a JSON error document as data; the shim raises it."""
+    _stub_stn(monkeypatch, {"type": "about:blank", "title": "Not Found", "status": 404})
     with pytest.raises(RouterUpstreamError) as ei:
-        hwm.parse_response(_HWM, {"bbox": _BBOX}, [b"not json"])
+        hwm.delegate(_HWM, {"bbox": _BBOX, "event_id": 7}, timeout_s=30.0)
     assert ei.value.error_code == "HWM_UPSTREAM_ERROR"
+    assert "Not Found" in str(ei.value)
 
 
-def test_envelope_end_to_end_from_fgb():
-    feats = hwm.parse_response(_HWM, {"bbox": _BBOX, "event_id": 7}, [_hwms_body()])
+def test_envelope_end_to_end_from_fgb(monkeypatch):
+    _stub_stn(monkeypatch, _hwms_records())
+    feats = hwm.delegate(_HWM, {"bbox": _BBOX, "event_id": 7}, timeout_s=30.0)
     data = vector_fgb.features_to_fgb_bytes(feats, _HWM, {"bbox": _BBOX})
     base = _router_mod.build_layer_uri(_HWM, {"bbox": _BBOX, "event_name": "2018 Michael"}, "s3://cache/hwm.fgb")
     out = _router_mod._apply_envelope(

@@ -1,6 +1,3 @@
-# Router source spec (LayerURI-envelope wave, ADR 0073).
-# Twin: fetch_high_water_marks.py -- FOLDED via resolve/build/parse + the
-# post-emit envelope hook (HighWaterMarksLayerURI quality/type/datum breakdown).
 schema_version: v1
 name: fetch_high_water_marks
 source_class: usgs_stn_hwm
@@ -8,8 +5,6 @@ error_prefix: HWM
 shape: vector-fgb
 supports_global_query: false
 endpoints:
-  data:
-    url: https://stn.wim.usgs.gov/STNServices/HWMs/FilteredHWMs.json
   events:
     url: https://stn.wim.usgs.gov/STNServices/Events.json
 auth:
@@ -28,11 +23,10 @@ params:
 hooks:
   resolve_build: usgs_stn_hwm.resolve_build
   resolve_parse: usgs_stn_hwm.resolve_parse
-  build_request: usgs_stn_hwm.build_request
-  parse_response: usgs_stn_hwm.parse_response
+  delegate: usgs_stn_hwm.delegate
   envelope: usgs_stn_hwm.envelope
 ingest:
-  chained: {}
+  delegate: {library: pygeohydro, timeout_s: 120}
   properties:
   - hwm_id
   - site_no
