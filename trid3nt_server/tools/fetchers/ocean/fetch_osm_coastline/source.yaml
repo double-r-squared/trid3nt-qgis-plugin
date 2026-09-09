@@ -21,11 +21,9 @@ params:
     required: true
     quantize: round_6dp
 hooks:
-  build_request: overpass_coastline.build_request
-  parse_response: overpass_coastline.parse_response
+  delegate: osm_coastline.delegate
 ingest:
-  http_source:
-    endpoint_fallback: true
+  delegate: {library: osmnx, timeout_s: 180}
   properties:
   - osm_id
   - name
