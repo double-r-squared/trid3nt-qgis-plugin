@@ -24,12 +24,12 @@ gates:
   max_features: 50000                        # twin _MAX_PAGES(50) * _PAGE_SIZE(1000)
 
 ingest:
-  # Twin sends a named outFields allowlist server-side (not '*').
+  access: ogr
+  ogr: {driver: ESRIJSON}
+  # A named outFields allowlist, sent server-side (not '*').
   query_template:
     out_fields: "FIRE_ID,FIRE_NAME,YEAR,FIRE_TYPE,ACRES,LATITUDE,LONGITUDE,MAP_ID,MAP_PROG,ASMNT_TYPE,IRWINID,IG_DATE"
-    f: geojson
     order_by: "OBJECTID ASC"
-  pagination: {mode: exceeded_transfer_limit, page_size: 1000}
   # YEAR range only when year_range is pinned (twin: YEAR >= start AND YEAR <= end).
   where_clauses:
     - {template: "YEAR >= {year_range[0]} AND YEAR <= {year_range[1]}", require: [year_range]}
