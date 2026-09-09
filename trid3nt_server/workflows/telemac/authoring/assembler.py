@@ -1,22 +1,8 @@
 """The accepted mesh -> what the sheet is FILLED from, and the run the box gets.
 
-Two acts, and the flip between them is the sheet. SETTLING is everything the run
-has to MEASURE before a keyword can be set: the bed at the mesh's declared roles,
-the section its outflow face cuts, the uniform-flow depth that section conveys
-the prescribed discharge at, where the release actually lands, and - for a
-catchment - the outlet face and the flow range its rating curve has to span.
-Every one of them comes off the artifact itself, because a number derived beside
-the mesh could disagree with the ground the geometry file holds.
-
-STAGING is the other act: everything the fill wrote is uploaded beside the mesh
-the solve runs on, and the manifest that names the case is written LAST - so a
-manifest exists only for a run whose every file is already where the launcher
-will look for it.
-
-What is NOT here any more is the authoring. A steering file is the SERIALIZER's,
-written by telapy against the engine's own dictionary; the sheet the serializer
-resolves is the template's.
-"""
+SETTLING measures off the artifact itself, never beside it. STAGING uploads every
+authored file beside the mesh and writes the manifest LAST, so a manifest exists
+only for a run whose every file is already where the launcher will look."""
 
 from __future__ import annotations
 
@@ -106,22 +92,7 @@ def case_section(*, module: str, steering: str, results: list[str],
                  continue_from: str | None = None) -> dict[str, Any]:
     """The CASE a worker runs: which engine, which file, what it must produce.
 
-    ``module`` names the engine binary, ``steering`` the authored file it reads,
-    and ``results`` every file that must exist for the run to have succeeded.
-    ``coupling`` names the module the steering file couples the solve with, because
-    which
-    runner can drive a coupled case is not the same question for every module and
-    the worker decides on this word. ``continue_from`` is the staged name of the
-    previous run's results the steering file restarts from, present only on a
-    continued
-    run.
-
-    ``server_facts`` is what the SERVER already knows and the worker cannot learn
-    from the files it is handed - the UTM zone, the bbox, the node and element
-    counts, the edge the mesh was measured at, which dataset the bed came from.
-    The worker copies it into its metrics VERBATIM: a fact re-derived in the
-    container is a second answer that can disagree with the first.
-    """
+    ``server_facts`` is copied into the worker's metrics verbatim, never re-derived."""
     return {"module": module, "steering": steering,
             **({"user_fortran": user_fortran} if user_fortran else {}),
             **({"coupling": coupling} if coupling else {}),
@@ -129,26 +100,17 @@ def case_section(*, module: str, steering: str, results: list[str],
             "results": list(results), "server_facts": dict(server_facts)}
 
 
+# ``inputs`` rows are ``{gs_uri, dest}``: what the launcher stages into the run
+# directory before the container starts, which is why the worker needs no network.
+# An authored run's section is ``case``.
 def stage_telemac_manifest(*, section: str, config: Mapping[str, Any],
                            run_tag: str, outputs: list[str],
                            inputs: list[dict[str, str]] | None = None,
                            prefix: str | None = None,
                            extra: Mapping[str, Any] | None = None) -> str:
-    """Write the worker manifest to the cache bucket and return its ``s3://`` URI.
+    """Write the worker manifest to the cache bucket -> its ``s3://`` URI.
 
-    THE manifest writer for the whole family. ``section`` is the key the worker's
-    ENTRYPOINT dispatches on. ``prefix`` is where the manifest is STAGED, and it
-    is not always the same word - the harbour module answers to ``agitation``
-    inside the document while its manifests live under ``artemis/``. Collapsing
-    the two into one name is how a manifest lands somewhere the worker looks and
-    carries a key it does not read, which is a silent fall-through rather than an
-    error.
-
-    ``inputs`` is what the launcher stages into the run directory before the
-    container starts, ``{gs_uri, dest}`` per entry. It carries everything these
-    domains used to fetch for themselves, which is why the worker needs no
-    network. An authored run's section is ``case`` - see :func:`case_section`.
-    """
+    ``section`` is the dispatch key, ``prefix`` the staging word; they differ."""
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
         raise OpenWaterError(
@@ -201,9 +163,7 @@ def _write_manifest(case: Mapping[str, Any], run_tag: str, *, outputs: list[str]
                     inputs: list[dict[str, str]], prefix: str) -> str:
     """Write the worker manifest for an authored case -> its ``s3://`` URI.
 
-    The document itself is written by the ONE manifest writer, under the ``case``
-    key the worker dispatches on.
-    """
+    Written by the one manifest writer, under the ``case`` dispatch key."""
     try:
         return stage_telemac_manifest(
             section="case", config=case, run_tag=run_tag, outputs=outputs,
@@ -227,10 +187,7 @@ async def stage_run(rundir: Path, run_tag: str, *, module: str, steering: str,
                     continue_from: str | None = None) -> dict[str, Any]:
     """An authored run directory -> the staged run the box receives.
 
-    Everything the authoring wrote is uploaded beside the mesh the solve runs on,
-    and the manifest that names the case is written LAST - so a manifest exists
-    only for a run whose every file is already where the launcher will look.
-    """
+    The manifest is written LAST, so it exists only for a fully staged run."""
     # Every file the authoring wrote, under its path INSIDE the run directory:
     # the oil module's user fortran is a directory the engine compiles, so the
     # walk is recursive and the manifest dest carries the same relative path.
@@ -256,9 +213,7 @@ def _mesh_field(mesh: Mapping[str, Any], name: str, *,
                 missing: Callable[[str], Exception]) -> str:
     """One field of the ACCEPTED mesh's record, or the refusal that names it.
 
-    A mesh record missing any of them refuses: falling through would solve on a
-    mesh nobody accepted, under the accepted mesh's name.
-    """
+    Falling through would solve on a mesh nobody accepted, under its name."""
     uri = (mesh or {}).get(name)
     if not uri:
         raise missing(
@@ -292,15 +247,7 @@ def _face_section(nodes: Sequence[int], node_xy: Any, bed: Any, *,
                   missing: Callable[[str], Exception]) -> list[list[float]]:
     """The channel a role's face cuts, as ``(offset, bed)`` pairs.
 
-    A role is a contiguous RUN of the boundary walk, so the nodes arrive in the
-    order they lie along the face and the offset is the running chord distance
-    between them. That makes the section a real transect of the painted bed
-    rather than a scatter that has to be re-ordered by a rule of its own.
-
-    A node the bed left unpainted drops out of the section and takes no offset
-    with it: the survey has a hole in it, and closing the hole by shifting the
-    nodes past it would narrow a channel nobody re-measured.
-    """
+    A role is a contiguous run of the walk, so the offset is running chord."""
     import numpy as np
 
     xy = None if node_xy is None else np.asarray(node_xy, dtype=float)
@@ -313,6 +260,9 @@ def _face_section(nodes: Sequence[int], node_xy: Any, bed: Any, *,
     points = xy[list(nodes)]
     steps = np.hypot(*(points[1:] - points[:-1]).T)
     offsets = np.concatenate([[0.0], np.cumsum(steps)])
+    # A node the bed left unpainted drops out of the section and takes no offset
+    # with it: the survey has a hole in it, and closing the hole by shifting the
+    # nodes past it would narrow a channel nobody re-measured.
     section = [[round(float(o), 3), round(float(z), 3)]
                for o, z in zip(offsets, bed[list(nodes)]) if np.isfinite(z)]
     if len(section) < 2:
@@ -325,18 +275,12 @@ def _measured_reach(roles: Mapping[str, Any], node_xy: Any, node_bed: Any,
                     centerline_utm: Any) -> dict[str, Any]:
     """What the accepted mesh says about the reach the outflow stage rests on.
 
-    Three measurements, every one off the artifact itself: the bed at the two
-    declared roles, the SECTION the outflow face cuts through that bed, and the
-    length of the line the mesh was built over. A profile derived beside the mesh
-    could disagree with the bed the geometry file holds, and a stage derived from
-    it would be prescribed against ground the solver never sees.
-
-    The two bed numbers are medians over the nodes each role names - the reach's
-    top, and the fall from there to its outflow. That fall over that length is
-    the friction slope the normal depth is computed at.
-    """
+    Bed, outflow section and reach length, every one off the artifact itself."""
     import numpy as np
 
+    # The two bed numbers are medians over the nodes each role names - the reach's
+    # top, and the fall from there to its outflow. That fall over the centerline's
+    # length is the friction slope the normal depth is computed at.
     bed = None if node_bed is None else np.asarray(node_bed, dtype=float)
     medians: dict[str, float] = {}
     role_nodes: dict[str, list[int]] = {}
@@ -371,13 +315,7 @@ def _measured_reach(roles: Mapping[str, Any], node_xy: Any, node_bed: Any,
 def _continuation_state(uri: str) -> dict[str, Any]:
     """The restart record's own last instant and depth field - read off the file.
 
-    A continued run is the SAME declared scenario over an extended horizon, and
-    the horizon begins where the leg being continued stopped. Only that file can
-    say when: the engine writes the restart at its own last time step, which is
-    not the graphic period, not the asked duration, and not something the server
-    can compute from the ask. The depth at that instant is the run's INITIAL
-    STATE, which is what decides where a release can land.
-    """
+    A continued run is the same declared scenario over an extended horizon."""
     import tempfile
 
     import numpy as np
@@ -405,6 +343,11 @@ def _continuation_state(uri: str) -> dict[str, Any]:
             "TELEMAC_CONTINUATION_UNREADABLE",
             f"{uri} carries no water depth among {record['varnames']}, so the "
             "state this run would start from cannot say where it is wet.")
+    # Only the file can say where the continued leg stopped: the engine writes the
+    # restart at its own last time step, which is not the graphic period, not the
+    # asked duration, and not anything the server can compute from the ask. The
+    # depth at that instant is the initial state, which decides where a release
+    # can land.
     start_s = float(record["times"][-1])
     wet = np.asarray(depth[-1], dtype=float) > TELEMAC_WSE_WET_DEPTH_M
     return {
@@ -454,11 +397,7 @@ def _to_lonlat_point(xy: tuple[float, float],
 def _mesh_nodes(mesh: Mapping[str, Any]) -> tuple[Any, Any]:
     """The accepted mesh's node coordinates and bed, read off its display face.
 
-    The ``.2dm`` is the one readable record of the node numbering the geometry
-    file carries, so the bed read here is the bed the solve starts from - which
-    is what the outflow stage is measured over, and what a NESTOR design grade
-    digs back to.
-    """
+    The ``.2dm`` is the one readable record of the geometry file's numbering."""
     points, _cells, z, _lonlat = read_accepted_mesh_nodes(
         _mesh_field(mesh, "display_uri", missing=_reach_mesh_missing))
     if points is None or z is None:
@@ -477,31 +416,17 @@ async def _settle_release(
 ) -> tuple[tuple[float, float], str]:
     """WHERE the source enters the water -> ``(lon, lat)`` and how it was decided.
 
-    ONE seam, because there is one centerline. A SUPPLIED point is settled against
-    real geometry: the domain polygon the accepted mesh was cut from decides
-    whether it can be a source at all, and the declared centerline decides where on
-    the river it sits. A point the domain does not hold raises through, because
-    the only alternatives are releasing somewhere the user did not choose or
-    solving a source outside the water.
-
-    With none placed the source sits at ``spill_fraction`` along that SAME
-    centerline - the line the section was cut between and the mesh was built over -
-    walked downstream to the first station the ACCEPTED MESH holds. The centerline
-    is the whole navigated stretch and the mesh is only the part of it the mapped
-    banks left, so "on the line" and "in the domain" are two different claims and
-    only the second one solves.
-
-    Either way the settled point lands LAST on the nearest node ``initial_state``
-    holds water at. Both earlier steps answer questions about geometry - is it in
-    the domain, is it on the river - and neither asks whether there is water there
-    at t0; a bankfull domain at low flow has mapped river that is dry ground when
-    the run opens, and a source released onto it discharges into the bed.
-    """
+    A supplied point the domain polygon does not hold raises rather than moves."""
     from trid3nt_server.workflows.telemac.helpers.release_point import (
         contain_release_point, derive_release_on_mesh, domain_polygon_of,
         snap_release_to_wetted,
     )
 
+    # With no point placed the source sits at ``spill_fraction`` along the declared
+    # centerline, walked downstream to the first station the ACCEPTED MESH holds:
+    # the centerline is the whole navigated stretch and the mesh is only the part
+    # of it the mapped banks left, so "on the line" and "in the domain" are two
+    # different claims and only the second one solves.
     if release_pair is None:
         lonlat, note = await asyncio.to_thread(
             derive_release_on_mesh, centerline_utm=centerline_utm, mesh=mesh,
@@ -513,6 +438,10 @@ async def _settle_release(
             flowline=centerline)
         lonlat, note = (contained.lon, contained.lat), contained.note
 
+    # The settled point lands LAST on the nearest node holding water at t0. Both
+    # steps above ask about geometry only; a bankfull domain at low flow has mapped
+    # river that is dry ground when the run opens, and a source released onto it
+    # discharges into the bed.
     wet_utm, moved_m, node = await asyncio.to_thread(
         snap_release_to_wetted, _to_utm_point(lonlat, utm_epsg),
         node_xy=node_xy, wet=initial_state["wet"], state=initial_state["note"])
@@ -535,13 +464,7 @@ async def _settle_release(
 def _outlet_boundary(mesh: Mapping[str, Any]) -> tuple[dict[str, Any], int, str, int]:
     """The declared OUTLET: ``(topology, number, what its quad prescribes, count)``.
 
-    The solver numbers its liquid boundaries by walking the geometry, the accepted
-    topology recorded that numbering when the ``.cli`` was written, and the solver
-    prints one flux per number in its own volume balance. So the number is what
-    turns "the outlet" into the series the hydrograph reads, and the count is what
-    lets the steering file state one stage-discharge entry per boundary in that
-    same numbering.
-    """
+    The number is the solver's own liquid-boundary walk order, 1-based."""
     topology = read_topology(_mesh_field(mesh, "topology_uri",
                                          missing=_catchment_mesh_missing))
     order = list(topology["liquid_boundary_order"])
@@ -552,6 +475,11 @@ def _outlet_boundary(mesh: Mapping[str, Any]) -> tuple[dict[str, Any], int, str,
             "to measure. Move the pour point onto the basin's own outlet, or mesh "
             "it finer so a boundary node reaches it.",
             error_code="TELEMAC_ROG_NO_OUTLET_NODES")
+    # The solver numbers its liquid boundaries by walking the geometry and prints
+    # one flux per number in its own volume balance; the accepted topology recorded
+    # that numbering when the ``.cli`` was written. So the number is what turns
+    # "the outlet" into the series the hydrograph reads, and the count is what lets
+    # the deck state one stage-discharge entry per boundary in the same numbering.
     number = order.index(_OUTLET_ROLE) + 1
     return (topology, number,
             str(topology["liquid_boundary_prescribes"][number - 1]), len(order))
@@ -561,11 +489,7 @@ def _bed_slope(nodes: Sequence[int], node_xy: Any, node_bed: Any,
                cells: Any) -> float:
     """The bed gradient at a face, over the ELEMENTS that face's nodes belong to.
 
-    A friction slope is a fall over a run, and the only run a catchment outlet
-    has is the ground it drains across: the elements touching the face are the
-    mesh's own neighbourhood of it, so the plane fitted through their painted
-    nodes is a measurement rather than a window somebody chose.
-    """
+    The plane is fitted through the painted nodes of the touching elements."""
     import numpy as np
 
     xy = np.asarray(node_xy, dtype=float)
@@ -598,12 +522,7 @@ def _measured_outlet(topology: Mapping[str, Any], node_xy: Any, node_bed: Any,
                      q_ceiling_m3s: float, q_ceiling_basis: str) -> dict[str, Any]:
     """What the accepted mesh says about the face the basin drains through.
 
-    Everything the outlet's rating curve is derived from, measured off the
-    artifact itself: the section the outlet face cuts through the painted bed,
-    the bed slope over the elements it touches, and the roughness the run's own
-    friction field carries there. A curve derived from anything else would hold
-    the outlet at a level computed over ground the solver never reads.
-    """
+    Section, slope and roughness, every one measured off the artifact itself."""
     import numpy as np
 
     nodes = [int(n) for n in (topology["roles"].get(_OUTLET_ROLE) or ())]
@@ -628,12 +547,7 @@ def _rain_ceiling(rain: Mapping[str, Any], cells: Any,
                   node_xy: Any) -> tuple[float, str]:
     """The most the outlet can ever discharge, and the basis of that number.
 
-    Every drop this run holds falls on the mesh, so the gross rain rate over the
-    meshed area is a CEILING on the outlet flux: infiltration only removes water
-    and storage only delays it. It is the top of the flow range the rating curve
-    is swept over, which is what "spanning the expected hydrograph" means without
-    a hydrograph in hand.
-    """
+    Gross rain on the meshed area caps it: infiltration only removes water."""
     import numpy as np
 
     xy = np.asarray(node_xy, dtype=float)
@@ -681,22 +595,7 @@ async def settle_reach(
 ) -> dict[str, Any]:
     """Everything the reach MEASURES, before a single keyword is set.
 
-    The MESH is the accepted one, so the numbers here are the triangulation that
-    was presented rather than an equivalent rebuild: the timestep follows the edge
-    that mesh was BUILT at, the bed comes off its own display face, and the
-    boundary walk is the numbering its ``.cli`` recorded.
-
-    The RELEASE POINT is settled against the one centerline before anything is
-    staged: a supplied point outside the domain polygon refuses while the user
-    can still move it, one inside it is put on the flowline, and an unplaced one
-    walks ``spill_fraction`` along the same line. The marker goes on the canvas
-    at the point the deck will carry, saying out loud who placed it.
-
-    ``continue_from`` is a previous run's RESTART record. The instant that file
-    stands at is read here, because every forcing series the sheet writes is the
-    SAME declared scenario evaluated over the stretch of one absolute clock this
-    run covers.
-    """
+    The mesh is the ACCEPTED one, never an equivalent rebuild."""
     from trid3nt_server.workflows.telemac.helpers.release_layer import publish_release_point
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
@@ -728,6 +627,9 @@ async def settle_reach(
     # WHAT THE RUN STARTS FROM. A fresh reach opens at the derived normal depth
     # laid bed-parallel, which is a positive depth at every node the deck writes
     # it over; a CONTINUED one opens at the restart record's own wet/dry field.
+    # ``continue_from`` names a previous run's restart record, and the instant it
+    # stands at is read here because every forcing series the sheet writes is the
+    # same declared scenario evaluated over the stretch of one absolute clock.
     initial_state = (
         await asyncio.to_thread(_continuation_state, str(continue_from))
         if continue_from else
@@ -876,9 +778,7 @@ async def settle_reach(
 def _graphic_period(output_interval_min: float | None, time_step_s: float) -> int:
     """The GRAPHIC PRINTOUT PERIOD in solver steps, off the run's own timestep.
 
-    The cadence is asked for in MINUTES, and the only thing that turns minutes
-    into steps is the step this same run is solved at.
-    """
+    The cadence is asked in minutes; only this run's own step converts it."""
     if output_interval_min is None:
         return _DEFAULT_GRAPHIC_PERIOD
     return max(1, round(float(output_interval_min) * 60.0 / float(time_step_s)))
@@ -895,11 +795,7 @@ async def settle_catchment(
 ) -> dict[str, Any]:
     """Everything the catchment MEASURES at the face the basin drains through.
 
-    ``catchment`` is the ACCEPTED mesh: its geometry, its boundary conditions and
-    the outlet role its pour point matched are what the solve runs on, so the
-    outlet's rating curve is derived over the triangulation that was presented
-    rather than an equivalent rebuild.
-    """
+    ``catchment`` is the ACCEPTED mesh, never an equivalent rebuild."""
     from trid3nt_server.workflows.telemac.templates.rain_on_grid.cn_infiltration import (
         select_runoff_path,
     )
@@ -1034,11 +930,7 @@ def _mesh_facts(mesh: Mapping[str, Any], *,
                 missing: Callable[[str], Exception]) -> dict[str, Any]:
     """The accepted mesh's own record, as every open-water sheet reads it.
 
-    One reader, because a harbour and a basin differ in what they DO with the
-    mesh and not in what the mesh is: the counts, the edge band, the zone, the
-    bed's provenance and the boundary the pair writer numbered are the artifact's
-    own answers and neither template gets to restate them.
-    """
+    One reader: a harbour and a basin differ in what they DO with the mesh."""
     artifact = mesh.get("artifact")
     utm_epsg = int(getattr(artifact, "utm_epsg", 0) or 0)
     if not utm_epsg:
@@ -1065,12 +957,9 @@ def _mesh_facts(mesh: Mapping[str, Any], *,
 
 def _boundary_file(mesh: Mapping[str, Any], *,
                    missing: Callable[[str], Exception]) -> tuple[str, list[int]]:
-    """The pair's own ``.cli`` text, and the boundary nodes it numbers, in rank order.
+    """The pair's own ``.cli`` text and the boundary nodes it numbers, in rank order.
 
-    The file the mesh recipe wrote from this geometry's IPOBO is the ONE record of
-    the boundary walk, so a run that restamps it reads the walk back rather than
-    re-deriving one that would classify different nodes.
-    """
+    The file written from this geometry's IPOBO is the ONE record of the walk."""
     from trid3nt_server.tools.cache import read_object_bytes_s3
 
     uri = _mesh_field(mesh, "cli_uri", missing=missing)
@@ -1110,18 +999,15 @@ def _settled_walk(walk: Sequence[int], structure: set[int], liquid: set[int]
                   ) -> tuple[list[int], list[int]]:
     """The two roles as RUNS of the boundary walk, not as scatters of nodes.
 
-    A node standing alone between two of another kind is not a face. front2.f
-    says so itself - it refuses "a solid point between two liquid points" and
-    the reverse by name - so a lone node whose two walk neighbours agree with
-    each other and not with it takes their role. Settled until nothing moves,
-    because closing one hole can expose the next.
-
-    The structure wins where the two overlap, so an ambiguity here reads the
-    same way the stamp reads it.
-    """
+    The structure wins where the two overlap, the way the stamp reads it."""
     order = [int(n) for n in walk]
     kind = ["structure" if n in structure else
             ("liquid" if n in liquid else "shore") for n in order]
+    # A node standing alone between two of another kind is not a face. front2.f
+    # says so itself - it refuses "a solid point between two liquid points" and the
+    # reverse by name - so a lone node whose two walk neighbours agree with each
+    # other and not with it takes their role. Settled until nothing moves, because
+    # closing one hole can expose the next.
     for _pass in range(len(order)):
         moved = False
         for i in range(1, len(kind) - 1):
@@ -1153,20 +1039,9 @@ async def settle_harbour(
     reflection_coef: float,
     result_basename: str,
 ) -> dict[str, Any]:
-    """What the accepted harbour mesh measures -> what the agitation sheet is filled from.
+    """What the accepted harbour mesh measures -> what the agitation sheet reads.
 
-    Three measurements, every one off the artifact itself: the boundary walk the
-    pair writer numbered, which stretch of it the mesh designated liquid, and
-    which of its faces stand on the punched structure. A wave forced at a
-    boundary derived beside the mesh would enter a domain the solver never sees.
-
-    ``structure_width_m`` is the width the mesher cut the footprint at, so the
-    same number decides what the cut removed and what the deck calls solid.
-
-    A mesh naming no liquid boundary REFUSES here: a prescribed incident wave has
-    no edge to enter a closed basin through, and the bundle says so in its own
-    words.
-    """
+    A mesh naming no liquid boundary refuses: a wave has no edge to enter by."""
     from trid3nt_server.workflows.shared.supplied_geometry import supplied_polylines
 
     facts = _mesh_facts(mesh, missing=_harbour_mesh_missing)
@@ -1269,16 +1144,7 @@ async def settle_basin(
 ) -> dict[str, Any]:
     """What the accepted basin mesh measures -> what the 3D sheet is filled from.
 
-    The one measurement a vertical grid cannot be planned without is the DEEPEST
-    column the mesh carries: the near-surface layer a sigma grid achieves is set
-    over that column, so a plan made against a shallower one would be a grid that
-    cannot hold the declared thermocline where the thermocline actually is. A
-    column is the FREE SURFACE minus the bed, and both are on the one datum the
-    level producer already refused to mix.
-
-    A basin naming no liquid boundary is what a lake IS. The bundle says so and
-    this records the sentence rather than refusing it.
-    """
+    A basin naming no liquid boundary is what a lake IS: recorded, not refused."""
     import numpy as np
 
     facts = _mesh_facts(mesh, missing=_basin_mesh_missing)
@@ -1287,6 +1153,12 @@ async def settle_basin(
     _points, _cells, node_bed, _lonlat = await asyncio.to_thread(
         read_accepted_mesh_nodes,
         _mesh_field(mesh, "display_uri", missing=_basin_mesh_missing))
+    # The one measurement a vertical grid cannot be planned without is the DEEPEST
+    # column the mesh carries: the near-surface layer a sigma grid achieves is set
+    # over that column, so a plan made against a shallower one is a grid that
+    # cannot hold the declared thermocline where the thermocline actually is. A
+    # column is the free surface minus the bed, both on the one datum the level
+    # producer already refused to mix.
     max_depth = float(surface_m) - float(np.nanmin(np.asarray(node_bed,
                                                               dtype=float)))
     duration_s = float(sim_duration_hours) * 3600.0

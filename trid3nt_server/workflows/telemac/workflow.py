@@ -1,22 +1,8 @@
 """The TELEMAC door: fill, then run.
 
-TWO ACTS ON ONE SHEET. ``fill`` sets slots, expands the composites the wrapper
-registered, binds every producer the template named, and hands back what the
-sheet now says; it is repeatable, it decides nothing, and it renders the sheet as
-the card the run is HELD on. ``run`` is the other act and it is explicit: a
-complete sheet is serialized into the engine's own steering files, the run
-directory is staged, and the box receives it.
-
-:class:`Door` is what a template hands over instead of a plan. It names the world
-the sheet is filled FROM - the domain, the mesh recipe, the producers this
-question needs - the STEERING body itself, and the wrapper OUTPUT that publishes
-the solved file. The sequence it builds is the same for every question, which is
-what a template no longer has to write down.
-
-``TelemacWorkflow`` is what the skeleton records the engine and the solve step
-under; every question this engine answers is a Door, so it declares those two
-facts and realizes nothing else.
-"""
+``fill`` sets slots, expands composites and binds producers; it is repeatable and
+decides nothing. ``run`` serializes the complete sheet, stages the run directory
+and hands it to the box; it is explicit and consequential."""
 
 from __future__ import annotations
 
@@ -61,11 +47,7 @@ _ALWAYS_READABLE = ("full_listing.log", "telemac_metrics.json")
 class Door:
     """What a template hands over: the world, the sheet, and how it is read.
 
-    Called by the skeleton at registration, it returns the step sequence - the
-    domain, the mesh, this question's own producers, the two acts on the sheet,
-    and the wrapper output that publishes the solved file. Nothing here decides
-    anything: every value it carries is the template's own declaration.
-    """
+    Decides nothing: every value it carries is the template's own declaration."""
 
     #: The STEERING body: the module wrapper plus the parts and slots this
     #: question asserts.
@@ -108,11 +90,7 @@ class Door:
     def sheet_doc(self) -> str:
         """The ENGINE SURFACE line of this template's docstring.
 
-        Which module the fill writes, the rubriques of the dictionary the body
-        actually touches, and the mandatory slots it leaves open - read off the
-        declaration itself, so the prose cannot claim a surface the body does not
-        state. Everything the line does NOT name is reached the two ways it says.
-        """
+        Read off the declaration itself, never claimed by prose."""
         body = self.steering
         stated = {name for part in (*body.PARTS, body) for name in part.ASSERTED}
         stated |= set(self.slots)
@@ -174,15 +152,7 @@ async def fill_sheet(*, steering: type, produced: Mapping[str, Any],
                      input_mode: str | None) -> Sheet:
     """Set the body's slots against what the run measured -> the sheet, HELD.
 
-    The producers have already run, so the canvas shows the mesh and the release
-    before anything is filled. What comes back is every filled slot with its
-    provenance and every open slot - and in ``user_gated`` that IS the card: the
-    sheet is shown, an edit is another fill, and the run waits.
-
-    The invocation's RAW KEYWORD floor is filled last and therefore wins: it is
-    the caller stating the engine's own keyword, and a template value it beats is
-    the one it was stated to replace.
-    """
+    The raw ``keywords`` floor is filled last and therefore beats a template value."""
     # A slot the caller did not override is not a statement: the body's own
     # value stands. That is not the same as a body asserting None, which IS the
     # statement that this run says nothing about the keyword.
@@ -216,10 +186,7 @@ async def run_sheet(*, sheet: Sheet, settled: Mapping[str, Any],
                     compute_class: Any) -> dict[str, Any]:
     """A complete sheet: serialize, stage, hand it to the box -> the run handle.
 
-    What a reader may later OPEN is the sheet's own answer: the files the engine
-    must write, the mesh it was handed, the deck it read, and every file a
-    composite named beside it. Nothing is listed that the run does not carry.
-    """
+    Nothing is listed as readable that the run does not carry."""
     module, _, attribute = str(dispatch).rpartition(".")
     to_the_box = getattr(import_module(module), attribute)
     coupled = dict(sheet.resolved()).get("COUPLING WITH")
@@ -247,13 +214,7 @@ _PROVENANCE_DOORS: Mapping[str, tuple[str, str]] = {
 def card_rows(sheet: Sheet) -> list[ParamSheetRow]:
     """The sheet as the card renders it: what is SET, what is OPEN, then the rest.
 
-    Three classes, in the order a reviewer reads them. Every SET slot is shown
-    with the provenance that filled it, and every OPEN MANDATORY slot is shown
-    because the run cannot begin without it. Everything else - the whole rest of
-    the module - folds under advanced, grouped by the dictionary's own rubrique
-    and carrying the engine default it will run on, so no keyword is a black box
-    and every one of them is reachable at the review.
-    """
+    The rest is the whole module, folded under advanced with its engine default."""
     rows = [_slot_row(name, row) for name, row in sheet.filled.items()]
     rows += [_open_row(slot) for slot in sheet.required()]
     # The advanced fold reads down the dictionary's own RUBRIQUES, and inside one
@@ -269,10 +230,7 @@ async def _review(sheet: Sheet, *, workflow: str, title: str,
                   input_mode: str | None) -> dict[str, Any]:
     """Show the filled sheet and HOLD -> the slot edits the user submitted.
 
-    The card is the door's VIEW of the sheet rather than a step of its own: the
-    set slots and the open ones are what a run is reviewed on, and submitting
-    an edited sheet IS the approval, because the whole of it was on screen. In ``auto`` nothing is shown and nothing waits.
-    """
+    Submitting an edited sheet IS the approval; in ``auto`` nothing waits."""
     from trid3nt_server.gates.input_review import gate_input_review
 
     rows = card_rows(sheet)
@@ -319,11 +277,7 @@ def _open_row(slot: Any) -> ParamSheetRow:
 def _default_row(slot: Any) -> ParamSheetRow:
     """One slot this run leaves to the engine, under the advanced fold.
 
-    The whole rest of the module is here, grouped by the dictionary's own
-    rubrique and carrying the value the engine will use: the default is SURFACED
-    rather than a black box, and every knob stays reachable at the review the
-    same way it is reachable on the call.
-    """
+    Carries the value the engine will use rather than an empty."""
     # A slot the dictionary answers for carries a DEFAULT basis; one it answers
     # for nobody carries the same basis the open mandatory rows do, because there
     # is no default there to call one.
