@@ -31,6 +31,8 @@ import shutil
 import subprocess
 import unittest
 
+import pytest
+
 
 def _qt_python() -> str | None:
     """First interpreter that can import qgis.PyQt (same probe as
@@ -57,6 +59,7 @@ def _qt_python() -> str | None:
     return None
 
 
+@pytest.mark.qt_harness_shim
 class TestDockUiBatch(unittest.TestCase):
     """One harness subprocess run, shared by the assertions below."""
 

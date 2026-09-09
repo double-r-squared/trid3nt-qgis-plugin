@@ -35,6 +35,8 @@ import sys
 import time
 import unittest
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -291,6 +293,7 @@ def _qt_python() -> "str | None":
     return None
 
 
+@pytest.mark.qt_harness_shim
 class TestToolPickerQt(unittest.TestCase):
     """One harness subprocess run covering the Qt card behavior: render,
     single-answer lock + chip folds, free-text radio selection, empty-Confirm

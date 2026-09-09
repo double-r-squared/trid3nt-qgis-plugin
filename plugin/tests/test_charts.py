@@ -23,6 +23,8 @@ import shutil
 import subprocess
 import sys
 import unittest
+
+import pytest
 from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -264,6 +266,7 @@ def _qt_python() -> str | None:
     return None
 
 
+@pytest.mark.qt_harness_shim
 class TestChartsWindow(unittest.TestCase):
     def test_charts_harness(self):
         py = _qt_python()

@@ -29,6 +29,8 @@ import sys
 import threading
 import unittest
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -212,6 +214,7 @@ def _qt_python() -> str | None:
     return None
 
 
+@pytest.mark.qt_harness_shim
 class TestDockProviderConfigWiring(unittest.TestCase):
     def test_save_posts_preset_payload_and_repopulates_models(self):
         py = _qt_python()

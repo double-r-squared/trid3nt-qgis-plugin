@@ -22,6 +22,8 @@ import subprocess
 import sys
 import unittest
 
+import pytest
+
 
 def _qt_python():
     """First interpreter that can import ``qgis.PyQt`` -- same probe shape as
@@ -48,6 +50,7 @@ def _qt_python():
     return None
 
 
+@pytest.mark.qt_harness_shim
 class TestRemoteEndpointsDock(unittest.TestCase):
     """Runs ``qt_remote_endpoints_harness.py`` in the qgis.PyQt interpreter
     (subprocess)."""

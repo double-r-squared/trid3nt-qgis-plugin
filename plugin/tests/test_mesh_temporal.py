@@ -21,6 +21,8 @@ import shutil
 import subprocess
 import unittest
 
+import pytest
+
 #: A solved rain-on-grid result kept as a rendering proof. Read-only here.
 _SELAFIN = os.path.join(
     os.path.dirname(__file__), "..", "..", "docs", "proof", "templates",
@@ -33,6 +35,7 @@ _TRACER_SELAFIN = os.path.join(
     "01KZH561BN64PFA5HWZ8EYEJPM_r2d_river.slf")
 
 
+@pytest.mark.qt_harness_shim
 class TestQtMeshTemporalAndDeclaredStyle(unittest.TestCase):
     @staticmethod
     def _qgis_python():

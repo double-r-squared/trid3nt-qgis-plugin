@@ -27,6 +27,8 @@ import sys
 import time
 import unittest
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -129,6 +131,7 @@ def _qt_python():
     return None
 
 
+@pytest.mark.qt_harness_shim
 class TestCaseBboxDock(unittest.TestCase):
     """Runs ``qt_case_bbox_harness.py`` in the qgis interpreter (subprocess)."""
 
