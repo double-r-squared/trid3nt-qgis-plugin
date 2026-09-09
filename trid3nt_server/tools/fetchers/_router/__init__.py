@@ -1,8 +1,7 @@
 """Generic data-router engine (the fetcher fold, phase-1 pilot).
 
 Authority: ``docs/specs/router-pilot-contract.md`` + ``docs/specs/data-router-fold.md``.
-Leading underscore = helper package, NOT a tool (matching ``_fetch_common.py`` /
-``_pc_stac.py``). Importing this package is side-effect-free: it does NOT walk the
+Leading underscore = helper package, NOT a tool (matching ``_fetch_common.py``). Importing this package is side-effect-free: it does NOT walk the
 tree or register any virtual tool. The fold-arm / pilot lane triggers registration
 explicitly via ``registration.register_specs_from_tree()``.
 

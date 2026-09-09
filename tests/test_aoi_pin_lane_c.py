@@ -321,12 +321,9 @@ def test_solve_emits_single_domain_zoom_to(
 # --------------------------------------------------------------------------- #
 
 
-def test_the_four_bbox_helpers_agree_that_a_touching_edge_overlaps():
-    """One shapely test behind four call sites, with one documented semantics."""
+def test_the_three_bbox_helpers_agree_that_a_touching_edge_overlaps():
+    """One shapely test behind three call sites, with one documented semantics."""
     from trid3nt_server.server.dispatch.aoi import _bbox_overlaps
-    from trid3nt_server.tools.fetchers._router.executors.raster_cog import (
-        _bbox_intersects as stac_item_intersects,
-    )
     from trid3nt_server.tools.fetchers.terrain.fetch_dem.hooks import (
         _bbox_intersects as dem_intersects,
     )
@@ -334,9 +331,7 @@ def test_the_four_bbox_helpers_agree_that_a_touching_edge_overlaps():
         _bbox_intersects as fields_intersects,
     )
 
-    helpers = [
-        _bbox_overlaps, stac_item_intersects, dem_intersects, fields_intersects,
-    ]
+    helpers = [_bbox_overlaps, dem_intersects, fields_intersects]
     cases = [
         (((0, 0, 1, 1), (2, 2, 3, 3)), False),   # disjoint
         (((0, 0, 2, 2), (1, 1, 3, 3)), True),    # partial overlap
@@ -349,12 +344,3 @@ def test_the_four_bbox_helpers_agree_that_a_touching_edge_overlaps():
     for helper in helpers:
         for (a, b), expected in cases:
             assert helper(a, b) is expected, (helper.__module__, a, b)
-
-
-def test_a_stac_item_with_no_usable_bbox_is_not_a_candidate():
-    from trid3nt_server.tools.fetchers._router.executors.raster_cog import (
-        _bbox_intersects,
-    )
-
-    for bad in (None, [], [1, 2], "abc", [1, 2, "x", 4]):
-        assert _bbox_intersects(bad, (0.0, 0.0, 1.0, 1.0)) is False

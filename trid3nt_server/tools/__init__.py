@@ -298,7 +298,7 @@ def clear_registry_for_tests() -> None:
 # fetch_high_water_marks FOLDED to a spec-driven surface: its source.yaml
 # + usgs_stn_hwm hooks register at import via register_specs_from_tree (envelope hook).
 # fetch_jrc_global_surface_water FOLDED to a spec-driven surface: its
-# source.yaml + the stac_continuous_mosaic access mode + the jrc_global_surface_water
+# source.yaml + the stac_raster mosaic render + the jrc_global_surface_water
 # colormap hook register at import via register_specs_from_tree (twin DELETED).
 # fetch_nhd_waterbodies: data-router fold phase-2 wave-2 -- twin DELETED, now
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.
@@ -351,7 +351,8 @@ def clear_registry_for_tests() -> None:
 # library_delegate mode; per-resolution payload table);
 # auto-registered by _register_router_specs() below.
 # fetch_copernicus_dem: fetcher-fold wave-8 -- twin DELETED, now spec-driven
-# (source.yaml + router stac_float), registered by _register_router_specs() below.
+# (source.yaml + the stac_raster float render), registered by _register_router_specs()
+# below.
 # fetch_dem FOLDED to a spec-driven surface: its source.yaml +
 # library_delegate py3dep hooks + the source="copernicus" cross-sibling dispatch
 # is promoted by register_specs_from_tree; no eager twin import.
@@ -373,13 +374,14 @@ def clear_registry_for_tests() -> None:
 # satellite-identifier / S3 substrate lives on in imagery/_goes_common.py (no registered
 # tool). No eager twin import.
 # fetch_landsat_imagery / fetch_naip / fetch_sentinel2_truecolor: STAC-composite wave
-# -- twins DELETED, now spec-driven (source.yaml + raster_cog
-# stac_multi_asset_rgb: N reflectance assets + QA/SCL mask + joint 2/98 stretch /
-# inferno LST / raw uint8 passthrough), auto-registered by _register_router_specs().
+# -- twins DELETED, now spec-driven (source.yaml + the stac_raster rgb render:
+# N reflectance assets + QA/SCL mask + joint 2/98 stretch / inferno LST / raw uint8
+# passthrough), auto-registered by _register_router_specs().
 # fetch_slider_timestamps folded to a record-shape spec; the promoted
 # tool auto-registers via register_specs_from_tree (SLIDER availability + cadence index).
 # fetch_sentinel1_sar: quick-folds wave -- twin DELETED, now spec-driven
-# (source.yaml + raster_cog stac_float + coverage-select + log10_db), auto-registered.
+# (source.yaml + the stac_raster float render + coverage-select + log10_db),
+# auto-registered.
 # fetch_viirs_day_fire FOLDED to a spec-driven surface: source.yaml +
 # shape: animation_frames + viirs_day_fire.frames_plan / frame_bytes (JPSS polar
 # day-pass SLIDER stitch), auto-registered by register_specs_from_tree.
@@ -392,7 +394,7 @@ def clear_registry_for_tests() -> None:
 # fetch_gridmet: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
 # fetch_modis_lst: data-router fold phase-2 wave-7 -- twin DELETED, now
-# spec-driven (source.yaml + stac_float continuous-float mode), registered by
+# spec-driven (source.yaml + the stac_raster float render), registered by
 # _register_router_specs() below.
 # fetch_us_drought_monitor: data-router fold phase-2 wave-2 -- twin DELETED, now
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.

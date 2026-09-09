@@ -103,11 +103,11 @@ def _mosaic_spec(max_bbox_deg2=8.0, tile_deg2=0.5) -> SourceSpec:
         "name": "fetch_demo_mosaic",
         "source_class": "demo_mosaic",
         "shape": "raster-cog",
-        "endpoints": {"data": {"url": "http://example.test/stac"}},
+        "endpoints": {"data": {"url": "http://example.test/tiles"}},
         "params": {"bbox": {"type": "bbox", "required": True}},
         "gates": {"max_bbox_deg2": max_bbox_deg2},
         "ingest": {
-            "access": "stac_search",
+            "access": "direct_window",
             "tile_deg2": tile_deg2,
             "mosaic": {"method": "first", "resampling": "nearest"},
         },
@@ -268,80 +268,6 @@ def test_imageserver_layer_uri_param_keyed_style_and_units():
     # layer "b": no mapped row, so the base row stands; mapped units.
     lb = rmod.build_layer_uri(spec, {"bbox": [-112.0, 34.5, -111.9, 34.6], "layer": "b"}, "s3://x.tif")
     assert lb.style == {"kind": "continuous"} and lb.units == "m * 10"
-
-
-# --------------------------------------------------------------------------- #
-# raster_cog: stac_float continuous-float mode (fold wave-7, ADR 0053; modis_lst)
-# --------------------------------------------------------------------------- #
-
-
-def _stac_float_spec() -> SourceSpec:
-    return SourceSpec.model_validate({
-        "name": "fetch_demo_float",
-        "source_class": "demo_float",
-        "error_prefix": "DEMO_FLOAT",
-        "empty_error_suffix": "NO_DATA",
-        "shape": "raster-cog",
-        "endpoints": {"data": {"url": "https://pc.test/stac"}},
-        "params": {
-            "bbox": {"type": "bbox", "required": True, "error_suffix": "BBOX_INVALID"},
-            "product": {"type": "str", "default": "11A2"},
-            "daynight": {"type": "str", "default": "day"},
-        },
-        "gates": {"max_bbox_deg2": 6.0},
-        "ingest": {
-            "access": "stac_float", "native_cell_m": 1000.0,
-            "stac": {"root": "https://pc.test/stac", "select": "latest",
-                     "param_error_suffix": "PARAM_INVALID",
-                     "collection_by_param": {"param": "product",
-                                             "map": {"11A2": "modis-11A2-061", "21A2": "modis-21A2-061"}},
-                     "asset_by_params": {"params": ["product", "daynight"],
-                                         "map": {"11A2": {"day": "LST_Day_1km", "night": "LST_Night_1km"},
-                                                 "21A2": {"day": "LST_Day_1KM", "night": "LST_Night_1KM"}}},
-                     "product_aliases": {"mod11a2": "11A2", "11a2": "11A2", "21a2": "21A2"},
-                     "daynight_aliases": {"day": "day", "d": "day", "night": "night", "n": "night"}},
-            "transform": {"scale": 0.02, "offset": -273.15, "fill_dn": 0, "src_nodata": 0},
-        },
-        "normalize": {"crs": "EPSG:4326", "units": "deg C"},
-        "output": {"layer_type": "raster", "ext": "tif", "role": "primary",
-                   "emit_bbox": False, "style": {"kind": "continuous"}},
-        "cache": {"ttl_class": "static-30d"},
-        "payload_estimate": {"model": "bbox_area", "mb_per_sq_deg": 0.5, "floor_mb": 0.1},
-    })
-
-
-def test_normalize_via_aliases_maps_and_validates():
-    spec = _stac_float_spec()
-    al = {"mod11a2": "11A2", "11a2": "11A2"}
-    assert raster_cog._normalize_via_aliases(spec, "MOD11A2", al, ["11A2", "21A2"], "PARAM_INVALID") == "11A2"
-    # canonical passthrough via upper() fallback.
-    assert raster_cog._normalize_via_aliases(spec, "21A2", al, ["11A2", "21A2"], "PARAM_INVALID") == "21A2"
-    with pytest.raises(RouterInputError) as ei:
-        raster_cog._normalize_via_aliases(spec, "not_real", al, ["11A2", "21A2"], "PARAM_INVALID")
-    assert ei.value.error_code == "DEMO_FLOAT_PARAM_INVALID" and ei.value.retryable is False
-
-
-def test_stac_float_bad_product_is_param_invalid():
-    spec = _stac_float_spec()
-    with pytest.raises(RouterInputError) as ei:
-        raster_cog._stac_float_to_array(spec, {"bbox": [-112.3, 33.3, -111.8, 33.6],
-                                               "product": "not_real", "daynight": "day"})
-    assert ei.value.error_code == "DEMO_FLOAT_PARAM_INVALID"
-
-
-def test_stac_float_bad_daynight_is_param_invalid():
-    spec = _stac_float_spec()
-    with pytest.raises(RouterInputError) as ei:
-        raster_cog._stac_float_to_array(spec, {"bbox": [-112.3, 33.3, -111.8, 33.6],
-                                               "product": "11A2", "daynight": "dusk"})
-    assert ei.value.error_code == "DEMO_FLOAT_PARAM_INVALID"
-
-
-def test_fetch_source_array_dispatches_stac_float(monkeypatch):
-    spec = _stac_float_spec()
-    monkeypatch.setattr(raster_cog, "_stac_float_to_array",
-                        lambda s, p: ("SENTINEL", "T", "EPSG:4326"))
-    assert raster_cog.fetch_source_array(spec, {"bbox": [-112.3, 33.3, -111.8, 33.6]})[0] == "SENTINEL"
 
 
 def test_payload_ceil_mb_clips():
