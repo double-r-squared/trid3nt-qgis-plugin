@@ -263,6 +263,33 @@ dependencies = [
     # xarray: 6 direct importers (gridded fetch decode, the COG write path);
     # supplied transitively by rioxarray / hydromt / landlab.
     "xarray==2026.4.0",
+    # Fetcher fold: the libraries that own a protocol family, so the spec
+    # names what to fetch and the library holds how.
+    # odc-stac loads a STAC item set onto an odc-geo GeoBox; odc-geo is the
+    # geometry/CRS math it and the raster executor share. Its reader is
+    # rasterio's GDAL, NOT the router transport, so every STAC read must run
+    # inside a rasterio.Env carrying the GDAL_HTTP_* retry policy.
+    "odc-stac==0.5.3",
+    "odc-geo==0.5.3",
+    # planetary-computer signs Planetary Computer blob hrefs per account and
+    # container; it is the modifier passed to pystac_client.Client.open.
+    "planetary-computer==1.0.0",
+    # osmnx owns Overpass. Its Overpass endpoint is a single settings value,
+    # so the mirror chain and the verbatim-error mapping are wrappers around
+    # it, not replacements for it.
+    "osmnx==2.1.1",
+    # pygeohydro carries the domain's own code tables (NID dam type/purpose,
+    # the STN high-water-mark query set); pynhd carries NLDI navigation.
+    # pygeohydro caps pynhd<0.20 while PyPI's latest pynhd is 0.20.0, so the
+    # pair is pinned exactly and moves together. Every call site passes
+    # status_to_retry=(429,500,502,503,504) and an explicit cache expiry.
+    "pygeohydro==0.19.4",
+    "pynhd==0.19.3",
+    # pyogrio is GDAL's vector I/O, imported directly for the ESRIJSON, OAPIF
+    # and /vsizip//vsicurl/ read paths. It vendors its OWN GDAL, distinct from
+    # rasterio's: GDAL_HTTP_* config set through rasterio.Env does not reach
+    # it, so vector reads configure it via pyogrio.set_gdal_config_options.
+    "pyogrio>=0.13,<1",
     # Consumed verbatim from contracts/ in this repo (editable install).
     "trid3nt-contracts>=0.1,<0.2",
 ]
