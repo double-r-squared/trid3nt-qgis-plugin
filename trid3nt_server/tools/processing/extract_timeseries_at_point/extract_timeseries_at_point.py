@@ -1,40 +1,8 @@
-"""``extract_timeseries_at_point`` atomic tool -- point series over case animation frames.
+"""``extract_timeseries_at_point`` - a point series over a Case's animation frames.
 
-Given a location (lon/lat pair OR a geocoded place name -- the same resolution
-seam as ``query_point_hazard``) and a time-stepped raster SEQUENCE loaded on
-the current Case (animation frames: an engine flood-depth step stack, GOES
-frame stack, HRRR forecast hours, ...), sample EVERY frame at the point and
-return the ordered series ``[(timestamp_or_index_label, value), ...]``.
-
-How frame sequences are represented
-===================================
-
-Animation frames live in ``CaseSummary.loaded_layer_summaries`` as SIBLING
-raster layers whose NAMES differ only in a monotonic frame token, and this
-module reads that token: ``F+03h``, ``hr 6``, ``step 4`` / ``frame 02`` /
-``idx 3``, ``t+2``, ``#3``, ``day 1``, preferring an ISO-8601 valid-time label
-when one is present. Grouping is conservative -- a group forms only from >= 2
-raster layers sharing a stem with strictly-increasing token values.
-
-The token read here is an ANALYSIS over layers a case already holds, not the
-map's clock: presentation reads the ``valid_from``/``valid_to`` window each
-frame declares. A case persisted before that window existed carries only the
-name, which is why the token read stays.
-
-Honesty (data-source fallback norm)
-===================================
-
-- A Case with no layers, or no detectable frame sequence, raises the typed
-  ``NoFrameSequenceError`` (listing any near-miss stems) -- the agent
-  narrates the honest absence instead of inventing a series.
-- A frame that cannot be read, or where the point is outside/nodata, is an
-  honest ``value=None`` entry with its reason; the series is never
-  gap-filled.
-
-``cacheable=False`` (``ttl_class="live-no-cache"``): depends on the live Case
-layer list.
+A sequence forms only from two or more raster layers sharing a stem with
+strictly-increasing tokens; an unreadable frame is None, never gap-filled.
 """
-
 from __future__ import annotations
 
 import logging
@@ -114,9 +82,12 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Frame-token parsing -- a Python port of web/src/LayerPanel.tsx
-# ``parseFrameToken`` (keep the two in lockstep; the web side is the
-# user-visible grouping this tool must agree with).
+# Frame-token parsing.
+#
+# The token read here is an ANALYSIS over the layers a case already holds, not
+# the map's clock: presentation reads the valid_from / valid_to window a frame
+# declares. A case persisted before that window existed carries only the name,
+# which is why the token read stays.
 # ---------------------------------------------------------------------------
 
 _FRAME_PATTERNS: tuple[tuple[re.Pattern[str], Any], ...] = (
@@ -157,12 +128,8 @@ _STEM_EDGE_PUNCT = re.compile(r"^[\s,(\-]+|[\s,(\-]+$")
 
 
 def parse_frame_token(name: str) -> dict[str, Any] | None:
-    """Parse a monotonic frame token out of a layer name.
-
-    Returns ``{"value": int, "label": str, "stem": str}`` or ``None`` when no
-    lead-time / step / index token is present. Mirrors the web's
-    ``parseFrameToken`` so the tool groups the same series the LayerPanel
-    scrubber shows.
+    """``{"value": int, "label": str, "stem": str}`` for a lead-time, step or
+    index token in a layer name, else None.
     """
     if not name:
         return None
@@ -184,11 +151,8 @@ def parse_frame_token(name: str) -> dict[str, Any] | None:
 def detect_frame_sequences(
     layers: list[dict[str, Any]],
 ) -> dict[str, list[dict[str, Any]]]:
-    """Group the Case's RASTER layers into frame sequences by shared stem.
-
-    Conservative (the web convention): only stems with >= 2 members whose
-    token values are strictly increasing after sorting form a sequence.
-    Returns ``{stem: [ {layer, value, label}, ... ordered ]}``.
+    """``{stem: [{layer, value, label}, ...]}`` ordered by token value; only a stem
+    with two or more strictly-increasing members forms a sequence.
     """
     grouped: dict[str, list[dict[str, Any]]] = {}
     for layer in layers:
@@ -235,37 +199,24 @@ async def extract_timeseries_at_point(
 ) -> dict[str, Any]:
     """Extract a time series at a point from the Case's animation-frame stack.
 
-    Use this when: "how does the flood depth at my house evolve over the
-    simulation?" / "plot water level at the pier over time" after an
-    animated solve (engine depth steps, GOES/GLM frames, HRRR
-    hours). Finds the time-stepped raster sequence loaded on the Case
-    (sibling layers sharing a stem, differing by a step/lead/ISO token --
-    same series the map scrubber groups) and samples every frame. Do NOT
-    use for: a single-time value (``query_point_hazard``); frames of a
-    run not yet loaded (``list_run_frames`` + sandbox); station/gauge
-    observations (fetch_* tools).
+    Use for how a value at one place evolves over an animated solve - flood
+    depth at a house, water level at a pier - across engine depth steps,
+    satellite frames or forecast hours. It finds the time-stepped raster
+    sequence on the Case (sibling layers sharing a stem, differing by a step,
+    lead or ISO token) and samples every frame. Not for a single-time value
+    (``query_point_hazard``), frames of a run not yet loaded, or gauge
+    observations.
 
     Params:
-        lon/lat: explicit EPSG:4326 coords (both required if used; wins
-            over ``place``).
+        lon/lat: explicit EPSG:4326 coords, both required, winning over
+            ``place``.
         place: free-text place name to geocode.
-        layer: optional sequence-stem selector (e.g. "flood depth");
-            default the Case's largest sequence.
+        layer: sequence-stem selector; default the Case's largest sequence.
         case_id: Case to read; default the turn's bound Case.
 
-    Returns:
-        ``{"sequence", "frame_count", "series": [{index, label, value,
-        note?, error?}, ...], "units", "location",
-        "available_sequences", "sampled_count", "computed_at"}``.
-        Unreadable/nodata frames are honest ``value=None`` -- never
-        gap-filled.
-
-    Raises:
-        TimeseriesInputError: no/invalid location.
-        NoCaseBoundError: no case.
-        NoFrameSequenceError: no detectable sequence, or none matches
-            ``layer``.
-        TimeseriesUpstreamError: persistence unavailable / case not found.
+    Returns the sequence name, frame count, the ordered series and the location.
+    An unreadable or nodata frame is an honest ``value=None``, never gap-filled;
+    no detectable sequence is a typed refusal.
     """
     q_lon, q_lat, label = resolve_point(lon, lat, place, TimeseriesInputError)
     resolved_case = resolve_case_id(case_id, NoCaseBoundError)
