@@ -124,7 +124,7 @@ def _template_corpus() -> dict[str, list[str]]:
     """Load each template's co-located workflows/**/corpus.yaml queries."""
     import trid3nt_server.tools as t
 
-    workflows = Path(t.__file__).resolve().parents[2] / "workflows"
+    workflows = Path(t.__file__).resolve().parents[1] / "workflows"
     out: dict[str, list[str]] = {}
     for cp in workflows.rglob("corpus.yaml"):
         data = yaml.safe_load(cp.read_text()) or {}
