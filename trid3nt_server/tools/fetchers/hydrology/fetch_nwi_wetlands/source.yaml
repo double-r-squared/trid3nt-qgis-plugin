@@ -28,7 +28,6 @@ ingest:
         Chrome/120.0 Safari/537.36 trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)
       Accept: application/json, text/plain, */*
       Referer: https://www.fws.gov/program/national-wetlands-inventory
-  pagination: {page_size: 1000}
   # Layer 0 is a join, so every column arrives table-prefixed; these three are the
   # published spec of this row.
   column_map:
