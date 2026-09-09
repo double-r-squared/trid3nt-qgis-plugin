@@ -289,7 +289,7 @@ package DataSeam {
 
     part blueTopoSource : BlueTopoSource {
         doc /*
-        code: trid3nt_server/tools/fetchers/_router/hooks/bluetopo.py
+        code: trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/hooks.py
         */
         port declarationIn : DeclarationIn;
         port provenanceOut : ProvenanceOut;
@@ -588,7 +588,7 @@ package DataSeam {
         imported them would be conditioning terrain and calling the result a
         survey.
 
-        forbid: trid3nt_server.tools.fetchers._router.hooks.bluetopo -> trid3nt_server.tools.processing
+        forbid: trid3nt_server.tools.fetchers.ocean.fetch_bluetopo.hooks -> trid3nt_server.tools.processing
         forbid: trid3nt_server.tools.fetchers._router.hooks.topobathy_class -> trid3nt_server.tools.processing
         forbid: trid3nt_server.tools.fetchers._router.hooks.topobathy -> trid3nt_server.tools.processing
         */

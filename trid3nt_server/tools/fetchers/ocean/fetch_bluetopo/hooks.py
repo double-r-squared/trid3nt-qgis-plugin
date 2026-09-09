@@ -37,11 +37,9 @@ from trid3nt_server.tools.cache import record_provenance
 from trid3nt_server.tools.fetchers._public_s3 import public_s3_client
 
 from ..._fetch_common import FetchError
-from . import register_hook
+from ..._router.hooks import register_hook
 
-logger = logging.getLogger(
-    "trid3nt_server.tools.fetchers._router.hooks.bluetopo"
-)
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "BlueTopoError",
@@ -279,7 +277,7 @@ def assert_navd88_tile(vsicurl_path: str) -> str:
     """
     import rasterio
 
-    from .topobathy import _VSICURL_ENV_KW
+    from ..._router.hooks.topobathy import _VSICURL_ENV_KW
 
     text = ""
     try:
@@ -349,7 +347,7 @@ def read_bluetopo(
     spec: Any, params: dict[str, Any], *, timeout_s: float
 ) -> tuple[Any, Any, Any]:
     """AOI -> tile-scheme select -> per-tile NAVD88 gate -> merged bed."""
-    from .topobathy import (
+    from ..._router.hooks.topobathy import (
         TopobathyEmptyError,
         TopobathyUpstreamError,
         _composite_sources_to_array,

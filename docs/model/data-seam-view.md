@@ -12,7 +12,7 @@ flowchart LR
     bedPainter["BedPainter<br/>trid3nt_server/workflows/mesh/shared/primitives.py"]
     bedResultModel["BedResultModel<br/>contracts/trid3nt_contracts/execution.py"]
     blueTopoDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/source.yaml"]
-    blueTopoSource["BlueTopoSource<br/>trid3nt_server/tools/fetchers/_router/hooks/bluetopo.py"]
+    blueTopoSource["BlueTopoSource<br/>trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/hooks.py"]
     coastalComposite["CoastalComposite<br/>trid3nt_server/tools/fetchers/_router/hooks/topobathy.py"]
     coastalDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_topobathy/source.yaml"]
     coastlineDeclaration["BedSourceDeclaration<br/>trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/source.yaml"]

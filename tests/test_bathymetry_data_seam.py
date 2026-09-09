@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from trid3nt_server.fallbacks import registered_ladders, resolve_ladder
-from trid3nt_server.tools.fetchers._router.hooks import bluetopo as bt
+from trid3nt_server.tools.fetchers.ocean.fetch_bluetopo import hooks as bt
 from trid3nt_server.tools.fetchers._router.hooks import topobathy as tb
 from trid3nt_server.tools.fetchers._router.hooks import topobathy_class as tc
 from trid3nt_server.tools.fetchers._router.hooks.topobathy import (
