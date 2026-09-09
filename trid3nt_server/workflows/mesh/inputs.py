@@ -1,18 +1,7 @@
 """The ONE typed conversion a data-valued op kwarg passes through.
 
-An op takes the data CLASS it is defined over, and a recipe names that data as
-whatever the chain produced - a DATA row's layer handle, an object-store uri, a
-path, inline GeoJSON. Two conversions and no more, both explicit:
-
-    raster -> the readable raster the op reads at the nodes
-    layer  -> the geometry document the op reads shapes out of
-
-Which one applies is read off the artifact's CLASS, which is the repo's one
-answer to "what kind of thing is this uri" (``runtime.data.artifact_class``, by
-suffix). A value whose class is not knowable is NOT guessed at: it passes
-through as it was written, and the op refuses it in its own words if it cannot
-use it.
-"""
+An op takes the data CLASS it is defined over; a recipe names that data as
+whatever address the chain produced."""
 
 from __future__ import annotations
 
@@ -32,6 +21,12 @@ def op_input(value: Any) -> Any:
 
     if isinstance(value, Mapping) and "type" in value:
         return dict(value)
+    # Two conversions and no more, and which one applies is read off the
+    # artifact's CLASS, never guessed:
+    #     raster -> the readable raster the op reads at the nodes
+    #     vector -> the geometry document the op reads shapes out of
+    # A value whose class is not knowable passes through as it was written and
+    # the op refuses it in its own words if it cannot use it.
     kind = artifact_class(value)
     if kind == "raster":
         return op_raster(value)
@@ -41,12 +36,7 @@ def op_input(value: Any) -> Any:
 
 
 def op_raster(source: Any) -> Path:
-    """A raster source -> a LOCAL readable raster, whatever it arrived as.
-
-    Local because a raster op reads it through the grid's own georeferencing -
-    rasterio opens a path, not a handle - and the object store is not a file
-    system.
-    """
+    """A raster source -> a LOCAL readable path, whatever it arrived as."""
     from trid3nt_server.tools.cache import read_object_bytes_s3
     from trid3nt_server.workflows.shared.geometry import source_uri
 
@@ -73,12 +63,7 @@ def op_raster(source: Any) -> Path:
 def op_geometry(source: Any) -> dict[str, Any]:
     """A geometry source -> GeoJSON, whatever vector format it arrived in.
 
-    A source is an address the recipe records and can re-read, so a drawn
-    polygon, a fetched water layer and a file on disk all enter the same way. A
-    LAYER a chain produced enters the same way too: refusing the object while
-    accepting the ``.uri`` it carries would make a chain depend on the author
-    remembering to write it.
-    """
+    A source is inline GeoJSON, an object-store uri, a path, or a layer handle."""
     from trid3nt_server.tools.cache import read_object_bytes_s3
     from trid3nt_server.workflows.shared.geometry import source_uri
 

@@ -1,27 +1,8 @@
 """The shoreline ladder: what the water is cut from, at the fidelity the ask needs.
 
-A domain cut from the shoreline is only as good as the line it was cut from. A
-substrate coarser than the triangles asked for cannot describe the harbour the
-ask is about: what it leaves is scraps that touch at points, which is a domain
-with no boundary numbering rather than a coarse answer. So the substrate is a
-LADDER with a stated fidelity per rung, and an ask no rung resolves is refused by
-name rather than served by the nearest thing on the box.
-
-  * ``osm_coastline`` - OpenStreetMap ``natural=coastline``, drawn at street
-    resolution and fetched per AOI. The harbour-scale rung. The ways are open
-    lines with the LAND ON THE LEFT, so the land polygons the mesher cuts from
-    are derived here, by closing the ways against the extent's own box.
-  * ``gshhg`` - the machine-local GSHHG L1 polygon shapefile named by
-    ``TRID3NT_GSHHG_SHP``. The coarse rung, at the vertex spacing its own
-    resolution letter publishes: full 0.1 km, high 0.2 km, intermediate 1 km,
-    low 5 km, crude 25 km.
-
-The rung that serves is the COARSEST one that still resolves the ask - a
-shoreline far finer than the mesh is detail the triangulator throws away and a
-fetch nobody needed - and a rung that yields nothing hands over to the next. The
-rung is journaled onto the mesh, because a domain's shape is the first thing an
-answer depends on.
-"""
+The rung that serves is the COARSEST one that still resolves the ask, a rung that
+yields nothing hands over to the next, and an ask no rung resolves is REFUSED by
+name: a substrate coarser than the triangles cuts scraps, not a coarse domain."""
 
 from __future__ import annotations
 
@@ -200,13 +181,7 @@ def land_polygons(walks: Sequence[Sequence[tuple[float, float]]],
                   bbox: tuple[float, float, float, float]) -> list[dict[str, Any]]:
     """Coastline walks + the extent's box -> the LAND polygons, as GeoJSON.
 
-    OSM draws a coastline with the LAND ON THE LEFT of the way's direction, and
-    that convention is the whole of the classification: the box and the walks
-    split the extent into faces, and each walk says which of the two faces it
-    divides is land. A walk that ENDS inside the box divides nothing - both sides
-    of it are the same face - and that is refused rather than guessed, because a
-    guess there is the sea meshed over the town.
-    """
+    A walk that ENDS inside the box divides nothing: refused, never guessed."""
     from shapely.geometry import LineString, Point, box, mapping
     from shapely.ops import polygonize, unary_union
 
@@ -226,6 +201,10 @@ def land_polygons(walks: Sequence[Sequence[tuple[float, float]]],
             if span == 0.0:
                 continue
             mid = (0.5 * (x0 + x1), 0.5 * (y0 + y1))
+            # OSM draws a coastline with the LAND ON THE LEFT of the way's
+            # direction, and that convention is the whole of the classification:
+            # the box and the walks split the extent into faces, and each walk
+            # says which of the two faces it divides is land.
             left = (-(y1 - y0) / span, (x1 - x0) / span)
             for index, sign in ((0, 1.0), (1, -1.0)):
                 probe = Point(mid[0] + sign * step * left[0],

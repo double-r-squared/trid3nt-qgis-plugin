@@ -1,22 +1,8 @@
 """The accepted topology of a mesh - what its geometry file cannot state.
 
-A SELAFIN says which nodes lie on a boundary; it never says which stretch of that
-boundary is the inflow and which the outflow, and it never says which numbered
-liquid boundary TELEMAC will call each stretch. Both are the MESHER's answers,
-measured when the ``.cli`` was written from this geometry's own IPOBO, and the
-steering author reads them here to state PRESCRIBED FLOWRATES and PRESCRIBED
-ELEVATIONS in the order the solver will use.
-
-The third answer is what each numbered boundary PRESCRIBES, read off the code
-quad the ``.cli`` carries on it. The steering file writes its lists from that
-rather than from a role-to-keyword table of its own, so it cannot state a level
-at a boundary whose code never reads one.
-
-The bundle rides beside the mesh objects and its uri lands on
-``MeshArtifact.topology_uri``. It carries no geometry: the nodes, cells and bed
-are the SELAFIN's, and duplicating them here would be a second mesh that could
-disagree with the first.
-"""
+Which stretch of a boundary is the inflow, which numbered liquid boundary the
+engine will call each stretch, and what each of those prescribes. The bundle
+carries no geometry: the nodes, cells and bed are the SELAFIN's."""
 
 from __future__ import annotations
 
@@ -34,8 +20,6 @@ TOPOLOGY_FILENAME: str = "mesh_topology.json"
 #: level and velocity the interior brings to the face. A steering author reads
 #: this name to tell a boundary that states no condition BY DESIGN from one whose
 #: two files disagree; both read ``"nothing"`` and only one of them is a run.
-#: The quad itself is the pair writer's table, which is the one decision; this
-#: side of the mount carries the name that indexes it.
 FREE_EXIT_ROLE: str = "free_exit"
 
 #: The role whose prescribed level is read off a STAGE-DISCHARGE CURVE rather
@@ -63,18 +47,7 @@ def write_topology(rundir: Path | str, *, roles: Mapping[str, Sequence[int]],
 def read_topology(uri: str) -> dict[str, Any]:
     """Read a topology bundle from an ``s3://`` uri or a local path.
 
-    A bundle naming NO liquid boundary is a recorded fact, not a gap: a closed
-    basin - a lake solved for its vertical structure - has no stretch of its
-    boundary the water crosses, and the bundle states that. ``states`` carries the
-    sentence, so a reader that needs a role refuses in its own words about the
-    role it needed rather than about an absent file.
-
-    A bundle that states no PRESCRIPTION per boundary DOES refuse. It was numbered
-    by the superseded row-order rule, which disagrees with the engine's own
-    numbering on any domain whose south-west corner falls on a liquid face, and a
-    steering file authored against it prescribes into codes that never read it.
-    There is no repair short of rebuilding the mesh.
-    """
+    A bundle stating no prescription per boundary is unrepairable and refuses."""
     if uri.startswith("s3://"):
         from trid3nt_server.tools.cache import read_object_bytes_s3
         raw = read_object_bytes_s3(uri).decode("utf-8")
@@ -91,6 +64,11 @@ def read_topology(uri: str) -> dict[str, Any]:
             f"{len(order)} liquid boundaries prescribe; it was numbered before "
             "the boundary numbering was measured by the engine's own rule, so "
             "rebuild the mesh rather than author a steering file against it")
+    # A bundle naming NO liquid boundary is a recorded fact, not a gap: a closed
+    # basin - a lake solved for its vertical structure - has no stretch of its
+    # boundary the water crosses. ``states`` carries that sentence, so a reader
+    # that needs a role refuses in its own words about the role it needed rather
+    # than about an absent file.
     return {"roles": roles, "liquid_boundary_order": order,
             "liquid_boundary_prescribes": prescribes,
             "states": ("this domain names no liquid boundary; its whole boundary "

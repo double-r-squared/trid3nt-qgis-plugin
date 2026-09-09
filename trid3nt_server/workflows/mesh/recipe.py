@@ -1,21 +1,8 @@
 """THE RECIPE - the one object a mesh is defined by.
 
-A mesh is not a spec plus a history of edits: it is the current PROGRAM that
-produces it. Present tense, editable, executable::
-
-    mesh state = recipe + staged inputs
-    recipe     = three agnostic params + one ordered ops list
-
-The three params are mesher-agnostic on purpose - ``extent`` (the domain),
-``resolution_m`` (the one size word), ``kind`` (the shape). Engine vocabulary is
-never a parameter of the generalization: a bed and a boundary role are OPS.
-
-There is no record and no edit-op chain. The journal captures edit events as
-audit, undo is editing the recipe back, and the one structured revert is
-reset-to-declaration. Same recipe + same staged inputs = same mesh; every change
-regenerates wholesale, and ``accept()`` freezes the recipe onto the artifact as
-its provenance.
-"""
+Not a spec plus a history of edits: the current PROGRAM that produces the mesh,
+as three mesher-agnostic params - extent, resolution_m, kind - and one ordered
+ops list. Engine vocabulary is never a param here; a bed and a role are OPS."""
 
 from __future__ import annotations
 
@@ -78,10 +65,7 @@ def jsonable(value: Any) -> Any:
 class MeshRecipe:
     """The current program that produces one mesh: three params and its ops.
 
-    Frozen, and every editing method returns a NEW recipe - a session swaps the
-    one it holds and regenerates wholesale, which is what makes the recipe the
-    single mesh-defining object rather than a value with a chain beside it.
-    """
+    Frozen: every editing method returns a NEW recipe."""
 
     mesher: str
     kind: str
@@ -113,11 +97,7 @@ class MeshRecipe:
         return replace(self, ops=tuple(ops))
 
     def with_params(self, **params: Any) -> "MeshRecipe":
-        """The recipe with agnostic params replaced. The ops are untouched.
-
-        The three params are the whole of what a generic card can edit, because
-        they are the whole of what every mesher means the same thing by.
-        """
+        """The recipe with agnostic params replaced. The ops are untouched."""
         unknown = [name for name in params
                    if name not in ("kind", "extent", "resolution_m")]
         if unknown:
@@ -177,9 +157,7 @@ def build_recipe(*, mesher: str, kind: Any = None, extent: Any = None,
                  ops: Iterable[MeshOp] | None = None) -> MeshRecipe:
     """The declared ask as a validated recipe. Builds NOTHING.
 
-    Omitting ``ops`` takes the mesher's hard-baked, VISIBLE default list;
-    declaring them replaces it wholesale.
-    """
+    Omitting ``ops`` takes the mesher's VISIBLE defaults; declaring replaces them."""
     registered = get_mesher(mesher)
     declared = registered.default_ops if ops is None else tuple(ops)
     bad = [op for op in declared if not isinstance(op, MeshOp)]
@@ -202,16 +180,15 @@ def build_recipe(*, mesher: str, kind: Any = None, extent: Any = None,
 def recipe_plan_value(recipe: MeshRecipe) -> dict[str, Any]:
     """A recipe as the plain mapping a plan step carries in its kwargs.
 
-    Mappings and sequences are what the interpreter walks to substitute
-    late-bound reads, so the recipe travels as one and comes back with its values
-    bound. Nothing about the ask is restated by the step, so a param or an op the
-    template declared cannot go missing between the declaration and the mesh.
-    """
+    The whole ask travels; the step restates none of it."""
     if not isinstance(recipe, MeshRecipe):
         raise MeshToolError(
             "MESH_RECIPE_EXPECTED",
             f"a mesh step carries the template's MESH recipe "
             f"(tool.build_mesh(...)), got {type(recipe).__name__}.")
+    # Mappings and sequences are what the interpreter walks to substitute
+    # late-bound reads, so the recipe travels as one and comes back with its
+    # values bound.
     return {
         "mesher": recipe.mesher,
         "kind": recipe.kind,
@@ -224,10 +201,7 @@ def recipe_plan_value(recipe: MeshRecipe) -> dict[str, Any]:
 def _thaw(value: Any) -> Any:
     """A frozen recipe value as the plain containers a step's kwargs carry.
 
-    A read-only proxy is not the ``dict`` a binder writes into. Late-bound reads
-    pass through untouched - binding them is the interpreter's job, not this
-    one's.
-    """
+    Late-bound reads pass through untouched: binding them is not this job."""
     if isinstance(value, Mapping):
         return {str(k): _thaw(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -239,11 +213,7 @@ def recipe_from_plan_value(value: Mapping[str, Any],
                            **overrides: Any) -> MeshRecipe:
     """Rebuild the recipe a step was handed, with named params replaced.
 
-    ``overrides`` are for the params a step RESOLVES rather than the template - a
-    domain the plan navigated, an input a producer fetched. Everything else,
-    including every op in its declared order, comes back exactly as it was
-    written.
-    """
+    ``overrides`` are the params a step RESOLVES; the rest returns as written."""
     ops = tuple(MeshOp(fn=str(entry["op"]), kwargs=dict(entry.get("kwargs") or {}))
                 for entry in (value.get("ops") or ()))
     fields = {"mesher": str(value["mesher"]), "kind": value.get("kind"),

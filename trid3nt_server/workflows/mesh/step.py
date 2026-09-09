@@ -1,16 +1,8 @@
 """The declared MESH step: a template's ``tool.build_mesh`` ask, built under the gate.
 
-One step for every template, because a mesh is a mesh: the RECIPE travels WHOLE -
-its mesher, its kind, its extent, its size word and every op in declared order -
-as the plain mapping the interpreter binds late-bound reads inside, a session
-opens over it, and what comes back is the ACCEPTED topology. Nothing about the
-ask is restated here, so a param or an op cannot go missing between the template
-and the mesh.
-
-Restated and not repeated: a per-domain wrapper around this would be a second
-place a mesh gets built, and the mesh a human approved and the mesh a solver ran
-on would be two objects that happen to agree.
-"""
+One step for every template, and the RECIPE travels WHOLE - its mesher, its kind,
+its extent, its size word and every op in declared order. Nothing about the ask
+is restated here, so a param or an op cannot go missing between the two."""
 
 from __future__ import annotations
 
@@ -32,21 +24,15 @@ class MeshStep:
     """The declared mesh build, as the step a plan puts before its author stage."""
 
     #: The label the mesh gate's card carries. It names the ASK - the mesh this
-    #: run is about to solve on - rather than whichever template demanded it,
-    #: because the same gate presents the same mesh to every one of them.
+    #: run is about to solve on - never the template that demanded it.
     GATE_LABEL: str = "build_mesh"
 
     @staticmethod
     def build(*, mesh: Any, name: Any = None, supplied: Any = None,
               tool: Any = None) -> Step:
-        """Build the template's declared mesh under the mesh gate, or adopt one.
+        """Build the declared mesh under the gate; ``supplied`` adopts a built one.
 
-        ``name`` is what the session is PRESENTED as and nothing more - which
-        place the mesh at the gate belongs to is a step result rather than
-        anything a frozen recipe can name. ``supplied`` is the slot a caller
-        hands a built mesh in, and ``tool`` the registered name whose declared
-        mesh row that supply is checked for membership against.
-        """
+        ``name`` presents the session; a supply is checked against ``tool``'s row."""
         return Step(runner=_RUNNER, stage="mesh",
                     kwargs={"mesh": recipe_plan_value(mesh), "name": name,
                             "supplied": supplied, "tool": tool})
@@ -57,18 +43,7 @@ async def build_declared_mesh(*, mesh: dict[str, Any], name: Any = None,
                               tool: Any = None) -> dict[str, Any]:
     """The mesh a solve runs on -> the accepted mesh's record.
 
-    The recipe is rebuilt exactly as the template declared it and a session opens
-    over it: the mesh is built from the whole program, then presented at the mesh
-    gate with its probes, its numbered ops and its editable layer, edited or
-    reset if the user says so, and accepted. A ``reset`` therefore goes back to
-    the declaration rather than past it.
-
-    A mesh SUPPLIED on the run is adopted instead, whole: it was built and
-    accepted already, so rebuilding it would be a second mesh and re-gating one
-    nobody changed would ask the same question twice. It is checked for
-    membership in the calling template's declared mesh row, so a supply outside
-    that row refuses by name rather than answering a different question.
-    """
+    A SUPPLIED mesh is adopted whole - never rebuilt, never re-gated."""
     import asyncio
 
     from trid3nt_server.emission.pipeline_emitter import current_turn_case
@@ -118,9 +93,7 @@ def mesh_record(art: Any) -> dict[str, Any]:
 def _session_name(name: Any, mesher: str) -> str:
     """What the gate card calls this mesh: the step's own name, else the mesher's.
 
-    A step result arrives as whatever its producer returned, so a mapping is read
-    for the two keys a domain step names itself by rather than stringified whole.
-    """
+    A mapping ``name`` is read for its ``name``/``slug`` key, never stringified."""
     if isinstance(name, dict):
         name = name.get("name") or name.get("slug")
     text = str(name or "").strip()

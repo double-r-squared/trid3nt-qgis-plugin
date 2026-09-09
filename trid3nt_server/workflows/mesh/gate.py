@@ -1,26 +1,8 @@
 """The mesh gate loop: a built mesh presented for edit, reset or accept.
 
-A mesh is expensive to get wrong and cheap to look at, so in USER-GATED mode the
-build stops at a gate instead of going straight to a solver. The gate presents
-three things about the SAME mesh - the editable MDAL layer on the map, the
-numeric probes it is judged on, and the RECIPE with its ops NUMBERED - and then
-hands over one edit surface for every mesher there will ever be.
-
-ONE CARD PATH. The card carries the agnostic param a rebuild can move
-(``resolution_m``, the one size word every mesher means the same thing by), the
-numbered ops as the program that produced what is on screen, and the reset row.
-The extent and the kind are the ASK rather than a dial - moving either is a
-different mesh, not a revision of this one. Everything an op can say is said
-through ``mesh_op``, which is a registered tool rather than a mounted per-mesher
-one - so nothing here knows what any library's functions are, and adding a
-mesher adds no card code.
-
-A hand-edit made in QGIS re-enters through ``mesh_adopt_layer`` and is HISTORY,
-not program: the mesh is flagged, and a later recipe edit refuses rather than
-throwing the hand-edit away.
-
-AUTO mode builds inline: no presentation, no mounted tools, no pause.
-"""
+The gate presents three faces of the SAME mesh - the editable MDAL layer on the
+map, the probes it is judged on, and the RECIPE with its ops NUMBERED - over one
+edit surface for every mesher. AUTO mode builds inline, with no gate at all."""
 
 from __future__ import annotations
 
@@ -61,7 +43,7 @@ ACCEPT_TOOL = "mesh_accept"
 RESET_TOOL = "mesh_reset"
 ADOPT_TOOL = "mesh_adopt_layer"
 
-#: Gate wait cap (seconds), mirroring the input-review / precondition-gate TTL.
+#: Gate wait cap, in seconds.
 _TTL_SECONDS = 300
 
 #: How many times the gate re-presents before it stops asking.
@@ -95,9 +77,7 @@ def open_mesh_gates() -> tuple[MeshGate, ...]:
 def active_mesh_session(mesh_id: str | None = None) -> MeshSession:
     """The session a runtime recipe edit acts on, or a typed refusal.
 
-    ONE mesh is under construction at a time, so an unnamed edit means the one on
-    screen; ``mesh_id`` names another when more than one is somehow open.
-    """
+    An unnamed edit means the mesh on screen; ``mesh_id`` names another."""
     if mesh_id:
         return _gate_for(str(mesh_id)).session
     gates = open_mesh_gates()
@@ -125,9 +105,7 @@ def _gate_for(mesh_id: str) -> MeshGate:
 def open_mesh_gate(session: MeshSession) -> MeshGate:
     """Open a gate over ``session`` -> the :class:`MeshGate`, tools mounted.
 
-    One mesh is under construction at a time: opening a gate closes any other,
-    so the mounted names always mean the mesh the user is looking at.
-    """
+    One mesh is under construction at a time: opening a gate closes any other."""
     for other in list(_OPEN.values()):
         logger.info("mesh gate: superseding open session %s with %s",
                     other.mesh_id, session.mesh_id)
@@ -232,9 +210,7 @@ def _adopt_tool(mesh_id: str) -> tuple[AtomicToolMetadata, Any]:
 async def present_mesh(gate: MeshGate) -> dict[str, Any]:
     """Put the mesh on the map and read it -> the layer, the probes, the recipe.
 
-    The display face is an MDAL mesh layer, which is what makes it editable in
-    QGIS rather than a picture of a mesh; the wireframe style is how it renders.
-    """
+    The display face is an MDAL mesh layer, which is what makes it editable."""
     from trid3nt_server.emission.layer_uri_emit import publish_input_layer
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
@@ -305,10 +281,7 @@ async def gate_mesh_build(session: MeshSession, *, tool_name: str,
                           max_rounds: int = _MAX_ROUNDS) -> MeshArtifact:
     """Build the demanded mesh under the gate -> the accepted :class:`MeshArtifact`.
 
-    AUTO (or a headless run with no session to present on) builds inline. Under
-    USER-GATED the mesh is presented and the run waits: approve it, put the
-    recipe back to its declaration, or change a param and look again.
-    """
+    AUTO, or a headless run with no session to present on, builds inline."""
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
     emitter = current_emitter()
@@ -359,10 +332,7 @@ async def _apply_gate_revision(session: MeshSession,
                                revised: Mapping[str, Any]) -> None:
     """One gate reply as a recipe change: the revert, or the size word that MOVED.
 
-    The card carries ``resolution_m`` and the reset; everything an op can say is
-    said through ``mesh_op``, so there is nothing per-mesher to unpack here and
-    no mesher can have a card row this loop does not understand.
-    """
+    Only ``resolution_m`` and the reset row move; every other change is an op."""
     if _truthy(revised.get(_RESET_ROW)):
         await asyncio.to_thread(session.reset)
         return
@@ -400,11 +370,7 @@ def _mesh_param_sheet(session: MeshSession, *, tool_name: str,
                       round_idx: int, max_rounds: int) -> Any:
     """The gate card: the size word, the numbered recipe, the revert.
 
-    Generic by construction. The row a user can MOVE is the one size word every
-    mesher means the same thing by; the ops are shown numbered because an index
-    is what an alter or a remove targets, and they are read-only here because the
-    one place an op is written is ``mesh_op``.
-    """
+    The ops rows are read-only: the one place an op is written is ``mesh_op``."""
     from trid3nt_contracts.payload_warning import ParamSheet, ParamSheetRow
 
     recipe = session.recipe

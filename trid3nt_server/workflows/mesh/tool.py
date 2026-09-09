@@ -1,15 +1,8 @@
 """``build_mesh`` - the one mesh router.
 
-A mesh ask is a RECIPE: which mesher, which kind, the domain, the one size word,
-and the ordered ops list that is the program. Declared in a template the ask is a
-frozen value that builds NOTHING at import; called standalone it builds now and
-stashes the artifact in the case. Both go through the same validation, which is
-the point of a single router: every op is checked against the registering
-mesher's namespaces and anything else is refused by name.
-
-Resolution order when a run needs a mesh: an explicit mesh argument wins, then a
-compatible mesh already authored in the case, then the declared recipe's build.
-"""
+A mesh ask is a RECIPE: mesher, kind, domain, the one size word, the ordered ops
+list. Declared in a template it builds NOTHING at import, called standalone it
+builds now, and both take the same validation: an unknown op refuses by name."""
 
 from __future__ import annotations
 
@@ -99,22 +92,9 @@ def resolve_mesh(
     loaded_mesh_uris: list[str] | None = None,
     s3_client: Any = None,
 ) -> MeshResolution:
-    """Pick the mesh a run should use: explicit first, then the case, then the recipe.
+    """Pick the mesh a run uses: explicit first, then the case, then the recipe.
 
-    An explicit mesh NEVER falls through: if it cannot be read, if its kind is not
-    a member of the ``mesh`` row of the template's declared ``accepts``, or if the
-    artifact itself says no solve can be staged on it, that is a refusal rather
-    than a quiet substitution. Two questions and two owners: the ``mesh`` row is
-    the TEMPLATE's statement of which supplied meshes its pipeline was built and
-    tested against, and readiness is the ARTIFACT's own
-    (:meth:`MeshArtifact.unsolvable_reason`). Both are asked here, at the door,
-    rather than several steps later by a deck that assumed a shape the mesh does
-    not have. A template with no mesh row accepts no supplied mesh at all.
-
-    ``recipe`` is the DEFAULT BUILD, and the build path is untouched by
-    ``accepts``: a run with nothing supplied and nothing to adopt builds the kind
-    it declared.
-    """
+    An explicit mesh never falls through: unreadable or unaccepted refuses."""
     if explicit is not None:
         if isinstance(explicit, MeshArtifact):
             art: MeshArtifact | None = explicit
@@ -134,6 +114,11 @@ def resolve_mesh(
                 f"the mesh supplied for this run ({explicit!r}) carries no readable "
                 "mesh artifact record, so what it is cannot be checked against the "
                 "engine; supply a mesh this case built.")
+        # Two questions, two owners: the ``mesh`` row is the TEMPLATE's statement
+        # of which supplied meshes its pipeline was built and tested against, and
+        # readiness is the ARTIFACT's own. Both are asked here, at the door,
+        # rather than several steps later by a deck that assumed a shape the mesh
+        # does not have.
         _refuse_unaccepted_kind(art, accepts)
         _refuse_unsolvable(art)
         return MeshResolution("explicit", "supplied on the run", artifact=art)
@@ -154,6 +139,8 @@ def resolve_mesh(
             "MESH_UNRESOLVED",
             "no mesh was supplied, none compatible was found in this case, and no "
             "mesh was declared, so there is nothing to build or adopt.")
+    # The build path is untouched by ``accepts``: a run with nothing supplied and
+    # nothing to adopt builds the kind it declared.
     return MeshResolution(
         "declared", f"the declared {recipe.mesher!r} build", recipe=recipe)
 
@@ -161,13 +148,7 @@ def resolve_mesh(
 def accepts_for(tool_name: str) -> Accepts | None:
     """The supply contract the REGISTERED workflow ``tool_name`` declares.
 
-    THE REGISTRY IS THE ONE HOME. A door asks it by the tool name it already
-    carries rather than importing some template's declarations module, so no door
-    has to know which package a contract was authored in and no contract has two
-    ways to be read. ``None`` for a name this build registers no declared workflow
-    under, which a door treats exactly as an undeclared contract - both are the
-    absence that refuses.
-    """
+    ``None`` for a name with no registered workflow - the absence that refuses."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get(str(tool_name))
@@ -179,12 +160,7 @@ def supplied_mesh_artifact(explicit: Any, *,
                            tool_name: str) -> MeshArtifact | None:
     """The mesh a run was HANDED, resolved and checked against the calling row.
 
-    The reader lives here rather than in each consuming template: a mesh artifact
-    is the mesh front's record, and a step that opened the object store for itself
-    would be doing world-reads a step must never do. ``None`` for an unfilled slot;
-    a refusal, never a fall-through, for one the calling template's ``mesh`` row
-    does not name or one no solve can be staged on.
-    """
+    ``None`` for an unfilled slot; a refusal, never a fall-through, otherwise."""
     from trid3nt_server.workflows.solver.solver import _get_s3_client
 
     if explicit is None or not str(explicit).strip():
@@ -197,9 +173,7 @@ def supplied_mesh_artifact(explicit: Any, *,
 def mesh_kind(art: MeshArtifact) -> Any:
     """The KIND of mesh this is, as the build that made it recorded its own ask.
 
-    ``None`` for a mesh whose record does not state one, which is not the same as
-    a kind that fails to match: nothing here can decide what an unstated shape is.
-    """
+    ``None`` for a record that states none, which is not a failed match."""
     provenance = getattr(art, "provenance", None) or {}
     return (provenance.get("recipe") or {}).get("kind")
 
@@ -207,11 +181,7 @@ def mesh_kind(art: MeshArtifact) -> Any:
 def kind_accepted(art: MeshArtifact, accepts: Accepts | None) -> bool:
     """Is ``art``'s kind a member of the declared ``mesh`` row? -> nothing more.
 
-    Two ways to be outside it, and neither is a permission. A template that wrote
-    no mesh row has no tested supplied path, so nothing is a member. A mesh that
-    states no kind FAILS: the question is membership in a declared row, and a shape
-    nobody wrote down cannot be in one.
-    """
+    No row and an unstated kind both answer False: neither is a permission."""
     if accepts is None:
         return False
     return accepts.accepts("mesh", mesh_kind(art))
@@ -274,52 +244,23 @@ async def build_mesh(
     ops: list[dict] | None = None,
     input_mode: str | None = None,
 ) -> Any:
-    """BUILD A COMPUTATIONAL MESH for a domain -> a mesh layer + a solver-ready mesh artifact.
+    """BUILD A COMPUTATIONAL MESH for a domain -> a mesh layer + a solver-ready artifact.
 
     THE tool for "mesh this watershed / coastline / river reach", "build the grid
-    or domain a solver runs on", "make me a mesh I can inspect before running a
-    model", "author the model domain and keep it in the case". Mesh creation is an
-    EXPLICIT act and lives HERE: a model template that finds this mesh in the case
-    ASKS before consuming it, and never invents one behind your back.
-
-    A mesh is defined by its RECIPE and nothing else: the mesher, the kind, the
-    domain, the one size word, and an ORDERED ops list. ``ops`` entries are
-    ``{"fn": <name>, ...kwargs}`` calling the mesh library's OWN functions under
-    their own names, plus the shared primitives ``set_bed`` and
-    ``set_boundary_roles``. Omit ``ops`` for the mesher's hard-baked default list.
-    Refine an already-built mesh by appending one more entry with ``mesh_op``.
-
-    The roster:
-
-    * ``om2d`` - OceanMesh2D: the GSHHG shoreline cuts the water domain from a
-      lon/lat box, or the interior of a POLYGON handed to ``extent`` is meshed as
-      it stands - a basin from ``delineate_watershed``, a river reach from
-      ``section``, any narrowed domain another tool produced. Its ops are
-      oceanmesh's own sizing functions (``feature_sizing_function``,
-      ``distance_sizing_from_line_function``, ``wavelength_sizing_function``,
-      ``enforce_mesh_gradation``) and its own clean passes.
-    * ``reg_grid`` - the uniform lattice a structured deck runs on.
-
-    ``input_mode="user_gated"`` stops at the MESH GATE instead of finishing: the
-    mesh lands on the map as an editable mesh layer, its probes come back, and the
-    recipe is presented with its ops NUMBERED so one can be appended, altered or
-    removed - then ``mesh_accept`` (or ``mesh_reset`` to go back to the recipe as
-    declared). AUTO (the default) builds and accepts inline.
+    or domain a solver runs on", "author the model domain".
 
     Params:
-        mesher: which mesh library builds it (om2d | reg_grid).
-        kind: the mesh shape that mesher makes (unstructured_tri |
-            structured_grid).
-        location: place naming the domain (geocoded). Supply this OR ``bbox``.
-        bbox: AOI ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-        extent: a POLYGON to mesh the interior of (a layer uri or GeoJSON),
-            instead of ``bbox``.
-        resolution_m: the finest cell or triangle edge, in metres. The coarsest
-            background edge defaults to 10x it unless an op states its own.
-        ops: the ordered program, ``[{"fn": name, ...kwargs}, ...]``. Omit for
-            the mesher's default list.
-        input_mode: ``user_gated`` to review + edit the mesh at the gate before
-            it is accepted; ``auto`` (default) builds and accepts inline.
+        mesher: om2d (OceanMesh2D triangles, cut from the shoreline or from a
+            polygon) or reg_grid (a uniform lattice).
+        kind: unstructured_tri | structured_grid.
+        location: place naming the domain. Supply this OR bbox.
+        bbox: AOI (min_lon, min_lat, max_lon, max_lat) in EPSG:4326.
+        extent: a POLYGON to mesh the interior of, not bbox.
+        resolution_m: the finest cell or triangle edge, in metres.
+        ops: the ordered program, [{"fn": name, ...kwargs}], calling the mesh
+            library's own functions plus set_bed and set_boundary_roles. Omit for
+            the mesher's defaults; refine a built one with mesh_op.
+        input_mode: user_gated stops at the mesh gate to edit; auto accepts inline.
     """
     import asyncio
 

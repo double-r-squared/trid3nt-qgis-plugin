@@ -1,13 +1,7 @@
 """Regular-grid geometry: a geographic bbox + a metre resolution -> the canonical
 origin / spans / cell-size / row-col mesh counts a regular deck runs on.
 
-Pure and dependency-light (stdlib ``math`` only): it is the domain math behind the
-``reg_grid`` mesher and the metre-per-degree scale the mesh session measures with.
-
-Angular <-> metre conversion uses a local equirectangular scale at the bbox centre
-latitude (``111_320 m/deg`` lat, ``* cos(lat)`` lon). It is a screening geometry,
-not a projected mesh.
-"""
+A screening geometry, not a projected mesh."""
 
 from __future__ import annotations
 
@@ -26,20 +20,14 @@ M_PER_DEG_LAT: float = 111_320.0
 
 @dataclass(frozen=True)
 class RegularGrid:
-    """Regular-grid geometry derived from a geographic bbox + a metre resolution.
-
-    Fields are the canonical regular-grid quantities every DIS / CGRID / SFINCS
-    regular deck needs: an origin (the SW corner), physical spans, a target cell
-    size, and the row/column mesh counts. ``ncol``/``nrow`` are the cell counts
-    (mesh count), floored at 1 so a degenerate AOI never yields an empty grid.
-    """
+    """Regular-grid geometry derived from a geographic bbox + a metre resolution."""
 
     min_lon: float
     min_lat: float
     max_lon: float
     max_lat: float
     resolution_m: float
-    #: cell (mesh) counts across the bbox
+    #: cell (mesh) counts across the bbox, floored at 1
     ncol: int
     nrow: int
     #: cell size in DEGREES (span / count) -- what a spherical deck writes
@@ -67,14 +55,7 @@ def regular_grid_from_bbox(
 ) -> RegularGrid:
     """Derive a :class:`RegularGrid` from a lon/lat ``bbox`` + a metre resolution.
 
-    ``bbox`` is ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326;
-    ``resolution_m`` is the target uniform cell size in metres. The origin is the
-    SW corner; spans are the physical bbox width/height at the centre latitude;
-    cell counts are ``round(span / resolution)`` floored at 1.
-
-    Raises ``ValueError`` on a degenerate bbox (non-increasing extent) or a
-    non-positive resolution -- the caller vouches for a real AOI.
-    """
+    ``bbox`` is EPSG:4326 (min_lon, min_lat, max_lon, max_lat)."""
     min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox)
     if not (max_lon > min_lon and max_lat > min_lat):
         raise ValueError(
@@ -88,6 +69,9 @@ def regular_grid_from_bbox(
 
     centre_lat = 0.5 * (min_lat + max_lat)
     m_per_deg_lat = M_PER_DEG_LAT
+    # Angular <-> metre conversion is a local equirectangular scale taken at the
+    # bbox centre latitude: 111_320 m per degree of latitude, times cos(lat) for
+    # longitude. The 0.01 floor keeps the longitude scale finite near the poles.
     m_per_deg_lon = M_PER_DEG_LAT * max(0.01, math.cos(math.radians(centre_lat)))
 
     span_x_m = (max_lon - min_lon) * m_per_deg_lon

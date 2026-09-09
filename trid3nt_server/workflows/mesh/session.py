@@ -1,19 +1,8 @@
 """``MeshSession`` - the mesh under construction, and the recipe that IS its state.
 
-The session holds ONE recipe. Every change - appending an op, altering one by
-index, removing one, resetting to the declaration - swaps that recipe and
-regenerates the mesh WHOLESALE; nothing is patched incrementally, because a mesh
-patched from a program that no longer describes it is a mesh nobody can rebuild.
-
-The journal beside the mesh files (``mesh_recipe.jsonl``) is append-only and is
-AUDIT, not state: the recipe as declared on the first line, then one line per
-edit event carrying the recipe that event produced. Undo is editing the recipe
-back; the one structured revert is :meth:`reset`.
-
-A hand-edit is the one operation that is genuinely history rather than program:
-the nodes were dragged, and no recipe produces that. It is ADOPTED and the mesh
-is flagged - regen would break it - rather than pretended into the recipe.
-"""
+One recipe per session: every change swaps it and regenerates the mesh WHOLESALE,
+never patching. The journal beside the mesh files is append-only AUDIT and not
+state; a hand-edit is ADOPTED and flagged rather than pretended into the recipe."""
 
 from __future__ import annotations
 
@@ -129,9 +118,7 @@ class MeshSession:
     def reset(self) -> dict[str, Any]:
         """Put the recipe back to the DECLARATION and rebuild -> the probes.
 
-        The one structured revert. What the template declared survives;
-        everything appended, altered or removed at this gate does not.
-        """
+        Everything appended, altered or removed at this gate goes."""
         self.recipe = self.declared
         self.regen_note = None
         return self._regenerate({"event": "reset"})
@@ -139,10 +126,7 @@ class MeshSession:
     def adopt_layer(self, layer: str) -> dict[str, Any]:
         """Adopt a hand-edited ``.2dm`` as this mesh -> the probes.
 
-        HISTORY, not program. The change lives in the layer's bytes, so the
-        recipe cannot produce it: the mesh is flagged instead, and any later
-        recipe edit refuses rather than silently throwing the hand-edit away.
-        """
+        The mesh is FLAGGED and any later recipe edit refuses."""
         import dataclasses
 
         from trid3nt_server.workflows.mesh.shared.nodes import read_2dm_mesh
@@ -184,10 +168,7 @@ class MeshSession:
     def snapshot(self) -> LayerURI:
         """The mesh's DISPLAY face for the current recipe, as a map layer.
 
-        A node/cell mesh is an MDAL ``.2dm``; a mesh whose cells the engine
-        re-realizes carries the display face its own mesher wrote, and the row
-        names the type that file actually is.
-        """
+        The row names the type the written file actually is."""
         _, uri = self._display_face()
         mesh = self.mesh
         return LayerURI(
@@ -201,14 +182,7 @@ class MeshSession:
     def accept(self) -> MeshArtifact:
         """Freeze the current mesh as a case artifact -> the :class:`MeshArtifact`.
 
-        The RECIPE is frozen onto the artifact as its provenance: what a rebuild
-        would run, beside the facts only the MESHER knows - what painted its bed,
-        which stretch it opened - which ride in on the mesh's own ``meta``.
-
-        A mesh whose boundary walk does not close once through every node never
-        reaches here: the walk that numbers the boundary refuses it by name, in
-        the process that runs it.
-        """
+        The RECIPE is frozen on as its provenance, beside the mesher's own facts."""
         mesh = self.mesh
         declared = dict(mesh.meta.get("artifact") or {})
         # The counts are already read through the mesh's own properties; passing
@@ -261,12 +235,10 @@ class MeshSession:
     def _display_face(self) -> tuple[Path, str]:
         """The ``.2dm`` this mesh renders as, written and staged ONCE per build.
 
-        Not a cache of STATE - the recipe is that, and it regenerates wholesale.
-        This memoizes a WRITE: the display face is asked for by every present, by
-        the snapshot and twice more by accept, and each miss is a file write plus
-        an object-store put. It is dropped on every regeneration and on an
-        adopted layer, so it can never answer for a mesh that no longer exists.
-        """
+        Dropped on every regeneration, so it can never answer for a dead mesh."""
+        # Not a cache of STATE - the recipe is that. This memoizes a WRITE: the
+        # display face is asked for by every present, by the snapshot and twice
+        # more by accept, and each miss is a file write plus an object-store put.
         if self._display is None:
             declared = mesh_display_path(self.mesh)
             local = Path(declared) if declared else self.workdir / "mesh.2dm"
@@ -278,11 +250,7 @@ class MeshSession:
     def _telemac_pair(self) -> tuple[str | None, str | None]:
         """The TELEMAC geometry AND its ``.cli``, when this mesh IS one.
 
-        The two are ONE artifact - the ``.cli`` rows are ordered by the geometry's
-        own IPOBO - so they are written together by the shared telapy driver
-        rather than by a byte layout this file would have to maintain. A mesher
-        that already wrote its own pair keeps it; nothing is re-derived.
-        """
+        A mesher that wrote its own pair keeps it; nothing is re-derived."""
         mesh = self.mesh
         files = dict(mesh.meta.get("files") or {})
         declared = files.get("slf_uri")
@@ -302,10 +270,7 @@ class MeshSession:
     def _staged_files(self, mesh: Mesh) -> dict[str, Any]:
         """Stage the per-solver files the mesher wrote.
 
-        ``meta["files"]`` maps an artifact URI field to a LOCAL path; each one lands
-        beside this mesh's other objects, so a mesher's own output is never a second
-        store.
-        """
+        ``meta["files"]`` maps an artifact URI field to a LOCAL path."""
         out: dict[str, Any] = {}
         for name, local in dict(mesh.meta.get("files") or {}).items():
             if name in ("slf_uri", "display_uri") or not local:
@@ -316,9 +281,7 @@ class MeshSession:
     def _stage(self, local: Path) -> str:
         """Upload ``local`` beside this mesh's other objects -> its uri.
 
-        With no case cache bucket configured the file stays where it was written
-        and the artifact points at it, which is what a headless direct call has.
-        """
+        With no cache bucket configured the file stays where it was written."""
         bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
         if not bucket:
             return str(local)
@@ -330,16 +293,11 @@ class MeshSession:
     def recipe_lines(self) -> list[dict[str, Any]]:
         """The journal as records: the declaration, then one per edit event.
 
-        A mesher whose library does not reproduce itself says so on the first
-        line, so a replay is read as an equivalent rebuild rather than as a
-        promise of the same mesh.
-
-        The line for the mesh STANDING NOW also names what actually painted its
-        bed - the ladder rung that served, not the row the recipe asked for. It
-        is the same datum the accepted artifact's provenance carries, under the
-        same name: a substitution is legible in either record alone.
-        """
+        The line for the mesh standing NOW names what actually painted its bed."""
         head: dict[str, Any] = {"recipe": self.declared.to_json()}
+        # A mesher whose library does not reproduce itself says so on the first
+        # line, so a replay is read as an equivalent rebuild rather than as a
+        # promise of the same mesh.
         if not self.mesher.deterministic:
             head["determinism"] = False
         lines = [head]
@@ -380,11 +338,7 @@ def replay_recipe(source: str | os.PathLike[str] | Sequence[Mapping[str, Any]]
                   ) -> Mesh:
     """Rebuild a mesh from its journal -> the :class:`Mesh` its recipe describes.
 
-    The LAST recipe the journal records is the one that produced the mesh, which
-    is what a replay runs. A recorded hand-edit REFUSES: its change is in the
-    layer's bytes, not in the recipe, so replaying would return a different mesh
-    under the same record.
-    """
+    The LAST recipe recorded is what a replay runs; a hand-edit REFUSES."""
     if isinstance(source, (str, os.PathLike)):
         lines = [json.loads(ln) for ln in
                  Path(source).read_text().splitlines() if ln.strip()]
@@ -420,9 +374,7 @@ def mesh_digest(mesh: Mesh) -> str:
 def _metre_scale(mesh: Mesh) -> tuple[float, float]:
     """Node-coordinate units -> metres, per axis.
 
-    A geographic mesh converts at its own mean latitude with the local
-    equirectangular scale; a projected mesh is already in metres.
-    """
+    A geographic mesh converts at its own mean latitude; a projected one is 1:1."""
     if str(mesh.crs_authid).upper() != "EPSG:4326":
         return 1.0, 1.0
     lat = float(np.asarray(mesh.points, dtype=float)[:, 1].mean())
@@ -469,10 +421,7 @@ def _min_angle_deg(points: Any, cells: Any, scale: tuple[float, float]) -> float
 def _area_km2(points: Any, cells: Any, scale: tuple[float, float]) -> float:
     """The MESHED domain's own area, summed over its cells, in km2.
 
-    Measured on the accepted topology rather than on the polygon the ask was cut
-    from: a catchment's runoff coefficient divides by the area the solve actually
-    covered, and the two differ by whatever the triangulation trimmed.
-    """
+    Measured on the accepted topology, never on the polygon the ask was cut from."""
     xy = points * np.asarray(scale, dtype=float)
     k = int(cells.shape[1])
     origin = xy[cells[:, 0]]
@@ -508,10 +457,7 @@ def _boundary_loops(boundary: Any) -> int:
 def _synthetic_inputs(mesh: Mesh) -> list[Any]:
     """The mesher's own input rows for the layer, built from what it declared.
 
-    A build that substituted a dataset or read a real source says so ON the layer;
-    a mesher that declared nothing contributes nothing rather than a manufactured
-    row.
-    """
+    A mesher that declared nothing contributes nothing, never a made-up row."""
     from trid3nt_contracts.common import SyntheticInput
 
     return [SyntheticInput(**dict(row))
