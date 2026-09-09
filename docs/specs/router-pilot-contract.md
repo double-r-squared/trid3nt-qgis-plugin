@@ -180,16 +180,25 @@ Plus bbox handling: `_validate_bbox` + `round_bbox_to_resolution` (raster) /
 `AtomicToolMetadata` synthesized from the spec's `name/source_class/ttl_class/
 supports_global_query/payload_mb_estimator_name` fields (`agent/tools/__init__.py`).
 
-### 2.1 raster-cog executor  (OPeNDAP + direct-COG/http + STAC)
+### 2.1 raster-cog executor  (OPeNDAP + direct-COG/http)
 
-Reads a gridded source to a CRS-tagged single-band COG. Three sub-modes keyed
-by `ingest.access`: `opendap` (xarray subset + `time_reduce` collapse, gridmet),
-`direct_window` (rasterio `/vsicurl/` windowed read of a known COG/VRT/
-ImageServer), `stac_search` (pystac-client search + `_pc_stac.sas_sign_href` +
-`_pc_stac.bbox_pixel_dims` windowed reproject). Emits `nodata=nan`, north-up
-(no lat sortby - the gridmet orientation lesson is a spec `normalize.orientation`
-directive), `rio.write_crs` re-asserted post-astype. Reuses `_pc_stac`
-primitives verbatim for the STAC sub-mode.
+Reads a gridded source to a CRS-tagged single-band COG over the router's own
+transport, keyed by `ingest.access`: `opendap` (xarray subset + `time_reduce`
+collapse, gridmet), `direct_window` (a windowed read of a known COG/VRT through
+`transport/range_file.py`, so GDAL parses and never networks), plus the VRT,
+gzip, GRIB, griddap, tile-grid, WCS and ArcGIS image-service modes. Emits
+`nodata=nan`, north-up (no lat sortby - the gridmet orientation lesson is a spec
+`normalize.orientation` directive), `rio.write_crs` re-asserted post-astype.
+
+### 2.1a stac-raster executor  (a STAC catalog)
+
+A source published through a STAC catalog (`ingest.access: stac`) reads through
+`stac_raster.py` instead: `pystac_client` search, `planetary_computer.sign_inplace`
+signing, an `odc.geo.GeoBox` destination and `odc.stac.load`'s first-valid fuse,
+serialized by the same `array_to_cog_bytes`. Three renders - `float`, `mosaic`,
+`rgb` - carry the band math no catalog does. This is the ONE family whose assets
+are read by GDAL's own HTTP client rather than by the transport; the two norm
+clauses that costs are ledgered in `docs/REANALYZE_LEDGER.md`.
 
 ### 2.2 vector-fgb executor  (incl ArcGIS paging mode)
 

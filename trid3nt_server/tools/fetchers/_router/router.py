@@ -605,6 +605,12 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
         ingest = spec.ingest or {}
         if "mosaic" in ingest or "tile_deg2" in ingest:
             return tiled_mosaic.execute
+        # A STAC catalog source reads through the stac_raster executor (the
+        # library owns search + grid + fuse); every other raster access mode
+        # reads through the transport-bound raster_cog executor.
+        if ingest.get("access") == "stac":
+            from .executors import stac_raster
+            return stac_raster.execute
         return raster_cog.execute
     if spec.shape == "vector-fgb":
         return vector_fgb.execute

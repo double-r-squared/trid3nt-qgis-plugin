@@ -100,3 +100,38 @@ size and a stated gap-to-spread ratio, never as a guess; (b) the
 coverage-map bed subsystem lands and stitches sources - the seam
 between two sources is exactly where a cloud test would fire, so the
 stitch must carry the datum per source, not re-derive it.
+
+## 2026-09-09 - STAC rasters read on GDAL's HTTP, two norm clauses traded
+DECIDED: the nine catalog-published raster rows (`stac_raster.py`) read
+their assets through GDAL's own HTTP client, configured once via
+`odc.loader.configure_rio(GDAL_HTTP_MAX_RETRY=5, RETRY_DELAY=1,
+RETRY_CODES="429,500,502,503,504")`, rather than through
+`_router/transport/`. `odc.stac.load`'s reader is closed
+(`odc/loader/_rio.py:601` is a bare `rasterio.open`, no `opener=`), so
+this is the price of the library owning search, grid and fuse.
+
+Two clauses of the upstream-error norm are TRADED, both measured at
+Stage 0 (docs/validation/fetcher-fold-stage0.md, Probe A):
+(a) the upstream STATUS is verbatim (`RasterioIOError: HTTP response
+code: 404 / 403 / 409`, proven on real objects) but the S3 XML
+`<Code>NoSuchKey</Code>` BODY never reaches Python -
+`CPL_CURL_VERBOSE=YES` recovers zero body tokens in 96/105 log records
+and costs a ~100-record-per-read firehose; `transport/opener.py`'s
+`<Code>` recovery has no GDAL equivalent;
+(b) `Retry-After` is NOT honored - source-confirmed at
+`port/cpl_http.cpp` v3.12.4 `CPLHTTPGetNewRetryDelay`, which is
+exponential-with-jitter and reads no header. Measured on a local
+origin sending `Retry-After: 6`: gaps 1.00 s then 2.42 s, identical
+with the header absent. Retries DO fire and DO recover (429 and 503,
+two failures then 200).
+Blast radius: nine rows, all raster, all read-only. The other twelve
+transport-bound raster rows (F6) and every vector row keep
+`transport/client.py`, where `Retry-After` is honored at block
+granularity.
+REVISIT TRIGGER: (a) odc-stac exposes a reader seam (an `opener=`
+pass-through or a supported `ReaderDriverSpec` for the rio driver) -
+then these rows return to our transport and both clauses are met;
+(b) GDAL's `CPLHTTPGetNewRetryDelay` learns `Retry-After` (watch the
+cpl_http changelog); (c) a real 429 from Planetary Computer or
+Earthdata that the exponential backoff fails to clear - then the wait
+policy is the thing that has to change, not the reader.

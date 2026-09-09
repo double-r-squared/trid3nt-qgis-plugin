@@ -21,13 +21,18 @@ from typing import Any
 from trid3nt_contracts.source_spec import SourceSpec
 
 from ..errors import bbox_error_suffix, router_empty_error, router_input_error
-from ..executors import raster_cog
+from ..executors import raster_cog, stac_raster
 
 logger = logging.getLogger(
     "trid3nt_server.tools.fetchers._router.transforms.tiled_mosaic"
 )
 
 __all__ = ["plan_tile_grid", "mosaic_tile_files", "array_to_tempfile", "execute"]
+
+
+def _tile_source(spec: SourceSpec) -> Any:
+    """The executor each sub-tile is fetched through (STAC catalog vs transport)."""
+    return stac_raster if (spec.ingest or {}).get("access") == "stac" else raster_cog
 
 
 def plan_tile_grid(
@@ -145,10 +150,11 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
 
     tiles = plan_tile_grid(tuple(bbox), tile_deg2)  # type: ignore[arg-type]
 
-    # Fast path: single tile == one executor call, no merge (categorical palette
-    # COG for stac_search inherits from raster_cog.execute).
+    # Fast path: single tile == one executor call, no merge (the palette COG a
+    # categorical mosaic carries comes from the executor's own serialize).
+    source = _tile_source(spec)
     if len(tiles) == 1:
-        return raster_cog.execute(spec, {**params, "bbox": list(tiles[0])})
+        return source.execute(spec, {**params, "bbox": list(tiles[0])})
 
     # Categorical (esri_landcover): uint8 tiles carrying nodata + the embedded
     # palette merged first-non-nodata -> palette COG (twin _fetch_landcover_cog_bytes).
@@ -163,13 +169,13 @@ def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:
         for tile in tiles:
             try:
                 if categorical:
-                    arr, transform, crs, tile_cmap = raster_cog.stac_to_mosaic(
+                    arr, transform, crs, tile_cmap = source.stac_to_mosaic(
                         spec, {**params, "bbox": list(tile)}
                     )
                     if colormap is None and tile_cmap is not None:
                         colormap = tile_cmap
                 else:
-                    arr, transform, crs = raster_cog.fetch_source_array(
+                    arr, transform, crs = source.fetch_source_array(
                         spec, {**params, "bbox": list(tile)}
                     )
             except Exception as exc:  # noqa: BLE001

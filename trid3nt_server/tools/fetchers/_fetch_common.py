@@ -17,6 +17,7 @@ __all__ = [
     "FetchError",
     "UpstreamAPIError",
     "BboxInvalidError",
+    "bbox_pixel_dims",
     "round_bbox_to_resolution",
 ]
 
@@ -168,3 +169,27 @@ def _bbox_area_km2(bbox: tuple[float, float, float, float]) -> float:
 
     ring = shapely.segmentize(shapely.box(*bbox), 1.0)
     return abs(Geod(ellps="WGS84").geometry_area_perimeter(ring)[0]) / 1.0e6
+
+
+def bbox_pixel_dims(
+    bbox: tuple[float, float, float, float],
+    native_cell_m: float,
+    *,
+    px_min: int = 16,
+    px_max: int = 4096,
+) -> tuple[int, int]:
+    """``(width_px, height_px)`` for ``bbox`` at ``native_cell_m``.
+
+    Measures metres-per-degree at the bbox mid-latitude and clamps each axis to
+    ``[px_min, px_max]``, so a large AOI never materializes an unbounded grid.
+    """
+    min_lon, min_lat, max_lon, max_lat = bbox
+    mid_lat = 0.5 * (min_lat + max_lat)
+    from pyproj import Geod
+
+    geod = Geod(ellps="WGS84")
+    width_m = geod.inv(min_lon, mid_lat, max(min_lon, max_lon), mid_lat)[2]
+    height_m = geod.inv(min_lon, min_lat, min_lon, max(min_lat, max_lat))[2]
+    width_px = max(px_min, min(px_max, int(round(width_m / native_cell_m)) or px_min))
+    height_px = max(px_min, min(px_max, int(round(height_m / native_cell_m)) or px_min))
+    return width_px, height_px
