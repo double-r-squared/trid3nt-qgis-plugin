@@ -1,41 +1,8 @@
-"""``extract_model_at_observations`` -- the model-vs-observation pairing primitive.
+"""``extract_model_at_observations`` - the model-vs-observation pairing primitive.
 
-Samples a MODEL result at OBSERVATION locations/times and writes the ALIGNED
-paired table the skill-metric tools (``compute_skill_metrics`` /
-``compute_flood_extent_skill``) consume. This is the crucial alignment step:
-it reconciles space (exact cell, else nearest wet cell within a tolerance),
-time (static max vs surveyed peak, or nearest sample within a tolerance),
-VERTICAL DATUM (a NAVD88 vs NGVD29 mismatch it cannot reconcile is a typed
-error, never a guess), and physical QUANTITY (a model flood-DEPTH raster vs an
-observed water-surface ELEVATION -- e.g. a USGS STN HWM ``elev_ft`` -- is
-converted WSE<->depth via a ground-elevation DEM, never paired silently; with
-no ground source it is a typed error). It ALWAYS lists every dropped
-observation with a per-item reason rather than silently discarding it.
-
-TWO input modes, auto-detected from the model handle:
-
-- STATIC RASTER model (a max-flood-depth / max-WSE / head COG) paired against
-  OBSERVATION POINTS (surveyed high-water marks, peak stages): one paired
-  sample per point, ``temporal="none_static"`` (model max vs surveyed peak).
-- TIME-SERIES model (a point vector layer carrying an inline ``time_series_csv``
-  per station, the ``fetch_usgs_nwis_gauges`` / ``fetch_noaa_coops_tides``
-  shape) paired against an OBSERVATION time-series layer of the same shape:
-  N paired samples per matched station, temporally aligned (exact, else
-  nearest model sample within ``time_tolerance_s``).
-
-Output: a FlatGeobuf point layer (EPSG:4326) with columns ``obs_id`` /
-``observed`` / ``simulated`` / ``time`` (+ passthrough observation
-properties) -- the ``compute_model_residuals`` output shape MINUS the
-``residual`` column, on purpose, so the paired table is interoperable. The
-returned ``PairedObsLayerURI`` carries the pairing summary: ``n_paired`` /
-``n_dropped`` / ``dropped[]`` (per-item reasons) / ``alignment{}`` (spatial /
-temporal / datum / crs) / ``units_warning`` (ALWAYS populated) / ``notes``.
-
-``cacheable=False`` (``live-no-cache``): a comparison composer over
-caller-supplied handles; the artifact goes to the runs bucket (or
-``_output_dir`` for offline tests), mirroring ``compute_model_residuals``.
+Four axes are reconciled and none is guessed: space, time, VERTICAL DATUM and
+physical QUANTITY. Every dropped observation comes back with its own reason.
 """
-
 from __future__ import annotations
 
 import logging
@@ -100,11 +67,8 @@ class PairingNoPairsError(PairingError):
 
 
 class PairingDatumMismatchError(PairingError):
-    """Observation and model vertical datums differ and cannot be reconciled.
-
-    NAVD88 vs NGVD29 (or any declared mismatch) with NO ``datum_shift_m`` is a
-    typed error, NEVER a silent guess -- an unreconciled vertical shift makes
-    every "residual" meaningless. Supply ``datum_shift_m`` to reconcile.
+    """Declared vertical datums differ with no ``datum_shift_m``: an unreconciled
+    vertical shift makes every residual meaningless, so it is never guessed.
     """
 
     error_code = "PAIRED_OBS_DATUM_MISMATCH"
@@ -112,16 +76,8 @@ class PairingDatumMismatchError(PairingError):
 
 
 class PairingQuantityMismatchError(PairingError):
-    """Model and observation measure DIFFERENT physical quantities and no
-
-    ground-elevation source is available to reconcile them. A model
-    flood-DEPTH raster (height above ground) vs an observed WATER-SURFACE
-    ELEVATION (height above a vertical datum) are NOT directly comparable --
-    pairing them produces a residual dominated by ground elevation (the
-    ~15 m Harvey false-error). Converting WSE<->depth requires sampling a
-    ground-elevation DEM; when none is supplied (``ground_elevation_uri``) and
-    none can be fetched, this typed error is raised NAMING both quantities,
-    NEVER a silent apples-vs-oranges pairing.
+    """The two sides measure different physical quantities and no ground-elevation
+    source can reconcile them; the error names both rather than pair silently.
     """
 
     error_code = "PAIRED_OBS_QUANTITY_MISMATCH"
@@ -136,27 +92,13 @@ class PairingUpstreamError(PairingError):
 
 
 # ---------------------------------------------------------------------------
-# Result type -- LayerURI subclass carrying the pairing side-channel.
+# Result type.
 # ---------------------------------------------------------------------------
 
 
 class PairedObsLayerURI(LayerURI):
-    """The paired-table point ``LayerURI`` plus the alignment summary.
-
-    Extra fields beyond ``LayerURI`` (all match build-contract section 3.3):
-
-    - ``paired_table_uri`` -- the handle lane B consumes (== ``uri``).
-    - ``n_paired`` / ``n_dropped`` -- kept vs dropped observation counts.
-    - ``dropped`` -- list of ``{obs_id, reason}``; reason in ``DROP_REASONS``.
-    - ``alignment`` -- ``{spatial, temporal, datum, crs}`` provenance, plus
-      ``model_quantity`` / ``observed_quantity`` and (when a WSE<->depth
-      conversion ran) ``quantity_conversion`` + ``ground_source``.
-    - ``columns`` -- the output feature columns.
-    - ``units_warning`` -- ALWAYS populated (datum/units/quantity honesty).
-    - ``flags`` -- non-fatal per-point honesty flags kept in the pairs (e.g.
-      ``negative_depth`` where the sampled ground sat above the observed water
-      surface); ``[]`` when none. Flagged points are KEPT, never clamped.
-    - ``notes`` -- provenance + per-step detail.
+    """The paired-table point ``LayerURI`` plus kept and dropped counts, a reason
+    per drop, the alignment block, a ``units_warning`` and per-point flags.
     """
 
     paired_table_uri: str = ""
@@ -311,11 +253,8 @@ def _to_float_array(values: Any) -> np.ndarray:
 def _resolve_field(
     gdf: Any, override: str | None, candidates: tuple[str, ...], *, numeric: bool
 ) -> str | None:
-    """Resolve a column: caller override (verbatim) else the first candidate.
-
-    ``numeric=True`` also requires the candidate to carry at least one finite
-    value. Returns ``None`` when nothing matches (the caller decides if that
-    is fatal). An override naming a missing column is a hard input error.
+    """A column: the caller's override verbatim, else the first candidate, else
+    None for the caller to judge. ``numeric=True`` also demands a finite value.
     """
     if override:
         if override not in gdf.columns:
@@ -345,15 +284,8 @@ def _detect_datum(gdf: Any) -> str | None:
 def _resolve_observed_units(
     field: str, override: str | None
 ) -> tuple[str, float, str]:
-    """Resolve the observed field's unit -> ``(unit_label, factor_to_m, note)``.
-
-    ``factor_to_m`` multiplies observed values into METRES (the model raster's
-    unit). Resolution order: caller ``observed_units`` override, else infer
-    from the field NAME (``elev_ft``/``*_ft`` -> feet; ``elev_m``/``elev``/
-    ``head``/generic aligned names -> metres). A field whose unit CANNOT be
-    determined is a typed ``PairingInputError`` -- never a silent guess, since
-    pairing a feet-unit observation against a metre-unit model is the
-    number-one silent unit-mismatch bug.
+    """``(unit_label, factor_to_m, note)`` from the caller override, then the field
+    name; an undeterminable unit raises rather than be guessed.
     """
     if override:
         u = override.strip().lower()
@@ -379,16 +311,14 @@ def _resolve_observed_units(
 
 
 # ---------------------------------------------------------------------------
-# Quantity semantics (the WSE-vs-depth honesty core -- same class as ft->m).
+# Quantity semantics: the WSE-vs-depth core.
 # ---------------------------------------------------------------------------
 #
-# The number-two silent killer after datum/units: pairing a model flood-DEPTH
-# raster (height above GROUND) against an observed WATER-SURFACE ELEVATION
-# (height above a vertical DATUM, e.g. a USGS STN HWM elev_ft). Their
-# difference is dominated by ground elevation (~15 m in the Harvey L2 run), so
-# a "residual" is meaningless. We classify each side into a physical FAMILY
-# and, on an elevation-vs-depth cross, CONVERT via a ground-elevation DEM
-# rather than pair silently.
+# A model flood-DEPTH raster measures height above GROUND and an observed
+# water-surface ELEVATION measures height above a vertical DATUM. Their
+# difference is dominated by ground elevation, so a residual across the two is
+# meaningless. Each side is classified into a physical FAMILY, and a cross is
+# CONVERTED through a ground-elevation DEM rather than paired.
 
 #: A raster-tag / band-tag key a producer MAY stamp to declare the quantity
 #: explicitly (forward-compatible; the flood workflow does not stamp it today,
@@ -401,13 +331,8 @@ _OBS_QUANTITY_COLUMN = "quantity"
 
 
 def _classify_quantity(name: str | None) -> tuple[str | None, str | None]:
-    """Classify a quantity NAME -> ``(family, label)``.
-
-    ``family`` is ``"depth"`` (height above ground) or ``"elevation"`` (height
-    above a vertical datum -- WSE / head / bare elevation), or ``None`` when the
-    name carries no quantity tell (never guessed). ``label`` is a canonical
-    display string. The depth keywords are tested FIRST so ``flood_depth_peak``
-    classifies as depth even though it also names water.
+    """``(family, label)``: "depth" above ground, "elevation" above a datum, None
+    when the name has no tell. Depth keywords test FIRST, so a depth wins.
     """
     n = (name or "").strip().lower()
     if not n:
@@ -424,11 +349,8 @@ def _classify_quantity(name: str | None) -> tuple[str | None, str | None]:
 def _resolve_model_quantity(
     tags: dict[str, Any], model_uri: str, override: str | None
 ) -> tuple[str | None, str | None, str]:
-    """Resolve the MODEL raster quantity -> ``(family, label, note)``.
-
-    Order: caller ``model_quantity`` override -> a stamped raster tag (forward
-    compat) -> the raster filename heuristic (``flood_depth_peak`` -> depth).
-    Unknown (``None`` family) is honest -- the caller may pass ``model_quantity``.
+    """``(family, label, note)`` from the caller override, then a stamped raster
+    tag, then the filename; an unknown family is honest, not guessed.
     """
     if override:
         fam, label = _classify_quantity(override)
@@ -459,12 +381,8 @@ def _resolve_model_quantity(
 def _resolve_observed_quantity(
     gdf: Any, observed_col: str, override: str | None
 ) -> tuple[str | None, str | None, str]:
-    """Resolve the OBSERVED quantity -> ``(family, label, note)``.
-
-    Order: caller ``observed_quantity`` override -> the CHOSEN observed field's
-    name heuristic (specific) -> the layer-level ``quantity`` stamp column
-    (``fetch_high_water_marks`` writes ``water_surface_elevation``). Unknown is
-    honest -- never guessed.
+    """``(family, label, note)`` from the caller override, then the chosen field's
+    name, then the layer's ``quantity`` column; unknown is honest, not guessed.
     """
     if override:
         fam, label = _classify_quantity(override)
@@ -496,14 +414,9 @@ def _resolve_observed_quantity(
 def _fetch_ground_dem(
     bbox_4326: tuple[float, float, float, float], tmpdir: str
 ) -> tuple[str, str]:
-    """Fetch a ground-elevation DEM for the AOI via ``fetch_dem`` (module seam).
-
-    Returns ``(local_path, source_label)``. Raises on any failure; the caller
-    turns a failure into a typed ``PairingQuantityMismatchError`` (never a
-    silent mismatched pairing). Patched in offline tests -- the committed suite
-    never calls the live 3DEP/GLO-30 fetch.
+    """``(local_path, source_label)`` for a ground-elevation DEM over the AOI; any
+    failure raises, for the caller to turn into a quantity mismatch.
     """
-    # fetch_dem is spec-driven -- resolve the promoted closure (keyword-only).
     from trid3nt_server.tools import TOOL_REGISTRY
 
     fetch_dem = TOOL_REGISTRY["fetch_dem"].fn
@@ -517,11 +430,8 @@ def _fetch_ground_dem(
 
 
 def _sample_ground_elev(dem_local: str, gdf: Any) -> np.ndarray:
-    """Bilinear-sample the ground DEM at each observation point (NaN off-extent).
-
-    Returns a float array aligned with ``gdf`` row order; NaN where the point is
-    outside the DEM or lands on nodata (that point cannot be depth-converted and
-    is dropped ``nodata_sample`` by the caller).
+    """Ground elevation per observation point, in ``gdf`` row order; NaN where the
+    point is off-extent or on nodata, which the caller drops.
     """
     import rasterio
 
@@ -555,14 +465,8 @@ def _reconcile_datum(
     datum_shift_m: float | None,
     notes: list[str],
 ) -> tuple[float, str, str]:
-    """Reconcile obs vs model vertical datum.
-
-    Returns ``(shift_m, alignment_datum, units_warning)``; ``units_warning`` is
-    NEVER empty. Raises ``PairingDatumMismatchError`` when the two datums are
-    declared, differ, and no ``datum_shift_m`` was supplied.
-
-    ``shift_m`` is ADDED to every observed value to bring it into the model's
-    vertical reference.
+    """``(shift_m, alignment_datum, units_warning)``, the warning never empty;
+    ``shift_m`` is ADDED to every observed value to reach the model's reference.
     """
     obs_u = obs_datum.upper() if obs_datum else None
     mod_u = model_datum.upper() if model_datum else None
@@ -638,13 +542,8 @@ def _m_per_deg_lat(lat_deg: float) -> float:
 
 
 def _meters_per_unit(crs: Any, lat_deg: float) -> float:
-    """Metres per CRS linear unit for a nearest-cell tolerance.
-
-    Projected metre CRS -> 1.0; geographic degrees -> the geodesic length of one
-    degree of latitude AT ``lat_deg`` (a single scalar for both axes: the
-    longitude foreshortening is folded into the pixel search window). Used ONLY
-    to size the nearest-wet-cell search radius; the tolerance is stated in the
-    alignment block so the approximation is transparent.
+    """Metres per CRS linear unit, used ONLY to size the nearest-wet-cell search
+    radius; one scalar covers both axes and the tolerance rides in alignment.
     """
     try:
         if crs is not None and crs.is_geographic:
@@ -672,14 +571,8 @@ def _bilinear_sample(
 def _nearest_wet_sample(
     band: np.ndarray, transform: Any, x: float, y: float, radius_px: int
 ) -> tuple[float, float]:
-    """Nearest finite (wet) cell value within ``radius_px`` pixels of (x, y).
-
-    Returns ``(value, pixel_distance)``; ``(nan, inf)`` if none is found in the
-    window. Used when the exact-cell bilinear sample lands on nodata (a dry
-    cell at the observation location -- common at a shoreline HWM).
-
-    Ties go to the first cell in row-major order, which is what ``argmin`` over
-    the clipped window returns and what the scan it replaced kept.
+    """``(value, pixel_distance)`` for the nearest finite cell within
+    ``radius_px``, or ``(nan, inf)``; ties go to the first in row-major order.
     """
     inv = ~transform
     col, row = inv * (x, y)
@@ -709,7 +602,9 @@ def _nearest_wet_sample(
 
 
 def _write_paired_fgb(gdf: Any, seed: str, output_dir: str | None) -> str:
-    """Persist the paired FlatGeobuf; return its URI (local test / runs live)."""
+    """Persist the paired FlatGeobuf and return its URI: a local path when
+    ``output_dir`` is given, else an ``s3://`` key in the runs bucket.
+    """
     filename = "paired.fgb"
     tmp = tempfile.mkdtemp(prefix="trid3nt_paired_")
     fgb_path = os.path.join(tmp, filename)
@@ -812,9 +707,8 @@ def _pair_raster_static(
     tmpdir: str,
     notes: list[str],
 ) -> tuple[Any, list[dict[str, Any]], dict[str, Any], str, list[dict[str, Any]]]:
-    """Pair a single-band raster (model max/head) against observation points.
-
-    Returns ``(out_gdf, dropped, alignment, units_warning, flags)``.
+    """Pair a single-band raster against observation points, returning
+    ``(out_gdf, dropped, alignment, units_warning, flags)``.
     """
     import rasterio
     from rasterio.warp import transform_bounds  # noqa: F401
@@ -877,13 +771,10 @@ def _pair_raster_static(
         obs_datum, model_datum, datum_shift_m, notes
     )
 
-    # --- Quantity compatibility (WSE-vs-depth honesty) ------------------
-    # Determine each side's physical FAMILY (depth above ground vs elevation
-    # above a datum). On an elevation-vs-depth cross, convert the observation to
-    # the model's family via a ground-elevation DEM; when neither side's family
-    # is known we proceed but WARN (cannot assert a mismatch we cannot see);
-    # when they cross and NO ground source is available we raise a typed
-    # QuantityMismatchError -- never a silent apples-vs-oranges pairing.
+    # On an elevation-vs-depth cross the observation converts to the model's
+    # family through a ground DEM; with neither family known the pairing
+    # proceeds under a warning, since a mismatch that cannot be seen cannot be
+    # asserted; with a cross and no ground source it is a typed refusal.
     model_fam, model_qlabel, model_qnote = _resolve_model_quantity(
         model_tags, model_uri, model_quantity
     )
@@ -1143,13 +1034,8 @@ def _pair_timeseries(
     tmpdir: str,
     notes: list[str],
 ) -> tuple[Any, list[dict[str, Any]], dict[str, Any], str, list[dict[str, Any]]]:
-    """Pair a model time-series vector layer against an observation time-series.
-
-    Both layers are point vectors carrying an inline ``time_series_csv``
-    (``fetch_usgs_nwis_gauges`` / ``fetch_noaa_coops_tides`` shape). Stations
-    are matched by nearest coordinate; each observed timestamp is aligned to
-    the exact model sample, else the nearest model sample within
-    ``time_tolerance_s``.
+    """Pair two point layers carrying an inline ``time_series_csv``: stations by
+    nearest coordinate, timestamps exactly or within ``time_tolerance_s``.
     """
     import geopandas as gpd  # noqa: F401
     import datetime as _dt
@@ -1355,104 +1241,23 @@ def extract_model_at_observations(
     _output_dir: str | None = None,
     **_extra_ignored: Any,
 ) -> PairedObsLayerURI:
-    """Pair a MODEL result with OBSERVATIONS -> the aligned paired table for skill metrics.
+    """Pair a MODEL result with OBSERVATIONS -> the aligned paired table.
 
-    Samples a model result at observation locations/times and writes the
-    paired table ``compute_skill_metrics`` / ``compute_flood_extent_skill``
-    consume. Handles the three alignment axes honestly: space (exact cell,
-    else nearest wet cell within a tolerance), time (static max vs surveyed
-    peak, or nearest sample within a tolerance), and VERTICAL DATUM (a
-    declared NAVD88 vs NGVD29 mismatch with no shift is a typed error, never a
-    guess). Every dropped observation is listed with a per-item reason.
+    Run right BEFORE ``compute_skill_metrics`` or ``compute_flood_extent_skill``:
+    it samples a model result at observation locations and times and writes the
+    pairs they consume. Two modes, read off the model handle: a STATIC raster
+    against observation points, or a TIME-SERIES layer against an observation
+    time-series. Not needed when you already hold the two arrays, and not the
+    residual map (``compute_model_residuals``).
 
-    **When to use:**
-    - Right BEFORE ``compute_skill_metrics`` / ``compute_flood_extent_skill``:
-      you have a model result handle and an observation layer and need the
-      aligned observed/simulated pairs.
-    - Validate a modeled max-flood-depth / max-WSE raster against surveyed
-      high-water marks (``fetch_high_water_marks``) or peak stages.
-    - Align a modeled gauge/tide time-series against an observed hydrograph.
+    Space, time, DATUM and QUANTITY are reconciled, never guessed: a datum
+    mismatch with no ``datum_shift_m``, a unit that cannot be inferred without
+    ``observed_units``, and an elevation-vs-depth cross with no ground DEM are
+    typed errors. Every dropped observation carries its reason.
 
-    **When NOT to use:**
-    - You already have observed + simulated arrays -> call
-      ``compute_skill_metrics`` directly (it also accepts arrays).
-    - You want residual VALUES + a diverging bias map ->
-      ``compute_model_residuals`` (this tool omits the residual on purpose so
-      the paired table stays a neutral input).
-    - Running the model itself -> the engine ``run_*`` tools.
-
-    **Two modes (auto-detected from the model handle):**
-    - STATIC RASTER model (max-depth / WSE / head COG) vs observation POINTS
-      -> one pair per point, ``temporal="none_static"``.
-    - TIME-SERIES model (point layer with an inline ``time_series_csv``) vs an
-      observation time-series layer -> N pairs per matched station, temporally
-      aligned (exact, else nearest model sample within ``time_tolerance_s``).
-
-    **Parameters:**
-    - ``model_layer_uri``: model result handle -- a raster COG or a
-      time-series point layer (s3:// or a prior tool's layer handle).
-    - ``observations_layer_uri``: point observation layer handle.
-    - ``observed_value_field``: observed column (auto-detected; ``elev_ft`` /
-      ``elev_m`` / ``water_level`` tried early).
-    - ``obs_id_field`` / ``time_field``: id / timestamp columns (auto-detected).
-    - ``model_datum``: the model's vertical datum (e.g. ``"NAVD88"``). Needed
-      to reconcile against the observation datum; a declared mismatch with no
-      ``datum_shift_m`` raises ``PairingDatumMismatchError``.
-    - ``datum_shift_m``: metres ADDED to observed to bring it into the model
-      datum (recorded in the alignment block).
-    - ``observed_units``: ``"feet"`` / ``"meters"`` (mode A). The model raster
-      is metres, so a feet-unit observed field (``elev_ft`` and friends) is
-      converted ft->m x0.3048 at ingestion; this overrides the name-based
-      inference. A field whose unit cannot be inferred AND has no override is a
-      typed ``PairingInputError`` (never a silent feet-vs-metres guess). The
-      conversion applied is recorded in ``alignment["units"]``.
-    - ``nearest_wet_tolerance_m`` (default 250): dry-cell snap radius (mode A).
-    - ``station_tolerance_m`` (default 500): station-match radius (mode B) --
-      the max distance a model station may sit from an observation station;
-      recorded in the alignment block.
-    - ``time_tolerance_s`` (default 3600): temporal match window (mode B).
-    - ``model_quantity`` / ``observed_quantity`` (mode A): OPTIONAL explicit
-      quantity for each side -- a depth-like (``"depth"`` / ``"flood_depth"`` /
-      ``"depth_above_ground"``) or elevation-like (``"wse"`` /
-      ``"water_surface_elevation"`` / ``"head"``) label. Overrides the automatic
-      resolution (raster tag / filename for the model; the observed field name
-      or a layer ``quantity`` stamp for the observations). When BOTH resolve and
-      one is a DEPTH while the other is an ELEVATION, the tool converts the
-      observations to the model's quantity (see ``ground_elevation_uri``); a
-      cross with NO ground source raises ``PairingQuantityMismatchError``.
-    - ``ground_elevation_uri`` (mode A): OPTIONAL ground-elevation DEM COG used
-      to convert a water-surface ELEVATION observation to a DEPTH (or back):
-      ``depth = observed_WSE - ground_elev`` sampled per point. When omitted and
-      a conversion is required, the tool auto-fetches a DEM for the AOI
-      (``fetch_dem``); if that also fails it raises
-      ``PairingQuantityMismatchError`` naming both quantities. The DEM's vertical
-      datum (3DEP: NAVD88) is assumed to match the observations' datum -- pass
-      ``datum_shift_m`` if not.
-
-    **Returns:** ``PairedObsLayerURI`` -- a FlatGeobuf point layer (EPSG:4326,
-    columns ``obs_id`` / ``observed`` / ``simulated`` / ``time`` + passthrough;
-    plus ``ground_elev_m`` / ``flag`` when a quantity conversion ran) named
-    ``"Model-obs pairs (<n> points)"``, plus ``paired_table_uri`` (the handle
-    lane B reads), ``n_paired`` / ``n_dropped`` / ``dropped[]`` (per-item
-    reasons), ``alignment`` (``spatial`` / ``temporal`` / ``datum`` / ``crs`` /
-    ``model_quantity`` / ``observed_quantity`` and, on a conversion,
-    ``quantity_conversion`` + ``ground_source``), ``columns``, ``units_warning``
-    (always populated), ``flags`` (e.g. ``negative_depth`` points -- kept, never
-    clamped), ``notes``.
-
-    **Errors:** ``PairingInputError`` (bad/unreadable inputs, no
-    observed field, unrecognized quantity); ``PairingDatumMismatchError``
-    (unreconciled vertical datums); ``PairingQuantityMismatchError`` (model
-    quantity vs observed quantity cross elevation-vs-depth with no ground
-    source); ``PairingNoPairsError`` (every observation dropped);
-    ``PairingUpstreamError`` (staging / write failure).
-
-    Cross-tool dependencies:
-        Upstream: engine ``run_*`` (model raster / time-series);
-        ``fetch_high_water_marks`` / ``fetch_usgs_nwis_gauges`` /
-        ``fetch_noaa_coops_tides`` (observations).
-        Downstream: ``compute_skill_metrics`` / ``compute_flood_extent_skill``
-        read ``paired_table_uri``.
+    Params: the two layer handles, the column overrides, ``model_datum`` /
+    ``datum_shift_m`` / ``observed_units``, the three tolerances, and
+    ``model_quantity`` / ``observed_quantity`` / ``ground_elevation_uri``.
     """
     if not isinstance(model_layer_uri, str) or not model_layer_uri.strip():
         raise PairingInputError(
