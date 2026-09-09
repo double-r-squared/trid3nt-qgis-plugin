@@ -52,7 +52,7 @@ it later (recon gotcha #1); v1 validates + log-only's a `mesh` entry.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `kind` | string | yes | The seam's routing key -- `"raster"` (a single-band COG), `"mesh"` (a native mesh sibling QGIS/MDAL reads directly, e.g. TELEMAC SELAFIN), `"vector"` (a GeoJSON/vector layer), or `"scalar"` (a bare number/series with no map layer). Open-set: an unrecognized `kind` is a typed reject at write time, not a silent drop -- see Section 6. |
-| `quantity` | string | yes | The physical quantity, e.g. `"flood_depth"`, `"dye_concentration"`, `"wave_height"`, `"burned_extent"`. The seam's styling-lookup KEY (Section 5). Free-text but drawn from a shared vocabulary as engines migrate (candidate: fold into `trid3nt_contracts.output_quantities`'s existing `quantity_id` -- see the recon's flag). |
+| `quantity` | string | yes | The physical quantity, e.g. `"flood_depth"`, `"dye_concentration"`, `"wave_height"`, `"burned_extent"`. The seam's styling-lookup KEY (Section 5). Free-text but drawn from a shared vocabulary as engines migrate (`trid3nt_contracts.output_quantities` is gone -- lean sweep D3; no shared `quantity_id` registry exists to fold into today). |
 | `name` | string | yes | The EXACT web-facing group/scrubber token, e.g. `"Flood depth"` / `"Flood depth step 7"`. Mirrors the existing `PublishManifestLayer.name` contract (`detectSequentialGroups` groups on this string) -- unchanged from today's manifest. |
 | `uri` | string | yes | A bare `s3://` (or `gs://`) object key. NEVER a pre-templated tile URL -- the seam re-templates, exactly as `register_manifest_layers` does today. |
 | `t` | number \| null | no | Seconds from run start. `null`/absent for a non-temporal artifact (a peak/final field, a scalar, a static input layer). Present and monotonically non-decreasing across a `quantity`'s own entries when temporal. |
@@ -222,9 +222,10 @@ top-level `schema_version` int, TWO surfaces gated on it, both SHIPPED in
   `serialize`) is PURE STDLIB so it is importable from BOTH the host-exec
   agent path (MODFLOW/SWMM, gotcha #2) AND a verbatim worker mirror
   (`workers/_raster_postprocess/outputs_manifest.py`, gated on the SAME
-  `OUTPUTS_MANIFEST_SCHEMA_VERSION`), per `output_quantities.py`'s
-  deploy-boundary precedent (the worker images ship `workers/**` but not
-  `contracts`; the agent ships `contracts` but not `workers`). The worker
+  `OUTPUTS_MANIFEST_SCHEMA_VERSION`) crosses the same deploy boundary
+  (the worker images ship `workers/**` but not `contracts`; the agent ships
+  `contracts` but not `workers`) -- `output_quantities.py` is gone (lean
+  sweep D3: a per-engine registry with no importer but its own test). The worker
   mirror lands WITH the first docker-engine producer (the flood proving
   case), not before it is needed.
 - the READER half (`OutputEntry` / `OutputsManifest` /
@@ -454,11 +455,9 @@ in favor of the seam's own `outputs.json` consumer (Section 5.2). Per the
 deletion-ledger norm, each of these should be registered as a QUEUED
 deletion with its CONDITION-to-delete ("last engine migrated off
 `publish_manifest.json`") at the point the FIRST engine migrates, not
-discovered later -- and per the flag in the recon's "does not survive
-contact" section, this collapse should also explicitly decide the fate of
-the `output_quantities.py`/`publish_quantities.py` scaffold (fold into
-`outputs.json`'s writer side, or delete as superseded) rather than leaving it
-as a second, unfinished mechanism next to a shipped one.
+discovered later. The `output_quantities.py`/`publish_quantities.py` scaffold
+this section once flagged for that decision is gone (lean sweep D3): no fold
+target remains, and no second mechanism stands next to the shipped one.
 
 CORRECTION (verified against the code 2026-08-16, supersedes the recon's
 "`get_output_registry` returns `()` for every engine except OpenQuake"): the
