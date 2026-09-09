@@ -1,17 +1,8 @@
 """``combine``: several geometry layers -> ONE geometry document.
 
-The generic composition link. A domain is often more than one shape: an extent
-polygon says where the model stops, and the polylines riding inside it say what
-the interior is sized toward. Both facts come out of separate tools, and a
-consumer that took them as two arguments could be handed a sizing network for an
-extent it does not describe - so they are joined into one document HERE, by an
-explicit call somebody wrote, and travel as one thing afterwards.
-
 Nothing is computed: no union, no clip, no buffer, no reprojection beyond reading
-each source into EPSG:4326. What comes back holds exactly the geometries that
-went in, which is what makes this composable rather than an opinion.
+each source into EPSG:4326. What comes back holds exactly what went in.
 """
-
 from __future__ import annotations
 
 import logging
@@ -35,12 +26,8 @@ logger = logging.getLogger("trid3nt_server.tools.processing.combine.combine")
 
 
 class CombineError(RuntimeError):
-    """A typed combine refusal: an error code plus what to supply instead.
-
-    Codes:
-    - ``COMBINE_NO_GEOMETRY`` -- a named source carries no geometry at all.
-    - ``COMBINE_SOURCE_UNREADABLE`` -- a source is neither inline GeoJSON nor a
-      readable vector layer.
+    """A typed combine refusal: ``COMBINE_NO_GEOMETRY`` (a named source carries no
+    geometry) or ``COMBINE_SOURCE_UNREADABLE`` (not GeoJSON, not a readable layer).
     """
 
     error_code: str
@@ -52,11 +39,8 @@ class CombineError(RuntimeError):
 
 
 class CombinedGeometryLayerURI(LayerURI):
-    """The combined document's ``LayerURI`` plus what went into it.
-
-    Extra fields beyond ``LayerURI``: ``polygon_count`` / ``line_count`` /
-    ``point_count`` (what the document holds, by shape), ``source_count`` (how
-    many layers were joined), ``notes`` (what each source contributed).
+    """The combined document's ``LayerURI``, plus counts by shape, the number of
+    layers joined, and one note per source saying what it contributed.
     """
 
     polygon_count: int = 0
@@ -67,8 +51,7 @@ class CombinedGeometryLayerURI(LayerURI):
 
 
 #: The label the combined document travels under. It carries whatever the sources
-#: meant, so it claims none of their semantics - the same reason ``section``
-#: names its own preset rather than borrowing the polygon's.
+#: meant, so it claims none of their semantics.
 _STYLE = {"kind": "reference"}
 
 _COMBINE_METADATA = AtomicToolMetadata(
@@ -132,37 +115,25 @@ def combine(
     # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> CombinedGeometryLayerURI:
-    """Join an extent polygon and the lines/points riding inside it into ONE geometry layer.
+    """Join an extent polygon and the lines/points riding inside it into ONE layer.
 
-    Use this when: a domain is a polygon PLUS the channel network the mesh should
-    refine toward, or a polygon plus the points a tool has to read alongside it.
-    A mesh sizes itself toward a channel network by NAMING it in its recipe
-    (``mesh_op('distance_sizing_from_line_function', line_file=<the lines>)``),
-    so use this for the readers that want the two in ONE document rather than to
-    hand a mesher a domain and its sizing source folded together. Do NOT use
-    for: merging two polygons into their union (nothing is dissolved here), or
-    clipping one layer by another (``section``).
+    Use when a domain is a polygon PLUS the channel network a mesh should refine
+    toward, or a polygon plus the points a tool must read alongside it - for the
+    readers that want the two in ONE document. A mesher sizes toward a network by
+    NAMING it in its own recipe instead. Do NOT use to merge polygons into a
+    union (nothing is dissolved) or to clip one layer by another (``section``).
 
     Nothing is inferred: the document holds exactly the geometries the sources
-    held, in EPSG:4326, and a source that maps nothing is refused by name rather
-    than dropped.
+    held, in EPSG:4326, and a source that maps nothing is refused by name.
 
     Params:
-        polygon: the extent layer - a vector layer uri (GeoJSON, FlatGeobuf,
-            shapefile) or inline GeoJSON. Required: a combined domain with no
-            polygon has no interior anything downstream can use.
-        lines: the polylines riding inside it - one layer uri/GeoJSON, or a list
-            of them. Optional.
-        points: points that travel with the domain - one layer uri/GeoJSON, or a
-            list of them. Optional.
+        polygon: the extent layer - a vector layer uri or inline GeoJSON.
+            Required.
+        lines: the polylines riding inside it - one uri/GeoJSON, or a list.
+        points: points travelling with the domain - one uri/GeoJSON, or a list.
 
-    Returns:
-        ``CombinedGeometryLayerURI`` -- one GeoJSON FeatureCollection (EPSG:4326) with ``polygon_count``,
-        ``line_count``, ``point_count``, ``source_count`` and honest ``notes``.
-
-    Raises:
-        CombineError: ``COMBINE_NO_GEOMETRY`` (a named source maps nothing),
-            ``COMBINE_SOURCE_UNREADABLE`` (a source could not be read).
+    Returns one FeatureCollection with counts by shape and honest notes; an
+    unreadable or empty source raises CombineError.
     """
     notes: list[str] = []
     geoms = _read(polygon, "polygon", notes)
