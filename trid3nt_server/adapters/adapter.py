@@ -1,45 +1,7 @@
 """google-genai IR containment + provider-dispatch seam.
 
-The ``google.genai.types`` package is the load-bearing intermediate
-representation (``Content`` / ``Part`` / ``FunctionCall`` / ``FunctionDeclaration``
-builders) every provider adapter shares. This module owns those genai-typed
-shapes and the multi-turn function_call -> function_response loop; the actual
-model call is delegated at ``stream_events_with_contents`` to the provider
-adapter selected by ``MODEL_PROVIDER`` (openai default; anthropic / scripted).
-An unsupported ``MODEL_PROVIDER`` raises ``UnsupportedModelProviderError``
-rather than silently emitting an empty turn.
-
-Model selection:
-  ``TRID3NT_GEMINI_MODEL`` env override, defaulting to ``DEFAULT_VERTEX_MODEL``
-  below, resolves only the display/telemetry label; the active provider
-  resolves the real model it calls.
-
-``stream_events`` passes the tool catalog (``FunctionDeclaration`` from each
-registered tool's callable + docstring) plus a focused system prompt to the
-provider adapter, then demultiplexes each chunk into either a
-``TextDeltaEvent`` or a ``FunctionCallEvent`` so the server can dispatch the
-tool through the registry. The live text path is
-``stream_events_with_contents`` -> dispatch.
-
-This module exposes the multi-turn function_call -> function_response loop:
-
-  * ``stream_events`` (single-turn primitive -- unchanged contract; still
-    accepts ``user_text`` for backward compatibility).  Existing tests use it.
-  * ``stream_events_with_contents`` (primitive used by the loop driver):
-    accepts a fully-built ``contents: list[Content]`` and streams one turn.
-  * ``build_contents_from_history`` -- converts ``state.chat_history`` plus the
-    current user_text into the initial ``contents`` list.
-  * ``summarize_tool_result`` -- compacts a tool result into the dict that
-    becomes the ``function_response.response`` payload Gemini reads on the
-    next turn. SUMMARY shape (LayerURI metadata, key metrics, error code) --
-    NEVER the full raw tool result (which can be MB of GeoJSON).
-  * ``build_function_call_content`` / ``build_function_response_content`` --
-    typed helpers for appending the model+function turn pair after a
-    dispatch.
-
-The loop driver itself lives in ``server.py`` (``_stream_model_reply``) so it
-can dispatch tools through ``_invoke_tool_via_emitter`` (registry + emitter
-side effects).  This file stays the Gemini-containment seam.
+``google.genai.types`` is the shared IR each provider adapter converts at its
+own boundary; an unsupported ``MODEL_PROVIDER`` raises, never an empty turn.
 """
 
 from __future__ import annotations
@@ -57,8 +19,8 @@ from google.genai import types as genai_types
 
 logger = logging.getLogger("trid3nt_server.adapters.adapter")
 
-# Default Gemini model id. See module docstring for the Gemini-3-on-Vertex
-# availability note. Override at runtime via ``TRID3NT_GEMINI_MODEL``.
+# Display / telemetry model label only -- the active provider resolves the real
+# model it calls. Override at runtime via ``TRID3NT_GEMINI_MODEL``.
 DEFAULT_VERTEX_MODEL = "gemini-2.5-pro"
 
 
@@ -68,75 +30,48 @@ DEFAULT_VERTEX_MODEL = "gemini-2.5-pro"
 
 @dataclass(frozen=True)
 class TextDeltaEvent:
-    """A streamed text fragment from Gemini."""
+    """A streamed text fragment from the model."""
     delta: str
 
 
 @dataclass(frozen=True)
 class ThinkingDeltaEvent:
-    """A streamed reasoning-channel fragment (local OpenAI-compatible path).
-
-    NATE live-feedback 2026-07-08 (local build): Ollama's OpenAI-compat stream
-    surfaces qwen3-family thinking as ``delta.reasoning`` chunks. The
-    openai_adapter yields these as ``ThinkingDeltaEvent`` so the server can
-    forward them live to the web as ``agent-thinking-chunk`` envelopes (greyed
-    foldable block). Never emitted by the Anthropic / scripted paths;
-    the server loop must tolerate + may drop them (user toggle off).
-    """
+    """A streamed reasoning-channel fragment (OpenAI-compatible path only).
+    Never emitted by the Anthropic or scripted paths, so the turn loop must
+    tolerate its absence and may drop it when the user toggle is off."""
     delta: str
 
 
 @dataclass(frozen=True)
 class FunctionCallEvent:
-    """Gemini decided to call a tool.
-
-    ``name`` matches the registered tool name in ``TOOL_REGISTRY``.
-    ``call_id`` is Gemini's per-call identifier (used when feeding back the
-    function response in the multi-turn loop).
-    ``args`` is the deserialized argument dict.
-
-    ``thought_signature`` is Gemini 3's opaque per-thought signature surfaced
-    on the ``Part`` that carries the function_call. Gemini 3 (Vertex)
-    requires the same signature byte-blob be echoed back on the *Part
-    wrapping the function_call* when that turn is replayed in the next
-    ``contents`` payload -- otherwise the next ``generate_content_stream``
-    fails with a ``thought-signature mismatch`` error. The harvest must
-    happen at the part level (not the FunctionCall level -- ``FunctionCall``
-    has no signature field in google-genai types.py); see
-    ``build_function_call_content``. For Gemini 2.5 (current default until
-    Gemini 3 lands on Vertex per ``DEFAULT_VERTEX_MODEL``), the field is
-    absent and harvested as ``None``, a no-op when fed back -- the plumbing
-    is forward-compat.
-    """
+    """The model decided to call a tool.
+    ``name`` matches a registered tool name; ``call_id`` is the provider's
+    per-call identifier, echoed back with the function response."""
     name: str
     call_id: str | None
     args: dict[str, Any] = field(default_factory=dict)
+    #: Opaque per-thought signature carried on the ``Part`` that WRAPS the
+    #: function_call. A provider that emits one requires the same byte-blob
+    #: echoed back on that same Part when the turn is replayed, or the next
+    #: request fails on a signature mismatch. The harvest is therefore at the
+    #: Part level -- ``FunctionCall`` itself has no such field. ``None`` where
+    #: no signature is emitted, and a no-op when fed back.
     thought_signature: bytes | None = None
 
 
 @dataclass(frozen=True)
 class UsageMetadataEvent:
-    """Per-turn usage metadata harvested from Gemini's ``response.usage_metadata``.
-
-    The multi-turn driver needs ``cached_content_token_count`` +
-    ``total_token_count`` on every Gemini call so it can forward a
-    ``cache-status`` envelope into the PipelineEmitter (live cache hit-rate
-    in the UI) and pipe ``cached_content_token_count`` into the tool-call
-    telemetry record (``telemetry.emit_tool_call_event``).
-
-    Emitted at most once per ``generate_content_stream`` call -- the producer
-    pulls ``usage_metadata`` off the LAST chunk (Gemini surfaces aggregate
-    counts only on the terminal response). All fields may be ``None`` when
-    the SDK version does not expose them or the response was cancelled.
-    """
+    """Per-turn usage metadata harvested from the provider's usage report.
+    Emitted at most once per adapter call; every field may be ``None`` when the
+    provider does not expose it or the response was cancelled."""
 
     cached_content_token_count: int | None = None
     total_token_count: int | None = None
     prompt_token_count: int | None = None
     candidates_token_count: int | None = None
     cache_hit: bool = False
-    # Per-turn telemetry (LANE CORE, 2026-07-22): reasoning-channel tokens where
-    # the provider reports them (OpenAI-compatible
+    # Per-turn telemetry: reasoning-channel tokens where the
+    # provider reports them (OpenAI-compatible
     # ``usage.completion_tokens_details.reasoning_tokens``). ``None`` when the
     # provider does not report the figure -- absent is tolerated, NEVER
     # fabricated.
@@ -145,35 +80,15 @@ class UsageMetadataEvent:
 
 @dataclass(frozen=True)
 class CompactionStartEvent:
-    """Client-side history management (``context_budget.plan_turn``) is about
-    to run for this turn -- proactive (the pre-send estimate exceeded the
-    model's discovered window) or reactive (the send was clipped, or the
-    provider rejected it as too long).
-
-    Yielded by EVERY live provider path -- OpenAI-compatible and Anthropic --
-    since both share the one budget seam. ``server.py``'s
-    dispatch loop mints a durable running card ("Compacting conversation...")
-    the instant this arrives (``pipeline_emitter.mint_compaction_card``),
-    animated on the wire and persisted so it survives a Case reopen. Carries
-    no fields: the token counts are not final yet (the compacted-side count is
-    only known once the ladder returns), so they ride the matching
-    ``CompactionCompleteEvent``. The scripted path never emits it, and a turn
-    that stays under budget emits nothing, so the server loop must tolerate it
-    being absent.
-    """
+    """Client-side history management is about to run for this turn.
+    Carries no fields -- the compacted-side count is not known yet, so it rides
+    the matching complete event; a turn under budget emits neither."""
 
 
 @dataclass(frozen=True)
 class CompactionCompleteEvent:
-    """The compaction a preceding ``CompactionStartEvent`` announced has
-    finished. ``before_tokens`` / ``after_tokens`` are
-    ``context_budget.CompactionResult.before_tokens`` /
-    ``.after_tokens`` -- the server-side dispatch loop renames the running
-    card to its terminal "Conversation compacted (Nk -> Mk tokens)" label and
-    flips it to ``complete`` on receipt (``pipeline_emitter.
-    complete_compaction_card``). Always paired 1:1 with a prior
-    ``CompactionStartEvent`` within the same adapter call.
-    """
+    """The compaction a preceding ``CompactionStartEvent`` announced has finished.
+    Always paired 1:1 with that prior event within the same adapter call."""
 
     before_tokens: int
     after_tokens: int
@@ -190,41 +105,32 @@ StreamEvent = (
 
 
 # ---------------------------------------------------------------------------
-# Upstream-provider discipline (LANE CORE, 2026-07-22 -- NATE hard rule:
-# never internalize an upstream failure).
+# Upstream-provider discipline: an upstream failure is NEVER internalized.
 #
-# The provider adapters (openai_adapter / anthropic_adapter) classify TRANSIENT
-# provider errors (HTTP 429, 5xx, timeouts, connection drops, provider-reported
-# overload) as ``error_class="upstream_provider"``, log the provider's VERBATIM
-# error, and retry with exponential backoff. On exhaustion they raise
-# ``UpstreamProviderError`` so the server turn loop ends the turn with an
-# HONEST provider-unavailable narration (typed, provider named) -- never a
-# silent empty turn, never recorded as an internal error. Non-transient
-# provider errors (auth, bad request) fail fast unchanged and are classified
-# ``error_class="provider_request"`` by ``classify_provider_error_class``.
+# The provider adapters classify TRANSIENT provider errors (HTTP 429, 5xx,
+# timeouts, connection drops, provider-reported overload) as
+# ``error_class="upstream_provider"``, log the provider's VERBATIM error, and
+# retry with exponential backoff. On exhaustion they raise
+# ``UpstreamProviderError`` so the turn ends with an HONEST
+# provider-unavailable narration -- never a silent empty turn, never recorded
+# as an internal error. Non-transient provider errors (auth, bad request) fail
+# fast unchanged as ``error_class="provider_request"``.
 #
-# Retry policy env (shared by both adapters):
+# Retry policy env, shared by the adapters:
 #   TRID3NT_PROVIDER_RETRIES    -- max retries after the first attempt
 #                                  (default 3)
 #   TRID3NT_PROVIDER_BACKOFF_S  -- exponential-backoff BASE seconds; the wait
 #                                  before retry N (0-based) is
 #                                  ``base * 2**N`` (default 5.0). A provider
 #                                  Retry-After, when present, OVERRIDES the
-#                                  schedule for that attempt (openai path).
+#                                  schedule for that attempt.
 # ---------------------------------------------------------------------------
 
 
 class UpstreamProviderError(RuntimeError):
-    """A TRANSIENT upstream model-provider failure that survived retry
-    exhaustion (429 / 5xx / timeout / connection drop / provider overload).
-
-    ``provider`` names the upstream provider for the user-facing narration
-    (e.g. ``"openrouter.ai (openai-compatible)"``);
-    ``detail`` carries the provider's VERBATIM last error string (honesty
-    floor: never paraphrased away); ``attempts`` is the total number of
-    request attempts made (1 original + retries). ``error_class`` is the
-    turn-telemetry classification constant.
-    """
+    """A TRANSIENT upstream provider failure that survived retry exhaustion.
+    ``detail`` carries the provider's VERBATIM last error string -- the honesty
+    floor -- and ``attempts`` counts the original request plus its retries."""
 
     error_class = "upstream_provider"
 
@@ -240,12 +146,8 @@ class UpstreamProviderError(RuntimeError):
 
 class UnsupportedModelProviderError(RuntimeError):
     """``MODEL_PROVIDER`` names a provider the dispatch does not support.
-
-    The provider dispatch in ``stream_events_with_contents`` is EXPLICIT:
-    scripted/replay/fake, anthropic, and openai each have a branch. Any OTHER
-    value -- the empty default included -- raises this (never a silent
-    fall-through), so a typo or a decommissioned provider fails loudly.
-    """
+    The dispatch is EXPLICIT: any other value, the empty default included,
+    raises here rather than falling through silently."""
 
     error_class = "internal"
 
@@ -287,19 +189,8 @@ def provider_backoff_wait(attempt: int, *, cap: float = 60.0) -> float:
 
 def classify_provider_error_class(exc: BaseException) -> str:
     """Classify a turn-ending exception for the per-turn telemetry record.
-
-    Returns one of:
-      - ``"upstream_provider"`` -- a typed ``UpstreamProviderError`` (retry
-        exhaustion) OR a raw provider error that is transient-shaped (a
-        mid-stream 429/5xx/timeout/connection drop that escaped the request-
-        time retry seam). Upstream failures are never recorded as internal.
-      - ``"provider_request"`` -- a NON-transient provider rejection of OUR
-        request (auth / bad request / not found / validation). Fail-fast class.
-      - ``"internal"`` -- everything else (a genuine bug in our own code).
-
-    Optional-dependency imports are defensive: openai / anthropic may be absent
-    on a build where that provider path is dormant.
-    """
+    One of ``upstream_provider`` (transient, never recorded as internal),
+    ``provider_request`` (a rejection of our request), or ``internal``."""
     if isinstance(exc, UpstreamProviderError) or getattr(exc, "error_class", None) == "upstream_provider":
         return "upstream_provider"
 
@@ -881,12 +772,9 @@ chain-of-thought internal; emit only the final, user-facing narration.
 # ---------------------------------------------------------------------------
 
 def _is_union_type(annotation: Any) -> bool:
-    """Return True if annotation is any union form (typing.Union or X | Y syntax).
-
-    Python 3.10+ ``X | Y`` creates ``types.UnionType``; ``typing.Union[X, Y]``
-    creates a ``_GenericAlias`` whose ``get_origin`` is ``Union``.  Both must be
-    detected for full compatibility.
-    """
+    """True for any union form: ``typing.Union[X, Y]`` or ``X | Y``.
+    ``X | Y`` is a ``types.UnionType``; ``typing.Union`` is a ``_GenericAlias``
+    whose origin is ``Union``. Both must be detected."""
     if isinstance(annotation, _builtin_types.UnionType):
         return True
     return get_origin(annotation) is Union
@@ -899,17 +787,12 @@ def _union_args(annotation: Any) -> tuple[Any, ...]:
     return get_args(annotation)
 
 
+# ``from_callable_with_api_option`` silently DROPS a parameter whose type is a
+# fixed-length tuple and RAISES for the optional form, so both are replaced
+# before a callable ever reaches it.
 def _is_tuple_annotation(annotation: Any) -> bool:
-    """Return True when *annotation* is a ``tuple[...]`` type (not just bare ``tuple``).
-
-    ``from_callable_with_api_option`` silently drops parameters whose type is a
-    fixed-length tuple (e.g. ``tuple[float, float, float, float]``) and raises
-    for ``tuple[float, float, float, float] | None``.  Both forms must be
-    replaced before the callable reaches ``from_callable``.
-
-    Handles both ``typing.Optional[tuple[...]]`` (``typing.Union``) and the
-    Python 3.10+ ``tuple[...] | None`` (``types.UnionType``) syntax.
-    """
+    """True when ``annotation`` is a ``tuple[...]`` type, not a bare ``tuple``.
+    Sees through both ``Optional[tuple[...]]`` and ``tuple[...] | None``."""
     if _is_union_type(annotation):
         args = _union_args(annotation)
         return any(_is_tuple_annotation(a) for a in args if a is not type(None))
@@ -918,25 +801,15 @@ def _is_tuple_annotation(annotation: Any) -> bool:
 
 
 def _simplify_annotation(annotation: Any) -> Any:
-    """Map a complex annotation to a Gemini-compatible equivalent.
-
-    Gemini's OpenAPI schema subset rejects:
-    * ``tuple[float, ...]`` -- silently dropped; use ``list[float]`` instead.
-    * ``tuple[float, ...] | None`` -- raises in ``from_callable``; use
-      ``list[float] | None``.
-    * ``str | tuple[float, ...]`` -- Union of incompatible types; use ``str``.
-    * Any Pydantic model / dataclass annotation -- raises in ``from_callable``;
-      use ``str | None`` (the serialized form that crosses the LLM boundary).
-
-    Parameters that are already schematizable (``str``, ``int``, ``float``,
-    ``bool``, ``list[str]``, ``Literal[...]``, ``str | None``, etc.) pass
-    through unchanged.
-
-    Handles both ``typing.Union``/``Optional`` (Python 3.9) and the new
-    ``X | Y`` union syntax (Python 3.10+, ``types.UnionType``).
-
-    B11: centralised in the adapter so no tool file needs touching.
-    """
+    """Map a complex annotation to a schema-compatible equivalent.
+    An annotation already schematizable (``str``, ``int``, ``list[str]``,
+    ``Literal[...]``, ``str | None``) passes through unchanged."""
+    # The OpenAPI schema subset rejects: ``tuple[float, ...]``, silently
+    # dropped -- use ``list[float]``; ``tuple[float, ...] | None``, which raises
+    # -- use ``list[float] | None``; ``str | tuple[float, ...]``, a union of
+    # incompatible types -- use ``str``; and any Pydantic model or dataclass
+    # annotation, which raises -- use ``str | None``, the serialized form that
+    # actually crosses the LLM boundary. Both union spellings are handled.
     if annotation is inspect.Parameter.empty:
         return annotation
 
@@ -985,11 +858,9 @@ def _simplify_annotation(annotation: Any) -> Any:
         # ``float | int`` (either order) -- both are the JSON Schema "number"
         # type; collapsing keeps a single primitive (float accepts int values
         # from the LLM boundary too) instead of falling through to "keep
-        # as-is", which left params like ``fetch_usace_dams(min_height_ft:
-        # float | int | None)`` as an unresolved multi-primitive union that
+        # as-is", which leaves an unresolved multi-primitive union that
         # ``from_callable_with_api_option`` schematizes WITHOUT a 'type' field
-        # (Vertex 400 INVALID_ARGUMENT trigger -- see test_gemini_schema_
-        # compliance.test_every_property_has_type).
+        # -- a Vertex 400 INVALID_ARGUMENT trigger.
         numeric_args = {a for a in simplified_non_none if a in (int, float)}
         if numeric_args and len(numeric_args) == len(simplified_non_none):
             result = float
@@ -1024,32 +895,9 @@ def _simplify_annotation(annotation: Any) -> Any:
 
 
 def _normalize_callable_for_gemini(fn: Any) -> Any:
-    """Return a thin wrapper of *fn* with annotations simplified for ``from_callable``.
-
-    ``FunctionDeclaration.from_callable_with_api_option`` rejects callables whose
-    annotations contain:
-    * ``-> LayerURI`` or any other Pydantic/dataclass return type
-    * ``tuple[float, float, float, float] | None`` parameter annotations
-    * ``tuple[int, int] | None`` year-range annotations
-    * ``str | tuple[float, ...]`` Union parameters
-    * Complex Pydantic model parameters (``SecretRecord | None``)
-
-    This helper produces a ``functools.wraps``-preserving wrapper whose
-    ``__annotations__`` are identical to the original except that:
-    1. The return annotation is replaced with ``dict`` (all tools return
-       serialisable dicts over the LLM boundary regardless of their Python
-       return type).
-    2. Each non-underscore parameter annotation is passed through
-       ``_simplify_annotation`` to replace unsupported types with
-       schema-compatible equivalents (list[float], str | None, etc.).
-
-    The wrapper delegates all calls to the original function unchanged --
-    behaviour is unaffected; only the schema-generation surface is altered.
-
-    B11: centralised in the adapter so no individual tool file
-    needs to be touched. The open question is resolved
-    by this function -- all 55 registered tools now pass ``from_callable``.
-    """
+    """A ``functools.wraps`` wrapper of ``fn`` with annotations simplified for
+    ``from_callable``: the return becomes ``dict``, and each public parameter
+    passes through :func:`_simplify_annotation`. Calls delegate unchanged."""
     import typing as _typing
 
     @functools.wraps(fn)
@@ -1100,30 +948,15 @@ def _normalize_callable_for_gemini(fn: Any) -> Any:
 
 def _strip_private_params(decl: genai_types.FunctionDeclaration) -> genai_types.FunctionDeclaration:
     """Remove underscore-prefixed parameters from a generated FunctionDeclaration.
-
-     finding: 16+ atomic tools (``compute_zonal_statistics``,
-    ``compute_impervious_surface``, ``extract_landcover_class``,
-    ``clip_raster_to_*``, ``compute_hillshade``/``slope``/``aspect``, etc.)
-    accept underscore-prefixed test-injection kwargs such as
-    ``_storage_client: object | None = None`` and ``_bucket: str | None = None``.
-    These are Python's standard "internal/private" naming convention and exist
-    only so unit tests can pass a mock GCS client -- they must NEVER be visible
-    to the LLM.
-
-    ``FunctionDeclaration.from_callable_with_api_option`` includes them in the
-    generated schema; ``_storage_client: object | None`` becomes a Schema with
-    only ``nullable=True`` (no ``type`` field), which Vertex Gemini rejects
-    with ``400 INVALID_ARGUMENT: schema didn't specify the schema type field``,
-    blocking the ENTIRE tool catalog -- Gemini cannot dispatch any tool. This
-    function surgically removes every underscore-prefixed property from the
-    schema (and from ``required``) before the declaration is returned.
-
-    Bug-class fix (per AGENTS.md "Bundle small fixes; scan for all instances"):
-    the filter is keyed on the underscore prefix, so any future tool with a
-    test-injection kwarg automatically gets the same treatment.
-    """
+    Test-injection kwargs are private by convention and must NEVER be visible to
+    the model; the filter keys on the prefix, so it needs no list of names."""
     if decl.parameters is None or decl.parameters.properties is None:
         return decl
+    # ``from_callable_with_api_option`` includes these in the generated schema,
+    # where a ``_storage_client: object | None`` becomes a Schema carrying only
+    # ``nullable=True`` and no ``type`` field. Vertex rejects that with a 400
+    # INVALID_ARGUMENT that blocks the ENTIRE tool catalog, so the property and
+    # its ``required`` entry are removed here.
     cleaned_props = {
         n: s for n, s in decl.parameters.properties.items() if not n.startswith("_")
     }
@@ -1141,34 +974,9 @@ def _strip_private_params(decl: genai_types.FunctionDeclaration) -> genai_types.
 def build_tool_declarations(
     tool_registry: dict[str, Any],
 ) -> list[genai_types.FunctionDeclaration]:
-    """Build Gemini ``FunctionDeclaration`` objects from the TOOL_REGISTRY.
-
-    Uses ``FunctionDeclaration.from_callable_with_api_option`` so the
-    docstring discipline enforced at registration time ("Use this
-    when:" / "Do NOT use this for:" / param/return descriptions) is the
-    sole source of Gemini's tool-selection signal -- the same text that a
-    human reviewer sees is exactly what Gemini reasons over.
-
-    B11 compliance fix: before calling ``from_callable``, every
-    tool's callable is passed through ``_normalize_callable_for_gemini`` which
-    replaces Gemini-incompatible annotations with schematisable equivalents:
-
-    * ``-> LayerURI`` (or any Pydantic/dataclass return type) → ``-> dict``
-    * ``tuple[float, float, float, float]`` → ``list[float]`` (silently dropped
-      by ``from_callable`` in all SDK versions tested)
-    * ``tuple[float, ...] | None`` → ``list[float] | None``
-    * ``tuple[int, int] | None`` → ``list[int] | None``
-    * ``str | tuple[float, ...]`` → ``str``
-    * ``SomeModel | None`` (Pydantic complex type) → ``str | None``
-
-    Falls back to a docstring-only declaration only if ``from_callable`` still
-    raises after normalisation (should not occur for any tool in the current
-    registry; logged at WARNING, not DEBUG, to make regressions visible).
-
-    Every generated declaration is post-processed through
-    ``_strip_private_params`` to remove underscore-prefixed kwargs (
-    see that helper's docstring for the Vertex 400 trace).
-    """
+    """Build ``FunctionDeclaration`` objects from the tool registry.
+    A tool's registered docstring is the SOLE tool-selection signal the model
+    reasons over; a callable that still fails to schematize falls back to it."""
     declarations: list[genai_types.FunctionDeclaration] = []
     for name, entry in sorted(tool_registry.items()):
         normalised = _normalize_callable_for_gemini(entry.fn)
@@ -1181,7 +989,7 @@ def build_tool_declarations(
         except Exception as exc:  # noqa: BLE001 -- fallback gracefully
             logger.warning(
                 "tool declaration fallback for %r (normalisation did not resolve "
-                "complex signature — file a B11 follow-up): %s",
+                "a complex signature): %s",
                 name,
                 exc,
             )
@@ -1189,8 +997,8 @@ def build_tool_declarations(
             declarations.append(
                 genai_types.FunctionDeclaration(
                     name=name,
-                    # 1 000 chars captures "Use this when:" + "Do NOT" + "Params:"
-                    # sections from well-documented tools.
+                    # 1,000 chars captures the routing block, the refusals and
+                    # the param section of a well-documented tool.
                     description=doc[:1000],
                 )
             )
@@ -1204,13 +1012,8 @@ def build_tool_declarations(
 @dataclass(frozen=True)
 class ModelSettings:
     """Resolved model configuration.
-
-    Only ``model`` is live -- it is the display/telemetry model id surfaced
-    when the active provider does not resolve its own (scripted/replay). The
-    ``project`` / ``location`` / ``use_vertex`` fields are inert carriers (the
-    provider adapters open their own client at the boundary); they default so a
-    caller need only supply ``model``.
-    """
+    Only ``model`` is live -- the display and telemetry id used when the active
+    provider resolves none of its own; the other fields are inert carriers."""
 
     model: str
     project: str = ""
@@ -1220,12 +1023,8 @@ class ModelSettings:
 
 def load_settings() -> ModelSettings:
     """Resolve model settings from the environment.
-
-    - ``TRID3NT_GEMINI_MODEL`` (default: ``DEFAULT_VERTEX_MODEL``) -- the
-      display/telemetry model id. The active provider resolves
-      the real model it calls; this is only the fallback label for the
-      scripted/replay path.
-    """
+    ``TRID3NT_GEMINI_MODEL`` sets only the display and telemetry label; the
+    active provider resolves the real model it calls."""
     return ModelSettings(
         model=os.environ.get("TRID3NT_GEMINI_MODEL", DEFAULT_VERTEX_MODEL),
     )
@@ -1274,10 +1073,7 @@ NEVER_REHYDRATE_FIELDS: frozenset[str] = frozenset({"thinking"})
 
 def _strip_never_rehydrate(entry: dict) -> dict:
     """Return ``entry`` without any ``NEVER_REHYDRATE_FIELDS`` key.
-
-    Identity (no copy) when the entry carries none of the guarded keys -- the
-    common path stays allocation-free. Never mutates the caller's dict.
-    """
+    Identity (no copy) when none is present, and never mutates the caller."""
     if not any(k in entry for k in NEVER_REHYDRATE_FIELDS):
         return entry
     return {k: v for k, v in entry.items() if k not in NEVER_REHYDRATE_FIELDS}
@@ -1285,25 +1081,8 @@ def _strip_never_rehydrate(entry: dict) -> dict:
 
 def _decode_parts_blob(blob: Any) -> list[genai_types.Part] | None:
     """Decode a persisted ``parts_blob`` into a list of ``Part``.
-
-    The ``parts_blob`` schema on a chat_history entry is a JSON byte string
-    (or pre-decoded dict / list) carrying enough fidelity to reconstruct the
-    exact ``Part`` objects from the prior turn -- including ``function_call``,
-    ``function_response``, and ``thought_signature`` -- so a replayed turn
-    survives Gemini 3's signature-mismatch check.
-
-    Wire shape (one entry per part):
-        {"text": "..."}                         # text-only part
-        {"function_call": {"name": ..., "id": ..., "args": {...}},
-         "thought_signature_b64": "..."}        # Gemini 3 model turn
-        {"function_response": {"name": ..., "id": ..., "response": {...}}}
-
-    ``thought_signature`` is persisted base64-encoded (JSON cannot carry raw
-    bytes); decoded back to bytes here. Returns ``None`` if the blob is
-    missing/empty/malformed so the caller can fall back to the text path --
-    we never raise on a malformed history entry (a single bad row would
-    otherwise break the whole conversation).
-    """
+    ``None`` when the blob is missing, empty or malformed: a single bad history
+    row must never raise and break the whole conversation."""
     import base64 as _b64
     import json as _json
 
@@ -1330,6 +1109,15 @@ def _decode_parts_blob(blob: Any) -> list[genai_types.Part] | None:
     if not isinstance(raw, list) or not raw:
         return None
 
+    # Wire shape, one entry per part:
+    #   {"text": "..."}                                  text-only part
+    #   {"function_call": {"name", "id", "args"},
+    #    "thought_signature_b64": "..."}                 model turn
+    #   {"function_response": {"name", "id", "response"}}
+    # ``thought_signature`` is persisted base64-encoded (JSON cannot carry raw
+    # bytes) and decoded back to bytes here. The blob carries enough fidelity
+    # to rebuild the exact Parts, so a replayed turn survives a provider's
+    # signature-mismatch check.
     parts: list[genai_types.Part] = []
     for entry in raw:
         if not isinstance(entry, dict):
@@ -1375,27 +1163,9 @@ def build_contents_from_history(
     user_text: str,
     chat_history: list[dict] | None = None,
 ) -> list[genai_types.Content]:
-    """Convert ``chat_history`` + a new ``user_text`` into Gemini ``Content``s.
-
-    Chat history entries are dicts. The supported shapes are:
-
-    * Text-only (legacy): ``{"role": ..., "text": "..."}`` -- collapsed into a
-      single text Part. ``role`` is one of ``user`` / ``agent`` / ``assistant``
-      / ``model``; Gemini only understands ``user`` / ``model`` (agent and
-      assistant collapse to ``model``).
-    * Full-fidelity: ``{"role": ..., "parts_blob": <bytes|str|list>,
-      "text": "..." (optional fallback)}`` -- when ``parts_blob`` decodes
-      cleanly, the Content uses the reconstructed Parts (which may carry
-      function_call, function_response, or thought_signature). This shape is
-      what the multi-turn driver MUST emit to round-trip Gemini 3's
-      thought_signature through chat history.
-
-    The ``parts_blob`` path takes precedence: when present and decodable, it
-    is used instead of reconstructing from text. Empty-text legacy entries
-    are dropped (the persistence layer writes empty rows for the LLM's
-    reply-turn marker; those carry no signal for Gemini). The new user_text
-    is always appended as the terminal ``user`` turn.
-    """
+    """Convert ``chat_history`` plus a new ``user_text`` into ``Content``s.
+    A decodable ``parts_blob`` wins over the text shape; an empty-text row is
+    dropped, and ``user_text`` is always the terminal ``user`` turn."""
     contents: list[genai_types.Content] = []
     if chat_history:
         for entry in chat_history:
@@ -1405,9 +1175,9 @@ def build_contents_from_history(
             entry = _strip_never_rehydrate(entry)
             role = entry.get("role", "user")
             gem_role = "model" if role in ("agent", "assistant", "model") else "user"
-            # B10: prefer parts_blob when present -- it carries function_call /
+            # Prefer parts_blob when present -- it carries function_call and
             # function_response Parts plus any thought_signature, so the
-            # replayed turn survives Gemini 3's signature-mismatch check.
+            # replayed turn survives a provider's signature-mismatch check.
             blob = entry.get("parts_blob")
             decoded = _decode_parts_blob(blob) if blob is not None else None
             if decoded:
@@ -1432,7 +1202,7 @@ def build_contents_from_history(
 
 
 # Default cap on the number of persisted chat rows rehydrated into the live
-# Gemini context on a Case reopen (J8). A long-running Case
+# model context on a Case reopen. A long-running Case
 # can accumulate hundreds of user/agent/tool rows; replaying all of them every
 # reopen turn would blow the context window (and the per-turn cost). We keep
 # the MOST RECENT rows (the tail carries the relevant recent state -- what the
@@ -1444,17 +1214,8 @@ REHYDRATE_HISTORY_CAP = 40
 
 def _summarize_tool_row_for_history(content: str, tool_card: Any) -> str:
     """Collapse a persisted ``role="tool"`` row into one model-side text line.
-
-    the persisted store keeps tool turns as a ``ToolCardRecord`` (typed
-    ``tool_card`` + a JSON-string mirror in ``content``); the full-fidelity
-    function_call / function_response Parts are NOT persisted, so we cannot
-    rebuild a real tool turn. A short text transcript line is enough to stop
-    recompute -- the model only needs to know the tool already ran and how it
-    came out. Shape: ``[tool <name> completed]`` / ``[tool <name> failed]``.
-
-    Falls back to parsing ``content`` (the JSON mirror) when the typed
-    ``tool_card`` is absent (non-contract consumers).
-    """
+    The full function_call / function_response Parts are NOT persisted, so
+    ``[tool <name> completed|failed]`` is all that stands against a recompute."""
     name: str | None = None
     state: str | None = None
     # Prefer the typed record (duck-typed: ToolCardRecord or a dict).
@@ -1482,11 +1243,8 @@ def _summarize_tool_row_for_history(content: str, tool_card: Any) -> str:
 
 def _format_layer_bbox(bbox: Any) -> str | None:
     """Compact ``[lon_min, lat_min, lon_max, lat_max]`` for a layer line.
-
-    Returns a short rounded string for a valid 4-tuple bbox, else ``None`` (most
-    persisted ``ProjectLayerSummary`` rows carry no bbox, so the line simply
-    omits it). The rounding keeps the [Case state] note compact.
-    """
+    ``None`` for anything that is not a valid 4-tuple; the rounding keeps the
+    Case-state note short."""
     if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
         return None
     try:
@@ -1497,15 +1255,9 @@ def _format_layer_bbox(bbox: Any) -> str | None:
 
 
 def _format_aoi_bbox_line(case_bbox: Any) -> str | None:
-    """Format the Case AOI bbox as a single durable instruction line.
-
-    ``case_bbox`` is the Case's persisted ``[lon_min, lat_min, lon_max,
-    lat_max]`` (``CaseSummary.bbox``). Returns ``None`` for missing / malformed
-    bboxes. This line is the AOI ANCHOR that must survive history capping --
-    long Cases drop the head user turn that named the place, so without an
-    explicit bbox a follow-up that fetches fresh data (e.g. a DEM for a
-    hillshade) loses the extent and re-geocodes / mis-scopes (panel-flagged).
-    """
+    """Format the Case AOI bbox as one durable instruction line, or ``None``.
+    The AOI ANCHOR that must survive history capping: a long Case drops the head
+    turn that named the place, and a follow-up fetch would then re-geocode."""
     if not isinstance(case_bbox, (list, tuple)) or len(case_bbox) != 4:
         return None
     try:
@@ -1524,26 +1276,13 @@ def build_layers_present_note(
     loaded_layers: list[dict] | None,
     case_bbox: Any = None,
 ) -> str | None:
-    """Build the compact "Case state" model turn: layers + AOI bbox.
-
-    ``loaded_layers`` is the persisted ``CaseSessionState.loaded_layers`` --
-    a list of ``ProjectLayerSummary`` ``model_dump(mode="json")`` dicts. We
-    surface ``layer_id`` / ``name`` / ``layer_type`` per entry AND the
-    reusable ``handle`` (== the ``layer_id`` per the layer-handle indirection
-    contract) plus the underlying ``uri`` (``layer_uri``) so the model can
-    pass an already-produced layer STRAIGHT into a tool param (e.g.
-    ``compute_blended_composite`` base/overlay, or any ``*_uri`` input)
-    instead of re-fetching or recomputing it (F54). ``case_bbox``
-    (``CaseSummary.bbox``) is appended as a durable AOI anchor so the extent
-    survives history capping (follow-ups reuse the original AOI).
-    Returns ``None`` only when there is neither a layer nor a usable bbox.
-    Kept deliberately short.
-    """
-    # enrich each line with enough IDENTITY that the model can
-    # recognize an existing RESULT (so it never re-runs the solver that made it):
+    """Build the compact "Case state" model turn: layers plus the AOI bbox.
+    ``None`` only when there is neither a layer nor a usable bbox."""
+    # Each line carries enough IDENTITY for the model to recognize an existing
+    # RESULT and not re-run the solver that made it:
     #   - role: RESULT (a primary simulation / analysis output) vs INPUT
     #     (a fetched / context layer used as a solver input);
-    #   - the producing scenario/family when recognizable from the layer_id
+    #   - the producing scenario family when recognizable from the layer_id
     #     (flood-depth, plume, ...) so "a flood-depth RESULT for this AOI is
     #     already here" and "the landcover/water-mask for this AOI is already
     #     here" read unambiguously;
@@ -1558,16 +1297,15 @@ def build_layers_present_note(
         layer_id = layer.get("layer_id") or "?"
         name = layer.get("name") or layer_id
         layer_type = layer.get("layer_type") or "?"
-        # F54: the layer_id IS the reusable handle (layer-handle indirection
-        # block in the system prompt); surface it explicitly as ``handle=``
-        # and append the underlying ``uri`` when present so the model can
-        # hand the existing artifact straight to a tool.
+        # The layer_id IS the reusable handle; it is surfaced explicitly as
+        # ``handle=`` alongside the underlying ``uri`` so the model can hand an
+        # existing artifact straight to a tool instead of recomputing it.
         uri = layer.get("uri")
         role_raw = layer.get("role")
         scenario_type = layer_id_scenario_type(layer_id, name)
         # An expensive-simulation output (recognized scenario family) OR a
         # ``role="primary"`` layer is a RESULT; everything else is an INPUT /
-        # context layer. RESULT labelling is what stops the re-run. F96: a
+        # context layer. RESULT labelling is what stops the re-run. A
         # recognized FETCHED layer (buildings / landcover / dem / roads / ...) is an
         # INPUT tagged with its KIND so a fit / resize / re-show follow-up
         # reuses it (compute_layer_bounds on its handle) instead of re-fetching
@@ -1633,38 +1371,9 @@ def rehydrate_history_from_case(
     cap: int = REHYDRATE_HISTORY_CAP,
     case_bbox: Any = None,
 ) -> tuple[list[dict], int]:
-    """Convert a Case's persisted chat into the ``chat_history`` dict shape.
-
-    On a Case reopen the server resets ``state.chat_history = []`` (the
-     cross-case clean-slate). Without rehydration the model has no
-    memory of prior work and recomputes (e.g. a follow-up hillshade ask in the
-    Fort Myers flood Case re-runs the whole flood). This converts the PERSISTED
-    PER-CASE messages -- the same data that drives the visible chat replay --
-    into the lightweight TEXT-turn dict shape ``build_contents_from_history``
-    consumes, so the live LLM regains that memory.
-
-    Args:
-        chat_messages: ordered ``CaseChatMessage`` list (oldest-first) for THIS
-            Case. Each has ``role`` in {user, agent, system, tool}, a ``content``
-            string, and (for tool rows) a ``tool_card``. Duck-typed so a dict
-            shape also works.
-        loaded_layers: the Case's persisted ``loaded_layers`` (used to build the
-            layers-present note appended as the LAST history turn).
-        cap: bound on the number of REPLAYED rows (tail-kept). Defaults to
-            ``REHYDRATE_HISTORY_CAP``.
-
-    Returns:
-        ``(history, dropped)`` where ``history`` is the dict list ready for
-        ``build_contents_from_history`` (role/text turns; tool rows collapsed
-        to a model-side text line; layers-present note appended last as a
-        ``model`` turn) and ``dropped`` is how many head rows were elided by
-        the cap (for the caller to log).
-
-    Guardrail: this function ONLY ever sees ONE Case's persisted
-    messages (the caller passes ``session_state.chat_history`` for the opened
-    ``case_id``). The persisted store is keyed by Case, so this is inherently
-    case-correct and cannot reintroduce the in-memory cross-case leak.
-    """
+    """Convert ONE Case's persisted chat into the ``chat_history`` dict shape.
+    Returns ``(history, dropped)``: only the ``cap`` most recent rows are
+    replayed, and the layers-present note is appended as the last model turn."""
     rows = list(chat_messages or [])
     dropped = 0
     if cap >= 0 and len(rows) > cap:
@@ -1674,10 +1383,8 @@ def rehydrate_history_from_case(
     history: list[dict] = []
     for msg in rows:
         # NEVER-REHYDRATE rule: read ONLY role / content / tool_card off the
-        # persisted row. The ``thinking`` field (reasoning-channel text,
-        # display replay only) is deliberately never read here -- see
-        # ``NEVER_REHYDRATE_FIELDS`` and the regression test pinning that
-        # thinking text never reaches LLM-bound contents.
+        # persisted row. The ``thinking`` field is reasoning-channel text for
+        # display replay and is deliberately never read here.
         role = getattr(msg, "role", None)
         content = getattr(msg, "content", None)
         tool_card = getattr(msg, "tool_card", None)
@@ -1698,10 +1405,10 @@ def rehydrate_history_from_case(
             continue
         if role in ("agent", "assistant", "model", "system"):
             if content.strip():
-                # ``agent`` collapses to ``model`` inside
-                # build_contents_from_history; ``system`` has no native Gemini
-                # role, so fold it to model-side context text (safer for
-                # routing than re-injecting it as a fresh ``user`` instruction).
+                # ``agent`` collapses to ``model`` in the contents builder;
+                # ``system`` has no native role there, so it folds to
+                # model-side context text -- safer for routing than
+                # re-injecting it as a fresh ``user`` instruction.
                 history.append({"role": "agent", "text": content})
             continue
         # Unknown role: skip rather than guess.
@@ -1715,16 +1422,8 @@ def rehydrate_history_from_case(
 
 def encode_parts_blob(parts: list[genai_types.Part]) -> bytes:
     """Encode a list of ``Part`` to the ``parts_blob`` wire shape.
-
-    The inverse of ``_decode_parts_blob``. Used by callers that want to
-    persist full-fidelity Content turns into ``chat_history`` for replay
-    through Gemini (preserving function_call/function_response Parts and
-    Gemini 3 thought_signature bytes).
-
-    Encoded as a JSON byte string so it round-trips through MongoDB / JSON
-    persistence; ``thought_signature`` is base64-encoded since JSON cannot
-    carry raw bytes.
-    """
+    A JSON byte string, so it round-trips through JSON persistence;
+    ``thought_signature`` is base64-encoded, since JSON cannot carry bytes."""
     import base64 as _b64
     import json as _json
 
@@ -1758,12 +1457,8 @@ def encode_parts_blob(parts: list[genai_types.Part]) -> bytes:
 
 def _coerce_to_summary_value(value: Any, depth: int = 0) -> Any:
     """Recursive helper for ``summarize_tool_result``.
-
-    Walks the tool-result structure; converts non-JSON-native types to strings,
-    truncates long lists and strings, drops nested dicts past depth 2.  The
-    goal isn't fidelity -- it's giving Gemini enough signal to decide the next
-    call without sending it megabytes of GeoJSON.
-    """
+    Non-JSON-native types become strings, long lists and strings truncate, and
+    a nested dict past depth 2 collapses: signal, never fidelity."""
     if value is None or isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
@@ -1801,30 +1496,8 @@ def _coerce_to_summary_value(value: Any, depth: int = 0) -> Any:
 
 def _classify_error(error: BaseException) -> tuple[str, bool]:
     """Derive ``(error_code, retryable)`` for a tool-dispatch exception.
-
-    typed tool exceptions across the registry already declare
-    ``error_code`` (str) and ``retryable`` (bool) class attributes
-    (``HRSLError``, ``MTBSError``, ``MRMSError``,
-    ``FIRMSError``, ``GTSMError``,
-    ``LANDFIREError``, ``OSMRoadsError``,
-    ``GOESError``, ``CompFireError``,
-    ``ColoredReliefError``, ``NIFCError``, ``NWSAlertsError``, etc.).
-    Harvest those directly so the function_response the multi-turn loop
-    feeds back to Gemini carries the retry signal the tool already knew.
-
-    For untyped exceptions, fall back to a conservative heuristic:
-
-    - ``asyncio.TimeoutError`` / ``TimeoutError``  → retryable
-    - ``ConnectionError`` / ``OSError`` (network-ish) → retryable
-    - ``ValueError`` / ``TypeError`` / ``KeyError`` / ``AttributeError``
-      (programmer / arg shape error) → NOT retryable
-    - everything else (``RuntimeError`` and friends) → retryable
-      (Gemini reads ``message`` and decides; the cap is
-      ``MAX_TURN_ITERATIONS`` either way).
-
-    Never raises -- even pathological exceptions yield a stable dict shape
-    so the multi-turn loop keeps going.
-    """
+    A typed tool exception's own ``error_code`` / ``retryable`` attributes win;
+    this NEVER raises, so the multi-turn loop always gets a stable pair."""
     # 1. Honour typed-tool exception class attributes when present.
     code_attr = getattr(error, "error_code", None)
     retry_attr = getattr(error, "retryable", None)
@@ -1835,7 +1508,10 @@ def _classify_error(error: BaseException) -> tuple[str, bool]:
     if isinstance(retry_attr, bool):
         return code, retry_attr
 
-    # 2. Heuristic fallback for untyped exceptions.
+    # 2. Heuristic fallback for an untyped exception: a timeout or a
+    # network-ish OSError is retryable; a ValueError / TypeError / KeyError /
+    # AttributeError is an argument-shape or programmer error and is NOT;
+    # everything else is retryable, capped either way by MAX_TURN_ITERATIONS.
     import asyncio as _asyncio
 
     if isinstance(error, (_asyncio.TimeoutError, TimeoutError)):
@@ -1844,22 +1520,13 @@ def _classify_error(error: BaseException) -> tuple[str, bool]:
         return code, True
     if isinstance(error, (ValueError, TypeError, KeyError, AttributeError)):
         return code, False
-    # Default: retryable so Gemini gets one more shot (capped by
-    # MAX_TURN_ITERATIONS).
     return code, True
 
 
 def _user_narration_message(tool_name: str, fallback: str) -> str:
-    """Concise user-actionable text for a credential/auth-config failure.
-
-    Reuses the credential registry's own copy (``CredentialProvider.
-    default_message`` -- already written as "what happened + what the user
-    can do") when the tool has a registered or generically-derivable
-    provider; falls back to appending a short, honest pointer to ``fallback``
-    (the original exception text, already truncated to 500 chars by the
-    caller) when the registry can't help. Never raises -- degrades to
-    ``fallback``.
-    """
+    """Concise user-actionable text for a credential or auth-config failure.
+    Reuses the credential registry's own copy when the tool has a provider;
+    NEVER raises, degrading to ``fallback`` with an honest pointer."""
     try:
         from trid3nt_server.credentials.credential_registry import (
             generic_provider_for_tool,
@@ -1880,16 +1547,8 @@ def _user_narration_message(tool_name: str, fallback: str) -> str:
 
 def _summarize_chart_emission(tool_name: str, result: dict[str, Any]) -> dict[str, Any]:
     """Compact summary for a chart-emission tool result.
-
-    The full ``vega_lite_spec`` (with inline data rows) is intentionally
-    DROPPED here -- it already went to the client on the ``chart-emission`` WS
-    envelope. Gemini receives only what it needs to narrate: the chart id, the
-    title, the one-line caption (which already carries the key tool-computed
-    numbers -- e.g. "1,234 structures · 567 damaged"), the chart's mark type,
-    and the number of data rows. This keeps the function_response small and
-    pushes narration to source the numbers from the caption, not free text
-    (Invariant 1 -- determinism boundary).
-    """
+    The full ``vega_lite_spec`` is DROPPED -- it already reached the client on
+    its own envelope -- so narration must source its numbers from the caption."""
     spec = result.get("vega_lite_spec")
     spec = spec if isinstance(spec, dict) else {}
     mark = spec.get("mark")
@@ -1927,21 +1586,13 @@ def _summarize_chart_emission(tool_name: str, result: dict[str, Any]) -> dict[st
 
 
 def _failed_modeled_envelope_error_code(result: dict[str, Any]) -> str:
-    """Extract the threaded failure code from a failed "modeled" envelope dict.
-
-     (HONESTY FLOOR). A ``_build_failed_envelope`` exit threads its
-    error code into TWO seams so it survives ``_coerce_to_summary_value``'s
-    depth>=2 dict-collapse:
-
-    1. (B2, depth 0) ``workflow_name == "<name>:FAILED:<CODE>"`` -- a top-level
-       string field, always visible in the summary.
-    2. (legacy, depth 2) ``flood.metrics.solver_version == "failed:<CODE>"`` --
-       and the equivalent ``seismic``/other-hazard ``metrics.solver_version``.
-
-    Prefer the depth-0 ``workflow_name`` seam (it is the one the LLM actually
-    sees post-coercion); fall back to the buried ``solver_version`` seam; else
-    ``"MODEL_RUN_PRODUCED_NO_LAYERS"``.
-    """
+    """Extract the threaded failure code from a failed "modeled" envelope.
+    Prefers the depth-0 ``workflow_name`` seam, the one that survives the
+    summary coercion; else the buried ``metrics.solver_version`` seam."""
+    # A failed envelope threads its error code into TWO seams so it survives
+    # ``_coerce_to_summary_value``'s depth>=2 dict collapse: the top-level
+    # ``workflow_name == "<name>:FAILED:<CODE>"``, and the buried
+    # ``<hazard>.metrics.solver_version == "failed:<CODE>"``.
     wf = result.get("workflow_name")
     if isinstance(wf, str) and ":FAILED:" in wf:
         code = wf.split(":FAILED:", 1)[1].strip()
@@ -1965,18 +1616,12 @@ def _failed_modeled_envelope_error_code(result: dict[str, Any]) -> str:
 
 
 def _modeled_envelope_is_failure_tagged(result: dict[str, Any]) -> bool:
-    """True if a "modeled" envelope carries an explicit failure marker.
-
-     R2 (MUST-FIX 1/2a). Two seams mark a deterministically-failed
-    composer run, regardless of whether a ``solver_run_id`` was already
-    appended before the failure (SOLVER_FAILED/SOLVER_TIMEOUT append at
-    model_flood_scenario.py:777 BEFORE failing; POSTPROCESS_FAILED likewise):
-
-    1. (depth 0) ``workflow_name`` contains ``":FAILED:"`` -- promoted by
-       ``_build_failed_envelope`` and surviving ``_coerce_to_summary_value``.
-    2. (depth 2) any hazard payload's ``metrics.solver_version`` starts with
-       ``"failed:"`` -- the legacy threading seam.
-    """
+    """True when a "modeled" envelope carries an explicit failure marker.
+    A run can append its ``solver_run_id`` BEFORE failing, so the marker, not
+    the presence of a run id, is what decides."""
+    # Two seams carry it: the depth-0 ``workflow_name`` containing ":FAILED:",
+    # which survives ``_coerce_to_summary_value``, and any hazard payload's
+    # depth-2 ``metrics.solver_version`` starting with "failed:".
     wf = result.get("workflow_name")
     if isinstance(wf, str) and ":FAILED:" in wf:
         return True
@@ -1994,14 +1639,8 @@ def _modeled_envelope_is_failure_tagged(result: dict[str, Any]) -> bool:
 
 def _extract_flood_metrics_phrase(result: dict[str, Any]) -> str:
     """Render whatever flood metrics exist into an honest narration fragment.
-
-     R2 (MUST-FIX 2b). On a solve-succeeded-but-publish/render-dropped
-    run the LLM gets ``status="error"`` with ``error_code=NO_RENDERABLE_LAYER``
-    but the simulation DID produce real numbers -- surface them so the agent can
-    still narrate the flood honestly ("flooded area X, max depth Y") even though
-    the result layer never reached the map. Degrade gracefully: emit only the
-    fields that are present; return ``""`` when none are.
-    """
+    A solve that succeeded but never reached the map still produced real
+    numbers; only present fields are emitted, and ``""`` when none are."""
     metrics: dict[str, Any] | None = None
     flood = result.get("flood")
     if isinstance(flood, dict):
@@ -2060,11 +1699,8 @@ def _published_scenario_tool_names() -> frozenset[str]:
 
 def _layer_uri_is_published(result: Any) -> bool:
     """True when ``result`` duck-types as a LayerURI carrying a store uri.
-
-    One store, one scheme: a layer has exactly ONE uri and the map reads THAT,
-    so an ``s3://`` COG on a scenario return IS the published face. An external
-    http(s) address is somebody else's service, not a layer this stack put on
-    the map."""
+    One store, one scheme: an ``s3://`` uri IS the published face, while an
+    external http(s) address is somebody else's service, not a layer here."""
     if isinstance(result, (dict, str, bytes)) or result is None:
         return False
     uri = getattr(result, "uri", None)
@@ -2074,16 +1710,9 @@ def _layer_uri_is_published(result: Any) -> bool:
 
 
 def _extract_synthetic_inputs(result: Any) -> list[dict[str, Any]]:
-    """Pull the structured ``synthetic_inputs`` provenance list off a tool result,
-    wherever it rides (provenance-chain wave).
-
-    Checks, in order: a top-level attribute (a ``LayerURI`` / result model), a
-    dict ``"synthetic_inputs"`` key, the result's primary layer
-    (``.layers[0]`` / ``.asr_layer`` / ``.<x>_layer`` style single-layer field),
-    and a nested ``summary``/``derived_params`` dict. Returns a list of plain
-    dicts (``model_dump``-style) or ``[]`` when none is declared. Never raises --
-    a missing field on any shape degrades to ``[]``.
-    """
+    """Pull the structured ``synthetic_inputs`` provenance list off a tool result.
+    Returns plain dicts, or ``[]`` when none is declared; NEVER raises, so a
+    missing field on any result shape degrades to ``[]``."""
 
     def _as_dicts(value: Any) -> list[dict[str, Any]]:
         if not isinstance(value, (list, tuple)) or not value:
@@ -2139,14 +1768,9 @@ def _extract_synthetic_inputs(result: Any) -> list[dict[str, Any]]:
 
 
 def _hoist_synthetic_inputs(payload: dict[str, Any], result: Any) -> None:
-    """When a tool result carries structured input provenance, hoist a compact
-    one-line ``assumptions_summary`` (+ the structured ``synthetic_inputs`` list)
-    to the TOP of the function_response so the LLM reliably narrates which inputs
-    are demo defaults vs site-derived (concise-chat: one line, never a table).
-
-    Mirrors the ``fallback_note`` hoist -- a no-op when the result declares no
-    provenance, so every existing result is byte-identical.
-    """
+    """Hoist a one-line ``assumptions_summary`` and its structured list to the
+    TOP of the function_response, so which inputs are defaults versus
+    site-derived is narrated as ONE line and never a table. A no-op when none."""
     from trid3nt_contracts.common import render_assumptions_line
 
     entries = _extract_synthetic_inputs(result)
@@ -2162,15 +1786,9 @@ def _hoist_synthetic_inputs(payload: dict[str, Any], result: Any) -> None:
 def _summarize_published_scenario_layer(
     tool_name: str, result: Any
 ) -> dict[str, Any]:
-    """Compact function_response for a scenario wrapper that returned an
-    ALREADY-PUBLISHED, styled LayerURI (job duplicate-flood-layer, PRIMARY fix).
-
-    Carries explicit ``published`` / ``on_map`` / ``publish_status`` flags so the
-    LLM reliably recognizes the layer is on the map and does NOT issue a
-    redundant display request for it. The metadata the loop needs to narrate +
-    pass the handle is kept: layer_id (the canonical handle), name, layer_type,
-    uri, bbox.
-    """
+    """Compact function_response for an ALREADY-PUBLISHED, styled LayerURI.
+    Explicit ``published`` / ``on_map`` / ``publish_status`` flags, so the model
+    does not issue a redundant display request for a layer already on the map."""
     layer_id = getattr(result, "layer_id", None)
     uri = getattr(result, "uri", None)
     bbox = getattr(result, "bbox", None)
@@ -2210,34 +1828,15 @@ def summarize_tool_result(
     error: BaseException | None = None,
 ) -> dict[str, Any]:
     """Compact a tool result into the ``function_response.response`` payload.
-
-    Per the kickoff: SUMMARY, not full result.  Gemini reads this between
-    turns to decide its next move; it needs LayerURI metadata, key metrics,
-    error codes, and counts -- not the raw GeoJSON bytes.
-
-    Conventions enforced:
-
-    * Errors become
-      ``{"status": "error", "error_code": str, "message": str, "retryable": bool, "error_type": str}``.
-      ``error_code`` + ``retryable`` are harvested from the tool's typed
-      exception class when present, else derived
-      from the exception class name / runtime kind via ``_classify_error``.
-      Gemini reads this and either retries with corrected args, calls a
-      different tool, or narrates the failure honestly. The
-      ``MAX_TURN_ITERATIONS`` cap protects against runaway retry.
-      The legacy ``"error"`` field is retained as an alias of ``message``
-      so older tests / consumers don't break.
-    * ``None`` results (the ``_invoke_tool_via_emitter`` path returns ``None``
-      on payload-warning skip, TOOL_NOT_FOUND, etc.) become
-      ``{"status": "no_result"}``.
-    * Dict results are walked through ``_coerce_to_summary_value`` and then
-      JSON-clipped to ``_FUNCTION_RESPONSE_CHAR_BUDGET`` chars.
-    * Primitive / string results become ``{"result": value}``.
-    * The final dict always carries ``"tool"`` and ``"status"`` keys so the
-      LLM has a stable shape to reason over.
-    """
+    A SUMMARY, never the raw result: metadata, key metrics, error codes and
+    counts. The dict always carries ``"tool"`` and ``"status"``."""
     import json as _json
 
+    # An error becomes {status: "error", error_code, message, retryable,
+    # error_type}. The code and retryability are harvested from the tool's own
+    # typed exception when it declares them, so the model can retry with
+    # corrected args, pick another tool, or narrate the failure honestly;
+    # ``MAX_TURN_ITERATIONS`` caps a runaway retry either way.
     if error is not None:
         from trid3nt_server.gates.actionability import classify_actionability
 
@@ -2245,13 +1844,11 @@ def summarize_tool_result(
         message = str(error)[:500]
         actionability = classify_actionability(tool_name, error)
         if actionability == "operator":
-            # Contract violation / internal exception (observability/
-            # retention batch item 3): the model gets a terse, honest
-            # acknowledgment ONLY -- nothing here for it to act on. The FULL
-            # exception already reached the log at the dispatch site
-            # (server.py's tool-dispatch except-block calls
-            # logger.exception(...) before summarize_tool_result runs), and
-            # error_code/actionability still ride the telemetry record.
+            # Contract violation or internal exception: the model gets a
+            # terse, honest acknowledgment ONLY -- nothing here for it to act
+            # on. The FULL exception already reached the log at the dispatch
+            # site, and error_code / actionability still ride the telemetry
+            # record.
             message = "internal error, logged"
         elif actionability == "user":
             # Missing-credential/auth-config: a concise narration directive
@@ -2272,12 +1869,10 @@ def summarize_tool_result(
             "error_type": type(error).__name__,
             "actionability": actionability,
         }
-        # Typed no-data / recovery contract (2026-07-13): a tool exception
-        # may carry a ``suggestions`` sequence of short recovery options
-        # (e.g. ``EarthquakesNoEventsError``: widen window / lower
-        # min_magnitude). Surface it as a STRUCTURED list so a small model
-        # relays the options to the user instead of inventing a next step
-        # (live incident: 0-event fetch -> a fabricated layer handle).
+        # Typed no-data / recovery contract: a tool exception may carry a
+        # ``suggestions`` sequence of short recovery options. It is surfaced as
+        # a STRUCTURED list so a small model relays the options rather than
+        # inventing a next step.
         raw_suggestions = getattr(error, "suggestions", None)
         if isinstance(raw_suggestions, (list, tuple)):
             suggestions = [str(s) for s in raw_suggestions if str(s).strip()]
@@ -2302,13 +1897,12 @@ def summarize_tool_result(
         return _summarize_published_scenario_layer(tool_name, result)
 
     # chart-emission results carry a full
-    # Vega-Lite spec with INLINE data rows (up to ~2000). Gemini must narrate
-    # from the chart's numbers, not re-read the inline rows -- and the spec
-    # could blow the char budget. Strip ``vega_lite_spec`` and surface a
+    # Vega-Lite spec with INLINE data rows (up to ~2000). The model must
+    # narrate from the chart's numbers, not re-read the inline rows -- and the
+    # spec could blow the char budget. Strip ``vega_lite_spec`` and surface a
     # COMPACT summary (chart_id / title / caption / chart type / data-shape) so
     # the function_response stays small and narration-focused. The FULL spec
-    # already went to the client on the ``chart-emission`` WS envelope
-    # (server.py ``_maybe_emit_chart``).
+    # already reached the client on the ``chart-emission`` envelope.
     if (
         isinstance(result, dict)
         and result.get("envelope_type") == "chart-emission"
@@ -2320,10 +1914,9 @@ def summarize_tool_result(
     # (status / result descriptor / stdout tail / truncated / duration) PLUS the
     # full ``code-exec-result`` wire payload under ``_code_exec_result`` (which
     # carries the larger 16-KiB stdout/stderr fields). The full payload already
-    # went to the client on the ``code-exec-result`` WS envelope
-    # (server.py ``_maybe_emit_code_exec_result``); strip it from the
-    # function_response so Gemini narrates from the compact summary + structured
-    # ``result``, not the raw logs.
+    # already reached the client on the ``code-exec-result`` envelope; it is
+    # stripped from the function_response so narration runs off the compact
+    # summary and the structured ``result``, not the raw logs.
     if isinstance(result, dict) and "_code_exec_result" in result:
         compact = {k: v for k, v in result.items() if k != "_code_exec_result"}
         return {
@@ -2332,38 +1925,26 @@ def summarize_tool_result(
             "result": _coerce_to_summary_value(compact),
         }
 
-    # a "modeled" composer result MUST NOT be stamped
-    # status="ok" while carrying an EMPTY ``layers`` list -- a modeled run with
-    # no renderable layer is exactly NATE's "no flood layer but said ok"
-    # symptom. This classifier lives at the single chokepoint every tool result
-    # passes through and keys off the STRUCTURE of the result (not on whether an
-    # exception was raised), so it is root-cause-agnostic.
+    # NET GUARANTEE: envelope_type=="modeled" AND an EMPTY ``layers`` list is
+    # NEVER stamped status="ok". Two sub-cases:
     #
-    # NET GUARANTEE (R2): envelope_type=="modeled" AND empty layers ->
-    # NEVER status="ok". Two sub-cases:
-    #
-    #   (a) FAILURE-TAGGED -- the depth-0 ``workflow_name`` carries ":FAILED:" OR
-    #       any payload's ``metrics.solver_version`` starts with "failed:". This
-    #       covers the _build_failed_envelope non-runs (precip-fetcher die,
-    #       deck build gate, solver-dispatch failure) AND the dispatched-then-
-    #       failed exits (SOLVER_FAILED / SOLVER_TIMEOUT / POSTPROCESS_FAILED)
-    #       which append a solver_run_id BEFORE failing -- so the R1 "no
-    #       solver_run_ids" gate let them slip through as ok. Surface
-    #       status="error" with the parsed code, REGARDLESS of solver_run_ids.
-    #
+    #   (a) FAILURE-TAGGED -- the depth-0 ``workflow_name`` carries ":FAILED:",
+    #       or a payload's ``metrics.solver_version`` starts with "failed:".
+    #       Surface status="error" with the parsed code, REGARDLESS of any
+    #       solver_run_id: a run can append one before failing.
     #   (b) NOT FAILURE-TAGGED -- the solve COMPLETED (metrics present, no
-    #       ":FAILED:" tag) but the result layer was dropped at publish/render
-    #       (model_flood_scenario.py:864 AWS publish-drop path). Surface
-    #       status="error", error_code="NO_RENDERABLE_LAYER", and INCLUDE the
-    #       available flood metrics in the message so the agent can still
-    #       narrate the numbers honestly even though nothing reached the map.
+    #       ":FAILED:" tag) but the result layer was dropped at publish or
+    #       render. Surface status="error", error_code="NO_RENDERABLE_LAYER",
+    #       and INCLUDE the available metrics so the numbers can still be
+    #       narrated honestly even though nothing reached the map.
     #
-    # _coerce_to_summary_value collapses the depth-2 metrics dict to bare key
-    # names, so without this detector the LLM received {status:ok, layers:[],
-    # metrics:{dict keys=...}} and honestly narrated "done". Do NOT broaden to
-    # "observed"/"fetched" tools: those legitimately return non-layer data
-    # (scalars, tables, point queries). A modeled envelope WITH a non-empty
-    # layers list reads as status="ok" (success path unchanged).
+    # ``_coerce_to_summary_value`` collapses the depth-2 metrics dict to bare
+    # key names, so without this detector the model sees {status:ok, layers:[],
+    # metrics:{dict keys=...}} and honestly narrates "done". The check keys off
+    # the STRUCTURE of the result, not on whether an exception was raised, so
+    # it is root-cause-agnostic. Do NOT broaden it to "observed"/"fetched"
+    # tools: those legitimately return non-layer data. A modeled envelope WITH
+    # a non-empty layers list still reads as status="ok".
     if (
         isinstance(result, dict)
         and result.get("envelope_type") == "modeled"
@@ -2426,12 +2007,11 @@ def summarize_tool_result(
             "status": "ok",
             "result": _coerce_to_summary_value(result),
         }
-        # HONESTY FLOOR (2026-07-13 DEM 3DEP->GLO-30 ladder): a bare LayerURI
-        # result normally repr-coerces clipped to 200 chars, which would drop
-        # the trailing ``fallback_note`` field. When a cross-source fallback
-        # happened, hoist the note to a top-level key so the LLM ALWAYS sees
-        # that the delivered data is the fallback source, never the primary.
-        # Scoped to fallback layers only -- every other result is unchanged.
+        # HONESTY FLOOR: a bare LayerURI result repr-coerces clipped to 200
+        # chars, which would drop the trailing ``fallback_note`` field. When a
+        # cross-source fallback happened, the note is hoisted to a top-level key
+        # so the model ALWAYS sees that the delivered data is the fallback
+        # source, never the primary. Scoped to fallback layers only.
         _fb_note = getattr(result, "fallback_note", None)
         if isinstance(_fb_note, str) and _fb_note:
             payload["fallback_note"] = _fb_note
@@ -2475,7 +2055,7 @@ def summarize_tool_result(
 #
 # ``success`` (did the tool return without raising / without a failure-tagged
 # envelope) is NOT the same question as ``was the result USABLE`` -- the headline
-# bug ([[project-render-chokepoint-and-honesty-floor]]): a layer-producing tool
+# bug: a layer-producing tool
 # can return status="ok" while carrying an EMPTY layers list (a modeled run that
 # produced no renderable layer, or a publish/render drop). That reads as a
 # SUCCESS in the per-tool count but is NOT a usable result. ``result_usable``
@@ -2500,8 +2080,8 @@ def summarize_tool_result(
 
 #: Result keys whose presence marks a layer-producing return. A non-empty value
 #: under any of these is a renderable artifact (LayerURI dict, gs://"/s3:// COG,
-#: or a layers list). Mirrors the *_uri vocabulary the adapter already tracks
-#: for handle-passing (see the module-level docstring).
+#: or a layers list). Mirrors the ``*_uri`` vocabulary the adapter already
+#: tracks for handle-passing.
 _LAYER_RESULT_KEYS = frozenset(
     {
         "layers",
@@ -2514,15 +2094,9 @@ _LAYER_RESULT_KEYS = frozenset(
 
 
 def _result_has_renderable_layer(result: Any) -> bool | None:
-    """Return whether ``result`` carries a renderable layer artifact.
-
-    ``True`` -- a LayerURI (duck-typed via ``layer_id`` + ``uri``) OR a dict with
-    a non-empty layer key (``layers`` list, ``layer_uri`` string, ...).
-    ``False`` -- a dict that LOOKS like a layer-producer (``envelope_type`` set,
-    or a layer key present) but the layer slot is empty.
-    ``None`` -- the result is not layer-shaped at all (the caller then decides
-    whether a data payload makes it usable, or whether usability is N/A).
-    """
+    """Whether ``result`` carries a renderable layer artifact.
+    ``True`` a layer survived; ``False`` a layer-producer whose slot is empty;
+    ``None`` not layer-shaped at all, leaving usability to the caller."""
     # LayerURI / pydantic-or-dataclass return with the two defining attributes.
     if not isinstance(result, (dict, str, bytes)) and result is not None:
         if hasattr(result, "layer_id") and hasattr(result, "uri"):
@@ -2555,16 +2129,8 @@ def classify_result_usable(
     summary: dict[str, Any] | None,
 ) -> bool | None:
     """Classify whether a completed tool call produced a USABLE result.
-
-    Reuses the honesty-floor signal already stamped on ``summary`` by
-    ``summarize_tool_result`` so the two never diverge: a layer-producing tool
-    that summarised to ``status="error"`` with ``error_code="NO_RENDERABLE_LAYER"``
-    (or a failure-tagged modeled envelope) is NOT usable, regardless of the
-    raised-exception ``success`` flag.
-
-    See the module section comment above for the full True / False / None
-    contract. Never raises -- a classification failure degrades to ``None``.
-    """
+    Keyed off the honesty-floor signal ``summarize_tool_result`` already
+    stamped, so the two never diverge; NEVER raises, degrading to ``None``."""
     try:
         # 1. The honesty floor already decided this is an empty-layer modeled
         #    run (status=error + NO_RENDERABLE_LAYER). That is the canonical
@@ -2621,21 +2187,14 @@ def build_function_call_content(
     thought_signature: bytes | None = None,
 ) -> genai_types.Content:
     """Build the ``model``-role Content wrapping the function_call.
-
-    This is appended to ``contents`` after a dispatch so the next Gemini
-    stream sees its own prior tool-call decision.
-
-    ``thought_signature`` (when non-None) is attached to the wrapping
-    ``Part`` (not the ``FunctionCall`` -- google-genai's ``FunctionCall`` has
-    no signature field; only ``Part`` does, per types.py line 2044). Gemini 3
-    requires the same opaque byte-blob be echoed back on the function_call
-    Part for the replayed model turn or generate_content_stream raises
-    ``thought-signature mismatch``. For Gemini 2.5 (current default), the
-    field is None and the resulting Part carries no signature -- a no-op for
-    the model. The plumbing is forward-compat.
-    """
+    Appended to ``contents`` after a dispatch so the next model round sees its
+    own prior tool-call decision."""
     fn_call = genai_types.FunctionCall(name=name, args=args or {}, id=call_id)
     part_kwargs: dict[str, Any] = {"function_call": fn_call}
+    # The signature rides the wrapping ``Part``, never the ``FunctionCall``:
+    # google-genai gives only ``Part`` such a field. A provider that emits one
+    # requires the same byte-blob echoed back on the replayed model turn, or
+    # the next request fails on a signature mismatch. ``None`` is a no-op.
     if thought_signature is not None:
         part_kwargs["thought_signature"] = thought_signature
     return genai_types.Content(
@@ -2650,10 +2209,8 @@ def build_function_response_content(
     call_id: str | None = None,
 ) -> genai_types.Content:
     """Build the ``function``-role Content wrapping the function_response.
-
-    Appended right after the matching ``model`` function_call content so
-    Gemini has the (call, response) pair before deciding its next turn.
-    """
+    Appended right after the matching function_call content, so the model has
+    the (call, response) pair before deciding its next turn."""
     fn_resp = genai_types.FunctionResponse(name=name, response=response, id=call_id)
     return genai_types.Content(
         role="user",
@@ -2662,16 +2219,9 @@ def build_function_response_content(
 
 
 def build_user_text_content(text: str) -> genai_types.Content:
-    """Build a plain ``user``-role text Content (empty-completion nudge).
-
-    The same one-Part text shape ``build_contents_from_history`` uses for the
-    live user message (adapter.py line 1245) -- factored out so the multi-turn
-    loop can append a corrective user turn (e.g. the empty-completion retry
-    nudge) to ``contents`` without server.py hand-rolling google.genai types.
-    Every provider boundary maps a ``user`` text Content to a ``user``
-    message; the scripted adapter ignores content bodies -- so this is safe on
-    every provider path that consumes ``contents``.
-    """
+    """Build a plain ``user``-role text Content.
+    The one-Part shape the contents builder uses for a live user message, so a
+    loop driver can append a corrective turn without hand-rolling genai types."""
     return genai_types.Content(
         role="user",
         parts=[genai_types.Part(text=text)],
@@ -2679,7 +2229,7 @@ def build_user_text_content(text: str) -> genai_types.Content:
 
 
 # ---------------------------------------------------------------------------
-# stream_events - tool-aware streaming (root fix)
+# stream_events -- tool-aware streaming
 # ---------------------------------------------------------------------------
 
 async def stream_events(
@@ -2691,33 +2241,9 @@ async def stream_events(
     chat_history: list[dict] | None = None,
     model_cache_ref: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
-    """Stream Gemini's reply as typed ``StreamEvent`` objects.
-
-    When ``tool_declarations`` is supplied (non-empty list), Gemini receives
-    the full function catalog so it can emit ``FunctionCallEvent`` objects
-    instead of prose refusals.
-
-    Each yielded item is either:
-    - ``TextDeltaEvent(delta)`` -- a streamed text fragment; caller wraps it
-      in ``agent-message-chunk``.
-    - ``FunctionCallEvent(name, call_id, args)`` -- Gemini wants to call a
-      tool; caller dispatches through ``_invoke_tool_via_emitter``.
-
-    Args:
-        client: accepted for signature parity and ignored -- the provider
-            adapters (openai / anthropic / scripted) open their own client at the
-            boundary. Pass ``None``.
-        model: model identifier string (e.g. ``"gemini-2.5-pro"``).
-        user_text: the user's message text.
-        tool_declarations: optional list of ``FunctionDeclaration`` objects
-            built by ``build_tool_declarations``; pass an empty list or
-            ``None`` to send no tool catalog (text-only mode).
-        system_prompt: optional system instruction string; passed as
-            ``GenerateContentConfig.systemInstruction``.
-        chat_history: optional list of prior ``{role, text}`` dicts from
-            ``SessionState.chat_history``.  Included as prior ``Content``
-            turns so Gemini has conversational context.
-    """
+    """Stream the model's reply to ``user_text`` as typed ``StreamEvent``s.
+    ``client`` is accepted for signature parity and IGNORED -- each provider
+    adapter opens its own; an empty ``tool_declarations`` means text-only."""
     contents = build_contents_from_history(user_text, chat_history)
     async for event in stream_events_with_contents(
         client,
@@ -2745,39 +2271,18 @@ async def stream_events_with_contents(
     model_id: str | None = None,
     show_thinking: bool = False,
 ) -> AsyncIterator[StreamEvent]:
-    """Stream one Gemini turn from a fully-built ``contents`` list.
-
-    ``show_thinking`` (local build): forwarded to the OpenAI
-    adapter only. When True the adapter omits the ``/no_think`` system suffix
-    (TRID3NT_OPENAI_EXTRA_SYSTEM) for this round so the model's reasoning
-    channel is generated and surfaced as ``ThinkingDeltaEvent``s. Ignored by
-    the Anthropic / scripted paths.
-
-    This is the primitive the multi-turn loop driver in ``server.py`` uses.
-    Each call corresponds to exactly one provider round -- the driver appends
-    function_call + function_response Content entries to ``contents`` and
-    re-calls this until the model emits no further function calls (only text →
-    terminal turn). ``stream_events`` (the user-text variant) delegates here
-    after building ``contents`` via ``build_contents_from_history``. Dispatch is
-    an EXPLICIT provider switch (scripted/replay/fake, anthropic, openai); any
-    other ``MODEL_PROVIDER`` raises ``UnsupportedModelProviderError``.
-
-    Provider-side prompt cache: when ``model_cache_ref`` is provided, the
-    request is built WITHOUT ``tools[]`` and WITHOUT ``tool_config`` -- the
-    cache carries the full catalog + system instruction, and sending either
-    field alongside ``cached_content`` is a Vertex 400. ``system_prompt`` and
-    ``tool_declarations`` are silently ignored in this path. Per-turn
-    the per-turn visible tool set is enforced server-side by the
-    retrieval-enforce declaration subset (see ``server.py``). A
-    ``UsageMetadataEvent`` is emitted from
-    the final chunk's ``usage_metadata`` so the multi-turn driver can verify
-    the cached token discount, emit the ``cache-status`` envelope into the
-    PipelineEmitter, and pipe ``cached_content_token_count`` into the
-    tool-call telemetry record.
-    """
-    # model-provider switch. Every adapter converts the genai contents + tool
-    # declarations at its own boundary and yields the SAME StreamEvent union, so
-    # the dispatch loop, validator, emitter, and UI are untouched.
+    """Stream ONE model round from a fully-built ``contents`` list.
+    ``show_thinking`` reaches the OpenAI adapter only; the dispatch is an
+    EXPLICIT provider switch, and any other provider raises."""
+    # ``model_cache_ref``, when set, means the request carries NO ``tools[]``
+    # and no ``tool_config``: the provider-side cache already holds the catalog
+    # and the system instruction, and sending either field alongside a cached
+    # reference is a 400. ``system_prompt`` and ``tool_declarations`` are
+    # ignored on that path.
+    #
+    # Every adapter converts the genai contents and tool declarations at its own
+    # boundary and yields the SAME StreamEvent union, so the dispatch loop, the
+    # validator, the emitter and the UI are untouched.
     from .model_selection import model_provider
     from .scripted_adapter import model_provider_is_scripted, stream_scripted
 
@@ -2824,23 +2329,15 @@ async def stream_events_with_contents(
             yield _ev
         return
 
-    # Provider dispatch is EXPLICIT -- scripted/replay/fake, anthropic and openai
-    # each returned above. Anything else is unsupported: raise a TYPED error
-    # instead of a silent empty turn. ``google.genai.types`` stays imported as
-    # the load-bearing IR (Content / Part / FunctionCall builders), but there is
-    # no ``generate_content_stream`` client path to fall through to.
+    # Provider dispatch is EXPLICIT -- scripted/replay/fake, anthropic and
+    # openai each returned above. Anything else is unsupported: a TYPED error,
+    # never a silent empty turn. ``google.genai.types`` stays imported as the
+    # load-bearing IR, but there is no client path here to fall through to.
     raise UnsupportedModelProviderError(
         f"MODEL_PROVIDER={model_provider()!r} is not supported. Valid providers: "
         "scripted/replay/fake, anthropic, openai."
     )
 
-
-# ---------------------------------------------------------------------------
-# (offline-pivot cleanup) ``stream_reply`` -- a text-only shim delegating to
-# ``stream_events`` -- was DELETED here: zero live/test callers (only its own
-# docstrings + a retained server.py import referenced it).  The live text path
-# runs through ``stream_events_with_contents`` -> provider dispatch.
-# ---------------------------------------------------------------------------
 
 __all__ = [
     "DEFAULT_VERTEX_MODEL",
@@ -2853,7 +2350,7 @@ __all__ = [
     "UsageMetadataEvent",
     "CompactionStartEvent",
     "CompactionCompleteEvent",
-    # Upstream-provider discipline (LANE CORE 2026-07-22)
+    # Upstream-provider discipline
     "UpstreamProviderError",
     "classify_provider_error_class",
     "provider_retries",

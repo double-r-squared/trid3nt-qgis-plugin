@@ -1,9 +1,7 @@
-"""genai Schema -> JSON Schema conversion, shared by the provider adapters.
+"""genai Schema -> JSON Schema conversion for the provider wire formats.
 
-The adapters keep ``google.genai`` ``FunctionDeclaration`` as the internal tool
-IR. Every provider wire format (Anthropic ``input_schema``, OpenAI
-``function.parameters``) wants plain JSON Schema, so the conversion lives here
-once instead of once per adapter.
+``google.genai`` ``FunctionDeclaration`` is the internal tool IR; provider APIs
+take plain JSON Schema.
 """
 
 from __future__ import annotations

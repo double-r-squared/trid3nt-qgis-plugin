@@ -1,1 +1,1 @@
-"""LLM provider adapters (bedrock default; openai/scripted/legacy seams)."""
+"""LLM provider adapters (``openai`` default; anthropic and scripted seams)."""

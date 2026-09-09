@@ -1,69 +1,7 @@
-"""OpenAI-compatible LLM provider adapter (offline/local build -- GAP 1).
+"""OpenAI-compatible LLM provider adapter, for any OpenAI-compatible endpoint.
 
-``MODEL_PROVIDER=openai`` selects this path. It accepts the SAME inputs that
-``adapter.stream_events_with_contents`` accepts -- a ``list[genai_types.Content]``
-history + a list of ``genai_types.FunctionDeclaration`` tool specs + a system
-prompt -- converts them to OpenAI chat-completions wire shapes at the boundary,
-and yields the SAME ``StreamEvent`` union (``TextDeltaEvent`` /
-``FunctionCallEvent`` / ``UsageMetadataEvent`` / ``CompactionStartEvent`` /
-``CompactionCompleteEvent``) that the server.py dispatch loop consumes.
-
-This single provider covers any OpenAI-compatible endpoint:
-  - Local: Ollama (http://localhost:11434/v1), vLLM, llama.cpp server, LM Studio
-  - Cloud: OpenAI, Groq, DeepSeek, OpenRouter, Anthropic (messages-compat API)
-
-Config env vars (all read at call time so an ECS/systemd env injection works
-without re-import):
-
-  TRID3NT_OPENAI_BASE_URL  (REQUIRED when MODEL_PROVIDER=openai; no default)
-  TRID3NT_OPENAI_API_KEY   (default "not-needed" -- local endpoints ignore it)
-  TRID3NT_OPENAI_MODEL     (the default model; a per-turn selection from the
-                           web model selector overrides it -- see openai_model)
-  MODEL_PROVIDER=openai   (selects this adapter from the dispatch seam)
-
-Design notes:
-
-  1. genai Content[] -> OpenAI messages[]
-     - ``user`` role -> ``"user"``; ``model`` role -> ``"assistant"``
-     - assistant function_call Part -> ``"assistant"`` message with ``tool_calls``
-       list; ``tool_call_id`` is minted deterministically (``"call_{counter}"``
-       per turn if the genai id is absent).
-     - function_response Part -> ``"tool"`` message with matching ``tool_call_id``
-       and JSON-serialised content; ids are resolved by pairing arrivals in order
-       (a producer thread feeding an asyncio queue).
-     - Consecutive same-role messages are coalesced to satisfy the OpenAI API
-       requirement that roles alternate (or at minimum that tool-result sequences
-       form a legal run).
-
-  2. FunctionDeclaration[] -> OpenAI tools[]
-     - ``_genai_schema_to_json_schema`` converts genai uppercase enum types to
-       lowercase JSON Schema (see adapters/tool_schema.py).
-     - The same sanitisation pass is applied: empty parameters -> object with
-       ``{}``, non-object top-level schema -> wrapped in object.
-
-  3. Streaming
-     - ``stream_options={"include_usage": True}`` is sent so the final chunk
-       carries usage metadata (usage is tolerated absent for providers that do
-       not support it).
-     - ``max_tokens`` (``context_budget.openai_max_output_tokens``, env
-       ``TRID3NT_OPENAI_MAX_TOKENS``, default 4096) caps every request so a
-       clipped/looping round cannot run away for minutes before the reactive
-       clip guard (below) gets a chance to react at stream end (BUG 3,
-       post-OPEN-14 acceptance rerun).
-     - Tool-call argument deltas are accumulated per index (``delta.tool_calls``
-       index field) across chunks; on ``finish_reason=="tool_calls"`` the
-       accumulated JSON is parsed and ``FunctionCallEvent``s are emitted.
-     - Text deltas -> ``TextDeltaEvent`` as they arrive.
-     - Usage on the final chunk -> ``UsageMetadataEvent`` (best-effort).
-
-  4. Bedrock-style id compatibility
-     - When the session's selected model id looks like a Bedrock inference-profile
-       id (contains ``anthropic.`` / ``us.`` / ``:0``), TRID3NT_OPENAI_MODEL
-       overrides it and a one-shot warning is logged.
-
-The ``openai`` package (``openai>=1.40``) is a hard dependency only when this
-adapter is active; the import lives inside the streaming function so the rest of
-the agent starts cleanly on environments where the package is not installed.
+Converts the genai-typed history and tool specs at the boundary and yields the
+shared ``StreamEvent`` union; every env read happens at call time.
 """
 
 from __future__ import annotations
@@ -102,11 +40,9 @@ from trid3nt_server.gates.context_budget import (
 
 logger = logging.getLogger("trid3nt_server.adapters.openai_adapter")
 
-#: Baked local-model tool-discipline system line (2026-07-13, OPEN-17 class:
-#: a 0-event fetch was followed by a publish_layer call carrying an invented
-#: placeholder handle). Appended to EVERY openai-path system prompt in
-#: ``contents_to_openai_messages`` - see the call-site comment for why the
-#: start_agent.sh TRID3NT_OPENAI_EXTRA_SYSTEM default is not enough.
+#: Tool-discipline line appended to EVERY openai-path system prompt: a small
+#: local model that fetches zero events must not follow up with a publish_layer
+#: call carrying an invented placeholder handle.
 _TOOL_DISCIPLINE_SYSTEM = (
     "Fetch and composer tools publish their own layers - only call "
     "publish_layer when you have a handle returned by a previous tool "
@@ -150,12 +86,9 @@ def openai_api_key() -> str:
 
 
 def openai_temperature() -> float:
-    """Sampling temperature for the OpenAI-compat body (default 0.7, unchanged).
-
-    Env-overridable via ``TRID3NT_OPENAI_TEMPERATURE`` so a deterministic run
-    (e.g. the catalog-surfacing experiment's temp-0 methodology) can pin it
-    without editing the request body. A bad value falls back to the default.
-    """
+    """Sampling temperature for the OpenAI-compat body (default 0.7).
+    ``TRID3NT_OPENAI_TEMPERATURE`` pins it for a deterministic run; an
+    unparseable value falls back to the default."""
     raw = os.environ.get("TRID3NT_OPENAI_TEMPERATURE", "").strip()
     if not raw:
         return 0.7
@@ -166,12 +99,9 @@ def openai_temperature() -> float:
 
 
 def openai_default_headers() -> dict[str, str] | None:
-    """Optional per-provider request headers (OpenRouter model extensibility).
-    OpenRouter accepts an ``HTTP-Referer`` + ``X-Title`` for
-    app attribution/ranking; other OpenAI-compatible providers ignore them.
-    Both env-driven and OMITTED entirely when unset, so the local-ollama and
-    every existing provider path is byte-unchanged (returns None -> AsyncOpenAI
-    default headers)."""
+    """Optional per-provider request headers, or ``None`` when none is set.
+    OpenRouter accepts ``HTTP-Referer`` and ``X-Title`` for app attribution;
+    other OpenAI-compatible providers ignore them."""
     headers: dict[str, str] = {}
     referer = os.environ.get("TRID3NT_OPENAI_HTTP_REFERER", "").strip()
     if referer:
@@ -184,24 +114,13 @@ def openai_default_headers() -> dict[str, str] | None:
 
 def openai_model(session_model: str | None = None) -> str:
     """Resolve the OpenAI model name to send.
-
-    Precedence (F2, live-feedback 2026-07-08: local hot-swap):
-      1. session_model if it does NOT look like a Bedrock inference-profile id
-         -- the per-turn selection from the web model selector (which, in the
-         local build, lists the REAL installed Ollama models via the agent's
-         /api/local-models endpoint). This must OVERRIDE the env default so
-         picking a model in the UI actually changes the serving model.
-      2. TRID3NT_OPENAI_MODEL env var (the configured default)
-      3. Raise if nothing is configured
-
-    A Bedrock-shaped session id (stale localStorage from a cloud session) is
-    ignored with a one-shot warning and falls through to the env default --
-    same guard as before, just no longer masked by the env-always-wins rule.
-    This function is only reached when MODEL_PROVIDER=openai, so the cloud
-    (Bedrock) path is untouched by the precedence flip.
-    """
+    A per-turn session selection wins over ``TRID3NT_OPENAI_MODEL``; with
+    neither configured this raises rather than guessing a model."""
     global _BEDROCK_ID_WARN_DONE
     configured = os.environ.get("TRID3NT_OPENAI_MODEL", "").strip()
+    # A Bedrock-shaped session id (stale client localStorage) names no model
+    # this endpoint serves: it is ignored with a one-shot warning and the env
+    # default is used instead.
     if session_model:
         if _looks_like_bedrock_id(session_model):
             if not _BEDROCK_ID_WARN_DONE:
@@ -225,7 +144,6 @@ def openai_model(session_model: str | None = None) -> str:
 
 # ---------------------------------------------------------------------------
 # Schema conversion: genai FunctionDeclaration -> OpenAI tools[]
-# (see adapters/tool_schema.py for the shared converter)
 # ---------------------------------------------------------------------------
 
 _TYPE_MAP = {
@@ -239,27 +157,22 @@ _TYPE_MAP = {
 }
 
 # ---------------------------------------------------------------------------
-# Tool-schema slimming (LOCAL path only -- 2026-07-12 context-window fix)
+# Tool-schema slimming (LOCAL path only)
 # ---------------------------------------------------------------------------
 #
-# MEASURED FAILURE THIS FIXES: on qwen3:8b-16k (num_ctx=16384) the tool
-# schemas + system prompt alone were ~15.7k tokens on the wire, so a 2-prompt
-# session hit an honest CONTEXT_WINDOW_EXCEEDED abort while the actual
-# conversation content was only ~6k tokens (live log 2026-07-12: whole-prompt
-# est 22107 vs budget 11264). The registry's tool/param descriptions are
-# written for large cloud models; the local wire caps them at schema-BUILD
-# time instead. ONLY description strings are ever touched -- name, type,
-# enum, required, properties, items structure pass through untouched (guard
-# rail), so the truncation can never break the JSON schema contract.
+# The registry's tool and param descriptions are written for large cloud
+# models; on a small local context window the schemas alone can crowd the
+# conversation out of the budget, so the local wire caps them at schema-BUILD
+# time. ONLY description strings are ever touched -- name, type, enum,
+# required and the properties/items structure pass through untouched, so the
+# truncation can never break the JSON schema contract.
 #
 # TRID3NT_OPENAI_TOOL_DESC_CAP (default 600) caps each TOOL description;
 # TRID3NT_OPENAI_PARAM_DESC_CAP (default 200) caps each PARAMETER (and nested
-# schema) description. Setting TRID3NT_OPENAI_TOOL_DESC_CAP=0 disables ALL
-# slimming (the single kill switch -- restores the legacy [:1000] behavior);
+# schema) description. TRID3NT_OPENAI_TOOL_DESC_CAP=0 disables ALL slimming;
 # TRID3NT_OPENAI_PARAM_DESC_CAP=0 disables only the param-level cap.
 # Truncation is word-boundary with a trailing "..." marker. The slimming is
-# LOCAL-path only; adapter.py's declarations are deliberately NOT touched, so
-# cloud models keep the full descriptions.
+# LOCAL-path only; the shared declarations are deliberately NOT touched.
 
 TOOL_DESC_CAP_DEFAULT = 600
 PARAM_DESC_CAP_DEFAULT = 200
@@ -311,11 +224,9 @@ def _truncate_word_boundary(text: str, cap: int) -> str:
 
 
 def _cap_schema_descriptions(schema: Any, cap: int) -> None:
-    """Recursively truncate every ``description`` string inside a converted
-    JSON Schema, in place. ONLY ``description`` values are modified --
-    type/enum/format/required and the properties/items STRUCTURE are never
-    touched (guard rail: the cap can only ever shorten prose, never break
-    the schema contract)."""
+    """Recursively truncate every ``description`` string in a JSON Schema, in place.
+    ONLY ``description`` values change: type/enum/format/required and the
+    properties/items STRUCTURE are never touched."""
     if cap <= 0 or not isinstance(schema, dict):
         return
     desc = schema.get("description")
@@ -363,11 +274,8 @@ def tool_declarations_to_openai_tools(
     tool_declarations: list[genai_types.FunctionDeclaration] | None,
 ) -> list[dict[str, Any]]:
     """Convert genai FunctionDeclarations to OpenAI ``tools[]`` (function type).
-
-    Applies the LOCAL-wire description caps (``tool_desc_cap`` /
-    ``param_desc_cap``, see the slimming block above) at build time, and logs
-    ONE INFO line (first build per process) with the total serialized size
-    before and after capping so the win is measurable in the agent log."""
+    Applies the local-wire description caps at build time and logs one INFO
+    line per process with the serialized size before and after capping."""
     global _SCHEMA_STATS_LOGGED
     tools: list[dict[str, Any]] = []
     for decl in tool_declarations or []:
@@ -424,12 +332,9 @@ def tool_declarations_to_openai_tools(
 
 
 def _coalesce_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Merge consecutive messages of the same role (except tool messages).
-
-    OpenAI requires that consecutive same-role assistant messages be merged.
-    Tool (role=='tool') messages must NEVER be merged -- each carries its own
-    tool_call_id and must remain separate.
-    """
+    """Merge consecutive messages of the same role, except tool messages.
+    A ``tool`` message carries its own ``tool_call_id`` and must NEVER be
+    merged with another."""
     merged: list[dict[str, Any]] = []
     for m in messages:
         if m["role"] == "tool":
@@ -467,24 +372,8 @@ def contents_to_openai_messages(
     show_thinking: bool = False,
 ) -> list[dict[str, Any]]:
     """Convert genai ``contents`` to OpenAI ``messages[]``.
-
-    genai roles:
-      ``user``  -> ``"user"``
-      ``model`` -> ``"assistant"``
-    function_call Part -> ``"assistant"`` message with ``tool_calls``
-    function_response Part -> ``"tool"`` message with tool_call_id
-
-    tool_call_id is harvested from fc.id; when absent (legacy Gemini history),
-    a stable deterministic id ``"call_{counter}"`` is minted. function_response
-    ids are resolved by pairing with the preceding function_call by arrival order
-    (a FIFO queue pairs each tool result with the call that produced it).
-
-    ``show_thinking`` (NATE live-feedback 2026-07-08, local build): when True
-    any ``/no_think`` directive inside TRID3NT_OPENAI_EXTRA_SYSTEM is dropped
-    for THIS round so the qwen3-family reasoning channel is generated (and
-    streamed back as ``ThinkingDeltaEvent``s by ``stream_openai``). Other
-    extra-system text is preserved.
-    """
+    An absent ``tool_call_id`` is minted as ``call_{counter}``, and responses
+    pair with the calls that produced them by arrival order."""
     messages: list[dict[str, Any]] = []
     # TRID3NT_OPENAI_EXTRA_SYSTEM: optional text appended to the system prompt.
     # Primary use: "/no_think" for Qwen3-family models served by Ollama, whose
@@ -498,12 +387,10 @@ def contents_to_openai_messages(
         extra_system = extra_system.replace("/no_think", "").strip()
     if extra_system:
         system_prompt = f"{system_prompt}\n{extra_system}" if system_prompt else extra_system
-    # 2026-07-13 (local small-model tool discipline, OPEN-17 class): baked
-    # HERE - not only in start_agent.sh's TRID3NT_OPENAI_EXTRA_SYSTEM default -
-    # because a user .env.local that sets EXTRA_SYSTEM (e.g. a bare
-    # "/no_think") silently SHADOWS that baked default (live-proven
-    # 2026-07-13: the running agent's env carried only "/no_think"). The
-    # openai path is the local build's path, so this stays local-only.
+    # Baked HERE, and not only in the launcher's TRID3NT_OPENAI_EXTRA_SYSTEM
+    # default, because a user .env.local that sets EXTRA_SYSTEM (a bare
+    # "/no_think", say) silently SHADOWS that default. The openai path is the
+    # local build's path, so this stays local-only.
     system_prompt = (
         f"{system_prompt}\n{_TOOL_DISCIPLINE_SYSTEM}"
         if system_prompt
@@ -589,18 +476,14 @@ def contents_to_openai_messages(
 # ---------------------------------------------------------------------------
 
 
-#: 429 retry policy: OpenRouter free-tier models are a
-#: shared, transiently rate-limited pool - a single 429 mid multi-round tool
-#: turn would otherwise kill the whole turn. The request-time 429 lands BEFORE
-#: any token, so a bounded retry honoring the provider's ``retry_after`` makes
-#: throttled (incl. :free) models survive a tool-heavy turn. env-tunable.
-#:
-#: LANE CORE (2026-07-22, upstream-provider discipline): the retry count and
-#: backoff now EXTEND to the cross-provider envs ``TRID3NT_PROVIDER_RETRIES``
-#: (default 3) / ``TRID3NT_PROVIDER_BACKOFF_S`` (exponential base, default 5.0
-#: -- see ``adapter.provider_backoff_wait``), shared across adapters. The
-#: legacy openai-specific envs stay honored as fallbacks so an existing local
-#: .env keeps working. Read at CALL time (env injection without re-import).
+#: 429 retry policy: a free-tier model pool is transiently rate-limited, and a
+#: single 429 mid multi-round tool turn would otherwise kill the whole turn.
+#: The request-time 429 lands BEFORE any token, so a bounded retry honoring the
+#: provider's ``retry_after`` lets a throttled model survive a tool-heavy turn.
+#: The retry count and backoff come from the cross-provider
+#: ``TRID3NT_PROVIDER_RETRIES`` (default 3) / ``TRID3NT_PROVIDER_BACKOFF_S``
+#: (exponential base, default 5.0); the openai-specific envs stay honored as
+#: fallbacks. Read at CALL time.
 _RATE_LIMIT_MAX_WAIT_S = float(os.environ.get("TRID3NT_OPENAI_RATE_LIMIT_MAX_WAIT_S", "45"))
 
 
@@ -641,10 +524,9 @@ def _provider_label() -> str:
 
 
 def _retry_after_seconds(exc: Any, attempt: int) -> float:
-    """Seconds to wait before retrying a 429 - honor the provider's
-    ``Retry-After`` header / ``retry_after_seconds`` metadata when present,
-    else fall back to the exponential backoff schedule. Capped at
-    ``_RATE_LIMIT_MAX_WAIT_S``."""
+    """Seconds to wait before retrying a 429.
+    Honors the provider's ``Retry-After`` header or ``retry_after_seconds``
+    metadata, else the backoff schedule; capped at ``_RATE_LIMIT_MAX_WAIT_S``."""
     wait: float | None = None
     resp = getattr(exc, "response", None)
     hdrs = getattr(resp, "headers", None)
@@ -670,13 +552,10 @@ def _retry_after_seconds(exc: Any, attempt: int) -> float:
 
 
 #: Case-insensitive substrings that mark a TRANSIENT UPSTREAM saturation the
-#: provider (or a shared free-tier worker pool) will recover from - NATE
-#: 2026-07-20: the nemotron :free endpoint surfaced "Upstream error from Nvidia:
-#: ResourceExhausted: Worker local total request limit reached (32/32)" as a
-#: NON-429 openai.APIError, so a single busy moment killed the whole turn
-#: (LLM_UNAVAILABLE) even though the tool had already run + published. These are
-#: the wire-visible signatures of a retryable upstream hiccup (5xx-family / pool
-#: saturation), NOT a bug in our request.
+#: provider (or a shared free-tier worker pool) will recover from. Some
+#: providers surface pool saturation as a NON-429 ``openai.APIError``, so the
+#: message text is the only wire-visible signature. These are the retryable
+#: 5xx-family and pool-saturation shapes, NOT a bug in our request.
 _TRANSIENT_UPSTREAM_SIGNATURES: tuple[str, ...] = (
     "resourceexhausted",
     "worker local total request limit",
@@ -695,22 +574,9 @@ _TRANSIENT_UPSTREAM_SIGNATURES: tuple[str, ...] = (
 
 
 def _is_transient_upstream(exc: Any) -> bool:
-    """True if ``exc`` is a TRANSIENT upstream error worth retrying with backoff.
-
-    Retry policy (extended):
-      (a) a 429 ``RateLimitError`` (kept - honors Retry-After via caller);
-      (b) any ``APIStatusError`` whose HTTP status is >= 500 (upstream 5xx);
-      (c) any ``APIError`` whose message matches a transient-upstream signature
-          (ResourceExhausted / worker-pool-saturation / overloaded / 5xx text);
-      (d) connection drops + request timeouts (``APIConnectionError``, which
-          subsumes ``APITimeoutError``) -- the upstream-provider discipline
-          classifies transport failures to the provider as upstream, never as
-          our own internal error.
-
-    Genuine CLIENT errors NEVER retry (retrying is pointless + hides real bugs):
-    400 bad-request (incl. context-length / max-tokens), 401/403 auth, 404, 422.
-    Those propagate unchanged.
-    """
+    """True when ``exc`` is a TRANSIENT upstream error worth retrying.
+    A genuine CLIENT error (400 including context-length, 401, 403, 404, 422)
+    NEVER retries: retrying is pointless and hides the real bug."""
     import openai  # noqa: WPS433 -- dep dormant unless the openai provider is on
 
     # --- Genuine client errors: never retry (checked FIRST so a 400 whose body
@@ -759,21 +625,8 @@ def _is_transient_upstream(exc: Any) -> bool:
 
 async def _create_stream_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
     """Open the streaming completion, retrying a request-time TRANSIENT upstream
-    error with exponential backoff (``_max_provider_retries`` /
-    ``_backoff_wait_s`` -- env TRID3NT_PROVIDER_RETRIES /
-    TRID3NT_PROVIDER_BACKOFF_S, legacy openai envs honored). The error raises
-    at ``create`` before any token is streamed, so retrying here is clean (no
-    partial-stream replay). A 429 honors the provider's Retry-After; other
-    transient upstream errors (5xx / pool saturation / connection drop /
-    timeout - see ``_is_transient_upstream``) use the backoff schedule. The
-    provider's VERBATIM error string is logged on every transient attempt
-    (upstream-provider discipline: never internalize / paraphrase away an
-    upstream failure). Genuine CLIENT errors (400/401/403/404/422,
-    context-length) propagate UNCHANGED (fail fast). On retry exhaustion
-    raises ``adapter.UpstreamProviderError`` (typed, provider named, verbatim
-    detail) so the server ends the turn with an honest provider-unavailable
-    narration. Returns the AsyncStream context manager.
-    """
+    error with backoff; returns the AsyncStream context manager.
+    The fault raises at ``create`` before any token, so nothing partial replays."""
     import openai  # noqa: WPS433 -- dep dormant unless the openai provider is on
 
     max_retries = _max_provider_retries()
@@ -822,11 +675,9 @@ async def _create_stream_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
 async def _stream_one_round(
     client: Any, kwargs: dict[str, Any]
 ) -> AsyncIterator[StreamEvent]:
-    """Stream ONE ``chat.completions.create`` round, yielding the TRID3NT
-    ``StreamEvent`` union. Split out of ``stream_openai`` (OPEN-14) so the
-    caller can wrap it in the clip-guard retry loop without duplicating the
-    chunk-accumulation logic.
-    """
+    """Stream ONE ``chat.completions.create`` round as ``StreamEvent``s.
+    Split out of ``stream_openai`` so the caller can wrap it in the clip-guard
+    retry loop without duplicating the chunk accumulation."""
     # Per-index accumulator for fragmented tool-call argument deltas.
     # Structure: {index: {"id": str, "name": str, "args_buf": str}}
     tool_call_accumulators: dict[int, dict[str, Any]] = {}
@@ -845,10 +696,9 @@ async def _stream_one_round(
                 if text:
                     yield TextDeltaEvent(delta=text)
 
-                # Reasoning delta (NATE live-feedback 2026-07-08): Ollama's
-                # OpenAI-compat stream carries qwen3-family thinking as
-                # ``delta.reasoning`` (verified live); DeepSeek-style servers
-                # use ``delta.reasoning_content``. The openai SDK's ChoiceDelta
+                # Reasoning delta: Ollama's OpenAI-compat stream carries
+                # qwen3-family thinking as ``delta.reasoning``; DeepSeek-style
+                # servers use ``delta.reasoning_content``. The openai SDK's ChoiceDelta
                 # tolerates extra fields, but read defensively via getattr +
                 # the pydantic ``model_extra`` bag so an SDK that drops unknown
                 # attrs still surfaces the channel. Always yielded when
@@ -893,8 +743,8 @@ async def _stream_one_round(
                 prompt_tokens = getattr(usage, "prompt_tokens", None)
                 completion_tokens = getattr(usage, "completion_tokens", None)
                 total_tokens = getattr(usage, "total_tokens", None)
-                # Per-turn telemetry (LANE CORE 2026-07-22): reasoning tokens
-                # where the provider reports them
+                # Per-turn telemetry: reasoning tokens where the provider
+                # reports them
                 # (``usage.completion_tokens_details.reasoning_tokens`` --
                 # OpenAI / OpenRouter / DeepSeek-style). Read defensively via
                 # getattr + the pydantic extras bag; absent -> None (tolerated,
@@ -945,42 +795,10 @@ async def stream_openai(
     show_thinking: bool = False,
 ) -> AsyncIterator[StreamEvent]:
     """Stream one OpenAI-compatible turn, yielding the ``StreamEvent`` union.
-
-    One call == one model round.
-    The dispatch loop in ``server.py`` appends function_call + function_response
-    Contents and re-calls until no tool calls remain.
-
-    The ``openai`` package is imported inside this function so the rest of the
-    agent starts cleanly on environments where the package is not installed
-    (the dep is dormant unless MODEL_PROVIDER=openai is selected).
-
-    OPEN-14 (context-budget compaction + overflow guard, LOCAL path only):
-    before the request is sent, ``contents`` is proactively compacted if the
-    estimated prompt would exceed the model's discovered ``num_ctx`` budget
-    (see ``context_budget.compact_contents``). After the round completes, the
-    ACTUAL reported ``usage.prompt_tokens`` is checked against ``num_ctx``; a
-    value ``>= num_ctx`` proves Ollama silently clipped the prompt (the
-    tell-tale shape of the 2x-reproduced incident this closes -- the model
-    loses its tool contract and narrates a fabricated success). One harder
-    recompaction + retry is attempted; a second clip raises
-    ``ContextWindowExceededError`` (caught by server.py and surfaced as an
-    honest typed envelope instead of a fabricated or generic failure).
-
-    Compaction UX (Part A): every ``compact_contents`` call is bracketed by a
-    ``CompactionStartEvent`` immediately followed by a
-    ``CompactionCompleteEvent(before_tokens=..., after_tokens=...)`` -- NOT a
-    ``TextDeltaEvent`` glued onto the model's own reply (the pre-Part-A
-    ``PROACTIVE_COMPACTION_NOTE`` / ``CLIP_RETRY_NOTE`` narration seam,
-    removed). ``server.py``'s dispatch loop turns that pair into a durable
-    pipeline card (``pipeline_emitter.mint_compaction_card`` /
-    ``complete_compaction_card``) instead. The PROACTIVE call site (below)
-    gates the pair on ``TurnPlan.compacted`` -- an under-budget turn that never
-    compacts must show no card at all. On the REACTIVE clip-guard path
-    ``compacted`` is True unconditionally: a detected clip always means a retry
-    is happening, so the card always reports its honest before/after count even
-    on a no-op pass (mirrors the original ``CLIP_RETRY_NOTE``, which was
-    likewise unconditional on that path).
-    """
+    One call is one model round; a prompt the provider silently CLIPPED is
+    recompacted and retried once, then raises ``ContextWindowExceededError``."""
+    # The ``openai`` package is imported here, not at module scope, so the rest
+    # of the agent starts cleanly where it is not installed.
     try:
         from openai import AsyncOpenAI
     except ImportError as exc:
@@ -1017,8 +835,7 @@ async def stream_openai(
     # PROACTIVE BUDGET CHECK: the wire messages are the closest available proxy
     # to what the server really receives, so the TOTAL prompt estimate is those
     # messages (which already inline the system prompt) plus the separately-sent
-    # tool schemas. The trim STRATEGY itself lives in context_budget.plan_turn --
-    # shared with the Anthropic and Bedrock paths, never reimplemented here.
+    # tool schemas. The trim STRATEGY itself is shared, never reimplemented here.
     plan = plan_turn(
         working_contents,
         window=window,
@@ -1032,9 +849,9 @@ async def stream_openai(
         messages = contents_to_openai_messages(
             working_contents, system_prompt=system_prompt, show_thinking=show_thinking
         )
-        # Compaction UX (Part A): typed events, not a narration note --
-        # see the docstring above and context_budget.COMPACTING_LABEL /
-        # compaction_complete_label.
+        # Compaction is reported as a typed event PAIR, never as narration
+        # glued onto the model's own reply. Gated on ``TurnPlan.compacted``: an
+        # under-budget turn that never compacts must show no card at all.
         yield CompactionStartEvent()
         yield CompactionCompleteEvent(
             before_tokens=plan.before_tokens, after_tokens=plan.after_tokens
@@ -1049,15 +866,13 @@ async def stream_openai(
             "stream": True,
             "stream_options": {"include_usage": True},
             "temperature": openai_temperature(),
-            # BUG 3 (post-OPEN-14 acceptance rerun): cap generation so a
-            # clipped/looping round cannot stream 16k-26k tokens of runaway
-            # narration for ~22 minutes before the reactive clip guard below
-            # gets a chance to react (it only inspects usage AFTER the round
-            # ends). Verified live against Ollama's OpenAI-compat endpoint
-            # (2026-07-12, llama3.2:3b): max_tokens maps to num_predict and
-            # truncates the completion at exactly this count under streaming.
-            # ``context_budget.reserve_output_tokens`` reserves this SAME
-            # value (single source of truth) -- see openai_max_output_tokens.
+            # Cap generation so a clipped or looping round cannot stream a
+            # runaway narration for minutes before the reactive clip guard
+            # below gets a chance to react (it only inspects usage AFTER the
+            # round ends). On an Ollama endpoint max_tokens maps to num_predict
+            # and truncates the completion at exactly this count under
+            # streaming. ``context_budget.reserve_output_tokens`` reserves this
+            # SAME value -- one source of truth.
             "max_tokens": openai_max_output_tokens(),
         }
         if tools:
@@ -1074,10 +889,10 @@ async def stream_openai(
         if not is_prompt_clipped(prompt_tokens, num_ctx):
             return
 
-        # REACTIVE CLIP GUARD: the send WAS clipped -- the round we just
-        # streamed is unreliable (this is exactly how the incident's
-        # fabricated-success narration happened: zero tool calls, confident
-        # prose, prompt clipped to num_ctx). Recompact HARDER and retry once.
+        # REACTIVE CLIP GUARD: the send WAS clipped, so the round just
+        # streamed is unreliable -- a clipped prompt loses the tool contract and
+        # the model answers with confident, fabricated prose and no tool calls.
+        # Recompact HARDER and retry once.
         logger.info(
             "context-budget: clip detected model=%s attempt=%d prompt_tokens=%s num_ctx=%d",
             resolved_model,
@@ -1099,13 +914,11 @@ async def stream_openai(
         messages = contents_to_openai_messages(
             working_contents, system_prompt=system_prompt, show_thinking=show_thinking
         )
-        # Compaction UX (Part A): same typed-event pair as the proactive
-        # path above -- UNCONDITIONAL here (plan_turn's reactive phase always
-        # reports ``compacted``, unlike the proactive site), matching the pre-Part-A
-        # ``CLIP_RETRY_NOTE`` this replaces: a detected clip always means a
-        # retry is happening, whether or not this pass finds more to shrink
-        # (an already-near-minimal history still reports its honest
-        # before==after count -- not a fabrication, just a no-op pass).
+        # The same typed-event pair as the proactive path, UNCONDITIONAL here:
+        # a detected clip always means a retry is happening, whether or not this
+        # pass finds more to shrink. An already-near-minimal history still
+        # reports its honest before==after count -- a no-op pass, not a
+        # fabrication.
         yield CompactionStartEvent()
         yield CompactionCompleteEvent(
             before_tokens=plan.before_tokens, after_tokens=plan.after_tokens

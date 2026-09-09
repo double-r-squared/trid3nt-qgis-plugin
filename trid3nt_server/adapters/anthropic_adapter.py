@@ -1,33 +1,7 @@
 """Anthropic Messages API adapter (official ``anthropic`` SDK).
 
-``MODEL_PROVIDER=anthropic`` selects this path. It accepts the SAME inputs the
-sibling adapters accept -- a ``list[genai_types.Content]`` history, a list of
-``genai_types.FunctionDeclaration`` tool specs and a system prompt -- converts
-them to Messages API shapes at the boundary, and yields the SAME
-``StreamEvent`` union the server turn loop consumes.
-
-Config env (read at call time so an env injection needs no re-import):
-
-  MODEL_PROVIDER=anthropic     selects this adapter at the dispatch seam
-  ANTHROPIC_API_KEY            the API key (resolved by the SDK itself)
-  TRID3NT_ANTHROPIC_MODEL      model id (default ``claude-sonnet-5``)
-
-API constraints this file encodes (they are 400s, not preferences):
-
-  * ``thinking`` is adaptive -- ``{"type": "adaptive"}``; ``budget_tokens`` is
-    removed on this model family.
-  * Sampling params (``temperature`` / ``top_p`` / ``top_k``) are removed on
-    this model family -- sending any of them is a 400, so none is sent.
-  * No assistant prefill: the request never ends on an assistant turn.
-  * Streaming is used for every call so a long tool-planning turn cannot trip
-    the SDK request timeout.
-
-Prompt caching is MANDATORY here (cost discipline carries across every model
-swap). The cacheable prefix renders ``tools`` -> ``system`` -> ``messages``, so
-the breakpoints sit at the end of the tool catalog and the end of the system
-block -- the two large stable spans -- and every volatile per-turn content sits
-after them. ``usage.cache_read_input_tokens`` on each turn proves the hit; it
-is logged at INFO on every turn.
+Converts the genai-typed history and tool specs at the boundary and yields the
+shared ``StreamEvent`` union; every env read happens at call time.
 """
 
 from __future__ import annotations
@@ -70,7 +44,7 @@ logger = logging.getLogger("trid3nt_server.adapters.anthropic_adapter")
 ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-5"
 
 #: Output ceiling per round. Adaptive thinking tokens are drawn from the same
-#: budget, so this sits above the 8k the Bedrock path uses.
+#: budget.
 _DEFAULT_MAX_TOKENS = 16000
 
 _PROVIDER_LABEL = "Anthropic API"
@@ -88,13 +62,9 @@ _COUNT_TOKENS_CONSULT_RATIO = 0.7
 
 
 async def _exact_prompt_tokens(client: Any, kwargs: dict[str, Any]) -> int | None:
-    """The provider's OWN count of this request's input tokens, or None.
-
-    Counts the whole prompt -- messages, system block and tool schemas -- which
-    is precisely the number ``plan_turn`` wants as ``wire_tokens``. Best-effort:
-    the counter is an optimization over the heuristic, never a hard dependency,
-    so any fault degrades to the estimate rather than failing the turn.
-    """
+    """The provider's OWN count of this request's input tokens, or ``None``.
+    Counts messages, system block and tool schemas; best-effort, so any fault
+    degrades to the heuristic rather than failing the turn."""
     try:
         payload: dict[str, Any] = {
             "model": kwargs["model"],
@@ -114,10 +84,8 @@ async def _exact_prompt_tokens(client: Any, kwargs: dict[str, Any]) -> int | Non
 
 def anthropic_api_key() -> str:
     """Return ``ANTHROPIC_API_KEY``; raise honestly when it is unset.
-
     The SDK resolves the key itself, but an unset key otherwise surfaces as an
-    SDK construction error with no pointer to the fix.
-    """
+    SDK construction error with no pointer to the fix."""
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not key:
         raise RuntimeError(
@@ -129,12 +97,8 @@ def anthropic_api_key() -> str:
 
 def anthropic_model(session_model: str | None = None) -> str:
     """Resolve the model id to send.
-
-    A per-turn selection from the client wins when it names a Claude model; an
-    id shaped for another provider (a stale Bedrock inference-profile id, an
-    Ollama tag) is ignored in favour of ``TRID3NT_ANTHROPIC_MODEL`` / the
-    default, since sending it would be a 404 from the Messages API.
-    """
+    A per-turn client selection wins only when it names a Claude model; an id
+    shaped for another provider would be a 404, so it is ignored."""
     if session_model and session_model.strip().startswith("claude-"):
         return session_model.strip()
     configured = os.environ.get("TRID3NT_ANTHROPIC_MODEL", "").strip()
@@ -150,11 +114,8 @@ def tool_declarations_to_anthropic_tools(
     tool_declarations: list[genai_types.FunctionDeclaration] | None,
 ) -> list[dict[str, Any]]:
     """Convert genai FunctionDeclarations to Messages API ``tools[]``.
-
-    Descriptions pass through in full -- unlike the Bedrock toolSpec, this API
-    imposes no per-description length cap, so the registry's LLM-facing
-    docstrings reach the model whole.
-    """
+    Descriptions pass through in FULL: this API imposes no per-description
+    length cap."""
     tools: list[dict[str, Any]] = []
     for decl in tool_declarations or []:
         dumped = decl.model_dump(mode="json", exclude_none=True)
@@ -183,11 +144,8 @@ def tool_declarations_to_anthropic_tools(
 
 def _coalesce(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Merge consecutive same-role messages.
-
-    Tool results must ride the user message that immediately follows the
-    assistant ``tool_use`` turn, and the codebase emits one Content per part,
-    so the run of function_response Contents has to fold into one message.
-    """
+    Tool results must ride the user message immediately after the assistant
+    ``tool_use`` turn, and one Content is emitted per part."""
     merged: list[dict[str, Any]] = []
     for m in messages:
         if merged and merged[-1]["role"] == m["role"]:
@@ -218,13 +176,8 @@ def contents_to_anthropic_messages(
     contents: list[genai_types.Content],
 ) -> list[dict[str, Any]]:
     """Convert genai ``contents`` to Messages API ``messages[]``.
-
-    genai roles ``user``/``model`` map to ``user``/``assistant``. A
-    function_call Part becomes a ``tool_use`` block, a function_response Part a
-    ``tool_result`` block; the two ids must match, so a history whose call ids
-    are absent gets synthesized ids paired by arrival order. Empty text is
-    dropped -- an empty text block is a 400.
-    """
+    ``tool_use`` and ``tool_result`` ids must match, so a history with no call
+    ids gets synthesized ids paired by arrival order; empty text is a 400."""
     messages: list[dict[str, Any]] = []
     pending_ids: deque[str] = deque()
     counter = 0
@@ -287,12 +240,13 @@ def _build_message_kwargs(
     model: str | None,
 ) -> dict[str, Any]:
     """Build the ``messages.stream`` kwargs (pure -- unit-testable).
-
-    Cache breakpoints land on the LAST tool and the system block: the render
-    order is tools -> system -> messages, so those two mark the end of the
-    stable prefix and everything volatile (the conversation) follows them. A
-    miss is a normal uncached call, never a correctness risk.
-    """
+    Cache breakpoints land on the LAST tool and the system block, the end of the
+    stable prefix; a miss is a normal uncached call, never a correctness risk."""
+    # API constraints encoded below are 400s, not preferences: ``thinking`` is
+    # adaptive and ``budget_tokens`` is removed on this model family; the
+    # sampling params (temperature / top_p / top_k) are removed too, so none is
+    # sent; the request never ends on an assistant turn (no prefill); and every
+    # call streams so a long tool-planning turn cannot trip the SDK timeout.
     kwargs: dict[str, Any] = {
         "model": anthropic_model(model),
         "max_tokens": _DEFAULT_MAX_TOKENS,
@@ -327,17 +281,14 @@ def _build_message_kwargs(
 
 def _is_transient_anthropic_error(exc: BaseException) -> bool:
     """True when ``exc`` is a TRANSIENT upstream failure worth retrying.
-
-    Transient: 429, any status >= 500 (overloaded / service-unavailable /
-    internal), and connection drops or request timeouts. Non-transient: 400 /
-    401 / 403 / 404 / 422 -- genuine rejections of our request where a retry
-    only hides the bug. Classes are tested most-specific-first.
-    """
+    Transient: 429, any status >= 500, connection drops and request timeouts. A
+    400 / 401 / 403 / 404 / 422 is a rejection where a retry only hides a bug."""
     try:
         import anthropic  # noqa: WPS433 -- dep dormant unless this provider is on
     except ImportError:
         return False
 
+    # Most-specific class first.
     if isinstance(
         exc,
         (
@@ -411,11 +362,8 @@ def _usage_event(usage: Any) -> UsageMetadataEvent:
 
 def _function_call_events(message: Any) -> list[FunctionCallEvent]:
     """Harvest ``tool_use`` blocks off the final message.
-
-    Tool inputs are read as parsed JSON (the SDK accumulates the streamed
-    partial JSON); a string payload is parsed with ``json.loads`` -- never
-    matched as text.
-    """
+    Tool inputs are read as parsed JSON; a string payload is parsed with
+    ``json.loads``, never matched as text."""
     events: list[FunctionCallEvent] = []
     for block in getattr(message, "content", None) or []:
         if getattr(block, "type", None) != "tool_use":
@@ -458,17 +406,8 @@ async def stream_anthropic(
     model: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """Stream one Messages API turn, yielding the ``StreamEvent`` union.
-
-    Mirrors ``openai_adapter.stream_openai``: one call == one model round.
-    The turn loop appends function_call + function_response Contents and
-    re-calls until no tool calls remain.
-
-    Request-time transient failures (429 / 5xx / timeouts) retry with the
-    shared exponential backoff, logging the provider's verbatim error; on
-    exhaustion the typed ``UpstreamProviderError`` ends the turn with an honest
-    provider-unavailable narration. A MID-STREAM transient failure is
-    classified the same way but never replayed -- tokens already flowed.
-    """
+    One call is one model round; request-time transients retry with the shared
+    backoff, and a MID-STREAM transient is never replayed -- tokens already flowed."""
     try:
         import anthropic
         from anthropic import AsyncAnthropic
@@ -497,7 +436,7 @@ async def stream_anthropic(
     kwargs = _build_message_kwargs(working_contents, tool_declarations, system_prompt, model)
 
     # Only when the cheap estimate says the decision is MARGINAL do we spend a
-    # round trip on the provider's exact counter (see the ratio's docstring).
+    # round trip on the provider's exact counter.
     heuristic = estimate_tokens_for_contents(working_contents) + tool_tokens + sys_tokens
     exact: int | None = None
     if heuristic >= window.tokens * _COUNT_TOKENS_CONSULT_RATIO:
