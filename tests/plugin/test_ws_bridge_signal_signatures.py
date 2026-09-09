@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 
 _WS_BRIDGE = (
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
     / "plugin"
     / "net"
     / "ws_bridge.py"
