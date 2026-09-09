@@ -49,10 +49,10 @@ from ...imagery._goes_common import (
     GOESInputError,
     _normalize_satellite,
 )
-from ..errors import router_input_error
-from . import FrameDegraded, FramePlan, register_hook
+from ..._router.errors import router_input_error
+from ..._router.hooks import FrameDegraded, FramePlan, register_hook
 
-logger = logging.getLogger("trid3nt_server.tools.fetchers._router.hooks.glm")
+logger = logging.getLogger(__name__)
 
 __all__ = ["frames_plan", "frame_bytes"]
 

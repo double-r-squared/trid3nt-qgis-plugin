@@ -34,7 +34,7 @@ from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import RouterInputError
 from trid3nt_server.tools.fetchers._router.executors import animation_frames as EX
 from trid3nt_server.tools.fetchers._router.hooks import FrameDegraded
-from trid3nt_server.tools.fetchers._router.hooks import glm as GLM
+from trid3nt_server.tools.fetchers.weather.fetch_glm_lightning import hooks as GLM
 from trid3nt_server.tools.fetchers.imagery._goes_archive_core import _grid_for_bbox
 
 

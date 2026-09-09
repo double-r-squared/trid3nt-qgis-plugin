@@ -23,8 +23,8 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from .. import hooks as _hooks
-from ..errors import router_empty_error, router_input_error
+from ..._router import hooks as _hooks
+from ..._router.errors import router_empty_error, router_input_error
 
 __all__ = ["resolve_build", "resolve_parse", "build_request", "parse_response", "enrich_plan", "enrich_merge"]
 

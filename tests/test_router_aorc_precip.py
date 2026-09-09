@@ -23,7 +23,7 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
     RouterNotAvailableError,
 )
-from trid3nt_server.tools.fetchers._router.hooks import aorc_precip as ap
+from trid3nt_server.tools.fetchers.weather.fetch_aorc_precip import hooks as ap
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 AORC_SPEC = load_spec_from_path(

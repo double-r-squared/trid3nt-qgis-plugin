@@ -28,17 +28,15 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..errors import (
+from ..._router.errors import (
     RouterError,
     router_empty_error,
     router_not_available_error,
     router_upstream_error,
 )
-from . import register_hook
+from ..._router.hooks import register_hook
 
-logger = logging.getLogger(
-    "trid3nt_server.tools.fetchers._router.hooks.aorc_precip"
-)
+logger = logging.getLogger(__name__)
 
 #: Public AWS Open Data bucket (NODD), per-year Zarr stores ``<year>.zarr``.
 _BUCKET = "noaa-nws-aorc-v1-1-1km"

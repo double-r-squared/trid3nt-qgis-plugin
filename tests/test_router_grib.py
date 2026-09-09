@@ -26,7 +26,7 @@ from rasterio.transform import from_bounds
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router.errors import RouterError
 from trid3nt_server.tools.fetchers._router.executors import raster_cog
-from trid3nt_server.tools.fetchers._router.hooks import mrms_qpe as mq
+from trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe import hooks as mq
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
 _NODATA = -9999.0
