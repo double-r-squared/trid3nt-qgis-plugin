@@ -1,56 +1,9 @@
 """Atomic tool ``compute_impervious_surface`` - NLCD impervious-fraction raster.
 
-This module registers one atomic tool that computes an impervious-surface
-fraction raster (float32, range 0.0-1.0) from either:
-
-- the **NLCD Impervious Surface** product (a separate USGS product whose pixel
-  values are percent impervious, integer 0-100) -- direct read + scale by 1/100;
-- or the **NLCD Land Cover** product (the canonical NLCD class-code raster) -- derive impervious fraction from developed-class membership using the standard
-  USGS NLCD developed-density mapping:
-
-      21 = Developed, Open Space         → 0.0
-      22 = Developed, Low Intensity      → 0.3
-      23 = Developed, Medium Intensity   → 0.6
-      24 = Developed, High Intensity     → 0.9
-      anything else                      → 0.0
-
-The output is a single-band Float32 GeoTIFF in the same CRS and grid as the
-input, with nodata = NaN. ``role="context"``, ``units=None`` (the values are
-dimensionless fractions).
-
-**Auto-detection of input product** is by filename heuristic + rasterio tags
-inspection: a URI whose path component contains ``impervious`` (case-insensitive)
-or whose raster tags include ``NLCD_Impervious_Surface`` is treated as the
-impervious product; otherwise the input is assumed to be NLCD landcover and
-the dev-class mapping is applied.
-
-**Cache key** is derived from ``(landcover_uri, bbox)`` -- both materially affect
-output pixels; the chosen path (impervious-product vs landcover-derive) is a
-deterministic function of the input URI so it does not need to enter the key.
-
-Cache layout:
-
-    ``s3://trid3nt-cache/cache/static-30d/impervious/<key>.tif``
-
-**Cross-cutting invariants:**
-
-- **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls; pure
-  numpy reclass + scale via rasterio.
-- **(cacheable): honors.** ``cacheable=True``,
-  ``ttl_class="static-30d"``, ``source_class="impervious"`` -- output is stable
-  for the lifetime of the cached upstream NLCD raster.
-- **CRS hygiene (engine.md domain discipline):** the output preserves the input
-  CRS verbatim (no reprojection); the transform / size / nodata are propagated.
-- **(resilience):** failures surface as ``ImperviousSurfaceError`` with
-  typed ``error_code``; S3-read errors and rasterio-open errors are wrapped.
-
-**Codified lesson check:** the input/output share grid + transform +
-CRS; the tool does not emit new geometry. The unit tests verify pixel-value
-correctness against known synthetic landcover (class 22 → 0.3, etc.), and the
-live test verifies the developed-class mapping produces sensible mean-fraction
-values for a real NLCD bbox.
+Reads either the NLCD Impervious Surface product (percent, scaled by 1/100) or
+the Land Cover class raster (mapped through the developed classes), chosen by
+filename and raster tags; the output keeps the input CRS and grid verbatim.
 """
-
 from __future__ import annotations
 from typing import Any
 
@@ -77,19 +30,10 @@ logger = logging.getLogger("trid3nt_server.tools.processing.compute_impervious_s
 # ---------------------------------------------------------------------------
 
 
+# ``error_code`` is one of RASTER_OPEN_FAILED, RASTER_DOWNLOAD_FAILED,
+# RASTER_WRITE_FAILED, UNKNOWN_RASTER_URI, BBOX_OUTSIDE_RASTER.
 class ImperviousSurfaceError(RuntimeError):
-    """Raised when impervious-surface computation fails.
-
-    ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (typed-error requirement).
-
-    Codes:
-    - ``RASTER_OPEN_FAILED`` -- rasterio could not open the input.
-    - ``RASTER_DOWNLOAD_FAILED`` -- S3 download failed.
-    - ``RASTER_WRITE_FAILED`` -- output rasterio write failed.
-    - ``UNKNOWN_RASTER_URI`` -- uri not an s3:// URI and not a readable file.
-    - ``BBOX_OUTSIDE_RASTER`` -- requested bbox does not intersect the raster.
-    """
+    """Impervious-surface computation failed."""
 
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
@@ -109,15 +53,13 @@ _IMPERVIOUS_METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Developed-class → impervious-fraction mapping (USGS NLCD canonical encoding)
+# Developed-class to impervious-fraction mapping
 # ---------------------------------------------------------------------------
 
-#: USGS NLCD developed-density classes → typical impervious fraction.
-#: The mapping reflects the canonical NLCD developed-class descriptions:
-#: 21 Developed/Open Space (<20% impervious), 22 Low (20-49%), 23 Medium
-#: (50-79%), 24 High (80-100%). The representative-midpoint fractions follow
-#: the USGS impervious-surface companion product's typical values. Other NLCD
-#: classes (water, forest, agriculture, etc.) map to 0.0 by default.
+#: USGS NLCD developed-density classes -> representative impervious fraction:
+#: 21 Open Space (under 20% impervious), 22 Low (20-49%), 23 Medium (50-79%),
+#: 24 High (80-100%), taking the USGS companion product's typical midpoints.
+#: Every other NLCD class maps to 0.0.
 DEVELOPED_CLASS_TO_IMPERVIOUS: dict[int, float] = {
     21: 0.0,
     22: 0.3,
@@ -127,22 +69,15 @@ DEVELOPED_CLASS_TO_IMPERVIOUS: dict[int, float] = {
 
 
 # ---------------------------------------------------------------------------
-# Object-store read helper (S3-only; GCP decommissioned)
+# Object-store read helper
 # ---------------------------------------------------------------------------
 
 
 def _download_raster_bytes(uri: str, storage_client: object | None = None) -> bytes:
-    """Download raster bytes from an ``s3://`` URI or read from a local path.
-
-    GCP is decommissioned: object-store reads route through boto3 (S3).
-    ``storage_client`` is retained for backward-compatible call signatures
-    but is ignored.
-
-    Raises ``ImperviousSurfaceError`` on any failure so callers get a typed
-    error.
+    """Raster bytes from an ``s3://`` URI or a local path; ``storage_client`` is
+    ignored and any failure raises ``ImperviousSurfaceError``.
     """
-    del storage_client  # GCP decommissioned -- S3/local only.
-    # s3:// staging via the shared boto3 reader.
+    del storage_client
     if uri.startswith("s3://"):
         from trid3nt_server.tools.cache import read_object_bytes_s3
         try:
@@ -152,7 +87,6 @@ def _download_raster_bytes(uri: str, storage_client: object | None = None) -> by
                 "RASTER_DOWNLOAD_FAILED",
                 f"S3 download failed for {uri!r}: {exc}",
             ) from exc
-    # Local path -- read directly (test / dev convenience).
     try:
         with open(uri, "rb") as f:
             return f.read()
@@ -169,19 +103,11 @@ def _download_raster_bytes(uri: str, storage_client: object | None = None) -> by
 
 
 def _is_impervious_product(uri: str, tags: dict[str, object] | None) -> bool:
-    """Auto-detect whether an input raster is the NLCD Impervious Surface product.
-
-    Heuristics:
-    - Filename contains the substring ``impervious`` (case-insensitive)
-      anywhere in the URI path (matches typical USGS names like
-      ``NLCD_2021_Impervious_L48.tif``, ``annual_nlcd_impervious_2021.tif``).
-    - rasterio tags include a key whose name contains ``impervious`` or whose
-      stringified value contains the substring ``Impervious_Surface`` /
-      ``percent_developed_impervious`` (the canonical NLCD layer aliases).
-
-    Returns True if the input looks like the impervious product, False
-    otherwise (in which case the landcover dev-class mapping path is used).
+    """True when the input looks like the NLCD Impervious Surface product; False
+    routes the caller through the landcover developed-class mapping instead.
     """
+    # The signals are an "impervious" token anywhere in the URI, or a raster tag
+    # whose key or value carries impervious / percent_developed_impervious.
     if "impervious" in uri.lower():
         return True
     if tags:
@@ -195,7 +121,7 @@ def _is_impervious_product(uri: str, tags: dict[str, object] | None) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Core computation -- pure-numpy, no LLM
+# Core computation
 # ---------------------------------------------------------------------------
 
 
@@ -203,27 +129,17 @@ def _derive_impervious_from_landcover(
     landcover_array: object,  # numpy.ndarray (int)
     nodata: int | float | None,
 ) -> object:  # numpy.ndarray (float32)
-    """Map NLCD landcover class codes to impervious fractions (developed-class lookup).
-
-    Args:
-        landcover_array: 2D numpy array of NLCD class codes (integers).
-        nodata: input nodata sentinel (or None).
-
-    Returns:
-        Float32 numpy array of impervious fractions in [0.0, 1.0], with
-        ``np.nan`` wherever the input is nodata.
+    """NLCD class codes to a float32 impervious fraction in [0.0, 1.0], NaN
+    wherever the input is nodata.
     """
     import numpy as np  # type: ignore[import-not-found]
 
     out = np.zeros(landcover_array.shape, dtype=np.float32)
-    # Apply developed-class mapping. All other classes (water, forest, ag, …)
-    # remain at the default 0.0 -- physically meaningful: a forest is impervious-
-    # 0%, a water body is impervious-0% from a runoff-routing perspective (the
-    # water IS the runoff destination).
+    # Every non-developed class stays at 0.0: a forest is 0% impervious, and so
+    # is a water body from a runoff-routing view - the water IS the destination.
     for class_code, fraction in DEVELOPED_CLASS_TO_IMPERVIOUS.items():
         out[landcover_array == class_code] = fraction
 
-    # Preserve nodata as NaN per audit.md spec.
     if nodata is not None:
         out[landcover_array == nodata] = np.nan
 
@@ -234,26 +150,17 @@ def _scale_impervious_product(
     impervious_array: object,  # numpy.ndarray (int)
     nodata: int | float | None,
 ) -> object:  # numpy.ndarray (float32)
-    """Scale NLCD Impervious Surface product values (0-100) to fractions (0.0-1.0).
-
-    Args:
-        impervious_array: 2D numpy array of percent-impervious values.
-        nodata: input nodata sentinel (or None).
-
-    Returns:
-        Float32 numpy array of impervious fractions in [0.0, 1.0], with
-        ``np.nan`` wherever the input is nodata.
+    """Percent-impervious values to a float32 fraction in [0.0, 1.0], NaN wherever
+    the input is nodata.
     """
     import numpy as np  # type: ignore[import-not-found]
 
     out = impervious_array.astype(np.float32) / 100.0
 
-    # Clip to [0.0, 1.0]. Anything outside is either nodata (handled below) or
-    # an upstream encoding anomaly; clipping is safer than emitting fractions
-    # > 1.0 that downstream consumers would mis-interpret.
+    # A value outside the range is nodata or an upstream encoding anomaly;
+    # clipping beats emitting a fraction above 1.0 for a consumer to misread.
     out = np.clip(out, 0.0, 1.0)
 
-    # Preserve nodata as NaN.
     if nodata is not None:
         out[impervious_array == nodata] = np.nan
 
@@ -265,21 +172,8 @@ def _compute_impervious_bytes(
     bbox: tuple[float, float, float, float] | None,
     force_impervious_product: bool | None = None,
 ) -> bytes:
-    """Read landcover bytes, derive impervious, return a Float32 GeoTIFF bytes.
-
-    Args:
-        landcover_bytes: bytes of the input raster (GeoTIFF).
-        bbox: optional ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326
-            for a windowed read.  When ``None`` the full raster is processed.
-            Tested-by-construction: if the bbox does not intersect the raster
-            after CRS-aware transform, ``BBOX_OUTSIDE_RASTER`` is raised.
-        force_impervious_product: tests can pass True/False to override the
-            auto-detection heuristic on synthetic data that lacks the
-            ``impervious`` filename token.
-
-    Returns:
-        Float32 GeoTIFF bytes (single-band), nodata = NaN, CRS + transform
-        inherited from the input.
+    """Single-band Float32 GeoTIFF bytes, nodata NaN, CRS and transform inherited;
+    a ``bbox`` that misses the raster raises BBOX_OUTSIDE_RASTER.
     """
     import numpy as np  # type: ignore[import-not-found]
     import rasterio  # type: ignore[import-not-found]
@@ -302,16 +196,13 @@ def _compute_impervious_bytes(
             src_nodata = src.nodata
             tags = src.tags()
 
-            # Decide path.
             if force_impervious_product is not None:
                 is_imp = bool(force_impervious_product)
             else:
-                # uri is not available at this layer; the outer wrapper passes
-                # the URI through filename inspection. Here we only have tags
-                # to inspect, plus the outer wrapper's URI-based check.
+                # No URI at this layer, so only the tags can be inspected; the
+                # caller has already applied the filename signal.
                 is_imp = _is_impervious_product("", tags)
 
-            # Compute the read window if bbox is provided.
             if bbox is not None:
                 if src_crs is None:
                     raise ImperviousSurfaceError(
@@ -456,8 +347,7 @@ def compute_impervious_surface(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """NLCD impervious-surface fraction computation.
@@ -479,17 +369,11 @@ def compute_impervious_surface(
             window-read a large source raster; ``None`` processes the
             full input.
 
-    Returns:
-        ``LayerURI`` for a Float32 GeoTIFF (cache bucket, TTL 30d; single
-        band, [0.0, 1.0] NaN-nodata, same CRS/grid as input).
-
-    Raises:
-        ImperviousSurfaceError: input unreadable, bbox doesn't intersect,
-            or output write failure.
+    Returns a single-band Float32 GeoTIFF in [0.0, 1.0] with NaN nodata, on the
+    input's own CRS and grid.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 
-    # Validate bbox shape early if provided.
     if bbox is not None:
         if len(bbox) != 4:
             raise ImperviousSurfaceError(
@@ -503,16 +387,12 @@ def compute_impervious_surface(
                 f"bbox is degenerate (min must be < max on both axes): {bbox!r}",
             )
 
-    # URI-based product detection -- the inner _compute_impervious_bytes also
-    # checks raster tags, but the URI heuristic is the strongest signal so
-    # we apply it here and pass through as an override.
+    # The URI token is the strongest product signal, so it is resolved here and
+    # passed down as an override of the tag inspection.
     uri_says_impervious = "impervious" in landcover_uri.lower()
 
     def _fetch() -> bytes:
-        # 1. Download or read the source raster.
         raster_bytes = _download_raster_bytes(landcover_uri, _storage_client)
-
-        # 2. Compute impervious bytes.
         return _compute_impervious_bytes(
             raster_bytes,
             bbox=bbox,
@@ -524,7 +404,7 @@ def compute_impervious_surface(
         "landcover_uri": landcover_uri,
     }
     if bbox is not None:
-        # 6dp ≈ 0.1m; sufficient for cache-key stability across float jitter.
+        # 6dp is about 0.1 m, enough for cache-key stability across jitter.
         params["bbox"] = [round(v, 6) for v in bbox]
 
     result = read_through(
@@ -557,7 +437,7 @@ def compute_impervious_surface(
         style={"kind": "continuous", "ramp": "reds", "units": "%",
          "label": "Impervious surface",
          "scale": {"policy": "fixed", "range": [0, 100],
-         "transform": "linear"}},  # tools-backlog #3: 0-100% reds ramp
+         "transform": "linear"}},
         role="context",
         units=None,
     )
