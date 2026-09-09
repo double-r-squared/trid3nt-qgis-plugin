@@ -11,7 +11,6 @@ three arrays - once from a path and once from an accepted mesh's own display fac
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -34,18 +33,10 @@ __all__ = [
 #: source coverage. One and a half puts every sample on a whole cell.
 _RIM_PIXELS = 1.5
 
-#: Where the repo's shared TIN format writers live. They are the one place the
-#: boundary walk and the orient/clean pass are written, and they are IMPORTED
-#: from here rather than reimplemented beside every caller.
-_TIN_FORMATS = "scripts/sandbox/oceanmesh"
-
 
 def tin_formats() -> Any:
-    """The repo's shared TIN format module, importable from the agent venv."""
-    path = str(Path(__file__).resolve().parents[4] / _TIN_FORMATS)
-    if path not in sys.path:
-        sys.path.insert(0, path)
-    import mesh_formats  # type: ignore
+    """The shared TIN writers - the one home of the boundary walk and orient pass."""
+    from trid3nt_server.workflows.mesh.shared.formats import mesh_formats
 
     return mesh_formats
 

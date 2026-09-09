@@ -3403,3 +3403,21 @@ in the row. Registered tools 162 -> 163 (the one declared addition,
 | `hazard/fetch_usace_levees` onto `pygeohydro.NLD` | `trid3nt_server/tools/fetchers/hazard/fetch_usace_levees/` | NOTHING LEFT TO FOLD: the row landed on GDAL's ESRIJSON driver in the vector stage (`ingest.ogr: {driver: ESRIJSON}`, zero hook LOC). `pygeohydro.NLD` would name the same three sub-layers the spec already names as data, over a second HTTP stack, and it carries no code table this row needs - the census's own deciding reason for the pygeohydro path. The driver stays | REJECTED (2026-09-09) | fold hydro stage |
 | `tools/processing/section/section.py`'s `between` cut (`_band` 16, `_end_face` 36, `_cut_between` 62) onto `pynhd.flowline_xsection` | `trid3nt_server/tools/processing/section/` | REPLACES NOTHING, MEASURED: `flowline_xsection` (60 LOC, plus `_xs_planar` 47) takes an NHDPlus FLOWLINE FRAME with a `levelpathi` column and emits regularly spaced section LINES along a network. Our cut takes two named points and a mapped POLYGON and returns the polygon subset plus the two transects a boundary role is prescribed across. No shared input, no shared output. A candidate NEW capability if a regular section set over a network is ever asked for | REJECTED (2026-09-09) | HYRIVER, THE WIDER MAP (c) |
 | `compute_cross_section._interpolate_stations` (34) onto `py3dep.elevation_profile` | `trid3nt_server/tools/processing/compute_cross_section/` | IT WOULD COST MORE THAN IT REMOVES, MEASURED: `elevation_profile` returns 3DEP and nothing else, so the tool's stated differentiator - N layers on one shared distance axis, any raster the Case holds, nodata surfaced as a break in the line - would go with it, along with `_sample_layer` (73) and the chart envelope (`_build_profile_spec` 106). It also splines the line before sampling, which is a different transect from the one the caller drew. ~34 of 743 removed against those | REJECTED (2026-09-09) | HYRIVER, THE WIDER MAP (c) |
+
+## The mesh format modules leave scripts/ - 2026-09-09
+
+`scripts/sandbox/oceanmesh/mesh_formats.py` and `schism_gr3.py` move to
+`trid3nt_server/workflows/mesh/shared/formats/` (git mv; contents byte-identical
+apart from `mesh_formats`' flat `from schism_gr3 import ...`, which becomes the
+package import). A new `formats/__init__.py` is the package door.
+
+Deleted with the move, not relocated: `shared/nodes.py`'s `_TIN_FORMATS`
+directory string, the `parents[4]` walk and the `sys.path.insert` inside
+`tin_formats()` (13 lines). `tin_formats()` itself stays - it is the name
+`meshers/om2d.py` and `tests/test_mesh_om2d.py` call - and now returns the module
+through a plain import. CONDITION: none outstanding; no caller signature moved,
+and the mesh worker image carries `oceanmesh` and a driver, never these writers.
+
+This closes the DESIGN-STOP held open at the SCHISM worker relocation above
+("where those three pure-numpy helpers should live is a structural choice"): they
+live in the product tree, in the package the one topology pass belongs to.

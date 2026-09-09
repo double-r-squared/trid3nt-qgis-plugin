@@ -25,7 +25,7 @@ from typing import Sequence
 
 import numpy as np
 
-from schism_gr3 import (  # type: ignore
+from trid3nt_server.workflows.mesh.shared.formats.schism_gr3 import (
     extract_boundary_loops,
     remove_boundary_pinch_points,
     signed_area_ccw,

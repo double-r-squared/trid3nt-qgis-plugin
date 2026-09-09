@@ -8,7 +8,7 @@ the wave's scope must carry exactly one row, written by the agent that READ it.
     git ls-files trid3nt_server plugin contracts scripts workers tests docs
     git ls-files | grep -iE '(^|/)README(\.[a-z]+)?$'
     git ls-files | grep -E '^(AGENTS\.md|CONVENTIONS\.md|README\.md)$'
-      union, minus '^docs/proof/'                                    -> 1,908
+      union, minus '^docs/proof/'                                    -> 1,909
 
 `docs/CONVENTIONS.md` is a member of the first set; there is no root
 `CONVENTIONS.md`. `docs/proof/` is excluded by the charter, as are untracked
@@ -16,18 +16,26 @@ files (`__pycache__`, `.pytest_cache`, the four untracked GSHHS shapefile parts
 under `scripts/sandbox/oceanmesh/shoreline/`, and the thirteen untracked docs
 siblings the `docs-and-readmes` lens names).
 
-Scope by top-level path: `trid3nt_server` 833, `docs` 498, `tests` 332,
-`contracts` 93, `plugin` 79, `scripts` 63, `workers` 8, `AGENTS.md` 1,
-`README.md` 1.
+Scope by top-level path: `trid3nt_server` 836, `docs` 498, `tests` 332,
+`contracts` 93, `plugin` 79, `scripts` 61, `workers` 8, `AGENTS.md` 1,
+`README.md` 1. The mesh-format move took two files from `scripts` into
+`trid3nt_server` and added the package `__init__.py` that came with them; the
+three rows are in `workflows-mesh.md`.
+
+OPEN GAP, not closed here: `git ls-files docs | grep -v '^docs/proof/'` now
+counts 514, sixteen above the 498 this census enumerated. Those sixteen landed
+after the census and have NO row. Reading them is the docs stage's work; until
+it lands, the 100% below is a figure for the tree the census walked, not for
+the tree today.
 
 ## Result
 
 | measure | count |
 | --- | --- |
-| files in scope | 1,908 |
-| files with a row | **1,908 (100%)** |
+| files in scope | 1,909 |
+| files with a row | **1,909 (100%)** |
 | files with NO row | **0** (three at the start of this pass; see below) |
-| census rows across all lenses | 1,957 |
+| census rows across all lenses | 1,960 |
 | files with TWO rows | 49 (34 self-declared restatements + 15 cross-lens overlaps) |
 
 Rows per lens (census tables only; guard, findings, summary and roll-up tables
@@ -42,13 +50,13 @@ below a lens's census are not rows and are not counted):
 | `tools-processing.md` | 141 |
 | `workflows-telemac.md` | 98 |
 | `contracts.md` | 72 |
-| `scripts-workers.md` | 71 |
+| `scripts-workers.md` | 69 |
 | `trid3nt_server-tools-root-search-meta-display.md` | 57 |
 | `workflows-runtime-solver-shared.md` | 43 |
 | `plugin.md` | 35 |
 | `trid3nt_server-server-main-persistence-plugin_repo.md` | 35 |
 | `trid3nt_server-gates-cases-sandbox-testing.md` | 32 |
-| `workflows-mesh.md` | 28 |
+| `workflows-mesh.md` | 31 |
 | `trid3nt_server-adapters-credentials-fallbacks.md` | 16 |
 | `emission.md` | 11 |
 
