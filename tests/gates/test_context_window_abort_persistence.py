@@ -25,7 +25,7 @@ the abort note builder (``context_budget.build_context_window_abort_note``).
 
 These tests drive the REAL ``_stream_model_reply`` / ``_dispatch_model_turn_and_persist``
 seams (no Gemini, no Playwright) against file-backed persistence, mirroring
-``tests/test_terminal_narration_and_failure_card.py``.
+``tests/adapters/test_terminal_narration_and_failure_card.py``.
 """
 
 from __future__ import annotations

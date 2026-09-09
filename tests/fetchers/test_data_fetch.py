@@ -1135,7 +1135,7 @@ from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period.lookup_pr
 # twin-internal tests (_fetch_nlcd_landcover_bytes / _landcover_bytes_to_cog /
 # _fix_nlcd_background_transparency / _clip_raster_bytes_to_bbox / cache-version
 # salt / overview generation) DELETED with the twin. Their value moved to
-# tests/test_router_landcover.py (the wcs_getcoverage mode + pre_resolve auto-coarsen
+# tests/fetchers/test_router_landcover.py (the wcs_getcoverage mode + pre_resolve auto-coarsen
 # + the sidecar envelope, incl. a twin-value-parity gate). The metadata + docstring
 # surface (network-free) stays here:
 

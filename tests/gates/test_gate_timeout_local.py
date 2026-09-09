@@ -13,7 +13,7 @@ card, so the F6 24h wait hung the turn; code-exec now waits on its own bounded
 ``_code_exec_approval_timeout_s()`` (default 180s, env
 ``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``) in EVERY lane and resolves the parked
 tool call with the typed ``CodeExecApprovalTimeoutError``. See
-tests/test_code_exec_tool.py for the timeout-path coverage.
+tests/sandbox/test_code_exec_tool.py for the timeout-path coverage.
 """
 
 from __future__ import annotations

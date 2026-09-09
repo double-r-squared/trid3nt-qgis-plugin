@@ -19,7 +19,7 @@ drains. The bound is on the model call ONLY -- the minutes-long ``run_solver``
 
 Run:
     venvs/agent/bin/python -m pytest \
-        tests/test_turn_timeout_hardening.py -q
+        tests/adapters/test_turn_timeout_hardening.py -q
 """
 
 from __future__ import annotations

@@ -8,13 +8,13 @@ Tests cover:
   4. OPEN-14: stream_openai's context-budget wiring -- proactive compaction
      before the request, and the reactive clip-guard retry-then-typed-error
      path (num_ctx discovery is monkeypatched throughout, no live Ollama
-     required; see tests/test_context_budget.py for the discovery/ladder/
+     required; see tests/gates/test_context_budget.py for the discovery/ladder/
      regex unit tests in isolation)
   5. Part A (compaction UX): every compaction pass yields a
      CompactionStartEvent/CompactionCompleteEvent pair -- NOT the pre-Part-A
      TextDeltaEvent note glued onto the model's reply -- so server.py's
      dispatch loop can mint/complete a durable pipeline card instead (see
-     tests/test_pipeline_emitter.py TestCompactionCard for the card-minting
+     tests/emission/test_pipeline_emitter.py TestCompactionCard for the card-minting
      seam these events drive).
 """
 from __future__ import annotations

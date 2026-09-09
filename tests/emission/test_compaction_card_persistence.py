@@ -4,7 +4,7 @@
 ``openai_adapter.stream_openai`` yields a ``CompactionStartEvent`` /
 ``CompactionCompleteEvent`` pair whenever ``context_budget.compact_contents``
 actually changes something (proactive, before the request; reactive, after a
-detected clip -- see ``tests/test_openai_adapter.py``). ``server.py``'s
+detected clip -- see ``tests/gates/test_openai_adapter.py``). ``server.py``'s
 dispatch loop turns that pair into a durable ``pipeline_emitter`` card
 (``mint_compaction_card`` / ``complete_compaction_card``) instead of the
 pre-Part-A ``TextDeltaEvent`` note glued onto the model's own reply -- the

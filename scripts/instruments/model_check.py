@@ -695,7 +695,7 @@ def render_view(model: Model, source: Path) -> str:
         "",
         f"GENERATED from `{source.relative_to(REPO_ROOT).as_posix()}` by "
         "`scripts/instruments/model_check.py --view`. Never hand-edited: regenerate it, and "
-        "`tests/test_model_conformance.py` fails while it is stale.",
+        "`tests/model/test_model_conformance.py` fails while it is stale.",
         "",
         # A view drawn without its place reads as the whole system. It is one
         # seam of one system of one plane, and it says so before its first box.

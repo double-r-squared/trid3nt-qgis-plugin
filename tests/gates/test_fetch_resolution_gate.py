@@ -467,7 +467,7 @@ async def test_landcover_small_bbox_native_resolution_no_gate() -> None:
 # continent-scale ceiling / pixel-budget) FOLDED to the spec-driven surface (ADR 0082).
 # The tool's auto-coarsen moved to the router pre_resolve hook + the gates.max_bbox_km2
 # ceiling; those twin-internal tests (which patched the deleted _fetch_nlcd_landcover_bytes
-# and read the dict return) migrated to tests/test_router_landcover.py
+# and read the dict return) migrated to tests/fetchers/test_router_landcover.py
 # (test_pre_resolve_* + test_route_continent_scale_ceiling). The gate-integration tests
 # above (fetch_landcover in FETCH_CONFIRM_TOOLS + the granularity block) still cover the
 # server-side resolution gate.

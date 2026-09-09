@@ -11,7 +11,7 @@ layers:
     normal short turn is left untouched.
 
 Run:
-    cd services/agent && .venv/bin/python -m pytest tests/test_runaway_guard.py -q
+    cd services/agent && .venv/bin/python -m pytest tests/gates/test_runaway_guard.py -q
 """
 
 from __future__ import annotations

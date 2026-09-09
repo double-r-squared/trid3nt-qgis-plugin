@@ -1599,7 +1599,7 @@ async def test_route_sim_terminal_marks_complete_and_failed(
 # --------------------------------------------------------------------------- #
 #
 # Wire-shape / lifecycle coverage against a FAKE (no-persist-hook) emitter --
-# see tests/test_compaction_card_persistence.py for the persistence-row-shape
+# see tests/emission/test_compaction_card_persistence.py for the persistence-row-shape
 # + full dispatch-loop integration coverage.
 
 

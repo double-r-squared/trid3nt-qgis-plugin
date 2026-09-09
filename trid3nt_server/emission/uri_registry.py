@@ -52,7 +52,7 @@ Scoping rules:
   knows a layer the composer's own envelope never named.
 
 Wired in ``server._invoke_tool_via_emitter`` (resolution before dispatch,
-registration after). Unit coverage in ``tests/test_uri_registry.py``
+registration after). Unit coverage in ``tests/emission/test_uri_registry.py``
 replays the mangle shapes described above.
 """
 

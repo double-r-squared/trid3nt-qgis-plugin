@@ -17,7 +17,7 @@ Covers:
      shape) and negative (plain answers, capability statements) cases.
 
 Run:
-    cd services/agent && .venv/bin/python -m pytest tests/test_context_budget.py -q
+    cd services/agent && .venv/bin/python -m pytest tests/gates/test_context_budget.py -q
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ from trid3nt_server.gates.context_budget import (
 
 
 # ---------------------------------------------------------------------------
-# Helpers (mirror tests/test_openai_adapter.py)
+# Helpers (mirror tests/gates/test_openai_adapter.py)
 # ---------------------------------------------------------------------------
 
 

@@ -838,7 +838,7 @@ package MeshSeam {
     verify requirement ModelShrinksWithTheTree by
         "tests/mesh/test_mesh_meshers.py::test_the_roster_is_the_meshers_the_tree_carries";
     verify requirement ModelShrinksWithTheTree by
-        "tests/mesh/test_mesh_om2d.py::test_the_roster_is_the_two_meshers_and_nothing_else";
+        "tests/mesh/test_mesh_meshers.py::test_the_roster_is_the_meshers_the_tree_carries";
     verify requirement ModelShrinksWithTheTree by
         "tests/model/test_model_conformance.py::test_the_model_conforms_to_the_tree";
 

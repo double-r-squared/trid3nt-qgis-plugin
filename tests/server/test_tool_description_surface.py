@@ -4,7 +4,7 @@ A tool docstring, a spec ``docstring``/``caveats`` line and a retrieval corpus
 query are all indexed as the model's routing signal. A dead engine name there
 does what a dead name in the system prompt does one layer up: it advertises a
 capability the product does not have, and it pulls a query toward a tool that
-cannot answer it. ``tests/test_system_prompt.py`` pins the prompt; this pins
+cannot answer it. ``tests/adapters/test_system_prompt.py`` pins the prompt; this pins
 everything below it.
 
 The retired-family list is the ONE lock. The prompt test's prefix-sharing lock

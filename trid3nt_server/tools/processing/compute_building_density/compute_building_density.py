@@ -41,7 +41,7 @@ Codified lesson (geographic correctness):
     The acceptance test for this tool MUST assert the density signal is high
     where Fort Myers actually has dense buildings and low over the river/ocean
     pixels in the same COG -- not merely that the COG round-trips bytes.
-    See ``tests/test_compute_building_density.py::test_geographic_correctness_*``.
+    See ``tests/processing/test_compute_building_density.py::test_geographic_correctness_*``.
 
 atomic tool, returns ``LayerURI``. Routed through
 ``read_through`` so identical ``(bbox, cell_size_m, source)`` calls reuse the

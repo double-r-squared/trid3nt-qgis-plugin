@@ -2,7 +2,7 @@
 
 Covers the DYE-variable picker, the adaptive grid sizing, and the channel-clipped
 scatter rasterization. The result read itself belongs to the engine's own library
-inside the image (``tests/test_telemac_result_reader.py``), and the live COG-write
+inside the image (``tests/telemac/test_telemac_result_reader.py``), and the live COG-write
 + upload path is exercised by the through-the-seam dev proof.
 """
 

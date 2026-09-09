@@ -19,7 +19,7 @@ Covers:
   4. Overflow classification -- which provider 400 means "too long".
 
 Run:
-    python3 -m pytest tests/test_context_window_discovery.py -q
+    python3 -m pytest tests/adapters/test_context_window_discovery.py -q
 """
 
 from __future__ import annotations
