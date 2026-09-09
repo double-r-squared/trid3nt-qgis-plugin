@@ -12,8 +12,6 @@ monkeypatched -- NO live calls. Coverage:
   typed ``*_EMPTY`` on all-empty; ``fetch_station_records`` via monkeypatch.
 - tiled_mosaic: ``plan_tile_grid`` math; ``mosaic_tile_files`` over 2 synthetic
   tiles (bounds cover both); single-tile fast path; hard-ceiling redirect error.
-- join: ``compute_value`` (value + pct + null floor); ``join_on_key`` missing ->
-  null (never fabricated); ``execute`` via monkeypatched geometry/values fetch.
 """
 
 from __future__ import annotations
@@ -37,7 +35,7 @@ from trid3nt_server.tools.fetchers._router.executors import (
     station_timeseries,
     vector_fgb,
 )
-from trid3nt_server.tools.fetchers._router.transforms import join, tiled_mosaic
+from trid3nt_server.tools.fetchers._router.transforms import tiled_mosaic
 
 
 # --------------------------------------------------------------------------- #
@@ -116,34 +114,6 @@ def _mosaic_spec(max_bbox_deg2=8.0, tile_deg2=0.5) -> SourceSpec:
         "output": {"layer_type": "raster", "ext": "tif", "style": {"kind": "continuous"}},
         "cache": {"ttl_class": "static-30d"},
         "payload_estimate": {"model": "tiled", "mb_per_tile": 0.05, "tile_deg2": tile_deg2},
-    })
-
-
-def _join_spec() -> SourceSpec:
-    return SourceSpec.model_validate({
-        "name": "fetch_demo_join",
-        "source_class": "demo_join",
-        "shape": "vector-fgb",
-        "endpoints": {
-            "geometry": {"url": "http://example.test/tracts/query"},
-            "values": {"url": "http://example.test/acs"},
-        },
-        "params": {"bbox": {"type": "bbox", "required": True}, "variable": {"type": "str", "default": "median_income"}},
-        "join": {
-            "geometry": {"endpoint": "geometry", "key_field": "GEOID", "keep": ["NAME", "STATE", "COUNTY"]},
-            "values": {
-                "endpoint": "values",
-                "scope_by": ["STATE", "COUNTY"],
-                "null_sentinel_below": -666666000.0,
-                "variables": {
-                    "median_income": {"code": "B19013_001E", "kind": "value", "units": "usd"},
-                    "poverty_rate": {"num": ["B17001_002E"], "denom": "B17001_001E", "kind": "pct", "units": "percent"},
-                },
-            },
-        },
-        "output": {"layer_type": "vector", "ext": "fgb", "style": {"kind": "reference"}},
-        "cache": {"ttl_class": "static-30d"},
-        "payload_estimate": {"model": "per_feature", "kb_per_feature": 2.0},
     })
 
 
@@ -594,78 +564,6 @@ def test_mosaic_hard_ceiling_redirects_with_typed_error():
     assert ei.value.error_code == "DEMO_MOSAIC_INPUT_ERROR"
     assert ei.value.retryable is False
 
-
-# --------------------------------------------------------------------------- #
-# join transform
-# --------------------------------------------------------------------------- #
-
-
-def test_compute_value_kind_value():
-    var = {"code": "B19013_001E", "kind": "value", "units": "usd"}
-    assert join.compute_value(var, {"B19013_001E": 65000.0}) == 65000.0
-    assert join.compute_value(var, None) is None
-    assert join.compute_value(var, {}) is None  # missing -> None (never fabricated)
-
-
-def test_compute_value_null_floor_normalizes_sentinel():
-    var = {"code": "B19013_001E", "kind": "value"}
-    assert join.compute_value(var, {"B19013_001E": -666666666.0}, null_floor=-666666000.0) is None
-
-
-def test_compute_value_kind_pct():
-    var = {"num": ["B17001_002E"], "denom": "B17001_001E", "kind": "pct"}
-    assert join.compute_value(var, {"B17001_002E": 25.0, "B17001_001E": 100.0}) == 25.0
-    assert join.compute_value(var, {"B17001_002E": 25.0, "B17001_001E": 0.0}) is None  # denom<=0
-    assert join.compute_value(var, {"B17001_001E": 100.0}) is None  # missing num -> None
-
-
-def test_join_on_key_left_join_missing_is_null():
-    spec = _join_spec()
-    join_block = spec.join
-    geom = [
-        {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]]},
-         "properties": {"GEOID": "48201010101", "NAME": "Tract A", "STATE": "48", "COUNTY": "201"}},
-        {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[1, 1], [1, 2], [2, 2], [1, 1]]]},
-         "properties": {"GEOID": "48201010102", "NAME": "Tract B", "STATE": "48", "COUNTY": "201"}},
-    ]
-    values = {"48201010101": {"B19013_001E": 72000.0}}  # tract B has NO value
-    var_name, var_spec = "median_income", join_block["values"]["variables"]["median_income"]
-    out = join.join_on_key(geom, values, join_block, var_name, var_spec, null_floor=-666666000.0)
-    by_geoid = {f["properties"]["geoid"]: f["properties"] for f in out}
-    assert by_geoid["48201010101"]["value"] == 72000.0
-    assert by_geoid["48201010102"]["value"] is None  # honest null, not fabricated
-    assert by_geoid["48201010101"]["name"] == "Tract A"
-    assert by_geoid["48201010101"]["units"] == "usd"
-
-
-def test_join_execute_via_monkeypatch(monkeypatch):
-    spec = _join_spec()
-    geom = [
-        {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [0, 0]]]},
-         "properties": {"GEOID": "48201010101", "NAME": "A", "STATE": "48", "COUNTY": "201"}},
-    ]
-    monkeypatch.setattr(join, "fetch_geometry", lambda s, p: geom)
-    monkeypatch.setattr(join, "fetch_values", lambda s, scopes, vs, p: {"48201010101": {"B19013_001E": 72000.0}})
-    data = join.execute(spec, {"bbox": [-96, 29, -95, 30], "variable": "median_income"})
-    import geopandas as gpd
-
-    gdf = gpd.read_file(io.BytesIO(data))
-    assert len(gdf) == 1
-    assert float(gdf.iloc[0]["value"]) == pytest.approx(72000.0)
-
-
-def test_join_values_staged_uri_is_typed_error_not_handed_to_httpx():
-    """A staged s3:// values endpoint is a closed trap (ADR 0297 follow-up):
-    the values leg queries a tabular API over httpx, which cannot serve a
-    staged object."""
-    spec = _join_spec()
-    spec = spec.model_copy(update={
-        "endpoints": {**spec.endpoints, "values": spec.endpoints["values"].model_copy(
-            update={"url": "s3://trid3nt-cache/staged/demo/values.json"})}
-    })
-    var_spec = spec.join["values"]["variables"]["median_income"]
-    with pytest.raises(RouterUpstreamError):
-        join.fetch_values(spec, [("48", "201")], var_spec, {"bbox": [-96, 29, -95, 30]})
 
 
 # --------------------------------------------------------------------------- #

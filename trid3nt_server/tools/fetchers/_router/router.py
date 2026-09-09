@@ -55,7 +55,6 @@ from .errors import (
     router_upstream_error,
 )
 from .executors import raster_cog, station_timeseries, vector_fgb
-from .transforms import join as join_transform
 from .transforms import tiled_mosaic
 
 logger = logging.getLogger("trid3nt_server.tools.fetchers._router.router")
@@ -587,8 +586,16 @@ def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], 
     if spec.hooks is not None and spec.hooks.build_request:
         from .executors import http_json
         return http_json.execute
+    # The JOIN-on-key transform is attic-supplied: no in-tree spec declares a
+    # join block, so a spec that does arrived with a re-mounted extension whose
+    # transform module has not been restored. Refuse rather than fall through to
+    # the geometry-only vector read, which would silently drop the values leg.
     if spec.join is not None:
-        return join_transform.execute
+        raise router_not_available_error(
+            spec.error_code_prefix,
+            "this spec declares a join block but _router/transforms/join.py is not "
+            "in the tree; restore it with the extension that supplies it",
+        )
     # Declarative fan-out (multi-query-per-value + merge, slr_scenarios). No-op
     # for every prior spec (none declare ingest.fan_out).
     if (spec.ingest or {}).get("fan_out"):
@@ -660,14 +667,6 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
     ubp = spec.normalize.units_by_param
     if ubp:
         units = (ubp.get("map") or {}).get(params.get(ubp.get("param")))
-    if spec.join is not None:
-        try:
-            _, var_spec = join_transform.select_variable(spec, params)
-            resolved = var_spec.get("units")
-            if resolved:
-                units = resolved
-        except Exception:  # noqa: BLE001 -- never fail emission on units resolution
-            pass
     # role_by_param: MAP a param value to the LayerURI role (landsat
     # thermal LST -> primary, RGB composites -> context); a value absent from the
     # map falls back to the static role. No-op when unset.
