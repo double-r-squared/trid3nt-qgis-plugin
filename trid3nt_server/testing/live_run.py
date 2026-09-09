@@ -33,7 +33,6 @@ from trid3nt_contracts import new_ulid
 from .ws_client import (
     BLOCKING_EVENTS,
     WS_URL,
-    approve_confirmation,
     create_case,
     delete_case,
     handshake,
@@ -351,9 +350,6 @@ async def _pump(ws: Any, session_id: str, run: LiveRun, ev: RunEvidence) -> None
         elif kind == "tool-payload-warning":
             activity = True
             await _answer_warning(ws, session_id, msg, run.answers, ev)
-        elif kind == "confirmation-request":
-            activity = True
-            await approve_confirmation(ws, session_id, msg)
         elif kind == "chart-emission":
             ev.charts += 1
             payload = msg["payload"]

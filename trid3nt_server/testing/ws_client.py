@@ -31,10 +31,11 @@ WS_URL = "ws://127.0.0.1:8765/ws"
 
 #: Events that PAUSE a turn waiting for something this client does not answer.
 #: A driver that declares no answer for one of these has hit a dead end, and
-#: saying so beats timing out.
+#: saying so beats timing out. ``spatial-input-request`` is answered directly
+#: (see ``_pump``'s own branch, checked ahead of this set); the rest have no
+#: answer this driver gives.
 BLOCKING_EVENTS = frozenset({
-    "spatial-input-request", "disambiguation-request",
-    "clarification-request", "recovery-choice",
+    "spatial-input-request", "credential-request", "region-choice-request",
 })
 
 
