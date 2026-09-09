@@ -27,11 +27,11 @@ gates:
   max_features: 100000                       # twin _MAX_PAGES(100) * _PAGE_SIZE(1000)
 
 ingest:
+  access: ogr
+  ogr: {driver: ESRIJSON}
   query_template:
     out_fields: "permanent_identifier,gnis_name,ftype,fcode,reachcode,elevation,areasqkm"
-    f: geojson
     order_by: "OBJECTID ASC"
-  pagination: {mode: exceeded_transfer_limit, page_size: 1000}
   column_map_ci: true                        # HR lowercase vs medium-res UPPERCASE field names
   column_map:
     permanent_identifier: {from: permanent_identifier}
