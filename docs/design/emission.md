@@ -302,7 +302,7 @@ ADR 0284).
 ## Composition
 
 Consumes `data/publish_layer` (durable vector/raster publish), `data/vector_tiles`
-(densify), `data/processing/charts_common` (budget chart), and
+(densify), `emission/charts` (budget chart), and
 `gates/context_budget` (compaction labels). Driven by `server/turn` +
 `server/_core` on every tool result. Input layers surface here via the
 emit-on-fetch seam rather than being hand-emitted by composers.
