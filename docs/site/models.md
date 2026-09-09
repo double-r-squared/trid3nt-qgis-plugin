@@ -116,8 +116,14 @@ The seam makes experiments cheap:
 3. Watch VRAM: on an 8 GB card, ~5 GB of Q4 weights + a 16k KV cache is about the ceiling
    (this is precisely why qwen3.5:9b at 6.6 GB failed the "fast" bar). Spill to CPU shows up
    as multi-minute turns, not errors.
-4. Re-run the harnesses to get numbers, not vibes: `scripts/tool_routing_bench.py`
-   (15-prompt bench) and `scripts/tool_routing_sweep.py` (per-tool sweep, resumable), then
-   `scripts/routing_failure_split.py` for the retrieval-vs-model split.
+4. Measure the swap; do not eyeball it. Two numbers decide whether a miss is the model's
+   or the corpus's, and they must be taken separately: the share of prompts where the
+   expected tool is inside the retrieved set at the K the server enforces (RETRIEVAL), and
+   the share where the model then actually calls it (ROUTING). Full retrieval recall with
+   routing short is a model-capability limit and no corpus tuning closes it; the reverse is
+   a corpus problem. Take both over the same WS surface the plugin uses - a fresh session
+   and Case per prompt, solver prompts cancelled as soon as the composer step appears in
+   `pipeline-state`, payload-warning cards auto-confirmed - and score per prompt, never per
+   turn. Recorded runs are in `docs/reports/`.
 5. Escape hatch: point `TRID3NT_OPENAI_BASE_URL` + `TRID3NT_OPENAI_API_KEY` at any cloud
    OpenAI-compatible API when a local model is not cutting it. Same agent, same tools.

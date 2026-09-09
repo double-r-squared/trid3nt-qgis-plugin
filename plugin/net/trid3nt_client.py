@@ -13,7 +13,7 @@ This module is the plugin's CONNECTION LAYER. Hard rules:
     platform and keeps the plugin zip pure-python (QGIS plugin repository
     no-binaries rule).
 
-Protocol (mirrors the web client's ``ws.ts`` (separate repo) + ``scripts/tool_routing_bench.py``):
+Protocol:
 
   envelope   {"type", "id" (ULID), "ts" (ISO-8601 Z), "session_id",
               "case_id", "payload"}
@@ -2116,11 +2116,10 @@ class AgentClient:
     def _wait_for(self, etype: str, deadline: Optional[float] = None) -> dict:
         """Drain frames until one of ``etype`` arrives (handshake helper).
 
-        Non-matching frames are dropped, mirroring the reference driver
-        (tool_routing_bench.do_handshake / create_case) -- EXCEPT ``error``
-        envelopes, whose payload is stashed on ``last_handshake_error`` so a
-        rejection that closes the socket (AUTH_REQUIRED then 1008) stays
-        classifiable after the ``ConnectionClosed`` surfaces.
+        Non-matching frames are dropped -- EXCEPT ``error`` envelopes, whose
+        payload is stashed on ``last_handshake_error`` so a rejection that closes
+        the socket (AUTH_REQUIRED then 1008) stays classifiable after the
+        ``ConnectionClosed`` surfaces.
         """
         if deadline is None:
             deadline = time.monotonic() + self.handshake_timeout

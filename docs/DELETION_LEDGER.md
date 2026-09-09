@@ -3480,3 +3480,33 @@ Repointed with the cull, not relocated: `render_selafin_animation.py`'s module
 docstring lost its supersession paragraph naming `proof_river_dye_frames.py`, and
 `fetch_lter_records/hooks.py` lost the sentence naming the atticked coverage
 probe. `scripts/sandbox/` now holds only the gitignored GSHHG shoreline.
+
+## scripts/local/ - six harnesses leave the public repo - 2026-09-09
+
+Git cannot track-but-not-push, so LOCAL-ONLY means UNTRACKED. The six files below
+moved to `scripts/local/` and were `git rm --cached`-ed: **git no longer protects
+them.** They exist on this machine only, they are not in any clone, and a
+`rm -rf` takes them with no recovery from this repo's history beyond the commit
+below. That is the ruling's intent - each needs a running ollama, this box's
+object store, or this box's run prefixes, and none is reachable from a fresh
+clone.
+
+| Untracked | Pure LOC | Why it cannot face a clone |
+|---|---:|---|
+| `scripts/local/tool_routing_bench.py` | 574 | 15-prompt routing bench against the LOCAL model over WS; needs ollama and the daemon. |
+| `scripts/local/telemac_routing_probe.py` | 163 | First-tool routing probe for the TELEMAC family; same dependency. |
+| `scripts/local/routing_failure_split.py` | 62 | Splits a local sweep log into RETRIEVAL vs MODEL; reads the bench's output. |
+| `scripts/local/backfill_run_journal.py` | 118 | A one-shot migration against THIS machine's object store; a fresh clone has no runs to backfill. |
+| `scripts/local/run_do_sag_direct.py` | 84 | Direct-call bench convenience; the cards driver is the live lane. |
+| `scripts/local/run_river_dye_direct.py` | 75 | Same, for the dye plume. |
+
+Each file's repo-root walk deepened one level with the move (`parents[1]` ->
+`parents[2]`) and nothing else changed.
+
+Repointed because a shipped page may not name an untracked script:
+`docs/site/models.md` now states the MEASUREMENT (retrieval recall at the
+enforced K, separately from the model's call rate, over the same WS surface the
+plugin drives) instead of naming three harnesses, one of which was deleted
+outright; `docs/site/engines.md` states what proves an engine (a live canary that
+closes with a delivery packet) instead of naming a `run_*_direct.py` pattern;
+`plugin/net/trid3nt_client.py` drops the two prose pointers at the bench.

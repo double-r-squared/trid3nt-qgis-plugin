@@ -12,15 +12,14 @@ into `$TRID3NT_RUNS_DIR/<run_id>/`, launches the engine, uploads outputs to MinI
 - **in-process / pip subprocess** -- pure-Python engines from the agent venv (SWMM in-process;
   Landlab and OpenQuake as `exec` subprocesses)
 
-Most engines below have been proven end-to-end locally BOTH tool-direct (a
-`scripts/run_*_direct.py` harness) and LLM-driven (`qwen3:8b-16k` called the composer on turn 1
-with 0 nudges). That proof evidence (numbered screenshots + a README) used to live at
-`docs/proof/README.md`, but a 2026-07-21 repo-slimming pass (`chore(local-bundle)`) untracked
-and gitignored `docs/proof/` to cut ~45 MB of tracked screenshots -- the file no longer exists in
-the working tree (recoverable from git history at commit `b4d2cb5`). What remains tracked in
-`docs/proof/` is a handful of direct-result JSON dumps (SFINCS, SWMM, Landlab) plus a few UI
-screenshots; per-engine result JSONs referenced below (e.g. `swan_direct_result.json`) are
-untracked-but-present working-tree evidence, not committed proof.
+An engine counts as proven end to end only through the surface a user drives: a live
+run against the running daemon, gates answered the way the dock answers them, judged on
+the artifacts the run itself wrote rather than on the turn finishing. That is what a
+CANARY is - a declared question, the same one every time - and each one closes by
+assembling a delivery packet (the canvas panels, the composite, the charts, an animation
+where the solve is time-stepped) and refusing when a piece is missing. The declarations
+live in `trid3nt_server/testing/canaries.py`; the packets they produce are the tracked
+evidence under `docs/proof/templates/`.
 
 Runtimes are from the reference consumer box (8-GB-GPU desktop; solves are CPU-bound) at the
 small/coarse AOIs used in the proofs -- they scale with AOI and resolution.
