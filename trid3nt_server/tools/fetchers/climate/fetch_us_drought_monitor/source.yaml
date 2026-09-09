@@ -25,13 +25,13 @@ params:
   date: {type: date_compact, required: false, default: null}
 
 ingest:
+  access: ogr
+  ogr: {driver: ESRIJSON}
   # Current-vs-archive layer chosen by the presence of `date` (period).
   endpoint_select: {param: date, absent: current, present: archive}
   query_template:
     out_fields: "OBJECTID,dm,period,ddate"
-    f: geojson
     order_by: "OBJECTID ASC"
-  pagination: {mode: result_offset, page_size: 2000}
   # Archive filter only when a release date is pinned (twin: period='<YYYYMMDD>').
   where_clauses:
     - {template: "period='{date}'", require: [date]}
