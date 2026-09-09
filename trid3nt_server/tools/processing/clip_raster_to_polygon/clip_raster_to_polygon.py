@@ -1,59 +1,8 @@
 """Atomic tool ``clip_raster_to_polygon`` - clip a raster to a polygon OR a bbox.
 
-The single raster-clip primitive: it accepts EITHER an arbitrary vector polygon
-(``polygon_uri``) OR a rectangular bounding box (``bbox`` + ``bbox_crs``, with an
-optional ``target_crs`` reprojection). A bbox is just a rectangular polygon, so
-both run through the SAME in-process ``rasterio.mask`` path - no gdal_translate /
-gdalwarp subprocess involved. This is the enabler for the
-"in [place]" geographic-clipping pattern (per feedback-geographic-clipping-pattern
-memory rule). Typical compositions::
-
-    # polygon (named place) clip
-    boundaries_uri = fetch_administrative_boundaries(level='state', bbox=...)
-    clipped_uri = clip_raster_to_polygon(
-        precip_uri,
-        polygon_uri=boundaries_uri,
-        feature_filter={"property": "name", "value": "Washington"},
-    )
-
-    # rectangular bbox clip (+ optional reprojection)
-    clipped_uri = clip_raster_to_polygon(
-        national_dem_uri, bbox=(w, s, e, n), bbox_crs="EPSG:4326",
-        target_crs="EPSG:3857",
-    )
-
-The result is a clipped GeoTIFF stored under the cache shim at::
-
-    s3://trid3nt-cache/cache/static-30d/clip_raster_polygon/<key>.tif
-
-**Implementation flow (cache miss):**
-
-1. Detect source CRS with ``rasterio.open(raster_uri).crs``.
-2. Read polygon(s) via ``geopandas.read_file`` (supports FlatGeobuf, GeoJSON,
-   shapefiles, GeoParquet, etc.).
-3. Apply ``feature_filter`` (property+value) to select matching features.
-4. Reproject polygon geometry to raster CRS via
-   ``rasterio.warp.transform_geom`` if CRS mismatched.
-5. Download source raster bytes (s3:// or local), write to a temp file.
-6. ``rasterio.mask.mask(raster, [polygon_geom], crop=True, nodata=...)``.
-7. Write masked array back to a LZW-compressed GeoTIFF.
-8. ``read_through`` writes bytes to the cache bucket.
-
-**Cache key** is derived from ``(raster_uri, polygon_uri, feature_filter,
-nodata_outside)`` -- all four parameters materially affect the output pixels.
-
-**Cross-cutting invariants:**
-
-- **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls.
-- **(cacheable): honors.** ``cacheable=True``,
-  ``ttl_class="static-30d"``, ``source_class="clip_raster_polygon"`` -- clip of
-  a static raster + static polygon is stable.
-- **(resilience): preserves.** Failures surface as
-  ``ClipRasterPolygonError`` (typed, never unhandled exception).
-- **CRS hygiene end-to-end:** polygon is reprojected to the raster's native
-  CRS before masking; output preserves the source raster CRS.
+Both paths run one in-process ``rasterio.mask`` call; the clip geometry is
+reprojected to the raster CRS first and the output keeps it unless retargeted.
 """
-
 from __future__ import annotations
 
 import logging
@@ -79,27 +28,13 @@ logger = logging.getLogger("trid3nt_server.tools.processing.clip_raster_to_polyg
 # ---------------------------------------------------------------------------
 
 
+# ``error_code`` is the caller's typed switch and is one of:
+#   RASTER_OPEN_FAILED, RASTER_DOWNLOAD_FAILED, UNKNOWN_RASTER_URI,
+#   POLYGON_OPEN_FAILED, POLYGON_DOWNLOAD_FAILED, UNKNOWN_POLYGON_URI,
+#   POLYGON_FILTER_EMPTY, POLYGON_REPROJECT_FAILED, MASK_FAILED,
+#   INVALID_CLIP_INPUT, BBOX_REPROJECT_FAILED.
 class ClipRasterPolygonError(RuntimeError):
-    """Raised when polygon-clip fails or inputs cannot be fetched/opened.
-
-    ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (typed-error requirement).
-
-    Codes:
-    - ``RASTER_OPEN_FAILED`` -- could not open raster_uri with rasterio.
-    - ``RASTER_DOWNLOAD_FAILED`` -- S3/local read for raster URI failed.
-    - ``UNKNOWN_RASTER_URI`` -- raster_uri neither s3:// URI nor readable file.
-    - ``POLYGON_OPEN_FAILED`` -- could not read polygon_uri with geopandas.
-    - ``POLYGON_DOWNLOAD_FAILED`` -- S3/local read for polygon URI failed.
-    - ``UNKNOWN_POLYGON_URI`` -- polygon_uri neither s3:// URI nor readable file.
-    - ``POLYGON_FILTER_EMPTY`` -- feature_filter matched zero features.
-    - ``POLYGON_REPROJECT_FAILED`` -- CRS reprojection of the polygon failed.
-    - ``MASK_FAILED`` -- rasterio.mask.mask raised or produced empty output.
-    - ``INVALID_CLIP_INPUT`` -- neither ``polygon_uri`` nor ``bbox`` supplied (or
-      both), or the ``bbox`` is malformed.
-    - ``BBOX_REPROJECT_FAILED`` -- bbox rectangle or output ``target_crs``
-      reprojection failed.
-    """
+    """A clip input could not be fetched, opened, filtered, reprojected or masked."""
 
     error_code: str
     retryable: bool = True
@@ -123,25 +58,18 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Raster I/O helpers (mirrors clip_raster_to_bbox sibling pattern)
+# Raster I/O helpers
 # ---------------------------------------------------------------------------
 
 
 def _get_source_crs(raster_uri: str) -> Any:
-    """Open the raster with rasterio and return its CRS.
-
-    For ``s3://`` URIs the bytes are staged via the shared boto3 reader and
-    opened in-memory.
-
-    Raises:
-        ClipRasterPolygonError: if the URI is unrecognised or rasterio cannot
-            open it.
+    """The raster's CRS; ``s3://`` bytes are staged and opened in-memory. An
+    unrecognised URI or an unopenable raster raises ``ClipRasterPolygonError``.
     """
     try:
         import rasterio  # type: ignore[import-not-found]
 
-        # s3:// header-read: stage the bytes via the shared boto3 reader and
-        # open in-memory (boto3 owns the credential chain, not GDAL /vsis3/).
+        # boto3 owns the credential chain here, not GDAL's /vsis3/.
         if raster_uri.startswith("s3://"):
             from rasterio.io import MemoryFile
             from trid3nt_server.tools.cache import read_object_bytes_s3
@@ -168,14 +96,10 @@ def _get_source_crs(raster_uri: str) -> Any:
 
 
 def _download_raster_bytes(raster_uri: str, storage_client: Any | None = None) -> bytes:
-    """Download raster bytes from an ``s3://`` URI or read from a local file.
-
-    GCP is decommissioned: object-store reads route through boto3 (S3).
-    ``storage_client`` is retained for backward-compatible call signatures
-    but is ignored.
+    """Raster bytes from an ``s3://`` URI or a local file; ``storage_client`` is
+    ignored and anything else raises ``ClipRasterPolygonError``.
     """
-    del storage_client  # GCP decommissioned -- S3/local only.
-    # s3:// staging via the shared boto3 reader.
+    del storage_client
     if raster_uri.startswith("s3://"):
         from trid3nt_server.tools.cache import read_object_bytes_s3
         try:
@@ -203,19 +127,10 @@ def _download_raster_bytes(raster_uri: str, storage_client: Any | None = None) -
 
 
 def _download_polygon_bytes(polygon_uri: str, storage_client: Any | None = None) -> tuple[bytes, str]:
-    """Download polygon bytes from an ``s3://`` URI or read from a local file.
-
-    GCP is decommissioned: object-store reads route through boto3 (S3).
-    ``storage_client`` is retained for backward-compatible call signatures
-    but is ignored.
-
-    Returns:
-        (bytes, suffix) where ``suffix`` is the file extension (e.g. ``.fgb``,
-        ``.geojson``) used so geopandas/pyogrio picks the right driver when
-        reading from the materialized temp file.
+    """``(bytes, suffix)`` for an ``s3://`` URI or a local file; the suffix is the
+    extension pyogrio needs to pick a driver off the materialized temp file.
     """
-    del storage_client  # GCP decommissioned -- S3/local only.
-    # s3:// staging via the shared boto3 reader.
+    del storage_client
     if polygon_uri.startswith("s3://"):
         from trid3nt_server.tools.cache import read_object_bytes_s3
         _name = polygon_uri.rstrip("/").rsplit("/", 1)[-1]
@@ -257,15 +172,8 @@ def _load_polygon_geom(
     target_crs: Any,
     storage_client: Any | None,
 ) -> list[Any]:
-    """Load polygon vector, apply ``feature_filter``, reproject to ``target_crs``.
-
-    Returns:
-        A list of shapely geometries (in ``target_crs``) suitable for
-        ``rasterio.mask.mask``. Multi-feature inputs yield one shapely geometry
-        per feature; the mask is the union of all of them.
-
-    Raises:
-        ClipRasterPolygonError: on read / filter / reproject failure.
+    """Load, filter and reproject the polygon: one shapely geometry per surviving
+    feature, in ``target_crs``, which ``rasterio.mask`` takes as one union mask.
     """
     try:
         import geopandas as gpd  # type: ignore[import-not-found]
@@ -291,7 +199,6 @@ def _load_polygon_geom(
                 f"geopandas could not read polygon_uri {polygon_uri!r}: {exc}",
             ) from exc
 
-        # Apply feature_filter if given. Schema: {"property": <name>, "value": <val>}
         if feature_filter is not None:
             prop = feature_filter.get("property")
             value = feature_filter.get("value")
@@ -316,7 +223,6 @@ def _load_polygon_geom(
                     retryable=False,
                 )
 
-        # Reproject to target CRS (raster's native CRS) if necessary.
         if gdf.crs is None:
             raise ClipRasterPolygonError(
                 "POLYGON_REPROJECT_FAILED",
@@ -324,8 +230,8 @@ def _load_polygon_geom(
                 retryable=False,
             )
 
-        # Compare CRSs. If raster CRS is None (rare; usually means broken raster
-        # metadata), assume EPSG:4326 lat/lon and let mask raise a clearer error.
+        # A raster with no CRS means broken metadata; assuming EPSG:4326 here
+        # lets the mask raise a clearer error than a None comparison would.
         target_crs_obj = target_crs
         try:
             if target_crs_obj is None:
@@ -345,7 +251,6 @@ def _load_polygon_geom(
                     f"polygon reprojection to {target_crs_obj} failed: {exc}",
                 ) from exc
 
-        # Return one geometry per feature.
         geoms = [geom for geom in gdf.geometry if geom is not None and not geom.is_empty]
         if not geoms:
             raise ClipRasterPolygonError(
@@ -364,7 +269,7 @@ def _load_polygon_geom(
 
 
 # ---------------------------------------------------------------------------
-# BBox -> rectangular polygon geometry (the folded clip_raster_to_bbox path)
+# BBox -> rectangular polygon geometry
 # ---------------------------------------------------------------------------
 
 
@@ -373,14 +278,8 @@ def _bbox_to_geoms(
     bbox_crs: str,
     target_crs: Any,
 ) -> list[Any]:
-    """Build a single rectangular polygon geometry for a bbox, in ``target_crs``.
-
-    ``bbox`` is ``(west, south, east, north)`` in ``bbox_crs``. The rectangle is
-    reprojected to the raster's native CRS (``target_crs``) via
-    ``rasterio.warp.transform_geom`` so ``rasterio.mask.mask`` masks in the
-    raster grid - the same convergence the polygon path uses. A bbox is just a
-    rectangle, so this runs through the same in-process rasterio path as a
-    polygon clip (no gdal subprocess).
+    """One rectangular polygon for ``bbox`` (west, south, east, north) in
+    ``bbox_crs``, reprojected to ``target_crs`` so the mask runs in the raster grid.
     """
     try:
         west, south, east, north = (float(v) for v in bbox)
@@ -428,17 +327,8 @@ def _mask_and_write(
     nodata_outside: float | None,
     target_crs: str | None = None,
 ) -> bytes:
-    """Mask raster bytes with polygon/rectangle geometry/ies; return GeoTIFF bytes.
-
-    Uses ``rasterio.mask.mask(crop=True)`` so the output extent shrinks to the
-    geometry bounding box. Output is LZW-compressed GeoTIFF preserving the source
-    CRS, unless ``target_crs`` is supplied and differs - then the masked result
-    is reprojected in-process (``rasterio.warp.reproject``) to ``target_crs``
-    (subprocess-free).
-
-    Raises:
-        ClipRasterPolygonError(MASK_FAILED) if masking raises or yields empty output.
-        ClipRasterPolygonError(BBOX_REPROJECT_FAILED) on output reprojection failure.
+    """Mask raster bytes to ``geoms`` and return LZW GeoTIFF bytes; ``crop=True``
+    shrinks the extent to the geometry, ``target_crs`` reprojects the result.
     """
     import rasterio  # type: ignore[import-not-found]
     from rasterio.mask import mask as rio_mask  # type: ignore[import-not-found]
@@ -452,15 +342,14 @@ def _mask_and_write(
 
         with tempfile.NamedTemporaryFile(suffix=".tif", delete=False, prefix="trid3nt_clip_out_") as out_f:
             out_tmp = out_f.name
-        # Remove placeholder so rasterio can create fresh.
         os.unlink(out_tmp)
 
         try:
             with rasterio.open(in_tmp) as src:
                 src_nodata = src.nodata
                 effective_nodata = nodata_outside if nodata_outside is not None else src_nodata
-                # rasterio.mask requires nodata for crop=True to fill outside pixels;
-                # fall back to 0 if both are None and the dtype is integer-like.
+                # crop=True needs a nodata value to fill outside pixels, so an
+                # unset one falls back to NaN for floats and 0 for integers.
                 if effective_nodata is None:
                     if src.dtypes[0].startswith("float"):
                         effective_nodata = float("nan")
@@ -528,10 +417,8 @@ def _reproject_masked(
     target_crs: str,
     nodata: float | int,
 ) -> tuple[Any, dict[str, Any]]:
-    """Reproject a masked array to ``target_crs`` in-process (the ``-t_srs`` path).
-
-    Returns ``(reprojected_image, updated_meta)``. A no-op (returns the inputs)
-    when ``target_crs`` already equals the source CRS.
+    """Reproject a masked array to ``target_crs``, returning ``(image, meta)``;
+    a no-op returning the inputs when it already equals the source CRS.
     """
     import numpy as np  # type: ignore[import-not-found]
     from rasterio.crs import CRS  # type: ignore[import-not-found]
@@ -601,44 +488,27 @@ def clip_raster_to_polygon(
     *,
     _storage_client: Any | None = None,
     _bucket: str | None = None,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Clip a raster to a polygon OR a rectangular bounding box.
 
-    The single raster-clip primitive (polygon mask and rectangular bbox clip).
-    Use it when a raster is larger than the analysis area: mask a flood/slope/
-    DEM raster to a named place (state, county, watershed, protected area,
-    parcel) before aggregation, OR crop to a rectangle (national DEM ->
-    city/county extent), optionally reprojecting in the same pass. Pass EITHER
-    ``polygon_uri`` OR ``bbox`` (exactly one). Do NOT use for vector-to-vector
-    clips.
+    Use when a raster is larger than the analysis area: mask a flood / slope /
+    DEM raster to a named place (state, county, watershed, parcel) before
+    aggregation, or crop to a rectangle, reprojecting in the same pass. Pass
+    EITHER ``polygon_uri`` OR ``bbox``. Do NOT use for vector-to-vector clips.
 
     Params:
         raster_uri: source raster (``s3://`` or local path).
-        polygon_uri: source polygon vector (FlatGeobuf/GeoJSON/GPKG/SHP) for an
-            arbitrary-shape clip. Mutually exclusive with ``bbox``.
-        feature_filter: optional ``{"property": name, "value": val}`` to select
-            matching features before clip (polygon path); else all features
-            dissolve into one mask.
-        nodata_outside: value for pixels outside the clip; defaults to the
-            source raster's own nodata (0 int / NaN float).
-        bbox: ``(west, south, east, north)`` rectangle clip. Mutually exclusive
-            with ``polygon_uri``.
-        bbox_crs: CRS of ``bbox`` (default ``"EPSG:4326"``).
-        target_crs: optional output CRS to reproject the clipped raster to (else
-            preserves source CRS); combined with clipping in one pass.
+        polygon_uri: polygon vector (FlatGeobuf / GeoJSON / GPKG / SHP).
+        feature_filter: ``{"property": name, "value": val}`` selects features
+            before the clip; else every feature dissolves into one mask.
+        nodata_outside: value outside the clip; defaults to the source nodata.
+        bbox: ``(west, south, east, north)`` in ``bbox_crs`` (EPSG:4326).
+        target_crs: output CRS; else the source CRS is preserved.
 
-    Returns:
-        ``LayerURI`` for the clipped GeoTIFF (cache bucket, TTL 30d; extent =
-        clip bbox via ``rasterio.mask.mask``; source CRS unless ``target_crs``).
-        Polygon / bbox is auto-reprojected to the raster CRS before masking.
-
-    Raises:
-        ClipRasterPolygonError: raster/polygon I/O failure, feature_filter
-            matches no features, CRS reprojection failure, the clip does not
-            intersect the raster, or neither/both of polygon_uri/bbox supplied.
+    The clip geometry is reprojected to the raster CRS first. I/O, filter,
+    reprojection and non-intersecting clips raise ClipRasterPolygonError.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 
@@ -651,11 +521,9 @@ def clip_raster_to_polygon(
             retryable=False,
         )
 
-    # 1. Detect source CRS so we know what to reproject the clip geometry to.
     source_crs = _get_source_crs(raster_uri)
 
     def _fetch() -> bytes:
-        # 2. Build the clip geometry in the raster's CRS (polygon or rectangle).
         if use_bbox:
             geoms = _bbox_to_geoms(bbox, bbox_crs, source_crs)
         else:
@@ -665,13 +533,11 @@ def clip_raster_to_polygon(
                 target_crs=source_crs,
                 storage_client=_storage_client,
             )
-        # 3. Download raster bytes.
         raster_bytes = _download_raster_bytes(raster_uri, _storage_client)
-        # 4. Mask + write GeoTIFF (optional target_crs reprojection).
         return _mask_and_write(raster_bytes, geoms, nodata_outside, target_crs)
 
-    # Cache key on every parameter that materially changes the output pixels.
-    # None values are omitted by _canonicalize_params (cache.py rule).
+    # Every parameter that moves output pixels is in the key; None values are
+    # omitted by _canonicalize_params.
     params: dict[str, Any] = {
         "raster_uri": raster_uri,
         "polygon_uri": polygon_uri,
@@ -692,7 +558,6 @@ def clip_raster_to_polygon(
     )
     assert result.uri is not None, "clip_raster_to_polygon is cacheable; uri must be set"
 
-    # Build a stable layer_id + human name for the polygon vs bbox path.
     raster_key = raster_uri.rstrip("/").rsplit("/", 1)[-1].replace(".tif", "")
     crs_suffix = ""
     if target_crs:
