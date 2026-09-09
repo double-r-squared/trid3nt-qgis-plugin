@@ -1,41 +1,8 @@
-"""Atomic tool ``compute_slope`` - terrain slope raster from DEM.
+"""Atomic tool ``compute_slope`` - terrain slope raster from a DEM.
 
-This module registers one atomic tool that computes a slope raster from a DEM
-by wrapping GDAL's ``gdaldem slope`` command:
-
-    ``compute_slope(dem_uri, output_unit, algorithm) → LayerURI``
-
-The result is a single-band GeoTIFF (units: degrees or percent rise/run) in the
-same CRS and grid as the input DEM, stored under the cache shim at:
-
-    ``s3://trid3nt-cache/cache/static-30d/slope/<key>.tif``
-
-**Cache key** is derived from ``(dem_uri, output_unit, algorithm)`` -- all three
-parameters materially affect the output pixels, so all three participate in
-cache-key derivation.
-
-**Implementation flow (cache miss):**
-
-1. Read the DEM bytes from S3 (or a local path for dev/test).
-2. Write to a temp file (``gdaldem`` requires a file path, not stdin).
-3. ``subprocess.run(["gdaldem", "slope", <input>, <output>, *flags])`` where:
-   - ``-p`` is added when ``output_unit="percent"`` (percent rise/run).
-   - ``-alg ZevenbergenThorne`` is added when ``algorithm="ZevenbergenThorne"``.
-   - Horn is the GDAL default (no flag needed).
-4. Read the output temp file, clean up.
-5. ``read_through`` writes the bytes to the cache bucket.
-
-**Cross-cutting invariants:**
-
-- **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls.
-- **(cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
-  ``source_class="slope"`` -- DEM-derived output is stable for the lifetime of
-  the cached DEM.
-- **(resilience): preserves.** gdaldem failures surface as
-  ``SlopeComputeError`` (typed, never unhandled exception); DEM read
-  errors are let through for the agent surface to handle.
+Wraps ``gdaldem slope``. The output keeps the input DEM's CRS and grid, and the
+cache key is (dem_uri, output_unit, algorithm) - all three move pixels.
 """
-
 from __future__ import annotations
 
 import logging
@@ -68,15 +35,8 @@ logger = logging.getLogger("trid3nt_server.tools.processing.compute_slope.comput
 
 
 class SlopeComputeError(RuntimeError):
-    """Raised when ``gdaldem slope`` fails or the DEM cannot be fetched.
-
-    ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (typed-error requirement).
-
-    Codes:
-    - ``GDALDEM_UNAVAILABLE`` -- ``gdaldem`` binary not found on PATH.
-    - ``GDALDEM_FAILED`` -- ``gdaldem slope`` returned non-zero.
-    - ``DEM_DOWNLOAD_FAILED`` -- S3/local read for the DEM URI failed.
+    """``gdaldem slope`` failed or the DEM could not be read. ``error_code`` is one
+    of GDALDEM_UNAVAILABLE, GDALDEM_FAILED, DEM_DOWNLOAD_FAILED.
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -101,10 +61,7 @@ _COMPUTE_SLOPE_METADATA = AtomicToolMetadata(
 
 
 def _get_gdaldem_bin() -> str:
-    """Resolve the ``gdaldem`` binary path (env override -> PATH).
-
-    Raises ``SlopeComputeError(GDALDEM_UNAVAILABLE)`` if not found.
-    """
+    """Resolve ``gdaldem``; absent raises ``SlopeComputeError(GDALDEM_UNAVAILABLE)``."""
     binary = resolve_gdaldem()
     if binary is None:
         raise SlopeComputeError(
@@ -116,9 +73,8 @@ def _get_gdaldem_bin() -> str:
 
 
 def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> bytes:
-    """Read the DEM bytes from an ``s3://`` URI or a local path (typed error on failure).
-
-    ``storage_client`` is ignored (retained for backward-compatible signatures).
+    """Read the DEM bytes from an ``s3://`` URI or a local path; ``storage_client``
+    is ignored and a read failure raises ``SlopeComputeError``.
     """
     del storage_client
     return read_raster_bytes(
@@ -138,16 +94,8 @@ def _run_gdaldem_slope(
     output_unit: Literal["degrees", "percent"],
     algorithm: Literal["Horn", "ZevenbergenThorne"],
 ) -> None:
-    """Run ``gdaldem slope`` as a subprocess.
-
-    Args:
-        input_path: local file path to the input DEM GeoTIFF.
-        output_path: local file path for the output slope GeoTIFF.
-        output_unit: ``"degrees"`` (default GDAL) or ``"percent"`` (adds ``-p``).
-        algorithm: ``"Horn"`` (default) or ``"ZevenbergenThorne"`` (adds ``-alg ZevenbergenThorne``).
-
-    Raises:
-        SlopeComputeError: if the binary is missing or returns non-zero.
+    """Run ``gdaldem slope`` on local paths (``-p`` for percent, ``-alg`` for
+    ZevenbergenThorne); a missing binary or non-zero exit raises ``SlopeComputeError``.
     """
     gdaldem = _get_gdaldem_bin()
 
@@ -196,8 +144,7 @@ def compute_slope(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Compute terrain slope (steepness) from a DEM. Wraps ``gdaldem slope``.
@@ -226,10 +173,8 @@ def compute_slope(
     effective_bucket = _bucket or CACHE_BUCKET
 
     def _fetch() -> bytes:
-        # 1. Download the DEM.
         dem_bytes = _download_dem_bytes(dem_uri, _storage_client)
 
-        # 2. Write to a temp input file.
         in_tmp: str | None = None
         out_tmp: str | None = None
         try:
@@ -243,10 +188,8 @@ def compute_slope(
             # (gdaldem errors if the output already exists on some GDAL builds).
             os.unlink(out_tmp)
 
-            # 3. Run gdaldem slope.
             _run_gdaldem_slope(in_tmp, out_tmp, output_unit, algorithm)
 
-            # 4. return real COG bytes (tiled + overviews).
             return _translate_to_cog(out_tmp)
         finally:
             for path in (in_tmp, out_tmp):
@@ -256,7 +199,6 @@ def compute_slope(
                     except OSError:
                         pass
 
-    # Cache key on (dem_uri, output_unit, algorithm).
     params = {
         "dem_uri": dem_uri,
         "output_unit": output_unit,
@@ -273,8 +215,7 @@ def compute_slope(
     )
     assert result.uri is not None, "compute_slope is cacheable; uri must be set"
 
-    # Build a stable layer_id from the DEM URI + parameters.
-    # Use only the last component of the path (the hash) to keep IDs concise.
+    # Only the last path component (the hash) goes into the id, to keep it short.
     dem_key = dem_uri.rstrip("/").rsplit("/", 1)[-1].replace(".tif", "")
     layer_id = f"slope-{dem_key}-{output_unit}-{algorithm}"
 
@@ -286,7 +227,7 @@ def compute_slope(
         uri=result.uri,
         style={"kind": "continuous", "ramp": "ylorrd", "units": "deg",
          "label": "Slope angle", "scale": {"policy": "fixed",
-         "range": [0, 60], "transform": "linear"}},  # tools-backlog: slope-angle ylorrd ramp (deg). Backend colormap here; the Orchestrator wires the frontend legend.
+         "range": [0, 60], "transform": "linear"}},
         role="context",
         units=output_unit,
     )

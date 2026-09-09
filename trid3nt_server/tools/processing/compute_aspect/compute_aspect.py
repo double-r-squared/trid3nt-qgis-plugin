@@ -1,43 +1,8 @@
-"""Atomic tool ``compute_aspect`` - terrain aspect raster from DEM.
+"""Atomic tool ``compute_aspect`` - terrain aspect raster from a DEM.
 
-This module registers one atomic tool that computes an aspect raster from a DEM
-by wrapping GDAL's ``gdaldem aspect`` command:
-
-    ``compute_aspect(dem_uri, algorithm, zero_for_flat) → LayerURI``
-
-The result is a single-band GeoTIFF (compass direction 0–360°; 0=N, 90=E,
-180=S, 270=W) in the same CRS and grid as the input DEM, stored under the
-cache shim at:
-
-    ``s3://trid3nt-cache/cache/static-30d/aspect/<key>.tif``
-
-**Cache key** is derived from ``(dem_uri, algorithm, zero_for_flat)`` — all
-three parameters materially affect the output pixels, so all three participate
-in cache-key derivation.
-
-**Implementation flow (cache miss):**
-
-1. Read the DEM bytes from S3 (or a local path for dev/test).
-2. Write to a temp file (``gdaldem`` requires a file path, not stdin).
-3. ``subprocess.run(["gdaldem", "aspect", <input>, <output>, *flags])`` where:
-   - ``-zero_for_flat`` is added when ``zero_for_flat=True`` (flat areas → 0
-     instead of the gdaldem default of -9999).
-   - ``-alg ZevenbergenThorne`` is added when ``algorithm="ZevenbergenThorne"``.
-   - Horn is the GDAL default (no flag needed).
-4. Read the output temp file, clean up.
-5. ``read_through`` writes the bytes to the cache bucket.
-
-**Cross-cutting invariants:**
-
-- **Invariant 2 (Deterministic workflows): preserves.** Zero LLM calls.
-- **(cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
-  ``source_class="aspect"`` — DEM-derived output is stable for the lifetime of
-  the cached DEM.
-- **(resilience): preserves.** gdaldem failures surface as
-  ``AspectComputeError`` (typed, never unhandled exception); DEM read
-  errors are let through for the agent surface to handle.
+Wraps ``gdaldem aspect``. The output keeps the input DEM's CRS and grid, and the
+cache key is (dem_uri, algorithm, zero_for_flat) - all three move pixels.
 """
-
 from __future__ import annotations
 
 import logging
@@ -70,15 +35,8 @@ logger = logging.getLogger("trid3nt_server.tools.processing.compute_aspect.compu
 
 
 class AspectComputeError(RuntimeError):
-    """Raised when ``gdaldem aspect`` fails or the DEM cannot be fetched.
-
-    ``error_code`` carries a SCREAMING_SNAKE_CASE code surfaced in the
-    pipeline strip (typed-error requirement).
-
-    Codes:
-    - ``GDALDEM_UNAVAILABLE`` — ``gdaldem`` binary not found on PATH.
-    - ``GDALDEM_FAILED`` — ``gdaldem aspect`` returned non-zero.
-    - ``DEM_DOWNLOAD_FAILED`` — S3/local read for the DEM URI failed.
+    """``gdaldem aspect`` failed or the DEM could not be read. ``error_code`` is one
+    of GDALDEM_UNAVAILABLE, GDALDEM_FAILED, DEM_DOWNLOAD_FAILED.
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -103,10 +61,7 @@ _COMPUTE_ASPECT_METADATA = AtomicToolMetadata(
 
 
 def _get_gdaldem_bin() -> str:
-    """Resolve the ``gdaldem`` binary path (env override -> PATH).
-
-    Raises ``AspectComputeError(GDALDEM_UNAVAILABLE)`` if not found.
-    """
+    """Resolve ``gdaldem``; absent raises ``AspectComputeError(GDALDEM_UNAVAILABLE)``."""
     binary = resolve_gdaldem()
     if binary is None:
         raise AspectComputeError(
@@ -118,9 +73,8 @@ def _get_gdaldem_bin() -> str:
 
 
 def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> bytes:
-    """Read the DEM bytes from an ``s3://`` URI or a local path (typed error on failure).
-
-    ``storage_client`` is ignored (retained for backward-compatible signatures).
+    """Read the DEM bytes from an ``s3://`` URI or a local path; ``storage_client``
+    is ignored and a read failure raises ``AspectComputeError``.
     """
     del storage_client
     return read_raster_bytes(
@@ -140,18 +94,8 @@ def _run_gdaldem_aspect(
     algorithm: Literal["Horn", "ZevenbergenThorne"],
     zero_for_flat: bool,
 ) -> None:
-    """Run ``gdaldem aspect`` as a subprocess.
-
-    Args:
-        input_path: local file path to the input DEM GeoTIFF.
-        output_path: local file path for the output aspect GeoTIFF.
-        algorithm: ``"Horn"`` (default) or ``"ZevenbergenThorne"``
-            (adds ``-alg ZevenbergenThorne``).
-        zero_for_flat: if True, adds ``-zero_for_flat`` flag so flat areas
-            output 0 instead of the gdaldem default of -9999.
-
-    Raises:
-        AspectComputeError: if the binary is missing or returns non-zero.
+    """Run ``gdaldem aspect`` on local paths; ``zero_for_flat`` sends flat cells to
+    0 rather than -9999. A missing binary or non-zero exit raises ``AspectComputeError``.
     """
     gdaldem = _get_gdaldem_bin()
 
@@ -200,8 +144,7 @@ def compute_aspect(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Compute terrain aspect (compass face direction) from a DEM. Wraps ``gdaldem aspect``.
@@ -213,29 +156,24 @@ def compute_aspect(
     (``compute_colored_relief``).
 
     Params:
-        dem_uri: single-band elevation DEM GeoTIFF (typically from
-            ``fetch_dem``).
-        algorithm: ``"Horn"`` (default, 3x3 gradient) or
-            ``"ZevenbergenThorne"`` (smoother, for rough/noisy DEMs).
-        zero_for_flat: ``True`` (default) labels flat areas aspect=0
-            (North); ``False`` labels them ``-9999`` so downstream code can
-            distinguish flat from north-facing.
+        dem_uri: single-band elevation DEM (typically from ``fetch_dem``).
+        algorithm: ``"Horn"`` (default) or ``"ZevenbergenThorne"`` (smoother,
+            for noisy DEMs).
+        zero_for_flat: ``True`` (default) labels flat cells 0 (North);
+            ``False`` labels them -9999 so flat stays distinguishable.
 
     Returns:
-        ``LayerURI`` for a single-band Float32 aspect GeoTIFF (0-360 deg,
-        North=0, East=90), same CRS/grid as input, cache bucket, TTL 30d.
+        ``LayerURI`` for a Float32 aspect GeoTIFF (0-360 deg, North=0,
+        East=90), same CRS/grid as the input.
 
     Raises:
-        AspectComputeError: gdaldem unavailable/non-zero exit, or DEM
-            download failure.
+        AspectComputeError: gdaldem unavailable/non-zero, or DEM download failure.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 
     def _fetch() -> bytes:
-        # 1. Download the DEM.
         dem_bytes = _download_dem_bytes(dem_uri, _storage_client)
 
-        # 2. Write to a temp input file.
         in_tmp: str | None = None
         out_tmp: str | None = None
         try:
@@ -249,10 +187,8 @@ def compute_aspect(
             # (gdaldem errors if the output already exists on some GDAL builds).
             os.unlink(out_tmp)
 
-            # 3. Run gdaldem aspect.
             _run_gdaldem_aspect(in_tmp, out_tmp, algorithm, zero_for_flat)
 
-            # 4. return real COG bytes (tiled + overviews).
             return _translate_to_cog(out_tmp)
         finally:
             for path in (in_tmp, out_tmp):
@@ -262,7 +198,6 @@ def compute_aspect(
                     except OSError:
                         pass
 
-    # Cache key on (dem_uri, algorithm, zero_for_flat).
     params = {
         "dem_uri": dem_uri,
         "algorithm": algorithm,
@@ -279,8 +214,7 @@ def compute_aspect(
     )
     assert result.uri is not None, "compute_aspect is cacheable; uri must be set"
 
-    # Build a stable layer_id from the DEM URI + parameters.
-    # Use only the last component of the path (the hash) to keep IDs concise.
+    # Only the last path component (the hash) goes into the id, to keep it short.
     dem_key = dem_uri.rstrip("/").rsplit("/", 1)[-1].replace(".tif", "")
     zff_label = "zff" if zero_for_flat else "nozff"
     layer_id = f"aspect-{dem_key}-{algorithm}-{zff_label}"
@@ -292,7 +226,7 @@ def compute_aspect(
         uri=result.uri,
         style={"kind": "continuous", "ramp": "hsv", "units": "deg",
          "label": "Aspect", "scale": {"policy": "fixed",
-         "range": [0, 360], "transform": "linear"}},  # tools-backlog: cyclic compass-aspect hsv ramp (deg). Backend colormap here; the Orchestrator wires the frontend compass legend.
+         "range": [0, 360], "transform": "linear"}},
         role="context",
         units="degrees",
     )
