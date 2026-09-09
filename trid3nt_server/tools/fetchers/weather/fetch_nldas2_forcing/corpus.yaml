@@ -1,0 +1,9 @@
+fetch_nldas2_forcing:
+- hourly land surface forcing for a hydrologic model over this basin
+- I need radiation humidity and wind alongside rainfall to drive a snowmelt run
+- NLDAS-2 forcing series for this watershed in 2016
+- give me the full meteorological forcing set for this catchment hour by hour
+- what were the hourly temperature and shortwave radiation over this AOI during the drought
+- surface pressure and specific humidity time series to force an evapotranspiration model
+- reproduce a study that was forced with NLDAS-2 over this area
+- hourly precipitation and temperature record for a CONUS basin since 1979

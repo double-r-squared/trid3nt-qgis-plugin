@@ -1,0 +1,136 @@
+# Router source spec -- NASA NLDAS-2 hourly land-surface forcing, read through
+# pynldas2 (the HyRiver line) on the pure-record path.
+#
+# The GES DISC time-series service is behind Earthdata Login: an unauthenticated
+# request answers 200 with the EDL sign-in PAGE, which a parser reads as garbage.
+# The spec therefore REFUSES BY NAME until ~/.netrc carries a machine entry for
+# urs.earthdata.nasa.gov, the same interactive account step fetch_opera_dswx names.
+schema_version: v1
+
+name: fetch_nldas2_forcing
+source_class: nldas2_forcing
+error_prefix: NLDAS2
+input_error_suffix: INPUT_INVALID
+empty_error_suffix: NO_HOURS
+shape: record
+supports_global_query: false
+
+endpoints:
+  # The GES DISC Hydrology data-rods time-series endpoint pynldas2 reads.
+  data:
+    url: https://hydro1.gesdisc.eosdis.nasa.gov/daac-bin/access/timeseries.cgi
+# A forcing series carries no elevation reference.
+vertical_datum: n/a (atmospheric forcing, not an elevation)
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+params:
+  bbox:
+    type: bbox
+    required: true
+    quantize: round_6dp
+    error_suffix: INPUT_INVALID
+  start_date:
+    type: iso_date
+    required: true
+    min_date: "1979-01-02"
+  end_date:
+    type: iso_date
+    required: true
+    max_range_days: 92
+  variables:
+    type: str_list
+    required: false
+    schema_optional: true
+
+gates:
+  conus_only: true
+  # One request fans out to a point series per 0.125 deg cell per variable, so the
+  # AOI is bounded the way the AORC hyetograph is: a basin, not a region.
+  max_bbox_deg2: 2.0
+
+hooks:
+  record: nldas2_forcing.build_record
+
+normalize:
+  crs: EPSG:4326
+  units: per_variable
+  quantity: land_surface_forcing
+
+output:
+  layer_type: record
+  ext: json
+  emit_bbox: false
+# No style row: a record is not rendered, and the contract's style kinds
+# (continuous / classed / reference / mesh) are all layer renderings.
+
+cache:
+  ttl_class: static-30d
+
+# The record is n_hours floats per variable: it grows with window length and with
+# the number of variables asked for, never with pixel count.
+payload_estimate:
+  model: per_station
+  stations_per_sq_deg: 1.0
+  kb_per_station_per_day: 2.0
+  overhead_kb: 4.0
+  floor_mb: 0.02
+  ceil_mb: 4.0
+
+caveats:
+- "NLDAS-2 is served from NASA GES DISC behind Earthdata Login: without a ~/.netrc machine entry for urs.earthdata.nasa.gov this refuses by name (NLDAS2_UPSTREAM_ERROR) rather than parsing the sign-in page as data."
+- "1/8 degree (~12 km) hourly CONUS + southern Canada / northern Mexico, 1979-01-02 to yesterday; NOT real-time and NOT a forecast."
+- "Returns AOI-MEAN hourly series per variable (a forcing record), not a spatial raster; precipitation is an hourly total in mm, temperature is Kelvin, wind is the u/v pair in m/s."
+- "Coarser than fetch_aorc_precip (~800 m) for precipitation alone; NLDAS-2 is the source when the run needs the FULL forcing set (radiation, humidity, wind, pressure) that AORC's precipitation record does not carry."
+
+docstring: |-
+  NASA NLDAS-2 hourly land-surface forcing -- the AOI-mean forcing series (precipitation, temperature, wind, radiation, humidity, pressure) for any CONUS window since 1979.
+
+  **What it does:** Reads the NLDAS-2 primary forcing file set (``NLDAS_FORA0125_H``)
+  through the GES DISC time-series service at its native 1/8 degree hourly
+  resolution, averages each requested variable over the request bbox, and returns
+  the hourly series plus the precipitation accumulation for the window.
+
+  **When to use:**
+  - A land-surface / hydrologic model needs the FULL forcing set, not precipitation
+    alone: shortwave and longwave radiation, specific humidity, wind components and
+    surface pressure alongside rain and temperature.
+  - Reproducing a published NLDAS-2-forced study, where the forcing dataset itself
+    is part of the method.
+  - A snowmelt or evapotranspiration question, where temperature and radiation are
+    the drivers and precipitation alone cannot answer it.
+
+  **When NOT to use:**
+  - Precipitation alone at the finest available resolution -- ``fetch_aorc_precip``
+    is ~800 m against NLDAS-2's ~12 km over the same CONUS record.
+  - Real-time or forecast weather -- use ``fetch_hrrr_forecast``; NLDAS-2 ends
+    yesterday.
+  - Outside CONUS -- use ``fetch_era5_reanalysis`` (global).
+  - A gridded forcing FIELD -- this returns an AOI-mean series, not a raster.
+
+  **Requires an Earthdata Login.** GES DISC answers an unauthenticated request
+  with its sign-in page. Without a ``~/.netrc`` entry for
+  ``urs.earthdata.nasa.gov`` this returns a typed refusal naming the file and the
+  host -- it never substitutes another dataset.
+
+  **Parameters:**
+  - ``bbox`` (list[float]): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
+    Must intersect CONUS; capped at 2.0 deg^2.
+  - ``start_date`` (str): ISO ``YYYY-MM-DD`` inclusive. Coverage floor 1979-01-02.
+  - ``end_date`` (str): ISO ``YYYY-MM-DD`` inclusive. Capped at 92 days from
+    ``start_date``; must be before today.
+  - ``variables`` (list[str], optional): any of ``prcp``, ``temp``, ``wind_u``,
+    ``wind_v``, ``rlds``, ``rsds``, ``humidity``, ``psurf``, ``pet``. Omitted ->
+    ``prcp`` and ``temp``. An unknown name is refused by name.
+
+  **Returns:** a JSON dict with ``source``, ``bbox``, ``start`` / ``end``,
+  ``n_hours``, ``n_cells``, ``times`` (ISO hourly), a ``series`` map of variable ->
+  ``{units, values}``, and ``precip_total_mm`` when precipitation was requested.
+  Cached ``static-30d``.
+
+  **Cross-tool dependencies:**
+  - Pairs with: ``fetch_usgs_nwis_gauges`` (the discharge record a forced run is
+    graded against) and ``fetch_dem``.
+  - Alternative: ``fetch_aorc_precip`` (CONUS, ~800 m, precipitation only),
+    ``fetch_era5_reanalysis`` (global, 27 km, full forcing).
