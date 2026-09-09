@@ -4332,3 +4332,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   and every other tree in the same read-every-comment pass (a regex
   census cannot finish it), with a suite grep-gate on the marker
   classes afterwards so it does not return.
+  DOC IMAGES (NATE 2026-09-09): the docs LEVERAGE the packets - one
+  page per template under docs/ embeds its composite, animation and
+  chart as DOC-SIZED renders (a composite near 300 KB, an animation
+  near 1-2 MB; the packet renderer gains a doc size) stamped with the
+  run id and commit; THE RUN THAT PROVES A TEMPLATE RENDERS ITS DOC
+  IMAGES (every acceptance), and a suite test FAILS when a doc image
+  predates its template's last change - staleness is a red test, not a
+  memory. Frozen proof packets stay full size in docs/proof. The
+  README's template gallery links the pages. Lands in the docs and
+  docstring wave.
