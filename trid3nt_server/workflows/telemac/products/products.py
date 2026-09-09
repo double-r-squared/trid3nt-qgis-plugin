@@ -1,24 +1,8 @@
 """The PRODUCTS step: a solved reach -> the map layers, the scalars, the chart spec.
 
-The peak concentration COG is the narration carrier; the native result SELAFIN
-beside it is the TEMPORAL artifact the client animates.
-
 EACH SUBSTANCE CLASS LEADS WITH ITS OWN PRODUCT, and the concentration raster is
-named for the field it actually carries. A sediment run leads with the signed
-bed-evolution map beside a SUSPENDED-SEDIMENT raster; an oil run leads with the
-floating-slick track, because the slick and the drogues beneath it are the only
-products carrying oil physics while the transported field is the same passive
-tracer a dye run advects; the dye class leads with the dye. A dye-named product
-outside the dye class asserts more than the run computed.
-
-The class scalars are read HERE, off the run's own uploaded evidence - GAIA's
-closure out of the solver listing, the slick out of the drogues track - because
-the worker is the engine room and derives nothing.
-
-Everything past the primary layer is best-effort by contract: failure retracts
-nothing, so a missing deposition COG or slick never voids the concentration
-layer.
-"""
+named for the field it carries: a dye-named product outside the dye class asserts
+more than the run computed. Everything past the primary layer is best-effort."""
 
 from __future__ import annotations
 
@@ -52,13 +36,7 @@ _PRODUCTS = "trid3nt_server.workflows.telemac.products"
 def _release_provenance(run: dict[str, Any]) -> SyntheticInput:
     """Where the source entered the water, as the layer's own record.
 
-    The downstream distance is measured from here, so the row states the point
-    the run was authored with: the supplied one, which the pre-flight
-    containment test already accepted into the domain and put on the flowline,
-    or the ``spill_fraction`` walk along the modeled centerline. A point outside
-    the domain never reaches this step - the pre-flight refuses it - so the row
-    can never read "user" over a relocated release.
-    """
+    A point outside the domain never reaches this step, so no "user" over a move."""
     lon, lat = (run.get("release_lon"), run.get("release_lat")) \
         if run.get("release_user_supplied") else (None, None)
     if lon is None or lat is None:
@@ -77,10 +55,7 @@ def _release_provenance(run: dict[str, Any]) -> SyntheticInput:
 def _rain_provenance(run: dict[str, Any]) -> list[SyntheticInput]:
     """The on-mesh rain/evaporation forcing, with its DECLARED temporal transform.
 
-    Empty when no forcing was asked for - a run with no rain has no rain row.
-    The note carries the cadence/units stamp the ``Data("rain")`` declaration
-    produced, so a reader can tell an as-reported rate from a moved one.
-    """
+    Empty when no forcing was asked for; the note carries the cadence stamp."""
     value = run.get("rain_mm_per_day")
     if value is None:
         return []
@@ -98,11 +73,7 @@ def _rain_provenance(run: dict[str, Any]) -> list[SyntheticInput]:
 def _bed_provenance(run: dict[str, Any]) -> SyntheticInput:
     """WHICH bed the reach's nodes carry, as the layer's own record.
 
-    The mesher's label travels on the sheet the worker was handed, so the row
-    names the dataset the solve actually read rather than the class of run it
-    was: a GLO-30 bed and the 3DEP one the ladder fell to are different physics
-    and the layer has to be able to say which it got.
-    """
+    Names the DATASET the solve actually read, never the class of run it was."""
     source = str(run.get("bed_source") or "staged")
     return SyntheticInput(
         param="mesh_bed", value=source, basis="fetched", consequence="physics",
@@ -115,11 +86,7 @@ def _provenance(solve: dict[str, Any], discharge: dict[str, Any],
                 run: dict[str, Any]) -> list[SyntheticInput]:
     """The physically dominant inputs, as rows the layer carries.
 
-    The carrier discharge that governs dilution (real NWM streamflow or
-    user-supplied), the on-mesh rain/evaporation forcing when one was asked for,
-    the bed the mesh was painted from, the bank geometry the reach was cut from,
-    and the release point the run was authored with.
-    """
+    The carrier discharge, the rain forcing, the bed, the banks, the release."""
     return [
         _release_provenance(run),
         *_rain_provenance(run),
@@ -160,10 +127,7 @@ def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
                         synthetic_inputs: list[SyntheticInput]) -> TelemacDyeLayerURI:
     """Publish the peak COG through the one styling chokepoint and enrich narration.
 
-    On publish failure the RAW peak is returned unchanged - its s3 COG still lets
-    the case discover the SELAFIN sibling, and the dispatch-level guardrail owns
-    the map honesty.
-    """
+    On publish failure the RAW peak is returned unchanged."""
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import peak_layer_id
 
     honesty = _honesty_note(location_name, substance)
@@ -187,10 +151,7 @@ def _publish_peak_layer(raw_peak: TelemacDyeLayerURI, run_id: str,
 def _download_artifact(run_id: str, basename: str) -> str | None:
     """Download one file the run uploaded; ``None`` when it wrote none (fail-open).
 
-    Every class extra past the primary layer is read off an artifact that may not
-    be there - a run that coupled no GAIA writes no GAIA result - so absence is
-    an answer rather than a failure.
-    """
+    Absence is an answer: a run that coupled no GAIA writes no GAIA result."""
     from trid3nt_server.workflows.solver.solver import (
         _get_runs_bucket,
         _get_s3_client,
@@ -225,13 +186,7 @@ async def _fold_sediment_products(peak: TelemacDyeLayerURI, *, run_id: str,
                                   erodible: bool, emitter: Any) -> TelemacDyeLayerURI:
     """Fold GAIA's own mass-balance scalars onto the peak + emit the deposition map.
 
-    The scalars are READ HERE, off the listing GAIA printed its closure into and
-    the result it wrote its graded surface into. ``deposited_mass_kg`` is the NET
-    bed mass, clamped at zero - the SAME net quantity the deposition map and the
-    deposit fraction integrate. Never the GROSS deposition: in a supply-limited
-    run gross deposition can equal gross erosion with net ~0, so the map is
-    correctly empty and the narrated mass must match it.
-    """
+    ``deposited_mass_kg`` is the NET bed mass clamped at zero, never the GROSS."""
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         PostprocessTelemacError,
         postprocess_telemac_deposition,
@@ -300,21 +255,12 @@ async def _emit_oil_slick(peak: TelemacDyeLayerURI, *, run_id: str,
                           emitter: Any) -> None:
     """Build the floating-slick track off the drogues the run wrote, and emit it.
 
-    The engine writes the raw TecPlot track and nothing else; the renderable
-    snapshots and the exit accounting are read HERE and uploaded beside it, so
-    the layer's bytes exist before its handle does - a URI registered ahead of
-    its object was the dangling-handle class.
-
-    An oil run LEADS with this: the slick and the drogues beneath it are the only
-    products that carry oil physics, while the transported field beside them is
-    the same passive tracer a dye run advects. A run that wrote no track is an
-    honest skip: the tracer COG stands.
-
-    The slick carries NO style preset. It is a snapshot point cloud, the style
-    contract has no row for it, and a preset the contract never declared resolves
-    to whatever the renderer guesses - which is how a river-line preset came to
-    style a slick.
-    """
+    The bytes precede the handle, NO preset rides it, and no track is a skip."""
+    # An oil run LEADS with this: the slick and the drogues beneath it are the
+    # only products that carry oil physics, while the transported field beside
+    # them is the same passive tracer a dye run advects. The slick is a snapshot
+    # point cloud and the style contract has no row for it, so a preset the
+    # contract never declared would resolve to whatever the renderer guesses.
     from trid3nt_contracts.execution import LayerURI
 
     from trid3nt_server.emission.layer_uri_emit import publish_input_layer
@@ -360,16 +306,7 @@ async def _emit_oil_slick(peak: TelemacDyeLayerURI, *, run_id: str,
 def _journal_wetted_fraction(metrics: dict[str, Any]) -> None:
     """Say out loud how much of the solved domain the run actually wet.
 
-    The reach is meshed from the mapped ACTIVE CHANNEL, which is a bankfull
-    polygon: at low flow the solve correctly leaves part of it dry, and the
-    conveyance width the answer rests on is narrower than the picture. The number
-    rides the journal because a reader needs it beside the map; it decides
-    nothing, and a run whose result cannot be measured says nothing rather than
-    losing its products over a heuristic.
-
-    The postprocess measured it off the read it already made, so this narrates
-    rather than reopening the result.
-    """
+    It decides nothing; an unmeasurable result says nothing rather than failing."""
     from trid3nt_server.workflows.runtime import journal_note
 
     measured = {k: metrics[k] for k in
@@ -392,11 +329,7 @@ async def _publish_transported_field(*, run: dict[str, Any], solve: dict[str, An
                                      ) -> TelemacDyeLayerURI:
     """The peak field every transported-substance question publishes.
 
-    ``product`` is the reader's own: which tracer variable the run wrote the
-    field into, the COG it uploads, the style that draws it and the noun the
-    layer is named with. Each question's reader names one and nothing here
-    chooses between them.
-    """
+    ``product`` is the reader's own and nothing here chooses between them."""
     from trid3nt_server.emission.pipeline_emitter import current_emitter
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         postprocess_telemac,
@@ -469,10 +402,7 @@ async def publish_oil_products(*, run: dict[str, Any], solve: dict[str, Any],
                                carrier_discharge: dict[str, Any]) -> TelemacDyeLayerURI:
     """The dissolved oil tracer's peak field, plus the SLICK the drogues drew.
 
-    The preset is the RUN's own: the deck was written against it and the slick is
-    drawn from the particles it produced, so reading it off the run is reading
-    what solved rather than re-deciding it here.
-    """
+    The preset is read off the RUN, which is what the deck was written against."""
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
     peak = await _publish_transported_field(
@@ -497,9 +427,7 @@ async def publish_sediment_plume_products(
         carrier_discharge: dict[str, Any]) -> TelemacDyeLayerURI:
     """The suspended load's peak field, plus what DEPOSITED out of it.
 
-    The bed holds no stock, so nothing erodes and the deposition map claims no
-    scour.
-    """
+    The bed holds no stock, so nothing erodes and no scour is claimed."""
     return await _publish_sediment(run=run, solve=solve,
                                    carrier_discharge=carrier_discharge,
                                    erodible=False)
@@ -527,9 +455,7 @@ async def _publish_sediment(*, run: dict[str, Any], solve: dict[str, Any],
 def _do_sag_provenance(carrier_discharge: dict[str, Any] | None) -> list[SyntheticInput]:
     """The carrier discharge governing dilution, as the DO-sag layer's own record.
 
-    Mirrors ``_provenance``'s dye row: the layer must carry which cycle it read,
-    never leave the reader to trust an unrecorded "latest".
-    """
+    The layer carries WHICH cycle it read, never an unrecorded "latest"."""
     if not carrier_discharge:
         return []
     return [SyntheticInput(
@@ -544,9 +470,7 @@ async def publish_do_products(*, run: dict[str, Any], solve: dict[str, Any],
                               carrier_discharge: dict[str, Any] | None = None) -> Any:
     """Postprocess a WAQTEL O2 solve into the DISSOLVED-O2 field COG + the sag curve.
 
-    The along-reach distance uses the principal-flow-axis proxy (no centerline is
-    threaded to the postprocess); the layer's honesty label states it.
-    """
+    The along-reach distance is the principal-flow-axis proxy, so labelled."""
     from trid3nt_contracts.telemac_contracts import TELEMAC_DO_STYLE
     from trid3nt_server.emission.pipeline_emitter import current_emitter
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import (

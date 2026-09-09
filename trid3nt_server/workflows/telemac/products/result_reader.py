@@ -1,20 +1,8 @@
 """A solved TELEMAC result's fields, read by the engine's own library.
 
-``read_selafin(path)`` returns the mesh and the per-variable time series every
-postprocessor works from. The read happens INSIDE
-``trid3nt-local/telemac:latest``, where ``TelemacFile`` lives: the host mounts
-the file's directory read-only and a scratch directory to write into, shells the
-driver with no network, and loads the arrays it left.
-
-A parser on this side would be a second implementation of a format nobody here
-owns, and the one this replaces had drifted twice: it refused a truncated result
-the engine reads without complaint, and it handed every consumer a variable name
-with the record's unit still glued to it.
-
-One container round trip per file. A read costs roughly a second of startup on
-top of the parse, which is the shape of the call sites: a postprocess reads its
-result once and works in memory from there, so nothing loops a container.
-"""
+The read happens INSIDE the TELEMAC image, where ``TelemacFile`` lives: one
+container round trip per file, with the file's directory mounted read-only, a
+scratch directory to write into and no network. Nothing here loops a container."""
 
 from __future__ import annotations
 
@@ -47,26 +35,17 @@ class SelafinReadError(RuntimeError):
 
 
 def read_selafin(path: str | Path) -> dict[str, Any]:
-    """A result file -> its mesh and per-variable time series::
+    """A result file -> its mesh and per-variable time series.
 
-        {"varnames": [str], "npoin": int, "nelem": int,
-         "x": ndarray(npoin2), "y": ndarray(npoin2), "ikle": ndarray(nelem, ndp),
-         "nplan": int, "npoin2": int, "nelem2": int,
-         "ikle2": ndarray(nelem2, 3),
-         "x_origin": int, "y_origin": int,
-         "times": ndarray(nframes),
-         "data": {varname: ndarray(nframes, npoin)}}
-
-    ``varnames`` are the engine's own names, with no unit glued on. ``ikle`` is
-    0-based, so a mesh-faithful render triangulates the file's real elements
-    rather than an unconstrained Delaunay of the node cloud, which bridges river
-    bends into a spurious fan.
-
-    The origins are the header's, REPORTED and not applied: ``x``/``y`` stay
-    exactly as the file stores them, because every postprocessor adds the origin
-    it recovers from the domain bbox and applying it here would double the offset
-    on all of them.
-    """
+    ``varnames`` carry no unit, ``ikle`` is 0-based, origins are not applied."""
+    # {"varnames": [str], "npoin": int, "nelem": int,
+    #  "x": ndarray(npoin2), "y": ndarray(npoin2), "ikle": ndarray(nelem, ndp),
+    #  "nplan": int, "npoin2": int, "nelem2": int, "ikle2": ndarray(nelem2, 3),
+    #  "x_origin": int, "y_origin": int, "times": ndarray(nframes),
+    #  "data": {varname: ndarray(nframes, npoin)}}
+    # ``x``/``y`` stay exactly as the file stores them: every postprocessor adds
+    # the origin it recovers from the domain bbox, and applying it here would
+    # double the offset on all of them.
     import numpy as np
 
     slf = Path(path).resolve()

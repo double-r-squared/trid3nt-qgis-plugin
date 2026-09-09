@@ -1,14 +1,8 @@
 """A solved catchment, answered: the peak depth envelope and the outlet hydrograph.
 
-The hydrograph IS the rainfall-runoff answer - a depth raster says where the
-water stood, and the series says how much left the basin and when - and the
-ENGINE measured it: the flux across the declared outlet is part of the solver's
-own water-volume balance, so the run is narrated from the number it printed
-rather than from a second integral computed over its output fields.
-
-Everything past the primary layer is best-effort by contract: a missing
-hydrograph or an unpublished results mesh never voids a solve.
-"""
+The hydrograph is the ENGINE's own: the flux across the declared outlet is part
+of the solver's water-volume balance, never a second integral computed here.
+Everything past the primary layer is best-effort and voids no solve."""
 
 from __future__ import annotations
 
@@ -40,9 +34,7 @@ _HOUR_S = 3600.0
 def _read_listing(run_id: str) -> str:
     """The solver listing the supervisor uploaded; ``""`` on any miss.
 
-    Best-effort by the products contract: the closure the engine printed is a
-    scalar the answer carries, never the reason a solved run has no layer.
-    """
+    A missing listing is never the reason a solved run has no layer."""
     from trid3nt_server.workflows.solver.solver import _get_runs_bucket, _get_s3_client
 
     try:
@@ -55,15 +47,9 @@ def _read_listing(run_id: str) -> str:
 
 
 def _rain_applied(run: Mapping[str, Any]) -> tuple[float | None, float | None]:
-    """What FELL on the catchment: ``(depth_mm, volume_m3)``, either ``None`` when
-    unmeasured.
+    """What FELL on the catchment: ``(depth_mm, volume_m3)``, either may be ``None``.
 
-    Gross depth times the meshed area - the same area the runoff left through -
-    so the coefficient is a ratio of two figures measured on one domain. The DEPTH
-    travels beside the volume because a dry run is narrated in both: millimetres
-    are what a reader checks a storm against, cubic metres what the outflow is
-    compared to.
-    """
+    Gross depth times the MESHED area, so the coefficient is one domain's."""
     rain, area_km2 = run["rain"], float(run.get("area_km2") or 0.0)
     total_mm = (run.get("hyetograph_total_mm") if rain["kind"] == "hyetograph"
                 else float(rain["intensity_mm_per_hr"])
@@ -77,10 +63,7 @@ def _rain_applied(run: Mapping[str, Any]) -> tuple[float | None, float | None]:
 def _provenance(run: Mapping[str, Any]) -> list[SyntheticInput]:
     """The physically dominant inputs, as rows the layer carries.
 
-    Which STORM drove it, which infiltration path ran, where the bed came from and
-    whether the mesh was generated or handed in - every one of them a fact the
-    answer is meaningless without, so each is stated rather than assumed.
-    """
+    The storm, the infiltration path, the bed, and whether the mesh was built."""
     infiltration, rain = run["infiltration"], run["rain"]
     rows = [
         SyntheticInput(
@@ -139,18 +122,12 @@ def _provenance(run: Mapping[str, Any]) -> list[SyntheticInput]:
 def _dryness_note(scalars: Mapping[str, Any], *, rain_mm: float | None) -> str:
     """The measured DRYNESS in the run's own numbers, or ``""`` when it ran off.
 
-    A correct solve over a catchment that shed no water is a FINDING - the storm
-    infiltrated - and stating it takes the three figures a reader would otherwise
-    go looking for: how deep the water got, how much rain the domain took, how
-    much left the outlet. So the sentence carries them rather than announcing an
-    absence.
-
-    The DEPTH FIELD is what decides, on the same wet floor the raster is masked
-    at: a catchment that never held a centimetre anywhere is the dry answer even
-    when the solver's own balance passed a trace of water across the outlet, and
-    hanging the finding on an exactly-zero outflow instead would hide it behind
-    a rounding.
-    """
+    The DEPTH FIELD decides, on the same wet floor the raster is masked at."""
+    # A catchment that never held a centimetre anywhere is the dry answer even
+    # when the solver's balance passed a trace of water across the outlet, so
+    # hanging the finding on an exactly-zero outflow would hide it behind a
+    # rounding. The sentence carries the three figures a reader would otherwise go
+    # looking for: how deep the water got, how much rain fell, how much left.
     from trid3nt_server.workflows.telemac.products.postprocess_telemac import (
         TELEMAC_WSE_WET_DEPTH_M,
     )
@@ -180,15 +157,10 @@ def _honesty_note(run: Mapping[str, Any], metrics: Mapping[str, Any],
                   dryness: str = "") -> str:
     """What the RUN was, prefixed by what the LAYER is.
 
-    The applicability envelope is part of the sentence, not a footnote: rain-on-
-    grid reproduces single-storm flash floods in small steep catchments and does
-    NOT carry baseflow, because infiltrated water is permanently lost.
-
-    A hydrograph still rising at the last sample gets its own sentence, because
-    every number the run reports about the storm is then a floor rather than a
-    measurement, and that is not a caveat a reader should have to derive from a
-    time series. A run that stayed dry gets one for the same reason.
-    """
+    The applicability envelope is part of the sentence, never a footnote."""
+    # A hydrograph still rising at the last sample gets its own sentence: every
+    # number the run reports about the storm is then a floor rather than a
+    # measurement. A run that stayed dry gets one for the same reason.
     rain = run["rain"]
     spacing = metrics.get("mesh_size_m") or run["mesh_size_m"]
     truncation = (

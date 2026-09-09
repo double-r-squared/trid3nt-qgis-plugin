@@ -1,20 +1,8 @@
 """The solved column -> the surface and bottom planes, and what survived between.
 
-Everything a reader checks a 3D run against is MEASURED here, off the 3D result
-the solve wrote: the engine room solves and this reads. A 3D field arrives flat
-over NPOIN3 and is NPLAN planes stacked over the 2D mesh, bottom plane first, so
-the surface field is the top plane, the bottom field is plane zero, and the
-profile is one column between them.
-
-THE COLUMN IS THE DEEPEST ONE. A profile is a statement about the vertical
-structure, and the deepest column is where the structure exists at all - a
-shoreline column two metres tall holds no thermocline whatever the run did.
-
-The run exchanges NO heat with the atmosphere, so the column can only
-REDISTRIBUTE its heat. The depth-weighted mean is measured at both ends and its
-drift is published as the numerical error bar on "the warm layer mixed down" -
-and as the refutation of any "the lake cooled" reading.
-"""
+A 3D field arrives flat over NPOIN3 as NPLAN planes stacked over the 2D mesh,
+bottom plane first. The run exchanges NO heat with the atmosphere, so the
+depth-weighted mean's drift is the numerical error bar rather than a signal."""
 
 from __future__ import annotations
 
@@ -46,11 +34,7 @@ _PRODUCTS = "trid3nt_server.workflows.telemac.products"
 def planes(result: dict[str, Any], variable: str, record: int) -> Any:
     """One 3D field at ``record``, reshaped ``(nplan, npoin2)``, bottom plane first.
 
-    The engine writes a 3D field flat over NPOIN3 in plane-major order, so the
-    reshape is the file's own layout rather than an interpretation of it. A
-    variable the run never wrote is ``None``, which is the honest "this run
-    carried no such field".
-    """
+    Plane-major is the file's own layout; a variable never written is ``None``."""
     import numpy as np
 
     nplan = int(result["nplan"])
@@ -74,10 +58,7 @@ def vertical_profile(field: Any, column: int) -> Any:
 def _deepest_column(bed: Any) -> int:
     """The node the column is read at: the deepest one the mesh carries.
 
-    A shoreline column is metres tall and holds no vertical structure whatever the
-    run did, so a profile drawn there says nothing about the answer. The deepest
-    column is where a thermocline can exist at all.
-    """
+    The deepest column is where vertical structure can exist at all."""
     import numpy as np
 
     return int(np.nanargmin(np.asarray(bed, dtype=float)))
@@ -86,10 +67,7 @@ def _deepest_column(bed: Any) -> int:
 def _sigma(elevation: Any, column: int) -> Any:
     """The plane positions the run ACTUALLY used, 0 = bed, 1 = free surface.
 
-    Measured off the solved elevations rather than recomputed from the grid plan:
-    a surface-zoomed sigma is not evenly spaced, and plotting the column against a
-    linear scale would misplace every point on it.
-    """
+    Measured off the solved elevations: a zoomed sigma is not evenly spaced."""
     import numpy as np
 
     z = np.asarray(vertical_profile(elevation, column), dtype=float)
@@ -133,11 +111,10 @@ def _measure(result: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
     heat_final = float(np.trapezoid(final, sigma))
 
     measured: dict[str, Any] = {
-        # Not "Surface temperature": this label rides BOTH rasters' legend
-        # caption (shared scale) and the bed-to-surface profile chart title,
-        # so it may not name one plane. The surface/bottom split in
-        # postprocess_telemac.py's _mk() still reads it correctly - splitting
-        # on the first space finds none here, so the whole label is the noun.
+        # Not "Surface temperature": this label rides BOTH rasters' legend caption
+        # and the bed-to-surface profile chart title, so it may not name one
+        # plane, and it stays a single word so a split on the first space leaves
+        # the whole label as the noun.
         "variable_label": "Water temperature", "variable_units": "degC",
         "stratification_metric": round(abs(dt_final), 4),
         "stratification_dt": round(dt_final, 4),
@@ -250,9 +227,7 @@ async def publish_stratified_products(*, run: dict[str, Any],
                                       solve: dict[str, Any]) -> Telemac3dLayerURI:
     """The solved column -> its surface and bottom layers, and the profile.
 
-    The BOTTOM companion is published and emitted; the SURFACE layer is returned,
-    and the dispatch seam puts that one on the canvas.
-    """
+    The BOTTOM is published and emitted; the SURFACE is returned for the seam."""
     from trid3nt_server.emission.pipeline_emitter import current_emitter
 
     from .result_reader import read_selafin

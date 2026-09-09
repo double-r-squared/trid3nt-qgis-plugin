@@ -1,19 +1,14 @@
 """Streeter-Phelps (1925) closed-form dissolved-oxygen sag - the WAQTEL O2 V&V.
 
-The WAQTEL O2 module (WATER QUALITY PROCESS = 2) reduces EXACTLY to the classic
-Streeter-Phelps oxygen-sag ODE when the eutrophication/benthic O2 sources are
-zeroed (photosynthesis P, respiration R, benthic demand BEN = 0), nitrification
-is off (K4 = 0), reaeration uses a constant k2 (FORMULA FOR COMPUTING K2 = 0) and
-saturation a constant Cs (FORMULA FOR COMPUTING CS = 0) at 20 C: the O2 source
-term becomes ``dD/dt = k1 L - k2 D`` with ``dL/dt = -k1 L`` (D = Cs - O2, L =
-CBOD). This module is the deterministic analytical reference the DO-sag template
-overlays against its computed profile (the 0153/0163/0167 closed-form V&V
-pattern). Pure arithmetic - no solver, no I/O.
+The deterministic analytical reference the DO-sag template overlays against its
+computed profile. Pure arithmetic - no solver, no I/O."""
 
-In-image V&V (2026-08-07, trid3nt-local/telemac:latest): a 12 km straight-channel
-WAQTEL O2 solve reproduces this closed form to 0.011 mg/L at the sag minimum
-(0.28 %), the sag location within 21 m (0.3 %), profile RMS 0.010 mg/L.
-"""
+# The WAQTEL O2 module (WATER QUALITY PROCESS = 2) reduces EXACTLY to this ODE
+# when the eutrophication and benthic sources are zeroed (photosynthesis P,
+# respiration R, benthic demand BEN = 0), nitrification is off (K4 = 0),
+# reaeration uses a constant k2 (FORMULA FOR COMPUTING K2 = 0) and saturation a
+# constant Cs (FORMULA FOR COMPUTING CS = 0) at 20 C: the O2 source term becomes
+# ``dD/dt = k1 L - k2 D`` with ``dL/dt = -k1 L``, where D = Cs - O2 and L = CBOD.
 from __future__ import annotations
 
 import math
@@ -32,11 +27,9 @@ def sp_do_profile(
 ) -> tuple[list[float], list[float]]:
     """DO(x) and deficit D(x) along a uniform reach (travel time ``t = x/U``).
 
-    ``L(t) = L0 e^{-k1 t}``; ``D(t) = k1 L0/(k2-k1)(e^{-k1 t}-e^{-k2 t}) + D0
-    e^{-k2 t}``; ``O2(t) = Cs - D(t)``. k in per-day, converted to per-second.
-    Handles the ``k1 == k2`` limit. Returns ``(do_mgl, deficit_mgl)`` lists aligned
-    to ``distance_m`` (x measured downstream from the fully-mixed discharge).
-    """
+    ``(do_mgl, deficit_mgl)`` on ``distance_m`` from the mix point; k per day."""
+    # ``L(t) = L0 e^{-k1 t}``; ``D(t) = k1 L0/(k2-k1)(e^{-k1 t}-e^{-k2 t}) + D0
+    # e^{-k2 t}``; ``O2(t) = Cs - D(t)``, with the ``k1 == k2`` limit handled.
     k1 = float(k1_per_day) / 86400.0
     k2 = float(k2_per_day) / 86400.0
     U = max(float(velocity_mps), 1e-9)
@@ -67,10 +60,9 @@ def sp_critical_point(
 ) -> dict[str, float]:
     """Critical (sag) travel time, downstream distance, and minimum DO.
 
-    ``tc = 1/(k2-k1) ln[(k2/k1)(1 - D0(k2-k1)/(k1 L0))]``; ``Dc = (k1/k2) L0
-    e^{-k1 tc}``; ``min DO = Cs - Dc``. Returns a dict with ``tc_day``, ``xc_m``,
-    ``min_do_mgl``, ``max_deficit_mgl``.
-    """
+    Returns ``tc_day``, ``xc_m``, ``min_do_mgl`` and ``max_deficit_mgl``."""
+    # ``tc = 1/(k2-k1) ln[(k2/k1)(1 - D0(k2-k1)/(k1 L0))]``;
+    # ``Dc = (k1/k2) L0 e^{-k1 tc}``; ``min DO = Cs - Dc``.
     k1 = float(k1_per_day)
     k2 = float(k2_per_day)
     Cs = float(saturation_mgl)

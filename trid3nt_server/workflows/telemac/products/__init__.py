@@ -1,5 +1,1 @@
-"""The door. Every consumer imports the module it means, never this file.
-
-An aggregating surface here would re-export names whose real home is a module,
-and a reader chasing a name would land on a list instead of on the code.
-"""
+"""Readers: a solved run's own files -> the map layers, the scalars, the charts."""

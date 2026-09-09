@@ -1,16 +1,8 @@
 """The solved harbour -> the agitation field, the sheltering pair and the curve.
 
-Everything a reader checks an agitation run against is MEASURED here, off the
-result file the solve wrote: the engine room solves and this reads. The field is
-the wave height at the mesh's own nodes; Kd is that over the incident height the
-deck prescribed; and the sheltering pair is two means over the strip the declared
-structure actually blocks - not two halves of the AOI, which would report whatever
-else lives in the domain as sheltering.
-
-The bed the wavelength is computed over is the RESULT's own ZF, so the depth the
-dispersion relation is solved at is the depth the solver ran on rather than a
-second sample of the same bathymetry.
-"""
+Everything is MEASURED off the result file the solve wrote, including the bed the
+wavelength is computed over, so the depth the dispersion relation is solved at is
+the depth the solver ran on rather than a second sample of the bathymetry."""
 
 from __future__ import annotations
 
@@ -50,11 +42,7 @@ _TRANSECT_POINTS = 60
 def dispersion_k(period_s: float, depth_m: float) -> float:
     """The wavenumber ``k`` solving ``omega^2 = g k tanh(k h)`` - Newton, from deep water.
 
-    The wavelength it gives is the length scale the sheltered and exposed strips
-    are held off the structure by: a mean taken inside half a wavelength of the
-    barrier is reading the barrier's own near field rather than the shelter behind
-    it.
-    """
+    Its wavelength is the distance the two strips are held off the structure by."""
     import numpy as np
 
     omega = 2.0 * np.pi / float(period_s)
@@ -74,13 +62,7 @@ def structure_shadow(segments: Any, ux: float, uy: float,
                      ) -> tuple[tuple[float, float], float | None]:
     """The structure's midpoint and the HALF-WIDTH of the strip it blocks.
 
-    A barrier's shadow is as wide as the barrier is ACROSS the incoming wave, so
-    the half-width is measured on the lateral axis - perpendicular to the incident
-    direction - over the structure's own vertices. With no structure there is
-    nothing to shadow: the caller falls back to the domain centre with no strip,
-    which is what makes an open-water run report no shelter instead of inventing
-    one.
-    """
+    Measured on the lateral axis; with no structure there is no strip at all."""
     import numpy as np
 
     segs = np.asarray(segments, dtype=float).reshape(-1, 4)
@@ -98,16 +80,7 @@ def _sheltering(x: Any, y: Any, kd: Any, *, mid: tuple[float, float],
                 shadow_half_m: float | None) -> dict[str, Any]:
     """The lee and the exposed approach, as the two means and what they averaged.
 
-    THE SHADOW, not the half-plane. Both selections are held inside the barrier's
-    own lateral extent - the sheltered mean is the lee, the exposed mean is the
-    same strip on the seaward side - so the pair is a like-for-like comparison
-    across ONE structure. A half-plane split reports a second harbour or a deeper
-    approach as sheltering.
-
-    A ratio between two means says nothing until the reader can see how many nodes
-    stood behind each one and how wide the strip they were drawn from was, so both
-    counts and the width ride with it.
-    """
+    THE SHADOW, not the half-plane: both are held inside the lateral extent."""
     import numpy as np
 
     ux, uy = wave_uv
@@ -136,10 +109,7 @@ def _transect(x: Any, y: Any, kd: Any, *, mid: tuple[float, float],
               shadow_half_m: float | None) -> dict[str, Any]:
     """A 1-D Kd profile along the incident direction through the shelter zone.
 
-    The band is the structure's own shadow strip - the same selection the
-    sheltered and exposed pair is read from - so the curve a reader sees and the
-    two numbers narrated beside it describe one region.
-    """
+    The band is the same shadow strip the sheltered and exposed pair is read from."""
     import numpy as np
 
     ux, uy = wave_uv
@@ -162,10 +132,7 @@ def _transect(x: Any, y: Any, kd: Any, *, mid: tuple[float, float],
 def _field(result: dict[str, Any]) -> tuple[Any, Any]:
     """``(WAVE HEIGHT, BOTTOM)`` at the mesh nodes, from the solved result.
 
-    The last record is the answer: an elliptic solve is steady state, so one
-    record is the whole run and a period scan's last record is the last period it
-    swept.
-    """
+    The last record is the answer: an elliptic solve is steady state."""
     import numpy as np
 
     def _named(*words: str) -> Any:

@@ -1,35 +1,8 @@
-"""TELEMAC-2D river-dye run-output postprocessing (river-dye reference scenario).
+"""A solved TELEMAC result SELAFIN -> the peak raster COGs and their scalars.
 
-``postprocess_telemac(slf_path, *, run_id, utm_epsg, ...) -> (layers, metrics)``
-reads a solved TELEMAC-2D result SELAFIN (``r2d_river.slf``), extracts the DYE
-tracer field over its time steps, rasterizes the PEAK (per-node max over time)
-concentration onto a regular EPSG:4326 grid clipped to the river channel, and
-emits the SAME ``(layers, metrics)`` shape as ``postprocess_geoclaw`` /
-``postprocess_openquake`` so the case/plugin render path consumes it unchanged.
-
-THE DELIBERATE DIFFERENCE from GeoClaw/SWMM (which emit a peak COG + a per-frame
-COG animation group): the TELEMAC result IS a native, time-stepped MDAL mesh --
-QGIS's MDAL provider opens the ``.slf`` directly and animates its DYE dataset
-group with ZERO new render code. So this postprocess emits ONLY the PEAK
-concentration COG (``layers[0]``, role ``"primary"``, named and styled by the
-PRODUCT the template's own reader handed in - a dye-named product over a
-sediment run asserts a field the run did not carry, so each question names its
-own) as the map anchor + narration carrier; the time
-animation rides the result SELAFIN, published as a ``layer_type="mesh"`` layer by
-the emit-on-solve seam (the composer writes ``outputs.json`` with a ``kind="mesh"``
-entry for ``r2d_river.slf``; ADR 0283). No per-frame COGs are written -- the mesh
-already carries every frame.
-
-Honesty floor (invariant 1): the dye scalars are computed with plain
-arithmetic from the SELAFIN tracer field -- no LLM anywhere. The COG carries an
-"idealized bed plane + prescribed-dispersion" label so a demo release is never
-read as a calibrated site study.
-
-The result file is read by ``result_reader.read_selafin``, which runs the
-engine's own ``TelemacFile`` inside the TELEMAC image. Nothing here knows the
-file's byte layout; this module works from the mesh and the per-variable frames
-that reader returns.
-"""
+Each reader emits ONE peak COG as the map anchor and narration carrier; the time
+animation rides the result SELAFIN itself, published as a mesh layer, so NO
+per-frame COGs are written. Every scalar is plain arithmetic over the field."""
 
 from __future__ import annotations
 
@@ -93,14 +66,11 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.workflows.telemac.products.postprocess_telemac")
 
-#: Concentration (mg/L) below which a node is treated as "no dye". OPEN-23
-#: (2026-07-16): a HARDCODED 1.0 mg/L false-flagged real-but-dilute plumes as
-#: TELEMAC_OUTPUT_EMPTY (e.g. a heavily-diluted spill peaking at 0.18 mg/L over
-#: a long reach). The detection floor is now RELATIVE to the run's own peak
-#: (``max(_DYE_WET_FLOOR, _DYE_WET_FRAC * dye_cmax)``): any run with a real
-#: plume passes at any concentration, while a genuinely empty run (peak ~0)
-#: still fails via the tiny absolute floor. ``TELEMAC_DYE_WET_MGL`` is retained
-#: as a legacy default only.
+#: Concentration (mg/L) below which a node is treated as "no dye". The detection
+#: floor is RELATIVE to the run's own peak
+#: (``max(_DYE_WET_FLOOR, _DYE_WET_FRAC * dye_cmax)``), so a real plume passes at
+#: any concentration while a genuinely empty run still fails on the tiny absolute
+#: floor. An absolute 1.0 mg/L would flag a heavily-diluted spill as empty.
 TELEMAC_DYE_WET_MGL: float = 1.0
 #: Absolute floor (mg/L) that separates a real (any-concentration) plume from a
 #: genuinely empty solve; below this, dye is treated as never injected.
@@ -129,17 +99,15 @@ TELEMAC_WSE_WET_DEPTH_M: float = 0.01
 class PostprocessTelemacError(RuntimeError):
     """Raised on read / rasterize / COG-write / upload failures.
 
-    ``error_code`` matches the open-set A.6 surface so the agent emitter renders
-    a typed error frame:
-
-    - ``TELEMAC_OUTPUT_READ_FAILED`` -- could not parse the SELAFIN.
-    - ``TELEMAC_OUTPUT_EMPTY`` -- no DYE variable / no time steps / no wet node
-      on a free-surface read (a wholly dry DEPTH field is a result, not empty).
-    - ``TELEMAC_DEPENDENCY_MISSING`` -- numpy / scipy / rasterio not importable.
-    - ``TELEMAC_COG_WRITE_FAILED`` -- rasterio could not write the COG.
-    - ``TELEMAC_CRS_TAG_MISMATCH`` -- the COG CRS tag did not round-trip.
-    - ``TELEMAC_COG_UPLOAD_FAILED`` -- the runs-bucket upload of the COG failed.
-    """
+    ``error_code`` is open-set, so the emitter renders a typed error frame."""
+    # TELEMAC_OUTPUT_READ_FAILED   -- could not parse the SELAFIN.
+    # TELEMAC_OUTPUT_EMPTY         -- no tracer variable, no time steps, or no
+    #                                 wet node on a free-surface read; a wholly
+    #                                 dry DEPTH field is a result, not empty.
+    # TELEMAC_DEPENDENCY_MISSING   -- numpy / scipy / rasterio not importable.
+    # TELEMAC_COG_WRITE_FAILED     -- rasterio could not write the COG.
+    # TELEMAC_CRS_TAG_MISMATCH     -- the COG CRS tag did not round-trip.
+    # TELEMAC_COG_UPLOAD_FAILED    -- the runs-bucket upload failed.
 
     error_code: str = "POSTPROCESS_TELEMAC_FAILED"
 
@@ -158,16 +126,11 @@ class PostprocessTelemacError(RuntimeError):
 def _pick_dye_var(varnames: list[str], *, mesh_group: str = "DYE") -> str | None:
     """The tracer variable name to rasterize, or None.
 
-    ``mesh_group`` is the SELAFIN variable the PRODUCT declares its field lands
-    in. ``DYE`` is the plain tracer pick: case-insensitive DYE, else a
-    T-prefixed tracer (mirrors the worker entrypoint's tracer-sanity selection).
-
-    A GAIA sediment coupled run declares ``NCOH SEDIMENT1``: the suspended
-    concentration rides as a SECOND telemac2d tracer (g/l == kg/m3) alongside
-    the required DYE companion, so the sediment-named var is picked and the
-    concentration COG is the SEDIMENT ribbon rather than the conservative dye
-    reference. Falls back to the dye pick when no sediment-named var is present
-    (an uncoupled rerun)."""
+    ``mesh_group`` is the variable the PRODUCT declares its field lands in."""
+    # A GAIA sediment coupled run declares ``NCOH SEDIMENT1``: the suspended
+    # concentration rides as a SECOND telemac2d tracer alongside the required DYE
+    # companion, so the sediment-named var is picked and the concentration COG is
+    # the SEDIMENT ribbon rather than the conservative dye reference.
     if mesh_group != "DYE":
         for v in varnames:
             u = v.strip().upper()
@@ -203,9 +166,7 @@ _V_VAR_KEYS: tuple[str, ...] = ("VELOCITY V", "VITESSE V")
 def _pick_named_var(varnames: list[str], keys: tuple[str, ...], letter: str) -> str | None:
     """First variable whose (upper, trimmed) name contains any of ``keys``.
 
-    Falls back to an EXACT single-letter mnemonic match (``S`` free surface / ``H``
-    water depth) for a terse run. Returns ``None`` when nothing matches (the
-    caller decides if that is fatal) -- never guesses a wrong field."""
+    Falls back to an EXACT mnemonic match, else ``None``; it never guesses."""
     for v in varnames:
         u = v.strip().upper()
         for k in keys:
@@ -240,11 +201,11 @@ def _grid_shape(bbox, res_m: float) -> tuple[int, int]:
 
 
 def _rasterize_nodes_to_grid(lon, lat, vals, bbox, out_shape, clip_dist_deg, wet_floor=0.0):
-    """Linear-interpolate scattered node values onto a regular 4326 grid, then
-    clip to the channel: a cell whose nearest node is farther than
-    ``clip_dist_deg`` is set to NaN (griddata otherwise fills the whole convex
-    hull, painting dye across meander cut-offs that carry no mesh). Sub-floor and
-    uncovered cells are NaN. Row 0 = NORTH (COG orientation)."""
+    """Linear-interpolate scattered node values onto a regular 4326 grid, clipped.
+
+    A cell past ``clip_dist_deg`` from any node is NaN; row 0 is NORTH."""
+    # Without the clip, griddata fills the whole convex hull and paints the field
+    # across meander cut-offs that carry no mesh.
     import numpy as np
     from scipy.interpolate import griddata
     from scipy.spatial import cKDTree
@@ -287,19 +248,12 @@ def _tri_from_ikle(ikle):
 def _rasterize_mesh_to_grid(lon, lat, ikle, vals, bbox, out_shape, wet_floor=0.0):
     """P1 (barycentric) interpolation of a nodal FEM field onto a regular grid.
 
-    The TELEMAC solution IS piecewise-linear over its own elements, so evaluating
-    each element's barycentric shape functions at the covered cell centres
-    reproduces the solver's representation exactly - zero invented data, and the
-    same thing QGIS's native mesh renderer draws. This REPLACES the nearest-node
-    halo of :func:`_rasterize_nodes_to_grid` for open-water meshes, where nodes
-    kilometres apart under a ~100 m halo published a lattice of isolated pixels
-    instead of a field.
-
-    A cell covered by no element stays NaN (the mesh footprint IS the clip - no
-    distance threshold to tune). An element with ANY non-finite vertex value is
-    SKIPPED: a masked node (dry, clamped land, never-wet) must not bleed a value
-    across the element it touches. Sub-``wet_floor`` cells are NaN. Row 0 = NORTH.
-    """
+    An element with ANY non-finite vertex is SKIPPED; row 0 is NORTH."""
+    # The TELEMAC solution IS piecewise-linear over its own elements, so
+    # evaluating each element's barycentric shape functions at the covered cell
+    # centres reproduces the solver's representation exactly. For an open-water
+    # mesh whose nodes stand kilometres apart, a nearest-node halo sized for a
+    # channel publishes a lattice of isolated pixels instead of a field.
     import numpy as np
 
     nrows, ncols = int(out_shape[0]), int(out_shape[1])
@@ -380,10 +334,7 @@ def _reraise_cogio(exc: CogIoError) -> "PostprocessTelemacError":
 def peak_layer_id(run_id: str, product: SubstanceProduct) -> str:
     """The transported-field layer's handle, spelled once for producer and publisher.
 
-    The PRODUCT's own noun is in the handle because the COG is: two runs of the
-    same reach publishing different fields would otherwise share a handle and one
-    would overwrite the other's registration.
-    """
+    The PRODUCT's own noun is in it, so two fields cannot share a handle."""
     return f"telemac-{product.noun.replace(' ', '-')}-peak-{run_id}"
 
 
@@ -403,37 +354,7 @@ def postprocess_telemac(
 ) -> tuple[list[TelemacDyeLayerURI], dict[str, Any]]:
     """Rasterize a solved TELEMAC-2D tracer run into ONE peak-concentration COG.
 
-    Reads ``slf_path`` (``r2d_river.slf``), extracts the tracer, computes the
-    per-node peak over time, reprojects the mesh nodes ``utm_epsg`` -> EPSG:4326,
-    rasterizes the peak onto an adaptive 4326 grid clipped to the channel, writes
-    + uploads ONE COG to the runs bucket under the ``product``'s own basename,
-    and returns
-    ``([TelemacDyeLayerURI], metrics)``. The time animation is served separately
-    from the SELAFIN mesh sibling that ``open_case_in_qgis`` discovers next to
-    this COG (this postprocess writes NO per-frame COGs).
-
-    Args:
-        slf_path: the solved result SELAFIN (local path, already downloaded).
-        run_id: the run id the COG is keyed under in the runs bucket (and whose
-            ``r2d_river.slf`` sibling the export path discovers for animation).
-        utm_epsg: the SELAFIN mesh CRS EPSG (the reach UTM zone; from
-            ``telemac_metrics.json``'s ``utm_epsg``). SELAFIN carries no CRS.
-        reach_name: echoed into the layer name.
-        product: the transported-field product this run publishes - the tracer
-            variable it reads, the COG basename it uploads under, the quantity,
-            the style preset and the noun the layer is named with. The reader
-            that was bound to this template names it.
-        dye_units: concentration units label (default mg/L).
-        runs_bucket: optional override for the runs bucket name.
-        target_ground_res_m: target ground resolution (m/px) for the COG.
-
-    Returns:
-        ``(layers, metrics)`` -- ``layers[0]`` the peak ``TelemacDyeLayerURI``;
-        ``metrics`` the peak/plume aggregates dict.
-
-    Raises:
-        PostprocessTelemacError: any read / rasterize / COG-write / upload failure.
-    """
+    ``utm_epsg`` is the mesh CRS the SELAFIN itself does not carry."""
     try:
         import numpy as np
         from pyproj import Transformer  # noqa: F401
@@ -465,7 +386,7 @@ def postprocess_telemac(
     import numpy as np
 
     dye = np.asarray(mesh["data"][dye_var])  # (nframes, npoin)
-    # UNITS TRAP (pinned by the 2026-07-19 in-image smoke): the GAIA suspended
+    # UNITS TRAP: the GAIA suspended
     # sediment tracer lands in r2d as 'NCOH SEDIMENT1' in g/l (== kg/m3), while
     # the dye tracer + our whole UI speak mg/L. Scale the sediment field g/l ->
     # mg/L (x1000) so the concentration COG + cmax are in mg/L like the dye - a
@@ -488,7 +409,7 @@ def postprocess_telemac(
     # flush-out are the parts of the curve the detection floor would cut off.
     curve_t = [float(t) for t in times[:per_frame_cmax.size]]
     curve_c = [float(c) for c in per_frame_cmax[:len(curve_t)]]
-    # OPEN-23: detection floor relative to THIS run's peak (+ a tiny absolute
+    # Detection floor relative to THIS run's peak (plus a tiny absolute
     # floor for genuinely-empty solves), so a dilute-but-real plume is not
     # false-flagged as OUTPUT_EMPTY.
     wet = max(_DYE_WET_FLOOR, _DYE_WET_FRAC * dye_cmax)
@@ -656,32 +577,13 @@ def postprocess_telemac_deposition(
 ) -> tuple[list[TelemacSedimentLayerURI], dict[str, Any]]:
     """Rasterize the GAIA final CUMUL BED EVOL field into ONE bed-evolution COG.
 
-    ``erodible=False`` (v1 supply-limited): renders only the positive DEPOSITION
-    tongue (nothing erodes) and errors if nothing deposited. ``erodible=True`` (v2
-    morphodynamics): renders the SIGNED bed change - SCOUR (negative) and
-    DEPOSITION (positive) - on the diverging ramp centered on 0, reports
-    ``max_scour_mm`` beside ``max_deposition_mm``, and is valid as long as the bed
-    moved either way.
-
-    Reads ``gaia_river.slf`` (the GAIA result), picks the CUMUL BED EVOL variable
-    (mnemonic ``E``; the in-image smoke confirmed it is present in METRES), takes
-    the FINAL frame (cumulative bed change -> final = total event deposition),
-    reprojects the mesh nodes ``utm_epsg`` -> EPSG:4326, rasterizes the SIGNED bed
-    change in MILLIMETRES onto an adaptive grid clipped to the channel, writes +
-    uploads ONE COG (``telemac_sediment_deposition.tif``) on the diverging
-    bed-evolution preset, and returns ``([TelemacSedimentLayerURI], metrics)``.
-
-    The layer's deposited_mass_kg / deposit_fraction come from
-    ``worker_sed_metrics`` (GAIA's OWN listing mass balance - the authoritative
-    closure numbers, never reconstructed): deposited_mass_kg is the NET bed mass
-    (CUMULATED BED EVOLUTIONS, clamped >= 0), the SAME net quantity the final-frame
-    E-field map and deposit_fraction integrate - never the gross CUMULATED
-    DEPOSITION, which can cancel against erosion and contradict the map.
-    max_deposition_mm is measured independently off the E field here (the design's
-    cross-check).
-
-    Raises ``PostprocessTelemacError`` on any read / rasterize / COG failure.
-    """
+    ``erodible=False`` renders deposition only; ``True`` the SIGNED change."""
+    # The CUMUL BED EVOL variable (mnemonic ``E``) is in METRES and cumulative, so
+    # the FINAL frame is the total event change; it is rasterized in MILLIMETRES.
+    # deposited_mass_kg and deposit_fraction come from GAIA's own listing balance
+    # as the NET bed mass, the SAME quantity the E-field map integrates - never
+    # the gross deposition, which can cancel against erosion and contradict the
+    # map. max_deposition_mm is measured independently off the E field here.
     try:
         import numpy as np
         from pyproj import Transformer  # noqa: F401
@@ -907,11 +809,10 @@ def postprocess_telemac_deposition(
 def _nn_spacing_m(x, y) -> float:
     """Median nearest-neighbour node spacing (mesh characteristic length).
 
-    Used to size the raster clip distance for a COARSE validation mesh: the dye
-    path clips at ~1.5 output cells (fine channel mesh), but a dam-break mesh has
-    ~tens-of-metres node spacing, so a cell-based clip would punch holes BETWEEN
-    nodes inside the domain. Clipping at ~2x the node spacing keeps the interior
-    filled while still trimming cells outside the mesh footprint."""
+    Sizes the raster clip distance where a cell-based clip would punch holes."""
+    # A fine channel mesh clips at ~1.5 output cells, but a coarse mesh with
+    # tens-of-metres node spacing needs ~2x the node spacing to keep the interior
+    # filled while still trimming cells outside the mesh footprint.
     import numpy as np
     from scipy.spatial import cKDTree
 
@@ -940,58 +841,25 @@ def postprocess_telemac_wse(
 ) -> tuple[list[TelemacWseLayerURI], dict[str, Any]]:
     """Rasterize a solved TELEMAC-2D result into ONE peak FREE-SURFACE (WSE) COG.
 
-    The validation-case analogue of :func:`postprocess_telemac` (which rasterizes
-    the DYE tracer): reads ``slf_path`` (``r2d_river.slf`` / a reference result),
-    picks the ``FREE SURFACE`` variable, and computes the per-node MAX-over-time
-    water-surface elevation -- but ONLY over frames where that node's WATER DEPTH
-    exceeded :data:`TELEMAC_WSE_WET_DEPTH_M` (TELEMAC's free surface equals the bed
-    at a dry node, so an unmasked max would paint dry terrain as a water surface).
-    A never-wetted node is NaN (no water), never its bed elevation.
-
-    ``quantity="depth"`` is the exception, and deliberately: a DEPTH of zero is a
-    result, so a never-wetted node inside the domain keeps its own zero and the
-    map renders it DRY. Only cells outside the meshed domain are nodata. A field
-    punched full of holes wherever the storm produced no runoff reads as a broken
-    raster rather than as an answer - and a field that is zero EVERYWHERE is that
-    same result at full extent, so it completes with the dryness stated rather
-    than refusing. ``TELEMAC_OUTPUT_EMPTY`` is what output that is truly empty
-    raises: no depth variable, no time steps.
-
-    Unlike the dye path this writes the COG **in the MESH's OWN CRS**
-    (``mesh_epsg``), with NO reprojection to EPSG:4326: obs high-water marks for a
-    validation case live in the same mesh frame, so keeping both sides in one
-    identical CRS makes the downstream ``extract_model_at_observations`` pairing an
-    exact identity (zero reprojection distortion). The raster is stamped with a
-    ``quantity=water_surface_elevation`` TAG so the pairing tool resolves the model
-    quantity from the tag and pairs it like-for-like against a WSE observation (no
-    DEM / depth conversion needed when both sides are WSE).
-
-    Args:
-        slf_path: the solved result SELAFIN (local path, already downloaded).
-        run_id: run id the COG is keyed under in the runs bucket.
-        mesh_epsg: the EPSG the SELAFIN mesh coordinates are in (the raster is
-            written verbatim in this CRS -- NO reprojection). For a bundled
-            local-frame validation mesh this is a PLACEHOLDER projected EPSG the
-            coordinates are stamped with; ``mesh_frame_note`` records the caveat.
-        reach_name: echoed into the layer name.
-        quantity: ``"wse"`` (free surface, default) or ``"depth"`` (max water
-            depth) -- selects the source variable + the stamped quantity tag.
-        vertical_datum: OPTIONAL datum label carried on the layer (e.g. ``"NGF"``).
-        mesh_frame_note: OPTIONAL local-frame caveat folded into ``fallback_note``.
-        runs_bucket: optional override for the runs bucket name.
-        target_ground_res_m: target ground resolution (m/px) for the COG.
-        _output_dir: TEST/offline hook -- when set, the COG is written to this
-            directory (``telemac_wse_max_<run_id>.tif``) and its LOCAL path is
-            returned instead of uploading to the runs bucket (mirrors
-            ``extract_model_at_observations``'s ``_output_dir``).
-
-    Returns:
-        ``([TelemacWseLayerURI], metrics)`` -- ``layers[0]`` the peak-WSE layer;
-        ``metrics`` the WSE aggregates dict.
-
-    Raises:
-        PostprocessTelemacError: any read / rasterize / COG-write / upload failure.
-    """
+    Written in the MESH's OWN CRS with NO reprojection, and tagged by quantity."""
+    # The max is taken only over frames where the node's WATER DEPTH exceeded the
+    # wet floor: TELEMAC's free surface equals the bed at a dry node, so an
+    # unmasked max would paint dry terrain as a water surface.
+    #
+    # ``quantity="depth"`` is the deliberate exception: a DEPTH of zero is a
+    # result, so a never-wetted node inside the domain keeps its own zero and the
+    # map renders it DRY, with only cells outside the meshed domain nodata. A
+    # field punched full of holes wherever the storm produced no runoff reads as a
+    # broken raster rather than as an answer, and a field that is zero everywhere
+    # is that same result at full extent. TELEMAC_OUTPUT_EMPTY is for output that
+    # is truly empty: no depth variable, no time steps.
+    #
+    # Observations for a validation case live in the mesh's own frame, so keeping
+    # both sides in one identical CRS makes the downstream pairing an exact
+    # identity, and the quantity tag lets that pairing resolve the model quantity
+    # without a DEM or depth conversion. For a bundled local-frame mesh
+    # ``mesh_epsg`` is a PLACEHOLDER the coordinates are stamped with, and
+    # ``mesh_frame_note`` records the caveat.
     try:
         import numpy as np
     except Exception as exc:  # noqa: BLE001
@@ -1309,7 +1177,7 @@ def postprocess_telemac_wse(
 # WAQTEL O2: the dissolved-oxygen SAG - steady-state DO COG + the sag curve.
 # --------------------------------------------------------------------------- #
 #: DISSOLVED O2 / ORGANIC LOAD variable names WAQTEL's O2 module writes (nametrac
-#: strings, pinned by the 2026-08-07 in-image smoke).
+#: strings).
 _DO_VAR_KEYS: tuple[str, ...] = ("DISSOLVED O2", "O2 DISSOUS", "DISSOLVED OXYGEN")
 _BOD_VAR_KEYS: tuple[str, ...] = ("ORGANIC LOAD", "CHARGE ORGANIQUE")
 
@@ -1317,17 +1185,13 @@ _BOD_VAR_KEYS: tuple[str, ...] = ("ORGANIC LOAD", "CHARGE ORGANIQUE")
 def _downstream_coordinate(x, y, centerline_utm=None, flow_uv=None):
     """Per-node DOWNSTREAM distance (m) + a label for how it was derived.
 
-    With ``centerline_utm`` (an ordered [(x,y), ...] polyline) each node is
-    projected to the nearest centerline segment and assigned that segment's
-    cumulative arc length - the true along-reach distance. Without it, the nodes
-    are projected onto their PRINCIPAL FLOW AXIS (PCA first component), which is
-    exact for a straight channel (the S-P V&V) and a labelled approximation for a
-    gently sinuous reach. Returns ``(s_m ndarray, label)``.
-
-    A principal AXIS has no direction of its own, so ``flow_uv`` - the solved mean
-    velocity vector - is what points it downstream. Without it the sign falls to
-    the node cloud's own skew, which can hand back a sag curve read backwards.
-    """
+    Returns ``(s_m ndarray, label)``, the label naming which route ran."""
+    # With a centerline each node takes the nearest segment's cumulative arc
+    # length, the true along-reach distance. Without one the nodes are projected
+    # onto their principal flow axis, which is exact for a straight channel. A
+    # principal AXIS has no direction of its own, so ``flow_uv`` - the solved mean
+    # velocity - is what points it downstream; without it the sign falls to the
+    # node cloud's own skew, which can hand back a sag curve read backwards.
     import numpy as np
 
     x = np.asarray(x, dtype=float)
@@ -1369,17 +1233,7 @@ def _streeter_phelps_overlay(curve_x, curve_do, curve_bod, *, velocity_mps,
                              saturation_mgl, k1_per_day, k2_per_day):
     """The closed-form DO sag over the SAME bins -> ``(anchor, do_mgl, note)``.
 
-    The overlay is ANCHORED at the modeled mix point - the bin where the solved
-    CBOD peaks, which is where the outfall's load has just entered the water - and
-    is integrated downstream from there on the run's own L0, D0 and travel-time
-    velocity. It is therefore a test of the KINETICS (deoxygenation against
-    reaeration) rather than a second guess at how the discharge mixed, and every
-    input is a number the run measured or the sheet declared.
-
-    Returns an empty profile with the reason when the run cannot support one - no
-    velocity, no CBOD tracer, no declared rates, or a mix point at the very end of
-    the reach with nothing downstream to compare.
-    """
+    ANCHORED at the modeled mix point, so it tests the KINETICS not the mixing."""
     import numpy as np
 
     from trid3nt_server.workflows.telemac.products.streeter_phelps import sp_do_profile
@@ -1424,18 +1278,7 @@ def postprocess_telemac_do(
 ) -> tuple[list[TelemacDoLayerURI], dict[str, Any]]:
     """Rasterize a WAQTEL O2 sag run into a steady-state DISSOLVED-O2 COG + curve.
 
-    Reads ``slf_path`` (``r2d_river.slf``), takes the STEADY-STATE (last frame)
-    DISSOLVED O2 field (the worst-case sag for a continuous discharge), reprojects
-    the mesh nodes ``utm_epsg`` -> EPSG:4326, rasterizes the DO field onto an
-    adaptive 4326 grid clipped to the channel, writes + uploads ONE COG
-    (``telemac_do_field.tif``) and returns ``([TelemacDoLayerURI], metrics)``. It
-    also bins DO + CBOD by downstream distance into the along-reach SAG CURVE the
-    dock chart plots against the DO standard, and computes the sag minimum + its
-    location (Invariant 1 - typed, never invented).
-
-    ``_output_dir`` (TEST/offline hook): when set the COG is written locally and
-    its path returned instead of uploading (mirrors ``postprocess_telemac_wse``).
-    """
+    The LAST frame is the answer: the worst-case sag for a continuous discharge."""
     try:
         import numpy as np
         from pyproj import Transformer  # noqa: F401
@@ -1722,20 +1565,13 @@ def _local_mesh_origin(domain_bbox: Any, utm_epsg: int, *,
                        context: str = "this postprocess") -> tuple[float, float]:
     """The UTM corner a LOCAL-coordinate mesh was built from. The ONE origin.
 
-    Every open-water TELEMAC build lays its grid with node 0 at the AOI's SW
-    corner, so the result SELAFIN carries local metres and the corner has to be
-    added back before reprojection. Getting this wrong does not fail: it silently
-    lands the field at the UTM zone's false origin, thousands of km from the
-    domain. Three copies of the arithmetic is three places for that to happen, so
-    there is one.
-
-    ABSENCE and MALFORMATION are different facts. A build with no AOI (the
-    geography-free idealized basin) has no corner to add and its coordinates are
-    already what they are; ``required=True`` says this reader cannot place its
-    mesh without one and refuses instead. A bbox that is PRESENT but not four
-    numeric corners is a refusal either way - reading it as absent would put a
-    real domain at the false origin, which is the bug this guards.
-    """
+    ABSENCE and MALFORMATION differ: a present but malformed bbox refuses."""
+    # Every open-water build lays its grid with node 0 at the AOI's SW corner, so
+    # the result SELAFIN carries local metres and the corner has to be added back
+    # before reprojection. Getting it wrong does not fail - it silently lands the
+    # field at the UTM zone's false origin, thousands of km from the domain - so
+    # the arithmetic lives in one place. ``required=True`` says this reader cannot
+    # place its mesh without a corner and refuses instead of guessing.
     if domain_bbox is None:
         if required:
             raise PostprocessTelemacError(
@@ -1782,31 +1618,13 @@ def postprocess_tomawac(
 ) -> tuple[list[TelemacWaveLayerURI], dict[str, Any]]:
     """Rasterize a solved TOMAWAC result into ONE significant-wave-height COG.
 
-    Reads ``slf_path`` (the TOMAWAC 2D result SELAFIN), picks the significant
-    wave height variable (``WAVE HEIGHT HM0``, mnemonic ``HM0``), takes the FINAL
-    frame (the steady sea state), reprojects the mesh nodes ``utm_epsg`` ->
-    EPSG:4326, rasterizes Hs onto an adaptive 4326 grid clipped to the wet domain,
-    writes + uploads ONE COG (``tomawac_hs.tif``), and returns
-    ``([TelemacWaveLayerURI], metrics)``. The time evolution plays from the
-    SELAFIN mesh sibling ``export_case_to_qgis`` discovers via
-    ``TELEMAC_WAVE_STYLE`` (no per-frame COGs).
-
-    ``domain_bbox`` is the 4326 AOI the REAL-lake grid was built over, and it is
-    what georeferences the result. The wave worker builds its grid in LOCAL
-    coordinates (node 0 at the AOI's SW corner) and only offsets by the corner
-    when it samples the bed, so the result SELAFIN carries local metres - exactly
-    as the coastal build does. Without the bbox those metres reproject as ABSOLUTE
-    UTM and the Hs COG lands at the zone's false origin, thousands of km from the
-    lake, while the bed COG beside it sits correctly on the water. The IDEALIZED
-    basin has no geographic footprint at all, so it passes no bbox and its layer
-    stays where the geography-free grid puts it - which its own label already says.
-
-    Honesty floor (invariant 1): every wave scalar is plain arithmetic over the
-    Hs field -- no LLM. The COG carries a spectral-screening label so a demo run
-    is never read as a calibrated hindcast.
-
-    Raises ``PostprocessTelemacError`` on any read / rasterize / COG failure.
-    """
+    The FINAL frame is the steady sea state; ``domain_bbox`` georeferences it."""
+    # The wave worker builds its grid with node 0 at the AOI's SW corner and only
+    # offsets by that corner when it samples the bed, so without the bbox those
+    # metres reproject as absolute UTM and the Hs COG lands at the zone's false
+    # origin while the bed COG beside it sits correctly on the water. An idealized
+    # basin has no geographic footprint, passes no bbox, and stays where the
+    # geography-free grid puts it - which its own label says.
     try:
         import numpy as np
         from pyproj import Transformer  # noqa: F401
@@ -1975,21 +1793,11 @@ def postprocess_artemis(
 ) -> tuple[list[ArtemisAgitationLayerURI], dict[str, Any]]:
     """The solved agitation field -> ONE Kd (Hs/H0) COG on the map.
 
-    ``hs`` is the WAVE HEIGHT the solve wrote at the mesh's own nodes and ``x`` /
-    ``y`` their coordinates in the mesh's UTM zone - a mesh authored over the AOI
-    carries TRUE eastings and northings, so the reprojection to 4326 is the whole
-    of the georeferencing and there is no origin to add back.
-
-    The field is drawn by the solver's own P1 representation over the element
-    table rather than by a nearest-node halo: an authored mesh spaces its offshore
-    nodes hundreds of metres apart, and a halo sized for the harbour publishes a
-    lattice of isolated pixels out there instead of a field.
-
-    Honesty floor: every agitation scalar is plain arithmetic over the Hs field.
-    The COG carries a phase-resolving-screening label.
-
-    Raises ``PostprocessTelemacError`` on any rasterize / COG failure.
-    """
+    An authored mesh carries TRUE eastings, so there is no origin to add back."""
+    # The field is drawn by the solver's own P1 representation over the element
+    # table rather than by a nearest-node halo: an authored mesh spaces its
+    # offshore nodes hundreds of metres apart, and a halo sized for the harbour
+    # publishes a lattice of isolated pixels out there instead of a field.
     import numpy as np
 
     hs = np.asarray(hs, dtype="float64")
@@ -2107,15 +1915,10 @@ def _rasterize_t3d_plane(
 ):
     """One sigma plane of the solved column -> a 4326 COG, uploaded.
 
-    Returns ``(uri, bbox, node_min, node_max, node_mean, valid_frac)``, where
-    ``valid_frac`` is the fraction of output pixels carrying a value - the number
-    that separates a FIELD from a dot lattice. NO value masking: a temperature or
-    a velocity can be negative and valid, so only non-finite nodes are dropped.
-
-    The nodes carry TRUE eastings and northings - an authored mesh is projected
-    into its own UTM zone - so the reprojection to 4326 is the whole of the
-    georeferencing and there is no origin to add back.
-    """
+    NO value masking: a temperature or a velocity can be negative and valid."""
+    # ``valid_frac`` is the fraction of output pixels carrying a value, the number
+    # that separates a FIELD from a dot lattice. The nodes carry true eastings and
+    # northings, so the reprojection to 4326 is the whole of the georeferencing.
     import numpy as np
 
     node_vals = np.asarray(node_vals, dtype="float64")
@@ -2197,17 +2000,7 @@ def postprocess_telemac3d(
 ) -> tuple[list[Telemac3dLayerURI], dict[str, Any]]:
     """The solved column's top and bed planes -> the PAIR of COGs on the map.
 
-    TWO LAYERS, ONE ANSWER: the contrast between the surface and the bottom is the
-    whole reason to go 3D, and a single depth-averaged map is exactly what this
-    refuses. ``measured`` carries the scalars read off the same 3D field the two
-    planes were taken from, so the narrated numbers and the rasters are one
-    measurement.
-
-    Honesty floor: every 3D scalar is plain arithmetic over the solved field. The
-    COGs carry a screening label.
-
-    Raises ``PostprocessTelemacError`` on any rasterize / COG failure.
-    """
+    TWO LAYERS, ONE ANSWER; ``measured`` is read off the same 3D field."""
     units = measured.get("variable_units") or ""
     var_label = measured.get("variable_label") or "Surface field"
     metric = float(measured.get("stratification_metric") or 0.0)
@@ -2315,20 +2108,16 @@ def postprocess_telemac3d(
 def _initially_dry_mask(mesh: Any, depth: Any, init_wl_m: Any) -> tuple[Any, str]:
     """The t=0 wet/dry mask: True where a node was DRY before the tide arrived.
 
-    Two routes to the same discrimination, in preference order, because the answer
-    layer has to mean the same thing as ``flooded_land_km2``:
-
-    1. the worker's own rule - ``BOTTOM > init_wl`` - reproduced from the result
-       SELAFIN's static bed and the DATUM-CORRECTED initial water line the worker
-       cold-started from. This is the definition the scalar already uses.
-    2. frame 0 of WATER DEPTH, when the result carries no bed or the run reported
-       no initial stage. TELEMAC cold-starts ``H = max(0, init_wl - B)``, so a
-       dry-at-t0 node is exactly one whose first frame is at the dry floor; it is
-       the same discrimination read off the field instead of off the bed.
-
-    Returned with the label of the route that ran, because "which land was already
-    under water" is a statement the reader is entitled to check.
-    """
+    Returned with the LABEL of the route that ran, so a reader can check it."""
+    # Two routes to the same discrimination, in preference order, because the
+    # answer layer has to mean the same thing as ``flooded_land_km2``:
+    #   1. the worker's own rule, ``BOTTOM > init_wl``, reproduced from the
+    #      result's static bed and the datum-corrected initial water line the
+    #      worker cold-started from - the definition the scalar already uses;
+    #   2. frame 0 of WATER DEPTH, when the result carries no bed or the run
+    #      reported no initial stage. TELEMAC cold-starts ``H = max(0, init_wl -
+    #      B)``, so a dry-at-t0 node is exactly one whose first frame is at the
+    #      dry floor - the same discrimination read off the field.
     import numpy as np
 
     bed_var = _pick_named_var(mesh["varnames"], _BED_VAR_KEYS, "B")
@@ -2356,36 +2145,12 @@ def postprocess_coastal(
 ) -> tuple[list[TelemacCoastalLayerURI], dict[str, Any]]:
     """Rasterize a solved COASTAL result into an INUNDATION layer and its context.
 
-    TWO products, because one raster was answering two questions at once. The
-    PRIMARY is peak depth over land that was DRY at t=0 (``coastal_inundation.tif``)
-    - the planning quantity, the same discrimination ``flooded_land_km2`` counts,
-    so the picture and the scalar finally agree. Beside it, as ``role="context"``,
-    the full peak WATER DEPTH field (``coastal_depth_max.tif``) including the
-    permanently submerged bay, honestly named: it is where the water is, not where
-    the tide went.
-
-    The storm-tide analogue of :func:`postprocess_tomawac`: reads ``slf_path``
-    (``res_coastal.slf``), takes the per-node MAX-over-time WATER DEPTH masked to
-    wet nodes, reprojects the mesh ``utm_epsg`` -> EPSG:4326, rasterizes both
-    fields onto one adaptive 4326 grid, uploads both COGs, and returns
-    ``([inundation, water_depth], metrics)``. The rising-tide animation plays from
-    the coastal result SELAFIN mesh sibling ``export_case_to_qgis`` discovers via
-    ``TELEMAC_COASTAL_DEPTH_STYLE``.
-
-    The coastal worker writes LOCAL (origin-shifted) mesh coordinates into the
-    result SELAFIN, so ``domain_bbox`` (the 4326 AOI the domain was built over) is
-    REQUIRED to recover the UTM origin ``(min easting, min northing)`` added back
-    before the ``utm_epsg`` -> 4326 reprojection -- exactly as the coastal build
-    georeferences its bed. Without it the COG would land at the UTM false-origin.
-
-    The flooded-LAND discriminant (newly-inundated area, km^2) is computed inside
-    the worker (dry-at-t0 land that goes wet at peak stage) and folded in from
-    ``worker_metrics`` -- the A/B storm-surge-vs-calm-tide signal. Honesty floor
-    (invariant 1): every depth/area scalar is plain arithmetic over the field --
-    no LLM.
-
-    Raises ``PostprocessTelemacError`` on any read / rasterize / COG failure.
-    """
+    TWO products: peak depth over land DRY at t=0, and the full depth field."""
+    # The coastal worker writes LOCAL (origin-shifted) mesh coordinates into the
+    # result, so ``domain_bbox`` is REQUIRED to recover the UTM origin added back
+    # before reprojection; without it the COG lands at the UTM false origin. The
+    # flooded-land discriminant is computed inside the worker and folded in from
+    # ``worker_metrics``.
     try:
         import numpy as np
         from pyproj import Transformer  # noqa: F401

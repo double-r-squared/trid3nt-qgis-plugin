@@ -1,16 +1,8 @@
 """What a solved run's OWN files say, read on the server.
 
-The worker is the engine room: it runs a steering file and writes what the
-engine wrote.
-Everything a reader has to derive from those files - the sediment closure GAIA
-prints into its listing, the floating slick a drogues track describes - is read
-HERE, from the artifacts the supervisor uploaded, so the numbers a run narrates
-come out of the run's own evidence rather than out of a second computation
-inside the container.
-
-Every function is BEST-EFFORT by the products contract: a parse that fails
-returns nothing and the primary layer still stands.
-"""
+The worker is the engine room: it runs a steering file and writes what the engine
+wrote, and everything derived from those files is read HERE. Every function is
+BEST-EFFORT: a parse that fails returns nothing and the primary layer stands."""
 
 from __future__ import annotations
 
@@ -69,10 +61,7 @@ _DEMAND_LINES = 6
 def engine_demand(listing_text: str) -> str | None:
     """What the engine ASKED FOR before it stopped, in its own words.
 
-    A keyword the dictionary gives no default for is open on the sheet, not
-    required: only the engine knows which of them THIS deck cannot run without,
-    and LECDON says so by name. That sentence is what a caller gets back.
-    """
+    Only the engine knows which open keyword THIS deck cannot run without."""
     lines = [line.rstrip() for line in (listing_text or "").splitlines()]
     starts = [i for i, line in enumerate(lines) if _LECDON_DEMAND.search(line)]
     if not starts:
@@ -88,17 +77,13 @@ def engine_demand(listing_text: str) -> str | None:
 def gaia_mass_balance(listing_text: str) -> dict[str, Any]:
     """GAIA's own closure out of the solver listing - deposited/eroded/net/lost kg.
 
-    These are the authoritative masses: the deposition MAP is a field and this is
-    the engine's own accounting of it, so the run narrates from these rather than
-    from an integral a reader recomputed. Any field the listing did not print is
-    simply absent.
-
-    ZERO HAS NO SIGN, and the sign is fixed HERE so no consumer has to know: a
-    residual the listing prints as a tiny negative rounds to ``-0.0``, which
-    survives ``max(value, 0.0)`` unchanged and reaches the reader as a negative
-    deposited mass beside a map showing deposition. Adding 0.0 collapses the
-    negative zero onto the positive one; a genuinely negative mass is untouched.
-    """
+    The authoritative masses; a field the listing did not print is absent."""
+    # ZERO HAS NO SIGN, and the sign is fixed HERE so no consumer has to know: a
+    # residual the listing prints as a tiny negative rounds to ``-0.0``, which
+    # survives ``max(value, 0.0)`` unchanged and would reach the reader as a
+    # negative deposited mass beside a map showing deposition. Adding 0.0
+    # collapses the negative zero onto the positive one; a genuinely negative
+    # mass is untouched.
     start = re.search(_GAIA_HEADING, listing_text or "")
     if start is None:
         return {}
@@ -121,11 +106,7 @@ def gaia_mass_balance(listing_text: str) -> dict[str, Any]:
 def surface_d50_spread(gaia_slf: str | Path) -> dict[str, Any]:
     """The SORTING signature: the spread of the bed's surface mean diameter, in um.
 
-    A single-class bed is uniform, so sorting is structurally impossible and the
-    range is zero; a graded mixture armors where the flow steepens (D50 up) and
-    fines where it slackens (D50 down). The spread is therefore the number that
-    says whether the bed sorted at all.
-    """
+    A single-class bed cannot sort, so its range is structurally zero."""
     import numpy as np
 
     from trid3nt_server.workflows.telemac.products.result_reader import read_selafin
@@ -153,15 +134,7 @@ def sediment_scalars(*, listing_text: str, injected_kg: float,
                      gaia_slf: str | Path | None = None) -> dict[str, Any]:
     """Every sediment number a GAIA run reports, off its own listing and result.
 
-    ``injected_kg`` is the run's own pulse - discharge x concentration x window -
-    so the deposit fraction compares what settled against what was put in rather
-    than against an assumed load. The fraction is clamped into [0, 1]: a net bed
-    gain larger than the injection is measurement noise on a supply-limited run,
-    not more sediment than was released.
-
-    A SORTED bed needs a mixture to sort, so the surface-grading spread is
-    reported only where the run declared two classes or more.
-    """
+    The deposit fraction is clamped into [0, 1]; sorting needs two classes."""
     stats = gaia_mass_balance(listing_text)
     stats["sediment_injected_kg"] = round(float(injected_kg), 3)
     net = stats.get("sediment_net_bed_mass_kg")
@@ -181,10 +154,7 @@ def sediment_scalars(*, listing_text: str, injected_kg: float,
 def parse_drogues(path: str | Path) -> list[tuple[float, list[tuple[float, float]]]]:
     """The TecPlot ASCII drogues track -> ``[(t_s, [(x, y), ...]), ...]``.
 
-    One ZONE per written instant, its time on the ZONE header. A row the reader
-    cannot parse is skipped rather than aborting the track: a truncated final
-    line costs one particle, not the whole slick.
-    """
+    One ZONE per written instant; an unparsable row is skipped, not fatal."""
     zones: list[tuple[float, list[tuple[float, float]]]] = []
     time_s: float | None = None
     points: list[tuple[float, float]] = []
@@ -215,12 +185,7 @@ def oil_slick_features(drogues_path: str | Path, *, utm_epsg: int
                        ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """The oil track -> ``(particles, slick, stats)`` in lon/lat.
 
-    ``oil_particles_exited_domain`` is the honest exit accounting: TELEMAC drops
-    a float from the track when its trajectory crosses a LIQUID boundary, which
-    is the particle LEAVING through the outlet. Released minus remaining is
-    therefore how many left the reach, and a low survivor count reads as the
-    plume having passed rather than as a broken tracker.
-    """
+    ``oil_particles_exited_domain`` is released minus remaining at the outlet."""
     import numpy as np
     from pyproj import Transformer
 
@@ -275,10 +240,7 @@ _VOLUME_ERROR = _BALANCE_TIME + r"\s*:\s*([-+\d.Ee]+)"
 def continuity_rel_error(listing_text: str) -> float | None:
     """The engine's OWN volume closure, off the last one it printed.
 
-    The solver accounts for its own mass and says so every listing period; the
-    LAST figure is the run's, and a reader that integrated the depth field
-    instead would be answering with a second computation the engine never made.
-    """
+    The solver prints one every listing period; the LAST figure is the run's."""
     found = re.findall(_VOLUME_ERROR, listing_text or "")
     if not found:
         return None
@@ -288,23 +250,22 @@ def continuity_rel_error(listing_text: str) -> float | None:
         return None
 
 
+# docstring-exempt: the 1-based boundary numbering and the outflow-positive sign
+# convention are stated here and nowhere else, and neither is in the signature.
 def outlet_hydrograph(listing_text: str, *, boundary: int) -> dict[str, Any]:
     """Discharge through one LIQUID BOUNDARY, as the engine itself measured it.
 
     TELEMAC integrates the flux across every liquid boundary as part of its own
-    water-volume balance and prints the result each listing period. That number is
-    the hydrograph: a server-side re-derivation from the depth and velocity fields
-    is a second computation of the same quantity, and it read zero on a run whose
-    solver was reporting tens of m3/s across the very boundary being asked about.
+    water-volume balance and prints the result each listing period; that number
+    is the hydrograph, never a server-side re-derivation.
 
     ``boundary`` is the 1-based liquid-boundary number - the position the role
-    takes in the accepted topology's ``liquid_boundary_order``, which is the order
-    the solver numbers its boundaries in.
+    takes in the accepted topology's ``liquid_boundary_order``, which is the
+    order the solver numbers its boundaries in.
 
     ONE SIGN CONVENTION, stated here and nowhere else: **outflow is positive**.
-    The listing's own convention is the opposite (it prints entering flow
-    positive), so it is negated once, at the read, and every consumer downstream -
-    the peak, the volume, the chart - reads a rising outflow as a rising number.
+    The listing's own convention is the opposite, so it is negated once, at the
+    read, and every consumer downstream reads a rising outflow as a rising number.
     """
     import numpy as np
 
@@ -358,21 +319,12 @@ def wetted_fraction(mesh: Mapping[str, Any], *, wet_tol_m: float = _WET_TOL_M
                     ) -> dict[str, Any]:
     """How much of the solved domain still held water at the final frame.
 
-    The reach domain is the mapped ACTIVE CHANNEL, which at bankfull includes the
-    gravel bars a low flow leaves dry. TELEMAC wets and dries them natively, so a
-    low-flow run is correct and its conveyance width is still narrower than the
-    domain it was solved on. Nothing about the result says so, and a reader
-    looking at a ribbon inside a wider mesh has no number to read it against.
-
-    So the run measures it: mesh area against wet area at the last frame, by
-    element, an element counting as wet when its own mean depth clears the
-    tolerance. A HEURISTIC, and it gates nothing - it is the number a reader
-    needs beside a picture, not a verdict on the run.
-
-    ``mesh`` is the record the postprocess ALREADY read; opening the container a
-    second time for the same file would cost a second engine round trip to
-    recompute arrays the caller is holding.
-    """
+    By element, a HEURISTIC; ``mesh`` is the record the postprocess ALREADY read."""
+    # The reach domain is the mapped ACTIVE CHANNEL, which at bankfull includes
+    # the gravel bars a low flow leaves dry: TELEMAC wets and dries them natively,
+    # so a low-flow run is correct and its conveyance width is still narrower than
+    # the domain it solved on. Nothing about the result says so, and a reader
+    # looking at a ribbon inside a wider mesh has no number to read it against.
     import numpy as np
 
     # SELAFIN pads a variable name to 32 chars with its unit trailing ('WATER

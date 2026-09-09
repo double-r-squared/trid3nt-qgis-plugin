@@ -1,20 +1,8 @@
 """TELEMAC results-mesh producer -- write ``outputs.json``, publish via the seam.
 
-The TELEMAC-2D legs (rain_on_grid, river_dye) return a typed
-PEAK raster COG (the map anchor + narration carrier) and, alongside it, the native
-result SELAFIN sibling (every frame, every variable) that QGIS/MDAL animates
-directly -- no per-frame COGs. The SELAFIN is the TEMPORAL artifact.
-
-This is the emit-on-solve producer half for those legs (ADR 0283): the agent-side
-postprocess writes ``outputs.json`` (the peak entry + the ``kind="mesh"`` SELAFIN
-entry, ``crs_authid=EPSG:{utm}`` because a SELAFIN carries no CRS of its own), then
-the SEAM (``build_layers_from_outputs(frames_only=True)``) owns publication of the
-mesh layer. The composer keeps its OWN typed peak (with the narration scalars on
-it); the seam skips the peak entry under ``frames_only`` so the same COG is never
-registered twice -- the M-class fork (ADR 0282), now carrying a mesh instead of
-frame COGs. Best-effort by contract: a write/read/emit miss degrades to peak-only,
-never sinks the run ("failure retracts nothing").
-"""
+The result SELAFIN is the TEMPORAL artifact: this writes the ``kind="mesh"``
+entry beside the peak, and the seam owns publication of the mesh layer. The peak
+entry is skipped there, so the same COG is never registered twice. Best-effort."""
 
 from __future__ import annotations
 
@@ -28,8 +16,8 @@ logger = logging.getLogger("trid3nt_server.workflows.telemac.products.results_me
 
 __all__ = ["publish_results_mesh_via_seam"]
 
-#: The generic quantity a native-mesh temporal entry carries (ADR 0283). Resolves
-#: to a ``kind="mesh"`` style row naming the run's own dataset group --
+#: The generic quantity a native-mesh temporal entry carries. Resolves to a
+#: ``kind="mesh"`` style row naming the run's own dataset group --
 #: consistent across all three TELEMAC legs (the SELAFIN carries every variable, so
 #: the mesh layer is a whole-results animation, not one physical field).
 RESULTS_MESH_QUANTITY: str = "model_results"
@@ -38,22 +26,14 @@ RESULTS_MESH_QUANTITY: str = "model_results"
 def _peak_range(peak_layer: LayerURI) -> tuple[float, float] | None:
     """The PUBLISHED max-over-time range, off the peak layer's resolved key.
 
-    One scale per quantity: the mesh the canvas animates paints its answer group
-    on the range the peak raster is published under, so a frame's colour and the
-    still's colour mean the same depth. ``None`` when the peak carries no
-    resolved range - the mesh then takes the reader's own statistics.
-    """
+    One scale per quantity; ``None`` when the peak has no resolved range."""
     legend = getattr(peak_layer, "legend", None)
     lo, hi = getattr(legend, "vmin", None), getattr(legend, "vmax", None)
     return None if lo is None or hi is None else (float(lo), float(hi))
 
 
 def _mesh_layer_name(reach_name: str) -> str:
-    """The EXACT web/scrubber group token for the results-mesh layer.
-
-    Byte-identical to the bespoke ``_publish_full_results_mesh`` name the seam
-    supersedes (rain_on_grid), so the migration render stream is unchanged.
-    """
+    """The EXACT web/scrubber group token for the results-mesh layer."""
     return f"Model results (time series): {reach_name}"
 
 
@@ -115,11 +95,7 @@ def _write_and_read_mesh_layers(
 ) -> list[LayerURI]:
     """Write ``outputs.json`` then read it back into the seam's mesh LayerURIs.
 
-    Runs off the event loop (a small S3 PUT + GET + pure build). The seam's
-    ``build_layers_from_outputs(frames_only=True)`` builds ONLY the temporal
-    artifacts -- for a TELEMAC leg that is the mesh layer (the peak entry is
-    skipped, the composer keeps its typed peak). Returns ``[]`` on any miss.
-    """
+    Runs off the event loop; ``[]`` on any miss."""
     from trid3nt_server.workflows.solver.solver import _get_runs_bucket
     from trid3nt_server.emission.outputs_seam import (
         build_layers_from_outputs,
@@ -171,17 +147,12 @@ async def publish_results_mesh_via_seam(
 ) -> int:
     """Write ``outputs.json`` + emit the results-mesh layer through the seam.
 
-    ``peak_layer`` is the RAW postprocess peak (its ``s3://`` COG uri lands in the
-    whole-run record). ``mesh_basename`` is the result SELAFIN basename under the
-    run prefix (``r2d_rog.slf`` / ``r2d_river.slf`` / ``res_coastal.slf``);
-    ``mesh_epsg`` is the reach UTM zone the SELAFIN is stamped with;
-    ``reference_time`` is the ISO-8601 UTC instant the SELAFIN's seconds are
-    counted from (the solve's own start), without which the scrubber reads 1900.
-    ``mesh_group`` is the leg's ANSWER field, spelled the way the SELAFIN reader
-    reports it, because a mesh preset paints ONE of the many groups the file
-    carries and the reader binds it by name.
-    Returns the number of mesh layers emitted (0 on any degrade). NEVER raises.
-    """
+    Returns the number of mesh layers emitted, 0 on any degrade. NEVER raises."""
+    # ``reference_time`` is the ISO-8601 UTC instant the SELAFIN's seconds are
+    # counted from, without which the scrubber reads 1900. ``mesh_group`` is the
+    # leg's ANSWER field spelled the way the SELAFIN reader reports it, because a
+    # mesh preset paints ONE of the many groups the file carries and the reader
+    # binds it by name.
     try:
         mesh_layers = await asyncio.to_thread(
             _write_and_read_mesh_layers,
