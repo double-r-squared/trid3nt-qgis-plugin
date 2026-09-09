@@ -4358,3 +4358,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   owner) until two rounds come back dry. The three read-only evals in
   flight are the shape; the wave's own inventory replaces their
   samples with full rows before anything changes.
+  TEMPLATE DOCS, THE FLOPY NOTES (NATE 2026-09-09): FloPy's docs work
+  because nothing is written twice - package pages are GENERATED from
+  the definition files the code reads, the example gallery RUNS in CI
+  and its thumbnails are the figures those runs produced. Ours: (1) a
+  GALLERY INDEX with a doc-sized composite thumbnail per template, its
+  one-line question and the module it wraps (eight cards, one per
+  question); (2) a page per template GENERATED FROM THE DECLARATION -
+  the question, the module and parts, the DATA rows with description
+  and datum, the sheet's params with the descriptions the LLM reads,
+  the outputs, a minimal invocation - so a page cannot drift from its
+  template; (3) the images from the proving run under the doc-image
+  freshness rule; (4) a MODULES page listing the wrappers with catalog
+  size, composites, outputs and a link into the keyword lookup. One
+  generator script over the template registry (an instrument), run at
+  every acceptance beside the packet renderer. In the docs wave.
