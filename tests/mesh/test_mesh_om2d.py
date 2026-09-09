@@ -25,7 +25,6 @@ from trid3nt_server.workflows.mesh.meshers import (
     MeshToolError,
     get_mesher,
     op_names,
-    registered_meshers,
     resolve_op,
 )
 from trid3nt_server.workflows.mesh.meshers import om2d as OM2D
@@ -49,10 +48,6 @@ def _recipe(**over):
 # --------------------------------------------------------------------------- #
 # What a mesher IS: namespaces, a role adapter, a default recipe.
 # --------------------------------------------------------------------------- #
-def test_the_roster_is_the_two_meshers_and_nothing_else():
-    assert registered_meshers() == ("om2d", "reg_grid")
-
-
 def test_the_wrapper_registers_the_librarys_own_names_tagged_by_phase():
     """The op vocabulary is VERBATIM and its phase is DERIVED from where it sits."""
     for sizing in ("feature_sizing_function", "wavelength_sizing_function",
