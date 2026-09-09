@@ -1,8 +1,7 @@
 """Atomic tool ``compute_impervious_surface`` - NLCD impervious-fraction raster.
 
-Reads either the NLCD Impervious Surface product (percent, scaled by 1/100) or
-the Land Cover class raster (mapped through the developed classes), chosen by
-filename and raster tags; the output keeps the input CRS and grid verbatim.
+Reads the NLCD Impervious Surface product (percent, scaled by 1/100) or the Land
+Cover raster (through the developed classes), keeping the input CRS and grid.
 """
 from __future__ import annotations
 from typing import Any
