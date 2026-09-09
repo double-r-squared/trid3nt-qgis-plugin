@@ -86,7 +86,7 @@ def test_no_spec_description_names_a_retired_engine(path: Path) -> None:
 def _corpus_paths() -> list[Path]:
     import trid3nt_server.tools as tools_pkg
 
-    root = Path(tools_pkg.__file__).resolve().parents[1]
+    root = Path(tools_pkg.__file__).resolve().parents[2]
     paths = sorted(root.rglob("corpus.yaml"))
     residual = root / "tools" / "tool_query_corpus.yaml"
     if residual.exists():
