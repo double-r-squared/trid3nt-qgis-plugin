@@ -21,7 +21,7 @@ WHY POINT JUDITH AND NOT MARQUETTE. The rematch was ruled on the Marquette
 harbour, whose water this mesher's DEFAULT domain source cannot cut: it takes its
 water from the GSHHG L1 land polygons, which describe the boundary between land
 and OCEAN, and Lake Superior is not in them. A lake domain is meshed from the
-water body's own polygon instead (``scripts/drive_lake_domain_mesh.py``), which
+water body's own polygon instead (``scripts/drivers/drive_lake_domain_mesh.py``), which
 is a different domain source rather than a different question. Point Judith puts
 the question - a real surveyed breakwater sheltering a real harbour over real
 surveyed bathymetry - on water GSHHG describes, so the flagship compares the
@@ -42,7 +42,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from trid3nt_server.testing.live_run import GateAnswers, LiveRun, run_live  # noqa: E402

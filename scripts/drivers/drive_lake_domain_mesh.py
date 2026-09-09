@@ -14,7 +14,7 @@ the same ``om.generate_mesh``, cutting the domain from the polygon's interior.
 
 Env (MinIO): set -a; source .env.local; set +a
 Usage:
-    venvs/agent/bin/python scripts/drive_lake_domain_mesh.py \\
+    venvs/agent/bin/python scripts/drivers/drive_lake_domain_mesh.py \\
         --bbox -87.39234 46.52812 -87.36788 46.55021 --edge-length-m 60 \\
         --out /tmp/lake-proof
 """
@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 __all__ = ["lake_polygon", "main", "render"]

@@ -29,6 +29,24 @@ interrogated, so its packet is assembled and verified exactly like the flagship'
 
 DEMO VALUES LIVE IN THE DECLARATION. A canary's location, window and station are
 here, in a labeled declaration, never as a constant inside workflow code.
+
+WHAT A CANARY DOES NOT COVER lives in the drive lane, and the registry names it
+so no acceptance driver is reachable only by memory. ``scripts/drivers/``:
+
+    drive_artemis_structure_slot.py   the three ways one slot can be filled
+    drive_do_sag_cards.py --smoke     the small variant of a declared canary
+    drive_river_dye_cards.py --coarse the same, for the dye plume
+    drive_keyword_floor.py            the raw keyword surface a caller reaches past
+                                      the declared params
+    drive_module_surface_flip.py      every question the module surface flipped,
+                                      end to end
+    drive_open_water_domains.py       the two open-water questions on the domains
+                                      they declare
+    drive_lake_domain_mesh.py         a LAKE domain meshed from the water body's
+                                      own polygon
+    drive_mesh_spotcheck.py           the standing mesh spot-check lane
+    proof_artemis_om2d_rematch.py     the flagship: an authored OceanMesh2D domain
+                                      fed into ARTEMIS
 """
 
 from __future__ import annotations
@@ -95,7 +113,7 @@ _COWEETA_STORM_HR = 24.0
 #: a run whose geometry arrived from a live Overpass query would report an
 #: upstream outage as a drift in the answer. The three ways the slot can be
 #: filled (a fetched layer, a drawn line, nothing at all) are proved together in
-#: scripts/drive_artemis_structure_slot.py, which is where the fetch belongs.
+#: scripts/drivers/drive_artemis_structure_slot.py, which is where the fetch belongs.
 _MARQUETTE_BREAKWATER: list[list[float]] = [
     [-87.37902, 46.54432], [-87.37902, 46.54403], [-87.37904, 46.54362],
     [-87.37905, 46.54240], [-87.37897, 46.53918], [-87.37892, 46.53741],
@@ -118,7 +136,7 @@ CANARIES: dict[str, LiveRun] = {
     # the trig convention the param declares, propagating toward the
     # north-north-west is 110 deg. The unfilled slot is a DIFFERENT question -
     # what an unsheltered approach does - and lives with the other two ways to
-    # fill it in scripts/drive_artemis_structure_slot.py.
+    # fill it in scripts/drivers/drive_artemis_structure_slot.py.
     "artemis_harbor_agitation": LiveRun(
         tool="artemis_harbor_agitation",
         args={
@@ -256,7 +274,7 @@ _EEL_OUTFALL = [-124.0983, 40.4921]
 
 CANARIES.update({
     # THE COHORT'S REFINED RUNS. Their SMALL runs live in their own drive scripts
-    # (scripts/drive_do_sag_cards.py --smoke, drive_river_dye_cards.py --coarse),
+    # (scripts/drivers/drive_do_sag_cards.py --smoke, drive_river_dye_cards.py --coarse),
     # which is where NATE reviewed them; only the delivering variants are declared
     # here, beside the other four.
     #

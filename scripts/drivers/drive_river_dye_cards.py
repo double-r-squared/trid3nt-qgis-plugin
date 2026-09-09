@@ -29,7 +29,8 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packet"))
 
 from render_all_layers_proof import add_render_proof_flag, render_proof  # noqa: E402
 from trid3nt_server.testing import GateAnswers, LiveRun, run_live  # noqa: E402

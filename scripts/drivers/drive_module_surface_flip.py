@@ -20,7 +20,7 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from trid3nt_server.testing import GateAnswers, LiveRun, run_live  # noqa: E402
 

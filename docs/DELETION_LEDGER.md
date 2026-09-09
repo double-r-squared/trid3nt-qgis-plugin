@@ -3510,3 +3510,21 @@ plugin drives) instead of naming three harnesses, one of which was deleted
 outright; `docs/site/engines.md` states what proves an engine (a live canary that
 closes with a delivery packet) instead of naming a `run_*_direct.py` pattern;
 `plugin/net/trid3nt_client.py` drops the two prose pointers at the bench.
+
+## seed_showcase_cases' WS-client aliases - DELETED - 2026-09-09
+
+The row at the head of this file (`scripts/seed_showcase_cases.py`'s copies of the
+WS protocol primitives) landed under ADR 0305 by IMPORTING them from
+`trid3nt_server.testing.ws_client` and keeping five private aliases -
+`_handshake`, `_create_case`, `_auto_approve_request`, `_parse_tool_status`,
+`_BLOCKING` - so that "the four drivers importing them from here keep working".
+
+That reason is now measurably false: nothing in the tree imports anything from
+this module (`grep -rn seed_showcase_cases` over `.py` returns zero importers).
+The aliases were a shim with no consumer, so the module calls the imported names
+directly and the five lines go. No signature moved and no behavior changed - each
+alias was a bare rebinding of the name it aliased.
+
+Repointed with the move to `scripts/drivers/`: the module docstring's pointer at
+the `scripts/run_*_direct.py` drivers, which are now untracked under
+`scripts/local/`.

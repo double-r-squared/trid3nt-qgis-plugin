@@ -20,10 +20,9 @@ After every entry is seeded a SECOND connection reopens each Case (``case-comman
 select``) and confirms the persisted ``loaded_layers`` survive the reconnect --
 the per-Case layer-durability norm, proven end-to-end.
 
-Nothing here fabricates physics: every arg set is a PROVEN demo mined from the
--0174 smoke reports and the ``scripts/run_*_direct.py`` drivers (the
-source of each is recorded in the entry ``note``). The reconstructed ``!run``
-line each Case records is a line a human can paste into the composer verbatim.
+Nothing here fabricates physics: every arg set is a PROVEN demo, and the source
+of each is recorded in the entry ``note``. The reconstructed ``!run`` line each
+Case records is a line a human can paste into the composer verbatim.
 
 OFFLINE proof (no daemon): ``--dry-run`` prints the planned invocation table and
 round-trips every reconstructed ``!run`` line back through the PRODUCT parser
@@ -49,7 +48,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 # Product parser lives in the plugin tree; reuse it for the offline round-trip.
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -653,16 +652,6 @@ class Result:
         }
 
 
-# --------------------------------------------------------------------------- #
-# WS client core - the protocol primitives live in the shared driver harness.
-# --------------------------------------------------------------------------- #
-_handshake = handshake
-_create_case = create_case
-_auto_approve_request = approve_confirmation
-_parse_tool_status = parse_tool_status
-_BLOCKING = BLOCKING_EVENTS
-
-
 async def _auto_confirm_warning(ws, session_id: str, msg: dict) -> None:
     import re
 
@@ -703,7 +692,7 @@ async def _auto_confirm_warning(ws, session_id: str, msg: dict) -> None:
 async def _seed_one(ws, session_id: str, sc: Showcase) -> Result:
     res = Result(tool=sc.tool, title=sc.case_title, args=sc.args, note=sc.note,
                  run_line=run_line(sc.tool, sc.args))
-    res.case_id = await _create_case(ws, session_id, sc.case_title)
+    res.case_id = await create_case(ws, session_id, sc.case_title)
     log.info("[%s] case_id=%s  %s", sc.tool, res.case_id, res.run_line)
 
     await ws.send(mk("dev-tool-invoke", session_id,
@@ -729,8 +718,8 @@ async def _seed_one(ws, session_id: str, sc: Showcase) -> Result:
             await _auto_confirm_warning(ws, session_id, msg)
         elif mtype == "confirmation-request":
             activity = True
-            await _auto_approve_request(ws, session_id, msg)
-        elif mtype in _BLOCKING:
+            await approve_confirmation(ws, session_id, msg)
+        elif mtype in BLOCKING_EVENTS:
             res.status = "blocked"
             res.detail = f"gate needs interactive input ({mtype}); skipped headlessly"
             log.warning("    BLOCKED by %s", mtype)
@@ -740,7 +729,7 @@ async def _seed_one(ws, session_id: str, sc: Showcase) -> Result:
         elif mtype == "tool-io":
             activity = True
             tool_io_seen = True
-            res.tool_status = _parse_tool_status(msg["payload"])
+            res.tool_status = parse_tool_status(msg["payload"])
             if msg["payload"].get("is_error"):
                 tool_io_error = True
                 res.detail = _first_line(msg["payload"].get("function_response", ""))
@@ -804,7 +793,7 @@ async def _verify_persistence(session_id: str, results: list[Result]) -> None:
     survived the reconnect (per-Case layer-durability norm)."""
     import websockets.asyncio.client as wsc
     async with wsc.connect(WS_URL) as ws:
-        await _handshake(ws, session_id)
+        await handshake(ws, session_id)
         for res in results:
             if not res.case_id:
                 continue
@@ -833,7 +822,7 @@ async def run_all(only: str | None) -> list[Result]:
     log.info("=== showcase seeding: %d entries, session=%s ===", len(entries), session_id)
     results: list[Result] = []
     async with wsc.connect(WS_URL, max_size=64 * 1024 * 1024) as ws:
-        await _handshake(ws, session_id)
+        await handshake(ws, session_id)
         for sc in entries:
             try:
                 results.append(await _seed_one(ws, session_id, sc))

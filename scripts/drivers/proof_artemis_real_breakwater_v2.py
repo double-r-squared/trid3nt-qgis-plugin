@@ -48,10 +48,10 @@ from PIL import Image
 from pyproj import Transformer
 from scipy.interpolate import griddata
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from trid3nt_server.workflows.telemac.products.result_reader import read_selafin  # noqa: E402
 
-PROOF = os.path.join(os.path.dirname(__file__), "..", "docs", "proof", "templates",
+PROOF = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "proof", "templates",
                      "artemis_real_breakwater")
 SLF = os.path.join(PROOF, "solved_slf")
 TILE = ("https://server.arcgisonline.com/ArcGIS/rest/services/"

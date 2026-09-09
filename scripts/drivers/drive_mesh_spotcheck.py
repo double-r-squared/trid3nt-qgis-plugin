@@ -15,21 +15,21 @@ the program, or omit it for the mesher's own hard-baked default list.
 Env (MinIO): set -a; source .env.local; set +a
 Usage:
     # coarse reg_grid (default: fastest mesher, no container) by place name
-    venvs/agent/bin/python scripts/drive_mesh_spotcheck.py \\
+    venvs/agent/bin/python scripts/drivers/drive_mesh_spotcheck.py \\
         --location "Scotia, California" --edge-length-m 250
 
     # coarse om2d coastal mesh by bbox (Point Judith Harbor of Refuge, RI -- a
     # real harbour on water the GSHHG shoreline describes, no geocode needed;
     # an inland water body refuses here and is meshed from its own polygon,
-    # see scripts/drive_lake_domain_mesh.py)
-    venvs/agent/bin/python scripts/drive_mesh_spotcheck.py \\
+    # see scripts/drivers/drive_lake_domain_mesh.py)
+    venvs/agent/bin/python scripts/drivers/drive_mesh_spotcheck.py \\
         --mesher om2d --bbox -71.525 41.338 -71.492 41.368 \\
         --edge-length-m 40
 
     # the same coast, sized by distance to shore, its rim held at the ask and
     # the whole held to a gradation: the RECIPE, declared op by op under the
     # library's own names
-    venvs/agent/bin/python scripts/drive_mesh_spotcheck.py \\
+    venvs/agent/bin/python scripts/drivers/drive_mesh_spotcheck.py \\
         --mesher om2d --bbox -71.525 41.338 -71.492 41.368 \\
         --edge-length-m 40 \\
         --op feature_sizing_function \\
@@ -46,7 +46,7 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from _env_guard import require_local_endpoint  # noqa: E402
 

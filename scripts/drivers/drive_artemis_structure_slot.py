@@ -16,7 +16,7 @@ claim of the design is that the SOLVE cannot tell them apart.
            reporting what an unsheltered basin actually does
 
 Usage:
-    venvs/agent/bin/python scripts/drive_artemis_structure_slot.py [--mode all]
+    venvs/agent/bin/python scripts/drivers/drive_artemis_structure_slot.py [--mode all]
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from trid3nt_server.testing import GateAnswers, LiveRun, run_live  # noqa: E402
 from trid3nt_server.testing.proof_paths import proof_dir  # noqa: E402
