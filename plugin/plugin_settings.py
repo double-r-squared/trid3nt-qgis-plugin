@@ -1,8 +1,8 @@
 """Plugin settings -- QSettings-backed, one namespace.
 
-Kept out of the dock widget so both the bridge and the layer materializer can
-read the same values. Uses ``qgis.PyQt`` (Qt5/Qt6-neutral surface, per the
-product analysis section 5).
+A value either rides the wire per turn (model id, thinking, tool-choice mode) or
+is agent-process ENV the plugin cannot inject: provider and its API key persist
+here and take effect only when the agent restarts.
 """
 
 from __future__ import annotations
@@ -23,11 +23,10 @@ DEFAULT_STORE_SECRET_KEY = "trid3nt-local-dev"
 DEFAULT_STORE_REGION = "us-east-1"
 
 #: The product is LOCAL-only: the agent runs on this box or a tailnet peer,
-#: reached over ws:// (the tailnet itself is the trust boundary). The cloud /
-#: Cognito REMOTE mode was removed. ``MODE_LOCAL`` and the read-only ``mode``
-#: property survive ONLY as a migration seam so a config persisted with
-#: ``mode=remote`` by an older build loads without a crash and degrades to the
-#: sole local behavior.
+#: reached over ws:// (the tailnet itself is the trust boundary). ``MODE_LOCAL``
+#: and the read-only ``mode`` property exist ONLY as a migration seam, so a
+#: config persisted with ``mode=remote`` loads without a crash and degrades to
+#: the sole local behavior.
 MODE_LOCAL = "local"
 
 
@@ -49,9 +48,8 @@ class PluginSettings:
 
     @property
     def mode(self) -> str:
-        """Always ``MODE_LOCAL``. Read-only migration seam: a config persisted
-        with ``mode=remote`` by an older (cloud) build reads as local rather
-        than crashing -- the stored key is otherwise inert."""
+        """Always ``MODE_LOCAL``. A stored ``mode=remote`` reads as local
+        rather than crashing; the stored key is otherwise inert."""
         return MODE_LOCAL
 
     @property
@@ -64,11 +62,9 @@ class PluginSettings:
 
     @property
     def token(self) -> str:
-        """The optional shared tailnet token. OFF (empty) by default: the
-        tailnet itself is the trust boundary, so a token is only needed when
-        the daemon opts into the ``TRID3NT_ACCESS_TOKEN`` gate. Pasted verbatim
-        into the connect handshake; never expires (a static shared secret --
-        it is either accepted or rejected)."""
+        """The optional shared tailnet token; empty means OFF. Pasted verbatim
+        into the connect handshake and never expires -- a static shared secret
+        is either accepted or rejected."""
         return self._get("token", "")
 
     @token.setter
@@ -77,9 +73,8 @@ class PluginSettings:
 
     @property
     def minio_endpoint(self) -> str:
-        """The object store's endpoint FALLBACK -- ``resolve_data_base``
-        (trid3nt_client) uses it when a connect handshake did not advertise
-        ``data_base``. Not a settings-dialog field."""
+        """The object store's endpoint FALLBACK, read only when a connect
+        handshake advertised no ``data_base``. Not a settings-dialog field."""
         return self._get("minio_endpoint", DEFAULT_MINIO_ENDPOINT) or DEFAULT_MINIO_ENDPOINT
 
     @minio_endpoint.setter
@@ -115,12 +110,9 @@ class PluginSettings:
 
     @property
     def export_api(self) -> str:
-        """Remote-daemon design: NOT a settings-dialog field anymore -- the
-        dock derives the effective :8766 base itself (server-advertised
-        ``http_base``, else WS-host-derived; ``dock._effective_http_base``).
-        This property survives ONLY as the last-resort fallback for a
-        standalone caller with no live dock/connection (e.g. the Settings
-        dialog opened outside the dock in a test harness)."""
+        """The :8766 base of LAST resort, for a caller with no live
+        connection. Not a settings-dialog field: a connected session derives
+        its effective base from the handshake instead."""
         return self._get("export_api", DEFAULT_EXPORT_API) or DEFAULT_EXPORT_API
 
     @export_api.setter
@@ -129,8 +121,7 @@ class PluginSettings:
 
     @property
     def canvas_aoi(self) -> bool:
-        """Milestone 2: "Use map canvas as area of interest" toggle (default
-        ON). Stored as "true"/"false" strings (QSettings bool portability)."""
+        """Whether the map canvas extent is offered as the AOI (default ON)."""
         return self._get("canvas_aoi", "true").lower() != "false"
 
     @canvas_aoi.setter
@@ -139,8 +130,8 @@ class PluginSettings:
 
     @property
     def selection_aoi(self) -> bool:
-        """Milestone 3: "Use selected polygon as AOI" toggle (default OFF --
-        an explicit override of the canvas extent, opt-in per session)."""
+        """Whether a selected polygon overrides the canvas extent as the AOI
+        (default OFF -- an explicit, opt-in override)."""
         return self._get("selection_aoi", "false").lower() == "true"
 
     @selection_aoi.setter
@@ -157,10 +148,8 @@ class PluginSettings:
 
     @property
     def auto_basemap(self) -> bool:
-        """Item 4 (live-feedback 2026-07-09): "Add OpenStreetMap basemap
-        automatically" toggle (default ON). When ON, ``layers.ensure_basemap``
-        runs after a case opens or a case export lands so the canvas is never
-        left white behind the case's own layers."""
+        """Add an OpenStreetMap basemap when a case opens (default ON), so the
+        canvas is never left white behind the case's own layers."""
         return self._get("auto_basemap", "true").lower() != "false"
 
     @auto_basemap.setter
@@ -169,10 +158,8 @@ class PluginSettings:
 
     @property
     def show_thinking(self) -> bool:
-        """F9 (live-feedback 2026-07-09): 'Show model thinking' toggle (default
-        ON). When ON, send ``show_thinking=True`` in the user-message payload
-        so the server forwards the model's reasoning channel; the dock renders
-        collapsible grey thinking blocks. Stored as "true"/"false" strings."""
+        """Ride ``show_thinking`` on the user-message payload (default ON) so
+        the server forwards the model's reasoning channel."""
         return self._get("show_thinking", "true").lower() != "false"
 
     @show_thinking.setter
@@ -181,13 +168,9 @@ class PluginSettings:
 
     @property
     def tool_choice_mode(self) -> str:
-        """auto/ask modes (Stage 3, 2026-07-22): the tool-selection
-        VISIBILITY mode ridden on every user-message (mirrors show_thinking).
-        ``"auto"`` (default) = autonomous selection, no picker cards (the
-        server may still ask on a measured retrieval near-tie); ``"ask"`` =
-        every staged selection surfaces as a ``tool-candidates`` picker card.
-        Consent gates are never mode-dependent. Reads filter to the closed
-        vocabulary so a hand-edited/stale value degrades to the default."""
+        """``"auto"`` (default, no picker cards) or ``"ask"`` (every staged
+        selection surfaces as a picker). Reads filter to that closed vocabulary,
+        so a hand-edited value degrades to ``"auto"``."""
         value = self._get("tool_choice_mode", "auto")
         return value if value in ("auto", "ask") else "auto"
 
@@ -197,12 +180,8 @@ class PluginSettings:
 
     @property
     def provider(self) -> str:
-        """OpenRouter model-extensibility (design 2026-07-19): the selected
-        LLM PROVIDER preset label (``PROVIDER_PRESETS`` key in dock.py --
-        local-ollama / openrouter-free / openrouter-paid / openai / groq).
-        Provider is agent-process ENV (base_url + key-env name), so changing
-        it only persists the choice + shows the restart note -- the plugin
-        cannot inject the agent's env live. Default = the local ollama seam."""
+        """The selected LLM provider preset label, one key of the settings
+        dialog's preset table; empty degrades to the local ollama seam."""
         return self._get("provider", "local-ollama") or "local-ollama"
 
     @provider.setter
@@ -211,12 +190,9 @@ class PluginSettings:
 
     @property
     def model_id(self) -> str:
-        """OpenRouter model-extensibility (design 2026-07-19): the per-turn
-        model id ridden on the user-message payload (mirrors ``show_thinking``:
-        the agent's ``resolve_selected_model`` passes any openai/OpenRouter
-        model id verbatim). Empty string = use the agent's env default
-        (``TRID3NT_OPENAI_MODEL``) -- so an unset picker changes nothing.
-        Switching MODEL within a provider is LIVE (no restart)."""
+        """The per-turn model id ridden on the user-message payload. Empty
+        means the agent's own env default, so an unset picker changes nothing;
+        switching model within a provider is live."""
         return self._get("model_id", "")
 
     @model_id.setter
@@ -225,14 +201,9 @@ class PluginSettings:
 
     @property
     def openrouter_api_key(self) -> str:
-        """OpenRouter model-extensibility (design 2026-07-19): the provider
-        API key (SECRET -- OPENROUTER_API_KEY / OPENAI_API_KEY / GROQ_API_KEY
-        per preset). Password-echoed in the dialog, NEVER logged. This is
-        agent-process ENV too (``TRID3NT_OPENAI_API_KEY``): the plugin only
-        PERSISTS it here + shows the restart note; it is never sent over the
-        WS (no per-message carrier exists, and leaking a live key on the wire
-        would be a security hole). Auto-writing .env.local + restart is
-        DEFERRED per design."""
+        """The provider API key. NEVER logged and never sent over the
+        websocket: no per-message carrier exists, and a live key on the wire
+        would be a security hole."""
         return self._get("openrouter_api_key", "")
 
     @openrouter_api_key.setter

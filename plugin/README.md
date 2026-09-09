@@ -31,23 +31,23 @@ copy-pasting file paths.
   (e.g. a large simulation grid), the dock shows an inline card with the
   agent's honest size/cost estimate and a resolution ladder; nothing heavy
   runs without an explicit click.
-- **Temporal animation grouping** -- frame-sequence rasters (e.g. flood depth
-  over time) are auto-detected and grouped, then stamped with the QGIS
-  Temporal Controller so you can scrub or animate them with the native QGIS
-  time slider.
-- **GeoTIFF / case export** -- pull a case's exported layers (GeoTIFFs,
-  vector tables) directly into your current QGIS project via "Open in QGIS".
+- **Temporal stamping** -- frame-sequence rasters (e.g. flood depth over time)
+  are auto-detected and stamped with the QGIS Temporal Controller so you can
+  scrub or animate them with the native QGIS time slider.
+- **Layers in place** -- a case's layers arrive in your current QGIS project as
+  the agent produces them, read straight out of the object store over
+  `/vsis3/`. There is no export step and nothing is downloaded.
 - **Mesh outputs (MDAL)** -- a solver's native mesh (a TELEMAC `.slf`, a
   SFINCS `sfincs_map.nc`) loads as a first-class `QgsMeshLayer` alongside the
   exported GeoTIFFs/vectors, with its CRS set automatically and its declared
   preset bound to the dataset group that preset names; a quantity none of the
   mesh's groups answers to keeps MDAL's own default and says so in the dock.
   Every dataset group the solver wrote stays selectable from Layer Properties.
-- **Push layer** -- the reverse of "Open in QGIS": send your ACTIVE QGIS
-  layer (vector or raster) into the current case as a first-class input
-  layer with one click ("Push layer" in the header). An optional "Set as
-  case AOI" checkbox pins the case's bounding box to the pushed layer's
-  extent. The layer reappears on the map on the case's next reopen.
+- **Push layer** -- send one of your own QGIS layers (vector or raster) into
+  the current case as a first-class input layer: right-click it in the layer
+  tree and choose "Push layer to case". An optional "Set as case AOI" checkbox
+  pins the case's bounding box to the pushed layer's extent. The layer
+  reappears on the map on the case's next reopen.
 - **Probe** -- click "Probe" in the header, then click anywhere on the
   canvas: the dock shows the value of every raster layer loaded on the
   current case at that point (a plain "name: value" line), with detected
@@ -166,8 +166,7 @@ then QGIS keeps running the OLD code in memory until you reload:
 --check` diff-checks what a sync would change without touching anything.
 
 Either way, enable **TRID3NT** in the Plugin Manager afterward (check "Show
-also Experimental Plugins" under Settings -- the plugin currently ships with
-`experimental=True`).
+also Experimental Plugins" under Settings if you do not see it listed).
 
 ## Server URL and token settings
 
@@ -217,12 +216,11 @@ From this directory (needs the agent venv from the root `make venv` /
 make test
 ```
 
-runs the full pure-Python test suite (300 tests as of this writing -- run
-`make test` for the current count) -- no QGIS installation is required for
+runs the full pure-Python test suite -- no QGIS installation is required for
 most of it. A small subset that exercises real Qt signal wiring runs in a
 subprocess against the system PyQt5 interpreter and skips honestly when one
-isn't available. See `trid3nt/net/trid3nt_client.py`'s module docstring for
-the full protocol reference, and `tests/` for coverage details.
+isn't available. `trid3nt/net/trid3nt_client.py` is the protocol surface, and
+`tests/` holds the coverage details.
 
 Other Makefile targets local to this directory:
 

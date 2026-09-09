@@ -7,10 +7,7 @@
 
 
 def classFactory(iface):  # noqa: N802 -- QGIS-mandated name
-    """Load the Trid3ntPlugin class.
-
-    :param iface: QgisInterface instance handed in by QGIS.
-    """
+    """Load the Trid3ntPlugin class."""
     from .plugin import Trid3ntPlugin
 
     return Trid3ntPlugin(iface)

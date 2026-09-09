@@ -1,61 +1,8 @@
-"""Third-party dependency installer for the TRID3NT QGIS plugin.
+"""Third-party dependency installer -- pure stdlib, importable outside QGIS.
 
-SINGLE SOURCE OF TRUTH for "what does this plugin need beyond QGIS's own
-Python + PyQt/qgis/osgeo/processing": the ``DEPENDENCIES`` list below. QGIS
-4.0.3 bundles numpy, pandas, shapely, pyproj, lxml and psycopg2 (per NATE's
-crash report); none of those are imported anywhere in ``plugin/``
-today, so nothing needs installing for them. matplotlib is the one gap:
-QGIS 3 bundled it, QGIS 4 dropped it. ``DEPENDENCIES`` is cross-checked
-against a live AST sweep of the plugin source by
-``tests/test_install_dependencies.py`` -- a future third-party import that
-is not added here fails that test (same pattern as the 0225 fetcher sweep).
-
-Platform split (NATE ground truth, live-verified on his macOS QGIS 4.0.3,
-supersedes every earlier console/PYTHONPATH attempt in this file's history):
-
-* Linux -- QGIS runs under the SYSTEM python3, which has pip. ``python3
-  install_dependencies.py`` (or the plugin's Missing-matplotlib panel's
-  ``python3 -m pip install matplotlib`` one-liner) just works.
-* Windows -- the OSGeo4W python.exe QGIS ships (``windows_python_executable``
-  below) has pip too. ``<that python.exe> install_dependencies.py`` works.
-* macOS -- QGIS 4's bundled Python has NO pip module at all
-  ("No module named pip", live-verified) -- not a PATH problem, not an env
-  problem, pip is simply absent from the interpreter. There is no in-
-  interpreter fix. NATE's ruling: treat the SYSTEM python3 as a pure
-  wheel DOWNLOADER (``pip download --only-binary``, never ``pip install``,
-  so it never touches QGIS's interpreter at all) and unzip the resulting
-  wheels straight into ``<profile>/python`` -- a directory already on
-  QGIS's own ``sys.path``, no interpreter of QGIS's own involved. See
-  ``mac_wheel_recipe`` below; this is the ONLY macOS path this file offers.
-
-Pure stdlib (no PyQt/qgis import anywhere in this file) so it runs two ways:
-
-  (a) directly, with the QGIS interpreter (Linux/Windows only -- see above)::
-
-      linux:   python3 install_dependencies.py   (already QGIS's interpreter)
-      windows: <QGIS install>\\apps\\Python3xx\\python.exe install_dependencies.py
-
-      On macOS, running this script AT ALL means you launched it with your
-      system python3 (never QGIS's own, which lacks pip); ``main()`` detects
-      that and prints the wheel-download recipe instead of attempting pip.
-
-  (b) referenced by ``trid3nt.ui.charts``'s ``linux_install_command`` /
-      ``windows_install_command`` / ``mac_wheel_recipe`` re-exports, which
-      the plugin's ``MissingMatplotlibPanel`` displays as the copy-able
-      fix for the running platform -- one source of truth for what gets
-      installed and how. The panel never runs anything itself: every path
-      here is a command for the USER to run in a real terminal.
-
-Behavior (direct run, Linux/Windows): check each dependency importable,
-print a present/missing table, pip-install only what's missing into the
-running interpreter (``-m pip install``, falling back to ``--user`` if the
-bundle's site-packages is not writable), re-verify the imports, print an
-honest per-dependency summary, and exit nonzero if anything is still
-missing. ``--dry-run`` prints the table and the command that would run
-without installing anything. On macOS, both modes just print the wheel
-recipe and return nonzero -- there is nothing this script can install
-itself into.
-"""
+``DEPENDENCIES`` is the sole record of what the plugin needs beyond QGIS's own
+Python. Linux and Windows QGIS interpreters have pip; macOS QGIS 4's bundled
+Python has none, so nothing installs into it and that path is a user recipe."""
 
 from __future__ import annotations
 
@@ -71,8 +18,9 @@ from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 #: (import_name, pip_package_name) pairs -- the true third-party import
-#: surface of plugin/. See module docstring for the bundled-vs-
-#: must-install reasoning.
+#: surface of plugin/. QGIS bundles numpy, pandas, shapely, pyproj, lxml and
+#: psycopg2, so none of those belong here; matplotlib is the one gap, bundled
+#: by QGIS 3 and dropped by QGIS 4.
 DEPENDENCIES: List[Tuple[str, str]] = [
     ("matplotlib", "matplotlib"),
 ]
@@ -137,9 +85,9 @@ def format_table(statuses: Sequence[DependencyStatus]) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Windows: OSGeo4W python.exe resolution (Linux needs none -- system python3
-# already has pip; macOS never resolves a QGIS-side interpreter at all, see
-# mac_wheel_recipe below).
+# Windows: OSGeo4W python.exe resolution. Linux needs none (the system python3
+# QGIS runs under already has pip); macOS never resolves a QGIS-side interpreter
+# at all, because there is no pip inside one to reach.
 # --------------------------------------------------------------------------- #
 
 
@@ -159,11 +107,9 @@ def _first_real_executable(candidates: Sequence[str]) -> Optional[str]:
 def windows_python_executable(
     exec_prefix: Optional[str] = None, executable: Optional[str] = None,
 ) -> str:
-    """The OSGeo4W python.exe pip ships with, on Windows -- ``exec_prefix/
-    python.exe`` first (the QGIS install's own ``apps/PythonNN`` dir),
-    falling back to the launcher's own directory's ``python.exe``. Verified
-    real on disk before being returned; an honest 'could not locate'
-    sentence, never a fabricated path, when neither probes real."""
+    """The OSGeo4W python.exe that ships with pip, verified real on disk.
+    When neither candidate probes real the return is an honest
+    'could not locate' sentence, never a fabricated path."""
     exec_prefix = sys.exec_prefix if exec_prefix is None else exec_prefix
     executable = sys.executable if executable is None else executable
     exe_dir = os.path.dirname(executable) if executable else ""
@@ -205,14 +151,9 @@ def _run_pip(
 def install_missing(
     statuses: Sequence[DependencyStatus], python_exe: Optional[str] = None
 ) -> bool:
-    """pip-install every MISSING status's pip package into ``python_exe``
-    (default: the running interpreter's own executable -- Linux/Windows
-    only, this is never called on macOS). Tries a plain install first; on
-    failure, retries with ``--user`` (the bundle's site-packages is
-    commonly not writable without elevated privileges). Returns True iff
-    the install command reported success -- callers must still re-verify
-    by import (packages can install without becoming importable, e.g. an
-    ABI mismatch)."""
+    """pip-install every MISSING status into ``python_exe`` (default: the
+    running interpreter), retrying with ``--user``. True means the command
+    reported success, NOT that the package became importable."""
     missing = [s for s in statuses if not s.present]
     if not missing:
         return True
@@ -228,46 +169,42 @@ def install_missing(
 
 
 # --------------------------------------------------------------------------- #
-# macOS: pip-download-as-wheel-fetcher recipe (NATE's ruling -- QGIS 4's
-# bundled Python has no pip at all, so there is no interpreter to install
-# INTO; the fix downloads prebuilt wheels with the system python3 and
-# unzips them into the QGIS profile's own python/ dir, which is already on
-# QGIS's sys.path).
+# macOS: pip-download-as-wheel-fetcher recipe. QGIS 4's bundled Python has no
+# pip at all, so there is no interpreter to install INTO; the fix downloads
+# prebuilt wheels with the system python3 and unzips them into the QGIS
+# profile's own python/ dir, which is already on QGIS's sys.path.
 # --------------------------------------------------------------------------- #
 
 
 def python_version_tag(version_info=None) -> str:
-    """``MAJOR.MINOR`` this interpreter reports (``sys.version_info``) --
-    the ``pip download --python-version`` value. Passed explicitly so
-    callers are testable without patching ``sys``."""
+    """``MAJOR.MINOR`` for ``pip download --python-version``, from
+    ``sys.version_info`` unless a caller passes one."""
     version_info = sys.version_info if version_info is None else version_info
     return f"{version_info.major}.{version_info.minor}"
 
 
 def mac_platform_tag(machine: Optional[str] = None) -> str:
-    """The ``pip download --platform`` tag for this Mac: Apple Silicon
-    (``platform.machine() == 'arm64'``) -> ``macosx_11_0_arm64``, else
-    ``macosx_11_0_x86_64``. Derived from ``platform.machine()`` at call
-    time, never hardcoded to one architecture."""
+    """The ``pip download --platform`` tag for this Mac, derived from
+    ``platform.machine()`` at call time: ``macosx_11_0_arm64`` on Apple
+    Silicon, else ``macosx_11_0_x86_64``."""
     machine = platform.machine() if machine is None else machine
     arch = "arm64" if machine == "arm64" else "x86_64"
     return f"macosx_11_0_{arch}"
 
 
 def profile_python_dir(file: Optional[str] = None) -> str:
-    """``<profile>/python`` -- the QGIS profile directory that is already
-    on QGIS's own ``sys.path``. The plugin ships at
-    ``<profile>/python/plugins/trid3nt/``, so this is two dirnames up from
-    the package directory: this module lives directly inside ``trid3nt/``,
-    so its own ``__file__`` needs exactly three ``dirname()`` calls to
-    reach ``<profile>/python``."""
+    """``<profile>/python``, the QGIS profile directory already on QGIS's own
+    ``sys.path``."""
+    # The plugin ships at ``<profile>/python/plugins/trid3nt/`` and this module
+    # lives directly inside ``trid3nt/``, so reaching the profile's python dir
+    # is exactly three ``dirname()`` calls from this file.
     file = __file__ if file is None else file
     package_dir = os.path.dirname(os.path.abspath(file))  # .../trid3nt
     return os.path.dirname(os.path.dirname(package_dir))  # .../python
 
 
-#: NATE-verified scratch download dir -- disposable, the wheels are unzipped
-#: out of it into the profile and never read again after that.
+#: Scratch download dir -- disposable; the wheels are unzipped out of it into
+#: the profile and never read again after that.
 _MAC_WHEEL_DOWNLOAD_DIR = "/tmp/qgis_mpl"
 
 
@@ -278,13 +215,9 @@ def mac_wheel_recipe(
     profile_python: Optional[str] = None,
     file: Optional[str] = None,
 ) -> str:
-    """NATE's verified macOS recipe: download prebuilt wheels with the
-    SYSTEM python3 as a pure downloader (``--only-binary``, never touches
-    QGIS's own interpreter, which has no pip to touch), then unzip them
-    (a wheel IS a zip) straight into ``<profile>/python``. Every value is
-    runtime-derived -- ``python-version`` from ``sys.version_info``,
-    ``platform`` from ``platform.machine()``, the profile path from this
-    module's own location -- never hardcoded to one QGIS install."""
+    """The macOS shell recipe: download prebuilt wheels with the SYSTEM
+    python3 (``--only-binary``, never ``install``), then unzip them into
+    ``<profile>/python``. Every value is runtime-derived, never hardcoded."""
     python_version = (
         python_version_tag() if python_version is None else python_version
     )
@@ -300,7 +233,7 @@ def mac_wheel_recipe(
     )
     # QGIS bundles numpy; the downloaded numpy wheel must NOT reach the
     # profile -- it shadows the bundled copy and breaks shapely's ABI,
-    # taking all of PyQGIS down at startup (NATE-verified live).
+    # taking all of PyQGIS down at startup.
     drop_numpy = f"rm -f {_MAC_WHEEL_DOWNLOAD_DIR}/numpy*.whl"
     install = (
         f'for w in {_MAC_WHEEL_DOWNLOAD_DIR}/*.whl; do unzip -o -q "$w" -d '
@@ -324,11 +257,9 @@ def _stdlib_module_names() -> frozenset:
 
 
 def scan_third_party_imports(root: Path) -> frozenset:
-    """AST-sweep every ``.py`` file under ``root``; return the set of
-    top-level import names that are neither stdlib, a relative (internal)
-    import, nor a known QGIS/Qt platform module. This is what
-    ``DEPENDENCIES`` above must equal -- see
-    ``tests/test_install_dependencies.py``."""
+    """Top-level import names under ``root`` that are neither stdlib, relative,
+    nor a QGIS/Qt platform module. ``DEPENDENCIES`` must equal this set, so a
+    new third-party import that is not declared there is a failure."""
     stdlib = _stdlib_module_names()
     found = set()
     root = Path(root)
