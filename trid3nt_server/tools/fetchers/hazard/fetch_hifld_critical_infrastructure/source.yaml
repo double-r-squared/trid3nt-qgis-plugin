@@ -11,10 +11,9 @@ supports_global_query: false                  # HIFLD is US-only
 
 # --- endpoints ------------------------------------------------------------
 # The service routes facility_type -> a per-service FeatureServer URL (routing dict
-# below). The current router vector-fgb executor reads ONE `data` endpoint URL
-# and does NOT consult a routing dict (see VERDICT.md: facility routing is a
-# router-executor gap). `data` is pinned to the Hospitals service (the pilot's
-# facility_type); the full routing table is retained in ingest.routing.
+# below). The router's vector-fgb executor reads ONE `data` endpoint URL and does
+# NOT consult a routing dict, so `data` is pinned to the Hospitals service and the
+# full routing table is retained in ingest.routing.
 endpoints:
   data:
     url: "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/Hospitals/FeatureServer/0/query"

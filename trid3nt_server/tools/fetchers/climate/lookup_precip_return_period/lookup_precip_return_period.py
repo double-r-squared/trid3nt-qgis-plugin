@@ -396,6 +396,7 @@ def lookup_precip_return_period(
 ) -> dict[str, Any]:
     """Look up a design-storm precipitation depth at a point, in inches.
 
+    Access pattern: Tier 3, a direct HTTPS point query to the NOAA PFDS endpoint.
     Returns ONE (return period, duration) depth from NOAA Atlas 14 as a scalar
     dict, not a layer. Coverage is CONUS plus Puerto Rico and the US Virgin
     Islands; a western-US point Atlas 14 omits is answered from the Atlas-2
@@ -445,11 +446,9 @@ def lookup_precip_return_period(
     }
 
     # --- PRIMARY: NOAA Atlas 14 PFDS (CONUS + PR/USVI). ---
-    # the Atlas-14 fetch+parse+matrix-lookup is wrapped so an
-    # out-of-project-area die (the data_fetch.py out-of-area raise) OR a
-    # matrix-miss raise falls through to the NOAA Atlas 2 (Western US)
-    # fallback. Atlas 14 does NOT cover the Pacific Northwest / Intermountain
-    # West (WA/OR/ID + interior states) -- those remain Atlas 2.
+    # The fetch, parse and matrix lookup are wrapped so an out-of-project-area raise
+    # OR a matrix miss falls through to the Atlas-2 western-US fallback: Atlas 14 does
+    # NOT cover the Pacific Northwest or the Intermountain West.
     try:
         result = read_through(
             metadata=_LOOKUP_PRECIP_RETURN_PERIOD_METADATA,

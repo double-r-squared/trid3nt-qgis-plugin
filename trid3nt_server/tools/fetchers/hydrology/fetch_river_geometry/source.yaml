@@ -77,7 +77,7 @@ docstring: |-
   2. Typed honest error if every mirror fails -- never a silent dead-end or a
      hallucinated success.
 
-  (The NHDPlus HR HUC4 region-download fallback leg is gone --
+  (The NHDPlus HR HUC4 region-download fallback leg was removed --
   its 8-envelope bbox->HUC4 heuristic and ~144 MB download were effectively never
   reached, since OSM is the reliable global primary.)
 

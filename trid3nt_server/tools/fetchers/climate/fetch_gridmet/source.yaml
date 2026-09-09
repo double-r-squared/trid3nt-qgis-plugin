@@ -50,8 +50,7 @@ ingest:
 # --- normalization stamps (indistinguishability) -------------------------
 # NOTE: units are per-variable upstream; the router carries ONE units string
 # on the emitted LayerURI, so this stamps the fm100/fm1000/rmin/rmax value
-# ("Percent"). Per-variable LayerURI.units is a router single-string limitation
-# (see VERDICT.md); the pilot fixed request is fm100 -> Percent (parity holds).
+# ("Percent"). Per-variable LayerURI.units is a router single-string limitation.
 normalize:
   crs: "EPSG:4326"
   units: "Percent"

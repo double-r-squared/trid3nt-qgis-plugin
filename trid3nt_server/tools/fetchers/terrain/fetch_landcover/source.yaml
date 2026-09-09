@@ -82,7 +82,7 @@ corpus:
 docstring: |-
   Fetch landcover classification raster (NLCD or ESA WorldCover) for a bbox.
 
-  Access pattern: an OGC service, the MRLC WCS endpoint.
+  Access pattern: Tier 2, an OGC service -- the MRLC WCS endpoint.
 
   **What it does:** Downloads an NLCD or ESA WorldCover landcover GeoTIFF
   clipped to the requested bbox via the MRLC WCS 1.0.0 GeoServer endpoint.
