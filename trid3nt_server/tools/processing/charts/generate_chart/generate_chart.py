@@ -1,20 +1,8 @@
-"""``generate_chart``: the ONE generic interactive-chart primitive.
+"""``generate_chart``: the one generic interactive-chart primitive.
 
-Wraps ``emission.charts.build_chart_payload`` so the LLM can render ANY
-Vega-Lite v5 chart (histogram, time series, damage-state bars, choropleth
-class breaks, scatter, heatmap, ...) from a caller-composed spec. It replaces
-the four fixed-shape ``generate_*`` chart tools: the SHAPE of the chart is now
-the caller's Vega-Lite spec, and the binning/classification that those tools
-hard-coded is composed in the python playground (``code_exec_request`` /
-``spatial_query``) then passed here as inline ``records``.
-
-Interactivity is guaranteed BY CONSTRUCTION: every mark is normalized to carry
-``tooltip: true`` and image (rasterized-PNG) marks are rejected, so this tool
-can never emit the non-interactive matplotlib->PNG shape the playground would.
-The emitted payload is the same ``ChartEmissionPayload`` envelope the plugin
-chart panel already renders, so no client change is needed.
+Interactivity is guaranteed by construction - every mark is normalized to carry
+``tooltip: true`` and image (rasterized-PNG) marks are rejected.
 """
-
 from __future__ import annotations
 
 import logging
@@ -53,11 +41,8 @@ _VIEW_CONTAINER_KEYS = ("layer", "hconcat", "vconcat", "concat", "spec")
 
 
 def _normalize_mark(view: dict[str, Any]) -> None:
-    """Force ``mark.tooltip = true`` on a single-view ``view``; reject image marks.
-
-    Converts a string mark to its dict form and stamps ``tooltip`` so every
-    emitted chart is interactive. Raises on ``mark.type == "image"`` (the
-    rasterized-PNG shape the interactive contract exists to exclude).
+    """Force ``mark.tooltip = true`` on a single-view ``view``, converting a string
+    mark to its dict form; ``mark.type == "image"`` raises.
     """
     mark = view.get("mark")
     if mark is None:
@@ -75,19 +60,16 @@ def _normalize_mark(view: dict[str, Any]) -> None:
             "(rasterized PNG) mark is not allowed. Use a real mark (bar / line "
             "/ point / rect / area / rule) with encodings.",
         )
-    # Force interactivity: stamp tooltip=true unless the caller already supplied a
-    # truthy tooltip (True or a richer {"content": ...} config, which we preserve).
+    # A caller-supplied truthy tooltip (True or a richer {"content": ...} config)
+    # is preserved rather than overwritten.
     if not mark.get("tooltip"):
         mark["tooltip"] = True
     view["mark"] = mark
 
 
 def _ensure_interactive(spec: dict[str, Any]) -> bool:
-    """Recursively stamp ``tooltip`` on every mark in ``spec``.
-
-    Returns True if at least one mark was found anywhere in the (possibly
-    layered / concatenated / faceted) spec, so the caller can reject a
-    mark-less spec (nothing to draw).
+    """Recursively stamp ``tooltip`` on every mark in ``spec``; True when at least
+    one mark was found anywhere in it, so a mark-less spec can be refused.
     """
     found = False
     if "mark" in spec:
@@ -105,12 +87,8 @@ def _ensure_interactive(spec: dict[str, Any]) -> bool:
 
 
 def _records_from_layer(layer_uri: str, storage_client: object | None) -> list[dict[str, Any]]:
-    """Read a layer's tabular rows for inline chart data.
-
-    Vector layer -> one row per feature (attributes, geometry dropped).
-    Raster layer -> one ``{"value": <cell>}`` row per sampled valid cell.
-    Capped at ``_MAX_ROWS`` (binning/classification is the caller's job in the
-    playground; this is raw-row injection only).
+    """Raw rows for inline chart data, capped at ``_MAX_ROWS``: vector -> one row
+    per feature, geometry dropped; raster -> one ``{"value": cell}`` per valid cell.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         local = _materialize_uri(layer_uri, tmpdir, "layer", storage_client)
@@ -166,38 +144,23 @@ def generate_chart(
 ) -> dict[str, Any]:
     """Render an interactive Vega-Lite chart from a caller-composed spec.
 
-    Use this for ANY chart the user asks to SEE: a histogram / value
-    distribution, a value-vs-time series, a structural damage-state
-    (DS0..DS4) bar chart, a choropleth class-break legend, a scatter, a
-    heatmap. Compose the bins/classes/series in the python playground
-    (code_exec_request / spatial_query), then pass them here as ``records``
-    with an ``encoding``.
+    Use for ANY chart the user asks to SEE: histogram, value-vs-time series,
+    damage-state (DS0..DS4) bars, choropleth class breaks, scatter, heatmap.
+    Compose bins / classes / series in the playground (code_exec_request /
+    spatial_query) and pass them as ``records``. Do NOT use for a numeric
+    answer (spatial_query); a layer renders on the map by itself.
 
-    Do NOT use for: a numeric answer (spatial_query); a layer needs no
-    separate call to render on the map, that happens automatically.
+    Params:
+        vega_lite_spec: Vega-Lite v5 dict; supply ``mark`` (bar / line /
+            point / rect / area / rule) and ``encoding``. Every mark is forced
+            interactive; an ``image`` mark is rejected.
+        title: non-empty. caption: one optional line under the chart.
+        records: inline rows, injected as ``data.values``; wins over
+            ``layer_uri``. Capped at 2000 rows.
+        layer_uri: layer read for rows when ``records`` is absent - vector
+            attributes, or sampled raster ``{"value": ...}``.
 
-    Parameters:
-        vega_lite_spec: a Vega-Lite v5 spec dict. Supply the ``mark`` (bar /
-            line / point / rect / area / rule) + ``encoding``; a ``$schema`` is
-            injected and every mark is forced interactive (``tooltip: true``).
-            An ``image``-mark spec is rejected. Inline ``data.values`` may be
-            supplied here directly, or via ``records`` / ``layer_uri`` below.
-        title: chart title (non-empty).
-        caption: optional one-line interpretation under the chart.
-        records: inline data rows (list of flat dicts). Injected as the spec's
-            ``data.values`` (top-level, inherited by layers). Takes precedence
-            over ``layer_uri``. Capped at 2000 rows.
-        layer_uri: s3:// / local layer to pull inline rows from when ``records``
-            is absent - vector attributes (one row per feature) or sampled
-            raster cell values (``{"value": ...}``). Capped at 2000 rows.
-
-    Returns:
-        A ChartEmissionPayload dict (envelope_type="chart-emission") the agent
-        loop emits as a chart-emission envelope; a compact summary is fed back.
-
-    Raises:
-        ChartToolError: NO_MARK (spec has no mark to draw), IMAGE_MARK_REJECTED,
-            NO_DATA, LAYER_OPEN_FAILED / DOWNLOAD_FAILED on a layer read.
+    Raises ChartToolError: NO_MARK, IMAGE_MARK_REJECTED, NO_DATA.
     """
     if not isinstance(vega_lite_spec, dict):
         raise ChartToolError(
