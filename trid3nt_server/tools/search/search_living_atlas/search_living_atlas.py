@@ -1,15 +1,8 @@
-"""``search_living_atlas``: ranked retrieval over the harvested ESRI Living Atlas.
-
-BM25 + dense over the two harvested strata (``living_atlas_common`` /
-``living_atlas_index``). Enforces NATE's two-pool rule STRUCTURALLY: the
-authoritative stratum is the default surface; the community stratum has ZERO
-default quota and appears ONLY when ``include_community=True`` (a small labelled
-quota) or as a labelled LAST RESORT when the authoritative stratum returns nothing.
-
-Designed to become a stratum when the flag-gated pools arm (TRID3NT_CATALOG_ARM,
-NO_ADVANCE) lights: the per-stratum indexes + quota composition here ARE the pool
-mechanics, so the same ranking drops behind the harness trigger unchanged.
-"""
+"""``search_living_atlas`` - BM25 + dense retrieval over the two harvested ESRI
+Living Atlas strata. The two-pool rule is enforced STRUCTURALLY: authoritative is
+the default surface, while community has ZERO default quota and appears only under
+``include_community=True`` or as a labelled LAST RESORT when the authoritative
+stratum returns nothing at all."""
 
 from __future__ import annotations
 
@@ -69,43 +62,21 @@ def search_living_atlas(
 ) -> list[dict[str, Any]]:
     """Search the ESRI Living Atlas of the World for fetchable map/data layers.
 
-    **What it does:** Ranks the harvested ESRI Living Atlas catalog (thousands of
-    ArcGIS Image / Feature / Map Services) by BM25 + dense relevance to a free-text
-    query and returns the top matches, each with its ArcGIS ``service_url``,
-    ``service_type``, geographic extent, and a curation label. The returned ``id``
-    is passed to ``fetch_living_atlas_layer`` to pull the actual bytes.
+    ROUTING: the user wants an ESRI/ArcGIS Living Atlas layer, or no dedicated
+    fetcher exists and ESRI's curated catalog is worth trying first. NOT for the
+    internal public-source catalog (`search_data_catalog`), NOT for a dataset that
+    already has its own fetcher, NOT to pull bytes - this only RANKS; the returned
+    `id` goes to `fetch_living_atlas_layer`.
 
-    **When to use:**
-    - The user wants an ESRI/ArcGIS Living Atlas layer ("find a Living Atlas
-      wetlands layer", "ESRI land cover", "authoritative population imagery").
-    - A dedicated fetcher does not exist for the needed data and you want ESRI's
-      curated, authoritative catalog before falling back to raw sources.
+    Two-pool curation: by default ONLY authoritative entries come back. Community
+    entries never take priority in an authoritative ask - they appear on
+    `include_community=True` as a small labelled quota ranked BELOW authoritative,
+    or as a labelled last resort when authoritative has nothing.
 
-    **When NOT to use:**
-    - For the internal curated public-source catalog -> ``search_data_catalog``.
-    - For a named US dataset that already has its own fetcher (DEM, NLCD land
-      cover, FEMA flood zones) -> call that fetcher directly.
-    - To pull bytes -> that is ``fetch_living_atlas_layer`` (this only ranks).
-
-    **Two-pool curation (NATE's rule):** by default ONLY authoritative entries
-    (ESRI ``contentStatus`` authoritative badge) are returned. Community entries
-    NEVER get priority in an authoritative ask -- they appear only when you pass
-    ``include_community=True`` (a small labelled quota, always ranked below the
-    authoritative results) or as a labelled last resort when the authoritative
-    stratum has nothing.
-
-    **Parameters:**
-        query: free-text topic ("wetlands", "land cover", "sea surface
-            temperature", "wildfire perimeters"). Required, non-empty.
-        include_community: opt in to community-curated entries (default False).
-        top_k: max authoritative results to return (default 8).
-
-    **Returns:** a list of dicts ranked by ``relevance_score`` (desc). Each carries
-    ``curation`` ("authoritative"|"community"), ``last_resort`` (bool), ``id``,
-    ``title``, ``snippet``, ``service_type``, ``service_url``, ``extent``,
-    ``authoritative``, ``premium``, ``tags``, and ``fetch_with`` (the exact
-    ``fetch_living_atlas_layer`` call). Empty list when nothing matches either
-    stratum.
+    `query` is a free-text topic, non-empty; `top_k` caps the authoritative results.
+    Returns dicts ranked by `relevance_score`, each carrying `curation`,
+    `last_resort`, `id`, `title`, `snippet`, `service_type`, `service_url`,
+    `extent`, `authoritative`, `premium`, `tags` and `fetch_with`.
     """
     if not isinstance(query, str) or not query.strip():
         return []

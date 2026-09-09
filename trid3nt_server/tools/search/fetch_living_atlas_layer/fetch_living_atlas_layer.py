@@ -1,27 +1,8 @@
-"""``fetch_living_atlas_layer``: fetch ONE discovered ESRI Living Atlas layer.
-
-A generic bridge from a harvested catalog entry (or a raw ArcGIS service URL) to
-published bytes. It builds a DYNAMIC ``SourceSpec`` per call from the entry's
-service type and hands it to the router's ``route()`` -- which is registry-free and
-spec-driven, so the ad-hoc spec rides EVERYTHING for free: param validation, the
-payload gate, typed errors, ``read_through`` caching, and LayerURI emission.
-No pre-registration; no bespoke transport.
-
-Service-type -> router mode:
-  - Image Service   -> raster-cog / imageserver_export (exportImage GeoTIFF)
-  - Map Service     -> raster-cog / mapserver_export   (server-symbolized RGBA COG)
-  - Feature Service -> vector-fgb  / esri_json          (FeatureServer /query -> FGB)
-
-NATE's two-pool rule surfaces in the envelope: the returned ``LivingAtlasLayerURI``
-labels the layer's curation class (authoritative | community). Premium /
-subscription items -> an honest typed ``LIVING_ATLAS_SUBSCRIPTION_REQUIRED`` error
-(missing-key parity: no ArcGIS token is registered, so premium content is never
-silently half-fetched).
-
-Cache disambiguation: ``source_class`` is per-item (``living_atlas_<item_id>``) so
-the content-addressed cache key (``sha256(source_class || params || ttl)``) never
-collides two different layers at the same bbox.
-"""
+"""``fetch_living_atlas_layer`` - one harvested catalog entry, or a raw ArcGIS
+service URL, to published bytes. A DYNAMIC ``SourceSpec`` is built per call from
+the entry's service type and routed like any other, so nothing here re-implements
+validation, the payload gate, typed errors, caching or emission. ``source_class``
+is per-item, so one key can never collide two layers at the same bbox."""
 
 from __future__ import annotations
 
@@ -66,10 +47,8 @@ class LivingAtlasInputError(ValueError):
 
 class LivingAtlasSubscriptionError(RuntimeError):
     """The item is ESRI premium/subscription content and no token is registered.
-
-    Missing-key parity: surfaced honestly and never silently, exactly like a
-    keyed fetcher with no API key.
-    """
+    Surfaced honestly, never a silent half-fetch - the same contract a keyed
+    fetcher has with no API key."""
 
     error_code = "LIVING_ATLAS_SUBSCRIPTION_REQUIRED"
     retryable = False
@@ -77,16 +56,18 @@ class LivingAtlasSubscriptionError(RuntimeError):
 
 # --------------------------------------------------------------------------- #
 # URL shaping + service probe.
+#
+# Service type -> router mode:
+#   Image Service   -> raster-cog / imageserver_export (exportImage GeoTIFF)
+#   Map Service     -> raster-cog / mapserver_export   (server-symbolized RGBA COG)
+#   Feature Service -> vector-fgb / esri_json          (FeatureServer /query -> FGB)
 # --------------------------------------------------------------------------- #
 
 
 def _split_service(url: str, suffix: str) -> tuple[str, str]:
-    """``(base, service_name)`` for an ImageServer/MapServer URL.
-
-    ``{base}/{service_name}/{suffix}`` reconstructs the original service URL, which
-    is exactly what ``imageserver_export`` / ``mapserver_export`` rebuild before
-    appending ``/exportImage`` or ``/export``.
-    """
+    """``(base, service_name)`` for an ImageServer/MapServer URL, split so that
+    ``{base}/{service_name}/{suffix}`` reconstructs the original exactly - the
+    export modes rebuild it that way before appending their own verb."""
     stripped = url.rstrip("/")
     low = stripped.lower()
     tail = "/" + suffix.lower()
@@ -97,12 +78,9 @@ def _split_service(url: str, suffix: str) -> tuple[str, str]:
 
 
 def _probe_service(url: str) -> dict[str, Any]:
-    """GET ``<service_url>?f=json`` through the shared transport.
-
-    Returns the parsed metadata dict. A token-required / forbidden error envelope
-    raises :class:`LivingAtlasSubscriptionError`; any other failure returns ``{}``
-    (the fetch proceeds and the router surfaces the real upstream error).
-    """
+    """The service's ``?f=json`` metadata dict. A token-required or forbidden
+    envelope raises :class:`LivingAtlasSubscriptionError`; any OTHER failure returns
+    ``{}`` so the fetch proceeds and the router surfaces the real error."""
     from trid3nt_server.tools.fetchers._router.transport import (
         TransportError,
         get_bytes,
@@ -317,41 +295,22 @@ def fetch_living_atlas_layer(
     service_url: str | None = None,
     **_extra_ignored: Any,
 ) -> LivingAtlasLayerURI:
-    """Fetch one ESRI Living Atlas layer (discovered via ``search_living_atlas``).
+    """Fetch ONE ESRI Living Atlas layer and publish it, clipped to `bbox`.
 
-    **What it does:** Takes a Living Atlas item id (or a raw ArcGIS service URL),
-    builds the right ArcGIS request for its service type, downloads the layer
-    clipped to ``bbox``, publishes it (GeoTIFF COG for Image/Map Services,
-    FlatGeobuf for Feature Services), and returns a curation-labelled layer.
+    ROUTING: after `search_living_atlas` returns an entry worth pulling bytes for,
+    or when an ArcGIS REST service URL is already in hand. NOT to rank or browse -
+    that is `search_living_atlas`. NOT for a dataset with a dedicated fetcher, which
+    gives native resolution and richer typing.
 
-    **When to use:**
-    - After ``search_living_atlas`` returns an entry you want to pull bytes for.
-    - You have an ESRI Living Atlas / ArcGIS REST service URL to fetch directly.
+    Give either `item_id` (an id from the search) or `service_url` (a raw
+    `.../ImageServer`, `.../MapServer` or `.../FeatureServer[/<n>]`). `bbox` is
+    REQUIRED, EPSG:4326, and should respect the entry's own extent.
 
-    **When NOT to use:**
-    - To RANK/BROWSE the Living Atlas -> ``search_living_atlas`` (this fetches one).
-    - For a US dataset with a dedicated fetcher (DEM, land cover, flood zones) ->
-      call that fetcher (native resolution, richer typing).
-
-    **Two-pool label + premium honesty:** the returned envelope's ``curation`` field
-    reports authoritative vs community. Premium/subscription items raise
-    ``LIVING_ATLAS_SUBSCRIPTION_REQUIRED`` (no ArcGIS token is registered) -- never a
-    silent half-fetch.
-
-    **Parameters:**
-        item_id: the Living Atlas item id from ``search_living_atlas`` (its ``id``).
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326. Required
-            (``supports_global_query=False``; respect the entry's extent).
-        service_url: alternative to ``item_id`` -- a raw ArcGIS REST service URL
-            (``.../ImageServer`` | ``.../MapServer`` | ``.../FeatureServer[/<n>]``).
-
-    **Returns:** a ``LivingAtlasLayerURI`` (a ``LayerURI`` plus ``curation``,
-    ``item_id``, ``service_type``, ``provenance``). ``uri`` -> the published COG/FGB.
-
-    **Error types:**
-        - ``LIVING_ATLAS_INPUT_INVALID``: unknown item / missing bbox / bad URL.
-        - ``LIVING_ATLAS_SUBSCRIPTION_REQUIRED``: premium content, no token.
-        - ``LIVING_ATLAS_*``: router-stamped upstream/empty errors from the fetch.
+    Returns a `LivingAtlasLayerURI`: a layer plus `curation` (authoritative or
+    community), `item_id`, `service_type` and `provenance`; the bytes are a COG for
+    Image/Map Services and FlatGeobuf for Feature Services. Premium content raises
+    LIVING_ATLAS_SUBSCRIPTION_REQUIRED rather than half-fetching; an unknown item,
+    missing bbox or bad URL raises LIVING_ATLAS_INPUT_INVALID.
     """
     from trid3nt_server.tools.fetchers._router import router
 

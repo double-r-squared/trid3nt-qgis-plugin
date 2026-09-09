@@ -1,10 +1,6 @@
-"""``fetch_from_catalog``: fetch a catalog entry by id through the tiered
-STAC -> OGC -> HTTPS -> region ladder into a cached LayerURI.
-
-Carved out of the original two-tool ``catalog`` module in the tools/ reorg;
-behavior and the registered tool surface are unchanged. The YAML loader +
-catalog cache live in ``trid3nt_server.tools.search.catalog_common``.
-"""
+"""``fetch_from_catalog`` - one catalog entry, by its stable id, through the
+tiered STAC -> OGC -> HTTPS -> region ladder into a cached LayerURI. Dispatch is
+by the entry's declared ``access_tier``, never by guessing."""
 
 from __future__ import annotations
 
@@ -33,12 +29,9 @@ __all__ = ["fetch_from_catalog"]
 
 logger = logging.getLogger("trid3nt_server.tools.search.fetch_from_catalog.fetch_from_catalog")
 
-#: Catalog-surfacing arms that route via a spec-served ``source`` name
-#: (experiments/catalog_surfacing/DESIGN.md): arms 1 and 3 both dispatch
-#: ``fetch_from_catalog(source=..., params=...)`` -> ``router.route``. Read at import
-#: so the registered tool exposes a ``source`` param ONLY under those arms; DEFAULT
-#: config keeps the exact entry_id-only signature + docstring. Each arm runs in its
-#: own process.
+#: Catalog-surfacing arms that route via a spec-served ``source`` name instead of an
+#: entry id. Read at IMPORT so the registered tool exposes a ``source`` param only
+#: under those arms; the default config keeps the entry_id-only signature exactly.
 _SOURCE_PARAM_ARM = os.environ.get("TRID3NT_CATALOG_ARM", "").strip() in ("1", "3")
 
 
@@ -55,18 +48,13 @@ _FETCH_FROM_CATALOG_METADATA = AtomicToolMetadata(
 )
 
 def _get_catalog_entry(entry_id: str) -> CatalogEntry:
-    """Fetch a single CatalogEntry by id. Raises CatalogNotFoundError on miss.
-
-    v0.1: looks up the YAML cache. Forward path (D.11 catalog_entries
-    collection): becomes a MongoDB read; YAML stays as fallback when the
-    Mongo cluster is unreachable.
-    """
+    """One CatalogEntry by id, from the loaded YAML catalog. Raises
+    ``CatalogNotFoundError`` on a miss, enumerating the known ids."""
     catalog = load_catalog()
     for entry in catalog:
         if entry.id == entry_id:
             return entry
-    # Surfacable hint for the LLM/agent: enumerate the v0.1 entry IDs so it
-    # can adjust on the next call.
+    # Enumerate the known ids so the caller can correct itself on the next call.
     ids = sorted(e.id for e in catalog)
     raise CatalogNotFoundError(
         f"catalog entry id={entry_id!r} not found in v0.1 catalog "
@@ -76,13 +64,9 @@ def _get_catalog_entry(entry_id: str) -> CatalogEntry:
 def _layer_uri_from_entry(
     entry: CatalogEntry, uri: str, ext: str
 ) -> LayerURI:
-    """Build a LayerURI for a fetched cached artifact.
-
-    A catalog entry declares no style of its own, so the layer takes its kind's
-    bare default: a vector is drawn, a raster gets the neutral ramp over its own
-    range. Guessing a physical band from a source-class substring would paint an
-    unknown quantity in the colours of one somebody assumed.
-    """
+    """A LayerURI for a fetched cached artifact. A catalog entry declares no style,
+    so the layer takes its kind's BARE default - guessing a physical band from a
+    source-class substring would paint an unknown quantity as an assumed one."""
     layer_type = "vector" if ext in ("fgb", "geojson", "json") else "raster"
     return LayerURI(
         layer_id=f"catalog-{entry.id}",
@@ -111,15 +95,9 @@ def _ext_for_content_type(content_type: str, service_type: str) -> str:
     return "bin"
 
 def _tier1_stac_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[bytes, str]:
-    """Tier-1 (STAC + COG) dispatch: thin substrate.
-
-    The seed catalog's Tier-1 entries (Copernicus DEM, ESA WorldCover, MODIS
-    LC, etc.) all expose Microsoft Planetary Computer STAC collections.
-    Implementing a full STAC search + COG windowed read here would duplicate
-    `fetch_dem` / `fetch_landcover`'s logic; v0.1 surfaces the access pattern
-    inferred from the entry's URLs and routes through the OGC adapter as a
-    raw HTTPS GET.
-    """
+    """Tier-1 (STAC + COG) dispatch. NOT implemented: a STAC search plus a COG
+    windowed read is what the dedicated raster fetchers already do, so this refuses
+    rather than duplicating them."""
     raise NotImplementedError(
         f"Tier-1 STAC dispatch via fetch_from_catalog is reserved for a follow-up "
         f"(entry_id={entry.id!r}); use the dedicated `fetch_dem` / "
@@ -127,14 +105,9 @@ def _tier1_stac_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[byte
     )
 
 def _tier2_ogc_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[bytes, str]:
-    """Tier-2 (OGC service) dispatch: route through the generic OGC adapter.
-
-    Inspects the entry's URLs + how_to_use to infer the service flavor
-    (WCS / WMS / WFS / ArcGIS REST). v0.1 heuristic: URL fragments name the
-    flavor (``/wms``, ``/wcs``, ``/wfs``, ``/MapServer/<n>/query``,
-    ``/FeatureServer/<n>``, etc.). When ambiguous, default to WMS (the most
-    common visualization surface).
-    """
+    """Tier-2 (OGC service) dispatch through the shared adapter. The flavor is
+    inferred from URL fragments and defaults to WMS when ambiguous; an explicit
+    ``params["service_type"]`` always wins over the sniff."""
     bbox_in = params.get("bbox") or params.get("location")
     if bbox_in is not None and not isinstance(bbox_in, (list, tuple)):
         raise OGCAdapterError(
@@ -150,12 +123,11 @@ def _tier2_ogc_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[bytes
     crs_param = params.get("crs", "EPSG:4326")
     version_param = params.get("version")
     image_format_param = params.get("format")
-    # Phase-2 resolution lever: width/height default to None so fetch_ogc_layer
-    # computes an extent-aware raster grid from the bbox. When the caller does
-    # not pin a target_resolution_m, fall back to the entry's curated
-    # native_resolution_m (e.g. 10 m for 3DEP, 30 m for NLCD/LANDFIRE) so the
-    # auto-grid targets the source's native ground sampling instead of a fixed
-    # 1024 px that coarsened large AOIs.
+    # width/height default to None so the adapter computes an extent-aware grid
+    # from the bbox. With no target_resolution_m pinned, the entry's curated
+    # native_resolution_m is the fallback, so the auto-grid targets the SOURCE's
+    # native ground sampling rather than a fixed pixel count that would coarsen a
+    # large AOI.
     _wp = params.get("width_px")
     _hp = params.get("height_px")
     width_px = int(_wp) if _wp is not None else None
@@ -184,16 +156,13 @@ def _tier2_ogc_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[bytes
         # ArcGIS REST endpoints often have no /wms in the path -- use REST.
         service_type = "ARCGIS_REST" if "arcgis" in sniff else "WMS"
 
-    # ArcGIS REST entry URLs typically point to /MapServer; the /query path
-    # has to be on a specific layer. v0.1 default: layer 0 unless params.layer
-    # overrides. The kickoff's FEMA NFHL flood zones live on layer 28 -- the
-    # caller passes layer_name="28" (or an integer-coercible string).
+    # An ArcGIS REST entry URL points at /MapServer, but the /query path has to be
+    # on a SPECIFIC layer, so layer 0 is the default unless the caller names one -
+    # a flood-hazard layer, say, is rarely layer 0.
     #
-    # ArcGIS ImageServer endpoints (raster) do NOT support /<layer>/query;
-    # they expose ``/exportImage`` instead. Detect ImageServer endpoints by
-    # URL substring and route through the ImageServer path with a thin
-    # extra_params override that maps bbox + size to ImageServer's parameter
-    # names (``bbox`` + ``size``).
+    # An ImageServer endpoint does NOT support /<layer>/query at all; it exposes
+    # /exportImage, whose params are named differently (bbox + size). The URL
+    # substring is what tells the two apart.
     fetch_url = url
     layer_name = layer_name_param or ""
     if service_type == "ARCGIS_REST":
@@ -247,12 +216,9 @@ def _tier2_ogc_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[bytes
     return resp.content, ext
 
 def _tier3_https_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[bytes, str]:
-    """Tier-3 (direct HTTPS + Range / point-query) dispatch.
-
-    v0.1 substrate: issues a single HTTPS GET for the entry's primary URL and
-    returns the body. Range-aware windowed reads for COG-shaped responses
-    live in the dedicated fetchers (`fetch_dem` / `fetch_landcover`) for v0.1.
-    """
+    """Tier-3 dispatch: ONE HTTPS GET for the entry's primary URL, body returned
+    whole. No range-aware windowed read here - a COG-shaped response is the
+    dedicated fetchers' business."""
     import requests as _rq
 
     extra_qs = params.get("query") or {}
@@ -283,15 +249,9 @@ def _tier3_https_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[byt
 def _tier4_region_fetch(
     entry: CatalogEntry, params: dict[str, Any]
 ) -> tuple[bytes, str]:
-    """Tier-4 (region download + local clip) dispatch.
-
-    v0.1 substrate raises NotImplementedError -- the per-source region
-    download + clip path is intricate (NHDPlus HR uses HUC4 routing; WorldPop
-    uses ISO3 country files; HydroSHEDS uses continental files). The existing
-    fetchers (``fetch_river_geometry`` for NHDPlus HR; ``fetch_population``
-    for WorldPop) already implement Tier-4 per source. Catalog-driven Tier-4
-    dispatch is a follow-up.
-    """
+    """Tier-4 (region download + local clip) dispatch. NOT implemented: the region
+    routing is per-source - HUC4, ISO3 country files, continental tiles - so it
+    refuses rather than guessing which one an entry means."""
     raise NotImplementedError(
         f"Tier-4 region-download dispatch via fetch_from_catalog is reserved for a "
         f"follow-up (entry_id={entry.id!r}); use the dedicated `fetch_river_geometry` / "
@@ -299,59 +259,22 @@ def _tier4_region_fetch(
     )
 
 def _fetch_from_catalog_entry(entry_id: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Fetch bytes for a vetted catalog entry by its stable id (§F.1.2 Mode 1).
+    """Fetch bytes for a vetted catalog entry by its stable id - the actual layer.
 
-    Use this (not search_data_catalog, which only LISTS candidates) when you already have a stable catalog entry id and want its actual layer BYTES.
+    ROUTING: an entry id is already in hand - typically chosen from
+    `search_data_catalog`, which only LISTS candidates - and the actual bytes are
+    wanted. NOT for discovering sources, NOT where a dedicated fetcher already
+    covers the dataset, NOT for a URL that is not in the catalog (`web_fetch`).
 
-    Use this when: the LLM has chosen a `CatalogEntry` from `search_data_catalog`
-    and needs the actual layer bytes -- generic dispatcher routes by the
-    entry's ``access_tier``: Tier 1 (STAC+COG), Tier 2 (OGC service), Tier 3
-    (HTTPS+Range), Tier 4 (region+clip). The dispatched bytes are written
-    through the cache and surfaced as a LayerURI.
+    `params` carries the dispatch shape: `bbox` (EPSG:4326), `layer_name` when the
+    entry URL does not name the layer, `layer_id` for a MapServer's integer layer
+    index, `service_type` to override URL sniffing, `crs`, `where` for an ESRI WHERE
+    clause, `query` for extra HTTPS params. For a raster, `width_px`/`height_px` set
+    the grid; omit both and `target_resolution_m` picks a ground cell size instead,
+    defaulting to the entry's native resolution, clamped to 4096 px per axis.
 
-    Do NOT use this for: discovering candidate sources (use ``search_data_catalog``);
-    direct-bbox raster retrieval where a dedicated fetcher already exists
-    (use ``fetch_dem`` / ``fetch_landcover`` etc.); user-supplied URLs not in
-    the catalog (use ``web_fetch``).
-
-    Params:
-        entry_id: stable catalog id (e.g. ``"fema-nfhl-flood-zones"``,
-            ``"usgs-3dep-elevation-image-service"``).
-        params: dispatch-specific request shape. Common keys:
-            - ``bbox`` (Tier 2/3/4 raster + ArcGIS REST): EPSG:4326 bbox.
-            - ``layer_name`` (Tier 2 WMS/WCS/WFS): override the layer/coverage
-              name when the entry URL doesn't name it directly.
-            - ``layer_id`` (Tier 2 ArcGIS REST): the integer layer index on
-              a MapServer (e.g. ``28`` for FEMA NFHL flood hazard zones).
-            - ``service_type`` (Tier 2): override URL sniffing
-              (``"WCS"`` / ``"WMS"`` / ``"WFS"`` / ``"ARCGIS_REST"``).
-            - ``width_px`` / ``height_px`` (Tier 2 raster): explicit pixel
-              dimensions. Optional -- when omitted, the dispatch derives an
-              extent-aware raster grid from ``bbox`` (resolution lever below).
-            - ``target_resolution_m`` (Tier 2 raster): ground cell size in
-              metres for the auto-computed grid (the fetch-side resolution
-              lever). Omit to target the entry's curated
-              ``native_resolution_m`` (e.g. 10 m for 3DEP, 30 m for
-              NLCD/LANDFIRE), falling back to a bounded 30 m default; pass a
-              finer value (e.g. ``10``) on a large AOI to opt into more pixels.
-              Each axis is clamped to 4096 px so payloads stay bounded.
-            - ``crs`` (Tier 2): default ``"EPSG:4326"``.
-            - ``where`` (Tier 2 ArcGIS REST): ESRI WHERE clause.
-            - ``query`` (Tier 3): extra HTTPS query params.
-
-    Returns:
-        A dict with:
-        - ``layer``: a ``LayerURI`` pointing at the cached artifact
-          (``s3://trid3nt-cache/cache/static-30d/fetch_from_catalog/<key>.<ext>``).
-        - ``entry_id``: the catalog id (echo).
-        - ``access_tier``: the dispatched tier (1/2/3/4).
-        - ``source_class``: the entry's source_class (for downstream routing).
-        - ``citation``: the entry's citation string (provenance).
-        - ``last_verified``: the entry's curator-vetted UTC timestamp.
-
-    Registered with ``ttl_class="static-30d"``,
-    ``source_class="fetch_from_catalog"``, ``cacheable=True``. The cache key is the
-    entry id + params; identical fetches dedup.
+    Returns {layer (a LayerURI on the cached artifact), entry_id, access_tier,
+    source_class, citation, last_verified}. Identical fetches dedup at the cache.
     """
     if not isinstance(entry_id, str) or not entry_id.strip():
         raise CatalogNotFoundError("fetch_from_catalog requires a non-empty entry_id")
@@ -424,13 +347,9 @@ def _fetch_from_catalog_entry(entry_id: str, params: dict[str, Any] | None = Non
 def _fetch_from_catalog_via_spec(
     source: str, params: dict[str, Any] | None
 ) -> dict[str, Any]:
-    """Catalog-surfacing Design-1 branch: resolve a spec-served source name to its
-    ``SourceSpec`` and route it through ``router.route`` (which runs
-    ``validate_params`` -> typed ``RouterInputError`` on bad args, then dispatches).
-
-    The single-enforcement-locus shift the arm measures: there is no provider
-    inputSchema on this fetch, so ``router.validate_params`` is the sole gate.
-    """
+    """Resolve a spec-served source name to its ``SourceSpec`` and route it. There
+    is no provider inputSchema on this path, so the router's own ``validate_params``
+    is the SOLE gate on the arguments."""
     from trid3nt_server.tools.fetchers._router import registration as _reg
     from trid3nt_server.tools.fetchers._router import router as _router
 
@@ -489,14 +408,9 @@ fetch_from_catalog = register_tool(
 
 
 def _ext_hint_for(entry: CatalogEntry, params: dict[str, Any]) -> str:
-    """Predict the cache file extension for an entry+params dispatch.
-
-    Reads the entry's URL / how_to_use + the caller's params (e.g. WCS
-    GetCoverage → ``tif``; ArcGIS REST query → ``json``; WMS GetMap →
-    ``png``; HydroMT-conditioned DEM ZIP → ``zip``). Wrong guesses are
-    purely cosmetic (the cache key is content-addressed; the extension is
-    metadata for human inspection of the bucket).
-    """
+    """Predict the cache file extension for an entry+params dispatch. A wrong guess
+    is purely cosmetic: the cache key is content-addressed, and the extension is
+    only there for a human reading the bucket."""
     if entry.access_tier == 2:
         # Sniff: explicit service_type wins.
         st = (params.get("service_type") or "").upper()
@@ -506,10 +420,9 @@ def _ext_hint_for(entry: CatalogEntry, params: dict[str, Any]) -> str:
         if st == "WFS" or "/wfs" in sniff:
             return "json"
         if st == "ARCGIS_REST" or "arcgis" in sniff or "/mapserver" in sniff or "/imageserver" in sniff:
-            # ArcGIS REST → JSON (geojson) responses for query endpoints; tif
-            # for ImageServer exportImage. ImageServer endpoints default to
-            # exportImage in the catalog Tier-2 dispatch (raster surfaces
-            # don't have MapServer-style /query).
+            # A query endpoint answers JSON; an ImageServer exportImage answers
+            # a tif. The dispatch defaults an ImageServer to exportImage, because a
+            # raster surface has no MapServer-style /query.
             if "imageserver" in sniff:
                 return "tif"
             return "json"

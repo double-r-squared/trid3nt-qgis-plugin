@@ -1,10 +1,6 @@
-"""``search_data_catalog``: keyword/bbox relevance search over the audited public
-data-source YAML catalog.
-
-Carved out of the original two-tool ``catalog`` module in the tools/ reorg;
-behavior and the registered tool surface are unchanged. The YAML loader +
-catalog cache live in ``trid3nt_server.tools.search.catalog_common``.
-"""
+"""``search_data_catalog`` - keyword and bbox relevance ranking over the audited
+public data-source YAML catalog. It only LISTS: the ids it returns are what
+``fetch_from_catalog`` takes to pull bytes."""
 
 from __future__ import annotations
 
@@ -47,10 +43,8 @@ _SEARCH_DATA_CATALOG_METADATA = AtomicToolMetadata(
 )
 
 def _score_entry(entry: CatalogEntry, topic: str) -> float:
-    """Compute a topic-relevance score for a catalog entry.
-
-    Simple lowercase substring + token-overlap heuristic.
-    """
+    """A topic-relevance score for one catalog entry: a lowercase substring and
+    token-overlap heuristic, never a semantic match."""
     if not topic:
         return 1.0
     haystack = " ".join(
@@ -66,10 +60,9 @@ def _score_entry(entry: CatalogEntry, topic: str) -> float:
     score = 0.0
     if needle in haystack:
         score += 5.0
-    # Token-overlap bonus: every CONTENT-WORD token in topic also in haystack
-    # adds 1. Skip generic filler ("data", "source", "name", "the", "for", "of"
-    # …) so a bogus phrase like "fake data source name" doesn't rack up a
-    # score from filler-only overlap with every catalog entry.
+    # Every CONTENT-WORD token of the topic found in the haystack adds 1. The
+    # filler words are skipped, so a phrase made only of them cannot rack up a score
+    # by overlapping with every entry in the catalog.
     stopwords = {
         "data",
         "source",
@@ -98,13 +91,13 @@ def _score_entry(entry: CatalogEntry, topic: str) -> float:
         if t and t not in stopwords
     ]
     if not tokens:
-        return score  # all-filler topic produces zero -- escalate to Mode 2.
+        return score  # an all-filler topic scores nothing here.
     matched_tokens = sum(1 for tok in tokens if tok in haystack)
     if matched_tokens == 0:
         return score  # no content-word hit at all.
     score += float(matched_tokens)
-    # Require at least 1/3 of the content tokens to hit before the entry
-    # qualifies as a real match -- guards against single-token false positives.
+    # At least a third of the content tokens must hit before the entry counts as a
+    # real match; otherwise one shared token carries an unrelated entry.
     if matched_tokens < max(1, len(tokens) // 3):
         score = max(0.0, score - 1.0)
     # Bias matches in the name (most authoritative) over description.
@@ -117,23 +110,16 @@ def _bbox_overlaps_world(
     bbox: tuple[float, float, float, float] | None,
     entry: CatalogEntry,
 ) -> bool:
-    """Does the catalog entry plausibly cover ``bbox``?
-
-    v0.1 heuristic: the YAML doesn't carry per-entry spatial extents (the
-    Mode 2 enrichment job lands ``coverage_envelope`` per F.1.2). For now,
-    apply a coarse rule: entries naming "global" or "world" or matching
-    international ISO terms always include international bboxes; entries
-    naming "US" / "CONUS" / "L48" / "national" cover the CONUS envelope; the
-    rest are treated as plausibly relevant (recall over precision).
-    """
+    """Does the entry plausibly cover ``bbox``? A COARSE heuristic - the catalog
+    carries no per-entry spatial extent - so anything not clearly US-scoped is kept:
+    recall over precision, since a dropped entry is invisible to the caller."""
     if bbox is None:
         return True
     text = (entry.description + " " + entry.name + " " + entry.how_to_use).lower()
-    # CONUS / US-only entries -- exclude any clearly non-US bbox center. We
-    # treat both "CONUS" / "L48" tokens and the broader "us federal data" /
-    # "(usgs)" curator language as US-only signals for the v0.1 heuristic.
-    # "conterminous us" mentions usually accompany Hawaii/Alaska coverage but
-    # still don't extend to international bboxes; treated as US-only here.
+    # A US-scoped entry drops out for a clearly non-US bbox centre. Both the
+    # explicit tokens and the broader "us federal" curator language count as
+    # US-only signals; "conterminous us" usually accompanies Hawaii and Alaska
+    # coverage but still never extends internationally, so it counts too.
     conus_words = {
         "conus",
         "l48",
@@ -145,67 +131,42 @@ def _bbox_overlaps_world(
     }
     if any(w in text for w in conus_words):
         mn_lon, mn_lat, mx_lon, mx_lat = bbox
-        # Broad US envelope (CONUS + Alaska + Hawaii + PR/USVI) approx
-        # (-180 to -60) lon × (15 to 75) lat. Any bbox center in this band
-        # qualifies.
+        # A broad US envelope covering the lower 48, Alaska, Hawaii and the
+        # Caribbean territories. Any bbox centre inside the band qualifies.
         cx, cy = 0.5 * (mn_lon + mx_lon), 0.5 * (mn_lat + mx_lat)
         return (-180.0 <= cx <= -60.0) and (15.0 <= cy <= 75.0)
     return True
 
 @register_tool(
     _SEARCH_DATA_CATALOG_METADATA,
-    # Annotations: readOnlyHint=True (read-only; no state mutation),
-    # openWorldHint=True (in-memory catalog lookup, but fetch_from_catalog ultimately
-    # dispatches to Tier-2/3 external APIs; search step itself is intra-process),
-    # destructiveHint=False, idempotentHint=True (cache shim deduplicates).
+    # Open-world: the lookup itself is in-process, but what it surfaces are
+    # external endpoints a later fetch will actually hit.
     open_world_hint=True,
 )
 def search_data_catalog(
     topic: str,
     location: tuple[float, float, float, float] | None = None,
     source_filter: str | None = None,
-    # absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    # Absorb model-invented kwargs; the normalizer already strips most of them.
     **_extra_ignored: Any,
 ) -> list[dict[str, Any]]:
     """Search the curated public data-source catalog for vetted entries on a topic.
 
-    Use this when: the agent has a free-text need ("flood zones", "DEM",
-    "river flow data", "building footprints") and wants the catalog's
-    curator-vetted endpoints + invocation hints (``how_to_use``) -- the §F.1.2
-    Mode 1 substrate. The returned entries carry stable IDs the LLM passes
-    to ``fetch_from_catalog``.
+    ROUTING: a free-text data need where the catalog's curator-vetted endpoints and
+    their `how_to_use` hints are wanted. The entries carry stable ids that
+    `fetch_from_catalog` takes. NOT for geocoding, NOT for pulling bytes, and NOT
+    for enumerating already-published layers - the catalog describes EXTERNAL
+    sources, not what is on the map.
 
-    Do NOT use this for: live geocoding (use ``geocode_location``); pulling
-    actual bytes (use ``fetch_from_catalog`` or one of the dedicated fetchers);
-    enumerating already-cached layers (those are not catalog entries -- the
-    catalog describes external sources).
+    `topic` is required and non-empty. `location` is an optional EPSG:4326 bbox; it
+    drops entries a coverage heuristic says the bbox cannot plausibly hit.
+    `source_filter` narrows to one `source_class`.
 
-    Params:
-        topic: free-text topic ("flood zones", "DEM", "land cover", etc.).
-            Required, non-empty.
-        location: optional ``(min_lon, min_lat, max_lon, max_lat)`` bbox in
-            EPSG:4326. When provided, the ranker uses a coverage heuristic to
-            drop entries that the bbox cannot plausibly hit (CONUS-only
-            entries vs an international bbox).
-        source_filter: optional ``source_class`` filter ("dem", "landcover",
-            "flood_zone", …). When set, only entries matching this
-            source_class are returned.
-
-    Returns:
-        A list of dicts (one per matching CatalogEntry), each carrying the
-        catalog entry as a JSON-serializable dict + a ``relevance_score``
-        float for the ranking. The dict shape matches the §F.1.2 Mode 1
-        binding contract (id, name, description, urls, access_tier,
-        credential_tier, ttl_class, source_class, license, citation,
-        vintage, last_verified, status, how_to_use, api_key_secret_ref).
-
-        Empty list when no entries match -- the LLM should fall back to the
-        generic fetchers / web research for an uncatalogued source.
-
-    Registered with ``ttl_class="semi-static-7d"``,
-    ``source_class="search_data_catalog"``, ``cacheable=True``. The cache key
-    incorporates topic + bbox + filter so repeat searches dedup.
+    Returns one dict per matching entry - the catalog row plus a `relevance_score` -
+    ranked, with the row carrying id, name, description, urls, access_tier,
+    credential_tier, ttl_class, source_class, license, citation, vintage,
+    last_verified, status, how_to_use and api_key_secret_ref. An EMPTY list when
+    nothing matches; fall back to a generic fetcher or research, do not invent an id.
     """
     if not isinstance(topic, str) or not topic.strip():
         raise CatalogNotFoundError("search_data_catalog requires a non-empty topic string")

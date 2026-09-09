@@ -1,16 +1,8 @@
-"""BM25 + dense retrieval over the harvested Living Atlas entries.
-
-Reuses the SAME machinery as the tool-discovery index (``search_tools``'s
-``_tokenize`` / ``_TypoTolerantBM25`` / ``_select_dense_backend`` /
-``_reciprocal_rank_fusion``) -- but runs it over the Living Atlas catalog ENTRIES
-(title + snippet + tags), not the tool registry.
-
-Two-pool structure (NATE's rule): a SEPARATE index per curation stratum, built
+"""BM25 + dense retrieval over the harvested Living Atlas entries - title, snippet
+and tags, not the tool registry. A SEPARATE index per curation stratum, built
 lazily and independently, so the community pool can never crowd the authoritative
-ranking. ``rank_stratum`` fuses BM25 + dense per stratum with no fused leaderboard
-across strata; the composition policy (authoritative-first, community only on
-opt-in / last-resort) lives in the ``search_living_atlas`` tool.
-"""
+ranking. There is no leaderboard fused across strata; the composition policy lives
+in the tool, not here."""
 
 from __future__ import annotations
 

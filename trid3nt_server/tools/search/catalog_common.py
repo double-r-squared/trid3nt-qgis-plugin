@@ -1,10 +1,6 @@
-"""Shared core of the public-data-source catalog tools (split from the
-original two-tool ``catalog`` module): the YAML catalog loader + module-level
-cache, ``CatalogNotFoundError`` and the test-only cache reset.
-
-This module registers nothing; ``search_data_catalog`` / ``fetch_from_catalog`` are
-siblings that share the loaded catalog through this module.
-"""
+"""The YAML catalog loader, its process-lifetime cache and the typed not-found
+error. This module registers NOTHING: the two catalog tools are siblings that share
+the loaded catalog through it."""
 
 from __future__ import annotations
 
@@ -35,29 +31,20 @@ logger = logging.getLogger("trid3nt_server.tools.search.catalog_common")
 
 
 class CatalogNotFoundError(RuntimeError):
-    """The requested catalog entry id was not found in the v0.1 YAML catalog.
-
-    Carries an ``error_code="CATALOG_ENTRY_NOT_FOUND"`` for the typed-
-    error surface. Not retryable — a missing entry id is a configuration error
-    rather than a transient failure.
-    """
+    """The requested catalog entry id is not in the YAML catalog. Not retryable:
+    a missing id is a configuration error, not a transient failure."""
 
     error_code: str = "CATALOG_ENTRY_NOT_FOUND"
     retryable: bool = False
 
-# Repo-root location of the catalog YAML. Override via env for tests / non-prod.
 def _default_catalog_yaml_path() -> Path:
-    """Resolve the default ``public_data_source_catalog.yaml`` path.
-
-    The file lives at the repo root for v0.1 (curator-edited under git).
-    Walk up from this module's directory to find the repo root; fall back to
-    an explicit env override.
-    """
+    """The vendored ``public_data_source_catalog.yaml``, found by walking up from
+    this module. ``TRID3NT_CATALOG_YAML`` overrides it outright."""
     env_path = os.environ.get("TRID3NT_CATALOG_YAML")
     if env_path:
         return Path(env_path).expanduser().resolve()
-    # trid3nt_server/tools/search/catalog_common.py -> repo
-    # root is 6 levels up (the walk below normally finds it first).
+    # The catalog is curator-edited under git at the repo root; the walk normally
+    # finds it, and the trailing parents[3] is the fallback if it does not.
     here = Path(__file__).resolve()
     for parent in [here, *here.parents]:
         candidate = parent / "public_data_source_catalog.yaml"
@@ -69,37 +56,26 @@ CATALOG_YAML_PATH = _default_catalog_yaml_path()
 
 
 def user_catalog_path() -> Path:
-    """Resolve the USER-OVERLAY catalog path (§F.1.2 Mode 2 offer-to-add).
-
-    The overlay is where Mode 2 user-accepted entries are appended -- it is
-    SEPARATE from the vendored ``public_data_source_catalog.yaml`` (which is
-    never mutated). ``load_catalog`` merges the overlay on top of the vendored
-    catalog (overlay wins on id collision). Resolved at call time (not frozen
-    at import) so tests can point it at a temp file via the env override.
-    Default: ``<repo-root>/data/persistence/user_catalog.yaml``.
-    """
+    """Where user-accepted catalog entries are appended, kept SEPARATE from the
+    vendored catalog, which is never mutated. Resolved at CALL time, not frozen at
+    import, so an env override can point it at a temp file."""
     env_path = os.environ.get("TRID3NT_USER_CATALOG_YAML")
     if env_path:
         return Path(env_path).expanduser().resolve()
     return CATALOG_YAML_PATH.parent / "data" / "persistence" / "user_catalog.yaml"
 
 
-# In-memory catalog cache (lazy-loaded, refreshed at process restart). v0.1
-# only — when D.11 ``catalog_entries`` is populated, this becomes a Mongo
-# read at the ``semi-static-7d`` cadence.
+# In-memory catalog cache: lazy-loaded, and refreshed only at process restart.
 _CATALOG_CACHE: list[CatalogEntry] | None = None
 
 def _parse_last_verified(raw: Any) -> str:
-    """Coerce a YAML ``last_verified`` field into a UTC datetime ISO-Z string.
-
-    The seed catalog stores ``last_verified`` as a YAML date (parsed as
-    ``datetime.date``). The CatalogEntry pydantic shape demands a
-    ``UTCDatetime`` — we widen the date to midnight UTC.
-    """
+    """Coerce a YAML ``last_verified`` field into a UTC ISO-Z string. The catalog
+    stores it as a bare date while ``CatalogEntry`` demands a datetime, so a date
+    widens to midnight UTC."""
     from datetime import datetime, time, timezone
 
     if hasattr(raw, "isoformat"):
-        # date or datetime — coerce to UTC midnight if just a date.
+        # date or datetime - coerce to UTC midnight if just a date.
         if hasattr(raw, "hour"):
             dt = raw
         else:
@@ -115,12 +91,9 @@ def _parse_last_verified(raw: Any) -> str:
     raise ValueError(f"unsupported last_verified shape: {type(raw).__name__}")
 
 def _parse_catalog_rows(raw: Any, source: str) -> list[CatalogEntry]:
-    """Parse + validate the ``entries`` rows of a loaded YAML mapping.
-
-    Shared by the vendored-catalog load and the user-overlay merge so both go
-    through the SAME validation (a malformed row is a typed skip -- logged and
-    dropped -- never a crash of the whole load).
-    """
+    """Parse and validate the ``entries`` rows of a loaded YAML mapping. A
+    malformed row is logged and DROPPED, never a crash of the whole load - the
+    vendored catalog and the user overlay both come through here."""
     entries: list[CatalogEntry] = []
     for row in (raw or {}).get("entries", []) or []:
         if not isinstance(row, dict):
@@ -130,7 +103,7 @@ def _parse_catalog_rows(raw: Any, source: str) -> list[CatalogEntry]:
         try:
             row["last_verified"] = _parse_last_verified(row.get("last_verified"))
             entries.append(CatalogEntry.model_validate(row))
-        except Exception as exc:  # noqa: BLE001 — surface + skip the bad row
+        except Exception as exc:  # noqa: BLE001 - surface and skip the bad row
             logger.warning(
                 "skipping catalog row id=%r in %s — validation failed: %s",
                 row.get("id"),
@@ -142,22 +115,16 @@ def _parse_catalog_rows(raw: Any, source: str) -> list[CatalogEntry]:
 
 
 def _merge_user_overlay(base: list[CatalogEntry]) -> list[CatalogEntry]:
-    """Merge the USER-OVERLAY catalog on top of ``base`` (overlay wins on id).
-
-    §F.1.2 Mode 2 offer-to-add: user-accepted entries live in a separate
-    overlay file (``user_catalog_path()``) so the vendored catalog is never
-    mutated. A missing / malformed overlay is a no-op (the vendored catalog is
-    authoritative); malformed rows inside a readable overlay are typed-skipped
-    by ``_parse_catalog_rows``. Emits exactly ONE log line when the overlay
-    contributes entries.
-    """
+    """Merge the user overlay on top of ``base``; the overlay WINS on an id
+    collision. A missing or malformed overlay is a no-op - the vendored catalog
+    stays authoritative - and one log line fires when the overlay contributes."""
     path = user_catalog_path()
     if not path.exists():
         return base
     try:
         with path.open() as fh:
             raw = yaml.safe_load(fh)
-    except Exception as exc:  # noqa: BLE001 — unreadable overlay -> vendored only
+    except Exception as exc:  # noqa: BLE001 - unreadable overlay -> vendored only
         logger.warning("user-overlay: unreadable %s — skipped: %s", path, exc)
         return base
     if not isinstance(raw, dict):
@@ -186,14 +153,9 @@ def _merge_user_overlay(base: list[CatalogEntry]) -> list[CatalogEntry]:
 
 
 def load_catalog(yaml_path: Path | str | None = None) -> list[CatalogEntry]:
-    """Load + parse + validate the YAML catalog into a list of CatalogEntry.
-
-    Cached in-memory after the first call. On the DEFAULT load path the
-    user-overlay catalog (§F.1.2 Mode 2) is merged on top of the vendored
-    catalog (overlay wins on id collision). Pass ``yaml_path=...`` to force a
-    reload from a specific vendored file WITHOUT the overlay merge (test
-    scaffolding for the vendored file itself).
-    """
+    """The validated catalog, cached in memory after the first call. The DEFAULT
+    path merges the user overlay on top; passing ``yaml_path`` forces a reload of
+    that file alone, WITHOUT the overlay and without touching the cache."""
     global _CATALOG_CACHE
     if yaml_path is None and _CATALOG_CACHE is not None:
         return _CATALOG_CACHE
@@ -211,7 +173,7 @@ def load_catalog(yaml_path: Path | str | None = None) -> list[CatalogEntry]:
     entries = _parse_catalog_rows(raw, str(path))
 
     if yaml_path is None:
-        # DEFAULT load path only: fold in the user-overlay (Mode 2 offer-to-add).
+        # DEFAULT load path only: fold in the user overlay.
         entries = _merge_user_overlay(entries)
         _CATALOG_CACHE = entries
     logger.info("loaded %d catalog entries from %s", len(entries), path)
@@ -219,11 +181,8 @@ def load_catalog(yaml_path: Path | str | None = None) -> list[CatalogEntry]:
 
 
 def reset_catalog_cache() -> None:
-    """Clear the in-memory catalog cache so the next ``load_catalog`` rebuilds.
-
-    Invalidates the cache so a fresh ``user_catalog.yaml`` overlay (hand-authored
-    entries) is picked up on the very next ``search_data_catalog`` call.
-    """
+    """Clear the in-memory cache so the next ``load_catalog`` rebuilds, picking up
+    a freshly written user overlay."""
     global _CATALOG_CACHE
     _CATALOG_CACHE = None
 

@@ -1,38 +1,8 @@
-"""``search_spatial_functions`` atomic tool - BM25 lookup over the vendored
-DuckDB ``spatial`` extension function catalog.
-
-Companion to ``spatial_query``: once
-``spatial_query`` resolved the diet-in-miniature problem of NOT enumerating
-every ``ST_*`` function inline in its own docstring (that prose was
-redundant with this tool and grew unboundedly as the extension gained
-functions), the LLM needs a narrow way to look one up when composing SQL.
-This tool is that lookup - free-text query in, top-k
-``{function, signature, description}`` matches out.
-
-Data source: ``trid3nt_server/tools/duckdb_spatial_functions.json``, a static
-vendored dump of ``duckdb_functions()`` filtered to ``ST_%`` (285 entries at
-generation time; scalar / aggregate / table / macro function types included).
-Generated OFFLINE from the *installed* duckdb's own catalog - no web fetch at
-runtime or at generation time beyond the one-time ``INSTALL spatial``. Stays
-correct as long as the vendored file is regenerated when ``server``'s duckdb
-pin moves to a spatial-extension release with function additions/renames;
-until then it degrades gracefully (a missing/stale function is just absent
-from search results, not a crash).
-
-Reuses ``search_tools``'s BM25 + tokenizer index infra pattern (same
-``rank_bm25.BM25Okapi`` library, same whitespace/lowercase tokenizer) but
-scoped to this tiny 285-row corpus - no dense/embedding channel, no RRF
-fusion, no telemetry co-occurrence channel. Those exist in ``search_tools``
-to rank the ~190-tool registry against ambiguous natural-language asks; this
-corpus is small, flat, and the query is nearly always already a fairly
-specific ask ("distance between two points", "buffer a polygon",
-"reproject coordinates") where BM25 alone resolves cleanly. Adding the
-heavier machinery here would violate the simplicity-over-completeness norm
-for no measurable recall gain at this corpus size.
-
-Index is built lazily at first call and cached at module level, exactly like
-``search_tools``. Reset for tests via ``_reset_index_for_tests()``.
-"""
+"""``search_spatial_functions`` - BM25 lookup over the vendored DuckDB ``spatial``
+function catalog. BM25 ONLY: the corpus is small and flat and the ask is usually
+already specific, so no dense channel and no fusion. The vendored dump must be
+REGENERATED when the duckdb spatial pin moves; until then a renamed function is
+simply absent from the results rather than a crash."""
 
 from __future__ import annotations
 
@@ -74,15 +44,9 @@ _INDEX: "_SpatialFunctionIndex | None" = None
 
 
 class _SpatialFunctionIndex:
-    """In-memory BM25 index over the vendored spatial-function catalog.
-
-    Fields:
-    - ``entries``: the raw list of ``{function, function_type, signature,
-      description}`` dicts, in vendored-file order (parallel to ``bm25``'s
-      corpus rows).
-    - ``bm25``: a ``rank_bm25.BM25Okapi`` instance, or ``None`` when
-      ``rank_bm25`` isn't importable (falls back to substring matching).
-    """
+    """In-memory BM25 index over the vendored catalog. ``entries`` stays in
+    vendored-file order, PARALLEL to the bm25 corpus rows; ``bm25`` is ``None`` when
+    the library is unimportable, and the search falls back to substring."""
 
     __slots__ = ("entries", "bm25")
 
@@ -92,12 +56,11 @@ class _SpatialFunctionIndex:
 
 
 def _default_data_path() -> Path:
-    """Resolve ``duckdb_spatial_functions.json`` under the package's ``tools/`` dir."""
+    """The vendored ``duckdb_spatial_functions.json``, env-overridable."""
     env_path = os.environ.get("TRID3NT_SPATIAL_FUNCTIONS_JSON")
     if env_path:
         return Path(env_path).expanduser().resolve()
-    # agent/tools/search/search_spatial_functions/search_spatial_functions.py
-    # -> trid3nt_server/ is parents[3]
+    # Four levels up from this module is the package root that holds tools/.
     here = Path(__file__).resolve()
     return here.parents[3] / "tools" / "duckdb_spatial_functions.json"
 
@@ -128,7 +91,7 @@ def _build_index(data_path: Path | None = None) -> _SpatialFunctionIndex:
     for e in entries:
         parts = [
             str(e.get("function", "")),
-            str(e.get("function", "")),  # doubled to bias exact-name matches
+            str(e.get("function", "")),  # doubled: biases an exact-name match
             str(e.get("signature", "")),
             str(e.get("description", "")),
         ]
@@ -183,10 +146,8 @@ _SEARCH_SPATIAL_FUNCTIONS_METADATA = AtomicToolMetadata(
 @register_tool(
     _SEARCH_SPATIAL_FUNCTIONS_METADATA,
     supports_global_query=False,
-    # Annotations: readOnlyHint=True (in-process BM25 over a vendored static
-    # file; no external calls or state mutation), openWorldHint=False,
-    # destructiveHint=False, idempotentHint=True (deterministic ranking for
-    # the same query + vendored corpus).
+    # In-process BM25 over a vendored static file: no external call, and the same
+    # query over the same corpus always ranks the same way.
 )
 async def search_spatial_functions(
     query: str,
@@ -195,41 +156,19 @@ async def search_spatial_functions(
 ) -> dict[str, Any]:
     """Look up DuckDB ``spatial`` extension SQL functions by free-text ask.
 
-    Use this when: composing or debugging ``spatial_query`` SQL and unfamiliar
-    with the exact DuckDB spatial function name/signature - e.g. "distance
-    between two points", "buffer a polygon", "reproject coordinates",
-    "intersection area", "convert to geojson". Pass either the user's raw ask
-    or your own distilled query (whichever names the operation more directly).
-    Returns candidate ``ST_*`` functions to call directly in the ``sql``
-    parameter of a subsequent ``spatial_query`` call.
+    ROUTING: composing or debugging `spatial_query` SQL without the exact function
+    name or signature to hand - "distance between two points", "buffer a polygon",
+    "reproject coordinates", "intersection area". Pass the raw ask or your own
+    distilled one, whichever names the OPERATION more directly. NOT for discovering
+    data or tools, NOT for running the SQL, and NOT for anything outside the
+    `ST_*` surface - the corpus is scoped to it.
 
-    Do NOT use this for: fetching or discovering DATA/tools (use
-    ``search_tools`` / ``search_data_catalog``); running the SQL itself (use
-    ``spatial_query``); functions outside the DuckDB ``spatial`` extension
-    (this corpus is scoped to ``ST_*``  only).
+    `query` is required and non-empty; `top_k` is clamped to [1, 25].
 
-    Params:
-        query: free-text ask naming the spatial operation you need
-            (required, non-empty).
-        top_k: maximum number of functions to return (default 5). Clamped to
-            [1, 25].
-
-    Returns:
-        A dict shaped::
-
-            {
-              "results": [
-                {
-                  "function": "ST_Distance",
-                  "signature": "ST_Distance(geom1 GEOMETRY, geom2 GEOMETRY) -> DOUBLE",
-                  "description": "Computes the distance between two geometries."
-                },
-                ...
-              ]
-            }
-
-        Empty ``results`` when nothing matches or the vendored data file is
-        unavailable - never raises for a routine no-match.
+    Returns {"results": [{function, signature, description}, ...]} ranked, with the
+    signature ready to drop into a later `spatial_query` `sql`. `results` is EMPTY
+    when nothing matches or the vendored catalog is unavailable - a routine no-match
+    never raises.
     """
     if not isinstance(query, str):
         return {"results": []}

@@ -1,18 +1,8 @@
-"""Shared core of the ESRI Living Atlas tools: the harvested-catalog entry model,
-the two-stratum YAML loader, and a module-level cache.
-
-NATE's two-pool curation rule is STRUCTURAL here: the harvest writes TWO catalog
-files -- ``living_atlas_authoritative.yaml`` (ESRI ``contentStatus`` authoritative
-badge) and ``living_atlas_community.yaml`` (everything else). The authoritative
-stratum is the default data-source surface; the community stratum has ZERO default
-quota and surfaces only on explicit opt-in or as a labelled last resort. This
-module registers nothing; ``search_living_atlas`` (ranks entries) and
-``fetch_living_atlas_layer`` (fetches one entry's bytes) share the loaded catalogs
-through it, mirroring how ``catalog_common`` serves the public-catalog tools.
-
-The two YAML files are harvested DATA (produced by ``scripts/instruments/harvest_living_atlas.py``),
-not code -- excluded from the coded-tool / coded-LOC metric.
-"""
+"""The harvested-catalog entry model, the two-stratum YAML loader and its cache.
+Two-pool curation is STRUCTURAL: the harvest writes TWO catalogs. Authoritative is
+the default surface; community has ZERO default quota and appears only on explicit
+opt-in or as a labelled last resort. This module registers nothing - the two Living
+Atlas tools share the loaded catalogs through it."""
 
 from __future__ import annotations
 
@@ -46,11 +36,8 @@ SERVICE_TYPES: tuple[str, ...] = ("Image Service", "Feature Service", "Map Servi
 
 class LivingAtlasEntry(BaseModel):
     """One harvested ESRI Living Atlas item, normalized to a fetchable entry.
-
-    Curation is NATE's two-pool discriminant: ``authoritative`` iff ESRI's item
-    ``contentStatus`` carries the authoritative badge (``public_authoritative`` /
-    ``org_authoritative``); everything else is ``community``.
-    """
+    ``curation`` is ``authoritative`` iff the item's ``contentStatus`` carries the
+    authoritative badge; everything else is ``community``."""
 
     schema_version: Literal["v1"] = "v1"
     id: str = Field(min_length=1)
@@ -134,12 +121,9 @@ def _parse_rows(raw: Any, source: str) -> list[LivingAtlasEntry]:
 
 
 def load_living_atlas(curation: CurationClass) -> list[LivingAtlasEntry]:
-    """Load one curation stratum's entries (cached). Missing file -> ``[]``.
-
-    A missing catalog is honest-empty (the harvest has not run / this stratum has
-    no members), NOT an error -- ``search_living_atlas`` degrades to the other
-    stratum or an empty result, never a fabricated entry.
-    """
+    """One curation stratum's entries, cached. A missing catalog is honest-empty,
+    NOT an error: the search degrades to the other stratum or to nothing, never to
+    a fabricated entry."""
     if curation in _CACHE:
         return _CACHE[curation]
     path = catalog_path(curation)
@@ -161,11 +145,9 @@ def load_living_atlas(curation: CurationClass) -> list[LivingAtlasEntry]:
 
 
 def get_entry(item_id_or_url: str) -> tuple[LivingAtlasEntry, CurationClass] | None:
-    """Resolve one entry by item id OR exact service_url, across both strata.
-
-    Authoritative is searched first so an id that (impossibly) lived in both
-    resolves to the authoritative copy. Returns ``None`` when unknown.
-    """
+    """Resolve one entry by item id OR exact service_url across both strata,
+    authoritative FIRST so an id present in both resolves to the authoritative
+    copy. ``None`` when unknown."""
     needle = (item_id_or_url or "").strip()
     if not needle:
         return None

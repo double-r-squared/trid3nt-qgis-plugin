@@ -1,35 +1,8 @@
-"""``retrieve_visible_tools`` -- case-stable, monotonic-grow tool selection.
-
-This is the BUILT-IN surfacing path: it decides WHICH subset of the tool catalog
-the model sees for a turn, so the per-turn tool list (and its ~41-46k tokens) stays
-trimmed to what the ask needs. Enforce is unconditional -- ``K`` is the only lever
-(``TRID3NT_TOOL_RETRIEVAL_K``).
-
-Design:
-  visible(turn) = ``CORE_FLOOR``
-                  UNION the Case's accumulated visible set (every tool once made
-                      visible this Case -- so a tool never leaves mid-task)
-                  UNION the top-k RRF ranking for the turn's user_text.
-
-Properties (asserted in tests):
-  * DETERMINISTIC -- same (user_text, accrued state) -> same result.
-  * NO hot-path I/O beyond the CACHED discover index lookup -- it never builds the
-    index (that would block on a cold model load); the orchestrator warms it at
-    startup via asyncio.to_thread. If the index is still cold, FAIL-OPEN.
-  * CORE FLOOR -- ``CORE_FLOOR`` is ALWAYS a subset of the result.
-  * NEVER HIDE MID-TASK -- the result always contains everything in the Case's
-    accrued visible set; it composes by UNION, so the visible set only grows.
-  * FAIL-OPEN -- any error, a cold index, or an empty ranking returns the FULL
-    registry (logged). Over-inclusion is cheap; dropping a needed tool is a silent
-    break, so recall@k is optimized, not precision.
-
-Reuse: the ranking reuses ``search_tools``'s cached index, tokenizer, RRF, and
-corpus 100% (no new infra). The 3 sync channels (BM25 + local-dense + name-substr)
-mirror ``search_tools``'s inline ranking (search_tools.py ~L1073-1182) MINUS
-its async Mongo co-occurrence channel, which cannot run on this synchronous path.
-
-ASCII only.
-"""
+"""Which subset of the tool catalog the model sees for a turn: CORE_FLOOR, UNION
+the Case's accrued visible set, UNION the top-k ranking of the turn's text.
+Composing by UNION is what makes it DETERMINISTIC and monotonic - a tool never
+leaves mid-task. Nothing here builds the index; a cold index, a fault or an empty
+ranking FAILS OPEN to the full registry, since dropping a tool is a silent break."""
 
 from __future__ import annotations
 
@@ -56,27 +29,20 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.search.tool_retrieval")
 
-#: search_tools top-k default + clamp ceiling (kickoff: k default 25, [1, 25]).
+#: Top-k default and clamp ceiling for the turn's ranking.
 DEFAULT_K = 25
 MAX_K = 25
 
-#: The always-visible floor -- tools that must NEVER be retrieved out, regardless
-#: of the turn's ranking: the "before you can do anything else" primitives
-#: (geocode, DEM, weather alerts CONUS + state-scoped), the discovery escape
-#: hatch (search_tools), and the cross-cutting view/analysis actions a user
-#: reaches for at any point (code exec, layer bounds, spatial input, chart,
-#: spatial query). retrieve_visible_tools and the openai tool-gating floor both
-#: union this set.
+#: The always-visible floor: tools that must NEVER be retrieved out whatever the
+#: turn ranks - the "before you can do anything else" primitives, the discovery
+#: escape hatch, and the cross-cutting actions a user reaches for at any point.
 #:
-#: No engine template belongs in this floor either: a template answers ONE
-#: question class, so flooring one biases every turn toward it. Templates reach
-#: the model through the turn's ranking, which the corpus-first retrieval matrix
-#: pins.
+#: No engine template belongs here: a template answers ONE question class, so
+#: flooring one biases every turn toward it. Templates reach the model through the
+#: turn's ranking instead.
 #:
-#: No publish tool belongs in this floor: emission is automatic, so there is no
-#: "display this" intent for the model to route to. The mechanism lives in
-#: ``trid3nt_server/emission/publish.py`` and runs on every renderable layer
-#: without being asked.
+#: No publish tool belongs here: emission is automatic, so there is no "display
+#: this" intent for the model to route to.
 CORE_FLOOR: frozenset[str] = frozenset(
     {
         "geocode_location",
@@ -96,19 +62,9 @@ CORE_FLOOR: frozenset[str] = frozenset(
 def _build_channel_rankings(
     query_clean: str, index: Any
 ) -> tuple[list[list[int]], list[int]]:
-    """The 3 sync ranking channels (BM25 + local dense + name-substring) over
-    the CACHED discover index, as rank lists of tool indices.
-
-    Split out of ``_discover_topk`` (Stage 3) so the scored
-    variant ``retrieve_ranked_tools`` fuses the SAME channels -- the visible-set
-    and the ambiguity-margin paths can never drift apart. Pure CPU; never
-    builds the index.
-
-    Returns ``(rankings, bm25_ranking)``; the BM25 channel's rank list is
-    surfaced separately so both callers can feed it to
-    ``_lexical_reinforcement`` (the door / lexical-champion boost) without
-    re-deriving which channel is BM25.
-    """
+    """The three sync ranking channels over the CACHED index, as rank lists of
+    tool indices. Pure CPU; NEVER builds the index. The BM25 rank list is returned
+    separately so a caller can feed it to the lexical reinforcement."""
     rankings: list[list[int]] = []
     bm25_ranking: list[int] = []
 
@@ -126,9 +82,10 @@ def _build_channel_rankings(
                 logger.warning("tool_retrieval: BM25 channel failed", exc_info=True)
                 bm25_ranking = []
 
-    # --- Dense channel (LOCAL backends only; skip Vertex network encode) ---
-    # Positive allowlist of the known CPU-local backends so any FUTURE network
-    # backend is excluded by default, not by omission.
+    # --- Dense channel, LOCAL backends only ---
+    # A positive allowlist of the CPU-local backends, so any FUTURE network-backed
+    # backend is excluded by default rather than by omission: a per-query network
+    # encode here would be hot-path I/O.
     if (
         index.dense_matrix is not None
         and index.dense_encode_fn is not None
@@ -188,19 +145,9 @@ def _build_channel_rankings(
 
 
 def _discover_topk(user_text: str, k: int) -> set[str] | None:
-    """Top-k tool names ranked by relevance to ``user_text`` via the CACHED
-    discover index (BM25 + name-substring + LOCAL dense).
-
-    Returns ``None`` when the index is COLD (not yet warmed) so the caller can
-    FAIL-OPEN without triggering a blocking cold model build on the hot path; an
-    empty ``set()`` when the index is warm but nothing matched.
-
-    Mirrors ``search_tools``'s inline ranking minus the async Mongo
-    co-occurrence channel, reusing that module's primitives so the paths stay
-    aligned. The network-backed Vertex dense backend's per-query encode is skipped
-    here (it would be hot-path I/O); local sentence-transformers / hashed dense and
-    BM25 are pure-CPU against the cached index.
-    """
+    """Top-k tool names by relevance to ``user_text`` over the CACHED index.
+    ``None`` means the index is COLD, so the caller fails open without triggering a
+    blocking build; an empty set means warm but nothing matched."""
     query_clean = user_text.strip()
     index = _dd._INDEX  # live module global; None until the orchestrator warms it
     if index is None or not getattr(index, "tool_names", None):
@@ -223,19 +170,9 @@ def _discover_topk(user_text: str, k: int) -> set[str] | None:
 def retrieve_ranked_tools(
     user_text: str, k: int = DEFAULT_K
 ) -> list[tuple[str, float]]:
-    """Ranked ``(tool_name, rrf_score)`` list for one turn's query (Stage 3).
-
-    The SCORED face of the same 3-channel RRF ranking ``retrieve_visible_tools``
-    uses -- feeds (a) the openai-provider top-k tool gating and (b) the
-    ambiguity signal (top-1 vs top-2 margin). Scores are the raw RRF fusion
-    values (rank-derived, NOT probabilities; only their ordering + relative
-    margin are meaningful).
-
-    Returns ``[]`` when the index is COLD, the query is empty, or nothing
-    matched -- callers MUST fail open (no gating / no ambiguity ask) on an
-    empty result. Never raises on the hot path; any channel fault degrades to
-    the surviving channels exactly like ``retrieve_visible_tools``.
-    """
+    """The SCORED face of the ranking ``retrieve_visible_tools`` uses. Scores are
+    rank-derived, NOT probabilities, so only ordering and relative margin mean
+    anything. ``[]`` on a cold index or no match, and the caller MUST fail open."""
     if not isinstance(user_text, str) or not user_text.strip():
         return []
     query_clean = user_text.strip()
@@ -264,16 +201,9 @@ def retrieve_ranked_tools(
 
 
 def _full_registry_floor(floor: set[str]) -> set[str]:
-    """The FAIL-OPEN result: every registered tool UNION the core floor.
-
-    Ensures the FULL registry is populated first: the catalog tools
-    (search_data_catalog / fetch_from_catalog) register ONLY via the startup
-    import path, NOT via tools/__init__, so without this the fail-open
-    snapshot is short by those real tools in any process where the startup
-    hook has not yet run
-    (tool-retrieval verify, 2026-06-23). Idempotent + guarded; only the rare
-    fail-open path pays for it.
-    """
+    """The FAIL-OPEN result: every model-facing registered tool UNION the core
+    floor. The FULL registry is populated first, because the catalog tools register
+    only through the startup import path. Idempotent; only this rare path pays."""
     try:
         import trid3nt_server.main as _main
 
@@ -282,12 +212,10 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
         logger.warning(
             "tool_retrieval: full-registry import failed on fail-open", exc_info=True
         )
-    # Door dissolution: engine templates (tier=template) are ordinary
-    # retrieval-pool members, so the FAIL-OPEN dump INCLUDES them. Only
-    # tier="catalog" (catalog-surfacing experiment, arm-flagged; no tool carries
-    # it in the DEFAULT config) and tier="internal" (an absorbed in-process seam,
-    # e.g. fetch_copernicus_dem -- registry-resolvable but never model-facing)
-    # stay out of the visible set.
+    # Engine templates (tier=template) are ordinary retrieval-pool members, so the
+    # FAIL-OPEN dump INCLUDES them. Only tier="catalog" (arm-flagged; no tool
+    # carries it in the default config) and tier="internal" (an absorbed in-process
+    # seam: registry-resolvable, never model-facing) stay out of the visible set.
     visible = {
         name
         for name, entry in TOOL_REGISTRY.items()
@@ -302,12 +230,9 @@ def retrieve_visible_tools(
     accrued: "set[str] | frozenset[str] | None",
     k: int = DEFAULT_K,
 ) -> set[str]:
-    """Select the set of tool names to make visible for one turn.
-
-    See the module docstring for the design + invariants. ``accrued`` is the
-    Case's monotonic visible set (may be ``None`` on a brand-new turn); ``k``
-    is the discover top-k, clamped to ``[1, MAX_K]``.
-    """
+    """The set of tool names to make visible for one turn. ``accrued`` is the
+    Case's monotonic visible set, ``None`` on a brand-new turn; ``k`` is clamped to
+    ``[1, MAX_K]``. An empty query returns the floor, never the full catalog."""
     try:
         k = int(k)
     except (TypeError, ValueError):

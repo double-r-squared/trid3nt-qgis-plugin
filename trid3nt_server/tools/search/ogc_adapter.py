@@ -1,47 +1,8 @@
-"""Generic OGC Tier-2 adapter (Stage B).
-
-Single implementation that any §F.1.1 Tier 2 catalog entry (WMS / WMTS / WCS /
-WFS) routes through. Mirrors the WCS 1.0.0 pattern used against MRLC NLCD
-(canonical class integers via `GetCoverage` rather than palette indices via
-`GetMap`) -- extracted here so:
-
-- `fetch_landcover` (NLCD MRLC) shares the adapter (single source of truth);
-- the new `fetch_from_catalog` Tier-2 dispatch routes any catalog entry through the
-  same code path;
-- future Tier-2 entries (FEMA NFHL ArcGIS REST MapServer, 3DEP Elevation
-  ImageServer, USGS NHDPlus HR MapServer, etc.) avoid duplicating service-
-  flavor request shapes.
-
-Service flavors supported (per §F.1.1 Tier 2):
-
-- ``WCS`` (Web Coverage Service): the raster-bytes surface for OGC catalogs --
-  returns the source raster's actual byte values (canonical classes for NLCD,
-  elevation in meters for 3DEP, etc.). Version 1.0.0 (most reliable on
-  GeoServer); WCS 1.1.1 / 2.0.1 surface specific bugs (see report).
-- ``WMS`` (Web Map Service): the rendered-pixel surface -- useful for
-  visualization layers but NOT for raw model-input bytes (the palette-index
-  trap closed). Used by `fetch_from_catalog` for Tier-2 visualization-
-  intent catalog entries (FEMA NFHL flood zones rendered as a map layer).
-- ``WFS`` (Web Feature Service): vector feature retrieval; the catalog-entry
-  path for ArcGIS REST FeatureServer-flavored services as well (via the
-  shared HTTPS-GET shape).
-- ``ARCGIS_REST`` (ArcGIS REST MapServer / FeatureServer / ImageServer): not a
-  strict OGC service but the dominant Tier-2 surface for FEMA / USGS National
-  Map / hazards.fema.gov endpoints. ESRI's REST query interface follows a
-  consistent ``/MapServer/<layer>/query`` shape that we treat as a fourth OGC-
-  adjacent dialect -- the adapter dispatches by the entry's explicit
-  ``service_type`` argument, not by URL sniffing.
-
-Routes through ``read_through`` so identical params dedup at the cache.
-External-API resilience per the established pattern: per-call
-timeout (default 120s; configurable), single re-raise on failure as
-``UpstreamAPIError``, no sentinel on failure.
-
-CRS hygiene: every request explicitly states a CRS (`EPSG:4326` by default;
-caller passes whatever the source dataset emits). The returned bytes are
-service-flavor-typed (GeoTIFF for WCS; PNG/JPEG/GeoTIFF for WMS; GeoJSON/
-GeoPackage/Shapefile for WFS; JSON/GeoJSON for ArcGIS REST queries).
-"""
+"""The one OGC-dialect adapter: WMS, WMTS, WCS, WFS and the ESRI ArcGIS REST
+shapes behind a single call. Dispatch is by the caller's explicit
+``service_type``, NEVER by sniffing the URL, and every request states a CRS. A
+failure re-raises as ``OGCAdapterError`` and writes no sentinel, so a caller never
+caches a failure as if it were bytes."""
 
 from __future__ import annotations
 
@@ -62,28 +23,23 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.search.ogc_adapter")
 
-#: Phase-2 resolution lever (job: fetch-side adjustable resolution). When a
-#: raster Tier-2 service (WMS/WCS/ImageServer) is requested WITHOUT explicit
-#: width_px/height_px, the adapter computes an extent-aware grid from the bbox
-#: at this default cell size (metres). Callers opt into finer/coarser via
-#: ``target_resolution_m`` (e.g. the catalog forwards an entry's
-#: ``native_resolution_m``). The previous fixed-1024 default coarsened large
-#: AOIs; this targets a real ground resolution instead.
+#: Cell size in metres for the grid a raster request derives from its bbox when it
+#: gives no explicit width/height. Targeting a ground resolution rather than a fixed
+#: pixel count is what keeps a large AOI from being silently coarsened; a caller
+#: opts into finer or coarser through ``target_resolution_m``.
 _DEFAULT_OGC_CELL_M = 30.0
 #: Hard cap on each computed raster axis so a large AOI never materializes an
 #: enormous grid (bounds the response payload). ``bbox_pixel_dims`` clamps to
 #: this on both axes.
 _OGC_PX_MAX = 4096
 
-#: Recognized Tier-2 service flavors. ``ARCGIS_REST`` is the ESRI MapServer /
-#: FeatureServer / ImageServer dialect -- strictly speaking not OGC, but the
-#: dominant Tier-2 surface for US federal hazard catalogs (FEMA NFHL, USGS
-#: National Map, etc.) so the adapter treats it as a fourth dialect.
+#: Recognized service flavors. ``ARCGIS_REST`` is the ESRI MapServer /
+#: FeatureServer / ImageServer dialect: not strictly OGC, but the dominant surface
+#: for the US federal catalogs, so the adapter treats it as a fourth dialect.
 ServiceType = Literal["WMS", "WMTS", "WCS", "WFS", "ARCGIS_REST"]
 
-# Conservative default User-Agent; engine-callers (e.g. ``fetch_landcover``)
-# pass their own descriptive one when policy requires (Nominatim, etc.). The
-# default is fine for federal-public OGC endpoints.
+# Conservative default User-Agent. A caller whose endpoint has a stated UA policy
+# passes its own; the default is fine for public federal OGC endpoints.
 DEFAULT_USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent OGC adapter; "
     "https://github.com/double-r-squared/trid3nt-qgis-plugin)"
@@ -91,29 +47,18 @@ DEFAULT_USER_AGENT = (
 
 
 class OGCAdapterError(RuntimeError):
-    """Adapter-level failure (HTTP error, OGC exception XML, empty body).
-
-    Carries ``error_code="UPSTREAM_API_ERROR"`` and ``retryable=True`` to
-    match the ``data_fetch.FetchError`` taxonomy -- call sites that wrap the
-    adapter behind a registered atomic tool re-raise as ``UpstreamAPIError``
-    so the agent's surface sees a single typed failure mode.
-    """
+    """Adapter-level failure: an HTTP error, an OGC exception XML body, or an
+    empty response. Retryable, and a call site wrapping the adapter behind a
+    registered tool re-raises it as its own upstream error."""
 
     error_code: str = "UPSTREAM_API_ERROR"
     retryable: bool = True
 
 
 class OGCResponse:
-    """Raw bytes + content-type + status from a single OGC adapter call.
-
-    Attributes:
-        content: response body bytes.
-        content_type: HTTP ``Content-Type`` header (used by callers to pick
-            an extension for cache writes -- ``image/tiff`` → ``"tif"``, etc.).
-        service_type: the dialect this response came from.
-        url: the resolved request URL (useful for log/evidence capture).
-        status_code: HTTP status code.
-    """
+    """Raw bytes, content type and status from one adapter call. ``content_type``
+    is the header verbatim - the caller picks the cache extension from it, since
+    the dialect alone does not determine the payload format."""
 
     __slots__ = ("content", "content_type", "service_type", "url", "status_code")
 
@@ -131,7 +76,7 @@ class OGCResponse:
         self.url = url
         self.status_code = status_code
 
-    def __repr__(self) -> str:  # pragma: no cover -- diagnostic
+    def __repr__(self) -> str:  # pragma: no cover - diagnostic
         return (
             f"OGCResponse(service={self.service_type}, bytes={len(self.content)}, "
             f"content_type={self.content_type!r}, status={self.status_code})"
@@ -151,16 +96,9 @@ def _build_wms_params(
     height_px: int,
     version: str,
 ) -> dict[str, str]:
-    """WMS ``GetMap`` query parameters.
-
-    Per OGC WMS 1.1.1 / 1.3.0: ``service=WMS``, ``request=GetMap``,
-    ``layers=...``, ``bbox=...``, ``srs/crs=...``, ``width=...``,
-    ``height=...``, ``format=...``. The axis-order convention differs between
-    1.1.1 (lon, lat) and 1.3.0 (varies by CRS); ``EPSG:4326`` is lon/lat in
-    1.1.1 and lat/lon in 1.3.0 -- caller is responsible for ordering bbox
-    correctly for the requested version. Default version 1.1.1 (the common
-    GeoServer flavor that uses lon/lat consistently).
-    """
+    """WMS ``GetMap`` query parameters. AXIS ORDER IS THE CALLER'S: EPSG:4326 is
+    lon/lat under 1.1.1 and lat/lon under 1.3.0, and this builder passes the bbox
+    through as given."""
     return {
         "service": "WMS",
         "version": version,
@@ -185,15 +123,9 @@ def _build_wcs_params(
     height_px: int,
     version: str,
 ) -> dict[str, str]:
-    """WCS ``GetCoverage`` query parameters.
-
-    Version-specific shape: 1.0.0 uses ``Coverage`` + ``CRS`` + ``WIDTH/HEIGHT``;
-    1.1.x / 2.0.1 use ``identifier`` / ``coverageId`` + ``boundingbox`` and have
-    GeoServer-specific projection-mapping bugs (see report - WCS
-    1.0.0 is the only reliable surface on MRLC's GeoServer instance). The
-    adapter defaults to 1.0.0; caller passes a different version explicitly
-    when they have probe evidence it works.
-    """
+    """WCS ``GetCoverage`` query parameters. 1.0.0 is the default because the
+    later versions carry GeoServer projection-mapping bugs; pass another version
+    only with probe evidence that the endpoint honours it."""
     if version.startswith("1.0"):
         return {
             "service": "WCS",
@@ -206,8 +138,7 @@ def _build_wcs_params(
             "HEIGHT": str(height_px),
             "FORMAT": image_format,
         }
-    # WCS 1.1.1 / 2.0.1: different parameter names. Surfaced as informational
-    # only -- the adapter prefers 1.0.0; 1.1.1 / 2.0.1 paths are reserved.
+    # WCS 1.1.1 / 2.0.1 rename the parameters. Reserved: the adapter prefers 1.0.0.
     return {
         "service": "WCS",
         "version": version,
@@ -250,13 +181,9 @@ def _build_arcgis_query_params(
     max_records: int,
     where: str,
 ) -> dict[str, str]:
-    """ArcGIS REST MapServer/FeatureServer ``/query`` parameters.
-
-    Different layer paths on the same server use the same parameter shape:
-    ``where=...&geometry=...&geometryType=esriGeometryEnvelope&inSR=...&outSR=...
-    &outFields=...&f=geojson`` (or ``f=json``). The adapter picks geojson by
-    default since downstream tools expect GeoJSON-like vectors.
-    """
+    """ArcGIS REST MapServer/FeatureServer ``/query`` parameters. Every layer path
+    on a server takes the same shape, so the layer lives in the URL and not in
+    these params."""
     params: dict[str, str] = {
         "where": where,
         "outFields": output_fields,
@@ -292,75 +219,14 @@ def fetch_ogc_layer(
     output_fields: str = "*",
     where_clause: str = "1=1",
 ) -> OGCResponse:
-    """Single-call generic OGC Tier-2 fetch.
-
-    Use this when: any §F.1.1 Tier 2 catalog entry needs to retrieve bytes
-    (raster or vector) via WMS / WMTS / WCS / WFS / ArcGIS REST. This is the
-    shared substrate for `fetch_landcover` (NLCD WCS), `fetch_from_catalog` Tier-2
-    dispatch, and any future Tier-2 fetcher.
-
-    Do NOT use this for: Tier 1 (STAC + COG, use `pystac-client`); Tier 3
-    (direct HTTPS + Range, use `requests` / `rasterio /vsicurl/`); Tier 4
-    (region download + clip, use the per-source fetcher pattern).
-
-    Args:
-        url: the OGC endpoint URL. The adapter appends query parameters; if
-            the URL already carries a path segment like ``/wms`` or
-            ``/MapServer/28/query`` it is preserved (caller is responsible for
-            the correct trailing path).
-        layer_name: WMS ``layers`` / WCS ``Coverage`` / WFS ``typeName`` /
-            ArcGIS REST: irrelevant (the layer is embedded in the URL path --
-            pass an empty string).
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326 (or the
-            CRS named by ``crs``). Optional for WFS / ArcGIS REST (omit to
-            query the whole layer).
-        crs: CRS string in the WMS/WCS form ``"EPSG:4326"``. WFS uses
-            ``"EPSG:4326"`` for ``srsName``; ArcGIS REST extracts the numeric
-            code (``4326``).
-        service_type: ``"WMS"`` / ``"WMTS"`` / ``"WCS"`` / ``"WFS"`` /
-            ``"ARCGIS_REST"``.
-        image_format: WMS ``format`` / WCS ``FORMAT``. Default ``image/geotiff``
-            (raster); WMS-rendered surfaces typically want ``image/png``.
-        version: OGC service version string. Defaults to ``"1.0.0"`` (WCS
-            sweet spot); WMS callers typically pass ``"1.1.1"``;
-            WFS callers ``"2.0.0"`` or ``"1.1.0"``.
-        width_px, height_px: pixel dimensions for raster responses (WMS / WCS /
-            ImageServer). Ignored for WFS / ArcGIS REST (MapServer query).
-            When BOTH are left ``None`` (the default), a raster request derives
-            an extent-aware grid from ``bbox`` at ``target_resolution_m`` (or
-            the ``_DEFAULT_OGC_CELL_M`` 30 m fallback), each axis clamped to
-            ``_OGC_PX_MAX`` (4096). Passing explicit ints is byte-identical to
-            the prior fixed behavior -- the computed-grid path only runs when
-            neither is given.
-        target_resolution_m: optional ground cell size in metres for the
-            auto-computed raster grid. Phase-2 resolution lever: callers (e.g.
-            ``fetch_from_catalog`` forwarding an entry's ``native_resolution_m``)
-            opt into finer/coarser output without hard-coding pixel counts.
-            Ignored when explicit ``width_px``/``height_px`` are given, or for
-            vector (WFS / MapServer query) service types.
-        timeout_s: request timeout.
-        user_agent: override the descriptive User-Agent header.
-        extra_params: extra query parameters merged after the default set
-            (rare -- catalog-specific knobs like ``f=json`` overrides).
-        max_features: WFS ``maxFeatures`` / ArcGIS ``resultRecordCount``.
-        output_fields: ArcGIS REST ``outFields``.
-        where_clause: ArcGIS REST ``where``. Default ``1=1`` (all features).
-
-    Returns:
-        ``OGCResponse(content=<bytes>, content_type=<str>, service_type, url,
-        status_code)``.
-
-    Raises:
-        ``OGCAdapterError`` on HTTP failure, OGC exception XML response, or
-        empty / sub-64-byte body. Callers translate to the engine's
-        ``UpstreamAPIError`` taxonomy.
-    """
-    # Phase-2 resolution lever: when a raster request leaves BOTH width/height
-    # unset, derive an extent-aware grid from the bbox at the target ground
-    # resolution (or the 30 m fallback), clamped to ``_OGC_PX_MAX`` per axis.
-    # Explicit ints pass through untouched (byte-identical to prior behavior).
-    # Vector service types ignore width/height; resolve to a harmless int so
-    # the builders that consume them always receive concrete pixel counts.
+    """One generic OGC fetch. ``url`` keeps whatever trailing path it carries, the
+    adapter only APPENDS params, and ``layer_name`` is unused for ARCGIS_REST, whose
+    layer lives in the URL. Raises rather than returning a partial body."""
+    # When a raster request leaves BOTH width and height unset, derive an
+    # extent-aware grid from the bbox at the target ground resolution, clamped per
+    # axis. Explicit ints pass through untouched. A vector service type ignores
+    # width/height, but they still resolve to concrete ints so every builder that
+    # consumes them receives numbers.
     if width_px is None and height_px is None:
         grid_bbox = bbox or (-180.0, -90.0, 180.0, 90.0)
         width_px, height_px = bbox_pixel_dims(
@@ -412,9 +278,9 @@ def fetch_ogc_layer(
             raise OGCAdapterError(
                 f"ARCGIS_REST requires EPSG:<code> CRS form; got {crs!r}"
             ) from exc
-        # ImageServer ``exportImage`` has a distinct param shape (bbox + size
-        # + format=tiff) vs MapServer/FeatureServer ``query``. Detect via the
-        # URL trailer.
+        # ImageServer ``exportImage`` takes a different param shape from the
+        # MapServer/FeatureServer ``query``; the URL trailer is what distinguishes
+        # them, since both arrive as ARCGIS_REST.
         if url.rstrip("/").endswith("/exportImage"):
             params = {
                 "bbox": _bbox_str(bbox) if bbox else "",
@@ -435,16 +301,14 @@ def fetch_ogc_layer(
                 where=where_clause,
             )
     elif service_type == "WMTS":
-        # WMTS tile addressing is per-zoom; for substrate scope, treat as a
-        # GetTile request and surface a clear NotImplemented if the caller
-        # didn't supply the needed extra_params. WMTS Tier-2 entries are
-        # not common in the v0.1 30-entry seed catalog.
+        # WMTS tile addressing is per-zoom, which this single-GET shape cannot
+        # express; refuse rather than issue a request that cannot be correct.
         raise OGCAdapterError(
             "WMTS GetTile addressing requires per-zoom tile coordinates; "
             "v0.1 substrate does not implement this dialect — surface as "
             "OQ-47-WMTS-DIALECT for a follow-up if a WMTS catalog entry lands."
         )
-    else:  # pragma: no cover -- Literal exhaustive
+    else:  # pragma: no cover - Literal exhaustive
         raise OGCAdapterError(f"unknown service_type={service_type!r}")
 
     if extra_params:
