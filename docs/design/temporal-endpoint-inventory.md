@@ -8,8 +8,11 @@ resolution (in-window off-cycle SNAPS with a provenance note, out-of-retention
 REFUSES typed). Dataset VINTAGE (NLCD year, DEM release) is the adjacent
 cousin -- selectable where sources version, same pinning rule.
 
-This inventory covers all 101 `data/fetchers/*/*/source.yaml` router specs
-against that doctrine. `fetch_noaa_nwm_streamflow` is the worked example the
+This inventory covers 90 of the 97 `trid3nt_server/tools/fetchers/*/*/source.yaml`
+router specs against that doctrine. Seven specs are NOT yet classified here and
+are an open gap: `fetch_bluetopo`, `fetch_greatlakes_bathymetry`,
+`fetch_greatlakes_water_level`, `fetch_nhd_area_water`,
+`fetch_nhdplus_hr_flowlines`, `fetch_osm_breakwaters`, `fetch_osm_coastline`. `fetch_noaa_nwm_streamflow` is the worked example the
 doctrine cites (`valid_time`/`forecast_hour` params, `output.provenance: true`,
 per-feature `valid_time` column) and is the reference "done" row below.
 
@@ -27,7 +30,7 @@ each spec's own caveats/docstring (the sources' own stated update rhythm);
 where the spec is silent, cadence is inferred from the provider's public
 documentation pattern and marked LOW-CONFIDENCE.
 
-Only **4 of 101** specs declare `output.provenance: true`:
+Only **4 of 90** classified specs declare `output.provenance: true`:
 `fetch_noaa_nwm_streamflow`, `fetch_goes_satellite`, `fetch_topobathy`,
 `fetch_storm_tracks`. Every other fetcher's provenance behavior at the
 envelope layer is unverified from the spec alone -- this is the single
@@ -44,25 +47,25 @@ Verdicts: `needs-time-param` | `needs-pinning-only` | `needs-metadata-only` |
 
 ---
 
-## Summary counts (101 fetchers, tallied directly off the table below)
+## Summary counts (90 classified fetchers, tallied directly off the table below)
 
 | Class | Count |
 |---|---|
 | STATIC (incl. 1 STATIC/VINTAGE borderline row) | 26 |
-| VINTAGE (incl. 1 reproducibility-gap row) | 20 |
-| TEMPORAL-LATEST-ONLY | 15 |
-| TEMPORAL-HAS-PARAM | 20 |
-| EVENT/RANGE | 19 |
+| VINTAGE (incl. 1 reproducibility-gap row) | 14 |
+| TEMPORAL-LATEST-ONLY | 14 |
+| TEMPORAL-HAS-PARAM | 17 |
+| EVENT/RANGE | 18 |
 | META (temporal-metadata tool itself) | 1 |
-| **Total** | **101** |
+| **Total** | **90** |
 
 | Verdict | Count | Notes |
 |---|---|---|
 | `static` | 25 | no action |
-| `done` | 35 | pin + metadata already adequate per spec (includes the 1 doctrine-reference row and 1 exemplar row) |
-| `needs-time-param` | 5 | latest-only source, historical param would be the fix (1 is low-priority/deliberate) |
-| `needs-pinning-only` | 21 | param exists (or source is a live snapshot); resolved value not confirmed surfaced/pinned -- 12 of these are LOW-CONFIDENCE pending hook-code verification |
-| `needs-metadata-only` | 15 | cadence/retention/vintage undocumented or unsurfaced, but no param gap |
+| `done` | 29 | pin + metadata already adequate per spec (includes the 1 doctrine-reference row and 1 exemplar row) |
+| `needs-time-param` | 4 | latest-only source, historical param would be the fix (1 is low-priority/deliberate) |
+| `needs-pinning-only` | 19 | param exists (or source is a live snapshot); resolved value not confirmed surfaced/pinned -- 10 of these are LOW-CONFIDENCE pending hook-code verification |
+| `needs-metadata-only` | 13 | cadence/retention/vintage undocumented or unsurfaced, but no param gap |
 
 (Verified by script tally against the per-fetcher table; see each row below
 for the individual call.)
@@ -149,15 +152,14 @@ sources.
 - **Latest-only sources with an existing per-feature pin but no historical
   param** (the param would be a convenience, not a correctness fix):
   `fetch_usgs_groundwater_levels`, `fetch_usgs_water_quality`,
-  `fetch_snotel_snow`, `fetch_wdpa_protected_areas`, `fetch_goes_satellite`
+  `fetch_snotel_snow`, `fetch_goes_satellite`
   (deliberately -- its own docstring redirects historical replay to
   `fetch_goes_archive_animation`).
 - **Metadata-only surfacing gaps** on inventories that change slowly and
   pose low physics risk if stale: `fetch_fema_nfhl_zones`,
   `fetch_nifc_fire_perimeters`, `fetch_landfire_fuels`,
   `fetch_usfs_canopy_fuels`, `fetch_nhd_waterbodies`, `fetch_nwi_wetlands`,
-  `fetch_usace_nsi`, `fetch_epa_ejscreen`, `fetch_mobi`,
-  `fetch_jrc_global_surface_water`, `fetch_naip` (state-cycle acquisition
+  `fetch_usace_nsi`, `fetch_jrc_global_surface_water`, `fetch_naip` (state-cycle acquisition
   year never surfaced), `fetch_wfigs_incident`.
 - **Reproducibility, not doctrine-strict**: `fetch_fault_sources` pulls the
   GEM active-faults GeoJSON off a floating GitHub `master` ref with no
@@ -174,18 +176,6 @@ sources.
 ---
 
 ## Per-fetcher classification
-
-### biodiversity/ (7)
-
-| Fetcher | Class | Cadence / retention | Temporal params | Pinning | Verdict |
-|---|---|---|---|---|---|
-| fetch_ebird_observations | TEMPORAL-HAS-PARAM | sub-hourly recent-endpoint refresh, 30-day rolling window (LOW-CONF exact latency) | `days_back` (1-30) | per-feature `obsDt` | done |
-| fetch_gbif_occurrences | EVENT/RANGE | continuously ingested aggregator, no retention cap | `year_range` (1500-2100) | per-feature `eventDate` | done |
-| fetch_inaturalist_observations | TEMPORAL-HAS-PARAM | continuous citizen-science stream | `days_back` (optional) | per-feature `observed_on` | done |
-| fetch_iucn_red_list_range | VINTAGE | per-species assessment, irregular (LOW-CONF cadence) | none (single current assessment) | per-feature `assessment_date` + `published_year` | done |
-| fetch_mobi | VINTAGE | NatureServe MoBI single release, cadence undocumented (LOW-CONF) | none | raster, no date band/envelope | needs-metadata-only |
-| fetch_movebank_tracks | TEMPORAL-HAS-PARAM | "near-real-time but caches batches" per docstring | `time_range` (datetime_range) | `ingest.properties: None` -- unverified (LOW-CONF) | needs-pinning-only (verify) |
-| fetch_wdpa_protected_areas | TEMPORAL-LATEST-ONLY | monthly WDPA releases (spec-documented) | none | `status_yr` is designation year, not fetch vintage; no fetch-time pin | needs-time-param |
 
 ### climate/ (6)
 
@@ -271,19 +261,15 @@ sources.
 | fetch_noaa_sst | TEMPORAL-HAS-PARAM | daily, NOAA CRW, 1985-present | `date` (optional) | confirmed gap -- default date excluded from cache key | needs-pinning-only |
 | fetch_topobathy | STATIC | composite build (CUDEM + 3DEP), `output.provenance: true` | none | already exemplary | static |
 
-### socioeconomic/ (13)
+### socioeconomic/ (9)
 
 | Fetcher | Class | Cadence / retention | Temporal params | Pinning | Verdict |
 |---|---|---|---|---|---|
 | fetch_administrative_boundaries | STATIC | 2024 TIGER/Line | none | n/a | static |
 | fetch_buildings | STATIC | OSM footprints, continuously edited but treated as context | none | n/a | static |
-| fetch_cdc_svi | VINTAGE | SVI 2022 pinned, caveat states "latest published" | none | pinned single vintage, documented | done |
-| fetch_census_acs | VINTAGE | ACS 5-yr vintage, annual release | `year` (default 2022) | `properties: None` -- year not confirmed echoed (LOW-CONF) | needs-pinning-only (verify) |
-| fetch_epa_ejscreen | VINTAGE | EJScreen 2.x, irregular (~annual) updates | none | no version captured precisely | needs-metadata-only |
 | fetch_field_boundaries | STATIC | fixed FTW/fiboa benchmark snapshot per region | none (`dataset` selects region, not time) | n/a | static |
 | fetch_ghsl_population | VINTAGE | GHSL R2023A, ~5-yr epoch releases | `epoch` (bounded min=max=2020, not currently selectable) | epoch stated in caveat, but param is a no-op today | needs-metadata-only |
 | fetch_hrsl_population | VINTAGE | Meta HRSL, effectively single-vintage | `year` (default 2020) against `source=meta_hrsl`-only enum | unclear whether `year` does anything (LOW-CONF) | needs-metadata-only (verify param validity) |
-| fetch_lehd_jobs | VINTAGE | LODES8 annual releases, 2002-2030 | `year` | per-feature `year` | done |
 | fetch_overpass_pois | STATIC | OSM POIs, continuously edited context layer | none | n/a | static |
 | fetch_population | VINTAGE | WorldPop annual releases, 2000-2020 | `dataset` (`worldpop_YYYY` token) | not confirmed echoed in output (LOW-CONF) | needs-pinning-only (verify) |
 | fetch_roads_osm | STATIC | OSM roads, "refreshed at most once per month" per caveat, context layer | none | n/a | static |
