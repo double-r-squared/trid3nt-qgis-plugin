@@ -19,7 +19,7 @@ from rasterio.io import MemoryFile
 from trid3nt_contracts.execution import FloodExtentObservationResult
 from trid3nt_server.tools.fetchers._router import router as _router
 from trid3nt_server.tools.fetchers._router import transport as _transport
-from trid3nt_server.tools.fetchers._router.hooks import flood_extent_observation as feh
+from trid3nt_server.tools.fetchers.hydrology.fetch_flood_extent_observation import hooks as feh
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
 _NODATA = 255

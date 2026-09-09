@@ -16,8 +16,8 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..errors import router_input_error
-from . import register_hook
+from ..._router.errors import router_input_error
+from ..._router.hooks import register_hook
 
 
 def _blue_ramp_colormap(nodata: int, vmax: int) -> dict[int, tuple[int, int, int, int]]:

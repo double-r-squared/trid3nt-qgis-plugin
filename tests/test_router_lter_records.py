@@ -22,7 +22,7 @@ from trid3nt_server.tools.fetchers._router.errors import (
     RouterInputError,
 )
 from trid3nt_server.tools.fetchers._router.executors import http_json
-from trid3nt_server.tools.fetchers._router.hooks import lter_records as lr
+from trid3nt_server.tools.fetchers.hydrology.fetch_lter_records import hooks as lr
 from trid3nt_server.tools.fetchers._router.spec import load_spec_from_path
 
 LTER_SPEC = load_spec_from_path(

@@ -19,7 +19,7 @@ import pytest
 from trid3nt_contracts.source_spec import SourceSpec
 from trid3nt_server.tools.fetchers._router.errors import RouterInputError, RouterUpstreamError
 from trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones import hooks as nfhl
-from trid3nt_server.tools.fetchers._router.hooks import nwi_wetlands as nwi
+from trid3nt_server.tools.fetchers.hydrology.fetch_nwi_wetlands import hooks as nwi
 from trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas import hooks as wdpa
 from trid3nt_server.tools.fetchers.hazard.fetch_usace_dams import hooks as dams
 from trid3nt_server.tools.fetchers.hazard.fetch_epa_frs_facilities import hooks as frs

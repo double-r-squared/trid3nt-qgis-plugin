@@ -32,8 +32,8 @@ from typing import Any
 
 from trid3nt_contracts.source_spec import SourceSpec
 
-from ..errors import router_input_error, router_upstream_error
-from . import RequestPlan, register_hook
+from ..._router.errors import router_input_error, router_upstream_error
+from ..._router.hooks import RequestPlan, register_hook
 
 _IV_URL = "https://waterservices.usgs.gov/nwis/iv/"
 _SITE_URL = "https://waterservices.usgs.gov/nwis/site/"

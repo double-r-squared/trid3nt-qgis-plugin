@@ -28,7 +28,7 @@ from types import SimpleNamespace
 from trid3nt_server.tools.fetchers._router import router
 from trid3nt_server.tools.fetchers._router import transport as _tp
 from trid3nt_server.tools.fetchers._router.executors import raster_cog
-from trid3nt_server.tools.fetchers._router.hooks import jrc_global_surface_water as jrc_hook
+from trid3nt_server.tools.fetchers.hydrology.fetch_jrc_global_surface_water import hooks as jrc_hook
 from trid3nt_server.tools.fetchers._router.router import synthesize_metadata
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 

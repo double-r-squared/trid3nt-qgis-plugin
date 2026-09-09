@@ -34,7 +34,7 @@ from trid3nt_server.tools.fetchers._router.hooks import (
     has_hook,
     resolve_hook,
 )
-from trid3nt_server.tools.fetchers._router.hooks import usgs_stn_hwm as hwm
+from trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks import hooks as hwm
 from trid3nt_server.tools.fetchers._router.spec import compose_specs_from_tree
 
 _SPECS = compose_specs_from_tree()

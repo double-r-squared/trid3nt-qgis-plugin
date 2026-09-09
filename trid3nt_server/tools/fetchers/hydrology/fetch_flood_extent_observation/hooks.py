@@ -24,8 +24,8 @@ from typing import Any
 from trid3nt_contracts.execution import LegendKey
 from trid3nt_contracts.source_spec import SourceSpec
 
-from .. import hooks as _hooks
-from ..errors import router_empty_error, router_input_error, router_upstream_error
+from ..._router import hooks as _hooks
+from ..._router.errors import router_empty_error, router_input_error, router_upstream_error
 
 __all__ = ["pre_resolve", "envelope", "MCDWD_CLASSES", "NODATA"]
 
@@ -71,7 +71,7 @@ _CAVEATS = [
 
 def _list_dir_names(spec: SourceSpec, url: str) -> list[str]:
     """The child directory names (digit-named) under a LANCE content-details URL."""
-    from ..transport import TransportError, TransportNotFound, get_bytes, get_client
+    from ..._router.transport import TransportError, TransportNotFound, get_bytes, get_client
 
     ua = spec.auth.user_agent if spec.auth else "trid3nt_default"
     try:

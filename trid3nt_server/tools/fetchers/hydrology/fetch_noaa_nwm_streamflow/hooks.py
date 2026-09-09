@@ -58,11 +58,9 @@ from typing import Any
 from trid3nt_server.tools.cache import record_provenance
 
 from ..._fetch_common import FetchError
-from . import register_hook
+from ..._router.hooks import register_hook
 
-logger = logging.getLogger(
-    "trid3nt_server.tools.fetchers._router.hooks.nwm_streamflow"
-)
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "NWMStreamflowError",
