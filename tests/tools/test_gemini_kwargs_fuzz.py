@@ -322,48 +322,43 @@ def _call_fn(entry_fn, kwargs: dict[str, Any]) -> None:
 # Parametrised fuzz test
 # ---------------------------------------------------------------------------
 
-# Build the full matrix: (tool_name, pattern_index) pairs.
-_ALL_TOOL_NAMES = sorted(TOOL_REGISTRY.keys())
-_FUZZ_CASES: list[tuple[str, int]] = [
-    (name, i)
-    for name in _ALL_TOOL_NAMES
-    for i in range(len(_INVENTED_KWARG_PATTERNS))
-]
+# One case per invented pattern, sweeping the whole registry inside it. The
+# cross product of every tool with every pattern proved the same single
+# invariant 3,263 times; a failure names every tool that failed the pattern,
+# which is what a reader of the red needs.
 
 
-@pytest.mark.parametrize("tool_name,pattern_idx", _FUZZ_CASES, ids=[
-    f"{t}__pat{i}" for t, i in _FUZZ_CASES
-])
-def test_tool_survives_invented_kwargs(tool_name: str, pattern_idx: int) -> None:
-    """Assert tool raises NO TypeError when called with invented Gemini kwargs.
+@pytest.mark.parametrize(
+    "pattern_idx",
+    range(len(_INVENTED_KWARG_PATTERNS)),
+    ids=[f"pat{i}" for i in range(len(_INVENTED_KWARG_PATTERNS))],
+)
+def test_tool_survives_invented_kwargs(pattern_idx: int) -> None:
+    """Every registered tool absorbs one pattern of model-invented kwargs.
 
-    The normalizer (job-0164 ``tool_arg_normalizer.normalize_args``) strips /
-    aliases unknown kwargs before dispatch.  This test drives that normalizer
-    + verifies the tool accepts the resulting cleaned dict without TypeError.
-
-    If the normalizer is not yet available (job-0164 not merged), the
-    inspect-based fallback ``_inspect_strip_unknown`` is used instead —
-    which strips unknown keys at the boundary.  Either way, the tool MUST NOT
-    raise TypeError.
-
-    Failure Layer:
-        TypeError with "unexpected keyword argument" → AGENT layer (missing
-        ``**_extra_ignored`` on the tool or normalizer not wired in server.py).
+    Refuses on TypeError "unexpected keyword argument" alone; any other
+    exception is allowed, because no network path is reachable offline.
     """
     normalize_fn, _is_real_normalizer = _get_normalizer()
-    entry = TOOL_REGISTRY[tool_name]
     invented = _INVENTED_KWARG_PATTERNS[pattern_idx]
-    raw = _build_fuzz_kwargs(tool_name, invented)
-    cleaned = normalize_fn(tool_name, raw, entry.fn)
+    failed: list[str] = []
 
-    try:
-        _call_fn(entry.fn, cleaned)
-    except TypeError as exc:
+    for tool_name in sorted(TOOL_REGISTRY):
+        entry = TOOL_REGISTRY[tool_name]
+        raw = _build_fuzz_kwargs(tool_name, invented)
+        cleaned = normalize_fn(tool_name, raw, entry.fn)
+        try:
+            _call_fn(entry.fn, cleaned)
+        except TypeError as exc:
+            failed.append(f"{tool_name}: {exc}")
+
+    if failed:
         pytest.fail(
-            f"[AGENT layer] tool={tool_name!r} pattern={pattern_idx} raised TypeError "
-            f"for invented kwargs {list(invented.keys())!r}: {exc}\n"
-            f"Fix: add **_extra_ignored to {tool_name} (job-0164 sweep) or verify "
-            f"normalize_args wiring in server.py _invoke_tool_via_emitter."
+            f"[AGENT layer] pattern={pattern_idx} invented kwargs "
+            f"{list(invented.keys())!r} raised TypeError on {len(failed)} tool(s):\n  "
+            + "\n  ".join(failed)
+            + "\nFix: add **_extra_ignored to each named tool, or verify the "
+            "normalize_args wiring at the dispatch."
         )
 
 
