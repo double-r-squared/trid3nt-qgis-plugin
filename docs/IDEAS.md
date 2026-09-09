@@ -4462,3 +4462,36 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   name, a signature or a body. The naming-driven comment elimination
   belongs to whichever wave owns a module for its own reasons, where
   it is reviewed as code.
+  TESTS RULED (NATE 2026-09-09, docs/validation/tests-eval.md): the
+  MIRROR TREE by subsystem (tests/telemac, mesh, fetchers, processing,
+  search, emission, runtime, server, gates, adapters, solver, model,
+  scripts ...), SIX SLICES by directory replacing the five alphabet
+  ranges - the standing line becomes "all six slices, zero failures";
+  the import-mode change (--import-mode=importlib, tests/__init__.py
+  gone, the shared fakes extracted to tests/_fakes/) lands FIRST as
+  its own green checkpoint before any file moves; plugin/tests and
+  contracts/tests STAY in their distributions and join the run as the
+  sixth slice (test_ws_bridge_signal_signatures -> tests/plugin/); the
+  three straddling files get HOMES not splits; the two milestone-
+  named plugin files SPLIT by subject; the fuzz cross product (3,263
+  cases, 36% of the suite, one invariant) COLLAPSES to a per-pattern
+  sweep; the CN-and-nodes file merges into its subject's; the cull is
+  1,627 pure LOC (tests have been dying with their subjects). THE NINE
+  Qt-shim tests that assert only "the harness exited 0" are NAMED AS
+  STANDING EXCEPTIONS now and reshaped in their own change. The
+  staged-dataset conformance helper is a follow-on.
+  FOLD RESIDUE HYGIENE (2026-09-09, five commits pushed): the double
+  retry collapsed to one authority (11 requests -> 7 on a hard 500,
+  and the 500's error envelope now reaches the caller); the land-
+  cover legend was NOT an emission regression - the paletted COG
+  paints itself in QGIS; the grey ramp was the proof renderer
+  stretching class codes, now painting through the file's own table;
+  the refined pin's lever read null because mesh_resolution_m was
+  neither an ANSWER field nor a provenance row - the five river
+  templates declare it (docs/proof's refined pin is STALE and stays
+  frozen); the cards were labelled with the family's one solver id -
+  they name the case now; the POI corpus was wrong, not retrieval
+  (three phrasings were HIFLD's question). RESOLVED under standing
+  law: fetch_copernicus_dem has no corpus BECAUSE it is the one
+  tier="internal" seam behind fetch_dem and is out of the retrieval
+  index by design - NOT A DEFECT; it stays internal.
