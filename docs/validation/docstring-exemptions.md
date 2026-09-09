@@ -9,3 +9,4 @@ entries the limit is re-argued rather than routed around.
 | --- | --- | --- |
 | `reseat_revised` | trid3nt_server/workflows/runtime/resolver.py:139 | The two user-authority doors seat identically - both stamp `basis=user` - and differ only in what they record, which no signature can say; the undeclared-name rule and the changed-names return are separate facts. |
 | `rederive_revised` | trid3nt_server/workflows/runtime/resolver.py:170 | The three-element return is under-specified by `tuple[ResolvedParams, list[str], list[str]]`, and the pin on a `basis=user` row is a rule no signature carries. |
+| `set_boundary_roles` | trid3nt_server/workflows/mesh/shared/primitives.py:72 | `**roles` accepts four face shapes - a transect, its two end coordinates, a point, a ring - and the run-not-node-set contract that decides what each one names; none of it is reachable from `**roles: Any`. |
