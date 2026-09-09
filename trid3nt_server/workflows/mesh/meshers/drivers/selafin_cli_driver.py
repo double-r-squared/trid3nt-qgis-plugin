@@ -1,34 +1,8 @@
 """In-container writer for the TELEMAC geometry pair.
 
-Runs INSIDE ``trid3nt-local/telemac:latest``, the only place ``telapy`` and
-``pretel`` are installed. The host mounts this file and a rundir and shells it;
-nothing here imports trid3nt code.
-
-  python selafin_cli_driver.py /data/config.json /data
-
-Config keys: ``mesh_npz`` (``x``, ``y`` npoin; ``ikle`` (nelem,3) 0-based;
-``bottom`` npoin positive up, empty for a bed-less mesh), ``geo_slf``, ``cli``,
-``title``, ``roles`` (``{role: [node index, ...]}`` - every boundary node not
-named is a wall). Emits the two files plus ``/data/selafin_cli_stats.json``.
-
-The stats carry the MEASURED liquid-boundary order: TELEMAC numbers its liquid
-boundaries by walking the contours, and a steering file states PRESCRIBED
-FLOWRATES and PRESCRIBED ELEVATIONS in that numbering. The numbering is measured
-HERE, by the engine's own rule (``bief/front2.f``, ported in
-:func:`_liquid_boundaries`), which is what lets a steering file be authored ONCE
-against the order the solver will actually use instead of being probed for by a
-throwaway solve.
-
-The stats also carry what each numbered boundary PRESCRIBES, read off the code
-quad this file just wrote for it. That is the cross-file contract: one table
-decides the ``.cli`` quad, and the steering keyword written at that boundary's
-number is derived from the same quad, so a face cannot be a free exit in one file
-and a prescribed level in the other.
-
-The IPOBO written into the geometry and the contours the ``.cli`` is numbered
-from come from ONE walk of ONE connectivity, which is what makes the two files
-one artifact.
-"""
+Runs INSIDE the image where ``telapy`` and ``pretel`` live, importing nothing
+from trid3nt. The geometry's IPOBO and the contours the ``.cli`` is numbered
+from come from ONE walk of ONE connectivity: the two files are one artifact."""
 
 from __future__ import annotations
 
@@ -86,16 +60,12 @@ RATING_CURVE_ROLE = "rating_curve"
 def _prescribes(codes) -> str:
     """What a code quad makes the engine READ from the steering file.
 
-    ``bord.f`` consumes PRESCRIBED ELEVATIONS only where ``LIHBOR`` is ``KENT``
-    and the prescribed flowrate only where ``LIUBOR`` is; a value written against
-    any other code is a number the engine never looks at. Reading the quad
-    rather than the role name is what leaves the steering file unable to disagree
-    with it.
-
-    ``"nothing"`` is what a FREE EXIT reads as, and it is an answer rather than a
-    gap: the steering file writes no value at that number because the face has no
-    condition to state.
-    """
+    ``"nothing"`` is what a FREE EXIT reads as: an answer, never a gap."""
+    # ``bord.f`` consumes PRESCRIBED ELEVATIONS only where ``LIHBOR`` is KENT
+    # and the prescribed flowrate only where ``LIUBOR`` is; a value written
+    # against any other code is a number the engine never looks at. Reading the
+    # quad rather than the role name is what leaves the steering file unable to
+    # disagree with it.
     lihbor, liubor = int(codes[0]), int(codes[1])
     if lihbor == KENT:
         return "elevation"
@@ -116,10 +86,7 @@ def _load(path: str):
 class _Refusal(Exception):
     """A typed refusal the HOST re-raises under its own code.
 
-    The one thing only THIS process knows is what the engine's own boundary walk
-    returned, so the refusal about that walk is written here and travels back as
-    a document rather than as a return code the host has to guess a meaning for.
-    """
+    What the engine's own boundary walk returned is knowable only here."""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -133,14 +100,13 @@ _NAMED_PINCH_NODES = 12
 def _refuse_shared_ring_nodes(contours) -> None:
     """Refuse a walk whose rings share nodes, naming them and how many there are.
 
-    IPOBO is a permutation of 1..NPTFR: every boundary node carries exactly one
-    position. A node two rings both walk through would need two, gets the second,
-    and the successor array built from the contour lengths is then longer than
-    the boundary itself - which is an index error several functions later and a
-    silently misnumbered boundary if it were not. The walk that decides this is
-    the engine's own, so nothing outside this process can measure it: a host-side
-    walk of the same cells returns different rings.
-    """
+    IPOBO is a permutation of 1..NPTFR: one position per boundary node."""
+    # A node two rings both walk through would need two positions, gets the
+    # second, and the successor array built from the contour lengths is then
+    # longer than the boundary itself - an index error several functions later,
+    # and a silently misnumbered boundary if it were not. The walk that decides
+    # this is the engine's own: a host-side walk of the same cells returns
+    # different rings.
     seen: dict = {}
     for ring in contours:
         for node in ring:
@@ -166,21 +132,20 @@ def _refuse_shared_ring_nodes(contours) -> None:
 def _boundary(x, y, ikle):
     """pretel's own boundary walk -> ``(ipobo, contours)``, which agree by construction.
 
-    ``get_ipobo`` returns the closed contours it walked (each already stripped of
-    its repeated closing node) and an IPOBO numbered along them with ONE count
-    continuing across contours - which is what TELEMAC's permutation of 1..NPTFR
-    means, and what a per-contour count would break. Its own array numbers
-    ``contour[1:]``, leaving the first node of every contour at 0 where TELEMAC
-    would read a boundary node as interior, so the walk is the authority here and
-    every node on it is numbered once, in walk order.
-    """
-    # Imported inside the walk so the numbering rules above it are readable
-    # outside the image, where pretel does not exist.
+    Every node on the walk is numbered once, in walk order."""
+    # Imported inside the walk: pretel exists only inside the image.
     from pretel.meshes import get_ipobo
 
     _, pbounds = get_ipobo(x, y, np.asarray(ikle, dtype=np.int32), debug=False)
     contours = [[int(n) for n in ring] for ring in pbounds]
     _refuse_shared_ring_nodes(contours)
+    # ``get_ipobo`` returns the closed contours it walked (each already stripped
+    # of its repeated closing node) and an IPOBO numbered along them with ONE
+    # count continuing across contours - which is what TELEMAC's permutation of
+    # 1..NPTFR means, and what a per-contour count would break. Its own array
+    # numbers ``contour[1:]``, leaving the first node of every contour at 0
+    # where TELEMAC would read a boundary node as interior, so the walk here is
+    # the authority.
     ipobo = np.zeros(len(x), dtype=np.int32)
     position = 0
     for ring in contours:
@@ -193,9 +158,7 @@ def _boundary(x, y, ikle):
 def _contour_runs(bnodes, contours) -> int:
     """How many CONTIGUOUS stretches the written row order breaks the contours into.
 
-    One run per contour is the whole point: a .cli whose rows interleave two
-    contours describes a boundary no walk of the geometry produces.
-    """
+    One run per contour: interleaved rows describe a boundary no walk produces."""
     where = {}
     for index, contour in enumerate(contours):
         for node in contour:
@@ -211,12 +174,7 @@ def _contour_runs(bnodes, contours) -> int:
 
 
 def _roles_by_node(roles: dict) -> dict:
-    """``{role: [node, ...]}`` -> ``{node: role}``, refusing a node claimed twice.
-
-    A node named by two roles has no boundary condition anyone can write, and
-    picking one silently would put a flowrate on a stretch the caller meant to
-    hold at a level.
-    """
+    """``{role: [node, ...]}`` -> ``{node: role}``, refusing a node claimed twice."""
     out: dict = {}
     for role, nodes in roles.items():
         if role not in _ROLE_CODES or role == "wall":
@@ -235,11 +193,7 @@ def _roles_by_node(roles: dict) -> dict:
 def _successors(contour_lengths) -> list:
     """``kp1bor`` over the written row order: the next row on the SAME contour.
 
-    TELEMAC walks the boundary by this successor and never by row order, so a run
-    that straddles a contour's first row is ONE boundary to the engine. The rows
-    are written contour after contour, in walk order, because IPOBO numbered them
-    that way - which is what makes a contour a slice of consecutive rows here.
-    """
+    run straddling a contour's first row is ONE boundary to the engine."""
     kp1: list = []
     at = 0
     for length in contour_lengths:
@@ -251,9 +205,7 @@ def _successors(contour_lengths) -> list:
 def _south_west(keys, unvisited) -> int:
     """The row FRONT2 starts a contour at: south-westernmost, then southernmost.
 
-    The engine picks its start point off the GEOMETRY, not off the file, and the
-    whole numbering follows from it.
-    """
+    The engine picks its start point off the GEOMETRY, never off the file."""
     sums = [keys[k][0] for k in unvisited]
     lowest, highest = min(sums), max(sums)
     eps = (highest - lowest) * 1.0e-4
@@ -265,25 +217,22 @@ def _south_west(keys, unvisited) -> int:
 def _liquid_boundaries(x, y, bnodes, codes, contour_lengths) -> list:
     """TELEMAC's OWN liquid-boundary numbering -> one ``[first, last]`` row pair.
 
-    A port of ``bief/front2.f``, which is where the engine decides which boundary
-    is number 1. It does NOT start at the first row of the file: it starts each
-    contour at the south-westernmost boundary point, walks the successor from
-    there, calls a segment solid when EITHER of its ends is solid, and folds the
-    run straddling that start point back into one boundary.
-
-    Numbering from row order instead agrees only by luck. On a reach whose inflow
-    face happens to hold the domain's south-west corner the two disagree, and the
-    steering file then states its level at the inflow's number and its flowrate
-    at the outflow's - each into a code that never reads it, so the inflow
-    supplies nothing and the outflow is clamped to elevation zero and drains the
-    domain.
-    """
+    A port of ``bief/front2.f``: the engine's own choice of boundary number 1."""
     kp1 = _successors(contour_lengths)
     quads = [(int(quad[0]), int(quad[1])) for quad in codes]
     solid = [quad[0] == KLOG for quad in quads]
     keys = [(float(x[n]) + float(y[n]), float(y[n])) for n in bnodes]
     seen = [False] * len(kp1)
     runs: list = []
+    # FRONT2 does NOT start at the first row of the file: it starts each contour
+    # at the south-westernmost boundary point, walks the successor from there,
+    # calls a segment solid when EITHER of its ends is solid, and folds the run
+    # straddling that start point back into one boundary. Numbering from row
+    # order instead agrees only by luck: on a reach whose inflow face holds the
+    # domain's south-west corner the two disagree, and a steering file then
+    # states its level at the inflow's number and its flowrate at the outflow's
+    # - each into a code that never reads it, so the inflow supplies nothing and
+    # the outflow is clamped to elevation zero and drains the domain.
     while not all(seen):
         start = _south_west(keys, [k for k in range(len(seen)) if not seen[k]])
         opened_first = not (solid[start] or solid[kp1[start]])
@@ -352,15 +301,10 @@ def _numliq(runs, kp1, nptfr) -> list:
                 break
     return numliq
 
-
 def _joined(values) -> str:
     """One statement per numbered boundary, or the joined names when it is two.
 
-    A boundary whose rows disagree is reported joined rather than resolved: it
-    means one contiguous liquid stretch was asked to be two things, and picking
-    one here would author a steering file against a face the file does not
-    describe.
-    """
+    A boundary whose rows disagree is reported joined, never resolved here."""
     return "+".join(sorted(set(values))) if values else "wall"
 
 
@@ -434,6 +378,15 @@ def write_pair(cfg: dict) -> dict:
 
 
 def main() -> int:
+    # Contract (host <-> container over the mounted /data dir):
+    #   python selafin_cli_driver.py /data/config.json /data
+    #
+    #   config: mesh_npz (x, y npoin; ikle (nelem,3) 0-based; bottom npoin
+    #           positive up, empty for a bed-less mesh), geo_slf, cli, title,
+    #           roles ({role: [node index, ...]} - every boundary node not named
+    #           is a wall). Emits the two files plus /data/selafin_cli_stats.json,
+    #           whose stats carry the MEASURED liquid-boundary order and what
+    #           each numbered boundary prescribes.
     cfg = json.load(open(sys.argv[1]))
     out = sys.argv[2].rstrip("/")
     try:

@@ -1,44 +1,8 @@
 """In-container OceanMesh2D driver for the ``om2d`` mesher.
 
-Runs INSIDE ``trid3nt-local/mesh:latest``, the only place the CHLNDDEV
-``oceanmesh`` port (OceanMesh2D, GPL-3) is installed. The host mesher mounts this
-file and a rundir and shells it; nothing here imports trid3nt code.
-
-THE RECIPE'S OPS TRAVEL AS DATA. The host sends a list of ``{fn, kwargs}`` and
-this file calls each one VERBATIM on the library, in the order it was declared.
-Because the library lives here, THIS is where the signature is the schema: every
-parameter the recipe left unstated is filled from the staged environment by NAME,
-a required parameter the environment cannot supply is refused by name, and the
-library's own error surfaces verbatim on anything else.
-
-Contract (host <-> container over the mounted /data dir):
-  argv[1] = <op>   argv[2] = /data/<config>.json   argv[3] = /data
-
-  build   config: bbox, EITHER shoreline_shp OR domain_geojson,
-          min_edge_length_m, max_edge_length_m, seed, max_iter,
-          pre_ops [{fn, kwargs}], post_ops [{fn, kwargs}].
-          Stages the domain, runs the pre ops into a sizing function, generates,
-          runs the post ops, and emits /data/om2d_mesh.npz (points (N,2) lon/lat,
-          cells (M,3) 0-based, pfix (K,2)) plus /data/om2d_stats.json.
-
-  post    config: mesh_npz (points, cells, optional bed), min_edge_length_m,
-          max_edge_length_m, ops [{fn, kwargs}]. Runs the ops over that mesh and
-          emits <config stem>.npz + <config stem>.json (the per-op results).
-
-UNITS. The library works in DEGREES at the domain's own latitude; everything
-above it works in metres. The parameters in :data:`_METRE_PARAMS` are therefore
-written in METRES by a recipe and converted here, whether they were stated by the
-author or threaded from ``resolution_m``. Every conversion is reported in the
-stats, so a number the author never wrote is never silently in force.
-
-The domain is EITHER the water side of a GSHHG shoreline or the interior of a
-supplied polygon. The shoreline path is the library's own ``Shoreline`` ->
-``signed_distance_function`` chain on its sizing GRID. The polygon path cannot
-use ``Shoreline`` - it meshes only water touching the region boundary and cannot
-mesh a fully enclosed interior - so the signed distance is measured against the
-polygon's own densified boundary. Both paths triangulate through the authentic
-``om.generate_mesh``, so a polygon domain is not a second mesher.
-"""
+Runs INSIDE the image where the CHLNDDEV ``oceanmesh`` port is installed and
+imports nothing from trid3nt. The recipe's ops travel as ``{fn, kwargs}`` data,
+each called VERBATIM on the library: THIS is where the signature is the schema."""
 
 from __future__ import annotations
 
@@ -62,6 +26,10 @@ from shapely.ops import unary_union
 _OBSTACLE_BAND_EDGES = 1.0
 
 #: The parameters a recipe writes in METRES and the library reads in degrees.
+#: The library works in DEGREES at the domain's own latitude and everything above
+#: it works in metres, so these are converted here whether the author stated them
+#: or they were threaded from ``resolution_m``. Every conversion is reported in
+#: the stats, so a number the author never wrote is never silently in force.
 _METRE_PARAMS = ("min_edge_length", "min_edgelength", "max_edge_length")
 
 #: The parameters whose staged raster path becomes one of the library's own DEM
@@ -86,11 +54,7 @@ class _EmptyAfterOp(Exception):
 class _Refusal(Exception):
     """A typed refusal the HOST re-raises under its own code.
 
-    The refusals this driver owes are about the DOMAIN, and the domain is only
-    knowable where the library is - so the code, the reason and the call that
-    does what the refused ask could not travel back as a document rather than as
-    a return code the host has to guess a meaning for.
-    """
+    The code, the reason and the escalation travel back as a document."""
 
     def __init__(self, code: str, message: str, escalation: dict | None = None
                  ) -> None:
@@ -100,18 +64,15 @@ class _Refusal(Exception):
 
 
 def _seed_library_randomness(seed: int) -> None:
-    """Bind the recipe's seed onto the one library call that draws without it.
-
-    ``feature_sizing_function`` skeletonizes the shoreline through skimage's
-    ``medial_axis``, which breaks ties between equidistant skeleton pixels from a
-    generator it creates FRESH per process unless it is handed one. The library
-    passes none, so an identical recipe returns a different skeleton, a different
-    sizing lattice and a different mesh on every rebuild - measured on a
-    shoreline-cut coastal domain as three distinct meshes from three identical
-    configs. The seed is bound onto the module the library calls it through
-    because the library exposes no parameter to reach it by; the function itself
-    is the library's own, unmodified.
-    """
+    """Bind the recipe's seed onto the one library call that draws without it."""
+    # ``feature_sizing_function`` skeletonizes the shoreline through skimage's
+    # ``medial_axis``, which breaks ties between equidistant skeleton pixels from
+    # a generator it creates FRESH per process unless it is handed one. The
+    # library passes none, so an identical recipe returns a different skeleton, a
+    # different sizing lattice and a different mesh on every rebuild - measured
+    # as three distinct meshes from three identical configs. The seed is bound
+    # onto the module the library calls it through because the library exposes no
+    # parameter to reach it by; the function itself is the library's own.
     from skimage.morphology import medial_axis
 
     om.edgefx.medial_axis = functools.partial(medial_axis, rng=int(seed))
@@ -177,9 +138,7 @@ def _thin(points: np.ndarray, spacing: float) -> np.ndarray:
 class _Holes(om.Domain):
     """The obstacle union as an oceanmesh domain: a signed distance in degrees.
 
-    Being a ``Domain`` is what lets ``om.Difference`` subtract it from the
-    shoreline domain with the library's own set algebra.
-    """
+    Being a ``Domain`` is what lets ``om.Difference`` subtract it."""
 
     def __init__(self, geoms, step: float, bbox) -> None:
         self.union = unary_union(geoms)
@@ -205,14 +164,14 @@ class _Holes(om.Domain):
         return np.where(inside, -d, d)
 
 
+# The polygon path cannot use ``om.Shoreline``: it meshes only water touching the
+# region boundary and cannot mesh a fully enclosed interior, so the signed
+# distance is measured against the polygon's own densified boundary. Both paths
+# still triangulate through the authentic ``om.generate_mesh``.
 class _PolygonDomain(om.Domain):
     """A supplied polygon as an oceanmesh domain: signed distance, negative inside.
 
-    Being a ``Domain`` is what lets the polygon interior reach the same
-    ``om.generate_mesh`` and the same ``om.Difference`` the shoreline path uses.
-    The boundary is densified before the KD-tree is built so the distance field
-    is smooth between vertices rather than stepping from one corner to the next.
-    """
+    The boundary is densified before the KD-tree, so the field is smooth."""
 
     def __init__(self, geoms, step: float, bbox) -> None:
         self.union = unary_union(geoms)
@@ -237,11 +196,7 @@ class _PolygonDomain(om.Domain):
 class _Build:
     """What the pre ops act on: the domain, the sizing stack, the obstacles.
 
-    A sizing SOURCE (a function that takes no ``grid``) is pushed onto the stack;
-    a sizing TRANSFORM (one that does) consumes the stack's minimum and replaces
-    it. With nothing on the stack the domain is meshed uniformly at the one size
-    word, which is what an ask that declared no sizing op asked for.
-    """
+    A sizing SOURCE pushes onto the stack; a TRANSFORM consumes and replaces it."""
 
     def __init__(self, cfg: dict) -> None:
         xmin, ymin, xmax, ymax = (float(v) for v in cfg["bbox"])
@@ -357,11 +312,7 @@ class _Build:
     def pfix(self) -> np.ndarray:
         """The outline vertices DistMesh locks, inside the domain only.
 
-        A constrained vertex outside the domain would pin a node the domain
-        excludes, so only the outline inside it is locked. Two outlines can be
-        locked - an obstacle punched out of the water, and the domain's own rim
-        when a recipe sized it - and they lock the same way.
-        """
+        A vertex outside the domain would pin a node the domain excludes."""
         locked = [self.rim]
         if self.holes is not None:
             outline = self.holes.outline
@@ -377,11 +328,7 @@ class _Build:
 def set_obstacle(build: _Build, geometry: str, constrain: bool = True) -> None:
     """Punch a geometry out of the domain and lock its outline into the mesh.
 
-    The cut can only follow the outline if the mesh is fine enough there to hold
-    it, so the band around the outline is SEEDED at the finest edge on whatever
-    sizing the recipe has built so far; the growth away from it is
-    ``enforce_mesh_gradation``'s job and belongs in the recipe after this.
-    """
+    The band around the outline is SEEDED at the finest edge, and no wider."""
     build.hole_geoms.extend(_load_geoms(geometry))
     build.holes = _Holes(build.hole_geoms, build.min_deg, build.bbox)
     if not constrain:
@@ -397,10 +344,7 @@ def set_obstacle(build: _Build, geometry: str, constrain: bool = True) -> None:
 def set_region_size(build: _Build, geometry: str, edge_length_m: float) -> None:
     """Write a target edge inside a drawn region onto the current sizing lattice.
 
-    Onto the lattice rather than into the triangulator, so the transition into the
-    region obeys the same gradation the rest of the mesh does instead of being a
-    discontinuity DistMesh has to absorb.
-    """
+    Onto the lattice, not into the triangulator: the transition obeys gradation."""
     grid = build.combined()
     if grid is None or not hasattr(grid, "create_grid"):
         raise ValueError(
@@ -418,34 +362,17 @@ def set_rim_size(build: _Build, edge_length_m: float | None = None,
                  tolerance: float = 2.0, constrain: bool = True) -> None:
     """Size the DOMAIN RIM at a declared edge and lock it into the mesh.
 
-    Nothing else sizes the rim. A sizing function measures the SHORELINE - the
-    feature width, the distance to a line, the wavelength over a depth - and the
-    extent's own box is none of those, so the lattice there falls to the coarsest
-    edge and the rim comes back an order of magnitude past the ask. That is the
-    boundary a solver forces its open condition on, so its spacing is the ask's
-    to state.
-
-    ``edge_length_m`` defaults to the recipe's own size word. ``constrain``
-    locks the resampled rim as mesh nodes, which is what makes the spacing a
-    fact rather than a target the relaxation may drift off; the passes that move
-    a constrained cut decline themselves, as they do around an obstacle.
-
-    ``tolerance`` is the band the built rim is measured in, as a factor either
-    side of the ask. A relaxation places nodes, it does not lay them out: an edge
-    between two nodes it settled runs a little under and a little over whatever
-    the lattice asked for, and twice the ask is the spread a triangulation at one
-    size word actually holds. Measured and reported against the build, asserted
-    by none: the ask states the band, the report states what it got.
-
-    ORDER: after the sizing ops and before the gradation. The rim's edge is
-    written onto the lattice the sizing ops built, and a gradation after it is
-    what turns the step from the rim into the interior into a slope instead of a
-    fan of slivers.
-    """
+    ``edge_length_m`` defaults to the recipe's own size word."""
     if not build.domain_rings:
         raise ValueError(
             "set_rim_size sizes the domain's own outline and this domain states "
             "none; it is the extent's box or a supplied polygon's rings")
+    # Nothing else sizes the rim. A sizing function measures the SHORELINE - the
+    # feature width, the distance to a line, the wavelength over a depth - and
+    # the extent's own box is none of those, so the lattice there falls to the
+    # coarsest edge and the rim comes back an order of magnitude past the ask.
+    # That is the boundary a solver forces its open condition on, so its spacing
+    # is the ask's to state. ORDER: after the sizing ops, before the gradation.
     target = (build.min_deg if edge_length_m is None
               else float(edge_length_m) / build.mpd)
     ring: list[tuple[float, float]] = []
@@ -464,7 +391,17 @@ def set_rim_size(build: _Build, edge_length_m: float | None = None,
     keep = _thin(points, target)
     points, positions = points[keep], np.asarray(walk, dtype=np.int64)[keep]
     build.rim_target = target
+    # ``tolerance`` is the band the built rim is MEASURED in, as a factor either
+    # side of the ask. A relaxation places nodes, it does not lay them out: an
+    # edge between two nodes it settled runs a little under and a little over
+    # whatever the lattice asked for, and twice the ask is the spread a
+    # triangulation at one size word actually holds. Measured and reported
+    # against the build, asserted by none.
     build.rim_tolerance = float(tolerance)
+    # ``constrain`` locks the resampled rim as mesh nodes, which is what makes
+    # the spacing a fact rather than a target the relaxation may drift off; the
+    # passes that move a constrained cut decline themselves, as around an
+    # obstacle.
     if constrain:
         # Not strictly inside: a rim point IS the boundary, so on a supplied
         # polygon its signed distance is zero and a strict test drops the whole
@@ -532,11 +469,7 @@ def _bind(fn, kwargs: dict, env: dict, mpd: float,
           report: dict) -> dict:
     """Fill what the recipe left unstated from the environment -> the real call.
 
-    THE SIGNATURE IS THE SCHEMA. A parameter the recipe stated is used as
-    written; one it did not is taken from the environment when the environment
-    has it; one that is required and neither is refused BY NAME, naming what the
-    environment does stage.
-    """
+    THE SIGNATURE IS THE SCHEMA: a required parameter neither supplies refuses."""
     signature = inspect.signature(fn)
     bound = {}
     threaded: dict[str, object] = {}
@@ -633,10 +566,7 @@ def op_build(cfg: dict, out: str) -> int:
     def guard(stage: str, nodes) -> bool:
         """Did this pass walk the mesh off the outline it was constrained to?
 
-        ``delete_boundary_faces`` cannot tell a constrained cut from a sliver -
-        the elements along a punched outline ARE boundary faces - so a pass that
-        moves the cut is declined and the elements along it stand as generated.
-        """
+        ``delete_boundary_faces`` cannot tell a constrained cut from a sliver."""
         record(stage, nodes)
         if not pfix.shape[0] or gaps[stage] <= gaps["generated"]:
             return False
@@ -706,19 +636,7 @@ def op_build(cfg: dict, out: str) -> int:
 def _rim_edges(points, cells, build: _Build) -> dict:
     """The RIM's edge lengths against the ask, in metres.
 
-    The rim is where a solver forces its open condition, and every sizing
-    function the library has measures the SHORELINE rather than the extent, so
-    how far the rim ran from the ask is a number every build reports rather than
-    a question a reader has to go and measure.
-
-    WHICH edges: the ones on the outline a rim op sized, when one did - a domain
-    boundary is part rim and part shoreline, and holding the shoreline to the
-    rim's ask would report the land as a rim failure. With no rim op the whole
-    boundary is measured, because none of it was sized and all of it is the ask's
-    to answer for - and it is measured without a verdict, because the band a rim
-    is held to is a kwarg of the op that sized it and an unsized rim declared
-    none.
-    """
+    Every build reports them: no sizing function measures the extent's rim."""
     xy = np.asarray(points, dtype=float)
     counts: dict[tuple[int, int], int] = {}
     for cell in cells:
@@ -726,6 +644,12 @@ def _rim_edges(points, cells, build: _Build) -> dict:
             key = (int(a), int(b)) if a < b else (int(b), int(a))
             counts[key] = counts.get(key, 0) + 1
     edges = [(a, b) for (a, b), n in counts.items() if n == 1]
+    # WHICH edges: the ones on the outline a rim op sized, when one did - a
+    # domain boundary is part rim and part shoreline, and holding the shoreline
+    # to the rim's ask would report the land as a rim failure. With no rim op
+    # the whole boundary is measured, because none of it was sized; and without
+    # a verdict, because the band a rim is held to is a kwarg of the op that
+    # sized it and an unsized rim declared none.
     measured = "every boundary edge (no rim op sized this domain)"
     if build.rim.shape[0]:
         _, nearest = cKDTree(xy).query(build.rim, k=1)
@@ -763,12 +687,7 @@ def _run_mesh_ops(ops, points, cells, bed, mpd: float, reports: list,
                   notes: list) -> tuple[np.ndarray, np.ndarray, dict]:
     """Run the ops that act on a generated mesh, verbatim, in declared order.
 
-    An op that hands back a triangulation replaces the mesh; one that hands back
-    a measurement is RECORDED under its own name and the mesh stands. An op that
-    removes the last element stops the chain and says which one did it - half a
-    clean is not a mesh, and a note about it reads afterwards as a mesh that was
-    merely cleaned less.
-    """
+    A triangulation replaces the mesh; a measurement is recorded under its name."""
     results: dict = {}
     for entry in ops:
         name = str(entry["fn"])
@@ -819,19 +738,7 @@ def _over_components(fn, kwargs: dict, points, cells, bed, mpd: float,
                      report: dict, env_extra: dict) -> list[dict]:
     """Call a boundary-walk op once per boundary WALK -> the sections it found.
 
-    Its own precondition, honoured rather than compensated for: the walk it
-    indexes into traces ONE closed contour, and a domain has as many as its
-    topology gives it - a shoreline cut can come back as two water bodies in one
-    array, and an obstacle punched out of one of them adds a rim around the hole.
-    The library starts its walk at whichever boundary edge sorts first, so on a
-    holed domain WHICH rim it traced was an accident of node numbering and every
-    other rim was invisible to it.
-
-    Each connected piece is therefore decomposed into its contours and offered one
-    identification PER CONTOUR, each walked from a declared start node; the runs
-    come back in the whole mesh's numbering. Contours are offered outer rim first
-    (by enclosed area), which is the order a reader checks them in.
-    """
+    The runs come back in the whole mesh's numbering."""
     out: list[dict] = []
     pieces = _components(cells, points.shape[0])
     report["components"] = len(pieces)
@@ -846,6 +753,12 @@ def _over_components(fn, kwargs: dict, points, cells, bed, mpd: float,
         env = {**dict.fromkeys(_POINT_PARAMS, sub_points),
                **dict.fromkeys(_CELL_PARAMS, sub_cells),
                "topobathymetry": sub_bed, **env_extra}
+        # The op's own precondition, honoured rather than compensated for: the
+        # walk it indexes into traces ONE closed contour, and the library starts
+        # it at whichever boundary edge sorts first - so on a holed or two-body
+        # domain WHICH rim it traced was an accident of node numbering and every
+        # other rim was invisible to it. Each contour gets its own call, from a
+        # declared start node, outer rim first.
         for rim, first in enumerate(_contour_starts(sub_cells, sub_points)):
             report["contours"] += 1
             with _walk_from(first):
@@ -858,17 +771,15 @@ def _over_components(fn, kwargs: dict, points, cells, bed, mpd: float,
 
 @contextlib.contextmanager
 def _walk_from(first: int):
-    """Run the block with the library's boundary walk started at ``first``.
-
-    ``get_winded_boundary_edges`` takes the start vertex as ``vFirst`` and returns
-    the ONE contour it walks from there; ``identify_ocean_boundary_sections`` calls
-    it without one, so the start - and with it the contour - falls to whichever
-    boundary edge the library's unique-row sort put first. The parameter is bound
-    on the module the caller reaches it through, because the caller exposes no way
-    to pass it; the walk itself is the library's own.
-    """
+    """Run the block with the library's boundary walk started at ``first``."""
     import oceanmesh.boundary as boundary
 
+    # ``get_winded_boundary_edges`` takes the start vertex as ``vFirst`` and
+    # returns the ONE contour it walks from there; identify_ocean_boundary_
+    # sections calls it without one, so the start - and with it the contour -
+    # falls to whichever boundary edge the library's unique-row sort put first.
+    # The parameter is bound on the module the caller reaches it through,
+    # because the caller exposes no way to pass it; the walk is the library's.
     original = boundary.get_winded_boundary_edges
     boundary.get_winded_boundary_edges = functools.partial(
         original, vFirst=int(first))
@@ -879,15 +790,9 @@ def _walk_from(first: int):
 
 
 def _contour_starts(cells, points) -> list[int]:
-    """One start node per boundary contour, outer rim first.
+    """One start node per boundary contour, outer rim first (by enclosed area).
 
-    The decomposition is the library's own walk asked repeatedly: from the lowest
-    unvisited boundary node it returns exactly the contour that node lies on, so
-    walking every contour once covers the whole boundary and the choice of start
-    is a stated rule rather than a sort artifact. The order is by ENCLOSED AREA -
-    the rim around a hole encloses less than the domain rim, however many nodes
-    either of them happens to carry.
-    """
+    The library's own walk, asked repeatedly from the lowest unvisited node."""
     from oceanmesh.edges import get_boundary_edges, get_winded_boundary_edges
 
     remaining = set(int(n) for n in np.unique(get_boundary_edges(cells)))
@@ -913,9 +818,7 @@ def _walk_nodes(winded) -> list[int]:
 def _components(cells: np.ndarray, npoin: int) -> list[np.ndarray]:
     """The connected pieces of a triangulation, as boolean cell masks.
 
-    A domain cut by a shoreline can come back as two water bodies in one array,
-    and the winding walk oceanmesh identifies sections along traces ONE of them.
-    """
+    A shoreline-cut domain can come back as two water bodies in one array."""
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import connected_components
 
@@ -930,15 +833,12 @@ def _components(cells: np.ndarray, npoin: int) -> list[np.ndarray]:
 def _sections(ends, points, cells, bed, node_ids, first: int) -> list[dict]:
     """Section ENDPOINTS as the runs of nodes between them, in walk order.
 
-    ``identify_ocean_boundary_sections`` returns the first and last node of each
-    section; the winding walk it indexes into is what turns those endpoints back
-    into a run, so the walk is rebuilt with the same library call FROM THE SAME
-    START - a walk from anywhere else is a different contour, or the same one cut
-    at a different place. ``node_ids`` maps this piece's numbering back onto the
-    whole mesh's.
-    """
+    ``node_ids`` maps this piece's numbering back onto the whole mesh's."""
     from oceanmesh.edges import get_winded_boundary_edges
 
+    # The walk the endpoints index into is rebuilt with the same library call
+    # FROM THE SAME START: a walk from anywhere else is a different contour, or
+    # the same one cut at a different place.
     walk = _walk_nodes(get_winded_boundary_edges(cells, vFirst=int(first)))
     at = {node: index for index, node in enumerate(walk)}
     out: list[dict] = []
@@ -990,6 +890,21 @@ _OPS = {"build": op_build, "post": op_post}
 
 
 def main() -> int:
+    # Contract (host <-> container over the mounted /data dir):
+    #   argv[1] = <op>   argv[2] = /data/<config>.json   argv[3] = /data
+    #
+    #   build  config: bbox, EITHER shoreline_shp OR domain_geojson,
+    #          min_edge_length_m, max_edge_length_m, seed, max_iter,
+    #          pre_ops [{fn, kwargs}], post_ops [{fn, kwargs}]. Stages the
+    #          domain, runs the pre ops into a sizing function, generates, runs
+    #          the post ops, and emits /data/om2d_mesh.npz (points (N,2)
+    #          lon/lat, cells (M,3) 0-based, pfix (K,2)) plus
+    #          /data/om2d_stats.json.
+    #
+    #   post   config: mesh_npz (points, cells, optional bed),
+    #          min_edge_length_m, max_edge_length_m, ops [{fn, kwargs}]. Runs
+    #          the ops over that mesh and emits <config stem>.npz and
+    #          <config stem>.json (the per-op results).
     op = sys.argv[1]
     cfg = json.load(open(sys.argv[2]))
     out = sys.argv[3].rstrip("/")

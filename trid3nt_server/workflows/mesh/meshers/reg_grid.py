@@ -1,17 +1,8 @@
 """The regular-grid mesher: a geographic extent plus a cell size -> the lattice.
 
-CONFORMS to the same surface every mesher does, with the smallest possible
-registration: no library namespace of its own (the lattice IS the repo's own
-regular-grid domain math, reached by the role adapter rather than named by an
-op), and a near-empty default recipe. The shared primitives ride along, so a
-lattice that wants a bed says ``mesh_op("set_bed", source=...)`` exactly as an
-unstructured domain does.
-
-What it returns is the node lattice and its quad cells, which is the same
-geometry a structured deck writes as an origin plus cell counts. A regular grid
-carries no bed of its own: elevations arrive from a sampled raster, and a
-zero-filled bed would read to a solver as ground at sea level.
-"""
+The node lattice and its quad cells - the geometry a structured deck writes as
+an origin plus cell counts. No library namespace of its own; the shared
+primitives ride along, so a lattice that wants a bed says ``set_bed``."""
 
 from __future__ import annotations
 
@@ -60,9 +51,7 @@ def build(recipe: Any) -> Mesh:
 def _with_ops(mesh: Mesh, recipe: Any) -> Mesh:
     """Run the recipe's ops over the lattice, in their declared order.
 
-    Every op a reg_grid recipe can name is a shared primitive running on the
-    host, so this is the whole of its execution: there is no library to shell.
-    """
+    Every op a reg_grid recipe can name is a shared primitive running here."""
     from trid3nt_server.workflows.mesh.inputs import op_input
     from trid3nt_server.workflows.mesh.meshers import bind_ops
 
@@ -84,6 +73,9 @@ def _lattice(grid: RegularGrid) -> Mesh:
     # counter-clockwise from the south-west corner
     cells = np.column_stack([sw, sw + 1, sw + stride + 1, sw + stride])
     return Mesh(
+        # A regular grid carries no bed of its own: elevations arrive from a
+        # sampled raster, and a zero-filled bed would read to a solver as ground
+        # at sea level.
         points=points, cells=cells, crs_authid="EPSG:4326", bed=None,
         meta={"extent": (grid.min_lon, grid.min_lat, grid.max_lon, grid.max_lat),
               "resolution_m": grid.resolution_m,

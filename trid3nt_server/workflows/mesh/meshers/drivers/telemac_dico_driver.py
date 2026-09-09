@@ -1,24 +1,8 @@
 """In-container extractor for the TELEMAC keyword dictionaries.
 
-Runs INSIDE ``trid3nt-local/telemac:latest``, the only place the engine's own
-dictionaries and their DAMOCLES reader live. The host mounts this file and an
-output directory and shells it; nothing here imports trid3nt code.
-
-  python telemac_dico_driver.py /data/config.json /data
-
-Config key: ``modules`` - the module names whose dictionary is read. Emits one
-``<module>.json`` per module, keywords ORDERED AS THE DICTIONARY, plus
-``telemac_dico_stats.json`` carrying the count each module contributed.
-
-The table is TRIMMED: what a slot needs to be filled and refused, and nothing
-the eficas GUI needs. Everything a consumer would otherwise have to work out for
-itself is resolved HERE, where the engine's own answer is at hand - the stray
-French type spellings (``ENTIER``, ``REEL``); the help text, which arrives
-LaTeX-marked and with every apostrophe swapped to a double quote by the
-dictionary reader; the identifier a class body writes each keyword under, from
-the map eficas ships; and the keywords whose one value is a separator-joined
-selection, from telapy's own list of them.
-"""
+Runs INSIDE the image where the engine's own dictionaries and their DAMOCLES
+reader live, importing nothing from trid3nt. The table is TRIMMED to what a slot
+is filled and refused by: nothing the eficas GUI needs, every spelling resolved."""
 
 from __future__ import annotations
 
@@ -82,15 +66,13 @@ _LATEX = (
 
 
 def de_latex(help_text: str) -> str:
-    """The dictionary's help as prose - plain words, no markup left.
-
-    The dictionary reader replaces every apostrophe inside a string with a
-    double quote (a DAMOCLES string is single-quoted, so an apostrophe arrives
-    doubled and is un-doubled into ``"``), which is why the swap is undone here
-    and not guessed at by a reader.
-    """
+    """The dictionary's help as prose - plain words, no markup left."""
     for pattern, repl in _LATEX:
         help_text = pattern.sub(repl, help_text)
+    # The dictionary reader replaces every apostrophe inside a string with a
+    # double quote (a DAMOCLES string is single-quoted, so an apostrophe arrives
+    # doubled and is un-doubled into ``"``), which is why the swap is undone here
+    # rather than guessed at by a reader.
     return " ".join(help_text.replace('"', "'").split())
 
 
@@ -104,11 +86,7 @@ def _size(info: dict) -> tuple[int | None, bool]:
 def identifiers(module: str) -> dict:
     """The module's own keyword -> identifier map, as eficas ships it.
 
-    The identifiers a class body writes keywords under are the image's, not a
-    spelling rule guessed at from the keywords: hyphens and parentheses become
-    underscores too, and one TOMAWAC keyword carries a trailing space the map is
-    keyed without.
-    """
+    The image's map, never a spelling rule guessed at from the keywords."""
     eficas = importlib.import_module(module + "_dicoCasEnToCata")
     return {engine: cata
             for cata, engine in eficas.dicoCataToEngTelemac.items()}
@@ -159,6 +137,12 @@ def extract(module: str) -> dict:
 
 
 def main() -> int:
+    # Contract (host <-> container over the mounted output dir):
+    #   python telemac_dico_driver.py /data/config.json /data
+    #
+    #   modules  the module names whose dictionary is read. Emits one
+    #            <module>.json per module, keywords ORDERED AS THE DICTIONARY,
+    #            plus telemac_dico_stats.json with the count each contributed.
     cfg = json.load(open(sys.argv[1]))
     out = sys.argv[2].rstrip("/")
     counts = {}

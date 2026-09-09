@@ -1,32 +1,8 @@
 """The ``om2d`` mesher: OceanMesh2D, wrapped where it lives.
 
-Three registrations and nothing else.
-
-NAMESPACES. Ops may name any function of the CHLNDDEV ``oceanmesh`` port under
-the library's own spelling, tagged by the phase it runs in: the sizing functions
-before generation, the clean passes and the ocean-boundary identification after
-it. Two om2d-owned primitives ride beside them for the two things the library has
-no single word for - punching a geometry out of the domain with its outline
-constrained in, and sizing a drawn region. The SHARED primitives (``set_bed``,
-``set_boundary_roles``) ride along as they do for every mesher.
-
-ROLE ADAPTER. ``build`` turns the recipe's extent into the library's domain
-object - the GSHHG land polygons cut to a lon/lat box, or the interior of a
-supplied polygon - and threads ``resolution_m`` as the library's own edge
-defaults. Nothing else: an adapter that grows opinions is the old sin.
-
-DEFAULT RECIPE. The hard-baked, visible list below. It sizes no INTERIOR, because
-what a domain should be sized TOWARD is the ask's knowledge; an undeclared ask is
-meshed uniformly at the one size word, cleaned by the library's own passes, and
-bedded from topobathy. The RIM is the one exception: no sizing function the
-library has measures the extent's own outline, so an ask that names none comes
-back with the boundary a solver forces its open condition on running an order of
-magnitude past the size word. A declared recipe replaces this list wholesale.
-
-All of the library is the port's own code, running in ``trid3nt-local/mesh:
-latest`` where it is installed; this file composes the ask, shells the box, and
-turns what comes back into the one neutral mesh every writer reads.
-"""
+Three registrations and nothing else: op namespaces, the role adapter, the
+default recipe. The library runs in the GPL-isolated image; this file composes
+the ask, shells the box, and reads back the one neutral mesh."""
 
 from __future__ import annotations
 
@@ -130,7 +106,11 @@ _OM2D_PRIMITIVES = ("set_obstacle", "set_region_size", "set_rim_size")
 
 #: The ops list an undeclared ask gets. Hard-baked and visible: the rim at the
 #: size word, the library's own clean chain in the order it is meant to run, then
-#: the bed.
+#: the bed. It sizes no INTERIOR - what a domain should be sized toward is the
+#: ask's own knowledge. The RIM is the one exception: no sizing function the
+#: library has measures the extent's own outline, so an ask that names none comes
+#: back with the boundary a solver forces its open condition on running an order
+#: of magnitude past the size word. A declared recipe replaces this list wholesale.
 _DEFAULT_OPS = (
     mesh_op("set_rim_size"),
     mesh_op("delete_boundary_faces"),
@@ -241,12 +221,7 @@ def _apply_tail(mesh: Mesh, tail: list[BoundOp], rundir: Path,
                 resolution_m: float, notes: list[str]) -> Mesh:
     """The ops declared after the first primitive, in their declared order.
 
-    OUR primitives run here, on the host, against the real callable. A LIBRARY op
-    in this stretch runs in its own container call over the arrays the mesh now
-    has, and must not renumber them: a bed painted before it would then belong to
-    nodes that no longer exist, which is why a topology-changing op belongs before
-    the first primitive.
-    """
+    OUR primitives run here, on the host, against the real callable."""
     import dataclasses
 
     results = dict(mesh.meta.get("op_results") or {})
@@ -317,12 +292,7 @@ def _staged(op: BoundOp, rundir: Path, index: int, resolution_m: float,
             notes: list[str]) -> dict[str, Any]:
     """One op as the container reads it: its name and its kwargs as /data paths.
 
-    Code-as-data. The name travels verbatim and the driver calls it verbatim; a
-    kwarg that is a raster or a layer is converted once, written into the mounted
-    rundir, and named by the path the container sees. A LINE layer is measured
-    against the declared edge on the way through, because that is the one thing
-    the conversion knows and the library does not.
-    """
+    Code-as-data: the name travels verbatim and the driver calls it verbatim."""
     from trid3nt_server.workflows.mesh.inputs import op_input
 
     kwargs: dict[str, Any] = {}
@@ -346,17 +316,7 @@ def _resampleable_lines(doc: Mapping[str, Any], resolution_m: float,
                         op_name: str, notes: list[str]) -> Mapping[str, Any]:
     """A staged LINE layer with the lines one declared edge cannot walk removed.
 
-    A sizing function walks each line at the min edge, so a line shorter than one
-    edge is not a coarse input - it is a resample the library dies inside rather
-    than refuses. What is below the resolution is measured here, dropped, and
-    journaled by count and threshold; a layer with nothing left is a typed
-    refusal naming the resolution, because a sizing op with no line sizes nothing.
-
-    Geodesic length on the WGS84 ellipsoid, per PART: a multi-line whose parts
-    are individually below the edge crashes the same walk a short single line
-    does. Only line geometries are measured; the polygon a domain or an obstacle
-    arrives as passes through untouched.
-    """
+    Only line geometries are measured; a polygon passes through untouched."""
     entries = _geojson_geometries(doc)
     if not any(_is_line(geometry) for _holder, geometry in entries):
         return doc
@@ -369,6 +329,11 @@ def _resampleable_lines(doc: Mapping[str, Any], resolution_m: float,
     for holder, geometry in entries:
         if _is_line(geometry):
             walks = _line_parts(geometry)
+            # A sizing function walks each line at the min edge, so a line
+            # shorter than one edge is not a coarse input - it is a resample the
+            # library dies inside rather than refuses. Geodesic length on the
+            # WGS84 ellipsoid, per PART: a multi-line whose parts are each below
+            # the edge crashes the same walk a short single line does.
             kept = [walk for walk in walks
                     if _walk_length_m(geod, walk) >= resolution_m]
             total += len(walks)
@@ -437,11 +402,10 @@ def _walk_length_m(geod: Any, walk: list[list[float]]) -> float:
 class _Domain:
     """What the mesh is cut from: the shoreline, or a supplied polygon.
 
-    Exactly one of ``shoreline`` and ``polygon_name`` is set. ``bbox`` is the
-    lon/lat box the triangulator seeds inside - the extent itself on the shoreline
-    path, the polygon's own bounds on the other.
-    """
+    Exactly one of ``shoreline`` and ``polygon_name`` is set."""
 
+    #: The lon/lat box the triangulator seeds inside: the extent itself on the
+    #: shoreline path, the polygon's own bounds on the other.
     bbox: tuple[float, float, float, float]
     source: str
     shoreline: Path | None = None
@@ -479,15 +443,13 @@ def _domain(extent: Any, rundir: Path, resolution_m: float,
 
 
 def _lonlat_bounds(bbox: tuple[float, ...], source: str) -> tuple[float, ...]:
-    """``bbox`` if it is lon/lat, else the refusal that names what it is instead.
-
-    Every sizing number this mesher works in is degrees converted at the domain's
-    own latitude, so an extent handed over in projected metres does not read as a
-    wrong answer - it reads as a lattice millions of cells wide, which surfaces as
-    an allocation failure inside the triangulator rather than as the CRS mismatch
-    it is.
-    """
+    """``bbox`` if it is lon/lat, else the refusal that names what it is instead."""
     west, south, east, north = (float(v) for v in bbox)
+    # Every sizing number this mesher works in is degrees converted at the
+    # domain's own latitude, so an extent handed over in projected metres does
+    # not read as a wrong answer - it reads as a lattice millions of cells wide,
+    # which surfaces as an allocation failure inside the triangulator rather
+    # than as the CRS mismatch it is.
     if -180.0 <= west <= 180.0 and -180.0 <= east <= 180.0 \
             and -90.0 <= south <= 90.0 and -90.0 <= north <= 90.0:
         return (west, south, east, north)
@@ -567,11 +529,7 @@ def _run_op(rundir: Path, op: str, config_name: str, produces: str, *,
 def _refusal(rundir: Path) -> None:
     """Re-raise the driver's own typed refusal, when it wrote one.
 
-    The refusals about the DOMAIN are only knowable where the library is; the
-    driver writes the code, the reason and the escalation as a document so they
-    reach a caller as a typed refusal rather than as a return code wrapped in a
-    stack trace.
-    """
+    The refusals about the DOMAIN are only knowable where the library is."""
     document = rundir / _REFUSAL_FILE
     if not document.exists():
         return
@@ -601,15 +559,7 @@ def _sizing_source(stats: Mapping[str, Any], domain: _Domain) -> str:
 def _clean_once(lonlat: Any, cells: Any) -> tuple[Any, Any, int]:
     """Orphan re-indexing, CCW normalization and the fusions a FILE forces.
 
-    The library's own clean passes are ops and have already run; what is left is
-    what the geometry FILE forces rather than what the mesh needs. A SELAFIN
-    carries its coordinates in SINGLE precision and a UTM northing runs to seven
-    digits, so two nodes a fraction of a metre apart are written as the same point
-    and the element between them arrives at the solver with no area. A COLLAPSED
-    element goes with them: a solver reads a zero determinant and stops, and one
-    cell out of twenty-five thousand takes the whole run down. How many were
-    dropped is reported rather than absorbed.
-    """
+    How many elements were dropped is reported, never absorbed."""
     from trid3nt_server.workflows.mesh.shared.nodes import tin_formats
 
     formats = tin_formats()
@@ -665,10 +615,7 @@ def _has_area(points: Any, cells: Any) -> Any:
 def _conformal_probe(points_m: Any, pfix: Any, utm_epsg: int) -> dict[str, Any]:
     """How far the mesh ended up from the outlines it was constrained to.
 
-    Reported, never asserted: the distance in metres from each constrained outline
-    vertex to the nearest node the mesh actually has. A build that constrained
-    nothing reports nothing.
-    """
+    Reported, never asserted; a build that constrained nothing reports nothing."""
     import numpy as np
     from pyproj import Transformer
     from scipy.spatial import cKDTree
@@ -695,13 +642,7 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
              stats: Mapping[str, Any], notes: list[str]) -> Mesh:
     """Write the per-solver geometry from ONE boundary segmentation -> the mesh.
 
-    TELEMAC's SELAFIN and its ``.cli`` are written together by telapy, because a
-    boundary-conditions file is only valid against the geometry whose boundary
-    numbering it was written from. Only formats an engine READS are written.
-
-    The staging notes join the journal here rather than at the read: an op staged
-    after the mesh came back has no provenance to write into yet.
-    """
+    Only formats an engine READS are written."""
     import dataclasses
 
     from trid3nt_server.workflows.mesh.shared.nodes import boundary_contours
@@ -772,12 +713,10 @@ def _emitted(mesh: Mesh, rundir: Path, domain: _Domain,
 def _open_sections(mesh: Mesh) -> list[dict[str, Any]]:
     """The contiguous ocean-boundary sections the library identified, if asked.
 
-    A recipe that never named ``identify_ocean_boundary_sections`` has no open
-    boundary, which is the right answer for an inland domain and not a missing
-    one. EVERY section identified is open: which of them a compass name would have
-    picked is a choice the library never made, and dropping the rest silently
-    numbered a multi-mouth estuary as a single-mouth one.
-    """
+    A recipe that never named ``identify_ocean_boundary_sections`` has none."""
+    # EVERY section identified is open: which of them a compass name would have
+    # picked is a choice the library never made, and dropping the rest silently
+    # numbered a multi-mouth estuary as a single-mouth one.
     found = (mesh.meta.get("op_results") or {}).get(
         "identify_ocean_boundary_sections")
     return [dict(section) for section in (found or [])]

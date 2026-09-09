@@ -1,21 +1,8 @@
 """What a MESHER is: namespaces, a role adapter, a default recipe.
 
-A mesher registers three things and nothing else. Its NAMESPACES are the sets of
-callables a recipe's ops may name, each tagged with the phase it runs in - the
-wrapped library's own functions under the library's own names, plus whatever
-primitives that mesher owns. The SHARED primitives namespace rides along for
-every mesher. Its ROLE ADAPTER is its ``build``: how the recipe's extent becomes
-this library's domain object and how ``resolution_m`` threads as its defaults.
-Its DEFAULT RECIPE is the hard-baked, visible ops list an undeclared ask gets.
-
-Everything else - the recipe, validation, ``mesh_op``, the gate's cards, regen,
-the artifact - is shared, so a new mesher is three registrations and no router
-grows.
-
-Every mesher returns the SAME neutral :class:`Mesh` - nodes, cells, an optional
-bed - which is what lets one build feed several solver writers and one display
-face.
-"""
+A mesher registers those three and nothing else; the recipe, validation, the
+gate, regeneration and the artifact are shared. Every mesher returns the SAME
+neutral :class:`Mesh` - nodes, cells, an optional bed."""
 
 from __future__ import annotations
 
@@ -61,10 +48,7 @@ POST = "post"
 class MeshToolError(RuntimeError):
     """A typed mesh refusal: an error code plus the reason, never a silent skip.
 
-    ``escalation`` carries the call that DOES what the refused ask could not, as
-    ``{"tool": name, "overrides": {...}}``, for the refusals whose answer is
-    another primitive rather than a different argument.
-    """
+    ``escalation`` names the call that DOES what the refused ask could not."""
 
     def __init__(self, error_code: str, message: str,
                  escalation: Mapping[str, Any] | None = None) -> None:
@@ -76,13 +60,7 @@ class MeshToolError(RuntimeError):
 def _edge_resolution_specs() -> tuple[Any, ...]:
     """The DECLARED range ``resolution_m`` is bounded by.
 
-    A MESH-GENERATOR constraint with a practical 5 m floor: a finer edge reliably
-    trips HEC-RAS's <= 8-sides-per-cell acceptance on any non-trivial AOI and
-    over-refines a TIN. There is NO fixed coarse ceiling - realizability is
-    AOI-dependent and enforced at build time by a typed refusal (> 8-sided cells,
-    a triangulator failure), never a silent snap. The declaration carries the
-    floor and the 8-side reality so a gate card can quote them.
-    """
+    A floor and no ceiling; a gate card quotes what this states."""
     from trid3nt_contracts.tool_registry import ResolutionSpec
 
     return (
@@ -115,11 +93,7 @@ def nearest_names(name: str, known: Iterable[str]) -> str:
 def is_late_bound(value: Any) -> bool:
     """Is ``value`` a plan-time DESCRIPTION of a read rather than the value?
 
-    A declared recipe field carries ``P.<name>`` / ``D.<name>`` / ``Ref(...)``
-    until the interpreter binds it, so its type and its membership in a choice
-    set are not answerable at declaration time - and asking either of a
-    placeholder raises rather than answering.
-    """
+    ``P.<name>`` / ``D.<name>`` / ``Ref(...)``, until the interpreter binds it."""
     try:
         from trid3nt_server.workflows.runtime.plan import ParamRef, Ref
     except Exception:  # noqa: BLE001 -- the library is absent in a stripped env
@@ -130,10 +104,7 @@ def is_late_bound(value: Any) -> bool:
 def input_digest(value: Any) -> str:
     """``sha256:<hex>`` for an input whose content is not its declaration.
 
-    A LOCAL file is digested by its bytes; anything else by its own text, which
-    is the strongest honest statement available about a remote object this
-    process never read.
-    """
+    A LOCAL file is digested by its bytes; anything else by its own text."""
     text = str(value)
     try:
         path = Path(text)
@@ -147,9 +118,7 @@ def input_digest(value: Any) -> str:
 def _field_of(layer: Any, name: str) -> Any:
     """One field of a fetched layer, whichever shape the registry handed back.
 
-    A fetcher returns a typed layer OR the same layer as a mapping, so reading
-    only the attribute reports UNMEASURED provenance for a fetch that measured it.
-    """
+    A fetcher returns a typed layer OR the same layer as a mapping."""
     if isinstance(layer, Mapping):
         return layer.get(name)
     return getattr(layer, name, None)
@@ -158,9 +127,7 @@ def _field_of(layer: Any, name: str) -> Any:
 def fetch_activation_rows(layer: Any) -> list[tuple[str, float]]:
     """The ladder rungs that ACTUALLY served a fetch -> ``[(rung, coverage), ...]``.
 
-    Rows with zero coverage are rungs the ladder considered and did not use, so
-    they are dropped rather than narrated as sources.
-    """
+    A zero-coverage rung was considered and not used: it is dropped."""
     rows: list[tuple[str, float]] = []
     for row in (_field_of(layer, "fallbacks") or []):
         rung = _field_of(row, "rung")
@@ -184,10 +151,7 @@ def fetch_fallback_note(layer: Any) -> str | None:
 class MeshOp:
     """One entry of a recipe's ops list: a function NAME and its kwargs.
 
-    The name is VERBATIM - the wrapped library's own spelling, or one of our
-    primitives under its real ``def`` name. Never an alias, because an alias is a
-    word that implies.
-    """
+    The name is VERBATIM - the library's own spelling, never an alias."""
 
     fn: str
     kwargs: Mapping[str, Any] = field(default_factory=dict)
@@ -202,12 +166,7 @@ class MeshOp:
 
 
 def mesh_op(fn: str, **kwargs: Any) -> MeshOp:
-    """One recipe entry, frozen. Builds NOTHING.
-
-    The declaration face of the word. Its other face is the registered
-    ``mesh_op`` tool (``workflows/mesh/op_tool.py``), which appends the same
-    entry to a live session's recipe and regenerates.
-    """
+    """One recipe entry, frozen. Builds NOTHING."""
     return MeshOp(fn=fn, kwargs=kwargs)
 
 
@@ -215,12 +174,7 @@ def mesh_op(fn: str, **kwargs: Any) -> MeshOp:
 class OpNamespace:
     """A set of callables a recipe's ops may name, and WHEN they run.
 
-    ``module`` is the real module when THIS process can import it, which is what
-    lets the signature be the schema. ``names`` is the declared roster for a
-    library that lives somewhere this process cannot import from - a
-    GPL-isolated container - whose signatures are the driver's to bind; an op
-    from such a namespace passes validation with a journaled note.
-    """
+    ``module`` when this process can import it, else ``names`` as the roster."""
 
     origin: str
     phase: str
@@ -247,10 +201,7 @@ class OpNamespace:
     def roster(self) -> tuple[str, ...]:
         """Every name this namespace answers to.
 
-        A module's own ``__all__`` is the roster: it is what the module DECLARES
-        it offers, so a helper it happens to import is not an op and a primitive
-        stays an op however it is reached.
-        """
+        A module's own ``__all__`` is the roster: what it DECLARES it offers."""
         if self.names:
             return self.names
         return tuple(sorted(getattr(self.module, "__all__", ())))
@@ -263,11 +214,9 @@ class OpNamespace:
 
 
 def _shared_primitives() -> tuple[OpNamespace, ...]:
-    """The primitives namespace that rides along for EVERY mesher.
-
-    Imported where it is asked rather than at module scope: the primitives are
-    written against :class:`Mesh`, which is declared here.
-    """
+    """The primitives namespace that rides along for EVERY mesher."""
+    # Imported where it is asked rather than at module scope: the primitives are
+    # written against :class:`Mesh`, which is declared here.
     from trid3nt_server.workflows.mesh.shared import primitives
 
     return (OpNamespace(origin="primitives", phase=POST, module=primitives),)
@@ -277,10 +226,7 @@ def _shared_primitives() -> tuple[OpNamespace, ...]:
 class BoundOp:
     """One recipe entry resolved against the namespace that owns it.
 
-    ``fn`` is ``None`` for a name whose callable this process cannot import; the
-    driver that can is where it binds, and ``note`` is what the journal carries
-    about that.
-    """
+    ``fn`` is ``None`` when this process cannot import the callable."""
 
     op: MeshOp
     origin: str
@@ -312,10 +258,7 @@ def op_names(mesher: "Mesher") -> tuple[str, ...]:
 def resolve_op(mesher: "Mesher", fn: str) -> tuple[OpNamespace, Callable[..., Any] | None]:
     """Which namespace owns ``fn`` -> ``(namespace, callable | None)``.
 
-    A name present in BOTH origins refuses loudly: the phase an op runs in is
-    derived from its namespace, so a name two namespaces answer to has no
-    derivable phase and the recipe would mean two different programs.
-    """
+    A name in BOTH origins refuses: its phase would not be derivable."""
     found = [space for space in _namespaces(mesher) if str(fn) in space.roster()]
     if len(found) > 1:
         raise MeshToolError(
@@ -336,12 +279,7 @@ def bind_ops(mesher: "Mesher",
              ops: Iterable[MeshOp]) -> tuple[BoundOp, ...]:
     """Validate a recipe's ops against the mesher's namespaces -> bound entries.
 
-    THE SIGNATURE IS THE SCHEMA. The name must exist in the combined namespace,
-    and the kwargs must bind to the real callable's signature. A function this
-    process cannot import has no signature to bind against, so it passes through
-    with a note the journal carries and the driver that owns it binds instead.
-    Declared order is preserved; duplicates are legal.
-    """
+    THE SIGNATURE IS THE SCHEMA. Order is preserved; duplicates are legal."""
     bound: list[BoundOp] = []
     for op in ops:
         space, fn = resolve_op(mesher, op.fn)
@@ -380,23 +318,19 @@ def _bind_signature(mesher: "Mesher", op: MeshOp,
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class Mesh:
-    """A built mesh in the ONE shape every mesher returns and every writer reads.
+    """A built mesh in the ONE shape every mesher returns and every writer reads."""
 
-    ``points`` is ``(N, 2)`` in ``crs_authid`` units, ``cells`` is ``(M, 3)``
-    triangles or ``(M, 4)`` quads, 0-based, both numpy arrays. ``bed`` is the node
-    elevation positive up, or ``None`` when no bed was painted - a solver that
-    needs bathymetry declines a bed-less mesh rather than reading zeros as ground.
-
-    Both are ``None`` for a mesh whose realized topology lives in an ENGINE BUNDLE
-    rather than in arrays: the engine re-realizes the nodes and cells from the
-    authoring inputs the mesher staged, so there is no geometry here to claim. Such
-    a mesh states its counts in ``meta["artifact"]`` and carries its own display
-    face, because the formats that write connectivity have nothing to write.
-    """
-
+    #: ``(N, 2)`` node coordinates in ``crs_authid`` units; ``None`` for a mesh
+    #: whose realized topology lives in an ENGINE BUNDLE, which the engine
+    #: re-realizes from the authoring inputs the mesher staged.
     points: Any
+    #: ``(M, 3)`` triangles or ``(M, 4)`` quads, 0-based; ``None`` carries the
+    #: same meaning as a ``None`` ``points``, and such a mesh states its counts
+    #: in ``meta["artifact"]`` and carries its own display face.
     cells: Any
     crs_authid: str
+    #: Node elevation, positive up; ``None`` when no bed was painted - a solver
+    #: that needs bathymetry declines rather than reading zeros as ground.
     bed: Any | None = None
     meta: Mapping[str, Any] = field(default_factory=dict)
 
@@ -435,22 +369,16 @@ class Mesh:
 class Mesher:
     """A registered mesh library: namespaces, a role adapter, a default recipe.
 
-    ``build`` IS the role adapter: it turns the recipe's extent into this
-    library's domain object, threads ``resolution_m`` as its defaults, and runs
-    the ops in their derived phases. ``kinds`` are the mesh shapes it makes, the
-    first being what an undeclared ask gets.
-
-    ``deterministic`` is a MEASURED claim about the library, not a hope: a mesher
-    declares False when identical inputs have been observed to produce different
-    meshes, and the recipe carries that so a replay is read as an equivalent
-    rebuild rather than as the same mesh.
-    """
+    ``build`` IS the role adapter; ``kinds[0]`` is what an undeclared ask gets."""
 
     name: str
     build: Callable[[Any], Mesh]
     kinds: tuple[str, ...]
     namespaces: tuple[OpNamespace, ...] = ()
     default_ops: tuple[MeshOp, ...] = ()
+    #: A MEASURED claim about the library: False where identical inputs have been
+    #: observed to produce different meshes, so a replay is read as an equivalent
+    #: rebuild rather than as the same mesh.
     deterministic: bool = True
 
     def kind_or_default(self, kind: Any) -> str:
@@ -481,9 +409,7 @@ def register_mesher(
 ) -> Mesher:
     """Record a mesher under ``name`` -> the registered :class:`Mesher`.
 
-    A duplicate name raises at import: two libraries answering to one name is a
-    routing ambiguity the router cannot resolve honestly.
-    """
+    A duplicate name raises at import: two libraries under one name cannot route."""
     key = str(name)
     if key in _MESHERS:
         raise MeshToolError(

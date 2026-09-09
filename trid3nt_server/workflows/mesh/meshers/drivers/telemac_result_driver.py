@@ -1,25 +1,8 @@
 """In-container reader for a solved TELEMAC result file.
 
-Runs INSIDE ``trid3nt-local/telemac:latest``, the only place the engine's own
-``TelemacFile`` lives. The host mounts this file, the directory holding the
-result, and an output directory, then shells it; nothing here imports trid3nt
-code.
-
-  python telemac_result_driver.py /data/config.json /data
-
-Config key: ``slf`` - the result file's in-container path. Writes
-``telemac_result_meta.json`` (what the engine reports about the header) beside
-``telemac_result_fields.npz`` (node coordinates, the element table, the
-instants, and one ``v<i>`` array per variable, shaped ``(frames, nodes)``).
-
-The 3D quantities are the ones read: a 2D file reports the same numbers under
-them, and a 3D file reports every plane, which is the shape its own postprocess
-is handed. The 2D shape rides beside them - ``nplan``, ``npoin2``, ``nelem2`` and
-``ikle2`` - because a 3D field is a stack of planes over that mesh and only this
-reader knows how tall the stack is. Variable names arrive as the engine states
-them, WITHOUT the unit the record stores alongside - splitting the two is exactly
-the format knowledge this driver exists to keep on the engine's side.
-"""
+Runs INSIDE the image where the engine's own ``TelemacFile`` lives, importing
+nothing from trid3nt. The 2D shape rides beside the 3D quantities, because only
+this reader knows how tall a stack of planes is."""
 
 from __future__ import annotations
 
@@ -39,6 +22,10 @@ def read_result(slf: str, out: str) -> dict:
     """One result file -> the fields on disk and the header as a dict."""
     res = TelemacFile(slf)
     try:
+        # The 3D quantities are the ones read: a 2D file reports the same
+        # numbers under them, and a 3D file reports every plane, which is the
+        # shape its own postprocess is handed. Names arrive as the engine states
+        # them, WITHOUT the unit the record stores alongside.
         varnames = [str(name) for name in res.varnames]
         arrays = {"x": np.asarray(res.meshx, dtype="float64"),
                   "y": np.asarray(res.meshy, dtype="float64"),
@@ -66,6 +53,14 @@ def read_result(slf: str, out: str) -> dict:
 
 
 def main() -> int:
+    # Contract (host <-> container over the mounted result and output dirs):
+    #   python telemac_result_driver.py /data/config.json /data
+    #
+    #   slf  the result file's in-container path. Writes
+    #        telemac_result_meta.json (what the engine reports about the header)
+    #        beside telemac_result_fields.npz: node coordinates, the element
+    #        table, the instants, and one v<i> array per variable, shaped
+    #        (frames, nodes).
     cfg = json.load(open(sys.argv[1]))
     out = sys.argv[2].rstrip("/")
     meta = read_result(cfg["slf"], out)
