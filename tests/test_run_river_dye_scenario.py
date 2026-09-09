@@ -259,6 +259,25 @@ def test_an_absent_carrier_discharge_leaves_a_derived_provenance_row():
     assert "National Water Model" in (row.note or "")
 
 
+def test_the_granularity_lever_reads_back_beside_the_edge_the_mesh_was_built_at():
+    """An asked edge the mesher answers differently has to be readable on the answer.
+
+    ``mesh_size_m`` is the MEASURED minimum edge of the accepted mesh, so on its
+    own it cannot say what was asked for; the lever's own row is what makes the
+    two comparable.
+    """
+    from trid3nt_server.workflows.runtime import merge_provenance, provenance_entries
+
+    workflow = _workflow()
+    sheet = _resolve(mesh_resolution_m=10.0)
+    metrics = workflow.answer(_peak_layer(mesh_size_m=7.763).model_copy(
+        update={"synthetic_inputs": merge_provenance(
+            [], provenance_entries(sheet, workflow.params))}))
+    assert metrics["mesh_size_m"] == 7.763
+    assert metrics["mesh_resolution_m"] == 10.0
+    assert "supplied on this invocation" in metrics["mesh_resolution_note"]
+
+
 def _peak_layer(**overrides: Any) -> TelemacDyeLayerURI:
     from trid3nt_contracts.common import SyntheticInput
 

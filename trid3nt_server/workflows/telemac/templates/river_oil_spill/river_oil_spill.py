@@ -222,7 +222,8 @@ telemac_river_oil_spill = register_workflow(
     data=DATA,
     accepts=ACCEPTS,
     answer=ANSWER,
-    provenance=(("discharge_m3s", "discharge_note"),),
+    provenance=(("discharge_m3s", "discharge_note"),
+                ("mesh_resolution_m", "mesh_resolution_note")),
     # The dissolved maximum is the canonical peak class: a concentration peak
     # lives inside one element. How far the slick REACHED is a front location and
     # moves with it.

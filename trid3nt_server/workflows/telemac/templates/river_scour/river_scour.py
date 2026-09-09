@@ -271,7 +271,8 @@ telemac_river_scour = register_workflow(
     data=DATA,
     accepts=ACCEPTS,
     answer=ANSWER,
-    provenance=(("discharge_m3s", "discharge_note"),),
+    provenance=(("discharge_m3s", "discharge_note"),
+                ("mesh_resolution_m", "mesh_resolution_note")),
     # Scour and deposition maxima live inside single elements, so a coarse mesh
     # reads both low.
     sensitivity=(("max_deposition_mm", "peak"),
