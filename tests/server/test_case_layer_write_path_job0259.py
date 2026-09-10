@@ -133,7 +133,7 @@ async def test_split_brain_two_connections_layer_and_chat_persist(
     assert len(session_state.loaded_layers) == 1
     assert session_state.loaded_layers[0]["layer_id"] == minted_id
     assert session_state.case.layer_summary == [minted_id]
-    # job-0267: the tool dispatch now ALSO persists a replayable tool-card
+    # The tool dispatch now ALSO persists a replayable tool-card
     # row (role="tool"), interleaved after the user turn by created_at.
     assert len(session_state.chat_history) == 2
     assert session_state.chat_history[0].role == "user"
@@ -265,7 +265,7 @@ async def test_merge_preserves_previously_persisted_layers(
 async def test_sync_clears_stale_llm_context_on_cross_socket_case_switch(
     file_persistence,
 ) -> None:
-    """OQ-0245 through the two-socket lens: when the case switches on a
+    """Through the two-socket lens: when the case switches on a
     sibling socket, the chat socket's next dispatch resets its LLM context."""
     session_id = new_ulid()
     ws_a, ws_b = FakeWS(), FakeWS()

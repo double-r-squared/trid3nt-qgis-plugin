@@ -3,7 +3,7 @@
 One JSON per exposed module, extracted IN-IMAGE from the module's dico by
 `scripts/instruments/extract_telemac_catalog.py` and committed. Never hand edited: a
 transcribed keyword table is a second answer to a question the engine already
-answers, and `tests/test_telemac_catalog_drift.py` re-extracts from the image
+answers, and `tests/scripts/test_telemac_catalog_drift.py` re-extracts from the image
 when one is present and fails on any difference.
 
 A row carries what the dictionary says about one keyword - its raw name, the

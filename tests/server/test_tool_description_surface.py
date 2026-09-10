@@ -17,7 +17,7 @@ from trid3nt_server.tools import TOOL_REGISTRY
 
 #: Engine families purged from the registry, lowercase. A name returns here one
 #: line at a time as its engine lands again. Kept verbatim in step with
-#: ``tests/test_system_prompt._RETIRED_ENGINE_NAMES`` -- the two surfaces are the
+#: ``_RETIRED_ENGINE_NAMES`` in the system-prompt tests -- the two surfaces are the
 #: same class, so a name may not leave one list while it holds in the other.
 RETIRED_ENGINE_NAMES = (
     "sfincs",

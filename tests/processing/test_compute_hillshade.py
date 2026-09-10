@@ -596,9 +596,9 @@ def test_compute_hillshade_swiss_double_calls_gdaldem_twice(fake_storage):
 
 
 # ---------------------------------------------------------------------------
-# job-0257 — CRS preservation (hillshade no-render root-cause #3)
+# CRS preservation (hillshade no-render root-cause #3)
 #
-# Live evidence (2026-06-10): the conda-env gdaldem invoked via bare
+# Live evidence: the conda-env gdaldem invoked via bare
 # subprocess (no PROJ_LIB/PROJ_DATA) cannot find proj.db and silently writes
 # the output CRS as a degenerate LOCAL_CS/ENGCRS (epsg=None) instead of the
 # DEM's EPSG:5070. QGIS Server then cannot reproject the layer for WMS.
@@ -664,7 +664,7 @@ def test_fetch_fn_output_preserves_dem_crs_without_proj_env():
     CS with no EPSG code."""
     from trid3nt_server.tools.processing.compute_hillshade.compute_hillshade import _make_fetch_fn
 
-    # Strip PROJ vars so the subprocess depends entirely on the job-0257
+    # Strip PROJ vars so the subprocess depends entirely on the
     # env-wiring (or the post-hoc stamp as fallback).
     stripped = {
         k: v
@@ -698,11 +698,11 @@ def test_fetch_fn_output_preserves_dem_crs_without_proj_env():
 
 
 # ---------------------------------------------------------------------------
-# 2026-07-13 DEM fallback ladder (FIX 3): the Copernicus GLO-30 fallback DEM
+# DEM fallback ladder (FIX 3): the Copernicus GLO-30 fallback DEM
 # handle must flow through compute_hillshade UNCHANGED. The fallback layer's
 # uri points at a COG the router serialize path emits (COG driver, EPSG:4326
-# degrees, float32, nodata=-9999; wave-8 fold ADR 0054 -- was the twin's
-# _write_dem_cog) -- a DIFFERENT byte shape than the 3DEP EPSG:5070 path -- so
+# degrees, float32, nodata=-9999) -- a DIFFERENT byte shape than the 3DEP
+# EPSG:5070 path -- so
 # this proves the uniform dem_uri contract with the real writer + real gdaldem.
 # ---------------------------------------------------------------------------
 

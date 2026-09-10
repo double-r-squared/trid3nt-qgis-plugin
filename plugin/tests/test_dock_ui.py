@@ -76,7 +76,7 @@ class TestDockUiBatch(unittest.TestCase):
         self.assertIn("DOCK-UI-OK", self._stdout())
 
     def test_markdown_rendering(self):
-        """Feature 2026-07-13: stream plain -> finalize rich markdown,
+        """Stream plain -> finalize rich markdown,
         replay rich, tall message unclipped at 320px and 640px widths."""
         out = self._stdout()
         self.assertIn("[markdown] narrow(320px view)", out)
@@ -120,7 +120,7 @@ class TestDockUiBatch(unittest.TestCase):
         )
 
     def test_no_tool_turn_mints_no_card(self):
-        """F3 (live-feedback 2026-07-21): a turn with zero tool events must
+        """F3: a turn with zero tool events must
         leave zero tool cards (the empty stale 'Tools' shell is gone)."""
         self.assertIn("[F3] no-tool turn minted zero tool cards", self._stdout())
 
@@ -132,7 +132,7 @@ class TestDockUiBatch(unittest.TestCase):
         self.assertIn("[F7] error notes", self._stdout())
 
     def test_tool_card_state_border(self):
-        """F4 (live-feedback 2026-07-21): the tool-card border tracks the
+        """F4: the tool-card border tracks the
         aggregate state -- neutral running, green success, red failure."""
         self.assertIn(
             "[F4] tool-card border: neutral running -> green success -> "

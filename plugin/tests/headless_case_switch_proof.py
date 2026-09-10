@@ -243,8 +243,8 @@ check(
     "item D: canvas auto-focused when opening case A (bbox present)",
     extent_after_a.toString() != initial_extent.toString(),
 )
-# NATE de-noise 2026-08-04: the "Zoomed to case area" chat note was removed;
-# the zoom BEHAVIOR (canvas auto-focus, checked above) stays, silently.
+# There is no "Zoomed to case area" chat note; the zoom BEHAVIOR (canvas
+# auto-focus, checked above) happens silently.
 
 # --------------------------------------------------------------------------- #
 # Open case B (a DIFFERENT case) -- A's group/layers/chat must vanish

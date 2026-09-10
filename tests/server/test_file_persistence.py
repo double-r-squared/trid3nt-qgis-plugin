@@ -91,8 +91,8 @@ def test_file_mcp_round_trip_case(tmp_path: Path) -> None:
 def test_file_mcp_list_cases(tmp_path: Path) -> None:
     """Multiple owned Cases are listed for their owner; others are excluded.
 
-    job-0252 (OQ-0115-CASE-USER-LINK): the ``$exists:false`` leak clause is
-    gone — Cases are owner-scoped on the file substrate too.
+    There is no ``$exists:false`` leak clause — Cases are owner-scoped on
+    the file substrate too.
     """
     p = Persistence(FileMCPClient(base_dir=tmp_path))
     owner = new_ulid()

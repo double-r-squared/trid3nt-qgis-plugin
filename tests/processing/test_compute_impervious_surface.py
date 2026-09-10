@@ -227,7 +227,7 @@ def test_compute_impervious_from_landcover_classes_22_23_24():
     # Row 3 (water=11) → 0.0
     assert np.allclose(out_arr[3, :], 0.0), f"row 3 (water): {out_arr[3]}"
 
-    # Codified job-0086 lesson: the spatial arrangement is preserved. The
+    # The spatial arrangement is preserved. The
     # developed-class GRADIENT runs north (top) to south (bottom). If a Y-axis
     # flip were silently introduced, row 0 would be 0.0 (water) not 0.3, and
     # row 3 would be 0.3 (class 22) not 0.0. The assertions above catch it.
@@ -316,7 +316,7 @@ def test_compute_impervious_nodata_preserved_as_nan():
 
 
 def test_compute_impervious_bbox_window_geographic_correctness():
-    """bbox window reads a sub-extent; checks GEOGRAPHIC correctness (job-0086)."""
+    """Bbox window reads a sub-extent; checks GEOGRAPHIC correctness."""
     # Build a 4×4 landcover raster in EPSG:4326 so we can pass a 4326 bbox.
     # Row 0 (north) = class 24 (high developed),
     # Row 1         = class 23,
@@ -608,7 +608,7 @@ def test_live_compute_impervious_against_fort_myers_landcover():
 
     Every value lies in [0, 1] excluding NaN, some fraction is non-zero, and the mean
     is below 1 - a sanity floor and ceiling rather than a pinned number."""
-    # fetch_landcover is spec-driven (ADR 0082): resolve off the registry seam; it
+    # fetch_landcover is spec-driven: resolve off the registry seam; it
     # returns a LandcoverResult (a LayerURI subclass -- the layer IS the result).
     from trid3nt_server.tools import TOOL_REGISTRY
 

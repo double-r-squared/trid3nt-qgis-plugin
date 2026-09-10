@@ -836,7 +836,7 @@ def _match_synthetic_queries(
 _NAME_RANKER_GENERICS: set[str] = {
     "polygon",
     "polygons",
-    # Bare domain nouns (2026-07-22): content channels route these; letting
+    # Bare domain nouns: content channels route these; letting
     # them earn NAME-channel RRF terms made name-bearing tools (fetch_buildings,
     # compute_flood_depth_damage) structurally unbeatable for analytical asks
     # like "summary statistics for the building layer" (spatial_query fold).

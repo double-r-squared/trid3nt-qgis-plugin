@@ -1,4 +1,4 @@
-"""Unit tests for the fetch-time provenance channel (ADR 0110).
+"""Unit tests for the fetch-time provenance channel.
 
 The general, minimal, cache-replayable sidecar from fetch to envelope: a delegate
 records a small typed dict during a NON-cached fetch; ``read_through`` persists it

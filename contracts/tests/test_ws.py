@@ -439,11 +439,11 @@ def test_pipeline_step_duration_ms_rejects_negative() -> None:
         )
 
 
-# --- two-card sim observability (task-149) ---------------------------------- #
+# --- two-card sim observability ---------------------------------- #
 
 
 def test_pipeline_step_role_defaults_to_tool_back_compat() -> None:
-    """task-149: a minimally-built PipelineStep is an on-box tool card with no
+    """A minimally-built PipelineStep is an on-box tool card with no
     Batch binding — proving the new fields keep every existing payload identical.
     """
     step = ws.PipelineStep(
@@ -455,7 +455,7 @@ def test_pipeline_step_role_defaults_to_tool_back_compat() -> None:
 
 
 def test_pipeline_step_compute_card_carries_batch_binding(session_id: str) -> None:
-    """task-149: a ``role="compute"`` off-box solver card carries the Batch
+    """A ``role="compute"`` off-box solver card carries the Batch
     jobId + last DescribeJobs status, and round-trips through the envelope.
     """
     payload = ws.PipelineStatePayload(
@@ -485,7 +485,7 @@ def test_pipeline_step_compute_card_carries_batch_binding(session_id: str) -> No
 
 
 def test_pipeline_step_rejects_unknown_role() -> None:
-    """task-149: role is a closed Literal — only ``tool``/``compute``."""
+    """Role is a closed Literal — only ``tool``/``compute``."""
     with pytest.raises(ValidationError):
         ws.PipelineStep(
             step_id=new_ulid(),
@@ -497,7 +497,7 @@ def test_pipeline_step_rejects_unknown_role() -> None:
 
 
 def test_solve_progress_phase_defaults_none_and_carries_batch_status() -> None:
-    """task-149: SolveProgressPayload.phase defaults None (back-compat) and,
+    """SolveProgressPayload.phase defaults None (back-compat) and,
     when populated, carries the DescribeJobs status verbatim.
     """
     minimal = ws.SolveProgressPayload(run_id=new_ulid(), solver="sfincs", elapsed_seconds=1.0)
@@ -508,11 +508,11 @@ def test_solve_progress_phase_defaults_none_and_carries_batch_status() -> None:
     assert populated.phase == "STARTING"
 
 
-# --- nested sub-step timeline (task-168) ------------------------------------ #
+# --- nested sub-step timeline ------------------------------------ #
 
 
 def test_pipeline_step_substep_fields_default_none_back_compat() -> None:
-    """task-168: a minimally-built PipelineStep carries no parent link and no
+    """A minimally-built PipelineStep carries no parent link and no
     breadcrumb, proving the four new fields keep every existing payload identical.
     """
     step = ws.PipelineStep(
@@ -525,7 +525,7 @@ def test_pipeline_step_substep_fields_default_none_back_compat() -> None:
 
 
 def test_pipeline_step_child_carries_parent_step_id(session_id: str) -> None:
-    """task-168: a CHILD step carries parent_step_id (nested, never top-level)
+    """A CHILD step carries parent_step_id (nested, never top-level)
     while the PARENT carries the live breadcrumb trio; both round-trip."""
     parent_id = new_ulid()
     payload = ws.PipelineStatePayload(
@@ -563,7 +563,7 @@ def test_pipeline_step_child_carries_parent_step_id(session_id: str) -> None:
 
 
 def test_pipeline_step_substep_total_none_for_unknown_plan(session_id: str) -> None:
-    """task-168: substep_total may be None when the planned child count is
+    """substep_total may be None when the planned child count is
     unknown -- the breadcrumb then shows just the label + index."""
     payload = ws.PipelineStatePayload(
         pipeline_id=new_ulid(),
@@ -587,7 +587,7 @@ def test_pipeline_step_substep_total_none_for_unknown_plan(session_id: str) -> N
 
 
 def test_pipeline_step_substep_index_rejects_non_positive() -> None:
-    """task-168: substep_index/total are 1-based (ge=1) -- 0 / negative reject."""
+    """substep_index/total are 1-based (ge=1) -- 0 / negative reject."""
     with pytest.raises(ValidationError):
         ws.PipelineStep(
             step_id=new_ulid(),
@@ -797,7 +797,7 @@ def test_secrets_payloads_registered_in_ws_dicts() -> None:
     assert "secret-add" in ws.CLIENT_TO_AGENT_PAYLOADS
     assert "secret-revoke" in ws.CLIENT_TO_AGENT_PAYLOADS
     assert "secrets-list" in ws.AGENT_TO_CLIENT_PAYLOADS
-    # Credential-request flow (§F.3 amendment): request is agent->client, the
+    # Credential-request flow: request is agent->client, the
     # retry signal is client->agent (the key itself rides the secret-add path).
     assert "credential-request" in ws.AGENT_TO_CLIENT_PAYLOADS
     assert "credential-provided" in ws.CLIENT_TO_AGENT_PAYLOADS
@@ -846,13 +846,13 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
         "spatial-input-request": lambda: ws.SpatialInputRequestPayload(
             request_id=new_ulid(), mode="point", title="t", description="d"
         ),
-        # — §F.3 per-Case secrets envelopes (OQ-0100-WS-REGISTRY-WIRING)
+        # — per-Case secrets envelopes
         "secret-add": lambda: ws.SecretAddEnvelopePayload(
             provider="firms", case_id=new_ulid(), key_value="x"
         ),
         "secret-revoke": lambda: ws.SecretRevokeEnvelopePayload(secret_id=new_ulid()),
         "secrets-list": lambda: ws.SecretsListEnvelopePayload(),
-        # §F.3 amendment — just-in-time credential-request flow
+        # just-in-time credential-request flow
         "credential-request": lambda: ws.CredentialRequestEnvelopePayload(
             request_id=new_ulid(),
             provider_id="firms",
@@ -865,7 +865,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
         "credential-provided": lambda: ws.CredentialProvidedEnvelopePayload(
             request_id=new_ulid(), secret_id=new_ulid()
         ),
-        # — tool payload-warning envelopes (Wave 2)
+        # — tool payload-warning envelopes
         "tool-payload-warning": lambda: ws.PayloadWarningEnvelopePayload(
             warning_id=new_ulid(),
             tool_name="fetch_dem",
@@ -878,7 +878,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             warning_id=new_ulid(),
             decision="proceed",
         ),
-        # — chart-emission envelope (sprint-13 conversational analysis)
+        # — chart-emission envelope (conversational analysis)
         "chart-emission": lambda: ChartEmissionPayload(
             chart_id=new_ulid(),
             vega_lite_spec={
@@ -888,7 +888,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             },
             title="Damage distribution",
         ),
-        # — python-sandbox code-exec envelopes (sprint-13 Stage 2)
+        # — python-sandbox code-exec envelopes (Stage 2)
         "code-exec-request": lambda: CodeExecRequestPayload(
             code_exec_id=new_ulid(),
             python_code="result = dem.read(1).mean()",

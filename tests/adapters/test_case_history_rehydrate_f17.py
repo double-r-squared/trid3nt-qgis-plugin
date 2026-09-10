@@ -141,7 +141,7 @@ def test_rehydrate_tool_row_failed_outcome() -> None:
 
 
 def test_rehydrate_tool_row_from_content_json_only() -> None:
-    """No typed tool_card (pre-job-0267 doc) — parse the JSON ``content``."""
+    """No typed tool_card on the document — parse the JSON ``content``."""
     case_id = new_ulid()
     row = _msg(case_id, "tool",
                '{"tool_name": "compute_hillshade", "state": "complete"}')
@@ -187,11 +187,11 @@ def test_layers_present_note_lists_layers() -> None:
     ])
     assert note is not None
     assert "ALREADY produced" in note
-    # job-0326: the note now forbids re-RUN as well as re-fetch/recompute and
+    # The note now forbids re-RUN as well as re-fetch/recompute and
     # tags each layer RESULT[...] / INPUT so the model recognizes an existing
     # simulation output and never re-launches the solver that made it.
     assert "do NOT re-run, re-fetch, or recompute" in note
-    # job-0325 (F54) + job-0326: the per-layer line surfaces the reusable handle
+    # The per-layer line surfaces the reusable handle
     # (== layer_id), the underlying uri, AND the role label. A flood-depth layer
     # classifies as a RESULT of the flood-depth family; landcover is an INPUT.
     assert (
@@ -376,7 +376,7 @@ def test_case_open_cross_case_isolation(_persistence_bound: Persistence) -> None
 
 
 def test_case_open_unbound_persistence_keeps_clean_slate() -> None:
-    """job-0245: with Persistence unbound, the reset still yields empty history
+    """With Persistence unbound, the reset still yields empty history
     (rehydration runs only AFTER the persistence binding check)."""
     saved = get_persistence()
     set_persistence(None)

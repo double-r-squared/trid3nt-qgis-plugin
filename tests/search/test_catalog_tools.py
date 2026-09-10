@@ -179,7 +179,7 @@ def test_registry_has_catalog_tools_after_explicit_import():
 
 
 def test_load_catalog_returns_30_entries_from_seed_yaml():
-    """The v0.1 seed catalog has 30 vetted entries per job-0046."""
+    """The v0.1 seed catalog has 30 vetted entries."""
     catalog_mod._reset_catalog_cache_for_tests()
     catalog = load_catalog()
     assert len(catalog) >= 25  # be lenient: tolerate minor curator drift
@@ -716,7 +716,7 @@ def test_fetch_landcover_routes_through_generic_ogc_adapter(monkeypatch):
 
     The shared adapter is the single source of truth for Tier 2, so a forked WCS
     implementation fails here."""
-    # fetch_landcover is spec-driven (ADR 0082): the WCS GetCoverage GET lives in the
+    # fetch_landcover is spec-driven: the WCS GetCoverage GET lives in the
     # router's wcs_getcoverage access mode, still the shared ogc adapter (Tier-2 SoT).
     import numpy as np
     import rasterio

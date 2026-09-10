@@ -121,7 +121,7 @@ assert not ws_entry._thinking_toggle.isChecked(), (
 )
 print("[bug2] first non-whitespace delta: bubble shown, thinking collapsed")
 
-# ---- 3. T8 (NATE 2026-07-20): the "Layers (N)" toggle is GONE ------------- #
+# ---- 3. T8: the "Layers (N)" toggle is GONE ------------- #
 # The user sees rendered layers in the QGIS map / layer tree, so successful
 # layer notes are dropped from chat; only FAILURE notes still surface (visible
 # error lines). The materialization path itself is untouched (tested elsewhere).
@@ -202,7 +202,7 @@ assert 0 <= i_pre < i_card < i_post, (
     f"gate card out of order: pre={i_pre} card={i_card} post={i_post}"
 )
 
-# ---- 6. MARKDOWN (feature 2026-07-13): stream plain, finalize rich --------- #
+# ---- 6. MARKDOWN: stream plain, finalize rich --------- #
 
 from qgis.PyQt.QtCore import Qt  # noqa: E402
 
@@ -388,7 +388,7 @@ assert think_entry._thinking_label.textFormat() == Qt.PlainText, (
 assert think_entry.label.textFormat() == Qt.RichText, "finalize skipped the answer"
 print("[markdown] stream-plain -> finalize-rich, replay rich, user/thinking plain")
 
-# ---- 6b. LANE PLUGIN (2026-07-22): persisted thinking replays as the ------- #
+# ---- 6b. LANE PLUGIN: persisted thinking replays as the ------- #
 #          SAME grey collapsible fold the live agent-thinking-chunk path
 #          shows -- collapsed by default, in the same bubble as the answer;
 #          a plain agent row (no thinking) renders unchanged (no fold).
@@ -480,13 +480,13 @@ print(
     "answer bubble; plain row unchanged"
 )
 
-# ---- 7. NATE 2026-07-19 chat-UI batch (N1 fold / N2 tree / N3 state / ------- #
+# ---- 7. chat-UI batch (N1 fold / N2 tree / N3 state / --------------------- #
 #         N4 collapsed-progress / N5 sim-card ordering) ----------------------- #
 
 from plugin.ui.cards import SimCard  # noqa: E402
 from plugin.net.trid3nt_client import PipelineStep  # noqa: E402
 
-# T1..T5 (NATE 2026-07-20): the parent tool card. render_tool_card builds ONE
+# T1..T5: the parent tool card. render_tool_card builds ONE
 # _ToolCard whose inner rows keep the state-driven TEXT color (green/grey/red),
 # each prefixed with ">" (T4), and carry a right-edge status glyph -- a spinner
 # frame while running, a check on success, an x on failure (T5). While a row is
@@ -620,7 +620,7 @@ assert 0 <= i_pre < i_card < i_post, (
 )
 print("[N5] sim card lands inline: pre-entry -> card -> post-entry")
 
-# ---- 8. Code-exec approval card (live-feedback 2026-07-21) ------------------ #
+# ---- 8. Code-exec approval card ------------------ #
 # The agent's code-exec-request envelope previously had ZERO handling (the
 # agent blocked on its confirm gate forever). The dock must render the
 # approval card inline, close out the streaming entry (BUG-4/N5 discipline),
@@ -727,7 +727,7 @@ dock._on_event("turn-complete", {})
 print("[code-exec] approval card: inline order, collapsed verbatim preview, "
       "Run=proceed / Deny=cancel via tool-payload-confirmation, lock + chip")
 
-# ---- 8b. Credential-request key-entry card (LANE K, 2026-07-22) ------------- #
+# ---- 8b. Credential-request key-entry card -------------------------------- #
 # The agent's credential-request envelope previously had ZERO handling (the
 # paused keyed tool waited out its server-side TTL -- the exact code-exec
 # gap). The dock must render the key-entry card inline (BUG-4/N5 close-out +
@@ -891,7 +891,7 @@ print("[credential] key-entry card: inline order, masked input, "
       "field cleared, lock + chip, no key in logs or labels")
 
 # ---- 9. F3: a no-tool turn mints ZERO tool cards ---------------------------- #
-# Live-feedback 2026-07-21 ("empty stale tool card"): a pipeline frame whose
+# The "empty stale tool card": a pipeline frame whose
 # steps are ALL filtered (LLM bookkeeping) used to lazily mint an empty
 # "Tools" shell. A turn with zero tool events must leave zero tool cards.
 
@@ -993,7 +993,7 @@ assert "#f85149" in f4_card.styleSheet(), (
 print("[F4] tool-card border: neutral running -> green success -> red failure")
 
 # ---- 11. F7: error notes wrap with the view + consecutive errors fold ------- #
-# Live-feedback 2026-07-22: red error lines (the case-open rehydrate "MinIO
+# Red error lines (the case-open rehydrate "MinIO
 # fetch failed (http://...) -- skipped" notes) rendered statically sized --
 # the unbroken store URL reported an unbreakable label width (measured
 # sizeHint 400px pre-fix) that dragged the dock wider than its minimum. Fix

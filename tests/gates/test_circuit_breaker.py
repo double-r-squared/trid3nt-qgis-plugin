@@ -295,7 +295,7 @@ def test_multiple_tools_are_independent():
 
 
 # ---------------------------------------------------------------------------
-# Test 9: failure classification (LIVE BUG 2026-06-17 — Oklahoma-tornado).
+# Test 9: failure classification.
 #
 # The breaker must trip ONLY on UPSTREAM/transient faults, NEVER on a
 # deterministic CLIENT/argument error — otherwise a burst of bad-arg calls

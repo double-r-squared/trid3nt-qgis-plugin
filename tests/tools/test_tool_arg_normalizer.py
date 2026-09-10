@@ -1,4 +1,4 @@
-"""Tests for ``tool_arg_normalizer`` — the centralized Gemini kwarg sweep (job-0164).
+"""Tests for ``tool_arg_normalizer`` — the centralized Gemini kwarg sweep.
 
 Each test names exactly one normalization rule and proves it fires by calling
 ``normalize_args(name, raw, fn)`` against a tiny fake callable whose signature
@@ -60,7 +60,7 @@ def test_coerce_bbox_value_plain_forms_unaffected() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# coerce_latlon (job-0317) — Bedrock Claude passes spill_location_latlon as a
+# coerce_latlon — Bedrock Claude passes spill_location_latlon as a
 # STRING, not a JSON array. The naive ``tuple(float(v) for v in value)``
 # iterated the string's characters -> float('.') crash. coerce_latlon accepts
 # every string form AND a real list, and raises a typed error only when the
@@ -406,7 +406,7 @@ def test_forcing_string_table(
 
 
 # ---------------------------------------------------------------------------
-# job-0261: NWS alert tools — LLM-invented state kwargs land on "area" so the
+# NWS alert tools — LLM-invented state kwargs land on "area" so the
 # precise server-side ?area= filter engages instead of the CONUS sweep.
 # ---------------------------------------------------------------------------
 

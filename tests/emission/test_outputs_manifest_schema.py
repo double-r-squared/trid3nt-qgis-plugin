@@ -36,7 +36,7 @@ def test_build_entry_flat_and_omits_absent_optionals():
 
 
 def test_build_entry_carries_optional_crs_authid_on_mesh():
-    """ADR 0283: a kind=mesh entry may carry crs_authid (a SELAFIN has no CRS);
+    """A kind=mesh entry may carry crs_authid (a SELAFIN has no CRS);
     it is omitted (absent, not null) when unset, and tolerant-read both ways."""
     mesh = om.build_entry(
         kind="mesh", quantity="model_results",

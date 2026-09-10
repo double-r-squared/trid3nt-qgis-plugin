@@ -288,7 +288,7 @@ async def test_openai_gate_fails_open_on_cold_index(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Door dissolution (ADR 0094): engine templates are in the DEFAULT declarations
+# Door dissolution: engine templates are in the DEFAULT declarations
 # directly -- no door, no gate expansion; only tier=internal/catalog are withheld.
 # ---------------------------------------------------------------------------
 
@@ -302,7 +302,7 @@ def _template_names() -> set[str]:
 
 
 def test_default_declarations_include_templates_directly():
-    """Door dissolution (ADR 0094): every tier=template engine template is in the
+    """Door dissolution: every tier=template engine template is in the
     DEFAULT declarable registry and is built into declarations directly -- no
     engine door, no gate expansion. No tier=door tool survives."""
     from trid3nt_server.adapters.adapter import build_tool_declarations

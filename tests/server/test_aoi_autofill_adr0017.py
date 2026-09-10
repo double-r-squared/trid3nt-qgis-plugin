@@ -177,7 +177,7 @@ class TestActiveAoiPayloadSeam:
 
 
 # --------------------------------------------------------------------------- #
-# 2b. The drawn-geometry session-state seam (ADR 0159)
+# 2b. The drawn-geometry session-state seam
 # --------------------------------------------------------------------------- #
 
 

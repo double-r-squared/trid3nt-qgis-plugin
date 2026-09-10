@@ -220,7 +220,7 @@ def test_per_turn_injection_shape_appends_case_state_user_turn() -> None:
     assert note is not None
 
     injected = list(turn_history) + [{"role": "user", "text": note}]
-    # Entry-captured list is untouched (job-0269 contract).
+    # Entry-captured list is untouched.
     assert turn_history == [{"role": "user", "text": "model the flooding"}]
     # The note is the LAST history turn and carries the Case-state marker.
     assert injected[-1]["role"] == "user"

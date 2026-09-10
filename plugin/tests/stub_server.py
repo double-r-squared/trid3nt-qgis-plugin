@@ -177,8 +177,8 @@ STUB_CODE_EXEC_ID = "01STUBCODEEXECAAAAAAAAAAAA"
 # contract (contracts .../sandbox_contracts.py). The confirmation reply rides
 # the EXISTING tool-payload-confirmation envelope with warning_id ==
 # code_exec_id (the server's shared confirm-gate seam, _gate_on_code_exec --
-# no new client verb). Live-feedback 2026-07-21: this envelope previously had
-# ZERO plugin handling, so the agent blocked on the gate forever.
+# no new client verb). Without plugin handling for this envelope the agent
+# blocks on the gate forever.
 CODE_EXEC_REQUEST_ROW: dict[str, Any] = {
     "envelope_type": "code-exec-request",
     "code_exec_id": STUB_CODE_EXEC_ID,
@@ -227,7 +227,7 @@ TOOL_CANDIDATES_ROW: dict[str, Any] = {
     "timeout_s": 60.0,
 }
 
-# Wave-picker sequence (LANE P, 2026-07-22): two DISTINCT tool-candidates
+# Picker sequence: two DISTINCT tool-candidates
 # requests emitted back-to-back in ONE turn (no wait between them, no wait
 # for a reply) -- exercises the client's supersede-on-new-picker fold so a
 # staged wave reads as a stepped wizard ("Step 1" folds to "agent proceeded"
@@ -281,7 +281,7 @@ STUB_CREDENTIAL_REQUEST_ID = "01STUBCREDREQAAAAAAAAAAAAA"
 # refreshed secrets-list) THEN credential-provided (request_id echo +
 # provided=True) -- or credential-provided provided=False alone on Skip (the
 # live server then re-raises the tool's original typed error). LANE K
-# 2026-07-22: this envelope previously had ZERO plugin handling (the exact
+# This envelope previously had ZERO plugin handling (the exact
 # code-exec gap), so the agent's paused keyed tool waited out its TTL.
 CREDENTIAL_REQUEST_ROW: dict[str, Any] = {
     "envelope_type": "credential-request",
@@ -302,7 +302,7 @@ STUB_REGION_ID = "county-12071"
 
 # A region-choice-request payload field-for-field the
 # RegionChoiceRequestEnvelopePayload contract (contracts .../region_choice.py).
-# CRITICAL gate-WAIT (2026-07-23): the server snapped a vague geocode to the
+# CRITICAL gate-WAIT: the server snapped a vague geocode to the
 # WHOLE state and PAUSES the turn awaiting a region-choice-provided reply
 # (region pick OR whole_state default) -- handled in the
 # region-choice-provided branch below. Previously the plugin had ZERO handling
@@ -339,7 +339,7 @@ STUB_SPATIAL_BBOX_REQUEST_ID = "01STUBSPATIALBBOXAAAAAAAAA"
 STUB_SPATIAL_VECTOR_REQUEST_ID = "01STUBSPATIALVECTORAAAAAAA"
 
 # spatial-input-request payloads field-for-field the SpatialInputRequestPayload
-# contract (contracts ws.py). CRITICAL gate-WAIT (2026-07-23): the agent needs
+# contract (contracts ws.py). CRITICAL gate-WAIT: the agent needs
 # a picked geometry and PAUSES the turn awaiting a spatial-input-response
 # (point/bbox coordinates, drawn features, or cancelled=True) -- handled in the
 # spatial-input-response branch below. The vector_draw row exercises the
@@ -365,7 +365,7 @@ SPATIAL_INPUT_VECTOR_ROW: dict[str, Any] = {
 }
 
 # Persisted chat_history rows the select rehydration replays (CaseChatMessage
-# subset). LANE PLUGIN (2026-07-22): the second agent row carries the
+# subset). LANE PLUGIN: the second agent row carries the
 # persisted "thinking" field (Lane CORE row-model addition -- the reasoning
 # channel the live turn streamed as agent-thinking-chunk, sharing the
 # bubble's message_id) so the plugin's history-replay thinking fold is
@@ -443,8 +443,7 @@ class StubAgentServer:
         #: When set, a BARE session-resume (payload case_id None) answers with
         #: THIS case_id stamped on the session-state envelope -- the real
         #: server's persisted ``last_active_case_id`` rebind (startup case
-        #: reuse, live-feedback 2026-07-09). A client-stamped resume still
-        #: echoes the client's id (job-CASE-AUTHORITY).
+        #: reuse). A client-stamped resume still echoes the client's id.
         self.resume_rebind_case_id: Optional[str] = None
         #: Remote-daemon (tailnet) endpoint advertisement (LANE P, plugin
         #: derivation tests). When set, EVERY ``auth-ack`` this reply merges
@@ -633,7 +632,7 @@ class StubAgentServer:
                     await ws.close(code=1011, reason="stub drop")
                     return
                 if "run-code" in text:
-                    # Code-exec HARD confirm gate (live-feedback 2026-07-21):
+                    # Code-exec HARD confirm gate:
                     # the agent emits the request and BLOCKS until the matching
                     # confirmation (warning_id == code_exec_id) arrives --
                     # handled in the tool-payload-confirmation branch below.
@@ -752,7 +751,7 @@ class StubAgentServer:
                     self._pending_gate_case = case_id
                     await send("tool-payload-warning", row, case_id=case_id)
                     continue
-                # F9 (live-feedback 2026-07-09): when the user-message carries
+                # F9: when the user-message carries
                 # show_thinking=True or the text contains "think", emit two
                 # agent-thinking-chunk deltas before the answer.
                 show_thinking = bool((env.get("payload") or {}).get("show_thinking"))
@@ -908,7 +907,7 @@ class StubAgentServer:
                     # The code-exec confirm reply (warning_id == code_exec_id;
                     # the live server FAIL-CLOSES anything != "proceed").
                     if decision == "proceed":
-                        # LANE A (2026-07-23): the run OUTCOME rides an
+                        # LANE A: the run OUTCOME rides an
                         # ADDITIONAL code-exec-result envelope, IN
                         # ADDITION to the narration -- the dock folds it into
                         # the approved card's chip.

@@ -310,7 +310,7 @@ def test_fetch_dem_partial_coverage_propagates_not_ladder(monkeypatch, fake_s3):
 
 
 # --------------------------------------------------------------------------- #
-# source="copernicus" cross-sibling DISPATCH (ADR 0097).
+# source="copernicus" cross-sibling DISPATCH.
 # --------------------------------------------------------------------------- #
 
 

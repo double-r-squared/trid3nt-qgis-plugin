@@ -634,7 +634,7 @@ class TestResultMaterialization:
         assert len(gdf) == 4
 
     def test_result_registers_layer_handle(self, points_path, tmp_path):
-        """ADR-0014: register_tool_result on the returned model mints the
+        """register_tool_result on the returned model mints the
         layer_id <-> uri pair so the NEXT spatial_query can reference the
         result layer by handle."""
         from trid3nt_server.emission.uri_registry import SessionUriRegistry
@@ -656,7 +656,7 @@ class TestResultMaterialization:
 
 
 # ---------------------------------------------------------------------------
-# ADR-0014 handle resolution (the dispatch seam the param name inherits)
+# Handle resolution (the dispatch seam the param name inherits)
 # ---------------------------------------------------------------------------
 
 
@@ -683,7 +683,7 @@ class TestHandleResolution:
         assert result["rows"][0][0] == 4
 
     def test_short_handle_resolves(self, points_path):
-        """The ADR-0014 L<n> short handle (what the LLM actually sees)."""
+        """The L<n> short handle (what the LLM actually sees)."""
         from trid3nt_server.emission.uri_registry import SessionUriRegistry
 
         reg = SessionUriRegistry(session_id="test-spatial-query-short")

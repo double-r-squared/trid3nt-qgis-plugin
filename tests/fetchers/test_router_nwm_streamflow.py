@@ -146,7 +146,7 @@ def test_resolve_nwm_key_not_available_raises(monkeypatch) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# netCDF -> streamflow lookup: the real datetime64[ns] round-trip (ADR 0309).
+# netCDF -> streamflow lookup: the real datetime64[ns] round-trip.
 # --------------------------------------------------------------------------- #
 
 
@@ -360,7 +360,7 @@ def test_end_to_end_not_available_propagates(monkeypatch, fake_s3) -> None:
 def test_cache_hit_replays_provenance_identically(monkeypatch, fake_s3) -> None:
     """A second call over the same params is a CACHE HIT that never re-fetches, yet
     reference_time / reach_count / nldi_comids_discovered REPLAY IDENTICAL from the
-    provenance sidecar (ADR 0110) -- the fact a pre-channel cache object would lose."""
+    provenance sidecar -- the fact a pre-channel cache object would lose."""
     calls = {"n": 0}
 
     def _counting_resolve(product, vt, fh):

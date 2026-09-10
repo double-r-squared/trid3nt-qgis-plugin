@@ -128,7 +128,7 @@ def test_raws_enrich_expands_and_best_effort_survives():
 
     def fake_get(spec_, plan):
         if "obhistory" in plan.url:
-            # 2024-09-01 succeeds; 2024-09-02 raises (best-effort skip)
+            # The 09-01 date succeeds; 09-02 raises (best-effort skip)
             if plan.params.get("date") == "2024-09-02":
                 from trid3nt_server.tools.fetchers._router.errors import router_upstream_error
                 raise router_upstream_error(spec.error_code_prefix, "boom")

@@ -577,7 +577,7 @@ def test_live_fortmyers_water_mask(tmp_path):
     n_other = int(np.sum(out_arr == 0))
     n_nd = int(np.sum(out_arr == 255))
 
-    # GEOGRAPHIC CORRECTNESS (job-0086 lesson):
+    # GEOGRAPHIC CORRECTNESS:
     # The mask MUST have exactly src_water_count pixels marked 1.
     assert n_match == src_water_count, (
         f"mask water count {n_match} != source water count {src_water_count}"

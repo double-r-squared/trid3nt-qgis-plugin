@@ -100,7 +100,7 @@ async def test_producer_rejects_non_bytes_signature(fake_llm):
 
 def test_build_function_call_content_attaches_signature_to_part():
     """``thought_signature`` is set on the wrapping Part — not the
-    FunctionCall (which has no signature field in google-genai types.py)."""
+    FunctionCall (which has no signature field in the google-genai types)."""
     sig = b"\xdeadbeef-opaque-thought-sig"
     content = build_function_call_content(
         "geocode_location",

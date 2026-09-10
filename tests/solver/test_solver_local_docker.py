@@ -214,7 +214,7 @@ def _seed_manifest(
     """Seed a worker-contract manifest + its authored inputs into the fake store.
 
     The input entries use the LEGACY field name ``gs_uri`` — the values carry
-    ``{scheme}://`` URIs and must be resolved by scheme (kickoff §1).
+    ``{scheme}://`` URIs and must be resolved by scheme.
     """
     authored = {
         "t2d_river.cas": b"[fake telemac steering]",
@@ -362,9 +362,9 @@ def test_local_manifest_dest_traversal_rejected(
 
 #: The EXACT key set the local supervisor writes. The worker-entrypoint schema
 #: PLUS two agent-side additions: the ``solver``
-#: engine-identity field (ADR 0021) so read_run_diagnostics can recover the
+#: engine-identity field so read_run_diagnostics can recover the
 #: engine directly instead of inferring it from the stdout field name, and the
-#: ``code_sha`` / ``code_dirty`` stamp (ADR 0317) so a reader of this artifact
+#: ``code_sha`` / ``code_dirty`` stamp so a reader of this artifact
 #: can ask whether the engine has changed since it ran. Both are written by the
 #: supervisor, never by a worker, so a worker-written completion.json lacks them
 #: and the readers of both fall back rather than requiring them.

@@ -133,7 +133,7 @@ def _restore_url() -> None:
 print(f"[first-run] plugin path: {PLUGIN_PATH}", flush=True)
 # Canvas-AOI OFF for this proof: with an AOI in play the local 8B reliably
 # falls into the placeholder/parallel-publish pathology; the no-AOI flow is
-# the proven-good path (2026-07-07 08:05 success).
+# the proven-good path.
 _qs0 = QSettings()
 _qs0.setValue("trid3nt/canvas_aoi", "false")
 _qs0.sync()
@@ -157,7 +157,7 @@ def pump(seconds, until=lambda: False):
         time.sleep(0.05)
 
 
-# connect (defaults = local mode) -- the milestone 2 crash aborted HERE.
+# connect (defaults = local mode) -- the first-run crash aborted HERE.
 dock.connect_agent()
 print("[first-run] connect_agent() called", flush=True)
 

@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 
 class TestShowThinkingSettings(unittest.TestCase):
-    """F9 (live-feedback 2026-07-09): show_thinking preference in plugin_settings."""
+    """F9: show_thinking preference in plugin_settings."""
 
     def _make_settings(self, stored: dict = None):
         import types
@@ -96,7 +96,7 @@ class TestShowThinkingSettings(unittest.TestCase):
 
 
 class TestAutoBasemapSettings(unittest.TestCase):
-    """Item 4 (live-feedback 2026-07-09): auto_basemap preference in
+    """Item 4: auto_basemap preference in
     plugin_settings -- same shape as TestShowThinkingSettings above."""
 
     def _make_settings(self, stored: dict = None):
@@ -182,7 +182,7 @@ class TestAutoBasemapSettings(unittest.TestCase):
 
 
 class TestProviderModelSettings(unittest.TestCase):
-    """OpenRouter model-extensibility (design 2026-07-19): provider / model_id
+    """OpenRouter model-extensibility: provider / model_id
     / openrouter_api_key round-trip through QSettings -- same FakeQSettings
     idiom as TestShowThinkingSettings / TestAutoBasemapSettings above."""
 

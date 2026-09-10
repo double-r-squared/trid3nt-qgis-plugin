@@ -73,7 +73,7 @@ _EMITTER_SENTINEL = object()
 
 
 def _florida_state_snap_result() -> dict:
-    """A geocode_location state-snap result for 'south Florida' (job-0346 shape)."""
+    """A geocode_location state-snap result for 'south Florida'."""
     return {
         "name": "Florida, United States",
         "bbox": [-87.634896, 24.396308, -79.974306, 31.000888],

@@ -1,4 +1,4 @@
-"""ADR 0280 -- the emit-on-solve seam consumer.
+"""The emit-on-solve seam consumer.
 
 Seam unit behaviour over a synthetic ``outputs.json``: temporal grouping,
 deterministic idempotent layer ids, registered-quantity pinned styling,

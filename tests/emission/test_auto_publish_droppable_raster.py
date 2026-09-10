@@ -226,7 +226,7 @@ async def test_non_renderable_publish_return_fails_open(monkeypatch, bad) -> Non
 
 @pytest.mark.asyncio
 async def test_publish_for_emission_is_the_only_seam() -> None:
-    """The dispatch-layer twin is DELETED, not disabled (ADR 0313)."""
+    """The dispatch-layer twin is DELETED, not disabled."""
     assert hasattr(layer_uri_emit, "publish_for_emission")
 
     from trid3nt_server.server.dispatch import results

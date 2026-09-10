@@ -712,7 +712,7 @@ class TestMeshScalarClassificationClamp(unittest.TestCase):
         self.assertIsNone(note)
 
     def test_degenerate_NON_active_group_is_still_clamped(self):
-        # The crux of NATE's mid-session crash: group 0 (depth) is sane and
+        # The crux of the mid-session crash: group 0 (depth) is sane and
         # rendered at add time, but group 1 (an all-dry water-level field) is
         # NaN. Switching to group 1 in the styling panel would crash unless we
         # clamped it up front. Every group is reached.

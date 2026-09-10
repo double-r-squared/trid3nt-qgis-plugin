@@ -172,7 +172,7 @@ def test_honesty_floor_no_daytime_passes(monkeypatch):
 
 
 def test_bbox_none_raises_input_error():
-    # ADR 0087 divergence (non-gating): twin's bare BBOX_REQUIRED -> the source
+    # Divergence (non-gating): twin's bare BBOX_REQUIRED -> the source
     # INPUT code VIIRS_DAY_FIRE_INPUT_INVALID (same non-retryable actionability).
     with pytest.raises(RouterInputError):
         TOOL_REGISTRY["fetch_viirs_day_fire"].fn(bbox=None)

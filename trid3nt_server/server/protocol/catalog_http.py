@@ -2104,8 +2104,8 @@ async def _handle_http(
             )
     elif path == "/api/version":
         # Daemon git sha + active model provider -- the version indicator the
-        # removed plugin-settings Update section wanted (see plugin_repo.py's
-        # module docstring). Cheap: one `git rev-parse` subprocess, off the
+        # removed plugin-settings Update section wanted. Cheap: one
+        # `git rev-parse` subprocess, off the
         # event loop.
         try:
             from trid3nt_server import plugin_repo
@@ -2117,7 +2117,7 @@ async def _handle_http(
             logger.exception("version payload build failed")
             writer.write(_format_response(500, b'{"error":"version lookup failed"}'))
     elif proxy_path == "/plugin-repo/plugins.xml":
-        # QGIS custom plugin repository index -- see plugin_repo.py. The
+        # QGIS custom plugin repository index. The
         # packaged plugins.xml carries a HOST_SENTINEL; the download_url host
         # is filled from the REQUEST's own Host header so a tailnet client's
         # "Add repository" URL (http://<daemon-host>:8766/plugin-repo/plugins.xml)
@@ -2150,8 +2150,7 @@ async def _handle_http(
         # THE zip Plugin Manager / Install-from-ZIP downloads -- every
         # plugins.xml download_url now points here. Fixed name (must match
         # plugin_repo.FRESH_ZIP_URL_PATH), built on demand straight from
-        # plugin/ and mtime-cached -- see plugin_repo.py's
-        # module docstring (FRESH ZIP section). No deploy-time
+        # plugin/ and mtime-cached. No deploy-time
         # package_plugin_repo() step required. ?v=<version> (already
         # stripped into proxy_qs above) is a pure cache-busting hint.
         from trid3nt_server import plugin_repo

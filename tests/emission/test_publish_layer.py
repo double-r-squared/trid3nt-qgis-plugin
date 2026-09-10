@@ -35,7 +35,7 @@ def test_publish_layer_is_not_a_registered_tool() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# derive_readable_layer_name (OPEN-9, 2026-07-10): a bare-ULID layer_id must
+# derive_readable_layer_name: a bare-ULID layer_id must
 # never reach the layer summary as the display name when a better
 # signal (an explicit name, a declared label, or a URI path segment) exists.
 # --------------------------------------------------------------------------- #

@@ -92,7 +92,7 @@ class MockMCPClient:
                     return False
                 continue
             if isinstance(v, dict) and "$nin" in v:
-                # job-0267: mirrors FileMCPClient — a missing field matches
+                # Mirrors FileMCPClient — a missing field matches
                 # (doc.get returns None, which is "not in" the exclusion
                 # list unless None is listed).
                 if doc.get(k) in v["$nin"]:

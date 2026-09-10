@@ -108,7 +108,7 @@ dock.settings.auto_basemap = False        # no basemap fetch in the harness
 rec = RecBridge()
 dock.bridge = rec
 
-# ---- 1. new_case creates BBOX-LESS (A2, NATE 2026-07-20) ------------------- #
+# ---- 1. new_case creates BBOX-LESS ---------------------------------------- #
 # The canvas-as-AOI seed is GONE: a fresh case starts with NO AOI until the
 # user Sets one (the Set-AOI rectangle) or the LLM geocodes it -- new_case
 # issues case_command("create", args=None) and leaves no local bbox behind.

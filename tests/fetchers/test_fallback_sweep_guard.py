@@ -171,7 +171,7 @@ def test_every_topobathy_call_site_declares_a_rung():
 #
 # These are the audit's SILENT physics/data rows. They are not ladders: no
 # alternative SOURCE exists to declare, only a default constant or an assumed
-# value, so the fix is the loudness class (ADR 0299's parked wave), not F2's
+# value, so the fix is the loudness class, not F2's
 # declared-degradation regime. They are registered here so the set cannot grow
 # quietly and so fixing one forces this table to change with it.
 # --------------------------------------------------------------------------- #

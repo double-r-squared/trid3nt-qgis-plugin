@@ -418,8 +418,8 @@ def test_end_to_end_empty_window_propagates_from_delegate(monkeypatch, fake_s3) 
 
 def test_cache_hit_replays_scan_provenance_identically(monkeypatch, fake_s3) -> None:
     """A second call with identical params is a CACHE HIT that never re-fetches,
-    yet satellite/band/scan_time REPLAY IDENTICAL from the provenance sidecar
-    (ADR 0110) -- scan_time is otherwise unrecoverable from the COG alone."""
+    yet satellite/band/scan_time REPLAY IDENTICAL from the provenance sidecar --
+    scan_time is otherwise unrecoverable from the COG alone."""
     calls = {"n": 0}
     default_key = (
         "ABI-L2-MCMIPC/2024/180/12/"

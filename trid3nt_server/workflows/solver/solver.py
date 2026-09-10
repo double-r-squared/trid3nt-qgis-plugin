@@ -1076,23 +1076,13 @@ def run_solver(
     ``wait_for_completion``); inspecting a completed run's outputs (they land in
     ``RunResult.output_uri``).
 
-    Params:
-        solver: lowercase solver identifier; it must be a key of
-            ``SOLVER_WORKFLOW_REGISTRY`` or the call raises
-            ``SolverNotRegisteredError``, listing what is registered.
-        model_setup_uri: ``s3://`` URI of the manifest the solver envelope reads
-            - inputs, outputs, and the argv tail. The engine template composes it.
-        compute_class: selects the sizing bucket. Default ``"medium"``.
+    Params: ``solver`` a lowercase identifier registered in
+    ``SOLVER_WORKFLOW_REGISTRY``; ``model_setup_uri`` the ``s3://`` manifest the
+    engine template composed; ``compute_class`` the sizing bucket.
 
-    Returns:
-        An ``ExecutionHandle`` whose ``workflow_name`` pins the backend, so
-        ``wait_for_completion`` routes the poll correctly, and whose ``run_id``
-        is what a cancel terminates.
-
-    Raises:
-        SolverNotRegisteredError: ``solver`` not in ``SOLVER_WORKFLOW_REGISTRY``.
-        SolverDispatchError: the dispatch failed - a missing docker or binary, an
-            S3 staging error, a malformed manifest.
+    Returns an ``ExecutionHandle`` whose ``workflow_name`` pins the backend and
+    whose ``run_id`` is what a cancel terminates. An unregistered solver raises
+    ``SolverNotRegisteredError``; a failed dispatch ``SolverDispatchError``.
     """
     if not isinstance(solver, str) or not solver.strip():
         raise SolverNotRegisteredError(
@@ -1186,22 +1176,13 @@ async def wait_for_completion(
     synchronous tool calls - atomic tools are sub-second, this is the
     solver-class blocking pattern.
 
-    Params:
-        handle: the ``ExecutionHandle`` from ``run_solver``; its
-            ``workflow_name`` pins the backend so the poll routes correctly.
-        poll_interval_s: seconds between completion polls.
-        timeout_s: hard ceiling; on timeout the tool returns a failed
-            ``RunResult`` with ``error_code="SOLVER_TIMEOUT"`` and best-effort
-            cancels the run.
+    Params: ``handle`` from ``run_solver`` (its ``workflow_name`` pins the
+    backend); ``poll_interval_s``; ``timeout_s``, on which the run is cancelled
+    best-effort and a failed ``RunResult`` returns with ``SOLVER_TIMEOUT``.
 
-    Returns:
-        ``RunResult{run_id, handle_id, status, output_uri?, started_at,
-        completed_at, duration_seconds, error_code?, error_message?,
-        cancellation_reason?}`` - the terminal outcome. ``status="complete"``
-        carries the ``output_uri`` read from ``completion.json``, ``"failed"``
-        the error code and message, ``"cancelled"`` a ``cancellation_reason``.
-
-    On cancellation the backend handler terminates the live run BEFORE
+    Returns the terminal ``RunResult``: ``status="complete"`` carries the
+    ``output_uri``, ``"failed"`` an error code and message, ``"cancelled"`` a
+    reason. On cancellation the backend terminates the live run BEFORE
     re-raising, so the kill is initiated with the cancel rather than after it.
     """
     if poll_interval_s < 0:

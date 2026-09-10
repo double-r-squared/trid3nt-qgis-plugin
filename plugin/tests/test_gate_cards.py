@@ -52,7 +52,7 @@ class TestGateParsing(unittest.TestCase):
         self.assertTrue(any("Hard cap" in line for line in gate.summary_lines(w)))
 
     def test_summary_lines_compute_wording(self):
-        # Local-cloud fingerprint fix (2026-07-08): the "local" compute lane
+        # Local-cloud fingerprint fix: the "local" compute lane
         # renders plain CPU wording ("local run (8 CPU)"), never the cloud
         # "vCPU" label; any other compute label (a remote/cloud agent) keeps
         # the prior wording unchanged.

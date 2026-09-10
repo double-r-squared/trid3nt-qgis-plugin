@@ -294,7 +294,7 @@ def test_outside_conus_is_refused_naming_the_coverage_limit(spec, label, bbox):
 def test_envelope_is_the_staged_grids_own_bounds(spec):
     """Read off the staged objects, which share one grid. Borrowing the generic
     router._CONUS_BBOX (gridmet's, south 25.05) would false-refuse AOIs this
-    grid covers -- the Key West lesson from ADR 0297."""
+    grid covers."""
     assert tuple(spec.gates.conus_bbox) == (
         -127.873333, 23.235556, -65.362222, 51.546667,
     )

@@ -413,7 +413,7 @@ class TestInputValidation:
         assert ei.value.error_code == "LAYER_OPEN_FAILED"
 
     def test_extra_kwargs_absorbed(self, tmp_path):
-        # job-0164: LLM-invented kwargs must not break the call.
+        # LLM-invented kwargs must not break the call.
         path = _make_raster(tmp_path, _x_ramp(), name="ek.tif")
         payload = compute_cross_section(
             layer_uri=path,

@@ -1636,7 +1636,7 @@ class PipelineEmitter:
         await self._send("tool-io", payload)
 
     # ------------------------------------------------------------------ #
-    # Tool-call wrapper -- the integration seam for server.py
+    # Tool-call wrapper -- the integration seam for the server
     # ------------------------------------------------------------------ #
 
     @contextmanager

@@ -218,7 +218,7 @@ async def test_new_turn_repin_does_not_steal_old_turn_narration(
 
 
 # --------------------------------------------------------------------------- #
-# Auto-create hand-off guard (job-0267 probe D, unchanged semantics): a root
+# Auto-create hand-off guard (probe D, unchanged semantics): a root
 # prompt binds the auto-created Case BEFORE any write; user + tool + agent
 # rows all land in it.
 # --------------------------------------------------------------------------- #
@@ -273,8 +273,8 @@ async def test_auto_created_case_receives_full_stream(
 
 
 # --------------------------------------------------------------------------- #
-# job-0281: the turn's zoom-to emissions persist on accumulator-snapshot rows
-# (Case-reopen snap-to-location replays the LAST one — job-0280 web).
+# The turn's zoom-to emissions persist on accumulator-snapshot rows
+# (Case-reopen snap-to-location replays the LAST one).
 # --------------------------------------------------------------------------- #
 
 

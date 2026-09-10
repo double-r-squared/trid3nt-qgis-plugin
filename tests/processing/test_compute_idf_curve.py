@@ -23,8 +23,8 @@ from trid3nt_server.tools.processing.compute_idf_curve.compute_idf_curve import 
     compute_idf_curve,
 )
 
-# Verbatim Atlas 14 PFDS response for the Fort Myers center (captured
-# 2026-06-07; same capture test_data_fetch.py uses).
+# Verbatim Atlas 14 PFDS response for the Fort Myers center - the same
+# capture the fetcher tests read.
 _ATLAS14_FIXTURE = b"""Point precipitation frequency estimates (inches)
 NOAA Atlas 14 Volume 9 Version 2
 Data type: Precipitation depth

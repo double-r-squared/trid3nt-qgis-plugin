@@ -73,7 +73,7 @@ def test_raster_http_url_passes_identity() -> None:
 
 
 def test_vector_gs_uri_passes_untouched_job0175() -> None:
-    """A vector LayerURI carrying gs:// is the inline-GeoJSON path (job-0175):
+    """A vector LayerURI carrying gs:// is the inline-GeoJSON path:
     the emitter reads the uri server-side and ships inline GeoJSON; the browser
     never fetches gs://. The seam MUST NOT break this -- the uri is untouched."""
     out = emit_layer_uri(_layer("vector", "gs://bucket/alerts.fgb"))

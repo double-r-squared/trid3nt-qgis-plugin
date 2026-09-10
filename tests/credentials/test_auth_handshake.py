@@ -254,7 +254,7 @@ async def test_server_connect_handshake_flow_with_mocks() -> None:
     assert payload["user_id"] == state_a.authenticated_user_id
     assert "firebase_uid" not in payload
     assert payload["is_anonymous"] is True
-    assert "tier" not in payload  # tier claim cut (wave 11)
+    assert "tier" not in payload  # no tier claim
     # Decision F: no raw token on the wire.
     assert "token" not in payload
 

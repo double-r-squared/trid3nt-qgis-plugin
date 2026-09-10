@@ -217,8 +217,8 @@ def test_vector_indexes_cover_runs_and_articles() -> None:
     assert set(VECTOR_INDEXES.keys()) == {"runs", "articles"}
     for spec in VECTOR_INDEXES.values():
         assert spec["type"] == "vectorSearch"
-        # The default dim is the documented constant; OQ-7 surfaces the
-        # recall-vs-cost check before infra locks Atlas.
+        # The default dim is the documented constant; the recall-vs-cost
+        # check comes before infra locks Atlas.
         vector_field = next(f for f in spec["fields"] if f["type"] == "vector")
         assert vector_field["numDimensions"] == EMBEDDING_DIMENSIONS_DEFAULT
         assert vector_field["similarity"] == "cosine"
@@ -226,7 +226,7 @@ def test_vector_indexes_cover_runs_and_articles() -> None:
 
 
 def test_embedding_dimension_default_is_768_oq7() -> None:
-    """OQ-7: SRS default (text-embedding-005, 768 dims)."""
+    """SRS default (text-embedding-005, 768 dims)."""
     assert EMBEDDING_DIMENSIONS_DEFAULT == 768
     assert EMBEDDING_MODEL_DEFAULT == "text-embedding-005"
 
@@ -460,14 +460,14 @@ def test_pipeline_step_summary_duration_ms_rejects_negative(bad: int) -> None:
         )
 
 
-# --- D.6 PipelineStepSummary two-card sim observability (task-149) ----------- #
+# --- D.6 PipelineStepSummary two-card sim observability ----------- #
 # Mirror the ws.PipelineStep card-kind discriminator + Batch binding so a
 # persisted/replayed snapshot and a cold-case rehydration carry the off-box
 # solver card across a reconnect. role defaults "tool", ids default None.
 
 
 def test_pipeline_step_summary_role_defaults_to_tool_back_compat() -> None:
-    """task-149: a minimally-built summary is an on-box tool card with no Batch
+    """A minimally-built summary is an on-box tool card with no Batch
     binding — proving the persisted snapshot stays byte-identical for old steps.
     """
     step = PipelineStepSummary(
@@ -486,7 +486,7 @@ def test_pipeline_step_summary_role_defaults_to_tool_back_compat() -> None:
 
 
 def test_pipeline_step_summary_compute_card_roundtrips() -> None:
-    """task-149: a ``role="compute"`` Batch-bound solver card persists the
+    """A ``role="compute"`` Batch-bound solver card persists the
     jobId + last DescribeJobs status and survives a JSON round-trip unchanged.
     """
     step = PipelineStepSummary(
@@ -511,7 +511,7 @@ def test_pipeline_step_summary_compute_card_roundtrips() -> None:
 
 
 def test_pipeline_step_summary_rejects_unknown_role() -> None:
-    """task-149: role is a closed Literal — only ``tool``/``compute``."""
+    """Role is a closed Literal — only ``tool``/``compute``."""
     with pytest.raises(ValidationError):
         PipelineStepSummary(
             step_id=new_ulid(),

@@ -1,4 +1,4 @@
-"""Offline tests for the ESRI Living Atlas wave (ADR 0117).
+"""Offline tests for the ESRI Living Atlas wave.
 
 Covers: the two-stratum loader, the harvest normalizer (stubbed sharing API), the
 scoped search tool (two-pool composition), the fetch bridge (dynamic SourceSpec

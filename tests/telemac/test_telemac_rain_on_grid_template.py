@@ -306,7 +306,7 @@ def test_resolve_rain_event_hyetograph_rung_builds_hourly_blocks(monkeypatch):
 
 
 # ===========================================================================
-# The pour-point-first AOI (the ADR 0196 live bug: a town bbox clipping the
+# The pour-point-first AOI (the live bug: a town bbox clipping the
 # upstream basin) - the surviving equivalent of the deleted
 # ``_aoi_from_pour_point`` / ``model_telemac_rain_on_grid`` dispatch tests.
 # ===========================================================================

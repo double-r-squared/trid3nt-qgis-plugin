@@ -92,7 +92,7 @@ _COWEETA_POUR_POINT = [-83.40402, 35.05746]
 #: depth at the Coweeta pour point is 6.17 in = 156.7 mm - NOAA Atlas 14 Volume 2
 #: Version 3 (Ohio River Basin), Precipitation Frequency Data Server
 #: (https://hdsc.nws.noaa.gov/pfds/), grid point 35.0583 N 83.4000 W, read
-#: 2026-09-02 through ``lookup_precip_return_period``. A REAL design depth for
+#: through ``lookup_precip_return_period``. A REAL design depth for
 #: this catchment rather than a round number a reader cannot look up: the storm
 #: the acceptance hydrograph is measured against has to have a source.
 _COWEETA_ATLAS14_10YR_24H_MM = 156.7

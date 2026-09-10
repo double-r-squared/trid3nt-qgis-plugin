@@ -67,7 +67,7 @@ def fr_content(name: str, response: dict[str, Any], call_id: str = "c1") -> gena
 
 
 def case_state_note_content(text: str = "These layers are ALREADY produced...") -> genai_types.Content:
-    """A stand-in for the row server.py appends as the case-state note --
+    """A stand-in for the row the server appends as the case-state note --
     just an ordinary role=user text Content structurally."""
     return genai_types.Content(role="user", parts=[genai_types.Part(text=text)])
 
@@ -400,7 +400,7 @@ class TestNumCtxDiscovery:
         _reset_num_ctx_cache_for_tests()
 
     def test_parse_num_ctx_from_show_response_parameters_field(self):
-        # Verified live shape (2026-07-11) against qwen3.5-lowvram:9b-16k.
+        # Verified live shape against qwen3.5-lowvram:9b-16k.
         payload = {
             "parameters": (
                 "top_k                          20\n"
@@ -601,8 +601,8 @@ class TestFabricationBackstop:
 
 
 # ---------------------------------------------------------------------------
-# BUG 1 / BUG 2 (post-OPEN-14 acceptance rerun): the abort-note builder wired
-# into server.py's ``except ContextWindowExceededError`` handler.
+# BUG 1 / BUG 2: the abort-note builder wired
+# into the server's ``except ContextWindowExceededError`` handler.
 # ---------------------------------------------------------------------------
 
 

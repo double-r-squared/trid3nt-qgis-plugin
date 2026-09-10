@@ -79,7 +79,7 @@ class TestPureHelpers(unittest.TestCase):
         self.assertTrue(uri.startswith("type=xyz&url="))
         self.assertTrue(uri.endswith("&zmin=0&zmax=24"))
         encoded = uri[len("type=xyz&url="):-len("&zmin=0&zmax=24")]
-        # MINIMAL encoding contract (2026-07-10): the installed QGIS build
+        # MINIMAL encoding contract: the installed QGIS build
         # does not percent-decode the url component, so everything must stay
         # literal EXCEPT the template's own query ampersands (%26), which
         # would otherwise split the provider-uri parameter list.
@@ -431,7 +431,7 @@ class TestCaseAndChat(StubServerTestCase):
         sent = [e for e in self.server.received if e["type"] == "cancel"][0]
         self.assertEqual(sent["payload"]["reason"], "test-cancel")
 
-    # F9 (live-feedback 2026-07-09): thinking-chunk round trip. ---------------
+    # F9: thinking-chunk round trip. ---------------
 
     def test_thinking_chunk_via_show_thinking_flag(self):
         """send_chat(show_thinking=True) -> stub emits agent-thinking-chunk
@@ -483,7 +483,7 @@ class TestCaseAndChat(StubServerTestCase):
                          "show_thinking must be absent or False when not requested")
 
     def test_send_chat_carries_model_id_when_set(self):
-        """OpenRouter model-extensibility (design 2026-07-19): send_chat with a
+        """OpenRouter model-extensibility: send_chat with a
         truthy model_id rides ``model_id`` on the user-message payload verbatim
         (mirrors show_thinking) so the server picks the model for the turn."""
         client = self._connect()
@@ -508,7 +508,7 @@ class TestCaseAndChat(StubServerTestCase):
         self.assertNotIn("model_id", sent[0]["payload"],
                          "model_id must be absent when the picker is empty")
 
-    # mechanism 2 (structured AOI, 2026-07-22).
+    # mechanism 2 (structured AOI).
 
     def test_send_chat_carries_structured_aoi_bbox_and_clean_text(self):
         """An AOI rides the STRUCTURED ``aoi_bbox`` field and the text goes out CLEAN.

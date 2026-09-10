@@ -163,7 +163,7 @@ def test_falls_back_to_3_channel_when_no_telemetry(tmp_path, monkeypatch) -> Non
     result = asyncio.run(search_tools("show me flood zones", top_k=5))
     assert "results" in result
     names = [r["tool_name"] for r in result["results"]]
-    # Canonical 3-channel expectation from Wave 4.10 B7.
+    # Canonical 3-channel expectation.
     assert "fetch_fema_nfhl_zones" in names[:3]
 
 

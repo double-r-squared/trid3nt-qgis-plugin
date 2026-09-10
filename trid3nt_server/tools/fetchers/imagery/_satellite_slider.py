@@ -76,7 +76,7 @@ class SliderEmptyError(SliderError):
 
 
 # ---------------------------------------------------------------------------
-# Constants (confirmed from the SLIDER-cli source + live probes 2026-06-22).
+# Constants from the SLIDER-cli source.
 # ---------------------------------------------------------------------------
 
 #: SLIDER host. The rammb host 302-redirects to slider.cira.colostate.edu; we

@@ -47,7 +47,7 @@ _LIVE_BUILDINGS = os.environ.get("TRID3NT_TEST_LIVE_BUILDINGS") == "1"
 
 
 # ---------------------------------------------------------------------------
-# Fake GCS plumbing (mirrors test_fetch_administrative_boundaries.py).
+# Fake GCS plumbing (mirrors the administrative-boundaries fetcher tests).
 # ---------------------------------------------------------------------------
 
 

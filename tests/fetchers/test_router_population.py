@@ -134,7 +134,7 @@ def test_population_docstring_is_worldpop_only():
 
 
 def test_acs_dataset_rejected_as_input_error():
-    """dataset='acs_2022' now fails the validate gate (ACS leg dropped, ADR 0092)."""
+    """dataset='acs_2022' now fails the validate gate (the ACS leg is dropped)."""
     with pytest.raises(RouterInputError) as ei:
         worldpop.validate_population(POP_SPEC, _vp(bbox=list(FORT_MYERS_BBOX), dataset="acs_2022"))
     assert "worldpop" in str(ei.value).lower() or "WorldPop" in str(ei.value)

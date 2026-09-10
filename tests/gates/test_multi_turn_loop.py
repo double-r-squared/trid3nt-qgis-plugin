@@ -446,7 +446,7 @@ async def test_stream_model_reply_caps_runaway_loop(fake_llm):
             sock, state, settings, "x", "research"
         )
 
-    # job-186: the runaway is fail-stopped FAST. Every round is the SAME
+    # The runaway is fail-stopped FAST. Every round is the SAME
     # tool+args (identical fetch_dem), so the LOOP WATCHDOG trips at
     # loop_repeat_n() rounds - well before the historical MAX_TURN_ITERATIONS
     # cap. (A varied-tool runaway hits the step cap instead - next test.)
@@ -460,7 +460,7 @@ async def test_stream_model_reply_caps_runaway_loop(fake_llm):
 
 
 # ---------------------------------------------------------------------------
-# job-0315: live-wire narration-segment interleave (one bubble per contiguous
+# Live-wire narration-segment interleave (one bubble per contiguous
 # run of agent text between tool-call rounds).
 # ---------------------------------------------------------------------------
 
@@ -724,7 +724,7 @@ async def test_stream_multiple_calls_one_round_single_finalize(fake_llm):
 
 
 # ---------------------------------------------------------------------------
-# F2 (live-feedback 2026-07-09): a turn SURVIVES the client WebSocket dropping.
+# F2: a turn SURVIVES the client WebSocket dropping.
 #
 # Log 2026-07-09 01:23 (trid3nt-local): the phone's WS died mid-turn; raw
 # ``websocket.send`` calls raised ConnectionClosedError INSIDE tool dispatch

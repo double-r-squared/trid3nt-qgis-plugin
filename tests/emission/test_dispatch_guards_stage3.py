@@ -223,7 +223,7 @@ async def test_drift_warning_kill_switch(monkeypatch, fake_llm):
 
 
 # ---------------------------------------------------------------------------
-# (b) expensive-sim reuse kill-switch (guard itself: job-0326 tests)
+# (b) expensive-sim reuse kill-switch
 # ---------------------------------------------------------------------------
 
 _SIM_LAUNCHES: list[dict] = []
@@ -231,7 +231,7 @@ _SIM_LAUNCHES: list[dict] = []
 
 @pytest.fixture()
 def _stub_expensive_tool():
-    """Shadow modflow_contaminant_plume with a launch-counting stub (job-0326 pattern)."""
+    """Shadow modflow_contaminant_plume with a launch-counting stub."""
     name = "modflow_contaminant_plume"
     original = agent_tools.TOOL_REGISTRY.get(name)
     _SIM_LAUNCHES.clear()
@@ -292,7 +292,7 @@ async def test_scenario_reuse_kill_switch_disables_short_circuit(
 async def test_scenario_reuse_default_still_fires(
     _stub_expensive_tool, monkeypatch
 ):
-    """Sanity: with the switch unset the job-0326 short-circuit still works."""
+    """Sanity: with the switch unset the reuse short-circuit still works."""
     monkeypatch.delenv("TRID3NT_SCENARIO_REUSE", raising=False)
     ws = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())

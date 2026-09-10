@@ -26,9 +26,9 @@ from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-# The SMALL collapsed bbox the geocode early-snap appends (server.py ~2015).
+# The SMALL collapsed bbox the geocode early-snap appends.
 _GEOCODE_SMALL_BBOX = [-82.55, 27.90, -82.54, 27.91]
-# The FLOORED (peak, Wave 1) AOI the composer's LayerURI carries.
+# The FLOORED (peak) AOI the composer's LayerURI carries.
 _FLOORED_BBOX = [-82.70, 27.70, -82.30, 28.10]
 
 

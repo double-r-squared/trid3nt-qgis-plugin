@@ -1,4 +1,4 @@
-"""Tests for ``trid3nt_server.tools.fetchers.us_states`` (job-0261).
+"""Tests for ``trid3nt_server.tools.fetchers.us_states``.
 
 The state-name → NWS area-code mapping is the linchpin of the "weather
 alerts for Texas must not spill into surrounding states" fix: both NWS

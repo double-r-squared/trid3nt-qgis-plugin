@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from plugin.net import trid3nt_client as tc  # noqa: E402
 
 # --------------------------------------------------------------------------- #
-# ITEM B (live-feedback 2026-07-10): chat-history replay extraction --
+# ITEM B: chat-history replay extraction --
 # ``session_state.chat_history`` (contracts ``case.py`` CaseChatMessage) ->
 # plain role/content rows for the dock's case-open chat replay.
 # --------------------------------------------------------------------------- #
@@ -32,7 +32,7 @@ class TestParseChatHistory(unittest.TestCase):
                 ]
             }
         )
-        # LANE PLUGIN (2026-07-22): an agent row with no persisted thinking
+        # LANE PLUGIN: an agent row with no persisted thinking
         # surfaces an honest thinking=None (plain rows replay unchanged).
         self.assertEqual(
             rows,
@@ -47,7 +47,7 @@ class TestParseChatHistory(unittest.TestCase):
         )
 
     def test_agent_row_thinking_surfaces(self):
-        # LANE PLUGIN (2026-07-22): the persisted "thinking" field (Lane
+        # LANE PLUGIN: the persisted "thinking" field (Lane
         # CORE row-model addition) rides through on agent rows so the dock
         # replays the collapsed thinking fold on case reopen.
         rows = tc.parse_chat_history(
@@ -114,7 +114,7 @@ class TestParseChatHistory(unittest.TestCase):
                 ]
             }
         )
-        # Item H (qgis-ux-batch 2026-07-19): a tool row with a usable content
+        # Item H: a tool row with a usable content
         # twin SURFACES (tool_card rides along, None here); a tool row with
         # NEITHER a tool_card dict NOR content is skipped like every other
         # malformed row -- never raised on.
@@ -156,7 +156,7 @@ class TestParseChatHistory(unittest.TestCase):
             }
         )
         self.assertIsNotNone(info)
-        # Item H (qgis-ux-batch 2026-07-19): tool rows are SURFACED with their
+        # Item H: tool rows are SURFACED with their
         # typed tool_card dict (tool-call chain replay on reopen), in order,
         # inline between the user and agent bubbles.
         self.assertEqual(

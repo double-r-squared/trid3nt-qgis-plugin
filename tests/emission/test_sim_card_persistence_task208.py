@@ -294,7 +294,7 @@ async def test_reconnect_replays_persisted_sim_card(file_persistence) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# RUNNING DURABILITY (the mid-run reconnect bug NATE hit) — the SIM card is
+# RUNNING DURABILITY (the mid-run reconnect bug) — the SIM card is
 # persisted the MOMENT it is minted (running), so a reconnect/reopen WHILE the
 # solve runs replays the spinning card instead of dropping it.
 # --------------------------------------------------------------------------- #
@@ -349,7 +349,7 @@ async def test_running_then_terminal_upserts_single_row(file_persistence) -> Non
 
 @pytest.mark.asyncio
 async def test_reconnect_mid_run_replays_running_sim_card(file_persistence) -> None:
-    """The keystone for NATE's bug: a bare WS reconnect WHILE the solve is still
+    """The keystone: a bare WS reconnect WHILE the solve is still
     running replays the persisted ``running`` SIM card in the resume
     session-state's chat_history (it no longer vanishes)."""
     ws1 = FakeWS()

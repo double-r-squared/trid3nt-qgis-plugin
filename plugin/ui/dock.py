@@ -1340,7 +1340,7 @@ class Trid3ntDock(QDockWidget):
                 "Agent HTTP API unreachable - is the local stack running?"
             )
 
-    # -- case switching / new / delete (milestone 3 + item 2/3) ---------------- #
+    # -- case switching / new / delete ----------------------------------------- #
 
     def open_case(self, case_id: str, title: str) -> None:
         """Open ``case_id`` from the Cases dialog, cold-listed or not. When

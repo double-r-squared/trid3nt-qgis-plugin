@@ -149,8 +149,8 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
 
 # ===========================================================================
 # (1b) publish_raster_input_cog -- the EXISTING-COG raster input seam
-#      (ADR 0227: the bathymetry-consuming coastal templates surface their
-#      fetched topobathy the same way the flood DEM path does).
+#      The bathymetry-consuming coastal templates surface their
+#      fetched topobathy the same way the flood DEM path does.
 # ===========================================================================
 _PUBLISH_LAYER_TARGET = (
     "trid3nt_server.emission.publish.publish_layer"
@@ -276,7 +276,7 @@ async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
 
 
 # ===========================================================================
-# (SWEEP) ADR 0244 single-path guard.
+# (SWEEP) single-path guard.
 #
 # After the S2 collapse the emit-on-fetch router seam (route() ->
 # maybe_emit_input_on_fetch) is the ONLY way a router-FETCHED renderable input
@@ -294,7 +294,7 @@ async def test_publish_raster_input_cog_none_emitter_or_uri_noop():
 #                               every bed the family solves on is a declared
 #                               router fetch and the seam surfaces it.
 #   * BARE-OSM fetches        - agitation's breakwaters bypass the router (an
-#                               S3 loose end, ADR 0244 S3).
+#                               S3 loose end).
 #
 # A NEW input-emission site fails this test: route the fetch through the seam
 # (its render declaration surfaces it for free) or, if it is genuinely one of

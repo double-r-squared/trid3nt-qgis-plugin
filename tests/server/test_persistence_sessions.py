@@ -191,7 +191,7 @@ def test_get_session_record_missing_returns_none(file_persistence):
 
 
 # --------------------------------------------------------------------------- #
-# job-0230 regression: chart $push lands on the dev substrate and the
+# Regression: chart $push lands on the dev substrate and the
 # session record stays readable (extras dropped on typed read)
 # --------------------------------------------------------------------------- #
 
@@ -231,7 +231,7 @@ def test_chart_push_lands_and_typed_read_tolerates_extras(file_persistence, tmp_
 
 
 def test_chart_push_on_headerless_doc_then_touch_backfills_header(file_persistence):
-    """Chart arrives BEFORE any touch (job-0230 ordering) — the later touch
+    """Chart arrives BEFORE any touch — the later touch
     must backfill the D.6 header without clobbering the charts array."""
     sid = new_ulid()
 

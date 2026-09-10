@@ -207,7 +207,7 @@ class TestCaseSelect(unittest.TestCase):
         self.assertEqual(self.server.resume_case_ids[-1], target)
 
     def test_select_rehydration_surfaces_persisted_thinking(self):
-        # LANE PLUGIN (2026-07-22): the stub's case-open chat_history now
+        # LANE PLUGIN: the stub's case-open chat_history now
         # carries a thinking-carrying agent row (Lane CORE "thinking" field)
         # plus a PLAIN agent row -- the parsed chat_messages must surface
         # the field on the former and None-default it on the latter.
@@ -245,7 +245,7 @@ class TestCaseSelect(unittest.TestCase):
         self.assertEqual(info.layers, [])
         self.assertIsNone(info.bbox)  # no bbox on the row -> honest None
 
-    # -- item 1 (live-feedback 2026-07-09): case-open bbox extraction ---------- #
+    # -- item 1: case-open bbox extraction ---------- #
 
     def test_parse_case_open_bbox_present(self):
         info = tc.parse_case_open(

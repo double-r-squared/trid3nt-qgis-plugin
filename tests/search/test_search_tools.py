@@ -88,7 +88,7 @@ def _run_top_k(query: str, k: int = 5) -> list[str]:
         ("show flood zones", "fetch_fema_nfhl_zones"),
         ("national wetlands inventory polygons", "fetch_nwi_wetlands"),
         ("elevation Grand Canyon", "fetch_dem"),
-        # Door dissolution (ADR 0094): a template is an ordinary retrieval-pool
+        # Door dissolution: a template is an ordinary retrieval-pool
         # member. A bare "model flooding" is genuinely ambiguous across the
         # family, so the canonical routing query is the specific phrasing one
         # template owns.
@@ -216,7 +216,7 @@ def test_rrf_single_ranking_preserves_order():
 
 
 # ---------------------------------------------------------------------------
-# 6b. Lexical-champion reinforcement (DOOR RRF BOOST, docs/IDEAS.md 2026-07-27).
+# 6b. Lexical-champion reinforcement (the DOOR RRF boost).
 # ---------------------------------------------------------------------------
 
 
@@ -368,7 +368,7 @@ def test_typo_gradinet_relief_routes_without_exact_corpus_queries(
     "query,expected_tool",
     [
         # "hillshde" is the discriminating case: WITHOUT expansion it misses
-        # the top-5 entirely (verified 2026-07-22); with expansion the
+        # the top-5 entirely; with expansion the
         # correction "hillshade" carries BM25 + name-substring.
         ("hillshde of this terrain", "compute_hillshade"),
         ("floof depth for this neighborhood", "compute_flood_depth_damage"),

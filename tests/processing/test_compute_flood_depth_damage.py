@@ -243,7 +243,7 @@ def test_no_structures_raises(depth_and_assets, tmp_path) -> None:
 
 def test_nsi_fetch_used_when_no_assets(depth_and_assets, tmp_path, monkeypatch) -> None:
     raster, assets = depth_and_assets
-    # fetch_usace_nsi is spec-driven (ADR 0061); the consumer resolves it via the
+    # fetch_usace_nsi is spec-driven; the consumer resolves it via the
     # registry, so patch the (frozen) RegisteredTool's fn there.
     import dataclasses
 

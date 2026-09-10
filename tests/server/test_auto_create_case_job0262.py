@@ -75,7 +75,7 @@ def test_root_prompt_creates_named_active_case_before_turn(
     case = asyncio.run(_persistence_bound.get_case(case_id))
     assert case is not None
     assert case.status == "active"
-    # Named via the job-0260 heuristic, not left untitled.
+    # Named via the title heuristic, not left untitled.
     assert case.title != "Untitled Case"
     assert "Flood" in case.title and "Fort" in case.title
     # The connection context is synced to the new Case (no reset on the
@@ -107,7 +107,7 @@ def test_root_prompt_emits_case_open_then_case_list(
     the web hub fans case-open to App.tsx so the UI leaves the Cases root."""
     ws = MockWebSocket()
     state = _fresh_state()
-    # job-0252 (OQ-0115): the handshake binds authenticated_user_id before the
+    # The handshake binds authenticated_user_id before the
     # turn; the auto-create path stamps it as the Case owner and the owner-
     # scoped _emit_case_list lists by it. Simulate the bound user.
     state.authenticated_user_id = new_ulid()
@@ -173,7 +173,7 @@ def test_root_prompt_does_not_reset_llm_context_or_turn_count(
     case-command(create) reset (chat_history clear / turn_count zero)."""
     ws = MockWebSocket()
     state = _fresh_state()
-    # Simulate the dispatcher's pre-existing per-turn state: the FR-FR-3 cap
+    # Simulate the dispatcher's pre-existing per-turn state: the turn cap
     # counter was already incremented for this in-flight turn, and the
     # connection had previously synced to root (so _sync_case_context is a
     # no-op and does not clear).
@@ -205,7 +205,7 @@ def test_degenerate_prompt_falls_back_to_untitled(
 def test_autoname_probe_skipped_for_auto_created_case(
     _persistence_bound: Persistence,
 ) -> None:
-    """job-0260's end-of-stream rename probe is a no-op for the auto-created
+    """The end-of-stream rename probe is a no-op for the auto-created
     Case (it was named at creation from the same prompt)."""
     ws = MockWebSocket()
     state = _fresh_state()
@@ -261,7 +261,7 @@ def test_existing_case_path_unchanged(
     _persistence_bound: Persistence,
 ) -> None:
     """An active Case means no new Case, no case-open frame; the turn
-    persists into the EXISTING Case (pre-job-0262 behavior preserved)."""
+    persists into the EXISTING Case."""
     case = _fresh_case_summary()
     asyncio.run(_persistence_bound.upsert_case(case))
     ws = MockWebSocket()
@@ -363,7 +363,7 @@ def test_integration_two_root_prompts_one_case(
 
 
 # --------------------------------------------------------------------------- #
-# A3 (NATE 2026-07-20): a fresh Untitled Case must auto-name from its FIRST user
+# A3: a fresh Untitled Case must auto-name from its FIRST user
 # message reliably -- even when the turn later fails (LLM_UNAVAILABLE etc.) and
 # even across a transient persistence miss (the guard must not burn the one
 # naming attempt up front).

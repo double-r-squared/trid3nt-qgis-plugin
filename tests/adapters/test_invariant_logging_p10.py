@@ -19,7 +19,7 @@ from trid3nt_server.adapters.adapter import ModelSettings
 from trid3nt_server.adapters.scripted_adapter import set_script
 from trid3nt_contracts import new_ulid
 
-#: The P10 bench prompt (logs/agent.log 2026-07-22 14:15:33, bench-p10).
+#: The P10 bench prompt.
 P10_PROMPT = (
     "Run a small pluvial flood simulation for a 4km box in Peoria, Illinois "
     "with a 50-year storm."

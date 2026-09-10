@@ -143,8 +143,8 @@ def test_system_prompt_has_geographic_clipping_section() -> None:
 
 def test_system_prompt_names_admin_polygon_clip_tools() -> None:
     """A5 fix must reference the admin-boundary fetcher + the raster clip tool +
-    the vector clip surface. cull pass 2 (2026-07-27): clip_vector_to_polygon was
-    CUT; vector clipping re-homes to spatial_query (ST_Within/ST_Intersects)."""
+    the vector clip surface. There is no clip_vector_to_polygon;
+    vector clipping lives on spatial_query (ST_Within/ST_Intersects)."""
     assert "fetch_administrative_boundaries" in SYSTEM_PROMPT
     assert "clip_raster_to_polygon" in SYSTEM_PROMPT
     assert "spatial_query" in SYSTEM_PROMPT
@@ -170,8 +170,8 @@ def test_system_prompt_carries_admin_clipping_example() -> None:
 
 
 # ---------------------------------------------------------------------------
-# ADR-0014 Stage 1 — compact layer-handle block replaces the job-0263
-# handle-indirection, job-0270 publish-discipline, and full-AOI-extent prose.
+# The compact layer-handle block replaces the handle-indirection,
+# publish-discipline and full-AOI-extent prose.
 # The harness now enforces these structurally: short handles (L1, L2, ...),
 # typed rejection of unknown URIs, auto-publish/emit seams, and bbox
 # auto-fill from the active AOI / case bbox.
@@ -200,15 +200,15 @@ def test_system_prompt_says_omitted_bbox_autofills() -> None:
 
 
 def test_system_prompt_removed_blocks_stay_removed() -> None:
-    """Regression lock: the four ADR-0014 Stage-1 cuts must not creep back.
+    """Regression lock: the four prompt cuts must not creep back.
     The harness enforces these structurally; re-adding the prose re-spends
     ~1.6k tokens per turn for no behavior change."""
     flat = " ".join(SYSTEM_PROMPT.split())
     for phrase in (
-        "Layer-handle indirection",          # job-0263 block
+        "Layer-handle indirection",          # handle-indirection block
         "URI_HANDLE_UNRESOLVED",
         "layer_handles",
-        "Publish-to-map discipline",          # job-0270 block
+        "Publish-to-map discipline",          # publish-discipline block
         "NOT pixels on the user's map",
         "publish_layer(layer_uri=<handle>",
         "Full-AOI extent for every overlay",  # full-AOI publish paragraph
@@ -226,7 +226,7 @@ def test_system_prompt_keeps_always_narrate_section() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Regression — existing behaviors from job-0154 must survive the amendment
+# Regression — the anti-fabrication behaviors must survive the amendment
 # ---------------------------------------------------------------------------
 
 
@@ -238,7 +238,7 @@ def test_system_prompt_still_routes_rainfall_runoff() -> None:
 
 
 def test_system_prompt_still_forbids_fabricated_numbers() -> None:
-    """job-0154 anti-fabrication guard survives the amendment."""
+    """anti-fabrication guard survives the amendment."""
     assert "Never fabricate numbers" in SYSTEM_PROMPT
 
 
@@ -253,7 +253,7 @@ def test_system_prompt_forbids_inventing_physical_inputs() -> None:
 
 
 def test_system_prompt_has_input_review_instruction() -> None:
-    """Two-mode input gate (ADR 0107): the prompt must instruct the agent how to
+    """Two-mode input gate: the prompt must instruct the agent how to
     handle a user-gated INPUT REVIEW card -- present the resolved input table,
     collect edits, confirm before running."""
     assert "INPUT REVIEW card" in SYSTEM_PROMPT
@@ -265,7 +265,7 @@ def test_system_prompt_has_input_review_instruction() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2026-06-17 — arg-error self-correct (Oklahoma-tornado bug)
+# arg-error self-correct (Oklahoma-tornado bug)
 # ---------------------------------------------------------------------------
 
 
@@ -308,7 +308,7 @@ def test_system_prompt_routes_the_news_article_spill_to_the_river_plume() -> Non
 
 
 # ---------------------------------------------------------------------------
-# job-0324 follow-up — shaded/baked land cover uses the land cover AS the blend
+# Shaded/baked land cover uses the land cover AS the blend
 # base (it is palette-aware); colored_relief is elevation colors, not
 # land-cover classes. Mirrors the compute_blended_composite description fix.
 # ---------------------------------------------------------------------------
@@ -333,13 +333,13 @@ def test_system_prompt_says_pass_landcover_as_blend_base() -> None:
 def test_system_prompt_forbids_colored_relief_as_landcover_base() -> None:
     """The anti-substitution half: do not use compute_colored_relief as the
     base for shaded land cover. (The trailing elevation-colors rationale was
-    cut in ADR-0014 Stage 1 — the prohibition sentence itself remains.)"""
+    cut — the prohibition sentence itself remains.)"""
     flat = " ".join(SYSTEM_PROMPT.split())
     assert "NOT substitute compute_colored_relief as the base" in flat
 
 
 # ---------------------------------------------------------------------------
-# Narration conciseness (user 2026-06-16) — be concise; do not re-explain the
+# Narration conciseness — be concise; do not re-explain the
 # same thing across retries or recap every step verbosely each turn.
 # ---------------------------------------------------------------------------
 

@@ -431,7 +431,7 @@ async def test_deleted_and_archived_cases_excluded_server_side(
     shelf = CaseSummary(
         case_id=new_ulid(), title="shelf", created_at=now_utc(), updated_at=now_utc()
     )
-    # job-0252 (OQ-0115): Cases are owner-scoped (the $exists:false leak clause
+    # Cases are owner-scoped (the $exists:false leak clause
     # is gone). Stamp the owner so the owner-scoped listing returns them; the
     # status filter is what this test actually exercises.
     for c in (live, ghost, shelf):
@@ -451,7 +451,7 @@ async def test_emitted_case_list_envelope_excludes_tombstones(
     """The actual ``case-list`` wire emission carries no deleted/archived Case."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
-    # job-0252 (OQ-0115): bind the owner so the create stamps it and the
+    # Bind the owner so the create stamps it and the
     # owner-scoped _emit_case_list lists by it.
     state.authenticated_user_id = new_ulid()
     case_id = await _create_case(ws, state)
@@ -462,7 +462,7 @@ async def test_emitted_case_list_envelope_excludes_tombstones(
     await file_persistence.delete_case(ghost.case_id)
 
     ws.sent.clear()
-    # OPEN-8 change-guard: force=True — this assertion is about tombstone
+    # Change-guard: force=True — this assertion is about tombstone
     # FILTERING (the ghost Case must never appear), not about the guard's
     # skip-when-unchanged behavior. The ghost create+delete round-trip here
     # goes through Persistence directly (bypassing the server's
@@ -484,7 +484,7 @@ async def test_pre_status_case_docs_stay_listed(file_persistence) -> None:
     """Backward-compat: docs that pre-date the status field are live."""
     legacy_id = new_ulid()
     # Write a raw doc with NO status key at all (pre-CaseStatus record).
-    # job-0252 (OQ-0115): the doc carries a user_id so it survives the now
+    # The doc carries a user_id so it survives the now
     # owner-scoped listing — this test exercises pre-*status*-field
     # backward-compat, not the (now removed) pre-Auth owner leak.
     await file_persistence._store.call_tool(
@@ -582,11 +582,11 @@ async def test_e2e_full_turn_replays_complete_stream(
 
 
 # --------------------------------------------------------------------------- #
-# 7. job-0315 — narration SEGMENTS interleave with tool rows in creation order
+# 7. Narration SEGMENTS interleave with tool rows in creation order
 # --------------------------------------------------------------------------- #
 
 
-from trid3nt_server.adapters.adapter import (  # noqa: E402 — grouped with the job-0315 test
+from trid3nt_server.adapters.adapter import (  # noqa: E402
     FunctionCallEvent,
     ModelSettings,
     TextDeltaEvent,
@@ -620,7 +620,7 @@ async def _drive_real_stream(ws, state, turn_events):
 
 @pytest.mark.asyncio
 async def test_segment_rows_interleave_with_tool_rows(file_persistence) -> None:
-    """job-0315: text -> tool -> text -> tool -> text persists FIVE agent/tool
+    """Text -> tool -> text -> tool -> text persists FIVE agent/tool
     rows interleaved in creation order: [user, agent, tool, agent, tool, agent].
     Only the LAST agent row carries the layer accumulator; segment rows carry []."""
     # Two fresh registry tools, both allowed via record_explicit.
@@ -690,7 +690,7 @@ async def test_segment_rows_interleave_with_tool_rows(file_persistence) -> None:
 async def test_narration_less_completed_turn_writes_single_marker(
     file_persistence,
 ) -> None:
-    """job-0315 edge: a completed turn with ZERO agent text + no tools still
+    """Edge: a completed turn with ZERO agent text + no tools still
     writes exactly ONE marker agent row (content="") — replay row count is
     unchanged from the pre-fix single-row contract."""
     ws = FakeWS()
@@ -710,7 +710,7 @@ async def test_narration_less_completed_turn_writes_single_marker(
 
 @pytest.mark.asyncio
 async def test_text_only_turn_single_segment_row(file_persistence) -> None:
-    """job-0315 edge: a text-only turn (no tools) persists exactly ONE agent
+    """Edge: a text-only turn (no tools) persists exactly ONE agent
     row with the full narration — byte-identical to the pre-fix single-row."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
@@ -725,7 +725,7 @@ async def test_text_only_turn_single_segment_row(file_persistence) -> None:
     rows = session_state.chat_history
     assert [m.role for m in rows] == ["agent"]
     assert rows[0].content == "Here is the answer."
-    # Terminal segment carries the accumulator (job-0259/0281).
+    # Terminal segment carries the accumulator.
     assert rows[0].layer_emissions == ["L-1"]
 
 
@@ -769,8 +769,8 @@ async def test_tool_terminal_turn_persists_zoom_to_accumulator(
         state.visible_tools.update(["job0315_pub"])
         await server._persist_chat_turn(state, role="user", content="flood it")
 
-        # The turn accumulated a geocode zoom-to (job-0281) + a published layer
-        # (job-0259) earlier; then its FINAL round emits text + a tool call and
+        # The turn accumulated a geocode zoom-to + a published layer
+        # earlier; then its FINAL round emits text + a tool call and
         # ENDS — no trailing narration after the tool round (current_message_id
         # is None at close, so the in-loop terminal finalize does NOT fire).
         zoom_bbox = [-82.0, 26.5, -81.7, 26.8]

@@ -163,7 +163,7 @@ async def test_circuit_breaker_trips_on_third_failure_and_short_circuits_fourth(
 
 
 def test_summarize_circuit_breaker_error_emits_wave49_envelope():
-    """``summarize_tool_result`` emits the Wave 4.9 envelope for CircuitBreakerError."""
+    """``summarize_tool_result`` emits the typed envelope for CircuitBreakerError."""
     err = CircuitBreakerError("fetch_dem", 55.0)
     summary = summarize_tool_result("fetch_dem", None, error=err)
     assert summary["status"] == "error"
@@ -171,7 +171,7 @@ def test_summarize_circuit_breaker_error_emits_wave49_envelope():
     assert summary["retryable"] is False
     assert summary["error_type"] == "CircuitBreakerError"
     assert "fetch_dem" in summary["message"]
-    # Legacy alias preserved (job-0177 contract).
+    # Legacy alias preserved.
     assert summary["error"] == summary["message"]
 
 
@@ -226,7 +226,7 @@ def test_circuit_breaker_is_per_session():
 
 
 # ---------------------------------------------------------------------------
-# Oklahoma-tornado bug (2026-06-17): arg errors through the full server path
+# Oklahoma-tornado bug: arg errors through the full server path
 # must NOT trip the breaker — so the model can self-correct and retry.
 # ---------------------------------------------------------------------------
 

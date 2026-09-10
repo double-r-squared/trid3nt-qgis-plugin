@@ -16,14 +16,14 @@ import pytest
 import requests
 
 from trid3nt_server.tools import TOOL_REGISTRY
-# fetch_dem twin DELETED (ADR 0097 library_delegate fold); its value-bearing
+# fetch_dem twin DELETED (library_delegate fold); its value-bearing
 # tests migrated to test_router_dem.py.
-# fetch_buildings twin DELETED (ADR 0084 buildings sidecar-write fold); its value-bearing
+# fetch_buildings twin DELETED (buildings sidecar-write fold); its value-bearing
 # tests migrated to test_router_buildings.py.
 from trid3nt_server.tools.fetchers.socioeconomic.geocode_location import geocode_location as geo_mod
-# fetch_population twin DELETED (ADR 0092 WorldPop library_delegate fold; the half-built
+# fetch_population twin DELETED (WorldPop library_delegate fold; the half-built
 # ACS leg dropped); its value-bearing WorldPop tests migrated to test_router_population.py.
-# fetch_river_geometry twin DELETED (ADR 0074 river fold); its value-bearing tests
+# fetch_river_geometry twin DELETED (river fold); its value-bearing tests
 # migrated to test_router_river.py.
 from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as pfd_mod
 from trid3nt_server.tools.fetchers._fetch_common import (
@@ -157,7 +157,7 @@ def test_registry_contains_job_0039_subset_after_eager_import():
         "fetch_buildings",
         "fetch_population",
         "geocode_location",
-        # job-0039 (this job):
+        # Spec-driven surfaces:
         "fetch_landcover",
         "fetch_river_geometry",
         "lookup_precip_return_period",
@@ -169,7 +169,7 @@ def test_registry_contains_job_0039_subset_after_eager_import():
 
 
 # ---------------------------------------------------------------------------
-# round_bbox_to_resolution — engine-side quantization (OQ-32-QUANTIZATION-LOCATION).
+# round_bbox_to_resolution — engine-side quantization.
 # ---------------------------------------------------------------------------
 
 
@@ -259,7 +259,7 @@ def test_geocode_location_rejects_empty_query():
 
 
 # ---------------------------------------------------------------------------
-# geocode_location — state-snap fallback (NATE directive 2026-06-17).
+# geocode_location — state-snap fallback.
 #
 # A vague/regional query ("south Florida") that geocodes to an arbitrary /
 # wrong-state OSM feature must snap to the full state bbox with an honest note,
@@ -292,7 +292,7 @@ def _bind_geocode_cache(monkeypatch):
         ("upstate New York", "New York"),
         ("greater metro Los Angeles California", "California"),
         # F71: vernacular sub-state regions whose TAIL (after qualifier strip)
-        # is a full state name resolve via steps (2)/(2b) — NATE's headline
+        # is a full state name resolve via steps (2)/(2b) — the headline
         # "South Florida" case. (Interior-position matches like "the Florida
         # Panhandle" were intentionally NOT added — see the reverted (2c) note
         # in _extract_us_state; the any-position scan regressed "Kansas City, MO"
@@ -786,10 +786,10 @@ def test_resolve_state_bbox_falls_back_to_table(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# OPEN-10 — "downtown Tampa" (and similar sub-locality phrasings) resolving
+# "downtown Tampa" (and similar sub-locality phrasings) resolving
 # to a single building/POI footprint instead of a usable case AOI.
 #
-# Live-confirmed root cause (2026-07-11): Nominatim's ONLY match for
+# Live-confirmed root cause: Nominatim's ONLY match for
 # "downtown Tampa" is a category=railway/type=tram_stop node literally named
 # "Downtown Tampa" (a streetcar stop), bbox ~11 m across. Two fixes in
 # ``_fetch_nominatim_geocode_bytes``: (a) prefer a place-class candidate over
@@ -800,7 +800,7 @@ def test_resolve_state_bbox_falls_back_to_table(monkeypatch):
 
 def test_geocode_open10_downtown_tampa_live_captured_regression(monkeypatch):
     """Golden regression: the EXACT live Nominatim payload for 'downtown Tampa'
-    (captured 2026-07-11) must floor-expand rather than return an 11 m bbox.
+    must floor-expand rather than return an 11 m bbox.
     """
     tampa_tram_stop = [
         {
@@ -1089,14 +1089,14 @@ def test_bbox_long_axis_km_and_square_km_bbox_roundtrip():
 
 
 # ---------------------------------------------------------------------------
-# job-0039 — fetch_landcover (NLCD MRLC WMS).
+# fetch_landcover (NLCD MRLC WMS).
 # ---------------------------------------------------------------------------
 
 
 from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import (  # noqa: E402 — after main test surface
     lookup_precip_return_period,
 )
-# fetch_landcover FOLDED to a spec-driven surface (ADR 0082): the twin + its
+# fetch_landcover FOLDED to a spec-driven surface: the twin + its
 # twin-internal tests (_fetch_nlcd_landcover_bytes / _landcover_bytes_to_cog /
 # _fix_nlcd_background_transparency / _clip_raster_bytes_to_bbox / cache-version
 # salt / overview generation) DELETED with the twin. Their value moved to
@@ -1119,7 +1119,7 @@ def test_fetch_landcover_docstring_records_access_tier():
     assert "Access pattern:" in doc
     assert "Tier" in doc
 
-# job-0039 — lookup_precip_return_period (NOAA Atlas 14 PFDS).
+# lookup_precip_return_period (NOAA Atlas 14 PFDS).
 # ---------------------------------------------------------------------------
 
 
@@ -1131,13 +1131,13 @@ def test_lookup_precip_return_period_is_registered_with_static_30d():
 
 
 def test_lookup_precip_return_period_docstring_records_tier_3():
-    """§F.1.1 docstring discipline: Tier 3 (direct HTTPS point query)."""
+    """Docstring discipline: Tier 3 (direct HTTPS point query)."""
     doc = lookup_precip_return_period.__doc__ or ""
     assert "Access pattern:" in doc
     assert "Tier 3" in doc
 
 
-# Verbatim Atlas 14 PFDS response for the Fort Myers center captured 2026-06-07.
+# Verbatim Atlas 14 PFDS response for the Fort Myers center.
 _ATLAS14_FORT_MYERS_FIXTURE = b"""Point precipitation frequency estimates (inches)
 NOAA Atlas 14 Volume 9 Version 2
 Data type: Precipitation depth

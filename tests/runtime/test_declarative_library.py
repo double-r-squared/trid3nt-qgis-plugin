@@ -1416,7 +1416,7 @@ def test_validator_refuses_a_param_ref_in_a_data_producer():
 
 
 # ============================================================================ #
-# wave 1d - revision coherence: leaks, re-derivation, eviction, the law-9 floor
+# Revision coherence: leaks, re-derivation, eviction, the law-9 floor
 # ============================================================================ #
 
 # --- R3-1: a ParamRef may not leak past the late-binding seam ----------------- #

@@ -71,7 +71,7 @@ def _settings() -> ModelSettings:
     # faked below) Vertex client construction succeeds instead of raising its
     # "Vertex-only" guard; the openai-path gating under test never reads this
     # client. (The real dispatch for MODEL_PROVIDER=openai still constructs
-    # that client unconditionally -- see server.py's per-turn client
+    # that client unconditionally -- the per-turn client
     # resolution -- so it must not raise.)
     return ModelSettings(
         model="qwen", project="t", location="us-central1", use_vertex=True
@@ -134,7 +134,7 @@ async def test_widen_fires_on_poor_fit(monkeypatch, caplog):
 
 @pytest.mark.asyncio
 async def test_widen_does_not_fire_on_good_fit(monkeypatch):
-    # NB: retrieve_ranked_tools is ALSO called at k=8 by the ADR-0018
+    # NB: retrieve_ranked_tools is ALSO called at k=8 by the
     # tool-candidates gate downstream -- unrelated to the widen. Assert the
     # widen specifically: the gate ranks at 24 and NEVER re-ranks at WIDEN_K.
     ks = await _drive_and_record_ks(top_score=0.9, monkeypatch=monkeypatch)

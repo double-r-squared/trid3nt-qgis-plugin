@@ -71,8 +71,8 @@ def user_fr_content(name: str, response: dict[str, Any], call_id: str | None = N
 class TestContentsToOpenaiMessages:
 
     def test_simple_user_message(self):
-        # 2026-07-13: even without a caller system_prompt, the baked local
-        # tool-discipline line rides as a system message (OPEN-17 class).
+        # Even without a caller system_prompt, the baked local
+        # tool-discipline line rides as a system message.
         contents = [user_content("Hello")]
         msgs = contents_to_openai_messages(contents)
         assert len(msgs) == 2
@@ -96,7 +96,7 @@ class TestContentsToOpenaiMessages:
         ]
         msgs = contents_to_openai_messages(contents)
         roles = [m["role"] for m in msgs]
-        # Leading system = the baked tool-discipline line (2026-07-13).
+        # Leading system = the baked tool-discipline line.
         assert roles == ["system", "user", "assistant"]
 
     def test_function_call_becomes_tool_calls(self):
@@ -223,7 +223,7 @@ class TestToolDeclarationsToOpenaiTools:
         tools = tool_declarations_to_openai_tools([decl])
         assert len(tools[0]["function"]["description"]) == 1000
 
-    # -- 2026-07-12 LOCAL-wire tool-schema slimming (context-window fix) ----
+    # -- LOCAL-wire tool-schema slimming (context-window fix) ----
 
     def test_tool_description_capped_at_default_600(self):
         long_desc = "word " * 300  # 1500 chars, plenty of word boundaries
@@ -566,7 +566,7 @@ class TestStreamOpenai:
 
 
 # ---------------------------------------------------------------------------
-# 4. openai_model precedence (F2, live-feedback 2026-07-08: local hot-swap)
+# 4. openai_model precedence (F2: local hot-swap)
 # ---------------------------------------------------------------------------
 
 
@@ -616,7 +616,7 @@ class TestOpenaiModelPrecedence:
 
 
 # ---------------------------------------------------------------------------
-# 5. OPEN-14: context-budget wiring inside stream_openai (proactive
+# 5. Context-budget wiring inside stream_openai (proactive
 #    compaction + the reactive clip-guard retry-then-typed-error path).
 #    ``discover_context_window`` is monkeypatched everywhere here -- no live Ollama.
 # ---------------------------------------------------------------------------
@@ -851,12 +851,12 @@ class TestContextBudgetWiring:
 
 
 # ---------------------------------------------------------------------------
-# BUG 3 (post-OPEN-14 acceptance rerun): a clipped/looping local generation
+# BUG 3: a clipped/looping local generation
 # ran for ~22 minutes streaming 16k-26k tokens of looped narration before the
 # reactive clip guard (above) could react at stream end -- it only inspects
 # usage AFTER a round finishes. ``max_tokens`` bounds every request; the
 # proactive budget's reserve is COUPLED to the same cap (single source of
-# truth -- see test_context_budget.py::TestBudget).
+# truth -- the budget tests pin it).
 # ---------------------------------------------------------------------------
 
 
@@ -929,7 +929,7 @@ class TestMaxTokensCap:
 
 
 # --------------------------------------------------------------------------- #
-# A1 (NATE 2026-07-20): retry TRANSIENT UPSTREAM errors, not just 429.
+# A1: retry TRANSIENT UPSTREAM errors, not just 429.
 #
 # The nemotron :free endpoint surfaced "Upstream error from Nvidia:
 # ResourceExhausted: Worker local total request limit reached (32/32)" as a

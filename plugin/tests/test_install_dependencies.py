@@ -206,7 +206,7 @@ class TestWindowsPythonExecutable(unittest.TestCase):
 
 
 class TestMacWheelRecipe(unittest.TestCase):
-    """NATE's ruling: macOS has no pip in QGIS's own python at all, so the
+    """macOS has no pip in QGIS's own python at all, so the
     fix is a system-python3 wheel download + unzip into the profile, never
     an interpreter probe against QGIS's own broken build."""
 

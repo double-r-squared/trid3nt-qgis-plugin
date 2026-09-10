@@ -21,7 +21,7 @@ from stub_server import (  # noqa: E402
 )
 
 # --------------------------------------------------------------------------- #
-# Startup case reuse (live-feedback 2026-07-09): never mint a fresh
+# Startup case reuse: never mint a fresh
 # "QGIS session ..." case while the user already has one
 # --------------------------------------------------------------------------- #
 

@@ -208,33 +208,22 @@ def read_run_diagnostics(
 ) -> dict[str, Any]:
     """Read a finished simulation run's engine diagnostics (mass balance, stability).
 
-    **What it does:** resolves a run handle to its retained diagnostics files and
-    returns ONE normalized health envelope for whichever engine produced it. You do
-    NOT pick an engine-specific reader - the engine is recovered from the run's
-    completion record. A run whose engine has no reader here raises typed rather
-    than guessing.
+    **What it does:** returns ONE normalized health envelope for whichever engine
+    produced the run - the engine comes from its completion record, never from you.
 
-    **When to use:**
-    - Right after any solve: did the run converge and conserve mass, or is it garbage?
-    - "Is this run healthy? What is its mass-balance or continuity error?"
-    - Before trusting a model result for downstream analysis or calibration.
+    **When to use:** right after any solve - did it converge and conserve mass;
+    before trusting a result downstream or in calibration.
 
-    **When NOT to use:**
-    - To compare the model against real observations -> ``compute_skill_metrics`` /
-      ``compute_model_residuals``.
-    - To fetch the run's output layers or frames -> ``list_run_frames``.
+    **When NOT to use:** comparing against observations
+    (``compute_skill_metrics``); fetching layers or frames (``list_run_frames``).
 
-    **Parameters:**
-    - ``run_handle``: the run id ULID, or any ``s3://`` run uri beneath it.
+    **Parameters:** ``run_handle`` - a run id ULID or any ``s3://`` uri beneath it.
 
-    **Returns:** a dict envelope: ``engine``, ``run_id``, ``status``, ``healthy``
-    (coarse heuristic; ``null`` when indeterminate), ``mass_balance_pct`` +
-    ``mass_balance_source`` (``reported``/``derived``/``null``), ``instability``,
-    ``nonconverged_pct``, ``dry_cells``, ``warnings[]``, ``engine_specific{}``,
-    ``sources``, ``notes[]``. Raises a typed error (``RUN_HANDLE_UNRESOLVED``,
-    ``DIAGNOSTICS_RUN_NOT_FOUND``, ``DIAGNOSTICS_ENGINE_UNKNOWN``,
-    ``DIAGNOSTICS_ARTIFACT_MISSING``, ``DIAGNOSTICS_PARSE_ERROR``) rather than a
-    fabricated healthy result.
+    **Returns:** one health envelope - ``healthy`` (coarse, ``null`` when
+    indeterminate), ``mass_balance_pct`` with its source, ``instability``,
+    ``nonconverged_pct``, ``dry_cells``, ``warnings``, ``engine_specific`` and the
+    artifact ``sources``. An unresolvable handle, an unknown engine, a missing
+    artifact or an unparseable one raises typed rather than reporting health.
     """
     completion, run_id, completion_source, runs_bucket = _load_completion(
         run_handle, _run_dir

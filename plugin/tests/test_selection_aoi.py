@@ -50,7 +50,7 @@ class TestSelectionAoi(unittest.TestCase):
         status = aoi.aoi_status_text(wide, True, source="selection")
         self.assertIn("selection", status)
         self.assertIn("too large", status)
-        # (2026-07-22): the per-message in-text context line is GONE
+        # The per-message in-text context line is GONE
         # -- the AOI rides the structured ``aoi_bbox`` user-message payload
         # field for every source (see test_client structured-AOI tests).
         self.assertFalse(hasattr(aoi, "attach_aoi_to_text"))

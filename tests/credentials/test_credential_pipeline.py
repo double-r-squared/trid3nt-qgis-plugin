@@ -32,7 +32,7 @@ from trid3nt_server.tools import (
     RegisteredTool,
     clear_registry_for_tests,
 )
-# fetch_firms_active_fire folded to a spec-driven tool (ADR 0079); its bespoke
+# fetch_firms_active_fire folded to a spec-driven tool; its bespoke
 # FirmsArgError/FirmsAuthError/FirmsMissingKeyError classes + the vault-first
 # ``_resolve_map_key`` / ``set_persistence_for_secrets`` machinery were removed (the
 # fold resolves the key in the firms_active_fire hook: kwarg -> str secret_ref -> env
@@ -80,7 +80,7 @@ class MockWebSocket:
 
 
 # =========================================================================== #
-# 1. FIRMS key resolution -- REMOVED with the twin (ADR 0079).
+# 1. FIRMS key resolution -- REMOVED with the twin.
 #
 # The twin's vault-first ``_resolve_map_key`` (Persistence.get_secret_value ->
 # ``set_persistence_for_secrets`` binding + a ``demo`` literal fallback + a key_fp
@@ -308,7 +308,7 @@ def test_generic_classifier_never_classifies_unknown_provider():
 
 
 # --------------------------------------------------------------------------- #
-# 2c. Config-missing family — the ERA5 .cdsapirc LIVE BUG (NATE 2026-06-18).
+# 2c. Config-missing family — the ERA5 .cdsapirc LIVE BUG.
 # --------------------------------------------------------------------------- #
 
 
@@ -372,7 +372,7 @@ def test_signup_url_none_provider_round_trips_end_to_end():
 
 
 # --------------------------------------------------------------------------- #
-# 2d. Generic NAME-ONLY fallback helpers (NATE principle 3).
+# 2d. Generic NAME-ONLY fallback helpers.
 # --------------------------------------------------------------------------- #
 
 
@@ -413,8 +413,8 @@ def test_derive_generic_credential_name_humanizes_tool():
 
 
 def test_generic_provider_has_no_signup_url():
-    """generic_provider_for_tool NEVER fabricates a signup_url (NATE
-    principles 2 + 3): the card is name + form only."""
+    """generic_provider_for_tool NEVER fabricates a signup_url: the card
+    is name + form only."""
     gp = cr.generic_provider_for_tool("fetch_usgs_water_gauges")
     assert gp.provider_id == cr.GENERIC_PROVIDER_ID == "generic"
     assert gp.signup_url is None
@@ -763,7 +763,7 @@ def test_cross_session_credential_provided_refused():
 
 
 # =========================================================================== #
-# 5. Generic NAME-ONLY fallback for UNREGISTERED tools (NATE principle 3).
+# 5. Generic NAME-ONLY fallback for UNREGISTERED tools.
 #
 # A credential-shaped failure from a tool with NO registered provider must
 # still surface a card — a derived credential NAME + secret-entry form,

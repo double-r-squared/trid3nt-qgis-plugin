@@ -358,7 +358,7 @@ def test_land_absent_labeled_degrade(monkeypatch, tmp_path, fake_s3) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Deep-water rung (ADR 0229): the 3DEP land leg's flat ocean-fill must not
+# Deep-water rung: the 3DEP land leg's flat ocean-fill must not
 # clobber the ETOPO full-column bathy on a forced-bathy-base (offshore/tsunami)
 # fetch, so a rupture/basin-scale domain keeps a genuine deep column.
 # --------------------------------------------------------------------------- #

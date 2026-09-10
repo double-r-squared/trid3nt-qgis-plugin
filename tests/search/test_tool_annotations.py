@@ -15,7 +15,7 @@ from trid3nt_server.tools import get_registered_tools
 
 # Force-import modules that are NOT in the __init__.py eager-import list but
 # whose tools are in scope for annotation coverage. These are loaded by the
-# agent service at startup via server.py / main.py but not by the package
+# agent service at startup via the server entrypoint but not by the package
 # __init__.py. Import them here so the live registry is fully populated.
 import trid3nt_server.tools.search.fetch_from_catalog.fetch_from_catalog  # noqa: F401 — registers fetch_from_catalog
 import trid3nt_server.tools.search.search_data_catalog.search_data_catalog  # noqa: F401 — registers search_data_catalog
@@ -106,7 +106,7 @@ def test_write_tools_are_not_read_only():
 #: KFFACT + Esri/IO land cover when no override URIs are passed, so its
 #: open_world_hint=True is HONEST -- flipping it to False to satisfy the
 #: naming lint would misannotate a real external-API caller.
-#: Quick-win batch (2026-07-07): compute_change_detection fetches its own
+#: Quick-win batch: compute_change_detection fetches its own
 #: two-date Sentinel-2 inputs (PC STAC) unless both imagery_*_uri overrides
 #: are passed -- the same input-fetching-composer shape as
 #: compute_sediment_yield, so its open_world_hint=True is honest too.

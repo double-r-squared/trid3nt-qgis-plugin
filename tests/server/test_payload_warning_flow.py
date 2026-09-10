@@ -73,7 +73,7 @@ class MockWebSocket:
 
 
 # --------------------------------------------------------------------------- #
-# Registry snapshot fixture (shared with sibling Wave 1.5 tests).
+# Registry snapshot fixture (shared with the sibling registry tests).
 # --------------------------------------------------------------------------- #
 
 

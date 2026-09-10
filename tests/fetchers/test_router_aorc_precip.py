@@ -29,7 +29,7 @@ AORC_SPEC = load_spec_from_path(
     / "trid3nt_server/tools/fetchers/weather/fetch_aorc_precip/source.yaml"
 )
 
-# Coweeta fork bbox (the ADR 0203 proof AOI).
+# Coweeta fork bbox (the proof AOI).
 _BBOX = [-83.48, 35.02, -83.42, 35.08]
 
 

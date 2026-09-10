@@ -456,7 +456,7 @@ async def test_first_resume_replays_layers_through_real_emitter() -> None:
 
 
 # =========================================================================== #
-# OPEN-8: case-list emission storm - server-side change-guard
+# case-list emission storm - server-side change-guard
 # =========================================================================== #
 #
 # Root cause (live evidence, trid3nt-local/logs/agent.log): ``_emit_case_list``

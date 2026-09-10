@@ -69,7 +69,7 @@ PROMOTED = {
         "properties": ["bbox", "date"],
         "required": ["bbox", "date"],
     },
-    # --- phase-2 wave-3: USGS water-data family (dataretrieval-delegated, ADR 0040) ---
+    # --- USGS water-data family (dataretrieval-delegated) ---
     "fetch_usgs_water_quality": {
         "source_class": "usgs_water_quality",
         # bbox + characteristic both carry defaults in the twin (bbox=None,
@@ -86,7 +86,7 @@ PROMOTED = {
         "properties": ["comid", "direction", "distance_km", "seed_point"],
         "required": [],
     },
-    # --- phase-2 wave-4: station family (snapshot mode, ADR 0045) ---
+    # --- station family (snapshot mode) ---
     "fetch_noaa_coops_currents": {
         "source_class": "noaa_coops_currents",
         # twin sig: fetch_noaa_coops_currents(bbox, product="currents", **_extra) --

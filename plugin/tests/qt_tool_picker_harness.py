@@ -109,7 +109,7 @@ assert tool_choice_sends == [
 ], f"pick send wrong: {tool_choice_sends}"
 assert card.answered
 assert not card.confirm_btn.isEnabled(), "card must lock after answering"
-# Wave-picker UX (LANE P, 2026-07-22): every picker this harness shows lands
+# Picker UX: every picker this harness shows lands
 # in the SAME (never-_send-reset) turn, so the chip carries the running
 # "Step N" prefix -- this is card 1 of the sequence below.
 assert card.summary_lbl.text() == "Step 1: picked spatial_query", card.summary_lbl.text()

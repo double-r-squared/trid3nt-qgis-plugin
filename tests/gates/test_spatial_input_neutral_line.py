@@ -151,8 +151,8 @@ def test_response_aoi_flow_has_no_line_keys():
 
 # --------------------------------------------------------------------------- #
 # 3. The surfaced line geometry resolves in compute_cross_section.
-# (cull pass 2 2026-07-27: compute_terrain_profile CUT; compute_cross_section is
-#  the surviving generic sample-along-line tool and carries _resolve_line_coords.)
+# There is no compute_terrain_profile; compute_cross_section is the
+#  surviving generic sample-along-line tool and carries _resolve_line_coords.
 # --------------------------------------------------------------------------- #
 
 

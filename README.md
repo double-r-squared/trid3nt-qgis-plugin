@@ -91,7 +91,7 @@ The model can also be switched live from the plugin's Settings (no restart).
 
 | Service        | URL                          | Notes                          |
 |----------------|------------------------------|--------------------------------|
-| Agent WS       | ws://localhost:8765          | plugin/web connect here        |
+| Agent WS       | ws://localhost:8765          | plugin and web clients connect |
 | Agent HTTP     | http://localhost:8766        | tool catalog + telemetry       |
 | MinIO API      | http://localhost:9000        | S3-compatible object storage   |
 | MinIO Console  | http://localhost:9001        | web UI (user: trid3nt)         |

@@ -1,4 +1,4 @@
-"""TELEMAC distributed on-mesh rainfall / evaporation forcing (ADR 0190 row 1).
+"""TELEMAC distributed on-mesh rainfall / evaporation forcing.
 
 Server-side offline coverage for the composer's rain-resolution path: the
 signed net-rate resolver, the gridMET-window parser, and the knob surfacing on

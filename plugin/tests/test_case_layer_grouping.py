@@ -246,7 +246,7 @@ class TestCaseGroupClearing(unittest.TestCase):
         core.QgsMeshLayer = type("QgsMeshLayer", (), {})
         # QGIS-native raster rendering names (TiTiler->QGIS swap) -- not
         # exercised by these tests; existence only so the module import
-        # succeeds. tests/test_raster_render.py exercises them for real.
+        # succeeds. The raster-render tests exercise them for real.
         core.QgsColorRampShader = type("QgsColorRampShader", (), {})
         core.QgsPalettedRasterRenderer = type("QgsPalettedRasterRenderer", (), {})
         core.QgsRasterShader = type("QgsRasterShader", (), {})

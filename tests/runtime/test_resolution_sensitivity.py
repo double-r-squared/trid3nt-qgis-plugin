@@ -124,7 +124,7 @@ def test_no_declaration_is_no_note() -> None:
 ])
 def test_every_telemac_template_declares_its_sensitive_answers(
         template: str, field: str, cls: str) -> None:
-    """The three NATE named plus the rest of the family, from the same evidence."""
+    """The three named templates plus the rest of the family, from one evidence set."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     workflow = TOOL_REGISTRY[template].fn.workflow

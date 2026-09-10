@@ -504,20 +504,20 @@ def test_tool_card_record_field_set_matches_ts_contract() -> None:
         "response_truncated",
         "args_bytes",
         "response_bytes",
-        # task-168 nested sub-step persistence:
+        # Nested sub-step persistence:
         "children",
     }
     assert set(ToolCardRecord.model_fields) == expected
 
 
 # --------------------------------------------------------------------------- #
-# PersistedSubStepRecord + ToolCardRecord.children (task-168 -- read-only
-# nested sub-step persistence)
+# PersistedSubStepRecord + ToolCardRecord.children - read-only nested
+# sub-step persistence
 # --------------------------------------------------------------------------- #
 
 
 def test_persisted_substep_record_field_set_matches_ts_contract() -> None:
-    """task-168: the Python child record field set EQUALS the web
+    """The Python child record field set EQUALS the web
     ``PersistedSubStepRecord`` (web/src/contracts.ts) so the producer<->consumer
     contract holds for the nested-timeline replay."""
     expected = {
@@ -587,8 +587,8 @@ def test_persisted_substep_record_rejects_unknown_state() -> None:
 
 
 def test_tool_card_record_children_default_none() -> None:
-    """task-168: ``children`` defaults to None on a minimal record so every
-    pre-task-168 document (no ``children`` key) validates + replays unchanged."""
+    """``children`` defaults to None on a minimal record so every
+    document without a ``children`` key validates + replays unchanged."""
     card = ToolCardRecord(tool_name="fetch_3dep_dem", state="complete")
     assert card.children is None
     # A document literally MISSING the children key validates (additive contract)
@@ -598,7 +598,7 @@ def test_tool_card_record_children_default_none() -> None:
 
 
 def test_tool_card_record_children_roundtrip_with_failed_child_and_io() -> None:
-    """task-168: a parent card carrying ordered children (one OK, one FAILED
+    """A parent card carrying ordered children (one OK, one FAILED
     with a tool-io drop-down) round-trips with the children intact + ordered."""
     parent = ToolCardRecord(
         tool_name="run_model_flood_scenario",

@@ -139,7 +139,7 @@ async def test_server_gate_cancel_blocks_dispatch() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Approval timeout (live-feedback 2026-07-22): unanswered card -> typed error,
+# Approval timeout: unanswered card -> typed error,
 # turn completes, registry cleaned up. The QGIS plugin had no handler for the
 # code-exec-request envelope, so the F6 24h local gate wait hung the turn.
 # --------------------------------------------------------------------------- #

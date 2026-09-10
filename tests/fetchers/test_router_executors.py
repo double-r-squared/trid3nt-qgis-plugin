@@ -143,7 +143,7 @@ def test_raster_execute_uses_fetch_source_array(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# raster_cog: imageserver_export mode (fold wave-7, ADR 0053; landfire/usfs)
+# raster_cog: imageserver_export mode (landfire/usfs)
 # --------------------------------------------------------------------------- #
 
 
@@ -399,7 +399,7 @@ def test_fetch_station_records_via_monkeypatch(monkeypatch):
 
 
 def test_station_catalog_staged_uri_is_typed_error_not_handed_to_httpx():
-    """A staged s3:// catalog endpoint is a closed trap (ADR 0297 follow-up):
+    """A staged s3:// catalog endpoint is a closed trap:
     this executor talks a station-catalog REST API over httpx, which cannot
     serve a staged object."""
     spec = _station_spec()
@@ -621,7 +621,7 @@ def test_validate_int_range_and_date_compact():
 
 
 # --------------------------------------------------------------------------- #
-# raster_cog: serialize nodata/dtype directive (fold wave-8, ADR 0054; copernicus)
+# raster_cog: serialize nodata/dtype directive (copernicus)
 # --------------------------------------------------------------------------- #
 
 
@@ -750,7 +750,7 @@ def test_direct_window_nodata_gate_passes_with_data(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# raster_cog: multi_url VRT fan-out mosaic (fold wave-9, ADR 0055; hrsl)
+# raster_cog: multi_url VRT fan-out mosaic (hrsl)
 # --------------------------------------------------------------------------- #
 
 

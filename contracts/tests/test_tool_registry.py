@@ -176,7 +176,7 @@ def test_atomic_tool_metadata_rejects_unknown_ttl_class() -> None:
 
 
 # ============================================================================ #
-# Wave 1.5 additions (schema-20260608):
+# Registry-schema additions:
 #   supports_global_query + payload_mb_estimator_name
 # ============================================================================ #
 

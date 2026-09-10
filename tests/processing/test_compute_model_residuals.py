@@ -356,7 +356,7 @@ def test_bbox_fetch_path(tmp_path, monkeypatch) -> None:
     with open(fgb_path, "rb") as f:
         fgb_bytes = f.read()
 
-    # fetch_usgs_groundwater_levels is spec-driven (ADR 0071); the composer resolves
+    # fetch_usgs_groundwater_levels is spec-driven; the composer resolves
     # its FGB bytes via the router seam (get_spec + validate_params + executor), so
     # mock the executor the re-point calls.
     from trid3nt_server.tools.fetchers._router import router as gw_router

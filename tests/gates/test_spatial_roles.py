@@ -1,4 +1,4 @@
-"""Unit tests for the shared drawn-geometry role vocabulary (ADR 0099, mesh M2).
+"""Unit tests for the shared drawn-geometry role vocabulary.
 
 Covers the generalized role parser in ``trid3nt_server.gates.spatial_roles`` --
 the canonical DOMAIN stage every engine consumes. The adapter surface over it is

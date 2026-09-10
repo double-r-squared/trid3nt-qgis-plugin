@@ -61,7 +61,7 @@ def test_create_branch_source_clears_context() -> None:
     create_idx = src.index('if command == "create"')
     select_idx = src.index('if command == "select"')
     create_block = src[create_idx:select_idx]
-    # job-0269: the reset REBINDS (never .clear()) — an in-flight turn holds
+    # The reset REBINDS (never .clear()) — an in-flight turn holds
     # the old list via its stream-entry capture and must keep it intact.
     assert "state.chat_history = []" in create_block
     assert "state.chat_history.clear()" not in create_block

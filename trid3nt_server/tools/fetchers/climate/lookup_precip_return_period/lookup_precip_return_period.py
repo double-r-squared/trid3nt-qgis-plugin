@@ -390,37 +390,30 @@ def lookup_precip_return_period(
     location: tuple[float, float],
     return_period_years: int,
     duration_hours: float,
-    # absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at the server via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Look up a design-storm precipitation depth at a point, in inches.
 
-    Access pattern: Tier 3, a direct HTTPS point query to the NOAA PFDS endpoint.
-    Returns ONE (return period, duration) depth from NOAA Atlas 14 as a scalar
-    dict, not a layer. Coverage is CONUS plus Puerto Rico and the US Virgin
-    Islands; a western-US point Atlas 14 omits is answered from the Atlas-2
-    anchors instead, and a point neither atlas covers raises rather than guessing.
+    Access pattern: Tier 3, a direct HTTPS point query to NOAA PFDS. Returns ONE
+    (return period, duration) depth from Atlas 14 as a scalar, not a layer.
+    Coverage is CONUS plus Puerto Rico and the US Virgin Islands; a western-US
+    point Atlas 14 omits falls back to the Atlas-2 anchors, and a point neither
+    atlas covers raises rather than guessing.
 
-    Use this when: a design storm is the question ("the 100-year 24-hour rainfall
-    here"), a historical storm total needs ranking against its return period, or a
-    rainfall-runoff model needs an intensity-duration-frequency input.
+    Use this when: a design storm is the question, or a rainfall-runoff model
+    needs an intensity-duration-frequency input.
 
-    Do NOT use this for: OBSERVED precipitation, which a radar or gauge product
-    answers; future-climate design storms, since Atlas 14 is historical; or a
-    spatial raster of return-period precipitation, since this is a point service.
+    Do NOT use this for: OBSERVED precipitation; future-climate design storms;
+    a spatial raster (this is a point service).
 
-    Params:
-        location: ``(lat, lon)`` in EPSG:4326 -- latitude FIRST, the opposite of
-            the bbox convention. Snapped to the 1/120-degree grid before caching.
-        return_period_years: ARI in years. Atlas 14 publishes 1, 2, 5, 10, 25, 50,
-            100, 200, 500 and 1000; anything else raises.
-        duration_hours: storm duration. Atlas 14 publishes 5 minutes through 60
-            days and never interpolates, so an unpublished duration raises.
+    Params: ``location`` as ``(lat, lon)`` -- latitude FIRST, the opposite of the
+    bbox convention; ``return_period_years`` and ``duration_hours``, which must be
+    values Atlas 14 publishes, since it never interpolates.
 
-    Returns: a dict carrying ``precip_inches``, ``units``, the snapped
-    ``location``, the return-period and duration echoes, ``vintage_volume``,
-    ``project_area`` and ``source``.
+    Returns ``precip_inches`` with its units, the snapped location and the atlas
+    vintage it came from.
     """
     if not isinstance(location, (tuple, list)) or len(location) != 2:
         raise BboxInvalidError(

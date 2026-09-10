@@ -303,16 +303,16 @@ def test_clamp_fetch_resolution_helper() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 10) Local-cloud fingerprint seam (NATE 2026-07-08): the LOCAL build
+# 10) Local-cloud fingerprint seam: the LOCAL build
 #     (TRID3NT_SOLVER_BACKEND=local-docker) must not surface the cloud
 #     "fetch (1 vCPU)" compute label on the confirm card -- it renders the
 #     "local" compute lane instead. The cloud lane (aws-batch / unset) keeps
 #     the exact prior values byte-for-byte.
 # --------------------------------------------------------------------------- #
-# 11) fetch_dem F16-for-DEM extension (2026-07-10): a state-scale bbox (the
+# 11) fetch_dem F16-for-DEM extension: a state-scale bbox (the
 #     WA-state live failure this fixes) gets an HONEST coarsened suggestion --
 #     bounded by fetch_dem's own 4000 px/axis budget (matching
-#     data_fetch.py's _DEM_PIXEL_BUDGET_PX), not the generic 8192 px
+#     the fetcher's own _DEM_PIXEL_BUDGET_PX), not the generic 8192 px
 #     MAX_FETCH_PX and not a stale 30 m default.
 # --------------------------------------------------------------------------- #
 # The exact bbox from the live failure report.
@@ -443,7 +443,7 @@ async def test_landcover_small_bbox_native_resolution_no_gate() -> None:
 
 # --------------------------------------------------------------------------- #
 # 14-17) fetch_landcover auto-coarsen (state-scale no-hard-fail / native-metadata /
-# continent-scale ceiling / pixel-budget) FOLDED to the spec-driven surface (ADR 0082).
+# continent-scale ceiling / pixel-budget) FOLDED to the spec-driven surface.
 # The tool's auto-coarsen moved to the router pre_resolve hook + the gates.max_bbox_km2
 # ceiling; those twin-internal tests (which patched the deleted _fetch_nlcd_landcover_bytes
 # and read the dict return) migrated to tests/fetchers/test_router_landcover.py

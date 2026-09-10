@@ -234,7 +234,7 @@ def plain_tool():
 @pytest.mark.asyncio
 async def test_plain_tool_persists_no_children(file_persistence, plain_tool) -> None:
     """A non-composer dispatch (no substeps) persists ``children == None`` --
-    byte-identical to every pre-task-168 row, and replays as a plain card."""
+    byte-identical to a row without children, and replays as a plain card."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
     case_id = await _create_case(ws, state)
@@ -253,7 +253,7 @@ async def test_legacy_tool_card_row_without_children_loads(
     file_persistence,
 ) -> None:
     """A persisted tool-card document literally MISSING the ``children`` field
-    (a pre-task-168 row) still validates + replays unchanged (additive contract).
+    still validates + replays unchanged (additive contract).
     Written through the raw MCP insert so no current code stamps the new field."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
@@ -266,7 +266,7 @@ async def test_legacy_tool_card_row_without_children_loads(
         "case_id": case_id,
         "role": "tool",
         "content": "{}",
-        # A tool_card with NO children key at all (pre-task-168 shape).
+        # A tool_card with NO children key at all.
         "tool_card": {
             "schema_version": "v1",
             "tool_name": "fetch_3dep_dem",

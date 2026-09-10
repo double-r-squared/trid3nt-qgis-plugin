@@ -70,7 +70,7 @@ def _write_gray_overlay(path: str, size: int = 600) -> np.ndarray:
 
 
 # A tiny NLCD-like palette: index → (R, G, B). These are the colors the
-# composite MUST carry through (not a flat gray), the job-0323 fix.
+# composite MUST carry through (not a flat gray).
 _NLCD_PALETTE = {
     11: (71, 107, 160),    # open water — blue
     41: (104, 171, 95),    # deciduous forest — green
@@ -479,7 +479,7 @@ def test_compute_blended_composite_cache_hit_skips_fetch(fake_storage):
 
 
 # ---------------------------------------------------------------------------
-# job-0324 follow-up — description must tell the agent the BASE may be a
+# The description must tell the agent the BASE may be a
 # paletted/categorical raster (NLCD land cover) so it stops substituting
 # compute_colored_relief (elevation colors) as the blend base. The "bake NLCD
 # land cover into hillshade" demo rendered the wrong colors because the

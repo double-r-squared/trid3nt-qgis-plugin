@@ -215,7 +215,7 @@ def test_river_gauge_id_detail_mode():
 
 
 # --------------------------------------------------------------------------- #
-# openfema_disasters (ADR 0064): offset paging + attribute<-boundary FIPS enrich.
+# openfema_disasters: offset paging + attribute<-boundary FIPS enrich.
 # --------------------------------------------------------------------------- #
 
 from trid3nt_server.tools.fetchers._router.executors import http_json as _HJ
@@ -310,7 +310,7 @@ def test_openfema_input_errors():
 
 
 # --------------------------------------------------------------------------- #
-# storm_events_db (ADR 0064): directory-index resolve -> bulk gzip-CSV decode.
+# storm_events_db: directory-index resolve -> bulk gzip-CSV decode.
 # --------------------------------------------------------------------------- #
 
 import gzip as _gzip

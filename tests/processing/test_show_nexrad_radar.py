@@ -43,7 +43,7 @@ def test_tool_registered() -> None:
     assert "show_nexrad_radar" in TOOL_REGISTRY
     entry = TOOL_REGISTRY["show_nexrad_radar"]
     # Uncacheable-by-construction: WMS URL passthrough; live radar pixels are
-    # dynamic. See module docstring OQ-0102-CACHEABLE-FLAG-CONTRADICTION.
+    # dynamic.
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"
     assert entry.metadata.source_class is None

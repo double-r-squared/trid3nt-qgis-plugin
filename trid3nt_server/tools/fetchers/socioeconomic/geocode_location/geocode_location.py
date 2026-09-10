@@ -590,30 +590,23 @@ def _fetch_nominatim_geocode_bytes(query: str) -> bytes:
 def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
     """Translate a free-text place name into a bounding box and canonical name.
 
-    Forward-geocodes a human-readable location to a WGS84 bbox, a centroid and
-    the canonical place name. The returned bbox is ALWAYS at least about 2 km on
-    its long axis, so it is a usable AOI and never a bare building footprint.
+    Forward-geocodes to a WGS84 bbox, a centroid and the canonical name. The bbox
+    is ALWAYS at least about 2 km on its long axis, so it is a usable AOI and
+    never a bare building footprint.
 
-    Use this when: a request names a city, county, neighbourhood or named feature
-    and a downstream tool needs a bbox, or an event's textual location has to
-    become one.
+    Use this when: a request names a place and a downstream tool needs a bbox.
 
-    Do NOT use this for: reverse geocoding, which is a different endpoint;
-    routing or distance, which this service does not answer; or parcel-level
-    address resolution, which needs a dedicated provider. The bbox is the full
-    administrative boundary of the named place, so a county or a state comes back
-    very large -- narrow it before handing it to a heavy download.
+    Do NOT use this for: reverse geocoding, routing or distance, or parcel-level
+    address resolution. The bbox is the full administrative boundary of the named
+    place, so a county or a state comes back very large -- narrow it before
+    handing it to a heavy download.
 
-    Params:
-        query: a free-text place name or description; must be non-empty.
+    Params: ``query``, a non-empty free-text place name.
 
-    Returns: a dict carrying ``name``, ``bbox`` as
-    ``[min_lon, min_lat, max_lon, max_lat]``, ``latitude`` and ``longitude``,
-    ``source``, and the OSM provenance fields, which are None on a state snap.
-    Two ADDITIVE keys appear only when they fired: ``fallback_reason`` when a
-    vague query snapped to a whole state, and ``expansion_note`` when a
-    building-scale result was widened to the AOI floor. Both are honest notes to
-    narrate rather than hide.
+    Returns the canonical ``name``, a ``[min_lon, min_lat, max_lon, max_lat]``
+    ``bbox``, a centroid and the source. ``fallback_reason`` appears when a vague
+    query snapped to a whole state and ``expansion_note`` when a building-scale
+    result was widened to the AOI floor - both are notes to narrate, not hide.
     """
     if not isinstance(query, str) or not query.strip():
         raise BboxInvalidError("geocode_location requires a non-empty string query")

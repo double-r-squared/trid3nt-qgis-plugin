@@ -161,7 +161,7 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
 # The 20 invented kwarg patterns Gemini routinely generates
 # ---------------------------------------------------------------------------
 
-# These are drawn from the real failure log that motivated job-0164. Each dict
+# These are drawn from a real failure log. Each dict
 # contains one or more invented kwargs; they are layered ON TOP of the valid
 # minimal params for the tool. The test asserts that no combination causes
 # TypeError.

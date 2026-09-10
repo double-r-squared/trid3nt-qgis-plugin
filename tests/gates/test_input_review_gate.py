@@ -1,4 +1,4 @@
-"""Offline tests for the two-mode INPUT_REQUIRED review gate (ADR 0107).
+"""Offline tests for the two-mode INPUT_REQUIRED review gate.
 
 Mirrors the granularity-gate test pattern (a background driver resolves the
 single pending ``_PENDING_CONFIRMATIONS`` future): no network, no daemon. Pins

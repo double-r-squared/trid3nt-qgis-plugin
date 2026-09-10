@@ -21,7 +21,7 @@ from stub_server import (  # noqa: E402
 )
 
 # --------------------------------------------------------------------------- #
-# Generic case-command (create/delete) -- item 2/3 (live-feedback 2026-07-09)
+# Generic case-command (create/delete) -- item 2/3
 # --------------------------------------------------------------------------- #
 
 

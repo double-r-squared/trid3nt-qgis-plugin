@@ -150,7 +150,7 @@ def test_summarize_tool_result_tool_not_found_emits_error_envelope():
     assert summary["error_type"] == "ToolNotFoundError"
     # message field carries the human-readable text.
     assert "bad_tool" in summary["message"]
-    # Legacy alias preserved (job-0177 contract).
+    # Legacy alias preserved.
     assert summary["error"] == summary["message"]
 
 

@@ -125,7 +125,7 @@ async def test_error_path_failed_step_carries_code_and_message(
 ) -> None:
     """``mark_failed`` populates the D.6 failure fields. Truncation to 512
     chars is enforced. SCREAMING_SNAKE_CASE shape is checked by the
-    PipelineStepSummary validator (job-0030)."""
+    PipelineStepSummary validator."""
     step_id = await emitter.add_step(name="Fetch DEM", tool_name="fetch_dem")
     await emitter.mark_running(step_id)
 
@@ -340,7 +340,7 @@ async def test_current_pipeline_set_and_cleared(
     emitter: PipelineEmitter, sink: _CapturingSink
 ) -> None:
     """``session-state.current_pipeline`` is non-null while a pipeline is
-    running (cross-envelope predicate (b) from job-0026), and is ``None``
+    running (cross-envelope predicate b), and is ``None``
     after ``close_pipeline``."""
     step_id = await emitter.add_step(name="Geocode", tool_name="geocode_location")
     await emitter.mark_running(step_id)
@@ -388,7 +388,7 @@ async def test_error_classifier_buckets_known_exception_types(
     emitter: PipelineEmitter, sink: _CapturingSink
 ) -> None:
     """Exception classification feeds the open-set A.6 error-code registry.
-    ConnectionError → UPSTREAM_API_ERROR (covers job-0033 fetcher failures)."""
+    ConnectionError → UPSTREAM_API_ERROR (covers fetcher failures)."""
 
     def boom() -> None:
         raise ConnectionError("upstream 503")
@@ -452,7 +452,7 @@ def test_no_merge_helper_exists() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 9. Vector inline-GeoJSON (job-0175)
+# 9. Vector inline-GeoJSON
 # --------------------------------------------------------------------------- #
 
 
@@ -585,7 +585,7 @@ async def test_reset_loaded_layers_clears_inline_table(
 
 
 # --------------------------------------------------------------------------- #
-# duration_ms stamping (job-0264, ELEVATED tool-timer requirement)
+# duration_ms stamping (the tool-timer requirement)
 # --------------------------------------------------------------------------- #
 
 
@@ -719,7 +719,7 @@ async def test_emit_tool_call_stamps_duration_end_to_end(
     session_id: str, sink: _CapturingSink
 ) -> None:
     """The full emit_tool_call wrapper stamps a non-negative duration_ms on
-    the terminal complete frame (integration of the seam server.py drives)."""
+    the terminal complete frame (integration of the seam the server drives)."""
     emitter = PipelineEmitter(session_id=session_id, sink=sink)
 
     async def tool() -> str:
@@ -733,7 +733,7 @@ async def test_emit_tool_call_stamps_duration_end_to_end(
 
 
 # --------------------------------------------------------------------------- #
-# job-0254 §3 — the emission seam is a no-op for a passing layer
+# The emission seam is a no-op for a passing layer
 # --------------------------------------------------------------------------- #
 
 
@@ -780,7 +780,7 @@ async def test_emit_byte_identical_with_seam_for_passing_layers(
 # --------------------------------------------------------------------------- #
 # Terminal-on-RETURN (terminal-pipeline-card hardening) — a tool/workflow that
 # FAILS or is CANCELLED yet RETURNS (the solver poll path) must flip the card
-# to failed/cancelled, NOT green. Kills NATE's "silent green on a dead solve" +
+# to failed/cancelled, NOT green. Kills the "silent green on a dead solve" +
 # "card spins forever then mislabels success" symptom.
 # --------------------------------------------------------------------------- #
 
@@ -1356,7 +1356,7 @@ async def test_rebind_sink_open_pipeline_replays_all_steps_mixed_states(
 
 
 # --------------------------------------------------------------------------- #
-# Two-card sim observability (task-149)
+# Two-card sim observability
 # --------------------------------------------------------------------------- #
 
 
@@ -1549,8 +1549,8 @@ async def test_route_sim_terminal_marks_complete_and_failed(
 # --------------------------------------------------------------------------- #
 #
 # Wire-shape / lifecycle coverage against a FAKE (no-persist-hook) emitter --
-# see tests/emission/test_compaction_card_persistence.py for the persistence-row-shape
-# + full dispatch-loop integration coverage.
+# the persistence-row shape and the full dispatch-loop integration are covered
+# against the persisting emitter instead.
 
 
 class TestCompactionCard:

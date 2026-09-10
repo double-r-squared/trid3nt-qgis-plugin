@@ -245,7 +245,7 @@ def test_honesty_floor_empty_window(monkeypatch):
 
 
 def test_bbox_none_raises_input_error():
-    # NOTE (ADR 0087 divergence, non-gating): the twin stamped a bare BBOX_REQUIRED;
+    # NOTE (divergence, non-gating): the twin stamped a bare BBOX_REQUIRED;
     # the router stamps the source INPUT code (GOES_ANIM_INPUT_INVALID) -- both are
     # non-retryable input errors with the same server actionability.
     with pytest.raises(RouterInputError):

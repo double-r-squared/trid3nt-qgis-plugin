@@ -80,8 +80,8 @@ def test_auth_token_message_type_pinned() -> None:
 def test_auth_token_rejects_extra_fields() -> None:
     """``extra='forbid'`` catches silent contract drift."""
     base = AuthTokenEnvelope(token="abc").model_dump(mode="json")
-    # ``anonymous_user_id`` was the sticky anon-id hint, cut in wave 11 -- it is
-    # now just another rejected extra field.
+    # ``anonymous_user_id`` is not a field on this envelope - it is rejected
+    # like any other extra.
     for forbidden in ("refresh_token", "tier", "user_id", "claims", "anonymous_user_id"):
         bad = {**base, forbidden: "x"}
         with pytest.raises(ValidationError, match="(?i)extra"):

@@ -283,7 +283,7 @@ def test_publish_layer_overview_cog_published_unchanged(
 
 
 # --------------------------------------------------------------------------- #
-# job-0324 — colormap preservation in the overview-enforcement re-write.
+# Colormap preservation in the overview-enforcement re-write.
 #
 # NLCD land cover is a single-band palette-index COG with an EMBEDDED GDAL
 # color table; TiTiler colorizes from it. _build_cog_with_overviews's
@@ -357,7 +357,7 @@ def _assert_colormap_round_trip_equal(src_bytes: bytes, out_bytes: bytes) -> Non
 
 def test_build_cog_with_overviews_preserves_colormap() -> None:
     """The overview re-write keeps the embedded NLCD color table AND builds
-    overviews — the job-0324 grey-land-cover fix."""
+    overviews — never grey land cover."""
     flat = _paletted_geotiff_bytes()
     assert _colormap_of(flat) is not None  # sanity: source has a table
     assert _raster_has_overviews(flat) is False

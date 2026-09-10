@@ -629,8 +629,8 @@ def test_active_upstream_url_used(monkeypatch, fake_s3) -> None:
 
 def test_cache_hit_replays_provenance_identically(monkeypatch, fake_s3) -> None:
     """A second call over the same params is a CACHE HIT that never re-fetches,
-    yet mode/storm_count/storm_names REPLAY IDENTICAL from the provenance sidecar
-    (ADR 0110) -- the fact a pre-channel cache object would have lost."""
+    yet mode/storm_count/storm_names REPLAY IDENTICAL from the provenance sidecar --
+    the fact a pre-channel cache object would have lost."""
     calls = {"n": 0}
 
     def _counting_get(url: str, timeout: float = 0.0) -> bytes:

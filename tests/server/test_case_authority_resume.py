@@ -142,7 +142,7 @@ def test_resume_rebinds_active_case_to_client_then_replays(monkeypatch, tmp_path
 
 def test_resume_without_case_id_keeps_current_behavior(monkeypatch, tmp_path):
     """An older client (no stamp) leaves the server pointer + replay untouched
-    — job-0356 fresh-reconnect replay still runs for the existing Case."""
+    — fresh-reconnect replay still runs for the existing Case."""
     _stub_resume(monkeypatch)
     server.set_persistence(_file_persistence(tmp_path))
 

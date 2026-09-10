@@ -36,7 +36,7 @@ class _FakeWS:
 class _FakeState:
     def __init__(self) -> None:
         self.session_id = new_ulid()
-        # fix (bbox-gate-retry-loop, 2026-07-09): the turn-memory dict the
+        # Turn-memory fix (bbox-gate-retry-loop): the turn-memory dict the
         # ``_gate_with_turn_memory`` wrapper reads/writes. Real
         # ``SessionState`` carries this too (reset at the start of every
         # user-message dispatch); tests construct it here since ``_FakeState``
@@ -67,7 +67,7 @@ def test_code_exec_request_in_hot_set() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Turn-memory fix (bbox-gate-retry-loop, 2026-07-09) - live drive found a
+# Turn-memory fix (bbox-gate-retry-loop) - a live drive found a
 # model retrying ``fetch_landcover`` with corrected NON-bbox args after typed
 # errors (dataset='nlcd' -> 'nlcd_' -> 'nlcd_2021'); each valid-bbox retry
 # re-emitted a NEW confirm gate for the SAME tool + SAME bbox, and the second
@@ -188,7 +188,7 @@ async def test_gate_turn_memory_cancel_not_memoized_gates_again() -> None:
 @pytest.mark.asyncio
 async def test_gate_turn_memory_new_turn_gates_again() -> None:
     """A fresh turn (state.gate_decisions_this_turn reset, mirroring the
-    real per-turn reset in server.py's dispatch entrypoint) gates again even
+    real per-turn reset in the server's dispatch entrypoint) gates again even
     for the SAME tool + bbox that was approved last turn."""
     from trid3nt_server import server
 

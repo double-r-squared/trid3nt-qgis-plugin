@@ -31,7 +31,7 @@ from trid3nt_contracts.execution import LayerURI
 # hash tail, the invented name - are what these pin, and they are verbatim.
 # --------------------------------------------------------------------------- #
 
-# job-0253 (Fort Myers flood -> Pelicun, session 01KTS5T50ET0FZZ1TWRMGCQTBA)
+# A real Fort Myers flood -> Pelicun cache key.
 REAL_FLOOD_COG_0253 = (
     "s3://trid3nt-runs/01KTS5W9GTE7A7WPC3BNBE10EQ/flood_depth_peak.tif"
 )
@@ -48,7 +48,7 @@ MANGLED_NSI_LAYERID_BASENAME_0253 = (
     f"{NSI_LAYER_ID}.fgb"
 )
 
-# job-0257 (hillshade demo, /tmp/agent_demo_ready.log) — 3/3 hash-tail mangles
+# A real hillshade cache key — 3/3 hash-tail mangles
 HILLSHADE_REAL_CHICAGO = "090a4ff8d9a083f67c0b355caf40241a.tif"
 HILLSHADE_MANGLED_CHICAGO_1 = "090a4ff8d9a083b28499252309d12999.tif"
 HILLSHADE_MANGLED_CHICAGO_2 = "090a4ff8d9a08321a43a7a9437b0e51c.tif"
@@ -56,7 +56,7 @@ HILLSHADE_REAL_SEATTLE = "4007d642cb157d11f5db275a50286ae5.tif"
 HILLSHADE_MANGLED_SEATTLE = "4007d642cb157d22b1113a4b912a2ee3.tif"
 HILLSHADE_CACHE_DIR = "s3://trid3nt-cache/cache/static-30d/compute_hillshade"
 
-# job-0255 (Fort Myers round 10, session 01KTS7QFMKWMKWG8V54D8GMH89)
+# A second real Fort Myers flood cache key.
 REAL_FLOOD_COG_0255 = (
     "s3://trid3nt-runs/01KTS8H8RJT6311A2V4BKX6H8A/flood_depth_peak.tif"
 )
@@ -234,7 +234,7 @@ class TestResolutionBranches:
     def test_ambiguous_hash_prefix_refuses_to_guess(self) -> None:
         reg = make_registry()
         # Two cache keys sharing the same 14-char prefix — substitution would
-        # be a coin flip; the registry never guesses. ADR 0014: the honest
+        # be a coin flip; the registry never guesses. The honest
         # answer is the TYPED reject listing both real handles so the model
         # re-picks (a pass-through could only 404 downstream).
         a = f"{HILLSHADE_CACHE_DIR}/090a4ff8d9a083aaaaaaaaaaaaaaaaaa.tif"
@@ -259,7 +259,7 @@ class TestSessionIsolation:
         reg_a.record(NSI_LAYER_ID, uri=REAL_NSI_FGB)
         # Session B never produced the layer: session A's mapping must NOT
         # leak — session B REJECTS the mangled object-store URI typed
-        # (ADR 0014) instead of substituting session A's real URI.
+        # instead of substituting session A's real URI.
         with pytest.raises(UriResolutionError):
             reg_b.resolve_params(
                 "t", {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253}
@@ -383,7 +383,7 @@ class TestHistoricalIncidents:
 
     def test_i5_invented_hash_ambiguous_dir_rejects_typed(self) -> None:
         """Two NSI fetches in the dir -> same-dir match is ambiguous -> the
-        registry refuses to guess and (ADR 0014) rejects TYPED, listing both
+        registry refuses to guess and rejects TYPED, listing both
         real handles so the model re-picks instead of eating a 404."""
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
@@ -533,7 +533,7 @@ def test_resolvable_param_allowlist_excludes_server_owned_params() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 6. Small-model PLACEHOLDER resolution (2026-07-08)
+# 6. Small-model PLACEHOLDER resolution
 #
 # Local 8B models emit fetch_dem + publish_layer in the SAME iteration, passing
 # stand-in strings as the consumer's layer_uri. Dispatch is sequential, so the

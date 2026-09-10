@@ -56,7 +56,7 @@ def _make_state(session_id: str = _SESSION_ID_A) -> SessionState:
 # ---------------------------------------------------------------------------
 
 def test_turn_counter_starts_at_zero():
-    """A freshly created SessionState has turn_count == 0 (FR-FR-3)."""
+    """A freshly created SessionState has turn_count == 0."""
     state = _make_state()
     assert state.turn_count == 0
 
@@ -76,7 +76,7 @@ def test_turn_counter_increments_on_each_dispatch():
 @pytest.mark.asyncio
 async def test_cap_fires_and_emits_max_turns_reached():
     """On the (MAX+1)th turn _handle_max_turns_reached emits a session-state
-    envelope with status='max_turns_reached' (FR-FR-3 acceptance criterion)."""
+    envelope with status='max_turns_reached'."""
     ws = FakeWebSocket()
     state = _make_state(session_id=ws.session_id)
     state.turn_count = MAX_TURNS_PER_SESSION + 1  # simulate cap just exceeded
@@ -171,7 +171,7 @@ def test_multiple_sessions_have_independent_counters():
 def test_max_turns_env_var_default():
     """MAX_TURNS_PER_SESSION defaults to 25 when the env var is absent."""
     # We can only test the imported value (env-var is read at import time).
-    # Verify it's a positive integer >= 1. The exact default is 25 per OQ-FR-1
+    # Verify it's a positive integer >= 1. The exact default is 25
     # but ops may override it; we just enforce it's a valid positive int.
     assert isinstance(MAX_TURNS_PER_SESSION, int)
     assert MAX_TURNS_PER_SESSION >= 1

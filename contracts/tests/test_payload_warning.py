@@ -245,7 +245,7 @@ def test_confirmation_envelope_carries_no_cost_field() -> None:
     assert banned.isdisjoint(fields.keys())
 
 
-# --- TimeScaleSuggestion (combined run-settings gate, sprint-16) ----------- #
+# --- TimeScaleSuggestion (combined run-settings gate) --------------------- #
 
 
 def _time_scale(**over) -> TimeScaleSuggestion:
