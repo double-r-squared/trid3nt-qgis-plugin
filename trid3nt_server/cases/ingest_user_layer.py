@@ -1,53 +1,9 @@
-"""``register_case_layer`` core -- bidirectional layer push (QGIS -> case).
+"""Bring a plugin-pushed vector or raster INTO a case as a first-class layer.
 
-Every existing layer seam flows agent -> QGIS (``publish_layer``). This
-module is the REVERSE seam: the TRID3NT QGIS
-plugin's user has an ACTIVE layer in their desktop project (vector or raster)
-they want to bring INTO the current case as a first-class input layer.
-
-Two entry points share ONE core (``ingest_user_layer``):
-
-1. ``POST /api/ingest-layer`` on the catalog HTTP listener
-   (``catalog_http.py``) -- the plugin's "Push layer" button drives this
-   directly, cold (no WS session required), mirroring the ``/api/export-qgis``
-   + ``/api/case-list`` route conventions (local-single-user gated, typed
-   errors -> honest 4xx bodies).
-2. The LLM-visible tool ``register_case_layer`` -- so a conversational request
-   ("use the file I uploaded as the AOI") can drive the SAME core once the file
-   already lives in object storage.
-
-Both entry points assume the artifact bytes are ALREADY in object storage at
-``s3_uri`` (bucket = ``TRID3NT_CACHE_BUCKET``, prefix ``user-uploads/<ulid>/
-<filename>`` -- the plugin uploads there first via
-``POST /api/ingest-layer-file`` since the QGIS Python runtime has no boto3).
-This module never accepts raw bytes directly -- see ``upload_layer_file`` below
-for the staging upload half.
-
-**Vector path:** the uploaded artifact (GeoJSON / FlatGeobuf / GeoPackage) is
-read via geopandas/pyogrio, reprojected to EPSG:4326, and written out as a
-FlatGeobuf -- the SAME format every other vector case layer uses. It lands at
-``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.fgb``, which is the layer's
-one uri: the plugin opens it natively.
-
-**Raster path:** the uploaded GeoTIFF is validated readable via rasterio, then
-handed to ``publish_layer`` VERBATIM -- it already owns COG-overview
-enforcement (``_ensure_raster_has_overviews``), style resolution and
-registration for an ``s3://`` raster. No COG logic is duplicated here.
-
-**Persistence is the contract.** The ingested layer is merged into the Case's
-durable ``loaded_layer_summaries`` (the SAME field
-``_persist_case_loaded_layers`` writes, using the identical
-append/replace-by-layer_id merge policy) so a Case reopen -- cold OR live --
-always shows the pushed layer. A best-effort nudge additionally refreshes any
-LIVE WebSocket session with this Case open (see ``_notify_live_sessions``): it
-pushes the existing ``case-list`` envelope (the same side-channel every other
-case mutation uses), NOT a fabricated ``session-state`` -- this cold entry point
-has no live ``PipelineEmitter`` to source a truthful ``chat_history``/
-``pipeline_history`` from, and inventing one risks the documented D1-class "chat
-blanks on case reopen" failure mode. The client repaints the pushed layer on its
-next Case reopen/reconnect regardless.
+The reverse of every other layer seam, which flows agent -> QGIS. Both entry
+points assume the artifact bytes are ALREADY in object storage: this module
+never accepts raw bytes, and ``upload_layer_file`` is the staging-upload half.
 """
-
 from __future__ import annotations
 
 import json
@@ -81,11 +37,10 @@ __all__ = [
 #: keeping a single HTTP round trip + in-memory read bounded.
 MAX_INGEST_BYTES: int = 200 * 1024 * 1024
 
-#: Staging prefix the plugin's raw-bytes upload lands under (bucket =
-#: ``TRID3NT_CACHE_BUCKET``). Content-addressed-cache TTL eviction rules do NOT
-#: apply here (this is a plain object, not a ``cache/<ttl-class>/...`` key), but
-#: the artifact is still copied OUT to the durable runs bucket before it becomes
-#: a case layer -- see the module docstring.
+#: Staging prefix the plugin's raw-bytes upload lands under. Content-addressed
+#: cache TTL eviction does NOT apply -- this is a plain object, not a
+#: ``cache/<ttl-class>/...`` key -- but the artifact is copied OUT to the durable
+#: runs bucket before it becomes a case layer.
 USER_UPLOAD_PREFIX = "user-uploads"
 
 _VECTOR_KIND = "vector"
@@ -142,8 +97,7 @@ class UnreadableLayerError(ImportLayerError):
 
 
 # --------------------------------------------------------------------------- #
-# S3 helpers (boto3; honors AWS_ENDPOINT_URL so MinIO works -- same posture as
-# every other s3:// read/write in this package, see cache.py / publish_layer.py)
+# S3 helpers. boto3 honors AWS_ENDPOINT_URL, so MinIO works unchanged.
 # --------------------------------------------------------------------------- #
 
 
@@ -197,12 +151,9 @@ def _put_object_bytes(
 
 
 def _sanitize_filename(filename: str) -> str:
-    """Strip any path components + control chars; keep the extension.
+    """Strip any path components and control chars; keep the extension.
 
-    A path-traversal-shaped filename (``../../etc/passwd``) is collapsed to its
-    basename -- the object key is minted server-side under a fresh ULID prefix
-    regardless, so this is defense-in-depth, not the sole guard.
-    """
+    Defense in depth: the key is minted server-side under a fresh ULID anyway."""
     base = os.path.basename((filename or "").strip().replace("\\", "/"))
     base = base.strip().strip(".") or "layer"
     # Keep it to a conservative safe charset; anything else becomes "_".
@@ -212,17 +163,12 @@ def _sanitize_filename(filename: str) -> str:
 
 
 def upload_layer_file(filename: str, data: bytes) -> str:
-    """Stage raw bytes uploaded by the plugin to
-    ``s3://<cache_bucket>/user-uploads/<ulid>/<filename>``.
+    """Stage raw bytes uploaded by the plugin under the staging prefix.
 
-    SYNC (boto3); the caller (the HTTP route) wraps this in
-    ``asyncio.to_thread``. This is the server-side half of the QGIS plugin's
-    upload -- the plugin has no boto3 (stdlib-only QGIS Python runtime), so it
-    streams the exported file's bytes to the agent over plain HTTP and the agent
-    does the actual object-store PUT.
-
-    Raises ``ObjectTooLargeError`` when ``data`` exceeds ``MAX_INGEST_BYTES``.
-    """
+    SYNC; the caller wraps it. Past ``MAX_INGEST_BYTES`` this raises."""
+    # The server-side half of the plugin's upload: the QGIS Python runtime is
+    # stdlib-only and has no boto3, so the plugin streams the exported file's
+    # bytes over plain HTTP and the object-store PUT happens here.
     if len(data) > MAX_INGEST_BYTES:
         raise ObjectTooLargeError(
             f"upload is {len(data)} bytes, exceeds the {MAX_INGEST_BYTES}-byte cap"
@@ -318,9 +264,7 @@ def _read_uploaded_vector_to_gdf(raw_bytes: bytes, ext: str, crs_authid: str | N
 
 
 def _write_fgb_bytes(gdf) -> bytes:
-    """GeoDataFrame -> FlatGeobuf bytes (the DATA-face format every other vector
-    case layer uses; matches ``compute_contours`` etc's ``to_file(...,
-    driver="FlatGeobuf", engine="pyogrio")`` convention)."""
+    """GeoDataFrame -> FlatGeobuf bytes, the format every vector case layer uses."""
     tmp_path: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -485,24 +429,20 @@ async def _ingest_raster(
 
 
 # --------------------------------------------------------------------------- #
-# Persistence merge (mirrors server._persist_case_loaded_layers's
-# append/replace-by-layer_id policy, without requiring a live SessionState /
-# PipelineEmitter -- this entry point is COLD by design).
+# Persistence merge. Durable persistence is the CONTRACT of an ingest: the layer
+# is merged into the Case's own summaries, so a Case reopen -- cold OR live --
+# always shows the pushed layer. This entry point is COLD by design, and needs
+# no live session or emitter.
 # --------------------------------------------------------------------------- #
 
 
 async def _merge_layer_into_case(
     case_id: str, summary: dict[str, Any], *, bbox: list[float] | None, make_aoi: bool
 ) -> bool:
-    """Persist ``summary`` onto the Case's ``loaded_layer_summaries`` +
-    ``layer_summary`` (append, or replace-in-place on a ``layer_id`` collision).
-    When ``make_aoi``, also pins ``Case.bbox`` from ``bbox`` (mirrors the F32
-    ``_pin_case_aoi_from_*`` write shape in ``server.py``:
-    ``case.model_copy(update={...})`` + ``upsert_case``).
+    """Append ``summary`` to the Case's layers, or replace it by ``layer_id``.
 
-    Returns True. Raises ``CaseNotFoundError`` when the case does not exist or
-    Persistence is unbound.
-    """
+    ``make_aoi`` also pins ``Case.bbox``; a missing case or unbound persistence
+    raises ``CaseNotFoundError``."""
     from trid3nt_server.server import get_persistence
 
     p = get_persistence()
@@ -539,13 +479,9 @@ async def _merge_layer_into_case(
 
 
 async def _require_case_exists(case_id: str) -> None:
-    """Fail fast with ``CaseNotFoundError`` before doing any ingest work (S3
-    reads, geopandas/rasterio conversion, ``publish_layer``) for a case that does
-    not exist. ``_merge_layer_into_case`` re-reads the case right before its write
-    regardless (freshness -- mirrors the ``_pin_case_aoi_from_*``
-    re-read-before-write convention in server.py), so this is a cheap early exit,
-    not the only guard.
-    """
+    """Fail fast before any ingest work for a case that does not exist.
+
+    A cheap early exit: the merge re-reads the case right before its own write."""
     from trid3nt_server.server import get_persistence
 
     p = get_persistence()
@@ -559,17 +495,10 @@ async def _require_case_exists(case_id: str) -> None:
 
 
 async def _notify_live_sessions(case_id: str) -> None:
-    """Best-effort: nudge any LIVE session with ``case_id`` open.
+    """Best-effort nudge to any LIVE session with ``case_id`` open.
 
-    Pushes the EXISTING ``case-list`` envelope (the same side-channel every other
-    case-mutating flow uses, e.g. ``_emit_case_list`` after create / rename /
-    archive / delete) rather than a fabricated ``session-state`` -- this cold
-    entry point has no live ``PipelineEmitter`` to source a truthful
-    ``chat_history`` from. NEVER raises; a missing/unreachable session, an unbound
-    Persistence, or any send failure is silently swallowed -- durable persistence
-    (``_merge_layer_into_case``) is the real contract; this is a nice-to-have
-    nudge on top of it.
-    """
+    NEVER raises: durable persistence is the contract, and this only makes the
+    repaint sooner than the next reopen would."""
     try:
         from trid3nt_server import server as _server
         from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
@@ -586,6 +515,10 @@ async def _notify_live_sessions(case_id: str) -> None:
         if p is None:
             return
         cases = await p.list_cases_for_user(LOCAL_SINGLE_USER_ID)
+        # The EXISTING ``case-list`` envelope, the side-channel every other
+        # case-mutating flow uses, and never a fabricated ``session-state``:
+        # this cold entry point has no live emitter to source a truthful chat
+        # history from, and inventing one blanks the chat on the next reopen.
         payload = CaseListEnvelopePayload(cases=cases)
         for sid in session_ids:
             sockets = list(_server._SESSION_WS_CONNECTIONS.get(sid, ()) or ())
@@ -612,18 +545,9 @@ async def ingest_user_layer(
     crs_authid: str | None = None,
     make_aoi: bool = False,
 ) -> dict[str, Any]:
-    """Validate + register an already-uploaded vector/raster as a Case input
-    layer. The shared core behind both ``POST /api/ingest-layer`` and the
-    ``register_case_layer`` LLM tool -- see the module docstring for the full
-    contract.
+    """Validate and register an already-uploaded artifact as a Case input layer.
 
-    Raises: ``ImportLayerInputError`` (bad kind / empty case_id or s3_uri),
-    ``ObjectNotFoundError``/``ObjectTooLargeError`` (the s3_uri fails the
-    existence/size gate), ``UnreadableLayerError`` (exists + in-cap but not a
-    valid artifact of ``kind``), ``CaseNotFoundError`` (no such case / Persistence
-    unbound). Never a bare traceback -- every failure is one of the above typed
-    subclasses of ``ImportLayerError``.
-    """
+    Every failure is a typed ``ImportLayerError`` subclass, never a traceback."""
     import asyncio
 
     if kind not in _KINDS:
@@ -634,8 +558,8 @@ async def ingest_user_layer(
         raise ImportLayerInputError(f"`s3_uri` must be an s3:// object, got {s3_uri!r}")
     clean_name = (name or "").strip() or "Pushed layer"
 
-    # Fail fast on a doomed case BEFORE any S3 read / geopandas / rasterio /
-    # publish_layer work -- see _require_case_exists's docstring.
+    # Fail fast on a doomed case BEFORE any S3 read, geopandas or rasterio
+    # conversion, or publish work.
     await _require_case_exists(case_id.strip())
 
     size = await asyncio.to_thread(_head_object_size, s3_uri)
@@ -693,9 +617,8 @@ async def ingest_user_layer(
 
 
 # --------------------------------------------------------------------------- #
-# LLM tool registration -- thin wrapper over the shared core (design point 2:
-# "use the file I uploaded as the AOI" works conversationally once the file
-# already lives in object storage).
+# A thin wrapper over the shared core, so "use the file I uploaded as the AOI"
+# works conversationally once the file already lives in object storage.
 # --------------------------------------------------------------------------- #
 
 _REGISTER_CASE_LAYER_METADATA = AtomicToolMetadata(
@@ -707,10 +630,9 @@ _REGISTER_CASE_LAYER_METADATA = AtomicToolMetadata(
 
 
 # DEREGISTERED (not LLM-visible): this function is NOT a registered tool. It
-# serves the ``/api/ingest-layer`` HTTP route directly (lazy-imported there) and
-# is called by tests/routes as a plain coroutine. ``_REGISTER_CASE_LAYER_METADATA``
-# above is retained as the route's source-of-truth for the tool's ttl/cacheable
-# semantics.
+# serves the ``/api/ingest-layer`` HTTP route directly, lazy-imported there, and
+# tests call it as a plain coroutine. ``_REGISTER_CASE_LAYER_METADATA`` above is
+# the route's source of truth for the tool's ttl and cacheable semantics.
 async def register_case_layer(
     s3_uri: str,
     name: str,
@@ -720,39 +642,13 @@ async def register_case_layer(
     crs_authid: str | None = None,
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Register an already-uploaded vector or raster artifact as a Case input
-    layer (the QGIS plugin's "Push layer" reverse seam, also reachable
-    conversationally).
+    """Register an already-uploaded artifact as a Case input layer.
 
-    USE THIS when the user says something like "use the file I just
-    uploaded/pushed from QGIS" or "make the layer I pushed the AOI" -- the
-    artifact must ALREADY be in object storage (the QGIS plugin uploads it via
-    its own HTTP route before this tool is ever reachable; there is no way to hand
-    this tool raw bytes).
-
-    Params:
-        s3_uri: the ``s3://`` object holding the uploaded artifact.
-        name: human-readable display name for the layer panel.
-        kind: ``"vector"`` or ``"raster"``.
-        case_id: the case to register onto. REQUIRED in practice -- when omitted
-            the server-side dispatch wrapper substitutes the turn's active case
-            (mirrors ``publish_layer``'s ``case_id`` transport convention); a
-            genuinely case-less call raises CASE_NOT_FOUND.
-        make_aoi: when True, also pins the Case's AOI (bounding box) to the pushed
-            layer's extent.
-        crs_authid: optional CRS hint (e.g. ``"EPSG:2263"``) used ONLY when the
-            uploaded artifact carries no embedded CRS.
-
-    Returns:
-        {"status": "ok", "layer_id": str, "name": str,
-         "layer_type": "vector"|"raster", "uri": str,
-         "bbox": [minLon, minLat, maxLon, maxLat] | None,
-         "aoi_pinned": bool, "feature_count": int | None}
-
-    Raises:
-        ImportLayerError subclasses (see ``ingest_user_layer``) -- every failure
-        is typed and honest, never a bare traceback.
-    """
+    ``make_aoi`` also pins the Case's AOI to the pushed layer's extent, and
+    ``crs_authid`` is read ONLY when the artifact carries no embedded CRS."""
+    # ``case_id`` is required in practice: the dispatch wrapper substitutes the
+    # turn's active case when it is omitted, so only a genuinely case-less call
+    # reaches this refusal.
     if not case_id:
         raise CaseNotFoundError(
             "no active case -- register_case_layer requires a case_id "

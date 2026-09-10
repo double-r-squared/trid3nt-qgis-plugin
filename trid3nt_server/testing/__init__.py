@@ -1,9 +1,8 @@
 """Drivers for the product's own WS protocol - a scripted client, not a mock.
 
 A live test declares what to invoke, how to answer the gates, and what must be
-true of the answer; :mod:`live_run` walks the socket the plugin walks. Drivers
-are product code, so this lives beside the server rather than in the test tree -
-``scripts/`` drivers and the offline suite both import it.
+true of the answer. Drivers are PRODUCT code, which is why they live beside the
+server rather than in the test tree.
 """
 
 from __future__ import annotations

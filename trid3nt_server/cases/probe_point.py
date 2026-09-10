@@ -1,41 +1,10 @@
-"""Deterministic map-click point probe -- server-side core for
-``POST /api/probe-point`` on the catalog HTTP listener (``catalog_http.py``).
+"""Deterministic map-click point probe: sample every raster on a case at a point.
 
-The TRID3NT QGIS plugin's dock has a "Probe" map tool: click the canvas and
-the dock shows the value (or a mini time series, for an animation-frame
-sequence) of every RASTER layer loaded on the current case at that point.
-This is a DETERMINISTIC read -- no LLM in the loop, no turn, no pipeline
-event -- so it is a plain function, NOT a ``@register_tool`` (an LLM-visible
-tool would be dispatched by the model; this is driven directly by a map
-click over cold HTTP, the same posture as ``/api/ingest-layer`` and
-``/api/case-list``). Lives in ``cases/`` (platform layer), not
-``agent/tools/`` -- it is not a registered LLM tool.
-
-Reuses two existing seams rather than re-deriving them:
-
-- ``query_point_hazard``'s case-layer enumeration
-  (``layers_from_case``) + point-sampling primitives (``stage_layer_local``
-  and ``sample_raster_at_point``, nearest-neighbour via rasterio).
-- ``extract_timeseries_at_point``'s frame-sequence classifier
-  (``detect_frame_sequences`` / ``parse_frame_token``), so a clicked point's
-  frame stack collapses into one series entry instead of N separate
-  single-value rows.
-
-Honesty (data-source fallback norm): a point outside a layer's extent, or on
-nodata, is an honest ``value: null`` + ``note`` entry -- never dropped, never
-zero-filled. A single unreadable layer/frame is a per-layer honest
-``value: null`` + ``error`` entry; it never fails the whole probe.
-
-Sync work (boto3 / rasterio) runs off the event loop via
-``asyncio.to_thread`` per layer/frame -- this module is called directly on
-the agent's asyncio loop (unlike an LLM tool dispatch, there is no outer
-executor wrapping it), so blocking here would stall the WS heartbeat.
-
-``MAX_PROBE_LAYERS`` caps the number of raster artifacts opened per click --
-a case can accumulate many loaded layers over a long session, and a probe is
-a synchronous point-and-wait UI action.
+A DETERMINISTIC read with no LLM in the loop, driven directly by a map click
+over cold HTTP, so it is a plain function and not a registered tool. Honesty
+floor: a point outside an extent, on nodata, or on an unreadable layer is an
+honest null entry, never dropped and never zero-filled.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -62,13 +31,15 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.cases.probe_point")
 
-#: Max raster layers opened per probe click (honest cap, not a silent drop --
-#: the response carries ``truncated: true`` when the case has more).
+#: Max raster layers opened per probe click. A case accumulates loaded layers
+#: over a long session and a probe is a synchronous point-and-wait UI action,
+#: so the cap is honest rather than a silent drop: the response carries
+#: ``truncated: true`` when the case has more.
 MAX_PROBE_LAYERS = 40
 
 
 # ---------------------------------------------------------------------------
-# Typed errors -- mirrors query_point_hazard's error shape.
+# Typed errors.
 # ---------------------------------------------------------------------------
 
 
@@ -101,12 +72,10 @@ class ProbePointCaseNotFoundError(ProbePointError):
 def _sample_single_layer(
     layer: dict[str, Any], lon: float, lat: float, tmpdir: str, tag: str
 ) -> dict[str, Any]:
-    """SYNC: stage + sample one non-series raster layer at a point.
+    """SYNC: stage and sample one non-series raster layer at a point.
 
-    Returns the honest per-layer result entry (``value: None`` + ``note`` for
-    outside-extent/nodata, ``value: None`` + ``error`` for an unreadable
-    layer) -- never raises.
-    """
+    Never raises: outside-extent and nodata carry a ``note``, an unreadable
+    layer an ``error``, and both leave ``value`` null."""
     name = str(layer.get("name") or layer.get("layer_id") or tag)
     entry: dict[str, Any] = {
         "layer_id": str(layer.get("layer_id") or ""),
@@ -136,11 +105,10 @@ def _sample_single_layer(
 def _sample_series_member(
     layer: dict[str, Any], label: str, lon: float, lat: float, tmpdir: str, tag: str
 ) -> tuple[dict[str, Any], str | None]:
-    """SYNC: stage + sample one frame of a detected sequence at a point.
+    """SYNC: stage and sample one frame of a detected sequence at a point.
 
-    Returns ``(entry, units)`` -- ``units`` is the frame's own units (when
-    readable), so the caller can pick the first non-null one for the series.
-    """
+    ``units`` is the frame's OWN units, so the caller can pick the first
+    non-null one for the whole series."""
     entry: dict[str, Any] = {"label": label, "value": None}
     units: str | None = None
     uri = str(layer.get("uri") or "")
@@ -167,25 +135,14 @@ def _sample_series_member(
 
 
 async def probe_point_at(case_id: str, lon: float, lat: float) -> dict[str, Any]:
-    """Sample every raster layer (and detected frame sequence) on a case at
-    one point -- the deterministic core behind ``POST /api/probe-point``.
+    """Sample every raster layer and frame sequence on a case at one point.
 
-    Non-series raster layers each become a single result entry
-    ``{layer_id, name, value, units, note?, error?}``. Raster layers that
-    ``extract_timeseries_at_point.detect_frame_sequences`` groups into an
-    animation-frame stack collapse into ONE entry
-    ``{name, series: [{label, value, note?, error?}, ...], units,
-    layer_ids}`` -- the same stem/token grouping the web scrubber and
-    ``extract_timeseries_at_point`` use. Vector layers are not sampled (a
-    point probe of a vector needs a different query shape) and are simply
-    absent from ``results``.
-
-    Raises ``ProbePointInputError`` on a missing/invalid location,
-    ``ProbePointCaseNotFoundError`` when the case does not exist or
-    persistence is unavailable. A Case with zero raster layers is NOT an
-    error -- it returns ``results: []`` (the click succeeded; there is
-    nothing to sample).
-    """
+    A case with zero raster layers is NOT an error: the click succeeded and
+    there was nothing to sample."""
+    # A detected animation-frame stack collapses into ONE result entry carrying
+    # a series, rather than N single-value rows. Vector layers are not sampled
+    # at all -- a point probe of a vector needs a different query shape -- and
+    # are simply absent from the results.
     q_lon, q_lat, _label = resolve_point(lon, lat, None, ProbePointInputError)
     if not case_id or not str(case_id).strip():
         raise ProbePointInputError("missing or empty `case_id`")
@@ -207,6 +164,9 @@ async def probe_point_at(case_id: str, lon: float, lat: float) -> dict[str, Any]
 
     results: list[dict[str, Any]] = []
     emitted_stems: set[str] = set()
+    # The sync boto3 / rasterio work goes off the loop per layer and per frame:
+    # this module is called directly on the agent's asyncio loop, with no outer
+    # executor, so blocking here would stall the WS heartbeat.
     with tempfile.TemporaryDirectory(prefix="trid3nt_probe_point_") as tmpdir:
         for idx, layer in enumerate(capped):
             stem = stem_by_layer_id.get(id(layer))

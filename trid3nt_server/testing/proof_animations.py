@@ -1,28 +1,10 @@
 """WHICH field a template's delivered animation paints - declared, never inferred.
 
-A time-stepped solve writes half a dozen variables and only one of them is the
-ANSWER. Coastal is the case that proves it: ``res_coastal.slf`` carries WATER
-DEPTH and FREE SURFACE, and depth over a tidal bay is bathymetry-dominated - the
-deep channel stays deep, the shallows stay shallow, and a six-hour surge moves the
-picture almost not at all. The surge lives in the free surface. But FREE SURFACE
-on a DRY node is the bed elevation (TELEMAC sets it that way), so painting it
-unmasked scales the whole field by the highest hill in the domain and the tide
-reads as a flat wash. The masked pair is the answer: FREE SURFACE where WATER
-DEPTH > 0.02 m, which is exactly the ``WET_TOL`` discriminant the coastal worker's
-own ``peak_wl_max_m`` / ``final_wl_max_m`` scalars are computed on.
-
-That choice lives HERE, beside the canary declarations, and never on a command
-line, for the same reason the canaries' locations and windows do: a delivered
-proof that came off a remembered flag is not repeatable, and a mechanical
-re-render that falls back to a default variable delivers the wrong picture with
-every check passing.
-
-THERE IS NO DEFAULT. A time-stepped template with no entry in
-:data:`PROOF_ANIMATIONS` REFUSES to render an animation - the packet assembler
-reports the absent declaration as a named gap. Guessing a variable is how the
-regression happened; refusing is the fix.
+A time-stepped solve writes half a dozen variables and only ONE of them is the
+answer. That choice lives here, beside the canary declarations, and never on a
+command line: a delivered proof that came off a remembered flag is not
+repeatable.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -38,36 +20,15 @@ WET_TOL_M = 0.02
 
 @dataclass(frozen=True)
 class ProofAnimation:
-    """One template's animation declaration: the field, the mask, the still, why.
+    """One template's animation declaration: the field, the mask, the still, why."""
 
-    ``variable`` and ``mask_var`` are TOKENS matched against the SELAFIN's own
-    padded 32-char names, so a token that stops matching refuses loudly rather
-    than animating a neighbouring variable.
-
-    ``still`` is ``peak`` for a field that BUILDS toward its answer (a rising
-    tide, an arriving plume) and ``final`` for one that DECAYS toward it (a
-    settling sag, a cooling column), where the peak frame is the initial
-    condition and shows the reader nothing the run did.
-
-    ``exempt_reason`` is the other half of the declaration: a solver with no
-    simulation clock states WHY it owes no animation, so the exemption is a
-    physics fact in the packet rather than a hole nobody noticed.
-
-    ``name`` exists because ONE run can owe more than one animation. A coastal
-    solve answers two different questions off the same SELAFIN - how the water
-    surface moves, and where it went onto land - and they are not two renderings
-    of one picture: they take different variables, different masks and different
-    scales. A template declares each, the packet requires all of them, and the
-    name lands in the filename so a reader is never guessing which is which.
-
-    ``dry_land_only`` is the INUNDATION gate: keep only nodes that were DRY at
-    t=0 (bed above the run's initial water line) so permanently submerged bay
-    floor is nodata rather than colour. It is the same discriminant
-    ``flooded_land_km2`` counts on, and without it the bathymetry dominates the
-    scale and "inundation" paints the sea.
-    """
-
+    #: ONE run can owe more than one animation - two questions off the same
+    #: SELAFIN take different variables, masks and scales, and are not two
+    #: renderings of one picture. The name lands in the filename, so a reader is
+    #: never guessing which is which.
     name: str = "default"
+    #: A TOKEN matched against the SELAFIN's own padded 32-char names, so a token
+    #: that stops matching refuses loudly rather than animating a neighbour.
     variable: str | None = None
     units: str = ""
     #: The published quantity this field is - the token the producing product
@@ -75,11 +36,19 @@ class ProofAnimation:
     #: resolves the SAME range and legend sentence as the published raster of
     #: that quantity rather than a second read of the same field.
     quantity: str | None = None
+    #: The masking field, matched the same way as ``variable``.
     mask_var: str | None = None
     mask_threshold: float = 0.0
+    #: ``peak`` for a field that BUILDS toward its answer, ``final`` for one that
+    #: DECAYS toward it, where the peak frame is the initial condition and shows
+    #: the reader nothing the run did.
     still: str = "peak"
     #: Which horizontal plane of a 3D PRISM result to paint.
     plane: str = "surface"
+    #: The INUNDATION gate: keep only nodes DRY at t=0, so permanently submerged
+    #: bay floor is nodata rather than colour. It is the same discriminant
+    #: ``flooded_land_km2`` counts on, and without it the bathymetry dominates
+    #: the scale and "inundation" paints the sea.
     dry_land_only: bool = False
     #: A field the SELAFIN does not store, built from the components it does.
     #: ``("VELOCITY U", "VELOCITY V")`` is the vector magnitude; the solver writes
@@ -140,21 +109,25 @@ class ProofAnimation:
     #: dynamics from a brightness ramp. The legend states the transform.
     transform: str | None = None
     reason: str = ""
+    #: A solver with no simulation clock states WHY it owes no animation, so the
+    #: exemption is a physics fact in the packet rather than an unnoticed hole.
     exempt_reason: str | None = None
 
 
-#: Keyed by TOOL, because a tool name is what an evidence JSON records; the value
-#: is a TUPLE, because one run can owe more than one animation. A second entry is
-#: a template DECISION - somebody decided this run answers two questions - never
-#: a default the assembler invents.
+#: Keyed by TOOL, because a tool name is what an evidence JSON records; the
+#: value is a TUPLE, because one run can owe more than one animation. A second
+#: entry is a template DECISION, never a default the assembler invents. THERE IS
+#: NO DEFAULT: a time-stepped template with no entry here REFUSES to render an
+#: animation, because guessing a variable delivers the wrong picture with every
+#: check passing.
 PROOF_ANIMATIONS: dict[str, tuple[ProofAnimation, ...]] = {
     # A dry-start watershed's published answer IS max water depth (overland sheet
     # flow); free surface over a hillslope is terrain.
     #
     # AND THE THRESHOLD IS NOT WET_TOL. 0.02 m is the depth at which flooded land
     # counts as flooded, and overland sheet flow on a hillslope is an order of
-    # magnitude thinner than that: this catchment's
-    # whole field peaks at 0.0273 m, so masking at 0.02 keeps a 7 mm sliver and
+    # magnitude thinner than that: this catchment's whole field peaks at
+    # 0.0273 m, so masking at 0.02 keeps a 7 mm sliver and
     # throws the answer away. Exact zero is the only honest gate here: paint
     # every cell carrying water, leave the never-wetted hillside to the basemap.
     "telemac_rain_on_grid": (
@@ -275,23 +248,16 @@ PROOF_ANIMATIONS: dict[str, tuple[ProofAnimation, ...]] = {
 
 
 def animations_for(tool: str) -> tuple[ProofAnimation, ...]:
-    """Every animation the tool declares, in declaration order. Empty when none.
+    """Every animation the tool declares, in declaration order; empty when none.
 
-    Empty is a REFUSAL upstream, never a default: the packet assembler reports an
-    undeclared time-stepped template as a named gap rather than animating
-    whatever variable a renderer would have reached for first.
-    """
+    Empty is a REFUSAL upstream: the assembler reports it as a named gap."""
     return PROOF_ANIMATIONS.get(tool, ())
 
 
 def suffixed(animation: ProofAnimation, declared: int) -> str:
     """The filename infix for one animation: ``_<name>`` only when there are many.
 
-    A template declaring ONE animation keeps the bare ``_animation.gif`` /
-    ``_peak_frame.png`` names, because those filenames are cited by name in ADRs
-    and evidence JSONs and renaming every existing proof for a coastal-only
-    feature is churn, not consistency.
-    """
+    A single-animation template keeps the bare names, cited by name elsewhere."""
     return f"_{animation.name}" if declared > 1 else ""
 
 

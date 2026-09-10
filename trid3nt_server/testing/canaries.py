@@ -1,54 +1,50 @@
 """The DECLARED canary runs: one named Tier-A invocation per template.
 
-A canary is the path-A test of the three-path model - every unfilled param
-supplied on the call, so the gates are SATISFIED rather than skipped - sized so
-the solve proves the plumbing and the physics answer in minutes rather than the
-half hour a showcase takes. It is a DECLARATION: the tool, the args, the answers
-its cards get. Nothing here implements a protocol; :mod:`live_run` does that.
-
-Why this is product code and not a script per template: a canary is what a
-migration's REPEATABILITY rests on. The same declaration runs before a change and
-after it, and "same question, same answer" is only evidence when both runs came
-from one frozen declaration rather than from two hand-typed command lines. One
-home, one registry, one runner:
-
-    venvs/agent/bin/python -m trid3nt_server.testing.canaries <name>
-
-writes the run's evidence JSON and, for a DELIVERING variant, assembles the
-delivery packet from it - ``scripts/packet/assemble_proof_packet.py``, which renders
-every panel, chart and animation the checklist demands, verifies them
-mechanically, and writes the ordered ``packet.json`` a reader is handed. Such a
-canary that solves but cannot be delivered exits non-zero, because "did we send
-the GIF" is not a question anybody should be answering from memory. Proof
-RENDERING stays out of the product tree by ruling; the declaration does not.
-
-EVERY VARIANT OWES ITS PACKET. The coarse lane is the SILENT-PIN one - its
-evidence is compared run against run to catch drift, and it is not what a reader
-is handed - but a pin whose renders nobody assembled is a pin nobody
-interrogated, so its packet is assembled and verified exactly like the flagship's.
-
-DEMO VALUES LIVE IN THE DECLARATION. A canary's location, window and station are
-here, in a labeled declaration, never as a constant inside workflow code.
-
-WHAT A CANARY DOES NOT COVER lives in the drive lane, and the registry names it
-so no acceptance driver is reachable only by memory. ``scripts/drivers/``:
-
-    drive_artemis_structure_slot.py   the three ways one slot can be filled
-    drive_do_sag_cards.py --smoke     the small variant of a declared canary
-    drive_river_dye_cards.py --coarse the same, for the dye plume
-    drive_keyword_floor.py            the raw keyword surface a caller reaches past
-                                      the declared params
-    drive_module_surface_flip.py      every question the module surface flipped,
-                                      end to end
-    drive_open_water_domains.py       the two open-water questions on the domains
-                                      they declare
-    drive_lake_domain_mesh.py         a LAKE domain meshed from the water body's
-                                      own polygon
-    drive_mesh_spotcheck.py           the standing mesh spot-check lane
-    proof_artemis_om2d_rematch.py     the flagship: an authored OceanMesh2D domain
-                                      fed into ARTEMIS
+A canary is a DECLARATION - the tool, its args, the answers its cards get -
+with every unfilled param supplied on the call, so the gates are SATISFIED
+rather than skipped. Every variant owes its packet, and demo values live HERE.
 """
 
+# A canary is what a migration's REPEATABILITY rests on: the same declaration
+# runs before a change and after it, and "same question, same answer" is only
+# evidence when both runs came from ONE frozen declaration rather than from two
+# hand-typed command lines. One home, one registry, one runner:
+#
+#     venvs/agent/bin/python -m trid3nt_server.testing.canaries <name>
+#
+# writes the run's evidence JSON and, for a DELIVERING variant, assembles the
+# delivery packet from it: every panel, chart and animation the checklist
+# demands, verified mechanically into the ordered packet.json a reader is
+# handed. A canary that solves but cannot be delivered exits non-zero, because
+# "did we send the GIF" is not a question anybody should answer from memory.
+# Proof RENDERING stays out of the product tree by ruling; the declaration does
+# not.
+#
+# EVERY VARIANT OWES ITS PACKET. The coarse lane is the SILENT-PIN one - its
+# evidence is compared run against run to catch drift, and it is not what a
+# reader is handed - but a pin whose renders nobody assembled is a pin nobody
+# interrogated, so its packet is assembled and verified like the flagship's.
+#
+# A canary is sized so the solve proves the plumbing and the physics answer in
+# minutes rather than the half hour a showcase takes.
+#
+# WHAT A CANARY DOES NOT COVER lives in the drive lane, listed here so no
+# acceptance driver is reachable only by memory. scripts/drivers/:
+#
+#     drive_artemis_structure_slot.py   the three ways one slot can be filled
+#     drive_do_sag_cards.py --smoke     the small variant of a declared canary
+#     drive_river_dye_cards.py --coarse the same, for the dye plume
+#     drive_keyword_floor.py            the raw keyword surface a caller reaches
+#                                       past the declared params
+#     drive_module_surface_flip.py      every question the module surface
+#                                       flipped, end to end
+#     drive_open_water_domains.py       the two open-water questions on the
+#                                       domains they declare
+#     drive_lake_domain_mesh.py         a LAKE domain meshed from the water
+#                                       body's own polygon
+#     drive_mesh_spotcheck.py           the standing mesh spot-check lane
+#     proof_artemis_om2d_rematch.py     the flagship: an authored OceanMesh2D
+#                                       domain fed into ARTEMIS
 from __future__ import annotations
 
 import argparse
@@ -273,9 +269,8 @@ _EEL_REACH = "Eel River near Scotia, California"
 _EEL_OUTFALL = [-124.0983, 40.4921]
 
 CANARIES.update({
-    # THE COHORT'S REFINED RUNS. Their SMALL runs live in their own drive scripts
-    # (scripts/drivers/drive_do_sag_cards.py --smoke, drive_river_dye_cards.py --coarse),
-    # which is where NATE reviewed them; only the delivering variants are declared
+    # THE COHORT'S REFINED RUNS. Their SMALL runs live in their own drive
+    # scripts under scripts/drivers/; only the delivering variants are declared
     # here, beside the other four.
     #
     # THE SAG THAT IS ACTUALLY A SAG. A DO sag is a TRAVEL-TIME answer: the load
@@ -372,9 +367,8 @@ def evidence_path(name: str) -> str:
 def run(name: str, *, timeout_s: float | None = None) -> RunEvidence:
     """Drive one declared canary over the live socket, from the top every time.
 
-    From the top is the DRIVER's default (``live_run.drive``), so a declaration
-    here states the question and nothing about resumption.
-    """
+    From the top is the DRIVER's default, so a declaration here states the
+    question and nothing about resumption."""
     declared = CANARIES.get(name)
     if declared is None:
         raise KeyError(f"no canary named {name!r} (declared: {sorted(CANARIES)})")
@@ -387,10 +381,8 @@ def run(name: str, *, timeout_s: float | None = None) -> RunEvidence:
 def _answer(ev: RunEvidence) -> dict[str, Any]:
     """The run's own PHYSICAL ANSWER, read off the artifacts it persisted.
 
-    Never recomputed: the metrics document under the run prefix is the product,
-    and a parity comparison that rebuilt the number would be comparing two
-    implementations rather than two runs.
-    """
+    Never recomputed: a comparison that rebuilt the number would be comparing
+    two implementations rather than two runs."""
     return {
         "tool": ev.tool,
         "run_id": ev.run_id,
@@ -410,22 +402,14 @@ def assemble_packet(name: str, out_dir: str | None = None,
                     evidence: str | None = None) -> dict:
     """The canary's DELIVERY PACKET - the checklist, assembled and verified.
 
-    A canary that finished is not a canary that can be handed to anybody: the
-    panels, the canvas view, the charts, the animation and the evidence JSON are
-    the deliverable, and "did we send the GIF" was a remembered question until
-    this. ``scripts/packet/assemble_proof_packet.py`` answers it mechanically and writes
-    ``packet.json`` beside the renders, so every canary close either produces the
-    ordered list of what to send or fails loudly saying what is missing.
-
-    ``out_dir`` names where those renders land and ``evidence`` names the JSON
-    they are assembled FROM. Both unset, that is the template's own proof folder;
-    named, the checklist is assembled somewhere the frozen proof tree is not
-    written to, off the run that was just driven, which is how an acceptance
-    drive owes a full packet without editing delivered evidence.
-
-    Imported BY PATH because proof RENDERING stays out of the product tree by
-    ruling - the declaration lives here, the renderers do not.
-    """
+    ``out_dir`` is where the renders land and ``evidence`` the JSON they are
+    assembled FROM; unset, both are the template's own proof folder."""
+    # Naming them assembles the checklist somewhere the FROZEN proof tree is not
+    # written to, off the run just driven, which is how an acceptance drive owes
+    # a full packet without editing delivered evidence.
+    #
+    # Imported BY PATH because proof RENDERING stays out of the product tree by
+    # ruling: the declaration lives here, the renderers do not.
     import importlib.util
 
     template, variant = split_variant(name)
@@ -441,14 +425,12 @@ def assemble_packet(name: str, out_dir: str | None = None,
 def main(argv: list[str] | None = None) -> int:
     """Drive one canary and exit non-zero unless its PRODUCTS were read.
 
-    ``require_ok`` alone is not the gate. It asks whether the tool dispatched and
-    the turn finished, and a run whose object store was not reachable satisfies
-    both: the products reader misses, ``metrics`` stays None, and a canary that
-    read NOTHING exits 0. That green means the socket worked, which is not what a
-    canary is for. ``require_run_products`` is what makes the exit code depend on
-    the run's own artifacts, so it is part of the DEFAULT gate - a missing
-    TRID3NT_RUNS_BUCKET fails loudly instead of passing quietly.
-    """
+    Reading the run's own artifacts is part of the DEFAULT gate, so a missing
+    runs bucket fails loudly instead of passing quietly."""
+    # ``require_ok`` alone is not the gate: it asks only whether the tool
+    # dispatched and the turn finished, and a run whose object store was
+    # unreachable satisfies both, leaving metrics None while exiting 0. That
+    # green says the socket worked, which is not what a canary is for.
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("name", choices=sorted(CANARIES))
     ap.add_argument("--timeout", type=float, default=1800.0)

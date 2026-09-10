@@ -1,9 +1,8 @@
 """The code-exec box: a staged workdir in, one constrained container run, results out.
 
 Every byte a snippet reads is staged into the run directory HERE, before the
-container starts, so a world-read stays on the substrate's own gate-visible
-fetch path and the analysis runs on what it was handed. The run directory dies
-with the run.
+container starts, so a world-read stays on the gate-visible fetch path and the
+analysis runs on what it was handed. The run directory dies with the run.
 """
 
 from __future__ import annotations
@@ -60,11 +59,10 @@ def submit_sandbox_job(python_code: str, layer_refs: dict[str, Any] | None = Non
 
 def _stage(layer_refs: dict[str, Any],
            staged: Path) -> tuple[dict[str, Any], dict[str, str]]:
-    """Every ref materialized under ``staged`` -> the box-side paths, and the misses.
+    """Every ref materialized under ``staged`` -> box-side paths, and the misses.
 
-    A ref that cannot be staged is handed through as its original string and
-    named in the misses: the snippet gets the reason rather than a crash.
-    """
+    An unstageable ref passes through as its own string and is named in the
+    misses, so the snippet gets the reason rather than a crash."""
     refs: dict[str, Any] = {}
     errors: dict[str, str] = {}
     for var, ref in layer_refs.items():
@@ -104,9 +102,8 @@ def _stage_one(uri: Any, staged: Path, label: str) -> tuple[Any, str | None]:
 def _run_container(workdir: Path, cap: int) -> dict[str, Any]:
     """One box run -> the envelope its driver wrote, or an honest stand-in.
 
-    The container is named so the timeout can kill IT: killing the client that
-    launched it would leave the run alive and the cap unenforced.
-    """
+    The container is NAMED so the timeout can kill it: killing the launching
+    client would leave the run alive and the cap unenforced."""
     name = f"trid3nt-sandbox-{uuid.uuid4().hex[:12]}"
     argv = ["docker", "run", "--rm", "--name", name,
             "--network", "none",

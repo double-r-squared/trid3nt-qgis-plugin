@@ -1,9 +1,8 @@
 """The snippet's engine room: a staged payload in, one result envelope out.
 
-Runs INSIDE the box and imports nothing from the server package - the mount is
-the only thing that connects them. There is no network here and nothing to
-fetch: every path the payload carries was staged before the container started,
-so a ref that is still a URI is a staging miss and opens as one.
+Runs INSIDE the box and imports nothing from the server package; the mount is
+all that connects them. There is no network here and nothing to fetch, so a ref
+that is still a URI is a staging miss and opens as one.
 """
 
 from __future__ import annotations
@@ -72,12 +71,10 @@ def _open(path: str) -> Any:
 
 
 def _handles(layer_refs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
-    """The staged refs as open handles, plus the reason each unopened one failed.
+    """The staged refs as open handles, plus why each unopened one failed.
 
-    A list ref is an ordered frame set and opens as a list, so a snippet iterates
-    frames. An open failure hands back the ref string rather than crashing: the
-    snippet decides what a missing layer means.
-    """
+    A list ref is an ordered frame set and opens as a list; an open failure hands
+    back the ref string, and the snippet decides what a missing layer means."""
     handles: dict[str, Any] = {}
     errors: dict[str, str] = {}
     for name, ref in (layer_refs or {}).items():

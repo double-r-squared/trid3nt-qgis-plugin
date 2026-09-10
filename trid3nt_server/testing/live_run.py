@@ -1,19 +1,9 @@
 """A live run, declared: the tool, its args, the gate answers, the assertions.
 
-The harness drives the daemon exactly as the plugin does - ``dev-tool-invoke``
-on a registered tool, then answering each card as it arrives - and hands back
-:class:`RunEvidence`: the tool's status, the layers that landed on the canvas,
-the cards that actually fired, and the artifacts the run wrote to its OWN prefix.
-
-Nothing is re-derived. The physical answer a test asserts on is read back out of
-the run's ``metrics.json``, and the chart is the spec the run persisted, so an
-assertion cites the product rather than a second implementation of it.
-
-Every driven run pre-flights the daemon FIRST, because acceptance evidence off a
-daemon older than the commit it is being read against is evidence about a build
-nobody asked about.
+The harness drives the daemon exactly as the plugin does. Nothing is re-derived:
+the physical answer a test asserts on is read back out of the run's own outputs.
+Every driven run pre-flights the daemon for staleness FIRST.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -65,10 +55,8 @@ class LiveRunError(AssertionError):
 class GateAnswers:
     """How this run answers the cards it expects to be shown.
 
-    A declared answer is also an EXPECTATION: ``require_draw`` / ``require_form``
-    turn a card that never appeared into a failure rather than a silent pass, so
-    a test cannot claim to have exercised a gate it never saw.
-    """
+    A declared answer is also an EXPECTATION: ``require_draw`` and
+    ``require_form`` turn a card that never appeared into a failure."""
 
     #: The geometry a DRAW card is answered with. A point is ``[lon, lat]``; a
     #: polyline/polygon is a list of vertices. ``None`` declines the card.
@@ -132,11 +120,8 @@ class RunEvidence:
     def require_ok(self) -> "RunEvidence":
         """The tool dispatched and did not fail.
 
-        A tool that returns a TYPED result (a ``LayerURI`` subtype) carries no
-        ``status`` field, so ``tool_status is None`` alongside a delivered tool-io
-        frame IS success. Requiring the literal ``"ok"`` would only ever pass for
-        tools that answer with a status dict - which is the failure shape.
-        """
+        A typed result carries no ``status`` field at all, so ``None`` alongside
+        a delivered tool-io frame IS success here."""
         if not self.dispatched:
             raise LiveRunError(
                 f"{self.tool} never dispatched - no tool-io frame arrived: "
@@ -237,10 +222,8 @@ class LiveRun:
 def _daemon_started_at(pid_file: Path = _PID_FILE) -> float | None:
     """When the running daemon STARTED, or None when there is none.
 
-    Read off ``/proc/<pid>`` rather than off the pid file: the file is written
-    once and never touched again, so its own mtime is the age of the last
-    ``make agent`` invocation and not of the process now serving.
-    """
+    Read off ``/proc/<pid>``: the pid file is written once, so its own mtime is
+    the age of the last launch and not of the process now serving."""
     try:
         pid = int(pid_file.read_text().strip())
     except (OSError, ValueError):
@@ -277,14 +260,11 @@ def _restart_daemon(root: Path = _REPO_ROOT) -> None:
 def assert_daemon_runs_head(root: Path = _REPO_ROOT) -> str | None:
     """The daemon must have started AFTER the commit it is measured against.
 
-    A driven run exists to exercise the code that changed, and a daemon older
-    than HEAD is serving a different tree. That failure does not look like a
-    failure: it looks like a PASS of the wrong build, which is the one outcome an
-    acceptance run must never produce. So staleness is repaired here rather than
-    reported - through the same target a human would use - and the restart is
-    returned so the driver's own record says the run was not simply handed a live
-    daemon.
-    """
+    Staleness is REPAIRED here, not reported, and the restart is returned so the
+    driver's record says the run was not simply handed a live daemon."""
+    # A daemon older than HEAD serves a different tree, and that failure does not
+    # look like one: it looks like a PASS of the wrong build, the single outcome
+    # an acceptance run must never produce.
     started, head = _daemon_started_at(), _head_committed_at(root)
     if started is not None and started >= head:
         return None
@@ -299,11 +279,9 @@ def assert_daemon_runs_head(root: Path = _REPO_ROOT) -> str | None:
 async def drive(run: LiveRun) -> RunEvidence:
     """Invoke the tool over the live socket, answering its cards, and record it.
 
-    ``restart_clean`` DEFAULTS ON for every driven run, because a driver run after
-    a code change exists to exercise the code that changed: any ledger left under
-    the same invocation key belongs to an older build. A declaration that names
-    the flag itself still wins.
-    """
+    ``restart_clean`` DEFAULTS ON, and a declaration naming the flag still wins."""
+    # A driven run after a code change exists to exercise the code that changed,
+    # so any ledger left under the same invocation key belongs to an older build.
     import websockets.asyncio.client as wsc
 
     restarted = await asyncio.to_thread(assert_daemon_runs_head)
@@ -462,13 +440,10 @@ async def _answer_warning(ws: Any, session_id: str, msg: dict[str, Any],
 
 
 def _read_dispatch_card(payload: dict[str, Any], ev: RunEvidence) -> None:
-    """Track the state of the card for the tool this run invoked.
+    """Track the state of the card for the tool this run invoked, and no other.
 
-    Only the step whose ``tool_name`` is the invoked tool: a plan's own substeps
-    and the off-box solver card ride the same snapshot, and a failed FETCH inside
-    a run that recovered is not this run's verdict. The last snapshot wins, so the
-    terminal transition is what survives.
-    """
+    A plan's substeps ride the same snapshot, and a failed fetch inside a run
+    that recovered is not this run's verdict; the last snapshot wins."""
     for step in payload.get("steps") or []:
         if step.get("tool_name") != ev.tool or step.get("role") == "compute":
             continue
