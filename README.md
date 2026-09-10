@@ -1,129 +1,125 @@
 # TRID3NT Local
 
-TRID3NT: an AI workbench for multi-hazard geospatial modeling, built as a
-**QGIS plugin + its local server**, running entirely on your own machine. This
-repo IS the product: the plugin (the only client) and the server it drives,
-one clone = a working end-to-end setup.
+A **QGIS plugin plus a local daemon**: ask in plain language, get real layers on
+your own canvas, on your own machine. This repo IS the product - the plugin (the
+only client) and the server it drives; one clone is a working end-to-end setup.
 
-- **QGIS plugin** - the client, deeply integrated with QGIS
-- **Pluggable LLM** via any OpenAI-compatible endpoint: local (Ollama, vLLM,
-  llama.cpp, LM Studio) or cloud (OpenAI, Groq, DeepSeek, OpenRouter, ...)
-- **Real solvers run locally**: MODFLOW 6, TELEMAC, SFINCS, SWMM, and more via
-  local `docker` containers; MODFLOW runs against a local `mf6` binary
-- File-based persistence + local tile rendering -- no cloud account required
+## What it can do today
 
-The server (`server/`), contracts (`contracts/`) and engine workers
-(`workers/`) are first-class code in THIS repo - there is no upstream
-sync.
-To extend the harness (write a tool / add an engine), see
-`docs/authoring/writing-a-tool.md` and `docs/authoring/adding-an-engine.md`.
+- **Fetch measured data** from 99 declared sources through one router - terrain,
+  hydrology, climate, weather, imagery, ocean, soil, hazard, socioeconomic - as
+  native QGIS layers, never a download folder.
+- **Compose an analysis** in the code-exec playground: 161 registered tools, and
+  anything they do not cover written as a confirmed snippet against the layers
+  already on the case.
+- **Author, mesh, run and read back** a TELEMAC hydrodynamic run: a real reach or
+  catchment, a triangulated domain, a solved result, and the layers, charts and
+  animation that came out of it.
 
-## Install paths
+## The one loop
 
-There are three ways to end up running TRID3NT, depending on which machine you're
-setting up:
+Ask -> the router fetches what the question needs -> the mesh front builds a
+recipe for the domain and holds it at a gate -> a template fills the module sheet
+-> the box solves -> layers, charts and a delivery packet land in QGIS.
+
+## The module surface
+
+A template declares raw engine keywords over a wrapper built from the engine's
+own dictionary. `fill` sets the sheet and decides nothing; `run` serializes it,
+stages the run directory and hands it to the box. Nothing is hidden: every
+keyword the template does not state keeps the engine's own default, and
+`describe_keywords` names it with that default so you can set it yourself.
+The wrappers are in [docs/modules.md](docs/modules.md).
+
+## The engines
+
+TELEMAC in a container - TELEMAC-2D and 3D, ARTEMIS, WAQTEL and GAIA. Eight
+registered templates, one per question. Each page carries its declaration, its
+proving run and that run's figures: [docs/templates/index.md](docs/templates/index.md).
+
+| template | the question it answers |
+| --- | --- |
+| `telemac_river_dye` | A dye / tracer / contaminant plume travelling downstream in a river. |
+| `telemac_river_oil_spill` | An oil slick on a river: floating particles plus the dissolved fraction. |
+| `telemac_river_scour` | Bed scour and deposition in a reach: a mobile bed under a flow. |
+| `telemac_river_sediment_plume` | A suspended sediment plume that settles and deposits on the bed. |
+| `telemac_do_sag` | The dissolved-oxygen sag below a discharge (the TMDL / permit question). |
+| `telemac_rain_on_grid` | How much runoff a storm produces from a watershed, as a hydrograph and a depth map. |
+| `artemis_harbor_agitation` | The wave agitation a declared structure leaves inside a harbour. |
+| `telemac3d_stratified_flow` | The 3D vertical structure a depth-averaged model cannot resolve. |
+
+## Install
+
+Three paths, depending on the machine. Full walkthrough, prerequisites and
+troubleshooting: [docs/site/install.md](docs/site/install.md).
 
 | Path | Machine | Steps | Needs QGIS? | Needs git/venv/docker? |
 |------|---------|-------|-------------|-------------------------|
-| **Daemon-only** | PC / headless box that runs the server | `git clone` + `make setup && make up` | No -- `plugin/` is inert, nothing there is ever loaded | Yes |
-| **Client-only** | laptop that just wants the QGIS dock | `make plugin-zip` on *any* checkout produces `dist/trid3nt-plugin-<version>.zip` -- copy that one file over, then QGIS: **Plugins > Install from ZIP**, then **Settings > Server URL** | Yes | No -- no clone, no venv, no server on this machine |
-| **Both** | one dev machine | `git clone` + `make setup && make up` + `make plugin` (syncs into your QGIS profile; reload in QGIS) | Yes | Yes |
-
-Full walkthrough per path (prerequisites, troubleshooting): [docs/site/install.md](docs/site/install.md).
-
-### Daemon-only / Both
+| **Daemon-only** | the box that runs the server | `git clone` + `make setup && make up` | No - `plugin/` is inert | Yes |
+| **Client-only** | a laptop that just wants the dock | `make plugin-zip` on *any* checkout, copy `dist/trid3nt-plugin-<version>.zip` over, then QGIS: **Plugins > Install from ZIP**, then **Settings > Server URL** | Yes | No |
+| **Both** | one dev machine | `git clone` + `make setup && make up && make plugin` | Yes | Yes |
 
 ```sh
-make setup     # one-time: create .env.local, fetch binaries (mf6/minio/mc), build the agent venv
-#              then edit .env.local -- set your LLM endpoint + key (make env writes a starter .env.local)
-make up        # start the local stack: minio (:9000) + agent (:8765 WS / :8766 HTTP)
-make plugin    # (Both only) install the QGIS plugin into your QGIS profile
-#              then in QGIS: enable the TRID3NT plugin (or Plugin Reloader to reload)
+make setup     # one-time: write .env.local, fetch binaries, build the agent venv
+make up        # start the stack: minio + agent
+make plugin    # install the plugin into your QGIS profile, then reload it in QGIS
 make status    # health-check the services
+make test      # the six suite slices, zero failures
 ```
 
-Prerequisites: Linux x86_64, Python 3.12, [uv](https://astral.sh/uv), and **Docker**
-(for the container-based solvers). Your user must be in the `docker` group (log
-out/in after being added, or wrap docker-touching commands in `sg docker -c
-'...'`). An LLM endpoint: either [ollama](https://ollama.com) local, or an API key
-for OpenAI/OpenRouter/Groq/etc.
+Prerequisites: Linux x86_64, Python 3.12, [uv](https://astral.sh/uv), Docker (for
+the container solvers; your user must be in the `docker` group), and an LLM
+endpoint. A client-only machine needs QGIS 3.28+ and nothing else.
 
-### Client-only
+## The LLM
 
-```sh
-make plugin-zip   # run on any checkout (repo clone not required on the client itself)
-#                 writes dist/trid3nt-plugin-<version>.zip
-```
-
-Copy `dist/trid3nt-plugin-<version>.zip` to the client machine, then in QGIS:
-**Plugins > Manage and Install Plugins > Install from ZIP**. Only prerequisite:
-QGIS 3.28+. See [plugin/README.md](plugin/README.md) for the full
-client walkthrough (Server URL / token settings, test suite).
-
-### Remote daemon (tailnet)
-
-A client machine points its plugin's **Server URL** at the daemon's [Tailscale](https://tailscale.com)
-address instead of loopback, e.g. `ws://100.x.x.x:8765/ws` -- everything else
-(MinIO, the HTTP catalog) is advertised automatically by the server on connect. Set
-`TRID3NT_ACCESS_TOKEN` on the daemon for a shared-secret lock; see
-[Remote daemon access (tailnet)](docs/site/configuration.md#remote-daemon-access-tailnet)
-for the full picture.
-
-### LLM endpoint (.env.local)
-
-`make setup` writes a starter `.env.local` (via `make env`). Set the provider:
-- Local Ollama: `MODEL_PROVIDER=openai`, `TRID3NT_OPENAI_BASE_URL=http://127.0.0.1:11434/v1`,
-  `TRID3NT_OPENAI_MODEL=<your ollama model>`, `TRID3NT_OPENAI_API_KEY=not-needed`.
-- OpenRouter / OpenAI / Groq: set `TRID3NT_OPENAI_BASE_URL` + `TRID3NT_OPENAI_MODEL` +
-  `TRID3NT_OPENAI_API_KEY`. Helper: `scripts/use_openrouter.sh <KEY> [model]`.
-The model can also be switched live from the plugin's Settings (no restart).
-
-### Engine backends (.env.local)
-
-- `TRID3NT_MODFLOW_LOCAL=1` -- MODFLOW runs against the local `mf6` binary (`TRID3NT_MF6_BIN`).
-- `TRID3NT_SOLVER_BACKEND=local-docker` -- container solvers (SFINCS/TELEMAC/...) run via
-  local docker. Set `TRID3NT_RUNS_DIR=<repo>/data/runs` (the host rundir mounted at `/data`).
-  Pull an engine image once, e.g. `sg docker -c 'docker pull deltares/sfincs-cpu:sfincs-v2.3.3'`.
-  These two are independent (MODFLOW checks `TRID3NT_MODFLOW_LOCAL` first). Start the agent
-  inside the docker group so it can reach the socket: `sg docker -c 'make agent'`.
+Pluggable: any OpenAI-compatible endpoint (Ollama, vLLM, llama.cpp, LM Studio;
+OpenAI, Groq, DeepSeek, OpenRouter) or Anthropic. Set it in `.env.local` -
+`MODEL_PROVIDER`, `TRID3NT_OPENAI_BASE_URL`, `TRID3NT_OPENAI_MODEL`,
+`TRID3NT_OPENAI_API_KEY` - and switch the model live from the dock's Settings
+without a restart. `scripts/use_openrouter.sh <KEY> [model]` writes the block for
+you. The full reference is [docs/site/configuration.md](docs/site/configuration.md).
 
 ## Service URLs
 
-| Service        | URL                          | Notes                          |
-|----------------|------------------------------|--------------------------------|
-| Agent WS       | ws://localhost:8765          | plugin and web clients connect |
-| Agent HTTP     | http://localhost:8766        | tool catalog + telemetry       |
-| MinIO API      | http://localhost:9000        | S3-compatible object storage   |
-| MinIO Console  | http://localhost:9001        | web UI (user: trid3nt)         |
-| Ollama         | http://localhost:11434       | optional local LLM             |
+| Service | URL | Notes |
+|---|---|---|
+| Agent WS | ws://localhost:8765 | what the plugin connects to |
+| Agent HTTP | http://localhost:8766 | tool catalog + telemetry |
+| MinIO API | http://localhost:9000 | S3-compatible object storage |
+| Ollama | http://localhost:11434 | optional local LLM |
+
+A client machine points its **Server URL** at the daemon's
+[Tailscale](https://tailscale.com) address instead of loopback, e.g.
+`ws://100.x.x.x:8765/ws`; everything else is advertised on connect. Set
+`TRID3NT_ACCESS_TOKEN` on the daemon for a shared-secret lock - see
+[Remote daemon access](docs/site/configuration.md#remote-daemon-access-tailnet).
 
 ## Repo layout
 
-```
-plugin/                the QGIS plugin (net/ ui/ render/ case/ + plugin.py; installs as trid3nt/)
-plugin/tests/          plugin test harnesses + headless E2E drivers
-tests/                 the server suite, one directory per subsystem (see tests/README.md)
-server/                the server (WS + tool dispatch + turn loop + persistence)
-contracts/             shared pydantic contracts (trid3nt-contracts package)
-workers/               the telemac solver worker + the oceanmesh environment image
-scripts/               the entry points you type (start_*, init_minio, install_plugin, build_*_image)
-scripts/instruments/   measure + check the tree (model_check, code_graph, loc_report, tool_sweep, ws_smoke)
-scripts/packet/        the delivery-packet renderers a canary closes with
-scripts/drivers/       live drive lane: one declared question per script, run against the daemon
-scripts/staging/       one-shot stagers that publish a source dataset into object storage
-bin/ venvs/ data/ logs/ run/   gitignored runtime (binaries, venvs, storage, logs, pids)
-```
+Each has its own map README.
 
-## Deploy seams (when you change code)
+| directory | what it is |
+| --- | --- |
+| `plugin/` | The QGIS plugin - the only client. |
+| `trid3nt_server/` | The daemon: turn loop, tool dispatch, gates, emission, workflows. |
+| `contracts/` | The shared pydantic contracts both sides import. |
+| `workers/` | The solver worker images - the engine room. |
+| `scripts/` | The entry points you type, and the instruments that measure the tree. |
+| `tests/` | The suite, one directory per subsystem. |
+| `docs/` | Method, rulings and maps. |
 
-Three independent seams -- a git commit alone deploys none of them:
-- **Server code**: edit `server/`, then restart the agent (`make agent`) - the
-  venv installs `server/` editable, so a restart picks the change up.
-- **QGIS plugin**: `make plugin` (rsyncs into the QGIS profile), then reload in QGIS.
-- **Worker image**: `scripts/build_<engine>_image.sh` (e.g. `build_telemac_image.sh`).
+## Deploy seams
 
-## Data directories (gitignored)
+Three, independent; a git commit deploys none of them.
 
-`./bin/` binaries · `./venvs/` Python envs · `./data/minio/` object storage ·
-`./data/persistence/` agent cases/layers · `./logs/` · `./run/` PID files ·
-`./cache/` HTTP cache.
+- **Server code**: edit `trid3nt_server/`, then `make agent` - the venv installs it editable, so a restart picks the change up.
+- **QGIS plugin**: `make plugin`, then reload in QGIS. QGIS runs the installed profile copy, never this checkout.
+- **Worker image**: `scripts/build_telemac_image.sh`. A worker edit is inert until the image is rebuilt.
+
+## Where the documentation lives
+
+`docs/site/` the manual · `docs/templates/` the template gallery ·
+`docs/modules.md` the engine wrappers · `docs/authoring/` how to extend it ·
+`docs/decisions/` why · `docs/model/` the suite-checked model · `AGENTS.md` the
+charter.
