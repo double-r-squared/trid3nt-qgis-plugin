@@ -52,10 +52,11 @@ def _pages() -> dict:
 
 def _package_dir(name: str) -> Path:
     """The template package the page is generated from."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-
-    module = sys.modules[TOOL_REGISTRY[name].fn.__module__]
-    return Path(module.__file__).resolve().parent
+    # The registered function is synthesized by the runtime factory and carries
+    # ITS module, not the template's; the STEERING body is declared in the
+    # recipe file, so it is what names the package.
+    steering = _templates()[name].plan_decl.steering
+    return Path(sys.modules[steering.__module__].__file__).resolve().parent
 
 
 def _last_change(path: Path) -> str:
