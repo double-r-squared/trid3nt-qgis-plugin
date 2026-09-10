@@ -1,42 +1,9 @@
 #!/usr/bin/env python
-"""Live driver: the standing mesh spot-check lane.
+"""Live driver: the standing mesh spot-check lane, for any mesh landing.
 
-Invoke this after ANY mesh-functionality landing. It calls the registered
-``build_mesh`` tool DIRECTLY (``TOOL_REGISTRY["build_mesh"].fn``, no daemon/
-socket), builds ONE coarse mesh, and prints the numeric facts a change is
-judged on: the probes measured on the accepted topology, the emitted MDAL
-display layer, the MeshArtifact's engine-compat facts, and the journaled
-recipe. NATE loads the printed display layer uri in QGIS as the visual pass.
-
-The edge-length lever is ``resolution_m``, the ONE agnostic size word every
-mesher reads. Everything else about a build is an OP: pass ``--op`` to declare
-the program, or omit it for the mesher's own hard-baked default list.
-
-Env (MinIO): set -a; source .env.local; set +a
-Usage:
-    # coarse reg_grid (default: fastest mesher, no container) by place name
-    venvs/agent/bin/python scripts/drivers/drive_mesh_spotcheck.py \\
-        --location "Scotia, California" --edge-length-m 250
-
-    # coarse om2d coastal mesh by bbox (Point Judith Harbor of Refuge, RI -- a
-    # real harbour on water the GSHHG shoreline describes, no geocode needed;
-    # an inland water body refuses here and is meshed from its own polygon,
-    # see scripts/drivers/drive_lake_domain_mesh.py)
-    venvs/agent/bin/python scripts/drivers/drive_mesh_spotcheck.py \\
-        --mesher om2d --bbox -71.525 41.338 -71.492 41.368 \\
-        --edge-length-m 40
-
-    # the same coast, sized by distance to shore, its rim held at the ask and
-    # the whole held to a gradation: the RECIPE, declared op by op under the
-    # library's own names
-    venvs/agent/bin/python scripts/drivers/drive_mesh_spotcheck.py \\
-        --mesher om2d --bbox -71.525 41.338 -71.492 41.368 \\
-        --edge-length-m 40 \\
-        --op feature_sizing_function \\
-        --op set_rim_size \\
-        --op 'enforce_mesh_gradation:{"gradation": 0.2}' \\
-        --op delete_boundary_faces --op 'fix_mesh:{"delete_unused": true}' \\
-        --op 'set_bed:{"source": "fetch_topobathy"}'
+Calls the registered ``build_mesh`` tool DIRECTLY - no daemon, no socket - and
+prints the numeric facts a change is judged on plus the display layer uri to
+load. ``resolution_m`` is the size lever; everything else about a build is an OP.
 """
 from __future__ import annotations
 

@@ -1,37 +1,9 @@
 #!/usr/bin/env python
 """THE FLAGSHIP: an authored OceanMesh2D domain, fed into ARTEMIS, proven.
 
-One end-to-end run that exercises the whole mesh front against a real harbour:
-
-  1. AUTHOR - ``tool.build_mesh`` on the ``om2d`` mesher over the Point Judith
-     Harbor of Refuge, adaptively sized (fine at the shore and the structure,
-     coarse offshore over the shelf), then two DECLARED edits: the surveyed
-     breakwater punched out as a conformal obstacle, and the seaward side
-     designated open. The recipe - spec plus that ordered chain - is the record.
-  2. FEED - the accepted mesh goes into ``artemis_harbor_agitation`` EXPLICITLY,
-     through the template's own ``mesh`` slot. Nothing is discovered.
-  3. SOLVE + PROVE - the live run writes its evidence to the canonical proof
-     path and ``scripts/packet/assemble_proof_packet.py`` assembles the delivery packet
-     from it.
-  4. COMPARE - the same question, same forcing, on the worker's own uniform grid,
-     so the adaptive answer is read against the one it replaces rather than
-     against nothing. The comparison is a numbers file beside the packet.
-
-WHY POINT JUDITH AND NOT MARQUETTE. The rematch was ruled on the Marquette
-harbour, whose water this mesher's DEFAULT domain source cannot cut: it takes its
-water from the GSHHG L1 land polygons, which describe the boundary between land
-and OCEAN, and Lake Superior is not in them. A lake domain is meshed from the
-water body's own polygon instead (``scripts/drivers/drive_lake_domain_mesh.py``), which
-is a different domain source rather than a different question. Point Judith puts
-the question - a real surveyed breakwater sheltering a real harbour over real
-surveyed bathymetry - on water GSHHG describes, so the flagship compares the
-adaptive mesh against the uniform grid rather than against a domain change.
-
-Env (MinIO + the agent daemon): set -a; source .env.local; set +a; make agent
-Usage:
-  proof_artemis_om2d_rematch.py                 # author a mesh, run, prove
-  proof_artemis_om2d_rematch.py --mesh s3://... # reuse an authored mesh
-  proof_artemis_om2d_rematch.py --mesh-only     # author and stop
+One end-to-end run over a real harbour: an adaptively sized mesh with the
+surveyed breakwater punched out and the seaward side designated open, handed to
+the template's own ``mesh`` slot, solved, and compared against the uniform grid.
 """
 from __future__ import annotations
 
@@ -104,14 +76,11 @@ COMPARISON_RESOLUTION_M = 40.0
 
 
 def barrier_footprint(bbox: tuple[float, ...], out_dir: Path) -> tuple[str, str]:
-    """The surveyed breakwater as a WATER-REMOVING footprint -> (geojson, layer uri).
-
-    The fetched structure is a set of centerlines. A centerline bounds no area, so
-    subtracting it from the water domain removes nothing and the triangulation
-    closes straight over it - conformal nodes on a barrier that is not there. The
-    footprint is that centerline given :data:`BARRIER_WIDTH_M`, which is what the
-    mesher can actually punch out.
-    """
+    """The surveyed breakwater as a WATER-REMOVING footprint -> (geojson, layer
+    uri): the fetched centerline given :data:`BARRIER_WIDTH_M`."""
+    # A centerline bounds no area, so subtracting it from the water domain
+    # removes nothing and the triangulation closes straight over it - conformal
+    # nodes on a barrier that is not there.
     import geopandas as gpd
 
     from trid3nt_server.tools import TOOL_REGISTRY
@@ -132,12 +101,9 @@ def barrier_footprint(bbox: tuple[float, ...], out_dir: Path) -> tuple[str, str]
 
 
 def author_mesh(work_dir: Path) -> tuple[Any, str, str]:
-    """Author the om2d domain through the declared chain.
-
-    Returns the accepted artifact, the structure layer the run is handed, and the
-    footprint the cut was constrained to - the last so a proof render can draw the
-    mesh against the geometry it was supposed to follow.
-    """
+    """Author the om2d domain through the declared chain -> the accepted artifact,
+    the structure layer the run is handed, and the footprint the cut was
+    constrained to, so a render can draw the mesh against its intended line."""
     from trid3nt_server.workflows.mesh.session import MeshSession
     from trid3nt_server.workflows.mesh.tool import mesh_op, tool
 
@@ -182,14 +148,11 @@ def author_mesh(work_dir: Path) -> tuple[Any, str, str]:
 
 def render_mesh_figures(artifact: Any, footprint: str, directory: Path, *,
                         run_id: str) -> list[str]:
-    """The MESH, as the two pictures a reader has to be able to check it against.
-
-    The engine render carries the wireframe over the solved field, which shows
-    that the solve ran on this mesh. Neither shows whether the cut LANDED on the
-    surveyed structure, because at a whole-domain zoom a 20 m barrier is a line
-    two pixels wide. So: the sized domain, and then a crop tight enough that the
-    element edges and the mapped centreline are separable.
-    """
+    """The MESH, as the two pictures a reader has to be able to check it against:
+    the sized domain, and a crop tight enough that the element edges and the
+    mapped centreline are separable."""
+    # At a whole-domain zoom a 20 m barrier is a line two pixels wide, so no
+    # full-extent render can show whether the cut LANDED on the structure.
     import geopandas as gpd
     import matplotlib
     matplotlib.use("Agg")
@@ -239,12 +202,9 @@ def render_mesh_figures(artifact: Any, footprint: str, directory: Path, *,
 
 
 def _cut_window(lines: Any, points: Any) -> tuple[float, float, float, float]:
-    """A crop ON the structure, wide enough to hold the cut and no wider.
-
-    Centred on the footprint itself rather than on its centroid: a breakwater bent
-    into a V has its centroid in the middle of the harbour it shelters, and a crop
-    there is a picture of open water.
-    """
+    """A crop ON the structure, wide enough to hold the cut and no wider. Centred
+    on the footprint itself, never its centroid: a breakwater bent into a V has
+    its centroid in the middle of the harbour, and a crop there is open water."""
     import numpy as np
     from shapely.ops import nearest_points
 
@@ -272,11 +232,8 @@ def run_leg(*, mesh_uri: str | None, structure_uri: str, title: str,
 
 def _worker_metrics(run_id: str | None) -> dict[str, Any]:
     """What the SOLVE itself recorded - the mesh it read, the field it measured.
-
-    The run's ``metrics.json`` is the published layer's scalars; the numbers that
-    say which mesh was consumed live in the worker's own document beside it, and a
-    comparison that cited only the first could not tell the two legs apart.
-    """
+    The published scalars say nothing about which mesh was consumed, so a
+    comparison citing only those could not tell the two legs apart."""
     import boto3
 
     if not run_id:

@@ -1,33 +1,9 @@
 #!/usr/bin/env python3
-"""CORRECTED mesh-faithful proof render for the REAL Cinder Pond ARTEMIS pair.
+"""Mesh-faithful proof render for the REAL Cinder Pond ARTEMIS pair.
 
-The solve is not rerun -- this reads the SAME solved SELAFIN the flagged iteration
-used, stashed under ``docs/proof/templates/artemis_real_breakwater/solved_slf/``,
-so the render is reproducible without docker.
-
-NATE flagged three things on the flagged pair (artemis_real_breakwater_pair.png):
-  1. "agitation moving through the breakwater" -- DIAGNOSED a RENDER-LIE: the old
-     render fed node Kd to scipy.griddata, which Delaunay-triangulates the NODE
-     CLOUD and bridges the ~36 m mesh slit (154 node-cloud edges cross the barrier),
-     interpolating Kd straight across the solid wall. The REAL mesh has 0 elements
-     crossing the barrier; the solved field is discontinuous (near-barrier lee/
-     seaward Kd = 0.12). Fix: triangulate on the TRUE element table (matplotlib.tri
-     with the SELAFIN ikle) so the slit stays blank -- no interpolation across it.
-  2. "in the removed version I still see its outline" -- COSMETIC: the removed mesh
-     is a true no-slit full mesh (66 nodes sit ON the barrier line, 182 elements
-     cross it, min node-distance 0.1 m); there is no field structure along the line.
-     The outline NATE saw was the red OSM polyline drawn identically on both panels.
-     Fix: on the REMOVED panel the geometry is dashed grey + labeled "not in solve".
-  3. "trajectory looks similar" -- the node-based basin metrics (kd_sheltered/
-     exposed) are render-independent and stand; the similarity was the smear.
-
-Emits (additions only, docs/proof/templates/artemis_real_breakwater/):
-  * artemis_real_breakwater_pair_v2.png   -- present / removed (mesh-faithful) +
-                                             present node-scatter diagnostic panel
-  * artemis_real_breakwater_render_lie.png -- old griddata smear vs mesh-faithful,
-                                             zoomed on the barrier, crossings annotated
-  * pair_metrics_v2.json                  -- flagged metrics + the diagnostic numbers
-ASCII only.
+Reads the SAME solved SELAFIN stashed under the template's proof directory
+rather than re-solving, so the render is reproducible without docker, and
+triangulates on the TRUE element table so nothing interpolates across the slit.
 """
 from __future__ import annotations
 
@@ -104,7 +80,7 @@ def _bbox_utm_epsg(bbox):
 
 
 def _georef(slf_path, bbox, epsg):
-    """Local-frame mesh -> true (lon,lat) via the latent-#7 SW-corner offset fix.
+    """Local-frame mesh -> true (lon,lat) via the SW-corner offset.
     Returns lon, lat, Kd(nodes), ikle(elements)."""
     m = read_selafin(slf_path)
     hs_var = next(v for v in m["varnames"] if "WAVE HEIGHT" in v.strip().upper())
@@ -137,7 +113,10 @@ def _bw_3857(polylines):
 
 def _mesh_faithful_tri(lon, lat, ikle):
     """matplotlib Triangulation in EPSG:3857 built on the TRUE element table, with
-    any freak long element masked (belt-and-suspenders; the slit already has none)."""
+    any freak long element masked (the slit already has none)."""
+    # Triangulating the NODE CLOUD instead - what scipy.griddata's Delaunay does
+    # - bridges the ~36 m mesh slit and interpolates Kd straight across the solid
+    # wall. On the element table no element crosses the barrier and it stays blank.
     xm, ym = TO3857.transform(lon, lat)
     tri = mtri.Triangulation(xm, ym, ikle)
     # mask elements whose longest edge is an outlier (never bridge across a slit)

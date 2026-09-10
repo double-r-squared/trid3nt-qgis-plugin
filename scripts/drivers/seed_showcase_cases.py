@@ -1,39 +1,9 @@
 #!/usr/bin/env python3
-"""seed_showcase_cases.py -- seed inspectable showcase Cases through the PRODUCT path.
+"""Seed inspectable showcase Cases through the PRODUCT path.
 
-The engine-template proofs have always lived in ``docs/proof/`` renders and ADR
-smoke logs -- they never landed in a QGIS profile a human can open. This driver
-closes that gap. It is a HEADLESS WS client that drives the live daemon exactly
-the way the QGIS plugin does:
-
-  1. auth-token (anonymous) -> auth-ack
-  2. session-resume -> session-state
-  3. case-command create {title="showcase: <template>"} -> case-open (new Case)
-  4. dev-tool-invoke {name, args, case_id, raw_text="!run <tool>(...)"} -- the
-     ``!run`` direct-invocation path: the SAME registry closure, gates,
-     layer materialization + Case persistence a model-issued call rides.
-  5. collect the turn (auto-confirm the tool-payload-warning / solver-confirm /
-     granularity gate; auto-approve a confirmation-request) until turn-complete,
-     recording the tool-io status + the emitted ``session-state`` loaded_layers.
-
-After every entry is seeded a SECOND connection reopens each Case (``case-command
-select``) and confirms the persisted ``loaded_layers`` survive the reconnect --
-the per-Case layer-durability norm, proven end-to-end.
-
-Nothing here fabricates physics: every arg set is a PROVEN demo, and the source
-of each is recorded in the entry ``note``. The reconstructed ``!run`` line each
-Case records is a line a human can paste into the composer verbatim.
-
-OFFLINE proof (no daemon): ``--dry-run`` prints the planned invocation table and
-round-trips every reconstructed ``!run`` line back through the PRODUCT parser
-(``trid3nt.net.run_invocation.parse_run_invocation``), asserting the line parses
-to the SAME (name, args) -- a hermetic contract check that reuses product code.
-
-This driver NEVER deletes or mutates an existing Case; it only CREATES new
-``showcase:``-prefixed Cases, and it never cleans one up afterwards - a showcase
-is a durable artifact a human opens, not a smoke test's scratch space. Cases
-carry no TTL stamp, so nothing expires them out from under that. It NEVER
-touches a template file.
+A headless WS client driving the live daemon the way the QGIS plugin does. It
+only CREATES ``showcase:``-prefixed Cases, never deleting, mutating or expiring
+one, and fabricates no physics: every arg set is a proven demo, named in its note.
 """
 
 from __future__ import annotations
@@ -85,8 +55,8 @@ _NEWPORT_OR = [-124.15, 44.45, -123.95, 44.80]         # Slab2 Cascadia scenario
 _GALVESTON = [-95.2, 29.0, -94.2, 29.8]                # surge shelf
 _PLATTE = [40.905, -98.42]                              # well (lat, lon)
 _GRAND_ISLAND_REACH = [40.857, -98.412]                 # Wood River reach AOI (lat, lon)
-_DESCHUTES_MAUPIN = [-121.145, 45.160, -121.035, 45.205]  # real river spotting barrier (lower Deschutes, OR) - SUPERSEDED as the showcase AOI (goosenecked, fails the two-component reach gate); kept as a documented reject case
-_SACRAMENTO_REDBLUFF = [-122.198936, 40.097754, -122.112372, 40.152662]  # amendment 2 - meander-robust connectivity search found a genuine straight, two-component reach (Sacramento River nr Red Bluff, CA)
+_DESCHUTES_MAUPIN = [-121.145, 45.160, -121.035, 45.205]  # real river spotting barrier (lower Deschutes, OR) - NOT the showcase AOI: goosenecked, so it fails the two-component reach gate; kept as a documented reject case
+_SACRAMENTO_REDBLUFF = [-122.198936, 40.097754, -122.112372, 40.152662]  # a genuine straight, two-component reach (Sacramento River nr Red Bluff, CA)
 
 
 @dataclass
@@ -264,7 +234,7 @@ SHOWCASE: list[Showcase] = [
     # -- MODFLOW GWE heat transport
     # St. Paul MN (natural place, cold-climate ATES/geothermal setting). The
     # gwe_thermal archetype family: two thin tools over ONE GWF+GWE dual-model
-    # deck. Physics PROVEN (sandbox + adapter test + through-image smoke):
+    # deck. Physics asserts:
     #   injection_plume: peak temperature EXCESS above ambient is nonzero and
     #     centered on the injection well; the warm plume advects downgradient.
     #   ates: per-cycle recovery efficiency is bounded in (0,1) and RISES with
@@ -425,7 +395,7 @@ SHOWCASE: list[Showcase] = [
              "scenario ('hypothetical rupture on real published geometry, NOT a real "
              "event') -- never confusable with the measured-inversion Chignik case.", 14400,
              title_suffix="Slab2 scenario Cascadia M9"),
-    # -- SWAN nonstationary storm evolution (row 3)
+    # -- SWAN nonstationary storm evolution
     Showcase("swan_wave_field",
              {"bbox": _APALACHEE, "mode": "nonstationary",
               "boundary_hs_m": 1.0, "boundary_side": "S",
@@ -484,7 +454,7 @@ SHOWCASE: list[Showcase] = [
              "default (no bed-composition fetcher).",
              1200, title_suffix="erodible-bed-scour"),
     # -- ARTEMIS (phase-resolving harbour agitation) --------------------------
-    # CANONICAL real-marina case (norm #10 "a real marina with a real breaker"):
+    # CANONICAL real-marina case - a real marina with a real breaker:
     # the ACTUAL surveyed breakwater at Marquette Lower Harbor / Cinder Pond Marina
     # (OSM man_made=breakwater, auto-fetched + meshed as a thin solid barrier) over
     # REAL NOAA Lake Superior lake-datum bathymetry.
@@ -509,7 +479,7 @@ SHOWCASE: list[Showcase] = [
              "tier; "
              "prescribed monochromatic incident wave, not a calibrated hindcast.",
              600, title_suffix="marquette-real-breakwater-diffraction"),
-    # VERIFICATION TIER (norm #10 labeled schematic): the analytic Sommerfeld
+    # VERIFICATION TIER, a labeled schematic: the analytic Sommerfeld
     # semi-infinite breakwater V&V on an idealized flat bed -- the geography-free
     # discriminating pair (Kd~0.5 on the shadow-boundary ray) that anchors the
     # physics, kept beside the real case.

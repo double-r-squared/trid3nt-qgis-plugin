@@ -2,16 +2,8 @@
 """Live driver: every question the module surface flipped, end to end.
 
 Six coarse canaries over one real reach and one real catchment, driven through
-the daemon exactly as the plugin drives it. Each is sized so the solve proves the
-PLUMBING - the chain, the mesh, the fill, the deck the serializer writes, the
-dispatch and the reader - rather than the physics, and each writes the evidence
-JSON the proof packet is assembled from.
-
-The discharge is PINNED on the reach runs: a canary that also depended on a live
-NWM cycle would report a source outage as a code failure.
-
-Env (MinIO): set -a; source .env.local; set +a
-Usage: drive_module_surface_flip.py [--only NAME ...] [--timeout 2400] [--out-dir D]
+the daemon as the plugin drives it. Each is sized to prove the PLUMBING rather
+than the physics, and each writes the evidence the proof packet is assembled from.
 """
 from __future__ import annotations
 

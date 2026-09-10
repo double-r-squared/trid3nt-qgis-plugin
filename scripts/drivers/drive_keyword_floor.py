@@ -1,22 +1,9 @@
 #!/usr/bin/env python
 """Live driver: the surface the LLM and the human actually use.
 
-Five arms over ONE reach, driven through the daemon exactly as the plugin drives
-it. The first builds the world and solves it plainly; the four after it reuse
-that world through the step ledger - same invocation, same params - so what each
-one exercises is the RAW KEYWORD FLOOR on the wire and nothing else.
-
-  baseline        the reach as the template writes it, and the source it settles
-  two_releases    the same reach with the releases composite stated as a longer
-                  list: two point sources, at two mesh nodes the baseline's own
-                  result names
-  raw_keyword     LAW OF BOTTOM FRICTION stated raw, beating what the reach
-                  derived, and shown in the deck as a fill
-  unknown_keyword a misspelling, refused naming the nearest keyword
-  bad_choice      a value outside the dictionary's choices, refused naming them
-
-Env (MinIO): set -a; source .env.local; set +a
-Usage: drive_keyword_floor.py --out-dir D [--only NAME ...] [--timeout 2400]
+Five arms over ONE reach, driven through the daemon as the plugin drives it: the
+first builds the world and solves it plainly, and the four after it reuse that
+world through the step ledger, so each exercises the RAW KEYWORD FLOOR alone.
 """
 from __future__ import annotations
 
@@ -83,13 +70,9 @@ def _deck_sources(deck: str) -> tuple[list[float], list[float]]:
 
 def _second_point(bucket: str, run_id: str, first: tuple[float, float]
                   ) -> tuple[float, float]:
-    """A wet mesh node farther down the reach - the second source's own place.
-
-    Read off the baseline run's OWN result: the reach's principal axis is the
-    long axis of its node cloud, and the second source sits at the deepest node
-    near a station farther along it, so the point is inside the water the run
-    actually solved rather than a coordinate this script invented.
-    """
+    """A wet mesh node farther down the reach - the second source's own place,
+    read off the baseline run's OWN result, so the point is inside the water
+    that run solved rather than a coordinate this script invented."""
     import numpy as np
 
     from trid3nt_server.workflows.telemac.products.result_reader import read_selafin

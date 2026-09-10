@@ -2,27 +2,8 @@
 """Live driver: a user_gated ``telemac_do_sag`` answered through the CARDS.
 
 A declaration, not a protocol implementation: the tool, its args, the answers
-its gates get, and the assertions the run has to satisfy. The socket work lives
-in ``trid3nt_server.testing``.
-
-  * the DRAW card is answered with a real outfall point on the Eel River reach
-    (the USGS Scotia gage), so the release is a USER value, not a derived seed;
-  * ``telemac_do_sag`` reviews its own filled sheet on the door, so the card
-    that fires is that review, and the driver answers it as a proceed.
-
-The evidence is the run's OWN artifacts under its prefix (``chart_spec.json``,
-``metrics.json``). Nothing here is rederived.
-
-``--coarse`` is the CANARY form of the same declaration: every param supplied
-up front (path A - the gates are satisfied rather than skipped) on a short
-reach, a short simulated window and a pinned discharge, so a library or shared-
-step change can be proven end-to-end through the product path in minutes rather
-than the half hour the showcase run takes. It writes its own evidence file and
-never renders the canonical proof set.
-
-Env (MinIO): set -a; source .env.local; set +a
-Usage: drive_do_sag_cards.py [--timeout 1800] [--out evidence.json]
-                             [--no-render-proof] [--coarse]
+its gates get, and the assertions the run has to satisfy. The evidence is the
+run's OWN artifacts under its prefix; nothing here is rederived.
 """
 from __future__ import annotations
 
@@ -101,7 +82,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--timeout", type=float, default=1800.0)
     ap.add_argument("--out", default=EVIDENCE)
-    # The storm/event moment to read the carrier discharge cycle at (ADR 0309).
+    # The storm/event moment to read the carrier discharge cycle at.
     # Unset (the committed showcase run) reads the most recent published NWM
     # cycle; an explicit ISO date/datetime pins an older cycle for the A/B
     # comparison - pass --no-render-proof alongside it so the B run never

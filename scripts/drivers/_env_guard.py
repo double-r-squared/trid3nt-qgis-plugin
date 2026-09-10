@@ -1,11 +1,7 @@
-"""Shared precondition for any script that builds a boto3 S3 client against
-this repo's local object store. ``boto3.client("s3", endpoint_url=os.environ
-.get("AWS_ENDPOINT_URL"))`` resolves to REAL AWS with whatever ambient
-credentials are on the box when the env var is unset (``endpoint_url=None`` is
-"use the default AWS endpoint" to boto3, not "no override"). This repo's AWS
-account is decommissioned -- there is no legitimate real-AWS target -- so an
-unset or AWS-hosted endpoint is always a misconfiguration, never a valid
-target, and must fail loud instead of silently reaching a real bucket.
+"""Shared precondition for a script building a boto3 S3 client against the local
+object store. To boto3 ``endpoint_url=None`` means "use the default AWS
+endpoint", not "no override", so an unset ``AWS_ENDPOINT_URL`` silently reaches
+real AWS - never a legitimate target here, and so a failure that must be loud.
 """
 
 from __future__ import annotations
@@ -17,14 +13,9 @@ __all__ = ["require_local_endpoint", "local_endpoint_or_none"]
 
 
 def local_endpoint_or_none() -> str | None:
-    """``AWS_ENDPOINT_URL`` if it names a non-AWS host, else ``None``.
-
-    Never exits -- for a best-effort caller (a smoke/staging step wrapped in
-    its own try/except) that should skip the step rather than crash the whole
-    script when the local object store is not configured. Use
-    :func:`require_local_endpoint` for a script whose primary job needs the
-    object store, where a missing endpoint should fail loud instead.
-    """
+    """``AWS_ENDPOINT_URL`` if it names a non-AWS host, else ``None``. Never
+    exits: the best-effort form, for a caller that should skip its step rather
+    than crash when the local object store is not configured."""
     endpoint = os.environ.get("AWS_ENDPOINT_URL", "").strip()
     if not endpoint or "amazonaws.com" in endpoint:
         return None
@@ -32,12 +23,8 @@ def local_endpoint_or_none() -> str | None:
 
 
 def require_local_endpoint() -> str:
-    """Return ``AWS_ENDPOINT_URL``, refusing to fall back to real AWS.
-
-    Exits the process with a clear message when the var is unset or names an
-    AWS-hosted host. Callers pass the return value straight through as
-    ``boto3.client(..., endpoint_url=require_local_endpoint())``.
-    """
+    """Return ``AWS_ENDPOINT_URL``, refusing to fall back to real AWS: exits the
+    process with a clear message when the var is unset or names an AWS host."""
     endpoint = local_endpoint_or_none()
     if endpoint is not None:
         return endpoint

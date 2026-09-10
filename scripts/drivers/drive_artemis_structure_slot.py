@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
 """The ARTEMIS ``structure`` slot, proved in all THREE of the ways it can be filled.
 
-The slot is producer-less by design (ADR 0315): the template names no default
-source for somebody's breakwater, so the only ways it ever gets filled are a
-caller handing over a layer, a caller drawing a line, or nobody doing either.
-Each of those is a different code path into the same normalizer, and the whole
-claim of the design is that the SOLVE cannot tell them apart.
-
-  fetched  the surveyed structure, via the fetch_osm_breakwaters router spec,
-           handed in by its layer uri
-  drawn    the same barrier as a sketch - the shape a draw gate's reply carries,
-           and the shape a typed line carries, which is the point of the
-           user-input species
-  omitted  the slot unfilled: an OPEN-WATER solve, labeled, with kd_sheltered
-           reporting what an unsheltered basin actually does
-
-Usage:
-    venvs/agent/bin/python scripts/drivers/drive_artemis_structure_slot.py [--mode all]
+The slot is producer-less by design - the template names no default source for
+somebody's breakwater - so it is filled by a handed-over layer, by a drawn line,
+or by nobody, and the claim is that the SOLVE cannot tell them apart.
 """
 
 from __future__ import annotations
@@ -59,11 +46,8 @@ _BASE = {
 
 def fetch_structure() -> tuple[str, list]:
     """The surveyed breakwater, through the ROUTER - uri plus its raw lines.
-
-    The direct-call route on purpose: this is a data fetch, and driving the model
-    to make it would prove the model's routing rather than the slot's contract.
-    The retrieval check covers the routing separately.
-    """
+    Direct-call on purpose: this is a data fetch, and driving the model to make
+    it would prove the model's routing rather than the slot's contract."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     layer = TOOL_REGISTRY["fetch_osm_breakwaters"].fn(bbox=tuple(BBOX))

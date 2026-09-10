@@ -1,22 +1,9 @@
 #!/usr/bin/env python
 """Live driver: a LAKE domain, meshed from the water body's own polygon.
 
-The om2d mesher cuts its default domain from GSHHG land polygons, which describe
-the boundary between land and OCEAN. A lake is not in them: over Marquette Lower
-Harbor on Lake Superior the shoreline carries no land boundary at all, and the
-mesher refuses rather than meshing the whole extent - streets included - as open
-water.
-
-The way through is the chain, not a second mesher. The water body is FETCHED
-(``fetch_nhd_waterbodies`` returns Lake Superior as one polygon), narrowed to the
-extent the question is about, and handed to ``build_mesh`` as a POLYGON extent -
-the same ``om.generate_mesh``, cutting the domain from the polygon's interior.
-
-Env (MinIO): set -a; source .env.local; set +a
-Usage:
-    venvs/agent/bin/python scripts/drivers/drive_lake_domain_mesh.py \\
-        --bbox -87.39234 46.52812 -87.36788 46.55021 --edge-length-m 60 \\
-        --out /tmp/lake-proof
+The om2d mesher cuts its default domain from GSHHG land polygons, which hold no
+lake, so it refuses there. The way through is the chain: the water body is
+FETCHED, narrowed to the question's extent, and handed in as a POLYGON extent.
 """
 from __future__ import annotations
 
@@ -43,12 +30,9 @@ BED = "fetch_greatlakes_bathymetry"
 
 
 def lake_polygon(bbox: tuple[float, ...], out_dir: Path) -> str:
-    """The water body over ``bbox``, narrowed to it -> a GeoJSON path.
-
-    NHD answers with WHOLE features, so a harbour question comes back holding the
-    whole of Lake Superior; the mesh domain is the part of it the question is
-    about, and the narrowing is the chain's, not the mesher's.
-    """
+    """The water body over ``bbox``, narrowed to it -> a GeoJSON path. NHD answers
+    with WHOLE features, so the narrowing to the part the question is about is
+    the chain's job, never the mesher's."""
     import geopandas as gpd
     from shapely.geometry import box as _box
 

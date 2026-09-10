@@ -1,23 +1,9 @@
 #!/usr/bin/env python
 """Live driver: the two open-water questions, on the domains they declare.
 
-Three runs, each driven through the daemon exactly as the plugin drives it:
-
-  * ``agitation_om2d`` - the harbour cut from the real shoreline over the AOI,
-    the surveyed breakwater punched out of it as a conformal obstacle, the bed
-    painted from surveyed topobathy;
-  * ``agitation_supplied`` - the SAME question on a mesh built ahead of the run
-    and handed to it, which is the arm that proves a caller's own domain is
-    adopted rather than rebuilt;
-  * ``stratified_om2d`` - a real lake basin, whose boundary names no liquid edge
-    at all, which is what a lake IS and what the sheet has to be able to state.
-
-Each is sized so the solve proves the PLUMBING - the chain, the mesh, the fill,
-the deck the serializer writes, the dispatch and the reader - rather than the
-physics.
-
-Env (MinIO): set -a; source .env.local; set +a
-Usage: drive_open_water_domains.py --out-dir D [--only NAME ...] [--timeout 3600]
+Three runs through the daemon, as the plugin drives it: a harbour cut from the
+real shoreline, the SAME question on a mesh built ahead of the run and handed
+to it, and a lake basin whose boundary names no liquid edge at all.
 """
 from __future__ import annotations
 
@@ -80,10 +66,8 @@ _INLINE_GEOJSON_KEEP_BYTES = 4096
 
 def breakwater_layer(bbox: tuple[float, ...]) -> str:
     """The surveyed structure this harbour's question is ABOUT -> its layer uri.
-
     Fetched here rather than declared in the template: which thing shelters is
-    the caller's to name, so the template says only what shape it accepts.
-    """
+    the caller's to name, so the template says only what shape it accepts."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     layer = TOOL_REGISTRY["fetch_osm_breakwaters"].fn(bbox=list(bbox))
@@ -91,12 +75,9 @@ def breakwater_layer(bbox: tuple[float, ...]) -> str:
 
 
 def supplied_harbour_mesh(structure_uri: str, work: Path) -> str:
-    """Build the harbour domain AHEAD of the run -> the mesh uri it is handed.
-
-    The recipe is the TEMPLATE's own, read off the declaration rather than
-    restated, so the two agitation arms differ in WHO built the mesh and in
-    nothing else.
-    """
+    """Build the harbour domain AHEAD of the run -> the mesh uri it is handed. The
+    recipe is the TEMPLATE's own, read off the declaration rather than restated,
+    so the two agitation arms differ in WHO built the mesh and in nothing else."""
     from trid3nt_server.workflows.mesh.session import MeshSession
     from trid3nt_server.workflows.mesh.tool import recipe_from_plan_value, recipe_plan_value
     from trid3nt_server.workflows.telemac.templates.agitation.agitation import MESH

@@ -1,26 +1,9 @@
 #!/usr/bin/env python
 """Live driver: a user_gated ``telemac_river_dye`` answered through the CARDS.
 
-The FORM card's live proof, and the release point's. ``telemac_river_dye``
-reviews its own filled sheet on the door and asks for the release point on the
-canvas, so this run exercises both:
-
-  * the SHEET card fires with the filled sheet and ONE row is edited
-    (``dye_concentration_mgl``), and the run's persisted metrics have to show the
-    edited value reached the physics;
-  * the DRAW card is answered with a real point, and the run has to AGREE with
-    it - either the solver puts the source there (``--case honored``, which the
-    driver verifies against the steering file the solver actually read), or the run
-    REFUSES typed rather than quietly releasing somewhere else
-    (``--case refused``, a point off the meshed reach).
-
-The evidence is the run's OWN artifacts under its prefix (``chart_spec.json``,
-``metrics.json``, ``t2d_river.cas``, ``telemac_metrics.json``). Nothing here is
-rederived.
-
-Env (MinIO): set -a; source .env.local; set +a
-Usage: drive_river_dye_cards.py [--case honored|refused] [--timeout 1800]
-                                [--out F] [--no-render-proof]
+The template reviews its own filled sheet on the door and asks for the release
+point on the canvas, so this run exercises both cards, and the run must AGREE
+with the point given - releasing there, or refusing typed. Nothing is rederived.
 """
 from __future__ import annotations
 
@@ -102,12 +85,9 @@ def _run(case: str, timeout: float):
 
 
 def _where_the_source_went(run_id: str) -> dict:
-    """The source coordinate the SOLVER read, off the run's own steering file.
-
-    ``ABSCISSAE/ORDINATES OF SOURCES`` in ``t2d_river.cas`` is the point the
-    solve released from, in the run's UTM zone. Reading it back is what makes
-    "the marker and the plume agree" a measurement instead of a claim.
-    """
+    """The source coordinate the SOLVER read, off the run's own steering file, in
+    the run's UTM zone. Reading it back is what makes "the marker and the plume
+    agree" a measurement instead of a claim."""
     import boto3
     from pyproj import Transformer
 
