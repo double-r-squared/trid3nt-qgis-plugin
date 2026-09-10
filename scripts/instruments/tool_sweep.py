@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Sequential direct-execution sweep of EVERY registered tool.
-
-Calls each registered fn directly - the sanctioned test path, the registry
-keeps fn unwrapped - with schema-introspected args and a small AOI. Results
-append to a JSONL, already-swept tools are skipped, and the checklist
-regenerates from that JSONL.
+"""Sequential direct-execution sweep of EVERY registered tool. Calls each
+registered fn directly - the sanctioned test path, since the registry keeps fn
+unwrapped - with schema-introspected args and a small AOI. Results append to a
+JSONL, already-swept tools are skipped, and the checklist regenerates from it.
 """
 
 from __future__ import annotations
@@ -138,7 +136,7 @@ STATIC_CHAIN = {
 
 
 def prefetch_chain(tools) -> None:
-    """Fetch the four canonical layers (cache-warm after pass 1) + ids."""
+    """Fetch the four canonical layers (cache-warm on a re-run) + ids."""
     def uri_of(result):
         return getattr(result, "uri", None) or str(result)
     plan = [
