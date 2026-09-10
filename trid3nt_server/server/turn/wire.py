@@ -1,33 +1,8 @@
-"""Turn wire plumbing -- the envelope construction + session-safe send
-primitives the turn engine emits through.
+"""Turn wire plumbing: envelope construction and the session-safe send.
 
-The leaf transport layer every turn/gate/handler path uses to reach the wire:
-build a typed ``Envelope`` (``_new_envelope``), send it across the captured
-socket with fall-forward to any live sibling socket of the session
-(``_session_safe_send``, the mid-turn-survives-a-dead-socket seam), and the
-small family of raw-JSON terminal frames (``error`` / ``loop_exhausted`` /
-``agent-abort`` / ``turn-complete`` / ``cache-status``) plus the connection
-liveness ``heartbeat``. These are pure leaves: they reference only external
-contracts, the sibling ``.protocol`` connection registry, and each other -- no
-``SessionState`` behavior, no ``_core`` back-import -- so they extract as a unit
-with no import cycle.
-
-``_core`` re-imports every name here so its bare-global references (the handler,
-the resume/auth/case emit paths, the turn driver) resolve unchanged; the package
-facade re-exposes them at ``trid3nt_server.server.<name>`` and propagates
-monkeypatch writes to this module (it is in ``_EXTRACTION_MODULES``).
-
-Deliberately NOT here (stays in ``_core``, flagged for a future pass): the gate
-coroutines (``_maybe_gate_on_payload_warning`` / ``_gate_on_code_exec`` /
-``_gate_on_solver_confirm`` / ``_gate_with_turn_memory``) and the turn driver
-(``_dispatch_model_turn_and_persist`` / ``_stream_model_reply``). The gates are
-bound to the ``_gate_wait_timeout`` source-inspection seam that
-``test_gate_timeout_local`` counts in ``_core`` AND that seam is SHARED with the
-credential/region/spatial emit-wait gates that stay in ``_core`` -- so the gate
-family is not cleanly separable. The driver's dense orchestration (it calls
-~30 ``_core``-resident persist/emit/dispatch helpers) would force a
-``_core`` <-> ``turn`` import cycle.
-"""
+Every turn, gate and handler path reaches the wire through here: a typed
+envelope, a send that falls forward to a live sibling socket, the raw-JSON
+terminal frames, and the connection-liveness heartbeat."""
 
 from __future__ import annotations
 
@@ -51,12 +26,9 @@ logger = logging.getLogger("trid3nt_server.server")
 
 
 def _new_envelope(message_type: str, session_id: str, payload: Any) -> str:
-    """Construct + validate an Envelope and return its JSON wire form.
-
-    Stamps ``case_id`` from the turn's ContextVar binding so the web routes
-    live envelopes to the owning Case's stream. None outside a turn --
-    lifecycle envelopes are untagged.
-    """
+    """Construct and validate an Envelope and return its JSON wire form; the
+    ``case_id`` is stamped from the turn's binding so a live envelope routes to
+    its owning Case, and is None outside a turn."""
     env = Envelope(
         type=message_type,
         session_id=session_id,
@@ -75,37 +47,27 @@ async def _send_error(
     retryable: bool = False,
 ) -> None:
     payload = ErrorPayload(error_code=code, message=message, retryable=retryable)
-    # F1 (2026-07-08): route through the session-aware safe send. An error
-    # reply aimed at a just-dropped socket must reach the session's surviving
-    # sibling socket when one exists, and must NEVER raise into the caller --
-    # pre-fix, the turn-failure path's _send_error re-raised ConnectionClosed
-    # and skipped the terminal-failure-card persist entirely.
+    # Route through the session-aware safe send: an error aimed at a
+    # just-dropped socket must reach a surviving sibling when one exists, and
+    # must NEVER raise into the caller, or the turn-failure path skips its
+    # terminal-card persist.
     await _session_safe_send(
         websocket, session_id, _new_envelope("error", session_id, payload)
     )
 
 
-# WS-30s STORM FIX (server data heartbeat): the browser ``WebSocket`` API
-# handles server PROTOCOL-level PING control-frames transparently and NEVER
-# surfaces them to ``onmessage``, so the server's ``ping_interval=20`` pings do
-# NOT reset the client's inbound-frame timer (ws.ts ``noteInboundActivity``
-# fires only on a DATA frame). Between turns the ONLY data frame the client sees
-# is its own keepalive's ``session-state`` reply; if that reply is slow or stalls
-# (a reconnect re-runs the active-case layer replay + vector densify), the
-# client's pong deadline expires and it force-reconnects -> the reconnect re-runs
-# the replay -> stalls again -> a self-sustaining ~30s reconnect storm in which
-# the user's prompts never reach the turn handler.
+# A protocol-level PING is handled transparently by a client's socket and never
+# surfaces as a message, so the server's pings do NOT reset a client's
+# inbound-frame timer. Between turns the only data frame a client sees is the
+# reply to its own keepalive, and when that reply stalls - a reconnect re-runs
+# the layer replay - its pong deadline expires and it force-reconnects, which
+# re-runs the replay: a self-sustaining reconnect storm in which the user's
+# prompts never reach the turn handler.
 #
-# Fix: per WS connection, a background task sends a lightweight ``heartbeat`` DATA
-# frame every ``HEARTBEAT_INTERVAL_SECONDS`` (well under the client's
-# ~25s ping + 10s pong-timeout window) so the client's ``onmessage`` fires and
-# its inbound-activity timer is reset on a cheap server clock that is independent
-# of the (possibly-slow) resume reply. ws.ts already (a) calls
-# ``noteInboundActivity()`` on EVERY inbound frame BEFORE any type parsing and
-# (b) routes an unknown ``heartbeat`` type to a no-op ``default:`` (console.debug
-# only) -- so NO web change is required for the client to tolerate + benefit from
-# it. The interval is deliberately shorter than the client's 25s keepalive so a
-# heartbeat lands inside every pong window even on a busy loop.
+# So each connection ticks a lightweight ``heartbeat`` DATA frame on this
+# interval, deliberately far inside a client's ping-plus-pong window, resetting
+# its inbound-activity timer on a cheap server clock independent of the resume
+# reply.
 HEARTBEAT_INTERVAL_SECONDS: float = 12.0
 
 
@@ -113,26 +75,12 @@ async def _heartbeat_loop(
     websocket: "ServerConnection",
     session_id: str,
 ) -> None:
-    """Send a lightweight ``heartbeat`` DATA frame every interval until cancelled.
-
-    WS-30s STORM FIX (primary): the server PING control-frames never reach the
-    browser ``onmessage`` handler, so they cannot keep the client's
-    inbound-activity / pong-deadline timer alive. This per-connection task sends a
-    tiny ``heartbeat`` envelope on a server clock (every
-    ``HEARTBEAT_INTERVAL_SECONDS``) so the client always sees a fresh DATA frame
-    well inside its pong window -- breaking the reconnect storm regardless of how
-    slow the session-resume reply is.
-
-    Built as a raw-JSON envelope (the same pattern ``_emit_turn_complete`` /
-    ``_send_loop_exhausted`` use) so no schema-lane payload model is required; the
-    payload carries only a server timestamp. NOT stamped with a Case tag -- it is
-    a pure transport-liveness frame, never routed to a Case stream.
-
-    Cancelled cleanly by the handler's ``finally`` on EVERY disconnect path. A
-    per-send wire failure (the socket may be mid-close) is swallowed so a transient
-    write error never tears down the loop early; a ``ConnectionClosed`` ends the
-    ``async for``-driven handler which then cancels this task.
-    """
+    """Send a lightweight ``heartbeat`` DATA frame every interval until
+    cancelled; it carries only a timestamp and is never Case-tagged, being a
+    pure transport-liveness frame."""
+    # A per-send failure on a half-closed socket is swallowed, so one transient
+    # write error never tears the loop down early; the handler ends on the real
+    # close and cancels this task.
     import asyncio
     import json as _json
 
@@ -154,8 +102,8 @@ async def _heartbeat_loop(
                 )
             )
         except asyncio.CancelledError:
-            # Clean shutdown from the handler ``finally`` -- propagate so the
-            # awaiting canceller observes completion (NATE: cancel cleanly).
+            # Clean shutdown from the handler's finally: propagate, so the
+            # awaiting canceller observes completion.
             raise
         except Exception:  # noqa: BLE001 -- transport liveness; never tear down
             # A half-closed socket send fails; the handler loop will end on the
@@ -175,9 +123,8 @@ async def _session_safe_send(
     session_id: str,
     message: str,
 ) -> bool:
-    """Send ``message`` on the captured socket, falling back to any live
-    socket of ``session_id``. Never raises; returns True when a send landed.
-    """
+    """Send ``message`` on the captured socket, falling back to any live socket
+    of ``session_id``; never raises, and returns True when a send landed."""
     if websocket is not None:
         try:
             await websocket.send(message)
@@ -204,35 +151,12 @@ async def _send_loop_exhausted(
     websocket: "ServerConnection",
     session_id: str,
 ) -> None:
-    """Emit the distinct ``loop_exhausted`` envelope.
-
-    Fires when the multi-turn loop hits ``MAX_TURN_ITERATIONS`` without a
-    natural termination (no tool-call-free turn). Raw-JSON envelope typed
-    ``"loop_exhausted"`` -- distinct from the generic ``"error"`` type -- so
-    the UI can render "Agent ran out of steps" rather than a generic
-    failure indicator.
-
-    Wire shape:
-        {
-          "type": "loop_exhausted",
-          "session_id": str,
-          "payload": {
-            "status": "loop_exhausted",
-            "error_code": "MAX_ITERATIONS_REACHED",
-            "message": "Agent reached max iteration limit (N) before completing the request.",
-            "retryable": False
-          }
-        }
-
-    The ``payload.error_code`` key is SCREAMING_SNAKE_CASE and lives in the
-    ``loop_exhausted`` typed envelope, not the ``error`` envelope, so clients
-    can distinguish "tool chain too long" from an upstream LLM failure.
-    ``retryable=False`` because the agent already consumed all its turns;
-    the user should rephrase or narrow scope.
-
-    Best-effort: a wire failure is logged but not re-raised so the terminal
-    agent-message-chunk can still fire.
-    """
+    """Emit the ``loop_exhausted`` envelope when the multi-turn loop hits its
+    iteration cap without terminating naturally. Its own type, distinct from a
+    generic error, so a client can tell a long tool chain from a model failure."""
+    # ``retryable=False``: the agent already consumed its turns, so the user
+    # rephrases or narrows scope. Best-effort - a wire failure is logged, never
+    # raised, so the terminal chunk still fires.
     import json as _json
 
     try:
@@ -274,16 +198,9 @@ async def _send_agent_abort(
     reason_code: str,
     message: str,
 ) -> None:
-    """Emit the runaway-agent abort envelope.
-
-    Sent when a per-turn guard fires (step cap, wall-clock, or loop watchdog)
-    to stop a runaway turn before it can wedge the shared box. Reuses the
-    ``loop_exhausted`` typed wire envelope but carries the specific guard
-    ``error_code`` and an honest message (honesty floor: state exactly why
-    the turn stopped, never a fabricated success). Best-effort: a wire
-    failure is logged, never re-raised, so the turn still terminates and
-    releases busy.
-    """
+    """Emit the runaway-agent abort envelope when a per-turn guard fires; it
+    reuses the loop-exhausted type but carries the guard's own code and an
+    honest message stating exactly why the turn stopped."""
     import json as _json
 
     try:
@@ -321,31 +238,13 @@ async def _emit_turn_complete(
     pipeline_id: str | None = None,
     final_state: str | None = None,
 ) -> None:
-    """Emit the end-of-turn ``turn-complete`` signal so the client
-    force-completes any card still rendering ``running``.
-
-    A tool/turn's terminal ``pipeline-state`` frame can be written onto a
-    just-dropped socket and lost, leaving a card spinning after its tool
-    actually finished. This idle marker is emitted at the end of every turn
-    and re-emitted on session-resume so no card hangs past turn end.
-
-    Wire shape (matches ``TurnCompletePayload`` exactly -- both fields
-    optional, a bare ``{}`` is a valid whole-turn idle):
-        {"type": "turn-complete", "session_id": ..., "case_id": <turn case>,
-         "payload": {"envelope_type": "turn-complete",
-                     "pipeline_id": <str|null>, "final_state": <str|null>}}
-
-    Built as a raw-JSON envelope (not via ``_new_envelope``) because the
-    typed ``Envelope.payload`` is a ``GraceModel`` with ``extra="forbid"``
-    and this payload model is not yet in ``trid3nt_contracts``; same
-    raw-JSON pattern ``_send_loop_exhausted`` uses. ``case_id`` is stamped
-    from the turn's ContextVar tag so this fans out session-wide and routes
-    by ``case_id`` to the owning Case's stream, exactly like ``solve-progress``.
-
-    Best-effort: a wire failure (the socket may already be half-closed) is
-    logged, never raised -- the persisted tool-card terminal state is the
-    durable replay backstop, and session-resume re-emits this signal anyway.
-    """
+    """Emit the end-of-turn idle signal, so a client force-completes any card
+    still rendering as running. Best-effort: the persisted terminal card state
+    is the durable backstop and a resume re-emits this anyway."""
+    # A terminal pipeline frame can be written onto a just-dropped socket and
+    # lost, leaving a card spinning after its tool finished. Raw JSON, because
+    # the typed envelope forbids extra fields and this payload has no contract
+    # model; the Case tag routes it to the owning Case's stream.
     import json as _json
 
     try:
@@ -381,24 +280,9 @@ async def _emit_cache_status(
     state: "SessionState",
     usage: "UsageMetadataEvent",
 ) -> None:
-    """Emit a ``cache-status`` envelope so the UI can render live cache hit rate.
-
-    Forwarded once per model stream after the ``UsageMetadataEvent`` lands.
-    Payload shape:
-
-        {
-            "cache_hit":     bool,
-            "cached_tokens": int,
-            "total_tokens":  int,
-            "prompt_tokens": int | null,
-            "candidates_tokens": int | null,
-            "model_cache_ref": str | null   (the provider-side cache handle in use this turn),
-        }
-
-    Intentionally raw-JSON (no contract model): observability surface, not
-    a wire-API contract. A wire-side failure is logged but never raised --
-    cache-status reporting must not break the agent loop.
-    """
+    """Emit a ``cache-status`` envelope once per model stream, after the usage
+    event lands. Deliberately raw JSON: an observability surface, not a wire
+    contract, and a failure here never breaks the agent loop."""
     import json as _json
 
     try:

@@ -27,19 +27,15 @@ from websockets.asyncio.server import ServerConnection
 logger = logging.getLogger("trid3nt_server.server")
 
 # ---------------------------------------------------------------------------
-# Harness-absorbs-prompt
-# config seams. Every mechanism ships with an env kill-switch so a live
-# regression can be flipped off without a code change (the TRID3NT_* idiom).
+# Turn config seams. Every mechanism here carries an env kill-switch, so a live
+# regression can be flipped off without a code change.
 # ---------------------------------------------------------------------------
 
 
 def _session_routing_mode(state: "SessionState") -> str:
-    """Routing-visibility mode for this session: 'auto' | 'ask'.
-
-    A per-session setting (the ``session-config`` envelope's ``mode`` field)
-    wins; else the ``TRID3NT_MODE`` env default; else 'auto'. Gates are NEVER
-    mode-dependent -- the mode governs tool-selection VISIBILITY only.
-    """
+    """Routing-visibility mode for this session: the per-session setting, else
+    the env default, else auto. Consent gates are NEVER mode-dependent - the
+    mode governs tool-selection VISIBILITY only."""
     mode = getattr(state, "routing_mode", None)
     if isinstance(mode, str) and mode in ("auto", "ask"):
         return mode
@@ -49,10 +45,9 @@ def _session_routing_mode(state: "SessionState") -> str:
 #: Max candidates surfaced on one tool-candidates card (avoid flooding).
 _TOOL_CANDIDATES_MAX = 4
 
-#: Turn-loop-invariant continuation nudge. ONE per
-#: turn, injected as a user-role content when a turn (a) terminates with tool
-#: results but zero assistant text since the last tool round, or (b) only ever
-#: geocoded while the user asked for data/analysis.
+#: Continuation nudge, injected at most ONCE per turn as user-role content when
+#: a turn ends with tool results but no assistant text since the last tool
+#: round, or only geocoded while the user asked for data or analysis.
 _CONTINUATION_NUDGE: str = (
     "You have tool results but have not answered the user yet. Summarize "
     "the results for the user now, and if their requested data or analysis "
@@ -75,9 +70,8 @@ def _asks_for_data_or_analysis(user_text: Any) -> bool:
     """True when the user's message asks for data/analysis (not a bare locate)."""
     return bool(isinstance(user_text, str) and _DATA_INTENT_RE.search(user_text))
 
-#: Analysis-flow stages, in pipeline order. The wave label derivation
-#: (``_stage_label_for_candidates``) tie-breaks toward the EARLIEST stage so a
-#: multi-step turn reads as a forward march acquisition -> ... -> visualization.
+#: Analysis-flow stages in pipeline order. The label derivation tie-breaks
+#: toward the EARLIEST stage, so a multi-step turn reads as a forward march.
 _STAGE_ORDER: tuple[str, ...] = (
     "acquisition",
     "preprocessing",
@@ -86,16 +80,8 @@ _STAGE_ORDER: tuple[str, ...] = (
 )
 
 def _stage_label_for_tool(tool_name: str) -> str:
-    """Coarse analysis-flow stage for ONE tool name
-    (acquisition -> preprocessing -> analysis -> visualization).
-
-    Category definitions: acquisition = fetchers (fetch_/geocode_/discover_/
-    catalog_/search_); preprocessing = processing/clip (clip_/merge_/fill_/cut_/
-    import_/digitize_/extract_); analysis = spatial_query/code_exec/compute
-    (compute_/run_/model_/spatial_/query_/analyze_/aggregate_/code_exec);
-    visualization = publish/charts (publish_/generate_/export_/zoom/compose_/
-    chart/plot). Anything else falls back to ``"tool-selection"``.
-    """
+    """The coarse analysis-flow stage for ONE tool name, by name prefix;
+    anything unrecognized falls back to ``"tool-selection"``."""
     if tool_name.startswith(
         ("fetch_", "geocode_", "discover_", "catalog_", "search_")
     ):
@@ -115,15 +101,9 @@ def _stage_label_for_tool(tool_name: str) -> str:
     return "tool-selection"
 
 def _stage_label_for_candidates(ranked: list[tuple[str, float]]) -> str:
-    """Derive one wave ``stage_label`` from the TOP candidates' categories.
-
-    Wave completion: a single top tool is a brittle signal for a
-    round's stage (the rank-1 pick may be an outlier). Instead we aggregate the
-    categories of the top ``_TOOL_CANDIDATES_MAX`` candidates and pick the
-    PLURALITY stage, tie-broken toward the earliest pipeline stage so a
-    multi-step turn surfaces a forward-marching sequence of labels. A candidate
-    set that is all fallbacks (``"tool-selection"``) yields ``"tool-selection"``.
-    """
+    """Derive one ``stage_label`` from the TOP candidates: the plurality stage,
+    tie-broken toward the earliest, since a single rank-1 pick is a brittle
+    signal. An all-fallback candidate set yields the fallback."""
     counts: dict[str, int] = {}
     for name, _score in ranked[:_TOOL_CANDIDATES_MAX]:
         stage = _stage_label_for_tool(name)
@@ -148,12 +128,9 @@ def _tool_summary_line(entry: Any) -> str:
 def _geocode_drift_note(
     args: Any, geocode_bbox: Any, active_aoi: Any
 ) -> str | None:
-    """Stage 3 guard (d): WARNING text when a call's bbox intersects NEITHER
-    the turn's geocoded bbox NOR the active AOI; ``None`` = no drift.
-
-    Advisory only -- the dispatch is never blocked. Calls without a coercible
-    bbox arg are skipped (nothing to compare).
-    """
+    """Warning text when a call's bbox intersects NEITHER the turn's geocoded
+    bbox nor the active AOI, else ``None``. Advisory only: the dispatch is never
+    blocked, and a call with no coercible bbox is skipped."""
     if not isinstance(args, dict):
         return None
     for key in ("bbox", "aoi_bbox"):
@@ -180,16 +157,9 @@ def _union_pinned_tool(
     retrieval_registry: dict,
     state: SessionState,
 ) -> dict:
-    """Union a user-pinned tool into the visible set + visible registry.
-
-    Shared by the pre-turn tool-candidates gate and the per-round ASK-mode
-    waves: a pinned tool must be BOTH in the Case's monotonic visible set (so it
-    stays visible next turn) AND in the retrieval-visible registry (so the
-    declaration is built and the model can actually call it). Returns the
-    registry to use -- a NEW dict when the pin widened it, else the same object
-    (so callers can skip a needless ``build_tool_declarations`` rebuild via
-    identity check).
-    """
+    """Union a user-pinned tool into both the monotonic visible set and the
+    retrieval-visible registry, so it stays visible and its declaration is
+    built. Returns a NEW registry only when the pin widened it."""
     if pinned and pinned in TOOL_REGISTRY:
         state.visible_tools.add(pinned)
         if pinned not in retrieval_registry:
@@ -200,16 +170,9 @@ def _union_pinned_tool(
 async def _handle_max_turns_reached(
     websocket: ServerConnection, state: SessionState
 ) -> None:
-    """Emit the cap-hit envelope sequence.
-
-    1. Emit ``session-state`` with ``status="max_turns_reached"`` so the
-       client knows the session is at its turn limit.
-    2. Send a closing ``agent-message-chunk`` summarising what's been done
-       and directing the user to start a new session.
-
-    Called instead of the normal dispatch when ``state.turn_count`` exceeds
-    ``MAX_TURNS_PER_SESSION``. No tool calls are dispatched.
-    """
+    """Emit the cap-hit envelopes - the session state carrying the cap status,
+    then a closing message - instead of dispatching, once the session's turn
+    count exceeds the limit. No tool call runs."""
     _ensure_emitter(websocket, state)
     # Re-emit session-state with the cap status so the client can render a
     # "session full" indicator.
@@ -258,25 +221,12 @@ async def _maybe_emit_tool_candidates(
     user_text: str,
     exclude_tools: "set[str] | None" = None,
 ) -> tuple[str | None, list[str]]:
-    """Surface the retrieval-ranked tool candidates BEFORE dispatch.
-
-    Fires when the session mode is ``ask``, OR in ``auto`` when the top-1 vs
-    top-2 retrieval-score margin is under the measured-ambiguity threshold
-    (``_ambiguity_margin_threshold``; 0 disables). Emits the ``tool-candidates``
-    envelope (raw-JSON, heartbeat-style -- the contracts lane declares the
-    typed model; until integration the payload is a plain dict) and waits
-    gate-style for the ``tool-choice`` reply with a BOUNDED timeout
-    (``_tool_choice_timeout_s`` -- deliberately bypasses the F6 24h local-lane
-    override, code-exec-gate precedent). On timeout / fault the turn proceeds
-    AUTONOMOUSLY (fail-open) -- the picker is an optimization, never a wall.
-
-    Returns ``(pinned_tool_name | None, notes)``:
-      * a ``tool_name`` reply pins that tool for the next dispatch -- the
-        caller unions it into the visible registry + allowed set, and a
-        directive note rides into ``contents``;
-      * a ``free_text`` reply becomes a user-clarification note;
-      * timeout yields a proceed-autonomously note.
-    """
+    """Surface the retrieval-ranked candidates BEFORE dispatch and wait, under a
+    bounded timeout, for the user's pick; returns that pin, if any, and the
+    notes to ride into the turn."""
+    # It fires in ask mode, or in auto when the top-1 against top-2 margin is
+    # under the ambiguity threshold. On timeout or fault the turn proceeds
+    # AUTONOMOUSLY: the picker is an optimization, never a wall.
     mode = _session_routing_mode(state)
     threshold = _ambiguity_margin_threshold()
     if mode != "ask" and threshold <= 0.0:
@@ -286,10 +236,8 @@ async def _maybe_emit_tool_candidates(
 
     ranked = retrieve_ranked_tools(user_text, k=8)
     if exclude_tools:
-        # Wave semantics: drop this turn's already-dispatched tools so
-        # each subsequent ASK-mode round's wave advances the stage label
-        # (acquisition -> preprocessing -> analysis -> visualization) instead of
-        # re-offering the same acquisition picks every round.
+        # Drop this turn's already-dispatched tools, so each later round
+        # advances the stage label instead of re-offering the same picks.
         ranked = [(n, s) for (n, s) in ranked if n not in exclude_tools]
     if not ranked:
         # Cold index / no match / all excluded: nothing to offer -- autonomous.
@@ -426,41 +374,19 @@ async def _prepare_user_turn(
     *,
     client_case_id: str | None = None,
 ) -> tuple[str, dict] | None:
-    """Pre-dispatch sequence for one ``user-message``.
-
-    Runs, in order, BEFORE the turn task is created (so the dispatched turn --
-    model stream or ``/invoke`` directive -- observes the final Case
-    context):
-
-    0. Re-bind the server's active-Case pointer to the client's stamped
-       ``client_case_id`` (the Case the user is actually in) when it differs
-       from the stale server pointer -- BEFORE the sync, the auto-create
-       check, and the turn pin. So e.g. a 'resize bbox' turn runs in the
-       client's current Case, never a Case the server pointer drifted to
-       (mid-reconnect select dropped / restart wiped the cache). A message
-       with NO ``case_id`` (older client) keeps the prior behavior.
-    1. ``_sync_case_context`` -- catch this connection up to the (now
-       corrected) session active Case.
-    2. Auto-create: a non-directive prompt with NO active Case mints +
-       activates a prompt-named Case (see ``_auto_create_case_from_root``).
-       ``/invoke`` debug directives stay on the stateless path.
-    3. ``_persist_chat_turn`` -- the user turn lands in the (possibly brand
-       new) active Case. Best-effort; no Case / no Persistence = no-op.
-    4. For an auto-created Case: emit ``case-open`` + ``case-list`` so the
-       client switches from the Cases root into the Case view (after the
-       persist -- see ``_emit_auto_case_open``).
-
-    Returns the parsed ``/invoke`` directive (``(tool_name, params)``) or
-    ``None`` for the model path -- the caller branches on it.
-    """
-    # The client's stamped Case is the authority for this turn: re-bind the
-    # session-scoped pointer to it before any sync/auto-create/pin reads
-    # ``active_case_id``, so the whole turn (LLM context sync, AOI bbox,
-    # every persistence write) follows the Case the user is actually
-    # viewing -- not a server pointer that drifted while the socket was
-    # reconnecting. Invalidate this connection's sync marker so
-    # ``_sync_case_context`` below reloads the corrected Case's LLM history +
-    # layer accumulator, and persist the pointer so it survives a restart.
+    """Pre-dispatch sequence for one user message, returning the parsed
+    directive or ``None`` for the model path; it runs BEFORE the turn task is
+    created, so the turn observes the final Case context."""
+    # The order is load-bearing: rebind the active-Case pointer to the client's
+    # stamp, sync this connection to that Case, auto-create a Case for a
+    # non-directive prompt that has none, pin the turn, persist the user row,
+    # and only then emit the open for an auto-created Case.
+    # The client's stamped Case is the authority for this turn, rebound before
+    # anything reads the pointer, so the whole turn - context sync, AOI, every
+    # write - follows the Case the user is actually viewing rather than a
+    # pointer that drifted while the socket reconnected. The sync marker is
+    # invalidated so the corrected Case's history and layers reload, and the
+    # pointer is persisted so it survives a restart.
     if client_case_id is not None and client_case_id != state.active_case_id:
         logger.info(
             "user-message re-binding active case session=%s server=%s client=%s",
@@ -478,10 +404,9 @@ async def _prepare_user_turn(
         auto_case_id = await _auto_create_case_from_root(
             websocket, state, text
         )
-    # Pin the turn's Case binding NOW -- after the auto-create
-    # hand-off, before the first write. Everything this turn persists
-    # (user row, tool cards, narration, layers, charts, .qgs routing)
-    # follows this pin; a mid-stream case switch must not re-aim it.
+    # Pin the turn's Case binding NOW, after the auto-create hand-off and
+    # before the first write: everything this turn persists follows the pin, and
+    # a mid-stream case switch must not re-aim it.
     state.current_turn_case_id = state.active_case_id
     await _persist_chat_turn(state, role="user", content=text)
     if auto_case_id is not None:
@@ -489,14 +414,9 @@ async def _prepare_user_turn(
     return directive
 
 def _parse_invoke_directive(text: str) -> tuple[str, dict] | None:
-    """If ``text`` is an ``/invoke <tool_name> <json-params>`` directive,
-    return ``(tool_name, params)``; else return None.
-
-    Drives real tool invocations end-to-end through the registry + emitter,
-    bypassing the LLM tool-call path (which handles model-issued function calls
-    on its own). The directive shape is debug-only; intentionally not part of
-    the wire protocol.
-    """
+    """Parse an ``/invoke <tool_name> <json-params>`` directive into its tool
+    and params, else ``None``. The directive shape is a debug surface and
+    deliberately not part of the wire protocol."""
     if not text.startswith("/invoke "):
         return None
     rest = text[len("/invoke ") :].strip()

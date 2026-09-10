@@ -45,27 +45,9 @@ async def _stream_model_reply(
     model_id: str | None = None,
     show_thinking: bool = False,
 ) -> None:
-    """Stream one user-message reply with multi-turn tool dispatch.
-
-    The canonical agent loop:
-
-        contents = history + user_text
-        for _ in range(MAX_TURN_ITERATIONS):
-            stream the model:
-                text deltas -> forward as agent-message-chunk
-                function_calls -> collect (this turn)
-            if no function_calls this turn:
-                break  # final narrative turn
-            for each call:
-                result = await _invoke_tool_via_emitter(...)
-                summary = summarize_tool_result(name, result, error)
-                append model Content (function_call) + function Content (response)
-            # then loop: the model now sees the call + result and decides next
-            # tool call OR narrates the answer.
-
-    Cancellation: ``asyncio.CancelledError`` aborts the whole loop and emits a
-    cancelled ``pipeline-state`` for the outer ``llm_generation`` step.
-    """
+    """Stream one user-message reply with multi-turn tool dispatch: each round
+    forwards text deltas, dispatches the round's tool calls and feeds their
+    results back, until a round makes no call. A cancel aborts the whole loop."""
     from trid3nt_server.gates.confirm import (
         SPATIAL_INPUT_SENTINEL_KEY,
         _handle_request_spatial_input,
@@ -107,16 +89,14 @@ async def _stream_model_reply(
     # running task so the dispatch wrapper's finally joins THIS turn's list
     # (never the live field), even on crash/cancel.
     state.current_turn_narration = []
-    # BUG 1: reset the per-turn context-window-abort note. A new turn is a
-    # fresh request -- any prior turn's abort note must never leak forward.
+    # Reset the per-turn context-window abort note: a new turn is a fresh
+    # request, and a prior turn's note must never leak forward.
     state.current_turn_context_abort_note = None
-    # job VAULT-READ: reset the per-turn credential-prompt guard. A new user
-    # turn is a fresh request -- a tool that prompted for a key last turn may
-    # legitimately prompt again this turn (the key may still be missing).
+    # Reset the per-turn credential-prompt guard: a tool that prompted for a key
+    # last turn may legitimately prompt again, since the key may still be gone.
     state.credential_prompted_tools = set()
-    # Reset the per-turn solver-confirm/fetch-resolution gate-decision memory.
-    # A new user turn is a fresh request - a tool+bbox pair confirmed last turn
-    # must gate again this turn (see ``gate_decisions_this_turn`` docstring above).
+    # Reset the per-turn gate-decision memory: a tool and bbox pair confirmed
+    # last turn must gate again this turn.
     state.gate_decisions_this_turn = {}
     turn_narration = state.current_turn_narration
     turn_history = state.chat_history
@@ -168,13 +148,10 @@ async def _stream_model_reply(
     from trid3nt_server.adapters.model_selection import model_provider as _model_provider
 
     _provider = _model_provider()
-    # #225 per-model telemetry: resolve the EFFECTIVE model that actually
-    # serves this turn (not the possibly-None explicit selection) so telemetry
-    # rows for DEFAULT-model turns are tagged with the real model instead of
-    # collapsing into the "unknown" bucket in the by_model accuracy slice. On
-    # the openai/OpenRouter path this applies openai_model's own precedence
-    # (selection -> TRID3NT_OPENAI_MODEL). Best-effort -- a resolution error
-    # must never break the turn, so fall back to the raw selection.
+    # Resolve the EFFECTIVE model serving this turn, not the possibly-None
+    # explicit selection, so a default-model turn's telemetry carries the real
+    # model instead of collapsing into the unknown bucket. Best-effort: a
+    # resolution error falls back to the raw selection.
     try:
         if _provider == "openai":
             from trid3nt_server.adapters import openai_adapter as _oa  # noqa: WPS433
@@ -449,7 +426,7 @@ async def _stream_model_reply(
     _post_deliverable_idle = 0
     _crisp_concluded = False
 
-    # OPEN-14 FABRICATION BACKSTOP: tracks whether ANY round of this turn
+    # Fabrication backstop: tracks whether ANY round of this turn
     # dispatched a tool call. A turn that ends with this still False AND
     # whose closing narration claims a completed geospatial action gets an
     # honest caveat appended -- see the ``not turn_function_calls`` block
@@ -459,7 +436,7 @@ async def _stream_model_reply(
     # tried and claims success is).
     _turn_ever_called_tool = False
 
-    # OPEN-16 EMPTY-COMPLETION RETRY: per-turn counter of empty-round retries
+    # Empty-completion retry: per-turn counter of empty-round retries
     # already spent, capped at ``_EMPTY_COMPLETION_RETRY_CAP``. Past the cap the
     # empty round falls through to the existing terminal break (never an infinite
     # loop). Local-path only (guarded on ``_provider == "openai"`` below).
@@ -484,7 +461,7 @@ async def _stream_model_reply(
     # per-call loop). Unarmed sessions never touch it.
     _bench_wrong_pick_end = False
 
-    # DISCOVERY-EXPANDS-GATE (task 2): tool names the tool-search tool
+    # Discovery expands the gate: tool names the tool-search tool
     # (search_tools) returned THIS turn that were unioned into the visible gate
     # for subsequent rounds, capped at ``_DISCOVERY_EXPAND_CAP`` per turn.
     # ``_tool_decls_dirty`` requests a one-time rebuild of ``tool_decls`` after
@@ -507,7 +484,7 @@ async def _stream_model_reply(
     iterations = 0
     try:
         while iterations < _step_cap:
-            # GUARD 2 (wall-clock): abort BEFORE the next (potentially long)
+            # Wall-clock guard: abort BEFORE the next, potentially long,
             # model round if this turn has already overrun its budget. Checked
             # at the top of every iteration so a turn whose rounds are each slow
             # cannot exceed the wall-clock bound by more than one round.
@@ -594,13 +571,13 @@ async def _stream_model_reply(
                     # Entry-captured list, never the live field.
                     turn_narration.append(event.delta)
                     # Also feed the OPEN-segment buffer so the
-                    # boundary finalize (A3 / A4) persists exactly this run's
+                    # boundary finalize persists exactly this run's
                     # text, and a crash leaves the un-finalized tail for the
                     # wrapper. Same registered list object -- never rebound.
                     _segment_buf.append(event.delta)
 
                 elif isinstance(event, ThinkingDeltaEvent):
-                    # Forward the model's reasoning-channel deltas so the web/QGIS
+                    # Forward the model's reasoning-channel deltas so the
                     # clients render the greyed foldable thinking block. Gated on the
                     # per-turn user toggle -- with it off the /no_think suppressor is armed
                     # and the channel is not generated, but a model that leaks reasoning
@@ -690,7 +667,7 @@ async def _stream_model_reply(
                     )
 
                 elif isinstance(event, CompactionCompleteEvent):
-                    # Compaction UX (Part A): flip the card minted above to
+                    # Compaction card: flip the card minted above to
                     # its terminal "Conversation compacted (Nk -> Mk tokens)"
                     # state. No-op (best-effort) if the mint above failed or
                     # never fired (emitter unbound) -- see
@@ -714,10 +691,10 @@ async def _stream_model_reply(
             # is finished -- either narrated the answer or had nothing more to
             # do.  Break out of the loop.
             if not turn_function_calls:
-                # OPEN-16 EMPTY-COMPLETION RETRY: a round with ZERO tool calls and ZERO
+                # Empty-completion retry: a round with ZERO tool calls and ZERO
                 # non-whitespace text is the qwen3 empty-completion shape -- retry with a
                 # corrective user nudge, bounded by _EMPTY_COMPLETION_RETRY_CAP, rather
-                # than silently dropping the request. Runs BEFORE the OPEN-14 fabrication
+                # than silently dropping the request. Runs BEFORE the fabrication
                 # backstop (disjoint: an empty round has no closing text to fabricate
                 # from). Scoped to the LOCAL (MODEL_PROVIDER=openai) path only -- Bedrock's
                 # production narration (a legitimately empty round) stays byte-unchanged.
@@ -748,16 +725,16 @@ async def _stream_model_reply(
                     # inventing a new envelope type is out of scope -- the
                     # log.warning is the durable retry witness.
                     continue
-                # Stage 3 TURN-LOOP INVARIANTS: ONE continuation nudge per turn, shared
+                # Turn-loop invariants: ONE continuation nudge per turn, shared
                 # budget, injected as user-role content with the round retried:
                 #   (a) NO-SILENT-END -- terminating with tool results but ZERO
-                #       assistant text since the last tool round. Skipped when OPEN-16
+                #       assistant text since the last tool round. Skipped when the
                 #       already nudged this turn (_empty_retries > 0).
                 #   (b) BARE-GEOCODE BACKSTOP -- the turn's ONLY tool was
                 #       geocode_location while the user asked for data or analysis.
                 # Kill-switch: TRID3NT_TURN_INVARIANTS=0. The nudge round still counts
                 # toward the step cap; the shared budget guarantees at most one nudge per
-                # turn (unified with OPEN-16 -- no stacking). Every terminal round logs
+                # turn, unified with that retry so they never stack. Every terminal round logs
                 # one INFO line per invariant: FIRED, or SKIPPED with its reason.
                 if (
                     not _continuation_nudged
@@ -834,7 +811,7 @@ async def _stream_model_reply(
                     iterations,
                     len(turn_text_parts),
                 )
-                # OPEN-14 FABRICATION BACKSTOP: fires only on the FIRST and ONLY
+                # Fabrication backstop: fires only on the FIRST and ONLY
                 # tool-call-free round this turn ever had. Conservative: only fires when
                 # the closing text pairs a completed-action verb with a geospatial-output
                 # noun in the same sentence -- see
@@ -868,11 +845,11 @@ async def _stream_model_reply(
                         _segment_buf.append(_caveat)
                 break
             _turn_ever_called_tool = True
-            # Stage 3 invariants: record this round's requested tool names
+            # Turn-loop invariants: record this round's requested tool names
             # (the bare-geocode backstop compares the turn's full set).
             _turn_tools_dispatched.update(c.name for c in turn_function_calls)
 
-            # GUARD 3 (loop watchdog): compute THIS round's (tool, args_hash)
+            # Loop watchdog: compute THIS round's (tool, args_hash)
             # signature now, but feed it to the watchdog AFTER dispatch together
             # with a PROGRESS witness. A no-progress runaway -- the SAME tool+args
             # (or identical round signature) N rounds in a row that keeps returning
@@ -910,7 +887,7 @@ async def _stream_model_reply(
             # Otherwise: dispatch each call, then append the call + summarized
             # response back into contents so the next model turn sees them.
             for call in turn_function_calls:
-                # Dispatch through the registry + emitter (Invariant 2 -- the LLM's
+                # Dispatch through the registry and emitter (the model's
                 # tool choice IS the classification). Routing failures (TOOL_NOT_FOUND,
                 # PAYLOAD_WARNING_CANCELLED) raise typed exceptions so the except-block
                 # below routes them through summarize_tool_result(error=...) -- a
@@ -1154,7 +1131,7 @@ async def _stream_model_reply(
                 # keep carrying the REAL uri the plugin renders from. The rewrite never
                 # raises (falls back to the unrewritten summary).
                 summary = _uri_reg.rewrite_result_for_llm(summary)
-                # Stage 3 guard (d): geocode drift warning. A successful
+                # Geocode drift warning. A successful
                 # geocode_location pins this turn's geocoded bbox; any LATER call whose
                 # bbox arg intersects NEITHER that bbox NOR the active AOI gets an
                 # advisory WARNING appended to its function_response (never blocks).
@@ -1333,7 +1310,7 @@ async def _stream_model_reply(
                     build_function_response_content(call.name, summary, call.call_id)
                 )
 
-            # DISCOVERY-EXPANDS-GATE (task 2): a tool-search this round widened
+            # Discovery expands the gate: a tool-search this round widened
             # the visible gate -- rebuild ``tool_decls`` ONCE so the NEXT model
             # round sees the unioned tools. No-op unless a search actually added
             # (the common path never sets the dirty flag).
@@ -1361,7 +1338,7 @@ async def _stream_model_reply(
                 )
                 break
 
-            # GUARD 3 (loop watchdog) POST-DISPATCH record: the round counts toward
+            # Loop watchdog, post-dispatch record: the round counts toward
             # the no-progress streak ONLY when it had calls, did NOT produce a real
             # artifact, and was NOT a failure / circuit-broken round (the breaker's
             # territory). A producing round, an all-failed round, or a
@@ -1425,7 +1402,7 @@ async def _stream_model_reply(
             # bound is the historical MAX_TURN_ITERATIONS (full-tier models, where
             # _step_cap >= MAX_TURN_ITERATIONS), natural exhaustion emits the
             # pre-existing loop_exhausted / MAX_ITERATIONS_REACHED envelope (the
-            # user-facing contract the web UI + tests rely on). Only when the cap
+            # user-facing contract the clients and tests rely on). Only when the cap
             # was TIGHTENED for a cheap/loop-prone tier (_step_cap <
             # MAX_TURN_ITERATIONS) is this a NEW, tighter runaway backstop, surfaced
             # as AGENT_STEP_LIMIT_REACHED. AGENT_LOOP_DETECTED stays reserved for
@@ -1598,7 +1575,7 @@ async def _stream_model_reply(
             await _emit_case_list(websocket, state, force=True)
 
     except asyncio.CancelledError:
-        # Invariant 8 -- distinct cancelled step state, not failed. A
+        # A distinct cancelled step state, never failed. A
         # partially-open narration segment's done=True is intentionally NOT
         # sent here (a cancelled stream has no clean terminal); current_turn_
         # narration still holds the partial text and the dispatch wrapper's
@@ -1643,7 +1620,7 @@ async def _stream_model_reply(
             exc,
         )
     except ContextWindowExceededError as exc:
-        # OPEN-14 REACTIVE CLIP GUARD: the local (Ollama/OpenAI-compat) model's
+        # Reactive clip guard: a local model's
         # prompt was clipped by num_ctx even after one recompaction + retry.
         # Distinct typed envelope -- NOT the generic LLM_UNAVAILABLE bucket --
         # so the honesty floor tells the user exactly why the turn stopped (a
@@ -1662,7 +1639,7 @@ async def _stream_model_reply(
         # payload, so it cannot be starved by any failure in the send path.
         # Both steps are individually try/excepted with explicit logging.
         #
-        # The fabrication backstop (item 4, context_budget) also applies on this
+        # The fabrication backstop also applies on this
         # exception path: zero tool calls dispatched this whole turn, AND the
         # accumulated narration matches the claim regex, appends the same
         # honest caveat as the normal zero-tool-call terminal branch.
@@ -1797,7 +1774,7 @@ async def _stream_model_reply(
             f"Upstream provider unavailable ({exc.provider}): {exc.detail}",
             retryable=True,
         )
-    except Exception as exc:  # noqa: BLE001 -- surface as A.6 LLM_UNAVAILABLE
+    except Exception as exc:  # noqa: BLE001 -- surface as LLM_UNAVAILABLE
         # PER-TURN TELEMETRY: a NON-transient provider rejection (auth / bad
         # request) classifies as ``provider_request`` (fail-fast, its own
         # class); anything else is honestly ``internal``. Upstream transients
@@ -1874,26 +1851,15 @@ async def _dispatch_model_turn_and_persist(
     model_id: str | None = None,
     show_thinking: bool = False,
 ) -> None:
-    """Stream the model reply, then persist the agent's reply to the active Case.
-
-    Wraps ``_stream_model_reply`` so the Case chat-history append happens
-    after the stream completes (the streamed text is the canonical
-    ``content`` field on ``CaseChatMessage``). On cancel/error we still
-    attempt a best-effort persist of whatever the narration accumulator
-    captured before the stream died.
-
-    The persisted ``content`` is the REAL accumulated narration --
-    ``_stream_model_reply`` resets ``state.current_turn_narration`` at
-    stream start and appends every ``TextDeltaEvent`` delta across all loop
-    iterations.
-    """
+    """Stream the model reply, then persist it to the active Case: the persisted
+    content is the REAL accumulated narration, and a cancel or error still
+    persists whatever the accumulator captured before the stream died."""
     # Capture the turn's Case at task entry -- the finally-persist
     # below must land in the Case that OWNED this turn even when the user
     # switched Cases (or a newer turn re-pinned the binding) mid-stream.
     turn_case_id = _turn_case_id(state)
-    # Bind the owning Case into the per-task ContextVar so EVERY
-    # envelope this turn emits (chunks, pipeline-state, session-state, …)
-    # carries Envelope.case_id and the web routes it to the right stream.
+    # Bind the owning Case into the per-task context var, so EVERY envelope this
+    # turn emits carries that case_id and a client routes it to that stream.
     bind_turn_case(turn_case_id)
     # Bind this turn's user-drawn geometry so composer gates read it
     # (current_turn_drawn_geometry) as a basis="user" spatial knob.
@@ -2013,7 +1979,7 @@ async def _dispatch_model_turn_and_persist(
             # accumulator (segments_done > 0 ending in narration), or the turn
             # emitted no zoom-to/layer accumulator at all -> every narration run
             # was already persisted as its own interleaved row. Nothing to add.
-        # C2: whole-turn idle signal -- fires on EVERY exit (clean, cancel,
+        # Whole-turn idle signal: fires on EVERY exit (clean, cancel,
         # error) so the client settles any card still spinning ``running`` after
         # the turn ends (its terminal pipeline-state frame may have died on a
         # dropped socket). Outside the ``if turn_case_id`` guard so a root-stream

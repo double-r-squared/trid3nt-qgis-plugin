@@ -4,28 +4,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Module-level live-turn registry keyed by ``(session_id, turn_key)`` --
-# mirrors ``_SESSION_ACTIVE_CASE``'s session-scoped discipline so an
-# in-flight turn OUTLIVES the per-connection ``SessionState``. Keying the
-# running task by ``session_id`` lets it survive the death of any one
-# socket; a closing connection's handler ``finally`` only drops that
-# connection's references (letting cheap turns finish) instead of
-# cancelling. ``wait_for_completion``'s own 1800s budget bounds a truly
-# stuck solve.
+# Module-level live-turn registry keyed by session and stream, so an in-flight
+# turn OUTLIVES the per-connection state: a closing connection drops only that
+# connection's references instead of cancelling, and a cheap turn finishes.
 #
-# Each entry carries the running ``asyncio.Task`` AND the ``PipelineEmitter``
-# the task is driving (so a reconnecting socket can rebind the emitter's
-# sink and receive the live solve's progress + terminal frames -- see
-# ``_rebind_live_turns``). A done-callback removes the entry on
-# completion/cancellation (no leak). Bounded by session-count; the value is
-# one task+emitter pair per live turn.
+# Each entry carries the running task AND the emitter it drives, so a
+# reconnecting socket can rebind that emitter's sink and receive the live
+# solve's progress and terminal frames. A done-callback removes the entry on
+# completion, so nothing leaks, and the registry is bounded by session count.
 @dataclass
 class _LiveTurn:
-    """An in-flight turn that has been detached from its launching connection.
-
-    ``task`` is the running ``asyncio.Task``; ``emitter`` is the
-    ``PipelineEmitter`` it drives (its ``_sink`` may point at a now-dead socket
-    until a reconnecting socket rebinds it via ``_rebind_live_turns``)."""
+    """An in-flight turn detached from its launching connection; the emitter it
+    drives may still point at a now-dead socket until a reconnect rebinds it."""
 
     task: "asyncio.Task"
     emitter: "PipelineEmitter | None"
@@ -41,19 +31,16 @@ _SESSION_LIVE_TURNS_CAP = 4096
 def _register_live_turn(
     session_id: str, turn_key: str, task: "asyncio.Task", emitter: "PipelineEmitter | None"
 ) -> None:
-    """Detach ``task`` into the module-level live-turn registry.
-
-    Installs a done-callback that removes the entry on completion/cancellation
-    so a completed/cancelled task never lingers (Requirement 4: NO leak). Safe
-    to call more than once for the same task (the callback de-dups on identity).
-    """
+    """Detach ``task`` into the live-turn registry, with a done-callback that
+    removes the entry on completion so nothing lingers; calling it twice for one
+    task is safe, because the callback de-dups on identity."""
     if (
         session_id not in _SESSION_LIVE_TURNS
         and len(_SESSION_LIVE_TURNS) >= _SESSION_LIVE_TURNS_CAP
     ):
-        # Evict the oldest session bucket whose turns are ALL done; if none are
-        # fully-done, evict the oldest regardless (bounded memory -- a live solve
-        # is never silently dropped under normal session counts).
+        # Evict the oldest bucket whose turns are ALL done, or the oldest
+        # regardless when none is fully done: bounded memory, and a live solve
+        # is never silently dropped at normal session counts.
         for sid in list(_SESSION_LIVE_TURNS):
             if all(lt.task.done() for lt in _SESSION_LIVE_TURNS[sid].values()):
                 _SESSION_LIVE_TURNS.pop(sid, None)
@@ -68,8 +55,8 @@ def _register_live_turn(
         if b is None:
             return
         lt = b.get(turn_key)
-        # Only drop if THIS task still owns the slot (a same-stream supersede may
-        # have replaced it with a fresh task -- don't evict the newer turn).
+        # Only drop when THIS task still owns the slot: a same-stream supersede
+        # may have replaced it, and the newer turn must not be evicted.
         if lt is not None and lt.task is _t:
             b.pop(turn_key, None)
         if not b:
@@ -83,22 +70,12 @@ def _rebind_live_turns(
     *,
     only_turn_key: str | None = None,
 ) -> int:
-    """Rebind live turn(s) of ``session_id`` onto ``emitter``'s sink.
-
-    When a new socket for the same session connects, point the
-    still-running turn's emitter at the new socket so its progress +
-    terminal frames reach the live connection. Returns the number of turns
-    rebound. No-op when no live turns exist or ``emitter`` is None.
-
-    The new connection's emitter IS the wire face (its ``_sink`` closes over
-    the live socket's ``send``). We swap the LIVE turn's emitter sink to
-    that same sink. Done/cancelled turns are skipped + pruned.
-
-    ``only_turn_key`` restricts the rebind to a single stream -- used by the
-    case-open path so opening Case A only rebinds Case A's live solve onto
-    the new socket (a concurrent Case B solve keeps emitting through its
-    own -- soon its OWN socket-resume / case-open rebinds it, or it lands
-    fully-detached and its layer rehydrates on the next case-open)."""
+    """Point every still-running turn of ``session_id`` at ``emitter``'s sink,
+    so its progress and terminal frames reach the live connection, and return
+    how many were rebound; ``only_turn_key`` restricts it to one stream."""
+    # A done or cancelled turn is skipped and pruned. Restricting by stream lets
+    # a case-open rebind only that Case's live solve, leaving a concurrent solve
+    # in another Case to be rebound by its own resume or open.
     bucket = _SESSION_LIVE_TURNS.get(session_id)
     if not bucket or emitter is None:
         return 0
@@ -114,15 +91,12 @@ def _rebind_live_turns(
             continue
         if lt.emitter is not None and lt.emitter is not emitter:
             lt.emitter.rebind_sink(emitter._sink)
-            # Rebinding the live turn's emitter onto the new sink only
-            # recovers FUTURE frames + pipeline CARDS -- not a loaded-layers
-            # session-state emitted onto the now-dead launch socket before
-            # this reconnect (e.g. a terminal flood-depth layer published
-            # late after a multi-minute solve). Seed this reconnect's fresh
-            # emitter from the live turn's accumulated layers so the
-            # caller's emit_session_state carries the full snapshot to the
-            # new socket. Union-by-identity: no duplicate, and the live
-            # turn's later (superset) emits never regress it.
+            # Rebinding the sink recovers only FUTURE frames, not a session
+            # state emitted onto the now-dead launch socket before this
+            # reconnect. Seeding this emitter from the live turn's accumulated
+            # layers makes the caller's emit carry the full snapshot; the union
+            # is by identity, so nothing duplicates and the live turn's later
+            # superset emits never regress it.
             emitter.merge_loaded_layers_from(lt.emitter)
             rebound += 1
     if not bucket:
@@ -140,10 +114,8 @@ def _find_live_turn(session_id: str, turn_key: str) -> "asyncio.Task | None":
     return None
 
 def _any_live_turn(session_id: str) -> "asyncio.Task | None":
-    """Return any live (not-done) detached turn for ``session_id`` or None.
-
-    Cancel fallback: when the keyed lookup misses (the binding moved), the stop
-    button still needs to reach a detached solver turn."""
+    """Return any live detached turn for ``session_id``, else ``None``: the
+    cancel fallback for when the keyed lookup misses because the binding moved."""
     bucket = _SESSION_LIVE_TURNS.get(session_id)
     if not bucket:
         return None

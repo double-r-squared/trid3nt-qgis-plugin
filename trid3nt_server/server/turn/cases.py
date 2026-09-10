@@ -21,24 +21,12 @@ logger = logging.getLogger("trid3nt_server.server")
 async def _emit_case_list(
     websocket: ServerConnection, state: SessionState, *, force: bool = False
 ) -> None:
-    """Emit the ``case-list`` envelope for the client's left rail.
-
-    Best-effort: skips silently if Persistence is unbound; logs + skips on
-    a listing failure (the case-list is a derivable view and must not break
-    the chat path).
-
-    The list is scoped by ``state.authenticated_user_id`` (Firebase UID, or
-    the sticky-anonymous ULID in dev), matching the owner stamped onto
-    Cases at creation -- a Case is visible only to its owner. Falls back to
-    ``session_id`` only when the handshake hasn't bound a user yet.
-
-    Change-guard: ``force=False`` (default) skips the send when the list is
-    byte-for-byte the same (by content digest, see ``_case_list_digest``)
-    as the last emit for this SESSION, collapsing repeat keepalive/
-    duplicate-socket resumes into a no-op. Callers that just performed (or
-    may have performed) a mutation pass ``force=True`` so the client is
-    never left with a stale list.
-    """
+    """Emit the ``case-list`` envelope, scoped to the handshake's user so a Case
+    is visible only to its owner. Best-effort: the list is a derivable view and
+    must never break the chat path."""
+    # The default change-guard skips the send when the digest matches the last
+    # emit for this SESSION, collapsing repeat keepalive resumes into a no-op; a
+    # caller that may have mutated the list forces the send instead.
     p = get_persistence()
     if p is None:
         logger.debug("case-list: Persistence unbound; skipping emit")
@@ -73,35 +61,21 @@ def _rehydrate_case_history(
     session_state: CaseSessionState,
     case_id: str,
 ) -> None:
-    """Refill ``state.chat_history`` from a Case's PERSISTED messages.
-
-    Called right after the ``state.chat_history = []`` reset in both
-    ``_emit_case_open`` and ``_sync_case_context``. Converts the per-Case
-    persisted ``CaseChatMessage`` list into the lightweight TEXT-turn dict
-    shape ``build_contents_from_history`` consumes, appends a compact
-    "layers already present" model turn, and bounds the replay to the last
-    ``REHYDRATE_HISTORY_CAP`` rows so a long Case cannot blow the context
-    window. Best-effort: any failure leaves the (empty) reset history
-    intact.
-
-    Guardrail: ``session_state`` belongs to exactly ONE ``case_id`` (the
-    persisted store is keyed by Case), so this cannot reintroduce a
-    cross-case leak.
-    """
+    """Refill the connection's history from a Case's PERSISTED messages, capped
+    so a long Case cannot blow the context window; the state passed in belongs
+    to exactly one Case, so this cannot leak across Cases."""
     try:
-        # F20 / panel-fix: pass the Case AOI bbox so the layers-present note
-        # carries the exact extent. It survives history capping, so a long
-        # Case whose head turn (which named the place) was dropped can still
-        # reuse the original AOI for follow-up fetch/clip instead of
-        # re-geocoding / mis-scoping.
+        # Pass the Case AOI bbox so the layers-present note carries the exact
+        # extent: the note survives history capping, so a long Case whose head
+        # turn named the place can still reuse the original AOI.
         case_bbox = getattr(getattr(session_state, "case", None), "bbox", None)
         history, dropped = rehydrate_history_from_case(
             session_state.chat_history,
             session_state.loaded_layers,
             case_bbox=case_bbox,
         )
-        # REBIND, never extend the entry-captured list -- assigning a
-        # fresh object keeps an in-flight turn's captured history untouched.
+        # REBIND rather than extend: a fresh object keeps an in-flight turn's
+        # captured history untouched.
         state.chat_history = history
         if dropped:
             logger.info(
@@ -124,41 +98,30 @@ async def _sync_case_context(
     websocket: ServerConnection, state: SessionState
 ) -> None:
     """Catch this CONNECTION's in-memory context up to the session's active
-    Case.
-
-    chat_history and the emitter's loaded_layers accumulator are
-    per-connection state, so a case-command on a sibling connection (or a
-    fresh reconnect) leaves them out of sync with the session's active
-    Case. Called at the top of every user-message dispatch: on a Case
-    change, replace (not reconcile) chat_history and reseed the emitter
-    from the persisted Case, so add_loaded_layer dedup and
-    _persist_case_loaded_layers writes operate on the full persisted
-    truth set.
-
-    Best-effort: a Persistence failure leaves the emitter seeded empty;
-    the merge in _persist_case_loaded_layers prevents an unseeded
-    accumulator from clobbering previously persisted layers.
-    """
+    Case, replacing its history and reseeding its emitter from the persisted
+    Case, so dedup and the layer writes see the full persisted truth."""
+    # History and the layer accumulator are per-connection, so a case command on
+    # a sibling connection leaves them stale. Best-effort: a failed read leaves
+    # the emitter seeded empty, and the merge on write keeps an unseeded
+    # accumulator from clobbering the persisted layers.
     current = state.active_case_id
     if state.case_context_synced_to == current:
         return
     state.case_context_synced_to = current
-    # Replace-not-reconcile (applied cross-connection): this
-    # connection's LLM context belongs to whatever Case it was last driving.
-    # REBIND, never clear() -- an in-flight turn holds the old list
-    # (captured at its stream entry) and must keep its own context intact.
+    # Replace rather than reconcile: this connection's model context belongs to
+    # whatever Case it was last driving. REBIND, never clear: an in-flight turn
+    # holds the old list and must keep its own context intact.
     state.chat_history = []
     state.turn_count = 1  # count the in-flight turn that triggered the sync
     _ensure_emitter(websocket, state)
     if state.emitter is None:  # pragma: no cover -- _ensure_emitter always binds
         return
     if current is None:
-        # JOB 2: no active Case -> no AOI anchor.
+        # No active Case means no AOI anchor.
         state.case_bbox = None
         state.emitter.reset_loaded_layers([])
-        # F32: no active Case -> no resolvable handles either (clears any
-        # leftover registrations from whatever Case this connection last
-        # drove).
+        # No active Case means no resolvable handles either: clear whatever the
+        # Case this connection last drove had registered.
         get_uri_registry(state.session_id).clear()
         return
     p = get_persistence()
@@ -167,33 +130,29 @@ async def _sync_case_context(
         return
     try:
         session_state = await p.get_session_state(current)
-        # JOB 2: cache the Case AOI so ``_turn_case_bbox`` has a durable
-        # active-AOI anchor on this connection's turns (kills repeat-fetch /
-        # re-geocode by feeding the reuse short-circuits + the per-turn note).
+        # Cache the Case AOI so this connection's turns have a durable anchor,
+        # which is what feeds the reuse short-circuits and the per-turn note.
         _cache_case_bbox_from_session_state(state, session_state)
         state.emitter.reset_loaded_layers(session_state.loaded_layers)
-        # Repopulate the inline-GeoJSON side-table
-        # so this connection's next session-state emission carries renderable
-        # vectors (mirrors the case-open path; best-effort).
+        # Repopulate the inline-vector side-table, so this connection's next
+        # session-state emission carries renderable vectors. Best-effort.
         try:
             await state.emitter.reinline_vector_layers()
         except Exception:  # noqa: BLE001
             logger.warning("case-context-sync vector re-inline failed")
-        # Seed the URI registry from the persisted Case layers so
-        # handle-indirection works for layers produced in PRIOR sessions of this
-        # Case (the LLM history was just cleared; the registry is the only
-        # place the layer_id -> uri association survives). REPLACE, not
-        # additive-seed -- this IS a case-switch point; an additive seed would
-        # leak the previous Case's handles/URIs into this Case's resolution.
-        # Also restores the Case's persisted L<n> short-handle map.
+        # Seed the URI registry from the persisted Case layers, so handle
+        # indirection works for layers produced in PRIOR sessions of this Case:
+        # the history was just cleared, and the registry is the only place the
+        # id-to-uri association survives. It REPLACES rather than adds, because
+        # this is a case-switch point and an additive seed would leak the
+        # previous Case's handles into this one.
         await _seed_registry_for_case(
             state, current, session_state.loaded_layers
         )
-        # F17: rehydrate this connection's LLM context from the SAME persisted
-        # per-Case store. state.chat_history = [] above is the cross-connection
-        # clean-slate; refilling it from current's persisted messages (already
-        # fetched; do NOT re-fetch) lets a sibling-connection / reconnect turn
-        # see prior work and stop recomputing. Per-Case store => case-correct.
+        # Rehydrate this connection's model context from the SAME state already
+        # fetched, never a second read: the clear above is the clean slate, and
+        # refilling it lets a sibling or reconnect turn see prior work instead
+        # of recomputing it.
         _rehydrate_case_history(state, session_state, current)
         logger.info(
             "case-context-sync session=%s case=%s layers=%d rehydrated=%d",
@@ -215,35 +174,24 @@ async def _emit_case_open(
     state: SessionState,
     case_id: str,
 ) -> None:
-    """Emit a ``case-open`` envelope hydrating ``CaseSessionState`` from Mongo.
-
-    Sets ``state.active_case_id`` BEFORE emitting so subsequent tool calls
-    (and chat persistence) carry the Case context. If the Case is missing
-    or Persistence is unbound, emits a ``case-open`` with ``session_state=None``
-    so the client falls back to the empty state per
-    ``CaseOpenEnvelopePayload`` semantics.
-    """
+    """Emit a ``case-open`` envelope hydrated from persistence, setting the
+    active Case BEFORE the emit so later tool calls and chat writes carry it; a
+    missing Case emits an empty state rather than failing."""
     state.active_case_id = case_id
-    # This connection runs the full case-open reset below, so its
-    # context is (about to be) synced to ``case_id`` -- record it so the next
-    # ``user-message`` on THIS connection skips the redundant re-sync.
-    # Sibling connections of the same session keep their stale marker and
-    # catch up via ``_sync_case_context`` on their next dispatch.
+    # This connection is about to run the full reset below, so recording the
+    # sync marker lets its next message skip a redundant re-sync; a sibling
+    # connection keeps its stale marker and catches up on its own dispatch.
     state.case_context_synced_to = case_id
-    # A Case switch must reset the per-connection LLM conversation, not just
-    # the case state -- otherwise build_contents_from_history keeps feeding
-    # old turns to the model and prompts misroute to the previous Case's
-    # composer. Clean slate per Case (the replace-not-reconcile rule,
-    # applied server-side); the visible chat replay comes from the
-    # persisted Case history, not this list. REBIND, never clear() -- see
-    # _sync_case_context.
+    # A Case switch resets the per-connection conversation, not only the case
+    # state: otherwise old turns keep reaching the model and prompts misroute to
+    # the previous Case. The visible replay comes from the persisted history,
+    # not this list. REBIND, never clear.
     state.chat_history = []
     state.turn_count = 0
     await _touch_session_record(state, case_id=case_id)  # session heartbeat
-    # Persist the active-Case pointer on explicit
-    # case-open/select so the cold-start cache (``last_active_case_id``) is warm
-    # for a reconnect after a process restart -- even for an older client that
-    # later resumes with no ``case_id`` stamp.
+    # Persist the pointer on an explicit open or select, so the cold-start cache
+    # is warm for a reconnect after a restart, even for a client that later
+    # resumes with no Case stamp.
     await _persist_session_active_case(state, case_id)
     p = get_persistence()
     if p is None:
@@ -268,8 +216,8 @@ async def _emit_case_open(
             _new_envelope("case-open", state.session_id, payload)
         )
         return
-    # JOB 2: cache the opened Case's AOI so the very first turn in this Case
-    # already has the active-AOI anchor (reuse short-circuits + per-turn note).
+    # Cache the opened Case's AOI, so the very first turn in it already has the
+    # anchor the reuse short-circuits and the per-turn note read.
     _cache_case_bbox_from_session_state(state, session_state)
     payload = CaseOpenEnvelopePayload(session_state=session_state)
     await websocket.send(_new_envelope("case-open", state.session_id, payload))
@@ -281,11 +229,9 @@ async def _emit_case_open(
     # existing layer would be treated as a fresh append.
     _ensure_emitter(websocket, state)
     # Opening THIS Case is the user returning to where a long solve was
-    # launched. If a turn keyed to this Case is still running (detached on a
-    # prior socket close), rebind its emitter sink onto the freshly-opened
-    # socket so the in-flight solve's progress + terminal session-state
-    # reach the live connection. Keyed to case_id so a concurrent solve in
-    # another Case is untouched.
+    # launched, so a turn keyed to it that is still running gets its emitter
+    # sink rebound onto this socket. Keyed by Case, so a concurrent solve
+    # elsewhere is untouched.
     rebound = _rebind_live_turns(
         state.session_id, state.emitter, only_turn_key=case_id
     )
@@ -298,26 +244,19 @@ async def _emit_case_open(
         )
     if state.emitter is not None:
         state.emitter.reset_loaded_layers(session_state.loaded_layers)
-        # F32 (live-reported): seed the URI registry from the SAME persisted
-        # layers the emitter/build_layers_present_note advertise. This is the
-        # missing half of the explicit case-open path -- a fresh connection
-        # (e.g. a QGIS dock reconnect) that opens an EXISTING Case via
-        # case-command(select) reaches THIS function directly, never
-        # _sync_case_context / _replay_active_case_layers. The registry is
-        # session-scoped in-memory state, so on a genuinely fresh connection it
-        # starts empty regardless of how many layers the Case has persisted.
-        # Without this seed, the per-turn [Case state] note advertised handles
-        # the registry could not resolve. REPLACE (not additive) so a Case
-        # switch on this connection never leaks a prior Case's handles. ADR
-        # 0014: also restores the Case's persisted L<n> short-handle map.
+        # Seed the URI registry from the SAME persisted layers the note
+        # advertises: a fresh connection that opens an EXISTING Case reaches
+        # here directly, and the registry is in-memory, so it would otherwise
+        # start empty and the advertised handles would not resolve. It REPLACES
+        # rather than adds, so a Case switch never leaks a prior Case's handles,
+        # and it restores the persisted short-handle map.
         await _seed_registry_for_case(
             state, case_id, session_state.loaded_layers
         )
-        # Persisted VECTOR layers carry no inline GeoJSON (the side-table is
-        # in-memory only), so the case-open payload above rehydrated entries the
-        # browser cannot render. Re-inline from the artifact and emit one
-        # follow-up session-state through the proven merge path so vectors
-        # repaint.
+        # A persisted VECTOR layer carries no inline geometry, since the
+        # side-table is in-memory, so the payload above rehydrated entries a
+        # client cannot render. Re-inline from the artifact and emit one
+        # follow-up session state so the vectors repaint.
         try:
             _reinlined = await state.emitter.reinline_vector_layers()
             if _reinlined:
@@ -327,11 +266,9 @@ async def _emit_case_open(
                 "case-open vector re-inline failed case=%s", case_id
             )
 
-    # F17: rehydrate the LLM conversation from THIS Case's persisted
-    # messages so a follow-up turn in a reopened Case sees prior work and
-    # stops recomputing. state.chat_history = [] above is the cross-case
-    # clean-slate; refill from the PER-CASE persisted store (session_state
-    # -- already loaded; do NOT re-fetch), which is inherently case-correct.
+    # Rehydrate the conversation from THIS Case's persisted messages, so a
+    # follow-up turn in a reopened Case sees prior work instead of recomputing
+    # it; the state above is already loaded and is never re-fetched.
     _rehydrate_case_history(state, session_state, case_id)
 
     logger.info(
@@ -348,28 +285,11 @@ async def _handle_case_command(
     state: SessionState,
     cmd: CaseCommandEnvelopePayload,
 ) -> None:
-    """Dispatch one ``case-command`` (Case lifecycle).
-
-    Commands:
-
-    - ``create`` -- generate a new ``CaseSummary``, persist via
-      ``Persistence.upsert_case``, set as active, emit ``case-open`` with
-      the fresh (empty) session state, then refresh ``case-list``.
-    - ``select`` -- load the persisted ``CaseSessionState`` and emit
-      ``case-open`` with the full rehydration (chat history, loaded
-      layers, pipeline history -- the chat-replay default).
-    - ``rename`` -- update ``CaseSummary.title``, persist, emit
-      ``case-list`` updated.
-    - ``archive`` -- soft-archive via ``Persistence.archive_case``, emit
-      ``case-list`` updated.
-    - ``delete`` -- soft-delete via ``Persistence.delete_case``, emit
-      ``case-list`` updated. Memory rule: the web UI confirms with the
-      user BEFORE firing this command; the server does not double-confirm.
-
-    Errors surface as ``error`` envelopes with ``error_code=INTERNAL_ERROR``
-    (the case-lifecycle commands are NOT a confirmation trigger;
-    only solver runs and non-session-collection Mongo writes are).
-    """
+    """Dispatch one Case lifecycle command - create, select, rename, archive or
+    delete - persisting it and emitting the resulting open or list. A failure
+    surfaces as an error envelope; none of these is a confirmation trigger."""
+    # The client confirms a delete with the user before sending it, and the
+    # server does not double-confirm.
     p = get_persistence()
     if p is None:
         await _send_error(
@@ -389,14 +309,11 @@ async def _handle_case_command(
         title = (cmd.args or {}).get("title") or "Untitled Case"
         if not isinstance(title, str) or not title.strip():
             title = "Untitled Case"
-        # AOI-first: an optional ``args.bbox`` lets the user pin the AOI
-        # extent BEFORE the first prompt (draw-on-map / numeric coords).
-        # Coerced via the shared validator so a None / wrong-length /
-        # non-finite value is dropped silently rather than crashing. When
-        # present it persists on ``CaseSummary.bbox`` and seeds
-        # ``state.case_bbox`` so the FIRST turn's ``_turn_case_bbox``
-        # returns the user's extent and the LLM is told to REUSE it (no
-        # re-geocode).
+        # An optional bbox lets the user pin the AOI extent BEFORE the first
+        # prompt. It is coerced through the shared validator, so a malformed
+        # value is dropped rather than crashing, and when present it persists on
+        # the Case and seeds the in-session anchor, so the FIRST turn reuses the
+        # user's extent instead of re-geocoding.
         create_bbox = _coerce_bbox4((cmd.args or {}).get("bbox"))
         now = now_utc()
         case = CaseSummary(
@@ -408,10 +325,8 @@ async def _handle_case_command(
             bbox=list(create_bbox) if create_bbox is not None else None,
         )
         try:
-            # Stamp the creator as owner so the Case is visible to them via
-            # ``list_cases_for_user``. ``authenticated_user_id`` is the fixed
-            # local user; None only on the unbound-Persistence path. Cases are
-            # durable -- no TTL stamp.
+            # Stamp the creator as owner, so the Case is visible to them in the
+            # listing. Cases are durable: no TTL stamp.
             await p.upsert_case(
                 case,
                 owner_user_id=state.authenticated_user_id,
@@ -426,22 +341,17 @@ async def _handle_case_command(
             )
             return
         state.active_case_id = new_case_id
-        # A fresh Case must NOT inherit the previous Case's AOI anchor.
-        # Reset the in-session bbox to None BEFORE the conditional seed
-        # (mirrors the select/deselect handlers) so a bbox-less create
-        # starts with no anchor -> ``_turn_case_bbox`` re-geocodes from the
-        # place name in the first prompt instead of reusing the prior
-        # Case's extent.
+        # A fresh Case must NOT inherit the previous Case's AOI anchor, so the
+        # reset happens BEFORE the conditional seed: a bbox-less create starts
+        # with no anchor and the first prompt geocodes its own place name.
         state.case_bbox = None
-        # #170 AOI-first: seed the in-session AOI anchor so the FIRST turn's
-        # _turn_case_bbox returns the user's pre-set extent (mirrors
-        # _pin_case_aoi_from_solve). Absent/invalid bbox => leave as-is (None).
+        # Seed the anchor when the create carried a bbox, so the FIRST turn
+        # returns the user's pre-set extent.
         if create_bbox is not None:
             state.case_bbox = list(create_bbox)
-        # See _emit_case_open -- this connection is now synced.
+        # This connection is now synced to the new Case.
         state.case_context_synced_to = new_case_id
-        # Fresh Case = fresh LLM context (see _emit_case_open note).
-        # REBIND, never clear() -- see _sync_case_context.
+        # A fresh Case gets a fresh model context. REBIND, never clear.
         state.chat_history = []
         state.turn_count = 0
         await _touch_session_record(state, case_id=new_case_id)  # session heartbeat
@@ -452,16 +362,14 @@ async def _handle_case_command(
         await websocket.send(
             _new_envelope("case-open", state.session_id, payload)
         )
-        # A fresh Case starts with NO loaded layers; flush
-        # the emitter's per-connection accumulator so a subsequent tool call
-        # in this Case doesn't accidentally inherit layers from whatever Case
-        # the user just left (replace-not-reconcile applied server-side).
+        # A fresh Case starts with NO loaded layers, so the per-connection
+        # accumulator is flushed and a later tool call cannot inherit layers
+        # from the Case the user just left.
         _ensure_emitter(websocket, state)
         if state.emitter is not None:
             state.emitter.reset_loaded_layers([])
-        # F32: a fresh Case starts with no resolvable handles either -- clear
-        # any leftover registrations from whatever Case this connection last
-        # drove (mirrors the emitter flush immediately above).
+        # A fresh Case has no resolvable handles either: clear whatever the
+        # previous Case registered.
         get_uri_registry(state.session_id).clear()
         await _emit_case_list(websocket, state, force=True)
         logger.info(
@@ -496,19 +404,19 @@ async def _handle_case_command(
         prev = state.active_case_id
         state.active_case_id = None
         state.case_context_synced_to = None
-        # JOB 2: clear the cached Case AOI so a root prompt (which auto-creates
-        # a FRESH Case) does not reuse the just-exited Case's extent.
+        # Clear the cached Case AOI, so a root prompt - which auto-creates a
+        # FRESH Case - does not reuse the just-exited Case's extent.
         state.case_bbox = None
-        # REBIND, never clear() -- see _sync_case_context.
+        # REBIND, never clear.
         state.chat_history = []
         state.turn_count = 0
         if state.emitter is not None:
             state.emitter.reset_loaded_layers([])
-        # F32: no active Case -> no resolvable handles from the just-exited
-        # Case either (mirrors _sync_case_context's current-is-None branch).
+        # No active Case means no resolvable handles from the just-exited Case
+        # either.
         get_uri_registry(state.session_id).clear()
-        # job-CASE-AUTHORITY: clear the persisted pointer too, so a reconnect
-        # after restart does NOT re-seed the just-exited Case.
+        # Clear the persisted pointer too, so a reconnect after a restart does
+        # NOT re-seed the just-exited Case.
         await _persist_session_active_case(state, None)
         logger.info(
             "case-command deselect session=%s prev_case=%s",
@@ -719,20 +627,16 @@ async def _handle_case_command(
     )
 
 async def _maybe_autoname_case(state: SessionState, prompt: str) -> bool:
-    """Name an 'Untitled Case' from its first user prompt.
-
-    Accumulated untitled Cases are otherwise indistinguishable in the left
-    rail. Best-effort, once per Case per process; never raises.
-    """
+    """Name an untitled Case from its first user prompt, once per Case per
+    process; best-effort and never raises."""
     case_id = state.active_case_id
     if not case_id or case_id in _AUTONAMED_CASES:
         return False
     p = get_persistence()
     if p is None:
-        # Persistence unbound is NOT a permanent state -- do NOT mark the case
-        # "named" (a later turn, once bound, can still name it from its first
-        # prompt). Marking it here would burn the one-and-only naming attempt on
-        # any early miss (transient error / fresh-case read race).
+        # Unbound persistence is NOT permanent, so the Case is left unmarked: a
+        # later turn can still name it, and marking here would burn the single
+        # naming attempt on a transient miss.
         return False
     try:
         case = await p.get_case(case_id)
@@ -763,22 +667,12 @@ async def _auto_create_case_from_root(
     state: SessionState,
     prompt: str,
 ) -> str | None:
-    """Create + activate a Case for a chat prompt arriving with NO active Case.
-
-    When a non-directive ``user-message`` arrives and the session has no
-    active Case, mint one server-side BEFORE the turn dispatches so
-    ``_persist_chat_turn`` + ``_persist_case_loaded_layers`` +
-    ``ensure_case_qgs`` + the ``publish_layer`` case_id injection all land in
-    it. The Case is named from the prompt via ``_derive_case_title``
-    ("Untitled Case" fallback for degenerate prompts).
-
-    Deliberately NOT the ``case-command(create)`` reset path: the in-flight
-    message IS the Case's first turn, so the per-connection LLM context
-    (``chat_history``) and the ``turn_count`` are left untouched.
-
-    Returns the new ``case_id``, or ``None`` when Persistence is unbound or
-    the upsert fails -- the stateless path keeps working either way.
-    """
+    """Mint and activate a Case for a prompt arriving with NO active Case,
+    before the turn dispatches so every turn-scoped write lands in it; returns
+    the new id, or ``None``, in which case the stateless path keeps working."""
+    # Deliberately not the create-command reset path: the in-flight message IS
+    # this Case's first turn, so the connection's context and turn count are
+    # left untouched.
     p = get_persistence()
     if p is None:
         return None
@@ -831,33 +725,13 @@ async def _emit_auto_case_open(
     state: SessionState,
     case_id: str,
 ) -> None:
-    """Emit ``case-open`` + ``case-list`` for an auto-created Case.
-
-    Distinct from ``_emit_case_open``: NO context reset (no ``chat_history``
-    clear, no ``turn_count`` reset, no emitter re-seed) -- the in-flight user
-    message IS the first turn of this Case and
-    ``_auto_create_case_from_root`` already established the connection
-    context. Must be called AFTER the user turn is persisted so the
-    rehydration payload carries it: Chat.tsx's case-open handler is
-    replace-not-reconcile (it flushes the local message buffer and
-    re-renders from ``session_state.chat_history``), so emitting before the
-    persist would blank the just-typed message bubble. The client's ws.ts
-    hub fans ``case-open`` out to App.tsx's socket (SESSION_SCOPED_TYPES),
-    where ``useCases.onCaseOpen`` sets ``activeCaseId`` and the left rail
-    flips from the Cases root into the Case view.
-
-    A skipped (or ``session_state=None``) case-open on a rehydration
-    failure would leave the client's ``activeCaseId`` unchanged -- stuck on
-    the Cases root while the turn dispatches with the new case bound, so
-    cards flow stamped with a ``case_id`` the client never opened and
-    nothing renders until a reload. The rehydration-failure branch instead
-    emits a MINIMAL non-null case-open whose ``session_state.case`` is the
-    just-upserted ``CaseSummary`` (re-fetched, or a bare
-    ``CaseSummary(case_id=...)`` if even that read fails).
-    ``CaseSessionState`` only requires ``case`` (other fields default
-    empty), so this guarantees the client flips out of the Cases root even
-    when the richer rehydration momentarily fails.
-    """
+    """Emit the open and list for an auto-created Case, with NO context reset:
+    the in-flight message IS this Case's first turn. Must run AFTER that user
+    row is persisted, or the client's replace-on-open blanks the typed bubble."""
+    # A skipped or null open would leave the client on the Cases root while the
+    # turn dispatches into the new Case, so cards arrive stamped with a Case it
+    # never opened. The failure branch therefore emits a MINIMAL non-null open
+    # carrying just the Case summary, which is all the state model requires.
     p = get_persistence()
     if p is not None:
         try:
