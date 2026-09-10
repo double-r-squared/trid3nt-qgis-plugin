@@ -1,29 +1,9 @@
 #!/usr/bin/env python3
 """Harvest the public ESRI Living Atlas of the World into two curation catalogs.
 
-Queries the keyless ArcGIS Online sharing/search API for the PUBLIC items in the
-Living Atlas of the World curation group ("LAW Search", owner Esri_LivingAtlas),
-filtered to the CONSUMABLE service types (Image / Feature / Map Service -- web
-maps / apps / scenes are skipped), and normalizes each item to a fetchable catalog
-entry. Output is TWO YAML files (DATA, not code):
-
-    data/living_atlas/living_atlas_authoritative.yaml   (ESRI contentStatus badge)
-    data/living_atlas/living_atlas_community.yaml        (everything else)
-
-NATE's two-pool rule is the split key: an item is AUTHORITATIVE iff its ESRI
-``contentStatus`` carries the authoritative badge (``public_authoritative`` /
-``org_authoritative``); everything else is community. Premium/subscription items
-(typeKeywords ``Requires Subscription`` / ``Requires Credits``) are flagged so the
-fetch bridge raises the honest subscription error.
-
-Re-runnable / idempotent: a re-run overwrites both files with a fresh snapshot.
-Rate-limited politely. Offline-testable: ``--fixture <json>`` reads a canned search
-response instead of the network (used by the offline test suite).
-
-Usage:
-    python scripts/instruments/harvest_living_atlas.py                    # full live harvest
-    python scripts/instruments/harvest_living_atlas.py --max-per-type 50  # quick sample
-    python scripts/instruments/harvest_living_atlas.py --fixture f.json --out-dir /tmp/la
+An item is AUTHORITATIVE iff its ESRI ``contentStatus`` carries the badge and
+community otherwise; premium items are flagged so the fetch bridge raises the
+honest subscription error. Output is YAML data, never code.
 """
 
 from __future__ import annotations

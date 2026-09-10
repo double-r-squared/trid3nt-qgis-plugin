@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
-"""ws_smoke.py -- TRID3NT Local WS smoke test (milestone 1/2 proof).
+"""WS smoke test against the running daemon at ws://127.0.0.1:8765/ws.
 
-Connects to ws://127.0.0.1:8765/ws, exercises:
-  TEST A: plain chat "Say hello in exactly five words." -> model text via qwen3.5:9b
-  TEST B: tool call "Geocode the city of Chattanooga, Tennessee and tell me its bounding box."
-            -> expects tool activity (geocode_location) + final answer
-
-Handles tool-payload-warning auto-confirmation.
-Logs ALL inbound envelope types + final texts to logs/ws_smoke.log.
+Exercises one plain chat turn and one tool turn, auto-confirms the
+tool-payload warning, and exits non-zero unless both pass. Every inbound
+envelope type and final text is logged to logs/ws_smoke.log.
 """
 
 from __future__ import annotations
@@ -45,8 +41,7 @@ log = logging.getLogger("ws_smoke")
 
 
 # ---------------------------------------------------------------------------
-# Protocol primitives: ONE implementation of the wire shapes, in the server
-# package (trid3nt_server.testing.ws_client), shared with the live-run harness.
+# Protocol primitives
 # ---------------------------------------------------------------------------
 from trid3nt_contracts import new_ulid
 from trid3nt_server.testing.ws_client import create_case, delete_case, handshake, mk
@@ -138,12 +133,9 @@ async def _collect_turn(
     label: str,
     timeout: float = 300,
 ) -> str:
-    """Collect an agent turn.
-
-    Waits for the llm_generation pipeline-state (signals the agent started
-    processing THIS turn), then drains agent-message-chunk deltas until
-    done=True or turn-complete.
-    """
+    """Collect one agent turn: wait for the llm_generation pipeline-state, which
+    marks THIS turn as started, then drain chunks until done=True or
+    turn-complete."""
     text_chunks: list[str] = []
     deadline = time.monotonic() + timeout
     llm_started = False  # True once we see a pipeline-state for this turn
@@ -197,11 +189,7 @@ async def _collect_turn_with_tools(
     label: str,
     timeout: float = 300,
 ) -> tuple[str, bool]:
-    """Like _collect_turn but also tracks tool calls.
-
-    Waits for llm_generation pipeline-state to confirm this turn has started,
-    then collects until done=True chunk or turn-complete.
-    """
+    """Like _collect_turn, and also tracks the tool calls the turn made."""
     text_chunks: list[str] = []
     tool_fired = False
     deadline = time.monotonic() + timeout

@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """Extract every exposed TELEMAC module's keyword catalog out of the image.
 
-The dictionaries are the engine's own publication of its keyword surface, and
-they live in the worker image. This runs the in-container extractor over them
-and lands one committed JSON per module under
-``trid3nt_server/workflows/telemac/catalog/`` - generated data, never hand
-edited, re-extracted and compared by the suite whenever the image is present.
-
-  python scripts/instruments/extract_telemac_catalog.py
+The dictionaries are the engine's own publication of its keyword surface and
+live only in the worker image; the committed JSON this writes is generated
+data, never hand edited.
 """
 
 from __future__ import annotations

@@ -1,21 +1,10 @@
 #!/usr/bin/env python3
-"""tool_sweep.py -- sequential direct-execution sweep of EVERY registered tool.
+"""Sequential direct-execution sweep of EVERY registered tool.
 
-Layer 1 of the full local tool audit (2026-07-06): calls each tool's registered
-fn directly (the sanctioned test path -- the registry deliberately keeps fn
-unwrapped) with schema-introspected args and a SMALL AOI, classifies:
-
-  PASS      tool returned without raising
-  KEY       tool needs an API key / credential (earmarked for later)
-  FAIL      tool raised (real local bug or data-source outage)
-  SKIP-ARGS required parameter the arg-generator cannot fabricate
-  TIMEOUT   exceeded the per-tool budget
-
-Resumable: results append to docs/reports/tool-sweep-results.jsonl and tools
-already present are skipped, so re-running continues the sweep. The markdown
-checklist regenerates from the JSONL each run.
-
-Usage:  venvs/agent/bin/python scripts/instruments/tool_sweep.py [--only NAME] [--limit N]
+Calls each registered fn directly - the sanctioned test path, the registry
+keeps fn unwrapped - with schema-introspected args and a small AOI. Results
+append to a JSONL, already-swept tools are skipped, and the checklist
+regenerates from that JSONL.
 """
 
 from __future__ import annotations
@@ -59,11 +48,10 @@ D30 = (END - dt.timedelta(days=30)).isoformat()
 D45 = (END - dt.timedelta(days=45)).isoformat()
 YDAY = (END - dt.timedelta(days=1)).isoformat()
 
-# Pass 1.5 curated args: pass-1 gave every tool the same 3km Tampa box + 2-day
-# window, so tools whose data genuinely is not there (earthquakes, snow, tide
-# stations, 5-day-revisit imagery...) returned honest empty errors. Each entry
-# is merged OVER the generated args; a tool listed here that previously
-# SKIP-ARGSed now runs.
+# Curated args, merged OVER the generated ones. A tool whose data genuinely is
+# not in the generic AOI or window (earthquakes, snow, tide stations,
+# 5-day-revisit imagery...) returns an honest empty error otherwise, and a tool
+# listed here that would SKIP-ARGS runs.
 OVERRIDES: dict[str, dict] = {
     # no-data-in-AOI -> a bbox/window where the source has data
     "fetch_usgs_earthquakes": {"bbox": (-119.0, 33.5, -116.5, 35.5), "start_date": D30, "min_magnitude": 2.0},
@@ -122,8 +110,8 @@ OVERRIDES.update({
     "digitize_water_body": {"bbox": (-82.78, 28.07, -82.71, 28.16), "start_date": (END - dt.timedelta(days=90)).isoformat()},
 })
 
-# Pass 2: chain REAL layer URIs (prefetched once, cache-warm) into the
-# layer-input tools. Param-NAME keyed, applied by _guess_arg fallback.
+# REAL layer URIs (prefetched once, cache-warm) chained into the layer-input
+# tools. Param-NAME keyed, applied by the _guess_arg fallback.
 CHAIN_PARAM_MAP_SPEC = {
     "dem": ("dem_uri", "raster_uri", "value_raster_uri", "base_layer_uri",
             "source_layer_uri", "layer_uri", "hazard_raster_uri", "imagery_uri"),
@@ -379,8 +367,7 @@ def main() -> None:
     print("sweep pass complete")
     # A tool that blew its budget leaves an abandoned NON-DAEMON thread behind;
     # normal interpreter exit joins threads forever and the process zombies at
-    # high CPU (seen live 2026-07-06: pass-1 spun 70+ min after finishing).
-    # All results are already flushed to the JSONL, so exit hard.
+    # high CPU. All results are already flushed to the JSONL, so exit hard.
     sys.stdout.flush()
     import os
     os._exit(0)

@@ -1,16 +1,12 @@
 """Load every preset the family can write into the installed QGIS and read it back.
 
-``loadNamedStyle`` returns a boolean about WELL-FORMEDNESS, so believing it is
-how a document that parses but styles nothing gets shipped. This asserts the
-POST-LOAD STATE instead: the renderer QGIS ends up holding is the one the
-document asked for, the stops read back at the values and colours written, and
-the range the layer reports is the range the preset resolved.
-
-Run it with the SYSTEM python (the one QGIS is installed against), from the
-repo root:
-
-    QT_QPA_PLATFORM=offscreen python3 scripts/instruments/qml_preset_smoke.py
+``loadNamedStyle`` returns a boolean about WELL-FORMEDNESS, so a document that
+parses but styles nothing passes it. This asserts the POST-LOAD STATE: the
+renderer held, the stops read back, and the range the layer reports.
 """
+
+# Needs the SYSTEM python, the interpreter QGIS is installed against, and an
+# offscreen platform: QT_QPA_PLATFORM=offscreen python3 <this file>.
 
 from __future__ import annotations
 

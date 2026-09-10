@@ -1,18 +1,8 @@
 """Replay every committed canary and diff its metrics against the recorded ones.
 
-A canary's evidence file already carries the two things a parity check needs -
-the tool and the exact args it was called with, and the metrics it answered. So
-"is this template still giving the same answer" is a direct re-invocation and a
-field-for-field diff, with no session to drive.
-
-Run ids, layer URIs and wall times are excluded for the obvious reason. Anything
-else that moves is reported, per key, with both values.
-
-Run:
-  cd /home/nate/Documents/trid3nt-local
-  set -a; source .env.local; set +a
-  venvs/agent/bin/python scripts/instruments/replay_canary_evidence.py
-  venvs/agent/bin/python scripts/instruments/replay_canary_evidence.py --only telemac_do_sag
+The evidence file carries the tool, the args and the metrics, so the check is a
+direct re-invocation and a field-for-field diff with no session to drive.
+Anything that moves is reported per key, with both values.
 """
 
 from __future__ import annotations
@@ -70,13 +60,10 @@ def _short(value: Any) -> Any:
 
 
 def _metrics_of(fn: Any, layer: Any, keys: list[str]) -> dict[str, Any]:
-    """The run's ANSWER, through the same function that wrote the recorded one.
-
-    Not ``getattr`` over the layer: a declared provenance row (the resolved
-    discharge and the note beside it) lives on the ANSWER and nowhere on the
-    returned object, so reading attributes would report every one of them as a
-    difference.
-    """
+    """The run's ANSWER, through the same function that wrote the recorded one."""
+    # Not ``getattr`` over the layer: a declared provenance row lives on the
+    # ANSWER and nowhere on the returned object, so reading attributes would
+    # report every one of them as a difference.
     workflow = getattr(fn, "workflow", None)
     if workflow is not None:
         return {k: v for k, v in workflow.answer(layer).items() if k in keys}
@@ -85,15 +72,12 @@ def _metrics_of(fn: Any, layer: Any, keys: list[str]) -> dict[str, Any]:
 
 
 def _approved_defaults(fn: Any, call: dict[str, Any]) -> dict[str, str]:
-    """Supply, EXPLICITLY, the labeled physics defaults a live session approved.
-
-    A canary recorded in a ``user_gated`` session had its physics-consequential
-    labeled defaults approved on a card. Headless there is no card, so law 9
-    refuses - correctly, and it must keep doing so. Replaying such a canary means
-    supplying those DECLARED DEFAULTS by name, which is the same values through
-    the user door instead of through the card. Names and values are reported, so
-    the report says which rows were approved this way rather than hiding it.
-    """
+    """Supply, EXPLICITLY, the labeled physics defaults a live session approved,
+    naming every row and its value so the report never hides one."""
+    # A canary recorded in a ``user_gated`` session had its physics-consequential
+    # labeled defaults approved on a card. Headless there is no card, so law 9
+    # refuses, and it must keep refusing: replaying means supplying those
+    # DECLARED DEFAULTS by name, the same values through the user door.
     workflow = getattr(fn, "workflow", None)
     if workflow is None:
         return {}

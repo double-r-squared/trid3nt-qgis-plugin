@@ -2,16 +2,8 @@
 """Standing code-graph instrument: what is reachable from the process entry
 points, what is only reachable from tests, and what nothing reaches at all.
 
-Dev tooling, not product code. Library-first: grimp owns the import graph for
-the three importable packages, vulture owns dead-symbol detection, stdlib ast
-covers the non-package trees (workers/, scripts/, tests/) plus the two edge
-classes a static import graph cannot see on its own -- dotted-path strings
-resolved through importlib at runtime, and cross-module call-site counts.
-
-Run:  venvs/agent/bin/python scripts/instruments/code_graph.py
-Out:  docs/validation/code-graph/{graph.json,orphans.md,dead_symbols.md,SUMMARY.md}
-
-Output is sorted end to end so a re-run produces a meaningful git diff.
+Writes docs/validation/code-graph/, sorted end to end so a re-run produces a
+meaningful git diff.
 """
 
 from __future__ import annotations
@@ -223,18 +215,16 @@ def add_grimp_edges(u: Universe) -> tuple[int, list[str]]:
 
 def _resolve_target(u: Universe, dotted: str, context: str | None = None) -> str | None:
     """Longest known-module prefix of a dotted path (``a.b.c`` may be module
-    ``a.b.c`` or attribute ``c`` of module ``a.b``).
-
-    ``context`` enables FLAT-NAMESPACE resolution: a worker payload is copied
-    flat into the container's /app, so ``entrypoint.py`` writes
-    ``import artemis_build`` for a module the repo stores as a sibling. An
-    absolute-looking bare name that matches a sibling file IS that sibling.
-    """
+    ``a.b.c`` or attribute ``c`` of module ``a.b``). With ``context``, an
+    absolute-looking bare name matching a sibling file IS that sibling."""
     parts = dotted.split(".")
     for cut in range(len(parts), 0, -1):
         cand = ".".join(parts[:cut])
         if cand in u.nodes:
             return cand
+    # FLAT-NAMESPACE resolution: a worker payload is copied flat into the
+    # container's /app, so ``entrypoint.py`` writes ``import artemis_build``
+    # for a module the repo stores as a sibling.
     if context:
         sibling_pkg = context.rpartition(".")[0]
         for cut in range(len(parts), 0, -1):
@@ -293,10 +283,9 @@ def parse_module(u: Universe, module: str, tree: ast.AST) -> dict[str, str]:
 
 
 def _resolve_filenames(u: Universe, module: str, filenames: set[str]) -> list[str]:
-    """A module named by BARE FILENAME is a real dependency: the sandbox and the
-    mesh/telemac in-container drivers are shipped as files and executed as
-    subprocesses, never imported. Resolve to the candidate sharing the longest
-    package prefix with the referencing module."""
+    """A module named by BARE FILENAME is a real dependency: the in-container
+    drivers ship as files and run as subprocesses, never imported. Resolves to
+    the candidate sharing the longest package prefix with the referrer."""
     out = []
     for fname in filenames:
         stem = fname[: -len(".py")]
@@ -311,10 +300,8 @@ def _resolve_filenames(u: Universe, module: str, filenames: set[str]) -> list[st
 
 def _dynamic_strings(tree: ast.AST) -> tuple[set[str], set[str]]:
     """String literals that name code: dotted module paths for the importlib
-    seams (``workflows/runtime/resolver._load``, ``fallbacks/walker``, the
-    payload-warning estimator lookup), and bare ``<name>.py`` filenames for the
-    ship-and-exec drivers. Module-level string constants are resolved so
-    f-strings like ``f"{_HELPERS}.water_quality.x"`` land."""
+    seams, and bare ``<name>.py`` filenames for the ship-and-exec drivers.
+    Module-level string constants are resolved so f-strings land."""
     consts: dict[str, str] = {}
     for node in getattr(tree, "body", []):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
@@ -393,9 +380,8 @@ def add_ast_edges(u: Universe) -> int:
 
 def _is_package_marker(path: Path, tree: ast.AST) -> bool:
     """An ``__init__.py`` carrying nothing but a docstring is a PACKAGE MARKER:
-    the directory exists to hold data the runtime walks (``fetchers/**/source.yaml``
-    is composed by directory, not by import), so the file has no code to be dead.
-    Reporting it as an orphan buries the two real ones under a hundred shims."""
+    the directory holds data the runtime walks by directory rather than by
+    import, so the file has no code to be dead and is never an orphan."""
     if path.name != "__init__.py":
         return False
     body = [n for n in getattr(tree, "body", [])
@@ -449,11 +435,10 @@ def classify(u: Universe) -> dict[str, set[str]]:
 
 def _param_index(path: Path) -> dict[tuple[str, int], int]:
     """(name, lineno) -> the ``def`` line, for every function parameter in a file.
-
-    Vulture types an unused parameter as a plain variable. A parameter is a
-    different fact from a dead local -- it is a knob callers still pass -- so it
-    is RECLASSIFIED rather than muted, and the def line is what carries the
-    repo's own ``noqa: ARG`` marker for signatures an external API mandates."""
+    Vulture types an unused parameter as a plain variable; a parameter is a knob
+    callers still pass, so it is RECLASSIFIED rather than muted."""
+    # The def line is what carries the repo's own ``noqa: ARG`` marker, for
+    # signatures an external API mandates.
     try:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
     except SyntaxError:
@@ -515,10 +500,8 @@ def _whitelisted(item: Any, source_lines: list[str], params: dict[tuple[str, int
 
 def dead_symbols(min_confidence: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
     """Returns (report at ``min_confidence``, the callable tier, muted-rule counts).
-
     Vulture scores unused functions/classes at 60, so the callable tier -- the
-    only tier that can name a dead FUNCTION -- sits below any 80 floor and is
-    carried separately rather than dropped."""
+    only tier naming a dead FUNCTION -- is carried separately, not dropped."""
     from vulture import Vulture
 
     v = Vulture(verbose=False)
@@ -561,7 +544,7 @@ def dead_symbols(min_confidence: int) -> tuple[list[dict[str, Any]], list[dict[s
 
 
 # ---------------------------------------------------------------------------
-# Honesty check: this arc's culled modules must be GONE, not merely orphaned
+# Honesty check: the culled modules must be GONE, not merely orphaned
 # ---------------------------------------------------------------------------
 KNOWN_CULLED: tuple[str, ...] = (
     "trid3nt_server.workflows.shared.soil_hydraulics",

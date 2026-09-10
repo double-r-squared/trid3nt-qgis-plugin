@@ -1,20 +1,9 @@
 #!/usr/bin/env python3
-"""gen_tool_support_page.py -- generate docs/site/tool-support.md from the
-tool-sweep results JSONL (docs/reports/tool-sweep-results.jsonl).
+"""Generate docs/site/tool-support.md from the tool-sweep results JSONL.
 
-The sweep JSONL is append-only across passes; this script takes the LATEST
-entry per tool as authoritative for status/time. Notes: the JSONL only
-carries notes for SKIP-ARGS rows, so FAIL/KEY/TIMEOUT notes are merged in
-from the human-curated sweep checklist
-(docs/reports/tool-sweep-checklist.md) -- used only when the checklist row's
-status matches the JSONL's latest status (a note from a different status
-would be misleading).
-
-Usage:
-    python3 scripts/instruments/gen_tool_support_page.py            # writes docs/site/tool-support.md
-    python3 scripts/instruments/gen_tool_support_page.py --check    # exit 1 if the page is stale
-
-Stdlib only; deterministic output (sorted by tool name).
+The JSONL is append-only, so the LATEST entry per tool is authoritative. It
+notes only SKIP-ARGS rows; a FAIL/KEY/TIMEOUT note is merged from the sweep
+checklist ONLY when that row's status matches the JSONL's latest.
 """
 
 from __future__ import annotations

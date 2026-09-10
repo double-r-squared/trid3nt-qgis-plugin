@@ -1,41 +1,9 @@
 #!/usr/bin/env python3
 """Check a SysML v2 textual model against the tree it describes.
 
-A model nobody can check rots. This reads the project's own subset of SysML v2
-textual notation - part def, part, port def, port, interface def / item,
-interface (connect), requirement def, satisfy, verify - and validates FOUR
-project conformance rules against the live code:
-
-  (a) every non-optional item of every interface USAGE is named by the module at
-      the hop's writer end and by the module at its consumer end. Per usage, not
-      per definition: evidence pooled across hops leaves a single-module
-      severance invisible, because a sibling hop keeps supplying the item;
-  (b) every ``verify`` names a test that exists, resolved by parsing the named
-      test file rather than importing it;
-  (c) every ``forbid:`` dependency rule holds against the import edges of the
-      modeled modules, computed here at check time;
-  (d) every tree module that calls a modeled contract's constructor is bound to
-      a usage of that contract - an author nobody modeled is a writer no
-      severance check covers.
-
-SCOPE: this checker validates THIS PROJECT'S conformance rules against the tree.
-It is not a SysML implementation - it resolves no inheritance, types no feature
-and evaluates no expression. An item's type word is recorded for the view and
-never interpreted.
-
-Four doc-line conventions carry what the notation has no place for. A part usage
-names the module it IS with ``code: <repo-relative path>``; a requirement def
-states a dependency rule with ``forbid: <importer prefix> -> <imported prefix>``;
-an interface def names a function that builds it with ``constructor: <name>``; an
-interface usage exempts a verbatim-forwarding end with
-``pass-through: <part usage>``, which neither owes nor supplies item evidence.
-
-The file's FIRST line places the seam in the system of systems -
-``// plane: <plane> | system: <system>`` - and the view carries it, so no one
-seam's picture can be read as the whole.
-
-Output is deterministic and sorted. Every finding names the model element and
-the code location, and the exit status is 1 when any finding stands.
+Reads this project's own subset of the textual notation and validates its four
+conformance rules against the live code. Not a SysML implementation: it
+resolves no inheritance, types no feature and evaluates no expression.
 """
 
 from __future__ import annotations
@@ -193,11 +161,9 @@ def _doc_of(body: str) -> str:
 
 
 def _own_doc(body: str) -> str:
-    """The block's OWN doc: the one before any nested member opens.
-
-    A nested part's doc would otherwise be read as its parent's, which is how a
-    block silently inherits another block's code binding.
-    """
+    """The block's OWN doc: the one before any nested member opens."""
+    # A nested part's doc would otherwise be read as its parent's, which is how
+    # a block silently inherits another block's code binding.
     found = _DOC.search(body)
     if found is None:
         return ""
@@ -208,20 +174,16 @@ def _own_doc(body: str) -> str:
 
 
 def _strip_docs(text: str) -> str:
-    """The model with every doc body blanked, line count preserved.
-
-    Doc prose is free text: scanning it for constructs would parse sentences.
-    """
+    """The model with every doc body blanked, line count preserved: doc prose is
+    free text, and scanning it for constructs would parse sentences."""
     return _DOC.sub(lambda m: "doc /*" + re.sub(r"[^\n]", " ", m.group(1)) + "*/",
                     text)
 
 
 def _reject_unknown_notation(text: str) -> None:
     """Every STATEMENT opens with a construct of the subset, or the model refuses.
-
-    Statements, not lines: a declaration wraps, and rejecting per line would
-    read its continuation as notation of its own.
-    """
+    Statements, not lines: a declaration wraps, and rejecting per line would read
+    its continuation as notation of its own."""
     stripped = re.sub(r"//[^\n]*", "", text)
     stripped = _DOC.sub(" ", stripped)
     for statement in re.split(r"[;{}]", stripped):
@@ -394,12 +356,9 @@ _WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 def _docstring_nodes(tree: ast.AST) -> set[int]:
-    """Every node that IS a docstring, by identity.
-
-    Prose is not a reader. A key a module only mentions in its own
-    documentation is exactly the severed interface this check exists to find,
-    so docstrings are excluded from what counts as naming an item.
-    """
+    """Every node that IS a docstring, by identity - excluded from what counts as
+    naming an item, because a key a module only mentions in its own prose is
+    exactly the severed interface this check exists to find."""
     marked: set[int] = set()
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
@@ -415,10 +374,8 @@ def _docstring_nodes(tree: ast.AST) -> set[int]:
 
 def code_names(path: Path) -> frozenset[str]:
     """Every name a module NAMES: identifiers, attributes, arguments, literals.
-
     Read structurally rather than by text search, so a comment or a docstring
-    mentioning a key never passes for a writer or a reader of it.
-    """
+    mentioning a key never passes for a writer or a reader of it."""
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -450,11 +407,8 @@ def code_names(path: Path) -> frozenset[str]:
 
 def _interface_findings(model: Model, root: Path) -> list[Finding]:
     """Rule (a): every hop's two ends name every non-optional item it carries.
-
-    Per USAGE. Pooling evidence across the hops that share an interface
-    definition lets one module drop a key while a sibling hop keeps supplying
-    it - which is the severed interface this check exists to catch.
-    """
+    Per USAGE: pooling evidence across the hops that share an interface
+    definition lets one module drop a key while a sibling hop supplies it."""
     cache: dict[str, frozenset[str]] = {}
 
     def named_by(part_name: str) -> tuple[str, frozenset[str]]:
@@ -508,11 +462,8 @@ def _interface_findings(model: Model, root: Path) -> list[Finding]:
 
 def _author_findings(model: Model, root: Path) -> list[Finding]:
     """Rule (d): every tree module that builds a modeled contract is modeled.
-
-    Scoped to the top-level trees the model's own blocks live in, and to product
-    modules: a test calls a contract's constructor to exercise it, not to author
-    a live case.
-    """
+    Scoped to the trees the model's own blocks live in and to product modules: a
+    test calls a constructor to exercise it, not to author a live case."""
     constructors: dict[str, str] = {}
     for def_name in sorted(model.interface_defs):
         for name in model.interface_defs[def_name].constructors:
@@ -609,12 +560,10 @@ def _verify_findings(model: Model, root: Path) -> list[Finding]:
 
 
 def scoped_import_edges(model: Model, root: Path) -> list[tuple[str, str]]:
-    """The import edges of the modeled modules, computed here.
-
-    Fresh at check time and scoped to the blocks the model binds. A committed
-    graph is an instrument's product: reading one makes the dependency rules
-    decorative the moment the instrument was last run before the code moved.
-    """
+    """The import edges of the modeled modules, computed fresh at check time and
+    scoped to the blocks the model binds."""
+    # A committed graph is an instrument's product: reading one makes the
+    # dependency rules decorative the moment the code moves past the last run.
     edges: set[tuple[str, str]] = set()
     for part in model.parts.values():
         if not part.code:
@@ -635,15 +584,12 @@ def scoped_import_edges(model: Model, root: Path) -> list[tuple[str, str]]:
 
 def _imported_modules(importer: str,
                       node: ast.ImportFrom) -> set[tuple[str, str]]:
-    """Every module a ``from ... import`` names - the package AND each name.
-
-    ``from pkg import submodule`` is an import OF the submodule. Recording only
-    ``pkg`` leaves a dependency rule evadable by spelling: the same edge the
-    rule forbids passes it under the parent's name. The imported names are
-    therefore carried as full dotted paths beside the package, which costs a
-    rule nothing (a forbidden prefix matches on a dot boundary, so an imported
-    FUNCTION only matches a rule that already names the module it lives in).
-    """
+    """Every module a ``from ... import`` names - the package AND each imported
+    name, carried as full dotted paths beside the package."""
+    # ``from pkg import submodule`` is an import OF the submodule; recording
+    # only ``pkg`` leaves a dependency rule evadable by spelling. Carrying the
+    # names costs a rule nothing: a forbidden prefix matches on a dot boundary,
+    # so an imported FUNCTION only matches a rule that already names its module.
     module = node.module or ""
     if node.level:
         base = importer.split(".")[:-node.level]
@@ -686,10 +632,8 @@ def check(model: Model, root: Path) -> list[Finding]:
 
 def render_view(model: Model, source: Path) -> str:
     """The model as a page: the flow graph, the item tables, the allocations.
-
     Every line is derived, so a diagram can never describe a seam the model no
-    longer states.
-    """
+    longer states."""
     lines: list[str] = [
         f"# {model.package} - derived view",
         "",
