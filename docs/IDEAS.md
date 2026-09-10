@@ -4543,3 +4543,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   method and maps are live. The hygiene wave's prerequisite move
   (the TIN writers into the product tree) therefore leaves mesh-wave-
   conformance.md:97 verbatim with its note.
+  THE DOCSTRING COUNT CLARIFIED (orchestrator under standing law
+  2026-09-09 - NATE may override): "3 lines" and "5 lines" count
+  CONTENT lines - the non-blank lines between the delimiters; the
+  opening/closing delimiter lines and a blank separator do not count.
+  An inclusive count would leave a function docstring zero content
+  (summary + blank + closing = 3), which was never the ruling ("3
+  lines seems ok"). The guard test enforces the content count; a
+  one-line docstring is one content line. Measured side finding: the
+  LOC instrument double-subtracted blank lines inside docstrings
+  (understating pure code by ~276 lines over one scope) - fixed in the
+  guards leg; the baselines are restated from the corrected measure.
