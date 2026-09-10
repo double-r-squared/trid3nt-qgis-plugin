@@ -4554,3 +4554,20 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   LOC instrument double-subtracted blank lines inside docstrings
   (understating pure code by ~276 lines over one scope) - fixed in the
   guards leg; the baselines are restated from the corrected measure.
+  CALIBRATION REV 2 (NATE 2026-09-09): (1) NO calibration recipe in a
+  template - that decides for the user which knobs may vary (the
+  author-literal pigeonhole again); the VARIATION SURFACE is every
+  declared Param with bounds; vary and observe rows are FILLED AT
+  INVOCATION like slots; a template may SUGGEST a default pairing the
+  user edits. (2) A RECORD of every variation for observability: each
+  forward run journals parent, varied values, run id, outcome,
+  objective; one manifest per calibration. (3) THE PRIMITIVE "launch N
+  sims with these params and record them" appears at both levels -
+  plain execution once, calibration in a loop with the intermediate
+  evaluate-and-propose step PEST++ owns. BUILD ORDER: calibration
+  FIRST (it builds the launcher it needs, recorded from the start);
+  THEN the launcher generalizes into an ensemble act on regular
+  execution (a list, a grid, or a draw; concurrent reruns under a
+  workers lever) whose live proof is a twenty-draw Monte Carlo on
+  rain_on_grid; Monte Carlo and sweeps are one pass, calibration is
+  the loop. Spec rev 2.

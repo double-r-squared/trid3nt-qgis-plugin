@@ -24,22 +24,24 @@
 </style>
 
 <h1>The Calibration Seam</h1>
-<p class="rev">rev 1d &middot; 2026-09-08 &middot; amended in place (flow signatures from hydrosignatures join the reported metrics): OPERA DSWx joins the observation sources (the WOfS family); the odc-stac raster executor is INHERITED from the fetcher fold wave, which now runs first &middot; the calibration wave's spec, per docs/IDEAS.md "CALIBRATION SPEC SHAPED" (2026-09-08) and the plan NATE approved the same day - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the module surface (docs/specs/module-surface.html), the mesh recipe, the emission fold, the rerun path (ADR 0319). Answers the question docs/design/calibration-methodology.md (2026-08-26, unsigned) left open: the proposer is PEST++, not an in-house driver; that document's coastal case is a later case on this seam.</p>
+<p class="rev">rev 2 &middot; 2026-09-09 &middot; the recipe leaves the template for the invocation; the variations record on every forward run; the ensemble primitive stated at the back end for the next wave &middot; earlier amendments: OPERA DSWx joins the observation sources (the WOfS family); the odc-stac raster executor is INHERITED from the fetcher fold wave, which now runs first &middot; the calibration wave's spec, per docs/IDEAS.md "CALIBRATION SPEC SHAPED" (2026-09-08) and the plan NATE approved the same day - written fresh for NATE's read; the wave runs only after. Format per <code>docs/decisions/0320-spec-format.md</code>. Frozen: the module surface (docs/specs/module-surface.html), the mesh recipe, the emission fold, the rerun path (ADR 0319). Answers the question docs/design/calibration-methodology.md (2026-08-26, unsigned) left open: the proposer is PEST++, not an in-house driver; that document's coastal case is a later case on this seam.</p>
 
 <h2>1. The principle</h2>
 <p>A calibration sits between a finished run and its rerun. The user declares WHICH declared params may vary, within bounds, and WHICH fetched observations are compared to WHICH outputs. PEST++ (USGS) proposes; pyEMU builds its interface; our forward run is the existing rerun path; the result is a PROPOSED fill the user confirms. We own no loop mathematics, no run management, no optimizer. Every calibrated value is labeled as such wherever it is read.</p>
 
-<h2>2. The recipe: verbatim library calls over three rows</h2>
-<pre><span class="c"># templates/rain_on_grid/rain_on_grid.py - the template gains a calibration recipe (data, like MESH)</span>
-CALIBRATE = tool.calibrate(
-    vary=[Vary(P.curve_number, bounds=(<span class="n">30</span>, <span class="n">100</span>)),
-          Vary(P.manning_multiplier, bounds=(<span class="n">0.5</span>, <span class="n">2.0</span>), transform=<span class="s">"log"</span>)],
+<h2>2. The recipe is filled at invocation, over every declared param</h2>
+<p>REV 2 (NATE 2026-09-09): a template carries NO calibration recipe - that would decide for the user which knobs may vary, the same pigeonhole the hardcoded author literals were. The VARIATION SURFACE is every declared Param with bounds, which the sheet already exposes. <code>calibrate</code> is a runtime act like <code>fill</code>: the user or the model names which params vary and which observation pairs with which output, from anything the sheet declares. A template may SUGGEST a default pairing the way it pre-fills slots (rain_on_grid: the outlet hydrograph against the nearest gauge), and the user overrides it exactly as a slot.</p>
+<pre><span class="c"># at invocation - the same door as fill; every row is a declared Param, a published output or a fetched series</span>
+calibrate(run_id,
+    vary=[Vary(<span class="s">"curve_number"</span>, bounds=(<span class="n">30</span>, <span class="n">100</span>)),
+          Vary(<span class="s">"manning_multiplier"</span>, bounds=(<span class="n">0.5</span>, <span class="n">2.0</span>), transform=<span class="s">"log"</span>)],
     observe=[Observe(output=<span class="s">"outlet_hydrograph"</span>, series=DATA.gauge, weight=<span class="n">1.0</span>)],
     method=<span class="s">"ies"</span>,                                      <span class="c"># ies | glm | sweep</span>
     ops=[cal_op(<span class="s">"pst_from_parnames_obsnames"</span>),         <span class="c"># pyEMU names, verbatim</span>
          cal_op(<span class="s">"ParameterEnsemble.from_gaussian_draw"</span>, num_reals=<span class="n">50</span>),
-         cal_op(<span class="s">"pestpp-ies"</span>, noptmax=<span class="n">3</span>)],
-)</pre>
+         cal_op(<span class="s">"pestpp-ies"</span>, noptmax=<span class="n">3</span>)])
+<span class="c"># templates/rain_on_grid: a SUGGESTED pairing only, data the user edits</span>
+CALIBRATION_DEFAULT = Pairing(vary=[<span class="s">"curve_number"</span>, <span class="s">"manning_multiplier"</span>], observe=(<span class="s">"outlet_hydrograph"</span>, DATA.gauge))</pre>
 <table>
 <tr><th>row</th><th>is</th><th>constraint</th></tr>
 <tr><td><code>Vary</code></td><td>a DECLARED Param (never a raw keyword) with bounds and an optional transform</td><td>declared params enter the invocation key and carry bounds; a raw keyword does neither - a keyword-only variation can REPLAY the parent's solve, so the recipe refuses it by name</td></tr>
@@ -68,6 +70,10 @@ flowchart LR
 <tr><td><code>forward_run.py</code></td><td>the model command PEST++ calls: a DRIVE-LANE script that reads the parameter file, calls <code>rerun_workflow(parent, overrides={param: value})</code> (never a container of its own - the ADR 0319 grep is a standing test), maps an override EQUAL to the parent's value onto the parent's own result (the rerun path refuses an inert override; a Jacobian base run or a resampled equal draw is that case), reads the output, pairs it against the pinned observation on the observation's own stamps, DELETES then writes <code>sim.csv</code> so a failed run is a failed run, and journals one field, <code>objective</code>.</td></tr>
 <tr><td><code>Proposal</code> + <code>confirm</code></td><td>the record: per varied param the posterior median and range, phi before and after, the posterior band of the observed output, the method and its settings. Rendered on the card as a PROPOSED column beside CURRENT; nothing is applied. <code>confirm(proposal)</code> is one more rerun whose varied slots carry provenance <code>calibrated by &lt;method&gt;</code> and basis <code>calibrated</code>.</td></tr>
 </table>
+
+<h2>3a. The variations record, and the ensemble primitive at the back end</h2>
+<p>THE PRIMITIVE is "launch N sims with these params and RECORD them", and it appears at two levels: plain execution uses it once; calibration wraps it in a loop with the intermediate step - evaluate the results and propose the next set - which PEST++ owns. This wave builds the launcher calibration needs: every forward run is an ordinary rerun (the mesh inherited, a unique run id) and EVERY MEMBER IS RECORDED in the run journal - the parent run, the varied params and their values, its own run id, its outcome, the <code>objective</code> - with one manifest per calibration naming its members and how they were generated (PEST++'s own par/obs files cited beside it). Any result traces to the exact variation that produced it; a finished calibration re-reads without re-running.</p>
+<p>THE NEXT WAVE generalizes that launcher into an <code>ensemble</code> act on regular execution: a list, a grid or a draw of variations (pyEMU's ensemble draws; PEST++'s sweep executable for grids) run as concurrent reruns under a <code>workers</code> lever, recorded the same way, with no observation and no objective required. Monte Carlo ("what range of outcomes should I expect") and sensitivity sweeps are one pass of it; calibration is the loop. Its live proof is a twenty-draw Monte Carlo on rain_on_grid with the outlet-peak spread reported and every member traceable. OUT OF THIS WAVE, stated so the launcher is built to be lifted, not rewritten.</p>
 
 <h2>4. The first case and its levers</h2>
 <p>rain_on_grid, the outlet hydrograph against the nearest USGS gauge downstream of the pour point, on a gauged basin the substrate can fetch (measured at Stage 0; Otto NC if its gauge answers, else the nearest that does).</p>
