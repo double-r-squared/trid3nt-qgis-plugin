@@ -45,7 +45,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "``runs``: every solver execution and every discovery operation.\nThe envelope is embedded as a DICT, not a nested model, so an envelope\nchange does not force a collection migration; it is validated at the API\nboundary before write. ``cancelled`` is a distinct terminal state.",
+  "description": "``runs``: every solver execution and every discovery operation.\nThe envelope is embedded as a DICT, validated at the API boundary, so an\nenvelope change never forces a collection migration.",
   "properties": {
     "_id": {
       "title": "Id",

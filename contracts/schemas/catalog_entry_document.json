@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``catalog_entries``: one curated catalog entry, unwrapped.\nThe collection schema IS the entry schema - no wrapper fields, and no\n``_id`` alias, because one shape across wire, YAML and store is worth more\nthan the alias: the entry id is already a stable free-form string.",
+  "description": "``catalog_entries``: one curated catalog entry, unwrapped.\nThe collection schema IS the entry schema: no wrapper fields, and no ``_id``\nalias, because one shape across wire, file and store is worth more.",
   "properties": {
     "access_tier": {
       "enum": [

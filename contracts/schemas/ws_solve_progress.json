@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``solve-progress``: one LIVE telemetry tick during a long solver run.\nEvery field is solver- or perf-model-sourced: ``elapsed_seconds`` is\nwall-clock, and ``eta_seconds`` is ``None`` when the perf model has no\nestimate rather than a fabricated one.",
+  "description": "``solve-progress``: one LIVE telemetry tick during a long solver run.\nEvery field is solver- or perf-model-sourced, and ``eta_seconds`` is ``None``\nwhen nothing can estimate it rather than a fabricated number.",
   "properties": {
     "active_cell_count": {
       "anyOf": [

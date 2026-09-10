@@ -160,10 +160,8 @@ class UserSpatialInput(GraceModel):
 
 class RunDocument(DocModel):
     """``runs``: every solver execution and every discovery operation.
-    The envelope is embedded as a DICT, not a nested model, so an envelope
-    change does not force a collection migration; it is validated at the API
-    boundary before write. ``cancelled`` is a distinct terminal state.
-    """
+    The envelope is embedded as a DICT, validated at the API boundary, so an
+    envelope change never forces a collection migration."""
 
     schema_version: Literal["v1"] = "v1"
 
@@ -418,10 +416,8 @@ CASES_ANON_TTL_SECONDS: int = int(
 
 class CatalogEntryDocument(CatalogEntry):
     """``catalog_entries``: one curated catalog entry, unwrapped.
-    The collection schema IS the entry schema - no wrapper fields, and no
-    ``_id`` alias, because one shape across wire, YAML and store is worth more
-    than the alias: the entry id is already a stable free-form string.
-    """
+    The collection schema IS the entry schema: no wrapper fields, and no ``_id``
+    alias, because one shape across wire, file and store is worth more."""
 
 
 #: Audit-log event vocabulary.
@@ -445,10 +441,8 @@ CatalogAuditEventType = Literal[
 
 class CatalogAuditLogDocument(DocModel):
     """``catalog_audit_log``: the APPEND-ONLY audit trail for the catalog.
-    Every catalog mutation lands one document. It is durable and never
-    TTL-cleaned, because a reference recorded on a run must stay resolvable
-    back through here to its proposal and review context.
-    """
+    One document per mutation, durable and never TTL-cleaned: a reference on a
+    run must stay resolvable back to its proposal and review context."""
 
     schema_version: Literal["v1"] = "v1"
 

@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``tool-io``: the RAW args and response for one dispatch, keyed by step.\nThe pipeline step deliberately carries only label, state and timing; this is\nthe additive sidecar that makes the EXACT args sent and response read back\nvisible, so an upstream failure a narration smooths over stays inspectable.",
+  "description": "``tool-io``: the RAW args and response for one dispatch, keyed by step.\nA pipeline step carries only label, state and timing; this sidecar makes the\nEXACT args and response visible, so a smoothed-over failure stays findable.",
   "properties": {
     "args_bytes": {
       "default": 0,

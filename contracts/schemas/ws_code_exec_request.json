@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``code-exec-request``, emitted BEFORE the sandbox runs.\nThe client renders a confirm card and the user approves or denies on a\npayload-confirmation whose ``warning_id`` equals ``code_exec_id``. No cost\nor quota field: the consequential act is running code, not a billed run.",
+  "description": "``code-exec-request``, emitted BEFORE the sandbox runs.\nApproval returns on a payload-confirmation whose ``warning_id`` equals\n``code_exec_id``. The consequential act is running code, not a billed run.",
   "properties": {
     "code_exec_id": {
       "title": "Code Exec Id",

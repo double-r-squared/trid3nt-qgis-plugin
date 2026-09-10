@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``tool-call-complete``: a tool finished successfully.\n``metrics`` is tool-specific structured data - the numbers a narrative cites\nlive there, never in the summary prose. The full result body is referenced\nby ``result_uri``, not inlined.",
+  "description": "``tool-call-complete``: a tool finished successfully.\n``metrics`` is tool-specific structured data - the numbers a narrative cites\nlive there. The full result body is referenced, never inlined.",
   "properties": {
     "call_id": {
       "title": "Call Id",

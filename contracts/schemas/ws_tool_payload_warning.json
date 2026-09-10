@@ -2,7 +2,7 @@
   "$defs": {
     "GranularitySuggestion": {
       "additionalProperties": false,
-      "description": "A pre-run GRANULARITY suggestion, optional on a payload warning.\nIt makes resolution a USER LEVER rather than a silent auto-coarsen: the\nsuggested rung, the ladder, the projected cells and solve time are all\nshown so the cost of resolution is visible before the run. Every number is\na structured field, and none of them is a price.",
+      "description": "A pre-run GRANULARITY suggestion, optional on a payload warning.\nIt makes resolution a USER LEVER rather than a silent auto-coarsen, showing\nthe cost of resolution before the run. No number here is a price.",
       "properties": {
         "cell_cap": {
           "exclusiveMinimum": 0,
@@ -102,7 +102,7 @@
     },
     "ParamSheet": {
       "additionalProperties": false,
-      "description": "The resolved sheet a step reviewing its own inputs presents.\nRows arrive in RENDER order, the server owning it because it owns the doors.\nA submit-with-edits IS the approval: the whole sheet was visible, so there\nis nothing left to re-present.",
+      "description": "The resolved sheet a step reviewing its own inputs presents.\nRows arrive in RENDER order, owned by whoever owns the doors. A\nsubmit-with-edits IS the approval - the whole sheet was visible.",
       "properties": {
         "rows": {
           "items": {
@@ -133,7 +133,7 @@
     },
     "ParamSheetRow": {
       "additionalProperties": false,
-      "description": "One row of the resolved param sheet a form card renders.\nRicher than a provenance line beside it: narration needs a value and a\nbasis, while an EDIT SURFACE also needs the declaration - what the value\nmeans, what it may become, and how loudly to warn that editing it overrides\na derivation.",
+      "description": "One row of the resolved param sheet a form card renders.\nRicher than a provenance line: an EDIT SURFACE needs the declaration too -\nwhat the value means, what it may become, and how loudly to warn.",
       "properties": {
         "advanced": {
           "default": false,
@@ -381,7 +381,7 @@
     },
     "TimeScaleSuggestion": {
       "additionalProperties": false,
-      "description": "A pre-run TIME-SCALE suggestion, optional on a payload warning.\nThe temporal sibling of the granularity row: cadence and window together fix\nthe FRAME COUNT, and too many frames balloon the payload while too few hide\nthe motion. Absent when the cadence is fixed, and the card then shows\ngranularity alone.",
+      "description": "A pre-run TIME-SCALE suggestion, optional on a payload warning.\nCadence and window together fix the FRAME COUNT: too many balloon the\npayload, too few hide the motion. Absent when the cadence is fixed.",
       "properties": {
         "cadence_param": {
           "const": "output_interval_min",
@@ -451,7 +451,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "``tool-payload-warning``: the gate a heavy dispatch pauses on.\nBoth numbers travel - the estimate AND the threshold it crossed - so the\nreason the gate fired is visible rather than narrated. Every number here is\na structured field, and none of them is a price.",
+  "description": "``tool-payload-warning``: the gate a heavy dispatch pauses on.\nBoth numbers travel - the estimate AND the threshold it crossed - so why the\ngate fired is visible rather than narrated. No number here is a price.",
   "properties": {
     "alternative_args": {
       "anyOf": [

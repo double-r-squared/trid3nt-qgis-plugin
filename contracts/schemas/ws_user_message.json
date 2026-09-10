@@ -2,7 +2,7 @@
   "$defs": {
     "DrawnGeometry": {
       "additionalProperties": false,
-      "description": "A user-drawn geometry attached to a ``user-message``.\nA per-turn STRUCTURED spatial knob, distinct from the analysis AOI, which an\ninput-review gate consumes as user-supplied. The ``geometry_type``\ndiscriminator leaves room for a polygon editor; only a rectangle is wired.",
+      "description": "A user-drawn geometry attached to a ``user-message``.\nA per-turn STRUCTURED knob, distinct from the analysis AOI, consumed as\nuser-supplied. Only a rectangle is wired; the discriminator leaves room.",
       "properties": {
         "bbox": {
           "items": {

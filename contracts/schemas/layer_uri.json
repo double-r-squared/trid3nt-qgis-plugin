@@ -292,7 +292,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "ONE produced output layer.\nAligned field-for-field with the ``load-layer`` map command and with\n``ResultLayer``, so it reaches the map without translation. The producer\nDECLARES a style; the publish path RESOLVES it into ``legend``.",
+  "description": "ONE produced output layer, aligned field-for-field with the\n``load-layer`` map command so it reaches the map untranslated. The producer\nDECLARES a style; the publish path RESOLVES it into ``legend``.",
   "properties": {
     "bbox": {
       "anyOf": [

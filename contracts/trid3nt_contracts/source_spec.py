@@ -316,10 +316,12 @@ class PayloadEstimateSpec(GraceModel):
 class HookSpec(GraceModel):
     """Named extension points for the ONE irreducible per-source step.
     Each names a REGISTERED PURE FUNCTION, ``<source_key>.<point>``, resolved at
-    load. A hook only COMPUTES: transport, retry, caching, gates, the payload
-    estimate and the typed-error machinery all stay router-owned. A field is
-    added here only when a real source cannot be expressed without it.
+    load. A hook only COMPUTES - transport, caching and gates stay router-owned.
     """
+
+    # A field is added here only when a real source cannot be expressed without
+    # it; a speculative point is not added.
+
 
     #: ``(spec, params) -> list[RequestPlan]``. Builds the source-specific
     #: request(s) - URL, query, headers, and any pre-fetch validation the
@@ -462,10 +464,8 @@ class HookSpec(GraceModel):
 
 class DispatchSpec(GraceModel):
     """A spec-declared, SINGLE-TARGET pre-flight dispatch to a sibling tool.
-    For ONE declared param value the request is served by a NAMED sibling and
-    that tool's result is returned VERBATIM - its own cache prefix, its own layer
-    id and name, no re-cache here and no double fetch.
-    """
+    One declared param value serves the request from a NAMED sibling, returning
+    that tool's result VERBATIM - its cache prefix, its ids, no double fetch."""
 
     # The seam is DELIBERATELY NARROW - one sanctioned exception to the rule that
     # a tool does not compose another:
@@ -498,11 +498,9 @@ class DispatchSpec(GraceModel):
 
 
 class SourceSpec(GraceModel):
-    """A single data source's router specification.
-    ``name`` IS the registry key the promoted tool takes. The ``ingest`` and
-    ``join`` blocks stay flexible dicts because they vary per shape; every other
-    top-level key is strictly typed, and an unknown one is a defect.
-    """
+    """A single data source's router specification; ``name`` IS its registry key.
+    ``ingest`` and ``join`` stay flexible dicts because they vary per shape;
+    every other top-level key is strictly typed and an unknown one is a defect."""
 
     schema_version: Literal["v1"] = "v1"
 

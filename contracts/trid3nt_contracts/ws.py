@@ -139,10 +139,8 @@ ToolChoiceMode = Literal["auto", "ask"]
 
 class DrawnGeometry(GraceModel):
     """A user-drawn geometry attached to a ``user-message``.
-    A per-turn STRUCTURED spatial knob, distinct from the analysis AOI, which an
-    input-review gate consumes as user-supplied. The ``geometry_type``
-    discriminator leaves room for a polygon editor; only a rectangle is wired.
-    """
+    A per-turn STRUCTURED knob, distinct from the analysis AOI, consumed as
+    user-supplied. Only a rectangle is wired; the discriminator leaves room."""
 
     geometry_type: Literal["rectangle"] = "rectangle"
     bbox: list[float]
@@ -238,10 +236,8 @@ class SessionResumePayload(GraceModel):
 
 class SpatialInputResponsePayload(GraceModel):
     """``spatial-input-response``: the user picked a geometry, or cancelled.
-    Three shapes on one payload, keyed by ``geometry_type``: a point or bbox
-    sets ``coordinates``; a draw sets ``features``, a role-tagged
-    ``FeatureCollection``; a cancellation sets ``cancelled`` and nothing else.
-    """
+    Three shapes on one payload: a point or bbox sets ``coordinates``, a draw
+    sets a role-tagged ``features``, a cancellation sets neither."""
 
     # No payload-size gate applies here: a drawn collection is kilobytes by
     # construction, and the warn/block discipline governs TOOL OUTPUT.
@@ -368,9 +364,7 @@ class ToolCallProgressPayload(GraceModel):
 class ToolCallCompletePayload(GraceModel):
     """``tool-call-complete``: a tool finished successfully.
     ``metrics`` is tool-specific structured data - the numbers a narrative cites
-    live there, never in the summary prose. The full result body is referenced
-    by ``result_uri``, not inlined.
-    """
+    live there. The full result body is referenced, never inlined."""
 
     MESSAGE_TYPE: ClassVar[str] = "tool-call-complete"
 
@@ -448,10 +442,8 @@ class PipelineStatePayload(GraceModel):
 
 class SolveProgressPayload(GraceModel):
     """``solve-progress``: one LIVE telemetry tick during a long solver run.
-    Every field is solver- or perf-model-sourced: ``elapsed_seconds`` is
-    wall-clock, and ``eta_seconds`` is ``None`` when the perf model has no
-    estimate rather than a fabricated one.
-    """
+    Every field is solver- or perf-model-sourced, and ``eta_seconds`` is ``None``
+    when nothing can estimate it rather than a fabricated number."""
 
     MESSAGE_TYPE: ClassVar[str] = "solve-progress"
 
@@ -472,10 +464,8 @@ class SolveProgressPayload(GraceModel):
 
 class ToolIoPayload(GraceModel):
     """``tool-io``: the RAW args and response for one dispatch, keyed by step.
-    The pipeline step deliberately carries only label, state and timing; this is
-    the additive sidecar that makes the EXACT args sent and response read back
-    visible, so an upstream failure a narration smooths over stays inspectable.
-    """
+    A pipeline step carries only label, state and timing; this sidecar makes the
+    EXACT args and response visible, so a smoothed-over failure stays findable."""
 
     MESSAGE_TYPE: ClassVar[str] = "tool-io"
 
@@ -682,10 +672,8 @@ class ToolCandidatesPayload(GraceModel):
 
 class ToolChoicePayload(GraceModel):
     """``tool-choice``: client -> agent, the picker reply.
-    Exactly one of three shapes: ``tool_name`` set is a pick, echoed verbatim;
-    ``free_text`` set is typed guidance instead of a pick; both ``None`` is
-    let-the-agent-decide, the same outcome as the timeout but immediate.
-    """
+    One of three shapes: a ``tool_name`` pick echoed verbatim, ``free_text``
+    guidance instead, or both ``None`` for let-the-agent-decide."""
 
     # The two should not both arrive; ``tool_name`` wins if they do, being the
     # stronger signal.

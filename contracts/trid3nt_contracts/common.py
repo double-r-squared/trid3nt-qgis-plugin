@@ -280,12 +280,9 @@ class SyntheticInput(GraceModel):
 
     @model_validator(mode="after")
     def _require_consequence_for_demo(self, info: ValidationInfo) -> "SyntheticInput":
-        """A ``default_demo`` entry MUST carry a ``consequence`` tag; construction
-        without one cannot succeed, because an untagged invented default is one
-        the gate cannot refuse. A read opting in via
-        ``context={"tolerant_history": True}`` backfills ``scenario`` with a note
-        instead of raising, so loading an older record never crashes.
-        """
+        """A ``default_demo`` entry MUST carry a ``consequence``: an untagged
+        invented default is one the gate cannot refuse. A read opting in to
+        tolerant history backfills instead of raising, so history still loads."""
         if self.basis == "default_demo" and self.consequence is None:
             tolerant = bool(info.context and info.context.get("tolerant_history"))
             if tolerant:

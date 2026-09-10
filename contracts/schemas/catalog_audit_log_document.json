@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``catalog_audit_log``: the APPEND-ONLY audit trail for the catalog.\nEvery catalog mutation lands one document. It is durable and never\nTTL-cleaned, because a reference recorded on a run must stay resolvable\nback through here to its proposal and review context.",
+  "description": "``catalog_audit_log``: the APPEND-ONLY audit trail for the catalog.\nOne document per mutation, durable and never TTL-cleaned: a reference on a\nrun must stay resolvable back to its proposal and review context.",
   "properties": {
     "_id": {
       "title": "Id",

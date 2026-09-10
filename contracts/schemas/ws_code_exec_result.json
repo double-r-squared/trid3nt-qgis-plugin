@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``code-exec-result``, emitted AFTER the sandbox returns.\n``status`` is the HONEST terminal outcome - a blocked or timed-out run is\nnever dressed up as ``ok`` - and every number narrated from a run comes from\nthe structured ``result``, never from free text a model invents.",
+  "description": "``code-exec-result``, emitted AFTER the sandbox returns.\n``status`` is the HONEST terminal outcome - a blocked or timed-out run is\nnever dressed up as ``ok`` - and narrated numbers come from ``result``.",
   "properties": {
     "code_exec_id": {
       "title": "Code Exec Id",

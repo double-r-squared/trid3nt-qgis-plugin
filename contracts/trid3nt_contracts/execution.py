@@ -144,11 +144,9 @@ class RunResult(GraceModel):
 
 
 class LayerURI(GraceModel):
-    """ONE produced output layer.
-    Aligned field-for-field with the ``load-layer`` map command and with
-    ``ResultLayer``, so it reaches the map without translation. The producer
-    DECLARES a style; the publish path RESOLVES it into ``legend``.
-    """
+    """ONE produced output layer, aligned field-for-field with the
+    ``load-layer`` map command so it reaches the map untranslated. The producer
+    DECLARES a style; the publish path RESOLVES it into ``legend``."""
 
     layer_id: str  # stable id; flows into the load-layer args
     name: str
@@ -267,10 +265,8 @@ class FloodExtentObservationResult(LayerURI):
 
 class LandcoverResult(LayerURI):
     """A landcover layer plus the sidecar a roughness mapping is validated on.
-    The base layer is a frozen ``extra="forbid"`` contract, so the vintage
-    cannot live on it; carrying it here keeps it typed rather than wrapped in a
-    dict beside the layer.
-    """
+    The base layer is a frozen ``extra="forbid"`` contract, so carrying the
+    vintage here keeps it typed rather than wrapped in a dict beside it."""
 
 
     #: The vintage the roughness mapping is validated against. ``None`` for a
@@ -288,19 +284,15 @@ class LandcoverResult(LayerURI):
 
 
 class DemLayerURI(LayerURI):
-    """A NO-FIELD subclass, carrying nothing beyond the base layer.
-    It exists because the only seam that can override the emitted layer id and
-    name is the envelope hook, and a hook must be declared together with a
-    result model. It serializes field-for-field like the base.
-    """
+    """A NO-FIELD subclass, carrying nothing beyond the base layer and
+    serializing identically. It exists only because the seam that overrides an
+    emitted layer id and name must be declared together with a result model."""
 
 
 class TopobathyResult(LayerURI):
     """A merged coastal topo-bathymetry layer plus its FETCH-TIME provenance.
-    Every field below reports what actually PAINTED the merge, never what was
-    selected for it: a tile can drop between selection and merge, and a claim
-    keyed on selection would be false.
-    """
+    Every field reports what actually PAINTED the merge, never what was selected
+    for it: a tile can drop in between, and a selection-keyed claim would lie."""
 
     # The provenance travels through the recorder channel, so it survives a
     # cache hit that never re-runs the fetch. A cache object written before the
@@ -348,10 +340,8 @@ class BlueTopoResult(LayerURI):
 
 class StormTracksLayerURI(LayerURI):
     """A storm-track layer plus the fetch-time provenance of which mode served.
-    The provenance travels through the recorder channel, so it survives a cache
-    hit that never re-runs the fetch; a pre-channel cache object has no sidecar
-    and these declared DEFAULTS hold.
-    """
+    The provenance travels the recorder channel, so it survives a cache hit that
+    never re-runs the fetch; without a sidecar these DEFAULTS hold."""
 
 
     #: ``"active"`` (a live feed) or ``"historical"`` (an archive).
@@ -377,10 +367,8 @@ class GOESSatelliteLayerURI(LayerURI):
 
 class NWMStreamflowLayerURI(LayerURI):
     """A point-streamflow layer plus the fetch-time provenance of a COMPOSITE.
-    ``reference_time`` is unrecoverable from the produced file's per-feature
-    attributes, so the recorder channel is what makes it durable across a cache
-    hit that never re-runs the composite fetch.
-    """
+    ``reference_time`` is unrecoverable from the produced file, so the recorder
+    channel is what makes it survive a cache hit."""
 
 
     #: The model configuration that served.

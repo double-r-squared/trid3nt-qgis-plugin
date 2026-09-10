@@ -116,10 +116,8 @@ class SecretsListEnvelopePayload(GraceModel):
 
 class SecretAddEnvelopePayload(GraceModel):
     """``secret-add``: client -> server, the ONE envelope carrying a raw key.
-    ``key_value`` is TRANSIENT: written to the vault on receipt and cleared
-    before any log or persistence path. Persisting this payload as-is would put
-    an unredacted key into storage; the repr elision below is only a back-stop.
-    """
+    ``key_value`` is TRANSIENT - vaulted on receipt and cleared before any log
+    or persistence path. The repr elision below is only a back-stop."""
 
     MESSAGE_TYPE: ClassVar[str] = "secret-add"
 
@@ -164,10 +162,8 @@ class SecretRevokeEnvelopePayload(GraceModel):
 
 class CredentialRequestEnvelopePayload(GraceModel):
     """``credential-request``: server -> client, a key is needed NOW.
-    The tool pauses; the answer takes the existing ``secret-add`` path, so this
-    envelope carries NO key material in either direction. A declined prompt
-    returns as a ``credential-provided`` with ``provided=False``.
-    """
+    The tool pauses and the answer takes the existing ``secret-add`` path, so
+    this envelope carries NO key material in either direction."""
 
     MESSAGE_TYPE: ClassVar[str] = "credential-request"
 
@@ -194,9 +190,7 @@ class CredentialRequestEnvelopePayload(GraceModel):
 class CredentialProvidedEnvelopePayload(GraceModel):
     """``credential-provided``: client -> server, the paused tool may retry.
     Carries NO key material. ``provided=False`` is the decline path: the tool is
-    abandoned and narrated honestly - never a silent dead-end or an invented
-    success.
-    """
+    abandoned and narrated, never a silent dead-end or an invented success."""
 
     MESSAGE_TYPE: ClassVar[str] = "credential-provided"
 

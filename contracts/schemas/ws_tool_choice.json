@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``tool-choice``: client -> agent, the picker reply.\nExactly one of three shapes: ``tool_name`` set is a pick, echoed verbatim;\n``free_text`` set is typed guidance instead of a pick; both ``None`` is\nlet-the-agent-decide, the same outcome as the timeout but immediate.",
+  "description": "``tool-choice``: client -> agent, the picker reply.\nOne of three shapes: a ``tool_name`` pick echoed verbatim, ``free_text``\nguidance instead, or both ``None`` for let-the-agent-decide.",
   "properties": {
     "free_text": {
       "anyOf": [

@@ -76,10 +76,8 @@ ResolutionConstraintSource = Literal["solver", "data"]
 
 class ResolutionSpec(GraceModel):
     """A DECLARED valid-resolution range for one granularity-bearing param.
-    Silent coercion to an undeclared resolution is BANNED: a tool declares what
-    it can actually run, and an out-of-range ask gets the declared range quoted
-    back, typed or gated, never a silent snap.
-    """
+    Silent coercion to an undeclared resolution is BANNED: an out-of-range ask
+    is quoted the declared range, typed or gated, never silently snapped."""
 
     #: The tool argument this constrains. Specs are matched to params by name.
     param: str = Field(min_length=1)

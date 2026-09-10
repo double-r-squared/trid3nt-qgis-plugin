@@ -51,11 +51,8 @@ PayloadWarningOption = Literal["proceed", "cancel", "narrow_scope"]
 
 class GranularitySuggestion(GraceModel):
     """A pre-run GRANULARITY suggestion, optional on a payload warning.
-    It makes resolution a USER LEVER rather than a silent auto-coarsen: the
-    suggested rung, the ladder, the projected cells and solve time are all
-    shown so the cost of resolution is visible before the run. Every number is
-    a structured field, and none of them is a price.
-    """
+    It makes resolution a USER LEVER rather than a silent auto-coarsen, showing
+    the cost of resolution before the run. No number here is a price."""
 
     # The run this suggestion is for. A FETCH resolution choice uses the same
     # ladder as a solver mesh, so both are members here.
@@ -148,11 +145,8 @@ class GranularitySuggestion(GraceModel):
 
 class TimeScaleSuggestion(GraceModel):
     """A pre-run TIME-SCALE suggestion, optional on a payload warning.
-    The temporal sibling of the granularity row: cadence and window together fix
-    the FRAME COUNT, and too many frames balloon the payload while too few hide
-    the motion. Absent when the cadence is fixed, and the card then shows
-    granularity alone.
-    """
+    Cadence and window together fix the FRAME COUNT: too many balloon the
+    payload, too few hide the motion. Absent when the cadence is fixed."""
 
     # A card carrying BOTH rows sends both overrides in ONE ``revised_args``,
     # so reviewing space and time is a single interaction.
@@ -238,11 +232,8 @@ ParamDoor = Literal["user", "question", "derived", "scenario", "constant", "gate
 
 class ParamSheetRow(GraceModel):
     """One row of the resolved param sheet a form card renders.
-    Richer than a provenance line beside it: narration needs a value and a
-    basis, while an EDIT SURFACE also needs the declaration - what the value
-    means, what it may become, and how loudly to warn that editing it overrides
-    a derivation.
-    """
+    Richer than a provenance line: an EDIT SURFACE needs the declaration too -
+    what the value means, what it may become, and how loudly to warn."""
 
     #: The declared param name - the key an edit rides back under.
     name: str = Field(min_length=1)
@@ -287,10 +278,8 @@ class ParamSheetRow(GraceModel):
 
 class ParamSheet(GraceModel):
     """The resolved sheet a step reviewing its own inputs presents.
-    Rows arrive in RENDER order, the server owning it because it owns the doors.
-    A submit-with-edits IS the approval: the whole sheet was visible, so there
-    is nothing left to re-present.
-    """
+    Rows arrive in RENDER order, owned by whoever owns the doors. A
+    submit-with-edits IS the approval - the whole sheet was visible."""
 
     workflow: str = Field(min_length=1)
     title: str = Field(default="", max_length=200)
@@ -307,10 +296,8 @@ class ParamSheet(GraceModel):
 
 class PayloadWarningEnvelopePayload(GraceModel):
     """``tool-payload-warning``: the gate a heavy dispatch pauses on.
-    Both numbers travel - the estimate AND the threshold it crossed - so the
-    reason the gate fired is visible rather than narrated. Every number here is
-    a structured field, and none of them is a price.
-    """
+    Both numbers travel - the estimate AND the threshold it crossed - so why the
+    gate fired is visible rather than narrated. No number here is a price."""
 
     MESSAGE_TYPE: ClassVar[str] = "tool-payload-warning"
 

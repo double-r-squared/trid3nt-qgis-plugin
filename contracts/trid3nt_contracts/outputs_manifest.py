@@ -58,12 +58,9 @@ def build_entry(
     reference_time: str | None = None,
     dataset_group: str | None = None,
 ) -> dict[str, Any]:
-    """Build ONE flat manifest entry dict.
-    ``ValueError`` on an unrecognized ``kind`` or a missing required field - a
-    typed reject at write time, never a silent drop. A ``None`` optional is
-    OMITTED from the dict rather than written as null, so the object stays as
-    small as the schema promises.
-    """
+    """Build ONE flat manifest entry dict. ``ValueError`` on an unrecognized
+    ``kind`` or a missing required field - a typed reject at write time, never a
+    silent drop. A ``None`` optional is OMITTED rather than written as null."""
     if kind not in OUTPUT_KINDS:
         raise ValueError(
             f"outputs.json entry kind {kind!r} not in {sorted(OUTPUT_KINDS)}"
@@ -127,10 +124,8 @@ def append_entries(
     new: list[dict[str, Any]],
 ) -> str:
     """Read the current array, append ``new``, return the WHOLE array serialized
-    for one atomic-per-object PUT. ``existing_text`` is ``None`` or empty on the
-    first frame, and the caller owns the object-store GET/PUT. ``ValueError`` on
-    a foreign ``schema_version``: a writer never straddles two versions.
-    """
+    for one atomic PUT - the caller owns the GET and the PUT. ``ValueError`` on a
+    foreign ``schema_version``: a writer never straddles two versions."""
     if existing_text:
         if isinstance(existing_text, (bytes, bytearray)):
             existing_text = existing_text.decode("utf-8")
@@ -215,9 +210,7 @@ class OutputsManifest(_ReaderModel):
 def parse_outputs_manifest(text: str | bytes) -> OutputsManifest:
     """Parse and schema-gate an ``outputs.json`` body into a typed model.
     ``ValueError`` on a non-dict body, a missing or unknown ``schema_version``,
-    or an entry whose ``kind`` is outside ``OUTPUT_KINDS`` - a hard reject the
-    caller falls back from, never a best-guess parse.
-    """
+    or an unknown entry ``kind`` - a hard reject, never a best-guess parse."""
     if isinstance(text, (bytes, bytearray)):
         text = text.decode("utf-8")
     data = json.loads(text)

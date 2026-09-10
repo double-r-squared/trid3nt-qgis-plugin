@@ -128,7 +128,7 @@
     },
     "ResolutionSpec": {
       "additionalProperties": false,
-      "description": "A DECLARED valid-resolution range for one granularity-bearing param.\nSilent coercion to an undeclared resolution is BANNED: a tool declares what\nit can actually run, and an out-of-range ask gets the declared range quoted\nback, typed or gated, never a silent snap.",
+      "description": "A DECLARED valid-resolution range for one granularity-bearing param.\nSilent coercion to an undeclared resolution is BANNED: an out-of-range ask\nis quoted the declared range, typed or gated, never silently snapped.",
       "properties": {
         "constraint_source": {
           "enum": [

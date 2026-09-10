@@ -101,10 +101,8 @@ class RegionChoiceRequestEnvelopePayload(GraceModel):
 
 class RegionChoiceProvidedEnvelopePayload(GraceModel):
     """``region-choice-provided``: client -> server, the user's pick.
-    Resumes the paused turn. There is no timeout or cancel field: a
-    ``whole_state`` reply IS the decline path, and a hard cancel has its own
-    message.
-    """
+    Resumes the paused turn. No timeout or cancel field: a ``whole_state`` reply
+    IS the decline path, and a hard cancel has its own message."""
 
     MESSAGE_TYPE: ClassVar[str] = "region-choice-provided"
 

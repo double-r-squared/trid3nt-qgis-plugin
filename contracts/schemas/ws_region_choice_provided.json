@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``region-choice-provided``: client -> server, the user's pick.\nResumes the paused turn. There is no timeout or cancel field: a\n``whole_state`` reply IS the decline path, and a hard cancel has its own\nmessage.",
+  "description": "``region-choice-provided``: client -> server, the user's pick.\nResumes the paused turn. No timeout or cancel field: a ``whole_state`` reply\nIS the decline path, and a hard cancel has its own message.",
   "properties": {
     "choice": {
       "enum": [

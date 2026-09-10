@@ -33,10 +33,8 @@ CodeExecStatus = Literal["ok", "error", "timeout", "blocked"]
 
 class CodeExecRequestPayload(GraceModel):
     """``code-exec-request``, emitted BEFORE the sandbox runs.
-    The client renders a confirm card and the user approves or denies on a
-    payload-confirmation whose ``warning_id`` equals ``code_exec_id``. No cost
-    or quota field: the consequential act is running code, not a billed run.
-    """
+    Approval returns on a payload-confirmation whose ``warning_id`` equals
+    ``code_exec_id``. The consequential act is running code, not a billed run."""
 
     MESSAGE_TYPE: ClassVar[str] = "code-exec-request"
 
@@ -61,9 +59,7 @@ class CodeExecRequestPayload(GraceModel):
 class CodeExecResultPayload(GraceModel):
     """``code-exec-result``, emitted AFTER the sandbox returns.
     ``status`` is the HONEST terminal outcome - a blocked or timed-out run is
-    never dressed up as ``ok`` - and every number narrated from a run comes from
-    the structured ``result``, never from free text a model invents.
-    """
+    never dressed up as ``ok`` - and narrated numbers come from ``result``."""
 
     MESSAGE_TYPE: ClassVar[str] = "code-exec-result"
 

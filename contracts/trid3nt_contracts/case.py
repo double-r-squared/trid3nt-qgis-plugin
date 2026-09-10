@@ -93,10 +93,8 @@ ToolCardState = Literal["running", "complete", "failed", "cancelled"]
 
 class PersistedSubStepRecord(GraceModel):
     """Replayable record of ONE nested CHILD step under a tool card.
-    Field names reuse the live step and card shapes VERBATIM so a replay
-    synthesizes a step straight off this record. Additive: a row without
-    children replays as a plain top-level card with no nested timeline.
-    """
+    Field names reuse the live step and card shapes VERBATIM, so a replay
+    synthesizes a step straight off this record."""
 
     schema_version: Literal["v1"] = "v1"
 
@@ -130,10 +128,8 @@ class PersistedSubStepRecord(GraceModel):
 
 class ToolCardRecord(GraceModel):
     """Replayable record of ONE tool dispatch inside a Case turn.
-    The persisted twin of a live tool card: the minimal state needed to
-    re-render it without replaying the pipeline. Every IO field is optional, so
-    a document that captured none validates and replays with no expander.
-    """
+    The persisted twin of a live card - the minimal state to re-render it
+    without replaying the pipeline. Every IO field is optional."""
 
     schema_version: Literal["v1"] = "v1"
 
@@ -167,10 +163,8 @@ class ToolCardRecord(GraceModel):
 
 class CaseChatMessage(GraceModel):
     """One persisted chat exchange in a Case session.
-    Carries the per-turn layer and map-command emissions so a re-open replays
-    the FULL stream in arrival order and re-binds layers the way the original
-    turn did, rather than re-parsing free text.
-    """
+    It carries the per-turn layer and map-command emissions, so a re-open
+    replays the FULL stream in arrival order and re-binds what the turn did."""
 
     schema_version: Literal["v1"] = "v1"
 
@@ -210,10 +204,8 @@ class CaseChatMessage(GraceModel):
 
 class CaseSessionState(GraceModel):
     """The rehydration envelope returned when a user opens a Case.
-    Enough to reconstruct the whole session: the chat, the loaded layers, the
-    pipeline history and the charts. The dict-typed fields mirror the live
-    session-state payload; this module keeps them untyped to stay acyclic.
-    """
+    Enough to reconstruct the whole session. The dict-typed fields mirror the
+    live session-state payload, untyped here to keep this module acyclic."""
 
     schema_version: Literal["v1"] = "v1"
 
