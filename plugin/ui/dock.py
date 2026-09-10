@@ -1,58 +1,8 @@
 """TRID3NT chat dock -- message list, input, status dot, settings.
 
-Milestone 3 additions on top of milestone 2:
-
-  * REMOTE Open-in-QGIS: mode=remote POSTs /api/export-qgis on the HTTP base
-    derived from the remote WS URL, downloads the .gpkg/.qgz artifacts through
-    GET /api/export-qgis/file into a local temp dir, then adds layers exactly
-    like local mode (rasters become an honest skipped note -- the file route
-    serves only .qgz/.gpkg).
-  * CASE SWITCHING: the Cases dialog gains "Open chat" -> case-command select;
-    the server's case-open rehydration rebinds the dock (header case title,
-    fresh layer group, replayed layers).
-  * CASE-LIST REFRESH: no list-cases verb exists; refresh = one debounced
-    session-resume round trip (the web's own keepalive -- documented tradeoff
-    in trid3nt_client.request_case_list_refresh).
-  * SELECTED-POLYGON AOI: retired by A2 (NATE 2026-07-20) -- the AOI model is
-    explicit-only (the drawn Set-AOI rectangle / rehydrated case bbox); the
-    selection + canvas toggles are gone.
-  * TOKEN UX: the optional shared tailnet token lives in Settings; an
-    auth-classified failure (the daemon rejected the token) STOPS the reconnect
-    ladder and paints an honest "token rejected" status instead of looping.
-
-Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
-
-  * GATE CARD: ``tool-payload-warning`` envelopes render as an inline Qt card
-    (title, the agent's honest numbers/recommendation, the #154 resolution
-    ladder when the envelope carries one, editable cadence/window when a
-    time_scale rides along) with Proceed / Cancel wired to
-    ``tool-payload-confirmation``. Sims never start without a click here
-    (user-controlled granularity, standing directive). Decision rules live in
-    the pure ``gate`` module (tested without Qt).
-  * AOI ON THE WIRE (mechanism 2, 2026-07-22): every outgoing
-    user-message carries the drawn/persisted case AOI as the STRUCTURED
-    ``aoi_bbox`` payload field ([min_lon, min_lat, max_lon, max_lat],
-    EPSG:4326) -- the legacy bracketed in-text context line is gone; the
-    chat text ships clean. >2 deg/side extents are honestly dropped
-    (``_aoi_for_send`` guard). The persistent Case bbox still rides
-    ``case-command set-bbox`` unchanged.
-  * RECONNECT: the bridge's capped-jitter ladder drives the status dot
-    (connecting amber / connected green / lost red); queued sends flush on
-    resume.
-  * CASE-OPEN RESTORES LAYERS (decision A, 2026-07-31): opening a case (the
-    Cases dialog row click / double-click, always ``select_case`` ->
-    ``_on_case_open_event``) restores its chat AND its persisted layers in
-    ONE gesture -- no separate "Open in QGIS"/"Export GeoTIFFs" action. The
-    layers ride the SAME ``case-open`` WS envelope the chat replay uses
-    (``session_state.loaded_layers``) and land via the SAME by-URI
-    materializer live-published layers use. There is zero user-facing export
-    (native QGIS covers any file export the user wants). Layers STREAM in
-    place from the advertised store endpoint via GDAL ``/vsis3/``; the
-    download/export machinery is gone.
-
-All socket work lives on the AgentBridge worker thread; this widget only
-handles Qt signals.
-"""
+ALL socket work lives on the bridge worker thread; this widget only handles Qt
+signals. Layers STREAM in place through the store endpoint: there is zero
+user-facing export, because native QGIS already covers file export."""
 
 from __future__ import annotations
 
@@ -77,8 +27,8 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-# Item R6 (live-feedback 2026-07-18): layer-type constant for registering the
-# "Push layer to case" layer-tree context-menu action (vector + raster).
+# The layer-type constant the "Push layer to case" context-menu action is
+# registered against.
 from qgis.core import QgsMapLayer
 
 from . import gate
@@ -144,7 +94,7 @@ _LLM_STEP_NAMES = {
     "model_generate", "generate",
 }
 
-# picker fail-open (Stage 3, 2026-07-22): event kinds that mean the
+# Picker fail-open: event kinds that mean the
 # TURN MOVED ON -- any of these arriving while a ToolCandidatesCard is still
 # unanswered proves the server's ``timeout_s`` fail-open (or a cancel/error)
 # already resolved that selection, so the dock folds the open card to its
@@ -162,9 +112,8 @@ _DOT_COLORS = {
     "connected": "#3fb950",
     "error": "#f85149",
 }
-# H1 (NATE 2026-07-20): _DOT_TITLES removed -- the titlebar no longer carries
-# the connection STATE (the coloured dot alone signifies it). The titlebar
-# shows the active CASE NAME (else "TRID3NT"); see ``_set_case_label``.
+# The coloured DOT alone signifies connection state; the titlebar carries the
+# active CASE NAME instead.
 
 _USER_BUBBLE_STYLE = (
     "background-color: #1f6feb; color: white; border-radius: 8px; padding: 6px 9px;"
@@ -172,24 +121,18 @@ _USER_BUBBLE_STYLE = (
 
 
 def _solver_engine_label(solver: str) -> str:
-    """Item R4 (live-feedback 2026-07-18): "telemac_river_dye" or
-    "telemac_river_dye:solve" -> "TELEMAC" -- the SimCard title names the
-    ENGINE; the full run identity stays visible in the metadata table.
-    Pure string math on the emitter's own naming convention
-    (``mint_dispatch_and_sim_cards`` stamps ``tool_name="<solver>:solve"``,
-    solver ids lead with the engine: sfincs_* / modflow_* / telemac_*)."""
+    """A solver id -> the ENGINE it names, for a sim card title; the full run
+    identity stays in the metadata table. Pure string math on the convention
+    that a solver id leads with its engine."""
     base = (solver or "").split(":", 1)[0]
     head = base.split("_", 1)[0]
     return head.upper() if head else "SOLVER"
 
 
 def _short_args_summary(raw_args: str, max_len: int = 64) -> str:
-    """Item R2 (live-feedback 2026-07-18): a compact ``k=v, k=v`` arg summary
-    for the tool chip row, from the ``tool-io`` sidecar's pre-serialized
-    ``raw_args`` JSON string (contract ws.ToolIoPayload). First 3 keys only,
-    each value clipped; nested structures collapse to "..." (the chip is a
-    summary, not an IO dump). Defensive: non-JSON / non-dict / empty input
-    yields "" -- the chip then renders without args, never a crash."""
+    """A compact ``k=v`` arg summary for a tool row: the first three keys,
+    each value clipped, nested structures collapsed. This is a SUMMARY, not an
+    IO dump; unusable input yields "" and the row renders without args."""
     try:
         args = json.loads(raw_args)
     except (ValueError, TypeError):
@@ -245,7 +188,7 @@ class Trid3ntDock(QDockWidget):
         self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
         self._push_tasks: List[_PushLayerTask] = []  # keep-alive refs
         self._probe_tasks: List[_ProbePointTask] = []  # keep-alive refs
-        # OpenRouter model-extensibility (design 2026-07-19): the Settings Save
+        # The Settings Save
         # provider-config POST tasks -- owned here (not the closing dialog).
         self._provider_config_tasks: List[_ProviderConfigTask] = []
         # The Probe map tool (design point 2): built lazily on first toggle-on
@@ -254,7 +197,7 @@ class Trid3ntDock(QDockWidget):
         # toggling off restores it (never steals the tool permanently).
         self._probe_map_tool = None
         self._prev_map_tool = None
-        # Persistent per-case bbox (per-case-bbox 2026-07-19, cloud parity):
+        # The persistent per-case bbox:
         # the case AOI the agent references every turn + the user can re-draw.
         # ``_case_bbox`` is the current EPSG:4326 ``(w, s, e, n)`` (None until a
         # case-open carries one / the user draws one); ``_aoi_rubber`` is the
@@ -278,53 +221,53 @@ class Trid3ntDock(QDockWidget):
         self._region_rubber = None
         self._region_map_tool = None
         self._prev_region_tool = None
-        # A1 (NATE 2026-07-20): True while the Set-AOI canvas key-filter (BACKSPACE
+        # True while the Set-AOI canvas key-filter (BACKSPACE
         # /DELETE -> _clear_aoi) is installed -- see ``_toggle_aoi_draw``.
         self._aoi_key_filter_on = False
         self._refresh_debounce = Debouncer()
-        # Item d (live-feedback 2026-07-09): a case picked from the Cases
+        # A case picked from the Cases
         # dialog before/while connecting -- opened via ``_on_case_ready``
         # once the (auto-)connect actually completes, so a cold-list click
         # is never silently dropped.
         self._pending_open_case: Optional[Tuple[str, str]] = None
-        # AUTO-CONNECT (live-feedback 2026-07-09): fires once per dock SHOW,
+        # AUTO-CONNECT fires once per dock SHOW,
         # reset on hide -- see ``showEvent``/``hideEvent``/``_auto_connect_local_once``.
         self._auto_connect_done_this_show = False
-        # Item R4 (live-feedback 2026-07-18): live SimCards keyed by the
+        # Live SimCards keyed by the
         # compute step's step_id; reset on case switch (_clear_messages).
         self._sim_cards: Dict[str, SimCard] = {}
-        # Item R2 (live-feedback 2026-07-18): short arg summaries from the
+        # Short arg summaries from the
         # tool-io sidecar, keyed by step_id, for the tool chip rows.
         self._tool_args_by_step: Dict[str, str] = {}
-        # (Stage 3, 2026-07-22): the OPEN (not yet answered/
+        # The OPEN (not yet answered/
         # superseded) tool-picker cards, in arrival order. A subsequent turn
         # event folds them to "agent proceeded" (_supersede_open_tool_pickers);
         # reset on case switch (_clear_messages -- the widgets die with the
         # message list).
         self._open_tool_pickers: List[ToolCandidatesCard] = []
-        # LANE A (2026-07-23): approved code-exec cards keyed by code_exec_id
+        # Approved code-exec cards keyed by code_exec_id
         # so the later ``code-exec-result`` envelope can update the right
         # card's folded chip with the run outcome; reset on case switch
         # (_clear_messages -- the widgets die with the message list).
         self._code_exec_cards: Dict[str, CodeExecCard] = {}
-        # LANE A (2026-07-23): the latest ``secrets-list`` roster (parsed
+        # The latest ``secrets-list`` roster (parsed
         # SecretRow list) for the settings/secrets surface. Minimal honest
         # handling -- stored + a one-line status note; raw keys never ride
         # here. Reset on case switch.
         self._secrets: list = []
-        # Wave-picker UX (LANE P, 2026-07-22): 1-based counter of picker
+        # 1-based counter of picker
         # cards shown THIS turn -- the "Step N" affordance is trivially
         # derived from card arrival order, never a server field. Reset on
         # every new user turn (_send) and on a case switch (_clear_messages).
         self._tool_picker_turn_step = 0
-        # O1 (NATE 2026-07-20): the standing "AOI: drawn X x Y deg" readout is
+        # The standing "AOI: drawn X x Y deg" readout is
         # GONE (clutter). The ONLY AOI note is the one-time inline transcript
         # note ``_on_aoi_extent_chosen`` emits WHEN the user actually sets the
         # AOI ("Case AOI set to ..."). Nothing is restated per-send anymore, so
         # the old ``_aoi_status_line`` / ``_last_aoi_note`` dedupe pair is
         # removed with it.
 
-        # Charts window (charts-window 2026-08-04): NATE's TUFLOW-Viewer
+        # The charts window: a bottom-docked
         # directive -- charts get their OWN bottom-docked window, never an
         # in-chat panel. Built LAZILY (first chart or first "Charts (N)" button
         # click) so a chart-less session never spawns a bottom dock. The chat
@@ -335,8 +278,8 @@ class Trid3ntDock(QDockWidget):
         self._build_ui()
         self._wire_bridge()
         self._configure_store_access()
-        # Item R6 (live-feedback 2026-07-18): the persistent "Push layer"
-        # header button was UI noise (NATE ask) -- the push action now lives
+        # The persistent "Push layer"
+        # header row stays clean -- the push action lives
         # in the QGIS layer-tree context menu ("Push layer to case").
         self._push_tree_actions: List = []
         self._register_layer_tree_push_action()
@@ -352,13 +295,9 @@ class Trid3ntDock(QDockWidget):
         self._auto_connect_done_this_show = False
 
     def _auto_connect_local_once(self) -> None:
-        """AUTO-CONNECT (live-feedback 2026-07-09): cases must be visible
-        WITHOUT the user pressing Connect, and the dock should not require a
-        manual connect at all. Fires once per dock show (reset on hide, so
-        re-opening the dock tries again); never retries on failure within one
-        show -- a failed attempt just paints the existing honest status line
-        via ``connect_agent``'s own failure path, exactly like a manual click
-        would."""
+        """Connect without the user pressing Connect, ONCE per dock show and
+        reset on hide. It never retries within one show: a failure paints the
+        same honest status line a manual click would."""
         if self._auto_connect_done_this_show:
             return
         self._auto_connect_done_this_show = True
@@ -379,7 +318,7 @@ class Trid3ntDock(QDockWidget):
         # connected); the text shows the RUNNING MODEL -- not a redundant
         # "Connected" word (the dot means that) and not a case-id (that lives
         # in the case title). Buttons live on their OWN row below so this stays
-        # a pure status strip. NATE 2026-07-20.
+        # a pure status strip.
         status_row = QHBoxLayout()
         self.dot = QLabel()
         self._set_dot("disconnected")
@@ -394,29 +333,17 @@ class Trid3ntDock(QDockWidget):
         self._effective_model: str = ""
         self._effective_model_tasks: List["_EffectiveModelTask"] = []
 
-        # Row 2 (actions): PURE buttons -- Cases / Probe / Set AOI /
-        # Settings(cog). Connect + Disconnect BOTH live in Settings now (the
-        # dock auto-connects in local mode; a greyed header Connect button was
-        # noise -- NATE 2026-07-20). H3: "New" dropped (creation via the Cases
-        # dialog); A1: "Clear AOI" dropped (BACKSPACE clears while Set-AOI is
-        # active).
+        # Row 2, the action buttons. Connect and disconnect BOTH live in
+        # Settings, not here: the dock auto-connects, so a greyed header button
+        # would be noise.
         button_row = QHBoxLayout()
         self.cases_btn = QToolButton()
         self.cases_btn.setText("Cases")
         self.cases_btn.clicked.connect(self._open_cases)
         button_row.addWidget(self.cases_btn)
 
-        # H3 (NATE 2026-07-20): the header "New" case button is REMOVED --
-        # case creation stays available in the Cases dialog. The ``new_case()``
-        # METHOD remains (the Cases dialog + the auto/startup paths still call
-        # it); only the header widget is gone.
-
-        # Item R6 (live-feedback 2026-07-18): the "Push layer" header button
-        # is REMOVED (UI-noise reduction, NATE ask). The bidirectional layer
-        # push (the reverse seam of "Open in QGIS") lives in the QGIS
-        # layer-tree context menu instead -- see
-        # ``_register_layer_tree_push_action``; ``_push_active_layer`` is
-        # still the backing method.
+        # Case creation lives in the Cases dialog, and pushing a layer lives
+        # in the QGIS layer-tree context menu; neither has a header button.
 
         # Map-click point probe: click the canvas to sample every raster
         # layer (and detected animation-frame sequence) on the current case
@@ -432,7 +359,7 @@ class Trid3ntDock(QDockWidget):
         self.probe_btn.toggled.connect(self._toggle_probe_tool)
         button_row.addWidget(self.probe_btn)
 
-        # Persistent per-case bbox (per-case-bbox 2026-07-19): drag a rectangle
+        # The persistent per-case bbox: drag a rectangle
         # on the map to set THIS case's area of interest -- the extent the
         # agent references every turn (state.case_bbox). Checkable, same
         # discipline as Probe: ON saves whatever tool is active + installs a
@@ -462,7 +389,7 @@ class Trid3ntDock(QDockWidget):
         self.region_btn.toggled.connect(self._toggle_draw_region)
         button_row.addWidget(self.region_btn)
 
-        # Charts (charts-window 2026-08-04): the count button that SHOWS the
+        # The count button that SHOWS the
         # bottom charts window. It stays in the chat dock; charts themselves
         # never render inline here. Click raises (creates lazily) the window;
         # a new chart increments the count + subtly flags the button.
@@ -472,16 +399,12 @@ class Trid3ntDock(QDockWidget):
         self.charts_btn.clicked.connect(self._show_charts_window)
         button_row.addWidget(self.charts_btn)
 
-        # A1 (NATE 2026-07-20): the "Clear AOI" header button is REMOVED --
-        # clearing is MULTIPLEXED into the Set-AOI tool: while Set-AOI is active
-        # (aoi_btn checked), pressing BACKSPACE or DELETE clears the current AOI
-        # via ``_clear_aoi`` (a canvas eventFilter installed only while the tool
-        # is on). ``_clear_aoi`` stays as the backing method.
+        # Clearing the AOI is MULTIPLEXED into the Set-AOI tool: while it is
+        # active, BACKSPACE or DELETE clears the current AOI through a canvas
+        # eventFilter installed only for the duration.
 
-        # Item B2 (qgis-ux-batch 2026-07-19): Settings collapses to a COG glyph
-        # (icon-only look) -- the header button row is pure buttons, no word
-        # labels competing with the connection signifier. The gear glyph is the
-        # button's only content (effectively icon-only); the tooltip names it.
+        # Settings is a COG GLYPH, so no word label competes with the
+        # connection signifier; the tooltip names it.
         button_row.addStretch(1)  # push Settings to the right end of the row
         self.settings_btn = QToolButton()
         self.settings_btn.setText("\u2699")  # gear glyph (cog); icon-only look
@@ -489,10 +412,6 @@ class Trid3ntDock(QDockWidget):
         self.settings_btn.clicked.connect(self._open_settings)
         button_row.addWidget(self.settings_btn)
         outer.addLayout(button_row)
-
-        # H2 (NATE 2026-07-20): the under-button "Case: <title>" line is REMOVED
-        # -- the active case name now rides the dock TITLEBAR (``_set_case_label``
-        # -> setWindowTitle), freeing this vertical space.
 
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
@@ -503,7 +422,7 @@ class Trid3ntDock(QDockWidget):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
-        # E1 (NATE 2026-07-20): the transcript NEVER grows a horizontal
+        # The transcript NEVER grows a horizontal
         # scrollbar -- error text (and every other chat line) must reflow with
         # the resizable chat panel, not pin it wide. AlwaysOff (was the default
         # ScrollBarAsNeeded, which a long unbroken error token could trip);
@@ -517,7 +436,7 @@ class Trid3ntDock(QDockWidget):
         self.scroll.setWidget(self.messages_host)
         outer.addWidget(self.scroll, 1)
 
-        # BUG 3b (live-feedback 2026-07-12, NATE verbatim: "the probe should
+        # (the probe should
         # show the data somewhere else this should not show up in chat
         # period"): probe output renders HERE -- a collapsible panel pinned
         # under the message list, near the Probe toggle's effect -- and is
@@ -545,29 +464,14 @@ class Trid3ntDock(QDockWidget):
         self._probe_panel.setVisible(False)
         outer.addWidget(self._probe_panel)
 
-        # Charts (charts-window 2026-08-04): the charts surface is the
-        # bottom-docked ``ChartsWindow`` (built lazily), NOT an in-chat panel.
-        # The chat dock keeps only the "Charts (N)" count button in the action
-        # row above; ``set_charts`` / ``add_chart`` / ``clear`` are driven on
-        # the window through ``_ensure_charts_window``.
-
-        # Item 4 (live-feedback 2026-07-09): the AOI toggles (canvas /
-        # selected polygon) moved into Settings -- apply-on-Save there now,
-        # instead of live-applying from checkboxes here. F9 "Show model
-        # thinking" moved into the Settings dialog (NATE live-feedback
-        # 2026-07-13) -- the send path keeps reading
-        # ``self.settings.show_thinking``.
-        # Item R3 (live-feedback 2026-07-18) + O1 (NATE 2026-07-20): NO pinned
-        # AOI status line above the composer, AND no per-send restated readout
-        # either. The ONLY AOI note is the one-time "Case AOI set to ..." line
-        # ``_on_aoi_extent_chosen`` emits when the user actually sets the AOI.
-
-        # Input row -- Item A (qgis-ux-batch 2026-07-19): a multi-line
-        # auto-growing composer (_ChatInput) replaces the one-line QLineEdit
-        # that clipped long prompts. ENTER sends, SHIFT+ENTER newlines.
-        # C1 (NATE 2026-07-20): the Send button is REMOVED -- ENTER already
-        # sends, so the composer is the sole full-width widget in the row
-        # (``_send`` stays, wired to ENTER via ``_ChatInput``).
+        # The charts surface is the bottom-docked window, NEVER an in-chat
+        # panel; this dock keeps only the count button in the row above.
+        #
+        # The ONLY AOI note is the one-time line emitted when the user actually
+        # sets one: there is no pinned status line and no per-send restatement.
+        #
+        # The input row: ENTER sends and SHIFT+ENTER newlines, so the composer
+        # is the sole full-width widget in it.
         input_row = QHBoxLayout()
         self.input_edit = _ChatInput(self._send)
         self.input_edit.setPlaceholderText("Ask for data or a simulation...")
@@ -579,10 +483,8 @@ class Trid3ntDock(QDockWidget):
     def _set_dot(self, state: str) -> None:
         color = _DOT_COLORS.get(state, _DOT_COLORS["disconnected"])
         self.dot.setStyleSheet(f"background-color: {color}; {_DOT_STYLE}")
-        # H1 (NATE 2026-07-20): the titlebar no longer carries the CONNECTION
-        # STATE -- the coloured dot alone signifies connection. The titlebar
-        # instead shows the active CASE NAME (else "TRID3NT"), driven from the
-        # case paths via ``_set_case_label``; nothing to repaint here.
+        # Nothing to repaint here: the titlebar carries the CASE NAME, not
+        # the connection state.
 
     def _scroll_to_bottom(self) -> None:
         bar = self.scroll.verticalScrollBar()
@@ -596,7 +498,7 @@ class Trid3ntDock(QDockWidget):
         lbl.setTextFormat(Qt.TextFormat.PlainText)
         lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         lbl.setStyleSheet(_USER_BUBBLE_STYLE)
-        # BUG 1 (live-feedback 2026-07-12): the bare QSizePolicy(h, v) ctor
+        # The bare QSizePolicy(h, v) ctor
         # DROPS the height-for-width flag QLabel.setWordWrap had set, which
         # (with the AlignRight cell) clipped long messages to one visual
         # line. Restore the flag so the layout asks the label how tall its
@@ -616,43 +518,37 @@ class Trid3ntDock(QDockWidget):
         return self._pending
 
     def _clear_messages(self) -> None:
-        """ITEM B (case switch must clear chat): remove every message-list
-        child widget (user bubbles, assistant entries, gate cards, notes)
-        while keeping the terminal stretch item ``_build_ui`` adds last --
-        every insertion elsewhere in the dock inserts BEFORE it, so it must
-        stay. Also drops any pending streaming assistant entry; a stale
-        target from the previous case must never receive the new case's
-        deltas."""
+        """Remove every message-list child widget while KEEPING the terminal
+        stretch item, which every other insertion goes before. Drops the
+        pending streaming entry: a stale target must never take new deltas."""
         self._pending = None
-        # Item R4/R2 (live-feedback 2026-07-18): per-case transcript state --
-        # the SimCard registry (widgets die in the loop below) + the tool-io
-        # arg summaries. (O1, NATE 2026-07-20: the per-send AOI note dedupe is
-        # gone -- the AOI note now fires only on an explicit Set-AOI.)
+        # Per-case transcript state: the sim-card registry, whose widgets die
+        # in the loop below, and the tool arg summaries.
         self._sim_cards.clear()
         self._tool_args_by_step.clear()
         # open picker cards are per-case transcript state -- the
         # widgets die in the loop below; drop the tracking refs with them.
         self._open_tool_pickers = []
         self._tool_picker_turn_step = 0
-        # LANE A (2026-07-23): approved code-exec cards are per-case transcript
+        # Approved code-exec cards are per-case transcript
         # state -- the widgets die in the loop below; drop the tracking refs.
         # (self._secrets is user/Case-level roster state, refreshed by the next
         # secrets-list; a switch clears it so a stale roster never lingers.)
         self._code_exec_cards.clear()
         self._secrets = []
-        # Per-case-bbox 2026-07-19: the previous case's AOI overlay must not
+        # The previous case's AOI overlay must not
         # linger across a switch -- _on_case_open_event repaints it below from
         # the newly-opened case's own bbox (or leaves it cleared when absent).
         self._clear_aoi_overlay()
         # a pending drawn region is per-turn/per-case -- drop it on a
         # case switch so it never rides a turn in the wrong case.
         self._clear_region_overlay()
-        # BUG 3b (live-feedback 2026-07-12): the probe panel shows CASE
+        # The probe panel shows CASE
         # data -- a table from the previous case must not linger across a
         # switch. Hide it (its next click repopulates it).
         self._probe_panel.setVisible(False)
         self.probe_result_label.setText("")
-        # Charts are per-Case state (charts-window 2026-08-04): the case-open
+        # Charts are per-Case state: the case-open
         # replay below repopulates the charts window for the new case. The
         # window survives the switch (bottom dock stays put); only its list is
         # cleared + the count button reset.
@@ -667,21 +563,9 @@ class Trid3ntDock(QDockWidget):
                 widget.deleteLater()
 
     def _replay_chat_history(self, messages: List[dict]) -> None:
-        """ITEM B / T9 (NATE 2026-07-20): repaint a just-opened case's persisted
-        conversation before the "Case '<title>' active" note.
-
-        T9 unifies the replay path with the live path: a run of consecutive
-        persisted ``role="tool"`` rows is grouped into ONE parent ``_ToolCard``
-        (the SAME widget the live pipeline builds), with each tool's RESULT
-        shown under it INSIDE the card -- so a reopened case shows the identical
-        parent format instead of a stack of separate flat cards. E2: a persisted
-        tool FAILURE (``is_error``) survives the reopen as a red row + result
-        inside that card. Any persisted THINKING (defensive -- read off the row
-        if a future server carries it) replays as the collapsed thinking block
-        on the agent entry (NATE lost both the tool chain + thinking on refresh).
-
-        ``messages`` is already role/content-filtered + capped by
-        ``trid3nt_client.parse_chat_history``; an empty list is a no-op."""
+        """Repaint a just-opened case's persisted conversation. A run of
+        consecutive tool rows groups into ONE parent card, the same widget the
+        live pipeline builds, so a reopened case reads identically."""
         tool_group: List[dict] = []
         for row in messages:
             role = row.get("role")
@@ -701,7 +585,7 @@ class Trid3ntDock(QDockWidget):
             content = row.get("content")
             # E2: a persisted terminal-error row (defensive -- a future server
             # role="error", or an agent row flagged is_error) replays as a
-            # wrapped inline error line, same place it appeared live. F7:
+            # wrapped inline error line, same place it appeared live;
             # CONSECUTIVE persisted error rows fold into one collapsed
             # "ERRORS (N)" row exactly like live arrival (they funnel through
             # the same add_note path on the same pending entry).
@@ -711,7 +595,7 @@ class Trid3ntDock(QDockWidget):
                 continue
             if not isinstance(content, str) or not content:
                 continue
-            # F7: a conversational row ends any open consecutive-error run --
+            # A conversational row ends any open consecutive-error run --
             # persisted errors separated by chat must not glue into one fold.
             if self._pending is not None:
                 self._pending.break_error_run()
@@ -719,7 +603,7 @@ class Trid3ntDock(QDockWidget):
                 self._add_user_bubble(content)
             elif role == "agent":
                 entry = _AssistantEntry(self.messages_layout)
-                # T9 + LANE PLUGIN (2026-07-22): replay persisted reasoning as
+                # Replay persisted reasoning as
                 # the SAME grey collapsible thinking fold the live
                 # agent-thinking-chunk path builds -- collapsed by default,
                 # above the answer text in the same bubble.
@@ -730,7 +614,7 @@ class Trid3ntDock(QDockWidget):
                     entry.append_thinking_delta(thinking)
                     entry.collapse_thinking()
                 entry.append_delta(content)
-                # Feature 2026-07-13: replayed text is always final --
+                # Replayed text is always final --
                 # render its markdown immediately.
                 entry.finalize_markdown()
         if tool_group:
@@ -752,16 +636,9 @@ class Trid3ntDock(QDockWidget):
         return card or None
 
     def _replay_tool_group(self, cards: List[dict]) -> None:
-        """T9: render a run of persisted tool rows as ONE parent ``_ToolCard``
-        -- the SAME builder the live pipeline uses (``_ToolCard.set_content``).
-
-        Each card becomes an inner row (``tool_name``/``label`` + ``state``)
-        with its ``function_response`` shown under it as a collapsed read-only
-        body INSIDE the card; ``is_error`` rows render as a failed row (x glyph)
-        with the red result block. The parent card is all-terminal on replay, so
-        ``set_content`` auto-collapses it (matching the live end-state, T3); the
-        chevron re-expands it. The bottom metadata block (T7) carries each
-        tool's short arg summary."""
+        """Render a run of persisted tool rows as ONE parent card, each row
+        carrying its response as a collapsed read-only body. The card is
+        all-terminal on replay, so it auto-collapses like a finished live one."""
         inner_rows: List[dict] = []
         meta_lines: List[str] = []
         for card in cards:
@@ -798,12 +675,9 @@ class Trid3ntDock(QDockWidget):
     def _rect_to_bbox4326(
         self, extent, authid: str
     ) -> Optional[Tuple[float, float, float, float]]:
-        """A QgsRectangle in ``authid`` -> EPSG:4326 bbox tuple, or None.
-
-        Pure math (``aoi.extent_to_bbox4326``) covers EPSG:4326/3857; any
-        other CRS falls back to QGIS's own transform. Never raises -- an
-        unresolvable CRS yields None (the status line says so honestly).
-        """
+        """A QgsRectangle in ``authid`` -> an EPSG:4326 bbox tuple, or None.
+        Never raises: an unresolvable CRS yields None and the status line says
+        so honestly."""
         bbox = aoi.extent_to_bbox4326(
             extent.xMinimum(), extent.yMinimum(),
             extent.xMaximum(), extent.yMaximum(), authid,
@@ -842,15 +716,9 @@ class Trid3ntDock(QDockWidget):
         return self._rect_to_bbox4326(extent, authid)
 
     def _selection_bbox4326(self) -> Optional[Tuple[float, float, float, float]]:
-        """The active layer's SELECTION bbox as EPSG:4326, or None.
-
-        Milestone 3 item 4 (v1): the bbox OF the selection, not the exact
-        ring -- the agent's structured AOI carriers (``args.bbox`` on
-        case-create/set-bbox + the per-message ``aoi_bbox`` payload field)
-        are 4-number boxes. None when there
-        is no active vector layer, no selected features, or a degenerate
-        rect (a single point selection has no area -- honest None).
-        """
+        """The active layer's SELECTION bbox as EPSG:4326, or None. The bbox
+        OF the selection, never its ring: every AOI carrier on the wire is a
+        four-number box. A degenerate rect has no area and yields None."""
         try:
             layer = self.iface.activeLayer()
             if layer is None or not hasattr(layer, "selectedFeatureCount"):
@@ -869,19 +737,8 @@ class Trid3ntDock(QDockWidget):
         self,
     ) -> Tuple[Optional[Tuple[float, float, float, float]], Optional[str]]:
         """The ``(bbox, source)`` to attach right now, or ``(None, None)``.
-
-        A2 (NATE 2026-07-20): the AOI model is now EXPLICIT-only -- the user
-        DREW an AOI (the Set-AOI rectangle, persisted as ``self._case_bbox``,
-        which the rehydrated case bbox also populates) OR no AOI is set and the
-        AGENT geocodes the location from the message. The canvas-as-AOI and
-        selection-polygon paths are GONE (no reads of ``settings.canvas_aoi`` /
-        ``settings.selection_aoi``). Returns the drawn/persisted case bbox when
-        one exists and is within the size guard, else ``(None, None)``.
-
-        O1 (NATE 2026-07-20): this NO LONGER stamps a standing status line --
-        the AOI is noted once at set time (``_on_aoi_extent_chosen``), never
-        restated per send.
-        """
+        The AOI model is EXPLICIT-only: either the user DREW one, or none is
+        set and the agent geocodes the location out of the message itself."""
         bbox = self._case_bbox
         if bbox is not None and aoi.bbox_within_guard(bbox):
             return bbox, "drawn"
@@ -893,13 +750,8 @@ class Trid3ntDock(QDockWidget):
         self, point, authid: str
     ) -> Optional[Tuple[float, float]]:
         """A clicked ``QgsPointXY`` in ``authid`` -> EPSG:4326 ``(lon, lat)``,
-        or None.
-
-        Pure math (``aoi.merc_to_lonlat``) covers EPSG:4326 passthrough +
-        EPSG:3857; any other CRS falls back to QGIS's own transform --
-        mirrors ``_rect_to_bbox4326``. Never raises -- an unresolvable CRS
-        or an out-of-range result yields None (the click note says so
-        honestly)."""
+        or None. Never raises: an unresolvable CRS or an out-of-range result
+        yields None and the click note says so."""
         import math
 
         authid_norm = (authid or "").strip().upper()
@@ -932,12 +784,9 @@ class Trid3ntDock(QDockWidget):
         return lon, lat
 
     def _toggle_probe_tool(self, checked: bool) -> None:
-        """Install/restore the canvas map tool for the Probe button.
-
-        ON: saves the canvas' CURRENT tool (whatever it was -- pan, another
-        plugin's tool, ...) then installs a ``QgsMapToolEmitPoint``, built
-        once and reused. OFF: restores the saved tool -- the canvas is never
-        left on a tool the user did not ask for."""
+        """Install or restore the canvas map tool for the Probe button. ON
+        SAVES whatever tool was active first, and OFF restores it, so the
+        canvas is never left on a tool the user did not ask for."""
         try:
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- no canvas (headless) -- no-op
@@ -963,9 +812,9 @@ class Trid3ntDock(QDockWidget):
         )
 
     def _set_probe_output(self, text: str, error: bool = False) -> None:
-        """BUG 3b (live-feedback 2026-07-12): the latest probe status /
-        result / error goes to the pinned panel under the message list,
-        replaced in place on each click -- NEVER a chat note."""
+        """The latest probe status, result or error goes to the PINNED panel
+        under the message list, replaced in place on each click -- never a
+        chat note."""
         self._probe_panel.setVisible(True)
         self.probe_result_label.setText(text)
         self.probe_result_label.setStyleSheet(
@@ -1017,23 +866,14 @@ class Trid3ntDock(QDockWidget):
         label = probe.probe_location_label(lon, lat)
         self._set_probe_output(f"Probe {label} failed: {message}", error=True)
 
-    # -- case AOI (persistent per-case bbox, per-case-bbox 2026-07-19) --------- #
+    # -- case AOI (the persistent per-case bbox) ------------------------------- #
 
     def _render_aoi_overlay(
         self, bbox4326: Tuple[float, float, float, float]
     ) -> None:
-        """Paint (or repaint) the case AOI as a DASHED, outline-only rectangle
-        on the canvas -- the QGIS twin of the web's analysis-extent overlay.
-
-        The bbox is EPSG:4326 ``(w, s, e, n)``; the canvas may be 3857/other,
-        so the ring is transformed 4326 -> canvas CRS via QgsCoordinateTransform
-        exactly like ``layers.zoom_to_bbox4326`` (never hand-rolled). A single
-        reused ``QgsRubberBand`` (built lazily -- it needs a live canvas) holds
-        the geometry; a subtle blue accent, Qt.PenStyle.DotLine pen, transparent fill so
-        it reads as an EXTENT, not a filled feature. Headless-safe: no canvas
-        (or any construction failure) is a silent no-op, never a crash -- the
-        state (``_case_bbox``) is still authoritative for the agent.
-        """
+        """Paint the case AOI as a DASHED, outline-only rectangle, so it reads
+        as an EXTENT and not a filled feature. Headless-safe: no canvas is a
+        silent no-op, and ``_case_bbox`` remains authoritative regardless."""
         try:
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- headless / no iface -- no overlay
@@ -1093,14 +933,9 @@ class Trid3ntDock(QDockWidget):
             pass
 
     def _toggle_aoi_draw(self, checked: bool) -> None:
-        """Install/restore the canvas map tool for the "Set AOI" button --
-        the exact release-point / probe discipline: ON saves whatever tool is
-        active then installs a ``QgsMapToolExtent`` (its ``extentChanged``
-        signal is the box analog of the point tool's ``canvasClicked``); OFF
-        restores the saved tool so the canvas is never left on a tool the user
-        did not ask for. Guarded: only usable with a live case + connection
-        (mirrors the probe-click guard) -- without one the button snaps back
-        off with an honest status line."""
+        """Install or restore the canvas map tool for the Set-AOI button, ON
+        saving the active tool and OFF restoring it. GUARDED: without a live
+        case and connection the button snaps back off with an honest note."""
         try:
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- headless / no canvas -- no-op
@@ -1138,7 +973,7 @@ class Trid3ntDock(QDockWidget):
                     return
             self._prev_aoi_tool = canvas.mapTool()
             canvas.setMapTool(self._aoi_map_tool)
-            # A1 (NATE 2026-07-20): while Set-AOI is ON, BACKSPACE/DELETE clears
+            # While Set-AOI is ON, BACKSPACE/DELETE clears
             # the current AOI. A canvas eventFilter (installed here, removed in
             # the OFF branch) catches those keys and routes to _clear_aoi -- the
             # clearing is multiplexed into the Set-AOI tool (no separate button).
@@ -1153,11 +988,9 @@ class Trid3ntDock(QDockWidget):
                 self._aoi_key_filter_on = False
 
     def eventFilter(self, obj, event):  # noqa: N802 -- Qt-mandated name
-        """A1 (NATE 2026-07-20): while the Set-AOI tool is active, BACKSPACE or
-        DELETE on the canvas clears the current AOI (``_clear_aoi``). The filter
-        is installed only while ``aoi_btn`` is checked (see ``_toggle_aoi_draw``);
-        guard on that flag + key so nothing else on the canvas is intercepted,
-        and always fall through to the base filter for every other event."""
+        """While Set-AOI is active, BACKSPACE or DELETE on the canvas clears
+        the AOI. Guarded on both flag and key, and every other event falls
+        through, so nothing else on the canvas is intercepted."""
         from qgis.PyQt.QtCore import QEvent
 
         if (
@@ -1171,12 +1004,9 @@ class Trid3ntDock(QDockWidget):
         return super().eventFilter(obj, event)
 
     def _on_aoi_extent_chosen(self, rect) -> None:
-        """A rectangle was dragged with the "Set AOI" tool: convert the
-        canvas-CRS ``QgsRectangle`` -> EPSG:4326 (via ``_rect_to_bbox4326``,
-        the same CRS path the canvas/selection AOI uses), update the state,
-        repaint the overlay, persist it (case-command ``set-bbox`` -> the
-        server sets ``state.case_bbox`` so the pin/snap paths fire every
-        turn), then restore the prior map tool + uncheck the button."""
+        """A rectangle was dragged with Set-AOI: convert it to EPSG:4326,
+        repaint the overlay, PERSIST it on the case so every later turn anchors
+        on it, then restore the prior map tool."""
         try:
             canvas = self.iface.mapCanvas()
             authid = canvas.mapSettings().destinationCrs().authid()
@@ -1205,16 +1035,9 @@ class Trid3ntDock(QDockWidget):
         self.aoi_btn.setChecked(False)
 
     def _clear_aoi(self) -> None:
-        """Item D (qgis-ux-batch 2026-07-19): clear the current case AOI.
-
-        Drops the local overlay + nulls ``self._case_bbox`` (``_clear_aoi_overlay``)
-        AND resets ``state.case_bbox`` server-side so the agent stops anchoring
-        every turn on the old extent -- the clear equivalent of the Set-AOI
-        ``set-bbox`` send (an empty ``bbox`` = CLEAR; the server treats an
-        explicit null/empty bbox as a reset). Honest note either way; with no
-        live case + connection there is nothing to sync, so it only clears the
-        local overlay and says so.
-        """
+        """Clear the current case AOI locally AND server-side, so the agent
+        stops anchoring on the old extent; an empty bbox IS the reset. Without
+        a live case there is nothing to sync, and it says so."""
         had = self._case_bbox is not None
         self._clear_aoi_overlay()  # hides overlay + nulls self._case_bbox
         if self._case_id and self.bridge.running:
@@ -1229,12 +1052,9 @@ class Trid3ntDock(QDockWidget):
     # -- draw-a-region supply path
 
     def _toggle_draw_region(self, checked: bool) -> None:
-        """Install/restore the 'Draw region' map tool -- mirrors the Set-AOI
-        release-point discipline: ON saves the active tool then installs a
-        ``QgsMapToolExtent`` (its ``extentChanged`` fires on the drag release),
-        OFF restores the saved tool. Unlike Set AOI, drawing is allowed offline
-        (the region attaches to the NEXT message, sent when connected); an older
-        QGIS build lacking the tool degrades honestly (snap off + note)."""
+        """Install or restore the Draw-region map tool, ON saving the active
+        tool and OFF restoring it. Unlike Set-AOI this is allowed OFFLINE,
+        because the region attaches to the next message rather than the case."""
         try:
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- headless / no canvas -- no-op
@@ -1266,11 +1086,9 @@ class Trid3ntDock(QDockWidget):
             self._prev_region_tool = None
 
     def _on_region_extent_chosen(self, rect) -> None:
-        """A rectangle was dragged with the 'Draw region' tool: convert the
-        canvas-CRS ``QgsRectangle`` -> EPSG:4326 (the same path Set-AOI uses),
-        stash it as the pending ``drawn_geometry`` payload, paint the overlay,
-        then restore the prior tool + pop the button. The region rides the NEXT
-        ``send_chat`` and is cleared on send (one rectangle, one turn)."""
+        """A rectangle was dragged with Draw-region: stash it as the pending
+        drawn geometry and paint the overlay. It rides the NEXT message and is
+        cleared on send -- one rectangle, one turn."""
         try:
             canvas = self.iface.mapCanvas()
             authid = canvas.mapSettings().destinationCrs().authid()
@@ -1301,11 +1119,9 @@ class Trid3ntDock(QDockWidget):
     def _render_region_overlay(
         self, bbox4326: Tuple[float, float, float, float]
     ) -> None:
-        """Paint the pending drawn region as a SOLID amber outline-only rectangle
-        (distinct from the dashed blue AOI overlay) so the user sees what will
-        attach. Same lazy-rubber-band + 4326->canvas transform path as
-        ``_render_aoi_overlay``; headless / construction failure is a silent
-        no-op (``_drawn_region`` stays authoritative for the send)."""
+        """Paint the pending drawn region as a SOLID amber outline, distinct
+        from the dashed AOI overlay, so the user sees what will attach.
+        Headless is a silent no-op; the stored region drives the send."""
         try:
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- headless / no iface -- no overlay
@@ -1373,15 +1189,9 @@ class Trid3ntDock(QDockWidget):
         self.bridge.auth_expired.connect(self._on_auth_expired)
 
     def _effective_http_base(self) -> str:
-        """The resolved agent HTTP (:8766) base for EVERY :8766 caller
-        (probe-point, ingest-layer/push-layer, export, case-list,
-        provider-config, local-models) -- the single derivation seam so they
-        can never drift out of sync (remote-daemon design). LOCAL mode
-        prefers the server-advertised ``http_base`` from the last connect
-        handshake; when absent (older daemon, or not connected yet -- e.g.
-        the cold pre-connect case-list fetch) it derives ``:8766`` from the
-        ONE "Server URL" setting's host, so pointing that URL at a tailnet
-        peer just works with no second field to configure."""
+        """The resolved agent HTTP base, and the ONE derivation seam every
+        caller of it goes through, so they cannot drift apart. It prefers the
+        advertised base and otherwise derives one from the Server URL host."""
         return resolve_http_base(self._advertised_http_base, self.settings.local_url)
 
     def _effective_data_base(self) -> str:
@@ -1392,10 +1202,8 @@ class Trid3ntDock(QDockWidget):
 
     def _configure_store_access(self) -> None:
         """Point GDAL's ``/vsis3`` at the effective store endpoint.
-
-        Idempotent, and run both at dock construction and after each connect:
-        the endpoint is only known for certain once a handshake has advertised
-        it, and a rehydrate can paint layers before then."""
+        IDEMPOTENT, and run both at construction and after each connect: the
+        endpoint is only certain once advertised, but layers can paint first."""
         note = configure_store_access(
             self._effective_data_base(),
             self.settings.store_access_key,
@@ -1415,12 +1223,12 @@ class Trid3ntDock(QDockWidget):
             return
         self._set_dot("connecting")
         self.status_label.setText(f"Connecting to {url} ...")
-        # Item B3 (qgis-ux-batch 2026-07-19): the top-row button only CONNECTS;
+        # The top-row button only CONNECTS;
         # disable it while a connection is up/in-flight (Disconnect lives in
         # Settings now). Re-enabled by disconnect_agent + the failure paths.
         title = "QGIS session " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         self._session_case_title = title
-        # A2 (NATE 2026-07-20): a fresh case is BBOX-LESS -- never seed the
+        # A fresh case is BBOX-LESS -- never seed the
         # canvas extent on create. The AOI is set explicitly later (the Set-AOI
         # rectangle) or the agent geocodes it; there is no canvas-as-AOI path.
         self.bridge.start(
@@ -1428,7 +1236,7 @@ class Trid3ntDock(QDockWidget):
             token=self.settings.effective_token(),
             case_title=title,
             case_bbox=None,
-            # Live-feedback 2026-07-09: REUSE the resumed / newest existing
+            # REUSE the resumed / newest existing
             # case instead of minting a fresh "QGIS session ..." case on every
             # connect (with auto-connect that regrew case clutter per
             # dock-show); create only when zero cases exist.
@@ -1443,17 +1251,17 @@ class Trid3ntDock(QDockWidget):
         # session, so sweep everything staged this session (the ONE fallback
         # for non-streamable meshes) -- nothing outlives the session.
         self.materializer.cleanup_session()
-        # Per-case-bbox 2026-07-19: the case AOI is per-case state -- a
+        # The case AOI is per-case state -- a
         # disconnect ends the case binding, so the overlay must go too.
         self._clear_aoi_overlay()
         self._clear_region_overlay  #: drop any pending drawn region
         self._set_case_label("")
         self._set_dot("disconnected")
         self.status_label.setText("Not connected")
-        # Item B3: re-arm the top-row Connect button (disabled while connected).
+        # Re-arm the top-row Connect button (disabled while connected).
 
     def _set_case_label(self, title: str) -> None:
-        # H1/H2 (NATE 2026-07-20): the case name moved to the dock TITLEBAR --
+        # The case name rides the dock TITLEBAR --
         # the under-button "Case: <title>" line (self.case_label) is gone. One
         # method both the case-open and no-case paths call: a title = that case
         # in the titlebar; empty = the "TRID3NT" brand word (fresh/no-case/
@@ -1469,7 +1277,7 @@ class Trid3ntDock(QDockWidget):
 
     def _open_settings(self) -> None:
         prev_basemap = self.settings.basemap_preset
-        # Item B3 (qgis-ux-batch 2026-07-19): DISCONNECT lives in Settings now
+        # DISCONNECT lives in Settings now
         # (off the header top row). Hand the dialog the dock's disconnect path +
         # the current connection state so its Disconnect button is enabled only
         # while connected and drives the exact same teardown as before.
@@ -1481,10 +1289,10 @@ class Trid3ntDock(QDockWidget):
             connected=self.bridge.running,
         )
         dlg.exec()
-        # Item 4: the AOI toggles live only in Settings. Item R3 (2026-07-18):
+        # The AOI toggles live only in Settings, and
         # no pinned status line to repaint anymore -- the next send recomputes
         # the AOI and notes any CHANGED notice inline in the transcript.
-        # BK-1b: Save persisted the preset but ensure_basemap only ran on
+        # Save persisted the preset but ensure_basemap only ran on
         # case-open/export, so the combo looked dead until the next case
         # switch. An explicit preset change in Settings applies here, not
         # gated on auto_basemap (that checkbox governs automatic adds).
@@ -1496,7 +1304,7 @@ class Trid3ntDock(QDockWidget):
     def _open_cases(self) -> None:
         dlg = CasesDialog(self, self._cases)
         self._cases_dialog = dlg
-        # Item b/c (live-feedback 2026-07-09): populate from the cold HTTP
+        # Populate from the cold HTTP
         # route when there is nothing to show yet, or the live WS case-list
         # never arrived (not connected) -- so the dialog is never an honest-
         # looking-but-wrong empty state while the agent box actually has
@@ -1509,12 +1317,9 @@ class Trid3ntDock(QDockWidget):
             self._cases_dialog = None
 
     def _load_cold_case_list(self, dlg: "CasesDialog") -> None:
-        """Fetch ``GET /api/case-list`` off the UI thread and feed the
-        result into ``dlg`` (item b/c). Local-mode only in practice (the
-        route is 404 outside the local single-user seam -- see
-        the server's ``catalog_http.py``); remote mode simply
-        gets an honest failure note, which is fine since remote already has
-        its own Connect-first flow."""
+        """Fetch the COLD case list off the UI thread and feed it into
+        ``dlg``, so the dialog can populate before any connection exists. A
+        failure lands as an honest note in the dialog."""
         dlg.info_lbl.setText("Loading cases ...")
         base_url = self._effective_http_base()
         task = _CaseListTask(base_url, self)
@@ -1540,16 +1345,9 @@ class Trid3ntDock(QDockWidget):
     # -- case switching / new / delete (milestone 3 + item 2/3) ---------------- #
 
     def open_case(self, case_id: str, title: str) -> None:
-        """Open ``case_id`` from the Cases dialog (single click / double
-        click on a row, cold-listed or not; item d, live-feedback
-        2026-07-09).
-
-        Already connected -> a direct ``select_case`` (works even with no
-        active case bound, e.g. right after deleting one). Otherwise (cold
-        list, or a connect is still mid-handshake) -> queue the open and
-        (auto-)connect; ``_on_case_ready`` performs the deferred select once
-        the handshake actually completes, so the click is never silently
-        dropped."""
+        """Open ``case_id`` from the Cases dialog, cold-listed or not. When
+        not yet connected the open is QUEUED and performed once the handshake
+        completes, so a click is never silently dropped."""
         if self.bridge.running and self._connected:
             self.select_case(case_id, title)
             return
@@ -1561,12 +1359,9 @@ class Trid3ntDock(QDockWidget):
             self._note(f"Waiting for connection to open case '{title}' ...")
 
     def select_case(self, case_id: str, title: str) -> None:
-        """Switch the chat session to an existing case (case-command select).
-
-        The server replies with a full ``case-open`` rehydration; the dock
-        rebinds on that event (authoritative title + replayed layers), so
-        this only stamps optimistically and sends.
-        """
+        """Switch the chat session to an existing case. This only stamps
+        optimistically and sends: the server's ``case-open`` reply is what
+        actually rebinds the dock."""
         if not self.bridge.running:
             self.status_label.setText("Not connected -- open Settings to connect")
             return
@@ -1575,17 +1370,13 @@ class Trid3ntDock(QDockWidget):
         self.bridge.select_case(case_id)
 
     def new_case(self) -> None:
-        """Start a fresh case (case-command create) -- header "New" button
-        and the Cases dialog's "New case" button both call this. The
-        server's case-open reply rebinds the dock (fresh layer group,
-        header title, basemap + zoom) through ``_on_case_open_event``, the
-        same path a case SELECT rebinds through.
-        """
+        """Start a fresh case. The server's ``case-open`` reply rebinds the
+        dock through the SAME path a case select rebinds through."""
         if not self.bridge.running:
             self.status_label.setText("Not connected -- open Settings to connect")
             return
         self._note("Starting a new case ...")
-        # Item C (qgis-ux-batch 2026-07-19): a NEW case must never inherit the
+        # A NEW case must never inherit the
         # PREVIOUS case's AOI rectangle -- drop the overlay + null the local
         # bbox BEFORE creating, so a stale box never lingers into the fresh
         # case (_on_case_open_event repaints from the new case's own bbox, or
@@ -1593,16 +1384,15 @@ class Trid3ntDock(QDockWidget):
         # also nulls self._case_bbox.
         self._clear_aoi_overlay()
         self._clear_region_overlay  #: drop any pending drawn region
-        # A2 (NATE 2026-07-20): a NEW case is BBOX-LESS -- the canvas-as-AOI
+        # A NEW case is BBOX-LESS -- the canvas-as-AOI
         # seed is gone. A clean slate with no AOI until the user Sets one (the
         # Set-AOI rectangle) or the LLM geocodes it.
         self.bridge.case_command("create", args=None)
 
     def delete_case(self, case_id: str, title: str) -> None:
-        """Delete a case (case-command delete). The server re-emits
-        case-list, which refreshes the open Cases dialog via ``set_cases``.
-        If the deleted case was the dock's active one, clear the case label
-        gracefully -- the connection itself stays up."""
+        """Delete a case. The server re-emits the case list, which refreshes
+        an open dialog; deleting the ACTIVE case clears the label but leaves
+        the connection up."""
         if not self.bridge.running:
             self.status_label.setText("Not connected -- open Settings to connect")
             return
@@ -1610,17 +1400,13 @@ class Trid3ntDock(QDockWidget):
         self.bridge.case_command("delete", case_id)
         if case_id == self._case_id:
             self._case_id = None
-            # H2 (NATE 2026-07-20): no under-button label anymore -- reset the
+            # No under-button label anymore -- reset the
             # titlebar to the "TRID3NT" brand word (no active case).
             self._set_case_label("")
 
     def rename_case(self, case_id: str, new_title: str) -> None:
-        """R1 (NATE 2026-07-20): rename a case (case-command ``rename`` with
-        ``args={"title": ...}``, the server-supported verb). Mirrors
-        ``delete_case``'s bridge send + not-connected guard. The server re-emits
-        the case-list, which repaints the open Cases dialog via ``set_cases``;
-        if the renamed case is the dock's active one, refresh the titlebar
-        label to the new title."""
+        """Rename a case. The server re-emits the case list, which repaints an
+        open dialog; renaming the ACTIVE case refreshes the titlebar label."""
         new_title = (new_title or "").strip()
         if not new_title:
             return
@@ -1645,15 +1431,9 @@ class Trid3ntDock(QDockWidget):
     # -- push active layer into the case -------------------------------------- #
 
     def _push_active_layer(self) -> None:
-        """Header "Push layer" button: send ``iface.activeLayer()`` into the
-        current case as a first-class input layer.
-
-        Ask-free UX: a single click, ONE tiny confirm popover (the "Set as
-        case AOI" checkbox -- default off -- since that mutates the case
-        extent and deserves a beat of confirmation; everything else proceeds
-        without further prompting), then one worker-thread round trip
-        (export to a temp file, upload, register).
-        """
+        """Send the ACTIVE QGIS layer into the current case as a first-class
+        input layer. Exactly ONE confirm, for the Set-as-case-AOI checkbox,
+        because that alone mutates the case extent."""
         if not self._case_id:
             self._note(
                 "No active case -- open or start a case first.", error=True
@@ -1704,14 +1484,9 @@ class Trid3ntDock(QDockWidget):
         self._note(f"{label} failed: {message}", error=True)
 
     def _register_layer_tree_push_action(self) -> None:
-        """Item R6 (live-feedback 2026-07-18): the push action lives in the
-        QGIS layer-tree context menu now (right-click a layer -> "Push layer
-        to case"), replacing the removed header button. One QAction per layer
-        type (vector + raster; the QGIS API registers per-type), both backed
-        by ``_push_active_layer`` -- right-clicking a tree entry makes it the
-        current/active layer, so the existing active-layer path is exactly
-        right. Removed again in ``shutdown`` so a plugin reload never stacks
-        duplicate menu entries."""
+        """Register the push action on the QGIS layer-tree context menu, one
+        QAction per layer type. Right-clicking a tree entry makes it ACTIVE,
+        so the active-layer path is exactly the right one to back it with."""
         for layer_type in (QgsMapLayer.VectorLayer, QgsMapLayer.RasterLayer):
             action = QAction("Push layer to case", self)
             action.triggered.connect(self._push_active_layer)
@@ -1724,14 +1499,12 @@ class Trid3ntDock(QDockWidget):
             self._push_tree_actions.append(action)
 
     def _route_compute_step(self, step: PipelineStep) -> None:
-        """Item R4 (live-feedback 2026-07-18): a ``role="compute"`` pipeline
-        step renders as ONE persistent collapsible SimCard keyed by step_id
-        (inserted before the terminal stretch like every message widget) --
-        never a transient grey row. Replayed frames fold into the same card;
-        ``_clear_messages`` (case switch) resets the registry."""
+        """A compute pipeline step renders as ONE persistent card keyed by
+        step id, never a transient row. Later frames fold into that same card,
+        and a case switch resets the registry."""
         card = self._sim_cards.get(step.step_id)
         if card is None:
-            # Item N5 (live-feedback 2026-07-19): mirror the BUG-4 gate-card
+            # Mirror the gate-card
             # discipline -- close out the current streaming entry BEFORE the
             # card inserts, so post-card narration mints a FRESH entry BELOW
             # it (chronological turn flow; the card never strands at the
@@ -1746,16 +1519,12 @@ class Trid3ntDock(QDockWidget):
         card.update_from_step(step)
 
     def _close_pending_for_card(self) -> None:
-        """Items BUG-4 / N5 (live-feedback 2026-07-12 / -07-19): a card (gate
-        or sim) is about to insert -- close out the current streaming
-        assistant entry so subsequent narration mints a FRESH entry BELOW the
-        card via ``_ensure_pending`` (chronological turn flow; the card never
-        strands at the bottom while text piles above it). The entry's
-        transient pipeline rows are cleared first so they re-render in the new
-        entry below rather than duplicating, frozen, above the card."""
+        """A card is about to insert: close out the streaming entry so later
+        narration mints a FRESH one BELOW it, and clear its transient rows so
+        they re-render below rather than freezing above the card."""
         if self._pending is not None:
             self._pending.clear_tool_card()
-            # Feature 2026-07-13: this entry receives no more deltas --
+            # This entry receives no more deltas --
             # final-render its markdown before closing it out.
             self._pending.finalize_markdown()
         self._pending = None
@@ -1790,10 +1559,9 @@ class Trid3ntDock(QDockWidget):
     # -- bridge slots (UI thread) ---------------------------------------------- #
 
     def _refresh_model_label(self) -> None:
-        """Row-1 status TEXT = the active LLM model name (the green dot already
-        means "connected"). Prefer the user's Settings model pick; else the
-        agent's env default probed on connect; else empty (the dot carries the
-        state). NATE 2026-07-20 -- drop the redundant "Connected"/case-id text."""
+        """The status text is the ACTIVE MODEL name, since the dot already
+        carries connectedness: the Settings pick first, else the agent's probed
+        default, else empty."""
         model = (self.settings.model_id or self._effective_model or "").strip()
         if model:
             # Short readable form: drop any provider prefix ("nvidia/...") but
@@ -1805,10 +1573,9 @@ class Trid3ntDock(QDockWidget):
             self.status_label.setToolTip("")
 
     def _probe_effective_model(self) -> None:
-        """Ask the agent for its env-default model (off-thread) so the status
-        strip shows the real running model even when the Settings picker is
-        blank (NATE's nemotron via .env.local). No-op when the user picked a
-        model explicitly (that value is authoritative)."""
+        """Ask the agent for its env-default model off-thread, so the status
+        strip names the real running model when the picker is blank. A NO-OP
+        when the user picked one: that value is authoritative."""
         if self.settings.model_id:
             return
         task = _EffectiveModelTask(self._effective_http_base(), self)
@@ -1842,12 +1609,12 @@ class Trid3ntDock(QDockWidget):
         self.materializer.set_case(case_id, self._session_case_title or None)
         self._set_case_label(self._session_case_title or case_id[:8])
         self._set_dot("connected")
-        # NATE 2026-07-20: the status strip carries neither the case-id chip nor
+        # The status strip carries neither the case-id chip nor
         # a "Connected" word -- the case identity rides the dock TITLEBAR
         # (``_set_case_label``), the green dot means connected, and the status
         # TEXT shows the active model.
         self._refresh_model_label()
-        # Item d (live-feedback 2026-07-09): a case picked from the Cases
+        # A case picked from the Cases
         # dialog while disconnected/mid-handshake -- the connection just
         # created its own fresh "QGIS session ..." case; now switch to the
         # one the user actually asked for.
@@ -1893,7 +1660,7 @@ class Trid3ntDock(QDockWidget):
     def _on_resumed(self) -> None:
         self._connected = True
         self._set_dot("connected")
-        # Item B1 (qgis-ux-batch 2026-07-19) + NATE 2026-07-20: no case-id chip
+        # No case-id chip
         # and no "Reconnected" word in the signifier -- the green dot means
         # connected; the status text returns to the active model name.
         self._refresh_model_label()
@@ -1911,7 +1678,7 @@ class Trid3ntDock(QDockWidget):
         if kind in _PICKER_SUPERSEDE_KINDS or kind == "tool-candidates":
             self._supersede_open_tool_pickers()
         if kind == "thinking-chunk":
-            # F9 (live-feedback 2026-07-09): local model reasoning-channel token.
+            # Local model reasoning-channel token.
             # Accumulate into the pending entry's thinking block; the block
             # collapses automatically when the first answer delta arrives.
             entry = self._ensure_pending()
@@ -1922,12 +1689,11 @@ class Trid3ntDock(QDockWidget):
             entry.append_delta(str(data.get("delta") or ""))
             self._scroll_to_bottom()
         elif kind == "pipeline":
-            # T1..T7 (NATE 2026-07-20): assemble the parent tool card's inner
+            # Assemble the parent tool card's inner
             # rows + the ONE bottom metadata block. Each inner row is just a
             # tool label + its state (the card renders ">" + label + a status
-            # glyph, T4/T5/T6); the per-row arg/state detail that used to ride
-            # on the right (T6) is DROPPED from the row and folded into the
-            # muted metadata block at the bottom of the card (T7).
+            # glyph); the per-row arg and state detail is folded into the
+            # muted metadata block at the bottom of the card instead.
             steps = data.get("steps") or []
             inner_rows: List[dict] = []
             meta_lines: List[str] = []
@@ -1937,7 +1703,7 @@ class Trid3ntDock(QDockWidget):
                 if step.tool_name.lower() in _LLM_STEP_NAMES:
                     continue
                 if step.role == "compute":
-                    # Item R4 (live-feedback 2026-07-18): the off-box solver
+                    # The off-box solver
                     # step renders as ONE persistent collapsible SimCard, not
                     # an inner tool row -- see _route_compute_step.
                     self._route_compute_step(step)
@@ -1955,7 +1721,7 @@ class Trid3ntDock(QDockWidget):
                      "state": step.state,
                      "nested": bool(step.parent_step_id)}
                 )
-                # T7: the arg summary (was the per-row right-side detail, T6)
+                # The arg summary
                 # + any substep label + error text join the bottom metadata.
                 bits: List[str] = []
                 if step.substep_label:
@@ -1978,7 +1744,7 @@ class Trid3ntDock(QDockWidget):
             if layers and self._case_id:
                 notes = self.materializer.materialize(layers)
                 if notes:
-                    # BUG 3a (live-feedback 2026-07-12): one collapsed
+                    # One collapsed
                     # "Layers (N)" toggle per batch, not N chat lines
                     # (errors stay visible outside the collapse).
                     self._ensure_pending().add_layer_notes(notes)
@@ -1989,7 +1755,7 @@ class Trid3ntDock(QDockWidget):
             self._ensure_pending().add_note(f"{code}: {message}", error=True)
             self._scroll_to_bottom()
         elif kind == "chart":
-            # Charts-window 2026-08-04: a live mid-turn chart lands in the
+            # A live mid-turn chart lands in the
             # bottom-docked ChartsWindow (never a chat widget). The chat gets
             # only the incremented "Charts (N)" button + one pointer note so
             # the turn's narrative says where the chart went.
@@ -2003,7 +1769,7 @@ class Trid3ntDock(QDockWidget):
                 )
                 self._scroll_to_bottom()
         elif kind == "solve-progress":
-            # Item R4 (live-feedback 2026-07-18): the ~10 s big-sim telemetry
+            # The ~10 s big-sim telemetry
             # tick. It carries run_id, not step_id; the local seam runs one
             # sim at a time, so fold it into every non-terminal SimCard (the
             # card itself run_id-stamps and ignores live-only fields once
@@ -2012,7 +1778,7 @@ class Trid3ntDock(QDockWidget):
                 if not card.terminal:
                     card.update_from_progress(data)
         elif kind == "tool-io":
-            # Item R2 (live-feedback 2026-07-18): raw-args sidecar keyed by
+            # Raw-args sidecar keyed by
             # step_id (emitted at dispatch START, so the summary is in place
             # before the pipeline frame paints the chip row).
             sid = data.get("step_id")
@@ -2022,24 +1788,24 @@ class Trid3ntDock(QDockWidget):
         elif kind == "payload-warning":
             self._show_gate_card(data)
         elif kind == "code-exec-request":
-            # Live-feedback 2026-07-21: the code-exec HARD confirm gate. The
+            # The code-exec HARD confirm gate. The
             # agent blocks until the reply lands, so this envelope must never
             # be dropped again (it previously fell through as kind="raw").
             self._show_code_exec_card(data)
         elif kind == "credential-request":
-            # LANE K (NATE 2026-07-22): the JIT API-key prompt for a paused
+            # The JIT API-key prompt for a paused
             # keyed tool (AirNow/FIRMS/...). Same gap the code-exec card
             # closed: previously fell through as kind="raw" and was dropped,
             # so the agent's pause waited out its TTL and failed.
             self._show_credential_card(data)
         elif kind == "tool-candidates":
-            # (Stage 3, 2026-07-22): the tool-selection picker
+            # The tool-selection picker
             # ranked candidates + free-text + let-agent-decide, replying on
             # ONE tool-choice envelope. Fail-open: unanswered, the server's
             # timeout_s proceeds and the supersede hook above folds the card.
             self._show_tool_candidates_card(data)
         elif kind == "region-choice-request":
-            # LANE A (2026-07-23): CRITICAL gate-WAIT -- the server snapped a
+            # CRITICAL gate-WAIT -- the server snapped a
             # vague geocode to the whole state and PAUSES the turn awaiting a
             # region-choice-provided reply. Previously fell through as
             # kind="raw" and was dropped, so the turn hung (the code-exec
@@ -2047,19 +1813,19 @@ class Trid3ntDock(QDockWidget):
             # answer keeps the honest default, so the gate always closes.
             self._show_region_choice_card(data)
         elif kind == "spatial-input-request":
-            # LANE A (2026-07-23): CRITICAL gate-WAIT -- the agent needs a
+            # CRITICAL gate-WAIT -- the agent needs a
             # picked geometry and PAUSES the turn. Previously dropped, hanging
             # the turn. The dock renders the pick card wired to the canvas
             # point/AOI tools; Cancel (and the honest vector_draw degrade)
             # closes the gate.
             self._show_spatial_input_card(data)
         elif kind == "code-exec-result":
-            # LANE A (2026-07-23): the run outcome that follows an approved
+            # The run outcome that follows an approved
             # code-exec-request -- update the code-exec card's folded chip
             # with the honest terminal status.
             self._on_code_exec_result(data)
         elif kind == "secrets-list":
-            # LANE A (2026-07-23): the per-user/per-Case secret roster --
+            # The per-user/per-Case secret roster --
             # store it for the settings/secrets state (minimal honest
             # handling; raw keys never ride here).
             self._on_secrets_list(data)
@@ -2072,7 +1838,7 @@ class Trid3ntDock(QDockWidget):
                 if self._cases_dialog is not None:
                     self._cases_dialog.set_cases(self._cases)
         elif kind == "raw" and data.get("type") == "map-command":
-            # Item G (qgis-ux-batch 2026-07-19): the agent frames a mesh preview
+            # The agent frames a mesh preview
             # (and other explicit re-frames) via a "zoom-to" map-command, since
             # the preview layer itself is published role=input with bbox=None
             # (so it does NOT self-zoom -- that would yank the camera for every
@@ -2096,7 +1862,7 @@ class Trid3ntDock(QDockWidget):
                     zoom_to_bbox4326(canvas, tuple(bbox))
         elif kind == "turn-complete":
             if self._pending is not None:
-                # Feature 2026-07-13: the answer text is final -- convert
+                # The answer text is final -- convert
                 # the plain streamed text to rendered markdown now.
                 self._pending.finalize_markdown()
                 self._pending = None
@@ -2117,36 +1883,13 @@ class Trid3ntDock(QDockWidget):
                 pass
 
     def _on_case_open_event(self, payload: dict) -> None:
-        """A ``case-open`` rehydration arrived -- the select response, AND
-        (as of item 2/3) a mid-session ``case_command("create")`` reply too,
-        since that now sends without blocking on the reply (only the
-        INITIAL connect's create_case still consumes its case-open inside
-        the worker handshake, via ``_on_case_ready``).
-
-        THE fold chokepoint for decision A (NATE 2026-07-31): a case is
-        confirmed open here with its chat AND its persisted layers restored
-        together, in one gesture -- there is no separate export action.
-        ``info.layers`` already carries the case's persisted
-        ``loaded_layer_summaries`` -- no extra HTTP round trip needed, it
-        rides the case-open envelope for free, parsed by the client the
-        SAME way a live publish would. The by-URI materializer STREAMS each
-        layer in place from the advertised store via ``/vsis3/`` -- the remote
-        client reads the same objects ranged over the tailnet, no download.
-
-        Rebinds the dock: authoritative title in the header, a FRESH layer
-        group named for the case (dedup reset), the persisted loaded_layers
-        replayed into it (streamed in place), an OpenStreetMap basemap
-        (settings-gated, item 4), and a canvas zoom to the case bbox -- or,
-        absent one, the union of the vector layers just materialized, or a
-        further fallback bbox -- so the canvas is never silently left
-        wherever it was (item 1, live-feedback 2026-07-09; the fallback
-        ladder + honest note for a genuinely bbox-less raster-only case is
-        item D, live-feedback 2026-07-10). Runs LAST, unconditionally, on
-        every case-open path that reaches this handler (select, New case,
-        and the startup-reuse select alike -- ``_bind_startup_case`` also
-        resolves through a ``case-command select`` whose reply lands here)
-        -- nothing above this call may skip or short-circuit past it.
-        """
+        """A ``case-open`` rehydration arrived: rebind the dock to that case
+        -- title, a FRESH layer group, its persisted layers streamed in place,
+        the basemap, and the zoom. ONE gesture restores chat AND layers."""
+        # The zoom runs LAST and UNCONDITIONALLY on every path that reaches
+        # this handler -- select, New case, and the startup-reuse select alike.
+        # Nothing above it may skip or short-circuit past it, or a case opens
+        # with the canvas left wherever it happened to be.
         info = parse_case_open(payload)
         if info is None:
             self._note(
@@ -2156,7 +1899,7 @@ class Trid3ntDock(QDockWidget):
             )
             return
         self._case_id = info.case_id
-        # ITEM B: the previous case's bubbles/notes/gate cards must not
+        # The previous case's bubbles/notes/gate cards must not
         # survive a switch -- clear the message list before repainting
         # anything for the newly-opened case.
         self._clear_messages()
@@ -2165,18 +1908,18 @@ class Trid3ntDock(QDockWidget):
         self._set_dot("connected")
         self._refresh_model_label()  # status text = active model, not case-id
         self._replay_chat_history(info.chat_messages)
-        # (NATE 2026-07-31): layer restore rides the SAME gesture
+        # Layer restore rides the SAME gesture
         # as the chat replay above -- the by-URI materializer reads the store
         # directly (MinIO on this box or the tailnet peer).
         if info.layers:
             notes = self.materializer.materialize(info.layers)
             if notes:
-                # BUG 3a (live-feedback 2026-07-12): the case-open replay
+                # The case-open replay
                 # used to paint one chat line PER layer (21 on a real case),
                 # pushing the conversation far up -- fold the batch into the
                 # collapsed "Layers (N)" toggle (errors stay visible).
                 self._ensure_pending().add_layer_notes(notes)
-        # Charts-window 2026-08-04: rebuild the charts window's list from the
+        # Rebuild the charts window's list from the
         # case's persisted SessionChartRecords (per-case durability). A
         # chart-less case leaves the (possibly-existing) window empty and the
         # button at "Charts (0)"; a chart-carrying case builds the window
@@ -2193,7 +1936,7 @@ class Trid3ntDock(QDockWidget):
             if note:
                 self._note(note)
         self._zoom_after_case_open(info)
-        # Per-case-bbox 2026-07-19: show the just-opened case's persisted AOI
+        # Show the just-opened case's persisted AOI
         # as the dashed overlay (the exact bbox the agent references each turn
         # via state.case_bbox), so the user sees + can re-draw it. A bbox-less
         # case leaves the overlay cleared (already reset in _clear_messages).
@@ -2203,30 +1946,15 @@ class Trid3ntDock(QDockWidget):
         self._scroll_to_bottom()
 
     def _zoom_after_case_open(self, info) -> None:
-        """ITEM D (live-feedback 2026-07-10, auto-focus on every case
-        switch): zoom the canvas to the just-opened case's area. Fallback
-        ladder, each rung tried only when the previous one is absent or its
-        transform fails:
-
-          1. ``info.bbox`` -- the case-open's own ``session_state.case.bbox``
-             (EPSG:4326).
-          2. the union of the vector layers THIS case-open just
-             materialized (XYZ raster layers report a whole-world extent,
-             so they never drive this fallback).
-          3. any bbox found elsewhere in the case-open's raw payload
-             (``find_fallback_bbox`` -- defensive/future-proof; today's
-             wire contract carries no OTHER bbox field).
-          4. the dock's own CACHED ``case-list`` row for this case_id
-             (``CaseInfo.bbox``, populated independently of the case-open
-             rehydration) -- can carry a bbox even when (1)-(3) come up
-             empty.
-
-        The zoom is silent (NATE de-noise 2026-08-04: the "Zoomed to case
-        area" subtext is gone). A genuinely bbox-less, vector-less case (an
-        OLD raster-only case predating bbox seeding) still says so honestly
-        instead of silently leaving the view wherever it was. Headless-safe:
-        no canvas (no ``iface``) is a silent no-op, never a crash.
-        """
+        """Zoom the canvas to the just-opened case's area, SILENTLY. A case
+        with nothing to zoom to says so honestly rather than leaving the view
+        wherever it was; headless is a no-op."""
+        # The ladder, each rung tried only when the one above it is absent or
+        # its transform fails: the case's own bbox; the union of the vector
+        # layers this open just materialized (an XYZ raster reports a
+        # whole-world extent, so rasters never drive it); any bbox elsewhere in
+        # the raw payload; the dock's cached case-list row, which is populated
+        # independently and can carry one when the rest come up empty.
         try:
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- no canvas (headless), nothing to zoom
@@ -2248,11 +1976,9 @@ class Trid3ntDock(QDockWidget):
     def _fallback_case_bbox(
         self, info
     ) -> Optional[Tuple[float, float, float, float]]:
-        """ITEM D rungs 3-4: a bbox from OUTSIDE ``info.bbox`` -- the
-        case-open's own raw payload, then the dock's cached ``case-list``
-        row for this case_id. Returns the first usable EPSG:4326 bbox, or
-        None. Never raises -- a malformed cached row is skipped, not fatal.
-        """
+        """A bbox from OUTSIDE the case row: the raw payload first, then the
+        cached case-list row. The first usable EPSG:4326 bbox, or None; never
+        raises."""
         raw_bbox = find_fallback_bbox(info.raw)
         if raw_bbox is not None:
             return raw_bbox
@@ -2267,14 +1993,12 @@ class Trid3ntDock(QDockWidget):
                 continue
         return None
 
-    # -- charts window (charts-window 2026-08-04) ------------------------------ #
+    # -- charts window --------------------------------------------------------- #
 
     def _ensure_charts_window(self) -> ChartsWindow:
-        """Lazily build the bottom-docked ChartsWindow (first chart / first
-        button click). Docked to ``Qt.BottomDockWidgetArea`` -- the TUFLOW
-        Viewer position. Headless-safe: no ``iface.addDockWidget`` (test
-        FakeIface) leaves the window a standalone widget, still fully driveable
-        for the chart-list / persistence logic."""
+        """Lazily build the bottom-docked charts window, on the first chart or
+        the first button click. Headless it stays a standalone widget, still
+        fully driveable."""
         if self._charts_window is None:
             self._charts_window = ChartsWindow(
                 locate_callback=self._locate_layer_on_map,
@@ -2307,12 +2031,9 @@ class Trid3ntDock(QDockWidget):
         self.charts_btn.setText(f"Charts ({self._charts_count}){star}")
 
     def _locate_layer_on_map(self, source_uri: str) -> None:
-        """ChartsWindow "Locate on map" (d): pan + flash the QGIS canvas to the
-        layer a chart was computed from. Matches ``source_uri`` to a loaded
-        layer stamped with it by the materializer (``trid3nt/source_uri``
-        custom property) or whose provider source contains it; zooms to that
-        layer's extent and flashes it. An unmatched uri is an HONEST note,
-        never a silent no-op or a crash. Headless (no canvas) is a no-op."""
+        """Pan and flash the canvas to the layer a chart was computed from.
+        An unmatched uri is an HONEST note, never a silent no-op; headless is
+        a no-op."""
         try:
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- no canvas (headless)
@@ -2356,11 +2077,9 @@ class Trid3ntDock(QDockWidget):
             )
 
     def _find_layer_by_source_uri(self, source_uri: str):
-        """A loaded QgsMapLayer matching ``source_uri`` -- by the materializer's
-        ``trid3nt/source_uri`` stamp (exact), else a substring match either way
-        against the layer's provider source (the chart's ``gs://`` / ``s3://``
-        uri and the render uri can differ in scheme/host but share the object
-        key). Returns the first match or None. Never raises."""
+        """A loaded layer matching ``source_uri``: the exact stamp first, else
+        a substring match either way, because two uris for one object can
+        differ in scheme or host while sharing the key. First match or None."""
         try:
             from qgis.core import QgsProject
 
@@ -2405,8 +2124,8 @@ class Trid3ntDock(QDockWidget):
         else:
             card = GateCard(warning, self._on_gate_decision)
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
-        # BUG 4 (live-feedback 2026-07-12, NATE: the card sat "at the bottom
-        # and the response chat is above") / Item N5 (2026-07-19): the
+        # Without this a card strands at the bottom while the response text
+        # piles above it: the
         # streaming _AssistantEntry was created BEFORE the card, so everything
         # after the user's confirm streamed into the entry ABOVE it. Close out
         # the pending entry here (shared _close_pending_for_card discipline) --
@@ -2424,16 +2143,12 @@ class Trid3ntDock(QDockWidget):
         except Exception as exc:  # noqa: BLE001
             self._note(f"confirmation send failed: {exc}", error=True)
 
-    # -- code-exec approval card (live-feedback 2026-07-21) --------------------- #
+    # -- code-exec approval card ----------------------------------------------- #
 
     def _show_code_exec_card(self, payload: dict) -> None:
-        """Render the ``code-exec-request`` HARD confirm gate as an inline
-        approval card (contracts ``sandbox_contracts.py``): the agent does not
-        run the sandbox until the user's decision rides back on the EXISTING
-        ``tool-payload-confirmation`` envelope with ``warning_id ==
-        code_exec_id``. Mirrors ``_show_gate_card``'s malformed-envelope
-        honesty and the BUG-4/N5 close-out discipline (post-decision
-        narration lands in a fresh entry BELOW the card)."""
+        """Render the code-exec HARD confirm gate as an inline approval card.
+        The agent does not run the sandbox until the decision rides back, so a
+        malformed envelope is noted honestly rather than dropped."""
         request = gate.parse_code_exec_request(payload)
         if request is None:
             self._note(
@@ -2444,7 +2159,7 @@ class Trid3ntDock(QDockWidget):
             )
             return
         card = CodeExecCard(request, self._on_code_exec_decision)
-        # LANE A (2026-07-23): track the card by code_exec_id so the later
+        # Track the card by code_exec_id so the later
         # code-exec-result envelope updates THIS card's chip with the outcome.
         self._code_exec_cards[request.code_exec_id] = card
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
@@ -2452,21 +2167,18 @@ class Trid3ntDock(QDockWidget):
         self._scroll_to_bottom()
 
     def _on_code_exec_decision(self, code_exec_id: str, decision: str) -> None:
-        """Send the code-exec confirmation: the reply reuses the payload-warning
-        confirmation envelope (``warning_id == code_exec_id`` -- the server's
-        shared confirm seam, no new outbound verb) with ``revised_args`` always
-        None (contract cross-rule for proceed/cancel)."""
+        """Send the code-exec confirmation. The reply REUSES the payload
+        confirmation envelope rather than adding an outbound verb, and
+        ``revised_args`` is always None."""
         try:
             self.bridge.confirm_payload(code_exec_id, decision, None)
         except Exception as exc:  # noqa: BLE001
             self._note(f"code-exec confirmation send failed: {exc}", error=True)
 
     def _on_code_exec_result(self, payload: dict) -> None:
-        """LANE A (2026-07-23): fold the ``code-exec-result`` run outcome into
-        the matching approved code-exec card's chip (contracts
-        ``sandbox_contracts.CodeExecResultPayload``). Fire-and-forget -- a
-        malformed envelope, or a result for a card that is gone (case switch),
-        is dropped honestly, never a crash."""
+        """Fold a run outcome into its approved code-exec card's chip.
+        FIRE-AND-FORGET: a malformed envelope, or a result for a card that is
+        gone, is dropped rather than crashing."""
         result = gate.parse_code_exec_result(payload)
         if result is None:
             return
@@ -2482,13 +2194,9 @@ class Trid3ntDock(QDockWidget):
     # -- secrets-list roster (settings/secrets state) --------------------------- #
 
     def _on_secrets_list(self, payload: dict) -> None:
-        """LANE A (2026-07-23): store the ``secrets-list`` roster for the
-        settings/secrets state (contracts ``secrets.SecretsListEnvelopePayload``).
-        Minimal honest handling -- the parsed rows carry only vault_ref-free
-        provider/label fields (raw keys NEVER ride this envelope), and a
-        one-line count note lands in chat so the user sees the roster
-        refreshed. A secrets-management UI surface is out of this lane's
-        scope; this is the durable state the settings dialog reads."""
+        """Store the ``secrets-list`` roster as the durable state the settings
+        dialog reads. Raw keys NEVER ride this envelope, and a one-line count
+        note lands in chat so the refresh is visible."""
         self._secrets = gate.parse_secrets_list(payload)
         active = [s for s in self._secrets if getattr(s, "is_active", True)]
         if active:
@@ -2499,17 +2207,12 @@ class Trid3ntDock(QDockWidget):
             )
             self._scroll_to_bottom()
 
-    # -- region-choice picker card (LANE A gate-WAIT, 2026-07-23) ---------------- #
+    # -- region-choice picker card (a gate WAIT) -------------------------------- #
 
     def _show_region_choice_card(self, payload: dict) -> None:
-        """Render the ``region-choice-request`` gate as an inline picker card
-        (contracts ``region_choice.py``): the server snapped a vague geocode
-        to the whole state and PAUSES the turn offering a narrower pick.
-        Mirrors ``_show_gate_card``'s malformed-envelope honesty and the
-        BUG-4/N5 close-out discipline. On a malformed envelope the gate cannot
-        be answered -- but the server's fail-open default is the whole-state
-        bbox it already resolved, so the honest note says the turn will
-        proceed with that."""
+        """Render the region-choice gate as an inline picker card. A
+        malformed envelope cannot be answered, but the server's own default is
+        the whole-state bbox, so the note says the turn proceeds with that."""
         request = gate.parse_region_choice(payload)
         if request is None:
             self._note(
@@ -2531,10 +2234,8 @@ class Trid3ntDock(QDockWidget):
         selected_region_id: Optional[str],
         selected_bbox: Optional[list],
     ) -> None:
-        """Send the region-choice reply: ONE ``region-choice-provided``
-        envelope (region pick with id + echoed bbox, or the whole-state
-        default). A whole_state answer keeps the honest already-resolved
-        bbox -- the decline path that still closes the gate."""
+        """Send the region-choice reply. A whole-state answer keeps the honest
+        already-resolved bbox: the decline path that still CLOSES the gate."""
         try:
             self.bridge.send_region_choice(
                 request_id,
@@ -2545,16 +2246,12 @@ class Trid3ntDock(QDockWidget):
         except Exception as exc:  # noqa: BLE001
             self._note(f"region choice send failed: {exc}", error=True)
 
-    # -- spatial-input pick card (LANE A gate-WAIT, 2026-07-23) ------------------ #
+    # -- spatial-input pick card (a gate WAIT) ---------------------------------- #
 
     def _show_spatial_input_card(self, payload: dict) -> None:
-        """Render the ``spatial-input-request`` gate as an inline pick card
-        (contracts ``ws.SpatialInputRequestPayload``): the agent needs a
-        picked geometry (point / bbox / vector_draw) and PAUSES the turn. The
-        card is wired to the SAME canvas machinery the probe/AOI tools use
-        (``_point_to_lonlat4326`` / ``_rect_to_bbox4326``). Mirrors
-        ``_show_gate_card``'s malformed-envelope honesty and the BUG-4/N5
-        close-out discipline."""
+        """Render the spatial-input gate as an inline pick card, wired to the
+        SAME canvas machinery the probe and AOI tools use. A malformed envelope
+        is noted honestly rather than dropped."""
         request = gate.parse_spatial_input_request(payload)
         if request is None:
             self._note(
@@ -2576,10 +2273,8 @@ class Trid3ntDock(QDockWidget):
         self._scroll_to_bottom()
 
     def _on_spatial_input_decision(self, wire: dict) -> None:
-        """Send the spatial-input reply: ONE ``spatial-input-response``
-        envelope built by the pure ``gate.resolve_spatial_input_*`` helpers
-        (point / bbox coordinates, or cancelled=True). Cancel -- and the
-        honest vector_draw degrade -- still CLOSES the server's paused gate."""
+        """Send the spatial-input reply: coordinates, features, or a cancel.
+        A CANCEL still closes the server's paused gate."""
         try:
             self.bridge.send_spatial_input(
                 wire["request_id"],
@@ -2591,15 +2286,12 @@ class Trid3ntDock(QDockWidget):
         except Exception as exc:  # noqa: BLE001
             self._note(f"spatial input send failed: {exc}", error=True)
 
-    # -- credential-request key-entry card (LANE K, 2026-07-22) ----------------- #
+    # -- credential-request key-entry card -------------------------------------- #
 
     def _show_credential_card(self, payload: dict) -> None:
-        """Render the ``credential-request`` JIT key prompt as an inline
-        key-entry card (contracts ``secrets.py``): a keyed tool hit a
-        missing/invalid key, the agent paused it and asked for the credential
-        by name. Mirrors ``_show_gate_card``'s malformed-envelope honesty and
-        the BUG-4/N5 close-out discipline (post-decision narration lands in a
-        fresh entry BELOW the card)."""
+        """Render the credential prompt as an inline key-entry card: a keyed
+        tool hit a missing key and the agent PAUSED it. A malformed envelope
+        is noted honestly rather than dropped."""
         request = gate.parse_credential_request(payload)
         if request is None:
             self._note(
@@ -2617,14 +2309,9 @@ class Trid3ntDock(QDockWidget):
     def _on_credential_decision(
         self, request_id: str, provider_id: str, key_value: Optional[str]
     ) -> None:
-        """Send the credential reply. ``key_value`` set -> Submit: the raw key
-        rides the EXISTING ``secret-add`` envelope (the ONLY transport that
-        ever carries it --; the server vault-writes it 0600) and
-        THEN ``credential-provided`` ``provided=True`` resumes the paused
-        tool. ``key_value`` None -> Skip: ``credential-provided``
-        ``provided=False`` alone (no secret saved; the server re-raises the
-        tool's original typed error and the agent narrates honestly).
-        The key is never logged and never appears in an error note."""
+        """Send the credential reply: a key submits, ``None`` skips. The raw
+        key rides ``secret-add`` ALONE and is never logged or echoed in an
+        error note; a skip saves nothing and lets the tool's error stand."""
         try:
             if key_value is None:
                 self.bridge.decline_credential(request_id)
@@ -2635,17 +2322,12 @@ class Trid3ntDock(QDockWidget):
             # before any failure surface we format here).
             self._note(f"credential reply send failed: {exc}", error=True)
 
-    # -- tool-selection picker card (Stage 3 2026-07-22)
+    # -- tool-selection picker card
 
     def _show_tool_candidates_card(self, payload: dict) -> None:
-        """Render the ``tool-candidates`` picker as an inline card (contracts
-        ``ws.ToolCandidatesPayload``): the agent ranked several plausible
-        tools for a step and asks which should run. Mirrors
-        ``_show_gate_card``'s malformed-envelope honesty and the BUG-4/N5
-        close-out discipline (post-decision narration lands in a fresh entry
-        BELOW the card). Fail-open by contract -- a malformed/unanswered
-        request costs nothing but the one-click error-kill window (the
-        server's ``timeout_s`` proceeds with its own pick)."""
+        """Render the tool-candidates picker as an inline card. FAIL-OPEN: a
+        malformed or unanswered request costs only the chance to redirect,
+        because the server proceeds with its own pick regardless."""
         request = gate.parse_tool_candidates(payload)
         if request is None:
             self._note(
@@ -2655,7 +2337,7 @@ class Trid3ntDock(QDockWidget):
                 error=True,
             )
             return
-        # Wave-picker UX (LANE P): increment the per-turn step counter BEFORE
+        # Increment the per-turn step counter BEFORE
         # constructing the card so a wave of N pickers in one turn reads
         # "Step 1", "Step 2", ... in arrival order.
         self._tool_picker_turn_step += 1
@@ -2681,11 +2363,9 @@ class Trid3ntDock(QDockWidget):
             self._note(f"tool choice send failed: {exc}", error=True)
 
     def _supersede_open_tool_pickers(self) -> None:
-        """Fold every still-open picker card to its "agent proceeded" chip
-        (the turn moved on -- the server's fail-open already resolved the
-        selection) and drop every terminal card from the tracking list.
-        ``mark_superseded`` no-ops on an answered card, so answered cards are
-        merely garbage-collected from the list here."""
+        """Fold every still-open picker to its "agent proceeded" chip, the
+        turn having moved on, and drop terminal cards from the list. An
+        ANSWERED card is only collected here, never re-folded."""
         if not self._open_tool_pickers:
             return
         for card in self._open_tool_pickers:
@@ -2712,15 +2392,9 @@ class Trid3ntDock(QDockWidget):
     # -- sending ------------------------------------------------------------- #
 
     def _send_run_invocation(self, text, run_inv) -> None:
-        """Handle a parsed ``!run`` invocation.
-
-        ``help`` / a local parse ``error`` render an honest local bubble and
-        send NOTHING. A valid ``(name, args)`` echoes the ``!run`` signature as
-        the user bubble (the durable attribution -- the server persists the same
-        line above the tool card) and dispatches a ``dev-tool-invoke``; the tool
-        card + turn-complete then ride the SAME rendering path a model call
-        uses.
-        """
+        """Handle a parsed ``!run`` invocation. Help and a local parse error
+        render locally and send NOTHING; a valid one echoes the signature as
+        the user bubble and dispatches the invocation."""
         self.input_edit.clear()
         self._add_user_bubble(text)
         if run_inv.help:
@@ -2749,7 +2423,7 @@ class Trid3ntDock(QDockWidget):
             self._pending.add_note(f"!run send failed: {exc}", error=True)
 
     def _send(self) -> None:
-        # Item A (qgis-ux-batch 2026-07-19): multi-line composer -- read the
+        # Multi-line composer -- read the
         # full document (toPlainText), not the one-line QLineEdit .text().
         text = self.input_edit.toPlainText().strip()
         if not text:
@@ -2768,33 +2442,33 @@ class Trid3ntDock(QDockWidget):
             return
         self.input_edit.clear()
         self._add_user_bubble(text)
-        # Wave-picker UX (LANE P): a fresh turn starts a fresh "Step N" count
+        # A fresh turn starts a fresh "Step N" count
         # -- any still-open pickers from the PRIOR turn are already folded by
         # _supersede_open_tool_pickers (a picker never survives a
         # turn-complete), so this is safe to reset unconditionally.
         self._tool_picker_turn_step = 0
         if self._pending is not None:
-            # Feature 2026-07-13, defensive: a WS drop can strand a
+            # Defensive: a WS drop can strand a
             # streaming entry that never saw turn-complete -- final-render
             # it before minting the new turn's entry.
             self._pending.finalize_markdown()
         self._pending = _AssistantEntry(self.messages_layout)
         self._scroll_to_bottom()
         bbox, _source = self._aoi_for_send()
-        # Structured AOI (mechanism 2, 2026-07-22): the AOI rides the
+        # The AOI rides the
         # ``aoi_bbox`` payload field now -- the bracketed in-text prose line
         # ("[QGIS map canvas AOI ...]") is GONE; the chat text goes out CLEAN.
-        # O1 (NATE 2026-07-20) still holds: no per-send AOI note -- the
+        # There is no per-send AOI note: the
         # transcript note fires only WHEN the user sets/changes the AOI
         # (``_on_aoi_extent_chosen``), never as a standing restated readout.
         try:
-            # F9: pass show_thinking so the server enables reasoning-channel
+            # Pass show_thinking so the server enables reasoning-channel
             # forwarding for this turn (local mode only; remote ignores the field).
-            # OpenRouter model-extensibility (design 2026-07-19): ride the picked
+            # Ride the picked
             # model_id (empty = agent env default) so a MODEL switch applies
             # live on the next message with no agent restart -- mirrors the
             # show_thinking add. Provider base_url/key stay agent-process env.
-            # (Stage 3, 2026-07-22): ride the persisted Auto/Ask
+            # Ride the persisted Auto/Ask
             # mode so the server surfaces tool selection as picker cards in
             # ask mode -- the same per-turn settings carrier as show_thinking
             # /model_id ("auto" is omitted on the wire; it IS the default).
@@ -2817,7 +2491,7 @@ class Trid3ntDock(QDockWidget):
     # -- teardown ------------------------------------------------------------- #
 
     def shutdown(self) -> None:
-        # Item R6 (live-feedback 2026-07-18): unhook the layer-tree push
+        # Unhook the layer-tree push
         # actions so a plugin reload never stacks duplicate menu entries.
         for action in self._push_tree_actions:
             try:
@@ -2825,7 +2499,7 @@ class Trid3ntDock(QDockWidget):
             except Exception:  # noqa: BLE001
                 pass
         self._push_tree_actions = []
-        # Charts-window 2026-08-04: the bottom charts window is a sibling dock
+        # The bottom charts window is a sibling dock
         # this dock owns -- tear it down with the dock so a plugin reload never
         # leaves an orphaned bottom dock behind.
         if self._charts_window is not None:
