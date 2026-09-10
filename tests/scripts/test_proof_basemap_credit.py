@@ -1,14 +1,8 @@
-"""A PROOF RENDER NAMES THE GROUND IT WAS DRAWN ON.
+"""A proof render names the ground it was drawn on.
 
-Satellite imagery over open water is a near-black field with no shoreline in it,
-so a domain that sits offshore renders on nothing while the caption still credits
-"ESRI World Imagery" - and the framing cannot be checked against anything. The
-mosaic is measured, the ocean reference basemap takes over when the imagery
-carries no legible signal, and the label travels with the image so the caption
-cannot credit imagery that is not there.
-
-Offline: the two functions under test are a pure measurement and a pure read.
-"""
+The mosaic is measured, the ocean reference basemap takes over when the imagery
+carries no legible signal, and the label travels with the image so a caption
+cannot credit imagery that is not there. Offline: a measurement and a read."""
 
 from __future__ import annotations
 

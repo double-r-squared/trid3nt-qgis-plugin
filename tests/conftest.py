@@ -1,11 +1,8 @@
 """Shared pytest fixtures for the agent-service test suite.
 
-The agent-service tests are import-light: every test that needs the tool
-registry imports ``trid3nt_server.tools`` directly. The registry is a
-module-level singleton, so tests that mutate it use the
-``clear_registry_for_tests`` helper inside a fixture rather than relying on
-import ordering.
-"""
+``TOOL_REGISTRY`` is a module-level singleton, so a test that mutates it goes
+through the ``clear_registry_for_tests`` helper inside a fixture rather than
+relying on import ordering."""
 
 from __future__ import annotations
 
@@ -38,11 +35,8 @@ class _S3Body:
 class InMemoryS3Client:
     """Minimal in-memory boto3 S3 client double.
 
-    ``store`` is keyed by the object KEY (path) only — agent tests run against
-    a single cache bucket, so the bucket name is recorded but not part of the
-    lookup key. This keeps the historical ``fake.store[path] = b"..."``
-    seeding ergonomics from the pre-S3 GCS doubles.
-    """
+    ``store`` is keyed by the object KEY alone - the bucket name is recorded but is
+    never part of the lookup."""
 
     def __init__(self) -> None:
         self.store: dict[str, bytes] = {}
@@ -72,11 +66,8 @@ class InMemoryS3Client:
 def fake_s3(monkeypatch: pytest.MonkeyPatch) -> InMemoryS3Client:
     """Monkeypatch ``boto3.client('s3', ...)`` to a shared in-memory double.
 
-    Returns the client so tests can pre-seed ``fake_s3.store[path]`` for a
-    cache hit and inspect ``fake_s3.store`` / ``fake_s3.last_put`` after a
-    write. Every ``boto3.client('s3', ...)`` call in the process under test
-    resolves to the same instance for the duration of the test.
-    """
+    Every ``boto3.client('s3', ...)`` in the process under test resolves to the same
+    instance, which is returned for seeding and inspection."""
     import boto3
 
     client = InMemoryS3Client()
@@ -93,15 +84,8 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> InMemoryS3Client:
 def _default_scripted_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     """Default the model provider to ``scripted`` for the agent test suite.
 
-    The RUNTIME default is ``openai``
-    (``adapters.model_selection.model_provider``). The agent-loop
-    tests fake model turns through the scripted fake-provider seam (the
-    ``fake_llm`` fixture installs a call-sequenced turn source and pins
-    ``MODEL_PROVIDER=scripted`` itself; this autouse default covers the tests
-    that patch ``stream_events_with_contents`` directly or otherwise never reach
-    the provider dispatch). Any test that needs a specific provider sets
-    ``MODEL_PROVIDER`` itself (monkeypatch wins inside the test body).
-    """
+    The runtime default is ``openai``. A test that needs a specific provider sets
+    ``MODEL_PROVIDER`` itself and monkeypatch wins inside the test body."""
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
 
 
@@ -121,24 +105,10 @@ def _reset_fake_llm_harness():
 
 @pytest.fixture()
 def fake_llm(monkeypatch: pytest.MonkeyPatch):
-    """Fake model provider for the agent-loop tests (the single replacement for
-    the retired ``patch build_client + feed fake generate_content_stream chunks``
-    harness).
+    """Fake model provider for the agent-loop tests.
 
-    Pins ``MODEL_PROVIDER=scripted`` so the REAL server dispatch
-    (``stream_events_with_contents``) routes to the scripted adapter, and hands
-    back a handle that installs a call-sequenced fake-turn source and exposes the
-    ``contents`` the server built between turns:
-
-      * ``fake_llm.script([turn, ...])``  -- a fixed list of fake turns.
-      * ``fake_llm.on_call(fn)``          -- a dynamic ``(call_index, contents) ->
-                                             turn`` source (external-counter tests).
-      * ``fake_llm.calls``                -- recorded calls; ``.calls[i]["contents"]``
-                                             replaces the ``_capture_and_stream`` snapshot.
-      * turn builders: ``fake_llm.text(...)``, ``.call(name, args, call_id=...,
-        thought_signature=...)``, ``.parallel(call, call, ...)``, ``.raise_(exc)``
-        (or author the turn dicts inline -- see ``scripted_adapter``).
-    """
+    Pins ``MODEL_PROVIDER=scripted`` so the REAL server dispatch routes to the
+    scripted adapter, and returns a handle over the fake turns and recorded calls."""
     from trid3nt_server.adapters import scripted_adapter as sa
 
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
@@ -169,10 +139,8 @@ def fake_llm(monkeypatch: pytest.MonkeyPatch):
 def empty_registry():
     """Yield a context where ``TOOL_REGISTRY`` is empty; restore on teardown.
 
-    Tests of the ``@register_tool`` decorator and duplicate-name fail-fast
-    behavior need a clean slate so the eager package imports don't
-    collide with a test's fixture-registered tool.
-    """
+    Without it the eager package imports collide with a test's fixture-registered
+    tool."""
     saved = dict(agent_tools.TOOL_REGISTRY)
     agent_tools.clear_registry_for_tests()
     try:

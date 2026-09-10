@@ -1,12 +1,9 @@
 """The committed TELEMAC catalogs are the image's dictionaries, not a copy of them.
 
-The catalog under ``workflows/telemac/catalog/`` is generated data: the engine's
-own keyword dictionaries, extracted in-image and committed so the server can read
-a keyword surface without a container round trip. That only holds while the two
-agree, so this re-extracts from the image and compares. Without the image there
-is nothing to compare against and the check skips saying so - it never passes on
-absence.
-"""
+The catalog under ``workflows/telemac/catalog/`` is generated data, valid only
+while it agrees with the engine's own keyword dictionaries, so this re-extracts
+in-image and compares. Without the image the check SKIPS - it never passes on
+absence."""
 
 from __future__ import annotations
 

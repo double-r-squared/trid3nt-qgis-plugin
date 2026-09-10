@@ -10,14 +10,8 @@ from __future__ import annotations
 def make_read_through_s3_injector(store: dict[str, bytes]):
     """Return a drop-in ``read_through`` replacement backed by an in-memory store.
 
-    Many fetcher tests patch the tool module's ``read_through`` with a wrapper
-    that used to inject a duck-typed ``google.cloud.storage`` client. GCP is
-    decommissioned (S3-only read-through), so this helper provides an in-memory
-    S3 read-through: it mints ``s3://`` URIs, honors cache hit/miss/write
-    semantics against ``store`` (keyed by object KEY), and short-circuits
-    ``live-no-cache`` exactly like the real shim. ``store`` is the same dict the
-    test inspects after the call (``next(iter(store.values()))`` etc.).
-    """
+    Mints ``s3://`` URIs, honours hit / miss / write against ``store`` keyed by object
+    KEY, and short-circuits ``live-no-cache`` as the real shim does."""
     from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,

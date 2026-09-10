@@ -1,13 +1,9 @@
 """The system model is checked against the tree, or it rots like every model does.
 
-Two gates per seam, both offline. The checker validates the modeled seam
-contracts, the requirement-to-test allocations and the block dependency rules
-against the live code; the view is asserted to be a regeneration of the model
-rather than a drawing somebody kept up to date by hand.
-
-Every ``docs/model/*.sysml`` is a seam and every seam is gated, so a model added
-for a new seam is checked by being written rather than by editing this file.
-"""
+Two gates per seam, both offline: the checker validates the modeled contracts,
+the requirement-to-test allocations and the block dependency rules against live
+code, and the view is asserted to be a regeneration of the model. Every
+``docs/model/*.sysml`` is a seam and every seam is gated."""
 
 from __future__ import annotations
 
@@ -32,11 +28,8 @@ def _run(*args: str) -> subprocess.CompletedProcess[str]:
 def test_the_model_conforms_to_the_tree(model):
     """Every hop's two ends name what it carries, every law has a live verifier.
 
-    This test IS the verification the dependency requirements name: the forbid
-    rules are checked here against import edges the checker computes for the
-    modeled modules, so a worker that reached into the server package fails the
-    suite rather than a review.
-    """
+    The forbid rules are checked here against the import edges the checker computes,
+    so a forbidden edge fails the suite rather than a review."""
     done = _run("--model", str(model))
     assert done.returncode == 0, done.stdout + done.stderr
 
@@ -94,9 +87,7 @@ def test_every_import_form_fires_against_the_rule_that_forbids_it(form, tmp_path
     """``forbid:`` is unevadable by spelling.
 
     ``from pkg.sub import leaf`` is an import OF ``pkg.sub.leaf``; recorded as an
-    import of ``pkg.sub`` it passes a rule that names the leaf, and the rule reads
-    as enforced while the edge it forbids is in the tree.
-    """
+    import of ``pkg.sub`` it would pass a rule that names the leaf."""
     model = _five_forms_tree(tmp_path, _IMPORT_FORMS[form])
     done = _run("--model", str(model), "--root", str(tmp_path))
     assert done.returncode == 1, done.stdout + done.stderr
@@ -107,10 +98,8 @@ def test_every_import_form_fires_against_the_rule_that_forbids_it(form, tmp_path
 def test_a_seam_that_states_no_plane_refuses(tmp_path):
     """A seam nobody placed cannot be indexed, and its view reads as the whole.
 
-    The header is the only thing that keeps one seam's picture from being taken
-    for the system of systems, so a model without one is a parse failure rather
-    than a seam quietly missing from the index.
-    """
+    A model without the plane header is a parse failure rather than a seam quietly
+    missing from the index."""
     model = _five_forms_tree(tmp_path, "import pkg.sub.leafy")
     model.write_text(_FORBID_MODEL.partition("\n")[2], encoding="utf-8")
     done = _run("--model", str(model), "--root", str(tmp_path))

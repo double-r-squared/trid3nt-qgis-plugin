@@ -1,20 +1,9 @@
-"""Guard: every forwarded Qt signal pair in the plugin's ``ws_bridge.py`` has
-MATCHING signatures (worker signal -> bridge signal).
+"""Every forwarded Qt signal pair in the plugin's ``ws_bridge.py`` matches.
 
-The live bug this locks out (commit 650e575): ``AgentBridge.connected`` was
-declared ``pyqtSignal(str, bool)`` while the worker emitted
-``pyqtSignal(str, bool, str, str)``. Qt silently DROPS the extra args when a
-2-arg slot is connected to a 4-arg signal, so the advertised ``http_base`` /
-``data_base`` never reached the dock and every tailnet client fell back to
-localhost layer fetches -- with no error anywhere.
-
-This test parses ``ws_bridge.py`` with ``ast`` (no Qt / no ``qgis.PyQt``
-import needed, so it runs in the offline server suite): it reads the
-``pyqtSignal(...)`` declarations of ``AgentWorker`` and ``AgentBridge`` and the
-``self._worker.<x>.connect(self.<y>)`` wiring in ``AgentBridge.start``, then
-asserts each connected pair's argument-type lists are identical -- and that
-``connected`` is specifically the 4-arg ``(str, bool, str, str)``.
-"""
+Qt silently DROPS the extra arguments when a signal is connected to a shorter
+one, so a mismatched pair loses payload with no error anywhere. The pairs are
+read out of the source with ``ast`` - no Qt import, so this runs offline - and
+``connected`` is asserted to be the four-argument ``(str, bool, str, str)``."""
 
 from __future__ import annotations
 
@@ -68,9 +57,8 @@ def _signal_signatures(class_node: ast.ClassDef) -> dict[str, tuple[str, ...]]:
 
 def _forwarded_pairs(start_fn: ast.FunctionDef) -> list[tuple[str, str]]:
     """Recover ``(worker_signal, bridge_signal)`` from every
-    ``self._worker.<a>.connect(self.<b>)`` call in ``start``. Only the
-    signal->signal forwards are returned; ``.connect(self._thread.quit)`` and
-    ``.connect(self._worker.run)`` (slot connects, not forwards) are skipped."""
+    ``self._worker.<a>.connect(self.<b>)`` call in ``start``. A slot connect is not a
+    forward and is skipped."""
     pairs: list[tuple[str, str]] = []
     for node in ast.walk(start_fn):
         if not (isinstance(node, ast.Call) and _is_attr(node.func, "connect")):

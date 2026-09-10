@@ -1,11 +1,9 @@
 """The reach chain's two FETCHES, stood in for with geometry this module writes.
 
-Offline. ``fetch_nhdplus_nldi_navigate`` (the navigated mainstem) and
-``fetch_nhd_area_water`` (the mapped banks) are the only network reads in the
-reach templates' domain chain; ``endpoints`` and ``section`` between them run for
-real over the files written here, so a chain test measures the chain rather than
-a stand-in for it.
-"""
+Offline. ``fetch_nhdplus_nldi_navigate`` and ``fetch_nhd_area_water`` are the only
+network reads in the reach templates' domain chain; ``endpoints`` and ``section``
+run for real over the files written here, so a chain test measures the chain
+rather than a stand-in for it."""
 
 from __future__ import annotations
 
@@ -70,11 +68,8 @@ def install_reach_chain(monkeypatch, tmp_path, captured: dict | None = None,
                         water: dict[str, Any] | None = None) -> None:
     """Answer the chain's two fetches from local files, recording what was asked.
 
-    The section tool writes its own artifact, so the output directory is pinned to
-    ``tmp_path`` for the whole chain. ``water`` names WHAT the water fetch returns,
-    so a caller can ask the chain a reach the mapped polygons only partly cover -
-    or do not cover at all.
-    """
+    Output goes to ``tmp_path`` because the section tool writes its own artifact;
+    ``water`` names WHAT the water fetch returns."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     seen = captured if captured is not None else {}

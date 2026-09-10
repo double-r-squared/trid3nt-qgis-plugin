@@ -1,16 +1,8 @@
-"""THE ANIMATION'S COLOUR SCALE IS FIXED FOR THE LENGTH OF THE GIF.
+"""The animation's colour scale is fixed for the length of the GIF.
 
-A time-stepped picture whose scale moves with the frame is a picture of the
-renderer, not of the run: the same colour means one value at t=0 and another at
-t=5, so a reader watching the plume "arrive" may only be watching the autoscale
-chase it. The preset family states the rule - the scope of a ``policy: data`` rescale is
-THE RUN, never the frame - and this pins it in pixels.
-
-Frames 0-2 live in 0..1 and frames 3-5 in 0..100, which is as loud a per-frame
-rescale as a field can offer. The legend region of the produced GIF must still be
-BYTE-IDENTICAL in every frame, while the field region must not be (otherwise the
-identity assertion is measuring a still).
-"""
+A ``policy: data`` rescale is scoped to THE RUN, never the frame. Frames 0-2 in
+0..1 and frames 3-5 in 0..100 leave the legend region of the produced GIF
+byte-identical across every frame while the field region is not."""
 
 from __future__ import annotations
 
@@ -238,13 +230,9 @@ def test_a_quantity_the_run_never_published_has_nothing_to_agree_with():
 
 
 def test_a_log_ramp_takes_the_published_top_and_its_own_declared_floor():
-    """A published envelope's floor is routinely ZERO, and a log ramp has no
-    zero. Reaching for the smallest positive value the run wrote spans every
-    decade down to a float32 denormal and paints the whole domain one colour -
-    a picture of the norm rather than of the water. The floor is read at the
-    clip the row declares; the TOP is the published one, which is the end a
-    peak is read off.
-    """
+    """A published envelope's floor is routinely ZERO and a log ramp has none, so the
+    floor is read at the clip the row declares while the TOP stays the published
+    one."""
     module = _animation_module()
     values = np.zeros((3, 400), dtype="float64")
     values[1, :200] = np.linspace(1e-40, 1e-3, 200)   # a denormal-adjacent tail

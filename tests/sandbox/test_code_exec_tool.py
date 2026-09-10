@@ -1,18 +1,9 @@
-"""Tests for ``code_exec_request`` + the server confirm-gate + the 0232 findings
-fixes (job-0233, sprint-13 Stage 2).
+"""Tests for ``code_exec_request``, the server confirm-gate and its result bounds.
 
-Coverage (kickoff scope §4):
-  - confirm-gate fails closed: the tool body refuses to run without confirmation
-    AND the server-side gate blocks dispatch until approval / denies on cancel.
-  - approved path runs the local sandbox end-to-end (benign numpy) -> status=ok.
-  - blocked-egress script returns status="blocked" honestly.
-  - timeout path -> status="timeout".
-  - FINDING-1: oversized JSON-native string result -> truncated=true, valid JSON.
-  - FINDING-2: a huge stdout never corrupts the parsed envelope (parse-then-bound).
-  - function_response summary shape: compact, full payload stripped, no cost.
-
-No network. No Gemini. Pure local-subprocess sandbox + in-process gate logic.
-"""
+Offline: a local-subprocess sandbox and in-process gate logic, no network and no
+model. The gate fails CLOSED - the tool body refuses without confirmation and
+dispatch blocks until approval - and an oversized string result or a huge stdout
+leaves the parsed envelope valid rather than corrupting it."""
 
 from __future__ import annotations
 
@@ -158,10 +149,9 @@ async def test_server_gate_cancel_blocks_dispatch() -> None:
 async def test_server_gate_timeout_raises_typed_and_cleans_registry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No confirmation within TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S -> the gate
-    raises ``CodeExecApprovalTimeoutError`` (typed, non-retryable) instead of
-    parking forever, emits a contract-valid CONFIRMATION_TIMEOUT ws error, and
-    pops the pending-confirmation registry entry."""
+    """No confirmation within ``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S`` raises the typed,
+    non-retryable ``CodeExecApprovalTimeoutError`` instead of parking forever, emits a
+    contract-valid CONFIRMATION_TIMEOUT ws error and pops the pending entry."""
     from trid3nt_server import server
 
     monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "0.2")
@@ -404,11 +394,9 @@ def test_build_payload_derives_truncated_from_result_marker() -> None:
 
 
 def test_dispatch_strips_llm_supplied_confirmed_for_code_exec() -> None:
-    """Invariant 9 (job-0301): the dispatch site STRIPS a model-supplied
-    confirmed/code_exec_id for code_exec_request BEFORE gating, so a model that
-    passes confirmed=True cannot self-approve and skip the user gate. The prior
-    `and not params.get("confirmed")` condition allowed exactly that bypass
-    (the params are not underscore-hidden from the model's tool schema)."""
+    """The dispatch site STRIPS a model-supplied confirmed / code_exec_id for
+    ``code_exec_request`` before gating, so a model that passes ``confirmed=True``
+    cannot self-approve past the user gate."""
     import inspect
 
     import trid3nt_server.server as server_mod

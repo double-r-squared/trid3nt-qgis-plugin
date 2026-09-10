@@ -17,10 +17,8 @@ from trid3nt_contracts.common import new_ulid
 class MockMCPClient:
     """In-memory mock of the MongoDB MCP server.
 
-    Implements just enough of the tool surface ``Persistence`` calls into:
-    ``find-one`` / ``find`` / ``insert-one`` / ``update-one``. Records every
-    call so tests can assert routing.
-    """
+    Implements the tool surface ``Persistence`` calls into - ``find-one`` / ``find``
+    / ``insert-one`` / ``update-one`` - and records every call for routing asserts."""
 
     def __init__(self) -> None:
         # collection -> id -> document
