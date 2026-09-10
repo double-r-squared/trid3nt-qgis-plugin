@@ -138,6 +138,14 @@ def _configure_logging() -> None:
     logging.basicConfig(level=level, format=fmt, handlers=handlers)
 
 
+# ONE PROCESS, ONE USER. The daemon carries the socket, the turn loop, tool
+# dispatch, the gates and persistence in a single process on purpose: every
+# connection is the SAME user, so the session registries are in-memory
+# single-user state rather than a store, and there is no per-user isolation to
+# split a service along. Remote access does not change that - a second machine
+# dialing in is the same user at another address. The trigger for revisiting it
+# is more than one CONCURRENT user, which is when isolation becomes a
+# correctness problem instead of a shape preference.
 def run(argv: list[str] | None = None) -> int:
     """Console-script entry point; ``--startup-only`` verifies the tool
     registry and exits 0 without binding the WebSocket port.

@@ -33,6 +33,18 @@ logger = logging.getLogger("trid3nt_server.tools.search.tool_retrieval")
 DEFAULT_K = 25
 MAX_K = 25
 
+# SEARCH IS THE FRONT DOOR; ENUMERATION IS THE EXCEPTION. A surface that is
+# large, documented and touched OCCASIONALLY per turn is reached by ranking it -
+# the catalog, the data sources, the spatial functions. A surface that is SMALL
+# and needed on MOST turns is enumerated, because a lookup for it would be pure
+# overhead. A browse TREE over either is the shape this refuses: it multiplies
+# wrong turns, each one a full round trip, and grows dead ends faster than the
+# corpus grows wide.
+#
+# The revisit trigger is MEASURED, not felt: a registry of order a thousand tools
+# AND a demonstrated fall in recall at k. Until both hold, a ranking is
+# sub-millisecond CPU and a tree buys back no latency to pay for its errors.
+
 #: The always-visible floor: tools that must NEVER be retrieved out whatever the
 #: turn ranks - the "before you can do anything else" primitives, the discovery
 #: escape hatch, and the cross-cutting actions a user reaches for at any point.

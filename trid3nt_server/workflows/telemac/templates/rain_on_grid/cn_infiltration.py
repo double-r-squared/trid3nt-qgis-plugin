@@ -63,8 +63,14 @@ class CNInfiltrationError(ValueError):
 # lever rather than a fixed constant. Manning n is the paper T2D column verbatim.
 # ---------------------------------------------------------------------------
 
-# The Manning column stays Godara's: no library table replaces it -- pygeohydro's
-# overland_roughness agrees on none of the 17 shared codes (docs/validation/nlcd-manning-tables.md).
+# ONE STUDY, BOTH COLUMNS. The curve number and the roughness are read off the
+# same paper's same table for the same class, so a run's infiltration and its
+# friction are parameterised together. Substituting another published roughness
+# table - the domain library ships one that agrees with this on none of the 17
+# shared codes, 5-8x rougher on open vegetated land and 40x smoother on water -
+# would mix two calibrations in one field and MOVE every number this template
+# has already produced. That is an author's declared choice, never a shim: swap
+# the pair, or carry both as a declared lever, but never half of one.
 #
 # nlcd_code -> (curve_number_amc2, manning_n, paper_class_label)
 NLCD_CN_MANNING: dict[int, tuple[float, float, str]] = {

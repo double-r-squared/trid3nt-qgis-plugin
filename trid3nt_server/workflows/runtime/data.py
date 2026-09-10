@@ -27,6 +27,16 @@ __all__ = [
 ]
 
 
+# A ROW NAMES ITS PRODUCER; RETRIEVAL NEVER PICKS ONE. What a run stands on is
+# DECLARED here, by name, with its ladder and its transforms - it is never
+# resolved by ranking a phrase against a catalog. Text relevance cannot judge the
+# facts that decide whether a source can carry a solve: its resolution, its CRS,
+# its coverage over this domain, its datum. A retrieved source that reads
+# plausibly and resolves wrong produces a run that completes and answers a
+# different question, which is the failure a declaration exists to make
+# impossible. Search is how a MODEL finds a tool to call; a template's inputs are
+# the template's own statement.
+
 class _CoversAOI:
     """Validator sentinel: a domain must be BOUND and have an extent before a
     supplied artifact is adopted. The artifact's own extent is never read, so one
