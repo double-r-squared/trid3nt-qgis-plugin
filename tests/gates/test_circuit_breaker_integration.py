@@ -1,17 +1,9 @@
-"""Circuit breaker integration tests (job-B8, Wave 4.10 Stage 3).
+"""The circuit breaker over the full wire path.
 
-Verifies the full wire path:
-    1. A tool that fails 3 times (threshold) trips the per-session circuit
-       breaker.
-    2. The 4th attempt is short-circuited: ``_invoke_tool_via_emitter`` is
-       NOT called; instead ``CircuitBreakerError`` is raised immediately.
-    3. The 4th call's function_response carries the Wave 4.9 structured
-       envelope with error_code="CIRCUIT_BREAKER_TRIPPED" and retryable=False.
-    4. A successful call after a breaker trip (post-cooldown) records success
-       and resets the failure counter.
-    5. The circuit breaker is per-session (independent ``SessionState``
-       instances have independent breakers).
-"""
+A tool failing to threshold trips the per-session breaker; the next attempt is
+short-circuited before ``_invoke_tool_via_emitter`` runs and its
+function_response carries CIRCUIT_BREAKER_TRIPPED with ``retryable=False``; a
+success after cooldown resets the counter. Breakers are per ``SessionState``."""
 
 from __future__ import annotations
 
@@ -95,14 +87,10 @@ def _contents_snapshot(fake_llm):
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_trips_on_third_failure_and_short_circuits_fourth(fake_llm):
-    """3 consecutive failures trip the breaker; the 4th call is short-circuited.
+    """Three consecutive failures trip the breaker; the fourth call short-circuits.
 
-    The test patches ``_invoke_tool_via_emitter`` to fail for the first 3
-    calls and checks that on the 4th turn Gemini would have been asked for
-    another function_call but the breaker intercepts it BEFORE the real
-    ``_invoke_tool_via_emitter`` runs.  The function_response Gemini gets on
-    the 4th call must carry CIRCUIT_BREAKER_TRIPPED + retryable=False.
-    """
+    The interception happens BEFORE the real dispatch, and the function_response the
+    model gets carries CIRCUIT_BREAKER_TRIPPED with ``retryable=False``."""
     from trid3nt_server import server as agent_server
 
     invoke_call_count = {"n": 0}
@@ -245,14 +233,10 @@ def test_circuit_breaker_is_per_session():
 
 @pytest.mark.asyncio
 async def test_arg_errors_through_server_do_not_trip_breaker(fake_llm):
-    """Many CLIENT/arg failures via _invoke_tool_via_emitter leave the breaker CLOSED.
+    """Many CLIENT / arg failures through the dispatch leave the breaker CLOSED.
 
-    Repro of the live bug: the model fired a burst of fetch_storm_events_db
-    calls with a bad state arg (each raising a *ArgError with retryable=False).
-    Before the fix those tripped the breaker in 3 calls and the cooldown then
-    BLOCKED the corrected-args retry. After the fix the breaker stays closed
-    and the corrected call's success path is reachable.
-    """
+    A burst of bad-arg calls must not open a cooldown that then blocks the
+    corrected-args retry."""
     from trid3nt_server import server as agent_server
 
     class _ArgError(RuntimeError):
@@ -319,13 +303,10 @@ async def test_arg_errors_through_server_do_not_trip_breaker(fake_llm):
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_error_not_counted_as_additional_failure(fake_llm):
-    """When the breaker fires (CircuitBreakerError raised), the failure counter
-    must NOT increment again — record_failure is skipped for CircuitBreakerError.
+    """A ``CircuitBreakerError`` does not increment the failure counter again.
 
-    Otherwise the cooldown deadline would keep extending on every subsequent
-    call while the breaker is open, which is incorrect behaviour (the deadline
-    is set once at trip time and should be fixed).
-    """
+    The cooldown deadline is set once at trip time; recording the refusal as a
+    failure would keep extending it on every subsequent call."""
     from trid3nt_server import server as agent_server
 
     # Manually trip the breaker with exactly threshold failures.

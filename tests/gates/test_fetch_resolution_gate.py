@@ -1,29 +1,9 @@
-"""Fetch-resolution gate (NATE 2026-06-26) — the heavy-raster-fetcher half.
+"""The fetch-resolution gate: the heavy-raster-fetcher half.
 
-The #154 granularity gate widened to the two HEAVY raster FETCHERS (fetch_dem +
-fetch_topobathy) so the user controls fetch resolution before a big download/merge
-(memory: feedback_user_controlled_granularity). It REUSES ``_gate_on_solver_confirm``
-and the SAME ``GranularitySuggestion`` card: ``engine`` in {dem, topobathy},
-``resolution_param="resolution_m"``, ``compute_class="fetch"``. The override reuses
-the existing ``tool-payload-confirmation`` ``narrow_scope`` path (no new envelope).
-
-A fetch is NOT a solve, so ``FETCH_CONFIRM_TOOLS`` is kept SEPARATE from
-``SOLVER_CONFIRM_TOOLS`` — the autostop solver-marker (``_is_solver_dispatch`` ->
-``_solve_started``) keys off ``SOLVER_CONFIRM_TOOLS`` only and must NOT fire for a
-fetch. The fetch branch never injects ``confirmed`` / ``enable_autoscale``.
-
-Covers:
-- the gate emits a ``tool-payload-warning`` carrying a ``granularity`` block with
-  ``resolution_param="resolution_m"`` + ``engine`` in {dem, topobathy};
-- ``proceed`` pins ``resolution_m=10`` (the coarse default) + injects NO confirmed;
-- ``narrow_scope`` to a finer rung (1 / 3) on a small AOI is applied as-is;
-- ``narrow_scope`` finer-than-finest_allowed on a LARGE AOI is clamped UP to
-  finest_allowed_m (the px-grid bound);
-- ``cancel`` / timeout fail-CLOSED (the fetch does not run);
-- a build exception fails OPEN (proceed with original params);
-- solver tools still gate as before (fetch_suggestion is None for them);
-- fetch_naip / compute_ndvi are NOT in FETCH_CONFIRM_TOOLS (no finer knob).
-"""
+``FETCH_CONFIRM_TOOLS`` is SEPARATE from the solver set, so the autostop
+solve-marker never fires for a fetch and the branch injects no ``confirmed``. The
+card carries a granularity block; ``proceed`` pins the coarse default;
+``narrow_scope`` is clamped up at the px-grid bound; cancel and timeout fail CLOSED."""
 
 from __future__ import annotations
 
@@ -38,11 +18,10 @@ from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 
 @pytest.fixture(autouse=True)
 def _cap_gate_waits(monkeypatch):
-    """LANE C: cap every user-decision gate wait so a headless run never hangs
-    on the F6 24h local-lane lift (``_gate_wait_timeout``). Production leaves
-    ``TRID3NT_GATE_WAIT_CAP_S`` unset -> byte-identical behavior. Happy-path
-    approver tasks answer within milliseconds; the dedicated timeout test
-    tightens the cap so it hits the honest fail-closed path fast."""
+    """Cap every user-decision gate wait so a headless run never hangs.
+
+    Production leaves ``TRID3NT_GATE_WAIT_CAP_S`` unset; the dedicated timeout test
+    tightens the cap so it reaches the honest fail-closed path fast."""
     monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
 
 

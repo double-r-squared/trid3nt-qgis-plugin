@@ -1,22 +1,9 @@
-"""FR-WC-16 malformed-draw mismatch - SERVER half.
+"""A malformed drawn reply fails the pending future eagerly, in band.
 
-An inbound ``spatial-input-response`` whose drawn ``FeatureCollection`` fails
-structural validation (e.g. a feature carrying an unknown ``role``) raises a
-pydantic ``ValidationError`` in the WS handler.
-
-BEFORE the fix: the handler sent ``TOOL_PARAMS_INVALID`` and ``continue``d
-WITHOUT resolving the pending ``request_spatial_input`` future, so the paused
-turn hung until ``default_timeout_seconds`` (~300s) then degraded to
-``SPATIAL_INPUT_TIMEOUT`` — a confusing, slow, wrong terminal state.
-
-AFTER the fix: the handler ALSO fails the pending future eagerly via
-``_fail_pending_spatial_input``, so the awaiting tool wakes IN-BAND with a typed
-``SPATIAL_INPUT_BAD_ROLE`` error PROMPTLY — never via the timeout path.
-
-These tests prove the future is resolved promptly (asserting the wall-clock
-budget is FAR under the read TTL) and that the honesty floor holds (a typed
-error result, never a silent success).
-"""
+An inbound response whose ``FeatureCollection`` fails structural validation
+raises in the WS handler; the handler must ALSO fail the pending future, so the
+awaiting tool wakes with a typed ``SPATIAL_INPUT_BAD_ROLE`` PROMPTLY rather than
+degrading to a timeout minutes later. The wall-clock budget is asserted."""
 
 from __future__ import annotations
 
@@ -168,10 +155,10 @@ def test_invalid_response_resolves_pending_future_promptly_not_via_timeout():
 
 
 def test_handle_request_spatial_input_returns_typed_error_on_invalid_reply():
-    """End-to-end through the tool entry point: a pending request_spatial_input
-    turn, fed an invalid reply, returns the TYPED error result the LLM reads
-    (honesty floor - never a silent success / fabricated geometry), and does so
-    PROMPTLY (not after default_timeout_seconds)."""
+    """End to end through the tool entry point: an invalid reply is a TYPED error.
+
+    Never a silent success or a fabricated geometry, and promptly rather than after
+    the default timeout."""
 
     async def _run() -> tuple[dict[str, Any], float]:
         ws = _MockWebSocket()

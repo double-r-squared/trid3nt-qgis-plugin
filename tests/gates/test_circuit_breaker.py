@@ -1,16 +1,9 @@
-"""Circuit breaker unit tests (job-B8, Wave 4.10 Stage 3).
+"""Circuit-breaker unit tests.
 
-Covers:
-    1. Default threshold + cooldown values.
-    2. Threshold tripping: N failures trip the breaker.
-    3. Cooldown expiry: breaker auto-closes after the window elapses.
-    4. Success resets the consecutive-failure counter.
-    5. Env overrides: TRID3NT_CIRCUIT_THRESHOLD + TRID3NT_CIRCUIT_COOLDOWN_S.
-    6. CircuitBreakerError shape: error_code, retryable, message, cooldown_remaining.
-    7. record_failure on an already-tripped breaker does not reset the clock.
-    8. Multiple independent tools: tripping one does not affect another.
-    9. cooldown_remaining_s returns 0 for non-tripped tools.
-"""
+Default threshold and cooldown; N failures trip it and the window auto-closes; a
+success resets the consecutive counter; the env overrides; the error's shape;
+recording a failure on a tripped breaker does not extend the deadline; breakers
+are per tool; ``cooldown_remaining_s`` is 0 when not tripped."""
 
 from __future__ import annotations
 
@@ -330,13 +323,10 @@ def test_is_client_arg_error_classification():
 
 
 def test_breaker_does_not_trip_on_client_arg_errors():
-    """N consecutive CLIENT/arg errors leave the breaker CLOSED.
+    """N consecutive CLIENT / arg errors leave the breaker CLOSED.
 
-    This is the Oklahoma-tornado bug fix: a model passing a bad arg
-    (e.g. "Oklahoma" before the validator was relaxed) must NOT trip the
-    breaker — the model can self-correct and retry, and a tripped breaker
-    would block that corrected retry for the whole cooldown.
-    """
+    A model passing a bad arg can self-correct and retry, and a tripped breaker would
+    block that corrected retry for the whole cooldown."""
     cb = ToolCircuitBreaker(threshold=3, cooldown_s=60.0)
     # Fire WAY more than the threshold of arg errors.
     for _ in range(10):
@@ -371,13 +361,10 @@ def test_breaker_trips_on_untyped_runtime_and_timeout():
 
 
 def test_arg_errors_do_not_block_subsequent_upstream_trip():
-    """Arg errors don't poison the counter — a later real upstream loop still trips.
+    """Arg errors do not poison the counter, and a later upstream loop still trips.
 
-    Models the exact Oklahoma scenario: a burst of bad-arg failures, then the
-    tool is corrected and a genuine upstream outage occurs. The breaker must
-    still be able to trip on the real upstream failures (it was never blocked
-    by the arg errors), AND the arg errors must not have pre-loaded the counter.
-    """
+    A burst of bad-arg failures must neither pre-load the counter nor stop a genuine
+    upstream outage from tripping the breaker afterwards."""
     cb = ToolCircuitBreaker(threshold=3, cooldown_s=60.0)
     # 5 arg errors — no effect.
     for _ in range(5):

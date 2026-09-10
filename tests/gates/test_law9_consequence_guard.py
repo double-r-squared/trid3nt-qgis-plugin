@@ -1,17 +1,9 @@
-"""Law-9 sweep guard: an invented-physics demo default cannot be born or run.
+"""An invented-physics demo default cannot be born or run.
 
-Three enforcing layers (the demo-physics-defaults audit's nip-in-the-bud design):
-
-  a. SCHEMA -- ``SyntheticInput(basis="default_demo")`` without a ``consequence``
-     tag cannot construct; a pre-law-9 persisted record loads tolerantly.
-  b. STATIC LINT -- every ``SyntheticInput(...)`` construction site in
-     ``trid3nt_server/`` whose block names ``default_demo`` carries an explicit
-     ``consequence=`` kwarg, so a new naked demo default fails here instead of
-     shipping.
-  c. BEHAVIORAL -- ``gate_input_review`` in auto mode (and the headless no-emitter
-     path) REFUSES a ``consequence="physics"`` demo default while letting
-     scenario / numerical / aoi demo defaults proceed.
-"""
+Three layers: the SCHEMA refuses a demo-default synthetic input with no
+``consequence`` tag while loading a pre-existing record tolerantly; a STATIC LINT
+requires an explicit ``consequence=`` at every construction site naming a demo
+default; the review gate REFUSES a physics one and lets the rest proceed."""
 
 from __future__ import annotations
 

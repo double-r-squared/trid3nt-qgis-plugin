@@ -1,35 +1,9 @@
 """Guard: no markdown syntax in LLM-bound tool RESULT strings.
 
-NATE rule (lane audit, 2026-07): markdown belongs in DOCSTRINGS (read by the
-LLM at tool-selection time) -- it is WASTE in tool RESULTS, which must be
-JSON / plaintext.
-
-This is a best-effort static lint, not a runtime check: it AST-walks every
-``.py`` file under ``trid3nt_server/tools`` and ``trid3nt_server/workflows``
-and flags NON-docstring string constants (incl. f-strings) that carry
-markdown markers:
-
-- headers  -- a line starting ``# `` .. ``#### ``
-- bold     -- ``**text**``
-- tables   -- ``| --- |`` separator rows
-- fences   -- triple backticks
-
-Docstrings are excluded (markdown is CORRECT there). Plain ``- item`` dash
-bullets are NOT flagged: a dash-prefixed list is legitimate plaintext (and
-matching it would false-positive on negative numbers / prose hyphens).
-
-Allowlist
-=========
-
-Files whose markdown-bearing strings are legitimately markdown because they
-build a USER-FACING document, never an LLM-bound result:
-
-- ``tools/meta/compose_case_report.py`` -- writes a markdown situation-report
-  FILE to the case artifacts dir (the open_case_in_qgis convention); its
-  registered tool returns a markdown-free JSON dict (path + counts). Verified
-  by ``test_compose_case_report_llm_result_is_markdown_free`` below so the
-  allowlist entry cannot silently start leaking markdown to the LLM.
-"""
+Markdown belongs in a docstring, which the model reads at selection time; a
+RESULT is JSON or plaintext. A static lint AST-walks the tool and workflow trees
+and flags non-docstring string constants carrying a header, bold, a table
+separator or a fence; a dash bullet is legitimate plaintext and is not flagged."""
 
 from __future__ import annotations
 
@@ -130,11 +104,8 @@ def test_allowlist_entries_exist() -> None:
 def test_compose_case_report_llm_result_is_markdown_free() -> None:
     """The allowlisted file's LLM-bound RETURN dict stays markdown-free.
 
-    ``compose_case_report`` may build markdown for its on-disk report file,
-    but the dict it returns to the LLM must remain plain JSON. Static check:
-    the ``return`` statement of the registered coroutine must be a dict
-    literal whose string values carry no markdown markers.
-    """
+    It may build markdown for its on-disk report file, but the registered coroutine's
+    returned dict literal must carry no markdown in its string values."""
     path = SRC_ROOT / "tools" / "meta" / "compose_case_report" / "compose_case_report.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     fn = next(

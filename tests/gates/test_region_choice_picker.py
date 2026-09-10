@@ -1,26 +1,9 @@
-"""Tests for the agent-side region-disambiguation picker.
+"""The agent-side region-disambiguation picker.
 
-The picker layers an INTERACTIVE narrowing choice on top of the job-0346
-state-bbox-fallback: when ``geocode_location`` snaps a vague/regional query to
-the WHOLE state bbox (``source == "state-bbox-fallback"``), the agent surfaces a
-``region-choice-request`` (whole-state default + candidate counties), PAUSES the
-turn, and on ``region-choice-provided`` either narrows the geocode bbox to the
-picked region or keeps the whole-state bbox.
-
-This MIRRORS the credential-request pause/resume seam (test_credential_pipeline)
-exactly. Covered here:
-
-1. State-snap geocode result triggers a region-choice-request carrying the
-   state's counties + the whole-state default (default_action="use_whole_state").
-2. A PRECISE geocode (source != state-bbox-fallback) does NOT trigger it.
-3. region-choice-provided(choice="region") narrows the geocode bbox to the
-   picked region's bbox (re-resolved by region_id).
-4. region-choice-provided(choice="whole_state") keeps the state bbox unchanged.
-5. The request + provided envelopes (de)serialize, and the contracts are wired
-   into the ws.py routing registries.
-6. The region-set builder turns TIGER FlatGeobuf features into per-county
-   {region_id, name, bbox, admin_level} candidates (mocked fetch).
-"""
+When ``geocode_location`` snaps a vague query to the WHOLE state bbox the agent
+emits a ``region-choice-request`` carrying the counties and a whole-state
+default, PAUSES the turn, and on the reply either narrows to the picked region or
+keeps the state bbox. A precise geocode does not trigger it."""
 
 from __future__ import annotations
 
@@ -63,11 +46,10 @@ from trid3nt_contracts.ws import (
 
 @pytest.fixture(autouse=True)
 def _cap_gate_waits(monkeypatch):
-    """LANE C: cap every user-decision gate wait so a headless run never hangs
-    on the F6 24h local-lane lift (``_gate_wait_timeout``). Production leaves
-    ``TRID3NT_GATE_WAIT_CAP_S`` unset -> byte-identical behavior. Happy-path
-    resolvers answer within milliseconds; the timeout test tightens the cap so
-    it hits the honest fail-open (keep whole-state bbox) path fast."""
+    """Cap every user-decision gate wait so a headless run never hangs.
+
+    Production leaves ``TRID3NT_GATE_WAIT_CAP_S`` unset; the timeout test tightens
+    the cap so it reaches the honest fail-open path fast."""
     monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
 
 
@@ -135,12 +117,10 @@ async def _drive_region_choice(
     *,
     candidates: list[RegionCandidate] | None = None,
 ) -> MockWebSocket:
-    """Drive _maybe_handle_region_choice with a mocked candidate set + reply.
+    """Drive ``_maybe_handle_region_choice`` with a mocked candidate set and reply.
 
-    Spawns the handler as a task, waits for the request envelope + pending
-    future, then resolves it with ``reply`` (or lets it run to completion when
-    ``reply is None`` — e.g. the precise-geocode no-op path).
-    """
+    The handler runs as a task; ``reply is None`` lets it run to completion, which is
+    the precise-geocode no-op path."""
     ws = MockWebSocket()
     state = SessionState(session_id=new_ulid())
     state.emitter = _EMITTER_SENTINEL  # type: ignore[assignment]

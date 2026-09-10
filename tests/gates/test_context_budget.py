@@ -1,24 +1,9 @@
-"""Context-budget compaction + overflow guard for the LOCAL model path
-(OPEN-14).
+"""Context-budget compaction and the overflow guard for the local model path.
 
-PROVEN FAILURE THIS FIXES (2x reproduced, session 01KX8GCZKNBAFEJ9SY1C8VNVND,
-trid3nt-local/logs/agent.log): a turn's prompt hit exactly ``num_ctx=16384``;
-Ollama silently clipped it; the model lost its tool contract and narrated a
-fabricated success with zero tool calls.
-
-Covers:
-  1. Token estimator (chars/4).
-  2. Compaction ladder: drop -> harden -> fold, hysteresis targets, the
-     case-state-note / current-user-message survival guarantee.
-  3. num_ctx discovery: /api/show parsing, ``-<N>k`` suffix fallback, env
-     fallback, process-lifetime cache.
-  4. Reactive clip guard: ``is_prompt_clipped`` + ``ContextWindowExceededError``.
-  5. Fabrication backstop regex: positive (the real fabricated sentence
-     shape) and negative (plain answers, capability statements) cases.
-
-Run:
-    cd services/agent && .venv/bin/python -m pytest tests/gates/test_context_budget.py -q
-"""
+A prompt at the context limit is silently clipped by the runtime and the model
+loses its tool contract. Covered: the token estimator; the compaction ladder
+(drop -> harden -> fold) with its hysteresis targets and survival guarantees;
+``num_ctx`` discovery and caching; the clip guard; the fabrication backstop."""
 
 from __future__ import annotations
 
@@ -90,15 +75,9 @@ def case_state_note_content(text: str = "These layers are ALREADY produced...") 
 def mixed_narration_and_call_content(
     text: str, name: str, args: dict[str, Any], call_id: str = "c1"
 ) -> genai_types.Content:
-    """A model turn that narrates BEFORE calling a tool -- ONE Content row
-    carrying both a ``text`` Part and a ``function_call`` Part together (the
-    real shape ``adapter.build_contents_from_history``'s ``parts_blob``
-    full-fidelity decode can reconstruct, per Gemini's own multi-Part
-    candidate shape). ``_is_droppable_row`` correctly refuses to drop this
-    row (it has a function_call Part); the pre-fix hardening step only
-    touched ``function_response`` Parts, so the narration text rode through
-    every step untouched -- the STILL-OVER-AFTER-STEP-A BUG (module
-    docstring)."""
+    """A model turn that narrates BEFORE calling a tool: ONE Content row carrying a
+    ``text`` Part and a ``function_call`` Part together. ``_is_droppable_row``
+    refuses it, so the narration text has to be reached by a later ladder step."""
     fc = genai_types.FunctionCall(name=name, args=args, id=call_id)
     return genai_types.Content(
         role="model", parts=[genai_types.Part(text=text), genai_types.Part(function_call=fc)]
@@ -165,10 +144,9 @@ class TestBudget:
         assert openai_max_output_tokens() == 4096
 
     def test_reserve_output_tokens_is_coupled_to_max_output_tokens(self, monkeypatch):
-        """BUG 3 (post-OPEN-14 acceptance rerun): the proactive budget's
-        output reserve must be the SAME number as the max_tokens cap sent on
-        the wire -- a single source of truth, not two independently
-        configured knobs that can drift apart."""
+        """The proactive budget's output reserve IS the max-tokens cap sent on the wire.
+
+        One source of truth, not two knobs that can drift apart."""
         monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
         assert reserve_output_tokens() == openai_max_output_tokens() == 4096
         monkeypatch.setenv("TRID3NT_OPENAI_MAX_TOKENS", "777")
@@ -316,15 +294,10 @@ class TestCompactionLadder:
 
 class TestStillOverAfterStepABug:
     def test_real_shape_giant_mixed_narration_rows_gets_under_target(self):
-        """Real-shape repro: several 100KB+ mixed narration+function_call
-        rows (a model turn that narrates before calling a tool -- ONE
-        Content row, per adapter.build_contents_from_history's parts_blob
-        full-fidelity decode), a case-state note, a current user message.
-        None of the giant rows are droppable (_is_droppable_row) and the old
-        harden step only touched function_response Parts -- pre-fix this
-        left the ladder stuck ~6k tokens over target with
-        dropped>0 hardened=0 folded=False. Post-fix the ladder must get
-        under target using the narration-text-cap + fold levers."""
+        """Several giant mixed narration-and-call rows, a case-state note, a user message.
+
+        None of the giant rows is droppable, so the ladder has to reach target through
+        the narration cap and the fold."""
         rows = [
             mixed_narration_and_call_content(
                 "y" * 120_000, f"fetch_layer_{i}", {"i": i}, call_id=f"c{i}"
@@ -343,10 +316,10 @@ class TestStillOverAfterStepABug:
         assert result.contents[-2:] == tail
 
     def test_giant_single_row_is_capped_at_contents_build_time(self):
-        """SECONDARY fix: a single history row must never carry 100KB+ into
-        a future turn's contents, even on a turn that ends up UNDER budget
-        overall (the defensive normalize pass runs unconditionally, before
-        the budget math)."""
+        """A single history row never carries 100 KB into a future turn's contents.
+
+        The defensive normalize pass runs unconditionally, before the budget math, so a
+        turn that ends up under budget overall is capped anyway."""
         giant = model_content("z" * 200_000)
         tail = [case_state_note_content(), user_content("current question")]
         contents = [giant] + tail
@@ -362,10 +335,9 @@ class TestStillOverAfterStepABug:
         assert result.contents[-2:] == tail
 
     def test_still_over_after_a_proceeds_to_b_then_c(self):
-        """Every non-protected row carries a function_call Part (nothing for
-        step (a) to drop -- dropped stays 0), so the ladder MUST fall
-        through to (b) narration-cap and then (c) fold to get under a very
-        tight target."""
+        """Every non-protected row carries a ``function_call`` Part, so nothing is
+        droppable and the ladder MUST fall through to the narration cap and then the
+        fold to reach a very tight target."""
         rows = [
             mixed_narration_and_call_content(
                 "n" * 50_000, f"fetch_layer_{i}", {"i": i}, call_id=f"c{i}"
@@ -382,10 +354,10 @@ class TestStillOverAfterStepABug:
         assert result.contents[-2:] == tail
 
     def test_protected_note_too_big_logs_warning_and_truncates(self, caplog):
-        """When the excess lives ENTIRELY in the protected tail (nothing
-        left in ``working`` for (a)/(b)/(c) to act on), the ladder must not
-        silently no-op: it truncates the oversized protected narration row
-        and logs a WARNING naming which block was too big."""
+        """Excess living ENTIRELY in the protected tail must not be a silent no-op.
+
+        The ladder truncates the oversized protected narration row and logs a WARNING
+        naming the block that was too big."""
         huge_note = case_state_note_content("s" * 50_000)
         current_question = user_content("small question")
         contents = [huge_note, current_question]

@@ -1,18 +1,9 @@
-"""Runaway-agent guard (#186): per-turn step cap + wall-clock + loop watchdog.
+"""Runaway-agent guard: a per-turn step cap, a wall clock and a loop watchdog.
 
-Pins the guard that stops a single hung / runaway session from pegging the
-shared event loop and starving other users (live incident 2026-06-25). Two
-layers:
-
-  * unit tests for the small ``runaway_guard`` module (thresholds, cheap-model
-    halving, the ``LoopWatchdog`` state machine, honest abort messages);
-  * integration tests that drive ``server._stream_model_reply`` and assert the
-    WALL-CLOCK and STEP-CAP guards each fire a clean honest abort -- while a
-    normal short turn is left untouched.
-
-Run:
-    cd services/agent && .venv/bin/python -m pytest tests/gates/test_runaway_guard.py -q
-"""
+What stops one hung session from pegging the shared event loop and starving
+others. Unit tests over the ``runaway_guard`` module - thresholds, the
+cheap-model halving, the watchdog state machine, the honest abort messages - and
+integration tests where each guard fires a clean abort on the real stream."""
 
 from __future__ import annotations
 
@@ -148,12 +139,10 @@ def _settings():
 
 @pytest.mark.asyncio
 async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch, fake_llm):
-    """A turn that overruns its wall-clock budget aborts with AGENT_TURN_TIMEOUT.
+    """A turn overrunning its wall-clock budget aborts with AGENT_TURN_TIMEOUT.
 
-    Round 1 dispatches normally (proving the in-flight round is NOT killed
-    mid-await -- e.g. a legitimate long Batch poll completes); the deadline is
-    only re-checked at the TOP of round 2, where it fires. The session stays
-    alive (a terminal frame is emitted) -- the loop is freed, not crashed."""
+    The deadline is re-checked at the TOP of a round, never mid-await, so an
+    in-flight round completes; the session stays alive and a terminal frame is sent."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
     from trid3nt_contracts import new_ulid

@@ -1,22 +1,9 @@
-"""Neutral-line round-trip: a USER-DRAWN elevation/section LineString through
-``request_spatial_input`` (purpose="line") -> server parse -> the LLM result
-that feeds ``compute_terrain_profile(line=...)``.
+"""A user-drawn LineString from ``request_spatial_input(purpose="line")``.
 
-A drawn ``role=="line"`` LineString parses to plain coordinates and is surfaced
-as the result's ``line`` / ``linestring`` fields.
-
-Coverage:
-1. PURE PARSE: a ``role=="line"`` LineString -> ``ParsedSpatialInput.line_coords``
-   (+ ``n_lines``); malformed lines raise typed ``SpatialInputParseError``
-   (honesty floor).
-2. RESPONSE -> RESULT: ``_spatial_response_to_result`` on a vector_draw reply
-   carrying a neutral line adds ``line`` + ``linestring`` to the result; an
-   AOI-only reply carries no ``line`` keys.
-3. CONSUMPTION: the surfaced ``line`` / ``linestring`` resolve via
-   ``compute_terrain_profile._resolve_line_coords`` (the tool consumes it).
-4. TOOL: ``request_spatial_input(purpose="line")`` rides ``purpose`` back in the
-   sentinel; an invalid purpose -> a typed param error.
-"""
+A ``role=="line"`` LineString parses to plain coordinates and is surfaced as the
+result's ``line`` and ``linestring`` fields; a malformed line raises the typed
+parse error; an AOI-only reply carries no line keys; the surfaced value resolves
+in the terrain-profile consumer; an invalid purpose is a typed param error."""
 
 from __future__ import annotations
 

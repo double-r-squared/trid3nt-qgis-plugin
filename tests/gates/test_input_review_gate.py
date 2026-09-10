@@ -54,10 +54,8 @@ async def _drive(
 ) -> str:
     """Resolve the next FRESH pending gate future once it appears.
 
-    ``seen`` tracks warning_ids already resolved this test so a multi-round
-    script never races on an already-resolved-but-not-yet-popped future (the
-    helper pops in a ``finally`` one await after ``set_result``).
-    """
+    ``seen`` tracks the warning ids already resolved, so a multi-round script never
+    races on an already-resolved future the helper has not popped yet."""
     seen = seen if seen is not None else set()
     for _ in range(int(appear_timeout / 0.005)):
         fresh = [

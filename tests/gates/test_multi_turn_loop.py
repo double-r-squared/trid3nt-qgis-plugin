@@ -1,35 +1,9 @@
-"""Multi-turn function_call → function_response loop tests (job-0169).
+"""The multi-turn function_call -> function_response loop.
 
-Verifies the fix for the CRITICAL BLOCKER reported by user testing 2026-06-08:
-every multi-tool natural-language prompt failed because Gemini stopped after
-the first tool call. The previous (job-0154) shape dispatched the first
-function_call but never appended a ``function_response`` Content to the next
-Gemini turn — so Gemini had no idea its first call had returned, and
-generation stopped.
-
-Tests:
-
-1. ``summarize_tool_result`` produces sensible compact summaries for the
-   common tool-return shapes (LayerURI metadata, dict with metrics, error,
-   None, primitive, oversized payload).
-2. ``stream_events_with_contents`` parses both text and function_call chunks
-   the same way ``stream_events`` did (parity check — the existing routing
-   tests already exercise ``stream_events`` which delegates here).
-3. ``_stream_model_reply`` drives the multi-turn loop end-to-end:
-   - First turn: Gemini emits a function_call (``geocode_location``).
-   - Second turn: Gemini sees the function_response (with bbox) and emits
-     another function_call (``fetch_fema_nfhl_zones`` with the bbox).
-   - Third turn: Gemini emits a final narrative text and no function_call,
-     so the loop terminates.
-   - Asserts: both tools dispatched in order, ``contents`` passed to Gemini
-     on the second + third turns contain the call + response pairs, terminal
-     ``agent-message-chunk done=True`` and ``pipeline-state complete`` are
-     emitted.
-4. Tool dispatch error is captured in the function_response (not raised),
-   so Gemini can read the error and retry / narrate.
-5. ``MAX_TURN_ITERATIONS`` is enforced — a runaway Gemini that keeps emitting
-   function_calls forever is fail-stopped, not infinite-looped.
-"""
+``summarize_tool_result`` compacts the common return shapes; the contents fed
+back on each turn carry the call and response pairs, so a second and third tool
+call build on the first and a final text turn ends the loop; a dispatch error
+rides the function_response rather than raising; the iteration cap fail-stops."""
 
 from __future__ import annotations
 
@@ -87,14 +61,10 @@ def test_summarize_tool_result_error_path():
 
 
 def test_summarize_tool_result_none():
-    """None result falls back to {status: "no_result"}.
+    """A ``None`` result falls back to ``{status: "no_result"}``.
 
-    B-rev: TOOL_NOT_FOUND and PAYLOAD_WARNING_CANCELLED now raise typed
-    exceptions, not return None. ``no_result`` is still the contract for
-    tool callables that legitimately return None (e.g. side-effect-only
-    tools). The fallback is retained — it no longer represents routing
-    failures.
-    """
+    That is the contract for a tool that legitimately returns None; a routing failure
+    raises a typed exception instead."""
     summary = summarize_tool_result("publish_layer", None)
     assert summary["status"] == "no_result"
 
@@ -234,20 +204,10 @@ class _FakeSocket:
 
 @pytest.mark.asyncio
 async def test_stream_model_reply_multi_turn_loop(fake_llm):
-    """Proper recovery flow: geocode -> search_tools -> flood zones -> narrative.
+    """Geocode, then search, then the fetch it surfaced, then a narrative.
 
-    Scenario mirrors "Show me protected areas in Fort Myers": the model
-    discovers its way to fetch_fema_nfhl_zones via search_tools (the
-    discovery escape hatch), then dispatches it. This test exercises the
-    multi-turn re-stream loop (function_call + function_response bundled between
-    turns), not the routing itself.
-
-    Turn 1: model calls ``geocode_location`` (always in the core floor).
-    Turn 2: model calls ``search_tools`` — surfaces fetch_fema_nfhl_zones.
-    Turn 3: model calls ``fetch_fema_nfhl_zones`` with the bbox from
-            the geocode result.
-    Turn 4: model emits a final narrative text and stops.
-    """
+    What is exercised is the re-stream loop - the call and response pairs bundled
+    between turns - rather than the routing that picks each tool."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 

@@ -1,22 +1,9 @@
-"""Unit tests for openai_adapter.py (no network required).
+"""Unit tests for ``openai_adapter.py``, no network required.
 
-Tests cover:
-  1. contents_to_openai_messages: genai Content[] -> OpenAI messages[] translation
-     including tool history round-trip (function_call + function_response)
-  2. tool_declarations_to_openai_tools: FunctionDeclaration[] -> tools[] sanitisation
-  3. stream_openai: streaming accumulator on synthetic chunk sequences (no network)
-  4. OPEN-14: stream_openai's context-budget wiring -- proactive compaction
-     before the request, and the reactive clip-guard retry-then-typed-error
-     path (num_ctx discovery is monkeypatched throughout, no live Ollama
-     required; see tests/gates/test_context_budget.py for the discovery/ladder/
-     regex unit tests in isolation)
-  5. Part A (compaction UX): every compaction pass yields a
-     CompactionStartEvent/CompactionCompleteEvent pair -- NOT the pre-Part-A
-     TextDeltaEvent note glued onto the model's reply -- so server.py's
-     dispatch loop can mint/complete a durable pipeline card instead (see
-     tests/emission/test_pipeline_emitter.py TestCompactionCard for the card-minting
-     seam these events drive).
-"""
+The genai-to-OpenAI message translation including a tool-history round trip; the
+declaration sanitisation; the streaming accumulator over synthetic chunks; the
+context-budget wiring - proactive compaction before the request and the reactive
+clip guard's retry-then-typed-error; and a start/complete event pair per pass."""
 from __future__ import annotations
 
 import json
@@ -697,10 +684,10 @@ class TestContextBudgetWiring:
 
     @pytest.mark.asyncio
     async def test_proactive_compaction_shrinks_the_sent_prompt(self, monkeypatch):
-        """A huge history over a SMALL discovered num_ctx triggers proactive
-        compaction: a CompactionStartEvent/CompactionCompleteEvent pair is
-        emitted first (Part A -- NOT a TextDeltaEvent note), and the request
-        actually SENT is smaller than the raw uncompacted history."""
+        """A huge history over a SMALL discovered ``num_ctx`` compacts before the request.
+
+        A start and complete event pair is emitted first, and what is actually SENT is
+        smaller than the raw history."""
         self._env(monkeypatch)
         captured: dict[str, Any] = {}
 
@@ -768,10 +755,9 @@ class TestContextBudgetWiring:
 
     @pytest.mark.asyncio
     async def test_clip_guard_retries_once_then_succeeds(self, monkeypatch):
-        """Round 1 reports usage.prompt_tokens >= num_ctx (clipped) -- the
-        adapter recompacts, emits a CompactionStartEvent/CompactionCompleteEvent
-        pair (Part A -- NOT a text note), and retries ONCE. Round 2 is clean
-        -- the turn completes normally, no exception."""
+        """A clipped round recompacts, emits the event pair and retries ONCE.
+
+        The second round is clean, so the turn completes with no exception."""
         self._env(monkeypatch)
 
         async def _fake_discover(provider, model_name, *, base_url=None):

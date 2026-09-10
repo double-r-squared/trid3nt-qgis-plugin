@@ -1,23 +1,9 @@
-"""HTTP-route + unit tests for the OpenRouter model-extensibility seam
-(design 2026-07-19).
+"""The OpenRouter model-extensibility seam: the config route and the model filter.
 
-Two features, both offline (no live network, no live agent):
-
-Feature 3 -- POST /api/provider-config:
-  - route ABSENT (404) unless the active provider is openai;
-  - a well-formed body updates os.environ[TRID3NT_OPENAI_*] and returns
-    {"ok", "model", "base_url_host"} -- the effect the openai adapter reads at
-    the next call (no restart);
-  - the num_ctx discovery cache is reset so a same-name model re-discovers;
-  - the api_key is NEVER echoed in the response body;
-  - a malformed body -> honest 400 that does not leak the body.
-
-Feature 2 -- _filter_openrouter_models (pure) + _fetch_openrouter_models:
-  - FREE = pricing 0/0 OR id ":free"; TOOL-CAPABLE = "tools" in
-    supported_parameters; a model missing supported_parameters is kept OUT;
-  - malformed rows are skipped, never fatal;
-  - the fetched list is cached per base_url with a TTL (one round trip).
-"""
+Offline. The route is ABSENT unless the active provider is openai; a well-formed
+body updates the env the adapter reads at its next call, resets the ``num_ctx``
+discovery cache and never echoes the key; a malformed body is an honest 400. The
+pure filter keeps free, tool-capable models and skips a malformed row."""
 
 from __future__ import annotations
 
@@ -42,12 +28,10 @@ _PROVIDER_ENV = (
 
 @pytest.fixture(autouse=True)
 def _isolate_provider_env():
-    """Snapshot/restore the provider env block around every test.
+    """Snapshot and restore the provider env block around every test.
 
-    The route mutates ``os.environ`` DIRECTLY, and ``monkeypatch.delenv`` on an
-    already-absent var records nothing to undo -- so without this a test's write
-    outlives it and seeds the next test's coherence gate.
-    """
+    The route mutates ``os.environ`` directly and a ``delenv`` on an absent var
+    records nothing to undo, so a write would otherwise outlive its test."""
     saved = {name: os.environ.get(name) for name in _PROVIDER_ENV}
     yield
     for name, value in saved.items():

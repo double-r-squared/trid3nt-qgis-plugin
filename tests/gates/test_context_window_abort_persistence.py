@@ -1,32 +1,9 @@
-"""BUG 1 + BUG 2 (post-OPEN-14 acceptance rerun): the ContextWindowExceededError
-abort path in server.py's ``_stream_model_reply`` / ``_dispatch_model_turn_and_persist``.
+"""The context-window abort path through the real stream and dispatch seams.
 
-Root cause (BUG 1): the OLD except-block sent the live error envelope FIRST and
-persisted the typed terminal-failure card SECOND. Both proven reproductions
-(sessions 01KXAGEJAAPWDH0YSEGYQK5QVG / 01KXAJ1WKWDC0XS7VW4RY6CVF6) had a
-dead/detached client socket, and neither the persist's success INFO nor its own
-exception log ever fired -- the persist call was never reached. ``_send_error``
--> ``_session_safe_send`` only catches ``Exception`` (not ``BaseException``), so
-an await on a dead-socket send that surfaces as anything else escapes straight
-past the persist and out of the except-block. Fix: persist FIRST (it never
-touches the socket, so a dead/detached connection can never starve it), attempt
-the best-effort socket send SECOND, both individually try/excepted with logging.
-Also: the honest window-exceeded verdict is now appended directly onto the
-turn's persisted partial-reply text (the streamed garbage is already
-persisted -- the reader must see the abort verdict right after it), not only in
-the transient error envelope a dead socket may drop.
-
-Root cause (BUG 2): the fabrication backstop (``looks_like_fabricated_action_claim``)
-is wired into the normal zero-tool-call terminal branch but was skipped
-entirely on the exception (abort) path, so an abort mid-fabrication persisted
-an unqualified false claim ("The hillshade has been generated..."). Fixed by
-folding the same structural gate (zero tool calls this turn) + text regex into
-the abort note builder (``context_budget.build_context_window_abort_note``).
-
-These tests drive the REAL ``_stream_model_reply`` / ``_dispatch_model_turn_and_persist``
-seams (no Gemini, no Playwright) against file-backed persistence, mirroring
-``tests/adapters/test_terminal_narration_and_failure_card.py``.
-"""
+The terminal-failure card is persisted FIRST - a persist never touches the
+socket, so a dead client cannot starve it - and the best-effort send follows,
+each individually caught and logged. The abort verdict is appended to the turn's
+persisted partial reply, and the fabrication backstop is folded into the note."""
 
 from __future__ import annotations
 
@@ -128,11 +105,10 @@ def _persisted_rows(session_state):
 
 @pytest.mark.asyncio
 async def test_abort_on_dead_socket_still_persists_failure_card(file_persistence) -> None:
-    """The 2x-reproduced shape: the client socket is ALREADY dead when the
-    abort fires. Pre-fix this silently dropped the terminal-failure card
-    (neither its success INFO nor a failure exception log ever appeared).
-    Post-fix: persist runs BEFORE the (now best-effort, failing) socket send,
-    so the failed card lands regardless."""
+    """The client socket is ALREADY dead when the abort fires.
+
+    The persist runs BEFORE the failing send, so the terminal-failure card lands
+    regardless."""
     # Case setup rides a LIVE socket (its own raw ``websocket.send`` calls are
     # unrelated to the abort-path fix); the turn itself is then driven on a
     # socket that is ALREADY dead, matching the repro.
@@ -207,11 +183,10 @@ async def test_abort_appends_note_with_caveat_ordering_when_fabricated(
 async def test_abort_after_a_real_tool_call_never_adds_fabrication_caveat(
     file_persistence,
 ) -> None:
-    """The fabrication backstop must stay scoped to a ZERO-tool-call turn
-    (context_budget.looks_like_fabricated_action_claim's own contract): a
-    turn that dispatched a real tool this turn and THEN aborted on a later
-    round must get the plain abort note, never the caveat, even if the
-    closing text happens to match the claim-shaped regex."""
+    """The fabrication backstop stays scoped to a ZERO-tool-call turn.
+
+    A turn that dispatched a real tool and then aborted gets the plain abort note,
+    even when its closing text matches the claim-shaped regex."""
 
     async def _tool() -> dict:
         return {"status": "ok"}
@@ -269,11 +244,9 @@ async def test_abort_after_a_real_tool_call_never_adds_fabrication_caveat(
 async def test_both_failure_logs_fire_when_persist_and_send_each_raise(
     file_persistence, monkeypatch, caplog
 ) -> None:
-    """Defense-in-depth: even if ``_persist_terminal_failure_card`` or
-    ``_send_error`` themselves raise (bypassing their own internal
-    catch-alls), the except-ContextWindowExceededError handler's own
-    try/excepts must log EACH failure individually -- never silently
-    swallow one, and never let one skip the other."""
+    """A raising persist and a raising send are each logged individually.
+
+    Neither may be swallowed, and neither may skip the other."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
     case_id = await _create_case(ws, state)

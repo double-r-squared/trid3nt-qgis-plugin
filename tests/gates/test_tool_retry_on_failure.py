@@ -1,40 +1,9 @@
-"""Tool-retry-on-failure tests (job-0177).
+"""Structured error feedback, so the model can retry or narrate honestly.
 
-Extends the job-0169 multi-turn loop with structured error feedback so
-Gemini can decide whether to retry (with corrected args / a different
-tool) or narrate failure honestly when a tool dispatch raises.
-
-Per the kickoff: when ``_invoke_tool_via_emitter`` raises, the loop
-already catches the exception and feeds a ``function_response`` back to
-Gemini.  job-0177 enriches that payload with
-``{status: "error", error_code: str, message: str, retryable: bool}``
-so Gemini reads the structured retry signal rather than a free-form
-``error: str``.  The signal is sourced from the tool's own typed
-exception class (FR-AS-11 — every tool already declares ``error_code``
-+ ``retryable`` on its exception base class) and falls back to a
-conservative heuristic for untyped exceptions.
-
-UI visibility is DEFERRED for v0.1 (per memory + kickoff): each retry
-attempt produces a new tool card; the CHAIN of cards is the visible
-retry signal.  ``MAX_TURN_ITERATIONS`` already caps runaway retry.
-
-Tests:
-
-1. ``summarize_tool_result`` emits the new structured-error shape
-   ``{status, error_code, message, retryable, error_type}`` and
-   harvests ``error_code`` + ``retryable`` from typed tool exceptions.
-2. Untyped exceptions (``RuntimeError``, ``ValueError``,
-   ``TimeoutError``, ``ConnectionError``) classify into sensible
-   defaults — programmer errors NOT retryable, network errors are.
-3. The error shape stays JSON-serializable + within the char budget.
-4. End-to-end: a tool dispatch raises → Gemini sees the structured
-   error → emits a second function_call (retry with different args) →
-   second dispatch succeeds → loop terminates with narrative.
-5. End-to-end: a tool dispatch keeps failing → loop fail-stops at
-   ``MAX_TURN_ITERATIONS`` rather than retrying forever.
-6. End-to-end: legacy ``error`` field is still present (alias of
-   ``message``) so older callers / tests don't break.
-"""
+When a dispatch raises, the ``function_response`` carries ``{status, error_code,
+message, retryable}`` sourced from the tool's own typed exception, with a
+conservative classification for an untyped one - a programmer error is not
+retryable, a network error is. The legacy ``error`` string stays as an alias."""
 
 from __future__ import annotations
 
@@ -76,14 +45,10 @@ def test_summarize_tool_result_error_carries_structured_fields():
 
 
 def test_summarize_tool_result_error_harvests_typed_attributes():
-    """A typed tool exception's ``error_code`` + ``retryable`` are harvested.
+    """A typed tool exception's ``error_code`` and ``retryable`` are harvested.
 
-    Mirrors the shape used across ``fetch_*`` / ``compute_*`` tools — every
-    tool's exception base class declares ``error_code: str`` and
-    ``retryable: bool`` as class attributes (FR-AS-11).  job-0177 surfaces
-    those into the function_response so Gemini sees the retry signal the
-    tool already knew.
-    """
+    Every tool's exception base class declares both as class attributes, and the
+    function_response surfaces the retry signal the tool already knew."""
 
     class NFHLBboxError(RuntimeError):
         error_code = "NFHL_BBOX_INVALID"
@@ -206,13 +171,10 @@ class _FakeSocket:
 
 @pytest.mark.asyncio
 async def test_stream_model_reply_retry_after_recoverable_failure(fake_llm):
-    """First dispatch fails (retryable=True) → second dispatch succeeds.
+    """First dispatch fails with ``retryable=True``, the second succeeds.
 
-    Gemini reads the structured error_code + retryable=True in the
-    function_response, decides to retry with different args, the second
-    dispatch succeeds, and the loop terminates with a narrative turn.
-    This is the core kickoff scenario.
-    """
+    The model reads the structured code, retries with different args, and the loop
+    terminates with a narrative turn."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
 
@@ -320,18 +282,10 @@ async def test_stream_model_reply_retry_after_recoverable_failure(fake_llm):
 
 @pytest.mark.asyncio
 async def test_stream_model_reply_failed_retry_caps_at_max_iterations(fake_llm):
-    """A tool that always raises + a Gemini that always retries → loop stops.
+    """A tool that always raises and a model that always retries still stops.
 
-    With the circuit breaker (job-B8, Wave 4.10) wired into the loop, the
-    real ``_invoke_tool_via_emitter`` mock is called at most
-    ``circuit_breaker.threshold`` times (default 3) before the breaker trips
-    and subsequent calls are short-circuited.  The outer loop still terminates
-    — either the breaker trips first, or ``MAX_TURN_ITERATIONS`` is hit —
-    whichever comes first.
-
-    The invariant this test guards: dispatches to the *actual tool* are
-    bounded (the breaker caps them at threshold); the loop does not run forever.
-    """
+    Dispatches to the actual tool are bounded by the circuit breaker's threshold and
+    the loop by its iteration cap, whichever comes first."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
     from trid3nt_server.gates.circuit_breaker import ToolCircuitBreaker
@@ -381,12 +335,9 @@ async def test_stream_model_reply_failed_retry_caps_at_max_iterations(fake_llm):
 
 
 def test_summarize_tool_result_error_legacy_alias_preserved():
-    """Old callers reading ``summary['error']`` still get a string.
+    """An old caller reading ``summary['error']`` still gets a string.
 
-    The job-0169 ``test_multi_turn_loop.py::test_summarize_tool_result_error_path``
-    asserts on ``summary["error"]`` / ``summary["error_type"]``.  job-0177
-    must not break that contract while adding the structured fields.
-    """
+    The structured fields were added beside that contract, not in place of it."""
     err = RuntimeError("upstream 503 — temporary")
     summary = summarize_tool_result("fetch_dem", None, error=err)
     assert "error" in summary  # legacy field preserved

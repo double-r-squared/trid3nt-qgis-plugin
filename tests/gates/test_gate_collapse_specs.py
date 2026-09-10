@@ -1,18 +1,9 @@
-"""Gate-collapse (ADR 0273) spec + provider regression guards.
+"""The confirm gates are built from tool METADATA, not hand-wired name sets.
 
-Verifies NATE's design call landed: the confirm gates are built from tool
-METADATA (a declared ``GateSpec``), not the hand-wired ``SOLVER_CONFIRM_TOOLS``
-/ ``FETCH_CONFIRM_TOOLS`` name-set literals + a per-engine ``if/elif`` chain.
-
-- The registry-DERIVED membership views match what the tree declares.
-- The hand-wired name-set LITERALS are gone from ``_core`` (absence guard).
-- Each spec's declared estimate / pin providers IMPORT and are the right shape.
-
-Every engine template in the tree now stops at the STANDARD MESH GATE, so the
-solver lane is EMPTY and the fetch lane carries the whole surface. That emptiness
-is asserted rather than assumed: a template that re-introduces a per-engine
-approve card has to say so here.
-"""
+The registry-DERIVED membership views match what the tree declares, the name-set
+literals are gone from the core (an absence guard), and each spec's declared
+estimate and pin providers import and are the right shape. Every template stops
+at the standard mesh gate, so the solver lane is EMPTY and that is asserted."""
 from __future__ import annotations
 
 import inspect

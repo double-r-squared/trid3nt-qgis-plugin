@@ -1,21 +1,9 @@
-"""job-0241: solver confirm gate — the dispatch-path test that was missing.
+"""The solver confirm gate on the DISPATCH path, not the inner composer.
 
-The Stage 3 live gate (job-0235) proved the Case 2 composer dispatched MODFLOW
-with ZERO user confirmation: the registered wrapper hardcoded
-``confirmed=True`` and the server dispatch path had no solver gate. The
-programmatic tests all drove the INNER composer, never the registered wrapper
-through the server's dispatch seam — this file closes that exact gap.
-
-Covers:
-- the gate builds the confirm card from the PURE extraction and emits it as a
-  ``tool-payload-warning`` (the card the web client already renders);
-- approve → ``confirmed=True`` injected; cancel/timeout → fail-closed with a
-  typed error envelope and NO dispatch;
-- the LLM cannot self-approve: ``confirmed`` supplied in params is STRIPPED
-  before gating;
-- the registered wrapper defaults ``confirmed=False`` (no hardcoded bypass);
-- extraction failure falls through (gate must not mask parameter errors).
-"""
+The gate builds its card from the pure extraction and emits it as a
+``tool-payload-warning``; approve injects ``confirmed=True`` while cancel and
+timeout fail closed with a typed error and NO dispatch; an LLM-supplied
+``confirmed`` is STRIPPED; extraction failure falls through to the param error."""
 
 from __future__ import annotations
 
@@ -30,11 +18,10 @@ from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 
 @pytest.fixture(autouse=True)
 def _cap_gate_waits(monkeypatch):
-    """LANE C: cap every user-decision gate wait so a headless run never hangs
-    on the F6 24h local-lane lift (``_gate_wait_timeout``). Production leaves
-    ``TRID3NT_GATE_WAIT_CAP_S`` unset -> byte-identical behavior. Happy-path
-    approver tasks answer within milliseconds; the dedicated timeout test
-    tightens the cap so it hits the honest fail-closed path fast."""
+    """Cap every user-decision gate wait so a headless run never hangs.
+
+    Production leaves ``TRID3NT_GATE_WAIT_CAP_S`` unset; the dedicated timeout test
+    tightens the cap so it reaches the honest fail-closed path fast."""
     monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
 
 
@@ -58,10 +45,9 @@ class _FakeState:
 
 
 def test_dispatch_source_contains_strip_and_gate() -> None:
-    """Belt-and-braces: the dispatch site resolves the tool's GateSpec (ADR 0273,
-    the gate-collapse -- membership is metadata, not a name set) and strips an
-    LLM-supplied ``confirmed`` for a SOLVER gate before gating (source-level
-    assertion so a refactor that drops the strip line fails loudly)."""
+    """Source-level: the dispatch site resolves the tool's ``GateSpec`` and strips an
+    LLM-supplied ``confirmed`` before gating, so a refactor that drops the strip line
+    fails loudly rather than quietly."""
     import trid3nt_server.server as server_mod
 
     src = inspect.getsource(server_mod._invoke_tool_via_emitter)
@@ -113,9 +99,9 @@ async def _approve_next_pending(server, decision: str = "proceed") -> None:
 
 @pytest.mark.asyncio
 async def test_gate_turn_memory_auto_applies_same_tool_same_bbox() -> None:
-    """A second call this turn with the SAME tool + bbox (but a corrected,
-    non-bbox arg -- e.g. a fixed `dataset`) must NOT gate again; the earlier
-    proceed decision is replayed and the remembered resolution_m override
+    """A second call this turn with the SAME tool and bbox does NOT gate again.
+
+    The earlier proceed decision is replayed and the remembered resolution override
     carries onto the new call's params."""
     from trid3nt_server import server
 
@@ -229,10 +215,10 @@ async def test_gate_turn_memory_new_turn_gates_again() -> None:
 
 
 def test_gate_decisions_this_turn_reset_at_new_dispatch() -> None:
-    """Source-level assertion: the real per-turn reset site (the same one
-    that clears ``credential_prompted_tools``) also clears
-    ``gate_decisions_this_turn`` -- a regression here would silently bring
-    back the cross-turn leak this fix closes."""
+    """Source-level: the per-turn reset site clears ``gate_decisions_this_turn``.
+
+    It is the same site that clears the prompted-tools set, so a decision cannot leak
+    across turns."""
     import inspect
 
     import trid3nt_server.server as server_mod

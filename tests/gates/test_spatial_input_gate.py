@@ -1,26 +1,9 @@
-"""FR-AS-10 / FR-WC-16: the AGENT consuming a drawn FeatureCollection.
+"""The AGENT consuming a drawn FeatureCollection.
 
-Proves the full agent-side wire for the spatial-input gate:
-
-1. PURE PARSE (``trid3nt_server.gates.spatial_input``): a role-tagged drawn
-   ``FeatureCollection`` (aoi polygon + points) splits into the AOI bbox and the
-   point list, and EVERY malformed shape degrades to a TYPED
-   ``SpatialInputParseError`` (never a silent success / fabricated geometry --
-   the honesty floor).
-
-2. RESPONSE -> RESULT (``_spatial_response_to_result``): a
-   ``spatial-input-response`` (vector_draw / point / bbox / cancel / timeout /
-   malformed) maps to the typed result the LLM reads.
-
-3. PAUSE/RESUME REGISTRY + INBOUND RESOLVE (``server`` spatial-input gate): the
-   ``_PENDING_SPATIAL_INPUTS`` registry + ``_resolve_pending_spatial_input``
-   mirror the region-choice gate (cross-session refusal, unknown-id no-op), and
-   ``_emit_spatial_input_and_wait`` round-trips a drawn reply.
-
-4. TOOL SENTINEL (``tools/spatial_input_tool``): ``request_spatial_input``
-   returns the sentinel the turn loop intercepts, and rejects an unknown mode
-   with a typed error.
-"""
+The pure parse splits a role-tagged collection into an AOI bbox and a point list
+and degrades every malformed shape to a TYPED error rather than a fabricated
+geometry; a response maps to the typed result the LLM reads; the pending registry
+refuses a cross-session resolve; the tool returns the turn's sentinel."""
 
 from __future__ import annotations
 
@@ -58,11 +41,10 @@ from trid3nt_contracts.ws import (
 
 @pytest.fixture(autouse=True)
 def _cap_gate_waits(monkeypatch):
-    """LANE C: cap every user-decision gate wait so a headless run never hangs
-    on the F6 24h local-lane lift (``_gate_wait_timeout``). Production leaves
-    ``TRID3NT_GATE_WAIT_CAP_S`` unset -> byte-identical behavior. Happy-path
-    resolvers answer within milliseconds; the emit/await timeout test tightens
-    the cap so it hits the honest None-return path fast."""
+    """Cap every user-decision gate wait so a headless run never hangs.
+
+    Production leaves ``TRID3NT_GATE_WAIT_CAP_S`` unset; the emit-and-await timeout
+    test tightens the cap so it reaches the honest None-return path fast."""
     monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
 
 
