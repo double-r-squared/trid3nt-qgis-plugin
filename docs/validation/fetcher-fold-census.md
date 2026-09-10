@@ -1,5 +1,10 @@
 # Fetcher fold census - the two-lens result, by protocol family
 
+> Frozen record. Its section 6 acceptance list names `scripts/ws_smoke.py` and
+> `scripts/run_sfincs_direct.py`: the first is now `scripts/instruments/ws_smoke.py`
+> and the second left the tree with the SFINCS purge. The finding below is left
+> verbatim; the live gate list is AGENTS.md law 1.
+
 Read-only census over the fetcher tree at `/home/nate/Documents/trid3nt-local`,
 HEAD `d243c0d5` ("docs: the lean sweep closed"). The two lens passes were taken at
 `e492c740`; `git diff --stat e492c740 HEAD -- trid3nt_server/tools/fetchers/` is

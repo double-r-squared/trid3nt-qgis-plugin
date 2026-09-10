@@ -487,3 +487,79 @@ Scope delta: `git ls-files docs | grep -v '^docs/proof/'` gains ten markdown
 pages, eight run records and thirty-three figures; the tracked tree gains twelve
 package maps outside `docs/`, rowed here because the map-README rule is this
 lens's subject.
+
+## Completeness critic, round 1: the REWRITE verdicts reconciled
+
+Every row above whose verdict is REWRITE was re-read against the tree at HEAD.
+The verdicts split three ways, and the census rows keep their original wording -
+this table is the correction, in the ledger style dated records use.
+
+### Executed here
+
+| path | the defect, verified | what landed |
+| --- | --- | --- |
+| `docs/site/engines.md` | eleven engines listed, one in the tree; the SWMM, GeoClaw and SWAN caveats describe absent workers | rewritten to TELEMAC plus the OceanMesh2D environment, with a closing section naming what is absent rather than gated |
+| `docs/site/install.md` | prerequisites and image steps for SFINCS, GeoClaw and SWAN; `pfdf` described as a debris-flow engine | image steps cut to TELEMAC and mesh; `pfdf` described as the data library it is |
+| `docs/site/overview.md` | "same React/MapLibre web UI"; a `~176-tool` catalog against a registry of 161; a mermaid graph with an empty `Browser` subgraph and four edges from an `SPA` node the graph never defines; a five-engine solver subgraph | reframed to the QGIS product, count corrected, graph redrawn from the dock, cloud-products section dropped |
+| `docs/site/configuration.md` | documents `TRID3NT_TOOL_RETRIEVAL`, which no module reads (`TRID3NT_TOOL_RETRIEVAL_K` is the live one) | row removed |
+| `docs/site/troubleshooting.md` | one entry drives a Playwright context and seeds `localStorage` in a browser | reframed to a client with no stored identity |
+| `docs/design/gates.md` | `draw_input.py`, `spatial_roles.py` and `fallback.py` are in the package and unnamed here (the stated `FormGate` / `DrawGate` defect is NOT in the file) | three rows added from the modules' own contracts |
+| `docs/design/outputs-manifest-schema.md` | verdict was KEEP, but it names `scripts/run_sfincs_direct.py`, absent since the SFINCS purge | repointed at the declared canary set |
+| `docs/design/server-package.md` | verdict was KEEP re-verified, but `scripts/ws_smoke.py` moved under `instruments/` in this wave's own scripts stage | path corrected |
+| `docs/design/calibration-methodology.md` | verdict was KEEP, but it names `scripts/assemble_proof_packet.py`, moved under `packet/` in this wave | path corrected |
+| `AGENTS.md` | law 1 was rewritten to six slices, but the tree map above it still read "contracts/tests (slice 5)" and "tests/ - the offline suite (slices 1-4)" | map paragraph brought onto the six named targets |
+
+### Verdict withdrawn: the stated defect is not in the file
+
+Each was read end to end at HEAD. The row's REWRITE was called on a defect that
+the file does not carry - in most cases because an earlier wave had already
+fixed it. No edit was made; the document is correct as it stands.
+
+| path | the row's claim | what the file actually says |
+| --- | --- | --- |
+| `docs/design/adapters.md` | "names the Bedrock adapter as a live path" | no occurrence of Bedrock; its seven module rows match `trid3nt_server/adapters/` exactly |
+| `docs/design/emission.md` | "predates the emission fold: names `styles.yaml`, the quantity-keyed preset zoo" | already describes the four data KINDS and `restyle_layer`; `styles.yaml` is not in the tree or the page |
+| `docs/authoring/writing-a-tool.md` | "names `zip_vector`, the `vector_fgb` fetch half and the shared `overpass.py` hook" | none of the three appear |
+| `docs/playbooks/frame-animation-recipe.md` | "its emission half predates the declared `valid_from`/`valid_to` window" | carries the declared window in both its scrubber sections |
+| `docs/site/models.md` | "names Bedrock as a selectable provider" | no occurrence of Bedrock |
+| `docs/design/declarative-workflows.md` | "the plan LANGUAGE died at module-surface stage 3" | `plan(ops)` is live - the static-plan ruling landed it |
+
+### Verdict superseded: dated records take a note, not a rewrite
+
+DATED RECORDS STAY VERBATIM governs these three: the finding is left as it was
+and the correction sits at the top of the record.
+
+| path | correction |
+| --- | --- |
+| `docs/validation/fetcher-fold-census.md` | note added: its section 6 acceptance list names a moved script and a purged one |
+| `docs/reports/tool-routing-failure-split.md` | note added: its totals are its own run's; the models page reports another run of the same bench, and neither is reconciled onto the other |
+| `docs/reports/tool-sweep-checklist.md` | note added: a frozen sweep, read as evidence about its own date |
+
+### Remaining: one fate that is not this critic's to choose
+
+`docs/design/offline-architecture.md` and `docs/specs/workflow-blueprint.html`
+are both LANDED PLANS. The first vendors from a GRACE-2 upstream that no longer
+feeds this repo, lists four GAPs that are all closed or purged, names
+`scripts/sync_from_grace2.sh` (absent) and a `compose.yml` with titiler, and
+carries a person attribution. The second opens "what is being added: the mesh
+tool" - work the mesh wave landed. Their lens verdict is REWRITE; the census
+ruling says superseded material is DELETED outright because git is the archive.
+Left in place, unedited, for that call.
+
+## Files that entered the wave's scope with no row
+
+The scope enumeration in `COVERAGE.md` walks `trid3nt_server plugin contracts
+scripts workers tests docs` plus every README plus `AGENTS.md` and `README.md`.
+Six tracked files at the repo root fall outside all of those, and so carried no
+row from any lens. All six were read end to end for this table.
+
+| file | what it is | prose verdict |
+| --- | --- | --- |
+| `public_data_source_catalog.yaml` | the vetted public data-source catalog `catalog_search` and `catalog_fetch` read (30 entries), found by `tools/search/catalog_common.py` walking up from its own file | SWEPT. It carried the largest single concentration of disallowed prose left in the tree: a header block of `FR-PHC-4`, four SRS section marks, `job-0046-research-20260607` and `sprint-08 Stage A`; thirty `# LIVE PROBE 2026-06-07:` comment stamps restating each entry's own `last_verified` field; three `DEVIATION FROM KICKOFF` comments; five `job-0` and one `OQ-4` label inside `how_to_use` prose the model reads; and a closing DOMAIN GAPS block citing "kickoff section 5" and deferring twice to `sprint-09`. Every one of them is gone and every constraint they wrapped is kept at its own line. The DATA is untouched: `last_verified` stays (it is the checkable place the stamps were restating) and `curator_job: "job-0046-research-20260607"` stays too - removing a key is a data-shape change, not documentation, and nothing reads it. |
+| `CLAUDE.md` | the session bootstrap that points at `AGENTS.md` | KEEP. Prose about how to start a session, no disallowed class. |
+| `Makefile` | the orchestration and suite targets | KEEP. Its comment block states the six-slice invocation and why the cache bucket is unset; both are constraints. No moved-script or five-slice reference survives in it. |
+| `pyproject.toml` | build + pytest configuration | KEEP. `--import-mode=importlib` and the timeout are stated, nothing else. |
+| `.gitignore`, `.dockerignore` | ignore lists | KEEP. Path lists, no prose. |
+| `ollama/Modelfile.qwen3-8b-24k` | the local-model context override | KEEP. Parameter lines only. |
+
+`wheels/pfdf-3.0.4-py3-none-any.whl` is a binary artifact and carries no prose.

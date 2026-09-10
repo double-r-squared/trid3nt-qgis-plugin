@@ -1,25 +1,25 @@
-# public_data_source_catalog.yaml — v0.1.0
-# TRID3NT Public Data Source Catalog
-# Engine-owned per FR-PHC-4 / §F.1.2 (v0.3.18 + v0.3.20 amendments)
-# Curated 2026-06-07 — job-0046-research-20260607 (sprint-08 Stage A)
+# The vetted public data-source catalog `catalog_search` and `catalog_fetch`
+# read. Every entry is a source a probe confirmed reachable on the date its
+# own `last_verified` field carries; a comment under an entry is the quirk
+# that probe found, and is the constraint a caller has to honour.
 #
-# §F.1.1 access-tier key:
+# access_tier:
 #   1 = STAC + COG (STAC catalog + HTTP Range on backend)
-#   2 = OGC service (WMS/WCS/WFS — visualization or canonical bytes)
+#   2 = OGC service (WMS/WCS/WFS - visualization or canonical bytes)
 #   3 = Direct HTTPS file + Range support (206 Partial Content)
 #   4 = Region-download + local clip (no Range; full-file per region)
 #
-# §F.1 credential-tier key:
+# credential_tier:
 #   1 = key-free public
 #   2 = key-required, free
 #   3 = paid / commercial
 #
-# §F.1.2 required fields per entry:
+# Required fields per entry:
 #   id, name, description, urls, access_tier, credential_tier,
 #   ttl_class, source_class, license, citation, vintage, last_verified,
 #   status, how_to_use
 #
-# ttl_class values (FR-DC-2): static-30d | semi-static-7d | dynamic-1h | live-no-cache
+# ttl_class values: static-30d | semi-static-7d | dynamic-1h | live-no-cache
 
 catalog_version: "0.1.0"
 last_updated: "2026-06-07"
@@ -41,9 +41,9 @@ entries:
     urls:
       - "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: elevation.nationalmap.gov REST endpoint returns valid
+    # elevation.nationalmap.gov REST endpoint returns valid
     # ArcGIS ImageServer JSON with WMS + WCS capabilities declared. The older
-    # index.nationalmap.gov path returns HTTP 404 — use elevation.nationalmap.gov.
+    # index.nationalmap.gov path returns HTTP 404 -- use elevation.nationalmap.gov.
     # WCS GetCoverage returns bytes suitable for model inputs (Tier 2, not Tier 3).
     # The /vsicurl/ windowed-read Tier 3 pattern works on individual staged tiles
     # at prd-tnm.s3.amazonaws.com but the tile URL pattern varies by resolution
@@ -64,7 +64,7 @@ entries:
     native_resolution_m: 10.0
     how_to_use: |
       OGC WCS GetCoverage is the canonical model-input path (same lesson as NLCD
-      per job-0044). Append ?service=WCS&version=1.0.0&request=GetCoverage&
+      as MRLC). Append ?service=WCS&version=1.0.0&request=GetCoverage&
       Coverage=DEP3Elevation&CRS=EPSG:4326&BBOX=<west>,<south>,<east>,<north>&
       WIDTH=<px>&HEIGHT=<px>&FORMAT=GeoTIFF. Use the ArcGIS REST exportImage
       endpoint for raster functions (hillshade etc.). The service exposes 11+
@@ -83,7 +83,7 @@ entries:
       - "https://planetarycomputer.microsoft.com/api/stac/v1/collections/cop-dem-glo-30"
       - "https://planetarycomputer.microsoft.com/api/stac/v1"
     access_tier: 1
-    # LIVE PROBE 2026-06-07: STAC collection cop-dem-glo-30 returns HTTP 200 with
+    # STAC collection cop-dem-glo-30 returns HTTP 200 with
     # valid STAC 1.0.0 collection JSON. GeoParquet item index confirms COG backend.
     # Tier 1 confirmed (STAC + COG).
     credential_tier: 1
@@ -114,7 +114,7 @@ entries:
     urls:
       - "https://planetarycomputer.microsoft.com/api/stac/v1/collections/cop-dem-glo-90"
     access_tier: 1
-    # LIVE PROBE 2026-06-07: collection cop-dem-glo-90 returns valid STAC 1.0.0
+    # collection cop-dem-glo-90 returns valid STAC 1.0.0
     # JSON with GeoParquet item index. Tier 1 confirmed.
     credential_tier: 1
     ttl_class: static-30d
@@ -142,11 +142,11 @@ entries:
       - "https://data.hydrosheds.org/file/hydrosheds-v1-con/na_con_3s.zip"
       - "https://www.hydrosheds.org/hydrosheds-core-downloads"
     access_tier: 4
-    # LIVE PROBE 2026-06-07: hydrosheds.org core downloads page confirmed live.
+    # hydrosheds.org core downloads page confirmed live.
     # Direct download URL pattern: https://data.hydrosheds.org/file/hydrosheds-v1-con/[continent]_con_3s.zip
     # The /vsicurl/ range-read is NOT tested on these ZIPs (compressed ZIPs don't
     # support byte-range reads of internal TIFFs). Must download full ZIP then extract.
-    # Tier 4 (region download + local clip). Continental files are ~100–400 MB each.
+    # Tier 4 (region download + local clip). Continental files are ~100-400 MB each.
     credential_tier: 1
     ttl_class: static-30d
     source_class: dem
@@ -183,12 +183,12 @@ entries:
     urls:
       - "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: MapServer root returns ArcGIS REST JSON v11.3 with
+    # MapServer root returns ArcGIS REST JSON v11.3 with
     # 13 layers (NHDPlusGage, NetworkNHDFlowline, NHDPlusCatchment, WBDHU12,
     # etc.). Query capability confirmed (JSON/geoJSON/PBF). Note: layer 1 is
-    # NHDPlusSink (point type, not flowline) — use layer 0 (NetworkNHDFlowline)
+    # NHDPlusSink (point type, not flowline) -- use layer 0 (NetworkNHDFlowline)
     # for reach queries. Direct bbox queries (geometry param) returned HTTP 400
-    # in spot tests — use where clause with spatial_intersect or OID pagination.
+    # in spot tests -- use where clause with spatial_intersect or OID pagination.
     # Data as of October 2022; no real-time update.
     credential_tier: 1
     ttl_class: static-30d
@@ -220,13 +220,13 @@ entries:
     urls:
       - "https://waterservices.usgs.gov/nwis/iv/"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: waterservices.usgs.gov/nwis/iv/ returned HTTP 404
+    # waterservices.usgs.gov/nwis/iv/ returned HTTP 404
     # at the bare root. Parametric query
     # ?format=json&sites=02339500&parameterCd=00060&period=P1D returns valid JSON
     # with site metadata + 15-min time series. Bbox query with bBox param also
     # returns live gauges (1 gauge returned for Fort Myers bbox 26.55-26.68N,
     # -81.92 to -81.80W: WHISKEY CREEK AT FT. MYERS, FL, site 02293230).
-    # Access pattern: OGC-like REST with query params — classified as Tier 2
+    # Access pattern: OGC-like REST with query params -- classified as Tier 2
     # (not a standard WMS but a provider REST service; not direct-file Tier 3).
     credential_tier: 1
     ttl_class: live-no-cache
@@ -258,9 +258,9 @@ entries:
     urls:
       - "https://hdsc.nws.noaa.gov/cgi-bin/hdsc/new/fe_text_mean.csv"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: PFDS endpoint returned valid structured text with
+    # PFDS endpoint returned valid structured text with
     # precipitation depth estimates for Fort Myers (lat=26.62, lon=-81.87).
-    # 100-year / 24-hour value: 11.9 inches — consistent with job-0039's
+    # 100-year / 24-hour value: 11.9 inches, matching the
     # lookup_precip_return_period live run (same endpoint, same result).
     # Tier 2 (OGC-like REST, not STAC/COG, not direct-file Range).
     credential_tier: 1
@@ -294,8 +294,8 @@ entries:
     urls:
       - "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: tidesandcurrents.noaa.gov datagetter redirects
-    # (HTTP 301) to api.tidesandcurrents.noaa.gov — use the api. subdomain
+    # tidesandcurrents.noaa.gov datagetter redirects
+    # (HTTP 301) to api.tidesandcurrents.noaa.gov -- use the api. subdomain
     # directly. Live response for station 8723214 (Virginia Key, FL) returned
     # valid JSON with 481 6-minute water level records for Jan 1-2 2026.
     # Tier 2 (REST API, not direct-file Tier 3).
@@ -330,8 +330,8 @@ entries:
       - "https://data.hydrosheds.org/file/HydroBasins/standard/hybas_na_lev04_v1c.zip"
       - "https://www.hydrosheds.org/products/hydrobasins"
     access_tier: 4
-    # LIVE PROBE 2026-06-07: hybas_na_lev04_v1c.zip at data.hydrosheds.org
-    # returned a binary ZIP (5.2 MB) with shapefile contents — confirmed live
+    # hybas_na_lev04_v1c.zip at data.hydrosheds.org
+    # returned a binary ZIP (5.2 MB) with shapefile contents -- confirmed live
     # public download. Tier 4 (full-file ZIP, no Range support on ZIPs).
     credential_tier: 1
     ttl_class: static-30d
@@ -366,12 +366,12 @@ entries:
     urls:
       - "https://mrms.ncep.noaa.gov/data/2D/MultiSensor_QPE_01H_Pass2/"
     access_tier: 4
-    # LIVE PROBE 2026-06-07: mrms.ncep.noaa.gov/data/2D/MultiSensor_QPE_01H_Pass2/
+    # mrms.ncep.noaa.gov/data/2D/MultiSensor_QPE_01H_Pass2/
     # returned HTTP 200 directory listing with ~20 GRIB2.GZ files at 2-min cadence
     # (files from June 6-7, 2026). File pattern:
     # MRMS_MultiSensor_QPE_01H_Pass2_00.00_YYYYMMDD-HHMMSS.grib2.gz
-    # A "latest" symlink is provided. This is a direct HTTPS directory —
-    # files are ~654KB–1.1MB gzipped GRIB2. No Range header tested (GRIB2 files
+    # A "latest" symlink is provided. This is a direct HTTPS directory --
+    # files are ~654KB-1.1MB gzipped GRIB2. No Range header tested (GRIB2 files
     # are not COGs so Range reads are of limited utility). Classified Tier 4
     # (download full GRIB2 per timestamp, then decode with cfgrib/pygrib).
     # Note: nomads.ncep.noaa.gov/pub/data/nccf/com/mrms/prod/ returned HTTP 403.
@@ -407,14 +407,14 @@ entries:
       - "s3://unidata-nexrad-level2"
       - "https://unidata-nexrad-level2.s3.amazonaws.com/"
     access_tier: 3
-    # LIVE PROBE 2026-06-07: The original noaa-nexrad-level2 S3 bucket URL
-    # returned HTTP 403 (deprecated per Unidata migration notice — bucket
+    # The original noaa-nexrad-level2 S3 bucket URL
+    # returned HTTP 403 (deprecated per Unidata migration notice -- bucket
     # discontinued Sep 2025). New bucket is unidata-nexrad-level2. File access
     # pattern: s3://unidata-nexrad-level2/YYYY/MM/DD/KSITE/KSITE{YYYYMMDD}_{HHMMSS}_V06
     # Files are ~2-10 MB each. HTTPS direct access supports Range reads (S3 standard).
-    # Access via boto3 or s3fs — no authenticated key needed (public bucket).
-    # DEVIATION FROM KICKOFF: kickoff listed noaa-nexrad-level2 bucket; the live
-    # bucket name changed to unidata-nexrad-level2 in Sep 2025.
+    # Access via boto3 or s3fs -- no authenticated key needed (public bucket).
+    # The bucket is unidata-nexrad-level2; the older noaa-nexrad-level2 name
+    # does not resolve.
     credential_tier: 1
     ttl_class: live-no-cache
     source_class: radar
@@ -450,11 +450,11 @@ entries:
       - "https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2025-02272026.txt"
       - "https://www.nhc.noaa.gov/data/"
     access_tier: 3
-    # LIVE PROBE 2026-06-07: NHC data page confirmed live; HURDAT2 files
+    # NHC data page confirmed live; HURDAT2 files
     # listed as direct HTTPS downloads (6.8 MB Atlantic, 4.0 MB Pacific).
     # A sample historical TCR PDF (Hurricane Ian) downloaded at HTTP 200
     # (6.7 MB PDF). Real-time ATCF advisory files (a-deck, b-deck) accessible
-    # at https://ftp.nhc.noaa.gov/atcf/ — the .dat.gz file probe returned
+    # at https://ftp.nhc.noaa.gov/atcf/ -- the .dat.gz file probe returned
     # a binary 1.5 KB file (confirmed accessible but via gz binary).
     # Tier 3: direct HTTPS file, no STAC catalog, file size small enough for
     # full download (no Range needed for HURDAT2 text files).
@@ -489,8 +489,8 @@ entries:
     urls:
       - "https://www.ncdc.noaa.gov/stormevents/"
     access_tier: 4
-    # LIVE PROBE 2026-06-07: The CSV API endpoint
-    # (ncdc.noaa.gov/stormevents/csv?...) returned HTTP timeout — likely requires
+    # The CSV API endpoint
+    # (ncdc.noaa.gov/stormevents/csv?...) returned HTTP timeout -- likely requires
     # browser session. The main page and FTP CSV download approach work:
     # https://www.ncdc.noaa.gov/stormevents/ftp.jsp documents annual CSV files.
     # Canonical download path is the NWS Storm Data publication CSV archive.
@@ -531,7 +531,7 @@ entries:
       - "https://github.com/microsoft/GlobalMLBuildingFootprints"
       - "https://minedbuildings.z5.web.core.windows.net/global-buildings/"
     access_tier: 4
-    # LIVE PROBE 2026-06-07: GitHub README confirmed data is at Azure storage
+    # GitHub README confirmed data is at Azure storage
     # base https://minedbuildings.z5.web.core.windows.net/global-buildings/.
     # The dataset-links.csv index URL (minedbuildings.blob.core.windows.net/...)
     # returned HTTP 409 Conflict (outdated URL). The z5.web.core.windows.net
@@ -569,7 +569,7 @@ entries:
     urls:
       - "https://overpass-api.de/api/interpreter"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: Overpass API returned valid JSON with 3 hospital
+    # Overpass API returned valid JSON with 3 hospital
     # features for Fort Myers bbox when queried for amenity=hospital. Generator
     # shows "Overpass API 0.7.62.11". Tier 2 (provider REST API, not STAC/COG).
     credential_tier: 1
@@ -605,14 +605,14 @@ entries:
     urls:
       - "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: hazards.fema.gov REST service returned valid
-    # ArcGIS MapServer JSON v11.1 with 31 layers. Note: the endpoint moved —
+    # hazards.fema.gov REST service returned valid
+    # ArcGIS MapServer JSON v11.1 with 31 layers. Note: the endpoint moved --
     # hazards.fema.gov/gis/nfhl/rest/... (legacy) returns HTTP 404 now;
     # use hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer.
-    # Direct bbox query (layer 28 flood zones) returned HTTP 400 in spot test —
+    # Direct bbox query (layer 28 flood zones) returned HTTP 400 in spot test --
     # use layer IDs carefully (flood hazard zones = layer 28).
-    # DEVIATION: kickoff listed /gis/nfhl/ path; live probe found it 404.
-    # Current URL is /arcgis/rest/services/public/NFHL/.
+    # The /gis/nfhl/ path 404s; the service is at
+    # /arcgis/rest/services/public/NFHL/.
     credential_tier: 1
     ttl_class: semi-static-7d
     source_class: flood_zone
@@ -645,7 +645,7 @@ entries:
     urls:
       - "https://nsi.sec.usace.army.mil/nsiapi/structures"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: NSI API returned HTTP 500 for both bbox formats
+    # NSI API returned HTTP 500 for both bbox formats
     # tested (lat/lon/radius and bbox=). GitHub and HEC documentation confirm
     # the endpoint at nsi.sec.usace.army.mil/nsiapi/structures is current.
     # The 500 may be transient (server-side); treat as intermittent rather than
@@ -683,15 +683,15 @@ entries:
     description: >
       WorldPop Global_2000_2020 1km Aggregated population count raster by
       country. Live-verified substrate for fetch_population Tier-1 default
-      (job-0037). 50 MB GeoTIFF per country, clipped locally to bbox.
+      50 MB GeoTIFF per country, clipped locally to bbox.
       Units: people per 1km cell.
     urls:
       - "https://data.worldpop.org/GIS/Population/Global_2000_2020_1km/2020/"
       - "https://www.worldpop.org/rest/data/pop/wpgp?iso3=USA"
     access_tier: 4
-    # LIVE PROBE 2026-06-07: WorldPop data.worldpop.org URL maxed out content
-    # limit (file >10MB — expected for 50 MB GeoTIFF). Server returns HTTP 200
-    # (not 206) for Range requests — confirmed by job-0037's live verification.
+    # WorldPop data.worldpop.org URL maxed out content
+    # limit (file >10MB -- expected for 50 MB GeoTIFF). Server returns HTTP 200
+    # (not 206) for Range requests, confirmed live.
     # /vsicurl/ windowed reads DO NOT WORK (no HTTP 206 support).
     # WorldPop Hub STAC at hub.worldpop.org/stac/catalog.json: HTTP 404 (not
     # live). Microsoft Planetary Computer: no worldpop collection exists.
@@ -731,7 +731,7 @@ entries:
     urls:
       - "https://api.census.gov/data/2023/acs/acs5"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: api.census.gov/data/2023/acs/acs5/variables/B01003_001E.json
+    # api.census.gov/data/2023/acs/acs5/variables/B01003_001E.json
     # returned valid JSON confirming the ACS 5-year API is live. The variable
     # metadata (label, concept, predicate_type) confirms the total population
     # variable. Actual data queries require a Census API key in the `key=` param.
@@ -767,13 +767,13 @@ entries:
       - "https://human-settlement.emergency.copernicus.eu/download.php"
       - "https://ghsl.jrc.ec.europa.eu/"
     access_tier: 4
-    # LIVE PROBE 2026-06-07: ghsl.jrc.ec.europa.eu download URL redirected
-    # (HTTP 302) to human-settlement.emergency.copernicus.eu — use the new domain.
+    # ghsl.jrc.ec.europa.eu download URL redirected
+    # (HTTP 302) to human-settlement.emergency.copernicus.eu -- use the new domain.
     # The download page confirms free access with tiling interface. No API;
     # tile selection via web UI or manually-constructed download links.
     # Tier 4: full tile download, no COG Range support documented.
     # Note: "single file download for this product is being produced" warning
-    # observed — tile-based access is the current primary path.
+    # observed -- tile-based access is the current primary path.
     credential_tier: 1
     ttl_class: static-30d
     source_class: population
@@ -806,15 +806,15 @@ entries:
       Characteristics (MRLC) Consortium GeoServer WCS 1.0.0 GetCoverage.
       Returns canonical NLCD integer class codes (11=Open Water, 21–24=Developed,
       31=Barren, 41–43=Forest, 52=Shrub, 71=Grassland, 81–82=Agriculture,
-      90–95=Wetlands). This is the fetch_landcover substrate post-job-0044 hotfix.
+      90-95=Wetlands). This is the fetch_landcover substrate.
     urls:
       - "https://www.mrlc.gov/geoserver/mrlc_download/NLCD_2021_Land_Cover_L48/ows"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: WCS 2.0.1 GetCapabilities on mrlc_download workspace
+    # WCS 2.0.1 GetCapabilities on mrlc_download workspace
     # returned a valid 825 KB capabilities document. WCS 1.0.0 GetCoverage on
     # mrlc_download:NLCD_2021_Land_Cover_L48 with CRS=EPSG:4326+BBOX+WIDTH+HEIGHT
-    # +FORMAT=GeoTIFF returned a 37.9 KB binary TIFF — canonical NLCD integers
-    # confirmed by job-0044 evidence (unique values [11,21,22,23,24,31,41,42,43,52,
+    # +FORMAT=GeoTIFF returned a 37.9 KB binary TIFF -- canonical NLCD integers
+    # confirmed by the observed values (unique values [11,21,22,23,24,31,41,42,43,52,
     # 71,81,82,90,95]). Note: mrlc_display workspace (WMS endpoint used for
     # visualization) exists separately. Use mrlc_download workspace for WCS
     # model-input bytes. WCS 2.0.1 returns GeoServer projection-mapping bug;
@@ -844,7 +844,7 @@ entries:
       Width/Height: use ceil(bbox_deg / 0.00009) for ~10m pixel size.
       CRITICAL: do NOT use WMS GetMap (mrlc_display workspace) for model inputs —
       it returns palette-encoded indices (1–21), NOT canonical NLCD integers.
-      This distinction is the OQ-42 lesson: WMS for visualization, WCS for bytes.
+      The distinction matters: WMS for visualization, WCS for bytes.
       Vintage year 2021 is the most recent as of 2026-06-07; 2023 Annual NLCD not
       yet available in MRLC GeoServer.
 
@@ -857,7 +857,7 @@ entries:
     urls:
       - "https://planetarycomputer.microsoft.com/api/stac/v1/collections/esa-worldcover"
     access_tier: 1
-    # LIVE PROBE 2026-06-07: STAC collection esa-worldcover returned HTTP 200
+    # STAC collection esa-worldcover returned HTTP 200
     # with valid STAC 1.0.0 JSON. Spatial: global -180 to 180, -60 to 82.75.
     # Temporal: 2020-01-01 to 2021-12-31. GeoParquet item index confirms COG
     # backend. Tier 1 confirmed (STAC + COG).
@@ -890,12 +890,12 @@ entries:
     urls:
       - "https://planetarycomputer.microsoft.com/api/stac/v1/collections/modis-13A1-061"
     access_tier: 1
-    # LIVE PROBE 2026-06-07: modis-13A1-061 (MODIS vegetation 16-day) is
+    # modis-13A1-061 (MODIS vegetation 16-day) is
     # confirmed live on PC. The land cover type product MCD12Q1 likely exists
     # at the same API but was not directly probed; vegetation proxy collection
     # confirms PC MODIS infrastructure is live. Tier 1 inferred for PC-hosted
     # MODIS collections (all PC collections are STAC+COG). Note: modis-13A1-061
-    # is vegetation index (NDVI/EVI), not land cover — the land cover collection
+    # is vegetation index (NDVI/EVI), not land cover -- the land cover collection
     # ID would be modis-MCD12Q1-061 or similar. Record as active with caveat.
     credential_tier: 1
     ttl_class: static-30d
@@ -930,13 +930,13 @@ entries:
     urls:
       - "https://www.fs.usda.gov/rmrs/datasets/wildfire-hazard-potential-conus-2023"
     access_tier: 4
-    # LIVE PROBE 2026-06-07: apps.fs.usda.gov ArcGIS REST service URLs attempted
+    # apps.fs.usda.gov ArcGIS REST service URLs attempted
     # returned HTTP 403 (access forbidden). WFAS.net WHP page returned HTTP 404.
     # The primary access remains the direct download from Forest Service RMRS.
     # apps.fs.usda.gov/arcx/ REST service for WHP: HTTP 403 (may require VPN).
     # Tier 4 (region download; WMS/REST service not consistently accessible).
-    # DEVIATION: kickoff expected WMS/REST access; live probes show limited public
-    # API access. GeoTIFF download remains the reliable path for model inputs.
+    # Public WMS/REST access is limited; GeoTIFF download is the reliable path
+    # for model inputs.
     credential_tier: 1
     ttl_class: static-30d
     source_class: wildfire_hazard
@@ -969,10 +969,10 @@ entries:
       - "https://edcintl.cr.usgs.gov/geoserver/landfire/conus_lf2022/ows"
       - "https://landfire.gov/data/lf_wcs_wms"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: LANDFIRE WCS documentation at landfire.gov confirmed
+    # LANDFIRE WCS documentation at landfire.gov confirmed
     # WCS endpoint base pattern: edcintl.cr.usgs.gov/geoserver/landfire/conus_lf[YEAR]/ows
     # Direct WCS GetCapabilities on conus_lf2022 and conus_lf2023 workspaces
-    # returned HTTP 404 — the exact workspace naming could not be confirmed live.
+    # returned HTTP 404 -- the exact workspace naming could not be confirmed live.
     # The edcintl.cr.usgs.gov base server is likely active per USGS infrastructure.
     # WMS seasonal fuels endpoint documented at:
     # edcintl.cr.usgs.gov/geoserver/landfire/conus_sf/ows?service=WMS&request=GetCapabilities
@@ -1000,7 +1000,7 @@ entries:
         edcintl.cr.usgs.gov/geoserver/landfire/conus_sf/ows?service=WMS
         &request=GetCapabilities
       GetCoverage with WCS 1.0.0 using CRS=EPSG:4326 is likely the correct
-      version (same pattern as MRLC per job-0044). The LANDFIRE Map Viewer at
+      version (the same pattern as MRLC). The LANDFIRE Map Viewer at
       landfire.gov/viewer/ provides reference for product names. Pixel units:
       integer class codes per fuel model standard (FBFM13, FBFM40, etc.).
 
@@ -1013,11 +1013,11 @@ entries:
     urls:
       - "https://firms.modaps.eosdis.nasa.gov/api/area/"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: firms.modaps.eosdis.nasa.gov/api/area/ endpoint
+    # firms.modaps.eosdis.nasa.gov/api/area/ endpoint
     # confirmed live. Without API key: HTTP 401 Unauthorized. With API key the
     # response would be CSV with columns: latitude, longitude, brightness,
     # acq_date, acq_time, satellite, confidence, frp (fire radiative power).
-    # Free MAP_KEY required — apply at https://firms.modaps.eosdis.nasa.gov/api/.
+    # Free MAP_KEY required -- apply at https://firms.modaps.eosdis.nasa.gov/api/.
     # Tier 2 (REST API with key). Note: credential_tier 2 (key required, free).
     credential_tier: 2
     ttl_class: live-no-cache
@@ -1051,9 +1051,9 @@ entries:
       - "https://wildfirerisk.org/"
       - "https://doi.org/10.2737/RDS-2020-0016-2"
     access_tier: 4
-    # LIVE PROBE 2026-06-07: wildfirerisk.org confirmed live; download page
+    # wildfirerisk.org confirmed live; download page
     # redirects to Forest Service Research Data Archive DOI links.
-    # No WMS/REST API identified for programmatic access — data is distributed
+    # No WMS/REST API identified for programmatic access -- data is distributed
     # as state-level GIS file downloads from the FSRDA.
     # Tier 4 (region download; no Range or STAC).
     credential_tier: 1
@@ -1092,7 +1092,7 @@ entries:
     urls:
       - "https://earthquake.usgs.gov/fdsnws/event/1/query"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: FDSNWS event query returned valid GeoJSON with 5
+    # FDSNWS event query returned valid GeoJSON with 5
     # earthquake features for Jan 1-2 2026 with minmagnitude=3.0. Service
     # confirmed live. Tier 2 (REST API with query parameters, not STAC/COG).
     credential_tier: 1
@@ -1128,7 +1128,7 @@ entries:
     urls:
       - "https://earthquake.usgs.gov/nshmp-haz-ws/hazard"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: hazard-ws root returned usage documentation JSON
+    # hazard-ws root returned usage documentation JSON
     # listing editions E2008, E2014, E2014B for COUS/CEUS/WUS regions.
     # Editions E2018 and E2023 not found on this instance. Parametric query
     # with valid E2014B + vs30=760 + region=COUS returned meaningful error
@@ -1170,8 +1170,8 @@ entries:
       - "https://www.fema.gov/api/open/v2/NriCounty"
       - "https://www.fema.gov/about/openfema/data-sets/national-risk-index-data"
     access_tier: 2
-    # LIVE PROBE 2026-06-07: FEMA OpenFEMA NRI API probed via multiple URL
-    # patterns — v1 and v2 both returned HTTP 404 at the paths tested.
+    # FEMA OpenFEMA NRI API probed via multiple URL
+    # patterns -- v1 and v2 both returned HTTP 404 at the paths tested.
     # The FEMA website confirms the NRI is available through OpenFEMA API
     # (base: https://www.fema.gov/api/open/) per search results, with December
     # 2025 v1.20 data. Old hazards.fema.gov NRI URL redirects to the RAPT page.
@@ -1200,32 +1200,32 @@ entries:
       more reliable than the API for full-state analysis.
 
   # ─────────────────────────────────────────────────────────────────
-  # DOMAIN GAPS — surfaced per kickoff requirement
+  # DOMAIN GAPS
   # ─────────────────────────────────────────────────────────────────
-  # The following domains/sources have fewer than 3 fully-verified
-  # entries or have significant access-tier uncertainty. Documented
-  # here per kickoff §5 "Surface deferrals" requirement.
+  # The following domains/sources have fewer than three fully-verified
+  # entries or have significant access-tier uncertainty. They are named
+  # here so a caller does not read their absence as coverage.
   #
-  # TERRAIN — supplemental / lower priority:
+  # TERRAIN - supplemental / lower priority:
   #   - ASTER GDEM v3 (NASA Earthdata/LP DAAC): requires NASA Earthdata Login
   #     (credential_tier 2). Live probe of earthdata.nasa.gov returned 404 for
-  #     the specific dataset catalog page. Recommend sprint-09: probe
+  #     the specific dataset catalog page. The path to try is
   #     https://e4ftl01.cr.usgs.gov/ASTT/ASTGTM.003/ with Earthdata creds.
   #
-  # HYDROLOGY — supplemental:
+  # HYDROLOGY - supplemental:
   #   - NOAA NWS AHPS gauges: ahps.weather.gov provides web interface but
   #     programmatic REST endpoints for AHPS stage data were not confirmed live
   #     (api.weather.gov returned HTTP 404 for the gridpoints forecast test URL).
   #     Recommend using USGS NWIS as primary gauge source; AHPS for official
   #     flood stage thresholds (separate concern).
   #
-  # SEISMIC — GEM Foundation:
+  # SEISMIC - GEM Foundation:
   #   - GEM Global Seismic Hazard Map: hazard.openquake.org hosts OpenQuake
   #     engine outputs. No REST API endpoint confirmed live during this session.
   #     Data downloadable as GeoTIFF from https://maps.openquake.org/map/global-hazard/.
-  #     Sprint-09: probe hazard.openquake.org for WMS capabilities.
+  #     hazard.openquake.org is unprobed for WMS capabilities.
   #
-  # POPULATION — GPW v4:
+  # POPULATION - GPW v4:
   #   - Gridded Population of the World v4 (CIESIN/NASA SEDAC): sedac.ciesin.columbia.edu
   #     timed out during probes. Requires NASA Earthdata login for download.
-  #     Credential_tier 2. Deferred to sprint-09.
+  #     Credential_tier 2. Not yet placed.

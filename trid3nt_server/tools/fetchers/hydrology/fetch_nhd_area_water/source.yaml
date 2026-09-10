@@ -1,7 +1,6 @@
 # NHDArea (MapServer layer 8) water-surface polygons by envelope - the WIDTH of
-# a river rather than its centreline. The TELEMAC reach mesher used to run this
-# query from inside the solver container; it is server tier because a bank
-# polygon changes if the box moves.
+# a river rather than its centreline. Server tier: a bank polygon changes if the
+# box moves.
 schema_version: v1
 
 name: fetch_nhd_area_water

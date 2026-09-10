@@ -137,7 +137,7 @@ right starting point -- see [Both](#both-one-dev-machine) for the one extra step
 | Linux x86_64 | binaries (mf6, MinIO) and docker images are linux-amd64 |
 | Python 3.12 | agent venv (managed by `uv`) |
 | [uv](https://astral.sh/uv) | venv + dependency management (`make venv` assumes `~/.local/bin/uv`) |
-| Docker | SFINCS, GeoClaw, and TELEMAC engines run in containers |
+| Docker | the TELEMAC solver and the OceanMesh2D meshing environment run in containers |
 | [Ollama](https://ollama.com) | local LLM serving (any OpenAI-compatible endpoint also works) |
 
 !!! warning "Docker group"
@@ -168,35 +168,30 @@ Agent venv (installs the contracts + server packages editable):
 make venv              # uv venv venvs/agent + uv pip install -e contracts -e .
 ```
 
-`wheels/` carries one PyPI-absent dependency (`pfdf`, for post-fire
-debris-flow) that `make venv` installs via `--find-links`; do not delete it.
+`wheels/` carries one PyPI-absent dependency (`pfdf`, read as a DATA library:
+`fetch_statsgo_soils` and the non-default 3DEP resolutions go through it) that
+`make venv` installs via `--find-links`; do not delete it.
 
 ### 3. Docker images
 
-**SFINCS** -- pulled from Docker Hub:
+Both are built locally from the worker Dockerfiles; the build is one-time and
+cached.
+
+**TELEMAC** -- the solver (opentelemac v9.0.0 conda env):
 
 ```sh
-sg docker -c 'docker pull deltares/sfincs-cpu:sfincs-v2.3.3'
-```
-
-**GeoClaw and TELEMAC** -- built locally from the worker Dockerfiles (both compile
-Fortran solvers into the image; the build is one-time and cached):
-
-```sh
-sg docker -c 'docker build -t trid3nt-local/geoclaw:latest -f workers/geoclaw/Dockerfile .'
 sg docker -c 'docker build -t trid3nt-local/telemac:latest workers/telemac/'  # or: bash scripts/build_telemac_image.sh
 ```
 
-**SWAN** -- builds locally (verified 2026-07-23; the pinned source-tarball
-checksum was a placeholder before that date and the `sha256sum -c` step always
-failed -- now fixed to the real digest of the SWAN 41.51 SourceForge tarball):
+**Mesh** -- the GPL-isolated OceanMesh2D environment. It holds no code of ours:
+the mesh recipe bind-mounts its driver and a rundir into it.
 
 ```sh
-sg docker -c 'docker build -t trid3nt-local/swan:latest -f workers/swan/Dockerfile .'
+sg docker -c 'docker build -t trid3nt-local/mesh:latest workers/mesh/'
 ```
 
-These image names are what `.env.local` points at (`TRID3NT_SFINCS_IMAGE`,
-`TRID3NT_GEOCLAW_IMAGE`, `TRID3NT_SWAN_IMAGE`).
+These image names are what `.env.local` points at (`TRID3NT_TELEMAC_IMAGE`,
+`TRID3NT_MESH_IMAGE`).
 
 ### 4. MinIO
 

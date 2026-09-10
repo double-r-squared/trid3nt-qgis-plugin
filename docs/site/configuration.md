@@ -149,7 +149,6 @@ QGIS profile when the daemon's MinIO uses different ones.
 
 | Variable | Shipped value | What it does |
 |----------|---------------|--------------|
-| `TRID3NT_TOOL_RETRIEVAL` | `enforce` | Mode of the top-K tool-retrieval layer: `off` (default -- all tools visible), `shadow` (rank + log recall@K, still show everything), `enforce` (subset the registry to the top-K per turn BEFORE building tool declarations; a once-visible tool stays visible within a Case). Enforce keeps the tool context small enough for 8B-class local models. Fails open to the full registry on a cold index or ranking error. |
 | `TRID3NT_TOOL_RETRIEVAL_K` | `8` | Top-K for `retrieve_visible_tools` (code default 25). K=8 is the benchmarked local setting -- see [Models](models.md#tool-retrieval-top-k). |
 
 ## Loop hygiene and telemetry

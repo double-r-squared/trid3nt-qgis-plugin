@@ -17,7 +17,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-PRODUCT_TREES = ("trid3nt_server", "plugin", "contracts", "scripts", "tests")
+PRODUCT_TREES = ("trid3nt_server", "plugin", "contracts", "scripts", "tests", "workers")
 
 DOCSTRING_EXEMPT_MARKER = "# docstring-exempt:"
 

@@ -25,10 +25,12 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   rebuilt: absolute -f/context paths, provenance-check the new code is
   IN the image, smoke through the image - never through mounted source.
 - `contracts/` - typed wire + registry contracts, with their own suite
-  in `contracts/tests` (slice 5) and their committed JSON Schema mirror
-  in `contracts/schemas` (regenerated, never hand-edited).
+  in `contracts/tests` (the `test-packages` slice) and their committed
+  JSON Schema mirror in `contracts/schemas` (regenerated, never
+  hand-edited).
 - `plugin/` - the QGIS dock (installs as `trid3nt`). `tests/` - the
-  offline suite (slices 1-4).
+  offline suite, mirroring the product tree; the six slices are its
+  directories, named by the `make test-*` targets law 1 lists.
   `scripts/` - the entry points you type, plus `instruments/` (measure
   + check), `packet/` (the delivery renderers), `drivers/` (the live
   drive lane) and `staging/`. `docs/` - decisions

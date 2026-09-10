@@ -789,7 +789,7 @@ Proposed deliverables:
 2. **One response curve** (objective vs parameter), which is the artifact
    that shows whether the parameter is identifiable at all.
 3. **One delivery packet, for the final calibrated run only**, at the
-   confirmation fidelity, through `scripts/assemble_proof_packet.py`, with
+   confirmation fidelity, through `scripts/packet/assemble_proof_packet.py`, with
    the standard QGIS-true renders plus one new panel: the modelled
    hydrograph over the observed one at the primary gauge, with the
    residual.

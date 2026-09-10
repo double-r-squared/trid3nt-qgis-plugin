@@ -91,24 +91,18 @@ pathological fetchers, but new heavy tools will not be covered.
 
 ---
 
-## Playwright / fresh browser contexts see no cases
+## A fresh client sees no cases
 
-**Symptom**: an e2e script (or an incognito window) connects fine but the case list is empty,
-even though cases exist in `data/persistence/`.
+**Symptom**: the dock connects fine but the case list is empty, even though cases exist in
+`data/persistence/`.
 
 **Root cause**: local auth is anonymous -- the server mints a fresh ULID user per unknown
-connection. A fresh Playwright context has no stored identity, so it IS a brand-new user, and
-cases belong to the ULID that created them.
+connection, and a case belongs to the ULID that created it. A client with no stored identity
+IS a brand-new user.
 
-**Fix**: seed the identity before loading the app, as the e2e harnesses do:
-
-```js
-localStorage.setItem('grace2.anonymous_user_id', '<owner ULID>');
-sessionStorage.setItem('grace2-save-gate-accepted', '1'); // bypass the save-gate prompt
-```
-
-The owner ULID for existing cases is visible in `logs/agent.log` (`auth-ack ... user_id=...`)
-or in the persistence store.
+**Fix**: connect with the owning identity rather than a fresh one. The owner ULID for existing
+cases is visible in `logs/agent.log` (`auth-ack ... user_id=...`) or in the persistence store;
+the plugin stores its own identity in the QGIS profile and reuses it across restarts.
 
 ---
 

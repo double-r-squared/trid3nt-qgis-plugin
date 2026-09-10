@@ -1,5 +1,10 @@
 # Pass-3 failure split: retrieval vs model (qwen3:8b-16k, K=8)
 
+> Frozen bench output. Its totals (183 / 44 / 138) are what that run scored;
+> `docs/site/models.md` reports 174 / 45 / 127 from a different run of the same
+> bench. Neither is rewritten to match the other - each is the record of its own
+> run, and the harness that produces them is `scripts/local/tool_routing_bench.py`.
+
 Scored 183 | HIT 44 | failures split: MODEL-MISS 138
 
 RETRIEVAL-MISS = expected tool absent from the top-K shortlist (model never saw it).

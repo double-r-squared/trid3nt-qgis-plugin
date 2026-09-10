@@ -1,5 +1,10 @@
 # TRID3NT Local tool sweep -- direct-execution checklist
 
+> Frozen sweep output, taken on the date below. Rows name tools that have since
+> left the registry, and registered tools added since do not appear. Read a row as
+> evidence about the date it was taken, not about today; the live count is in
+> `docs/site/tool-support.md`.
+
 Updated: 2026-07-06T17:34:38  
 Total 176 | PASS 138 | KEY 6 | FAIL 17 | TIMEOUT 3 | SKIP-ARGS 12
 

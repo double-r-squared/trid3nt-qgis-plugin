@@ -1,7 +1,6 @@
 # NHDPlus High Resolution NetworkNHDFlowline (MapServer layer 3) by envelope,
-# optionally filtered to one GNIS name. The seed rungs of the TELEMAC reach
-# family used to run this query from inside the solver container; it is server
-# tier because a flowline query changes if the box moves.
+# optionally filtered to one GNIS name. Server tier: a flowline query changes if
+# the box moves.
 schema_version: v1
 
 name: fetch_nhdplus_hr_flowlines

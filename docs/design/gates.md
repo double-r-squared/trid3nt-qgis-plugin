@@ -17,6 +17,12 @@ context-budget, and actionability classification.
   model-discovery `reset_num_ctx_cache` seam).
 - `input_review.py`, `actionability.py`, `spatial_input.py` -- input-review
   gate + exception-actionability classifier (`{agent, user, operator}`).
+- `draw_input.py`, `spatial_roles.py` -- the DRAW gate that asks for one
+  declared param's geometry on the canvas, and the shared role vocabulary and
+  parser the mesh authoring layer reads a drawn `FeatureCollection` through.
+- `fallback.py` -- the ONE fallback gate: the loudness floor over the
+  pending-confirm spine, where a `synthetic` rung always pauses and its
+  labeled default is REFUSE.
 
 ## Composition
 

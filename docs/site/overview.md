@@ -1,35 +1,33 @@
 # TRID3NT Local -- Overview
 
-**TRID3NT Local** is the offline / local-first build of TRID3NT: the same AI workbench for
-multi-hazard geospatial modeling -- same React/MapLibre web UI, same agent, same ~176-tool
-catalog, same engines -- running entirely on one machine. No AWS account, no cloud dependency
-for the core loop. The LLM is pluggable: a local model served by Ollama (or vLLM, llama.cpp,
-LM Studio) or any cloud OpenAI-compatible API, through one provider seam.
+**TRID3NT Local** is the QGIS product: a QGIS plugin plus a local daemon, running entirely
+on one machine. The dock is the client -- there is no web UI in this repo. No AWS account, no
+cloud dependency for the core loop. The LLM is pluggable: a local model served by Ollama (or
+vLLM, llama.cpp, LM Studio) or any cloud OpenAI-compatible API, through one provider seam.
 
-Repo: `trid3nt-local` (standalone, publishable; the web + cloud products live in a separate repo).
+Repo: `trid3nt-local`, standalone and publishable: plugin, server and engine workers, with no
+upstream sync.
 
 ---
 
 !!! note "Where this section is edited"
-    The canonical source for these pages is `trid3nt-local/docs/site/`. They are copied into
-    the cloud repo's docs site (`docs-site/docs/local/`) by its docs-sync step
-    and rebuild -- do not edit those copies directly.
+    The canonical source for these pages is `trid3nt-local/docs/site/`.
     The tool-support page is generated -- see [Tool Support Matrix](tool-support.md).
 
 ---
 
-## What is swapped relative to the cloud build
+## Where each concern runs
 
-Every cloud dependency has a local counterpart behind an existing, env-gated seam. The entire
-cloud-to-local rewiring is environment variables -- no fork of the agent code.
+Every substrate is local and sits behind an env-gated seam, so pointing one somewhere else is
+an environment value rather than a code path.
 
-| Concern | Cloud (TRID3NT) | Local (TRID3NT Local) | Seam |
-|---------|-----------------|----------------------|------|
-| LLM | AWS Bedrock (Sonnet default) | Ollama `qwen3:8b-16k` (or any OpenAI-compatible endpoint) | `MODEL_PROVIDER=openai` + `openai_adapter.py` |
-| Object storage | S3 runs + cache buckets | MinIO on `:9000` (S3-compatible, zero code change) | `AWS_ENDPOINT_URL` |
-| Persistence | DynamoDB (`trid3nt_*` tables) | FilePersistence -- JSON store on disk | `TRID3NT_DEV_PERSISTENCE_DIR` |
-| Raster rendering | TiTiler EC2 (always-on) | none -- the QGIS plugin opens COGs from MinIO natively via GDAL `/vsis3` and styles them client-side | `publish_layer` emits the `s3://` COG URI |
-| Solvers | AWS Batch (Spot, scale-to-zero) | Local subprocess / local docker per engine | `TRID3NT_SOLVER_BACKEND`, per-engine gates |
+| Concern | Local substrate | Seam |
+|---------|-----------------|------|
+| LLM | Ollama `qwen3:8b-16k`, or any OpenAI-compatible endpoint | `MODEL_PROVIDER=openai` + `openai_adapter.py` |
+| Object storage | MinIO on `:9000` (S3-compatible) | `AWS_ENDPOINT_URL` |
+| Persistence | FilePersistence -- JSON store on disk | `TRID3NT_DEV_PERSISTENCE_DIR` |
+| Raster rendering | the QGIS plugin opens COGs from MinIO natively via GDAL `/vsis3` and styles them client-side | `publish_layer` emits the `s3://` COG URI |
+| Solvers | local docker per engine | `TRID3NT_SOLVER_BACKEND`, per-engine gates |
 
 Data fetchers need internet (USGS/NOAA/OSM/etc. are public HTTPS or anonymous public S3) but
 no cloud account. "Offline" means no-cloud-ACCOUNT, not air-gapped.
@@ -40,13 +38,14 @@ no cloud account. "Offline" means no-cloud-ACCOUNT, not air-gapped.
 
 ```mermaid
 graph TD
-    subgraph Browser["Browser"]
+    subgraph Client["QGIS"]
+        Dock["TRID3NT dock (plugin)"]
     end
 
     subgraph Agent["Agent (host venv, venvs/agent)"]
         WS["WS :8765 (chat protocol)"]
         HTTP["HTTP :8766 (tool catalog, stats)"]
-        Tools["~176 tools + tool retrieval (top-K)"]
+        Tools["161 tools + tool retrieval (top-K)"]
         FP["FilePersistence\ndata/persistence/"]
     end
 
@@ -60,30 +59,22 @@ graph TD
     end
 
     subgraph Solvers["Local solvers"]
-        MF6["MODFLOW 6\nbin/mf6 subprocess"]
-        SFINCS["SFINCS\ndocker deltares/sfincs-cpu"]
-        SWMM["SWMM\npyswmm in-process"]
-        Pip["Landlab / OpenQuake\nsubprocess (pip-only)"]
-        Fortran["GeoClaw / SWAN\ndocker (locally built images)"]
+        TELEMAC["TELEMAC\ndocker trid3nt-local/telemac"]
     end
 
-    SPA -- "ws://localhost:8765" --> WS
-    SPA -- "http://localhost:8766" --> HTTP
-    SPA -- "signed COG reads (/vsis3)" --> MinIO
+    Dock -- "ws://localhost:8765" --> WS
+    Dock -- "http://localhost:8766" --> HTTP
+    Dock -- "signed COG reads (/vsis3)" --> MinIO
     WS --> Tools
     Tools -- "chat/completions (streaming tools)" --> Ollama
     Tools -.-> CloudAPI
     Tools --> FP
-    Tools -- "COGs, decks, completion.json" --> MinIO
-    Tools --> MF6
-    Tools --> SFINCS
-    Tools --> SWMM
-    Tools --> Pip
-    Tools --> Fortran
+    Tools -- "COGs, meshes, completion.json" --> MinIO
+    Tools --> TELEMAC
     Solvers -- "outputs" --> MinIO
 ```
 
-The flow is identical to the cloud build: prompt -> LLM tool selection -> fetch/compute tools ->
+The flow: prompt -> LLM tool selection -> fetch/compute tools ->
 solver dispatch -> COG outputs in the runs bucket -> `publish_layer` emits the `s3://` COG URI ->
 the QGIS plugin opens it via GDAL `/vsis3` and applies the envelope's legend/style client-side.
 One store, one scheme: the buckets are private, the read is signed, and the store's endpoint is
@@ -91,13 +82,6 @@ GDAL configuration the plugin sets once - so a remote store is an endpoint value
 Only the substrate under each seam changes.
 
 ---
-
-## Relationship to the other TRID3NT products
-
-This repo is the standalone QGIS product: plugin + server + engine workers,
-first-class, no upstream sync. The separate web and cloud products live in
-their own upstream repo; until 2026-07-21 the server code here was a vendored
-copy synced from it.
 
 ## Section map
 

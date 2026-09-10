@@ -68,7 +68,7 @@ make agent
 # for the container-backed engines (recommended):
 sg docker -c 'make agent'
 # then in another shell:
-python scripts/ws_smoke.py   # WS chat smoke against the running daemon
+python scripts/instruments/ws_smoke.py   # WS chat smoke against the running daemon
 ```
 
 `make agent` runs `scripts/start_agent.sh`, which loads `.env.local`, launches
