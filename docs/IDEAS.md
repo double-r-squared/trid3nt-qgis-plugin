@@ -5492,3 +5492,26 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   over "becomes a comment block"). The tests/ and scripts/ structures
   and the generated template docs are the new baseline for every
   wave.
+
+- DOCS DESCRIBE THE SYSTEM; DECISIONS LIVE IN IDEAS; PROOF IS
+  TRANSIENT (NATE 2026-09-10): the records were memory, and memory is
+  IDEAS and git. DROPPED OUTRIGHT: docs/validation's 44 dated working
+  records (the hygiene manifest, the six evaluations and censuses, the
+  seven conformance tables, stage records, boards and dated ledgers,
+  the three audits, the comparisons) - only the live instrument
+  outputs stay (code-graph, docstring-exemptions, README); docs/
+  reports (23 dated bench reports); docs/proof (525 files, 654 MB of
+  frozen packets); docs/decisions (the 106 binding records) - a
+  constraint only an ADR stated moves first into the SysML model as a
+  requirement, into CONVENTIONS, or into the code's own comment, each
+  move listed. PROOF IS TRANSIENT: packets render under a GITIGNORED
+  run/proof/ directory with a 7-DAY TTL the packet renderer prunes on
+  every write; every acceptance still renders a full packet and
+  DELIVERS it; the generated template pages carry the only durable
+  images (doc-sized, freshness-guarded). The frozen-proof law, the
+  docs/proof README, the proof-coverage assertion and the committed-
+  evidence replay instrument go with the folder; code-staleness pins
+  that compared against committed evidence read run/proof or die.
+  docs/ then holds: the README, the directory maps, the specs, the
+  model, the generated template pages, the site, the ledgers
+  (DELETION, REANALYZE, READABILITY) and IDEAS.
