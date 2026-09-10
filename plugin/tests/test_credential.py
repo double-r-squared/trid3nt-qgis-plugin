@@ -1,27 +1,9 @@
-"""Credential-request key-entry card tests (LANE K, NATE directive 2026-07-22).
+"""The credential-request key-entry card, offline.
 
-The agent's ``credential-request`` envelope (contracts ``secrets.py``) had
-ZERO plugin handling -- the exact gap the code-exec card closed: it fell
-through the client's classifier as kind="raw", the dock dropped it, and the
-agent's paused keyed tool (AirNow, FIRMS, ...) waited out its server-side TTL
-and failed with the original auth error.
-
-Coverage here (offline -- pure parse logic + stub_server round trips; the Qt
-card itself is covered at the qt harness level, see ``qt_dock_ui_harness.py``):
-
-* ``gate.parse_credential_request`` field mapping + malformed-envelope
-  honesty (no request_id / no provider_id -> None, never a crash).
-* the wire round trip against the stub's paused "need-key" turn. Submit is
-  TWO envelopes in Decision-F order: ``secret-add`` (the ONLY transport that
-  ever carries the raw key -- the server vault-writes it) THEN
-  ``credential-provided`` (request_id echo, ``secret_id=None``,
-  ``provided=True``; NO key material). Skip is ``credential-provided`` with
-  ``provided=False`` alone -- the contract's real negative path (the server
-  then re-raises the tool's original typed error; agent narrates honestly).
-* key hygiene on the wire: the raw key appears in the ``secret-add``
-  envelope and NOWHERE else -- not in ``credential-provided``, not in any
-  other frame the stub recorded.
-"""
+The parse maps the envelope's fields and answers None on a malformed one rather
+than crashing. Submit is TWO envelopes in order: ``secret-add``, the ONLY
+transport that ever carries the raw key, then ``credential-provided`` with no key
+material. Skip is that second envelope alone. The key appears NOWHERE else."""
 
 from __future__ import annotations
 

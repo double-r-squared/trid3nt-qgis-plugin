@@ -22,15 +22,10 @@ from stub_server import StubAgentServer  # noqa: E402
 
 @pytest.mark.qt_harness_shim
 class TestQtBridgeStart(unittest.TestCase):
-    """Exercises AgentBridge.start under a REAL QCoreApplication.
+    """Exercises ``AgentBridge.start`` under a REAL QCoreApplication.
 
-    Regression for the QObject.event() shadowing crash (a pyqtSignal named
-    ``event`` made the first delivered QEvent qFatal the whole QGIS process
-    -- "TypeError: native Qt signal is not callable"). The stdlib stub tests
-    never build a Qt object tree, which is exactly why milestones 1-2 shipped
-    with it; this test runs the wiring in a subprocess using the SYSTEM
-    interpreter (the one with qgis.PyQt) and skips honestly when absent.
-    """
+    A pyqtSignal named for a C++ virtual makes the first delivered QEvent abort the
+    host process, which only a real Qt object tree catches; runs in a subprocess."""
 
     @staticmethod
     def _qt_python() -> str | None:

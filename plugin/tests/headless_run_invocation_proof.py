@@ -1,22 +1,9 @@
 """Live-proof driver for the ``!run`` direct tool invocation.
 
-Drives the WS as a client (the pure-stdlib ``AgentClient`` -- no QGIS needed),
-exactly as the dock does: parse the ``!run`` line CLIENT-side with the product
-parser (``run_invocation.parse_run_invocation``) and send the structured
-``dev-tool-invoke``; a non-``!run`` message routes to chat. Prints envelope
-excerpts per turn so the four required proofs are visible.
-
-REQUIRES the live daemon to be running the CURRENT server.py (the
-``dev-tool-invoke`` handler). Validated OFFLINE first against
-``tests/stub_server.py`` via ``test_client.TestCaseAndChat`` (the round-trip +
-unknown-tool cases) so a driver bug never burns a live cycle.
-
-Run (from plugin/):
-    ../venvs/agent/bin/python tests/headless_run_invocation_proof.py
-
-Env:
-    TRID3NT_AGENT_URL   ws:// URL (default ws://127.0.0.1:8765)
-"""
+Drives the WS as the dock does with the pure-stdlib client: the ``!run`` line is
+parsed CLIENT-side by the product parser and sent as a structured
+``dev-tool-invoke``, while any other message routes to chat. Needs the live
+daemon; validated offline against the stub first, so a driver bug burns no cycle."""
 
 from __future__ import annotations
 

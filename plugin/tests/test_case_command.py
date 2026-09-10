@@ -26,12 +26,10 @@ from stub_server import (  # noqa: E402
 
 
 class TestCaseCommandCreateDelete(unittest.TestCase):
-    """``AgentClient.case_command`` -- the New/Delete case plumbing.
+    """``AgentClient.case_command`` - the New and Delete case plumbing.
 
-    Unlike ``create_case`` (blocking, used only during the initial connect
-    handshake), ``case_command`` sends without waiting: the reply flows
-    through the normal ``next_event`` pump like ``select_case``'s does.
-    """
+    Unlike the blocking ``create_case``, it sends without waiting: the reply flows
+    through the normal event pump."""
 
     def setUp(self):
         self.server = StubAgentServer()
@@ -68,13 +66,10 @@ class TestCaseCommandCreateDelete(unittest.TestCase):
         self.assertIsNone(sent["case_id"])  # envelope-level case_id too
 
     def test_create_reply_updates_wire_stamp(self):
-        """F34: the pump must ADOPT the case-open rebind into client.case_id.
+        """The pump must ADOPT the case-open rebind into ``client.case_id``.
 
-        Pre-fix, case_command("create") never updated the stamp, so the next
-        user-message carried the PREVIOUS case_id and the turn ran/persisted
-        into the wrong case (live-proven 2026-07-10: a fresh flood case ended
-        up empty while its layers landed in the startup case).
-        """
+        Without it the next user-message carries the PREVIOUS id and the turn runs and
+        persists into the wrong case."""
         before = self.client.case_id
         self.client.case_command("create")
         ev = self._await_kind("case-open")

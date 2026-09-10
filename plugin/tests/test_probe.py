@@ -1,15 +1,8 @@
-"""Tests for ``probe.py`` -- the map-click point probe's pure (no PyQGIS)
-half: request builder, response parser, and the dock note-block formatter.
+"""``probe.py``: the point probe's pure half - builder, parser, note formatter.
 
-No QGIS required (mirrors ``test_push_layer.py``'s pattern): a small
-``http.server.BaseHTTPRequestHandler`` stub mirrors the agent's real
-``POST /api/probe-point`` route semantics (the server's
-``catalog_http.py`` + ``tools/probe_point.py``), and the tests drive
-``probe.post_probe_point`` / ``probe.format_probe_result`` against it. The
-ONE PyQGIS-touching piece (the ``QgsMapToolEmitPoint`` install/restore) is
-NOT exercised here -- see ``tests/headless_probe_point_proof.py`` for the
-plugin-side flow proof.
-"""
+No QGIS required: a small ``http.server`` stub mirrors the agent route's real
+semantics and the tests drive the real post and formatter against it. The one
+PyQGIS piece, installing and restoring the map tool, is not exercised here."""
 
 from __future__ import annotations
 

@@ -1,18 +1,9 @@
-"""``install_dependencies.py`` -- the plugin's general third-party dependency
-installer (matplotlib was the QGIS-4 gap that prompted it; NATE wants the
-general answer, so this covers the check/install/re-verify/report logic and
-the self-enforcing sweep that keeps ``DEPENDENCIES`` honest as the source
-changes).
+"""``install_dependencies.py``: the plugin's third-party dependency installer.
 
-Three parts:
-* ``TestDependencySweep`` -- the self-enforcing AST sweep: a third-party
-  import in the plugin source that is not in ``DEPENDENCIES`` fails this,
-  same pattern as the 0225 fetcher sweep.
-* ``TestCheckAndReport`` / ``TestInstallMissing`` -- the check/report/install
-  logic with mocked imports and mocked ``subprocess.run`` (no real pip
-  network calls in the test suite).
-* ``TestMain`` -- the CLI (``--dry-run`` and the full run), exit codes.
-"""
+A self-enforcing AST sweep fails when a third-party import in the plugin source
+is not in ``DEPENDENCIES``; the check, report and install logic runs against
+mocked imports and a mocked ``subprocess.run``, so no test makes a real pip
+network call; the CLI's dry run, full run and exit codes are covered."""
 
 from __future__ import annotations
 
@@ -177,10 +168,10 @@ def _fake_access(true_for):
 
 
 class TestWindowsPythonExecutable(unittest.TestCase):
-    """The OSGeo4W python.exe probe -- Windows is the only platform that
-    still needs an interpreter derived/verified on disk (Linux uses the
-    literal ``python3``; macOS never targets a QGIS-side interpreter at
-    all, see ``TestMacWheelRecipe``)."""
+    """The OSGeo4W ``python.exe`` probe.
+
+    Windows is the only platform needing an interpreter derived and verified on
+    disk; Linux uses the literal ``python3`` and macOS targets none."""
 
     def test_picks_exec_prefix_python_exe(self):
         exec_prefix = r"C:\QGIS\apps\Python312"

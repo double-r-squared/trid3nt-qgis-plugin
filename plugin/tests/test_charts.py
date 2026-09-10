@@ -1,19 +1,9 @@
-"""Charts surface tests (OpenQuake result parity, live-feedback 2026-07-13).
+"""The charts surface, in the repo's two halves.
 
-Two halves, mirroring the repo convention:
-
-* PURE-PYTHON (this venv, no Qt): ``trid3nt_client.parse_charts`` -- the
-  defensive ``session_state.charts`` replay parser -- plus the case-open
-  carrier (``CaseOpenInfo.charts``) and the live ``chart-emission`` ->
-  ``AgentEvent("chart", ...)`` dispatch.
-* QT SUBPROCESS: ``qt_charts_harness.py`` under the system interpreter (the
-  one with ``qgis.PyQt`` + matplotlib -- the ``test_dock_ui`` convention),
-  covering the ChartsWindow rendering (log-log hazard curve, dashed rule,
-  bars, paging, de-dupe, clear), its interactivity (nearest-vertex click
-  inspect, locate-on-map enablement + callback) and the dock wiring (lazy
-  bottom window + "Charts (N)" button + one pointer note, never a chart
-  widget in the chat message list).
-"""
+PURE-PYTHON here: the defensive replay parser, the case-open carrier and the live
+chart event dispatch. QT SUBPROCESS under the interpreter with ``qgis.PyQt`` and
+matplotlib: the window's rendering, paging, de-dupe and interactivity, and the
+dock wiring that keeps charts out of the message list."""
 
 from __future__ import annotations
 
@@ -181,11 +171,10 @@ def _fake_access(true_for):
 
 
 class TestInstallCommandBuilder(unittest.TestCase):
-    """Per-OS install command builders -- pure, no subprocess. ``charts``
-    delegates the Windows/macOS derivations to ``install_dependencies``
-    (one source of truth; full probe-order coverage lives in
-    ``test_install_dependencies``); these tests confirm the delegation and
-    the Linux literal."""
+    """Per-OS install command builders - pure, no subprocess.
+
+    ``charts`` delegates the Windows and macOS derivations to one source of truth;
+    these confirm the delegation and the Linux literal."""
 
     def test_linux_is_a_plain_literal_no_derivation(self):
         cmd = charts_mod.linux_install_command()

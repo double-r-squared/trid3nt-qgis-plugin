@@ -1,38 +1,9 @@
-"""Offscreen harness for the ChartsWindow (charts-window 2026-08-04, NATE's
-TUFLOW-Viewer directive).
+"""Offscreen harness for the ChartsWindow.
 
-Run as a SUBPROCESS by ``test_charts.TestChartsWindow`` -- it needs
-``qgis.PyQt`` (PyQt5) + matplotlib, which the pure-python test venv does not
-have; the wrapper probes the system interpreter and skips honestly when
-absent (the ``qt_dock_ui_harness.py`` convention).
-
-Offscreen, no agent, no network. Checks:
-
-  1. HAZARD CURVE (the acceptance fixture's shape -- 19 IML points, layered
-     line+rule spec, log-log scales, dashed 10%-in-50yr design line):
-     ``set_charts`` renders it -- 2 views, 1 line series, 19 vertices,
-     1 rule, x_log + y_log, the rule's label in the legend, axis titles.
-  2. DE-DUPE: ``add_chart`` with the SAME chart_id returns False and does
-     not grow the window (a tool re-emit repaints, never duplicates).
-  3. PAGING + LIST STRIP: a second chart (damage-distribution bar shape with
-     a color field) pages to 2/2; the chart-list strip carries both titles;
-     prev steps back; the bar count is asserted.
-  4. CLEAR: ``clear()`` empties the window (case-switch discipline).
-  5. DEFENSIVE: junk rows (no chart_id / non-dict spec) are skipped by
-     ``set_charts``; a junk live payload returns False.
-  6. INTERACTIVITY: (b) ``nearest_vertex`` snaps a display-space point to the
-     exact plotted vertex + carries its series label; (d) the "Locate on map"
-     button enables only for a chart carrying a ``source_layer_uri`` and its
-     click fires the locate callback with that uri.
-  7. DOCK WIRING: ``Trid3ntDock._on_event("chart", payload)`` lazily builds
-     the bottom window, lands the chart there, bumps the chat "Charts (N)"
-     button (with the new-chart flag), and adds exactly ONE pointer note to
-     the chat -- charts never flood the message list (NATE's clutter rule).
-
-Exits 0 and prints CHARTS-OK plus the render summaries; asserts (nonzero)
-otherwise. Also grabs docs/proof/97-qgis-charts-window.png (offscreen QWidget
-grab -- a LAYOUT proof, not pixel-parity vs live QGIS rendering).
-"""
+Run as a SUBPROCESS by its wrapper, which needs ``qgis.PyQt`` and matplotlib and
+skips honestly when absent. No agent, no network. Covers the hazard-curve render,
+de-dupe, paging, clear on case switch, junk rows skipped, click-inspect and
+locate-on-map, and the dock wiring that keeps charts out of the message list."""
 
 from __future__ import annotations
 

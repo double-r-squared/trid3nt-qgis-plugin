@@ -1,34 +1,9 @@
-"""Real-QGIS harness for the layer clocks -- run as a SUBPROCESS by
-``test_mesh_temporal`` (needs qgis.core; the pure test venv does not have it,
-so the parent test probes the system interpreter and skips honestly when
-absent).
+"""Real-QGIS harness for the layer clocks, run as a SUBPROCESS by its wrapper.
 
-What it proves, on the INSTALLED QGIS rather than on a description of it:
-
-  * MDAL opens a real SELAFIN as a mesh layer whose temporal properties are
-    already active, and whose reference time is 1900 - the file records no
-    origin for the seconds it counts, which is why a run has to state one;
-  * ``stamp_mesh_temporal`` moves the whole time extent onto the instant the
-    row DECLARED, so the controller scrubs the run's own clock;
-  * a row that declares no reference time is left on MDAL's own axis rather
-    than given an invented one;
-  * ``load_declared_style`` loads a preset ``.qml`` onto a real raster and the
-    renderer CHANGES (loadNamedStyle's boolean is well-formedness only, so the
-    post-load state is what the gate reads);
-  * a raster carrying its own colour table and no ``.qml`` keeps QGIS's own
-    paletted renderer - the render this side no longer rebuilds;
-  * ``bind_declared_mesh_style`` binds a DECLARED quantity to the group MDAL
-    actually reports (a SELAFIN's names are fixed-width: ``dye
-    mgl``), and the same document loaded UNBOUND leaves the mesh with no
-    active scalar group at all - the blank render the binding exists to
-    prevent;
-  * a declared quantity no group answers to keeps MDAL's own default group and
-    says so.
-
-Arguments: a SELAFIN to open, and a SELAFIN carrying a tracer group. Prints
-QT-MESH-TEMPORAL-OK and exits 0 on success; prints the failing assertion and
-exits 1 otherwise.
-"""
+Proved on the INSTALLED QGIS: MDAL opens a SELAFIN already temporal on a 1900
+reference the file never states; stamping moves the extent onto the DECLARED
+instant while a row declaring none keeps MDAL's axis; a preset style changes the
+renderer; a declared quantity binds to the group MDAL actually reports."""
 
 from __future__ import annotations
 

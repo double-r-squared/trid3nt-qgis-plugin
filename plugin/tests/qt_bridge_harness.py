@@ -1,24 +1,9 @@
 """Regression harness for the REAL Qt bridge start path.
 
-Run as a SUBPROCESS by ``test_milestone3.TestQtBridgeStart`` -- it needs
-``qgis.PyQt`` (PyQt5), which the pure-python test venv does not have; the
-test probes the system interpreter and skips honestly when absent.
-
-REGRESSION (found live in QGIS 3.40.6, 2026-07-07): AgentBridge/AgentWorker
-once named a pyqtSignal ``event``, shadowing the C++ virtual
-``QObject.event()``. The FIRST QEvent Qt delivered to the object (the
-ChildAdded event from ``QThread(self)`` inside ``AgentBridge.start``) made
-PyQt call the attribute as the reimplemented event handler ->
-"TypeError: native Qt signal is not callable" -> qFatal abort of the whole
-host process. Only a real Qt object tree catches that class of bug -- the
-stdlib client tests bypass Qt entirely, which is exactly why it escaped
-milestones 1-2.
-
-argv[1] = ws url of a running stub agent (the parent test owns it).
-Exits 0 after connected + case_ready + one full chat round trip
-(chunk / session-state / turn-complete through the queued-signal path)
-have been observed; asserts (nonzero) or aborts otherwise.
-"""
+Run as a SUBPROCESS by its wrapper test, which needs ``qgis.PyQt`` and skips
+honestly when the interpreter lacks it. A pyqtSignal named for a C++ virtual
+shadows it, so the first delivered QEvent aborts the host process - only a real
+Qt object tree catches that class of bug. ``argv[1]`` is the stub agent's url."""
 
 from __future__ import annotations
 

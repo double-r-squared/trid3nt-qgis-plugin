@@ -1,36 +1,9 @@
-"""Live-shaped proof: map-click point probe (2026-07-11).
+"""Live-shaped proof: the map-click point probe, downstream of PyQGIS.
 
-Proves the FULL plugin-side flow -- POST /api/probe-point -> dock note-block
-formatting -- by driving the REAL, unmodified ``probe.py``
-(``post_probe_point`` / ``format_probe_result``) against a STUB HTTP server
-that mirrors the agent route's real contract (the server's
-``catalog_http.py`` + ``tools/probe_point.py``):
-
-    POST /api/probe-point {"case_id","lon","lat"}
-      -> 200 {"status":"ok","point":{"lon","lat"},"case_id","results":[
-              {"layer_id","name","value","units"?,"note"?,"error"?} |
-              {"name","series":[...],"units"?,"layer_ids"}
-            ],"truncated","computed_at"}
-
-The ONE PyQGIS-touching piece (``QgsMapToolEmitPoint`` install/restore + the
-canvas-CRS -> EPSG:4326 point transform, both in ``dock.py``'s
-``_toggle_probe_tool`` / ``_point_to_lonlat4326``) is NOT exercised here --
-this proof covers everything downstream of "a click resolved to an EPSG:4326
-point", which is where ``_ProbePointTask._run`` hands off from PyQGIS to
-pure Python.
-
-Additionally, if a REAL agent is reachable at ``TRID3NT_AGENT_HTTP`` (default
-``http://127.0.0.1:8766``) AND its ``/api/probe-point`` route responds (not a
-404 -- the route needs a restart to pick up this change, per the kickoff's
-"do NOT restart the running agent" constraint), the SAME flow is re-run
-against the live route too, so this proof becomes the live-route
-verification the moment the coordinator restarts the box -- no script
-changes needed, just re-run:
-
-    python3 tests/headless_probe_point_proof.py
-
-Run (no live agent needed):  python3 tests/headless_probe_point_proof.py
-"""
+The REAL ``probe.py`` drives a stub HTTP server mirroring the agent route's
+contract, and the same flow re-runs against a live agent when one is reachable.
+The one PyQGIS piece - installing the map tool and transforming the click to
+EPSG:4326 - is not exercised here; everything after that point is."""
 
 from __future__ import annotations
 
@@ -69,16 +42,10 @@ def check(label: str, cond: bool, detail: str = "") -> None:
 def _run_flow(
     base_url: str, label: str, lon: float, lat: float, *, allow_route_absent: bool = False
 ) -> bool:
-    """Drive the REAL ``probe.post_probe_point`` + ``format_probe_result``
-    against ``base_url``, asserting the full request/response contract.
+    """Drive the REAL probe post and formatter against ``base_url``.
 
-    Returns True iff the route responded (i.e. the flow was actually
-    exercised). When ``allow_route_absent`` is True (the LIVE half only), an
-    ``HTTP 404``/``HTTP 405`` failure is treated as "not deployed yet" -- a
-    NOTE, not a counted failure -- since that is the EXPECTED state before
-    the coordinator restarts the agent process (this session was told not
-    to). Any other failure (once the route exists) is a real FAIL.
-    """
+    Returns True iff the route responded. With ``allow_route_absent`` a 404 or 405 is
+    a NOTE rather than a counted failure; any other failure is a real one."""
     print(
         f"\n[proof] {label}: probing case={CASE_ID} at ({lon}, {lat})", flush=True
     )

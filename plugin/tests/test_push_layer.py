@@ -1,18 +1,9 @@
-"""Tests for ``push_layer.py`` -- bidirectional layer push (the reverse seam
-of layer materialization).
+"""``push_layer.py``: the reverse seam of layer materialization.
 
-No QGIS required (pure request-builder/parser tests, mirroring
-``test_milestone3.py``'s ``TestRemoteDownload`` pattern): a small
-``http.server.BaseHTTPRequestHandler`` stub mirrors the agent's real
-``/api/ingest-layer-file`` + ``/api/ingest-layer`` route semantics
-(the server's ``catalog_http.py``), and the tests drive
-``push_layer.upload_layer_bytes`` / ``post_ingest_layer`` /
-``push_exported_file`` / ``format_push_note`` against it. The ONE
-QGIS-touching function (``export_active_layer_to_tempfile``) is intentionally
-NOT exercised here -- see ``tests/headless_push_layer_proof.py`` for the
-full plugin-side flow proof (temp file already on disk -> upload -> ingest
--> note) and the module docstring for why that split exists.
-"""
+No QGIS required: an ``http.server`` stub mirrors the two agent routes' real
+semantics and the tests drive the upload, the ingest post, the combined push and
+the note formatter against it. The one QGIS-touching function, exporting the
+active layer to a temp file, is left to the plugin-side flow proof."""
 
 from __future__ import annotations
 

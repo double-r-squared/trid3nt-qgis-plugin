@@ -1,20 +1,9 @@
-"""Qt harness: SettingsDialog Save -> off-thread provider-config POST payload
-shape + OpenRouter provider -> live model-list repopulate (design 2026-07-19).
+"""Qt harness: the settings dialog's save payload and its live model-list fetch.
 
-Runs under the ``qgis.PyQt`` interpreter (offscreen). Spins a recording
-``http.server`` stub for the agent's ``/api/provider-config`` (POST) and
-``/api/local-models`` (GET) routes, points a PluginSettings ``export_api`` at
-it, builds the dialog for an ``openrouter-free`` provider, and:
-
-  * waits for the construction-time live model-list fetch to REPOPULATE the
-    editable model combo with the stub's (distinct-from-static) free ids ->
-    prints ``MODEL_REPOPULATE_OK``;
-  * calls ``accept()`` and waits for the off-thread POST to land, asserting the
-    payload = the provider preset's base_url + num_ctx plus the persisted key +
-    model id -> prints ``SAVE_PAYLOAD_OK``.
-
-Exits non-zero on any mismatch. The api key is NEVER printed.
-"""
+Runs offscreen under the ``qgis.PyQt`` interpreter against a recording
+``http.server`` stub for the two agent routes. The construction-time fetch
+repopulates the model combo from the stub's ids and the off-thread POST carries
+the preset plus the persisted key and model. The api key is NEVER printed."""
 
 from __future__ import annotations
 

@@ -1,17 +1,9 @@
-"""Degenerate-numeric clamp tests -- the QGIS 4 / Qt6 / macOS arm64 dock-open
-SIGBUS fix (v0.3.8).
+"""The degenerate-numeric clamp that keeps a non-finite range off the native path.
 
-Root cause: a non-finite (NaN/inf) or zero-span range reaching a NATIVE Qt
-double-to-string call has its precision computed as a non-finite double and
-cast to a C int; on arm64 that saturates to INT_MAX, and ``qt_doubleToAscii``
-overruns the stack. These are the pure-python guards that keep any such value
-away from the native boundary -- the crash is untestable off-arm64, so we test
-the CLAMP (that no path can produce an unbounded precision or a degenerate
-range) instead.
-
-Covers ``render.formatting`` (the shared clamp seam) and ``ui.charts._as_float``
-(the chart-series finiteness drop). Both are qgis-free -> this venv runs them.
-"""
+A NaN, an infinity or a zero-span range reaching a native double-to-string call
+has its precision cast to a C int, which saturates and overruns the stack. The
+crash is untestable off that architecture, so what is tested is the CLAMP: no
+path can produce an unbounded precision or a degenerate range."""
 
 from __future__ import annotations
 

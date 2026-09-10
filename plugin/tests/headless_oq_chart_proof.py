@@ -1,35 +1,9 @@
-"""Live proof: OpenQuake result parity -- opening the kept PSHA case must
-surface its persisted hazard-curve chart in the bottom Charts window
-(live-feedback 2026-07-13; charts-window 2026-08-04).
+"""Live proof: a kept PSHA case surfaces its persisted chart in the Charts window.
 
-Loads the REAL plugin inside a real (offscreen) QgsApplication -- same
-pattern as ``headless_case_switch_proof.py`` -- connects to the LIVE local
-agent on ``ws://127.0.0.1:8765``, opens the kept acceptance case
-"Probabilistic Seismic Hazard Analysis Run_seismi"
-(01KXD9J5T0AW6FGNT1CKY0XD4G -- READ-ONLY select, the case is never mutated)
-whose chart is persisted server-side (chart_id 01KXD9Q34VPR9C5AJ40DX8MN4M),
-and asserts:
-
-  1. the case-open replay lazily builds the bottom Charts window + rebuilds
-     its list: count >= 1, the persisted chart_id is current, the chat
-     "Charts (N)" button reflects the count;
-  2. the render is the real hazard curve: 1 line series with 19 IML
-     vertices, the dashed 10%-in-50yr design rule (legend label), log-log
-     axes, PGA axis titles;
-  3. the case's web-parity caption ("474 sites") rides along;
-  4. NO chart widget landed in the chat message list (clutter rule);
-  5. switching AWAY to a chart-less case clears the window + resets the button.
-
-Grabs the dock with the chart visible to docs/proof/98-qgis-oq-chart.png
-(offscreen QWidget grab -- widget-layout proof, not pixel-parity vs live
-QGIS; the map canvas is not part of the grab, the CHART is the subject).
-
-Run:  QT_QPA_PLATFORM=offscreen python3 tests/headless_oq_chart_proof.py
-
-Set TRID3NT_AGENT_URL / TRID3NT_ANON_USER_ID / TRID3NT_OQ_CASE /
-TRID3NT_OQ_CHART_ID to point at a different stack/case (defaults match the
-kept fixture this proof was authored against).
-"""
+The REAL plugin runs offscreen against the live local agent and READ-ONLY selects
+the case. Asserted: the case-open replay lazily builds the window and lists the
+persisted chart; the render is the real hazard curve with its design rule and
+log-log axes; no chart widget lands in the chat list; switching away clears it."""
 
 from __future__ import annotations
 

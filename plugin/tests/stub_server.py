@@ -1,49 +1,9 @@
-"""Stub TRID3NT agent WS server for connection-layer tests.
+"""Stub TRID3NT agent WS server for the connection-layer tests.
 
-Runs a real ``websockets`` (>=13, asyncio) server on a background thread with
-its own event loop, speaking just enough of the envelope protocol
-(auth-token/auth-ack, session-resume/session-state, case-command/case-open,
-user-message -> chunk + pipeline-state + session-state-with-layers +
-turn-complete) to exercise ``trid3nt_client.AgentClient`` end to end.
-
-Milestone 2 additions:
-
-* a user-message whose text contains ``"simulate"`` pauses behind a
-  ``tool-payload-warning`` (granularity + time_scale enrichments,
-  #154 shapes) and only proceeds when the matching
-  ``tool-payload-confirmation`` arrives (decision recorded; cancel ->
-  cancelled turn-complete). ``"simulate-hardcap"`` emits the hard-cap variant
-  (no "proceed" in options).
-* ``session-resume`` now answers with a populated ``case-list`` (CaseSummary
-  rows) and echoes the resumed ``case_id`` back on the session-state.
-* a user-message whose text contains ``"drop-connection"`` closes the socket
-  server-side WITHOUT a turn-complete (reconnect tests); the server keeps
-  accepting new connections.
-
-Milestone 3 additions:
-
-* ``case-command select`` answers with the server's full ``case-open``
-  rehydration (CaseSummary + loaded_layers) for a known ``CASE_LIST_ROWS``
-  id, or ``session_state: None`` for an unknown id (the real server's
-  could-not-rehydrate shape). Selected ids are recorded on ``selects``.
-* an ``auth-token`` whose token is ``EXPIRED_TOKEN`` is REJECTED the way the
-  live agent rejects a dead token: an ``error`` envelope with
-  ``error_code=AUTH_REQUIRED`` then a 1008 (policy violation) close.
-
-Structured-AOI additions (mechanism 2, 2026-07-22):
-
-* every ``user-message`` payload is validated the way the live server's
-  ``UserMessagePayload`` (``extra="forbid"``) would: unknown keys or a
-  malformed ``aoi_bbox`` (anything but a 4-number EPSG:4326
-  ``[min_lon, min_lat, max_lon, max_lat]`` list, or null) get an ``error``
-  envelope with ``error_code=TOOL_PARAMS_INVALID`` and NO turn-complete --
-  a contract regression fails LOUDLY offline instead of 400ing live.
-  Violations are recorded on ``protocol_violations``; each present
-  ``aoi_bbox`` value is recorded on ``user_message_aoi_bboxes``.
-
-Requires the ``websockets`` package (present in the trid3nt-local agent venv).
-The plugin itself never imports this -- test-only.
-"""
+A real ``websockets`` server on a background thread speaking just enough of the
+envelope protocol to exercise the client end to end, with scripted triggers in
+the message text for the confirm gate, the hard cap and a dropped connection.
+Payloads are validated as the live ``extra="forbid"`` server would."""
 
 from __future__ import annotations
 
@@ -74,12 +34,10 @@ USER_MESSAGE_ALLOWED_KEYS = frozenset(
 
 
 def _aoi_bbox_problem(value: Any) -> Optional[str]:
-    """Why ``value`` is not a contract-legal ``aoi_bbox`` (None = it is legal).
+    """Why ``value`` is not a contract-legal ``aoi_bbox``; None means it is legal.
 
-    Mirrors the ``UserMessagePayload._validate_aoi_bbox`` rules: null, or a
-    list of exactly 4 finite numbers in EPSG:4326
-    ``[min_lon, min_lat, max_lon, max_lat]`` order.
-    """
+    Mirrors the payload validator: null, or a list of exactly four finite numbers in
+    ``[min_lon, min_lat, max_lon, max_lat]`` order."""
     if value is None:
         return None
     if not isinstance(value, list):

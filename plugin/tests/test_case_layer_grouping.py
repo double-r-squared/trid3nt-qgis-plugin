@@ -35,15 +35,10 @@ def _make_gpkg(path: str, tables: list) -> None:
 
 
 class TestCaseGroupClearing(unittest.TestCase):
-    """The case-switch group clear: one TRID3NT group per case, no leftovers.
+    """The case-switch group clear: one case group, no leftovers.
 
-    ``layers.py`` imports ``qgis.core`` / ``qgis.PyQt`` at module top, so
-    this installs an in-memory fake ``qgis.core`` rich enough to model a
-    QgsLayerTreeGroup/QgsLayerTreeRoot's group/layer nesting -- groups,
-    ``findGroups``/``findLayer``/``findLayerIds``, ``removeChildNode``, and
-    per-layer visibility -- since ``set_case``'s stale-group sweep drives that
-    API directly.
-    """
+    ``layers.py`` imports ``qgis`` at module top, so an in-memory fake models the
+    layer-tree nesting that the stale-group sweep drives directly."""
 
     def _import_layers(self):
         import importlib

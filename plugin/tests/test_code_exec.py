@@ -1,25 +1,9 @@
-"""Code-exec approval gate tests (live-feedback 2026-07-21).
+"""The code-exec approval gate, offline.
 
-The agent's ``code-exec-request`` envelope (contracts
-``sandbox_contracts.py``) previously had ZERO plugin handling: it fell
-through the client's classifier as kind="raw", the dock dropped it, and the
-agent blocked on its confirm-gate future forever ("it just stopped").
-
-Coverage here (offline -- pure parse/decision logic + stub_server round
-trips; the Qt card itself is covered at the qt harness level, see
-``qt_dock_ui_harness.py``):
-
-* ``gate.parse_code_exec_request`` field mapping + malformed-envelope
-  honesty (no code_exec_id / no python_code -> None, never a crash).
-* ``gate.resolve_code_exec_decision``: Run -> ("proceed", None), Deny ->
-  ("cancel", None) -- revised_args ALWAYS None (contract cross-rule; the
-  server fail-closes narrow_scope for code, so it is never offered).
-* the wire round trip against the stub: a "run-code" turn pauses behind the
-  ``code-exec-request``; the reply rides the EXISTING
-  ``tool-payload-confirmation`` envelope with ``warning_id ==
-  code_exec_id`` (the server's shared confirm seam -- no new client verb);
-  proceed resumes the turn, cancel ends it honestly.
-"""
+The parse maps the envelope's fields and answers None on a malformed one rather
+than crashing; the decision resolves Run to proceed and Deny to cancel with
+``revised_args`` ALWAYS None; the reply rides the EXISTING confirm envelope with
+``warning_id == code_exec_id``, so the client gains no new verb."""
 
 from __future__ import annotations
 

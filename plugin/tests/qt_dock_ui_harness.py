@@ -1,41 +1,9 @@
-"""Regression harness for the 2026-07-12 dock UI fix batch.
+"""Regression harness for the dock UI fix batch.
 
-Run as a SUBPROCESS by ``test_dock_ui.TestDockUiBatch`` -- it needs
-``qgis.PyQt`` (PyQt5), which the pure-python test venv does not have; the
-test probes the system interpreter and skips honestly when absent (the same
-convention as ``qt_bridge_harness.py``).
-
-Offscreen, no agent, no network. Checks:
-
-  1. BUG 1 (wrapped-bubble clip): a long user message at a narrow dock
-     width must paint at its FULL wrapped height (height >=
-     heightForWidth(actual width)); pre-fix it clipped to one visual line
-     (measured 73px painted vs 133px needed at 320px). Same check for the
-     assistant answer label.
-  2. BUG 2 (empty assistant bubble): whitespace-only text deltas after a
-     thinking block must NOT reveal the answer label nor collapse the
-     thinking block; the first NON-whitespace delta does both.
-  3. BUG 3a (Layers (N) collapse): a layer-note batch folds into one
-     default-collapsed toggle; error notes stay visible outside it.
-  4. BUG 3b (probe panel): probe output goes to the pinned panel, replaced
-     in place, and never adds a widget to the chat message list.
-  5. BUG 4 (gate-card ordering): a gate card closes out the streaming
-     entry; post-decision output lands in a NEW entry BELOW the card
-     (user bubble -> pre-gate entry -> card -> post-gate entry).
-  6. MARKDOWN (feature 2026-07-13): assistant answers stream PLAIN
-     (an unclosed ``` fence mid-stream never hits the markdown parser),
-     convert to rendered rich text on turn-complete and on replay; a TALL
-     markdown message (header + paragraphs + json code block + table +
-     list) must paint at its full wrapped height at BOTH a narrow (320px)
-     and a wide (640px) dock width -- the F36 _WrapLabel min-height
-     re-assert must hold for rich text too. User bubbles and the thinking
-     block stay Qt.PlainText.
-
-Exits 0 and prints DOCK-UI-OK plus the measured heights; asserts (nonzero)
-otherwise. Also grabs docs/proof/90-dock-ui-batch.png and the markdown
-proof docs/proof/93-dock-markdown.png (offscreen QWidget grabs -- LAYOUT
-proofs, not pixel-parity claims vs live QGIS rendering).
-"""
+Run as a SUBPROCESS by its wrapper, which needs ``qgis.PyQt`` and skips honestly
+when absent. Offscreen, no agent, no network. Covers a wrapped bubble painting at
+its full height, whitespace-only deltas never revealing an empty answer, the
+layer-note fold, the probe panel, gate-card ordering, and markdown rendering."""
 
 from __future__ import annotations
 

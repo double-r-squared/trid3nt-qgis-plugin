@@ -1,22 +1,9 @@
-"""Client-helper + dock-wiring tests for the OpenRouter model-extensibility
-seam (design 2026-07-19).
+"""The provider-config client helpers and their dock wiring.
 
-Feature 3 -- ``post_provider_config`` POSTs the live provider config to the
-agent's ``/api/provider-config`` route (base_url/api_key/model/num_ctx) so a
-provider switch applies with no restart. Feature 2 -- ``fetch_model_list`` GETs
-the agent's ``/api/local-models`` route (the free + tool-capable list on
-OpenRouter).
-
-The pure-python tests here use an ``http.server`` stub that mirrors the real
-agent routes in miniature (same posture as ``test_milestone3``'s
-``_CaseListStub``) -- no Qt, no live agent, no live network. The Qt dock-wiring
-harness (Save -> off-thread POST payload shape; OpenRouter provider -> live
-model-list repopulate) runs in a subprocess under the ``qgis.PyQt`` interpreter
-and skips honestly when absent.
-
-SECURITY: a dedicated test asserts the api key never appears in a raised error
-message.
-"""
+``post_provider_config`` applies a provider switch with no restart and
+``fetch_model_list`` reads the agent's model route. The pure tests run against an
+``http.server`` stub mirroring both routes; the Qt wiring runs in a subprocess
+under the ``qgis.PyQt`` interpreter. The api key never appears in a raised error."""
 
 from __future__ import annotations
 

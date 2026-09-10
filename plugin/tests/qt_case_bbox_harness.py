@@ -1,38 +1,9 @@
-"""Offscreen harness for the persistent per-case bbox (per-case-bbox
-2026-07-19). Run as a SUBPROCESS by ``test_case_bbox.TestCaseBboxDock`` -- it
-needs ``qgis`` (a real ``QgsMapCanvas`` + ``QgsRubberBand``), which the pure
-test venv lacks; the test probes the system interpreter and skips honestly
-when absent (same convention as ``test_dock_ui``).
+"""Offscreen harness for the persistent per-case bbox.
 
-Offscreen, no agent, no network. A real QgsMapCanvas (EPSG:3857) drives the
-CRS-transform + overlay paths for real; the WS bridge is replaced with a
-recorder so the outbound case-command frames can be inspected. The live
-``QgsMapToolExtent`` DRAG is NOT simulated here (it needs real mouse events on
-a shown canvas -- NATE live-verifies it on plugin reload); instead the tool's
-``extentChanged`` handler ``_on_aoi_extent_chosen`` is invoked directly with a
-canvas-CRS rectangle, which covers everything downstream of the drag: the
-4326<->canvas conversion, the state update, the overlay repaint, the
-set-bbox persist, and the button restore.
-
-Checks:
-  1. new_case creates BBOX-LESS (A2, NATE 2026-07-20): case-command create
-     with args=None -- the canvas-as-AOI seed is gone; no local bbox either.
-  2. _on_aoi_extent_chosen(rect) converts canvas-CRS -> EPSG:4326 (round-trips
-     the seed box within tolerance), updates _case_bbox, builds the overlay,
-     and persists via case-command set-bbox with the edited bbox.
-  3. a case-open carrying a bbox sets _case_bbox + renders the overlay.
-  4. _clear_messages (case switch) clears _case_bbox.
-  5. disconnect_agent clears _case_bbox.
-  6. a case-open WITHOUT a bbox leaves _case_bbox None (no stale box).
-  7. (structured AOI, 2026-07-22) _send with NO case bbox rides
-     aoi_bbox=None on send_chat and the text goes out clean.
-  8. _send with a drawn/rehydrated case bbox rides it STRUCTURED as
-     send_chat(aoi_bbox=[...]) -- the message text stays EXACTLY the user's
-     prose (no "[QGIS map canvas AOI ...]" bracket line) -- and the set-time
-     AOI affordance (the rubber-band overlay) is still up after the send.
-
-Exits 0 and prints CASE-BBOX-OK; raises (nonzero) on any failed check.
-"""
+Run as a SUBPROCESS by its wrapper, which needs a real ``QgsMapCanvas`` and
+``QgsRubberBand`` and skips honestly when absent. No agent, no network: the
+bridge is a recorder so outbound case-commands can be inspected, and the extent
+tool's handler is invoked directly, covering everything downstream of the drag."""
 
 from __future__ import annotations
 

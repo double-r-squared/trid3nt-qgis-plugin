@@ -1,19 +1,9 @@
-"""Remote reads -- the plugin side.
+"""Remote reads on the plugin side: staging, honesty labels, the mesh hop.
 
-Covers three things the materializer owes:
-
-  * session-scoped staging: ``_ensure_temp_dir`` creates one
-    ``trid3nt_session_<tag>`` subdir (owner-PID marked), ``cleanup_session``
-    removes it, ``sweep_stale_session_dirs`` reaps a DEAD-owner leftover but
-    keeps a LIVE-owner dir (a concurrent QGIS instance);
-  * STREAMED vs STAGED honesty labels on every layer note;
-  * the MDAL mesh cache hop (``_add_mesh``) -- the ONE format with no /vsi
-    layer, so it stages to the session dir, labeled.
-
-No QGIS required: reuses the fake-qgis import harness from
-``test_raster_render`` and monkeypatches the mesh/CRS fakes onto the imported
-module (``layers.py`` holds them as module attributes).
-"""
+Session-scoped staging creates one owner-marked directory, cleans it up and reaps
+a DEAD-owner leftover while keeping a live one; every layer note is labelled
+STREAMED or STAGED; the mesh is the ONE format with no ``/vsi`` layer, so it
+stages, labelled. No QGIS required - the fake-qgis harness is reused."""
 from __future__ import annotations
 
 import os

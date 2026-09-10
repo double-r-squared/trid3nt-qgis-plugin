@@ -1,25 +1,9 @@
 """Live proof: a template run's layers reach the canvas through ``s3://``.
 
-Drives the REAL ``LayerMaterializer`` under a real ``QgsApplication`` against a
-REAL case's persisted ``loaded_layer_summaries`` -- the same rows the dock
-replays on case-open -- so nothing here is a re-implementation of the render
-path. One store, one scheme, end to end:
-
-  1. every layer reference in the run is an ``s3://`` uri (no second face);
-  2. rasters and vectors register through GDAL ``/vsis3`` and stage NOTHING;
-  3. the mesh takes the ONE cache hop (MDAL has no /vsi layer) and its cost is
-     MEASURED and printed, not assumed;
-  4. the store is private: an unsigned HTTP GET of the same object is refused,
-     which is what makes the signed read the only path in.
-
-Run (from repo root), against the RUNNING stack -- this script restarts
-nothing:
-
-    QT_QPA_PLATFORM=offscreen python3 plugin/tests/headless_store_reads_proof.py [CASE_ID]
-
-Defaults to the most recently updated case that carries raster, vector AND
-mesh rows. Exits nonzero on any failed check.
-"""
+The REAL materializer runs under a QgsApplication against a real case's
+persisted layer rows, so nothing here re-implements the render path. Every
+reference is ``s3://``, rasters and vectors register through ``/vsis3`` staging
+nothing, the mesh's one cache hop is MEASURED, and an unsigned GET is refused."""
 import json
 import os
 import sys

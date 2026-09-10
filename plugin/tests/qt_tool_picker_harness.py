@@ -1,44 +1,9 @@
-"""Qt harness for the tool-selection picker card (Stage 3, 2026-07-22).
+"""Qt harness for the tool-selection picker card.
 
-Run as a SUBPROCESS by ``test_tool_picker.TestToolPickerQt`` -- it needs
-``qgis.PyQt`` (PyQt5), which the pure-python test venv does not have; the
-test probes the system interpreter and skips honestly when absent (the same
-convention as ``qt_dock_ui_harness.py``).
-
-Offscreen, no agent, no network. Checks (the card contract, +
-the fixed interface contract):
-
-  1. RENDER: a ``tool-candidates`` event paints ONE ToolCandidatesCard with
-     the stage label in the title, one radio per ranked candidate (tool name
-     monospace + one-line summary), the free-text line edit as the LAST
-     option, and Confirm / Let-agent-decide buttons. The card closes out the
-     pending entry (BUG-4/N5 ordering -- post-decision narration lands
-     BELOW the card).
-  2. PICK: select a candidate radio + Confirm -> EXACTLY ONE
-     ``send_tool_choice(request_id, tool_name, None)`` through the bridge
-     hook; the card locks (single-answer -- a second Confirm is a no-op) and
-     folds to the chip "picked <tool>" (prefixed "Step N: " -- LANE P
-     2026-07-22 wave-picker UX; every card in this harness lands in the same
-     never-reset turn, so the chips run Step 1..4 in creation order). A
-     later turn event must NOT re-fold an answered card to "agent
-     proceeded".
-  3. FREE TEXT: typing selects the free-text radio; Confirm sends
-     ``(None, stripped_text)`` and folds to the guidance chip.
-  4. EMPTY-CONFIRM HONESTY: Confirm with nothing selected consumes NO
-     decision (no send, not locked, honest note) -- mirroring the
-     credential card's empty-Submit rule.
-  5. LET AGENT DECIDE: sends ``(None, None)`` and folds to "agent decided".
-  6. UNANSWERED FOLD: a subsequent turn event (chunk) arriving while the
-     card is open folds it to "agent proceeded", locked, with NO reply sent
-     (the server's timeout_s fail-open already resolved the selection).
-  7. MALFORMED: a request without request_id paints NO card, only the
-     honest error note.
-  8. MODE TOGGLE: the Settings dialog's Auto/Ask combo persists
-     ``settings.tool_choice_mode`` on Save, and the dock's send path stamps
-     it onto ``bridge.send_chat(tool_choice_mode=...)``.
-
-Exits 0 and prints TOOL-PICKER-OK; asserts (nonzero) otherwise.
-"""
+Run as a SUBPROCESS by its wrapper, which needs ``qgis.PyQt`` and skips honestly
+when absent. Offscreen, no agent, no network. Covers the render and its ordering,
+a pick and a free-text answer each sending once and locking, an empty Confirm
+consuming nothing, the unanswered fold, a malformed request, the mode toggle."""
 
 from __future__ import annotations
 

@@ -1,36 +1,9 @@
-"""Live-shaped proof: bidirectional layer push (2026-07-11).
+"""Live-shaped proof: bidirectional layer push, downstream of the export.
 
-Proves the FULL plugin-side flow -- temp export -> upload POST ->
-ingest POST -> success note -- by driving the REAL, unmodified
-``push_layer.py`` (``push_exported_file`` / ``format_push_note``) against a
-STUB HTTP server that mirrors the two agent routes' real contracts
-(``trid3nt_server/server/protocol/catalog_http.py``):
-
-    POST /api/ingest-layer-file?filename=<name>  (raw octet-stream body)
-      -> 200 {"s3_uri": "s3://..."}
-    POST /api/ingest-layer {"case_id","name","kind","s3_uri",
-      "crs_authid"?,"make_aoi"?}
-      -> 200 {"status":"ok","layer_id",...,"aoi_pinned","feature_count"}
-
-The "temp export" step (the ONE QGIS-touching piece,
-``export_active_layer_to_tempfile``) is SIMULATED here by writing a small
-GeoPackage-shaped file directly to disk -- proving that half requires a real
-QGIS session (see ``headless_mesh_proof.py`` for that heavier pattern); this
-proof covers everything downstream of "a file exists on disk", which is
-where ``_PushLayerTask._run`` hands off from PyQGIS to pure Python.
-
-Additionally, if a REAL agent is reachable at ``TRID3NT_AGENT_HTTP`` (default
-``http://127.0.0.1:8766``) AND its ``/api/ingest-layer-file`` route responds
-(not a 404 -- the route needs a restart to pick up this change, per the
-kickoff's "do NOT restart the running agent" constraint), the SAME flow is
-re-run against the live routes too, so this proof becomes the live-route
-verification the moment the coordinator restarts the box -- no script
-changes needed, just re-run:
-
-    python3 tests/headless_push_layer_proof.py
-
-Run (no live agent needed):  python3 tests/headless_push_layer_proof.py
-"""
+The REAL ``push_layer.py`` drives a stub HTTP server mirroring the two agent
+routes' contracts, and the same flow re-runs against a live agent when one is
+reachable. The QGIS-touching export is simulated by writing a file to disk;
+everything downstream of "a file exists" is real."""
 
 from __future__ import annotations
 
@@ -63,16 +36,10 @@ def check(label: str, cond: bool, detail: str = "") -> None:
 
 
 def _run_flow(base_url: str, label: str, *, allow_route_absent: bool = False) -> bool:
-    """Drive the REAL ``push_layer.push_exported_file`` + ``format_push_note``
-    against ``base_url``, asserting the full request/response contract.
+    """Drive the REAL push and formatter against ``base_url``.
 
-    Returns True iff the route responded (i.e. the flow was actually
-    exercised). When ``allow_route_absent`` is True (the LIVE half only), an
-    ``HTTP 404``/``HTTP 405`` failure is treated as "not deployed yet" -- a
-    NOTE, not a counted failure -- since that is the EXPECTED state before
-    the coordinator restarts the agent process (this session was told not
-    to). Any other failure (once the route exists) is a real FAIL.
-    """
+    Returns True iff the route responded. With ``allow_route_absent`` a 404 or 405 is
+    a NOTE rather than a counted failure; any other failure is a real one."""
     fd, tmp_path = tempfile.mkstemp(suffix=".gpkg", prefix="trid3nt_push_proof_")
     os.close(fd)
     os.unlink(tmp_path)

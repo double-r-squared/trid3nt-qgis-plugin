@@ -1,47 +1,9 @@
-"""Live proof: opening a DIFFERENT case must clear the previous case's chat
-+ layers, not accumulate them, and must auto-focus the canvas (live-feedback
-2026-07-10, items A/B/C/D).
+"""Live proof: opening a DIFFERENT case clears the previous case's chat and layers.
 
-Loads the REAL plugin inside a real (offscreen) QgsApplication -- same
-pattern as ``headless_first_run.py`` -- connects to the LIVE local agent on
-``ws://127.0.0.1:8765``, opens an EXISTING case that already has layers +
-chat history + a persisted bbox, then opens a DIFFERENT existing case with
-NO persisted bbox and NO vector layers, and asserts:
-
-  ITEM A  exactly ONE "TRID3NT "-prefixed layer-tree group remains (the
-          newly-opened case's), the first case's group + its layers are
-          gone from the project, and the OpenStreetMap basemap survives
-          untouched (it lives directly at layerTreeRoot, never in a group).
-  ITEM B  the dock's message list is cleared and repopulated: its child
-          count does NOT just keep growing across the switch, and the
-          replayed bubble count matches the newly-opened case's own
-          persisted chat_history (capped at 50), not the previous case's.
-  ITEM C  the first case's "Flood depth step 1..7" frame sequence lands
-          grouped into ONE collapsed "flood depth (animation, 7 frames)"
-          subgroup, not 7 flat sibling layers (proves the case-open REPLAY
-          path -- not just a fresh live stream -- also groups).
-  ITEM D  case A (has a persisted bbox) auto-focuses the canvas (extent
-          changes -- the zoom is silent since the "Zoomed to case area" note
-          was removed); case B (no bbox, no vector layers -- a raster-only
-          case) leaves the canvas exactly where it was and says so honestly
-          ("Case has no stored map area - keeping current view") instead of
-          silently doing nothing.
-
-Uses two cases already sitting in the local dev persistence store (see
-``data/persistence/trid3nt_dev/projects.json``) that belong to the same
-local anonymous user this proof authenticates as -- no LLM turn needed, so
-the proof is fast and does not queue behind other live work.
-
-Run:  QT_QPA_PLATFORM=offscreen python3 tests/headless_case_switch_proof.py
-
-Set TRID3NT_AGENT_URL / TRID3NT_ANON_USER_ID to point at a different stack
-or user (defaults match the box this proof was authored against). Set
-TRID3NT_CASE_A / TRID3NT_CASE_B to point at different case ids (A must have
-layers + a "step N" frame sequence + chat history + a persisted bbox for
-the strongest proof; B must be a DIFFERENT case the same user owns, ideally
-with no persisted bbox and no vector layers to exercise the item D honest
-fallback note).
-"""
+The REAL plugin runs in an offscreen QgsApplication against the live local
+agent, opening two existing cases in turn. Asserted: exactly ONE case group
+survives with the basemap untouched, the message list is repopulated rather than
+grown, a frame sequence groups on REPLAY, and a bbox-less case says so honestly."""
 
 from __future__ import annotations
 

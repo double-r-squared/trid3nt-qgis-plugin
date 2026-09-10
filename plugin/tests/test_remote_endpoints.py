@@ -1,18 +1,9 @@
-"""Remote-daemon (tailnet) endpoint derivation -- LANE P (plugin lane).
+"""Remote-daemon endpoint derivation, in two offline layers.
 
-Two layers of offline coverage:
-
-  * TestClientAdvertisedEndpoints (test_client.py already covers the pure
-    ``AgentClient``/``StubAgentServer`` handshake parsing -- see
-    ``TestHandshake`` there for the flat/nested/absent/malformed shapes).
-  * TestRemoteEndpointsDock: the Qt DOCK wiring (``_on_connected`` ->
-    ``_effective_http_base`` / ``_effective_data_base`` /
-    the store's GDAL configuration, REMOTE-mode isolation, and the
-    settings-layer token passthrough) runs ``qt_remote_endpoints_harness.py``
-    in a SUBPROCESS under the system interpreter that has ``qgis.PyQt``,
-    skipping honestly when absent -- the same convention as ``test_dock_ui``
-    / ``test_case_bbox`` / ``test_provider_config``.
-"""
+The pure handshake parsing lives with the client tests. The Qt DOCK wiring - the
+effective bases, the store's GDAL configuration, remote-mode isolation and the
+settings token passthrough - runs its harness in a SUBPROCESS under the
+interpreter that has ``qgis.PyQt``, skipping honestly when absent."""
 
 from __future__ import annotations
 

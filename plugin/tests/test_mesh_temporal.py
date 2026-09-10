@@ -1,18 +1,9 @@
 """The layer clocks and the declared style, against REAL QGIS.
 
-The collapse this covers only pays off if the platform really does the work:
-MDAL owns a mesh's time axis, QGIS owns the render, and this side only states
-facts. So the proof runs in a subprocess on the system interpreter (the one
-with ``qgis.core``) over real SELAFINs, and skips honestly when no such
-interpreter exists -- the same tier as ``TestQtBridgeStart``.
-
-The mesh binding is proven on the group names MDAL reports for a real solved
-result, because those names (fixed-width, ``dye             mgl``) are the whole
-reason the declared quantity is resolved on this side.
-
-The harness itself carries what is asserted; this module owns finding an
-interpreter and reading its verdict.
-"""
+MDAL owns a mesh's time axis and QGIS owns the render, so the proof runs in a
+subprocess on the interpreter with ``qgis.core`` over real SELAFINs and skips
+honestly when none exists. The binding is proven on the group names MDAL reports
+for a real solved result, since those fixed-width names are why it is resolved."""
 
 from __future__ import annotations
 

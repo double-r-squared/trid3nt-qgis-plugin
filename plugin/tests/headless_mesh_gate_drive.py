@@ -1,27 +1,9 @@
-"""Live E2E: a natural spill prompt -> the mesh gate -> a solve on the accepted mesh.
+"""Live E2E: a natural spill prompt, the mesh gate, a solve on the accepted mesh.
 
-Asserts, in order:
-  1. a tool-payload-warning arrives carrying a PARAM SHEET - the mesh gate's edit
-     surface. Its rows are the open mesher's numeric edit knobs, named
-     ``<action>.<input>``, plus the ``restart`` truncation row; that sheet is what
-     makes the gate's revision channel reachable from the shipped card, so a gate
-     without one is proceed/cancel-only and FAILS here;
-  2. BEFORE that gate, a session-state carries the mesh display layer;
-  3. the sheet is submitted UNCHANGED, which is the approval, and the run solves on
-     the mesh that was presented;
-  4. a dye-peak layer lands carrying the JOURNAL's measured banks-coverage line -
-     the witness that the domain was cut from real mapped water and that the run
-     said how much of the reach that water covered; when E2E_EXPECT_SUBSTANCE is
-     set the layer NAME must contain it (the substance lever);
-  5. post-run: the newest rundir's telemac_metrics.json - CORRECT END plus the
-     node and element counts the SERVER measured and the worker echoed back,
-     which is what makes "it solved on the accepted mesh" checkable.
-
-Config via env (E2E_STUB=1 runs the SAME driver against tests/stub_server.py for a
-zero-token contract validation):
-  E2E_STUB E2E_URL E2E_PROMPT E2E_DEADLINE_S E2E_EXPECT_SUBSTANCE
-  E2E_RUNS_DIR E2E_REGION_HINT
-"""
+Asserted in order: the gate's warning carries a PARAM SHEET, so a
+proceed/cancel-only gate FAILS here; a session-state before it carries the mesh
+display layer; submitting the sheet unchanged is the approval; the dye layer
+carries the journal's measured banks coverage; the rundir's metrics agree."""
 import glob
 import json
 import re

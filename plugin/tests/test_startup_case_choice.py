@@ -84,10 +84,10 @@ class TestChooseStartupCase(unittest.TestCase):
 
 
 class TestStartupCaseReuse(unittest.TestCase):
-    """The client half of the connect-flow reuse: the handshake stashes the
-    case-list + adopts a server-rebound case, and the reuse ladder ends in a
-    full case-open rehydration (the worker's ``_bind_startup_case`` path,
-    minus Qt)."""
+    """The client half of the connect-flow reuse.
+
+    The handshake stashes the case list and adopts a server-rebound case, and the
+    reuse ladder ends in a full case-open rehydration."""
 
     def _client(self, server, **kwargs):
         client = tc.AgentClient(server.url, **kwargs)

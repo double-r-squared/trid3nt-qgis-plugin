@@ -1,32 +1,9 @@
-"""Offscreen harness for remote-daemon (tailnet) endpoint derivation
-(LANE P). Run as a SUBPROCESS by ``test_remote_endpoints.TestRemoteEndpointsDock``
--- it needs ``qgis.PyQt`` (a real ``Trid3ntDock``/``QDockWidget``), which the
-pure test venv lacks; the test probes the system interpreter and skips
-honestly when absent (same convention as ``test_dock_ui`` / ``test_case_bbox``).
+"""Offscreen harness for remote-daemon endpoint derivation.
 
-Offscreen, no agent, no network -- ``_on_connected`` is invoked directly
-(exactly how ``AgentBridge.connected`` delivers a real handshake result to the
-dock; see ``ws_bridge.AgentWorker.run``), so every check below exercises the
-REAL dock code path (``_effective_http_base`` / ``_effective_data_base`` /
-``_configure_store_access``), not a re-implementation of it.
-
-Checks:
-  1. stub-shaped advertised endpoints present -> both effective bases equal
-     the advertisement verbatim (trailing slash already stripped upstream),
-     and GDAL's ``/vsis3`` endpoint follows it. THIS is the one-scheme claim:
-     pointing at a remote store is an endpoint VALUE, not a second code path,
-     so the same ``s3://`` layer uri resolves against whichever host is set.
-  2. no advertised endpoints (old daemon) + a tailnet-shaped ``local_url`` ->
-     the http base is WS-host-DERIVED (:8766), never localhost; the data
-     base falls back to ``settings.minio_endpoint`` (current behavior).
-  3. no advertised endpoints + the DEFAULT ``local_url`` -> the derived http
-     base is byte-identical to the old hardcoded default
-     (``http://127.0.0.1:8766``) -- the "localhost default unchanged" bar.
-  4. token passthrough: ``settings.effective_token()`` rides the optional
-     shared tailnet token (empty/OFF by default).
-
-Exits 0 and prints REMOTE-ENDPOINTS-OK; raises (nonzero) on any failed check.
-"""
+Run as a SUBPROCESS by its wrapper, which needs a real dock widget and skips
+honestly when absent. ``_on_connected`` is invoked directly, exactly as the
+bridge delivers a handshake, so the real dock code runs. Pointing at a remote
+store is an endpoint VALUE: the same ``s3://`` uri resolves against any host."""
 
 from __future__ import annotations
 

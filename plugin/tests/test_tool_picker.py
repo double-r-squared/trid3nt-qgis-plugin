@@ -1,30 +1,9 @@
-"""Tool-selection picker tests (auto/ask modes -- Stage 3, 2026-07-22).
+"""The tool-selection picker, in auto and ask modes.
 
-The agent's ``tool-candidates`` envelope (contracts ws.ToolCandidatesPayload)
-surfaces the retrieval-ranked tool candidates for a step as an inline picker
-card; the reply is ONE ``tool-choice`` envelope (request_id echo + verbatim
-pick XOR free-text guidance, or both None = let the agent decide). Fail-open
-by contract: unanswered, the SERVER times out (``timeout_s``) and proceeds
-with its own top pick -- the picker can only ever ADD a one-click error-kill,
-never block a turn. The Auto/Ask mode itself rides every user-message as
-``tool_choice_mode`` (the show_thinking settings-carrier pattern).
-
-Coverage here (offline -- pure parse logic + stub_server round trips; the Qt
-card itself is covered at the qt harness level, ``qt_tool_picker_harness.py``,
-run as a subprocess by ``TestToolPickerQt`` below):
-
-* ``gate.parse_tool_candidates`` field mapping + malformed-envelope honesty
-  (no request_id -> None; junk candidate rows skipped, never a crash) and
-  the ``gate.resolve_tool_choice`` three-shape normalization.
-* the wire round trips against the stub's paused "which-tool" turn: pick a
-  tool -> the EXACT ToolChoicePayload shape; the free-text path; the
-  let-agent-decide path; and the unanswered fail-open twin ("which-tool-
-  timeout": the turn proceeds with NO tool-choice ever sent).
-* the mode toggle on the wire: ``tool_choice_mode="ask"`` rides the
-  user-message payload; the default send OMITS the key (byte-identical to
-  the pre-field payload) -- and neither trips the stub's extra=forbid
-  contract gate.
-"""
+The reply is ONE ``tool-choice``: a verbatim pick XOR free-text guidance, or both
+None to let the agent decide. Fail-open by contract - unanswered, the SERVER
+times out and proceeds with its own top pick, so the picker can only add a
+one-click correction, never block a turn. The mode rides every user-message."""
 
 from __future__ import annotations
 
@@ -239,10 +218,9 @@ class TestToolChoiceRoundTrip(unittest.TestCase):
         )
 
     def test_unanswered_fail_open(self):
-        """The fail-open twin: the server emits the picker and the turn moves
-        on with NO tool-choice ever sent -- the client just watches the turn
-        proceed (the dock folds the card to 'agent proceeded'; Qt-level
-        coverage in the harness)."""
+        """The fail-open twin: the server emits the picker and the turn moves on.
+
+        No tool-choice is ever sent; the client just watches the turn proceed."""
         self.client.send_chat("which-tool-timeout please")
         self._await_kind("tool-candidates")
         chunk = self._await_kind("chunk")
@@ -295,10 +273,10 @@ def _qt_python() -> "str | None":
 
 @pytest.mark.qt_harness_shim
 class TestToolPickerQt(unittest.TestCase):
-    """One harness subprocess run covering the Qt card behavior: render,
-    single-answer lock + chip folds, free-text radio selection, empty-Confirm
-    honesty, the unanswered 'agent proceeded' fold, the malformed-envelope
-    note, and the Settings Auto/Ask toggle -> send-path stamping."""
+    """One harness subprocess run covering the Qt card behaviour.
+
+    Render, the single-answer lock and chip folds, free-text selection,
+    empty-Confirm honesty, the unanswered fold, a malformed envelope, the toggle."""
 
     _proc: "subprocess.CompletedProcess | None" = None
 

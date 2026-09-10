@@ -1,28 +1,9 @@
-"""Static Qt5/Qt6 dual-compatibility conformance guard.
+"""Static Qt5 / Qt6 dual-compatibility conformance guard.
 
-Keeps the shipped ``trid3nt`` package portable across QGIS 3.x (PyQt5/Qt5)
-and QGIS 4.x (PyQt6/Qt6). It FAILS if either of two regressions reappears
-anywhere in the product source tree:
-
-  1. A direct ``PyQt5`` / ``PyQt6`` import (Qt must always route through the
-     ``qgis.PyQt`` binding shim, which resolves to whichever Qt the host
-     QGIS ships).
-  2. A known UNSCOPED enum access (e.g. ``Qt.UserRole``, ``QMessageBox.Ok``,
-     ``QFrame.StyledPanel``). Qt6 removed unscoped enum shortcuts; only the
-     fully-scoped form (``Qt.ItemDataRole.UserRole`` ...) resolves under
-     BOTH bindings. The ``qgis.PyQt`` shim under Qt5 accepts the scoped
-     form too, so scoped is the single portable spelling.
-
-The scan is tokenize-aware: STRING and COMMENT spans are blanked before the
-regexes run, so a prose mention of ``Qt.PlainText`` in a docstring or an
-example in a ``#`` comment never trips the guard -- only executable code
-does. Pure-python: no PyQt / QGIS import needed, so it runs in the offline
-test venv alongside the rest of the suite.
-
-Scope: the shipped ``trid3nt/`` package only (that is what loads inside
-QGIS). The ``tests/`` harnesses are dev-only, run under the Qt5 test
-interpreter, and are intentionally out of scope.
-"""
+The shipped package FAILS this on a direct ``PyQt5`` or ``PyQt6`` import - Qt
+must route through the ``qgis.PyQt`` shim - or on a known UNSCOPED enum access,
+since only the fully scoped spelling resolves under both bindings. The scan is
+tokenize-aware, so a mention in a string or a comment never trips it."""
 from __future__ import annotations
 
 import io

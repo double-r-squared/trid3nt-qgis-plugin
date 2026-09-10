@@ -1,23 +1,9 @@
-"""The FORM and DRAW cards' pure logic (declarative campaign, wave 2).
+"""The FORM and DRAW cards' pure logic, offline and with no Qt.
 
-Offline, no Qt: the parse/resolve helpers in ``ui/gate.py`` are where the wire
-meets the card, and they are what a headless test can hold to the contract. The
-widgets themselves are covered at the qt harness level.
-
-Coverage:
-
-* ``parse_param_sheet``: field mapping, the advanced fold, and honest degrade -
-  an absent or malformed sheet is None, so the gate card falls back to its
-  provenance text instead of rendering a broken grid.
-* ``resolve_param_sheet_edits``: only rows that actually MOVED become
-  ``revised_args`` (re-sending an untouched value would re-stamp it as
-  user-supplied), numbers parse back to numbers, and an unparseable numeric edit
-  is dropped rather than sent as a string the server would refuse.
-* ``SpatialInputRequest.draw_kind``: the polygon and polyline purposes each map
-  to the capture tool that draws them.
-* ``resolve_spatial_input_features``: the drawn shape's wire reply, including the
-  closed polygon ring the contract validator and the server parser read.
-"""
+``parse_param_sheet`` degrades honestly - an absent or malformed sheet is None,
+so the card falls back to its provenance text. ``resolve_param_sheet_edits``
+sends only rows that MOVED, since re-sending an untouched value re-stamps it as
+user-supplied, and drops an unparseable numeric edit rather than send a string."""
 
 from __future__ import annotations
 

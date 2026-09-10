@@ -1,13 +1,7 @@
-"""Connection-layer tests for the TRID3NT QGIS plugin (no QGIS required).
+"""Connection-layer tests for the TRID3NT QGIS plugin, no QGIS required.
 
-Run with the trid3nt-local agent venv python (needs ``websockets`` for the
-stub server only -- the client under test is pure stdlib):
-
-    cd plugin
-    ../venvs/agent/bin/python -m unittest discover -s tests -v
-
-or simply ``make test`` from plugin/.
-"""
+The client under test is pure stdlib; the stub server needs ``websockets``, so
+the suite runs on the agent venv's python."""
 
 from __future__ import annotations
 
@@ -517,11 +511,10 @@ class TestCaseAndChat(StubServerTestCase):
     # mechanism 2 (structured AOI, 2026-07-22).
 
     def test_send_chat_carries_structured_aoi_bbox_and_clean_text(self):
-        """send_chat(aoi_bbox=...) rides the STRUCTURED ``aoi_bbox`` payload
-        field ([min_lon, min_lat, max_lon, max_lat], EPSG:4326) and the text
-        goes out CLEAN -- no legacy "[QGIS map canvas AOI ...]" prose line.
-        The stub validates the payload the way the live extra=forbid server
-        would; a normal turn-complete proves the field was ACCEPTED."""
+        """An AOI rides the STRUCTURED ``aoi_bbox`` field and the text goes out CLEAN.
+
+        The stub validates the payload the way a live ``extra=forbid`` server would, so a
+        normal turn-complete proves the field was ACCEPTED rather than tolerated."""
         client = self._connect()
         client.connect()
         client.create_case("structured aoi test")
@@ -542,10 +535,10 @@ class TestCaseAndChat(StubServerTestCase):
         self.assertEqual(self.server.user_message_aoi_bboxes, [bbox])
 
     def test_send_chat_without_aoi_omits_key(self):
-        """No AOI -> the ``aoi_bbox`` key is OMITTED entirely (mirrors the
-        show_thinking / model_id convention): a plain message stays
-        byte-identical to the pre-field payload, so it keeps working against
-        a one-deploy-behind extra=forbid server."""
+        """No AOI means the ``aoi_bbox`` key is OMITTED entirely.
+
+        A plain message stays byte-identical to the pre-field payload, so it keeps
+        working against a server one deploy behind."""
         client = self._connect()
         client.connect()
         client.create_case("no aoi test")

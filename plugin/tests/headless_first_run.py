@@ -1,23 +1,9 @@
-"""Headless first-run proof: load the plugin inside a real QgsApplication
-(offscreen), connect to the LIVE local agent, request a DEM, wait for the
-layer to land in QgsProject, and grab screenshots.
+"""Headless first-run proof: the plugin in a real QgsApplication, offscreen.
 
-This is a MANUAL live-proof driver, not part of ``make test`` (it needs the
-local TRID3NT stack up on ws://127.0.0.1:8765 and drives a real LLM turn,
-which may queue behind other work). It exists because only a real Qt object
-tree catches Qt-wiring crashes -- the QObject.event() signal-shadowing abort
-that shipped in milestone 2 reproduced on the FIRST connect here.
-
-Run:  QT_QPA_PLATFORM=offscreen python3 tests/headless_first_run.py
-
-By default the CURRENT repo tree is loaded (what you are editing). Set
-TRID3NT_PLUGIN_PATH to a directory containing a ``trid3nt`` package (e.g.
-the installed profile plugins dir) to drive that copy instead.
-
-Set TRID3NT_AGENT_URL to point the dock at a different agent (e.g. the test
-stub server) -- the QSettings ``trid3nt/local_url`` key is stamped for the
-run and RESTORED afterwards, so your real QGIS profile setting survives.
-"""
+A MANUAL live-proof driver, not part of the suite: it needs the local stack up
+and drives a real model turn. It exists because only a real Qt object tree
+catches Qt-wiring crashes. The dock's URL setting is stamped for the run and
+RESTORED afterwards, so a real profile survives."""
 
 from __future__ import annotations
 

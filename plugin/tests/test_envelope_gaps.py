@@ -1,35 +1,9 @@
-"""LANE A envelope-gap coverage (2026-07-23).
+"""Envelope kinds that used to fall through the client's classifier and be dropped.
 
-Eight server-emitted envelope kinds previously fell through the plugin
-client's classifier as kind="raw" and were dropped by the dock. Two of them
-are GATE-WAITS -- the server PAUSES the turn awaiting a reply, so an unhandled
-envelope hung the turn forever (the exact bug class the code-exec gate was):
-
-  * region-choice-request  (state-bbox-fallback narrowing; reply
-    region-choice-provided) -- CRITICAL gate-WAIT.
-  * spatial-input-request  (the agent needs a picked geometry; reply
-    spatial-input-response) -- CRITICAL gate-WAIT.
-
-The lighter five are fire-and-forget side effects the dock now renders:
-
-  * code-exec-result  (the run outcome after an approved code-exec-request).
-  * secrets-list      (the per-user/per-Case secret roster).
-  * (chart-emission + solve-progress were already classified/rendered by a
-    prior lane -- covered in test_charts / the SimCard harness -- so this file
-    does not re-cover them.)
-
-Coverage here (offline -- pure parse/resolve logic + stub_server round trips;
-the Qt cards themselves are exercised at the qt harness level):
-
-* ``gate.parse_*`` field mapping + malformed-envelope honesty (a missing
-  correlation id -> None, never a crash -- a hung turn is the failure this
-  guards against).
-* ``gate.resolve_*`` decision -> wire mapping (the exact reply the server
-  consumes).
-* the wire round trip against the stub: the gate-WAITs pause the turn and
-  resume ONLY on the matching reply; the side effects surface as their own
-  kind, never the dropped-on-the-floor "raw" fallthrough.
-"""
+Two are gate-WAITS, where the server pauses the turn awaiting a reply, so an
+unhandled envelope hung the turn forever; the rest are fire-and-forget side
+effects the dock now renders. Offline: a missing correlation id parses to None,
+a decision maps to the exact reply, and a gate resumes only on its own reply."""
 
 from __future__ import annotations
 

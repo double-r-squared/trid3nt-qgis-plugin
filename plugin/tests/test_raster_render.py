@@ -1,20 +1,9 @@
-"""QGIS-native raster rendering tests.
+"""QGIS-native raster rendering, against an in-memory stubbed ``qgis`` package.
 
-Covers, with an in-memory stubbed ``qgis`` package (the established
-``test_milestone2`` pattern -- no QGIS install required):
-
-* uri resolution in ``LayerMaterializer._add_raster``: an ``s3://...tif`` COG
-  uri becomes ``QgsRasterLayer("/vsis3/<bucket>/<key>", name, "gdal")``, and
-  anything that is not a store uri is an honest skip;
-* the styling seam: the ``.qml`` the legend carries reaches
-  ``loadNamedStyle``, and a layer whose file already carries its colours (no
-  ``.qml`` on the legend) keeps QGIS's own renderer untouched;
-* the temporal seam: a row's DECLARED ``valid_from``/``valid_to`` window
-  becomes the layer's fixed temporal range, and a row that declares none is
-  left alone.
-
-Run via ``make test`` from plugin/.
-"""
+Covered: uri resolution, where an ``s3://`` COG becomes a ``/vsis3`` raster layer
+and a non-store uri is an honest skip; the styling seam, where the legend's
+``.qml`` reaches ``loadNamedStyle`` and a layer carrying its own colours keeps
+QGIS's renderer; and the temporal seam over a row's DECLARED window."""
 
 from __future__ import annotations
 
@@ -467,10 +456,8 @@ class TestTheUnEmitReachesTheLayerTree(unittest.TestCase):
     def test_a_visibility_flip_on_a_row_already_seen_reaches_the_layer_tree(self):
         """Taking a layer off the canvas is a row that arrives again, flipped.
 
-        Session state is replayed whole on every emit, so a layer this side has
-        already added arrives many times; the row's ``visible`` is the un-emit,
-        and it has to be applied to a layer the materializer will not add twice.
-        """
+        Session state is replayed whole on every emit, so the row's ``visible`` has to
+        reach a layer the materializer will not add twice."""
         layers, fakes = _import_layers()
         m = layers.LayerMaterializer(settings=_Settings())
         m.materialize([_event(layers, RASTER_LAYER_ROW)])
@@ -559,10 +546,8 @@ class TestDeclaredTemporalWindow(unittest.TestCase):
     def test_a_frames_declared_window_becomes_its_fixed_temporal_range(self):
         """The producer held the instant; this side stamps it.
 
-        Nothing here reads a time out of the layer NAME, so a frame named in any
-        language still plays, and a name that merely LOOKS like a step number
-        cannot manufacture a clock.
-        """
+        Nothing reads a time out of the layer NAME, so a frame named in any language
+        plays and a name that merely looks like a step number manufactures no clock."""
         layers, fakes = _import_layers()
         m = layers.LayerMaterializer(settings=_Settings())
         row = dict(RASTER_LAYER_ROW)
@@ -683,12 +668,10 @@ class _FakeMeshLayer:
 
 
 class TestMeshScalarClassificationClamp(unittest.TestCase):
-    """The mesh analogue of the raster ``sane_range`` guard -- a degenerate
-    MDAL scalar group range (all-nodata / all-dry / an empty scrubber
-    timestep) is pinned to a finite classification BEFORE the native mesh
-    renderer builds its colour-ramp legend (the arm64 SIGBUS the 0.3.8 raster
-    fix never covered). ALL groups are clamped, so switching the active scalar
-    group mid-session cannot hand a degenerate range to the native renderer."""
+    """The mesh analogue of the raster range guard.
+
+    A degenerate MDAL scalar range is pinned finite BEFORE the native renderer builds
+    its ramp, and ALL groups are clamped, so switching the active group is safe too."""
 
     def _clamp(self, ranges):
         layers, _ = _import_layers()
@@ -814,10 +797,10 @@ class TestZoomToExtentFiniteGuard(unittest.TestCase):
 
 
 class TestMeshStagingExtension(unittest.TestCase):
-    """ADR 0283: a native mesh stages under its SOURCE extension, not a hardcoded
-    ``.nc`` -- MDAL's driver selection is extension-sensitive, so a SELAFIN staged
-    as ``.nc`` could be rejected. The staged filename derives its extension from
-    the uri; ``.nc`` is only the default when the uri carries none."""
+    """A native mesh stages under its SOURCE extension, not a hardcoded ``.nc``.
+
+    MDAL's driver selection is extension-sensitive; the staged filename derives its
+    extension from the uri, and ``.nc`` is the default only when the uri has none."""
 
     def _capture_staged_fname(self, uri):
         layers, _ = _import_layers()
@@ -863,10 +846,8 @@ class TestThePresetAppliesAtBirthOnly(unittest.TestCase):
     def test_a_case_reopen_adopts_its_own_layers_and_loads_no_style_over_them(self):
         """Reopening a case must not repaint what the user has since restyled.
 
-        The project keeps the layer AND the styling it now carries, so the
-        replayed row resolves to a layer already on the canvas: it is adopted,
-        not rebuilt, and no style document is loaded over it.
-        """
+        The replayed row resolves to a layer already on the canvas: it is adopted, not
+        rebuilt, and no style document is loaded over it."""
         layers, fakes = _import_layers()
         m = layers.LayerMaterializer(settings=_Settings())
         row = dict(RASTER_LAYER_ROW)
@@ -902,11 +883,10 @@ class TestThePresetAppliesAtBirthOnly(unittest.TestCase):
 
 class TestTheReadBackSeesWhatChanged(unittest.TestCase):
     def test_a_vectors_declared_symbol_is_what_the_read_back_reports(self):
-        """A vector's renderer TYPE is the same before and after: QGIS's own
-        default for one is already a single-symbol renderer. The SYMBOL is what
-        the document changed, so it is what the assertion has to read - or a
-        style that loaded and a style that did nothing report identically.
-        """
+        """A vector's renderer TYPE is unchanged either way, so the SYMBOL is the assertion.
+
+        QGIS's own default is already a single-symbol renderer, so reading the type would
+        report identically for a style that loaded and one that did nothing."""
         layers, fakes = _import_layers()
         m = layers.LayerMaterializer(settings=_Settings())
         row = {

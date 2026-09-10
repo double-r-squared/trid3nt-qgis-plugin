@@ -1,22 +1,9 @@
-"""Persistent per-case bbox (per-case-bbox 2026-07-19) -- cloud parity.
+"""The persistent per-case bbox, in two offline layers.
 
-Two layers of offline coverage:
-
-  * TransportArgs: the ``case_command`` args-threading is PURE (no Qt) -- the
-    dock persists a user-edited AOI via ``case_command("set-bbox", case_id,
-    {"bbox": [...]})``, and the new ``args`` slot must ride the wire while
-    every existing caller (create with no args, delete) stays byte-identical.
-    Checked against the StubAgentServer's recorded frames.
-
-  * TestCaseBboxDock: the Qt dock behavior (overlay build, 4326<->canvas
-    conversion, bbox-less-on-create, state clear on switch/disconnect) runs in a
-    SUBPROCESS under the system interpreter that has ``qgis`` (a real
-    QgsMapCanvas + QgsRubberBand), skipping honestly when absent -- the same
-    convention as ``test_dock_ui``. The live QgsMapToolExtent DRAG itself is
-    NOT unit-tested (it needs real mouse events on a shown canvas -- NATE
-    live-verifies it on plugin reload); the harness invokes the tool's
-    ``extentChanged`` handler directly, covering everything downstream.
-"""
+The args-threading is PURE: a user-edited AOI persists through
+``case_command("set-bbox", ...)`` and the ``args`` slot rides the wire while
+every existing caller stays byte-identical. The dock behaviour runs in a
+SUBPROCESS under the interpreter that has ``qgis``, skipping when it is absent."""
 
 from __future__ import annotations
 

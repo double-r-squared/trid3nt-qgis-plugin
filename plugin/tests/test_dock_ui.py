@@ -1,28 +1,9 @@
-"""Dock UI regression batch (live-feedback 2026-07-12).
+"""Dock UI regression batch: Qt layout and visibility behaviour.
 
-Four live-reported dock bugs, all Qt-layout/visibility behavior that the
-pure-python stub tests cannot see -- so, like ``TestQtBridgeStart``, the
-checks run in a SUBPROCESS under the system interpreter (the one with
-``qgis.PyQt``) and skip honestly when absent:
-
-  BUG 1  long user message clipped to one visual line (wrapped-QLabel
-         height-for-width never honored by the aligned HBox cell)
-  BUG 2  empty grey assistant bubble when qwen3 emits whitespace-only
-         text deltas after </think> on a thinking+tool-only turn
-  BUG 3a per-layer materialization notes (21 lines on a case open)
-         now fold into one default-collapsed "Layers (N)" toggle
-  BUG 3b probe output moved out of chat into the pinned panel
-  BUG 4  gate card must sit BETWEEN the pre-gate entry and the
-         post-decision response (was: response streamed above the card)
-
-Plus the 2026-07-13 markdown feature: assistant answers stream plain,
-convert to rendered markdown (header/bold/list/code-block/table) on
-turn-complete and on replay, and a tall markdown message must paint at
-its full wrapped height at 320px and 640px dock widths.
-
-The harness (``qt_dock_ui_harness.py``) prints the measured 1-line vs
-wrapped bubble heights so the fix is quantified, not vibes.
-"""
+The pure-python stub tests cannot see any of it, so the checks run in a
+SUBPROCESS under the interpreter with ``qgis.PyQt`` and skip honestly when
+absent. Covered: a wrapped bubble's full height, whitespace-only deltas leaving
+no bubble, the layer fold, the probe panel, gate-card ordering, and markdown."""
 
 from __future__ import annotations
 
@@ -107,12 +88,10 @@ class TestDockUiBatch(unittest.TestCase):
         )
 
     def test_persisted_thinking_replay_fold(self):
-        """LANE PLUGIN (2026-07-22): a case-reopen agent row carrying the
-        persisted "thinking" field replays as the SAME grey collapsible
-        thinking fold the live agent-thinking-chunk path shows -- collapsed
-        by default ("Thought process" toggle, body hidden, answer visible in
-        the same bubble, click expands) -- while a plain agent row (no
-        thinking) renders unchanged with no fold."""
+        """A replayed agent row's persisted thinking folds like the live one.
+
+        Collapsed by default with the answer visible in the same bubble; a row with no
+        thinking renders unchanged, with no fold."""
         self.assertIn(
             "[thinking-replay] persisted thinking -> collapsed grey fold in "
             "the answer bubble; plain row unchanged",
@@ -120,20 +99,17 @@ class TestDockUiBatch(unittest.TestCase):
         )
 
     def test_code_exec_approval_card(self):
-        """Live-feedback 2026-07-21: the code-exec-request confirm gate
-        renders an inline approval card (collapsed verbatim code preview,
-        Run=proceed / Deny=cancel over tool-payload-confirmation, lock +
-        one-line chip) instead of being silently dropped."""
+        """The code-exec-request gate renders an inline approval card.
+
+        A collapsed verbatim code preview, Run and Deny riding the confirm envelope, and
+        a lock with a one-line chip - never a silently dropped envelope."""
         self.assertIn("[code-exec] approval card", self._stdout())
 
     def test_credential_key_entry_card(self):
-        """LANE K (NATE 2026-07-22): the credential-request JIT key prompt
-        renders an inline key-entry card (masked password field,
-        Submit=secret-add+credential-provided through the bridge,
-        Skip=decline, field cleared, lock + provider-named chip) instead of
-        being silently dropped -- and the raw key literal never appears in
-        ANY output the harness subprocess produced (stdout or stderr; the
-        harness also asserts captured log records and rendered labels)."""
+        """The credential-request renders an inline key-entry card.
+
+        A masked field, Submit sending the two envelopes and Skip declining, the field
+        cleared and a provider-named chip; the raw key appears in NO harness output."""
         out = self._stdout()
         self.assertIn("[credential] key-entry card", out)
         # The harness's test key -- must never leak into any log output this
@@ -149,13 +125,10 @@ class TestDockUiBatch(unittest.TestCase):
         self.assertIn("[F3] no-tool turn minted zero tool cards", self._stdout())
 
     def test_error_notes_wrap_and_fold(self):
-        """F7 (live-feedback 2026-07-22): error/note lines wrap like every
-        other chat text (a long unbroken store URL never forces the dock
-        wider -- break-anywhere inside long tokens, sizeHint bounded by the
-        chat container) and CONSECUTIVE error notes fold into one collapsed
-        inline "ERRORS (N)" toggle row (charts-collapse affordance, red
-        accent), expanding in place; a single error (N==1) stays a plain
-        wrapped red line; persisted-history replay folds the same way."""
+        """Error notes wrap like every other chat text and consecutive ones fold.
+
+        A long unbroken URL breaks inside the token rather than widening the dock; a
+        single error stays a plain wrapped line; replay folds the same way."""
         self.assertIn("[F7] error notes", self._stdout())
 
     def test_tool_card_state_border(self):
