@@ -82,3 +82,22 @@ ADR 0321 (the globs must reach the shell).
 9924 passed, **0 failed**. ADR 0321's "exactly the two named failures" clause is
 superseded: the standing baseline is zero failures in every slice, and any
 failure anywhere is a regression.
+
+## Lifted here 2026-09-09, from the two records this one supersedes
+
+**The declarative library is live, at `workflows/runtime/`.** ADR 0303 built it
+under a different path and is gone; what it decided stands: a workflow is a
+VALUE - `PARAMS` + `DATA` + a pure plan - and ONE interpreter walks it. The
+library owns the param doors and their bounds-clamped provenance rows, the data
+declaration and its producers, the plan nodes and refs, the validator, the
+interpreter with its ledger replay and typed error envelopes, the domain
+environment, and the rendered tool docstring with its routing block
+front-loaded inside the 1000-char budget. Nothing re-implements any of those
+per template.
+
+**The plan is STATIC.** ADR 0314 is gone and this is the half that survives:
+`plan(ops)` takes no sheet. Reads are the module-level `P.` and `D.`
+namespaces, so a plan is built at import time, a `P.` typo is caught then
+rather than at invocation, and a construction-time branch on a revisable value
+is not expressible - which is why no read-recording apparatus exists to police
+one.

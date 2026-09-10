@@ -25,3 +25,17 @@ artifacts to the runs bucket.
 Consequence: local solves produce durable, re-emittable outputs with no
 container-side storage credentials, and the autoscaler does not under-coarsen off
 an optimistic synthetic anchor. Related: 0009 (simulations own their inputs).
+
+## Lifted here 2026-09-09, from the record that measured it
+
+ADR 0295's SWMM half is gone; its honesty half is this contract's and lives
+here: **the supervisor must not eat the metrics pointer.** A worker that does
+its own object I/O writes its own `completion.json`, carrying the manifest
+pointer, the output uris and its engine `extra`. The supervisor then wrote
+`completion.json` unconditionally on container exit and overwrote it, so the
+pointer died with the worker's copy - and the reader, which resolves
+`completion.json.publish_manifest_uri` and never globs by design, answered
+`None`. A consumer that then presented `.get("max_depth_m", 0.0)` narrated four
+defaults as answers over a peak COG holding 19.99 m of water. Two rules follow:
+a supervisor never overwrites a completion record it did not author, and a
+metrics carrier that reads absent is a refusal, never a zero.

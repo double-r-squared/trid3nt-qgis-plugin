@@ -139,3 +139,13 @@ flagged for a future decomposition wave.
 `protocol/loop`); its rehome into `protocol/` and the model-discovery route
 eviction into `adapters/` were not executed this pass. No import cycle blocks
 them -- they are additive relocations for a follow-up.
+
+## Lifted here 2026-09-09, from the wave record that produced them
+
+ADR 0263's wave-3 extraction is gone; two of its products are live members of
+this package and belong on the roster above: `server/interactions.py` (the
+pending-interaction gates - the credential, tool-choice and catalog-offer
+registries with their register/pop/resolve triples) and `server/spatial.py`
+(the bbox/AOI helpers plus the spatial pending-input registry, including the
+eager typed-error fail path). Both sit beside `errors.py` and `config.py` at
+the package root rather than inside one of the four subfolders.

@@ -103,3 +103,13 @@ object succeeds.
   so it never reached the XYZ branch) and skips it now with an honest note. The
   tool is broken at the canvas either way; naming its fix is a display decision,
   not a transport one.
+
+## Lifted here 2026-09-09, from the record it supersedes
+
+ADR 0005 said it first and this record is where it lives now: **QGIS and GDAL
+read a COG natively, so there is no tile server in this stack.** Publish emits
+the raw store uri and the plugin loads it through GDAL, applying its own
+renderer from the envelope legend - a colormap ramp table, or the file's own
+embedded color table for a categorical raster. TiTiler left with 0005 and does
+not come back; a tile-template mint anywhere in the publish path is the failure
+this clause names.

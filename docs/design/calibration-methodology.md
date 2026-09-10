@@ -753,7 +753,15 @@ likely to break by accident, so it is written as a gate in section 7.
   not a calibrated hindcast", and that sentence is only allowed to change
   for the specific calibrated configuration, not for the template.
 - **SFINCS remains screening-only.** The fidelity ladder is unaffected by
-  anything here.
+  anything here. The ladder itself, lifted 2026-09-09 out of the record that
+  set it (ADR 0022) so it does not die with that file: **fidelity is a
+  per-question choice with known limitations per rung**, and a reduced-physics
+  screening engine - one that buys speed by collapsing physics and geometry -
+  is the wrong instrument for a calibration-grade conclusion. Screening results
+  are screening-grade; a refinement or calibration conclusion is never drawn on
+  them. A calibration exercise runs on the question's own full-physics solver,
+  against a published case with observed data, and cites the published
+  calibration result it is measured against.
 
 ---
 

@@ -246,3 +246,65 @@ wall time per read when slots are scarce. The library's own JSON disk
 cache is DISABLED: the router owns the cache tier and the provenance
 that rides with it, and a second cache under it would age on its own
 rules.
+
+## 2026-09-09 - the registry shrink stays UNDECIDED, on a model artifact
+DECIDED: the ambient declarable pool keeps its per-source registrations.
+Three surfacing designs were built behind a reversible default-off flag
+and run model-in-the-loop at temperature 0: card-carried (Design 1),
+discovery-expands-declaration (Design 2) and the harness-side stratified
+data pool (Design 3). Selection: baseline 60.58%, D1 0.0%, D2 0.96%,
+D3 57.69%. NEITHER advanced, so nothing rolled out and no per-source
+registration was deleted. Evidence: the mechanisms are SOUND on their own
+axes - model-free reachability 0.9904 full-index and 1.0 on the sharpened
+source stratum, first-attempt param validity 80.95% -> 100.0% under D3,
+zero cross-arm leakage in the controls. The whole gap to baseline is one
+artifact of the weak default free model: 28 of 104 source asks returned an
+EMPTY completion, each graded a selection miss, and the model almost never
+INITIATES a discovery hop while semantically-adjacent ambient siblings are
+declared. D3 is the strongest candidate because it is the only arm that
+decouples selection from the model's willingness to initiate.
+REVISIT TRIGGER: re-run the signed experiment on a CAPABLE adapter, and/or
+with a system prompt that steers a data need to the discovery surface. If
+D3 selection clears 60.58 with the NO_CALL noise removed, roll out the
+stratified data pool and delete per-source registration. The verdict of
+that re-run supersedes this entry; nothing here is rewritten.
+
+## 2026-09-09 - a cross-dataset DEM swap refuses at runtime, not on a card
+DECIDED: `fetch_dem(source="auto")` tries 3DEP and, on a 3DEP SERVICE
+failure, RAISES rather than substituting Copernicus. The refusal is a typed
+retryable error carrying `.suggestions` (it states that 3DEP failed and
+why, names the explicit `source="copernicus"` retry, and states the
+tradeoff: 30 m global radar against 1-10 m lidar, a different measurement
+method), so the agent narrates the tradeoff and the USER approves the swap
+by retrying. A clearly non-US bbox is caught BEFORE the attempt by a
+deliberately generous US-coverage envelope and raises a distinct
+out-of-coverage error. Evidence for the MECHANISM choice: a pre-dispatch
+confirm card cannot express this, because 3DEP service health is not a
+pre-dispatch parameter - the substitution is only knowable after the
+attempt fails. The envelope is generous on purpose: a border-straddling
+bbox falls through to a real attempt, so a misclassification can only
+DOWNGRADE the distinct out-of-coverage message to the outage gate, never
+turn a foreign miss into a false success.
+REVISIT TRIGGER: (a) a declared fallback ladder gains a rung whose gate
+fires AFTER a rung fails at runtime - then the typed-error mechanism and
+the rung are two expressions of one rule and one of them goes; (b) a
+border-straddling bbox is ever measured producing a wrong ANSWER rather
+than a downgraded message, which is the only way the generosity costs
+anything.
+
+## 2026-09-09 - workers/ is walked by no suite slice
+DECIDED: the worker tree's own assertions stay outside the suite
+denominator. The six slice targets are `tests/` by directory plus
+`contracts/tests` and `plugin/tests`; nothing collects `workers/`, so
+`workers/telemac/test_entrypoint.py` passes only when pointed at directly
+(36 passed in 0.60s at the last measure) and the image's build-time smoke
+blocks - the unified import, the strict-gate negative, the four telapy
+classes and their per-step call, both builder config maps, the baked
+raindef3 fortran - are evidence the green does not carry. Evidence: the
+denominator has been re-measured four times across the purge, the second
+mesh front and the worker-unification close-out, and every one of those
+measurements states this same gap in its own closing paragraph.
+REVISIT TRIGGER: (a) a worker change lands that the image's smoke blocks
+do not catch, which is the first real cost of the gap; (b) a slice target
+gains `workers/`, at which point the entrypoint suite joins the standing
+line and this entry closes.

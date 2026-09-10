@@ -46,3 +46,21 @@ wire startup spec registration or dispatch-callable swap -- dispatch resolves th
 raw `TOOL_REGISTRY[name].fn` and the replication harness calls the router executor
 directly; those seams belong to the pilot / experiment lanes.
 Related: 0034 (tier-based pool exclusion this reuses), 0019, 0031 (LayerURI).
+
+## Lifted here 2026-09-09, from two wave records the fold retired
+
+Both clauses are live router mechanism whose own ADRs (0055, 0075) are gone.
+
+**The multi-URL VRT fan-out.** A single-URL opener reads a `.vrt` grid and
+returns all-NaN, because it re-serves the VRT bytes for every sub-tile open and
+never fans out to the members. `_router/transforms/fan_out.py` parses the VRT's
+`SimpleSource` entries - the member URL resolved through `relativeToVRT`, plus
+`SrcRect` and `DstRect` - and mosaics the members. An all-nodata mosaic is an
+honest EMPTY, never a silent zero field.
+
+**`payload_estimate.mb_per_sq_deg_by_param`.** A source whose payload scales
+with a declared param carries a per-param coefficient table rather than one
+scalar, and the estimator's bbox-area branch reads the RESOLVED param value to
+pick its coefficient. Without it a resolution-sensitive source estimates its
+payload off the wrong curve and the granularity gate offers a coarsening that
+does not fit.
