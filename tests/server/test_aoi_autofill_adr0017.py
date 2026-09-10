@@ -1,20 +1,9 @@
-"""ADR 0017 (structured-AOI slice, Lane S) — dispatch-time bbox auto-fill.
+"""Dispatch-time bbox auto-fill from the canvas AOI.
 
-The canvas AOI arrives as a structured ``aoi_bbox`` field on the user-message
-payload (interface contract with the client lane: ``[min_lon, min_lat,
-max_lon, max_lat]`` EPSG:4326, ``None`` when absent). The server stores it as
-the session's active AOI, and at dispatch a tool call whose signature
-REQUIRES a bbox-like param the model OMITTED gets it auto-filled with
-precedence: explicit arg > active AOI > case bbox. Explicit args are never
-overridden.
-
-Covers:
-1. the pure ``autofill_missing_bbox`` helper (precedence, no-override,
-   required-only, validation fallbacks);
-2. ``_set_active_aoi_from_payload`` (set / clear / malformed-ignore);
-3. the REAL dispatch seam (``_invoke_tool_via_emitter``) filling a dummy
-   tool's required bbox from the session's active AOI.
-"""
+The canvas AOI arrives as an ``aoi_bbox`` field on the user-message payload and
+becomes the session's active AOI. At dispatch a tool whose signature REQUIRES a
+bbox-like param the model OMITTED gets it filled with the precedence explicit
+arg > active AOI > case bbox; an explicit arg is never overridden."""
 
 from __future__ import annotations
 

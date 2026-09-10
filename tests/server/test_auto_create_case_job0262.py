@@ -1,40 +1,9 @@
-"""Unit + integration tests for AUTO-CREATE CASE FROM ROOT (job-0262).
+"""Auto-create a Case from the Cases root.
 
-Live-demo finding: a chat prompt sent from the Cases root (no active Case)
-ran stateless — no Case, no Case view / layer panel, orphaned results.
-The fix: ``_prepare_user_turn`` (the pre-dispatch sequence every
-``user-message`` runs BEFORE its turn task is created) now mints + activates
-a prompt-named Case when a non-directive message arrives with no active
-Case, persists the user turn into it, and emits ``case-open`` + ``case-list``
-so the web client flips from the Cases root into the Case view.
-
-Coverage:
-- ``test_root_prompt_creates_named_active_case_before_turn`` — Case exists,
-  is named from the prompt, and is ACTIVE when ``_prepare_user_turn``
-  returns (i.e. before the LLM turn task would start).
-- ``test_root_prompt_user_turn_persisted_into_new_case`` — the triggering
-  message is the new Case's first persisted chat turn.
-- ``test_root_prompt_emits_case_open_then_case_list`` — envelope order +
-  case-open rehydration carries the first message (Chat.tsx's
-  replace-not-reconcile flush must not blank the just-typed bubble).
-- ``test_root_prompt_layer_attribution_lands_in_new_case`` — per-turn layer
-  emissions recorded after the auto-create attribute into the new Case.
-- ``test_root_prompt_does_not_reset_llm_context_or_turn_count`` — the
-  message IS the first turn: no job-0245-style context clear.
-- ``test_degenerate_prompt_falls_back_to_untitled`` — title fallback.
-- ``test_autoname_probe_skipped_for_auto_created_case`` — job-0260 rename
-  probe is a no-op for the already-named auto-created Case.
-- ``test_existing_case_path_unchanged`` — an active Case means NO new Case
-  and NO case-open emission; the turn persists into the existing Case.
-- ``test_invoke_directive_stays_stateless`` — ``/invoke`` debug directives
-  do not mint a Case.
-- ``test_no_persistence_stays_stateless`` — Persistence unbound = M1
-  stateless path, no envelopes.
-- ``test_upsert_failure_falls_back_to_stateless`` — a failing upsert leaves
-  the session at root (no active Case, no envelopes).
-- ``test_integration_two_root_prompts_one_case`` — the live repro: two
-  consecutive root prompts produce exactly ONE Case holding both turns.
-"""
+``_prepare_user_turn`` mints and activates a prompt-named Case when a
+non-directive message arrives with no active Case, persists that message as its
+first turn, and emits ``case-open`` then ``case-list``. A directive, an unbound
+Persistence, a failed upsert or an existing active Case all leave it alone."""
 
 from __future__ import annotations
 
@@ -252,12 +221,10 @@ def test_autoname_probe_skipped_for_auto_created_case(
 def test_root_prompt_rehydration_failure_still_emits_nonnull_case_open(
     _persistence_bound: Persistence, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """NATE 2026-06-26: when get_session_state momentarily fails, the auto
-    case-open must STILL carry a non-null session_state.case (the just-created
-    Case). A null/absent case-open would leave the client's activeCaseId
-    unchanged so it never leaves the Cases root, and the turn would then
-    dispatch with the new case bound -> cards stamped with a case_id the
-    client never opened (nothing renders until reload)."""
+    """A momentary state-read failure must still emit a non-null ``case-open`` case.
+
+    A null one leaves the client's active id unchanged at the Cases root while the
+    turn dispatches bound to the new Case, so nothing renders until a reload."""
     ws = MockWebSocket()
     state = _fresh_state()
     state.authenticated_user_id = new_ulid()

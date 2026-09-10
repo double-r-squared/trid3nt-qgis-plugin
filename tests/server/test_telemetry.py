@@ -1,20 +1,9 @@
-"""Unit tests for ``trid3nt_server.telemetry`` (Wave 4.10 job B-tel).
+"""Unit tests for ``trid3nt_server.telemetry``.
 
-Coverage:
-    1. ``test_record_shape`` — ``emit_tool_call_event`` writes a JSONL line
-       with ALL required fields and correct types.
-    2. ``test_non_blocking_returns_before_write`` — the coroutine returns
-       quickly (schedules a task) rather than awaiting the file write.
-    3. ``test_error_path_does_not_raise`` — a forced write failure does not
-       propagate out of ``emit_tool_call_event``.
-    4. ``test_multiple_events_append`` — successive calls append separate lines
-       (not overwrite) so the log accumulates correctly.
-    5. ``test_compute_args_hash_stable`` — same args → same digest; different
-       args → different digest.
-    6. ``test_env_override_path`` — ``TRID3NT_TELEMETRY_PATH`` is respected.
-    7. ``test_none_args_hash`` — ``compute_args_hash(None)`` returns a stable
-       hex string rather than raising.
-"""
+``emit_tool_call_event`` writes a JSONL line with every required field and
+correct types, returns without awaiting the write, appends rather than
+overwrites, and does not propagate a write failure. ``compute_args_hash`` is
+stable and handles ``None``; ``TRID3NT_TELEMETRY_PATH`` is respected."""
 
 from __future__ import annotations
 
@@ -109,11 +98,8 @@ async def test_record_shape() -> None:
 async def test_non_blocking_returns_before_write() -> None:
     """``emit_tool_call_event`` returns without blocking on the file write.
 
-    We verify this by measuring that the coroutine itself is fast (< 50 ms)
-    even on a slow-to-write path.  The write is delegated to an
-    ``asyncio.ensure_future`` task; the test drains the loop afterwards to
-    confirm the file is eventually written.
-    """
+    The write is delegated to a task, so the coroutine is fast even on a
+    slow-to-write path, and the loop is drained afterwards to see the file."""
     with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as tf:
         path = tf.name
     try:

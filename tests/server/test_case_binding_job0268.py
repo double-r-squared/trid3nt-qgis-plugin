@@ -1,22 +1,9 @@
-"""job-0268: turn-start Case binding — cross-Case contamination regression tests.
+"""Turn-start Case binding: no cross-Case contamination.
 
-The job-0267 adversarial verifier proved (probes A+B in
-``reports/inflight/job-0267-agent-20260610/verify/test_adversarial_job0267.py``)
-that every persistence site read ``state.active_case_id`` at WRITE time, so a
-``case-command(select)`` arriving mid-stream re-aimed in-flight writes: Case
-A's narration and tool cards persisted into Case B permanently. The window is
-minutes-long for SFINCS-class tools.
-
-The fix pins the turn's Case once (``SessionState.current_turn_case_id``, set
-by ``_prepare_user_turn`` after the auto-create hand-off) and threads it
-through every turn-scoped write: chat rows, tool cards, layer attribution,
-per-Case .qgs routing, and chart persistence. The dispatch wrappers capture
-the binding at task entry so even a cancel-and-redispatch (new turn re-pins
-while the old turn's finally-persist is still pending) cannot cross-paint.
-
-These tests are the INVERSIONS of the job-0267 expected-bug probes — the
-contaminated behavior those probes demonstrated must never come back.
-"""
+Every persistence site used to read the active Case at WRITE time, so a
+``case-command(select)`` arriving mid-stream re-aimed in-flight writes. The turn
+pins its Case once in ``SessionState.current_turn_case_id`` and every turn-scoped
+write threads it, the dispatch wrappers capturing the binding at task entry."""
 
 from __future__ import annotations
 

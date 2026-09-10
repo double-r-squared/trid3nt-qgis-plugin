@@ -1,24 +1,9 @@
-"""Tests for the Persistence-singleton startup wiring.
+"""The Persistence-singleton startup wiring.
 
-Coverage:
-    1. ``test_prebound_file_persistence_is_preserved`` — ``init_persistence_from_env``
-       preserves a file-backed ``Persistence`` pre-bound by the startup path
-       (``main._maybe_bind_dev_persistence``) and returns it, not ``None``.
-       The agent must never crash on a fresh clone.
-
-    2. ``test_disabled_dev_persistence_returns_none`` — with
-       ``TRID3NT_DEV_PERSISTENCE=0`` (the no-persistence escape hatch) the
-       function returns ``None`` and the singleton stays unbound; callers
-       handle ``None`` gracefully.
-
-    3. ``test_mcp_client_protocol_compatibility`` — a minimal in-memory client
-       satisfies ``MCPClientProtocol`` structurally, confirming the protocol
-       definition is duck-typed correctly.
-
-    4. ``test_set_get_persistence_singleton`` — ``set_persistence`` /
-       ``get_persistence`` round-trips the module-level singleton; ``None``
-       clears it.
-"""
+``init_persistence_from_env`` preserves a file-backed ``Persistence`` the startup
+path pre-bound, so a fresh clone never crashes; ``TRID3NT_DEV_PERSISTENCE=0``
+returns None and leaves the singleton unbound; a minimal in-memory client
+satisfies ``MCPClientProtocol``; set / get round-trips and ``None`` clears it."""
 
 from __future__ import annotations
 
@@ -67,13 +52,9 @@ def _clean_persistence_singleton():
 
 @pytest.mark.asyncio
 async def test_prebound_file_persistence_is_preserved(tmp_path):
-    """init_persistence_from_env preserves the pre-bound file-backed singleton.
+    """``init_persistence_from_env`` preserves the pre-bound file-backed singleton.
 
-    When ``TRID3NT_DEV_PERSISTENCE=1`` (forced on) and
-    ``TRID3NT_DEV_PERSISTENCE_DIR`` points at a temp dir, the function returns
-    the file-backed ``Persistence`` the startup path bound.  The agent service
-    must survive a fresh clone with zero configuration.
-    """
+    The agent service has to survive a fresh clone with zero configuration."""
     set_persistence(None)
     try:
         env_overrides = {
@@ -100,12 +81,10 @@ async def test_prebound_file_persistence_is_preserved(tmp_path):
 
 @pytest.mark.asyncio
 async def test_disabled_dev_persistence_returns_none():
-    """With TRID3NT_DEV_PERSISTENCE=0, returns None.
+    """``TRID3NT_DEV_PERSISTENCE=0`` returns None.
 
-    This is the no-persistence escape hatch: the singleton stays unbound and
-    the agent service starts without any persistence.  Callers handle None
-    gracefully.
-    """
+    The no-persistence escape hatch: the singleton stays unbound and callers handle
+    the None."""
     set_persistence(None)
     try:
         with patch.dict(

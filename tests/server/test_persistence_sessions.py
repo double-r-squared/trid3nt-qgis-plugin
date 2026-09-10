@@ -1,15 +1,9 @@
-"""job-0203 (Wave 4.11 M4): D.6 session-record persistence + FileMCPClient operators.
+"""Session-record persistence and the file client's update operators.
 
-Covers the two Phase-1 acceptance surfaces:
-
-1. ``Persistence.touch_session`` / ``get_session_record`` /
-   ``upsert_session_record`` round-trips — on BOTH the mock MCP client
-   (protocol-shape assertions) and the live ``FileMCPClient`` substrate
-   (semantics assertions).
-2. ``FileMCPClient._apply_update`` Mongo-faithful operator semantics,
-   including the job-0230 chart-drop regression: a ``$push`` onto the
-   ``sessions`` collection must actually land on the dev substrate.
-"""
+``touch_session`` / ``get_session_record`` / ``upsert_session_record`` round-trip
+on both the mock client (protocol shape) and the live ``FileMCPClient``
+(semantics), and ``FileMCPClient._apply_update`` is Mongo-faithful - a ``$push``
+onto the ``sessions`` collection has to land on the dev substrate."""
 
 from __future__ import annotations
 

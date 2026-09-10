@@ -1,26 +1,9 @@
-"""File-backed Persistence tests.
+"""File-backed Persistence: the substrate under the unmodified wrapper.
 
-``FileMCPClient`` is the persistence substrate: it satisfies
-``MCPClientProtocol`` against per-collection JSON files. These tests exercise
-that substrate through the unmodified ``Persistence`` wrapper, proving the
-file-backed shim round-trips every typed contract the wrapper serializes.
-
-Coverage:
-- ``test_file_mcp_round_trip_case`` — Case upsert + get round-trips and
-  writes a JSON file in the expected location.
-- ``test_file_mcp_list_cases`` — list_cases_for_user returns inserted Cases.
-- ``test_file_mcp_archive_then_delete`` — soft-archive then soft-delete
-  flips ``status`` and persists across a fresh ``FileMCPClient`` instance.
-- ``test_file_mcp_chat_round_trip`` — append_chat_message + get_session_state
-  rehydrates with ordered chat history.
-- ``test_file_mcp_atomic_writes`` — interrupted write (a synthetic crash
-  between tmp-write and rename) does not corrupt the on-disk store.
-- ``test_is_dev_persistence_enabled_*`` — default-on semantics:
-  ``TRID3NT_DEV_PERSISTENCE`` unset → enabled; ``=0`` disables; ``=1`` enables.
-- ``test_init_persistence_from_env_engages_file_fallback`` — server-side
-  wiring: ``init_persistence_from_env`` with no MCP env vars + a tmpdir
-  override engages FilePersistence and binds the singleton.
-"""
+``FileMCPClient`` satisfies ``MCPClientProtocol`` against per-collection JSON
+files, so every typed contract the wrapper serializes round-trips through it -
+Case upsert, list, soft-archive and soft-delete across instances, chat append and
+rehydration, atomic writes, the default-on env semantics and the startup wiring."""
 
 from __future__ import annotations
 
@@ -202,12 +185,10 @@ def test_file_mcp_chat_round_trip(tmp_path: Path) -> None:
 
 
 def test_file_mcp_atomic_writes_survive_partial_tmp(tmp_path: Path) -> None:
-    """An orphaned .tmp file from a crashed write does NOT corrupt the store.
+    """An orphaned ``.tmp`` from a crashed write does NOT corrupt the store.
 
-    Simulates: a previous run crashed AFTER writing the tmp file but BEFORE
-    the os.replace landed. The next call must read the committed file, not
-    the partial tmp.
-    """
+    A crash after the tmp write and before the ``os.replace`` must leave the next
+    read on the committed file."""
     client = FileMCPClient(base_dir=tmp_path)
     p = Persistence(client)
     case_a = _fresh_case("committed")
@@ -302,12 +283,8 @@ def test_maybe_bind_dev_persistence_engages_file_fallback(
 ) -> None:
     """``main._maybe_bind_dev_persistence`` binds a FilePersistence singleton.
 
-    Mirrors the startup wiring in ``main.run``: with no MCP env vars set and
-    no prior binding, the helper engages the file-backed substrate so the
-    ``server.get_persistence()`` singleton is populated. The follow-on call
-    to ``server.init_persistence_from_env`` preserves it (we exercise the
-    preservation branch too).
-    """
+    With no MCP env vars and no prior binding it engages the file substrate, and the
+    follow-on ``init_persistence_from_env`` preserves it."""
     from trid3nt_server.main import _maybe_bind_dev_persistence
     from trid3nt_server.server import (
         get_persistence,

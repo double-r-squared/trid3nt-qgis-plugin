@@ -1,21 +1,9 @@
-"""Offline tests for the daemon-hosted QGIS plugin repository (plugin_repo.py)
-and its ``/plugin-repo/*`` HTTP routes on the tool-catalog listener:
+"""The daemon-hosted QGIS plugin repository and its ``/plugin-repo/*`` routes.
 
-  - ``GET /plugin-repo/plugins.xml``    -- the QGIS plugin-repository index XML,
-    with its download_url host filled from the request's own Host header.
-  - ``GET /plugin-repo/<zip>``          -- the packaged installable zip.
-  - ``GET /api/version``                -- daemon git sha + active model provider.
-
-Covers: the deploy-time package (versioned zip name, top-level ``trid3nt/``
-dir, LICENSE inside, caches/hidden/installed-marker excluded, metadata-driven
-version, manifest + plugins.xml written with the HOST_SENTINEL), the
-version-drift warning (tree changed but version not bumped), per-request host
-substitution, the zip-serve path-traversal guard, and the HTTP dispatcher's
-routing + error mapping (404/500/503).
-
-Everything runs against a throwaway plugin tree + served dir under ``tmp_path``
--- no network, no real daemon checkout touched.
-"""
+Offline against a throwaway plugin tree under ``tmp_path``: the deploy-time
+package (versioned zip name, top-level package dir, LICENSE in, caches and
+markers out), the version-drift warning, per-request host substitution of the
+index's sentinel, the zip-serve traversal guard, and the dispatcher's routing."""
 
 from __future__ import annotations
 
@@ -56,13 +44,10 @@ tracker=https://example.invalid/issues
 
 
 def _make_fake_repo(tmp_path: Path) -> Path:
-    """Build ``<tmp_path>/repo`` with a minimal flat ``plugin/`` tree: the
-    shipped package (metadata.txt, __init__.py, a nested module, LICENSE) at
-    the plugin ROOT, plus exclusion bait -- a __pycache__ dir, a .pyc, a
-    dotfile, the installed_version.txt marker, AND the co-located non-shipping
-    siblings ``tests/`` + ``Makefile`` that live beside the package in the real
-    checkout. No git needed -- the version is metadata-driven now.
-    """
+    """Build a minimal flat ``plugin/`` tree under ``<tmp_path>/repo``.
+
+    The shipped package at the plugin ROOT plus exclusion bait: a ``__pycache__``, a
+    ``.pyc``, a dotfile, the installed-version marker and the non-shipping siblings."""
     repo_root = tmp_path / "repo"
     plugin_dir = repo_root / "plugin"
     plugin_dir.mkdir(parents=True)

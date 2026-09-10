@@ -1,20 +1,9 @@
-"""job-0269: root-deselect + stream-scoped turn concurrency.
+"""Root deselect, and turn cancellation scoped to one stream.
 
-Live failures (2026-06-10 demo) this guards against:
-
-1. Navigating from a Case to the Cases root was CLIENT-ONLY — the server's
-   session-scoped active Case kept pointing at the last-opened Case, so a
-   prompt sent from the root view skipped auto-create and dispatched INTO
-   the stale Case (a terrain prompt landed in the flood Case), and
-   re-selecting that Case looked like a no-op. Fix: ``case-command(deselect)``.
-
-2. The M1 "cancel any in-flight turn on a new user-message" policy killed
-   cross-Case work: a root terrain prompt cancelled a running cloud SFINCS
-   solve (``workflows.executions.cancel`` was issued mid-execution). Fix:
-   cancellation is scoped to the stream the new turn targets; turns in other
-   Cases keep running, with per-turn captured history/narration lists so
-   concurrent turns cannot cross-contaminate LLM context or persisted rows.
-"""
+``case-command(deselect)`` clears the server's session-scoped active Case, so a
+prompt from the Cases root auto-creates instead of dispatching into the last
+Case. Cancellation is scoped to the stream the new turn targets, and each turn
+captures its own history and narration, so concurrent turns cannot cross."""
 
 from __future__ import annotations
 
@@ -216,13 +205,10 @@ async def test_same_case_reprompt_replaces_turn(file_persistence, monkeypatch) -
 async def test_concurrent_turns_keep_narration_isolated(
     file_persistence, monkeypatch
 ) -> None:
-    """Turn A's persisted narration must be A's own text even when turn B
-    runs concurrently and re-points ``state.current_turn_narration``.
+    """Turn A's persisted narration is A's own text while B runs concurrently.
 
-    Uses the REAL ``_stream_model_reply`` registration seam: the per-task
-    registry is what isolates the wrapper's finally-join. Here we simulate
-    it by having each fake register in the same way the real stream does.
-    """
+    The per-task registration seam is what isolates the wrapper's finally-join, and
+    each fake registers the way the real stream does."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
     case_a = await _create_case(ws, state, "Case A")

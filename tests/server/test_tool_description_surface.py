@@ -1,19 +1,9 @@
 """The MODEL-FACING description surface names only tools that exist.
 
-A tool docstring, a spec ``docstring``/``caveats`` line and a retrieval corpus
-query are all indexed as the model's routing signal. A dead engine name there
-does what a dead name in the system prompt does one layer up: it advertises a
-capability the product does not have, and it pulls a query toward a tool that
-cannot answer it. ``tests/adapters/test_system_prompt.py`` pins the prompt; this pins
-everything below it.
-
-The retired-family list is the ONE lock. The prompt test's prefix-sharing lock
-does not transfer here: a docstring is full of ordinary identifiers
-(``model_setup_uri``, ``run_id``, ``list_of``) that share a first segment with a
-registered tool without being one.
-
-ASCII only.
-"""
+A docstring, a spec ``docstring`` or ``caveats`` line and a corpus query are all
+indexed as routing signal, so a dead engine name advertises a capability the
+product does not have. The retired-family list is the ONE lock: a docstring is
+full of ordinary identifiers that share a first segment with a real tool name."""
 
 from __future__ import annotations
 

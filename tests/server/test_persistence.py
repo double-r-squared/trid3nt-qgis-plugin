@@ -1,20 +1,9 @@
-"""Unit + integration tests for ``trid3nt_server.persistence`` (job-0115).
+"""Unit and integration tests for ``trid3nt_server.persistence``.
 
-The ``Persistence`` wrapper translates between agent-side typed contracts
-(``CaseSummary`` / ``CaseChatMessage`` / ``User``) and a document-store client's
-CRUD surface (``insert-one`` / ``update-one`` / ``find-one`` / ``find``), driven
-here by an in-memory ``MockMCPClient``.
-
-Coverage:
-- ``test_get_case_returns_none_on_missing`` — find-one with no match.
-- ``test_upsert_case_then_get_round_trip`` — upsert -> get returns equal model.
-- ``test_list_cases_for_user`` — find with user filter returns list.
-- ``test_archive_case_sets_status`` — archive sets status="archived".
-- ``test_delete_case_sets_status`` — delete sets status="deleted".
-- ``test_append_chat_message_and_hydrate_session`` — chat append +
-  ``get_session_state`` re-hydrates.
-- ``test_user_round_trip`` — upsert + get_user_by_id.
-"""
+The ``Persistence`` wrapper translates between the typed agent-side contracts and
+a document store's ``insert-one`` / ``update-one`` / ``find-one`` / ``find``
+surface, driven here by an in-memory client: Case upsert and get round-trip, the
+owner-scoped list, the archive and delete statuses, chat append and rehydration."""
 
 from __future__ import annotations
 
@@ -102,11 +91,8 @@ def test_upsert_case_then_get_round_trip() -> None:
 def test_list_cases_for_user() -> None:
     """Two Cases owned by a user are listed; a third owned by someone else is not.
 
-    job-0252 (OQ-0115-CASE-USER-LINK): the ``$exists:false`` backward-compat
-    leak clause is GONE. Cases are now owner-scoped — a Case is visible only
-    to the user stamped as its owner at creation
-    (``upsert_case(owner_user_id=...)``).
-    """
+    Cases are owner-scoped - visible only to the user stamped as owner at creation -
+    with no backward-compat clause for an absent owner."""
     mock = MockMCPClient()
     p = Persistence(mock)
     owner = new_ulid()
@@ -223,10 +209,10 @@ def test_user_lookup_returns_none_when_missing() -> None:
 
 
 def test_get_user_by_id_tolerates_stale_firebase_uid_key() -> None:
-    """An OLD-SHAPE user row carrying the retired ``firebase_uid`` key loads
-    without crashing: ``get_user_by_id`` filters to the known User fields
-    before ``model_validate``, so the dropped IdP-sub carrier never reaches the
-    ``extra="forbid"`` contract."""
+    """An OLD-SHAPE user row carrying a retired key loads without crashing.
+
+    ``get_user_by_id`` filters to the known ``User`` fields before validating, so a
+    dropped carrier never reaches the ``extra="forbid"`` contract."""
     mock = MockMCPClient()
     uid = new_ulid()
     # Seed the store directly with a legacy document shape (pre-chop the field

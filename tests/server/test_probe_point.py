@@ -1,13 +1,9 @@
-"""Tests for ``probe_point.probe_point_at`` (deterministic map-click probe
-core behind ``POST /api/probe-point``).
+"""``probe_point.probe_point_at``, the deterministic map-click probe core.
 
-No network / no DynamoDB: persistence is a fake monkeypatched onto
-``trid3nt_server.telemetry.get_persistence`` (the SAME seam
-``test_query_point_hazard.py`` uses, since ``probe_point_at`` reuses
-``query_point_hazard.layers_from_case``). Layers are tiny local GeoTIFFs
-referenced from synthetic ``loaded_layer_summaries`` dicts -- real rasterio
-reads over throwaway files, no S3/rasterio mocking needed.
-"""
+No network and no store: persistence is a fake monkeypatched onto the telemetry
+seam the layer read goes through. Layers are tiny local GeoTIFFs referenced from
+synthetic loaded-layer summaries, so the rasterio reads are real over throwaway
+files rather than mocked."""
 
 from __future__ import annotations
 

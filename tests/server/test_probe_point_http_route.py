@@ -1,20 +1,8 @@
-"""HTTP-route wiring tests for /api/probe-point on the catalog listener
-(deterministic map-click probe -- the QGIS plugin dock's "Probe" tool).
+"""HTTP-route wiring for ``/api/probe-point`` on the catalog listener.
 
-Exercises ``tool_catalog_http._handle_http`` dispatch only -- the sampling
-LOGIC (rasterio reads, frame-sequence grouping, honesty-floor null/error
-entries, the layer cap) is covered by ``test_probe_point.py``. Mirrors
-``test_ingest_layer_http_route.py``:
-
-  - the route served UNCONDITIONALLY (the local build hardwires
-    ``solver_backend()`` to local-docker, so ``TRID3NT_SOLVER_BACKEND`` no
-    longer gates it);
-  - POST /api/probe-point happy path (monkeypatched core fn) -> 200;
-  - POST /api/probe-point missing/invalid fields -> typed 400 (core never
-    invoked);
-  - POST /api/probe-point typed core errors -> honest 404/400;
-  - the existing /api/tool-catalog path stays unaffected.
-"""
+Dispatch only - the sampling logic is covered where it lives. The route is served
+UNCONDITIONALLY; a missing or invalid field is a typed 400 with the core never
+invoked; a typed core error is an honest 404 or 400."""
 
 from __future__ import annotations
 
@@ -117,10 +105,8 @@ def _local_mode(monkeypatch):
 def test_probe_point_route_served_without_env_arming(monkeypatch):
     """Served with no env arming at all.
 
-    ``b"{}"`` reaching the handler's field validation (typed 400 naming
-    ``case_id``) proves dispatch serves the route -- an absent route would
-    have 404ed before any body parsing.
-    """
+    ``b"{}"`` reaching the handler's field validation proves dispatch serves the
+    route - an absent route would have 404ed before any body parsing."""
     monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
     out = _drive(_post("/api/probe-point", b"{}"))
     assert _status(out) == 400

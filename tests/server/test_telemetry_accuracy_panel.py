@@ -1,20 +1,9 @@
-"""Unit tests for the tool-accuracy panel + live big-sim telemetry
-(NATE 2026-06-17).
+"""The agent side of the tool-accuracy panel and the live solve telemetry.
 
-Covers the AGENT side of the shared wire contract:
-
-    1. ``result_usable`` classification at the dispatch chokepoint
-       (``adapter.classify_result_usable``) — incl. the headline
-       status=ok-but-no-layer case asserting ``result_usable=False``.
-    2. The new aggregation fields on ``_aggregate_records``: ``success_rate``,
-       ``result_usability_rate``, ``routing_accuracy_rate``, ``latency_p50_ms``,
-       ``latency_p95_ms`` (per_tool + top-level), and the all-zero empty shape.
-    3. The routing-accuracy heuristic (failed+superseded -> routed_ok=False).
-    4. ``solve_telemetry`` aggregation (recent[] + wall_clock p50/p95) folded
-       into the summary, and the zero-state when no solves are recorded.
-    5. The LIVE solve-progress envelope shape
-       (``telemetry.build_live_solve_progress`` + ``ws.SolveProgressPayload``).
-"""
+``result_usable`` classification at the dispatch chokepoint, including
+status=ok-with-no-layer reading False; the aggregation's success, usability and
+routing rates and its latency percentiles, per tool and overall, with an all-zero
+empty shape; the solve aggregation; and the live solve-progress envelope shape."""
 
 from __future__ import annotations
 

@@ -1,25 +1,9 @@
-"""HTTP-route wiring tests for /api/ingest-layer(-file) on the catalog
-listener (bidirectional layer push -- the reverse seam of layer materialization).
+"""HTTP-route wiring for ``/api/ingest-layer`` and ``/api/ingest-layer-file``.
 
-Exercises ``tool_catalog_http._handle_http`` dispatch only -- the ingestion
-LOGIC (geopandas/rasterio round trips, Persistence merge, AOI pin) is covered
-by ``test_register_case_layer.py``. Mirrors
-``test_case_list_http_route.py``:
-
-  - both routes served UNCONDITIONALLY (the local build hardwires
-    ``solver_backend()`` to local-docker, so ``TRID3NT_SOLVER_BACKEND`` no
-    longer gates them);
-  - POST /api/ingest-layer happy path (monkeypatched core fn) -> 200;
-  - POST /api/ingest-layer missing/invalid fields -> typed 400 (core never
-    invoked);
-  - POST /api/ingest-layer typed core errors -> honest 404/400;
-  - POST /api/ingest-layer-file happy path (monkeypatched upload fn) -> 200
-    {"s3_uri": ...};
-  - POST /api/ingest-layer-file missing filename -> 400;
-  - POST /api/ingest-layer-file oversized Content-Length -> 413 WITHOUT
-    reading the body;
-  - the existing /api/tool-catalog path stays unaffected.
-"""
+Dispatch only - the ingestion logic is covered where it lives. Both routes are
+served UNCONDITIONALLY; a missing or invalid field is a typed 400 with the core
+never invoked; a typed core error is an honest 404 or 400; an oversized
+``Content-Length`` is a 413 WITHOUT the body being read."""
 
 from __future__ import annotations
 
@@ -135,10 +119,8 @@ def _local_mode(monkeypatch):
 def test_ingest_layer_route_served_without_env_arming(monkeypatch):
     """Served with no env arming at all.
 
-    ``b"{}"`` reaching the handler's field validation (typed 400 naming
-    ``case_id``) proves dispatch serves the route -- an absent route would
-    have 404ed before any body parsing.
-    """
+    ``b"{}"`` reaching the handler's field validation proves dispatch serves the
+    route - an absent route would have 404ed before any body parsing."""
     monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
     out = _drive(_post("/api/ingest-layer", b"{}"))
     assert _status(out) == 400

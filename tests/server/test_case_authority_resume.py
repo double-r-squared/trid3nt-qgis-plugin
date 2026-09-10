@@ -1,23 +1,9 @@
-"""job-CASE-AUTHORITY: the CLIENT's current Case is the authority for
-turn-binding + reconnect replay (fixes THE SNAP).
+"""The CLIENT's current Case is the authority for turn-binding and replay.
 
-ROOT CAUSE (wf_baa3273e): two un-reconciled sources of truth for "which case."
-The client never told the server its Case, so a bare ``session-resume {}``
-replayed the server's STALE in-memory pointer, and a ``user-message`` bound the
-turn to whatever Case the server pointer had drifted to.
-
-FIX surface exercised here (all in server.py + persistence.py):
-- ``_handle_session_resume(client_case_id=...)`` re-binds the server's
-  active-Case pointer to the client's Case BEFORE the layer replay.
-- ``_prepare_user_turn(client_case_id=...)`` re-binds the turn to the
-  message's Case before the sync / auto-create / pin.
-- ``Persistence.set_session_active_case`` / ``get_session_active_case`` persist
-  the pointer so it survives an EC2 auto-stop/restart; the in-memory dict is a
-  cache. ``_reload_session_active_case`` warms a fresh SessionState from it.
-
-INVARIANT (job-0356): a genuine fresh reconnect STILL replays the active
-Case's rendered layers — we correct WHICH Case, never remove replay.
-"""
+``_handle_session_resume`` re-binds the server's active-Case pointer to the
+client's Case BEFORE the layer replay, and ``_prepare_user_turn`` re-binds the
+turn before the sync, auto-create and pin. The pointer is persisted so it
+survives a restart. A fresh reconnect STILL replays that Case's rendered layers."""
 
 from __future__ import annotations
 

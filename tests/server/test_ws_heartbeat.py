@@ -1,27 +1,9 @@
-"""WS-30s STORM FIX: the per-connection server DATA heartbeat.
+"""The per-connection server DATA heartbeat.
 
-ROOT CAUSE (live 2026-06-22): the browser ``WebSocket`` API handles server
-PROTOCOL-level PING control-frames transparently and never surfaces them to
-``onmessage``, so the agent's ``ping_interval=20`` pings do NOT reset the web
-client's inbound-activity / pong-deadline timer (ws.ts ``noteInboundActivity``
-fires only on a DATA frame). Between turns the only data frame the client sees is
-its own keepalive's ``session-state`` reply; if that reply is slow/stalls the
-client force-reconnects -> a ~30s reconnect storm in which the user's prompts
-never reach the turn handler.
-
-FIX (primary): ``server._heartbeat_loop`` sends a lightweight ``heartbeat`` DATA
-frame every ``HEARTBEAT_INTERVAL_SECONDS`` on a fast server clock so the client's
-inbound-activity timer is reset regardless of how slow the resume reply is. The
-client tolerates an unknown ``heartbeat`` type (it routes to a no-op
-``default:`` after already calling ``noteInboundActivity()`` on EVERY frame), so
-no web change is required.
-
-These tests pin:
-  (a) the loop emits well-formed ``heartbeat`` envelopes on the interval;
-  (b) ``cancel()`` stops the loop cleanly (raises CancelledError, sends no more);
-  (c) a transient per-send wire error does NOT tear the loop down (it keeps
-      ticking) -- so a single half-closed-socket hiccup cannot kill liveness.
-"""
+A browser handles protocol-level PINGs transparently, so only a DATA frame resets
+the client's inbound-activity timer and ``_heartbeat_loop`` sends one on a fast
+server clock. Pinned: well-formed envelopes on the interval, a clean stop on
+cancel, and a transient send error that does not tear the loop down."""
 
 from __future__ import annotations
 

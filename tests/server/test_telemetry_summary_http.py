@@ -1,20 +1,9 @@
-"""Unit tests for ``trid3nt_server.server.protocol.catalog_http`` telemetry-summary path
-(Wave 4.11 M7 — routing-quality dashboard backend).
+"""The telemetry-summary path behind the routing-quality dashboard.
 
-Coverage:
-    1. ``test_aggregate_empty`` — empty record list yields the zero-state
-       summary shape.
-    2. ``test_aggregate_basic`` — total/error/cache stats + per-tool rows
-       sorted by count descending + sources split.
-    3. ``test_aggregate_chain_sequences`` — co-occurring tool calls within a
-       single session produce the expected top routing chains.
-    4. ``test_normalize_record_local_file_and_mongo`` — both wire shapes
-       (``success`` / ``ts`` vs ``result_ok`` / ``called_at_utc``) normalize
-       into the same canonical fields.
-    5. ``test_build_telemetry_summary_file_fallback`` — when Persistence is
-       unbound, the builder falls back to the local JSONL path and respects
-       ``TRID3NT_TELEMETRY_PATH``.
-"""
+An empty record list yields the zero-state shape; totals, error and cache stats,
+per-tool rows sorted by count and the source split; co-occurring calls in one
+session become the top routing chains; both wire shapes normalize to the same
+fields; with Persistence unbound the builder falls back to the local JSONL path."""
 
 from __future__ import annotations
 

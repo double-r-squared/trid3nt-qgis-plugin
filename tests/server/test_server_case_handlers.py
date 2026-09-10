@@ -1,38 +1,9 @@
-"""Unit tests for the Case lifecycle handlers in ``server.py`` (job-0121).
+"""The Case lifecycle handlers, against a mock socket that collects envelopes.
 
-These tests exercise the server-side dispatch without binding a real
-WebSocket — a ``MockWebSocket`` collects every envelope and the tests
-assert on the envelope sequence + the persistence side effects.
-
-Coverage (>=10 unit tests + 1 integration):
-- ``test_case_create_emits_case_open_and_case_list`` — create dispatches
-  to upsert_case + emits case-open with empty session_state, then case-list.
-- ``test_case_select_emits_case_open_with_chat_history`` — select hydrates
-  CaseSessionState including chat history.
-- ``test_case_rename_updates_title_and_refreshes_case_list`` — rename
-  updates persisted title; case-list re-emitted.
-- ``test_case_archive_soft_archives_and_refreshes_case_list`` — archive
-  flips status; case-list re-emitted.
-- ``test_case_delete_soft_deletes_and_clears_active_case`` — delete flips
-  status; active_case_id cleared when matching.
-- ``test_case_command_without_persistence_emits_error`` — no Persistence
-  bound -> INTERNAL_ERROR envelope.
-- ``test_case_command_rename_missing_case_id_emits_error`` — rename
-  without case_id -> INTERNAL_ERROR.
-- ``test_case_command_rename_missing_title_emits_error`` — rename
-  without args.title -> INTERNAL_ERROR.
-- ``test_emit_case_list_skips_when_persistence_unbound`` — emit silently
-  skips with no Persistence.
-- ``test_active_case_id_set_after_create_and_select`` — active context
-  follows command dispatch.
-- ``test_persist_chat_turn_writes_when_active_case_set`` — chat message
-  appended to mongo.
-- ``test_persist_chat_turn_noop_when_no_active_case`` — no active context
-  = no write.
-- ``test_integration_e2e_case_flow`` — full flow: create case A, persist
-  chat, archive, create case B, verify isolation (case A's chat does NOT
-  appear in case B's rehydration).
-"""
+Create emits ``case-open`` with an empty state then ``case-list``; select
+hydrates the chat history; rename, archive and delete update the record and
+re-emit the list, delete clearing a matching active Case. A missing Persistence
+or a missing field is an INTERNAL_ERROR envelope. Cases stay isolated end to end."""
 
 from __future__ import annotations
 
@@ -191,20 +162,10 @@ def test_case_create_without_bbox_leaves_aoi_unset(
 def test_case_create_without_bbox_resets_stale_aoi_anchor(
     _persistence_bound: Persistence,
 ) -> None:
-    """Stale-AOI regression: a fresh Case must NOT inherit the PREVIOUS Case's
-    in-session AOI anchor.
+    """A fresh Case must NOT inherit the PREVIOUS Case's in-session AOI anchor.
 
-    Simulates the real incident — a Case was opened/solved with a bbox set
-    (``state.case_bbox`` non-None, e.g. the Chattanooga flood extent), then the
-    user creates a NEW Case with no bbox. The create handler must reset
-    ``state.case_bbox`` to None so the first turn re-geocodes from the place
-    name (Twin Falls, Idaho) instead of reusing Chattanooga's extent.
-
-    NOTE: unlike ``test_case_create_without_bbox_leaves_aoi_unset`` (which
-    starts from a fresh state where ``case_bbox`` is already None and so passes
-    even without the fix), this test pre-seeds a stale anchor, so it FAILS
-    without the reset line in the create handler.
-    """
+    The create handler resets ``state.case_bbox`` to None, so the first turn
+    re-geocodes from the place name instead of reusing the prior extent."""
     ws = MockWebSocket()
     state = _fresh_state()
     state.authenticated_user_id = new_ulid()
@@ -226,10 +187,10 @@ def test_case_create_without_bbox_resets_stale_aoi_anchor(
 def test_case_create_with_bbox_overrides_stale_aoi_anchor(
     _persistence_bound: Persistence,
 ) -> None:
-    """The #170 AOI-first path still works after the stale-anchor reset: a
-    create carrying a valid ``args.bbox`` seeds the NEW extent even when a
-    prior (different) anchor was cached — the reset clears the old one, the
-    conditional seed installs the new one."""
+    """A create carrying a valid ``args.bbox`` seeds the NEW extent.
+
+    The reset clears the cached anchor and the conditional seed installs the new one,
+    so the AOI-first path survives the reset."""
     ws = MockWebSocket()
     state = _fresh_state()
     state.authenticated_user_id = new_ulid()
@@ -573,15 +534,10 @@ def test_persist_chat_turn_noop_when_no_active_case(
 
 
 def test_integration_e2e_case_flow(_persistence_bound: Persistence) -> None:
-    """End-to-end: create Case A → publish-like chat persist → select Case B → isolation.
+    """Create Case A, persist a chat turn, create Case B, select A again.
 
-    Verifies:
-    1. Creating Case A sets active context.
-    2. Chat turn persists into Case A only.
-    3. Creating Case B switches active context.
-    4. Case B's rehydration shows ZERO chat history (Case A's chat is isolated).
-    5. Selecting Case A again rehydrates the original chat.
-    """
+    Active context follows each command, B rehydrates with ZERO chat history, and A
+    comes back with its own."""
     ws = MockWebSocket()
     state = _fresh_state()
 

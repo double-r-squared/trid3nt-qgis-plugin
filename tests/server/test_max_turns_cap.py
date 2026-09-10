@@ -1,23 +1,9 @@
-"""Tests for FR-FR-3: MAX_TURNS_PER_SESSION cap (job-0048, sprint-08).
+"""The ``MAX_TURNS_PER_SESSION`` cap.
 
-Three required tests per kickoff acceptance criteria:
-  1. Turn counter increments correctly on each user-message dispatch.
-  2. Cap fires at (MAX+1)th turn: session-state(status="max_turns_reached")
-     is emitted and further tool-call dispatches are refused.
-  3. New session (new WebSocket connection / new SessionState) starts with
-     a fresh counter at 0.
-
-Additional tests:
-  4. Env-var override: TRID3NT_MAX_TURNS_PER_SESSION is parsed at import time
-     into MAX_TURNS_PER_SESSION.
-  5. Closing agent-message-chunk emitted alongside the cap-hit session-state.
-  6. Subsequent turns after cap fires continue to be refused (idempotent cap).
-
-All tests drive the real _make_handler / SessionState machinery through a
-live websockets connection (same pattern as job-0035's live-evidence harness)
-so the cap is exercised end-to-end, not just via unit-tested SessionState
-mutations.
-"""
+The counter increments per user-message dispatch and starts fresh on a new
+session; at the cap a ``session-state(status="max_turns_reached")`` and a closing
+chunk are emitted and every further turn gets the same refusal. The env override
+is parsed at import. Driven end to end through a live websockets connection."""
 
 from __future__ import annotations
 
@@ -121,12 +107,10 @@ async def test_cap_fires_and_emits_closing_agent_message():
 
 @pytest.mark.asyncio
 async def test_cap_refuses_further_tool_calls_after_hitting_limit():
-    """After the cap fires, subsequent turns continue to emit max_turns_reached
-    (the cap is idempotent — every turn above the limit gets the same refusal).
+    """The cap is idempotent: every turn above the limit gets the same refusal.
 
-    This simulates calling _handle_max_turns_reached multiple times, which is
-    what the server.py dispatch loop does for every user-message once
-    turn_count > MAX_TURNS_PER_SESSION."""
+    That is what the dispatch loop does for each user-message once the count has
+    passed the limit."""
     ws = FakeWebSocket()
     state = _make_state(session_id=ws.session_id)
     state.turn_count = MAX_TURNS_PER_SESSION + 1

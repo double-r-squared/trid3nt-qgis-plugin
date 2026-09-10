@@ -1,12 +1,8 @@
-"""job-0245 (OQ-0245-CONTEXT-CARRYOVER-MISROUTE): Case switch resets LLM context.
+"""A Case switch resets the LLM context.
 
-Round-3 live testing proved a reused WS session re-routed EVERY post-switch
-prompt to the PREVIOUS Case's composer (a Fort Myers flood ask and a numpy ask
-both got the Twin Falls groundwater confirmation gate) because
-``build_contents_from_history`` kept feeding ``state.chat_history`` from the
-old Case. These tests pin the clean-slate rule (Wave 4.8 A.7, server-side):
-case SELECT and case CREATE both clear the per-connection LLM conversation.
-"""
+``build_contents_from_history`` otherwise keeps feeding ``state.chat_history``
+from the previous Case, so a post-switch prompt routes to that Case's composer.
+Case SELECT and case CREATE both clear the per-connection conversation."""
 
 from __future__ import annotations
 

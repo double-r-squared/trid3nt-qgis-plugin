@@ -1,16 +1,9 @@
-"""SNAP-TO-AOI INDEPENDENT OF GEOLOCATE (NATE 2026-06-24).
+"""The camera snap is independent of ``geocode_location``.
 
-When the user gives coordinates DIRECTLY the model (correctly) skips
-``geocode_location``, so the geocode-only zoom-to emit never fired and the
-camera did not snap to the AOI ("if we need a place we are snapped there first
-and foremost"). The fix generalizes the snap: ANY tool result that SETS an
-AOI/bbox (a top-level ``bbox`` or ``aoi_bbox``) snaps the camera, deduped
-against the turn's last zoom-to so a chain of bbox-bearing tools over the SAME
-AOI does not re-snap.
-
-These tests pin the pure decision helper ``_aoi_zoom_to_bbox`` (the inline emit
-+ accumulator append in the turn loop is a thin wrapper over it).
-"""
+ANY tool result that SETS an AOI - a top-level ``bbox`` or ``aoi_bbox`` - snaps
+the camera, deduped against the turn's last zoom-to so a chain of bbox-bearing
+tools over the SAME AOI does not re-snap. Pinned here is the pure decision helper
+``_aoi_zoom_to_bbox``; the emit in the turn loop is a thin wrapper over it."""
 
 from __future__ import annotations
 

@@ -1,22 +1,9 @@
-"""Tests for the agent-side payload-warning gate (job-0127).
+"""The agent-side payload-warning gate, end to end over a mock socket.
 
-Exercises ``_maybe_gate_on_payload_warning`` + ``_invoke_tool_via_emitter``
-end-to-end with a ``MockWebSocket`` collecting wire envelopes:
-
-- small payload (1 MB) → no warning, direct dispatch
-- medium payload (50 MB) → warning emitted, agent pauses
-- confirmation:proceed → dispatch fires after the confirmation
-- confirmation:cancel → dispatch skipped, USER_INPUT_CANCELLED error returned
-- confirmation:narrow_scope → revised_args used in the dispatch
-- hard cap (>250 MB) → warning omits ``proceed`` from options
-- audit log captures every decision
-
-The gate calls into ``TOOL_REGISTRY`` so we register a couple of dummy
-tools per-test inside the autouse fixture that snapshots / restores the
-real registry. The tools' ``__module__`` is overridden so the estimator
-lookup resolves to the test module itself (where the estimator is defined
-at module scope below).
-"""
+A small payload dispatches directly; a medium one emits the warning and pauses;
+``proceed`` dispatches, ``cancel`` raises USER_INPUT_CANCELLED, ``narrow_scope``
+dispatches the revised args; a hard cap omits ``proceed`` from the options; every
+decision is audited. The dummy tools live on a snapshot-restored registry."""
 
 from __future__ import annotations
 
@@ -108,10 +95,8 @@ def _register_dummy(
 ) -> None:
     """Insert a ``RegisteredTool`` whose module resolves to THIS test module.
 
-    The gate resolves estimators by importing ``RegisteredTool.module`` and
-    looking up the named attribute. By pointing at this module we get the
-    ``estimate_payload_mb`` defined at the top of the file.
-    """
+    The gate resolves an estimator by importing ``RegisteredTool.module`` and looking
+    up the named attribute, which lands on the one defined at the top of this file."""
     meta = AtomicToolMetadata(
         name=name,
         ttl_class="dynamic-1h",
@@ -125,11 +110,10 @@ def _register_dummy(
 
 
 async def _pump(n: int = 60) -> None:
-    """Yield the event loop enough times for a gate coroutine to reach its next
-    emit/await point. The gate now offloads its estimator via ``asyncio.to_thread``
-    (resolution doctrine R-B, so a sampling estimator's network read can't stall the
-    WS keepalive), which introduces a real thread-scheduling boundary a single
-    ``sleep(0)`` no longer crosses -- pump briefly until the thread hop completes."""
+    """Yield the loop until a gate coroutine reaches its next emit or await point.
+
+    The gate offloads its estimator through ``asyncio.to_thread``, a real thread
+    boundary a single ``sleep(0)`` does not cross."""
     for _ in range(n):
         await asyncio.sleep(0.002)
 
@@ -498,13 +482,10 @@ def test_invoke_tool_via_emitter_dispatches_after_proceed() -> None:
 
 
 def test_invoke_tool_via_emitter_skips_after_cancel() -> None:
-    """End-to-end: warning → cancel → tool does NOT run, raises PayloadWarningCancelledError.
+    """Warning then cancel: the tool does NOT run, and the gate RAISES.
 
-    B-rev: previously this returned None (opaque to Gemini); now it raises
-    PayloadWarningCancelledError so the multi-turn loop feeds a structured
-    error envelope back to Gemini (error_code=PAYLOAD_WARNING_CANCELLED,
-    retryable=False).
-    """
+    ``PayloadWarningCancelledError`` rather than a None return is what feeds the
+    multi-turn loop a structured, non-retryable error envelope."""
     from trid3nt_server.server import PayloadWarningCancelledError
 
     _register_dummy("integration_cancel_tool")

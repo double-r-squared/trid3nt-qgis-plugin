@@ -1,34 +1,9 @@
-"""job-0259 — Case layers not rehydrating: WRITE-path root-cause regression tests.
+"""The Case-layer WRITE path, against real file-backed persistence.
 
-Root cause (diagnosed live, 2026-06-10): the web client mounts TWO WebSocket
-connections per tab (Chat.tsx carries ``user-message``; App.tsx carries
-``case-command`` — see web/src/ws.ts job-0159 hub comment), while the server
-kept ``active_case_id`` on the per-connection ``SessionState``. The
-``case-command(select|create)`` landed on App's connection; every tool
-dispatch + persistence write ran on Chat's connection with
-``active_case_id=None`` — so ``_persist_chat_turn`` and
-``_persist_case_loaded_layers`` silently no-opped and a Case re-open showed
-``chat=0 layers=0`` (verified against /tmp/agent_demo_ready.log: every single
-case-open emitted by the live demo agent showed chat=0 layers=0 while 31-33
-Cases existed).
-
-Fix under test:
-
-1. ``SessionState.active_case_id`` is now a property backed by the
-   session-scoped ``_SESSION_ACTIVE_CASE`` registry — every connection of a
-   session (including post-reconnect replacements) observes the same Case.
-2. ``_sync_case_context`` catches a connection's in-memory context
-   (chat_history + emitter loaded_layers seed) up to the session's active
-   Case at user-message time.
-3. The layer persist moved into the ``finally`` of
-   ``_invoke_tool_via_emitter`` so a post-invoke envelope-send failure on a
-   dying WebSocket no longer skips it (the round-3 plume scenario).
-4. ``_persist_case_loaded_layers`` merges by ``layer_id`` (append/replace,
-   never clobber) so an unseeded emitter cannot erase persisted layers.
-
-All tests are Gemini-free and run against the REAL file-backed persistence
-substrate (``make_file_persistence``) pointed at a pytest tmpdir.
-"""
+The web client mounts TWO connections per tab, so ``active_case_id`` is backed by
+a session-scoped registry every connection observes, ``_sync_case_context``
+catches a connection up at user-message time, the layer persist sits in the
+dispatch's ``finally``, and it MERGES by ``layer_id`` rather than clobbering."""
 
 from __future__ import annotations
 
@@ -130,13 +105,10 @@ async def _create_case_via_command(ws, state, title="Split Brain Demo") -> str:
 async def test_split_brain_two_connections_layer_and_chat_persist(
     file_persistence, fake_layer_tool
 ) -> None:
-    """THE root-cause regression: case-command on socket A, tool on socket B.
+    """``case-command`` on socket A, the tool dispatch on socket B.
 
-    Models the production web client exactly: App.tsx's connection receives
-    ``case-command(create)``; Chat.tsx's connection (a DIFFERENT SessionState
-    bound to the SAME session_id) dispatches the tool. Pre-fix, socket B saw
-    ``active_case_id=None`` and persisted nothing.
-    """
+    Two SessionStates bound to the SAME session id must both see the active Case, or
+    the dispatching one persists nothing."""
     session_id = new_ulid()
     ws_a, ws_b = FakeWS(), FakeWS()
     state_a = server.SessionState(session_id=session_id)  # App.tsx socket
@@ -214,19 +186,9 @@ async def test_no_write_without_active_case(
 async def test_persist_fires_even_when_post_invoke_emission_fails(
     file_persistence, fake_layer_tool
 ) -> None:
-    """Round-3 plume scenario: tool succeeds, the WS dies before the
-    session-state emission. The layer MUST still persist.
-
-    CONTRACT UPDATE (terminal-pipeline-card hardening, Fix 3 / Gap 1): the
-    emitter sink (server._ensure_emitter._sink) now SWALLOWS a mid-close
-    ``websocket.send`` failure best-effort instead of letting ConnectionClosed
-    escape. Previously a dying WS let the RuntimeError propagate out of the
-    dispatch (the layer persisted only via the ``finally`` path). Now the
-    dispatch COMPLETES cleanly — the terminal pipeline frame is never lost to a
-    closing socket, the CancelledError/terminal path is never derailed by a
-    send error, and the layer still persists. Both contracts guarantee
-    persistence; the new one additionally guarantees the dispatch does not raise
-    on a transient socket close."""
+    """The tool succeeds, the WS dies before the session-state emission, the layer
+    still persists. The emitter sink swallows a mid-close ``send`` failure, so the
+    dispatch completes cleanly rather than losing the terminal frame."""
     session_id = new_ulid()
     ws_create = FakeWS()
     state = server.SessionState(session_id=session_id)

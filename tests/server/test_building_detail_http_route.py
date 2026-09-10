@@ -1,18 +1,9 @@
-"""HTTP-route wiring tests for /api/building-detail on the catalog listener.
+"""HTTP-route wiring for ``/api/building-detail`` on the catalog listener.
 
-Click-to-enrich (NATE 2026-06-27): the building footprint inline GeoJSON is now
-SLIM (id-only props); the popup fetches the full tag bag on demand by
-``(osm_type, osm_id)`` here. The route reads the cached ``<key>.tags.json``
-sidecar; on a miss it falls back to a live Overpass-by-id query. Returns
-``{fid, tags:{...}}`` or a typed 404 / 400.
-
-Exercises ``tool_catalog_http._handle_http`` dispatch for ``/api/building-detail``:
-  - sidecar HIT -> 200 {fid, tags};
-  - sidecar miss -> live Overpass fallback HIT -> 200;
-  - both miss -> typed 404;
-  - malformed input (bad osm_type / non-numeric osm_id) -> typed 400;
-  - the existing /api/tool-catalog path stays unaffected.
-"""
+The inline footprint GeoJSON is slim, id-only, so the popup fetches the tag bag
+on demand by ``(osm_type, osm_id)``. The route reads the cached ``.tags.json``
+sidecar and falls back to a live Overpass-by-id query on a miss, returning
+``{fid, tags}`` or a typed 404 / 400."""
 
 from __future__ import annotations
 

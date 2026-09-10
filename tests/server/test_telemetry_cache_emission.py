@@ -1,19 +1,9 @@
-"""Tests for ``cache-status`` envelope emission + telemetry cache plumbing
-(Wave 4.10 job-B6).
+"""``cache-status`` emission and the cached-token telemetry field.
 
-Coverage:
-    1. ``test_cache_status_envelope_shape`` — ``_emit_cache_status`` serializes
-       the expected JSON shape to the WebSocket sink.
-    2. ``test_cache_status_failure_does_not_raise`` — a failing websocket send
-       logs but does not propagate (observability surface must not break the
-       agent loop).
-    3. ``test_telemetry_records_cached_tokens`` — ``emit_tool_call_event``
-       writes the ``cached_content_token_count`` field to the JSONL log so
-       the 90%-discount empirical proof is observable downstream.
-    4. ``test_usage_metadata_event_cache_hit_flag`` — ``UsageMetadataEvent``
-       sets ``cache_hit=True`` when cached_content_token_count > 0, False
-       otherwise.
-"""
+``_emit_cache_status`` serializes the expected shape to the socket sink, and a
+failing send logs rather than propagating - an observability surface must not
+break the agent loop. ``emit_tool_call_event`` writes the cached-token count and
+``UsageMetadataEvent`` sets ``cache_hit`` from it."""
 
 from __future__ import annotations
 
