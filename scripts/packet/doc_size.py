@@ -44,8 +44,11 @@ def head_commit(repo: Path | str | None = None) -> str:
     root = str(repo or Path(__file__).resolve().parents[2])
     head = subprocess.run(["git", "-C", root, "rev-parse", "HEAD"],
                           capture_output=True, text=True, check=True).stdout.strip()
-    dirty = subprocess.run(["git", "-C", root, "status", "--porcelain"],
-                           capture_output=True, text=True, check=True).stdout.strip()
+    # TRACKED changes only: the renders themselves land untracked on a first
+    # pass, and a stamp that called every first render dirty would say nothing.
+    dirty = subprocess.run(
+        ["git", "-C", root, "status", "--porcelain", "--untracked-files=no"],
+        capture_output=True, text=True, check=True).stdout.strip()
     return f"{head}-dirty" if dirty else head
 
 
