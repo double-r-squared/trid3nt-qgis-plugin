@@ -5,7 +5,15 @@ one: names and types carry what the code is, an inline comment carries the
 constraint at the line it governs, the docstring carries the caller's contract,
 the SysML model carries structure and requirements, `docs/` carries method and
 maps, and the tests carry the behaviour. Prose that repeats one of those is a
-maintenance liability.
+maintenance liability. The RULINGS record - what was decided and why - is kept
+outside the repo, so a constraint that only a ruling states has to be lifted into
+one of the places above before the ruling can be its only home.
+
+A drawing of LIVE STRUCTURE is the model's, regenerated: `docs/model/` is
+derived from its own `.sysml` sources and the suite fails while a view is stale,
+so a second hand-drawn copy of the same system is drift with nothing to catch
+it. A spec draws the MECHANISM it is committing to and cites the model for the
+structure it builds on.
 
 ## The docstring
 
@@ -47,7 +55,7 @@ archive.
 - **Attribution**: a person's name, and the memory filenames.
 - **Usage narrative and examples**: `>>>` blocks, `Example:`, `Usage:`.
 - **Architecture and neighbour references**: `see <module>.py`, "defined in ...".
-- **Why-essays and rationale**: the decision record holds those, or nothing does.
+- **Why-essays and rationale**: the rulings record holds them, or nothing does.
 - **Per-field roll-calls** of a typed model the reader can read off the type.
 
 A path a comment, docstring or README does name has to exist: a reference that

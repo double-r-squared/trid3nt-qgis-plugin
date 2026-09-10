@@ -121,5 +121,5 @@ Three, independent; a git commit deploys none of them.
 
 `docs/site/` the manual · `docs/templates/` the template gallery ·
 `docs/modules.md` the engine wrappers · `docs/authoring/` how to extend it ·
-`docs/decisions/` why · `docs/model/` the suite-checked model · `AGENTS.md` the
-charter.
+`docs/model/` the suite-checked model · `docs/design/` how a feature works ·
+`AGENTS.md` the charter.

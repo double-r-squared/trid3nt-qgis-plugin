@@ -33,9 +33,10 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   directories, named by the `make test-*` targets law 1 lists.
   `scripts/` - the entry points you type, plus `instruments/` (measure
   + check), `packet/` (the delivery renderers), `drivers/` (the live
-  drive lane) and `staging/`. `docs/` - decisions
-  (ADRs), design (feature guides), validation, proof/templates (NEVER
-  delete anything there).
+  drive lane) and `staging/`. `docs/` - the manual, the directory
+  maps, the specs, the model, the generated template pages and the
+  ledgers. The repo carries the SYSTEM; the rulings record - what was
+  decided and why - is kept outside it.
 
 ## The laws
 
@@ -120,7 +121,10 @@ touch, BEFORE writing code. Inherit the structure; do not improvise.
   non-obvious constraint exists - if one needs a paragraph, it needs a
   better name or a split.
 - Names and structure carry meaning; documents carry knowledge
-  (docs/design per feature, ADRs for why, commit messages for
-  provenance). ASCII hyphens only; no emojis.
-- Decisions get an ADR-lite note in docs/decisions/. If your change
+  (docs/design per feature, the model for structure and requirements,
+  commit messages for provenance). ASCII hyphens only; no emojis.
+- A decision is NATE's and lands as a dated entry in the rulings
+  record. What the repo carries is the CONSTRAINT - as a requirement
+  in the model, a line here or in docs/CONVENTIONS.md, or a comment at
+  the line it governs - never the argument for it. If your change
   reshapes a feature, update its docs/design page in the same change.
