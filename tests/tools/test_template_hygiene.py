@@ -1,19 +1,9 @@
-"""Mechanical hygiene gate: tier=template docstrings + module comments must be
-PURELY FUNCTIONAL.
+"""Mechanical hygiene gate: a template's docstring and comments are PURELY FUNCTIONAL.
 
-Every registered ``tier="template"`` tool must present a contract-only surface: its
-docstring and its module's comments state what the tool does, its params, errors,
-fidelity/off-scope, and data sources -- never history/archaeology (no rename/fold
-provenance, no scenario-era ``model_*_scenario`` naming, no north-star verbiage) and
-ASCII only (no em/en dashes or typographic quotes).
-
-Scope is deliberately narrow and EASY TO WIDEN: ``_LOCI`` lists the surfaces scanned
-(the tool ``__doc__``, the template module's module-level docstring, and the module's
-``#`` comment lines). Helper-function docstrings and the general (non-template) repo
-are a separate scope decision -- widening is one edit to ``_LOCI``.
-
-ASCII only.
-"""
+Every registered ``tier="template"`` tool states what it does, its params, its
+errors, its fidelity and off-scope and its data sources - never rename or fold
+provenance and never a scenario-era name - in ASCII only. ``_LOCI`` lists the
+surfaces scanned and is the one edit that widens the scope."""
 
 from __future__ import annotations
 

@@ -1,16 +1,9 @@
-"""Wave 4.10 alias pre-population tests (job B13).
+"""Alias pre-population: every documented alias normalizes to the canonical name.
 
-For each of the 14 new Wave 4.10 endpoints: every documented alias in
-``_TOOL_SPECIFIC_ALIASES`` normalizes to the canonical parameter name.
-
-Design notes:
-- No real tool imports — each test provides a tiny ``fn`` whose signature
-  is the canonical contract, exactly like the existing
-  ``test_tool_arg_normalizer.py`` style.
-- Each test covers one tool and exercises every alias added in B13.
-- All tests are named ``test_<tool>_<param>_alias_<variant>`` so failures
-  pinpoint the exact alias that broke.
-"""
+Each test covers one tool and every alias declared for it in
+``_TOOL_SPECIFIC_ALIASES``, against a tiny local ``fn`` whose signature is the
+canonical contract rather than a real tool import. The names are
+``test_<tool>_<param>_alias_<variant>`` so a failure names the broken alias."""
 
 from __future__ import annotations
 

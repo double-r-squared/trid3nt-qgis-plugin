@@ -1,13 +1,9 @@
-"""Unit tests for the atomic-tool registry (job-0032, FR-AS-3, FR-CE-8).
+"""Unit tests for the atomic-tool registry.
 
-Coverage:
-- ``@register_tool`` happy path: populates ``TOOL_REGISTRY``, returns fn
-  unchanged.
-- Duplicate-name registration raises ``ToolRegistrationError``.
-- ``get_registered_tools`` returns a sorted snapshot.
-- The eager ``meta`` imports populate the registry at package import.
-- ``register_tool`` rejects non-``AtomicToolMetadata`` arguments.
-"""
+``@register_tool`` populates ``TOOL_REGISTRY`` and returns the function
+unchanged; a duplicate name raises ``ToolRegistrationError``;
+``get_registered_tools`` returns a sorted snapshot; the eager imports populate
+the registry at package import; a non-``AtomicToolMetadata`` argument is refused."""
 
 from __future__ import annotations
 
@@ -108,10 +104,8 @@ def test_get_registered_tools_returns_sorted_snapshot(empty_registry):
 def test_eager_import_registers_meta_tools():
     """Importing ``trid3nt_server.tools`` populates the registry on its own.
 
-    The acceptance criterion: a module-level ``@register_tool`` fires at
-    package import, so the live ``TOOL_REGISTRY`` is populated with no
-    fixture. The dead ``mongo_query`` stub must NOT be in it.
-    """
+    A module-level ``@register_tool`` fires at package import with no fixture, and
+    the dead ``mongo_query`` stub must NOT be there."""
     # No fixture: we deliberately use the live registry populated by import.
     assert "code_exec_request" in agent_tools.TOOL_REGISTRY
     assert "mongo_query" not in agent_tools.TOOL_REGISTRY
@@ -123,12 +117,10 @@ def test_eager_import_registers_meta_tools():
 
 
 def test_misconfigured_metadata_fails_at_construction():
-    """FR-CE-8 fail-fast: cacheable=True + ttl_class='live-no-cache' rejects.
+    """``cacheable=True`` with ``ttl_class='live-no-cache'`` is refused.
 
-    The cross-field validator on ``AtomicToolMetadata`` runs at pydantic
-    construction time, so a misconfigured ``@register_tool`` call dies
-    before the decorator factory even sees it.
-    """
+    The cross-field validator runs at pydantic construction, so the call dies before
+    the decorator factory sees it."""
     with pytest.raises(Exception):
         AtomicToolMetadata(
             name="bad",
@@ -139,23 +131,10 @@ def test_misconfigured_metadata_fails_at_construction():
 
 
 def test_global_query_scope_audit():
-    """NATE-requested ``supports_global_query`` scope audit (this job).
+    """The live registry carries exactly the intended global-capable set.
 
-    Asserts the authoritative live ``TOOL_REGISTRY`` (populated by the eager
-    package import) carries exactly the intended set of global-capable tools.
-    Each tool in ``EXPECTED_GLOBAL_CAPABLE`` is one whose natural use is a
-    no-bbox / nationwide query with a bounded upstream payload; everything
-    else is bbox-required (a wrong ``True`` risks an absurd global download,
-    so the default is the conservative ``False``).
-
-    Two tools flipped to True in this audit:
-    - ``fetch_nws_alerts_conus`` — the unscoped ``/alerts/active`` CONUS sweep
-      (~200KB) is its primary use; resolves OQ-0105-GLOBAL-QUERY-FIELD.
-    - ``show_nexrad_radar`` — returns only a CONUS-wide WMS service URL
-      (~0.1MB, no pixel transfer); the intent had been parked in dead code
-      (``_INTENDED_METADATA_EXTENSIONS``) and never reached the live metadata.
-      Resolves OQ-0102-METADATA-FIELDS for the global-query flag.
-    """
+    A tool is global-capable when its natural use is a no-bbox query with a bounded
+    payload; everything else is bbox-required, a wrong ``True`` being a huge download."""
     registry = agent_tools.TOOL_REGISTRY
 
     # Tools that legitimately run global/CONUS-wide with no bbox.

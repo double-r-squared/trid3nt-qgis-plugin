@@ -1,51 +1,9 @@
-"""Cross-cutting Gemini-kwargs fuzz test (job-0168-testing-20260608).
+"""Cross-cutting fuzz: an invented kwarg must never raise TypeError.
 
-Regression guard for the harness sweep landed in job-0164.
-
-Purpose:
-  Gemini routinely invents kwargs that don't exist on our tool signatures:
-  ``run_name``, ``description``, ``durationHours``, ``scenario_id``,
-  ``rainfall_event="atlas14_100yr"``, ``return_period_years`` (when the tool
-  uses ``return_period_yr``), etc. Before job-0164's sweep every tool without
-  ``**_extra_ignored`` raised TypeError on the first invented kwarg, silently
-  blocking the entire dispatch chain.
-
-What this test does:
-  1. Imports every tool in TOOL_REGISTRY (via the same eager-import path that
-     ``trid3nt_server.tools`` uses at startup, so no tool is missed).
-  2. For each tool, iterates 20 invented Gemini kwarg patterns drawn from the
-     real-world set that caused failures (run_name, scenario_id, description,
-     durationHours, rainfall_event, etc.) plus realistic valid minimal params
-     for that tool's required parameters.
-  3. Calls each (valid_params | invented_kwargs) combination through the
-     normalizer path:
-       - If ``trid3nt_server.tools.tool_arg_normalizer.normalize_args`` is available
-         (job-0164 landed): use it, assert no TypeError on the normalised call.
-       - Otherwise (job-0164 not yet merged): fall back to
-         ``_inspect_strip_unknown`` which uses ``inspect.signature`` to filter
-         unknown kwargs before invoking — confirms the test harness itself is
-         correct and establishes the baseline.
-  4. Asserts that calling the function does NOT raise TypeError — any other
-     exception (RuntimeError, NotImplementedError, requests.HTTPError, etc.)
-     is allowed because network/GCS/worker paths are not reachable in unit-test
-     context; only TypeError signals a bad signature contract.
-
-Coverage sentinel:
-  When job-0164 is merged, exactly 0 tools should rely on the inspect-strip
-  fallback — ``test_all_tools_have_native_extra_ignored`` asserts that all
-  registered tools have ``**_extra_ignored`` (or equivalent VAR_KEYWORD param)
-  in their signatures.  Before job-0164 this test is expected to FAIL (and is
-  marked xfail accordingly); after job-0164 it becomes the green acceptance
-  gate.
-
-OQ-0168-NORMALIZER-DEPENDENCY:
-  This test depends on ``tool_arg_normalizer.normalize_args`` from job-0164.
-  If job-0164 is not yet merged, the test falls back to the inspect-based
-  strip path and records a warning for the orchestrator. TENTATIVE resolution:
-  merge order should be job-0164 → job-0168; if this test runs first the
-  fallback path keeps it green while the orchestrator verifies the ordering
-  in the audit.
-"""
+Every tool in ``TOOL_REGISTRY`` is probed with realistic minimal params plus the
+invented kwargs a model routinely supplies, through the normalizer path. Only a
+TypeError signals a broken signature contract; any other exception is allowed,
+because no network, store or worker path is reachable here."""
 
 from __future__ import annotations
 
@@ -71,17 +29,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _get_normalizer():
-    """Return a (tool_name, raw_args, fn) -> dict callable.
-
-    If ``trid3nt_server.tools.tool_arg_normalizer.normalize_args`` is available,
-    return it directly.  Otherwise return
-    ``_inspect_strip_unknown`` which uses inspect.signature to achieve the
-    same effect.
-
-    Returns:
-        (normalize_fn, is_real_normalizer) where is_real_normalizer is True
-        when the production normalizer is in use.
-    """
+    """Return a ``(tool_name, raw_args, fn) -> dict`` callable and whether it is the
+    production one: ``tool_arg_normalizer.normalize_args`` when importable, else the
+    inspect-based strip."""
     try:
         from trid3nt_server.tools.tool_arg_normalizer import normalize_args  # type: ignore[import]
         return normalize_args, True
@@ -94,23 +44,8 @@ def _inspect_strip_unknown(
 ) -> dict[str, Any]:
     """Fallback normalizer: strip kwargs unknown to the tool's signature.
 
-    Matches the ``normalize_args(tool_name, raw_args, fn)`` signature from
-    job-0164's ``tool_arg_normalizer`` module so it can be used as a drop-in
-    when that module is not yet available (pre-merge).
-
-    A tool with a VAR_KEYWORD param (``**_extra_ignored`` or ``**kwargs``)
-    will accept the raw kwargs without stripping; a tool without it gets
-    unknown keys removed.
-
-    Args:
-        tool_name: key in ``TOOL_REGISTRY`` (used for logging only here).
-        raw_args: the raw kwargs dict (possibly containing Gemini-invented keys).
-        fn: the registered callable whose signature is inspected.
-
-    Returns:
-        A dict containing only the subset of ``raw_args`` that the tool's
-        signature accepts.
-    """
+    A tool with a VAR_KEYWORD param takes the raw kwargs unstripped; one without it
+    gets unknown keys removed. Same signature as the production normalizer."""
     sig = inspect.signature(fn)
     params = sig.parameters
     has_var_kw = any(
@@ -281,32 +216,10 @@ def _build_fuzz_kwargs(tool_name: str, extra: dict[str, Any]) -> dict[str, Any]:
 
 
 def _call_fn(entry_fn, kwargs: dict[str, Any]) -> None:
-    """Probe the tool function's signature for unexpected keyword argument errors.
+    """Probe the signature with ``bind_partial`` rather than calling the body.
 
-    Strategy: use ``inspect.Signature.bind_partial`` to verify the cleaned
-    kwargs are accepted by the function's parameter list WITHOUT actually
-    calling the function body. This avoids subprocess overhead (gdaldem,
-    gdal, solver dispatchers) and network calls while still catching the
-    exact failure mode we care about — a signature rejecting an unexpected
-    keyword argument.
-
-    ``sig.bind_partial(**kwargs)`` raises TypeError("got an unexpected keyword
-    argument 'X'") if the function does not declare that parameter and has no
-    VAR_KEYWORD (``**kwargs``) catch-all. That is mechanically identical to the
-    real call-time TypeError, so this probe exercises the same contract.
-
-    Args:
-        entry_fn: the registered callable (sync or async — signature is the
-            same in both cases for ``inspect.signature``).
-        kwargs: the normalised argument dict from ``normalize_args`` or the
-            inspect-strip fallback.
-
-    Raises:
-        TypeError: iff the kwargs include a name that the function signature
-            rejects with "unexpected keyword argument".  Missing required arg
-            TypeErrors (different wording) are silently swallowed — they are
-            not the bug class under test.
-    """
+    It raises the same "unexpected keyword argument" TypeError a real call would,
+    with no subprocess and no network; a missing-required one is swallowed."""
     sig = inspect.signature(entry_fn)
     try:
         sig.bind_partial(**kwargs)
@@ -374,14 +287,10 @@ def test_tool_survives_invented_kwargs(pattern_idx: int) -> None:
     strict=False,
 )
 def test_all_tools_have_native_extra_ignored() -> None:
-    """All @register_tool functions must have a VAR_KEYWORD (**_extra_ignored) param.
+    """Every ``@register_tool`` function must declare a VAR_KEYWORD param.
 
-    The target state: a tool absorbs an invented kwarg in its own signature and
-    the normalizer is a safety net rather than the mechanism. Until every tool
-    does, this is xfail - an expected gap, not a blocking red.
-
-    Failure Layer: AGENT / ENGINE - missing signature on the named tool.
-    """
+    The target state absorbs an invented kwarg in the signature itself and leaves the
+    normalizer a safety net; until every tool does, this is xfail."""
     missing: list[str] = []
     for name in sorted(TOOL_REGISTRY.keys()):
         entry = TOOL_REGISTRY[name]
@@ -405,15 +314,10 @@ def test_all_tools_have_native_extra_ignored() -> None:
 # ---------------------------------------------------------------------------
 
 def test_tool_registry_count_ge_50() -> None:
-    """Registry must contain at least 50 tools for the fuzz to be meaningful.
+    """The registry must hold at least 50 tools for the fuzz to be meaningful.
 
-    A shrunken registry (e.g. import error silently drops a submodule) would
-    mean the fuzz is testing a subset of the real surface.  This catches
-    import-time failures before they mask coverage gaps.
-
-    Failure Layer: AGENT — import error in a tool submodule (see the startup
-    ``@register_tool`` eager-import block in ``trid3nt_server/tools/__init__.py``).
-    """
+    A shrunken registry - an import error silently dropping a submodule - would leave
+    the fuzz testing a subset of the real surface."""
     count = len(TOOL_REGISTRY)
     assert count >= 50, (
         f"[AGENT layer] Expected ≥50 tools in TOOL_REGISTRY, got {count}. "
@@ -427,12 +331,9 @@ def test_tool_registry_count_ge_50() -> None:
 # ---------------------------------------------------------------------------
 
 def test_normalizer_presence_logged() -> None:
-    """Log whether the real normalizer (job-0164) is in use or the fallback.
+    """Log whether the production normalizer or the fallback is in use.
 
-    Not a failure — purely informational.  The test passes regardless so the
-    CI run is green in both states.  The orchestrator reads this in the report
-    to know whether job-0164 has been merged.
-    """
+    Informational: the test passes either way."""
     _, is_real = _get_normalizer()
     if is_real:
         logger.info(

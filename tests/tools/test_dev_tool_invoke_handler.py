@@ -1,21 +1,9 @@
-"""``!run`` direct tool invocation -- server handler tests (ADR 0114).
+"""``!run`` direct tool invocation: the server handler's own contract.
 
-``_handle_dev_tool_invoke`` runs the named registry closure OUTSIDE the LLM
-loop through the SAME ``_dispatch_tool_and_persist`` -> ``_invoke_tool_via_emitter``
-seam a ``/invoke`` directive uses. These pin the handler's own contract:
-
-  * wire-shape validation (name / args) -> typed TOOL_PARAMS_INVALID;
-  * an unknown tool routes through the shared TOOL_NOT_FOUND envelope;
-  * a valid invocation drives the shared emission pipeline (tool-io +
-    pipeline-state + turn-complete on the wire) and respects the sync-tool
-    off-load rule;
-  * the payload-warning gate composes on the !run path (the gate seam is
-    invoked before dispatch).
-
-The prepared-turn scaffolding (case rebind / sync / auto-create / user-row
-persist) is owned + tested by ``_prepare_user_turn``; it is stubbed here so the
-handler test stays hermetic (no persistence).
-"""
+``_handle_dev_tool_invoke`` runs the named registry closure OUTSIDE the LLM loop
+through the same dispatch seam a ``/invoke`` directive uses. Pinned: wire-shape
+validation, the shared TOOL_NOT_FOUND envelope, the shared emission pipeline and
+the off-load rule, and the payload-warning gate composing before dispatch."""
 
 from __future__ import annotations
 
@@ -203,15 +191,10 @@ class _TypedToolError(RuntimeError):
 
 @pytest.mark.asyncio
 async def test_typed_tool_error_reaches_client_as_error_envelope() -> None:
-    """A typed tool exception on the ``!run`` no-awaiter path must surface as a
-    structured ``error`` envelope -- not vanish as an "asyncio Task exception was
-    never retrieved" while the client sees nothing (ADR 0198 honesty-floor fix).
+    """A typed tool exception on the no-awaiter path surfaces as an ``error`` envelope.
 
-    The A.6 ``ErrorCode`` Literal is a CLOSED set, so a tool's own out-of-enum
-    code (``TELEMAC_ROG_POUR_POINT_OFF_DEM``) rides the wire as INTERNAL_ERROR
-    with the specific code LEADING the message as a ``[MARKER]`` (house
-    convention) -- honest + greppable, and it never raises inside _send_error
-    (which would re-open the silence)."""
+    ``ErrorCode`` is a CLOSED set, so a tool's out-of-enum code rides the wire as
+    INTERNAL_ERROR with that code LEADING the message as a ``[MARKER]``."""
 
     def _raise(**_kw):
         raise _TypedToolError("pour point falls outside the DEM window")

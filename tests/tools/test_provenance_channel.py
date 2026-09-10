@@ -89,10 +89,9 @@ def test_no_recorder_is_byte_identical_no_sidecar(fake_s3: Any) -> None:
 
 
 def test_legacy_object_without_a_current_sidecar_is_a_miss(fake_s3: Any) -> None:
-    """An object cached BEFORE the channel (or before a schema bump) has no
-    trustworthy account of its own bytes. Replaying the declared DEFAULTS over it
-    served a silently-degraded artifact for the rest of the TTL bucket, so the
-    object REFETCHES instead."""
+    """An object cached before the channel, or before a schema bump, has no trustworthy
+    account of its own bytes, so it REFETCHES; replaying the declared DEFAULTS over
+    it serves a silently degraded artifact for the rest of the TTL bucket."""
     md = _md()
     from trid3nt_server.tools.cache import cache_path, compute_cache_key
     key = compute_cache_key(md.source_class, {"k": 9}, md.ttl_class)

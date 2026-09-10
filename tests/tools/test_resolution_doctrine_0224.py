@@ -1,12 +1,8 @@
-"""Resolution doctrine (ADR 0224) -- offline unit coverage.
+"""Resolution doctrine: offline unit coverage of the two live rulings.
 
-Covers the two rulings whose subject is still in the tree:
-  R-B sampled payload estimator (measured vs analytic, px-cap, resolution scaling, cache);
-  R-C honest GLOBAL-FALLBACK warning (skipped vs no-intersect vs unreachable vs datum-gated).
-R-A (native-default / explicit-coarsen fetch kwargs) rode the schism surge legs and
-left with them.
-All pure -- no network, no fetch.
-"""
+The sampled payload estimator (measured against analytic, the pixel cap,
+resolution scaling, the cache) and the honest GLOBAL-FALLBACK warning (skipped
+vs no-intersect vs unreachable vs datum-gated). All pure - no network, no fetch."""
 from __future__ import annotations
 
 import pytest

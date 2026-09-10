@@ -1,19 +1,9 @@
-"""#6 STAGED SYNC-TOOL DISPATCH OFF-LOAD — Stage 0 (ships dark).
+"""The staged sync-tool off-load mechanism, shipping dark.
 
-Stage 0 lands the mechanism for off-loading synchronous atomic-tool bodies to a
-worker thread (so a slow sync tool can no longer stall the WS keepalive — see
-feedback_no_sync_blocking_on_asyncio_loop) behind the ``TRID3NT_SYNC_TOOL_OFFLOAD``
-env var, DEFAULT OFF. These tests pin:
-
-1. the staged mode helper (``off``/``subset``/``global``) resolves correctly;
-2. the armed-only startup safety gate is a no-op under the dark default;
-3. the headline #6 invariant — EVERY sync tool the off-load would touch is
-   emit-free (its body never references the loop-bound PipelineEmitter API) — is
-   actually true against the REAL registry, for BOTH the Stage-1 ``subset`` and
-   the Stage-2 ``global`` cohorts. If a future sync tool starts emitting, the
-   global assertion (and this test) fails before we can ever arm it;
-4. the gate REFUSES to arm when a candidate sync tool would touch the emitter.
-"""
+``TRID3NT_SYNC_TOOL_OFFLOAD`` resolves ``off`` / ``subset`` / ``global``; the
+startup safety gate is a no-op under the dark default and REFUSES to arm when a
+candidate sync tool would touch the emitter. The headline invariant - every sync
+tool the off-load touches is emit-free - is asserted against the REAL registry."""
 
 from __future__ import annotations
 
@@ -66,12 +56,10 @@ def test_real_subset_is_emit_free(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_real_global_is_emit_free(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stage-2 cohort: EVERY real sync tool body is emit-free.
+    """Every real sync tool body is emit-free.
 
-    This is the core #6 claim ("sync tool bodies are emit-free, so the off-load
-    is safe"). If this fails, a sync tool now touches the loop-bound emitter and
-    global mode must NOT be armed until it is fixed (compute/emit split).
-    """
+    A failure means a sync tool now touches the loop-bound emitter, and global mode
+    must not be armed until the compute and emit halves are split."""
     monkeypatch.setattr(server, "_SYNC_OFFLOAD_MODE", "global")
     server._assert_sync_offload_safe()  # raises listing any offending tool(s)
 

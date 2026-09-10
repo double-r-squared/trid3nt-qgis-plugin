@@ -1,26 +1,9 @@
-"""Unit + integration tests for the cache shim (job-0032, FR-DC-3, FR-DC-6).
+"""Unit and integration tests for the cache shim.
 
-Coverage:
-- Cache-key determinism: identical inputs at the same vintage produce the
-  same key.
-- Cache-key vintage separation: different TTL bucket vintages produce
-  different keys.
-- TTL-bucket vintage strings for each of the four classes.
-- ``cache_path`` matches the job-0031 live layout
-  (``cache/<ttl-class>/<source-class>/<hash>.<ext>``).
-- ``is_cacheable`` for each of the four TTL classes (parametrized).
-- Read-through-on-hit: pre-seeded S3 object is returned verbatim and
-  ``fetch_fn`` is NOT invoked.
-- Write-on-miss: ``fetch_fn`` is invoked, the object lands in the bucket,
-  and the ``s3://`` URI is returned.
-- ``live-no-cache`` short-circuit: ``fetch_fn`` invoked, no S3 write.
-- ``force_refresh=True``: lookup skipped, fetcher invoked, write executed.
-- ``fetch_fn`` failure re-raises without writing a sentinel.
-
-GCP is decommissioned (S3-only read-through): these tests drive the boto3 S3
-path via an in-memory ``boto3.client`` double, NOT the old injected
-``google.cloud.storage`` client.
-"""
+Key determinism at one vintage and separation across TTL-bucket vintages, the
+four vintage strings, the ``cache/<ttl-class>/<source-class>/<hash>.<ext>``
+layout, read-through on hit without invoking ``fetch_fn``, write on miss,
+``live-no-cache`` and ``force_refresh``, and a failure that writes no sentinel."""
 
 from __future__ import annotations
 
@@ -64,12 +47,10 @@ def test_cache_key_is_deterministic_for_same_inputs():
 
 
 def test_cache_key_separates_across_ttl_bucket_vintages():
-    """Different TTL-bucket vintages produce different keys for same inputs.
+    """Different TTL-bucket vintages produce different keys for the same inputs.
 
-    Acceptance criterion: ``dynamic-1h`` keys for the SAME params 90 minutes
-    apart produce DIFFERENT keys; ``static-30d`` keys 5 days apart produce
-    the SAME key.
-    """
+    ``dynamic-1h`` keys 90 minutes apart differ; ``static-30d`` keys 5 days apart are
+    the same."""
     params = {"bbox": [0.0, 0.0, 1.0, 1.0]}
 
     # dynamic-1h: 90 minutes apart -> different vintage strings -> different keys
@@ -207,10 +188,8 @@ class _Body:
 def fake_s3(monkeypatch) -> _FakeS3Client:
     """Monkeypatch ``boto3.client('s3', ...)`` to an in-memory double.
 
-    The cache shim builds its S3 client lazily via ``boto3.client`` inside
-    ``read_object_bytes_s3`` / ``_read_through_s3``; patching the factory
-    routes every call through the shared in-memory store.
-    """
+    The shim builds its client lazily inside the read helpers, so patching the
+    factory routes every call through the shared store."""
     import boto3
 
     store: dict[tuple[str, str], bytes] = {}

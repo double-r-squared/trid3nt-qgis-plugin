@@ -1,28 +1,9 @@
-"""#6 SYNC-TOOL OFF-LOAD -- in-code ALWAYS-OFFLOAD set for proven-heavy tools.
+"""The in-code ALWAYS-OFFLOAD set for proven-heavy sync tools.
 
-The staged ``TRID3NT_SYNC_TOOL_OFFLOAD`` env flag ships dark (mode ``off``) and
-flipping it to ``global`` on the box is a gated production-mode change. But a
-coastal-flood turn died at code 1005 because the LLM-driven ``fetch_topobathy``
-tool ran a ~61 s CUDEM tile merge + reproject + 189 MB COG materialize INLINE on
-the asyncio loop (``_invoke_with_unique_layer_id``), starving the 12 s WS
-data-heartbeat past the browser reconnect deadline (see
-feedback_no_sync_blocking_on_asyncio_loop).
-
-The fix is a pure-code ``_ALWAYS_OFFLOAD_SYNC_TOOLS`` frozenset: a TIGHT,
-hand-audited set of proven-pathological emit-free heavy sync tools that off-load
-to a worker thread REGARDLESS of the env flag. These tests pin:
-
-1. ``fetch_topobathy`` (the root-cause tool) is in the always-set and
-   ``_should_offload_sync_tool`` returns True for it EVEN in dark ``off`` mode;
-2. every always-set member off-loads in ``off`` mode (the set is unconditional);
-3. the startup guard runs its emit-free scan in ``off`` mode (because the
-   always-set is non-empty) and does NOT raise (every member is emit-free);
-4. the guard would REFUSE to start in ``off`` mode if an emitting tool were ever
-   added to the always-set -- so the invariant can never silently regress;
-5. both direct in-workflow ``fetch_topobathy`` call sites already run off-loop
-   via ``asyncio.to_thread`` (their enclosing helpers are sync, dispatched off
-   the loop), so the loop is never blocked by the workflow path either.
-"""
+``_ALWAYS_OFFLOAD_SYNC_TOOLS`` is a tight hand-audited frozenset whose members
+off-load to a worker thread REGARDLESS of the staged env flag, because a heavy
+sync body on the asyncio loop starves the WS heartbeat. Every member must be
+emit-free: the startup guard refuses to start if an emitting tool joins the set."""
 
 from __future__ import annotations
 
@@ -49,11 +30,10 @@ def test_fetch_topobathy_in_always_set() -> None:
 
 
 def test_goes_archive_animation_in_always_set() -> None:
-    """LIVE 2026-06-25: fetch_goes_archive_animation looped over 78+ frames (each a
-    ~54 MB netCDF download + reproject + COG write) ON the asyncio loop when the
-    LLM called it directly (the historical fire-animation path), starving the WS
-    heartbeat -> health-endpoint timeout + client connecting-loop. It must
-    off-load like its sibling fetch_goes_animation."""
+    """``fetch_goes_archive_animation`` off-loads like its sibling.
+
+    Called directly it loops over dozens of frames, each a large netCDF download,
+    reproject and COG write, which on the loop starves the WS heartbeat."""
     assert "fetch_goes_archive_animation" in server._ALWAYS_OFFLOAD_SYNC_TOOLS
     assert server._should_offload_sync_tool("fetch_goes_archive_animation") is True
 
@@ -120,10 +100,9 @@ def test_guard_refuses_emitting_tool_in_always_set_off_mode(
 
 
 def _calls_to_thread_with(src: str, fn_name: str) -> bool:
-    """True if ``src`` contains an ``asyncio.to_thread(<callable>, ...)`` whose
-    FIRST positional arg is a name/attr ending in ``fn_name`` (e.g.
-    ``asyncio.to_thread(_fetcher_chain)`` is a wrapper that calls fetch_topobathy
-    inside its body), OR a direct ``asyncio.to_thread(fetch_topobathy, ...)``."""
+    """True when ``src`` holds an ``asyncio.to_thread(<callable>, ...)`` whose FIRST
+    positional argument is a name or attribute ending in ``fn_name`` - the wrapper
+    case - or a direct ``asyncio.to_thread(fn_name, ...)``."""
     tree = ast.parse(src)
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -151,11 +130,8 @@ def _calls_to_thread_with(src: str, fn_name: str) -> bool:
 def test_no_workflow_calls_the_heavy_fetch_on_the_loop() -> None:
     """A synchronous heavy fetch inside a coroutine BLOCKS the loop.
 
-    The sweep is the guard rather than a per-composer offload assertion: a new
-    caller has to either stay synchronous (a producer the interpreter runs) or
-    wrap itself in ``asyncio.to_thread``, and this fails the moment one does
-    neither.
-    """
+    The sweep is the guard: a new caller either stays synchronous or wraps itself in
+    ``asyncio.to_thread``, and this fails the moment one does neither."""
     offenders: list[str] = []
     for path in _WORKFLOWS.rglob("*.py"):
         if "__pycache__" in path.parts:

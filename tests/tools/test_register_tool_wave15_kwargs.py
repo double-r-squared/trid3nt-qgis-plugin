@@ -1,24 +1,9 @@
-"""Live test of ``@register_tool``'s Wave-1.5 kwarg plumbing (job-0114-schema).
+"""The optional ``supports_global_query`` / estimator-name kwargs on ``@register_tool``.
 
-The schema-side contract change (``AtomicToolMetadata.supports_global_query``
-+ ``payload_mb_estimator_name``) is paired with the agent-side
-``register_tool`` decorator gaining the same two flags as optional
-keyword arguments. This test exercises the integration:
-
-1. ``@register_tool(metadata)`` with no kwargs preserves pre-Wave-1.5
-   behaviour (the metadata's defaults are visible in ``TOOL_REGISTRY``).
-2. ``@register_tool(metadata, supports_global_query=True)`` ovveridees the
-   field on the registered metadata.
-3. ``@register_tool(metadata, payload_mb_estimator_name="estimate_payload_mb")``
-   overrides the estimator-name field.
-4. Both flags compose (one decorator call sets both).
-5. The decorator-level override fails fast if it would invalidate the
-   cross-field FR-DC-6 rule.
-
-These tests use ``clear_registry_for_tests`` so registrations done here
-don't leak into the global registry (which is populated at import time
-by the real tool modules).
-"""
+With no kwargs the metadata's own values are what reaches ``TOOL_REGISTRY``;
+either kwarg overrides its field, the two compose in one call, and an override
+that would break the cross-field rule fails fast. Registrations here are
+snapshot-restored so they never leak into the global registry."""
 
 from __future__ import annotations
 
@@ -36,11 +21,8 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 def _snapshot_and_restore_registry() -> None:
     """Snapshot the real registry, run the test, then restore.
 
-    The real registry is populated at import time by every tool module
-    listed at the bottom of ``trid3nt_server/tools/__init__.py``. Our tests
-    need a clean slate; we restore the snapshot at teardown so subsequent
-    tests in the same pytest session still see the production tools.
-    """
+    The registry is populated at import time by every tool module, and later tests in
+    the same session still need those production tools."""
     snapshot = dict(TOOL_REGISTRY)
     clear_registry_for_tests()
     try:
@@ -134,15 +116,10 @@ def test_register_tool_composes_both_wave15_kwargs() -> None:
 
 
 def test_register_tool_kwarg_override_preserves_already_set_metadata_field() -> None:
-    """If the metadata already declares the field, passing the kwarg overrides it.
+    """The decorator kwarg wins when the metadata also declares the field.
 
-    Wave 1.5 sibling tools (e.g. fetch_mrms_qpe) use a defensive try/except
-    that passes the field via the ``AtomicToolMetadata`` constructor; once
-    the schema field exists, that pattern works directly. This test asserts
-    the decorator kwarg still wins when both are set, so a follow-up edit
-    can move the declaration from the metadata constructor to the decorator
-    site without behavioural drift.
-    """
+    That is what lets a declaration move from the metadata constructor to the
+    decorator site without behavioural drift."""
     # Construct metadata with supports_global_query=True already set on it.
     meta = AtomicToolMetadata(
         name="dummy_tool_both_set",

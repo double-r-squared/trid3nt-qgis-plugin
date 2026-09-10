@@ -1,16 +1,9 @@
-"""#6 sync-tool off-load — DISPATCH-PATH integration test.
+"""Sync-tool off-load, on the DISPATCH path.
 
-The Stage-0 unit tests (test_sync_tool_offload_stage0) pin the mode helper and
-the armed-only emit-free assertion. This file pins the thing that actually
-matters at runtime: that ``_invoke_tool_via_emitter`` runs a SYNC tool body on
-the event-loop thread under the dark default, but OFF-LOADS it to a worker
-thread when the mode is armed for that tool — while returning the identical
-result either way (output integrity preserved across the off-load).
-
-This is the programmatic proof that arming Stage 1 (``TRID3NT_SYNC_TOOL_OFFLOAD
-=subset``) is safe: the dispatch path is exercised end-to-end here, so the
-eventual env-flip is verified, not blind.
-"""
+``_invoke_tool_via_emitter`` runs a SYNC tool body on the event-loop thread under
+the dark default and off-loads it to a worker thread when the mode is armed for
+that tool, returning the identical result either way. Output integrity across the
+off-load is what makes arming the env flag a verified change rather than a blind one."""
 
 from __future__ import annotations
 
