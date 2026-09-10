@@ -131,3 +131,16 @@ rows keyed `file:line`, and the three `docs/proof` READMEs the
 are at the foot of `tests-plugin-contracts.md`, written by the agent that wrote
 and read them. No other file enters scope in this leg - the sweep edited files
 that already carry rows.
+
+## Template-docs leg delta
+
+Three script files (442 pure LOC) enter the `scripts` scope and two guard files
+(162 pure LOC) enter the `tests` scope; their rows are at the foot of
+`scripts-workers.md` and `tests-plugin-contracts.md`. The `docs` scope gains ten
+generated markdown pages, eight run records and thirty-three doc figures, and
+the tracked tree gains twelve package maps outside `docs/`; all of them are
+rowed at the foot of `docs-and-readmes.md`, which is where the map-README rule
+lives. Seven existing maps were corrected against the tree and carry a row
+naming the defect; each already had a row from the first pass, so no file enters
+scope unrowed. The remaining edits in the leg - the four `scripts/packet/`
+renderers that take `--doc` - are to files that already carry rows.

@@ -524,3 +524,16 @@ Read end to end by the agent that wrote it. Same columns.
 Scope delta: one file, 29 pure LOC (28 as `loc_report` prints it - the
 double-subtracted blank inside the module docstring, the same instrument defect
 every lens records).
+
+## Added by the template-docs leg: two more guards in `tests/hygiene/`
+
+Written and read end to end by the agent that landed them. Same columns as the
+guards leg; both are KEEP and both join the `test-server` slice.
+
+| path | pure | hist | fate | note |
+| --- | ---: | ---: | --- | --- |
+| `tests/hygiene/test_template_docs.py` | 92 | 0 | KEEP | every registered template has a page, a run record and figures; the pages are byte-current against the generator; a figure whose stamped commit does not contain its template's last change fails; the figures stay inside the doc-size ceilings |
+| `tests/hygiene/test_map_readmes.py` | 70 | 0 | KEEP | a package map names only what exists beside it, and names every tracked top-level module and immediate subfolder |
+
+Scope delta: `git ls-files tests plugin/tests contracts/tests` gains two files,
+162 pure LOC. `tests/README.md`'s `hygiene/` row is restated from 3 files to 6.

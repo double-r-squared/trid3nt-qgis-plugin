@@ -192,3 +192,18 @@ the tables; they did not produce them.
 ## Summary
 
 files listed: 69 / files read: 69 / rows written: 69 (the two mesh-format modules left this scope; their rows are in `workflows-mesh.md`)
+
+## Added by the template-docs leg: `scripts/packet/` + `scripts/instruments/`
+
+Three files, written and read end to end by the agent that landed them. Same
+columns as sections 2 and 3; `hist` is the standing history-marker regex count
+after the read. All three are KEEP - they are the lane the DOC IMAGES and
+TEMPLATE DOCS rulings name - and neither carries an LLM-facing docstring.
+
+| path | pure LOC | docstrings (longest) | comment blocks > 6 lines | hist | refs to deleted or moved | fate | notes |
+| --- | ---: | --- | --- | ---: | --- | --- | --- |
+| `scripts/packet/doc_size.py` | 66 | 5 / module 3; every function 1-2 | none | 0 | none | KEEP | The doc-size policy in one place: the three densities, the frame stride, the palette pass, the commit stamp read and written for PNG and GIF. Nine `#:` constants, each stating the measurement behind its number. |
+| `scripts/packet/doc_renders.py` | 159 | 9 / module 4; `proving_run` 2, `_case_id_for` 3 | none | 0 | none | KEEP | Pins the run a page documents, writes `run.json`, and renders through the assembler's own `_render` at the doc size. Reads the local run journal and the local persistence store, both untracked - so it is a RENDER lane, never a generation input. |
+| `scripts/instruments/gen_template_docs.py` | 217 | 15 / module 5; `render_template` 1, `_caption` 1 | none | 0 | none | KEEP | The generator: a pure function of the registry declarations, the committed `run.json` and the figures on disk. `--check` is what the byte-currency guard calls. |
+
+Scope delta: `git ls-files scripts workers` gains three files, 442 pure LOC.

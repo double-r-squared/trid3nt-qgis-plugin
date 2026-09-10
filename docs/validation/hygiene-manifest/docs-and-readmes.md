@@ -429,3 +429,61 @@ files listed: 209 / files read: 209 / rows written: 209 (191 at the first pass,
 plus the eighteen docs that landed after the census: the sixteen
 `hygiene-manifest/` siblings that became tracked, `docs/READABILITY_LEDGER.md`
 and `docs/validation/docstring-exemptions.md`)
+
+## Added by the template-docs leg
+
+Written and read end to end by the agent that landed them. Two classes: pages
+this leg GENERATES (the generator is the reader of record - a page cannot drift
+from the declaration it is written from, and the byte-currency guard proves it),
+and maps this leg WROTE or CORRECTED after reading the package they describe.
+
+### Generated pages and the run records beside them
+
+| path | lines | fate | note |
+| --- | ---: | --- | --- |
+| `docs/templates/index.md` | 70 | KEEP - generated | the gallery: eight cards, each a doc composite, the question and the module |
+| `docs/templates/artemis_harbor_agitation.md` | 109 | KEEP - generated | one page per registered template: the question, the module and parts, the DATA rows with producer and datum, the sheet, what it answers, the figures, the proving run's filled sheet with provenance, the reproduce block |
+| `docs/templates/telemac3d_stratified_flow.md` | 140 | KEEP - generated | as above |
+| `docs/templates/telemac_do_sag.md` | 158 | KEEP - generated | as above |
+| `docs/templates/telemac_rain_on_grid.md` | 152 | KEEP - generated | as above; two declared animations, so two of each figure |
+| `docs/templates/telemac_river_dye.md` | 160 | KEEP - generated | as above |
+| `docs/templates/telemac_river_oil_spill.md` | 162 | KEEP - generated | as above |
+| `docs/templates/telemac_river_scour.md` | 178 | KEEP - generated | as above |
+| `docs/templates/telemac_river_sediment_plume.md` | 157 | KEEP - generated | as above |
+| `docs/modules.md` | 22 | KEEP - generated | the five module wrappers: keyword count, composites, outputs, and the `describe_keywords` read over them |
+| `docs/templates/<template>/run.json` (8) | - | KEEP - evidence | the committed record of the proving run a page is generated from: the invocation, the sheet, its provenance, the answer, the published layers. Written by the doc renderer; the pages read it, and nothing reads the untracked run journal |
+| `docs/templates/<template>/*.png`, `*.gif` (33) | - | KEEP - evidence | the doc-sized figures, 9.0 MB total, each stamped with its run id and the commit that drew it. Frozen like `docs/proof/` in kind, but REPLACED rather than kept when the declaration moves - that is what the freshness guard forces |
+
+### Package maps written by this leg
+
+| path | lines | fate | note |
+| --- | ---: | --- | --- |
+| `trid3nt_server/README.md` | 35 | KEEP | the package root: seven modules, eleven subfolders, one line each |
+| `trid3nt_server/adapters/README.md` | 20 | KEEP | the shared IR and one adapter per provider |
+| `trid3nt_server/cases/README.md` | 14 | KEEP | the two seams that move a layer the other way |
+| `trid3nt_server/credentials/README.md` | 14 | KEEP | the handshake, the registry, the resolver |
+| `trid3nt_server/emission/README.md` | 23 | KEEP | eleven modules; the one styling seam is named as one |
+| `trid3nt_server/fallbacks/README.md` | 15 | KEEP | ladders as data, one walker, the persisted activations |
+| `trid3nt_server/gates/README.md` | 30 | KEEP | thirteen modules and the `cards/` table |
+| `trid3nt_server/sandbox/README.md` | 14 | KEEP | the box, and what runs inside it |
+| `trid3nt_server/server/README.md` | 25 | KEEP | five modules and the four subpackages |
+| `trid3nt_server/testing/README.md` | 18 | KEEP | the scripted client and the declared canaries |
+| `scripts/README.md` | 29 | KEEP | the eight entry points, and the four lanes below them |
+| `contracts/trid3nt_contracts/README.md` | 36 | KEEP | one row per contract |
+
+### Existing maps corrected against the tree
+
+| path | what was wrong | fate |
+| --- | --- | --- |
+| `README.md` | named `server/` for `trid3nt_server/`, the multi-hazard framing, five engines where one ships, a deleted `data/` row; no module surface, gallery, contracts, tests or suite | REWRITE - done |
+| `plugin/README.md` | named none of its own files or subfolders | REWRITE - a Layout section added under the user-facing page |
+| `workers/README.md` | named neither `conftest.py` nor its two subfolders; the roster was prose | REWRITE - done |
+| `tests/README.md` | did not name `conftest.py`; the `hygiene/` row counted three files | REWRITE - done |
+| `trid3nt_server/tools/README.md` | the `fetchers/` section's rows were relative to `fetchers/`, so thirteen of them resolved to nothing from the map's own directory | REWRITE - rows re-rooted |
+| `trid3nt_server/workflows/README.md` | the same defect over the `runtime/` section, nineteen rows | REWRITE - rows re-rooted |
+| `trid3nt_server/workflows/telemac/templates/README.md` | did not name its own `__init__.py` | REWRITE - done |
+
+Scope delta: `git ls-files docs | grep -v '^docs/proof/'` gains ten markdown
+pages, eight run records and thirty-three figures; the tracked tree gains twelve
+package maps outside `docs/`, rowed here because the map-README rule is this
+lens's subject.
