@@ -53,3 +53,6 @@ scripts/local/
 scratchpad/staging/
 scratchpad/
 experiments/
+
+# machine-only: regenerated wholesale by scripts/instruments/code_graph.py on every run
+docs/validation/code-graph/graph.json

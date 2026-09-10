@@ -24,7 +24,7 @@
 > gate, not a preference, and five of the six carry it.
 
 Branch `refactor/engine-doors`. Read-only synthesis over 5 per-tool audit batches +
-`processing-redundancy-report.md` (prior art) + `processing-decloud-refactor.md` (queued).
+the redundancy report (prior art) and the de-cloud refactor (both since executed and deleted).
 Scope: `agent/tools/processing/` only (40 registered tools + 2 register-nothing infra modules).
 CULL STANDARD: a tool dies only with live replication evidence on remaining surfaces; function
 never lost; usage is never a cut criterion. This doc proposes verdicts and gates; it runs no

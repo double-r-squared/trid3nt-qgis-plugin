@@ -54,6 +54,12 @@ The variables below are the complete shipped file, grouped by concern.
 | `TRID3NT_RUNS_DIR` | `<repo>/data/runs` | Host rundir root for local solves; mounted into engine containers at `/data`. The code default `/opt/grace2/runs` does not exist on a dev box -- set it. |
 | `TRID3NT_OQ_BIN` | `<repo>/venvs/agent/bin/oq` | Path to the OpenQuake `oq` CLI (installed into the agent venv). First run needs a one-time `oq engine --upgrade-db`. |
 
+## Meshing
+
+| Variable | Shipped value | What it does |
+|----------|---------------|--------------|
+| `TRID3NT_GSHHG_SHP` | unset | Absolute path to a GSHHG L1 polygon shapefile, the COARSE rung of the shoreline ladder an open-water mesh extent is cut from. The fine rung is `fetch_osm_coastline` and needs no configuration; this rung is machine-local because the dataset is a download, not a service. The resolution is read from the file's own name letter (`f` 100 m, `h` 200 m, `i` 1 km, `l` 5 km, `c` coarser). Unset, the ladder refuses with every rung named rather than silently meshing a coarser coast: an open-water template asked for a domain it cannot cut will say so.
+
 ## Agent process
 
 | Variable | Shipped value | What it does |

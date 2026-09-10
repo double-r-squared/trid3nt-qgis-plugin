@@ -1,6 +1,6 @@
 # corpus-additions.yaml
 # Proposed tool_query_corpus.yaml entries for the 9-tool V&V wave (ADR 0021,
-# docs/validation/build-contract.md). tool_query_corpus.yaml itself carries
+# the retired build contract). tool_query_corpus.yaml itself carries
 # uncommitted user WIP and is off-limits to every build/integration agent, so
 # these entries are staged HERE for NATE to land by hand-merging into that
 # file (same key: list-of-query-strings format as tool_query_corpus.yaml).
@@ -10,7 +10,7 @@
 # runs ONLY once these entries are merged into the real corpus file -- it
 # reads from tool_query_corpus.yaml, not from this staging file. Until then,
 # treat retrieval visibility for these 9 tools as UNVERIFIED (see
-# build-report.md open issues).
+# that build's open issues).
 #
 # Source: lane structured reports (lanes A/B/C/D), collected verbatim by the
 # integration agent. No lane touched tool_query_corpus.yaml directly.

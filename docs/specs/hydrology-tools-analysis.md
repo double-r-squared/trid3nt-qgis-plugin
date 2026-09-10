@@ -12,11 +12,11 @@ and a Legacy section.
 
 ## Ground-truth anchors (what we already run)
 
-- **Data-router fold** (`docs/specs/data-router-fold.md`, `fetcher-fold-audit.md`):
+- **Data-router fold** (executed; the record is `docs/validation/fetcher-fold-census.md`):
   97 fetchers / 71,836 lines folding to YAML source specs + a shared router with
   pluggable ingestion executors. A router executor MAY delegate to a maintained
   client library instead of raw HTTP - this is exactly the FOLD lens below.
-- **Calibration / V&V lane** (`docs/validation/tool-list.md`, `build-contract.md`):
+- **Calibration / V&V lane** (`docs/design/calibration-methodology.md`):
   `compute_skill_metrics` wraps `spotpy.objectivefunctions` (NSE/KGE/PBIAS/RMSE
   native); `read_run_diagnostics`; setters use hydromt-sfincs `setup_*`,
   swmm-api/PySWMM, flopy; `run_pest_calibration` uses pyEMU/PstFrom (FROZEN loop).
@@ -194,7 +194,7 @@ Ordered by priority. Lane / what-it-adds / cost class per row; evidence below.
   delineation - which SFINCS domain definition and SWMM subcatchment derivation want.
   pysheds is the lightest option (vs PyGeoprocessing #15, Lidar). Also relevant to the
   `check_lidar_artifacts` gap (DEM hydro-conditioning / depression filling) noted in
-  `tool-list.md` line 138.
+  the V&V primitive list, since deleted with the registry it mirrored.
 - **Cost class:** dep-only (playground) OR a `compute_watershed` irreducible primitive
   (sibling of `compute_contours`) - borderline under "analysis is playground"; delineation
   is arguably irreducible enough to be a tool.

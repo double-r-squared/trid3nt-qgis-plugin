@@ -362,7 +362,7 @@ def test_atomic_tool_metadata_advertises_global_policy_to_llm_catalog() -> None:
 
 
 # ============================================================================ #
-# Engine-door refactor additions (docs/specs/engine-door-refactor.md):
+# The tier vocabulary and the optional engine field:
 #   engine: str | None = None + tier: Literal["general","door","template"]
 # ============================================================================ #
 

@@ -3627,3 +3627,43 @@ measurements - and where the design space went.
 | Candidate | Scope | Condition to delete | Status | Source |
 |---|---|---|---|---|
 | `docs/specs/system-uml.html` (167) | `docs/specs/` | DELETED rather than demoted to a generated rendering, because the model views already cover it and a rendering with no generator is the same ungated copy under a new name. Section 1 (the declaration surface) is `steering-surface.sysml` plus `data-seam.sysml`; section 2 (the chain and mesh subsystem) is `mesh-seam.sysml`; section 3 (the solve seam) is `solve-seam.sysml`, whose reader end plus `emission-seam.sysml` also carry section 5's product states. Each of those regenerates its view in-commit and `tests/model/test_model_conformance.py` fails while one is stale, which this page had nothing equivalent to - it was rev 1 of 2026-08-30 and had not moved through the mesh or module-surface waves. Its section 4, the end-to-end sequence, is the one part no seam holds; it is also the part that had gone stale, naming `FormGate` and `DrawGate`, both of which grep to ZERO in `trid3nt_server`, `contracts` and `plugin`. ADR 0320 is amended in the same wave to say why: a spec's UML depicts the mechanism a wave commits to, and a drawing of live structure belongs to the suite-checked model | DELETED (2026-09-09) | `docs/validation/docs-census.md` Q4f; `docs/validation/hygiene-manifest/docs-and-readmes.md` finding 10 |
+
+## The docs layout - 62 stale files deleted, four moved - 2026-09-09
+
+| Candidate | Scope | Condition to delete | Status | Source |
+|---|---|---|---|---|
+| 62 files across `docs/{design,playbooks,reports,research,specs,validation}` plus `docs/metrics.md` | `docs/` | Every one carries a per-file row in `docs/validation/hygiene-manifest/docs-and-readmes.md` with the measurement that makes it stale: a package map whose package is gone, a kickoff whose wave closed, a spec whose contract shipped, an audit whose findings landed, a report on engines that left the tree, or one of the five byte-identical A/B twins (md5-verified). `docs/metrics.md` is the sharpened case - it deletes not merely because it is stale but because NOTHING regenerates it, so it can only be re-derived, which `loc_report.py` and `code_graph.py` already do | DELETED (2026-09-09) | `docs/validation/docs-census.md` 3.1-3.5; the per-file rows in `hygiene-manifest/docs-and-readmes.md` |
+| `docs/validation/code-graph/graph.json` (1.0 MB) | `docs/validation/code-graph/` | UNTRACKED rather than deleted: it is machine output regenerated wholesale on every `code_graph.py` run, it dirties the index each time, and `model_check.py` no longer reads it (it parses its own import edges). The three markdown reports beside it stay tracked. `docs/model/*-view.md` is deliberately NOT ignored - the suite fails while one is stale, and untracking them removes the gate | `git rm --cached` + `.gitignore` (2026-09-09) | `docs/validation/docs-census.md` 4 |
+
+Moved rather than deleted, because a dated measurement belongs in
+`docs/validation/` and not beside a standing design:
+`docs/design/{external-fetch-audit,fallback-audit,demo-physics-defaults-audit}.md`
+-> `docs/validation/`. The manifest rows the census fed rated all three DELETE
+on measured staleness; the wave's own instruction was the move, so they are
+moved and the divergence is REPORTED rather than decided here.
+`docs/decisions/afk-ledger-2026-08-24.md` -> `docs/validation/` for the same
+reason: a closed AFK ledger is not a decision record.
+
+`docs/design/` is left holding seven standing designs and no dated audit:
+`calibration-methodology.md`, `declarative-workflows.md`, `fallback-ladders.md`,
+`outputs-manifest-schema.md` (FROZEN), plus the three package maps
+(`adapters.md`, `gates.md`, `server-package.md`) and `emission.md` and
+`offline-architecture.md` and `local-model-upgrade-2026-07.md`, all of which
+carry REWRITE rows rather than delete rows.
+
+Embedded non-map documentation moved out of the packages: `plugin/README.md`'s
+sixty-line per-OS matplotlib wheel recipe is now
+`docs/site/install.md#plugin-dependencies-matplotlib-per-os` and the README
+keeps a map-sized pointer. `TRID3NT_GSHHG_SHP`, the coarse rung of the
+shoreline ladder, was named only inside `workflows/mesh/README.md` and the code
+that reads it; it now has a row in `docs/site/configuration.md`, which is where
+an env var belongs.
+
+Four dead cross-references were repointed rather than left dangling:
+`contracts/tests/test_tool_registry.py:365` (the one Python comment naming a
+deleted spec), `docs/specs/hydrology-tools-analysis.md`,
+`docs/specs/processing-redundancy-cull-proposal.md` and
+`docs/validation/corpus-additions.yaml`. Dated records that name a deleted file
+are left verbatim: `mesh-recipe-conformance.md`, `scripts-eval.md`, the A/B
+final report, `docs/IDEAS.md` and the ledger rows above all record what was true
+when they were written.
