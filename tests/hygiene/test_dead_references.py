@@ -1,8 +1,9 @@
-"""Every module, script or path a comment, docstring or README names must exist.
+"""Every module, script or path a comment, docstring or reader-facing doc names,
+and every relative link those docs carry, must resolve against the tracked tree.
 
-A reference that stopped resolving is a lie the reader cannot check, so the
-guard resolves paths, bare script names and dotted module paths against the
-tracked tree.
+A reference that stopped resolving is a lie the reader cannot check. Prose scope
+is the product trees plus the manual; a dated record states what was true then
+and is read as evidence, so it is out.
 """
 
 from __future__ import annotations
@@ -19,6 +20,16 @@ SCRIPT_REF = re.compile(r"(?<![\w./*>-])[a-z_][a-z0-9_]{2,}\.(?:py|sh)\b")
 MODULE_REF = re.compile(r"\b(?:trid3nt_server|trid3nt_contracts)(?:\.[a-z_][a-z0-9_]*)+\b")
 
 PACKAGE_ROOTS = ("", "contracts/", "plugin/")
+
+#: Markdown whose sentences are claims about the tree as it is now: the reader's
+#: manual, the generated template pages, and every directory map. A dated record
+#: under `docs/design/`, `docs/validation/`, `docs/reports/` or `docs/decisions/`
+#: names what it named when it was written and is not scanned.
+LIVE_DOC_ROOTS = ("docs/site/", "docs/authoring/", "docs/playbooks/", "docs/templates/")
+
+#: Relative links are resolved in every tracked markdown outside frozen evidence:
+#: a link is a promise the reader can follow, whatever the page's vintage.
+LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 
 
 def _tracked():
@@ -62,13 +73,21 @@ def _prose():
             yield comment.rel, comment.lineno, comment.text, ""
         for doc in source.docstrings(path):
             yield doc.rel, doc.lineno, doc.text, ""
-    for path in source.markdown_files():
-        if path.name != "README.md":
-            continue
-        rel = str(path.relative_to(source.REPO_ROOT))
+    for rel in _live_docs():
         base = rel.rsplit("/", 1)[0] + "/" if "/" in rel else ""
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        text = (source.REPO_ROOT / rel).read_text(encoding="utf-8")
+        for number, line in enumerate(text.splitlines(), start=1):
             yield rel, number, line, base
+
+
+def _live_docs() -> list[str]:
+    """The markdown whose sentences are claims about the tree as it is now."""
+    live = ["Makefile"]
+    for path in source.markdown_files():
+        rel = str(path.relative_to(source.REPO_ROOT))
+        if path.name == "README.md" or rel.startswith(LIVE_DOC_ROOTS):
+            live.append(rel)
+    return live
 
 
 def test_named_modules_and_scripts_exist() -> None:
@@ -96,3 +115,22 @@ def _resolves(ref: str, files, dirs, basenames, base: str = "") -> bool:
     if ref.startswith(("trid3nt_server.", "trid3nt_contracts.")):
         return any(candidate in files or candidate in dirs for candidate in _module_paths(ref))
     return (source.REPO_ROOT / ref).exists()
+
+
+def test_relative_links_resolve() -> None:
+    """A link the reader cannot follow is the same defect as a dead path."""
+    broken = []
+    for path in source.markdown_files():
+        rel = str(path.relative_to(source.REPO_ROOT))
+        if rel.startswith("docs/proof/"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        for number, line in enumerate(text.splitlines(), start=1):
+            for match in LINK.finditer(line):
+                target = match.group(1)
+                if target.startswith(("http://", "https://", "mailto:", "#")):
+                    continue
+                target = target.split("#")[0]
+                if target and not (path.parent / target).resolve().exists():
+                    broken.append(f"{rel}:{number} links {match.group(1)!r}, which does not exist")
+    assert not broken, "broken relative links:\n" + "\n".join(sorted(set(broken)))

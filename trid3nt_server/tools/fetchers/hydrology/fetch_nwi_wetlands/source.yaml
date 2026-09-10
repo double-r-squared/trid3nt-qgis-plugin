@@ -56,29 +56,43 @@ caveats:
 - USFWS National Wetlands Inventory polygons via the public MapServer (layer 0), geojson with WAF headers,
   prefix-strip normalizer. US + territories; bbox required. Vegetated/classified wetlands, NOT open water
   (use fetch_nhd_waterbodies).
-docstring: "USFWS National Wetlands Inventory (NWI) wetland polygons as a vector layer.\n\nROUTING --\
-  \ use this when the user wants WETLAND EXTENT / boundaries: \"show\nthe wetlands here\", \"map the marshes\
-  \ / swamps / bogs\", \"NWI wetlands\",\n\"Cowardin wetland classes\", \"freshwater emergent / forested\
-  \ wetlands\",\n\"estuarine wetlands\", or needs wetland polygons to overlay on / intersect\nwith a hazard\
-  \ footprint. KEY-FREE, US + territories, authoritative USFWS\nsource.\n\nPrefer THIS over:\n- ``fetch_nhd_waterbodies``\
-  \ -- that returns OPEN-WATER polygons (lakes,\n  ponds, reservoirs); this returns VEGETATED / classified\
-  \ WETLANDS. Fetch\n  both when the user wants \"all water + wetland habitat\".\n- ``fetch_jrc_global_surface_water``\
-  \ -- that is a global surface-water RASTER\n  (occurrence %), not classified wetland polygons.\n- ``digitize_water_body``\
-  \ -- that CV-vectorizes one water body from imagery;\n  NWI is the pre-mapped national inventory.\n\
-  Do NOT use for: FEMA regulatory flood zones (``fetch_fema_nfhl_zones``),\nadministrative boundaries\
-  \ (``fetch_administrative_boundaries``), or soil types\n(``fetch_soilgrids`` / ``fetch_statsgo_soils``).\n\
-  \nParameters:\n    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. REQUIRED -- NWI does\
-  \ not support a global query (national-scale polygon corpus).\n        Recommended <= ~1 deg on a side;\
-  \ larger envelopes risk the\n        100k-feature pagination ceiling. Example (Naples, FL):\n      \
-  \  ``(-81.5, 26.0, -81.3, 26.2)``.\n\nReturns:\n    ``LayerURI`` (``layer_type=\"vector\"``, ``role=\"\
-  context\"``,\n ``units=None``) pointing at a\n    FlatGeobuf in\
-  \ the cache bucket with per-polygon columns:\n        attribute     (str) -- NWI code (e.g. \"L1UBHx\"\
-  , \"PFO1A\")\n        wetland_type  (str) -- Cowardin type (e.g. \"Lake\", \"Freshwater\n          \
-  \                      Forested/Shrub Wetland\", \"Estuarine and\n                                Marine\
-  \ Wetland\")\n        acres         (float) -- polygon area in acres (from the source)\n    An empty\
-  \ bbox over open ocean / an unmapped area returns a valid\n    0-feature FlatGeobuf (NOT an error).\n\
-  \nCross-tool dependencies:\n    - Composed by ``analyze_affected_habitats`` (the wetland channel of\
-  \ the\n      habitat-impact assessment).\n    - Feeds ``spatial_query`` (wetland area by type inside\
-  \ a footprint, or\n      wetlands within a place / protected area).\n\nResilience: the read is one ESRIJSON driver query the\
-  \ driver pages\nitself; an upstream failure is an honest\n``NWIWetlandsUpstreamError(retryable=True)``.\
-  \ Never fabricates a non-empty\nlayer. Cache: ``static-30d``, keyed on ``bbox-rounded-6dp`` + month\nvintage."
+docstring: |-
+  USFWS National Wetlands Inventory (NWI) wetland polygons as a vector layer.
+
+  ROUTING -- use this when the user wants WETLAND EXTENT / boundaries: "show
+  the wetlands here", "map the marshes / swamps / bogs", "NWI wetlands",
+  "Cowardin wetland classes", "freshwater emergent / forested wetlands",
+  "estuarine wetlands", or needs wetland polygons to overlay on / intersect
+  with a hazard footprint. KEY-FREE, US + territories, authoritative USFWS
+  source.
+
+  Prefer THIS over:
+  - ``fetch_nhd_waterbodies`` -- that returns OPEN-WATER polygons (lakes,
+    ponds, reservoirs); this returns VEGETATED / classified WETLANDS. Fetch
+    both when the user wants "all water + wetland habitat".
+  - ``fetch_jrc_global_surface_water`` -- that is a global surface-water RASTER
+    (occurrence %), not classified wetland polygons.
+  - ``digitize_water_body`` -- that CV-vectorizes one water body from imagery;
+    NWI is the pre-mapped national inventory.
+  Do NOT use for: FEMA regulatory flood zones (``fetch_fema_nfhl_zones``),
+  administrative boundaries (``fetch_administrative_boundaries``), or soil types
+  (``fetch_soilgrids`` / ``fetch_statsgo_soils``).
+
+  Parameters:
+      bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. REQUIRED --
+          NWI does not support a global query (national-scale polygon corpus).
+          Recommended <= ~1 deg on a side; larger envelopes risk the
+          100k-feature pagination ceiling.
+
+  Returns:
+      ``LayerURI`` (``layer_type="vector"``, ``role="context"``, ``units=None``)
+      pointing at a FlatGeobuf with per-polygon columns:
+          attribute     (str) -- NWI code (e.g. "L1UBHx", "PFO1A")
+          wetland_type  (str) -- Cowardin type (e.g. "Lake", "Freshwater
+                                  Forested/Shrub Wetland", "Estuarine and
+                                  Marine Wetland")
+          acres         (float) -- polygon area in acres (from the source)
+      An empty bbox over open ocean / an unmapped area returns a valid
+      0-feature FlatGeobuf (NOT an error). An upstream failure raises
+      ``NWIWetlandsUpstreamError(retryable=True)``; a non-empty layer is never
+      fabricated.

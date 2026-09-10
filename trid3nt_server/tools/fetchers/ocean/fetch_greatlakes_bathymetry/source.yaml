@@ -135,6 +135,3 @@ docstring: |-
       Bathymetry product. It is NOT NAVD88 and NOT mean sea level: a bed on this
       datum and a water level on an orthometric one need a stated offset before
       they can be read together.
-
-  Cache: ``ttl_class="static-30d"``, ``source_class="greatlakes_bathymetry"``.
-  Tier-1 free. No API key. ``supports_global_query=False``.

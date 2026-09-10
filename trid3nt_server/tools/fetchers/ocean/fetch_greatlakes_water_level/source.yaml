@@ -130,6 +130,3 @@ docstring: |-
       data endpoint for it by name. It is NOT NAVD88, NOT IGLD85 and NOT mean
       sea level; a level here and an orthometric elevation need a stated offset
       before they can be read together.
-
-  Cache: ``ttl_class="dynamic-1h"``, ``source_class="greatlakes_water_level"``.
-  Tier-1 free. No API key. ``supports_global_query=False``.

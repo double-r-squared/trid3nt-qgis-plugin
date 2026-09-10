@@ -1,5 +1,12 @@
 # Local model upgrade research -- better tool-calling brains for TRID3NT Local (2026-07)
 
+> Frozen record. Its procedure (steps 5-7) drives three routing harnesses that no
+> longer face a clone: `tool_routing_sweep.py` was deleted outright, and
+> `routing_failure_split.py` and `tool_routing_bench.py` moved to the untracked
+> `scripts/local/`. The findings below are left verbatim; what a shipped page may
+> say about routing is the MEASUREMENT, as `docs/site/models.md` now states it,
+> and the moves are recorded in `docs/DELETION_LEDGER.md`.
+
 Status: research only (nothing pulled, nothing benchmarked). Follow-up to the pass-3 routing
 sweep verdict: all 127 scored failures were MODEL-MISS at K=8 -- the retrieval layer put the
 right tool on the 8-tool menu every single time and `qwen3:8b-16k` picked wrong or declined

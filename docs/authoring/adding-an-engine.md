@@ -51,8 +51,9 @@ seam list, from the TELEMAC templates:
    reader that cannot describe the result.
 
 4. **The steps** -- `workflows/<engine>/steps/`: the deck writer and the product
-   reader the row names. A product raster declares the QUANTITY it computed; the
-   style contract (`contracts/trid3nt_contracts/styles.yaml`) owns the preset.
+   reader the row names. A product raster declares the QUANTITY it computed and
+   carries a declared `style` row on its `LayerURI`; `trid3nt_server/emission/presets.py`
+   resolves that row into one of the four preset kinds.
 
 5. **Discovery + wiring**:
    - import the template in `trid3nt_server/tools/__init__.py` so its
@@ -70,8 +71,8 @@ Each new engine adds, roughly in order:
 
 1. **A result contract** in `contracts/trid3nt_contracts/<engine>_contracts.py`:
    the headline `LayerURI` subclass carrying the typed scalars the agent
-   narrates, mirroring `telemac_contracts.py`. Style presets are named here and
-   declared once in `styles.yaml`.
+   narrates, mirroring `telemac_contracts.py`. A product's style is declared on
+   the layer it rides, once, in the reader that builds it.
 
 2. **A worker** under `workers/<engine>/`: an `entrypoint.py` plus the deck
    builders. The worker is an ENGINE ROOM - a staged run dir in, results out, no

@@ -537,3 +537,18 @@ guards leg; both are KEEP and both join the `test-server` slice.
 
 Scope delta: `git ls-files tests plugin/tests contracts/tests` gains two files,
 162 pure LOC. `tests/README.md`'s `hygiene/` row is restated from 3 files to 6.
+
+## Completeness critic, round 2: the dead-reference guard grows two lenses
+
+No file enters scope. `tests/hygiene/test_dead_references.py`, already rowed in
+the guards leg, gains the two checks whose absence let seven live pages carry a
+dead reference through the whole wave:
+
+| what it now reads | why the scope stops where it does |
+| --- | --- |
+| the reader's manual as prose - `docs/site/`, `docs/authoring/`, `docs/playbooks/`, `docs/templates/`, every README, and the `Makefile` - not `README.md` alone | a dated record under `docs/design/`, `docs/validation/`, `docs/reports/` or `docs/decisions/` names what it named when it was written, and DATED RECORDS STAY VERBATIM; scanning one would turn a frozen finding into a red test |
+| every relative link in every tracked markdown outside `docs/proof/` | a link is a promise the reader can follow whatever the page's vintage, so this one has no vintage exemption; `docs/proof/` is frozen evidence and out of the wave |
+
+Both proven on a seeded break: a live doc naming an absent instrument, and a
+page linking an absent sibling. `tests/README.md`'s `hygiene/` row still reads 6
+files - the file count is unchanged.

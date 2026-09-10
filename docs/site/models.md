@@ -2,7 +2,7 @@
 
 The LLM is pluggable through the OpenAI-compatible seam (`MODEL_PROVIDER=openai` +
 `TRID3NT_OPENAI_BASE_URL`). This page records what has actually been measured locally: which
-models can drive the ~176-tool agent, why the default is what it is, and what the routing
+models can drive the 161-tool agent, why the default is what it is, and what the routing
 benchmarks say.
 
 Reference box for all numbers below: consumer desktop with an NVIDIA RTX 2060 SUPER (8 GB
@@ -48,18 +48,20 @@ system-suffix seam -- harmless for models that ignore it).
 
 ## Tool retrieval (top-K)
 
-An 8B model cannot reliably pick the right tool out of a 176-tool catalog (measured below), so
-the local build runs the retrieval layer in **enforce** mode: each turn, the user text is
-ranked against the tool corpus (BM25 + name-substring + local dense embeddings, fused with
-RRF, reusing `discover_dataset`'s cached index) and only the top-K tools (plus a hot-set floor,
+An 8B model cannot reliably pick the right tool out of a registry this size (161 tools
+today, 176 when the bench below ran), so the local build always runs the retrieval
+layer: each turn, the user text is ranked against the tool corpus (BM25 +
+name-substring + local dense embeddings, fused with RRF, reusing
+`discover_dataset`'s cached index) and only the top-K tools (plus a hot-set floor,
 union-ed monotonically per Case) are declared to the model.
 
-- `TRID3NT_TOOL_RETRIEVAL=enforce`, `TRID3NT_TOOL_RETRIEVAL_K=8` locally (code default K=25).
+- `TRID3NT_TOOL_RETRIEVAL_K=8` locally (code default K=25). There is no on/off knob:
+  the off and shadow modes were removed and retrieval always enforces.
 - **Fail-open**: a cold index, an error, or an empty ranking shows the full registry -- the
   layer can never hide every tool.
 - The index is warmed at startup (`asyncio.to_thread`); until the warm completes, retrieval
-  logs `discover index COLD; FAIL-OPEN to full registry` and the model faces all 176 tools --
-  which measurably hurts routing (below).
+  logs `discover index COLD; FAIL-OPEN to full registry` and the model faces the whole
+  registry -- which measurably hurts routing (below).
 
 ## Benchmark history
 

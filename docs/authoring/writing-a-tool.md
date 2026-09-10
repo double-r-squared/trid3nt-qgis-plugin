@@ -2,7 +2,7 @@
 
 This is the step-by-step guide to adding your own atomic tool to the agent. An
 "atomic tool" is a single Python function the LLM can call: a data fetcher, a
-raster/vector compute, or an irreducible primitive. Follow the seven steps below
+raster/vector compute, or an irreducible primitive. Follow the six steps below
 and your tool will register at import time, route from natural-language prompts,
 render its output on the map, and pass the mandatory acceptance checks.
 
@@ -12,10 +12,16 @@ render its output on the map, and pass the mandatory acceptance checks.
 > "compute one primitive from a raster", it is a tool. If it is "combine layers
 > A, B, C into an impact number", it is a playground composition.
 
+A DATA FETCHER is not written in Python at all: it is DECLARED as a
+`source.yaml` beside a `corpus.yaml` under `trid3nt_server/tools/fetchers/`, and
+the router promotes the declaration into a registered tool. Read
+`trid3nt_server/tools/README.md` for that path. Everything below is the CODED
+path - the processing, display, search and meta primitives.
+
 Two files are your templates. Read them next to this guide:
 
-- Canonical real example (a self-contained raster fetcher):
-  `trid3nt_server/tools/fetchers/ocean/fetch_noaa_slr_confidence.py`
+- Canonical real example (a cached raster compute returning a map layer):
+  `trid3nt_server/tools/processing/compute_slope/compute_slope.py`
 - Copy-me starter (a trivial, dependency-free compute):
   `trid3nt_server/tools/_example_tool_template.py`
 
@@ -23,24 +29,22 @@ Everything below cites real code. Line numbers drift; grep the symbol.
 
 ---
 
-## The seven seams a new tool touches
+## The six seams a new tool touches
 
-1. The tool **function** + its **metadata** (`AtomicToolMetadata`) in a new
-   module under `trid3nt_server/tools/<subpackage>/` -- pick the
-   folder by what the tool IS: `fetchers/<domain>/` (one file per fetch tool,
-   filed by the phenomenon measured: weather / hydrology / ocean / terrain /
-   imagery / climate / socioeconomic / hazard / soil),
-   `processing/` (compute_* / clip_* / extract_* / charts, flat),
-   `simulation/` (run_* engine bridges, model_* engines, the solver seam),
-   `discovery/` (catalog + retrieval), or `meta/` (utilities).
-   `publish_layer.py` and `cache.py` deliberately stay at `tools/` root.
+1. The tool **function** + its **metadata** (`AtomicToolMetadata`) in its own
+   DIRECTORY under `trid3nt_server/tools/<subpackage>/<tool_name>/`, holding
+   `<tool_name>.py`, `corpus.yaml` and an `__init__.py`. Pick the subpackage by
+   what the tool IS: `processing/` (compute_* / clip_* / extract_* / charts),
+   `display/` (live map overlays that transfer no data), `search/` (catalog and
+   tool retrieval), or `meta/` (utilities: the code_exec box, case report,
+   spatial input). `cache.py`, `vector_tiles.py` and `tool_arg_normalizer.py`
+   deliberately stay at `tools/` root.
 2. The **`@register_tool`** decorator (registers it in `TOOL_REGISTRY`).
 3. An **eager import** in `trid3nt_server/tools/__init__.py`
    (so the decorator actually fires at startup).
-4. **Corpus queries** in
-   `trid3nt_server/tools/tool_query_corpus.yaml` (the retrieval
-   index) + the mandatory `retrieve_visible_tools(prompt, None, 8)` check.
-5. A **test** under `services/agent/tests/`.
+4. **Corpus queries** in the sibling `corpus.yaml` (the retrieval index) + the
+   mandatory `retrieve_visible_tools(prompt, None, 8)` check.
+5. A **test** under `tests/<subsystem>/`, mirroring the product tree.
 6. Observe the **1000-char docstring rule** (front-load routing).
 
 ---
@@ -50,10 +54,13 @@ Everything below cites real code. Line numbers drift; grep the symbol.
 ### Signature conventions
 
 ```python
-def fetch_noaa_slr_confidence(
-    bbox: tuple[float, float, float, float],
-    slr_ft: float = 3.0,
-    res_deg: float | None = None,
+def compute_slope(
+    dem_uri: str,
+    output_unit: Literal["degrees", "percent"] = "degrees",
+    algorithm: Literal["Horn", "ZevenbergenThorne"] = "Horn",
+    *,
+    _storage_client: object | None = None,
+    _bucket: str | None = None,
     **_extra_ignored: Any,
 ) -> LayerURI:
     ...
@@ -74,11 +81,11 @@ def fetch_noaa_slr_confidence(
 
 ### Sync vs async
 
-- **Fetchers are normally sync `def`** (like `fetch_noaa_slr_confidence`). If the
-  fetch is heavy/loop-blocking, do NOT block the asyncio loop yourself -- the
-  server offloads registered heavy sync fetchers to a thread via
-  `_ALWAYS_OFFLOAD_SYNC_TOOLS` (server-side); you just write a plain sync
-  function.
+- **Compute and fetch tools are normally sync `def`** (like `compute_slope`).
+  If the work is heavy/loop-blocking, do NOT block the asyncio loop yourself --
+  the server offloads named heavy sync tools to a thread through
+  `_ALWAYS_OFFLOAD_SYNC_TOOLS` (`server/dispatch/emitter.py`), which refuses to
+  arm for a tool that emits; you just write a plain sync function.
 - **Use `async def`** for engine/composer tools and anything that must `await`
   I/O directly (the no-sync-blocking-on-the-asyncio-loop rule).
 
@@ -88,25 +95,26 @@ Return one of:
 
 - **A `LayerURI`** (`trid3nt_contracts.execution.LayerURI`) -- this is what puts a
   layer on the map. Fields (see the class): `layer_id`, `name`,
-  `layer_type` (`"raster"` | `"vector"`), `uri` (a COG for raster,
-  FlatGeobuf/GeoParquet for vector), `style_preset`,
+  `layer_type` (`"raster"` | `"vector"` | `"mesh"`), `uri` (a COG for raster,
+  FlatGeobuf/GeoParquet for vector), `style` (the DECLARED style row; the
+  publish path resolves it into `legend`), `quantity`,
   `role` (`"primary"` | `"context"` | `"input"`), `units`, `bbox` (optional;
-  present triggers a `zoom-to`), `legend` (optional data-driven `LegendKey`),
-  `fallback_note` (optional honesty marker when you substituted a fallback source).
+  present triggers a `zoom-to`), `fallback_note` and `fallbacks` (the honesty
+  markers when a fallback source or a declared ladder rung served the layer).
 - **A plain `dict`** -- for tools whose answer is scalar/tabular, not a layer
   (the copy-me template returns a dict).
 - **A `list[LayerURI]`** -- for animation-frame sequences.
 
 ### Emitting a layer (how a `LayerURI` reaches the map)
 
-When your tool returns a `LayerURI` whose `uri` is a raw object-store uri
-(`s3://` / `gs://`) for a RASTER, the server auto-publishes it: the
-`auto_publish` metadata flag (default `True`) makes the dispatch wrapper call
-`publish_layer` server-side to convert the COG to a TiTiler `http(s)` tile URL --
-no separate LLM step. Set `auto_publish=False` only for pure INTERMEDIATE rasters
-the user should not auto-see (e.g. a raw DEM that only feeds `compute_hillshade`).
-Vectors render inline as GeoJSON. See `fetch_noaa_slr_confidence` L133-142 for the
-`LayerURI` construction.
+When your tool returns a `LayerURI` whose `uri` is a raw `s3://` COG for a
+RASTER, the emission seam publishes it on the way out (`publish_for_emission` in
+`trid3nt_server/emission/layer_uri_emit.py`, which calls `publish_layer` off the
+event loop). There is no per-tool opt-out flag: a raster that should not be seen
+is one the tool does not return. A failed publish degrades to the unstyled
+`s3://` COG rather than dropping the layer. Vectors render inline as GeoJSON.
+See `compute_slope`'s `LayerURI(...)` return for the construction, style row
+included.
 
 ### Caching
 
@@ -115,10 +123,10 @@ If your tool is a network fetcher, wrap the byte-producing call in `read_through
 
 ```python
 result = read_through(
-    metadata=_METADATA,
+    metadata=_COMPUTE_SLOPE_METADATA,
     params=params,          # dict that fully keys the request
     ext="tif",
-    fetch_fn=lambda: export_slr_raster_cog_bytes(service, q_bbox, rd),
+    fetch_fn=_fetch,
 )
 ```
 
@@ -158,7 +166,8 @@ a misconfiguration fails fast at IMPORT time). Every field, from
 | `open_world_hint` | default `False` | `True` for anything hitting an external endpoint (all `fetch_*`). |
 | `destructive_hint` | default `False` | `True` only for irreversible mutation (`publish_layer`). |
 | `idempotent_hint` | default `True` | `False` for dispatchers / emitters / writers. |
-| `auto_publish` | default `True` | Auto-publish a returned raster `LayerURI` carrying a raw `s3://`/`gs://` uri. `False` for pure intermediates. |
+| `engine` | default `None` | Owning engine slug for an engine-door family member; `None` for every non-engine tool. |
+| `tier` | default `None` | The door/template tier a family member sits at; `None` for a plain atomic tool. |
 
 **Cross-field validator** (`_validate_cacheable_consistency`, runs at
 construction):
@@ -169,16 +178,14 @@ construction):
 A bad combination raises `ValidationError` at import, before the tool is on the
 wire.
 
-Real fetcher metadata (`fetch_noaa_slr_confidence.py` L54-61):
+Real metadata (`compute_slope/compute_slope.py`):
 
 ```python
-_METADATA = AtomicToolMetadata(
-    name="fetch_noaa_slr_confidence",
+_COMPUTE_SLOPE_METADATA = AtomicToolMetadata(
+    name="compute_slope",
     ttl_class="static-30d",
-    source_class="noaa_slr_confidence",
+    source_class="slope",
     cacheable=True,
-    supports_global_query=False,
-    payload_mb_estimator_name="estimate_payload_mb",
 )
 ```
 
@@ -186,8 +193,8 @@ Decorate the function. Any non-`None` decorator kwarg overrides the metadata via
 `model_copy(update=...)` and re-validates (fail-fast):
 
 ```python
-@register_tool(_METADATA, open_world_hint=True)
-def fetch_noaa_slr_confidence(bbox, slr_ft=3.0, res_deg=None, **_extra_ignored):
+@register_tool(_COMPUTE_SLOPE_METADATA)
+def compute_slope(dem_uri, output_unit="degrees", algorithm="Horn", **_extra_ignored):
     ...
 ```
 
@@ -207,7 +214,7 @@ import block near the bottom of
 `trid3nt_server/tools/__init__.py`:
 
 ```python
-from .fetchers.ocean import fetch_noaa_slr_confidence  # noqa: E402,F401
+from .processing.compute_slope import compute_slope  # noqa: E402,F401
 ```
 
 The block is grouped by subpackage and sorted; add your line to the group
@@ -220,15 +227,15 @@ silently never exists.
 
 ## Step 4 - the corpus + the mandatory retrieval check
 
-This is a HARD rule: **every new tool gets `tool_query_corpus.yaml` queries AND
-must pass the `retrieve_visible_tools(prompt, None, 8)` visibility check before
+This is a HARD rule: **every new tool gets `corpus.yaml` queries AND must pass
+the `retrieve_visible_tools(prompt, None, 8)` visibility check before
 acceptance.**
 
 ### Why the corpus exists (the retrieval index)
 
 The per-turn tool list is trimmed for token cost: instead of showing the LLM the
 whole registry every turn, `retrieve_visible_tools`
-(`trid3nt_server/tools/discovery/tool_retrieval.py`) composes the visible
+(`trid3nt_server/tools/search/tool_retrieval.py`) composes the visible
 set as:
 
 ```
@@ -237,24 +244,24 @@ CORE_FLOOR  UNION  the Case's accrued visible set  UNION  discover top-k
 
 The `discover top-k` term ranks tools against the user's text with a BM25 + local
 dense + name-substring fusion over an index built from each tool's audited
-docstring **plus its `tool_query_corpus.yaml` example queries**
-(`search_tools._build_index`). If your tool has no corpus entry, the index has
+docstring **plus its `corpus.yaml` example queries**
+(`search_tools._build_index`, which composes one flat corpus by walking every
+co-located `corpus.yaml` under `tools/`). If your tool has no corpus entry, the index has
 nothing but the docstring to route on, and natural user phrasings that do not
 literally echo the docstring will MISS it -- the tool becomes unreachable even
 though it is registered.
 
-Add 5-10 realistic, natural user-prompt queries keyed by your function name.
-Cover synonyms, regional variants, and adjacent intent. Real entry
-(`tool_query_corpus.yaml`):
+Add 5-10 realistic, natural user-prompt queries keyed by your function name, in
+the `corpus.yaml` beside your module. Cover synonyms, regional variants, and
+adjacent intent. Real entry (`processing/compute_slope/corpus.yaml`):
 
 ```yaml
-fetch_noaa_slr_confidence:
-  - "how confident is the sea-level-rise inundation mapping at 3 feet here"
-  - "show me the NOAA SLR mapping confidence raster for this coast"
-  - "where is the sea-level-rise inundation high vs low confidence at 2 ft"
-  - "give me the SLR mapping uncertainty overlay for this coastline"
-  - "flag the low-confidence sea-level-rise areas before I report exposure"
-  - "NOAA SLR viewer confidence layer at 5 feet for this estuary"
+compute_slope:
+- show me the slope map for this watershed
+- I need terrain steepness for landslide susceptibility analysis
+- calculate the gradient of the hillside in this burn scar
+- which areas around the dam are the steepest?
+- give me a slope raster over the Camp Fire footprint for debris-flow risk
 ```
 
 Follow the no-downtown-city and natural-prompts-no-bbox norms: use place names,
@@ -271,12 +278,12 @@ run against the copy-me template:
 ```python
 import trid3nt_server.tools as T
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.discovery import search_tools as dd
-from trid3nt_server.tools.discovery.tool_retrieval import retrieve_visible_tools
+from trid3nt_server.tools.search.search_tools import search_tools as dd
+from trid3nt_server.tools.search.tool_retrieval import retrieve_visible_tools
 
 dd._get_index()  # warm the BM25 + dense index from TOOL_REGISTRY + corpus
-name = "fetch_noaa_slr_confidence"
-for q in ["show me the NOAA SLR mapping confidence raster for this coast"]:
+name = "compute_slope"
+for q in ["show me the slope map for this watershed"]:
     vis = retrieve_visible_tools(q, None, 8)
     assert name in vis, f"{name} not surfaced for {q!r}"
     assert len(vis) < len(TOOL_REGISTRY), "full registry == cold fail-open, not real routing"
@@ -291,33 +298,36 @@ case so it proves the CORPUS actually routes.
 
 ## Step 5 - the test
 
-Model your test on `services/agent/tests/test_fetch_noaa_slr_siblings.py`. A
-minimal test asserts three things: registration + metadata, the corpus coverage,
-and the tool's own behavior (called directly via `TOOL_REGISTRY[name].fn`, since
-the decorator returns the undecorated function):
+The test tree MIRRORS the product tree, so a processing tool's test is
+`tests/processing/test_<your_tool>.py`. Model it on
+`tests/processing/test_compute_slope.py`. A minimal test asserts three things:
+registration + metadata, the corpus coverage, and the tool's own behavior
+(called directly via `TOOL_REGISTRY[name].fn`, since the decorator returns the
+undecorated function):
 
 ```python
 from trid3nt_server.tools import TOOL_REGISTRY
 
 def test_registered():
-    assert "fetch_noaa_slr_confidence" in TOOL_REGISTRY
-    m = TOOL_REGISTRY["fetch_noaa_slr_confidence"].metadata
-    assert m.source_class == "noaa_slr_confidence"
+    assert "compute_slope" in TOOL_REGISTRY
+    m = TOOL_REGISTRY["compute_slope"].metadata
+    assert m.source_class == "slope"
     assert m.ttl_class == "static-30d" and m.cacheable is True
 
 def test_corpus():
     import pathlib, yaml
-    from trid3nt_server.tools import fetch_noaa_slr_confidence as mod
-    p = pathlib.Path(mod.__file__).resolve().parents[1] / "data" / "tool_query_corpus.yaml"
+    from trid3nt_server.tools.processing.compute_slope import compute_slope as mod
+    p = pathlib.Path(mod.__file__).resolve().parent / "corpus.yaml"
     corpus = yaml.safe_load(p.read_text())
-    assert len(corpus["fetch_noaa_slr_confidence"]) >= 3
+    assert len(corpus["compute_slope"]) >= 3
 ```
 
-Monkeypatch the network (see the sibling test's `_FakeClient` / `read_through`
-stubs) so the test is offline and deterministic. Run with the agent venv:
+Monkeypatch the network and the object store (see the sibling test's stubs) so
+the test is offline and deterministic. Run it from the repo root with the agent
+venv, through the slice that owns your subsystem:
 
 ```bash
-cd services/agent && python -m pytest tests/test_<your_tool>.py -q
+venvs/agent/bin/python -m pytest tests/processing/test_<your_tool>.py -q
 ```
 
 ---
@@ -343,9 +353,11 @@ Therefore:
 - **Purge dead infra prose.** Do not spend the budget on implementation notes;
   put those below the routing block (for humans) where truncation is harmless.
 
-The docstring structure that works (see `fetch_noaa_slr_confidence`): a one-line
-summary, then `**What it does:**`, `**When to use:**`, `**When NOT to use:**`,
-`**Parameters:**`, `**Returns:**`, `**Cross-tool dependencies:**`.
+The docstring structure that works: a one-line summary, then
+`**What it does:**`, `**When to use:**`, `**When NOT to use:**`,
+`**Parameters:**`, `**Returns:**`. Routing to a sibling tool belongs inside the
+"When NOT to use" block, where it is routing; an implementation or cache note
+does not belong in the docstring at all.
 
 ---
 
@@ -357,12 +369,13 @@ that returns a dict. It shows metadata (a `cacheable=False` / `live-no-cache`
 compute), the `**_extra_ignored` signature, a front-loaded routing docstring, the
 typed error convention, and `@register_tool`. It ships gated behind
 `TRID3NT_ENABLE_EXAMPLE_TOOL` so it stays out of the production catalog; a real
-tool decorates unconditionally (delete the gate). Its corpus block lives under
-`example_bbox_area:` in `tool_query_corpus.yaml`.
+tool decorates unconditionally (delete the gate). It ships NO corpus, because an
+inert tool must not sit in the retrieval index -- yours writes one.
 
 To copy it into your own tool:
 
-1. `cp _example_tool_template.py fetch_my_thing.py`; rename the function, the
+1. Make `<subpackage>/<your_tool>/` with an `__init__.py`, and copy
+   `_example_tool_template.py` in as `<your_tool>.py`; rename the function, the
    `name=` in the metadata, and `__all__`.
 2. Replace the body with your fetch/compute; return a `LayerURI` (map layer) or a
    dict (scalar/tabular).

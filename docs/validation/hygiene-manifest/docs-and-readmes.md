@@ -563,3 +563,44 @@ row from any lens. All six were read end to end for this table.
 | `ollama/Modelfile.qwen3-8b-24k` | the local-model context override | KEEP. Parameter lines only. |
 
 `wheels/pfdf-3.0.4-py3-none-any.whl` is a binary artifact and carries no prose.
+
+## Completeness critic, round 2: the pages round 1 cleared on the row's claim
+
+Round 1 reconciled the REWRITE verdicts by re-reading each page against the
+CLAIM its census row made. Where the claim was false the verdict was withdrawn
+and the page was not read further, so a page could be cleared while carrying a
+different defect. Round 2 re-read those pages against the TREE instead, and ran
+two mechanical checks the wave had no guard for: every path a live doc names,
+and every relative link any tracked markdown carries.
+
+| path | what round 1 cleared it on | what round 2 found | what landed |
+| --- | --- | --- | --- |
+| `docs/authoring/writing-a-tool.md` | REWRITE withdrawn: `zip_vector`, the `vector_fgb` fetch half and the `overpass.py` hook are not in the file | it names `publish_layer.py` at `tools/` root, the `simulation/` and `discovery/` subpackages, `services/agent/tests/` twice, `tools/discovery/tool_retrieval.py`, an `auto_publish` metadata field, a `style_preset` layer field and a corpus block for `example_bbox_area` - none of which exist; its whole running example is a coded fetcher the fetcher fold deleted | running example moved to `compute_slope` (a live coded tool with a metadata row, a `read_through` call, a `LayerURI` return, a sibling `corpus.yaml` and a mirror-tree test); every path corrected; the declarative fetcher path named; "seven seams" corrected to six |
+| `docs/design/server-package.md` | verdict KEEP re-verified, `scripts/ws_smoke.py` repointed | its five relative links were written when the file was `server/README.md` and none resolve from `docs/design/`; its Layout block maps `server/src/trid3nt_server/` with `server.py`, three adapters and `auth_handshake.py` at the package root, `tools/discovery/`, `tools/simulation/solver.py` and eight engines that left the tree | the hand-typed tree DELETED rather than retyped - `trid3nt_server/README.md` and the subpackage READMEs are the checkable maps and the map guard reads them; the page keeps what is its own (the provider seam, running locally, scope, deploy) and its links resolve |
+| `docs/site/models.md` | REWRITE withdrawn: no occurrence of Bedrock | states a `~176-tool agent` where the registry is 161 (the number round 1 corrected in `overview.md`), and presents `TRID3NT_TOOL_RETRIEVAL=enforce` as a live setting after ADR 0276 removed the knob | the live claims corrected; the bench's own 176-tool run conditions left verbatim |
+| `docs/site/troubleshooting.md` | rewritten in round 1 (the Playwright entry) | its fail-open paragraph still quoted the same stale 176, and it named `trid3nt_server/tools/_public_s3.py`, which sits under `fetchers/` | both corrected |
+| `docs/design/local-model-upgrade-2026-07.md` | verdict KEEP: load-bearing history | its rerunnable procedure drives `tool_routing_sweep.py` (deleted by this wave's own cull), `routing_failure_split.py` and `tool_routing_bench.py` (moved to the untracked `scripts/local/`); the ledger's repointing row named `models.md` and `engines.md` and stopped there | a dated note at the top, the record verbatim below it |
+| `docs/authoring/adding-an-engine.md` | verdict KEEP: "the file the scrub already fixed" | names `contracts/trid3nt_contracts/styles.yaml` twice as the style contract; the emission fold deleted it and the four preset kinds resolve a declared `style` row instead | both sentences corrected to the seam that exists |
+| `docs/playbooks/urban-heat-island-recipe.md`, `docs/playbooks/zonal-statistics-recipe.md` | not flagged | each cites a decision record by bare number (`docs/decisions/0313`, `docs/decisions/0043`), which resolves to nothing a reader can open | cited by full filename; both records exist |
+
+### The guard hole that let all seven through
+
+Round 1 named it and did not close it: the dead-reference guard reads only
+`README.md` among markdown, so a live page could name a module the guard had
+just watched leave. `tests/hygiene/test_dead_references.py` now reads the
+reader's manual as well - `docs/site/`, `docs/authoring/`, `docs/playbooks/`,
+`docs/templates/`, every README and the `Makefile` - and carries a second test
+that resolves every relative link in every tracked markdown outside
+`docs/proof/`. Both are proven on a seeded break (a doc naming an absent
+instrument; a link to an absent page). `docs/design/`, `docs/validation/`,
+`docs/reports/` and `docs/decisions/` stay out of the PROSE scan on purpose: a
+dated record names what it named when it was written, and DATED RECORDS STAY
+VERBATIM. Links are checked everywhere, because a link is a promise the reader
+can follow whatever the page's vintage.
+
+### Not acted on, recorded
+
+`docs/design/offline-architecture.md` and `docs/specs/workflow-blueprint.html`
+remain where round 1 left them: landed plans whose lens verdict is REWRITE and
+whose census ruling would delete them outright. That fate is still not a
+critic's to choose.

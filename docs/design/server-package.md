@@ -1,71 +1,43 @@
-# server/ -- TRID3NT agent service (WebSocket + tool dispatch)
+# `trid3nt_server` -- the agent service (WebSocket + tool dispatch)
 
-The `trid3nt_server` package: a Python application that serves the
-Appendix-A WebSocket protocol, hosts the tool registry (native Python
-FunctionTools -- fetchers, discovery, processing, hazard-simulation
+The Python application that serves the plugin's WebSocket protocol, hosts the
+tool registry (fetchers, search, processing, display, meta, and the engine
 workflows), runs the multi-turn generation loop against a **pluggable LLM
-provider** (local Ollama or any OpenAI-compatible endpoint by default,
-Anthropic as an option), streams replies, propagates cancellation,
-and enforces the determinism boundary (Invariant 1) and confirmation-before-
-consequence hooks (Invariant 9).
+provider**, streams replies, propagates cancellation, and enforces the
+determinism boundary and the confirmation-before-consequence gates.
 
-> **Provider note.** The live default is `MODEL_PROVIDER=openai` ->
-> `openai_adapter.py`, which speaks the OpenAI-compatible `chat/completions`
-> streaming API against Ollama (default), vLLM, llama.cpp, LM Studio, OpenAI,
-> Groq, DeepSeek, or OpenRouter. `MODEL_PROVIDER=anthropic` selects the
-> first-party Messages API path; `MODEL_PROVIDER=scripted` (aliases
-> `replay`/`fake`) replays a canned transcript for zero-cost deterministic
-> tests. The Vertex generation path in `adapter.py` is retired; only the
-> provider-neutral
-> `google.genai.types` shapes it holds are still used -- every adapter yields
-> the same `StreamEvent` union, so `server.py`'s dispatch loop, validator,
-> emitter, and UI are untouched by the provider choice. See
-> [Configuration](../docs/site/configuration.md#llm-provider) for the env vars.
+The package's own maps are the checkable ones and this page does not restate
+them: [`trid3nt_server/README.md`](../../trid3nt_server/README.md) maps the
+package, and each subpackage carries its own README (the daemon core is
+[`trid3nt_server/server/README.md`](../../trid3nt_server/server/README.md), the
+providers are
+[`trid3nt_server/adapters/README.md`](../../trid3nt_server/adapters/README.md)).
 
-## Layout
+## The provider seam
 
-```
-server/
-├── pyproject.toml            trid3nt-server package, console script `trid3nt-server`
-├── README.md                 (this file)
-├── wheels/                   PyPI-absent deps committed as wheels (pfdf); every
-│                              install path uses --find-links server/wheels
-├── src/trid3nt_server/
-│   ├── __init__.py
-│   ├── main.py                entry point (`trid3nt-server` -> run())
-│   ├── server.py               Appendix-A WebSocket server (asyncio + websockets)
-│   ├── openai_adapter.py       OpenAI-compatible chat/completions loop (default provider)
-│   ├── anthropic_adapter.py    Anthropic Messages API loop (optional provider)
-│   ├── scripted_adapter.py     MODEL_PROVIDER=scripted -- canned-transcript replay, no LLM call
-│   ├── adapter.py               StreamEvent union + provider-neutral genai-types helpers
-│   ├── persistence.py           Cases/sessions/users persistence -- FilePersistence only
-│   │                            (the DynamoDB backend was removed; local-only build)
-│   ├── auth_handshake.py        local WS connect handshake -- anonymous users + the
-│   │                            fixed local single-user id; no IdP, no token verification
-│   ├── tools/                   the tool registry + atomic/composer/engine tools
-│   │   ├── catalog.py            registry + docstring-metadata enforcement
-│   │   ├── cache.py              cached-fetch storage (S3-compatible; MinIO locally)
-│   │   ├── discovery/            catalog/spatial-function/QGIS-processing discovery + tool retrieval
-│   │   ├── fetchers/             data-source fetch tools
-│   │   ├── meta/                 code_exec, probe_point, case export/import, web_fetch, ...
-│   │   ├── processing/           compute/clip/aggregate/analysis tools
-│   │   └── simulation/
-│   │       └── solver.py         run_solver / wait_for_completion -- local-docker /
-│   │                              local-exec dispatcher (`solver_backend()` is
-│   │                              local-only; the AWS Batch arm is decommissioned)
-│   └── workflows/                per-engine build/run/postprocess modules (MODFLOW,
-│                                  SFINCS, SWMM, TELEMAC, GeoClaw, SWAN, OpenQuake,
-│                                  Landlab, ELMFIRE, ...) + the model_*.py hazard scenarios
-```
+The live default is `MODEL_PROVIDER=openai` -> `adapters/openai_adapter.py`,
+which speaks the OpenAI-compatible `chat/completions` streaming API against
+Ollama (default), vLLM, llama.cpp, LM Studio, OpenAI, Groq, DeepSeek, or
+OpenRouter. `MODEL_PROVIDER=anthropic` selects the first-party Messages API
+path; `MODEL_PROVIDER=scripted` replays a recorded cassette for zero-cost
+deterministic tests. Provider selection itself lives in
+`adapters/model_selection.py` and is read at call time, so no adapter import
+decides it.
+
+`google.genai.types` is the internal history and tool-declaration shape, and a
+provider adapter is the only place a provider's own nouns appear. Every adapter
+yields the same streamed events, so the turn loop, the validator, the emitter
+and the plugin are untouched by the provider choice. See
+[Configuration](../site/configuration.md#llm-provider) for the env vars.
 
 ## Running locally
 
-From the repo root (the `trid3nt-local` root, one level up from here):
+From the repo root:
 
 ```bash
 make agent
 # or, inside the docker group so the agent can reach the docker socket
-# for the container-backed engines (recommended):
+# for the container-backed engine (recommended):
 sg docker -c 'make agent'
 # then in another shell:
 python scripts/instruments/ws_smoke.py   # WS chat smoke against the running daemon
@@ -76,36 +48,30 @@ python scripts/instruments/ws_smoke.py   # WS chat smoke against the running dae
 `venvs/agent/` (built by `make venv` / `make setup`), on WS `:8765` / HTTP
 `:8766` (override with `TRID3NT_AGENT_PORT` / `TRID3NT_AGENT_HTTP_PORT`),
 logs to `logs/agent.log`, and writes a PID to `run/agent.pid`. See
-[Install](../docs/site/install.md) for first-time setup and
-[Configuration](../docs/site/configuration.md) for the full `.env.local`
-reference.
+[Install](../site/install.md) for first-time setup and
+[Configuration](../site/configuration.md) for the full `.env.local` reference.
 
 ## Scope
 
-- `openai_adapter.py` round-trip (streamed `agent-message-chunk` deltas,
-  terminal `done: true` frame) against Ollama or any OpenAI-compatible
-  endpoint; `anthropic_adapter.py` carries the same prompt-caching behavior
-  through `cache_control` breakpoints when `MODEL_PROVIDER=anthropic` is
-  selected instead.
-- `cancel` interrupts in-flight generation and the in-flight solver run
-  (local docker container / subprocess), and emits cancelled `pipeline-state`
-  (Invariant 8).
-- Persistence (Cases/sessions/users/secrets-refs/audit) through the
-  `Persistence` seam: **FilePersistence only** (`TRID3NT_DEV_PERSISTENCE_DIR`)
-  -- both the GCP-era MongoDB MCP path and the AWS DynamoDB backend were
-  removed for the local-only build (Decision 0006).
-- Heavy/sandboxed compute runs locally: SFINCS via `local-docker`, MODFLOW
-  against the local `mf6` binary, the `code_exec` box in a network-none
-  container (`sandbox/`),
-  GeoClaw/TELEMAC/ELMFIRE via locally-built docker images -- see
-  [Engines](../docs/site/engines.md) for the per-engine matrix. No AWS Batch,
-  no cloud queue.
-- Every wire message validated via `trid3nt_contracts` -- no hand-rolled JSON.
+- The adapter round-trip (streamed `agent-message-chunk` deltas, a terminal
+  `done: true` frame) against any of the providers above; the Anthropic path
+  carries prompt caching through `cache_control` breakpoints.
+- `cancel` interrupts in-flight generation and the in-flight solver run, and
+  emits a cancelled `pipeline-state`.
+- Persistence (cases / sessions / users / secret refs / audit) through the
+  `Persistence` seam: **file persistence only**
+  (`TRID3NT_DEV_PERSISTENCE_DIR`); there is no cloud backend in this build.
+- Heavy or sandboxed compute runs locally: TELEMAC and the mesher through
+  locally built docker images, the `code_exec` box in a network-none container
+  (`sandbox/`) -- see [Engines](../site/engines.md) for what a shipped engine
+  means here. No cloud queue.
+- Every wire message validated through `trid3nt_contracts` -- no hand-rolled
+  JSON.
 
 ## Deploy
 
-There is no separate deploy step for this repo's server -- edit `server/`,
-then restart the agent (`make agent` from the repo root; the venv installs
-`server/` editable, so a restart picks the change up). See the root
-[README's Deploy seams](../README.md#deploy-seams-when-you-change-code)
-section for the other two seams (QGIS plugin, worker images).
+There is no separate deploy step for the server: edit `trid3nt_server/`, then
+restart the agent (`make agent` from the repo root; the venv installs the
+package editable, so a restart picks the change up). See the root
+[README's deploy seams](../../README.md#deploy-seams) for the other two seams
+(the QGIS plugin, the worker images).

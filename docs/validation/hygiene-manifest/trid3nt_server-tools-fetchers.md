@@ -501,3 +501,26 @@ decision table (number / title / BINDING or SUPERSEDED-by or DEAD-because / fate
 | `_router/emit_on_fetch.py` module docstring | the role="context" nesting semantics are settled behaviour a caller depends on |
 
 files listed: 405 / files read: 405 / rows written: 405
+
+## Completeness critic, round 2: four TRIM rows the sweep never opened
+
+Every `source.yaml` row above carries the fate TRIM. Four of the 99 are
+byte-identical at HEAD to their pre-wave state - the sweep passed over them:
+
+| path | what it still carried | what landed |
+| --- | --- | --- |
+| `hazard/fetch_epa_frs_facilities/source.yaml` | stored as an escaped one-liner (the sweep made the others block scalars), a closing `Cache:` paragraph restating the file's own `ttl_class` and `source_class`, a broken indent inside the Returns block, and a `telemac_river_dye` workflow name in the routing | block scalar; the cache paragraph gone (the fields state it); the routing line names the QUESTION rather than one template |
+| `hydrology/fetch_nwi_wetlands/source.yaml` | the same escaped one-liner, a `Cross-tool dependencies` section naming `analyze_affected_habitats` - a composer absent from the tree - and `Resilience:` plus `Cache:` paragraphs | block scalar; the dead composer and the two paragraphs gone; the honest-failure rule kept, as one sentence on the Returns contract |
+| `ocean/fetch_greatlakes_bathymetry/source.yaml` | a closing `Cache: ... Tier-1 free. No API key. supports_global_query=False` paragraph, every clause of which restates a declared field in the same file | the paragraph gone; the Low Water Datum contract, which nothing else states, kept |
+| `ocean/fetch_greatlakes_water_level/source.yaml` | the same closing paragraph | the same cut |
+
+All four still register and their docstrings still parse (161 tools, unchanged).
+
+RECORDED, NOT ACTED ON: the census column above measures each declaration
+against the 1000-char front budget and 95 of the 99 are still over it. THE
+DOCSTRING LIMIT RULED enforces that budget on the hand-written tool docstrings -
+"the 19 that exceed it today" - and the Python guard holds those at zero. A
+declaration's routing prose is not one of the 19, no guard reads it, and cutting
+95 routing surfaces to a third of their length is a change to what the model
+sees, not a documentation trim. It is named here so the next wave chooses rather
+than inherits.

@@ -1,7 +1,8 @@
 # Playground recipe: zonal statistics (raster values within zones)
 
 Status: LIVE recipe (processing-wave cull, 2026-07-29). Replaces the DEMOTED
-`compute_zonal_statistics` atomic tool (docs/decisions/0043). Aggregating a
+`compute_zonal_statistics` atomic tool
+(`docs/decisions/0043-processing-wave.md`). Aggregating a
 value raster within zones (a vector polygon set OR a threshold mask) is a
 straight-line rasterio + numpy composition over already-staged Case layers, so
 it lives in the python playground (`code_exec_request`), not a bespoke tool.

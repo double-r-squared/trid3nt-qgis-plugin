@@ -15,7 +15,7 @@ Denied, or misleading "no data upstream" errors -- while the same tools work on 
 **globally** by boto3 (>= 1.28) and s3fs/aiobotocore. Anonymous reads of `noaa-goesNN` GLM
 granules and the HRRR zarr mirror get silently redirected to MinIO, which has no such buckets.
 
-**Fix**: shipped -- `trid3nt_server/tools/_public_s3.py` pins
+**Fix**: shipped -- `trid3nt_server/tools/fetchers/_public_s3.py` pins
 UNSIGNED public-bucket clients to the real `https://s3.<region>.amazonaws.com` endpoint
 (cloud behavior unchanged, since the env var is unset there). If you add a new tool that
 touches a public bucket, build its client/fs kwargs through `_public_s3` helpers -- never a
@@ -45,7 +45,7 @@ its own. The log shows
 `tool_retrieval: discover index COLD; FAIL-OPEN to full registry`.
 
 **Root cause**: tool retrieval never builds its index on the hot path (that would block on a
-cold embedding-model load). Until the index is warm it fails open to the FULL 176-tool
+cold embedding-model load). Until the index is warm it fails open to the FULL
 registry, which measurably wrecks 8B-class selection (35.7% cold vs 57.1% warm on the
 15-prompt bench).
 
