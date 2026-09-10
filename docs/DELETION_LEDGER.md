@@ -9,8 +9,9 @@ in a Source column as the name a wave went by, not as a file you can open. The
 rulings - what was decided and why - are kept in the rulings record, outside
 this repo; the constraints those records carried are in `docs/model/`, in
 `docs/CONVENTIONS.md`, in `AGENTS.md`, or as a comment at the line each one
-governs. The three sections at the foot of this file list every deleted file by
-name.
+governs. The three sections at the foot of this file list every deleted decision,
+validation and report file by name; the 493 proof packets are rowed as one
+folder with its count.
 
 Every deletion candidate is REGISTERED here at decision time and stays
 until DELETED (with the commit hash) - never silently dropped (NATE
