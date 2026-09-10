@@ -2,8 +2,7 @@
 
 A signature match short-circuits an expensive re-run before the solver launches;
 any ambiguity RUNS instead, since a false short-circuit returns a stale answer
-while a false run only costs a re-solve. Pure, synchronous, never networked.
-"""
+while a false run only costs a re-solve. Pure, synchronous, never networked."""
 
 from __future__ import annotations
 
@@ -132,8 +131,7 @@ def fetched_kind_for_tool(tool_name: str) -> str | None:
 def fetched_layer_kind(layer_id: str | None, name: str | None = None) -> str | None:
     """Classify a loaded FETCHED layer by id and name into a kind token, else
     ``None``; a layer that classifies as a simulation RESULT is deliberately not
-    a fetched kind.
-    """
+    a fetched kind."""
     # A simulation RESULT is not a fetched layer - keep the two taxonomies
     # disjoint so the note never double-labels.
     if layer_id_scenario_type(layer_id, name) is not None:
@@ -201,8 +199,7 @@ def bbox_encloses(
 ) -> bool:
     """True iff ``outer`` covers ``inner`` within the quantization tolerance; a
     request contained by an already-loaded extent is answered by that layer,
-    while one that pokes outside it is genuinely new data.
-    """
+    while one that pokes outside it is genuinely new data."""
     o = _coerce_bbox(outer)
     i = _coerce_bbox(inner)
     if o is None or i is None:
@@ -246,8 +243,7 @@ def _round_num(value: Any, ndigits: int = 4) -> float | None:
 class ScenarioSignature:
     """Normalized identity of an expensive-scenario request: equal
     ``scenario_type`` and ``key_params`` over an equivalent AOI describe two runs
-    that would produce the SAME layer.
-    """
+    that would produce the SAME layer."""
 
     scenario_type: str
     # Telemetry only: two tools that produce the same family are
@@ -328,8 +324,7 @@ def _plume_signature(tool_name: str, params: dict) -> ScenarioSignature | None:
 def scenario_signature(tool_name: str, params: dict) -> ScenarioSignature | None:
     """Build a normalized reuse signature for an expensive-scenario tool call, or
     ``None`` when the tool is unguarded or the request lacks identity we can match
-    without geocoding - no signature means no short-circuit.
-    """
+    without geocoding - no signature means no short-circuit."""
     scenario_type = scenario_type_for_tool(tool_name)
     if scenario_type is None:
         return None
@@ -414,8 +409,7 @@ class ScenarioResultIndex:
     def seed_from_loaded_layers(self, loaded_layers: Any) -> None:
         """Seed the index from a Case's persisted ``loaded_layers`` on reopen.
         A persisted summary carries no signature, so such an entry matches only
-        a request that itself carries no key params.
-        """
+        a request that itself carries no key params."""
         known = {r.layer_id for r in self._results}
         for layer in loaded_layers or []:
             d = _layer_to_dict(layer)
@@ -453,8 +447,7 @@ class ScenarioResultIndex:
     ) -> ScenarioResult | None:
         """Return an existing result that CLEARLY answers ``request``, newest
         first, else ``None``; anything ambiguous returns ``None`` and the caller
-        runs the scenario.
-        """
+        runs the scenario."""
         if request is None or not request.aoi_resolvable():
             return None
         same_family = [
@@ -532,8 +525,7 @@ def _layer_to_dict(layer: Any) -> dict | None:
 class FetchedLayerMatch:
     """An already-loaded FETCHED layer that answers a repeat fetch request;
     ``layer_id`` IS the handle, so a fit or resize follow-up passes it straight
-    to a bounds call instead of re-fetching.
-    """
+    to a bounds call instead of re-fetching."""
 
     kind: str
     layer_id: str
@@ -552,8 +544,7 @@ def find_reusable_fetched_layer(
 ) -> FetchedLayerMatch | None:
     """Return an already-loaded fetched layer that ANSWERS a fetch request, else
     ``None``: the tool must be a recognized fetcher and a loaded layer of the same
-    kind must ENCLOSE the requested AOI, or the caller re-fetches.
-    """
+    kind must ENCLOSE the requested AOI, or the caller re-fetches."""
     kind = fetched_kind_for_tool(tool_name)
     if kind is None:
         return None

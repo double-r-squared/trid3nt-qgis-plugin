@@ -2,8 +2,7 @@
 
 Importing ``trid3nt_server.tools`` populates ``TOOL_REGISTRY`` through the
 import-time ``@register_tool`` decorators; a tool whose ``AtomicToolMetadata``
-is misconfigured raises there and the service refuses to start.
-"""
+is misconfigured raises there and the service refuses to start."""
 
 from __future__ import annotations
 

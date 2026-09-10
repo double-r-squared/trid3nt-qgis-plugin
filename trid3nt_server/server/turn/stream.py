@@ -997,15 +997,12 @@ async def _stream_model_reply(
                                 logger.debug(
                                     "aoi-set zoom-to emit failed", exc_info=True
                                 )
-                    # Emit a chart-emission WS envelope whenever a chart-generation tool
-                    # returns a ChartEmissionPayload-shaped dict (key signal: envelope_type
-                    # == "chart-emission" + a dict vega_lite_spec). Fires IN ADDITION to the
-                    # standard function_response -- the client gets the full Vega-Lite spec
-                    # on the envelope (vega-embed rendering + stacked gallery), and a
-                    # COMPACT data summary on the function_response (stripped by
-                    # summarize_tool_result so the model narrates from numbers, not inline
-                    # rows). Also persists a SessionChartRecord so the chart replays on Case
-                    # rehydration.
+                    # Emit a chart envelope whenever a chart tool returns a
+                    # chart-emission payload. It fires IN ADDITION to the
+                    # function response: the client gets the full spec on the
+                    # envelope and the model gets a COMPACT summary, so it
+                    # narrates from numbers rather than inline rows. The chart
+                    # is persisted too, so it replays on rehydration.
                     if is_chart_emission_result(result):
                         await _maybe_emit_chart(websocket, state, result)
                     # Emit a code-exec-result WS envelope whenever code_exec_request returns

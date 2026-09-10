@@ -2,8 +2,7 @@
 
 ``package_plugin_repo`` writes the versioned zip, ``plugins.xml`` and a manifest;
 serving substitutes the per-request Host for :data:`HOST_SENTINEL` and can build a
-fresh zip from ``plugin/`` on demand. Every function here is SYNC.
-"""
+fresh zip from ``plugin/`` on demand. Every function here is SYNC."""
 
 from __future__ import annotations
 
@@ -104,8 +103,7 @@ def _plugin_src_dir(repo_root: Path) -> Path:
 def _served_dir(served_dir: Path | str | None = None) -> Path:
     """The directory holding the packaged zip, ``plugins.xml`` and
     ``manifest.json``: the ``served_dir`` argument, else
-    ``TRID3NT_PLUGIN_REPO_DIR``, else ``<repo_root>/run/plugin-repo``.
-    """
+    ``TRID3NT_PLUGIN_REPO_DIR``, else ``<repo_root>/run/plugin-repo``."""
     if served_dir is not None:
         return Path(served_dir).expanduser().resolve()
     env = os.environ.get("TRID3NT_PLUGIN_REPO_DIR")
@@ -151,8 +149,7 @@ def _plugin_version(plugin_src: Path) -> str:
 def _iter_packaged_files(plugin_src: Path):
     """Every file that belongs in a packaged zip, in sorted-relpath order; the
     one exclude rule shared by the tree hash, the mtime signature and the
-    fresh-build zip.
-    """
+    fresh-build zip."""
     for item in sorted(plugin_src.rglob("*")):
         if not item.is_file():
             continue
@@ -169,8 +166,7 @@ def _iter_packaged_files(plugin_src: Path):
 def _tree_sha(plugin_src: Path) -> str:
     """A stable content hash of the packaged plugin tree: every packaged file as
     ``<relpath>\\0<bytes>`` in sorted order, so two byte-identical trees hash the
-    same whatever their mtimes.
-    """
+    same whatever their mtimes."""
     h = hashlib.sha256()
     for item in _iter_packaged_files(plugin_src):
         rel = item.relative_to(plugin_src).as_posix()
@@ -183,8 +179,7 @@ def _tree_sha(plugin_src: Path) -> str:
 def _source_signature(plugin_src: Path) -> tuple[tuple[str, int, int], ...]:
     """Stat-only signature of the packaged tree - ``(relpath, size, mtime_ns)``
     per file, sorted - cheap enough to run on every request because it never
-    reads file bytes.
-    """
+    reads file bytes."""
     entries = []
     for item in _iter_packaged_files(plugin_src):
         st = item.stat()
@@ -228,8 +223,7 @@ def _build_zip(plugin_src: Path, dest_zip: Path) -> None:
 def _build_zip_bytes(repo_root: Path, plugin_src: Path) -> bytes:
     """In-memory build for :func:`build_fresh_zip`: the same layout and excludes
     as ``_build_zip`` plus a ``trid3nt/installed_version.txt`` provenance stamp
-    that the deploy-time zip deliberately excludes.
-    """
+    that the deploy-time zip deliberately excludes."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for item in _iter_packaged_files(plugin_src):
@@ -253,8 +247,7 @@ _fresh_zip_lock = threading.Lock()
 def build_fresh_zip(repo_root: Path | None = None) -> tuple[bytes, str, str]:
     """SYNC - build, or reuse a cached, plugin zip straight from ``plugin/``,
     returning ``(zip_bytes, version, zip_filename)``; every call re-stats the
-    tree and rebuilds only when a file's size or mtime changed.
-    """
+    tree and rebuilds only when a file's size or mtime changed."""
     root = repo_root if repo_root is not None else _repo_root()
     plugin_src = _plugin_src_dir(root)
     if not plugin_src.is_dir():
@@ -327,8 +320,7 @@ def build_plugins_repo_xml(
 ) -> bytes:
     """Render the QGIS plugin-repository index XML for ``plugin_src``; pure and
     deterministic, since ``version``, ``file_name`` and ``download_url`` are all
-    supplied by the caller.
-    """
+    supplied by the caller."""
     fields = _parse_metadata_txt(plugin_src / "metadata.txt")
     xml = _XML_TEMPLATE.format(
         name_attr=_xml_attr_escape(fields.get("name") or PLUGIN_NAME),
@@ -380,8 +372,7 @@ def read_manifest(served_dir: Path | str | None = None) -> dict[str, Any] | None
 def package_plugin_repo(served_dir: Path | str | None = None) -> dict[str, Any]:
     """SYNC - rebuild the served repository (versioned zip, ``plugins.xml`` with
     the sentinel host, ``manifest.json``), returning ``{"version",
-    "zip_filename", "tree_sha", "warned", "served_dir"}``.
-    """
+    "zip_filename", "tree_sha", "warned", "served_dir"}``."""
     repo_root = _repo_root()
     plugin_src = _plugin_src_dir(repo_root)
     if not plugin_src.is_dir():
@@ -443,8 +434,7 @@ def package_plugin_repo(served_dir: Path | str | None = None) -> dict[str, Any]:
 def render_plugins_xml(host: str, served_dir: Path | str | None = None) -> bytes:
     """SYNC - read the packaged ``plugins.xml`` and substitute ``host`` for the
     :data:`HOST_SENTINEL`, so a client reaches the zip on the host it dialed.
-    Refuses with :class:`PluginRepoBuildError` when nothing was packaged yet.
-    """
+    Refuses with :class:`PluginRepoBuildError` when nothing was packaged yet."""
     xml_path = _served_dir(served_dir) / "plugins.xml"
     if not xml_path.is_file():
         raise PluginRepoBuildError(
@@ -458,8 +448,7 @@ def render_plugins_xml(host: str, served_dir: Path | str | None = None) -> bytes
 def served_zip_path(zip_filename: str, served_dir: Path | str | None = None) -> Path:
     """SYNC - resolve a ``GET /plugin-repo/<zip>`` filename to a real file.
     Path-traversal safe: no directory separators, ``.zip`` suffix required, and
-    a name that is not in the served directory raises ``FileNotFoundError``.
-    """
+    a name that is not in the served directory raises ``FileNotFoundError``."""
     name = zip_filename.strip()
     if not name.endswith(".zip") or "/" in name or "\\" in name or name.startswith("."):
         raise FileNotFoundError(zip_filename)
@@ -508,8 +497,7 @@ def _git_provenance(repo_root: Path) -> tuple[str, str]:
 def build_version_payload() -> dict[str, Any]:
     """SYNC (git subprocess): the ``/api/version`` payload,
     ``{"git_sha", "provider"}``; either degrades to ``"unknown"`` rather than
-    raising, because a discovery endpoint is never worth a 500.
-    """
+    raising, because a discovery endpoint is never worth a 500."""
     repo_root = _repo_root()
     head = _git_head_sha(repo_root)
     git_sha = head[:7] if head != "unknown" else "unknown"

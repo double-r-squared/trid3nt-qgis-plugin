@@ -2,8 +2,7 @@
 
 Callers pass typed ``trid3nt_contracts`` models in and get typed models out;
 the ``dict`` transport is contained behind one ``client.call_tool`` seam. No
-quota, cost or spend field is persisted, and API keys never reach this store.
-"""
+quota, cost or spend field is persisted, and API keys never reach this store."""
 
 from __future__ import annotations
 
@@ -58,8 +57,7 @@ class MCPClientProtocol(Protocol):
 def _unwrap_result(raw: dict[str, Any]) -> Any:
     """Extract the payload from one store-client result: ``document`` or
     ``documents`` when present, else the raw result, so a caller branches on
-    ``None`` rather than on a shape.
-    """
+    ``None`` rather than on a shape."""
     if not isinstance(raw, dict):
         return raw
     if "document" in raw:
@@ -106,8 +104,7 @@ class Persistence:
     def _doc_to_case_summary(doc: dict) -> CaseSummary:
         """Normalize a stored projects document into a ``CaseSummary``: ``_id``
         rewires to ``case_id`` and every storage-only field is dropped, so an
-        owner link or an ``expires_at`` stamp never reaches the wire.
-        """
+        owner link or an ``expires_at`` stamp never reaches the wire."""
         allowed = set(CaseSummary.model_fields.keys())
         normalized: dict[str, object] = {}
         for k, v in doc.items():
@@ -132,8 +129,7 @@ class Persistence:
     ) -> CaseSummary:
         """Insert or update a Case; returns the persisted ``CaseSummary``.
         ``owner_user_id`` stamps the storage-only ``user_id`` field and a later
-        ``None`` never clears it; Cases carry no ``expires_at`` TTL stamp.
-        """
+        ``None`` never clears it; Cases carry no ``expires_at`` TTL stamp."""
         body = case.model_dump(mode="json")
         body["_id"] = case.case_id  # the ``_id`` primary key
         if owner_user_id:
@@ -159,8 +155,7 @@ class Persistence:
     ) -> None:
         """Persist a Case's storage-only ``{L<n>: uri}`` short-handle map.
         ``upsert=False``: a deleted or never-created Case is not resurrected
-        by this side channel, and the caller treats the write as best-effort.
-        """
+        by this side channel, and the caller treats the write as best-effort."""
         await self._store.call_tool(
             "update-one",
             {
@@ -177,8 +172,7 @@ class Persistence:
     ) -> dict[str, str] | None:
         """Read back the persisted ``{L<n>: uri}`` map, or ``None`` when the
         Case, the field or the shape is missing; only ``str -> str`` entries
-        survive, and the caller falls back to minting fresh handles.
-        """
+        survive, and the caller falls back to minting fresh handles."""
         raw = await self._store.call_tool(
             "find-one",
             {
@@ -203,8 +197,7 @@ class Persistence:
     async def list_cases_for_user(self, user_id: str) -> list[CaseSummary]:
         """List the user's LIVE Cases: archived and deleted are excluded by the
         query AND by a post-validation guard, since a backend may ignore the
-        ``$nin``; a document with no ``status`` at all is live.
-        """
+        ``$nin``; a document with no ``status`` at all is live."""
         raw = await self._store.call_tool(
             "find",
             {
@@ -284,8 +277,7 @@ class Persistence:
     async def append_chat_message(self, msg: CaseChatMessage) -> None:
         """Append one chat exchange to a Case's history; the chat log is the
         agent's own record, not a solver result, so the write never triggers a
-        confirmation gate.
-        """
+        confirmation gate."""
         body = msg.model_dump(mode="json")
         body["_id"] = msg.message_id
         await self._store.call_tool(
@@ -300,8 +292,7 @@ class Persistence:
     async def upsert_chat_message(self, msg: CaseChatMessage) -> None:
         """Insert-or-replace one chat row keyed by its stable ``message_id``, so
         a running card and its terminal state rewrite the SAME row; ``created_at``
-        is pinned on insert so the transition never reorders the replay.
-        """
+        is pinned on insert so the transition never reorders the replay."""
         body = msg.model_dump(mode="json")
         body["_id"] = msg.message_id
         created_at = body.pop("created_at", None)
@@ -326,8 +317,7 @@ class Persistence:
     async def get_session_state(self, case_id: str) -> CaseSessionState:
         """Hydrate a Case's resume envelope: its header joined with the ordered
         chat history; layers, pipeline history and charts pass through as dicts
-        because ``trid3nt_contracts`` owns those shapes.
-        """
+        because ``trid3nt_contracts`` owns those shapes."""
         case = await self.get_case(case_id)
         if case is None:
             # Surface a minimal placeholder so the caller can decide how to
@@ -430,8 +420,7 @@ class Persistence:
     ) -> None:
         """Activity heartbeat in one upsert: ``last_active_at`` and the TTL
         ``expires_at`` are set, the immutable header lands only on insert, and a
-        given ``case_id`` is deduped into ``project_ids``. Never raises upward.
-        """
+        given ``case_id`` is deduped into ``project_ids``. Never raises upward."""
         from trid3nt_contracts.collections import SESSIONS_TTL
 
         now = now_utc()
@@ -500,8 +489,7 @@ class Persistence:
     ) -> None:
         """Persist the session's storage-only ``last_active_case_id`` so the
         pointer survives a restart; ``None`` clears it. The client-stamped
-        ``case_id`` on a turn stays the authority - this is the cold-start cache.
-        """
+        ``case_id`` on a turn stays the authority - this is the cold-start cache."""
         now = now_utc()
         iso_now = now.isoformat().replace("+00:00", "Z")
         await self._store.call_tool(
@@ -542,8 +530,7 @@ class Persistence:
     async def get_session_record(self, session_id: str) -> "SessionDocument | None":
         """Read one session record back as a typed ``SessionDocument``; storage-
         only extras such as the ``charts`` array are dropped before validation,
-        and a malformed document yields ``None``.
-        """
+        and a malformed document yields ``None``."""
         from trid3nt_contracts.collections import SessionDocument
 
         raw = await self._store.call_tool(
@@ -661,8 +648,7 @@ def _collection_lock(path: _Path) -> _asyncio.Lock:
 def _file_lock(path: _Path):
     """Exclusive advisory lock on a sidecar, held across one read-modify-write.
     BLOCKING - runs inside ``to_thread``. The sidecar, because ``_atomic_write``
-    replaces the store's inode; cross-PROCESS only, asyncio serializes in-process.
-    """
+    replaces the store's inode; cross-PROCESS only, asyncio serializes in-process."""
     if _fcntl is None:  # pragma: no cover - this box is Linux
         yield
         return
@@ -695,8 +681,7 @@ def _default_dev_persistence_dir() -> _Path:
 class FileMCPClient:
     """The file-backed store, satisfying :class:`MCPClientProtocol` over one
     JSON file per collection; reads return a ``{"document": ...}`` or
-    ``{"documents": [...]}`` envelope and writes return a counts dict.
-    """
+    ``{"documents": [...]}`` envelope and writes return a counts dict."""
 
     def __init__(self, base_dir: _Path | None = None) -> None:
         self._base_dir = base_dir or _default_dev_persistence_dir()
@@ -731,8 +716,7 @@ class FileMCPClient:
     def _cycle(self, path: _Path, apply: Any) -> Any:
         """BLOCKING: one flocked read-modify-write over the CURRENT store; the
         read happens inside the lock, so a whole-store write can never be
-        computed from a snapshot another writer has already superseded.
-        """
+        computed from a snapshot another writer has already superseded."""
         with _file_lock(path):
             store = self._read_store(path)
             result, dirty = apply(store)
@@ -815,8 +799,7 @@ class FileMCPClient:
     def _apply_update(doc: dict, update: dict, *, inserting: bool) -> None:
         """Apply an update document in place, supporting ``$set``,
         ``$setOnInsert`` (only when ``inserting``), ``$push`` and ``$addToSet``;
-        an unknown operator raises rather than dropping the write.
-        """
+        an unknown operator raises rather than dropping the write."""
         for op, fields in update.items():
             if op == "$set":
                 doc.update(fields)
@@ -869,8 +852,7 @@ class FileMCPClient:
     def _operation(self, name: str, args: dict[str, Any]) -> Any:
         """The mutation for one call: ``(store) -> (result, dirty)``.
 
-        Built OUTSIDE the lock, applied INSIDE it against the store as it is then.
-        """
+        Built OUTSIDE the lock, applied INSIDE it against the store as it is then."""
         if name == "insert-one":
             doc = args["document"]
             if doc.get("_id") is None:
@@ -957,8 +939,7 @@ class FileMCPClient:
 def is_dev_persistence_enabled() -> bool:
     """Resolve whether the file-backed substrate engages: an explicit
     ``TRID3NT_DEV_PERSISTENCE`` value decides, and unset defaults ON so a fresh
-    clone gets working Case persistence with no config.
-    """
+    clone gets working Case persistence with no config."""
     raw = _os_for_file.environ.get(DEV_PERSISTENCE_ENABLED_ENV)
     if raw is not None:
         return raw.strip().lower() in {"1", "true", "yes", "on"}

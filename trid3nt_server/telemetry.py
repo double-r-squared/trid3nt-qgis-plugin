@@ -2,8 +2,7 @@
 
 One JSON line per tool call, turn, shadow selection or solve completion, to a
 local JSONL sink written unconditionally. Every emitter here is fire-and-forget
-and NEVER raises: telemetry must not break the dispatch, turn or solve loop.
-"""
+and NEVER raises: telemetry must not break the dispatch, turn or solve loop."""
 
 from __future__ import annotations
 
@@ -93,8 +92,7 @@ def _list_telemetry_segments() -> list[str]:
 def get_persistence() -> "Persistence | None":
     """The bound Persistence singleton, or ``None`` before the server module has
     bootstrapped or when persistence is disabled. The import is deferred to
-    break the import cycle.
-    """
+    break the import cycle."""
     try:
         from .server import get_persistence as _server_get_persistence
         return _server_get_persistence()
@@ -117,8 +115,7 @@ def _get_telemetry_path() -> str:
 def telemetry_read_paths(*, all_segments: bool = False) -> list[str]:
     """Resolve the JSONL file(s) a READER should consult: the explicit-file
     override alone, else the current boot's segment, or every retained segment
-    when ``all_segments`` is set.
-    """
+    when ``all_segments`` is set."""
     raw = os.environ.get("TRID3NT_TELEMETRY_PATH")
     if raw and _is_explicit_file_override(raw):
         return [raw]
@@ -131,8 +128,7 @@ def telemetry_read_paths(*, all_segments: bool = False) -> list[str]:
 def cleanup_telemetry_segments(keep: int | None = None) -> list[str]:
     """Delete segments beyond the last ``keep`` (default
     ``TRID3NT_TELEMETRY_KEEP``), returning what was removed; a no-op in
-    explicit-file mode, best-effort per segment, and it never raises.
-    """
+    explicit-file mode, best-effort per segment, and it never raises."""
     raw = os.environ.get("TRID3NT_TELEMETRY_PATH")
     if raw and _is_explicit_file_override(raw):
         return []
@@ -172,8 +168,7 @@ def _hash_args(args: dict | None) -> str:
 async def _write_line(path: str, record: dict) -> None:
     """Append one JSON line to ``path``, through ``aiofiles`` when it is
     installed and an executor thread otherwise, so no write blocks the loop.
-    Never raises: an I/O error is logged at WARNING.
-    """
+    Never raises: an I/O error is logged at WARNING."""
     line = json.dumps(record, default=str) + "\n"
     try:
         parent = os.path.dirname(path)
@@ -229,8 +224,7 @@ async def emit_tool_call_event(
 ) -> None:
     """Emit one tool-call telemetry record: the write is scheduled as a
     fire-and-forget task, so the dispatch loop pays only the enqueue, and a
-    failure is logged rather than raised.
-    """
+    failure is logged rather than raised."""
     # ``result_usable`` is NOT ``success``: a layer-producing tool can return
     # without raising and still carry no renderable layer. ``routed_ok`` is a
     # heuristic, never ground truth - False marks a call superseded within the
@@ -274,8 +268,7 @@ def load_tool_call_records(
 ) -> list[dict]:
     """Read per-tool-call rows from the JSONL sink, newest-first by default and
     tolerant of a missing file or a malformed line. Shadow rows are EXCLUDED; an
-    explicit ``path`` wins, else the current segment, or all retained segments.
-    """
+    explicit ``path`` wins, else the current segment, or all retained segments."""
     targets = [path] if path is not None else telemetry_read_paths(all_segments=all_segments)
     out: list[dict] = []
     for target in targets:
@@ -334,8 +327,7 @@ def build_shadow_selection_record(
 ) -> dict:
     """Build the per-turn shadow-selection record (pure, no I/O); ``turn_id`` is
     the join key recall@k needs, and ``user_text`` is truncated because the full
-    text is not part of that measurement.
-    """
+    text is not part of that measurement."""
     try:
         visible_sorted = sorted({str(t) for t in (visible_tools or [])})
     except Exception:  # noqa: BLE001 -- defensive; never break the dispatch loop
@@ -470,8 +462,7 @@ def emit_solve_telemetry(
 ) -> dict:
     """Emit one solve-completion record: an INFO line always, the JSONL append
     best-effort, and the record returned so provenance can fold it in. Never
-    raises into the solve path.
-    """
+    raises into the solve path."""
     record = build_solve_telemetry_record(
         run_id=run_id,
         backend=backend,
@@ -531,8 +522,7 @@ solve_meta_logger = logging.getLogger("trid3nt_server.solve_telemetry")
 def record_solve_telemetry(record: dict) -> dict:
     """Write ONE solve-completion record: the caller supplies the merged
     compute and mesh-size fields, this writer stamps ``record_type="solve"`` and
-    a ``ts`` when absent, logs an INFO line, and never raises.
-    """
+    a ``ts`` when absent, logs an INFO line, and never raises."""
     try:
         rec = dict(record or {})
     except Exception:  # noqa: BLE001 -- defensive; never break the solve
@@ -663,8 +653,7 @@ def emit_turn_telemetry(
 ) -> dict | None:
     """Emit ONE per-turn record: a structured INFO line always fires, the JSONL
     append is scheduled and not awaited, and nothing raises. Returns the record,
-    or ``None`` when even the build failed.
-    """
+    or ``None`` when even the build failed."""
     try:
         record = build_turn_telemetry_record(
             turn_id=turn_id,
@@ -714,8 +703,7 @@ def emit_turn_telemetry(
 def load_turn_records(path: str | None = None, *, max_records: int = 5000) -> list[dict]:
     """Read per-turn records from the JSONL sink in file order, keeping the last
     ``max_records``; a missing file or a malformed line yields what could be
-    read rather than raising.
-    """
+    read rather than raising."""
     target = path or _get_turn_telemetry_path()
     out: list[dict] = []
     try:
@@ -748,8 +736,7 @@ def _mean(values: list[float]) -> float | None:
 def build_turn_summary(records: list[dict]) -> dict:
     """Aggregate per-turn records into the telemetry-summary section, one entry
     per model sorted by turn count; a mean covers only the turns that REPORTED
-    the figure, so an unreported count never drags a mean toward zero.
-    """
+    the figure, so an unreported count never drags a mean toward zero."""
     by_model: dict[str, dict] = {}
     for rec in records or []:
         if not isinstance(rec, dict):
@@ -821,8 +808,7 @@ def build_live_solve_progress(
 ) -> dict:
     """Build the LIVE solve-progress payload (pure, no I/O); ``eta_seconds`` is
     the perf model's estimate when one exists and ``None`` otherwise, and the
-    field names match the at-completion record deliberately.
-    """
+    field names match the at-completion record deliberately."""
     return {
         "run_id": run_id,
         "solver": solver,
