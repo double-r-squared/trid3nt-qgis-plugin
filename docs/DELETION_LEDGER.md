@@ -1,5 +1,17 @@
 # Deletion Ledger
 
+**2026-09-10: `docs/decisions/` is GONE, with `docs/reports/`, `docs/proof/`
+and the dated measurements under `docs/validation/`.** Rows below cite ADR
+numbers and files in those folders; every one of them is a dated record and
+stays VERBATIM, because a row states what was true when it was written and
+rewriting it would falsify the ledger rather than repair it. Read an `ADR NNNN`
+in a Source column as the name a wave went by, not as a file you can open. The
+rulings - what was decided and why - are kept in the rulings record, outside
+this repo; the constraints those records carried are in `docs/model/`, in
+`docs/CONVENTIONS.md`, in `AGENTS.md`, or as a comment at the line each one
+governs. The three sections at the foot of this file list every deleted file by
+name.
+
 Every deletion candidate is REGISTERED here at decision time and stays
 until DELETED (with the commit hash) - never silently dropped (NATE
 2026-07-31). Rules:
