@@ -19,17 +19,14 @@ from websockets.asyncio.server import ServerConnection
 
 logger = logging.getLogger("trid3nt_server.server")
 
-#: Strong references to fire-and-forget background tasks. ``asyncio.create_task``
-#: only holds a weak reference, so an unreferenced task can be garbage-collected
-#: mid-flight. Each detached task is added here and self-discards via an
-#: ``add_done_callback`` once it finishes (e.g. the startup tool-retrieval
-#: discover-index warm).
+#: Strong references to fire-and-forget background tasks: ``create_task`` holds
+#: only a weak one, so an unreferenced task can be collected mid-flight. Each
+#: detached task is added here and self-discards when it finishes.
 _BG_TASKS: set[asyncio.Task] = set()
 
 #: Bounded wall-clock budget for the graceful-shutdown drain of ``_BG_TASKS``.
-#: A SIGTERM unwinds ``run_server`` and waits at most this long for outstanding
-#: detached tasks to finish; a pathologically slow task is abandoned rather than
-#: hanging shutdown forever. Overridable for ops via the env var (seconds).
+#: A shutdown waits at most this long for outstanding detached tasks, so a
+#: pathologically slow one is abandoned rather than hanging the exit.
 _BG_DRAIN_TIMEOUT_S: float = float(
     os.environ.get("TRID3NT_BG_DRAIN_TIMEOUT_S", "10")
 )
@@ -37,14 +34,9 @@ _BG_DRAIN_TIMEOUT_S: float = float(
 async def _drain_bg_tasks(
     timeout: float | None = None,
 ) -> None:
-    """Flush any outstanding detached background tasks on shutdown.
-
-    Called from ``run_server``'s shutdown ``finally`` so a graceful stop
-    (SIGTERM) lets fire-and-forget tasks still pending in ``_BG_TASKS`` finish
-    before the process exits. Bounded by ``timeout`` (defaults to
-    ``_BG_DRAIN_TIMEOUT_S``) so a pathologically slow task cannot hang shutdown.
-    Best-effort: ``return_exceptions=True`` plus the timeout guard keep a
-    slow/failed task from breaking teardown. A no-op when nothing is pending."""
+    """Flush any outstanding detached background tasks on shutdown, bounded by
+    ``timeout`` so a pathologically slow task cannot hang the exit. Best-effort,
+    and a no-op when nothing is pending."""
     pending = [t for t in _BG_TASKS if not t.done()]
     if not pending:
         return
@@ -70,29 +62,12 @@ async def _handle_dev_tool_invoke(
     state: SessionState,
     payload_dict: dict,
 ) -> None:
-    """Server handler for the ``!run`` direct tool invocation.
-
-    The plugin parses ``!run <tool>(...)`` CLIENT-side and sends a structured
-    ``dev-tool-invoke {name, args, case_id, raw_text?}``. This runs the named
-    registry closure OUTSIDE the LLM loop through the SAME
-    ``_dispatch_tool_and_persist`` -> ``_invoke_tool_via_emitter`` seam a
-    ``/invoke`` directive uses -- so the payload-warning / code-exec / solver
-    gates, the ``_ALWAYS_OFFLOAD_SYNC_TOOLS`` thread offload, layer
-    materialization + Case persistence, the ``tool-io`` card sidecar, and the
-    end-of-turn ``turn-complete`` ALL ride the identical rendering path a
-    model-issued call does. An unknown tool routes through the same
-    ``ToolNotFoundError`` -> ``TOOL_NOT_FOUND`` envelope (raised inside
-    ``_invoke_tool_via_emitter`` and surfaced by ``_dispatch_tool_and_persist``).
-
-    Attribution: the ``raw_text`` composer line (or a reconstructed
-    ``!run name(args)``) is persisted as the turn's user row via
-    ``_prepare_user_turn`` -- a Case reopen replays the ``!run`` signature above
-    the tool card, distinguishing a manual call from a model call without a new
-    UI surface.
-
-    Wire-shape validation only (the plugin already validated syntax): ``name``
-    a non-empty str, ``args`` a dict.
-    """
+    """Run a client-parsed ``!run`` invocation OUTSIDE the model loop, through
+    the SAME dispatch seam a model-issued call takes, so the gates, offload,
+    layer materialization, card sidecar and turn-complete all ride identically."""
+    # Wire-shape validation only, since the client already validated syntax: a
+    # non-empty ``name`` and a dict of ``args``. An unknown tool routes through
+    # the same not-found envelope a model call would produce.
     name = payload_dict.get("name")
     if not isinstance(name, str) or not name.strip():
         await _send_error(
@@ -126,10 +101,9 @@ async def _handle_dev_tool_invoke(
     state.current_turn_pipeline_id = None
     state.current_turn_map_commands = []
 
-    # Case rebind + sync + turn pin + user-row persist (the ``!run`` line lands
-    # as the user bubble so replay is attributable). ``_prepare_user_turn``
-    # parses ``/invoke`` (which ``!run`` text never matches) and auto-creates a
-    # Case when the session has none -- both correct here.
+    # Case rebind, sync, turn pin and user-row persist: the ``!run`` line lands
+    # as the user bubble so a replay is attributable, and a session with no Case
+    # gets one auto-created.
     await _prepare_user_turn(
         websocket, state, raw_text, client_case_id=client_case_id
     )
@@ -140,8 +114,8 @@ async def _handle_dev_tool_invoke(
     _rebind_live_turns(state.session_id, state.emitter)
 
     # Stream-scoped supersede: a manual invocation in the SAME stream cancels
-    # that stream's in-flight turn (a running LLM turn or a prior ``!run``),
-    # mirroring a re-prompt. Turns in other Cases keep running.
+    # that stream's in-flight turn, mirroring a re-prompt. Turns in other Cases
+    # keep running.
     turn_key = state.current_turn_case_id or _ROOT_STREAM_KEY
     prior = state.inflight_tasks.get(turn_key)
     if prior is None or prior.done():
@@ -175,17 +149,9 @@ async def _handle_secret_add(
     state: SessionState,
     envelope: SecretAddEnvelopePayload,
 ) -> None:
-    """Store a plugin-pushed credential VALUE in the in-memory session cache.
-
-    The plugin brokers key values over this ``secret-add`` seam -- at connect
-    (one call per QgsAuthManager entry the session needs) and in response to a
-    ``credential-request`` (the mid-turn retry path). The raw ``key_value`` is
-    written to ``credentials.resolver`` keyed by ``session_id -> provider``; it
-    is NEVER persisted, echoed back, or logged.
-
-    This is NOT a confirmation trigger -- the user typing the key
-    into the plugin form IS the confirmation.
-    """
+    """Store a plugin-pushed credential VALUE in the in-memory session cache,
+    keyed by session and provider; it is NEVER persisted, echoed back or logged.
+    The user typing the key into the plugin IS the confirmation."""
     if not envelope.key_value:
         await _send_error(
             websocket,
@@ -201,20 +167,9 @@ async def _handle_layer_delete(
     state: SessionState,
     payload_dict: Any,
 ) -> None:
-    """Process a ``layer-delete`` envelope.
-
-    Removes ``layer_id`` from the live emitter's ``loaded_layers``, emits a
-    refreshed ``session-state`` (Map.tsx replace-not-reconcile drops the
-    overlay), and persists the post-deletion list authoritatively. The
-    deletion also propagates to the agent's loaded-layers awareness -- both
-    the emitter's in-memory ``_loaded_layers`` and the persisted
-    ``loaded_layer_summaries`` -- so ``build_layers_present_note`` stops
-    listing it.
-
-    The payload is loosely-shaped ``{layer_id: str}`` (read inline for
-    forward-compat). A malformed / empty ``layer_id`` surfaces a typed
-    ``TOOL_PARAMS_INVALID`` error.
-    """
+    """Process a ``layer-delete`` envelope: drop the layer from the live
+    accumulator, emit a refreshed session state, and persist the survivors
+    authoritatively. A missing ``layer_id`` is a typed params error."""
     layer_id: str | None = None
     if isinstance(payload_dict, dict):
         lid = payload_dict.get("layer_id")
@@ -246,12 +201,10 @@ async def _handle_layer_delete(
     ]
     state.emitter.reset_loaded_layers(survivors)
 
-    # Re-inline surviving vectors BEFORE emit so a delete never transiently
-    # drops sibling vector layers: emit_session_state only attaches
-    # inline_geojson for ids already in _inline_geojson_by_layer_id, and the
-    # client never fetches s3:// directly, so a missing inline payload means
-    # the layer cannot render. ``reinline_vector_layers`` is idempotent, so
-    # this is a cheap no-op when the side-table is already full.
+    # Re-inline surviving vectors BEFORE the emit, so a delete never transiently
+    # drops sibling vector layers: only ids already in the inline side-table get
+    # an inline payload, and a vector layer with none cannot render. The call is
+    # idempotent, so a full side-table makes this a cheap no-op.
     try:
         await state.emitter.reinline_vector_layers()
     except Exception:  # noqa: BLE001 -- re-inline is best-effort
@@ -261,10 +214,9 @@ async def _handle_layer_delete(
             target_case,
         )
 
-    # Emit the refreshed session-state. Map.tsx removes the now-absent layer
-    # from MapLibre via replace-not-reconcile. session-state is
-    # session-scoped fan-out on the client, so every connection of this
-    # session converges on the new loaded_layers list.
+    # Emit the refreshed session state: the client replaces rather than
+    # reconciles, so the now-absent layer disappears, and the fan-out is
+    # session-scoped, so every connection converges on the new list.
     await state.emitter.emit_session_state()
 
     # Persist authoritatively (replace, not the union merge -- see helper).

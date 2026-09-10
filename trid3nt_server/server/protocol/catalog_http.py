@@ -1,39 +1,8 @@
-"""HTTP catalog endpoint.
+"""HTTP catalog endpoint: the read-only discovery surface.
 
-Exposes read-only endpoints:
-
-- ``GET /api/tool-catalog`` -- the flat tool catalog as JSON (the agent's-eye
-  view: every registered tool with its REAL docstring + metadata facets).
-- ``GET /catalog`` -- a self-contained HTML page rendering that same catalog,
-  with client-side name/text search and metadata-facet filters (no external
-  assets: inline CSS + JS + embedded data).
-- ``GET /api/telemetry/summary`` -- aggregated routing-quality stats over the
-  most recent 30 sessions, backing the routing-quality dashboard.
-
-Why a dedicated HTTP endpoint when the rest of the agent talks WebSockets?
-
-- The catalog is a **discovery surface** for human users browsing what the
-  agent can do. It is not part of the chat envelope contract --
-  it does not stream, does not maintain session state, and does not require
-  an authenticated user. A plain HTTP GET is the right shape.
-
-The endpoint runs on its own asyncio TCP listener (default port 8766;
-override via ``TRID3NT_AGENT_HTTP_PORT``). It is mounted as a sibling of the
-WebSocket server in ``server.run_server``, NOT in its own process -- single
-process, single asyncio loop, no thread sharing.
-
-Backed entirely by:
-- ``trid3nt_server.tools.TOOL_REGISTRY`` -- every registered tool's
-  docstring (the same text the model sees) + its ``AtomicToolMetadata``
-  facets (``engine``, ``tier``, ``source_class``, the MCP annotation hints,
-  ``supports_global_query``). No hand-maintained taxonomy: every facet is
-  derived from metadata the tool already carries.
-- ``data/tool_query_corpus.yaml`` -- example sample-queries keyed by tool name.
-
-CORS: ``Access-Control-Allow-Origin: *`` so any origin can hit the endpoint
-without preflight friction. The endpoint is read-only and unauthenticated;
-permissive CORS is the correct posture.
-"""
+It serves the tool catalog as JSON and as an HTML page, plus a telemetry
+summary, on its own listener beside the WebSocket server. Every facet derives
+from the tool registry, and the endpoints are unauthenticated with open CORS."""
 
 from __future__ import annotations
 
@@ -64,23 +33,15 @@ __all__ = [
 
 DEFAULT_HTTP_PORT = 8766
 
-# Module-level cache: loaded once on the first request, retained until the
-# agent process restarts. Matches the "reset on agent restart" requirement
-# in the C1 kickoff (no hot-reload semantics needed for an internal
-# discovery endpoint).
+# Module-level cache: loaded once on the first request and retained until the
+# process restarts; a discovery endpoint needs no hot-reload semantics.
 _CORPUS_CACHE: dict[str, list[str]] | None = None
 _PAYLOAD_CACHE: dict[str, Any] | None = None
 
 
 def _default_corpus_path() -> Path:
-    """Resolve the residual ``tools/tool_query_corpus.yaml`` under the package.
-
-    Post engine-door restructure this is the RESIDUAL corpus (tools registered
-    outside a co-located folder). The composed corpus is assembled by
-    ``_compose_corpus_from_tree``. Mirrors ``search_tools._default_corpus_path``
-    so both consumers read the same residual by default. Honours the
-    ``TRID3NT_TOOL_CORPUS_YAML`` env override for test/dev pinning.
-    """
+    """Resolve the residual corpus file under the package: the
+    ``TRID3NT_TOOL_CORPUS_YAML`` override when set, else the packaged path."""
     env_path = os.environ.get("TRID3NT_TOOL_CORPUS_YAML")
     if env_path:
         return Path(env_path).expanduser().resolve()
@@ -105,23 +66,14 @@ def _package_workflows_dir() -> Path:
 
 
 class _CorpusFormatError(Exception):
-    """Non-string entry in a corpus YAML list (a malformed corpus).
-
-    An unquoted phrasing containing a colon (e.g. ``- TMDL analysis: BOD
-    decay``) parses as a one-key dict instead of a string. Refuse rather
-    than silently drop the entry -- a dropped phrasing vanishes from
-    retrieval with no signal.
-    """
+    """Non-string entry in a corpus YAML list: an unquoted phrasing containing a
+    colon parses as a one-key dict, and a dropped phrasing would vanish from
+    retrieval with no signal, so it is refused instead."""
 
 
 def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
-    """Load a single corpus YAML into ``{tool: [queries]}``.
-
-    Missing files yield ``{}`` (best-effort: the catalog still renders
-    without sample queries). A non-string list entry raises
-    ``_CorpusFormatError`` naming the file, tool key, and offending entry
-    rather than being silently dropped.
-    """
+    """Load a single corpus YAML into ``{tool: [queries]}``; a missing file
+    yields ``{}``, and a non-string entry raises rather than being dropped."""
     if not p.exists():
         return {}
     try:
@@ -150,12 +102,8 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
 
 
 def _compose_corpus_from_tree() -> dict[str, list[str]]:
-    """Compose the flat corpus: every ``tools/**/corpus.yaml`` and every
-    ``workflows/**/corpus.yaml`` (the engine templates + former per-engine
-    simulation shims, now homed there) merged with the residual
-    ``tools/tool_query_corpus.yaml``. Same shape/content as the
-    pre-restructure monolith (flat composition, no tiers).
-    """
+    """Compose the flat corpus: every co-located ``corpus.yaml`` under the tools
+    and workflows trees, merged with the residual monolith."""
     tools_dir = _package_tools_dir()
     composed: dict[str, list[str]] = {}
     for base in (tools_dir, _package_workflows_dir()):
@@ -166,20 +114,9 @@ def _compose_corpus_from_tree() -> dict[str, list[str]]:
 
 
 def load_query_corpus(path: Path | None = None) -> dict[str, list[str]]:
-    """Load + cache the synthetic example-query corpus.
-
-    Returns a mapping ``tool_name -> [sample_query, ...]``. Cached for the
-    lifetime of the process; the cache reset is implicit on agent restart
-    (process-level state, no persistence).
-
-    Default: compose the co-located per-tool ``corpus.yaml`` files with the
-    residual monolith. An explicit ``path`` or the ``TRID3NT_TOOL_CORPUS_YAML``
-    env override reads a single monolithic file instead (legacy pin).
-
-    Missing files / parse errors degrade to fewer/no sample queries -- the
-    catalog still renders. Failure to load the corpus must not block the
-    discovery surface.
-    """
+    """Load and cache the example-query corpus as ``tool_name -> [query]``,
+    composing the co-located files with the residual monolith unless a single
+    file is pinned. A missing or malformed file degrades to fewer queries."""
     global _CORPUS_CACHE
     if _CORPUS_CACHE is not None:
         return _CORPUS_CACHE
@@ -210,35 +147,9 @@ def build_catalog_payload(
     corpus: dict[str, list[str]] | None = None,
     use_cache: bool = True,
 ) -> dict[str, Any]:
-    """Assemble the flat ``/api/tool-catalog`` payload (the agent's-eye view).
-
-    A thin reader over ``TOOL_REGISTRY``: every registered tool listed FLAT with
-    its REAL docstring (the exact text the model routes on) and the metadata
-    facets it already carries. No taxonomy, no hand bookkeeping. Shape::
-
-        {
-          "generated_at": "2026-...Z",
-          "tool_count": N,
-          "tools": [
-            {
-              "name": "fetch_dem",
-              "docstring": "...",          # the full, real docstring
-              "engine": null,              # facet: owning engine slug or null
-              "tier": "general",           # facet: retrieval tier
-              "source_class": "dem",       # facet: cache source-class prefix
-              "supports_global_query": false,
-              "cacheable": true,
-              "ttl_class": "static-30d",
-              "annotations": {
-                "read_only_hint": true, "open_world_hint": true,
-                "destructive_hint": false, "idempotent_hint": true
-              },
-              "sample_queries": ["show me elevation for the Grand Canyon", ...]
-            },
-            ...
-          ]
-        }
-    """
+    """Assemble the flat ``/api/tool-catalog`` payload: a thin reader over the
+    registry listing every tool with its REAL docstring, the exact text the
+    model routes on, and the metadata facets the tool already carries."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     global _PAYLOAD_CACHE
@@ -374,12 +285,9 @@ pre.doc{margin:0;white-space:pre-wrap;word-break:break-word;font:13px/1.5 ui-mon
 
 
 def render_catalog_page(payload: dict[str, Any] | None = None) -> bytes:
-    """Render the self-contained HTML catalog page (UTF-8 bytes).
-
-    Embeds ``build_catalog_payload`` as an inline JSON block the page's inline JS
-    reads for client-side search + facet filtering. ``</`` in the JSON is escaped
-    so a docstring containing it cannot break out of the ``<script>`` block.
-    """
+    """Render the self-contained HTML catalog page as UTF-8 bytes; the payload
+    is embedded as inline JSON with ``</`` escaped, so a docstring containing it
+    cannot break out of the script block."""
     data = payload if payload is not None else build_catalog_payload()
     raw = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
     safe = raw.replace("</", "<\\/")
@@ -387,28 +295,21 @@ def render_catalog_page(payload: dict[str, Any] | None = None) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Telemetry summary (Wave 4.11 M7 -- routing-quality dashboard backend).
+# Telemetry summary: the routing-quality dashboard backend.
 # ---------------------------------------------------------------------------
 
 
 def _get_telemetry_path() -> Path:
-    """Resolve the JSONL fallback path (delegates to ``telemetry``'s canonical,
-
-    session/boot-segmented resolver -- item 2 of the observability/retention
-    batch: this used to duplicate ``telemetry._get_telemetry_path``'s
-    env-var + default logic; now it reads the SAME current-segment path that
-    module owns, so a dashboard read and a live write agree on where the
-    sink lives. Kept as its own callable (rather than inlining the import at
-    each call site) because tests monkeypatch THIS name directly to pin a
-    hermetic tmp file.
-    """
+    """Resolve the JSONL read path by delegating to the telemetry module's own
+    segmented resolver, so a dashboard read and a live write agree on where the
+    sink lives. Kept as a named callable because tests pin it directly."""
     from trid3nt_server import telemetry as _telemetry
 
     return Path(_telemetry._get_telemetry_path())
 
 
-# tool-retrieval SHADOW recall@k (tool-retrieval kickoff). The shadow-selection
-# rows share the tool_call_telemetry sink, tagged with this discriminator.
+# The shadow-selection rows share the tool-call sink, tagged with this
+# discriminator.
 _SHADOW_RECORD_TYPE = "tool_retrieval_shadow"
 
 #: Terminal solver tools -> the flow they identify. A turn is attributed to a
@@ -432,17 +333,14 @@ _FLOWS: tuple[str, ...] = tuple(dict.fromkeys(_FLOW_BY_SOLVER_TOOL.values()))
 
 
 def _normalize_record(rec: dict[str, Any]) -> dict[str, Any]:
-    """Coerce a single telemetry record into the summary's canonical shape.
-
-    The local-file writer uses ``success`` + ``ts``; the MCP writer uses
-    ``result_ok`` + ``called_at_utc``. We accept either form so the summary
-    builder doesn't care which substrate produced the data.
-    """
+    """Coerce a single telemetry record into the summary's canonical shape,
+    accepting either the ``success``/``ts`` or the ``result_ok``/``called_at_utc``
+    spelling, so the summary builder does not care which writer produced it."""
     out: dict[str, Any] = {}
     out["session_id"] = rec.get("session_id") or ""
     out["tool_name"] = rec.get("tool_name") or ""
     out["source"] = rec.get("source") or "llm"
-    # Either ``success`` (local file) or ``result_ok`` (Mongo).
+    # Either spelling of the outcome flag.
     if "result_ok" in rec:
         out["result_ok"] = bool(rec.get("result_ok"))
     else:
@@ -451,30 +349,24 @@ def _normalize_record(rec: dict[str, Any]) -> dict[str, Any]:
     out["error_code"] = rec.get("error_code")
     out["retry_attempt"] = int(rec.get("retry_attempt") or 0)
     out["cached_content_token_count"] = rec.get("cached_content_token_count")
-    # Tool-accuracy panel. ``result_usable`` is bool|None
-    # (None = the notion doesn't apply, e.g. a meta tool); ``routed_ok`` is
-    # bool|None and is the per-record carrier of the routing-quality heuristic.
-    # Both substrates use the same key names, so a plain get suffices.
+    # ``result_usable`` is None when the notion does not apply, as for a meta
+    # tool; ``routed_ok`` carries the routing-quality heuristic per record.
     out["result_usable"] = rec.get("result_usable")
     out["routed_ok"] = rec.get("routed_ok")
-    # Timestamp: prefer the Mongo field name; fall back to the file form.
+    # Timestamp under either spelling.
     out["called_at_utc"] = rec.get("called_at_utc") or rec.get("ts") or ""
-    # In-chat model selector dimension. None when the record
-    # predates the feature; _aggregate_records buckets it as "unknown".
+    # None on a record written before the model dimension existed; the
+    # aggregator buckets that as "unknown".
     out["model_id"] = rec.get("model_id")
-    # turn_id (the per-user-message dispatch / pipeline id) -- the recall@k join
-    # key against the turn's tool-retrieval shadow row. Absent on pre-feature
-    # records (None); recall only counts dispatches that carry one.
+    # The per-turn dispatch id is the recall@k join key against that turn's
+    # shadow row, and recall counts only dispatches that carry one.
     out["turn_id"] = rec.get("turn_id")
     return out
 
 
 def _empty_solve_telemetry() -> dict[str, Any]:
-    """Return the zero-state solve_telemetry section (no solves recorded yet).
-
-    Matches the WIRE CONTRACT: ``recent`` is an empty list and the percentiles
-    are zeros until at least one solve has been logged.
-    """
+    """The zero-state solve-telemetry section: an empty ``recent`` list and zero
+    percentiles until at least one solve has been logged."""
     return {
         "recent": [],
         "wall_clock_p50_s": 0.0,
@@ -490,7 +382,7 @@ def _empty_summary() -> dict[str, Any]:
         "error_rate_overall": 0.0,
         "cache_hit_rate": 0.0,
         "average_latency_ms": 0.0,
-        # Tool-accuracy panel additions (WIRE CONTRACT).
+        # Tool-accuracy fields.
         "success_rate": 0.0,
         "result_usability_rate": None,
         "routing_accuracy_rate": None,
@@ -509,12 +401,9 @@ def _empty_summary() -> dict[str, Any]:
 
 
 def _percentile(values: list[float], q: float) -> float:
-    """Return the ``q``-th percentile (q in [0,1]) via linear interpolation.
-
-    Empty input yields ``0.0``. Uses the same "linear" method numpy defaults to
-    so the p50/p95 line up with any external numpy-based recompute. Pure-stdlib
-    (no numpy import -- telemetry must stay light + always importable).
-    """
+    """The ``q``-th percentile, q in [0,1], by linear interpolation; empty input
+    yields ``0.0``. Pure stdlib, matching numpy's default method so an external
+    recompute agrees."""
     if not values:
         return 0.0
     ordered = sorted(values)
@@ -529,13 +418,9 @@ def _percentile(values: list[float], q: float) -> float:
 
 
 def _rate_over_bools(values: list[bool | None]) -> float | None:
-    """Fraction of ``True`` among the non-``None`` entries.
-
-    Returns ``None`` when EVERY entry is ``None`` (the notion does not apply to
-    any record -- e.g. result_usable for an all-meta-tool slice), so the wire
-    field is an honest null rather than a misleading ``0.0``. This is the
-    contract for ``result_usability_rate`` / ``routing_accuracy_rate``.
-    """
+    """Fraction of ``True`` among the non-``None`` entries, or ``None`` when
+    every entry is ``None``, so a rate the data cannot support is an honest null
+    rather than a misleading zero."""
     considered = [v for v in values if v is not None]
     if not considered:
         return None
@@ -544,23 +429,13 @@ def _rate_over_bools(values: list[bool | None]) -> float | None:
 
 
 def _derive_routed_ok(records: list[dict[str, Any]]) -> dict[int, bool]:
-    """Derive the routing-quality heuristic per record (id() -> routed_ok).
-
-    DEFENSIBLE HEURISTIC, NOT GROUND TRUTH (clearly labelled on the wire as
-    ``routing_accuracy_rate``): a tool call is "mis-routed" when it FAILED
-    (result_ok=False) and the SAME session's NEXT call (by timestamp) is a
-    DIFFERENT tool -- i.e. the model abandoned this tool and reached for another
-    one for the same logical step. Such a call gets ``routed_ok=False``. Any
-    other completed call gets ``routed_ok=True``. We leverage ``retry_attempt``
-    too: a call with retry_attempt>0 that itself failed and was followed by a
-    different tool is the clearest mis-route signal, but the failed+superseded
-    rule already captures it.
-
-    A per-record value the writer ALREADY supplied (``routed_ok`` not None) wins
-    -- this only fills the gap for records whose writer left it None (the current
-    emit path, where supersession is not yet observable). Keyed by ``id(rec)``
-    so two records with identical contents are scored independently.
-    """
+    """Derive the routing-quality heuristic per record, keyed by ``id(rec)`` so
+    two identical records score independently. A value the writer already
+    supplied wins; this only fills the gap where it left one None."""
+    # HEURISTIC, NOT GROUND TRUTH: a call counts as mis-routed when it FAILED
+    # and the same session's NEXT call, by timestamp, is a DIFFERENT tool - the
+    # model abandoned it and reached for another for the same logical step. Any
+    # other completed call is routed_ok.
     out: dict[int, bool] = {}
     sess_buckets: dict[str, list[dict[str, Any]]] = {}
     for r in records:
@@ -590,11 +465,9 @@ def _derive_routed_ok(records: list[dict[str, Any]]) -> dict[int, bool]:
 
 
 def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """Compute the dashboard summary over a list of normalized records.
-
-    Returns a JSON-serializable dict; called by both the MCP-backed and
-    file-fallback code paths so the aggregation logic stays in one place.
-    """
+    """Compute the dashboard summary over normalized records, as a
+    JSON-serializable dict; every read path funnels through here, so the
+    aggregation lives in one place."""
     if not records:
         return _empty_summary()
 
@@ -652,9 +525,8 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
         all_routed.append(routed)
         src = r["source"] or "llm"
         by_source_count[src] = by_source_count.get(src, 0) + 1
-        # Cache hit rate: presence of a non-zero cached_content_token_count
-        # treated as a "cache hit" since the Gemini SDK reports the cached
-        # token count when the cached content path engaged.
+        # Cache hit rate: a present cached-token count means the provider
+        # reported a cached-content path, so the call counts as a hit.
         cct = r.get("cached_content_token_count")
         if cct is not None:
             cache_total += 1
@@ -688,7 +560,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "error_count": errs,
                 "error_rate": round(rate, 4),
                 "avg_latency_ms": round(avg_latency, 2),
-                # Tool-accuracy panel additions (WIRE CONTRACT).
+                # Tool-accuracy fields.
                 "success_rate": round(1.0 - rate, 4),
                 "result_usability_rate": (
                     round(usability_rate, 4) if usability_rate is not None else None
@@ -775,7 +647,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
         "error_rate_overall": round(error_rate_overall, 4),
         "cache_hit_rate": round(cache_hit_rate, 4),
         "average_latency_ms": round(avg_latency_ms, 2),
-        # Tool-accuracy panel additions (WIRE CONTRACT).
+        # Tool-accuracy fields.
         "success_rate": round(success_rate, 4),
         "result_usability_rate": (
             round(usability_rate_overall, 4)
@@ -809,15 +681,11 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# solve_telemetry section (live big-sim panel).
+# The solve-telemetry section of the summary.
 #
-# The solve-telemetry record is written to the SAME file+structured-log dual
-# sink as before (telemetry.emit_solve_telemetry); we read its JSONL here to
-# fold per-solve metrics (grid resolution / active cells / vCPU / wall-clock /
-# backend / aoi) into /api/telemetry/summary. The lightest path consistent with
-# the existing file+mongo dual-sink: read the JSONL the solve writer already
-# maintains. No Mongo collection is required (none exists for solves), matching
-# the writer's own "JSONL + structured log, not MCP-routed" decision.
+# The per-solve metrics - grid resolution, active cells, vCPU, wall clock,
+# backend, AOI - are read from the JSONL the solve writer already maintains and
+# folded into the summary.
 # ---------------------------------------------------------------------------
 
 _DEFAULT_SOLVE_TELEMETRY_PATH = "/tmp/trid3nt_solve_telemetry.jsonl"
@@ -827,10 +695,8 @@ _SOLVE_RECENT_CAP = 20
 
 
 def _get_solve_telemetry_path() -> Path:
-    """Resolve the solve-telemetry JSONL path (env override + default).
-
-    Mirrors ``telemetry._get_solve_telemetry_path`` so reader + writer agree.
-    """
+    """Resolve the solve-telemetry JSONL path, env override then default, the
+    same way the writer does so reader and writer agree."""
     return Path(
         os.environ.get(
             "TRID3NT_SOLVE_TELEMETRY_PATH", _DEFAULT_SOLVE_TELEMETRY_PATH
@@ -839,11 +705,8 @@ def _get_solve_telemetry_path() -> Path:
 
 
 def _load_solve_records_from_file(path: Path) -> list[dict[str, Any]]:
-    """Read the solve-telemetry JSONL (newest-last as written).
-
-    Returns the parsed records in file order; missing/unreadable file yields an
-    empty list (the summary then carries the zero-state solve section).
-    """
+    """Read the solve-telemetry JSONL in file order; a missing or unreadable
+    file yields an empty list and the summary carries its zero state."""
     if not path.exists():
         return []
     out: list[dict[str, Any]] = []
@@ -867,14 +730,9 @@ def _load_solve_records_from_file(path: Path) -> list[dict[str, Any]]:
 def _aggregate_solve_telemetry(
     records: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Build the ``solve_telemetry`` section from solve records.
-
-    Shape (WIRE CONTRACT): ``{recent: [{run_id, solver, grid_resolution_m,
-    active_cell_count, vcpus, wall_clock_seconds, backend, aoi_km2}],
-    wall_clock_p50_s, wall_clock_p95_s}``. ``recent`` is newest-first, capped at
-    ``_SOLVE_RECENT_CAP``. Percentiles are over every record that carries a
-    numeric ``wall_clock_seconds``. Empty input -> the zero-state section.
-    """
+    """Build the solve-telemetry section: ``recent`` newest-first and capped,
+    with percentiles over every record carrying a numeric wall clock. Empty
+    input yields the zero-state section."""
     if not records:
         return _empty_solve_telemetry()
     # Newest-first by ts (ISO Z strings sort lexicographically).
@@ -913,14 +771,9 @@ def _load_recent_records_from_file(
     *,
     last_n_sessions: int = 30,
 ) -> list[dict[str, Any]]:
-    """Read the JSONL fallback file(s) and return records from the most-recent
-    ``last_n_sessions`` distinct sessions (newest first).
-
-    ``path`` is a single ``Path`` (the default -- unchanged behavior) or a
-    list of ``Path`` (the retained-telemetry-segments case, oldest-first).
-    A missing/unreadable file is skipped, not fatal -- the dashboard renders
-    an empty state only if EVERY target is missing/unreadable.
-    """
+    """Read one JSONL file, or a list of retained segments, and return the
+    records of the most-recent ``last_n_sessions`` distinct sessions, newest
+    first; an unreadable target is skipped rather than fatal."""
     targets = [path] if isinstance(path, Path) else list(path)
     out: list[dict[str, Any]] = []
     for target in targets:
@@ -938,9 +791,8 @@ def _load_recent_records_from_file(
                         continue
                     if not isinstance(rec, dict):
                         continue
-                    # tool-retrieval SHADOW rows share this JSONL sink but are NOT
-                    # tool-call dispatches -- skip them here (the recall@k path reads
-                    # them separately via _load_shadow_records_from_file).
+                    # Shadow rows share this sink but are not dispatches; the
+                    # recall@k path reads them separately.
                     if rec.get("record_type") == _SHADOW_RECORD_TYPE:
                         continue
                     out.append(_normalize_record(rec))
@@ -963,13 +815,9 @@ def _load_recent_records_from_file(
 
 
 def _load_shadow_records_from_file(path: Path | list[Path]) -> list[dict[str, Any]]:
-    """Read the tool-retrieval SHADOW rows from the JSONL sink(s).
-
-    Shadow rows carry ``record_type == _SHADOW_RECORD_TYPE`` and a
-    ``visible_tools`` array (the would-be-visible set for that turn). Keyed for
-    recall@k by ``(session_id, turn_id)``. ``path`` is a single ``Path`` or a
-    list (retained-segments case); a missing/unreadable target is skipped.
-    """
+    """Read the tool-retrieval SHADOW rows from one JSONL file or a list of
+    retained segments, keyed for recall@k by session and turn; an unreadable
+    target is skipped."""
     targets = [path] if isinstance(path, Path) else list(path)
     out: list[dict[str, Any]] = []
     for target in targets:
@@ -993,11 +841,8 @@ def _load_shadow_records_from_file(path: Path | list[Path]) -> list[dict[str, An
 
 
 def _normalize_shadow_record(rec: dict[str, Any]) -> dict[str, Any]:
-    """Coerce a shadow row into the recall@k canonical shape.
-
-    Accepts either the file form (``visible_tools`` list) or a mongo form;
-    ``visible_tools`` is normalized to a set of strings.
-    """
+    """Coerce a shadow row into the recall@k canonical shape, normalizing
+    ``visible_tools`` to a set of strings."""
     vis = rec.get("visible_tools") or []
     try:
         visible = {str(t) for t in vis}
@@ -1015,30 +860,11 @@ def compute_recall_at_k(
     tool_records: list[dict[str, Any]],
     shadow_records: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Compute recall@k of the tool-retrieval shadow selection (PURE).
-
-    For each turn that has a shadow row, recall counts the LLM-dispatched tools
-    (``source == "llm"``) for that turn that WERE present in the turn's
-    would-be-visible set, divided by the count of dispatched llm tools for that
-    turn. A dispatched tool the retrieval would have DROPPED is a MISS.
-
-    Returns the recall@k section of the summary::
-
-        {
-          "overall": float | None,         # 0..1; None when no measurable turns
-          "turns_measured": int,           # turns with a shadow row + >=1 llm dispatch
-          "dispatches_measured": int,      # total dispatched llm tools across those turns
-          "hits": int,
-          "misses": int,
-          "k": int | None,                 # the k the shadow rows were taken at (modal)
-          "by_flow": [ {flow, recall, turns, dispatches, hits, misses}, ... ],
-          "missed_tools": [ {name, count, flows: [..]}, ... ],  # tools retrieval dropped
-        }
-
-    Turns without a shadow row (e.g. mode==off when the dispatch happened, or a
-    pre-feature record) are EXCLUDED -- recall is only defined where we logged a
-    would-be set. The join key is ``(session_id, turn_id)``.
-    """
+    """Compute recall@k of the tool-retrieval shadow selection, PURE: per turn,
+    the model-dispatched tools present in that turn's would-be-visible set over
+    all its dispatched tools, so a dropped tool is a MISS."""
+    # A turn with no shadow row is EXCLUDED: recall is defined only where a
+    # would-be set was logged. The join key is (session_id, turn_id).
     # Index shadow rows by (session_id, turn_id) -> visible set.
     shadow_by_turn: dict[tuple[str, str], set[str]] = {}
     k_values: list[int] = []
@@ -1048,8 +874,8 @@ def compute_recall_at_k(
         tid = norm["turn_id"]
         if not tid:
             continue
-        # If the same turn logged multiple shadow rows (shouldn't happen), the
-        # union is the safe choice (over-inclusion never penalizes recall).
+        # If one turn logged several shadow rows, the union is the safe choice:
+        # over-inclusion never penalizes recall.
         key = (sid, tid)
         shadow_by_turn.setdefault(key, set()).update(norm["visible_tools"])
         kv = norm.get("k")
@@ -1200,17 +1026,9 @@ async def build_telemetry_summary(
     last_n_sessions: int = 30,
     all_segments: bool = False,
 ) -> dict[str, Any]:
-    """Build the routing-quality summary served by /api/telemetry/summary.
-
-    Telemetry is JSONL-only (the ``tool_call_telemetry`` Persistence-collection
-    route was cut). Reads the per-tool-call rows from the deliberately-retained,
-    session/boot-segmented sink (``telemetry.py`` item 2) and aggregates
-    against them: the CURRENT boot segment by default (``_get_telemetry_path``,
-    monkeypatchable for tests), or every retained segment when
-    ``all_segments=True`` (``telemetry.telemetry_read_paths``).
-
-    Returns the empty-summary shape (all-zero counts) if nothing is found.
-    """
+    """Build the routing-quality summary served by the telemetry endpoint, over
+    the current boot segment by default or every retained segment; nothing found
+    yields the all-zero empty summary."""
     if all_segments:
         from trid3nt_server import telemetry as _telemetry
 
@@ -1228,7 +1046,7 @@ async def build_telemetry_summary(
     summary = _aggregate_records(records)
     summary["source"] = used_source
 
-    # Fold in the tool-retrieval SHADOW recall@k section (tool-retrieval kickoff).
+    # Fold in the tool-retrieval shadow recall@k section.
     # The would-be-visible shadow rows share the SAME JSONL sink (tagged by
     # record_type); load them and join against the dispatched llm tools above by
     # turn_id. Best-effort: a read/compute fault leaves the zero-state section
@@ -1293,18 +1111,14 @@ class _BuildingDetailBadRequest(Exception):
 
 
 def _building_fid(osm_type: str, osm_id: str) -> str:
-    """Mirror ``data_fetch._building_fid``: ``<first-letter-of-type><id>``."""
+    """The building feature id the fetcher writes: type initial plus id."""
     return f"{osm_type[:1]}{osm_id}"
 
 
 def _parse_building_detail_qs(query_string: str) -> tuple[str, str]:
-    """Parse + validate ``osm_type`` + ``osm_id`` from the raw query string.
-
-    Returns ``(osm_type, osm_id)`` with ``osm_type`` normalized to the OSM
-    element kind (``way`` / ``relation`` / ``node``) and ``osm_id`` a digit
-    string. Raises ``_BuildingDetailBadRequest`` on anything malformed (so the
-    handler emits a typed 400, never a fabricated success).
-    """
+    """Parse and validate the OSM element kind and id from the query string;
+    anything malformed raises, so the handler emits a typed 400 rather than a
+    fabricated success."""
     from urllib.parse import parse_qs
 
     params = parse_qs(query_string, keep_blank_values=False)
@@ -1322,14 +1136,9 @@ def _parse_building_detail_qs(query_string: str) -> tuple[str, str]:
 
 
 def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
-    """Scan the buildings tag sidecars for ``fid`` -> its tag bag (or None).
-
-    SYNC (boto3); the caller wraps it in ``asyncio.to_thread``. The detail
-    request carries only ``(osm_type, osm_id)``, not the AOI bbox the sidecar
-    key is derived from, so we list the bounded ``buildings/`` sidecar prefix and
-    check each ``.tags.json`` for the fid. Best-effort: any S3 fault returns None
-    so the handler degrades to the live Overpass-by-id fallback.
-    """
+    """Scan the buildings tag sidecars for ``fid`` and return its tag bag, or
+    ``None``. SYNC: the caller off-loads it. The request carries no bbox, so the
+    bounded sidecar prefix is listed; a storage fault degrades to the live read."""
     try:
 
         from trid3nt_server.tools.cache import CACHE_BUCKET, cache_path
@@ -1381,12 +1190,9 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
 
 
 def _read_tags_from_overpass(osm_type: str, osm_id: str) -> dict[str, Any] | None:
-    """Live Overpass-by-id fallback for one element -> its tag bag (or None).
-
-    SYNC (httpx); the caller wraps it in ``asyncio.to_thread``. Returns the OSM
-    ``tags`` dict for the element, or None when the element is unknown / has no
-    tags / Overpass is unreachable (the handler then emits a typed 404).
-    """
+    """Live by-id fallback for one OSM element's tag bag, or ``None`` when the
+    element is unknown, untagged or unreachable, in which case the handler emits
+    a typed 404. SYNC: the caller off-loads it."""
     try:
         import httpx
     except Exception:  # noqa: BLE001
@@ -1417,14 +1223,9 @@ def _read_tags_from_overpass(osm_type: str, osm_id: str) -> dict[str, Any] | Non
 
 
 async def _handle_building_detail(query_string: str) -> bytes:
-    """Resolve the JSON body for ``GET /api/building-detail``.
-
-    Returns the encoded ``{fid, tags:{...}}`` body on success. Raises
-    ``_BuildingDetailBadRequest`` (-> 400) on malformed input and
-    ``_BuildingDetailNotFound`` (-> 404) when neither the sidecar nor live
-    Overpass yields tags. Both the S3 sidecar scan and the live Overpass query
-    run off the event loop via ``asyncio.to_thread``.
-    """
+    """Resolve the ``{fid, tags}`` body for the building-detail route; malformed
+    input raises a 400 and tags found in neither the sidecar nor the live read
+    raise a 404. Both reads run off the event loop."""
     osm_type, osm_id = _parse_building_detail_qs(query_string)
     fid = _building_fid(osm_type, osm_id)
 
@@ -1451,10 +1252,9 @@ class _ProviderConfigBadRequest(Exception):
 
 
 class _ProviderConfigIncoherent(_ProviderConfigBadRequest):
-    """base_url and model name DIFFERENT providers -> 400 with the env left
-    exactly as it was. The message may name the base URL HOST and the model id
-    (both already leave this route in the success body); it must never carry the
-    full base URL or the api_key."""
+    """base_url and model name DIFFERENT providers, so the push is refused with
+    the env left exactly as it was. The message may name the base URL HOST and
+    the model id, never the full URL or the api_key."""
 
 
 #: Ollama's fixed listen port. The ONLY signal that an OpenAI-compatible
@@ -1469,13 +1269,9 @@ _OLLAMA_PROBE_TIMEOUT_S = 1.5
 
 
 def _provider_family(base_url: str) -> str | None:
-    """OpenAI-compatible base URL -> provider family, or None when the endpoint
-    has no fixed model-id convention.
-
-    Only families whose id convention is UNAMBIGUOUS are named. api.openai.com,
-    Groq, vLLM, llama.cpp and LM Studio all serve ids we must not second-guess,
-    so they resolve to None and are never gated.
-    """
+    """The provider family for an OpenAI-compatible base URL, or ``None`` when
+    the endpoint has no fixed model-id convention; only families whose ids are
+    UNAMBIGUOUS are named, and everything else is never gated."""
     from urllib.parse import urlsplit
 
     try:
@@ -1491,13 +1287,9 @@ def _provider_family(base_url: str) -> str | None:
 
 
 def _ollama_serves_model(base_url: str, model: str) -> bool | None:
-    """SYNC live probe of Ollama's ``/api/tags``: True/False when the endpoint
-    answers, None when it cannot be reached or says nothing usable.
-
-    None is the honest answer for a network hiccup and MUST NOT be read as
-    incoherence -- only an endpoint that answers with a non-empty installed list
-    can prove a model absent.
-    """
+    """SYNC live probe of the installed-model list: True or False when the
+    endpoint answers, ``None`` when it cannot be reached. ``None`` must never be
+    read as incoherence - only a non-empty answer can prove a model absent."""
     import httpx
 
     root = model_discovery._ollama_root(base_url)
@@ -1530,19 +1322,13 @@ def _ollama_serves_model(base_url: str, model: str) -> bool | None:
 
 
 def _check_provider_coherence(base_url: str, model: str) -> None:
-    """Raise ``_ProviderConfigIncoherent`` when base_url and model belong to
-    DIFFERENT providers. Called BEFORE any env mutation.
-
-    A dock Save pushes fields independently, so a base-URL-only push can strand
-    a model id from the previous provider in place; the daemon then dials an
-    endpoint that does not serve it and is un-runnable until restart. The pair
-    is therefore checked as RESOLVED (payload over live env), not per field.
-
-    Static identification is the gate. The live ``/api/tags`` probe runs only
-    for the one pair static shape cannot settle -- a namespaced id against
-    Ollama, which accepts ``namespace/model`` references of its own -- and an
-    unreachable probe never rejects.
-    """
+    """Refuse when base_url and model belong to DIFFERENT providers. Called
+    BEFORE any env mutation, on the RESOLVED pair rather than per field."""
+    # A client saves fields independently, so a base-URL-only push can strand a
+    # model id from the previous provider and leave the daemon dialling an
+    # endpoint that does not serve it. Static identification is the gate; the
+    # live probe runs only for the one shape static form cannot settle, and an
+    # unreachable probe never rejects.
     family = _provider_family(base_url)
     if family is None or not model:
         return
@@ -1572,26 +1358,14 @@ def _check_provider_coherence(base_url: str, model: str) -> None:
 
 
 def _apply_provider_config(raw_body: bytes) -> bytes:
-    """Update the OpenAI-provider process env from the POST body and return the
-    encoded ``{"ok", "model", "base_url_host"}`` result.
-
-    OpenRouter model-extensibility (design 2026-07-19): the plugin's Settings
-    key-form POSTs ``{base_url, api_key, model, num_ctx}`` (all optional) here.
-    ``openai_adapter`` reads ``TRID3NT_OPENAI_*`` from ``os.environ`` at CALL
-    time and builds ``AsyncOpenAI`` per-call, so mutating the env takes effect
-    on the NEXT turn with NO restart. For each present, non-empty field the
-    matching env var is set (str()-ed so a numeric ``num_ctx`` rides cleanly);
-    a same-name model then re-discovers its context window via the public
-    ``reset_num_ctx_cache`` seam.
-
-    The RESOLVED base_url/model pair (this body over the live env) must pass
-    ``_check_provider_coherence`` before anything is written, so a rejected push
-    leaves the env byte-identical rather than half-applied.
-
-    SECURITY: the api_key is written to ``os.environ`` but is NEVER logged,
-    echoed in the response, or placed in a raised message -- only the base URL
-    HOST and the effective model name leave this function.
-    """
+    """Update the provider env from the POST body and return
+    ``{"ok", "model", "base_url_host"}``; the adapter reads the env per call, so
+    a push takes effect on the NEXT turn with no restart."""
+    # The RESOLVED pair - this body over the live env - must pass the coherence
+    # check before anything is written, so a rejected push leaves the env
+    # byte-identical rather than half-applied. SECURITY: the api_key is written
+    # to the env but NEVER logged, echoed or raised; only the base URL HOST and
+    # the effective model name leave this function.
     try:
         payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
     except (UnicodeDecodeError, json.JSONDecodeError):
@@ -1643,20 +1417,12 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# /api/case-list -- cold (no WS session) case list for the QGIS local dock.
+# The cold case list: the same rows the WS session emits, over plain HTTP, so a
+# client can populate its dialog BEFORE a WebSocket connection exists.
 #
-# The case-list envelope otherwise only arrives over the WS session
-# (``_emit_case_list`` in ``server.py``, sent on connect + after every case
-# mutation). This route mirrors that envelope's data + user-scoping over
-# plain HTTP so the dock can populate the dialog BEFORE a WS connection
-# exists.
-#
-# User scoping mirrors ``_emit_case_list``: the WS path resolves
-# ``state.authenticated_user_id or state.session_id`` from the live
-# handshake. A cold HTTP caller has neither. This build collapses every
-# connection onto ONE fixed user id (``auth_handshake.LOCAL_SINGLE_USER_ID``,
-# see ``auth_handshake._resolve_local_single_user``), so a cold caller resolves
-# the identical id without a handshake.
+# The WS path scopes rows to the handshake's user. A cold caller has no
+# handshake, and this build collapses every connection onto one fixed local
+# user id, so it resolves the identical id anyway.
 # ---------------------------------------------------------------------------
 
 
@@ -1670,13 +1436,9 @@ def _case_list_route_enabled() -> bool:
 
 
 def _case_summary_to_wire(case: Any) -> dict[str, Any]:
-    """One ``CaseSummary`` -> the ``/api/case-list`` row shape.
-
-    ``model_dump(mode="json")`` runs the model's own ``UTCDatetime`` /
-    ``BBox`` serializers (ISO-8601 ``Z`` strings, plain float tuples) --
-    narrowed here to the four fields the dock needs, with an honest ``None``
-    bbox when the case has none.
-    """
+    """One ``CaseSummary`` as a case-list row: the model's own serializers,
+    narrowed to the four fields the client needs, with an honest ``None`` bbox
+    when the case has none."""
     dumped = case.model_dump(mode="json")
     return {
         "case_id": dumped.get("case_id"),
@@ -1687,15 +1449,9 @@ def _case_summary_to_wire(case: Any) -> dict[str, Any]:
 
 
 async def build_case_list_payload() -> dict[str, Any]:
-    """Assemble the ``/api/case-list`` JSON payload, newest-first.
-
-    Sources rows via the SAME ``Persistence.list_cases_for_user`` call
-    ``_emit_case_list`` makes over the WS session, scoped to the local
-    build's one fixed user id (``auth_handshake.LOCAL_SINGLE_USER_ID``).
-    Raises ``_CaseListPersistenceUnavailable`` when Persistence is unbound
-    (the dispatcher maps that to an honest 503) -- never a fabricated empty
-    list.
-    """
+    """Assemble the case-list payload newest-first, through the same
+    persistence call the WS path makes; unbound persistence raises, so the route
+    answers an honest 503 rather than a fabricated empty list."""
     from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
     from trid3nt_server.server import get_persistence
 
@@ -1732,9 +1488,7 @@ async def build_case_list_payload() -> dict[str, Any]:
 #     merges it into the case's durable loaded_layer_summaries, and
 #     best-effort-pins the AOI when make_aoi is true.
 #
-# Local-mode gated exactly like /api/case-list (see that section's docstring
-# for the full cloud-vs-local rationale): ABSENT (404) unless the agent is
-# running the TRID3NT local single-user seam.
+# Served whenever the agent runs the local single-user seam.
 
 
 class _IngestLayerBadRequest(Exception):
@@ -1762,14 +1516,9 @@ def _upload_layer_file_fn():
 
 
 async def _handle_ingest_layer_post(raw_body: bytes) -> bytes:
-    """Resolve the JSON body for ``POST /api/ingest-layer``.
-
-    Validates ``{"case_id", "name", "kind", "s3_uri"}`` (``crs_authid`` /
-    ``make_aoi`` optional), awaits ``ingest_user_layer``, and returns its
-    encoded result dict. Raises ``_IngestLayerBadRequest`` (-> 400) on
-    malformed input; the core's own typed ``ImportLayerError`` subclasses
-    propagate for the dispatcher to map to honest 4xx/404 bodies.
-    """
+    """Resolve the JSON body for the ingest-layer route: malformed input raises
+    a 400, and the ingest's own typed errors propagate for the dispatcher to map
+    to honest 4xx bodies."""
     try:
         payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -1819,12 +1568,9 @@ def _parse_ingest_layer_filename(query_string: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# POST /api/probe-point {"case_id", "lon", "lat"} -- deterministic map-click
-# point probe (QGIS plugin dock "Probe" tool). Samples every raster layer (+
-# detected frame sequence) on the case at one point; see
-# ``tools/probe_point.py`` for the full contract/rationale. Local-mode gated
-# exactly like /api/ingest-layer -- ABSENT (404) outside the local
-# single-user seam.
+# The deterministic map-click point probe: samples every raster layer, and any
+# detected frame sequence, on the case at one point. Served whenever the agent
+# runs the local single-user seam.
 
 
 class _ProbePointBadRequest(Exception):
@@ -1845,14 +1591,9 @@ def _probe_point_fn():
 
 
 async def _handle_probe_point_post(raw_body: bytes) -> bytes:
-    """Resolve the JSON body for ``POST /api/probe-point``.
-
-    Validates ``{"case_id", "lon", "lat"}`` are present with the right basic
-    shape, awaits ``probe_point_at``, and returns its encoded result dict.
-    Raises ``_ProbePointBadRequest`` (-> 400) on malformed input; the core's
-    own typed ``ProbePointError`` subclasses (deeper lon/lat range checks,
-    case lookup) propagate for the dispatcher to map to honest 4xx bodies.
-    """
+    """Resolve the JSON body for the probe-point route: malformed input raises a
+    400, and the probe's own typed errors propagate for the dispatcher to map to
+    honest 4xx bodies."""
     try:
         payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -1933,13 +1674,9 @@ async def _handle_http(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
 ) -> None:
-    """Handle one HTTP request.
-
-    The wire-protocol implementation is intentionally minimal -- we only need
-    to serve GET ``/api/tool-catalog`` and respond to CORS preflights. Any
-    other path returns 404; any other method returns 405. Body is read until
-    Content-Length OR end-of-stream so a stray POST doesn't hang.
-    """
+    """Handle one HTTP request. The protocol implementation is deliberately
+    minimal: an unknown path is 404, an unknown method 405, and a body is read
+    to Content-Length or end-of-stream so a stray POST cannot hang."""
     try:
         request_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
     except asyncio.TimeoutError:
@@ -1993,9 +1730,8 @@ async def _handle_http(
 
     
     if method == "POST" and proxy_path == "/api/ingest-layer-file":
-        # Bidirectional layer push, half 1: stage the plugin's raw upload
-        # bytes to object storage. Local-mode gated -- see the module section
-        # above this route for the rationale.
+        # Bidirectional layer push, half 1: stage the client's raw upload bytes
+        # to object storage.
         if not _ingest_layer_route_enabled():
             writer.write(_format_response(404, b'{"error":"not found"}'))
             await writer.drain()
@@ -2143,9 +1879,7 @@ async def _handle_http(
         return
 
     if method == "POST" and proxy_path == "/api/probe-point":
-        # Deterministic map-click point probe (QGIS plugin Probe tool) -- see
-        # the module section above for the full contract. Local-mode gated
-        # exactly like /api/ingest-layer.
+        # Deterministic map-click point probe.
         if not _probe_point_route_enabled():
             writer.write(_format_response(404, b'{"error":"not found"}'))
             await writer.drain()
@@ -2199,16 +1933,12 @@ async def _handle_http(
         return
 
     if method == "POST" and proxy_path == "/api/provider-config":
-        # OpenRouter model-extensibility (design 2026-07-19): the plugin's
-        # Settings key-form POSTs the live provider config here so a
-        # provider/model/key switch takes effect on the NEXT turn with NO agent
-        # restart (openai_adapter reads TRID3NT_OPENAI_* from os.environ at call
-        # time + rebuilds AsyncOpenAI per-call). Local-mode gated EXACTLY like
-        # /api/local-models -- absent (404) on the cloud surface. SECURITY: the
-        # api_key rides the body, is written to env, and is NEVER logged or
-        # echoed -- only the base_url host + effective model return. Runs in a
-        # thread: the coherence gate may make a short blocking /api/tags probe,
-        # which must never sit on the event loop.
+        # The live provider config: a provider, model or key switch takes effect
+        # on the NEXT turn with no restart, because the adapter reads the env per
+        # call. SECURITY: the api_key rides the body and is written to the env,
+        # never logged or echoed - only the base URL host and effective model
+        # return. Runs in a thread, because the coherence gate may make a short
+        # blocking probe that must never sit on the event loop.
         if not model_discovery._local_models_route_enabled():
             writer.write(_format_response(404, b'{"error":"not found"}'))
             await writer.drain()
@@ -2293,9 +2023,7 @@ async def _handle_http(
                 _format_response(500, b'{"error":"telemetry summary failed"}')
             )
     elif proxy_path == "/api/case-list":
-        # Cold case list for the QGIS local dock (live-feedback 2026-07-09) --
-        # see the module section above _case_list_route_enabled for the full
-        # rationale. Route ABSENT (404) outside the local single-user seam.
+        # The cold case list, for a client with no WebSocket session yet.
         if not _case_list_route_enabled():
             writer.write(_format_response(404, b'{"error":"not found"}'))
         else:
@@ -2318,11 +2046,9 @@ async def _handle_http(
                     _format_response(500, b'{"error":"case list failed"}')
                 )
     elif proxy_path == "/api/local-models":
-        # F2 (live-feedback 2026-07-08): installed local (Ollama) models for
-        # the web model selector's local hot-swap. Route ABSENT (404 -- same
-        # as any unknown path) unless MODEL_PROVIDER=openai, so the cloud
-        # agent's HTTP surface is behavior-identical. The upstream fetch runs
-        # off the event loop.
+        # The installed local models, for a client's model picker. The route is
+        # absent, like any unknown path, unless the local provider is active,
+        # and the upstream fetch runs off the event loop.
         if not model_discovery._local_models_route_enabled():
             writer.write(_format_response(404, b'{"error":"not found"}'))
         else:
@@ -2492,14 +2218,9 @@ async def serve_catalog_http(
     host: str = "127.0.0.1",
     port: int | None = None,
 ) -> asyncio.AbstractServer:
-    """Start the catalog HTTP listener and return the server handle.
-
-    Designed to be mounted alongside the WebSocket server in
-    ``server.run_server`` -- same asyncio loop, single process, no threads.
-
-    Reads ``TRID3NT_AGENT_HTTP_PORT`` if ``port`` is not passed (default
-    ``DEFAULT_HTTP_PORT``).
-    """
+    """Start the catalog HTTP listener and return the server handle; the port
+    comes from ``TRID3NT_AGENT_HTTP_PORT`` when not passed. It runs on the same
+    loop and process as the WebSocket server."""
     if port is None:
         try:
             port = int(os.environ.get("TRID3NT_AGENT_HTTP_PORT", DEFAULT_HTTP_PORT))
