@@ -3894,3 +3894,39 @@ file READ, every row's action landed and the standing check now the six guards i
 `trid3nt_server-tools-fetchers.md`,
 `trid3nt_server-tools-root-search-meta-display.md`, `workflows-mesh.md`,
 `workflows-runtime-solver-shared.md`, `workflows-telemac.md`.
+
+## docs/reports - 18 frozen bench files, 2026-09-10
+
+Bench output from July 2026, taken against a 176-tool registry the live one no
+longer resembles (161 registered at the last measurement, 75 of the swept names
+gone). Two of the files already carried their own "read a row as evidence about
+the date it was taken" header. Nothing here binds: the live instruments are
+`scripts/instruments/tool_sweep.py` and `scripts/instruments/gen_tool_support_page.py`,
+and the live coverage page is `docs/site/tool-support.md`, which stays.
+
+The sweep pair was ALSO the generator's input, so the instruments were repointed
+first: both records now land under the gitignored `run/sweep/`, which is where a
+record its own instrument regenerates belongs.
+
+Deleted, 10 at the top level:
+
+`tool-routing-bench-qwen3-8b.md`, `tool-routing-bench-qwen3-8b-BEFORE-coldindex.md`,
+`tool-routing-bench-qwen3-8b-AFTER-warmindex.md`, `tool-routing-report.md`,
+`tool-routing-results.jsonl`, `tool-routing-failure-split.md`,
+`tool-sweep-checklist.md`, `tool-sweep-results.jsonl`,
+`tool-usability-report.md`, `tool-usability-results.jsonl`.
+
+Deleted, the 8 of `ab-2026-07-07/` - one closed three-arm experiment, its
+narrative and each arm's raw records:
+
+`FINAL-REPORT.md`, `baseline-split.md`, `consumed-baseline.jsonl`,
+`lessons-on-split.md`, `lessons-on-qwen3-8b.jsonl`,
+`lessons-store-after-9b.jsonl`, `model-swap-9b-split.md`,
+`model-swap-9b-lessons.jsonl`.
+
+Five untracked `.log` siblings sat in `ab-2026-07-07/` and were never in the
+tree, so git cannot restore them: `8b-lessons-sweep.log`, `lessons-on-sweep.log`,
+`model-swap-sweep.log`, `model-swap-sweep-16k-truncated.log`,
+`usability-sweep.log`. They are the raw console tails of the same closed
+experiment; they were moved aside rather than destroyed and the folder is empty
+on disk.
