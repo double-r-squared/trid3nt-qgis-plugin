@@ -56,3 +56,6 @@ experiments/
 
 # machine-only: regenerated wholesale by scripts/instruments/code_graph.py on every run
 docs/validation/code-graph/graph.json
+
+# the rulings record stays local; git holds the code, not the decisions
+docs/IDEAS.md
