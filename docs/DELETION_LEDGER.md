@@ -3715,3 +3715,43 @@ file. 0320 is a BINDING record, so it is amended in place per the census
 ruling rather than left contradicting the tree. Dated records that name the
 three are left verbatim: `docs/validation/docs-census.md`, `mesh-wave-
 conformance.md` and the manifest's own rows say what was true when written.
+
+## The constraint migration out of the dropped records - 2026-09-10
+
+The 2026-09-10 ruling "DOCS DESCRIBE THE SYSTEM; DECISIONS LIVE IN IDEAS; PROOF
+IS TRANSIENT" drops four bodies of record: `docs/decisions/` (106), the dated
+working records under `docs/validation/` (45 files, the hygiene manifest
+included), `docs/reports/` (18 tracked) and `docs/proof/`. This slice READ every
+one of them and moved what still binds; nothing is deleted here. The per-file
+verdict table is the migration record the deleting slice reads.
+
+Of 170 files, EIGHT constraints needed a home. The rest were already stated -
+by a model requirement, by a comment at the line the constraint governs, by an
+`AGENTS.md` law, or by a ruling already in the rulings record - or their subject
+had left the tree, which is most of the 106: the cloud, the coded fetchers, the
+scenario composers, the nineteen non-TELEMAC workers and the engines they ran.
+
+| constraint | landed as |
+| --- | --- |
+| consequential code runs on the user's own approval, and an unanswered gate EXPIRES typed | `docs/model/tool-plane.sysml` `ConsequentialCodeIsUserGated`, 7 verify allocations |
+| the model is handed a minted HANDLE, never a store path; an unresolvable reference is a typed refusal | `docs/model/emission-seam.sysml` `TheModelIsHandedAHandleNotAUri`, 9 verify allocations |
+| one process, one user; the revisit trigger is more than one CONCURRENT user | comment block at `trid3nt_server/main.py::run` |
+| SEARCH is the front door, ENUMERATION the exception; the revisit trigger is MEASURED recall | comment block at `CORE_FLOOR`, `trid3nt_server/tools/search/tool_retrieval.py` |
+| a template DECLARES the artifact it stands on; retrieval never picks a run's inputs | comment block at `trid3nt_server/workflows/runtime/data.py` |
+| the NLCD curve-number and roughness columns are ONE study's, together; a swap is a declared author choice | comment block at `NLCD_CN_MANNING`, `.../rain_on_grid/cn_infiltration.py` (rewritten to state the constraint, not cite a record) |
+| rationale lives in the rulings record or nowhere | `docs/CONVENTIONS.md`, the disallowed-classes list |
+| a drawing of LIVE STRUCTURE is the model's, regenerated; a hand-drawn second copy is drift | `docs/CONVENTIONS.md`, opening paragraph |
+
+Three documents moved with the charter rather than with a constraint:
+`AGENTS.md` stops routing a decision to `docs/decisions/` and drops the
+never-prune clause on `docs/proof/templates` (both RETIRED), and `README.md`'s
+documentation map drops the decision folder. All three now name the rulings
+record WITHOUT a path, because the same day's second ruling put it outside the
+repo: a law document that pointed at it would resolve on the author's machine
+and nowhere else, which is the exact defect
+`tests/hygiene/test_dead_references.py` exists to catch.
+
+| file | move | why |
+| --- | --- | --- |
+| `tests/emission/test_layer_handles_adr0014.py` -> `tests/emission/test_layer_handles.py` | RENAMED (git mv, no content change beyond one fixture title) | the name cited a record the charter drops, and spec notation is disallowed prose by `docs/CONVENTIONS.md`. Six `ADR NNNN` citations in five other test files went the same way; `grep -riE '\bADR ?[0-9]{3,4}\b'` over every tracked `.py` outside `docs/proof/` is now ZERO |
+

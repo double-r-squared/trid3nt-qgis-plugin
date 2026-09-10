@@ -40,7 +40,7 @@ def test_engine_template_in_registry():
     assert _TEMPLATE in agent_tools.TOOL_REGISTRY, f"{_TEMPLATE} must be registered"
     for door in ("run_sfincs", "run_model_flood_scenario", "run_telemac"):
         assert door not in agent_tools.TOOL_REGISTRY, (
-            f"{door} was dissolved (ADR 0094); the template stands alone"
+            f"{door} was dissolved; the template stands alone"
         )
 
 

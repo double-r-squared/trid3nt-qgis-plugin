@@ -287,7 +287,7 @@ def _mk_case(case_id: str):
 
     now = datetime.now(timezone.utc)
     return CaseSummary(
-        case_id=case_id, title="ADR-0014 case", created_at=now, updated_at=now
+        case_id=case_id, title="handle round-trip case", created_at=now, updated_at=now
     )
 
 

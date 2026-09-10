@@ -216,7 +216,7 @@ def test_system_prompt_removed_blocks_stay_removed() -> None:
         "ELEVATION colors",                   # trailing colored-relief note
     ):
         assert phrase not in flat, (
-            f"removed-block phrase {phrase!r} reappeared — ADR-0014 Stage-1 cut regressed"
+            f"removed-block phrase {phrase!r} reappeared - the publish-discipline block is cut"
         )
 
 

@@ -313,7 +313,7 @@ _WORKFLOWS_DIR = (
 _ALLOWLISTED_INPUT_EMISSION: dict[str, tuple[int, str]] = {
     "mesh/gate.py": (1, "the mesh under construction, presented at the gate as an editable MDAL layer - an AUTHORED domain, not a router fetch, so no emit-on-fetch seam can cover it; one home for every mesher's presentation"),
     "telemac/products/stratified.py": (1, "the TELEMAC-3D BOTTOM companion layer - the surface layer rides the dispatch seam, so only its pair-mate is emitted here"),
-    "telemac/helpers/forcing.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam (ADR 0309)"),
+    "telemac/helpers/forcing.py": (1, "NWM discharge station point, its name pinned to the RESOLVED cycle for its caption, which the fetch (visualize=False) never exposes to the generic seam"),
     "telemac/products/products.py": (3, "deposition + oil-slick + DO-field results"),
     "telemac/helpers/release_layer.py": (1, "the seam-side release/outfall point publisher - a resolved PARAM (drawn or derived), not a router fetch, so no emit-on-fetch seam can cover it; one home for all telemac legs"),
     "telemac/products/results_mesh_seam.py": (1, "the seam-side SELAFIN mesh publisher - framework emission, one home for all telemac legs"),
@@ -343,7 +343,7 @@ def test_sweep_no_surface_input_helpers_except_worker_cog():
             if name not in _ALLOWLISTED_SURFACE_HELPERS:
                 offenders.append(f"{path.relative_to(_WORKFLOWS_DIR)}::{name}")
     assert not offenders, (
-        "router-fetched inputs surface via the emit-on-fetch seam (ADR 0244); "
+        "router-fetched inputs surface via the emit-on-fetch seam; "
         "delete these hand-written _surface_*input* helpers:\n  "
         + "\n  ".join(offenders)
     )
@@ -375,7 +375,7 @@ def test_sweep_input_emission_calls_match_allowlist():
         if found.get(rel, 0) != cnt
     }
     assert not unexpected and not missing, (
-        "input-emission call sites drifted from the ADR 0244 allow-list.\n"
+        "input-emission call sites drifted from the allow-list.\n"
         f"unexpected/changed (route through the seam or allow-list w/ reason): {unexpected}\n"
         f"allow-listed but not found (update the allow-list): {missing}"
     )

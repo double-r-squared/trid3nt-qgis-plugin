@@ -191,7 +191,7 @@ _PARKED_SILENT_SUBSTITUTIONS: dict[str, tuple[str, str, str]] = {
         'ds.attrs.get("crs", "EPSG:3857")',
         "audit row 11: a COG whose dataset carries no CRS is TAGGED EPSG:3857 and "
         "written, so pixel coordinates that were never Web Mercator get a Web "
-        "Mercator georeference. Logged only. PARKED (ADR 0299 fork 4): raise vs "
+        "Mercator georeference. Logged only. PARKED: raise vs "
         "keep guessing is NATE's call.",
     ),
 }
