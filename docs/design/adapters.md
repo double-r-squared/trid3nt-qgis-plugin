@@ -1,6 +1,6 @@
 # adapters/ -- LLM provider adapters
 
-`trid3nt_server/adapters/` (was `agent/adapters/`, ADR 0277) is the ONLY place
+`trid3nt_server/adapters/` is the ONLY place
 provider nouns appear. It presents one contents/declarations/system-prompt
 surface the turn engine drives regardless of backend.
 
@@ -21,7 +21,7 @@ surface the turn engine drives regardless of backend.
   (`stream_anthropic`, `anthropic_model`, `anthropic_api_key`), selected by
   `MODEL_PROVIDER=anthropic`. Claude Sonnet 5 by default
   (`TRID3NT_ANTHROPIC_MODEL`), adaptive thinking, no sampling params, two
-  `cache_control` breakpoints on the tool catalog + system block. ADR 0301.
+  `cache_control` breakpoints on the tool catalog + system block.
 - `openai_adapter.py` -- OpenRouter + local-model (Ollama) path
   (`stream_openai`, `FunctionCallEvent`, `openai_api_key`).
 - `model_discovery.py` -- the provider model-LIST surface behind
@@ -40,11 +40,11 @@ surface the turn engine drives regardless of backend.
 
 `server/turn/stream.py` drives these via the shared `adapter.py` surface. The
 pluggable-LLM story (cloud API or local model) is a provider swap behind this
-seam. Provider model-discovery folded into `model_discovery.py` (ADR 0279): the
+seam. Provider model-discovery folded into `model_discovery.py`: the
 `protocol/catalog_http` route handler and `gates/context_budget` import it
 instead of defining provider logic themselves.
 
-## Context budget (ADR 0311)
+## Context budget
 
 The context window is a PER-MODEL FACT DISCOVERED AT RUNTIME, never hardcoded.
 `gates/context_budget.discover_context_window` resolves it per

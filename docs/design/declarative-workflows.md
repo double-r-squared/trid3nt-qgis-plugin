@@ -1,16 +1,16 @@
 # Declarative workflows - the plan-value architecture
 
-NATE-shaped design (2026-08-21/23 discussion). V1 LANDED (ADR 0303) -
-do_sag MIGRATED. WAVE 2 LANDED (ADR 0304) - the FORM and DRAW cards, on
-the existing spines, plugin 0.3.17. WAVE 3 LANDED (ADR 0305) -
+NATE-shaped design (2026-08-21/23 discussion). V1 LANDED -
+do_sag MIGRATED. WAVE 2 LANDED - the FORM and DRAW cards, on
+the existing spines, plugin 0.3.17. WAVE 3 LANDED -
 telemac_river_dye MIGRATED (3,469 -> 671 lines over a shared
 `workflows/telemac/` family), the form card's first live proof,
 and the live-run harness (`trid3nt_server/testing/`). WAVE 4 LANDED
-(ADR 0306) - the GENERALIZATION CHECKPOINT PASSED:
+- the GENERALIZATION CHECKPOINT PASSED:
 `modflow_regional_water_budget` and `swmm_aquifer_baseflow_to_node`
 migrated onto shared `workflows/<engine>/steps/` families, both
 bit-identical, on four small library additions and no redesign. WAVE 5
-LANDED (ADR 0307) - SWMM ENGINE CAMPAIGN WAVE A: the two standalone
+LANDED - SWMM ENGINE CAMPAIGN WAVE A: the two standalone
 solve templates (`swmm_rdii_rtk_unit_hydrograph`,
 `swmm_snowmelt_degree_day`) declared, both bit-identical INCLUDING their
 deck text, on NO library change at all; the shared SWMM family grew
@@ -19,7 +19,7 @@ time-series helpers, and paid back its first 18 lines into the
 checkpoint's own template. SWMM is 3 of 15; the remaining twelve are two
 composer families (published-deck, mechanism-comparison) and three AOI
 giants, and the wave boundaries follow the shared machinery rather than
-the file sizes (ADR 0307's tranche plan). Focus engines: SWMM + MODFLOW
+the file sizes (wave 5's tranche plan). Focus engines: SWMM + MODFLOW
 (top priority, EPA/USGS), TELEMAC, HEC-RAS (tail, skippable).
 One principle everywhere: DECLARE THE WHAT, CENTRALIZE THE HOW - and
 the what is a VALUE.
@@ -215,7 +215,7 @@ as producer. Data producers consume params, which is what makes
 dataflow tracing cross the boundary.
 
 AN ARTIFACT IS DATA; A SCALAR THE PLAN CONSUMES IS A DERIVED PARAM
-(ADR 0306). A `Data` producer may `Ref` a param or another `Data`,
+(the generalization checkpoint). A `Data` producer may `Ref` a param or another `Data`,
 never a step, so a fetch that depends on a resolved LOCATION cannot be
 declared as `Data` - `Data` reads the DOMAIN environment, which carries
 an extent, and that fits rasters and layers. The test is what the plan
@@ -426,7 +426,7 @@ THREE PATHS, and the split is itself diagnostic (NATE, 2026-08-24):
   VALUES live in the declaration - a demo script IS a saved,
   banner-labeled path-A invocation, never a constant in workflow code.
 - **B - the gate-by-gate walkthrough**, over the real socket
-  (`trid3nt_server/testing`, ADR 0305): the tool, its args, the answers
+  (`trid3nt_server/testing`, wave 3): the tool, its args, the answers
   its gates get, and the assertions - `LiveRun(tool, args, answers=
   GateAnswers(draw=..., form_edits=..., require_draw=True))`. The full
   product-path audit, run at wave acceptance. Three rules make it
@@ -448,15 +448,15 @@ A-green with B-red isolates a fault to the interaction machinery.
 3. river_dye migration (the full-contact proof; R3 acceptance;
    net-LOC meter on).
 4. GENERALIZATION CHECKPOINT: one SWMM and one MODFLOW template
-   before any mass conversion. DONE (ADR 0306) - PASSED.
+   before any mass conversion. DONE (wave 4) - PASSED.
 5. SWMM + MODFLOW engine-complete campaigns (purity + meshing + byo
    mesh adoption; row-19 river_dem_uri wiring lands here), TELEMAC
    family completion, HEC-RAS tail (skippable). Two items queued out
    of the checkpoint: the SWMM Green-Ampt trio derived from the same
    texture fit as the aquifer column (a physics change, NATE's), and
    river_dye's carrier discharge adopting the DERIVED door, which
-   closes ADR 0305's delta 1 with no library change.
-   SWMM waves, per ADR 0307's tranche plan: **A - the standalone solve
+   closes wave 3's delta 1 with no library change.
+   SWMM waves, per wave 5's tranche plan: **A - the standalone solve
    templates (LANDED)**; B - the published-deck trio, where a fetched
    deck becomes the family's first `Data` (authored, therefore
    `.supplied()`-able); C - the mechanism-comparison five, where the purity
@@ -479,7 +479,7 @@ A-green with B-red isolates a fault to the interaction machinery.
 Agreed in the 2026-08-24 architecture discussion (rulings recorded in
 docs/IDEAS.md, 2026-08-24/25 entries); this section is the contract the
 family campaign builds. Status: BUILT and hardened on the two-template cohort
-(`telemac_do_sag` + `telemac_river_dye`, ADR 0312) - PROPOSED for the FLEET
+(`telemac_do_sag` + `telemac_river_dye`, the workflow skeleton) - PROPOSED for the FLEET
 until NATE redlines the cohort result. What the cohort taught, recorded here so
 the contract and the code do not drift:
 
@@ -551,7 +551,7 @@ Two slot kinds, distinguished per slot:
   LAYER hook was drafted here and deliberately NOT built (removed in
   `efcca38b`): the steps that fetch inputs already emit through the one
   emission seam, so a skeleton-level hook would be a SECOND input-emission
-  site - exactly the double emission the ADR 0244 single-seam guard exists
+  site - exactly the double emission the single-seam guard exists
   to catch. It belongs to the emission-unification wave, where the seam is
   the single home; a test pins that the skeleton emits no input layer of
   its own.
@@ -672,7 +672,7 @@ past - PHYSICS ANSWERS still owe parity (R3 stands: same question ->
 same answer; "no back compat" is about API shape, never about results
 drifting). Every removal gets a DELETION_LEDGER row.
 
-### Rerun-with-overrides - the recalibration interface (ADR 0319)
+### Rerun-with-overrides - the recalibration interface
 
 **A run derives from a run.** `rerun_workflow(run_id, overrides={...})` is the one
 way any question gets asked again with something moved, and it serves three

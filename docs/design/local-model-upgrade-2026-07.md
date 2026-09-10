@@ -10,7 +10,7 @@
 Status: research only (nothing pulled, nothing benchmarked). Follow-up to the pass-3 routing
 sweep verdict: all 127 scored failures were MODEL-MISS at K=8 -- the retrieval layer put the
 right tool on the 8-tool menu every single time and `qwen3:8b-16k` picked wrong or declined
-(`docs/reports/tool-routing-failure-split.md`). The lever is model quality at three things:
+(the routing-failure split of that bench). The lever is model quality at three things:
 choosing from a short menu, argument fidelity, and multi-step chaining (geocode-then-fetch
 chains stall today). This doc ranks the candidates that can actually run on this box.
 
@@ -159,7 +159,7 @@ Qwen3.5 arms disappoint on selection: `hengwen/watt-tool-8B`.)
 Continuity target: pass-3 sweep (HIT 45 / MISS 73 / NO_CALL 55 / ERROR 1 over 174) and the
 15-prompt bench history (35.7% cold -> 57.1% warm on qwen3:8b-16k).
 
-1. Preserve the baseline: `cp docs/reports/tool-routing-results.jsonl docs/reports/tool-routing-results-qwen3-8b-pass3.jsonl`,
+1. Preserve the baseline: copy the bench's results JSONL aside under a run-named file,
    then reset the live file (the sweep is resumable via that jsonl; a stale copy would skip
    every prompt). Same for the report md if regenerating in place.
 2. Pull + create the 16k variant (above); flip `TRID3NT_OPENAI_MODEL=qwen3.5:9b-lowvram-16k`

@@ -12,7 +12,7 @@ and a Legacy section.
 
 ## Ground-truth anchors (what we already run)
 
-- **Data-router fold** (executed; the record is `docs/validation/fetcher-fold-census.md`):
+- **Data-router fold** (executed):
   97 fetchers / 71,836 lines folding to YAML source specs + a shared router with
   pluggable ingestion executors. A router executor MAY delegate to a maintained
   client library instead of raw HTTP - this is exactly the FOLD lens below.

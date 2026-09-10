@@ -25,14 +25,14 @@ into the layer + pipeline frames the QGIS plugin renders over the WebSocket.
 - `restyle.py` -- THE presentation surface: ramp, title, units, scale, kind,
   and `hide` (the un-emit, and its undo). Journaled with the sentence the
   legend ends up saying.
-- `outputs_seam.py` -- the emit-on-SOLVE CONSUMER (ADR 0280 item 4).
+- `outputs_seam.py` -- the emit-on-SOLVE CONSUMER.
   `read_outputs_manifest(run_result)` reads `outputs.json` from the run prefix
   (missing/unknown-schema -> `None`, the byte-identical no-op);
   `build_layers_from_outputs(manifest, run_id, bbox)` turns each entry into the
   SAME registered, styled, legend-stashed `LayerURI` the register-only
   `publish_manifest.json` path produced -- raster no-`t` = standalone primary,
   raster+`t` sharing a `quantity` = a temporal group (frames in `t` order),
-  vector = a vector layer, mesh = a native `layer_type="mesh"` layer (ADR 0283),
+  vector = a vector layer, mesh = a native `layer_type="mesh"` layer,
   scalar = log-only. `layer_id` is
   deterministic + idempotent from `(quantity, t-ordinal, run_id)`; the legend is
   STASHED side-band (byte-identical to `register_manifest_layers`). Proven
@@ -49,26 +49,26 @@ The append-only `outputs.json` manifest (`trid3nt_contracts.outputs_manifest`,
 `{kind, quantity, name, uri, t?, units?}` entries under its run prefix; the
 seam consumer reads them on the existing completion poll and publishes each
 (raster+`t` sharing a `quantity` = a temporal group; raster with no `t` = one
-layer; vector = a vector layer; mesh = a native SELAFIN `layer_type="mesh"` layer,
-ADR 0283; scalar = log-only). v1 is AT-EXIT;
+layer; vector = a vector layer; mesh = a native SELAFIN `layer_type="mesh"` layer;
+scalar = log-only). v1 is AT-EXIT;
 a MISSING manifest is a no-op (legacy engines byte-unchanged). See
 `docs/design/outputs-manifest-schema.md` (frozen schema; v1 gained OPTIONAL
-`bbox` + `band_stats` render-hint fields, ADR 0280 EXECUTED) + ADR 0280 (the
-seam, the flood proving case, the scaffold reconciliation, the cap fix). The seam
-consumer (`outputs_seam.py`), the SFINCS worker producer (`outputs.json` written
-alongside `publish_manifest.json`), and the byte-equivalence bar are LANDED (ADR
-0280 EXECUTED). The SFINCS flood composer is WIRED to the seam and the deck-side
-cadence cap fix landed (ADR 0280 live close-out).
+`bbox` + `band_stats` render-hint fields, EXECUTED) for the seam, the flood
+proving case, the scaffold reconciliation and the cap fix. The seam consumer
+(`outputs_seam.py`), the SFINCS worker producer (`outputs.json` written
+alongside `publish_manifest.json`), and the byte-equivalence bar are LANDED.
+The SFINCS flood composer is WIRED to the seam and the deck-side cadence cap
+fix landed.
 
 MIGRATED ENGINES (S-class, each: worker producer + composer seam-or-legacy fork +
 byte-equivalence + deck-side cadence + post-hoc thinning deleted + live proof
 through a rebuilt image):
 
-- **SFINCS flood** -- the proving case (ADR 0280).
-- **GeoClaw inundation** (ADR 0281): `quantity="flood_depth"`, per-frame `t` read
+- **SFINCS flood** -- the proving case.
+- **GeoClaw inundation**: `quantity="flood_depth"`, per-frame `t` read
   from the `fort.t` sibling; composer fork in `workflows/geoclaw/inundation`;
   `publish_manifest` = metrics carrier.
-- **SWAN nonstationary waves** (ADR 0281): `quantity="wave_height"`, evenly-spaced
+- **SWAN nonstationary waves**: `quantity="wave_height"`, evenly-spaced
   `t` from `sim_duration_s`; composer fork in `workflows/swan/wave_field`. The
   rebuild also shipped the SWAN postprocess in-image for the first time + fixed a
   COG-upload ordering gap.
@@ -77,7 +77,7 @@ Each seam mints `layer_id` off the PHYSICAL quantity (`flood-depth-*` /
 `wave-height-*`), the one explained non-rendering divergence from the register
 path's engine-prefixed stems; web temporal grouping rides the `name` token,
 unchanged. Cadence stays the count-native `output_frames` lever (aliased to the
-universal `output_interval_min` vocabulary in ADR 0281; no redundant param added).
+universal `output_interval_min` vocabulary; no redundant param added).
 
 MIGRATED ENGINES (M-class, HOST-EXEC writer -- the agent postprocess is the
 producer; NO worker image, so offline-green == deploy-green, effective
@@ -85,15 +85,15 @@ immediately). These use the OPTION (a) ruling: the seam owns the TEMPORAL FRAMES
 ONLY (`build_layers_from_outputs(..., frames_only=True)`); the TYPED PEAK layer +
 its narration scalars stay composer-built exactly as before, and the composer does
 NOT consume the seam's peak entry (avoids double-registering the same COG uri).
-Byte-equivalence is measured on the FRAME render stream (ADR 0282):
+Byte-equivalence is measured on the FRAME render stream:
 
-- **SWMM urban_flood + dual_drainage** (ADR 0282): `postprocess_swmm` writes
+- **SWMM urban_flood + dual_drainage**: `postprocess_swmm` writes
   `outputs.json` host-side (the shared `workflows/shared/outputs_manifest_io`
   writer's FIRST real use), `quantity="flood_depth"`, per-frame `t` = elapsed
   seconds from the `.out` report steps; the 144-frame `_select_frame_time_indices`
   cap is GONE (never-omit) and cadence resolves DECK-SIDE via `output_interval_min
   -> REPORT_STEP`. `dual_drainage` gains the depth animation for the first time.
-- **Landlab overland_flow_timeseries** (ADR 0282):
+- **Landlab overland_flow_timeseries**:
   `postprocess_landlab_overland_timeseries` writes `outputs.json` host-side,
   `quantity="flood_depth"` (shares the depth family), per-frame `t` = the worker's
   REAL snapshot elapsed seconds (`max_cell_series`); the worker interval FLOOR
@@ -107,7 +107,7 @@ the same explained non-rendering divergence from the register path's stems
 (`swmm-depth-frame-*` / `landlab-overland-depth-frame-*`); grouping rides the
 `name` token (`"Flood depth step N"` / `"Overland depth step N"`), unchanged.
 
-MIGRATED ENGINES (L-class, native-mesh temporal -- TELEMAC-2D, ADR 0283). The
+MIGRATED ENGINES (L-class, native-mesh temporal -- TELEMAC-2D). The
 result IS a native, time-stepped SELAFIN that QGIS/MDAL animates directly, so the
 temporal artifact is a `kind="mesh"` entry, NOT per-frame COGs. The agent-side
 postprocess writes `outputs.json` (the peak entry + the mesh SELAFIN entry, the new
@@ -133,11 +133,11 @@ Cadence for the L-class is the universal `output_interval_min` (minutes ->
 INERT until the image rebuild); rain_on_grid computes it AGENT-SIDE (its `time_step_s`
 is a composer constant). `None` = byte-identical current defaults.
 
-MIGRATED ENGINES (L-class, native-mesh temporal -- SCHISM, ADR 0286). Exactly the
-TELEMAC 0283 precedent applied to SCHISM: the result IS a native, time-stepped UGRID
+MIGRATED ENGINES (L-class, native-mesh temporal -- SCHISM). Exactly the
+TELEMAC precedent applied to SCHISM: the result IS a native, time-stepped UGRID
 netCDF (`out2d_1.nc` elevation/velocity, or the 3D `salinity_1.nc`) that QGIS/MDAL
 animates directly (proven live: MDAL loads a real solved out2d valid, 7 dataset
-groups, 24-48 temporal steps with hourly reference times -- ADR 0286 gate #1). NO
+groups, 24-48 temporal steps with hourly reference times -- the leg's gate #1). NO
 per-step rasterization. The agent-side postprocess (SCHISM postprocess is agent-side,
 so NO image law binds this leg) computes the typed peak COG; the composer then writes
 `outputs.json` (peak entry + the `kind="mesh"` netCDF entry, `crs_authid=EPSG:4326`
@@ -170,7 +170,7 @@ nsteps/nspool)*nspool` to preserve it. `None` = byte-identical hourly default (p
 live: a 2-day baroclinic at `output_interval_min=30` -> 96 out2d dataset-times vs
 `=120` -> 24, exactly the 4x the lever dictates).
 
-MIGRATED ENGINES (L-class, MODFLOW transport family -- ADR 0284, host-exec mf6).
+MIGRATED ENGINES (L-class, MODFLOW transport family -- host-exec mf6).
 The GWT/GWE TRANSPORT templates have depth-class quantities that animate cleanly;
 MF6 OC saves EVERY transport step (never-omit by construction -- no cap ever
 existed, and `publish_modflow_quantities` was DEAD scaffold, now deleted). The
@@ -196,10 +196,10 @@ peak + narration scalars + charts stay composer-built (OPTION a).
 Head-based MODFLOW templates (drawdown/mounding/hydroperiod/subsidence/dewatering/
 seepage/asr/saltwater/vadose/budget/capture/wellhead) get NO frames (fork 2A) --
 their quantity is a t0-difference or max-min RANGE reduction, or non-temporal; the
-temporal signal stays in their existing composer CHARTS. See ADR 0284's verdict
+temporal signal stays in their existing composer CHARTS, per that leg's verdict
 table (the coverage-law denominator).
 
-MIGRATED ENGINES (L-class, HEC-RAS depth family -- ADR 0287, TWO agent-side
+MIGRATED ENGINES (L-class, HEC-RAS depth family -- TWO agent-side
 producers). The recon REFUTED the "peak-only" framing: BOTH HEC-RAS lineages carry
 genuine per-step 2D fields. The 6.x lineage's plan HDF stores `Unsteady Time Series/
 2D Flow Areas/<area>/Water Surface` (Nt,Nc) at the `Base Output Interval` (verified
@@ -226,12 +226,12 @@ a frame renders byte-consistently with the peak; frame `t = totim DAYS * 86400` 
 The shared `workflows/hecras/_frame_emit.read_and_emit_hecras_frames` reads it back
 (`frames_only=True`) and all four depth-class composers emit the `flood_depth` group;
 NEVER-OMIT (every step, no cap). Cadence: the universal
-`output_interval_min` lever DEFERS ENTIRELY (ADR 0287 fork 2, the 0284-3A precedent) --
+`output_interval_min` lever DEFERS ENTIRELY (this leg's fork 2, on the MODFLOW precedent) --
 it is ASYMMETRIC (6.x `Base Output Interval` attr-patch reachable; 2025 mapping
 interval is a managed-engine decompile), and an asymmetric lever silently no-oping on
 one path is the hidden-inconsistency class; BOTH cadence items are QUEUED for NATE.
 
-MIGRATED ENGINES (ELMFIRE, derived-from-ToA burned-extent frames -- ADR 0288,
+MIGRATED ENGINES (ELMFIRE, derived-from-ToA burned-extent frames --
 agent-side producer). ELMFIRE writes NO per-step field: its native product is ONE
 cumulative `time_of_arrival` (ToA) raster (hours-from-ignition per cell). That single
 raster IS the run's complete spatiotemporal solution, so frame N = the ToA masked to
@@ -281,7 +281,7 @@ frame quantity resolves to the peak's physical preset so a
 frame renders byte-consistently with the peak; a frame publish/read/emit miss degrades
 to peak-only, never sinking the run.
 
-FRAME COLLAPSE EXECUTED (ADR 0294, 2026-08-19): the three docker RASTER workers no
+FRAME COLLAPSE EXECUTED (2026-08-19): the three docker RASTER workers no
 longer dual-write their frames into `publish_manifest.json`. A frame now exists in
 exactly ONE manifest -- `outputs.json` -- so the two can never disagree.
 `publish_manifest.json` keeps the non-frame entries: it is the metrics carrier (the
@@ -294,8 +294,7 @@ the REST of the `publish_manifest` collapse (the file, the bespoke schema, and
 `register_published_manifest.py` -- still live as the metrics carrier + fallback,
 ledger row 19 narrowed), and -- separately, OPTION A -- the per-engine
 `output_quantities` scaffold migration
-(MODFLOW's DEAD half is deleted; swmm/landlab/openquake halves are still LIVE,
-ADR 0284).
+(MODFLOW's DEAD half is deleted; swmm/landlab/openquake halves are still LIVE).
 
 ## Composition
 

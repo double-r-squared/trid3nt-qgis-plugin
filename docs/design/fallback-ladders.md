@@ -2,12 +2,11 @@
 
 NATE-shaped design (2026-08-17 discussion), approved as written.
 Replaces hidden substitution everywhere with one declared, visible,
-gated mechanism. Proving case: the SWAN bathymetry rectangle
-(docs/validation/fallback-audit.md, the mosaic land-fill exhibit).
+gated mechanism. Proving case: the SWAN bathymetry rectangle, the mosaic
+land-fill exhibit of the fallback audit.
 
-Waves F1 (ADR 0289), F1b (ADR 0290), F1c (ADR 0291), F1d (ADR 0292), F1e (ADR
-0293) and F2 (ADR 0299) are LANDED - read "As built" at the bottom for the
-shipped shapes before touching the machinery.
+Waves F1, F1b, F1c, F1d, F1e and F2 are LANDED - read "As built" at the bottom
+for the shipped shapes before touching the machinery.
 
 ## The contract in five rules
 
@@ -78,7 +77,7 @@ Wave F1: the fallbacks module (rung schema + walker + activation
 recording) + the gate + router kwarg plumbing + the SWAN bathymetry
 ladder as proving case (fixes the rectangle; live A/B: undeclared ->
 typed error naming the gap; declared -> ETOPO rung, loud, coverage
-reported). Wave F1b (ADR 0290): the adversarial panel's fixes - all
+reported). Wave F1b: the adversarial panel's fixes - all
 four exposed `fetch_topobathy` callers migrated onto declared rungs, the
 merge reconciling its footprint PROMISE against what actually painted,
 the walker surfacing the PRIMARY's error at REFUSE, no coverage claim
@@ -88,7 +87,7 @@ the audit's remaining data-bearing rows + `spec.fallback` + deprecate
 the ad-hoc params, full-coverage law (inventory + verdicts + sweep
 guard against naked substitution).
 
-## As built (wave F1, ADR 0289)
+## As built (wave F1)
 
 - `trid3nt_server/fallbacks/` - `ladder.py` (`Rung` / `Ladder` /
   `REFUSE` / the registry) and `walker.py` (`walk_ladder`, `LadderGap`,
@@ -107,7 +106,7 @@ guard against naked substitution).
   four structural ones (`primary`, `user_supplied`, `enhancement`,
   `refuse`). The floor keys only on the degradation classes;
   `enhancement` is a source BETTER than the primary, so it is declared
-  and reported but never gated (see ADR 0299).
+  and reported but never gated (see wave F2 below).
 - TOP RUNG (NATE, 2026-08-19): a ladder may declare one
   `user_supplied` rung naming the request param that carries the
   user's own data. Present -> it serves and the walk stops; it stamps
@@ -121,7 +120,7 @@ guard against naked substitution).
   rung was DECLINED at the gate, or when the failure carries no
   `error_code` at all.
 
-## As built (wave F1b, ADR 0290)
+## As built (wave F1b)
 
 - ALL exposed `fetch_topobathy` callers declare a rung, not just SWAN:
   `sfincs/flood` (coastal), `geoclaw/inundation` (non-tsunami),
@@ -147,7 +146,7 @@ guard against naked substitution).
   `s3://<runs>/<run_id>/fallback_activations.json` so a solved run is
   auditable from the bucket.
 
-## As built (wave F1c, ADR 0291)
+## As built (wave F1c)
 
 - COVERAGE IS MEASURED, NOT PROMISED. A result may report `rung_coverage`
   (rung name -> the fraction of the request that rung's source PAINTED); the
@@ -178,7 +177,7 @@ guard against naked substitution).
   provenance field becomes load-bearing for honesty -- otherwise a fixed AOI
   keeps serving the stale reading for the rest of its TTL bucket.
 
-## As built (wave F1d, ADR 0292)
+## As built (wave F1d)
 
 - A FAULT IS NOT A VERDICT. The capability's `refuse_error_code` is reserved for
   GENUINE coverage refusals: no rung permitted, a rung declined while the gap it
@@ -220,7 +219,7 @@ guard against naked substitution).
   seam also clears the result's `rung_coverage`: an envelope may not contradict its
   own UNMEASURED note.
 
-## As built (wave F2, ADR 0299)
+## As built (wave F2)
 
 - A NON-DEGRADING CONTRIBUTOR IS DECLARABLE. The `enhancement` consequence
   closes 0292's parked schema gap. It is a rung so the walker can NAME what

@@ -1,9 +1,8 @@
 # Playground recipe: urban heat island (surface temperature by land cover)
 
 Status: LIVE recipe (cleanup wave phase 2, 2026-08-25). Replaces the DEMOTED
-`compute_urban_heat_island` atomic tool
-(`docs/decisions/0313-emission-is-automatic-publish-layer-dies.md` window,
-`docs/DELETION_LEDGER.md`). Both maps the question needs are already registered
+`compute_urban_heat_island` atomic tool, whose cut is rowed in
+`docs/DELETION_LEDGER.md`. Both maps the question needs are already registered
 fetchers; the analysis between them is per-class arithmetic over two staged
 rasters, so it lives in the python playground (`code_exec_request`), not a
 bespoke tool.
@@ -21,7 +20,7 @@ is the whole reason this one demotes while its five siblings do not. The tool's
 map product was the MODIS LST resampled onto the 10 m land-cover grid, painted
 with `style_preset="land_surface_temp_c"` - which the tool's own source called
 "the fetch_modis_lst paint". `fetch_modis_lst` paints that layer itself, at its
-NATIVE resolution, and since emission became automatic (ADR 0313) it reaches
+NATIVE resolution, and because emission is automatic it reaches
 the map without anyone asking. So the recipe loses no layer. It loses the
 upsample, and losing it is an honesty gain: a ~1 km LST resampled to a 10 m
 grid reads far more precise than the measurement is.

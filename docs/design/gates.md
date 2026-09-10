@@ -1,6 +1,6 @@
 # gates/ -- agent-loop safety and routing gates
 
-`trid3nt_server/gates/` (was `agent/gates/`, ADR 0277) holds the agent-loop
+`trid3nt_server/gates/` holds the agent-loop
 gates: user-decision cards, tool-gating/retrieval, runaway/circuit guards,
 context-budget, and actionability classification.
 
@@ -30,8 +30,8 @@ context-budget, and actionability classification.
 `mesh/` to compute estimates -- absolute cross-package imports since these are
 now peer top-level packages. The GateSpec confirm engine + the shared gate-wait
 seam + the five user-decision emit-wait gate families (payload, code-exec,
-solver-confirm, credential, region, spatial) now live in `confirm.py` (ADR 0278,
-evicted from `server/_core`). The server callers import those functions
+solver-confirm, credential, region, spatial) now live in `confirm.py`,
+evicted from `server/_core`. The server callers import those functions
 function-locally to keep the `server <-> gates` package edge acyclic.
 
 ## The mesh gate loop

@@ -12,7 +12,7 @@ live APIs while writing this document, and the numbers are quoted as
 measured. Everything that describes what we would BUILD is a proposal with
 an open question attached wherever the evidence did not settle it.
 
-ADR 0319 named the gap this document closes: the rerun primitive is the
+The rerun-with-overrides wave named the gap this document closes: the rerun primitive is the
 loop's engine, and the three pieces it still needs are OBSERVATIONS to
 score against, an OBJECTIVE that turns answer-vs-observation into a
 scalar, and a PROPOSER that picks the next override. This document
@@ -271,7 +271,7 @@ plumbing, only a proposer that names values. Bounds quoted are the ones
   The declared default of 40 (n = 0.025) sits mid-band, which is a good
   sign the default was chosen and not guessed. The band is deliberately
   NARROWER than the declared `Param` bound because the declared bound has
-  to span three friction laws (ADR 0319) while a calibration search should
+  to span three friction laws while a calibration search should
   not wander into values that are the other quantity.
 - **The coupled-validity rule already guards the failure mode**:
   `friction_coefficient_matches_law` refuses `COUPLED_VALIDITY_REFUSED`
@@ -463,7 +463,7 @@ and it produces the first four rows of the run journal in exactly the
 shape everything downstream consumes. Every child carries
 `parent_run_id`, `overrides: ["friction_coefficient"]` and a
 `door=user basis=user note="override of run <parent>"` row already, at no
-cost, because ADR 0319 built it.
+cost, because the rerun wave built it.
 
 ### 4.2 Phase 2 - systematic sweep
 
@@ -508,7 +508,7 @@ four references are file-driven or in-process harnesses that own the model
 invocation, and ours cannot be: our re-run path is a run derived from a
 run, with sheet inheritance, ledger seeding and provenance that a
 file-swapping harness knows nothing about. Wrapping any of them would mean
-either giving up the derivation (a second re-run path, which ADR 0319
+either giving up the derivation (a second re-run path, which the rerun wave
 forbids in as many words) or writing a shim that pretends a run is a file.
 
 **The wrap-or-not decision is explicitly NOT made here.** It is NATE's
@@ -576,7 +576,7 @@ The loop stops on the FIRST of:
 
 The noise floor for (4) is not assumed. Canary replay already proves this
 template is deterministic (`coastal_tidal_surge` replayed 18/18 identical
-in the ADR 0319 gate), so a repeated identical run has zero spread and the
+in the rerun gate), so a repeated identical run has zero spread and the
 floor is set by the observation uncertainty instead: the CO-OPS sigma at
 the peak is ~0.037 m and the best HWM class is +/- 0.05 ft.
 
@@ -680,7 +680,7 @@ happens to be warm.
 The reason is not tidiness. `fetch_noaa_coops_tides` carries
 `ttl_class: dynamic-1h`, and a comparison whose reference moves between
 iteration 3 and iteration 9 is a comparison of nothing. This is the same
-argument ADR 0319 makes for deriving from a parent's sheet rather than
+argument the rerun wave makes for deriving from a parent's sheet rather than
 re-resolving the wire, applied to the observation side, and the same
 determinism artifact the reach family adopted after the do_sag flake: a
 recorded content hash makes "the same comparison twice" verifiable rather
@@ -754,7 +754,7 @@ likely to break by accident, so it is written as a gate in section 7.
   for the specific calibrated configuration, not for the template.
 - **SFINCS remains screening-only.** The fidelity ladder is unaffected by
   anything here. The ladder itself, lifted 2026-09-09 out of the record that
-  set it (ADR 0022) so it does not die with that file: **fidelity is a
+  set it so it does not die with that file: **fidelity is a
   per-question choice with known limitations per rung**, and a reduced-physics
   screening engine - one that buys speed by collapsing physics and geometry -
   is the wrong instrument for a calibration-grade conclusion. Screening results
@@ -1014,16 +1014,16 @@ is ours.
 
 - TELEMAC-2D User Manual, opentelemac.org. LAW OF BOTTOM FRICTION (2 =
   Chezy, 3 = Strickler, 4 = Manning) and FRICTION COEFFICIENT semantics,
-  which are the source of the coupled-validity rule ADR 0319 ported.
+  which are the source of the coupled-validity rule the rerun wave ported.
 
 - Chow, V.T. (1959). *Open-Channel Hydraulics.* McGraw-Hill. The Manning
   n tables behind the proposed friction band in section 2.1.
 
 **In-repo, load-bearing**
 
-- ADR 0319, `docs/decisions/0319-rerun-with-overrides-and-coupled-validity.md`.
-  The primitive this loop consumes, the three-piece gap it names, and the
-  hard rule against a second re-run path.
+- `trid3nt_server/workflows/runtime/rerun/`. The primitive this loop consumes,
+  the three-piece gap its module docstrings name, and the hard rule against a
+  second re-run path, with `validity.py` for coupled validity.
 - `docs/IDEAS.md`: the calibration rulings this document implements -
   coastal surge against a real event with CO-OPS gauges; NATE-first
   methodology sign-off before runs; references are benchmarks never shape;
@@ -1034,7 +1034,7 @@ is ours.
 
 ## Appendix A - the validation background, folded here 2026-09-09
 
-Six "STATUS: THINKING" notes under `docs/validation/` were the design space
+Six "STATUS: THINKING" notes were the design space
 this document grew out of. What they carried that still binds is folded here
 and the notes are gone; what was proposed and then superseded, or written about
 engines that left the tree, went with them.

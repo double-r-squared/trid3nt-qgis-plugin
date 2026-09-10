@@ -64,7 +64,7 @@ one's job goes instead). This is the deliberate flattening the settled design
 calls for: the required core describes WHAT WAS WRITTEN AND WHEN, nothing about
 how to draw it.
 
-**AMENDMENT (schema_version 1, ADR 0280 EXECUTED 2026-08-17):** two OPTIONAL
+**AMENDMENT (schema_version 1, EXECUTED 2026-08-17):** two OPTIONAL
 render-hint fields REJOIN the entry -- `bbox` (per-COG EPSG:4326
 `[minlon,minlat,maxlon,maxlat]`) and `band_stats`
 (`{is_categorical, is_rgba, p2, p98}`). They are NOT part of the REQUIRED flat
@@ -76,9 +76,9 @@ byte-equivalence bar (Section 7.1 lists bbox + band stats) requires. Absent
 bbox + a lazy per-COG stats touch (the unregistered-quantity neutral ramp only).
 Tolerant-read: an old producer that omits them is byte-unchanged. This amends the
 original "no `band_stats` / no `bbox` on the entry" line above -- the flat core is
-unchanged; the render hints are optional and additive. See ADR 0280 EXECUTED.
+unchanged; the render hints are optional and additive.
 
-**AMENDMENT (schema_version 1, ADR 0283 EXECUTED 2026-08-17):** one more OPTIONAL
+**AMENDMENT (schema_version 1, EXECUTED 2026-08-17):** one more OPTIONAL
 field REJOINS the entry -- `crs_authid` (an EPSG authority id string, e.g.
 `"EPSG:32617"`). It exists for `kind="mesh"` entries ONLY: a native SELAFIN mesh
 sibling carries NO CRS of its own, and the plugin's `_add_mesh` sets
@@ -89,7 +89,7 @@ before the seam owned mesh publication. The seam threads it onto the mesh
 `LayerURI` (`crs_authid=`). It is NOT part of the REQUIRED flat core; raster/vector
 entries omit it (their COGs/GeoJSON are self-describing). Tolerant-read: an old
 producer that omits it is byte-unchanged. Both the contracts writer/reader and the
-worker mirror carry the field. See ADR 0283 EXECUTED.
+worker mirror carry the field.
 
 **AMENDMENT (schema_version 1, 2026-09-04):** a `kind="mesh"` entry may also
 carry `dataset_group` -- the ONE group its preset paints, spelled the way the
@@ -203,7 +203,7 @@ async def watch_outputs(run_id, runs_bucket, emitter):
 ## 4. Version marker (the parser-version law)
 
 Per the existing law (`publish_manifest.json`'s `schema_version`,
-ADR 0158's "bump the parser version + reject unknown fields" precedent):
+the worker parser's "bump the parser version + reject unknown fields" precedent):
 
 ```json
 {
@@ -434,7 +434,7 @@ change itself.
 
 ### 7.3 The collapse step
 
-**EXECUTED-NARROW (2026-08-19, ADR 0294).** NATE's ruling narrowed the collapse:
+**EXECUTED-NARROW (2026-08-19).** NATE's ruling narrowed the collapse:
 `publish_manifest.json` SURVIVES as the metrics carrier (the composers read its
 top-level aggregates for their narration scalars; flat `outputs.json` entries
 carry none) and as the legacy register-only fallback. ONLY its FRAME entries
@@ -477,4 +477,4 @@ retires a live 4-engine feature. NATE's item-6 deletion ruling was premised on
 the stale recon fact; the deletion is REGISTERED as QUEUED in the ledger with
 the CONDITION "all four live consumers migrate onto the outputs.json writer +
 quantity->style registry (one at a time, byte-equivalence per engine)", NOT
-executed in this wave. See ADR 0280.
+executed in this wave.

@@ -54,8 +54,7 @@ MODULE_REF = re.compile(r"\b(?:trid3nt_server|trid3nt_contracts)(?:\.[a-z_][a-z0
 
 #: Markdown whose sentences are claims about the tree as it is now: the reader's
 #: manual, the generated template pages, and every directory map. A dated record
-#: under `docs/design/`, `docs/validation/`, `docs/reports/` or `docs/decisions/`
-#: names what it named when it was written and is not scanned.
+#: under `docs/design/` names what it named when it was written and is not scanned.
 LIVE_DOC_ROOTS = ("docs/site/", "docs/authoring/", "docs/playbooks/", "docs/templates/")
 
 #: The two law documents are scanned with the maps: an agent is told to obey them,

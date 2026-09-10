@@ -22,8 +22,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 # _env_guard is the drive lane's, and the no-ambient-AWS law wants ONE copy of it.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "drivers"))
-RESULTS = REPO / "docs" / "reports" / "tool-sweep-results.jsonl"
-CHECKLIST = REPO / "docs" / "reports" / "tool-sweep-checklist.md"
+# The sweep writes both of its records, so neither is held in the tree: they
+# land under the gitignored run/ root and a clone regenerates them by re-running.
+RESULTS = REPO / "run" / "sweep" / "tool-sweep-results.jsonl"
+CHECKLIST = REPO / "run" / "sweep" / "tool-sweep-checklist.md"
 
 # Small AOI: ~3km box over downtown Tampa (fast fetches, tiny sims).
 BBOX = (-82.47, 27.94, -82.44, 27.97)
@@ -352,6 +354,7 @@ def main() -> None:
                 rec.update(status=classify_error(exc), seconds=time.time() - t0,
                            error=f"{type(exc).__name__}: {exc}"[:200],
                            tb=traceback.format_exc()[-400:])
+        RESULTS.parent.mkdir(parents=True, exist_ok=True)
         with RESULTS.open("a") as f:
             f.write(json.dumps(rec) + "\n")
         done[name] = rec

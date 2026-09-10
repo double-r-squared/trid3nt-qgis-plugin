@@ -35,7 +35,7 @@ deciding finding and the lanes CONFLICT on it -- flagged, not smoothed:
   fills NODATA silently; the mode's "ANY member fail -> typed UPSTREAM" cannot
   survive structurally.
 - AUDIT: native collapse reopens the exact 404->UPSTREAM status-blindness bug that
-  ADR-0044 / opener.py exist to fix; per-member typed EMPTY/UPSTREAM is lost.
+  the shared httpx opener exists to fix; per-member typed EMPTY/UPSTREAM is lost.
 
 Resolution: the behaviors are NOT contradictory once you separate open-time from
 read-time. A member unreachable at VRT-open can raise; a member reachable at open
@@ -72,7 +72,7 @@ Same physics as gzip. PROBE (GHSL tile zip, DEFLATE entry compress_size=26.6MB,
 ground-truthed via zipfile central directory): a 480x300px window via
 `/vsizip//vsicurl/` pulled 34.3MB RX (~full entry). DEFLATE zip streams aren't
 randomly seekable, forcing near-total sequential decompress regardless of window.
-No candidate native path is cheaper; nothing to collapse to. (Note for ADR-0052:
+No candidate native path is cheaper; nothing to collapse to. (Note for the archive leg:
 the inner TIFF's own band compression is LZW, distinct from and irrelevant to the
 zip-entry seek problem.) Real collapse = **0 LOC.**
 
@@ -179,7 +179,7 @@ three of four candidates stay.
 
 ## What this does NOT change
 
-- transport/ for API fetchers -- the httpx opener (ADR-0044), retry authority,
+- transport/ for API fetchers -- the httpx opener, retry authority,
   Retry-After, TransportTruncatedError length-assert. Shared, un-collapsed.
 - stamps, gates, publish_layer, the honesty floor.
 - The spec-interpreter architecture -- modes stay as declarations dispatched by

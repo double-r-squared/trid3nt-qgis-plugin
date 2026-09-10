@@ -34,8 +34,7 @@ mangle-match and the placeholder resolution. Those resolve an ID, not
 a scheme, and cutting them would revive the URI-hallucination class
 the module was built to prevent - so the row was met at the layer it
 names rather than by LOC, and the residual is reported instead of
-taken. Evidence: docs/validation/emission-fold-store-conformance.md,
-deviation 1.
+taken. Evidence: the emission-fold store conformance read, deviation 1.
 REVISIT TRIGGER: (a) the emit rewrite is proven to leave NO path by
 which a model can echo a raw store uri into a *_uri param - then the
 fuzzy match and the placeholder branch are dead weight, not defense;
@@ -111,7 +110,7 @@ RETRY_CODES="429,500,502,503,504")`, rather than through
 this is the price of the library owning search, grid and fuse.
 
 Two clauses of the upstream-error norm are TRADED, both measured at
-Stage 0 (docs/validation/fetcher-fold-stage0.md, Probe A):
+the fetcher fold's Stage 0, Probe A:
 (a) the upstream STATUS is verbatim (`RasterioIOError: HTTP response
 code: 404 / 403 / 409`, proven on real objects) but the S3 XML
 `<Code>NoSuchKey</Code>` BODY never reaches Python -
@@ -146,8 +145,8 @@ with `pyogrio.set_gdal_config_options` and is a second config store,
 not the raster family's.
 
 The same two clauses the STAC family trades are traded here, measured
-at Stage 0 Probe B on GDAL 3.12.4 (docs/validation/fetcher-fold-
-stage0.md): the upstream STATUS is verbatim
+at the fetcher fold's Stage 0, Probe B, on GDAL 3.12.4: the upstream STATUS
+is verbatim
 (`pyogrio.errors.DataSourceError: HTTP response code: 404 / 403`) but
 the S3 XML `<Code>` body is not, and `Retry-After` is not honored
 (identical gaps 1.00 s / 2.42 s with and without the header). A THIRD

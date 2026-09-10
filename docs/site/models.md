@@ -91,7 +91,8 @@ pre-loaded so layer-consuming tools have a real target), K=8:
 | NO_CALL | 55 | prose answer, no dispatch |
 | ERROR | 1 | WS connection error |
 
-Full table: `docs/reports/tool-routing-report.md` in the `trid3nt-local` repo.
+The counts above are the whole of what the bench record carried forward; the bench
+itself is re-cut by re-running it, not read out of the tree.
 
 ### The retrieval-vs-model split (the verdict)
 
@@ -103,8 +104,7 @@ Every failed prompt was replayed through `retrieve_visible_tools` (K=8) and clas
 At K=8 the retrieval layer put the expected tool in front of the model every single time.
 The residual routing gap is a **model-capability limit of the 8B class**, not a retrieval
 tuning problem -- raising K, re-weighting the corpus, or adding retrieval features will not
-close it. The lever is a stronger model. Full split:
-`docs/reports/tool-routing-failure-split.md`.
+close it. The lever is a stronger model.
 
 ---
 
@@ -126,6 +126,7 @@ The seam makes experiments cheap:
    a corpus problem. Take both over the same WS surface the plugin uses - a fresh session
    and Case per prompt, solver prompts cancelled as soon as the composer step appears in
    `pipeline-state`, payload-warning cards auto-confirmed - and score per prompt, never per
-   turn. Recorded runs are in `docs/reports/`.
+   turn. A bench run is evidence about the day it was taken: take a fresh one rather
+   than reading an old record.
 5. Escape hatch: point `TRID3NT_OPENAI_BASE_URL` + `TRID3NT_OPENAI_API_KEY` at any cloud
    OpenAI-compatible API when a local model is not cutting it. Same agent, same tools.
