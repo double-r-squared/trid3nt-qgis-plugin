@@ -1,23 +1,9 @@
-"""F97: two loaded layers from the SAME source get DISTINCT layer_ids.
+"""Two loaded layers from the SAME source get DISTINCT layer ids.
 
-ROOT CAUSE of F97 (deleting one of two duplicate WDPA layers removed BOTH):
-the WDPA fetcher (and other fetchers) mint a SOURCE-DERIVED ``layer_id``
-(e.g. ``wdpa-<lon>-<lat>``), so two fetches for the same bbox returned the
-SAME id. Map.tsx keys MapLibre sources by ``layer_id`` — two layers sharing
-an id collide onto ONE source, and a delete-by-id tears that source down so
-BOTH vanish.
-
-FIX (this track): ``_invoke_tool_via_emitter`` mints a fresh ULID for every
-FRESHLY-fetched layer at the dispatch seam, BEFORE ``add_loaded_layer`` /
-the URI registry / the reuse index see it. The reuse short-circuit
-(``_ReuseEntry``) is the deliberate exception — it hands back an already-loaded
-layer, so it keeps that layer's existing (already-minted) id for per-Case
-durability.
-
-These tests drive the REAL dispatch with a stub fetcher returning a
-collision-prone source-derived ``layer_id`` and assert the dispatch hands back
-DISTINCT, ULID-shaped ids.
-"""
+A source-derived id repeats across two fetches of one bbox, and a client keys its
+sources by id, so the two collide onto one source and a delete by id tears down
+both. The dispatch seam mints a fresh ULID for every FRESHLY fetched layer before
+anything sees it; the reuse short-circuit is the exception and keeps the old id."""
 
 from __future__ import annotations
 
@@ -53,12 +39,10 @@ _FETCH_N: list[int] = []
 
 @pytest.fixture(autouse=True)
 def _stub_collision_tool():
-    """Register a fetcher that ALWAYS returns the same source-derived layer_id.
+    """Register a fetcher that ALWAYS returns the same source-derived layer id.
 
-    The name is not a known scenario / solver tool, so neither the reuse
-    short-circuit nor the confirm gate fires — we exercise the bare fresh-fetch
-    mint path.
-    """
+    The name is neither a scenario nor a solver tool, so neither the reuse
+    short-circuit nor the confirm gate fires and the bare mint path runs."""
     original = agent_tools.TOOL_REGISTRY.get(_STUB_TOOL)
     _FETCH_N.clear()
     reset_scenario_indexes_for_tests()

@@ -1,30 +1,9 @@
-"""job-0356: a RENDERED layer must survive any WS reconnect — without a
-case-open.
+"""A RENDERED layer must survive any WS reconnect, without a case-open.
 
-The AGENT half of the per-Case layer DURABILITY requirement (NATE, hard
-requirement): once a layer is rendered in a Case it must stay rendered across
-any WS reconnect; the user must NEVER have to exit/re-enter a Case to get layers
-back.
-
-job-0355 made an in-flight solve SURVIVE a disconnect (the live-turn registry +
-``rebind_sink``) and ``_handle_session_resume`` rebinds those LIVE turns onto the
-reconnecting socket. But a layer that COMPLETED + rendered BEFORE the disconnect
-has NO live turn, so a bare reconnect (``session-resume`` with no in-flight turn)
-replayed an EMPTY session-state and the user's already-rendered layers vanished
-until an explicit case-open.
-
-These tests pin the fix in ``_handle_session_resume`` /
-``_replay_active_case_layers``:
-
-  (a) a BARE reconnect with an active Case + NO live turn replays the Case's
-      persisted ``loaded_layers`` snapshot to the new socket (the A.7
-      replace-not-reconcile ``session-state`` the client already renders).
-  (b) reconnect-WHILE-SOLVING delivers exactly ONE set of session-state frames
-      (the rebound live-turn emitter is the single writer — the resume must NOT
-      also seed + emit a second snapshot through the new connection's emitter).
-  (c) reconnect with NO active Case replays nothing (no crash; empty snapshot,
-      exactly as before).
-"""
+A layer that completed BEFORE a disconnect has no live turn to rebind, so a bare
+resume used to replay an empty session state. Pinned: a bare reconnect with an
+active Case replays its persisted snapshot; a reconnect WHILE SOLVING delivers
+exactly one set of frames; a reconnect with no active Case replays nothing."""
 
 from __future__ import annotations
 
@@ -53,11 +32,10 @@ class FakeWS:
 
 
 class _FakePersistence:
-    """Returns a fixed ``CaseSessionState.loaded_layers`` for one case_id.
+    """Returns a fixed loaded-layer list for one case id.
 
-    Implements ONLY the methods ``_handle_session_resume`` touches:
-    ``get_session_state`` (the replay seam) and ``list_cases_for_user``
-    (``_emit_case_list``, best-effort)."""
+    Implements ONLY the two methods the resume handler touches: the replay seam and
+    the best-effort case listing."""
 
     def __init__(
         self,
@@ -295,14 +273,10 @@ def _chat_msg(case_id: str, role: str, content: str) -> CaseChatMessage:
 
 @pytest.mark.asyncio
 async def test_bare_resume_replays_active_case_chat_history() -> None:
-    """A bare reconnect seeds emitter chat_history from the persisted Case.
+    """A bare reconnect seeds the emitter's chat history from the persisted Case.
 
-    #147 Feature B GAP B1: pre-fix, the bare-reconnect replay re-rendered
-    layers but shipped an EMPTY chat_history, so the transcript vanished until
-    an explicit case-open. The replay now seeds ``emitter.seed_chat_history``
-    from the SAME persisted ``CaseSessionState`` so ``emit_session_state``
-    ships the chat bubbles too.
-    """
+    The replay reads the SAME persisted session state the layers come from, so the
+    transcript ships with them instead of waiting for an explicit case-open."""
     session_id = new_ulid()
     case_id = new_ulid()
     layers = [_raster_layer("L_flood_001")]

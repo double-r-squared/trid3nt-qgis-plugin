@@ -1,14 +1,9 @@
-"""Layer-handle announcement, server-level evidence.
+"""Layer-handle announcement, at the server level.
 
-These tests drive ``_stream_model_reply`` end-to-end (fake model, fake tool
-dispatch - no live calls) and prove:
-
-- a registry-valid tool dispatches on the FIRST call and sticks in the Case's
-  monotonic visible set for the rest of the session.
-- the function_response for a layer-producing tool announces its handles and
-  carries the ``layer_handles_note``: the layer is already on the map, and a
-  handle is passed rather than a storage URI rebuilt.
-"""
+Driven end to end with a fake model and fake dispatch: a registry-valid tool
+dispatches on the FIRST call and sticks in the Case's monotonic visible set, and
+a layer-producing tool's function_response announces its handles - the layer is
+already on the map, and a handle is passed rather than a storage uri rebuilt."""
 
 from __future__ import annotations
 

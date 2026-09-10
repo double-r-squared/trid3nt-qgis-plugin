@@ -1,19 +1,9 @@
 """publish_layer: the envelope carries the store uri, and only that.
 
-One store, one scheme: the QGIS plugin opens the COG natively through GDAL
-``/vsis3``, so a publish emits the ``s3://`` uri itself and never mints a second
-face for the same layer. This suite pins that contract:
-
-  - a raster publish returns the ``s3://`` COG URI VERBATIM - no ``/cog/tiles/``
-    path, no ``{z}/{x}/{y}`` placeholders;
-  - the RESOLVED STYLE (ramp + range + the .qml) is stashed keyed by that same
-    uri, so the pipeline emitter's ``layer.uri`` lookup matches the envelope;
-  - ``observe_published_layer`` registers the layer against that ONE uri;
-  - a non-s3 raster URI raises the typed LAYER_URI_NOT_FOUND error.
-
-No network I/O - ``_read_raster_bytes`` is patched to fail open so style
-resolution lands on the declared row's fallback range.
-"""
+One store, one scheme: the plugin opens the COG natively, so a publish returns
+the store uri VERBATIM and never mints a second face. The resolved style is
+stashed against that same uri so the emitter's lookup matches, the layer is
+registered against it, and any other scheme raises typed. No network I/O."""
 
 from __future__ import annotations
 

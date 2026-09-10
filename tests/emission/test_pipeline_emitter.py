@@ -1,33 +1,9 @@
-"""Unit tests for ``PipelineEmitter`` (job-0035, M4 real envelope emission).
+"""Unit tests for ``PipelineEmitter``.
 
-Coverage maps to the kickoff's acceptance criteria #5:
-
-1. ``test_happy_path_state_transitions`` — pending → running → complete emits
-   3 ``pipeline-state`` envelopes carrying the full snapshot each time
-   (replace-not-reconcile per Appendix A.7).
-2. ``test_replace_not_reconcile_full_snapshot`` — multi-step pipeline emits
-   the FULL list of steps on every transition; there is NO merge / delta
-   helper on the emitter (structurally enforced).
-3. ``test_error_path_failed_step_carries_code_and_message`` — ``mark_failed``
-   populates ``error_code`` (SCREAMING_SNAKE_CASE) + ``error_message``
-   (truncated to 512 chars) per D.6 / job-0030.
-4. ``test_loaded_layers_accumulation_via_layer_uri_return`` — when a tool
-   returns a ``LayerURI``, ``loaded_layers`` grows in the next ``session-state``
-   emission (FR-AS-7 / A.4 ``session-state``).
-5. ``test_current_pipeline_set_and_cleared`` — ``current_pipeline`` is non-null
-   in ``session-state`` while a pipeline is running and ``None`` after close
-   (cross-envelope visibility predicate from job-0026).
-6. ``test_cancel_propagation_emits_cancelled_state`` — the M1 cancel chain
-   (``asyncio.CancelledError`` inside ``emit_tool_call``) flips the step to
-   ``cancelled`` (yellow chip, distinct from ``failed`` per Invariant 8).
-7. ``test_loaded_layers_dedup_by_uri`` — re-fetching the same layer replaces
-   in place (TENTATIVE policy per kickoff Open Questions).
-8. ``test_no_merge_helper_exists`` — defensive: scans the class for any
-   ``merge``/``apply_delta``/``update_partial`` method that would break A.7.
-
-These are async tests; the sink is a sync capture closure wrapped in an
-``async def`` so the emitter can ``await`` it.
-"""
+Every transition emits the FULL snapshot, replace-not-reconcile, and no merge or
+delta helper exists on the class to break that. A failed step carries its code and
+truncated message; a cancelled one is distinct; a returned layer accumulates and
+dedups by uri; the current pipeline clears on close."""
 
 from __future__ import annotations
 
@@ -180,13 +156,10 @@ async def test_error_path_failed_step_carries_code_and_message(
 async def test_mark_failed_rejects_malformed_error_code(
     emitter: PipelineEmitter,
 ) -> None:
-    """The D.6 ``_validate_error_code_shape`` regex (job-0030) rejects
-    lowercase / kebab-case codes at serialization time. ``mark_failed``
-    flows through ``current_snapshot``/``PipelineStepSummary`` so the
-    rejection lands eventually — but at the wire envelope shape
-    (``PipelineStep``) the regex is NOT enforced (open-set on the wire).
-    Verify the persistence-snapshot raises while the wire emission proceeds.
-    """
+    """The error-code shape is enforced on the persistence snapshot, not on the wire.
+
+    A lowercase or kebab-case code raises where the snapshot is built, while the wire
+    step stays open-set and the emission proceeds."""
     step_id = await emitter.add_step(name="X", tool_name="x")
     await emitter.mark_running(step_id)
     # Use lowercase code — would fail PipelineStepSummary regex.
@@ -241,22 +214,10 @@ async def test_loaded_layers_accumulation_via_layer_uri_return(
 async def test_emit_tool_call_layer_uri_return_funnels_to_loaded_layers(
     emitter: PipelineEmitter, sink: _CapturingSink
 ) -> None:
-    """End-to-end: a tool that returns a ``LayerURI`` from inside
-    ``emit_tool_call`` causes a ``session-state`` envelope to be emitted.
+    """A tool returning a layer from inside the call emits a ``session-state``.
 
-    STUCK-RUNNING-CARD FIX: the terminal ``pipeline-state(complete)`` frame is
-    now emitted BEFORE the ``session-state`` side-effect of
-    ``add_loaded_layer``. Previously add_loaded_layer ran first and its
-    session-state snapshot captured the step while STILL "running" — that
-    snapshot could land at/after the terminal frame and leave the tool card
-    stuck "running" forever.
-
-    job-0254: ``emit_tool_call`` routes the returned ``LayerURI`` through the
-    ``layer_uri_emit`` seam before ``add_loaded_layer``. A renderable raster
-    carries a WMS ``http(s)`` URL (post-publish, the realistic shape), which the
-    seam passes through — so the funnel still fires. (The raster-with-raw-
-    ``gs://`` drop path is covered by ``test_emit_tool_call_drops_raster_gs_uri``
-    below and in ``test_layer_uri_emit.py``.)"""
+    The terminal complete frame goes out BEFORE that side effect, so a running
+    snapshot cannot land after it and leave the card stuck at running."""
     layer = LayerURI(
         layer_id="dem_1",
         name="Demo DEM",
@@ -287,16 +248,10 @@ async def test_emit_tool_call_layer_uri_return_funnels_to_loaded_layers(
 async def test_emit_tool_call_layer_uri_terminal_frame_before_session_state(
     emitter: PipelineEmitter, sink: _CapturingSink
 ) -> None:
-    """STUCK-RUNNING-CARD REGRESSION GUARD (compute_hillshade et al.).
+    """The terminal frame precedes the ``session-state`` the layer add produces.
 
-    For a ``compute_*`` tool that returns a renderable raster ``LayerURI``, the
-    terminal ``pipeline-state`` frame with ``state="complete"`` MUST be emitted
-    BEFORE the ``session-state`` frame that ``add_loaded_layer`` produces, and
-    the FINAL emitted pipeline-state for the step MUST be ``"complete"`` (never
-    left at ``"running"``). This is the bug NATE hit: the hillshade layer
-    renders but the card stays stuck "Computing hillshade..." forever because a
-    running-snapshot session-state arrived after the terminal frame.
-    """
+    The FINAL emitted state for the step must be ``complete``, never left at
+    ``running`` by a snapshot that arrived afterwards."""
     # compute_hillshade publishes a WMS-URL raster (post-publish shape) so the
     # layer_uri_emit seam passes it through to add_loaded_layer.
     layer = LayerURI(
@@ -349,11 +304,10 @@ async def test_emit_tool_call_layer_uri_terminal_frame_before_session_state(
 async def test_emit_tool_call_drops_raster_gs_uri(
     emitter: PipelineEmitter, sink: _CapturingSink
 ) -> None:
-    """job-0254 §1+§2 integration: a tool that returns a renderable raster
-    ``LayerURI`` with a raw ``gs://`` uri (the publish-failure degraded path)
-    is DROPPED by the ``layer_uri_emit`` seam — NO ``session-state`` is
-    emitted (no broken layer row), the step still completes, and the tool
-    result is returned UNCHANGED so narration/retry can act on it."""
+    """A raster carrying an unreachable scheme is DROPPED by the seam.
+
+    No ``session-state`` is emitted, so no broken row appears; the step still
+    completes and the result returns UNCHANGED so narration can act on it."""
     leaked = _make_layer("gs://b/flood_depth_peak.tif", layer_id="flood_1")
 
     def fake_tool() -> LayerURI:
@@ -787,10 +741,10 @@ async def test_emit_tool_call_stamps_duration_end_to_end(
 async def test_emit_byte_identical_with_seam_for_passing_layers(
     session_id: str,
 ) -> None:
-    """For a PASSING layer (WMS raster), routing through the seam in
-    ``emit_tool_call`` produces a ``session-state`` payload byte-identical to
-    calling ``add_loaded_layer`` directly (pre-seam path) -- the seam is a true
-    no-op on the wire for a passing layer."""
+    """For a PASSING layer the seam is a true no-op on the wire.
+
+    Routing through it produces a payload byte-identical to adding the layer
+    directly."""
     layer = LayerURI(
         layer_id="dem_1",
         name="Demo DEM",
@@ -913,10 +867,10 @@ async def test_emit_tool_call_complete_runresult_marks_card_complete(
 async def test_emit_tool_call_failed_envelope_dict_marks_card_failed(
     emitter: PipelineEmitter, sink: _CapturingSink
 ) -> None:
-    """The flood composer returns a typed failed AssessmentEnvelope whose
-    ``workflow_name`` carries the ``:FAILED:<CODE>`` honesty anchor. As a dict
-    (model_dump) it must flip the card to FAILED — the silent-green mislabel for
-    the flood path (Gap 2)."""
+    """A typed failed envelope returned as a dict flips the card to FAILED.
+
+    The failure anchor rides in the workflow name, so a silent green is the mislabel
+    this prevents."""
     env_dict = {
         "envelope_type": "modeled",
         "hazard_type": "flood",
@@ -1163,11 +1117,10 @@ async def test_emit_tool_io_non_serializable_degrades_to_str(
 
 
 class _ClosingSink:
-    """A sink that raises ConnectionClosedError on send (simulates a dead WS).
+    """A sink that raises on send, simulating a dead socket.
 
-    Mirrors how ``websocket.send`` blows up on a closed/cycling socket — the
-    exact failure that previously aborted a terminal pipeline-state emit and
-    LOST the red/green card."""
+    It mirrors how a send blows up on a closed or cycling socket - the failure that
+    used to abort a terminal emit and LOSE the card."""
 
     def __init__(self) -> None:
         self.calls = 0
@@ -1280,10 +1233,10 @@ async def test_rebind_sink_replays_last_terminal_pipeline_state(
 async def test_rebind_sink_replays_full_live_snapshot_for_open_pipeline(
     emitter: PipelineEmitter,
 ) -> None:
-    """J-B-part-i (FIX 2): an OPEN pipeline that has NOT reached a terminal
-    transition still replays its FULL live snapshot on ``rebind_sink`` -- this
-    is exactly the fix for the dropped SETUP/dispatch running card. Every step
-    in its CURRENT (running) state must reappear on the new sink, not nothing."""
+    """An OPEN pipeline replays its FULL live snapshot on a sink rebind.
+
+    Every step in its CURRENT running state must reappear on the new sink, not
+    nothing."""
     step_id = await emitter.add_step(name="Solve", tool_name="run_solver")
     await emitter.mark_running(step_id)  # running, NOT terminal
 
@@ -1317,13 +1270,10 @@ async def test_rebind_sink_no_replay_with_no_open_pipeline(
 async def test_running_emit_swallows_connection_closed_but_records_state(
     emitter: PipelineEmitter,
 ) -> None:
-    """FIX 1: a NON-terminal (running) ``_emit_pipeline_state`` whose underlying
-    send raises ConnectionClosedError is swallowed (does NOT propagate) and the
-    step's running state is still recorded -- symmetric with the terminal path.
+    """A non-terminal emit whose send raises is swallowed and still recorded.
 
-    This is the dropped SETUP/dispatch card: the running frame is lost on the
-    dead launch socket, but the in-memory step state survives so a later rebind
-    can replay it in full."""
+    Symmetric with the terminal path: the running frame is lost on the dead socket
+    but the in-memory state survives, so a later rebind can replay it in full."""
     step_id = await emitter.add_step(name="Setup", tool_name="fetch_dem")
 
     # Swap in a dead-socket sink ONLY for the running emit (add_step already
@@ -1366,10 +1316,10 @@ async def test_running_emit_propagates_non_connection_errors(
 async def test_rebind_sink_open_pipeline_replays_all_steps_mixed_states(
     emitter: PipelineEmitter,
 ) -> None:
-    """FIX 2 (full-snapshot replay): after several SETUP/dispatch frames were
-    dropped on a dead launch socket, ``rebind_sink`` on the still-OPEN pipeline
-    replays a SINGLE full snapshot carrying ALL step_ids in their CURRENT state
-    (a mix of complete + running) -- not just the last terminal card."""
+    """A rebind on a still-OPEN pipeline replays ONE full snapshot of every step.
+
+    All ids come back in their current state, a mix of complete and running, rather
+    than only the last terminal card."""
     # Three steps: a completed setup child, a completed dispatch, a running sim.
     setup_id = await emitter.add_step(name="Fetch DEM", tool_name="fetch_dem")
     await emitter.mark_running(setup_id)
@@ -1793,15 +1743,10 @@ async def test_small_vector_is_not_densified_off_loop(tmp_path: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_densify_runs_in_executor_not_on_loop(tmp_path: Any) -> None:
-    """The densify must NOT run on the asyncio loop: a concurrent loop task must
-    keep ticking while a dense FC is being read + densified.
+    """The densify must NOT run on the asyncio loop.
 
-    This is the WS-keepalive proxy. We instrument ``densify_if_needed`` to block
-    for a beat (simulating the real CPU cost) and concurrently run a tight
-    ``asyncio.sleep(0)`` heartbeat. If the densify ran ON the loop, the heartbeat
-    would be starved for the whole block; because it runs in an executor thread,
-    the heartbeat keeps advancing.
-    """
+    A concurrent heartbeat keeps ticking while a dense collection is read and
+    densified, which it could not do if the work ran on the loop."""
     import time
 
     from trid3nt_server.emission import pipeline_emitter as pe
@@ -1857,14 +1802,10 @@ async def test_densify_runs_in_executor_not_on_loop(tmp_path: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_densified_result_is_cached_across_reads(tmp_path: Any) -> None:
-    """A second read of the SAME vector uri is served from cache -- the densify
-    does NOT run again.
+    """A second read of the SAME vector uri is served from cache.
 
-    This is the reconnect-storm fix: a session-resume replay re-reads the
-    active-case vector layers on every ~30s reconnect; without the cache each
-    reconnect re-densified tens of thousands of features, which pegged the shared
-    box and fed the reconnect storm. The cache makes the repeat read an O(1) hit.
-    """
+    A resume replay re-reads the active case's vector layers on every reconnect;
+    without the cache each one re-densifies every feature."""
     from trid3nt_server.emission import pipeline_emitter as pe
     from trid3nt_server.tools import vector_tiles as vt
     from trid3nt_server.tools.vector_tiles import MAX_INLINE_FEATURES

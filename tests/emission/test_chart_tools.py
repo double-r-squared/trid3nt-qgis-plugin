@@ -1,25 +1,9 @@
-"""Tests for the generic ``generate_chart`` primitive + agent chart-emission loop.
+"""The generic ``generate_chart`` primitive and the agent chart-emission loop.
 
-All tests use synthetic in-memory/temp-file data -- no network, no LLM calls.
-
-``generate_chart`` replaced the four fixed-shape chart tools (generate_histogram
-/ generate_choropleth_legend / generate_time_series / generate_damage_distribution)
-in the processing-wave cull (docs/decisions/0043): the SHAPE is now the caller's
-Vega-Lite spec + inline records (binning/classification composed in the
-playground), and interactivity is guaranteed by construction.
-
-Coverage:
-- generate_chart emits a structurally-valid ChartEmissionPayload from inline
-  records and from a layer_uri; every mark is forced interactive (tooltip=true);
-  image marks are rejected (the anti-PNG honesty floor); a mark-less spec raises.
-- The four culled chart shapes are REPRODUCED via generate_chart (interactive
-  bar / line specs) -- the replication coverage baked into the suite.
-- Inline row cap (_MAX_ROWS) + $schema injection (build_chart_payload).
-- is_chart_emission_result: True on the generic chart, False on ordinary results.
-- adapter.summarize_tool_result strips vega_lite_spec for the chart.
-- server._maybe_emit_chart emits the chart-emission WS envelope AND persists.
-- Registration + category membership.
-"""
+Synthetic in-memory data, no network and no model. The SHAPE is the caller's
+Vega-Lite spec plus inline records, so every mark is forced interactive, an image
+mark is rejected as the anti-PNG honesty floor and a mark-less spec raises. The
+inline row cap holds, the summarizer strips the spec, and the emit persists."""
 
 from __future__ import annotations
 

@@ -1,20 +1,9 @@
-"""job-0326: server-side reuse guard short-circuits a redundant expensive re-run.
+"""The server-side reuse guard short-circuits a redundant expensive re-run.
 
-These exercise the REAL ``_invoke_tool_via_emitter`` dispatch path with a stub
-tool registered under a guarded ``EXPENSIVE_SCENARIO_TOOLS`` name (NOT gated by
-SOLVER_CONFIRM_TOOLS, so the test needs no confirm-card plumbing). The stub
-counts solver launches and returns a live concentration layer; the guard reads
-the call's params and the result layer_id, never the composer behind the name.
-
-  * A repeat dispatch with identical args REUSES the existing layer — the stub
-    solver is launched only ONCE — and the second call's function_response
-    carries the "reused_existing / not re-run" signal.
-  * A dispatch with CHANGED args (different spill location) RUNS again.
-  * ``force_rerun=True`` bypasses the guard.
-
-The first dispatch still emits the layer onto the map (session-state), and the
-reuse short-circuit re-loads the same layer (dedup by uri keeps one entry).
-"""
+The REAL dispatch path runs with a stub tool registered under a guarded name and
+no confirm gate; the stub counts launches, and the guard reads the call's params
+and the result layer id rather than the composer behind the name. Identical args
+REUSE and launch once, changed args RUN again, and a force flag bypasses."""
 
 from __future__ import annotations
 

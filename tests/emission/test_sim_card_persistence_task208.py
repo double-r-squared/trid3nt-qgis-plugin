@@ -1,33 +1,9 @@
-"""task-208 — SIM/compute-card DURABILITY: the Batch-bound SIM card replays
-like every other tool card across a WS reconnect / Case reopen.
+"""The Batch-bound SIM card replays like every other tool card.
 
-The two-card sim observability (task-149) mints a "Dispatch" tool card
-(``add_step`` -> ``mark_complete``, ALREADY persisted as a ``role="tool"`` row)
-and a "Sim" compute card (``add_compute_step``, ``role="compute"``) bound to the
-AWS Batch jobId. The Dispatch card replayed on reopen; the SIM card was NEVER
-persisted -- it lived only on the wire -- so a WS reconnect / Case reopen
-replayed an EMPTY pipeline and the user's green/red solve card vanished
-(task #208: "tool-card flicker on refresh/reconnect, sim card non-durable").
-
-These tests drive the REAL seams (no Bedrock, no Batch, no Playwright):
-
-  PART 2 (persist):
-    (a) a COMPLETE solve persists a ``role="tool"`` ``CaseChatMessage`` carrying
-        a ``ToolCardRecord(state="complete")`` with the compute step's label +
-        duration, and it round-trips through ``get_session_state``;
-    (b) a FAILED solve persists ``state="failed"`` (the honesty floor: a solve
-        failure SURFACES across a socket cycle);
-    (c) a CANCELLED solve persists NOTHING (Invariant 8 -- no replay row);
-    (d) the Dispatch card is NOT double-persisted by this path (only the
-        ``role="compute"`` SIM card is the new write);
-    (e) ``route_sim_terminal`` with NO persist hook (verify/CI/direct call)
-        still drives the live card terminal -- it just writes no row.
-
-  PART 1 (reconnect carries it):
-    (f) a bare WS reconnect replays the persisted SIM tool-card row in the
-        resume ``session-state`` payload's ``chat_history`` (so the green/red
-        card re-renders without a case-open) -- the end-to-end durability proof.
-"""
+It used to live only on the wire, so a reconnect replayed an empty pipeline.
+Driven against the real seams: a complete solve persists a tool row carrying the
+compute step's label and duration; a failed one persists ``failed``; a cancelled
+one persists nothing; and the dispatch card is not double-written."""
 
 from __future__ import annotations
 
@@ -93,12 +69,10 @@ class _RunResult:
 
 
 async def _mint_sim_card(state) -> str:
-    """Mint the SIM (role=compute) card + persist it ``running`` (the real flow).
+    """Mint the SIM card and persist it ``running``, as the real flow does.
 
-    Mirrors ``mint_dispatch_and_sim_cards``: the SIM card is persisted the MOMENT
-    it is minted (``running``) so a mid-run reconnect/reopen replays it; the
-    later ``route_sim_terminal`` UPSERTS the SAME row to its terminal state.
-    """
+    Persisting at mint is what lets a mid-run reconnect replay it; the later terminal
+    routing UPSERTS the SAME row."""
     sim_id = await state.emitter.add_compute_step(
         name="sfincs solve",
         tool_name="sfincs:solve",
@@ -213,13 +187,10 @@ async def test_cancelled_sim_card_persists_cancelled(file_persistence) -> None:
 
 @pytest.mark.asyncio
 async def test_only_compute_card_persisted_not_dispatch(file_persistence) -> None:
-    """``route_sim_terminal``'s persist writes the role='compute' SIM card ONLY.
+    """The terminal routing writes the compute card ONLY.
 
-    The Dispatch (Card 1) tool card is persisted on the on-box tool path (it is
-    a plain ``add_step`` -> ``mark_complete`` minted by the composer); THIS new
-    write must add EXACTLY ONE row for the SIM card -- never a second Dispatch
-    row -- so a re-open shows one solve card, not a duplicate.
-    """
+    The dispatch card is persisted on the on-box tool path, so this write must add
+    exactly one row - a reopen shows one solve card, not a duplicate."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
     server._ensure_emitter(ws, state)

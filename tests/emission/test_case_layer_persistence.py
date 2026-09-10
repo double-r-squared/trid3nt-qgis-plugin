@@ -1,15 +1,9 @@
-"""Test Case layer persistence + emitter rehydration (job-0172 Part B).
+"""Case layer persistence and emitter rehydration.
 
-When a tool publishes a layer inside an active Case, the agent now:
-
-1. Appends the ``ProjectLayerSummary`` to ``Case.loaded_layer_summaries``
-   (and the layer_id to ``Case.layer_summary``) via ``upsert_case``.
-2. On a subsequent ``case-open``, ``get_session_state`` reads the
-   persisted list into ``CaseSessionState.loaded_layers`` so a Case
-   re-open repopulates the LayerPanel deterministically.
-3. The ``PipelineEmitter.reset_loaded_layers`` method seeds the
-   per-connection accumulator from a persisted snapshot.
-"""
+A layer published inside an active Case is appended to the Case's persisted
+layer summaries; a later case-open reads them back into the session state so the
+panel repopulates deterministically; and the emitter's reset seeds its
+per-connection accumulator from that snapshot."""
 
 from __future__ import annotations
 

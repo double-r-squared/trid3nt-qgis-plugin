@@ -1,17 +1,9 @@
-"""Focused server.py dispatch-seam coverage.
+"""Focused dispatch-seam coverage: the unique-layer-id mint over a LIST return.
 
-NATE 2026-06-26: extends the F97 unique-layer-id mint guarantee to the
-LIST-returning tool case. True-color / satellite tools
-(``fetch_goes_animation``, ``fetch_goes_archive_animation``,
-``fetch_goes_active_fire``, ``fetch_glm_lightning``, ``fetch_viirs_day_fire``)
-return ``list[LayerURI]``. The original ``_restamp`` only re-stamped a SINGLE
-``LayerURI`` (``isinstance(value, LayerURI)``), so list members kept
-source-derived ids that can coincide; ``add_loaded_layer`` dedups by
-COG-identity (TiTiler ``url=`` param), NOT by ``layer_id``, so two layers with
-the same id both persist and collide on delete-by-id (deleting one tore down
-BOTH). The fix re-stamps every ``LayerURI`` element while preserving the
-sequence type so downstream ``isinstance(result, list)`` checks are unaffected.
-"""
+A tool returning a list of layers had only its single-layer case re-stamped, so
+list members kept source-derived ids that can coincide - and since the
+accumulator dedups by COG identity rather than by id, two layers shared an id and
+a delete by id tore down both. Every element is re-stamped, sequence type intact."""
 
 from __future__ import annotations
 
@@ -43,12 +35,10 @@ _SOURCE_DERIVED_ID = "goes-2026-06-26"
 
 @pytest.fixture(autouse=True)
 def _stub_list_tool():
-    """Register a fetcher that returns a LIST of LayerURIs sharing one id.
+    """Register a fetcher returning a LIST of layers that share one id.
 
-    The name is not a known scenario / solver tool, so neither the reuse
-    short-circuit nor the confirm gate fires — we exercise the bare
-    fresh-fetch mint path through ``_restamp`` for a list return.
-    """
+    The name is neither a scenario nor a solver tool, so neither the reuse
+    short-circuit nor the confirm gate fires and the bare mint path runs."""
     original = agent_tools.TOOL_REGISTRY.get(_LIST_TOOL)
     reset_scenario_indexes_for_tests()
     reset_uri_registries_for_tests()

@@ -1,23 +1,9 @@
 """publish_layer: the benign vector no-op, and overview enforcement.
 
-BENIGN VECTOR NO-OP:
-  publish_layer is RASTER-ONLY. A vector (.fgb/.geojson/...) handed to it is
-  already a store object the plugin opens natively, and GDAL cannot open a
-  FlatGeobuf as a raster COG. So it returns a benign, NON-error result: no
-  raise (the step card stays green), no registration, and a calm
-  function_response so the agent narrates honestly and does not re-call.
-
-OVERVIEW ENFORCEMENT:
-  A no-overview COG renders SPOTTY (per-strip range requests time out cold;
-  QGIS cannot downsample for low zooms). Before a raster is registered,
-  publish_layer VALIDATES the COG has overviews and AUTO-TRANSLATES to a
-  tiled+overview COG when missing, then publishes THAT. A raster that ALREADY
-  has overviews is published unchanged.
-
-These exercise the pure-helper layer (``_ensure_raster_has_overviews``,
-``_is_vector_uri``, ``_benign_vector_noop``) plus the publish path end-to-end
-with real GeoTIFF bytes built by rasterio - no network I/O.
-"""
+Publish is RASTER-ONLY, and a vector handed to it is already an object the plugin
+opens natively, so it returns a benign non-error result - no raise, no
+registration, a calm response the agent narrates honestly. A COG without
+overviews renders spotty, so one is auto-translated before it is registered."""
 
 from __future__ import annotations
 
@@ -353,12 +339,10 @@ def _colorinterp0_name(raster_bytes: bytes) -> str:
 
 
 def _assert_colormap_round_trip_equal(src_bytes: bytes, out_bytes: bytes) -> None:
-    """Output band-1 table must equal the SOURCE's round-tripped table.
+    """The output band's table must equal the SOURCE's round-tripped table.
 
-    GDAL's GTiff palette writer normalizes alpha on write, so we compare the
-    output against the source's own ``colormap(1)`` (apples-to-apples) rather
-    than a hand-written RGBA dict. A mismatch = the re-write changed the table.
-    """
+    The palette writer normalizes alpha on write, so the comparison is against the
+    source's own table rather than a hand-written dict; a mismatch is a re-write."""
     src_cmap = _colormap_of(src_bytes)
     assert src_cmap is not None, "test fixture lost its colormap"
     out_cmap = _colormap_of(out_bytes)

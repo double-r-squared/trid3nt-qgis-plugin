@@ -1,27 +1,9 @@
-"""Session durability fix - Jobs B + C (agent half, server.py).
+"""Session durability: connection accumulation, and the active-case flap.
 
-Both jobs target the "session feels broken" cluster from live mobile use
-(navigate-out/back). They are file-disjoint within ``server.py`` and serialized
-as one agent thread (see ``reports/design/session_durability_fix.md``).
-
-JOB B (WS connection accumulation): navigate-out/back piles up sockets - the
-old socket lingers as a zombie until the slow ~20s transport ping reaps it, so a
-single session accumulated ~20 live connections. Fix: a per-session connection
-registry (``_SESSION_WS_CONNECTIONS``) plus eager reaping on each
-``session-resume`` handshake - a new connection proactively closes any PRIOR
-socket of the SAME session. CRITICAL invariant: the reap NEVER closes the
-resuming connection's OWN live socket.
-
-JOB C (active-case flap): two sockets of one session each send a 25s keepalive
-``session-resume`` stamped with the Case THAT socket believes is active; pre-fix
-every keepalive re-bound the shared ``_SESSION_ACTIVE_CASE`` pointer when its
-stamp differed, so the sockets ping-ponged the pointer every 25s and each rebind
-drove an authoritative layer replay that clobbered the displayed Case. Fix: gate
-the resume-rebind so it fires only on the FIRST resume of a connection (a
-genuine fresh resume), never on a keepalive ping. Explicit case-select /
-user-message still rebind. The legitimate first-resume layer replay still fires
-ONCE per connection.
-"""
+A per-session connection registry reaps a PRIOR socket of the same session on
+each resume handshake, and never the resuming connection's own live socket. The
+resume-rebind fires only on a connection's FIRST resume, so two sockets sending
+keepalives cannot ping-pong the active-Case pointer every cycle."""
 
 from __future__ import annotations
 
@@ -515,10 +497,10 @@ async def test_first_resume_forces_case_list_keepalive_skips_unchanged() -> None
 
 @pytest.mark.asyncio
 async def test_case_list_change_guard_cleared_on_disconnect(monkeypatch) -> None:
-    """Once a session's last live connection deregisters, its cached
-    case-list digest is dropped — a later reconnect (fresh SessionState)
-    gets an honest first-resume emit rather than inheriting a stale guard
-    from the closed connection."""
+    """A session's cached case-list digest is dropped with its last connection.
+
+    A later reconnect gets an honest first-resume emit rather than inheriting a stale
+    guard from the closed one."""
     session_id = new_ulid()
     case_id = new_ulid()
     server.set_persistence(_FakePersistence(case_id, []))

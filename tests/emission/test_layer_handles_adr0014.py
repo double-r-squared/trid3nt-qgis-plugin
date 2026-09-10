@@ -1,30 +1,9 @@
-"""ADR 0014 — the LLM passes handles, never URIs (Lane S implementation).
+"""The model passes handles, never uris.
 
-Covers the four server-side mechanisms:
-
-1. HANDLE MINT — the registry mints short per-case handles (``L1``, ``L2``,
-   ...) the moment a record gains a data URI; monotonic per case; both
-   directions (handle -> uri, uri -> handle) resolvable; the ``{L<n>: uri}``
-   map export/import round-trips through the Case persistence seam so a
-   reconnect/reopen resolves the SAME handles.
-2. EMIT REWRITE — ``rewrite_result_for_llm`` swaps registered URI faces
-   (data COG + WMS/tile display URL) for short handles in the LLM-facing
-   function_response ONLY; the plugin-bound LayerURI emission
-   (``emit_layer_uri``) keeps the real uri.
-3. DISPATCH RESOLVE — ``resolve_params`` resolves ``L<n>``
-   (case-insensitive, zero-pad tolerant) and dual-accepts verbatim
-   registered URIs; UNKNOWN short handles and unregistered object-store
-   URIs reject typed (``URI_HANDLE_UNRESOLVED``) with the handle-inventory
-   hint; ``code_exec_request.layer_refs`` values (including list-valued
-   refs) resolve the same way.
-4. PERSISTENCE — ``Persistence.set/get_case_layer_handles`` store the map
-   as a storage-only ``layer_handles`` field on the cases doc that
-   ``upsert_case`` never clobbers and ``CaseSummary`` never carries.
-
-Plus one end-to-end drive of ``_stream_model_reply`` (fake Gemini, real
-emit seam) proving the function_response the model reads carries ``L<n>``
-while the raw uri never reaches it.
-"""
+Four server-side mechanisms: the registry mints short per-case handles the moment
+a record gains a uri, resolvable both ways and round-tripping through Case
+persistence; the rewrite swaps uri faces for handles in the LLM-facing response
+ONLY; dispatch resolves tolerantly and rejects typed; the map is storage-only."""
 
 from __future__ import annotations
 

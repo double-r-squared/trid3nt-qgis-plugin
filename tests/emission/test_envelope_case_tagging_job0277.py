@@ -1,11 +1,8 @@
-"""job-0277: envelope case-tagging (proposed A.1 amendment).
+"""Every envelope emitted inside a turn carries the turn's pinned Case.
 
-Every envelope emitted inside a turn carries ``Envelope.case_id`` = the
-turn's pinned Case, via a per-task ContextVar bound by the dispatch
-wrappers. The web routes tagged envelopes to the OWNING Case's stream —
-killing the "still-running turn paints into the newest stream" display
-limit documented in job-0269.
-"""
+A per-task context variable is bound by the dispatch wrappers, so a client routes
+each envelope to the OWNING Case's stream and a still-running turn cannot paint
+into the newest one."""
 
 from __future__ import annotations
 

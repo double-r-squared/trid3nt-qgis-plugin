@@ -1,31 +1,9 @@
-"""Part A (compaction UX) -- the durable "Compacting conversation..." /
-"Conversation compacted (Nk -> Mk tokens)" pipeline card.
+"""The durable compaction pipeline card.
 
-``openai_adapter.stream_openai`` yields a ``CompactionStartEvent`` /
-``CompactionCompleteEvent`` pair whenever ``context_budget.compact_contents``
-actually changes something (proactive, before the request; reactive, after a
-detected clip -- see ``tests/gates/test_openai_adapter.py``). ``server.py``'s
-dispatch loop turns that pair into a durable ``pipeline_emitter`` card
-(``mint_compaction_card`` / ``complete_compaction_card``) instead of the
-pre-Part-A ``TextDeltaEvent`` note glued onto the model's own reply -- the
-SAME F10 running-tool-card treatment (animated live) plus the two-card SIM
-observability's running-then-upsert-terminal durability (task-208): the
-running card persists at mint, and the terminal write UPSERTS the SAME row.
-
-Two layers of coverage, mirroring the existing siblings:
-
-  PART 1 (card-lifecycle durability, mirrors test_sim_card_persistence_task208.py):
-    mint_compaction_card / complete_compaction_card driven directly against a
-    REAL emitter + file-backed persistence -- running row persists at mint,
-    terminal write upserts the SAME row with the renamed label + token counts.
-
-  PART 2 (full dispatch-loop integration, mirrors
-    test_context_window_abort_persistence.py): drives the REAL
-    ``_stream_model_reply`` / ``_dispatch_model_turn_and_persist`` seam with a
-    mocked ``stream_events_with_contents`` that yields the typed compaction
-    events -- proves server.py's wiring end-to-end, and that NO card (and no
-    stray narration note) appears when compaction never fires.
-"""
+The adapter yields a start and complete event pair whenever compaction actually
+changes something, and the dispatch loop turns that pair into a durable card
+rather than a note on the model's reply. Two layers: the card lifecycle against a
+real emitter, where the terminal write UPSERTS the running row; and the wiring."""
 
 from __future__ import annotations
 
@@ -191,10 +169,10 @@ async def _drive_real_stream(ws, state, fake_stream):
 async def test_compaction_events_mint_and_complete_a_card_end_to_end(
     file_persistence,
 ) -> None:
-    """The full server wiring: CompactionStartEvent -> CompactionCompleteEvent
-    -> a single terminal ``context:compact`` card, and the model's own reply
-    carries NO stray compaction note (Part A removed the OPEN-14 narration
-    seam -- the card is the ONLY signal now)."""
+    """The full server wiring: one start and one complete give a single terminal card.
+
+    The model's own reply carries NO stray compaction note - the card is the only
+    signal."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
     case_id = await _create_case(ws, state)

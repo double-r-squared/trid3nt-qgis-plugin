@@ -1,22 +1,9 @@
-"""job-0325 — F53 (delete layers) + F54 (reuse-not-refetch) coverage.
+"""Deleting a layer, and the reuse instruction on the layers-present note.
 
-F53 (server.py ``_handle_layer_delete`` + ``_delete_case_loaded_layer``):
-- delete removes the layer from the live emitter's ``loaded_layers`` and emits
-  a refreshed ``session-state`` (Map.tsx replace-not-reconcile then drops the
-  overlay — no Map.tsx change);
-- the persisted ``CaseSummary`` loses the layer AUTHORITATIVELY (replace, not
-  the union merge of ``_persist_case_loaded_layers`` which would resurrect it);
-- the agent's loaded-layers awareness reflects the delete (the emitter snapshot
-  no longer carries the layer, so ``build_layers_present_note`` stops listing
-  it);
-- a non-existent layer_id is a harmless no-op; a malformed payload surfaces a
-  typed ``TOOL_PARAMS_INVALID``.
-
-F54 (adapter.py ``build_layers_present_note``):
-- the per-layer line now carries ``handle=`` (== the layer_id) and ``uri=``
-  when present so the model can pass the artifact straight to a tool;
-- the firm reuse / no-refetch instruction is appended.
-"""
+A delete removes the layer from the live emitter and emits a refreshed session
+state; the persisted Case loses it AUTHORITATIVELY, by replace rather than the
+union merge that would resurrect it; the model's awareness follows. An unknown
+id is a no-op and a malformed payload is typed. The note carries handle and uri."""
 
 from __future__ import annotations
 
@@ -182,11 +169,10 @@ def test_layer_delete_removes_from_emitter_and_emits_session_state(
 def test_layer_delete_reinlines_surviving_vectors_before_emit(
     _persistence_bound: Persistence,
 ) -> None:
-    """NATE 2026-06-26: a delete must NOT transiently drop sibling vector
-    layers. Seed two vector layers, only ONE pre-inlined; the delete path
-    re-inlines the missing one BEFORE emit so EVERY surviving vector layer in
-    the emitted session-state carries ``inline_geojson`` (the client never
-    fetches s3:// directly — job-0175)."""
+    """A delete must NOT transiently drop sibling vector layers.
+
+    Every surviving vector layer is re-inlined BEFORE the emit, so the emitted state
+    carries inline geometry for each - the client never fetches the store directly."""
     case_id = new_ulid()
     asyncio.run(_persistence_bound.upsert_case(_fresh_case_with_layers(case_id)))
 

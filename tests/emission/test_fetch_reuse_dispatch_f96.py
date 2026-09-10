@@ -1,24 +1,9 @@
-"""job-0366 (F96): server-side reuse guard short-circuits a redundant RE-FETCH.
+"""The server-side reuse guard short-circuits a redundant RE-FETCH.
 
-The Wave B F96 track shipped the pure helper (find_reusable_fetched_layer) + the
-prompt steer, but the DETERMINISTIC backstop that actually prevents the duplicate
-— wiring the helper into ``_invoke_tool_via_emitter`` — fell between the two
-tracks. job-0366 wires it (mirroring the run_model_* reuse guard, job-0326).
-
-The real headline case (NATE 2026-06-17): a bare "resize the bbox to encompass
-all the protected areas" follow-up carries NO bbox of its own — it targets the
-layer already on the map, so the requested AOI resolves to the Case AOI. A loaded
-same-kind layer then answers it -> short-circuit instead of re-fetching a
-duplicate. ``ProjectLayerSummary`` does not (yet) carry a per-layer bbox, so the
-match runs through the Case-AOI-equivalence path of find_reusable_fetched_layer;
-``_turn_case_bbox`` is monkeypatched here to supply that Case AOI hermetically.
-
-  * a repeat fetch at the Case AOI (bare follow-up, or explicit == Case AOI)
-    REUSES the loaded layer — the fetcher runs only ONCE — and the response
-    carries the "reused_existing / not re-fetched" signal;
-  * a fetch at a genuinely different/larger AOI re-fetches;
-  * ``force_refetch=True`` bypasses the guard.
-"""
+A bare follow-up carries no bbox of its own, so its AOI resolves to the Case AOI
+and a loaded same-kind layer answers it: the fetcher runs ONCE and the response
+carries the reused signal. A genuinely different or larger AOI re-fetches, and
+``force_refetch`` bypasses the guard. The Case AOI is supplied hermetically."""
 
 from __future__ import annotations
 
@@ -41,11 +26,10 @@ from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 
 @pytest.fixture(autouse=True)
 def _cap_gate_waits(monkeypatch):
-    """LANE C: cap every user-decision gate wait so a headless run never hangs
-    on the F6 24h local-lane lift (``_gate_wait_timeout``). Production leaves
-    ``TRID3NT_GATE_WAIT_CAP_S`` unset -> byte-identical behavior; 5s is a
-    generous net -- the gate approver below answers within milliseconds, so the
-    cap is only a fail-closed backstop, never the path these tests exercise."""
+    """Cap every user-decision gate wait so a headless run never hangs.
+
+    Production leaves ``TRID3NT_GATE_WAIT_CAP_S`` unset; the approver below answers
+    in milliseconds, so the cap is a fail-closed backstop, not the path exercised."""
     monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
 
 
@@ -53,14 +37,8 @@ def _cap_gate_waits(monkeypatch):
 async def _auto_proceed_fetch_gate():
     """Answer the fetch-resolution gate with ``proceed`` as each card appears.
 
-    ``fetch_dem`` is in ``FETCH_CONFIRM_TOOLS``, so ``_invoke_tool_via_emitter``
-    parks on the fetch-confirm gate before the fetcher runs. These tests
-    exercise the REUSE guard, not the gate (the gate has its own dedicated
-    suites), so a background approver replies ``proceed`` to every pending card:
-    the first fetch materializes the layer and the reuse guard can then
-    short-circuit (or re-fetch) the follow-up exactly as production would after
-    a user clicks through. Without an answer the gate would fail closed at the
-    cap above (or hang unbounded in production)."""
+    ``fetch_dem`` parks on the gate before the fetcher runs, and these exercise the
+    REUSE guard rather than the gate, so a background approver lets it through."""
 
     async def _watch() -> None:
         while True:

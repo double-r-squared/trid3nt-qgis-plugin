@@ -1,24 +1,9 @@
-"""Durable-Case persistence + old-shape ``expires_at`` tolerance.
+"""Durable-Case persistence, and tolerance for an old-shape TTL stamp.
 
-Cases are durable: ``upsert_case`` writes NO ``expires_at`` TTL stamp (the
-ephemeral-Case TTL machinery was removed -- no local reader/reaper ever acted
-on it). What remains under test:
-
-- ``test_upsert_case_writes_no_expires_at`` -- a Case upsert never stamps a TTL.
-- ``test_upsert_case_authed_byte_identical_to_legacy`` -- the stored doc is
-  ``model_dump(mode='json')`` + ``_id`` + (when owned) ``user_id`` and nothing
-  else.
-- ``test_doc_to_case_summary_drops_stale_expires_at`` -- a LEGACY stored doc
-  that still carries ``expires_at`` reads back fine; the storage-only key never
-  reaches the wire ``CaseSummary``.
-- ``test_get_case_tolerates_legacy_expires_at`` -- end-to-end old-shape proof:
-  a doc seeded with ``expires_at`` on disk is read back without crashing and
-  never surfaces the key.
-- ``test_seed_chat_history_*`` -- the reconnect-resync emitter primitive.
-
-Case tests run against the file-backed Persistence substrate so the raw stored
-document can be inspected on disk.
-"""
+Cases are durable: an upsert writes NO ``expires_at``, and the stored document is
+the model dump plus its id and, when owned, its user. A LEGACY document that
+still carries the key reads back without crashing and never surfaces it on the
+wire. Run against the file-backed substrate so the raw document can be inspected."""
 
 from __future__ import annotations
 

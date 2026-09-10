@@ -1,16 +1,9 @@
 """The presentation surface: the ask beats the declaration, and hide is the un-emit.
 
-Emission is automatic, so nothing here puts a layer on the map. What this
-covers is everything a reader may change about one afterwards - which of the
-four shapes draws it, its ramp, its title, the range it is read on, and whether
-it is on the canvas at all - and the two rules that make those changes
-predictable: an ask wins field by field over what the data declared, and an ask
-nobody made leaves the declaration untouched rather than re-asserting a default
-over it.
-
-The re-paint is asserted on the RESOLVED preset the surface returns, which is
-the same resolution the .qml and the legend sentence are both built from.
-"""
+Emission is automatic, so nothing here puts a layer on the map; this covers what
+a reader may change afterwards - the shape, the ramp, the title, the range, and
+whether it is on the canvas - and the two rules that make those predictable: an
+ask wins field by field, and an ask nobody made leaves the declaration alone."""
 
 from __future__ import annotations
 

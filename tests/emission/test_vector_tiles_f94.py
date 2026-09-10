@@ -1,20 +1,9 @@
-"""F94 — dense vector layers route to the tiled/simplified path (not raw inline).
+"""A dense vector layer routes to the simplified path, not raw inline.
 
-NATE 2026-06-17 confirmed OSM building footprints rendered as a single raw
-inline-GeoJSON FeatureCollection made the app "considerably more laggy." This
-suite proves:
-
-1. ``vector_tiles.densify_if_needed``:
-   - a sub-threshold FeatureCollection is returned UNCHANGED (legacy inline path
-     preserved, no meta);
-   - an over-threshold FeatureCollection is topology-preserving-simplified +
-     capped, lighter on the wire, and TAGGED with a ``DensifyMeta`` so the
-     degradation is surfaced honestly (never a silent drop).
-2. The emitter choke point (``pipeline_emitter._read_vector_uri_as_geojson`` ->
-   ``add_loaded_layer`` -> ``emit_session_state``) emits a SIMPLIFIED inline FC
-   plus the ``vector_density`` wire tag for a dense vector, while a small vector
-   stays inline unchanged with NO tag.
-"""
+A sub-threshold collection is returned UNCHANGED, preserving the inline path,
+while an over-threshold one is topology-preserving-simplified and capped and
+TAGGED so the degradation is surfaced honestly rather than dropped silently. The
+emitter's choke point emits the simplified geometry with its density tag."""
 
 from __future__ import annotations
 
@@ -150,12 +139,10 @@ def test_above_cap_is_capped_to_max_and_tagged(monkeypatch: pytest.MonkeyPatch) 
 
 
 def _simple_rect_fc(n: int, *, dp: int = 12) -> dict[str, Any]:
-    """Dense FC of SIMPLE 5-vertex rectangles with high-precision coords.
+    """A dense collection of SIMPLE five-vertex rectangles with high-precision coords.
 
-    Represents the real OSM-footprint case the F94 verifier flagged: Douglas-
-    Peucker drops no vertices from a rectangle, so the only honest wire win is
-    coordinate-precision rounding.
-    """
+    Douglas-Peucker drops no vertex from a rectangle, so the only honest wire win is
+    coordinate-precision rounding."""
     feats: list[dict[str, Any]] = []
     for i in range(n):
         cx = -122.0 + (i % 80) * 0.001

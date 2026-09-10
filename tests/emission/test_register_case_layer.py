@@ -1,24 +1,9 @@
-"""Tests for ``register_case_layer`` -- the bidirectional layer push core.
+"""``register_case_layer``: the bidirectional layer push core.
 
-Mirrors ``test_case_list_http_route.py``
-in spirit: real geopandas/rasterio round trips (no fakes for the artifact
-parsing itself -- that IS the thing under test), but every object-store I/O
-call and the Persistence seam are monkeypatched so no network/boto3/MinIO is
-touched.
-
-Covered:
-  - happy vector (GeoJSON upload) -> FlatGeobuf DATA face + durable GeoJSON
-    DISPLAY face + a role="input" ProjectLayerSummary merged onto the case.
-  - happy raster (tiny in-memory GeoTIFF) -> publish_layer is reused
-    (mocked) for the COG/tile-template step; the summary is merged in.
-  - size cap -> ObjectTooLargeError.
-  - bad kind -> ImportLayerInputError.
-  - missing object -> ObjectNotFoundError.
-  - make_aoi=True persists Case.bbox from the layer's computed bounds;
-    make_aoi=False (default) leaves it untouched.
-  - a second push to the SAME case replaces-by-layer_id rather than
-    duplicating an unrelated existing entry (merge policy sanity).
-"""
+Real geopandas and rasterio round trips, since the artifact parsing IS the thing
+under test, with every object-store call and the persistence seam monkeypatched.
+A vector gains a data face, a durable display face and an input summary on the
+case; the three input failures refuse typed; the AOI is pinned only when asked."""
 
 from __future__ import annotations
 

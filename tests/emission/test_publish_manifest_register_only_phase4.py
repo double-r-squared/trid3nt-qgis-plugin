@@ -1,24 +1,9 @@
-"""SFINCS postprocess-offload Phase 4 - AGENT-side thin-out tests.
+"""The worker-to-agent publish manifest: the register-only handoff.
 
-Covers the worker -> agent ``publish_manifest.json`` register-only handoff:
-
-1. Typed contract parse + schema-version REJECT (the agent's typed reader mirror
-   of the worker's plain-dict writer, gated on schema_version==1).
-2. ``register_manifest_layers`` (TiTiler exit / QGIS-native swap) emits the raw
-   ``s3://`` ``cog_uri`` AS the layer uri (the plugin reads it via /vsicurl/),
-   stashes the data-driven legend keyed by that ``cog_uri`` (resolved from the
-   agent style registry + ``band_stats``, NO COG read), mints ``layer_id`` =
-   ``<stem>-<run_id>``, registers the COG, and surfaces the top-level metrics.
-   No tile server is needed - the old ``TRID3NT_TILE_SERVER_BASE``
-   publish-or-honest-drop gate is GONE (nothing drops).
-3. ``read_publish_manifest`` returns the typed manifest when present + parses to
-   schema 1, and ``None`` (the on-box fallback trigger) when absent / unknown.
-4. ``model_flood_scenario``: the on-box ``postprocess_flood`` convert sits under
-   ``if not register_only:`` so a present manifest short-circuits it and an
-   absent manifest runs the legacy convert unchanged.
-
-All mocked - no network / GDAL / solver / S3.
-"""
+The typed reader mirrors the worker's plain-dict writer and REJECTS an unknown
+schema version, which is what triggers the on-box fallback. Registration emits
+the store uri AS the layer uri, stashes the legend keyed by it from the style
+registry and the recorded band stats with NO raster read, and mints an id."""
 
 from __future__ import annotations
 

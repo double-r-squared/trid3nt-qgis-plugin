@@ -1,25 +1,9 @@
-"""publish_layer -- the RESOLVED STYLE a published raster carries.
+"""publish_layer: the RESOLVED STYLE a published raster carries.
 
-The gradient and the range a reader is shown must MEAN something, so both come
-out of ONE resolution of the layer's declared row against the layer's own
-bytes: the legend range and the painted range agree by construction because
-there is no second read. The result is stashed keyed by the returned raw
-``s3://`` COG uri, so the pipeline emitter can lift it onto the
-``ProjectLayerSummary`` (the atomic tool returns a bare URI string, not a typed
-``LayerURI``); the register-only manifest seam stashes by the same
-``cog_uri`` (coverage in ``test_publish_manifest_register_only_phase4.py``).
-
-Coverage:
-  (a) a CONTINUOUS raster carries the REAL vmin/vmax + ramp (the run's own
-      p2/p98 for a data-policy row; the declared domain range for a fixed one);
-  (b) the layer ships the .qml the map loads, over that same range;
-  (c) a paletted raster carries ``kind="classed"`` swatches from its own
-      embedded GDAL colour table (transparent slots dropped);
-  (d) an RGB(A) composite carries NO key - it is already painted;
-  (e) the resolved style round-trips through the URI stash.
-
-No network I/O -- real GeoTIFF bytes built by rasterio.
-"""
+The gradient and the range come out of ONE resolution of the declared row against
+the layer's own bytes, so the legend range and the painted range agree by
+construction. A continuous raster carries a real range and ships the document the
+map loads; a paletted one carries its own swatches; an RGB composite carries none."""
 
 from __future__ import annotations
 
@@ -148,12 +132,10 @@ def test_the_layer_ships_the_qml_the_map_loads_over_that_same_range() -> None:
 def test_continuous_legend_uses_real_percentile_range(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A data-policy preset renders with the p2/p98 range read off THIS raster;
-    the legend carries the IDENTICAL real range (no retroactive hardcoded guess).
+    """A data-policy preset renders with the percentile range read off THIS raster.
 
-    The range is controlled by handing the resolver a real COG whose data span we
-    know, so the string under test is the one the chokepoint actually resolves.
-    """
+    The legend carries the identical real range, and the resolver is handed a COG
+    whose data span is known, so the string under test is the one it resolves."""
     monkeypatch.setattr(
         MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes(0.0, 30.0)
     )

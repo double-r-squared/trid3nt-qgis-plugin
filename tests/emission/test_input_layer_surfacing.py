@@ -1,23 +1,9 @@
-"""Input-layer surfacing, post ADR 0244 S2 collapse.
+"""Input-layer surfacing: the primitives, the one worker case, and the sweep.
 
-Router-fetched renderable inputs now surface via the emit-on-fetch router seam
-(``route()`` -> ``maybe_emit_input_on_fetch``); the per-family ``_surface_*``
-helpers + hand-written composer emission call sites were deleted in S2. What
-remains here pins the pieces the seam does NOT own:
-
-  (1) ``publish_input_layer`` / ``publish_raster_input_cog`` -- the emission
-      PRIMITIVES the seam itself rides: force role + bbox=None, best-effort
-      (NEVER raise), honour the emit_layer_uri guardrail (raw-object raster
-      DROPPED, vector passes).
-  (2) river_dye's IN-WORKER bed-bathymetry surfacing -- a worker-COG the router
-      seam cannot cover (sampled inside the solver container).
-  (SWEEP) the ADR 0244 single-path guard: no ``_surface_*input*`` helper and no
-      hand-written input-emission call for router-fetched data may reappear.
-
-Everything I/O-bound (S3 put, publish_layer, the solver chain) is MOCKED -- no
-network / boto3 is touched. The per-family composer-surfacing cases were removed;
-the seam is now pinned by ``test_emit_on_fetch_seam.py``.
-"""
+A router-fetched renderable input surfaces through the emit-on-fetch seam, so
+what is pinned here is what the seam does NOT own: the emission primitives it
+rides, which force the role, are best-effort and honour the guardrail; the
+in-worker bathymetry; and a sweep against a new hand-written call. All I/O mocked."""
 
 from __future__ import annotations
 
@@ -174,10 +160,10 @@ _COG_EXISTS_TARGET = "trid3nt_server.emission.layer_uri_emit._cog_object_exists"
 
 @pytest.mark.asyncio
 async def test_publish_raster_input_cog_surfaces_with_provenance():
-    """An existing s3:// COG rounds through publish_layer (mocked) and reaches
-    the emitter as a role="context" raster carrying the provenance name + the
-    continuous_dem ramp. This is the 0217-lesson gate: a valid input LayerURI
-    MUST reach the emitter, never silently drop."""
+    """An existing COG rounds through the publish and reaches the emitter.
+
+    It arrives as a context raster carrying its provenance name and its ramp: a valid
+    input layer MUST reach the emitter, never silently drop."""
     published: list[dict] = []
 
     def _mock_publish_layer(layer_uri, layer_id, style=None, name=None, **kw):  # noqa: ANN001
@@ -238,11 +224,10 @@ async def test_publish_raster_input_cog_publish_failure_non_fatal():
 
 @pytest.mark.asyncio
 async def test_publish_raster_input_cog_skips_missing_object_loudly(caplog):
-    """THE HONESTY FIX: the dead-COG class -- a manifest that recorded a
-    filename the store never actually received. head_object (mocked) reports
-    absent -> the object is SKIPPED before ever reaching publish_layer: no
-    404 layer registered, a LOUD warning naming the layer_id + uri, returns
-    False. NEVER raises."""
+    """The dead-COG class: a manifest naming a file the store never received.
+
+    The head reports it absent, so the object is SKIPPED before the publish - no 404
+    layer registered, a LOUD warning naming the layer and uri, and no raise."""
     called = {"n": 0}
 
     def _spy(*a, **k):  # pragma: no cover - must not run
@@ -365,10 +350,10 @@ def test_sweep_no_surface_input_helpers_except_worker_cog():
 
 
 def test_sweep_input_emission_calls_match_allowlist():
-    """Every hand-written publish_input_layer / publish_raster_input_cog CALL in a
-    composer must be an allow-listed non-seam-covered emission (mesh / result /
-    in-worker COG / bare-OSM / user-data overlay). A new site -> route the fetch
-    through the seam, or allow-list it here with a reason."""
+    """Every hand-written input-emission CALL in a composer must be allow-listed.
+
+    A new site either routes its fetch through the seam or is listed here with a
+    reason."""
     found: dict[str, int] = {}
     for path in _iter_workflow_py():
         n = 0

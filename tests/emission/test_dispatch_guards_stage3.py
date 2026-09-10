@@ -1,25 +1,9 @@
-"""Stage 3 (ADR 0017 mechanism 3) -- dispatch-guard hardening.
+"""Dispatch-guard hardening: each guard fires, does not over-fire, and can be off.
 
-Covered here (each guard: fire + no-fire + kill-switch):
-
-  (c) FUZZY ENUM-ARG CORRECTION at the normalizer -- a string arg failing a
-      ``Literal`` schema is difflib-corrected (cutoff 0.8) with a log line;
-      below the cutoff the normal typed-error path owns it.
-      Kill-switch: ``TRID3NT_ENUM_FUZZY=0``.
-
-  (d) GEOCODE DRIFT WARNING -- after geocode_location, a later call whose bbox
-      intersects neither the geocoded bbox nor the active AOI gets an advisory
-      WARNING appended to its function_response (never blocks).
-      Kill-switch: ``TRID3NT_GEOCODE_DRIFT_WARN=0``.
-
-  (a) REFETCH DEDUPE kill-switch (``TRID3NT_FETCH_REUSE=0``) -- the F96
-      short-circuit itself is covered by test_fetch_reuse_dispatch_f96 /
-      test_scenario_reuse_fetch_f96; here we prove the switch disables it.
-
-  (b) EXPENSIVE-SIM RESULT REUSE kill-switch (``TRID3NT_SCENARIO_REUSE=0``) --
-      the job-0326 short-circuit + force_rerun escape are covered by
-      test_scenario_reuse_dispatch_job0326; here we prove the switch.
-"""
+A string arg failing a ``Literal`` schema is fuzzy-corrected above a cutoff and
+left to the typed-error path below it. After a geocode, a call whose bbox
+intersects neither the geocoded bbox nor the active AOI gets an advisory warning
+that never blocks. The two reuse short-circuits each have a kill-switch."""
 
 from __future__ import annotations
 

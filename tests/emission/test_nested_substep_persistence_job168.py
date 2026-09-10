@@ -1,26 +1,9 @@
-"""task-168 -- READ-ONLY persistence of nested workflow sub-step cards.
+"""READ-ONLY persistence of nested workflow sub-step cards.
 
-The live nested sub-step cards (commit 256a587) surface a composer's internal
-atomic-tool calls (``fetch_*`` / deck build / ``run_solver`` / ``postprocess_*`` /
-``publish_layer``) as CHILD rows under the top-level workflow card, driven by
-wire-only ``pipeline-state`` envelopes. Those were LOST on Case reopen and on the
-reopen. This suite proves the remaining work: the children now PERSIST
-and replay READ-ONLY exactly like every other Case datum.
-
-Drives the REAL server seams (no Gemini, no Playwright) against file-backed
-persistence:
-
-- a composer tool that opens ``substep`` children (one OK, one FAILED, with a
-  failed child error_code) persists a ``ToolCardRecord`` whose ordered
-  ``children`` survive a ``get_session_state`` round-trip (warm reopen);
-- the parent's own tool-io (raw_args / function_response) is unchanged and the
-  children ride alongside it;
-- a FAILED parent still nests its children (a successful fetch then a failed
-  solve);
-- a plain tool with NO substeps persists ``children == None`` (every pre-task-168
-  path), and a legacy tool-card row literally missing the field still loads
-  (backward compat).
-"""
+A composer's internal calls surface as CHILD rows under its top-level card. Driven
+against the real seams and file-backed persistence: the ordered children survive a
+session-state round trip, the parent's own tool-io is unchanged beside them, a
+FAILED parent still nests, and a legacy row missing the field still loads."""
 
 from __future__ import annotations
 

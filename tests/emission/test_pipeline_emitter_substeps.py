@@ -1,34 +1,9 @@
-"""Unit tests for the nested sub-step timeline (task-168).
+"""Unit tests for the nested sub-step timeline.
 
-The CONTRACT + EMITTER lane surfaces a composer's INTERNAL atomic-tool calls
-(``fetch_*`` / deck build / ``run_solver`` / ``postprocess_*`` /
-``publish_layer`` / ``compute_*``) as CHILD steps nested under the parent
-workflow card via ``PipelineEmitter.substep`` (and the module-level no-op-safe
-``substep`` / ``begin_substeps`` wrappers).
-
-Coverage (maps to the kickoff's acceptance #3):
-
-1. ``test_parent_with_three_substeps_emits_one_parent_three_children`` — a
-   parent step that runs 3 substeps emits exactly 1 parent + 3 child steps, all
-   with UNIQUE ULID ids; each child carries ``parent_step_id`` == the parent's
-   id and renders nested (never as a top-level card).
-2. ``test_parent_breadcrumb_label_index_total_transitions`` — the PARENT carries
-   ``substep_label`` (raw child name), 1-based ``substep_index``, and
-   ``substep_total`` (from ``begin_substeps``) WHILE a child runs, then those
-   fields CLEAR on the parent's terminal transition.
-3. ``test_failing_substep_marks_child_failed_not_parent_green`` — a substep that
-   raises marks the CHILD failed (red, honesty floor) and re-raises; the parent
-   still reaches ``complete`` (green) and is never turned red by the child.
-4. ``test_substep_is_noop_when_no_emitter_bound`` — the module-level
-   ``substep(None, ...)`` wrapper yields ``None`` and mints nothing (the
-   verify/CI direct-call path is unchanged); ``begin_substeps(None, ...)`` is a
-   no-op too.
-5. ``test_substep_noop_when_emitter_has_no_parent`` — ``emitter.substep`` yields
-   ``None`` + mints nothing when no top-level ``emit_tool_call`` parent is bound.
-
-The sink is a sync capture closure wrapped in an ``async def`` so the emitter
-can ``await`` it.
-"""
+A composer's internal calls become CHILD steps under its parent card. Three
+substeps emit one parent and three children with unique ids, each naming its
+parent; the parent carries the breadcrumb label, index and total while a child
+runs and CLEARS them at its terminal transition; a raising substep reddens only itself."""
 
 from __future__ import annotations
 

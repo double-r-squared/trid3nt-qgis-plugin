@@ -1,26 +1,9 @@
-"""job-SOLVE-SURVIVE: a long-running solve must SURVIVE a WS disconnect.
+"""A long-running solve must SURVIVE a WS disconnect.
 
-The #1 blocker: SFINCS flood modeling produced no successful run since Fort
-Myers because a WS disconnect KILLED the in-flight solve. Root cause: the
-handler ``finally`` blanket-``.cancel()``-ed every not-done task on the
-per-connection ``SessionState.inflight_tasks`` — including a detached
-``sfincs_flood`` -> ``wait_for_completion``. The web client opens
-MULTIPLE sockets per session (StrictMode double-mount + reconnect), so a
-transient socket swap detonated the finally and docker-killed the solve ~7s in.
-
-These tests exercise the lifecycle WITHOUT a real solver (mock the WS + the
-turn body the way the existing server tests do):
-
-  (a) a solver turn is NOT cancelled when its launching connection's handler
-      ``finally`` runs (simulated disconnect) — the task keeps running.
-  (b) the explicit ``cancel`` envelope still cancels it (genuine cancellation +
-      docker-kill preserved).
-  (c) a new connection for the same session re-binds the emitter sink, so the
-      in-flight solve's progress + terminal frames reach the new socket.
-  (d) no task leak: a completed turn is removed from the module-level registry.
-  (e) a non-solver (cheap LLM-only) turn behaves as before — also kept running
-      across a disconnect and self-removed on completion (no leak).
-"""
+The handler's ``finally`` used to cancel every not-done task on the
+per-connection state, and a client opens multiple sockets per session, so a
+transient swap killed an in-flight solve. Pinned without a real solver: the turn
+detaches, an explicit cancel still cancels, and a new connection rebinds the sink."""
 
 from __future__ import annotations
 
@@ -80,12 +63,10 @@ async def _gated_turn(release: asyncio.Event, emitter: PipelineEmitter) -> None:
 
 
 def _simulate_disconnect_finally(state: server.SessionState) -> None:
-    """Run the EXACT detach logic from the handler ``finally`` on ``state``.
+    """Run the EXACT detach logic from the handler's ``finally``.
 
-    The real finally lives inside the closure ``_make_handler.handler``; this
-    reproduces its observable contract so the test does not need a live socket
-    server: for each not-done in-flight turn, ensure it is registered in the
-    module-level live-turn registry (detached, kept running) — NEVER cancel."""
+    It reproduces the observable contract without a live socket server: each not-done
+    turn is registered in the live-turn registry and kept running, NEVER cancelled."""
     for turn_key, t in list(state.inflight_tasks.items()):
         if t.done():
             continue

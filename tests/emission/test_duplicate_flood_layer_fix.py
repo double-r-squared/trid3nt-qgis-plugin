@@ -1,23 +1,9 @@
 """One flood layer, never two, and it is styled by DECLARATION.
 
-A single flood request must put exactly ONE map row of the peak-depth data on
-the canvas. Three independent things can break that, and each gets a class:
-
-PRIMARY (``adapter.summarize_tool_result``): a scenario wrapper's
-already-published LayerURI is summarized with explicit ``published`` /
-``on_map`` signals, so the model recognizes the layer is already on the map and
-does not issue a second publish of the same COG.
-
-THE STYLE BOUNDARY (``emission.presets``): a layer is drawn by the style row
-its PRODUCER DECLARED. A style is never inferred from a filename or a layer id.
-
-THE DEDUP RULE (``pipeline_emitter.add_loaded_layer``): two publishes of the
-SAME COG collapse to ONE loaded layer, while two genuinely distinct COGs must
-still coexist as two rows.
-
-Every appended layer also carries a stable, monotonic ``z_index``, and an
-in-place re-publish reuses the superseded layer's slot rather than renumbering.
-"""
+Three independent things can break that, one class each: a wrapper's published
+layer is summarized with explicit on-map signals, so the model does not publish
+the same COG twice; a layer is drawn by the style row its PRODUCER declared; and
+two publishes of one COG collapse to one row while two distinct COGs coexist."""
 
 from __future__ import annotations
 
@@ -151,10 +137,10 @@ class TestPublishBoundaryStyle:
         assert preset.label is None and preset.units is None
 
     def test_the_resolver_cannot_see_a_filename(self) -> None:
-        """The anti-guess pin: a file name and a layer id are NAMES, not
-        measurements, so the resolver is not given either one. A COG called
-        ``flood_depth_peak.tif`` cannot acquire a flood ramp, because nothing
-        here is told what the file is called."""
+        """The anti-guess pin: a file name and a layer id are NAMES, not measurements.
+
+        The resolver is given neither, so a COG called ``flood_depth_peak.tif`` cannot
+        acquire a flood ramp."""
         params = set(inspect.signature(presets.from_row).parameters)
         assert params == {"row"}, params
 

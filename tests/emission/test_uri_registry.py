@@ -1,26 +1,9 @@
-"""Tests for the session-scoped layer-URI registry.
+"""The session-scoped layer-uri registry.
 
-Layer-handle indirection kills the LLM-URI-mangling incident class. The suite
-covers:
-
-1. registration on tool results (LayerURI models, dicts, bare store uris, the
-   composer observation hook);
-2. all four resolution branches (exact pass / handle substitution / fuzzy
-   mangle-match + WARNING / typed URI_HANDLE_UNRESOLVED reject for an unknown
-   store URI, with non-store strings - external http(s) links, local paths -
-   still failing open);
-3. cross-session isolation;
-4. the historical incident shapes, each replayed with the REAL logged values:
-
-   - I1 runs/ prefix mangle
-   - I2 layer_id-as-basename (same call - assets_uri)
-   - I3 hash-tail hallucination (3/3 publishes)
-   - I5 invented cache hash (same call - assets_uri)
-
-5. server-seam wiring: ``_invoke_tool_via_emitter`` resolves params before
-   dispatch, registers results after, and the typed error reaches the model as
-   a structured retryable function_response listing the real handles.
-"""
+Handle indirection kills the uri-mangling incident class. Covered: registration
+from every result shape; all four resolution branches, including the fuzzy
+mangle-match and the typed reject for an unknown store uri while a non-store
+string fails open; cross-session isolation; and the dispatch seam's wiring."""
 
 from __future__ import annotations
 
@@ -206,10 +189,10 @@ class TestResolutionBranches:
         assert any("resolved" in r.message for r in caplog.records)
 
     def test_branch4_unknown_storage_uri_rejects_typed(self) -> None:
-        """ADR 0014: an unknown object-store URI where a layer is expected is
-        a TYPED reject carrying the handle inventory — never a pass-through
-        (the hallucinated path could only 404 downstream, or read the wrong
-        object). Verbatim REGISTERED URIs still pass (branch 1 dual-accept)."""
+        """An unknown object-store uri where a layer is expected is a TYPED reject.
+
+        It carries the handle inventory rather than passing through to 404 or to the
+        wrong object; a verbatim REGISTERED uri still passes."""
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
         invented = "s3://trid3nt-cache/cache/static-30d/totally/made_up.tif"

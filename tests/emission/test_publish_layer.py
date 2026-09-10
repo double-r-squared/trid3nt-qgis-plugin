@@ -1,15 +1,9 @@
 """Unit tests for ``publish_layer``'s identity derivation.
 
-The envelope contract is pinned in ``test_publish_layer_envelope.py``; the
-vector no-op and overview enforcement in
-``test_publish_layer_vector_and_overviews_f32_f33.py``.
-
-Coverage here:
-1. ``test_publish_layer_is_not_a_registered_tool`` - publish is a mechanism
-   the emission seam calls, never a tool a model routes to.
-2. ``derive_readable_layer_name`` - a bare-ULID layer_id never reaches the
-   layer list when a better signal is available.
-"""
+Publish is a mechanism the emission seam calls, never a tool a model routes to,
+and a bare-ULID layer id never reaches the layer list when a better signal is
+available. The envelope and the vector and overview halves are pinned in their
+own files."""
 
 from __future__ import annotations
 
@@ -29,12 +23,10 @@ from trid3nt_server.emission.publish import (
 
 
 def test_publish_layer_is_not_a_registered_tool() -> None:
-    """ADR 0313: emission is automatic, so there is no publish intent to route.
+    """Emission is automatic, so there is no publish intent to route.
 
-    The inverse of the assertion this test used to make. The function still
-    exists and is still the one raster-publish chokepoint - it just lives in
-    ``emission/`` and is called BY the emission seam, never by a model.
-    """
+    The function is still the one raster-publish chokepoint; it is called BY the
+    emission seam rather than by a model."""
     assert "publish_layer" not in TOOL_REGISTRY, (
         "publish_layer is registered again; emission is automatic and a "
         '"display this" intent has no meaning'

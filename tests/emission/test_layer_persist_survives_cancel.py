@@ -1,23 +1,9 @@
-"""Layer-publish DURABILITY under cancellation (live bug 2026-06-23).
+"""Layer-publish DURABILITY under cancellation.
 
-Root cause: a long solver dispatch (SFINCS+SnapWave, ~9 min) persists its
-computed layer accumulator to the ``grace2_cases`` DynamoDB record ONLY in the
-``finally`` of ``_invoke_tool_via_emitter`` -- with a BARE ``await``. That
-``finally`` runs on the cancellation path too (a same-stream re-prompt
-supersede, the stop button, or any cancel reaching the detached turn), but a
-bare ``await persist(...)`` in a ``finally`` is cancel-fragile: the pending
-``CancelledError`` re-raises at the persist's first suspension point and SKIPS
-the DynamoDB write -- so a fully-computed layer (its COGs already on S3) is lost
-from the Case. Live evidence: run 01KVSTC80F wrote 100+ flood_depth_frame COGs
-to S3 yet Case 01KVSTBCG3 persisted ``loaded_layer_summaries = []`` after a
-transient WS drop during the solve.
-
-Fix under test: ``server._run_to_completion_shielded`` wraps the layer persist
-(and the cold-view snapshot + manifest) so a parent cancel cannot interrupt the
-write; the write runs to completion, THEN the cancel re-raises (Invariant 8
-preserved). These tests are LLM-free and run against the REAL file-backed
-persistence substrate pointed at a pytest tmpdir.
-"""
+The layer accumulator is persisted in the dispatch's ``finally``, which also runs
+on the cancellation path - and a bare ``await`` there re-raises at its first
+suspension point and SKIPS the write, losing a computed layer. The persist is
+shielded, so it completes and THEN the cancel re-raises. Model-free, offline."""
 
 from __future__ import annotations
 
@@ -75,11 +61,10 @@ def _clean_session_registry():
 
 @pytest.fixture()
 def slow_layer_tool():
-    """A tool that ADDS a layer to the emitter (mirroring the solver workflow's
-    out-of-band ``add_loaded_layer`` publish), then blocks -- modeling the long
-    publish loop / wait that runs after the COGs are already on S3. A cancel
-    that lands while it blocks must NOT lose the already-added layer.
-    """
+    """A tool that ADDS a layer to the emitter, then blocks.
+
+    It models the long publish loop that runs after the objects are already stored: a
+    cancel landing while it blocks must NOT lose the already-added layer."""
     started = asyncio.Event()
 
     async def _fn(_emitter=None):  # noqa: ANN001 — test stub
@@ -119,12 +104,10 @@ async def _create_case(ws, state, title="Coastal SFINCS Cancel") -> str:
 async def test_layer_persists_when_dispatch_task_cancelled_mid_publish(
     file_persistence, slow_layer_tool
 ) -> None:
-    """THE live regression: a layer added BEFORE a cancel must persist.
+    """A layer added BEFORE a cancel must persist.
 
-    Spawn the dispatch as a real task (as the server does), let it add the
-    layer, then CANCEL the task (modeling a same-stream supersede / stop button
-    / cancel reaching the detached turn). The Case record MUST carry the layer.
-    """
+    The dispatch runs as a real task, adds the layer and is then cancelled; the Case
+    record must still carry it."""
     session_id = new_ulid()
     ws, state = FakeWS(), server.SessionState(session_id=session_id)
     case_id = await _create_case(ws, state)

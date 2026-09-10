@@ -1,20 +1,9 @@
-"""BENCH pre-dispatch block hook (LANE A, task 1).
+"""The bench pre-dispatch block hook.
 
-The routing-sweep experiments framework arms a session-scoped tool-block config
-via the ``session-config`` path (``bench_tool_block``). When armed (bench mode
-only -- absent = normal operation, ZERO dispatch overhead), the dispatch site
-decides a model-picked tool's fate BEFORE invoking the fn:
-
-  * a NON-MEMBER pick (outside allow / always_allowed / block_at_invocation) ->
-    typed BENCH_BLOCKED_WRONG_PICK function-response, fn NOT run, turn ENDS.
-  * a member pick in the block tier -> typed BENCH_BLOCKED_CORRECT after arg
-    validation, fn NOT run (turn continues; the bench grades + ends it).
-  * an always-allowed (mechanism) tool -> executes normally.
-
-Covered here: the pure decision/parse logic, then the live dispatch loop --
-armed blocks BOTH classes without executing the fn, always-allowed passes
-through, and an UNARMED session is byte-identical (the fn runs).
-"""
+A session-scoped block config arms the dispatch site to decide a model-picked
+tool's fate BEFORE invoking it: a non-member pick is a typed wrong-pick that ends
+the turn, a member pick in the block tier is a typed correct-block after arg
+validation, an always-allowed tool executes, and unarmed is byte-identical."""
 
 from __future__ import annotations
 

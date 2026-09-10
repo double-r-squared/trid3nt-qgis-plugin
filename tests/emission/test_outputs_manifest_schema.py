@@ -1,14 +1,9 @@
-"""Emit-on-solve ``outputs.json`` schema: writer + tolerant reader.
+"""The emit-on-solve outputs manifest: writer and tolerant reader.
 
-Pins the frozen schema (docs/design/outputs-manifest-schema.md):
-1. Flat entry contract ``{kind, quantity, name, uri, t?, units?}`` -- t/units
-   omitted (absent, not null) when unset; unknown kind rejected at write time.
-2. Safe-append semantics: whole-array read-modify-write, immutable prior
-   entries, order preserved, first-frame bootstrap.
-3. Version marker: writer stamps schema_version; reader hard-rejects a missing
-   / unknown version and a foreign kind (the completion-only fallback trigger).
-4. Writer -> reader round trip.
-"""
+The flat entry contract omits its optional keys rather than nulling them and
+rejects an unknown kind at write time; appends are whole-array read-modify-write
+with prior entries immutable and order preserved; the reader hard-rejects a
+missing or unknown version, which is what triggers the completion-only fallback."""
 
 from __future__ import annotations
 

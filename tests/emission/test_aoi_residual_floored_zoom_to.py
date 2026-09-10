@@ -1,26 +1,9 @@
-"""job AGENT-AOI-RESIDUAL (#159 re-entry): the floored AOI bbox must be the
-LAST persisted turn zoom-to so a Case re-entry snaps to the FULL AOI.
+"""The floored AOI bbox must be the LAST persisted turn zoom-to.
 
-ROOT CAUSE pinned by these tests
---------------------------------
-Re-entry into a Case replays the persisted
-``CaseChatMessage.map_command_emissions`` newest-first (web
-``extractLastZoomTo``). The ONLY writer of ``state.current_turn_map_commands``
-was ``geocode_location``'s EARLY snap to the SMALL collapsed bbox
-(server.py ~2015). A composer's FLOORED (peak, Wave 1) zoom-to was emitted live
-via ``add_loaded_layer`` but NEVER landed in ``current_turn_map_commands`` - so
-the closing row persisted only the small geocode bbox and re-entry reverted to
-the old tiny AOI.
-
-FIX pinned here
----------------
-At the tool-dispatch site, when the result is a ``LayerURI`` carrying a finite
-4-number bbox, APPEND a ``zoom-to`` for that bbox to
-``state.current_turn_map_commands``. Because the geocode snap was appended
-EARLIER in the same turn, appending the floored bbox AFTER makes it the LAST
-entry -> re-entry snaps to the floored AOI. Guards: finite 4-tuple only; dedupe
-against the last accumulated zoom-to bbox.
-"""
+Re-entry into a Case replays the persisted map commands newest-first, so a
+composer's floored bbox has to reach the accumulator or re-entry snaps to the
+small geocode extent. At the dispatch site, a result carrying a finite four-number
+bbox appends a ``zoom-to`` after the geocode snap, deduped against the last one."""
 
 from __future__ import annotations
 
@@ -62,10 +45,8 @@ class MockWebSocket:
 def _seed_geocode_zoom_to(state: SessionState) -> None:
     """Replay the geocode early-snap: append the SMALL bbox zoom-to.
 
-    Mirrors the only pre-fix writer of ``current_turn_map_commands``
-    (server.py ~2015) so the dispatch append is exercised against a turn that
-    already carries the collapsed geocode extent.
-    """
+    The dispatch append is then exercised against a turn that already carries the
+    collapsed geocode extent."""
     state.current_turn_map_commands.append(
         {"command": "zoom-to", "args": {"bbox": list(_GEOCODE_SMALL_BBOX)}}
     )
@@ -118,12 +99,10 @@ def _stub_composer():
 def test_floored_bbox_is_last_zoom_to_after_geocode_small_snap(
     _stub_composer: str,
 ) -> None:
-    """Re-entry replays newest-first; the floored AOI must be the LAST zoom-to.
+    """Re-entry replays newest-first, so the floored AOI must be the LAST zoom-to.
 
-    Pre-fix: the geocode small bbox was the only zoom-to in the accumulator, so
-    re-entry reverted to the tiny AOI. Post-fix: dispatching a LayerURI with a
-    finite floored bbox appends a zoom-to AFTER the geocode snap.
-    """
+    Dispatching a layer with a finite floored bbox appends its zoom-to after the
+    geocode snap; with only the geocode entry, re-entry reverts to the tiny AOI."""
     ws = MockWebSocket()
     state = SessionState(session_id=new_ulid())
 

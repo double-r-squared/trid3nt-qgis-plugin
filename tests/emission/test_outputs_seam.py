@@ -88,11 +88,10 @@ def test_scalar_is_log_only():
 
 
 def test_mesh_entry_publishes_native_mesh_layer(tmp_path):
-    """ADR 0283: a kind=mesh entry -> a layer_type=mesh LayerURI (role context),
-    crs_authid threaded from the entry, bbox None (MDAL derives the extent), and a
-    deterministic {quantity-base}-mesh-{run_id} id. Byte-equivalent (name/style/
-    role/crs/uri) to the bespoke rain_on_grid _publish_full_results_mesh it
-    supersedes; only the layer_id STEM diverges (idempotence key, explained)."""
+    """A mesh entry publishes a native mesh layer.
+
+    Role context, the CRS threaded from the entry, no bbox because the driver derives
+    the extent, and a deterministic id whose stem is the idempotence key."""
     reach = "Coweeta"
     mesh_uri = "s3://trid3nt-runs/%s/r2d_rog.slf" % RID
     entries = [
@@ -151,13 +150,9 @@ def test_missing_manifest_is_a_noop():
 # The mesh entry: one group, one scale
 # --------------------------------------------------------------------------- #
 def test_a_mesh_entry_paints_the_group_it_declares_on_the_published_range():
-    """A results mesh carries every variable the solve wrote, so the quantity it
-    is filed under is not the field a reader is meant to see - and it has no
-    band to read a range off, so both are DECLARED.
-
-    The range declared is the published max-over-time one, which is what puts
-    the animating canvas and the still on a single scale.
-    """
+    """A results mesh carries every variable the solve wrote and has no band to read a
+    range off, so the painted group and the range are both DECLARED - on the
+    published max-over-time range that puts the canvas and the still on one scale."""
     from trid3nt_server.emission.outputs_seam import entry_style
 
     manifest = _manifest([

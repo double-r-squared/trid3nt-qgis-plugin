@@ -1,19 +1,9 @@
-"""Unit tests for the single LayerURI emission seam (job-0254, Decision 11).
+"""Unit tests for the single LayerURI emission seam.
 
-Coverage:
-  * Guardrail pass/block matrix -- the §1 leak fix promoted to an invariant,
-    RELAXED for s3:// rasters by the TiTiler exit / QGIS-native swap (the
-    plugin reads raw s3:// COGs via /vsicurl/):
-      - raster + raw s3:// COG -> PASS (identity)  [the NEW publish shape]
-      - raster + http(s) WMS   -> PASS (identity)
-      - raster + raw gs://     -> DROP (return None) [no reachable face]
-      - raster + file://       -> DROP (return None) [plugin cannot reach]
-      - raster + empty uri     -> DROP (return None) [nothing to fetch]
-      - vector + gs:// / s3:// (inline-GeoJSON path, job-0175) -> PASS (identity)
-      - vector + http(s)       -> PASS (identity)
-  * Byte-identity: a passed-through LayerURI is the SAME object (no copy / no
-    field mutation), so envelope payloads are byte-identical.
-"""
+The guardrail matrix: a raster passes on a store COG or an http face and DROPS on
+a scheme the client cannot reach or an empty uri; a vector passes on any of them,
+since it rides the inline-geometry path. A passed-through layer is the SAME
+object - no copy and no field mutation - so envelope payloads stay byte-identical."""
 
 from __future__ import annotations
 
@@ -40,10 +30,10 @@ def _layer(layer_type: str, uri: str, layer_id: str = "L1") -> LayerURI:
 
 
 def test_raster_s3_cog_uri_passes_identity() -> None:
-    """THE NEW CONTRACT (TiTiler exit / QGIS-native swap): a raster carrying a
-    raw s3:// COG uri PASSES the seam unchanged -- publish_layer now returns the
-    raw s3:// COG and the QGIS plugin reads it via /vsicurl/. This reverses the
-    job-0290c browser-era s3 drop."""
+    """A raster carrying a raw store COG uri PASSES the seam unchanged.
+
+    The publish returns that uri and the plugin reads it directly, so the seam has no
+    reason to drop it."""
     layer = _layer("raster", "s3://bucket/runs/r1/flood_depth_peak.tif")
     out = emit_layer_uri(layer)
     assert out is layer  # identity -- no copy, no mutation
@@ -115,10 +105,10 @@ def test_a_vector_declaring_no_row_takes_its_kinds_default_not_the_rasters() -> 
 
 
 def test_vsigs_and_local_raster_pass_through() -> None:
-    """The guardrail targets only the raw ``gs://`` scheme (the leak shape).
-    Other raster uri schemes (vsigs, local paths) are not the leak class and
-    pass through — they are not produced on the client path today, but the
-    seam must not over-block."""
+    """The guardrail targets only the one unreachable scheme.
+
+    Other raster schemes are not the leak class and pass through: the seam must not
+    over-block."""
     assert emit_layer_uri(_layer("raster", "/vsigs/bucket/x.tif")) is not None
     assert emit_layer_uri(_layer("raster", "/tmp/local.tif")) is not None
 

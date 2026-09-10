@@ -1,43 +1,9 @@
 """Automatic emission: a raster reaches the map without anyone asking.
 
-NATE's directive, twice. First (2026-06-26): "we should not have the LLM
-enforce publishing of layers -- this should just be done without LLM
-intervention." Then ruling (b), 2026-08: emission is automatic EVERYWHERE, the
-"display this" intent is retired, and the user hides what they do not want.
-
-ADR 0313 landed the second half. The publish used to happen at a call site in
-the dispatch layer (``server/dispatch/emitter.py`` ->
-``results.py::_auto_publish_droppable_raster``), parallel to the emission seam
-and reachable only from the WS server, gated by a per-tool ``auto_publish``
-flag. Both are gone. The publish now happens inside
-``PipelineEmitter.emit_tool_call``'s LayerURI branch via
-``layer_uri_emit.publish_for_emission`` - the ONE seam ``emit_layer_uri``
-guards - so these tests drive the emitter rather than the server, which is
-also what makes them mean something: no LLM and no dispatch wrapper are in the
-picture, so a published layer can only have come from the seam.
-
-The honesty floor CHANGED SHAPE with the QGIS-native swap, and that is
-asserted here rather than assumed. Publishing enriches a raster (COG
-overviews, resolved style params, the data-driven legend); it does not make it
-reachable, because the plugin reads a raw ``s3://`` COG via ``/vsicurl/``
-either way. So a failed publish is a DEGRADE - the layer still reaches the map,
-unstyled, with a warning - not the typed ``LAYER_AUTO_PUBLISH_FAILED`` the
-MapLibre era needed. The guardrail that keeps genuinely un-renderable rasters
-(``gs://`` / ``file://`` / empty) off the map is still ``emit_layer_uri``.
-
-Asserted:
-  * a raster ``s3://`` LayerURI publishes ONCE, unasked, and reaches
-    ``loaded_layers`` carrying the PUBLISHED uri;
-  * an INTERMEDIATE (the class that used to carry ``auto_publish: false``)
-    publishes too - there is no opt-out;
-  * every layer of a returned LIST takes the same trip;
-  * an http(s) raster is untouched (already a rendered face);
-  * a vector is untouched (inline-GeoJSON path);
-  * a publish that RAISES, and one that returns a non-renderable value, both
-    fail OPEN: the raw COG still reaches the map;
-  * a ``gs://`` raster is still DROPPED by the guardrail after the publish
-    step declines to touch it.
-"""
+The publish happens inside the emitter's LayerURI branch, so these drive the
+emitter rather than the server: no model and no dispatch wrapper is in the
+picture. Publishing ENRICHES a raster without making it reachable, so a failed
+publish DEGRADES to the raw COG with a warning; a bad scheme is still dropped."""
 
 from __future__ import annotations
 
@@ -57,11 +23,8 @@ S3_COG = "s3://bucket/cache/hillshade.tif"
 def _published(uri: str) -> str:
     """What the real publish returns: the overview sibling of the SAME COG.
 
-    Per-input rather than a single constant, because ``add_loaded_layer`` dedups
-    by COG identity - a stub that returned one uri for every input would make a
-    three-frame series look like one layer and hide the bug this file is here
-    to catch.
-    """
+    Per-input rather than one constant, because the accumulator dedups by COG
+    identity and a single-uri stub would make a three-frame series look like one."""
     head, _, tail = uri.rpartition("/")
     return f"{head}/overviews/{tail}"
 
@@ -150,12 +113,10 @@ async def test_raster_s3_publishes_once_and_reaches_the_map(publish_recorder) ->
 async def test_intermediate_publishes_too_there_is_no_opt_out(
     publish_recorder,
 ) -> None:
-    """ADR 0313: the ``auto_publish`` flag is deleted, not defaulted.
+    """The ``auto_publish`` flag is deleted, not defaulted.
 
-    The DEM was the flagship opt-out (``auto_publish: false`` in its
-    source.yaml). NATE: the user hides what they do not want, so an
-    intermediate is still a layer.
-    """
+    An intermediate is still a layer: there is no opt-out, and the user hides what
+    they do not want."""
     emitter, sink = _emitter()
     await _run(emitter, _raster(layer_id="dem-1", name="DEM", role="input"))
 
