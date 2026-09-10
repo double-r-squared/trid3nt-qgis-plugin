@@ -280,7 +280,7 @@
     },
     "SyntheticInput": {
       "additionalProperties": false,
-      "description": "One structured provenance entry for a physical model input.\n\nRecords WHERE a single physical parameter used in a run came from so the\nagent can narrate provenance instead of inventing phrasing, and so a demo\ndefault is never mistaken for site-derived data (the input-provenance audit\ngate, structured half). Carried by the result-envelope contracts\n(``LayerURI.synthetic_inputs``); ADDITIVE\nand default-empty so templates populate the list incrementally - an empty\nlist means \"no declared provenance\", never \"all real\".\n\nFields:\n  - ``param``: the canonical parameter name (e.g. ``\"dam_break_depth_m\"``).\n  - ``value``: the value actually used (scalar/str; None when not surfaced).\n  - ``units``: physical units, when applicable.\n  - ``basis``: the provenance class (see ``InputBasis``).\n  - ``consequence``: what the value's wrongness costs (see ``InputConsequence``).\n    REQUIRED when ``basis == \"default_demo\"`` - the gate cannot decide\n    refuse-vs-proceed from ``basis`` alone, because a demo default may be an\n    invented physics value (refuse) or a scenario/numerical/aoi assumption\n    (proceed). Optional on other bases.\n  - ``real_source_if_any``: the fetcher / dataset name when\n    ``basis in {\"fetched\", \"derived\"}`` (e.g. ``\"fetch_usace_dams\"``).\n  - ``note``: a short human-readable qualifier.",
+      "description": "One structured provenance entry for a physical model input.\nADDITIVE and default-empty: an empty list means \"no declared provenance\",\nNEVER \"all real\".",
       "properties": {
         "basis": {
           "enum": [

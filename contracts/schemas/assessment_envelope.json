@@ -121,7 +121,7 @@
     },
     "FallbackActivation": {
       "additionalProperties": false,
-      "description": "One rung of a declared fallback ladder that actually served a request.\n\nFields:\n  - ``capability``: the ladder's owner (a tool name or a seam id).\n  - ``rung`` / ``consequence``: which alternative served and what it costs.\n  - ``coverage``: the FRACTION of the request this rung served - 1.0 for a\n    whole-request swap, a partial share for a mosaic that several rungs\n    painted together (0.89 primary + 0.11 cross_dataset).\n  - ``note``: what the alternative IS, in the words the user reads.",
+      "description": "One rung of a declared fallback ladder that actually served a request.",
       "properties": {
         "capability": {
           "title": "Capability",

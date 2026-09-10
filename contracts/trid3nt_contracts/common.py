@@ -1,14 +1,9 @@
-"""Shared primitives for every contract in this package.
+"""Shared primitives every other contract in this package builds on.
 
-This module holds the cross-cutting building blocks every other contract module
-depends on: the canonical pydantic base configuration, the ULID id helpers, the
-``BBox`` type and its EPSG:4326 ordering validator, and the shared ``TimeRange``.
-
-Conventions enforced here (SRS, B.7, D.7):
-- Ids are ULIDs: 26-char, Crockford base32, time-sortable, URL-safe.
-- ``bbox`` is always ``[minLon, minLat, maxLon, maxLat]`` in EPSG:4326.
-- Datetimes serialize to ISO-8601 with a ``Z`` suffix (UTC) on the wire.
-- ``model_dump(mode="json")`` is the canonical wire/storage form.
+Ids are ULIDs - 26 chars, Crockford base32, time-sortable, URL-safe. A ``bbox``
+is always ``[minLon, minLat, maxLon, maxLat]`` in EPSG:4326. Datetimes
+serialize with a ``Z`` suffix, and ``model_dump(mode="json")`` is the canonical
+wire and storage form.
 """
 
 from __future__ import annotations
@@ -61,8 +56,8 @@ def new_ulid() -> str:
 
 def _validate_ulid(value: str) -> str:
     """Reject anything that is not a syntactically valid ULID string."""
-    # ULID.from_str raises ValueError on malformed input; that surfaces as a
-    # pydantic validation error, which is exactly what we want.
+    # ULID.from_str raises ValueError on malformed input, which surfaces as a
+    # pydantic validation error.
     ULID.from_str(value)
     return value
 
@@ -131,13 +126,8 @@ BBox = Annotated[tuple[float, float, float, float], AfterValidator(_validate_bbo
 
 class GraceModel(BaseModel):
     """Canonical base for every contract model.
-
-    - ``extra="forbid"``: unknown fields are a defect, not silently dropped.
-      Forward-compatible growth happens through open ``Literal`` enums and
-      additive fields, never through accepting arbitrary keys.
-    - ``validate_assignment``: mutating a field re-validates it.
-    - Wire form is ``model_dump(mode="json")``; datetimes carry the ``Z``
-      serializer via the ``UTCDatetime`` alias used on every datetime field.
+    ``extra="forbid"``: an unknown field is a DEFECT, never silently dropped, so
+    forward-compatible growth goes through open Literals and additive fields.
     """
 
     model_config = ConfigDict(
@@ -160,20 +150,18 @@ class TimeRange(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# Engine run-args mixin (STEP 2 of the engine-coverage-levers refactor).
+# Engine run-args mixin
 # --------------------------------------------------------------------------- #
 
-#: The run's temporal solve mode. ``"steady"`` = a single steady-state /
-#: stationary solve (the engine default for most demos); ``"transient"`` = a
-#: time-stepping solve that emits an animation. Open-ended growth happens through
-#: the alias normalizer below + an additive Literal member, never arbitrary keys.
+#: The run's temporal solve mode. ``"steady"`` is a single stationary solve;
+#: ``"transient"`` a time-stepping solve that emits an animation. Growth is by
+#: an additive Literal member plus an alias, never by arbitrary keys.
 TemporalMode = Literal["steady", "transient"]
 
 
-#: Common LLM / user synonyms mapped onto the canonical ``TemporalMode`` BEFORE
-#: the Literal check (so the FIRST attempt validates - no retry loop, mirroring
-#: ``geoclaw_contracts._SCENARIO_ALIASES``). An UNKNOWN string passes through
-#: UNCHANGED so a genuinely-invalid value still raises the honest Literal error.
+#: Synonyms mapped onto the canonical ``TemporalMode`` BEFORE the Literal check,
+#: so the FIRST attempt validates instead of costing a retry. An UNKNOWN string
+#: passes through UNCHANGED, so a genuinely invalid value still raises.
 _TEMPORAL_MODE_ALIASES: dict[str, str] = {
     # steady-state / stationary synonyms.
     "steady": "steady",
@@ -200,44 +188,23 @@ _TEMPORAL_MODE_ALIASES: dict[str, str] = {
 
 class EngineRunArgsMixin(GraceModel):
     """ADDITIVE, DEFAULT-OFF base for the per-engine ``*RunArgs`` models.
-
-    STEP 2 of the engine-coverage-levers refactor. Adds three cross-engine levers
-    the audit identified as recurring across every engine, as ADDITIVE fields with
-    defaults that reproduce TODAY'S behavior byte-for-byte:
-
-      - ``temporal_mode``: ``"steady"`` (default) | ``"transient"``. The default
-        ``"steady"`` is the no-op: a model that does not opt into ``"transient"``
-        behaves exactly as before. The ``_TEMPORAL_MODE_ALIASES`` before-validator
-        normalizes LLM/user synonyms so the first attempt validates.
-      - ``output_frames``: number of evenly-spaced animation output frames
-        (>= 1, default 24). DEFAULT-MATCHES the existing per-engine
-        ``DEFAULT_OUTPUT_FRAMES`` (24) on SWAN/GeoClaw, so adopting the mixin on a
-        model that already has this field is byte-identical; new adopters inherit
-        the same 24.
-      - ``advanced_physics``: an OPTIONAL per-engine physics-overrides dict
-        (default ``None`` = no overrides = current behavior). The convention the
-        audit's "physics-toggle exposure" pattern uses; what validates the keys
-        is the engine's own keyword catalog.
-
-    DEFAULT-OFF GUARANTEE: every field defaults to today's behavior, so a model
-    that does NOT set them serializes + behaves byte-identically. A model adopts
-    the mixin by inheriting it as an ADDITIONAL base alongside ``GraceModel``
-    (``class FooRunArgs(EngineRunArgsMixin): ...``); the fields are then available
-    but inert until the engine's deck builder reads them (STEP 3). Because the
-    fields are additive and default-valued, ``extra="forbid"`` is unaffected for
-    existing payloads (they simply do not carry these keys).
+    Every field defaults to the behaviour before it existed, so a model that
+    adopts the mixin and sets nothing serializes and behaves byte-identically.
     """
 
     temporal_mode: TemporalMode = "steady"
+    #: Evenly spaced animation output frames.
     output_frames: int = Field(default=24, ge=1)
+    #: Per-engine physics overrides. ``None`` is no overrides; what validates
+    #: the keys is the engine's own keyword catalog, not this model.
     advanced_physics: dict[str, Any] | None = None
 
     @field_validator("temporal_mode", mode="before")
     @classmethod
     def _normalize_temporal_mode(cls, value: Any) -> Any:
-        """Map common synonyms onto the canonical ``TemporalMode`` BEFORE the
-        Literal check. A non-string or unknown string passes through UNCHANGED so
-        a genuinely-invalid value still raises the honest Literal error."""
+        """Map a synonym onto the canonical ``TemporalMode`` BEFORE the Literal
+        check. A non-string or unknown string passes through UNCHANGED, so a
+        genuinely invalid value still raises the honest Literal error."""
         if not isinstance(value, str):
             return value
         key = value.strip().lower()
@@ -245,14 +212,13 @@ class EngineRunArgsMixin(GraceModel):
 
 
 # --------------------------------------------------------------------------- #
-# Structured input provenance (the provenance-chain wave)
+# Structured input provenance
 # --------------------------------------------------------------------------- #
 
-#: Where a single physical model input came from. The honest distinction the
-#: input-provenance audit demanded: a demo default (``default_demo``) is not the
-#: same as a value fetched from real data (``fetched``), user-supplied (``user``),
-#: interpreted from the user's request (``prompt_interpreted``), or computed from
-#: other inputs (``derived``). Open string Literal (forward-compat).
+#: Where a single physical model input came from. A demo default is NOT the same
+#: thing as a value fetched from real data, supplied by the user, interpreted
+#: from the request, or computed from other inputs, and this is the distinction
+#: that keeps the two from being narrated alike.
 InputBasis = Literal[
     "fetched",
     "user",
@@ -270,9 +236,9 @@ InputBasis = Literal[
 ]
 
 
-#: What a demo default's WRONGNESS costs (law 9). The discriminator the
-#: input-review gate keys on to decide whether an unresolved ``default_demo``
-#: value may proceed or must REFUSE in auto mode:
+#: What a demo default's WRONGNESS costs. The discriminator the input-review
+#: gate keys on to decide whether an unresolved ``default_demo`` value may
+#: proceed or must REFUSE in auto mode:
 #:   - ``physics``: a physics-consequential world value (material property,
 #:     forcing magnitude, boundary/source term, friction/decay, invented terrain
 #:     or geometry). A ``default_demo`` with this consequence REFUSES in auto - a
@@ -286,56 +252,39 @@ InputBasis = Literal[
 #:     physics invention - proceeds, labeled.
 InputConsequence = Literal["physics", "scenario", "numerical", "aoi"]
 
-#: Backfilled onto a pre-law-9 persisted entry that carried ``basis="default_demo"``
-#: without a ``consequence`` tag: tolerant reads coerce it to ``scenario`` (proceed,
-#: never a spurious refuse on history) and record why here.
+#: Stamped on an older persisted entry that carried ``basis="default_demo"``
+#: with no ``consequence``: a tolerant read coerces it to ``scenario`` - proceed,
+#: never a spurious refusal on history - and records why here.
 _HISTORY_CONSEQUENCE_NOTE = "consequence backfilled=scenario (pre-law-9 record)"
 
 
 class SyntheticInput(GraceModel):
     """One structured provenance entry for a physical model input.
-
-    Records WHERE a single physical parameter used in a run came from so the
-    agent can narrate provenance instead of inventing phrasing, and so a demo
-    default is never mistaken for site-derived data (the input-provenance audit
-    gate, structured half). Carried by the result-envelope contracts
-    (``LayerURI.synthetic_inputs``); ADDITIVE
-    and default-empty so templates populate the list incrementally - an empty
-    list means "no declared provenance", never "all real".
-
-    Fields:
-      - ``param``: the canonical parameter name (e.g. ``"dam_break_depth_m"``).
-      - ``value``: the value actually used (scalar/str; None when not surfaced).
-      - ``units``: physical units, when applicable.
-      - ``basis``: the provenance class (see ``InputBasis``).
-      - ``consequence``: what the value's wrongness costs (see ``InputConsequence``).
-        REQUIRED when ``basis == "default_demo"`` - the gate cannot decide
-        refuse-vs-proceed from ``basis`` alone, because a demo default may be an
-        invented physics value (refuse) or a scenario/numerical/aoi assumption
-        (proceed). Optional on other bases.
-      - ``real_source_if_any``: the fetcher / dataset name when
-        ``basis in {"fetched", "derived"}`` (e.g. ``"fetch_usace_dams"``).
-      - ``note``: a short human-readable qualifier.
+    ADDITIVE and default-empty: an empty list means "no declared provenance",
+    NEVER "all real".
     """
 
+    #: The canonical parameter name.
     param: str
+    #: The value actually used. ``None`` when it is not surfaced.
     value: float | int | str | None = None
     units: str | None = None
     basis: InputBasis
+    #: REQUIRED when ``basis == "default_demo"``: the gate cannot decide
+    #: refuse-vs-proceed from ``basis`` alone, because a demo default may be an
+    #: invented physics value or a harmless scenario assumption.
     consequence: InputConsequence | None = None
+    #: The fetcher or dataset name, for a fetched or derived basis.
     real_source_if_any: str | None = None
     note: str | None = None
 
     @model_validator(mode="after")
     def _require_consequence_for_demo(self, info: ValidationInfo) -> "SyntheticInput":
-        """A ``default_demo`` entry MUST carry a ``consequence`` tag (law 9).
-
-        Construction without it cannot succeed - the omission is the exact bug the
-        demo-physics audit exists to prevent (a new invented default shipping
-        untagged, so the gate cannot refuse it). Tolerant read: a deserialization
-        that opts in via ``context={"tolerant_history": True}`` (the persistence
-        load path for pre-law-9 records) backfills ``scenario`` with a note instead
-        of raising, so loading history never crashes.
+        """A ``default_demo`` entry MUST carry a ``consequence`` tag; construction
+        without one cannot succeed, because an untagged invented default is one
+        the gate cannot refuse. A read opting in via
+        ``context={"tolerant_history": True}`` backfills ``scenario`` with a note
+        instead of raising, so loading an older record never crashes.
         """
         if self.basis == "default_demo" and self.consequence is None:
             tolerant = bool(info.context and info.context.get("tolerant_history"))
@@ -357,15 +306,14 @@ class SyntheticInput(GraceModel):
 #: Which rung of a declared fallback ladder served a request, and what swapping
 #: to it COSTS. ``primary`` is the declared first choice and ``user_supplied``
 #: the caller's own data - neither is a degradation. The three degradation
-#: classes are what the loudness floor keys on: ``same_data`` (another mirror /
+#: classes are what the loudness floor keys on: ``same_data`` (another mirror or
 #: endpoint of the SAME dataset) walks silently, ``cross_dataset`` (a different
 #: dataset, method or resolution) narrates loudly and gates in user_gated mode,
 #: ``synthetic`` (a value with no real data source) ALWAYS gates with a labeled
 #: default of refuse. ``enhancement`` is the fourth non-degradation: a source
-#: BETTER than the primary (finer, more local) that the capability may lay under
-#: part of a request. It is reported for the same reason every other rung is --
-#: a reader must be able to account for the whole result -- but it costs nothing,
-#: so the floor ignores it and a call site cannot "permit" it.
+#: BETTER than the primary - finer, more local - laid under part of a request.
+#: It is reported so a reader can account for the whole result, but it costs
+#: nothing, so the floor ignores it and a call site cannot "permit" it.
 FallbackConsequence = Literal[
     "primary", "user_supplied", "enhancement",
     "same_data", "cross_dataset", "synthetic",
@@ -373,31 +321,23 @@ FallbackConsequence = Literal[
 
 
 class FallbackActivation(GraceModel):
-    """One rung of a declared fallback ladder that actually served a request.
+    """One rung of a declared fallback ladder that actually served a request."""
 
-    Fields:
-      - ``capability``: the ladder's owner (a tool name or a seam id).
-      - ``rung`` / ``consequence``: which alternative served and what it costs.
-      - ``coverage``: the FRACTION of the request this rung served - 1.0 for a
-        whole-request swap, a partial share for a mosaic that several rungs
-        painted together (0.89 primary + 0.11 cross_dataset).
-      - ``note``: what the alternative IS, in the words the user reads.
-    """
-
+    #: The ladder's owner - a tool name or a seam id.
     capability: str
     rung: str
     consequence: FallbackConsequence
+    #: The FRACTION of the request this rung served: 1.0 for a whole-request
+    #: swap, a share when several rungs painted one mosaic together.
     coverage: float = Field(default=1.0, ge=0.0, le=1.0)
+    #: What the alternative IS, in the words the user reads.
     note: str | None = None
 
 
 def render_fallback_line(activations: Any) -> str | None:
     """Render fallback activations into ONE narration line, or None when clean.
-
-    Rungs that are not degradations (``primary`` alone) render nothing - the
-    line exists to say what was SWAPPED, never to add noise to an undegraded
-    run. Accepts ``FallbackActivation`` objects or their ``model_dump`` dicts.
-    """
+    A run with no degradation renders nothing: the line exists to say what was
+    SWAPPED. Takes ``FallbackActivation`` objects or their ``model_dump`` dicts."""
     if not activations:
         return None
 
@@ -420,17 +360,9 @@ def render_fallback_line(activations: Any) -> str | None:
 
 
 def render_assumptions_line(entries: Any) -> str | None:
-    """Render a structured ``synthetic_inputs`` list into ONE compact narration
-    line, or ``None`` when there are no entries.
-
-    Groups by provenance so the agent narrates the risk (demo defaults) plainly
-    without a table (concise-chat norm). Accepts either ``SyntheticInput`` objects
-    or their ``model_dump`` dicts so both the server (typed) and the
-    narration-summary seam (dict) can call it. Example:
-
-        "Provenance: dam_break_depth_m=44.2 m, source_lonlat fetched (NID via
-        fetch_usace_dams); soil cohesion/friction/thickness = demo defaults."
-    """
+    """Render a ``synthetic_inputs`` list into ONE narration line, ``None`` when
+    empty. Grouped by provenance so demo defaults are named plainly rather than
+    tabulated. Takes ``SyntheticInput`` objects or their ``model_dump`` dicts."""
     if not entries:
         return None
 
