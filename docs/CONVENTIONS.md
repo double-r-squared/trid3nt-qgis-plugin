@@ -1,44 +1,63 @@
 # Code documentation conventions
 
-The rule in one line: names and structure carry the meaning; comments
-carry constraints; documents carry knowledge. Prose in code is a
-maintenance liability - every sentence must earn its place.
+Each fact lives in exactly one place, and the checkable place beats the readable
+one: names and types carry what the code is, an inline comment carries the
+constraint at the line it governs, the docstring carries the caller's contract,
+the SysML model carries structure and requirements, `docs/` carries method and
+maps, and the tests carry the behaviour. Prose that repeats one of those is a
+maintenance liability.
 
-## Docstring budget, by surface type
+## The docstring
 
-| Surface | Budget | Rationale |
-|---|---|---|
-| LLM-facing tool docstrings (registered tools, template composers) | RICH - routing block, args, fallback ladder, constraints | This is product material: the model's routing interface, not documentation. Truncation limits already force discipline. |
-| Contract types (wire/registry shapes) | Wire semantics only; one line where the shape is self-evident | Contracts are read by the model and by reviewers of the wire. |
-| Public seams (module-level APIs other features import) | 1-3 lines: what it is + non-obvious constraints. Args documented only where the name/type does not say it. | A seam's docstring is its promise, not its manual. |
-| Module docstrings | <= 3 lines: what lives here | The folder structure is the primary map. |
-| Private helpers (leading underscore, single-feature use) | NONE, unless a non-obvious constraint exists | The name, signature, and 20 readable lines ARE the documentation. If a private helper needs a paragraph, it needs a better name or a split. |
-| Tests | One line per test max: the behavior pinned. Module docstring only for suite-level conventions (baselines, harness quirks). | Test names carry the spec. |
+A docstring says what the symbol is, what it refuses, a constraint the signature
+cannot carry, or the input/output contract where the types under-specify it.
+Nothing else belongs there.
 
-## Comments
+| surface | budget |
+|---|---|
+| function, method, class | 3 content lines |
+| module | 5 content lines (what lives here + one module-wide constraint) |
+| LLM-facing (a `register_tool` body, a docstring assigned through `__doc__`) | 1000 characters - the routing budget the model actually reads |
 
-A comment states a constraint the code cannot express: an invariant, a
-gotcha, an external-system behavior, a deliberate non-obvious choice.
-Never: narration of the next line, history, provenance, citations,
-attributions, milestones, or claims about other code (those rot into
-falsehoods - verified 2026-08-15).
+**Content lines** are the non-blank lines between the delimiters. The opening
+and closing `"""` lines and a blank separator do not count, so a one-line
+docstring is one content line.
 
-## Where knowledge lives instead
+A longer docstring that is a genuine contract carries a marker in the comment
+block directly above the symbol:
 
-- docs/decisions/ - why things are the way they are (ADR-lite).
-- docs/design/ - architecture maps and feature guides, written for
-  agents and humans to READ BEFORE editing a feature. One page per
-  feature folder is the target, created/updated when a feature changes
-  shape.
-- docs/validation/ - evidence and coverage.
-- Commit messages - provenance, spec references, wave history.
+    # docstring-exempt: <the contract the limit cannot hold>
+
+`docs/validation/docstring-exemptions.md` is rendered from those markers and the
+suite diffs it. Past roughly ten entries the limit gets re-argued rather than
+routed around.
+
+## The comment block
+
+A full-line comment block has **no length cap**. It is the constraint at its
+point of use, read by whoever changes that line - a different reader from the
+caller at the docstring. A derivation, a ladder or a unit convention that
+governs a line belongs there; what governs nothing goes, because git is the
+archive.
+
+## Never, in a docstring or a comment
+
+- **History**: dates, "used to", change narration, what a wave or a fold moved.
+- **Spec notation**: job, task, sprint, ADR, wave N, milestone N, FR-N, OQ-N, section marks.
+- **Attribution**: a person's name, and the memory filenames.
+- **Usage narrative and examples**: `>>>` blocks, `Example:`, `Usage:`.
+- **Architecture and neighbour references**: `see <module>.py`, "defined in ...".
+- **Why-essays and rationale**: the decision record holds those, or nothing does.
+- **Per-field roll-calls** of a typed model the reader can read off the type.
+
+A path a comment, docstring or README does name has to exist: a reference that
+stopped resolving is a claim the reader cannot check.
 
 ## Enforcement
 
-- New code follows the budget from birth; review flags prose overruns
-  like any other defect.
-- The documentation share of a non-LLM-facing module (docstring +
-  comment lines / total) should sit well under 20%; a module pushing
-  past that is either under-named or over-narrated.
-- LLM-facing surfaces are exempt from the share metric but not from the
-  constraint rule (no history, no citations, front-load routing).
+`tests/hygiene/` is the sweep guard, not the census: `test_docstring_standard.py`
+holds the limits, the routing budget, the exemption ledger and the disallowed
+classes; `test_history_markers.py` sweeps every comment and docstring in every
+product tree; `test_dead_references.py` resolves every named module, script and
+path. A guard is a grep after a file has been read end to end - it catches a
+class coming back, it never stands in for reading.
