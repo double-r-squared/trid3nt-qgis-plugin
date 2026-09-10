@@ -1,17 +1,9 @@
-"""Unit tests for search_data_catalog + fetch_from_catalog + generic OGC adapter (job-0047).
+"""``search_data_catalog``, ``fetch_from_catalog`` and the generic OGC adapter.
 
-Coverage:
-- ``search_data_catalog`` returns ranked entries by topic match.
-- ``search_data_catalog`` with a bbox filter drops CONUS-only entries for non-CONUS bboxes.
-- ``search_data_catalog`` with ``source_filter`` returns only that source class.
-- ``fetch_from_catalog`` dispatches correctly per access_tier (Tier 1/2/3/4 paths).
-- ``fetch_from_catalog`` cache-shim integration (read_through hit + miss + cached URI).
-- Generic OGC adapter — WMS GetMap mocked.
-- Generic OGC adapter — WCS GetCoverage mocked (mirror NLCD).
-- Generic OGC adapter — WFS GetFeature mocked.
-- Generic OGC adapter — ArcGIS REST query mocked.
-- Generic OGC adapter — OGC exception XML body raises ``OGCAdapterError``.
-"""
+Ranked entries by topic, a bbox filter dropping CONUS-only entries off CONUS, the
+source filter, per-access-tier dispatch, and the cache shim's hit / miss / cached
+URI. The adapter runs against mocked WMS, WCS, WFS and ArcGIS REST responses,
+with an OGC exception body raising ``OGCAdapterError``."""
 
 from __future__ import annotations
 
@@ -88,11 +80,8 @@ class FakeStorageClient:
 def fake_storage_patched(monkeypatch):
     """Route the catalog module's ``read_through`` through an in-memory S3 store.
 
-    GCP is decommissioned: the cache shim is S3-only via boto3. This patches the
-    catalog module's ``read_through`` with an in-memory implementation that mints
-    ``s3://`` URIs and reads/writes ``fake.store`` (keyed by object KEY), so the
-    cache hit/miss/write assertions hold without touching the network.
-    """
+    It mints ``s3://`` URIs and reads and writes ``fake.store`` keyed by object KEY,
+    so the hit / miss / write assertions hold without touching the network."""
     from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
@@ -176,13 +165,10 @@ def test_fetch_from_catalog_is_registered_with_static_30d():
 
 
 def test_registry_has_catalog_tools_after_explicit_import():
-    """Acceptance criterion: the two new tools register.
+    """The two catalog tools register.
 
-    In-process the registry only carries the modules this test file explicitly
-    imports + the eager ``tools/__init__.py`` imports. The
-    ≥16-tools floor is asserted at ``--startup-only`` (see evidence/), where
-    ``main._import_tools_registry`` triggers every job's eager import.
-    """
+    In process the registry carries only what this file imports plus the eager
+    package imports, so the whole-surface floor is asserted at startup instead."""
     assert "search_data_catalog" in TOOL_REGISTRY
     assert "fetch_from_catalog" in TOOL_REGISTRY
 
@@ -312,12 +298,10 @@ def test_fetch_from_catalog_tier2_arcgis_dispatch_for_fema_nfhl(
 def test_fetch_from_catalog_tier2_arcgis_imageserver_routes_to_exportimage(
     fake_storage_patched, monkeypatch
 ):
-    """`fetch_from_catalog("usgs-3dep-elevation-image-service", {bbox})` routes to ArcGIS ImageServer exportImage.
+    """An ArcGIS ImageServer entry routes to ``/exportImage``.
 
-    The 3DEP entry's primary URL is an ArcGIS ImageServer; v0.1 sniffs that
-    as ARCGIS_REST and routes ImageServer endpoints through ``/exportImage``
-    (raster) rather than ``/<layer>/query`` (vector, MapServer/FeatureServer).
-    """
+    The URL sniffs as ARCGIS_REST, and an ImageServer is raster, so it must not take
+    the ``/<layer>/query`` vector path a MapServer or FeatureServer takes."""
     captured: dict = {}
 
     def _fake_get(url, params=None, headers=None, timeout=None, **_kw):
@@ -565,12 +549,10 @@ def _wcs_grid_capture(monkeypatch):
 
 
 def test_ogc_adapter_auto_grid_scales_with_bbox_and_clamps(monkeypatch):
-    """No width/height -> extent-aware grid: bigger bbox -> more pixels, clamped at 4096.
+    """No width or height gives an extent-aware grid, clamped at 4096 per axis.
 
-    Phase-2 resolution lever: when both width_px/height_px are None, the
-    adapter derives WIDTH/HEIGHT from the bbox at the default 30 m cell,
-    clamped to _OGC_PX_MAX (4096) per axis.
-    """
+    With both None the adapter derives WIDTH and HEIGHT from the bbox at the default
+    30 m cell, so a bigger bbox is more pixels up to ``_OGC_PX_MAX``."""
     captured = _wcs_grid_capture(monkeypatch)
 
     # Small bbox (Fort Myers ~0.12 x 0.13 deg) at 30 m -> a modest grid well
@@ -674,12 +656,10 @@ def test_ogc_adapter_explicit_width_height_honored_byte_identical(monkeypatch):
 def test_fetch_from_catalog_imageserver_uses_entry_native_resolution(
     fake_storage_patched, monkeypatch
 ):
-    """3DEP ImageServer Tier-2 dispatch auto-targets the entry's 10 m native_resolution_m.
+    """Tier-2 ImageServer dispatch targets the entry's own ``native_resolution_m``.
 
-    With no caller-supplied width/height or target_resolution_m, the dispatch
-    forwards the entry's native_resolution_m so the exportImage ``size`` is an
-    extent-aware grid at 10 m (vs the old fixed 1024).
-    """
+    With no caller width, height or ``target_resolution_m`` the entry's native value
+    sets an extent-aware ``size`` rather than a fixed grid."""
     captured: dict = {}
 
     def _fake_get(url, params=None, headers=None, timeout=None, **_kw):
@@ -732,12 +712,10 @@ def test_ogc_adapter_surfaces_exception_xml(monkeypatch):
 
 
 def test_fetch_landcover_routes_through_generic_ogc_adapter(monkeypatch):
-    """job-0047 refactor: fetch_landcover NLCD path now calls fetch_ogc_layer.
+    """The NLCD path in ``fetch_landcover`` calls ``fetch_ogc_layer``.
 
-    Verifies the shared adapter is the single source of truth for Tier 2 —
-    a future refactor can't accidentally fork the WCS implementation
-    without this test catching it.
-    """
+    The shared adapter is the single source of truth for Tier 2, so a forked WCS
+    implementation fails here."""
     # fetch_landcover is spec-driven (ADR 0082): the WCS GetCoverage GET lives in the
     # router's wcs_getcoverage access mode, still the shared ogc adapter (Tier-2 SoT).
     import numpy as np

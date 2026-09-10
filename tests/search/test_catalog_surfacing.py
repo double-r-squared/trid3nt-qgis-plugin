@@ -1,55 +1,9 @@
-"""Catalog-surfacing experiment mechanisms (experiments/catalog_surfacing/DESIGN.md).
+"""Catalog-surfacing mechanisms: the two arm prerequisites and the identity gate.
 
-Covers the two arm prerequisites + the identity gate:
-
-- DEFAULT config (no arm flag): the 27 spec-served sources stay tier="general",
-  ambient-declarable; registry == 258 (TELEMAC wave B +fetch_osm_breakwaters) (canopy species deletion 2026-08-24, -1 compute_canopy_height) (ADR 0298 +fetch_water_table_depth +fetch_aquifer_thickness +fetch_aquifer_transmissivity staged Zell-Sanford CONUS surficial-groundwater specs) (ADR 0297 +fetch_groundwater_recharge staged CONUS recharge spec) (ADR 0276 -2 list_categories+list_tools_in_category browse-tool chop) (+1 ADR 0259 coastal_tidal_surge TELEMAC-2D coastal tidal/surge inundation template) (+1 ADR 0256 elmfire_crown_fire_active_ros_verification Cruz-2005 active crown-fire ROS exact-solution regression gate) (+1 ADR 0252 landlab_normal_fault_scarp_evolution NormalFault tectonic-forcing landscape-evolution template) (+1 ADR 0251 culvert_embankment_flow HEC-RAS 2025 2D culvert-through-embankment template) (+1 ADR 0247 pelicun_hazus_lifeline_seismic_dl_run HAZUS EQ lifeline-network bridge/pipe/substation template) (+1 ADR 0241 telemac3d_stratified_flow TELEMAC-3D three-dimensional baroclinic stratified-flow template) (+1 ADR 0239 elmfire_spot_fire_barrier_crossing ELMFIRE ember-spotting barrier-jump template) (+1 ADR 0237 artemis_harbor_agitation ARTEMIS phase-resolving harbour-agitation template) (+1 ADR 0236 tomawac_wave_field TOMAWAC spectral-wave template) (+2 ADR 0235 modflow_thermal_plume + modflow_thermal_storage GWE heat-transport templates) (+1 ADR 0228 modflow_vadose_transport UZF+UZT unsaturated-zone breakthrough) (+2 ADR 0218 swmm_snowmelt_degree_day + swmm_aquifer_baseflow_to_node) (+1 ADR 0217 schism_pahm_surge) (+2 ADR 0214 landlab_groundwater_water_table +
-  landlab_groundwater_storm_recession GroundwaterDupuitPercolator templates;
-  +2 ADR 0203 fetch_aorc_precip + fetch_lter_records;
-  +1 build_mesh, the one mesh router, which the standalone mesh builder dissolved into;
-#  +1 telemac_rain_on_grid SCS-CN
-  rainfall-runoff template ADR 0196; +1 SWMM RTK unit-hydrograph RDII template ADR 0190 row 4 (+1 ELMFIRE Hirsch initial-attack POC
-  closed-form template ADR 0190 row 2; +1 SCHISM baroclinic template ADR 0189;
-  +3 Landlab shortlist-batch templates (ADR
-  0184): landlab_channel_incision_steady_state (detachment-limited stream-power
-  incision to steady state + analytical slope-area V&V) +
-  landlab_channel_steepness_chi_map (ChiFinder+SteepnessFinder chi/ksn knickpoint
-  diagnostic) + landlab_storm_sequence_generator (in-process
-  PrecipitationDistribution stochastic storm-sequence forcing generator); (+2
-  OpenQuake templates (ADR 0182):
-  openquake_disaggregation (local-subprocess disaggregation calculator: which
-  magnitude-distance-epsilon scenario dominates a site's hazard, M-R contribution
-  matrix) + openquake_event_based (local-subprocess event-based/stochastic PSHA:
-  synthetic catalogue + event-based hazard map + classical-convergence check);
-  +1 TELEMAC WAQTEL O2 template (ADR 0169):
-  telemac_do_sag (dissolved-oxygen sag below a discharge - US TMDL/permit; WATER
-  QUALITY PROCESS = 2 O2 module, V&V to Streeter-Phelps 1925 to 0.011 mg/L);
-  (+1 GeoClaw storm-surge front template (ADR
-  0168): geoclaw_storm_surge (parametric-Holland tropical-cyclone wind+pressure
-  surge from a storm track, selectable wind drag law none|Garratt|Powell);
-  (+2 OpenQuake templates (ADR 0164): openquake_scenario_gmf (in-process oq scenario single-rupture JB2009-correlated ground-motion field, mean + across-realization spread COGs) + openquake_secondary_perils (scenario-GMF-driven openquake.sep liquefaction Zhu-2015 + Newmark landslide Jibson screening over fetched DEM Vs30/slope/CTI covariates); +3 ELMFIRE transient-weather + crown-fire templates (ADR 0161): elmfire_transient_wind_schedule_spread (mid-run wind-shift redirection vs constant wind, multi-band NUM_METEOROLOGY_TIMES>1 + DT_METEOROLOGY interpolation) + elmfire_dead_fuel_moisture_interpolation_frequency_control (DT_INTERPOLATE_M1/M10/M100 accuracy-vs-cost sweep on a moisture-recovery schedule) + elmfire_crown_fire_initiation_threshold_sweep (CRITICAL_CANOPY_COVER initiation boundary + Cruz CROWN_FIRE_SPREAD_RATE_LIMIT ceiling folded sweep); +3 pelicun DL_calculation-harness templates (ADR 0160, ADR 0247): pelicun_hazus_seismic_dl_run (auto-populated HAZUS EQ building damage+loss run via the tempdir+serialized-cwd DL_calculation harness) + pelicun_hazus_eq_version_comparison (HAZUS EQ v5.1-vs-v6.1 dataset comparison at the Assessment API) + pelicun_hazus_lifeline_seismic_dl_run (auto-populated HAZUS EQ lifeline-network run over the three DLML libraries -- transportation bridge / potable-water pipe / electric-power substation -- lifeline_class knob, ADR 0247); +1 SCHISM CAND-S transport-scheme V&V template: schism_transport_validation (Test_HeatConsv upwind-vs-TVD numerical mixing + Test_GEN_MassConsv conservative-tracer mass conservation on the hydro-core binary, ADR 0156); +1 MODFLOW CAND-S package-validation template: modflow_package_validation (GWF-NPF Newton/Zaidel + GWF-MAW/Sokol + GWF-HFB grid-independence cases, ADR 0153); +5 SWMM CAND-S mechanism-comparison templates: swmm_subcatchment_runoff_comparison + swmm_node_hydraulics_comparison + swmm_wetwell_pump_control_comparison + swmm_lid_performance_comparison + swmm_wq_buildup_washoff_comparison; +2 SWAN CAND-S templates: swan_physics_sensitivity_sweep + swan_stationary_snapshot_batch; +4 pelicun CAND-S Assessment-API validation templates:
-  pelicun_closed_form_validation + pelicun_mixed_fragility_loss_assessment +
-  pelicun_replacement_threshold_override_sweep + pelicun_flood_foundation_depth_damage_sweep;
-  +2 GeoClaw CAND-S SWE+AMR knob templates: geoclaw_amr_refinement_regions + geoclaw_regional_manning_friction; +1 GeoClaw Thacker V&V template (ADR 0187): geoclaw_thacker_validation (synthetic paraboloid-basin verification of the wet-dry SWE+AMR solver vs Thacker 1981 -- period/amplitude/shoreline/mass); +3 ELMFIRE CAND-S sensitivity templates:
-  elmfire_length_to_width_ceiling_sensitivity + elmfire_wind_fluctuation_randomization
-  + elmfire_live_fuel_moisture_sensitivity; +6 Landlab diagnostic templates:
-  landlab_landslide_storm_ensemble + landlab_overland_flow_timeseries +
-  landlab_dem_conditioning + landlab_lake_mapping + landlab_hacks_law_scaling +
-  landlab_hand_wetness; ADR 0140 +1 hecras_flood_2d fresh-AOI 2D-flood template; ADR 0128 +3 swmm_lid_raingarden_wq + swmm_wwtp_detention_ponds + swmm_pump_pid_rtc; ADR 0125 +1 hecras_levee_breach; ADR 0124 +2 swmm_network_import + swmm_dual_drainage_coupling; ADR 0123 +3 landlab_green_ampt_overland_flow + geoclaw_tsunami_gauge_timeseries + elmfire_verification_elliptical_replication; ADR 0122 +1 landlab_flow_accumulation; ADR 0120 +1 sfincs_advanced_numerical_physics_knobs; ADR 0118 +1 schism_tidal_hydro; ADR 0117 +2 living-atlas search+fetch; ADR 0109 +1 hecras_riverine_flood; ADR 0105: -3 standalone composers, atop ADR 0095 -1 fetch_cama_flood_discharge
-  deleted, atop ADR 0094 -10 engine doors); fetch_from_catalog keeps its exact
-  entry_id-only signature;
-  search_data_catalog returns YAML catalog entries.
-- Arm flag ON (own process): the 27 leave the default declarable pool (tier="catalog")
-  but stay in the search index; Arm 1 exposes a fetch_from_catalog(source=...) branch
-  + card projection; Arm 2 keeps them discoverable + gate-expandable.
-- Card content fidelity + the fetch-via-spec validation locus.
-
-The flag is read at import (each arm runs in its OWN process per the design), so the
-full flag-on registration behaviour is asserted via subprocess; the flag-independent
-projection + validation pieces are asserted in-process.
-
-ASCII only.
-"""
+Under the DEFAULT config the spec-served sources stay ``tier="general"`` and
+ambient-declarable; with the arm flag on they leave the declarable pool for
+``tier="catalog"`` while staying in the search index. The flag is read at import,
+so flag-on registration is asserted in a subprocess. ASCII only."""
 
 from __future__ import annotations
 

@@ -1,20 +1,9 @@
-"""LANE S -- user-overlay catalog merge (hand-authored overlay, load seam).
+"""The user-overlay catalog merge at the load seam.
 
-A user's hand-authored entries live in a SEPARATE overlay file
-(``user_catalog.yaml``); the vendored ``public_data_source_catalog.yaml`` is
-never mutated. ``load_catalog`` merges the overlay on top of the vendored
-catalog at load, overlay winning on id collision, with one summary log line. A
-malformed overlay (bad top-level or a bad row) degrades honestly -- the
-vendored catalog still loads.
-
-Covered here:
-  * an overlay row -> reload finds the new entry (cache reset picks it up);
-  * vendored file bytes are UNTOUCHED by an overlay merge;
-  * overlay wins on id collision (merged value is the overlay's);
-  * a malformed overlay ROW is a typed skip (good rows still merge);
-  * a malformed overlay TOP-LEVEL is skipped (vendored catalog still loads);
-  * a missing overlay is a no-op.
-"""
+Hand-authored entries live in ``user_catalog.yaml`` and the vendored catalog is
+never mutated. ``load_catalog`` merges the overlay on top at load, the overlay
+winning on an id collision. A malformed row is a typed skip and a malformed top
+level is skipped whole - the vendored catalog still loads either way."""
 
 from __future__ import annotations
 

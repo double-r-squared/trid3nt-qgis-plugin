@@ -1,20 +1,9 @@
-"""Unit tests for the ``search_spatial_functions`` atomic tool (ADR 0019, lane-B).
+"""Unit tests for the ``search_spatial_functions`` atomic tool.
 
-Coverage:
-1. Registration: tool present in ``TOOL_REGISTRY`` with the expected
-   metadata (``cacheable=False``, ``ttl_class="live-no-cache"``).
-2. Vendored data file loads and is non-trivially sized (the DuckDB
-   ``spatial`` extension's ``ST_*`` catalog).
-3. Model-free retrieval check (hard rule - corpus before acceptance): a
-   handful of canonical free-text asks route to the expected ``ST_*``
-   function without any LLM in the loop.
-4. ``top_k`` is honored; empty/whitespace query returns ``{"results": []}``
-   without raising.
-5. Exact function-name query (e.g. "ST_Buffer") still resolves via the
-   substring fallback even with BM25 unavailable.
-6. Corpus (``tool_query_corpus.yaml``) carries a
-   ``search_spatial_functions`` entry with example queries.
-"""
+Registration with ``cacheable=False`` and ``ttl_class="live-no-cache"``; the
+vendored ``ST_*`` catalog loads non-trivially sized; a model-free retrieval check
+routes canonical free-text asks to the expected function; ``top_k`` is honored
+and an empty query returns none; an exact name resolves by substring."""
 
 from __future__ import annotations
 

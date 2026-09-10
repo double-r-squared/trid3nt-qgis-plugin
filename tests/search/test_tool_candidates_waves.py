@@ -1,16 +1,9 @@
-"""LANE S -- ADR 0018 wave semantics: per-round stage-labeled tool-candidates.
+"""Per-round stage-labeled tool-candidates.
 
-Completion of the coarse single-wave stage_label: in ASK mode each ROUND's
-pre-dispatch candidates emission derives its stage_label from the TOP
-candidates' categories, and excludes this turn's already-dispatched tools, so a
-multi-step turn surfaces a SEQUENCE of stage-labeled picks (acquisition ->
-preprocessing -> analysis -> visualization) instead of one blob. AUTO mode is
-unchanged (single near-tie emission only).
-
-Driven end-to-end through ``_stream_model_reply`` on the scripted provider; the
-retrieval ranking is patched at its module seam and tool dispatch is stubbed so
-no real tool runs.
-"""
+In ASK mode each ROUND's pre-dispatch emission derives its ``stage_label`` from
+the top candidates' categories and excludes this turn's already-dispatched tools,
+so a multi-step turn surfaces a SEQUENCE of labelled picks. AUTO mode is
+unchanged. Ranking is patched and dispatch stubbed, so no real tool runs."""
 
 from __future__ import annotations
 

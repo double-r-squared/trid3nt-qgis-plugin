@@ -1,24 +1,9 @@
-"""Unit tests for the ``web_fetch`` atomic tool (job-0092).
+"""Unit tests for the ``web_fetch`` atomic tool.
 
-Coverage:
-- Tool registers with ``dynamic-1h`` TTL + ``web_fetch`` source class.
-- Each of 4 extract modes (``full_html``, ``main_text``, ``json``, ``metadata``)
-  produces the documented shape from synthetic HTML / JSON.
-- BeautifulSoup boilerplate strip removes ``<script>``, ``<style>``, ``<nav>``,
-  ``<header>``, ``<footer>``, ``<aside>``, ``<noscript>``.
-- ``<main>`` is preferred over ``<body>`` for ``main_text``.
-- URL canonicalization (lowercase scheme/host, drop default port, trailing slash).
-- Cache miss → fetcher invoked + bytes written; cache hit → fetcher skipped.
-- Bad URL (no scheme) → ``WebFetchInputError`` (not retryable).
-- 5xx response → ``WebFetchUpstreamError`` (retryable), no sentinel written.
-- 4xx response → ``WebFetchInputError``.
-- Timeout → ``WebFetchUpstreamError``.
-- ``extract='json'`` Content-Type mismatch → ``WebFetchInputError``.
-- Bad ``timeout_s`` → ``WebFetchInputError``.
-
-Live test (``TRID3NT_TEST_LIVE_WEB=1``): fetches ``https://www.weather.gov/`` in
-``metadata`` mode and asserts the response carries a non-empty title.
-"""
+Registration; the four extract modes over synthetic HTML and JSON, with
+boilerplate stripped and ``<main>`` preferred over ``<body>``; URL
+canonicalization; a cache miss writing and a hit skipping the fetcher; and the
+typed split of input errors from retryable upstream ones, with no sentinel."""
 
 from __future__ import annotations
 
@@ -93,13 +78,10 @@ class FakeStorageClient:
 
 @pytest.fixture
 def fake_storage(monkeypatch: pytest.MonkeyPatch) -> FakeStorageClient:
-    """Route ``read_through`` through an in-memory S3 store (GCP decommissioned).
+    """Route ``read_through`` through an in-memory S3 store.
 
-    The production cache shim is S3-only via boto3; tests must not touch the
-    network. This patches the tool module's ``read_through`` with an in-memory
-    implementation that mints ``s3://`` URIs and reads/writes ``fake.store``
-    (keyed by object KEY), so the cache hit/miss/write assertions hold.
-    """
+    It mints ``s3://`` URIs and reads and writes ``fake.store`` keyed by object KEY,
+    so the hit / miss / write assertions never touch the network."""
     fake = FakeStorageClient()
     from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
@@ -503,14 +485,10 @@ def test_web_fetch_unknown_extract_mode_raises_input_error(
 
 @pytest.mark.skipif(not _LIVE_WEB, reason="set TRID3NT_TEST_LIVE_WEB=1 to run live network tests")
 def test_web_fetch_live_weather_gov_metadata() -> None:
-    """Live fetch: ``https://www.weather.gov/`` in metadata mode.
+    """Live fetch in metadata mode: a non-empty title and the canonical URL.
 
-    Asserts the result carries a non-empty title (or Open Graph title) and the
-    fetched URL matches the canonical form. This bypasses GCS by NOT using
-    the fake_storage fixture — the real ``read_through`` writes to the
-    production cache bucket if ADC is available. If GCS is unreachable, the
-    test still validates the fetch shape via the upstream attempt.
-    """
+    The fake-storage fixture is deliberately absent, so the real ``read_through``
+    runs; an unreachable store still leaves the fetch shape validated."""
     result = web_fetch("https://www.weather.gov/", extract="metadata")
     assert result["status_code"] == 200
     assert result["extract_mode"] == "metadata"

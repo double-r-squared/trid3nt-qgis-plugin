@@ -1,12 +1,9 @@
-"""Unit tests for ``retrieve_visible_tools`` (the built-in surfacing path).
+"""Unit tests for ``retrieve_visible_tools``, the built-in surfacing path.
 
-Asserts the invariants: CORE-FLOOR (``CORE_FLOOR`` always a subset),
-NEVER-HIDE-MID-TASK (result always contains the Case's accrued visible set),
-DETERMINISTIC, k-clamp, and FAIL-OPEN (error / cold index / empty ranking -> full
-registry; empty query -> floor only). Plus a recall fixture over covered tools.
-
-ASCII only.
-"""
+The invariants: ``CORE_FLOOR`` is always a subset, the Case's accrued visible set
+is never hidden mid-task, the result is deterministic, k is clamped, and an
+error, a cold index or an empty ranking FAILS OPEN to the full registry while an
+empty query returns the floor alone. Plus a recall fixture. ASCII only."""
 
 from __future__ import annotations
 
@@ -117,13 +114,10 @@ _STARTUP_ONLY = {
 
 
 def _pool_hidden_names() -> set[str]:
-    """Registered pool-HIDDEN names: tier=internal only.
+    """Registered pool-HIDDEN names: ``tier=internal`` only.
 
-    Engine templates (tier=template) are ordinary retrieval-pool members -- they
-    belong in retrieve_visible_tools, the fail-open dump, and the corpus. Only
-    tier=internal (an absorbed in-process seam, fetch_copernicus_dem) stays
-    pool-hidden -- never model-facing, carries no corpus, and must NOT appear in
-    the fail-open dump."""
+    An internal tool is never model-facing, carries no corpus and must NOT appear in
+    the fail-open dump; engine templates are ordinary retrieval-pool members."""
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()
@@ -223,10 +217,8 @@ def _load_corpus():
 
 
 def _full_registry_names() -> set[str]:
-    """The FULL registry -- includes the workflow/solver/catalog tools that
-    register only via the startup import path (NOT the plain `from . import
-    TOOL_REGISTRY` snapshot), so the coverage check is deterministic regardless
-    of test order."""
+    """The FULL registry, including the tools that register only through the startup
+    import path, so the coverage check is deterministic regardless of test order."""
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()
@@ -248,10 +240,10 @@ def test_every_registered_tool_has_corpus_queries():
 
 
 def test_no_dead_corpus_keys():
-    """A corpus key for a tool nothing registers is dead weight in the index --
-    EXCEPT a DECLARED PARKED template, whose corpus is part of the declaration and
-    comes back with it in one keyword. The retrieval visible set is derived from
-    the registry, so a parked template's phrasings never reach the model."""
+    """A corpus key for a tool nothing registers is dead weight in the index.
+
+    The exception is a DECLARED PARKED template, whose corpus travels with the
+    declaration; the visible set is derived from the registry, so it never surfaces."""
     from tests.search.test_door_dissolution import PARKED_TEMPLATES
 
     corpus = _load_corpus()

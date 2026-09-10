@@ -1,14 +1,9 @@
-"""Agent routing tests: model tool-dispatch wiring.
+"""Agent routing: the model tool-dispatch wiring.
 
-1. An engine TEMPLATE is present in ``TOOL_REGISTRY`` and the dissolved door
-   names are gone (door dissolution, ADR 0094 -- no alias, no concierge).
-2. ``build_tool_declarations`` includes it in the list it builds from the
-   registry.
-3. The ``stream_events`` adapter yields a ``FunctionCallEvent`` when a mocked
-   stream emits a function_call part.
-4. ``_stream_model_reply`` dispatches the function call through
-   ``_invoke_tool_via_emitter``.
-"""
+An engine TEMPLATE is in ``TOOL_REGISTRY`` with no dissolved door name beside it,
+``build_tool_declarations`` includes it, the ``stream_events`` adapter yields a
+``FunctionCallEvent`` for a function_call part, and ``_stream_model_reply``
+dispatches that call through ``_invoke_tool_via_emitter``."""
 
 from __future__ import annotations
 

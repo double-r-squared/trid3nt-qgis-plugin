@@ -1,14 +1,9 @@
-"""POOR-FIT WIDENING (LANE A, task 3).
+"""POOR-FIT WIDENING: an uncertain ranking widens the gate once.
 
-When a turn's TOP retrieval score is under a calibrated threshold
-(``TRID3NT_GATING_WIDEN_THRESHOLD``, default 0.035 -- measured against the
-hashed dense fallback; see tool_gating.py), the ranking is uncertain, so the
-openai-path gate k is widened once (24 -> 40) to protect recall on a vague ask.
-
-Covered: the pure threshold resolver + poor-fit predicate, then the live gating
-block -- the widen re-ranks at k=40 (logged) ONLY on a poor fit, and a good fit
-is left at k=24.
-"""
+When a turn's TOP retrieval score is under ``TRID3NT_GATING_WIDEN_THRESHOLD`` the
+ranking is uncertain, so k goes 24 -> 40 once to protect recall on a vague ask.
+Covered: the pure threshold resolver and predicate, then the live gating block
+re-ranking at 40 on a poor fit and staying at 24 on a good one."""
 
 from __future__ import annotations
 

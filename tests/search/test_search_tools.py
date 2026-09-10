@@ -1,27 +1,9 @@
-"""Unit tests for the ``search_tools`` atomic tool (Wave 4.10 job-B7).
+"""Unit tests for the ``search_tools`` atomic tool.
 
-Coverage:
-1. Registration: tool present in ``TOOL_REGISTRY`` with the expected
-   metadata (``cacheable=False``, ``ttl_class="live-no-cache"``,
-   ``supports_global_query=False``).
-2. Top-3 routing fidelity for the kickoff's five canonical queries:
-   - "weather alerts" → ``fetch_nws_alerts_conus``
-   - "show flood zones" → ``fetch_fema_nfhl_zones``
-   - "national wetlands inventory polygons" → ``fetch_nwi_wetlands``
-   - "elevation Grand Canyon" → ``fetch_dem``
-   - "model flooding" → ``run_sfincs``
-3. ``top_k`` is honored (returns at most ``top_k`` results).
-4. Empty / whitespace query does not crash and returns ``{"results": []}``.
-5. Tokenizer round-trip (whitespace + lowercase + underscore preservation).
-6. ``_reciprocal_rank_fusion`` is rank-aware and interleaved
-   (a higher-ranked doc in EITHER ranking outscores a lower-ranked one).
-7. Description snippets are present + truncated to ≤240 chars.
-8. ``matched_queries`` is populated for queries that match synthetic corpus.
-
-These tests import the agent's full tool surface (data_fetch + solver +
-catalog + workflows) so the routing index
-contains the same tools the agent server exposes at runtime.
-"""
+Registration metadata; top-3 routing fidelity on the canonical queries; ``top_k``
+honored and an empty query returning no results; the tokenizer round trip;
+rank-aware interleaved reciprocal-rank fusion; snippets truncated to 240 chars.
+The full tool surface is imported, so the index is the one the server exposes."""
 
 from __future__ import annotations
 
@@ -239,10 +221,9 @@ def test_rrf_single_ranking_preserves_order():
 
 
 def test_lexical_reinforcement_lifts_bm25_champion_door():
-    """A door that BM25 ranks #1 but the fused list buries (dense drowning) is
-    lifted back above a general tool that only ranks mid on both channels.
-    The bonus is one RRF term (+1/(60+1)=~0.0164), so doc 0's 0.028 -> ~0.0444
-    overtakes the 0.040 leader."""
+    """A BM25 champion the fused list buries is lifted back above a mid-ranked general
+    tool. The bonus is one RRF term, ``1/(60+1)``, which is enough to overtake the
+    leader and not enough to reorder the rest."""
     fused = [(1, 0.040), (0, 0.028), (2, 0.027)]  # door doc 0 buried at rank 2
     bm25_ranking = [0, 1, 2]  # door (doc 0) is the BM25 champion
     tiers = ["door", "general", "general"]
@@ -252,10 +233,10 @@ def test_lexical_reinforcement_lifts_bm25_champion_door():
 
 
 def test_lexical_reinforcement_gates_general_to_champion_only():
-    """A GENERAL tool at BM25 rank 2 gets NO bonus (gate = champion only); the
-    SAME tool as a DOOR at BM25 rank 2 DOES (wider door gate). Locks the
-    tier-aware asymmetry. doc 1 is buried below doc 0; doc 2 is the BM25
-    champion (absent from the fused window, so it only anchors the rank axis)."""
+    """The bonus gate is tier-aware and asymmetric.
+
+    A GENERAL tool at BM25 rank 2 gets nothing; the same tool as a DOOR at rank 2
+    does, because the door gate is wider."""
     assert _LEX_REINFORCE_GATE_GENERAL == 1 and _LEX_REINFORCE_GATE_DOOR >= 2
     fused = [(0, 0.030), (1, 0.028)]  # doc 1 is buried just under doc 0
     bm25_ranking = [2, 1]  # doc 1 is BM25 rank 2 (NOT the champion)
@@ -349,13 +330,10 @@ def test_extra_kwargs_ignored():
 def test_typo_gradinet_relief_routes_without_exact_corpus_queries(
     tmp_path, monkeypatch
 ):
-    """The typo'd NATE prompt surfaces compute_colored_relief in the top-5
-    even with the exact "gradient relief" corpus queries stripped (they were
-    added the same day as the live failure -- the test must not depend on
-    them). The correct token "gradient" survives in the vocabulary via other
-    tools' docstrings + corpus text (e.g. compute_slope), so the fuzzy
-    correction "gradinet" -> "gradient" still fires.
-    """
+    """A typo'd ask still surfaces ``compute_colored_relief`` in the top 5.
+
+    Its exact corpus queries are stripped, so the correct token has to survive in the
+    vocabulary through other tools for the fuzzy correction to fire."""
     import yaml as _yaml
 
     corpus = _load_corpus()

@@ -1,12 +1,9 @@
 """``describe_keywords``: the read over the module catalogs.
 
-The tool exists because the keyword surface is larger than any docstring budget,
-so what is checked here is that a question in WORDS reaches the keyword that
-answers it, that the answer carries the dictionary's own help, choices and
-default, and that it decides nothing.
-
-ASCII only.
-"""
+The keyword surface is larger than any docstring budget, so what is checked is
+that a question in WORDS reaches the keyword that answers it, that the answer
+carries the dictionary's own help, choices and default, and that it decides
+nothing. ASCII only."""
 
 from __future__ import annotations
 

@@ -1,19 +1,9 @@
-"""Tool-retrieval enforce + recall@k tests (the built-in surfacing path).
+"""Tool-retrieval enforce and recall@k over the built-in surfacing path.
 
-Enforce is unconditional now (K is the only lever). These pin:
-
-1. ENFORCE subsets the registry to the visible set, the CORE FLOOR stays a
-   subset, and the Case's monotonic visible set never shrinks across turns.
-2. FAIL-OPEN: a retrieval error or an empty result never trims the catalog --
-   it falls back to the DEFAULT declarable registry (full MINUS the pool-hidden
-   internal/catalog tiers; engine templates are ordinary members).
-3. The per-turn selection event fires (recall@k telemetry) with mode="enforce".
-4. recall@k computation on a synthetic telemetry fixture (overall + per-flow +
-   the missed-tool list).
-5. fetch_glm_lightning is in the ALWAYS-OFFLOAD set.
-
-ASCII only.
-"""
+Enforce is unconditional and K the only lever: it subsets the registry to the
+visible set, the CORE FLOOR stays a subset and the Case's visible set never
+shrinks. A retrieval error or an empty result FAILS OPEN to the default
+declarable registry. The per-turn selection event fires. ASCII only."""
 
 from __future__ import annotations
 
@@ -53,15 +43,9 @@ def _settings() -> ModelSettings:
 
 
 def _non_template_names() -> set[str]:
-    """The names in the DEFAULT declarable registry: the full TOOL_REGISTRY
-    MINUS the pool-hidden tiers (tier=internal / tier=catalog).
-
-    Engine templates (tier=template) ARE in the default declarable set -- they
-    are ordinary retrieval-pool tools, callable directly. Only tier=internal (an
-    absorbed seam, fetch_copernicus_dem) and tier=catalog (arm-flagged, none in
-    the default config) are withheld. The object passed to build_tool_declarations
-    is a NEW filtered dict (server._default_declarable_registry), not the live
-    registry identity."""
+    """The names in the DEFAULT declarable registry: ``TOOL_REGISTRY`` minus the
+    pool-hidden ``internal`` and ``catalog`` tiers. What reaches
+    ``build_tool_declarations`` is a NEW filtered dict, not the live registry."""
     from trid3nt_server.tools import TOOL_REGISTRY
 
     return {

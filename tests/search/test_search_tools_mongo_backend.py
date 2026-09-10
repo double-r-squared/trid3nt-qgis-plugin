@@ -1,29 +1,9 @@
-"""search_tools co-occurrence (JSONL-backed) tests.
+"""The ``search_tools`` co-occurrence channel, over the JSONL telemetry sink.
 
-Telemetry is JSONL-only now (the ``tool_call_telemetry`` Persistence-collection
-route was cut). The co-occurrence channel reads the JSONL sink via
-``telemetry.load_tool_call_records``; these tests feed a temp
-``TRID3NT_TELEMETRY_PATH`` file.
-
-The per-user dynamic hot-set path (``get_dynamic_hot_set``, Mongo-backed,
-gated behind ``TRID3NT_DYNAMIC_HOT_SET`` and unset in all live configs) was
-cut as feature-creep; its dedicated tests were removed along with the
-function.
-
-Coverage:
-    1. ``test_co_occurrence_boost_when_jsonl_populated`` — with a populated JSONL
-       sink, a frequently-co-called tool ranks no worse than the empty-sink
-       3-channel baseline.
-    2. ``test_falls_back_to_3_channel_when_no_telemetry`` /
-       ``test_malformed_jsonl_does_not_crash`` — an empty/missing/malformed sink
-       leaves the co-occurrence channel out; discover still returns results.
-    3. ``test_cooccurrence_index_cached_within_5min_window`` — a second call
-       within the refresh window reuses the cached index (no second JSONL read);
-       past the window the cache is rebuilt.
-    4. ``test_existing_unit_tests_still_pass_smoke`` — guards against accidental
-       regression of the canonical 3-channel routing answers.
-    5. ``test_build_cooccurrence_from_docs_*`` — pure algorithmic correctness.
-"""
+Telemetry is JSONL-only, read through ``telemetry.load_tool_call_records`` from a
+temp ``TRID3NT_TELEMETRY_PATH``. A populated sink ranks a frequently co-called
+tool no worse than the three-channel baseline; an empty, missing or malformed
+sink leaves the channel out; the index is cached within its refresh window."""
 
 from __future__ import annotations
 
@@ -68,12 +48,10 @@ def _make_telemetry_docs(
     *,
     base_session: str = "01SESS",
 ) -> list[dict[str, Any]]:
-    """Build a list of synthetic ``tool_call_telemetry`` rows.
+    """Build synthetic per-tool-call rows, newest first.
 
-    Each entry in ``pairs`` is ``(session_id, tool_name)``.  Returned list
-    is ordered newest-first (the same order the live ``find … sort {_id:-1}``
-    query produces).
-    """
+    Each entry in ``pairs`` is ``(session_id, tool_name)``, and newest-first is the
+    order the live query returns."""
     docs: list[dict[str, Any]] = []
     for i, (sid, tool) in enumerate(pairs):
         docs.append(
@@ -94,11 +72,8 @@ def _make_telemetry_docs(
 def _write_telemetry_jsonl(path, pairs: list[tuple[str, str]]) -> None:
     """Write synthetic per-tool-call rows to a JSONL telemetry sink.
 
-    ``pairs`` is ``[(session_id, tool_name), ...]`` in CHRONOLOGICAL order
-    (oldest first, as the append-ordered live sink stores them);
-    ``telemetry.load_tool_call_records`` reverses to newest-first. Rows carry no
-    ``record_type`` so they read as per-tool-call rows (not SHADOW rows).
-    """
+    ``pairs`` is chronological, oldest first, as the append-ordered sink stores them;
+    rows carry no ``record_type``, so they read as per-tool-call rows."""
     import json
 
     with open(path, "w", encoding="utf-8") as fh:
@@ -127,11 +102,8 @@ def _write_telemetry_jsonl(path, pairs: list[tuple[str, str]]) -> None:
 def test_co_occurrence_boost_when_jsonl_populated(tmp_path, monkeypatch) -> None:
     """A tool that frequently co-occurs with a query-named tool is boosted.
 
-    Telemetry is JSONL-only now (the Persistence-collection read was cut). With
-    a populated sink where ``fetch_dem`` co-occurs with ``compute_hillshade`` in
-    5 sessions, the query "fetch_dem terrain" surfaces ``compute_hillshade`` no
-    worse than the empty-sink 3-channel baseline.
-    """
+    With a sink where ``fetch_dem`` co-occurs with ``compute_hillshade``, the query
+    "fetch_dem terrain" ranks ``compute_hillshade`` no worse than the empty baseline."""
     # Baseline: empty telemetry sink -> co-occurrence channel drops out.
     empty = tmp_path / "empty.jsonl"
     empty.write_text("", encoding="utf-8")
@@ -268,12 +240,10 @@ def test_cooccurrence_index_cached_within_5min_window(tmp_path, monkeypatch) -> 
 
 
 def test_existing_unit_tests_still_pass_smoke(tmp_path, monkeypatch) -> None:
-    """Spot-check that the 3-channel shape from Wave 4.10 B7 still holds.
+    """Smoke: the co-occurrence module state does not move the canonical answers.
 
-    The full 17-test suite lives in ``test_search_tools.py``; this is a
-    smoke that the co-occurrence module-level state doesn't break the
-    canonical routing answers with an empty telemetry sink.
-    """
+    With an empty telemetry sink the three-channel routing results are exactly what
+    the dedicated ``search_tools`` suite pins."""
     monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(tmp_path / "empty.jsonl"))
     _reset_cooccurrence_cache_for_tests()
 

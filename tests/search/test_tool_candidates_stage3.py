@@ -1,23 +1,9 @@
-"""Stage 3 (ADR 0018) -- the tool-candidates ambiguity/ask gate.
+"""The tool-candidates ambiguity / ask gate.
 
-Interface contract (fixed between lanes): agent->client ``tool-candidates``
-{request_id, stage_label, candidates: [{tool_name, summary, score}], reason:
-"ambiguity"|"ask_mode", timeout_s}; client->agent ``tool-choice``
-{request_id, tool_name | null, free_text | null}.
-
-Covered here (Lane S owns emission + consumption semantics):
-  * ask mode emits the card before dispatch and waits;
-  * auto mode emits ONLY on a measured near-tie margin;
-  * confident auto never emits;
-  * an unanswered card times out BOUNDED and the turn proceeds autonomously
-    with a note (never hangs);
-  * a tool_name reply pins that tool (directive note + allowed set + visible
-    registry);
-  * a free_text reply feeds back as a user clarification.
-
-Driven end-to-end through ``_stream_model_reply`` on the scripted provider;
-the retrieval ranking is patched at its module seam so margins are exact.
-"""
+Ask mode emits the card before dispatch and waits; auto mode emits ONLY on a
+measured near-tie and a confident auto never does; an unanswered card times out
+BOUNDED and the turn proceeds with a note; a ``tool_name`` reply pins that tool,
+a ``free_text`` reply is a clarification. Ranking is patched so margins are exact."""
 
 from __future__ import annotations
 

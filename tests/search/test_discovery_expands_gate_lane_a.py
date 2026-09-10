@@ -1,14 +1,9 @@
-"""DISCOVERY-EXPANDS-GATE (LANE A, task 2).
+"""DISCOVERY-EXPANDS-GATE: a turn's discovered tools widen the next round's gate.
 
-Tool names the tool-search tool (``search_tools``, formerly ``discover_dataset``)
-returns during a turn are unioned into the visible gate for SUBSEQUENT rounds --
-capped at +8 per turn, logged. This lets the model discover its way past a
-trimmed gate without re-dumping the whole catalog.
-
-Covered: the pure result parser + registry-lookup name resolver, then the live
-loop -- expand fires (discovered tools land in the next round's declarations),
-the +8 cap holds, and the widening is logged.
-"""
+Names ``search_tools`` returns during a turn are unioned into the visible gate
+for SUBSEQUENT rounds, capped at +8 per turn and logged, so the model can
+discover past a trimmed gate without re-dumping the catalog. Covered: the pure
+parser and name resolver, then the live loop with the cap and the log."""
 
 from __future__ import annotations
 

@@ -1,17 +1,9 @@
-"""Stage 3 (ADR 0017/0018) -- per-turn TOP-K TOOL GATING for the openai path.
+"""Per-turn TOP-K tool gating on the openai path.
 
-The routing bench's own recommendation: the openai adapter was sending ALL
-~190 tool schemas per round. ``tool_gating.gate_tool_registry`` trims the
-per-turn registry to the retrieval top-k plus the always-include floors:
-
-  * the META floor (hot set + search_data_catalog/fetch_from_catalog + web_fetch),
-  * every tool already used this case-session (dispatched + explicit),
-  * any tool the user NAMED in the message.
-
-Scoped to ``MODEL_PROVIDER=openai`` -- the scripted/bedrock/vertex tool lists
-are byte-unchanged. ``TRID3NT_TOOL_GATING_TOPK=0`` disables; a cold/empty
-ranking FAILS OPEN to the full registry.
-"""
+``tool_gating.gate_tool_registry`` trims the per-turn registry to the retrieval
+top-k plus the always-include floors: the META floor, every tool already used in
+this case-session, and any tool the user NAMED. Other providers' tool lists are
+byte-unchanged; ``TOPK=0`` disables, and a cold or empty ranking FAILS OPEN."""
 
 from __future__ import annotations
 
@@ -48,15 +40,10 @@ agent_main._import_tools_registry()
 
 
 def _full_registry_size() -> int:
-    """The DEFAULT declarable-registry size handed to ``build_tool_declarations``
-    in the gating-OFF / fail-open paths -- membership-derived as
-    ``len(TOOL_REGISTRY) - count(tier in {internal, catalog})``.
+    """The DEFAULT declarable-registry size, membership-derived.
 
-    Door dissolution (ADR 0094): engine templates (tier=template) ARE in the
-    DEFAULT declarations now -- they are ordinary retrieval-pool tools, callable
-    directly (no door, no gate expansion). Only tier=internal (an absorbed seam,
-    fetch_copernicus_dem; ADR 0059) and tier=catalog (arm-flagged) are withheld,
-    matching ``server._default_declarable_registry`` on the product side."""
+    ``len(TOOL_REGISTRY)`` minus the pool-hidden tiers, ``internal`` and ``catalog``;
+    engine templates are ordinary declarable tools and stay in."""
     n_hidden = sum(
         1
         for entry in TOOL_REGISTRY.values()

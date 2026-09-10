@@ -1,17 +1,9 @@
-"""Tests for MCP annotation hints on every registered atomic tool (job-B12).
+"""MCP annotation hints on every registered atomic tool.
 
-Coverage:
-- Every registered tool has all four annotation fields set (not None).
-- Consistency rule: write tools (read_only_hint=False) are not also
-  flagged as read-only.
-- Consistency rule: external-API tools (open_world_hint=True) are a
-  subset of the fetch_* / web_fetch / catalog_* group; compute_* /
-  clip_* / local-substrate-only tools are not open-world.
-- Specific spot-checks for known high-stakes tools (
-  run_solver, wait_for_completion).
-- Verify the four new fields land on AtomicToolMetadata with correct
-  default values.
-"""
+All four annotation fields are set on every tool; a write tool is not also
+flagged read-only; an open-world tool is a fetch, ``web_fetch`` or catalog tool
+rather than a local ``compute_*`` or ``clip_*`` transform; the high-stakes tools
+are spot-checked; the four fields carry their declared defaults."""
 
 from __future__ import annotations
 
@@ -136,12 +128,10 @@ _OPEN_WORLD_COMPUTE_EXCEPTIONS = {
 
 
 def test_open_world_tools_are_fetchers_or_external():
-    """open_world_hint=True tools must not include compute_* or clip_* tools.
+    """``open_world_hint=True`` must not include a ``compute_*`` or ``clip_*`` tool.
 
-    compute_* and clip_* are local GDAL transforms with no external API calls
-    (documented exceptions: input-fetching composers in
-    ``_OPEN_WORLD_COMPUTE_EXCEPTIONS``).
-    """
+    Those are local GDAL transforms with no external call; the input-fetching
+    composers are the documented exceptions in ``_OPEN_WORLD_COMPUTE_EXCEPTIONS``."""
     snapshot = _registry_snapshot()
     open_world_names = {n for n, m in snapshot.items() if m.open_world_hint}
     assert open_world_names, (
@@ -286,12 +276,9 @@ def test_register_tool_annotation_kwargs_override_defaults(empty_registry):
 
 
 def test_annotation_summary():
-    """Print a summary of annotation counts for the smoke_test_result metric.
+    """Print the annotation counts and check they are internally consistent.
 
-    Counts tools by annotation category. This does not assert specific counts
-    (they grow with each new tool) but verifies the numbers are internally
-    consistent.
-    """
+    The counts grow with every new tool, so no specific count is asserted."""
     snapshot = _registry_snapshot()
     n_total = len(snapshot)
     n_read_only = sum(1 for m in snapshot.values() if m.read_only_hint)

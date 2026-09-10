@@ -1,37 +1,9 @@
-"""Tests for the ``spatial_query`` tool (DuckDB spatial-query fold, Phase B).
+"""The ``spatial_query`` tool: one read-only SQL surface over local layers.
 
-Replaces ``test_analytical_qa.py``: the three fixed-shape analytical Q&A tools
-(``summarize_layer_statistics`` / ``count_features_above_threshold`` /
-``aggregate_property_within_zone``) folded into ONE read-only SQL surface.
-The behavioral coverage of the old suite is rewritten here as spatial_query
-SQL against small LOCAL geojson fixtures - fully OFFLINE (no MinIO, no
-network; the DuckDB spatial extension is loaded from the local
-~/.duckdb/extensions cache).
-
-Coverage:
-- Registration + metadata + category + hot-set floor slot.
-- Registry fold proof: the three folded tools are GONE; count is 190.
-- SQL happy paths: summary stats / count-above-threshold / aggregate-within-
-  zone / per-zone spatial join (the old trio's behaviors, as SQL).
-- Read-only guard: writes / multi-statement / INSTALL / COPY / ATTACH / SET
-  rejected; string-literal keyword smuggling NOT falsely rejected.
-- Bad SQL -> typed SQL_ERROR carrying the DuckDB message verbatim (retryable).
-- Raster ref -> typed RASTER_UNSUPPORTED naming the playground alternative.
-- Bad alias / bad ref -> typed BAD_LAYER_REF.
-- Row cap + truncation flag.
-- Result materialization ("show me all X in Y" paints): geometry-bearing
-  results return a SpatialQueryLayerURI (FlatGeobuf written + vector-tool
-  envelope + compact row summary); tabular/empty results unchanged;
-  result_name honored; runs-bucket upload key; geopandas fallback; honest
-  degrade-to-tabular on materialization failure.
-- ADR-0014 handle resolution: SessionUriRegistry.resolve_params resolves
-  layer_refs dict VALUES (handle -> uri) for tool_name="spatial_query".
-- Retrieval (hard rule - corpus before acceptance): search_tools returns
-  spatial_query top-5 for folded-tool phrasings; retrieve_visible_tools
-  always carries it (hot-set floor).
-
-ASCII only.
-"""
+Offline against small local geojson fixtures: registration and the hot-set floor,
+the SQL happy paths, a read-only guard that rejects writes and multi-statement
+without falsely rejecting a keyword inside a string literal, the typed errors and
+the row cap, the materialization that paints a geometry result, and retrieval."""
 
 from __future__ import annotations
 
@@ -145,10 +117,10 @@ class TestRegistration:
             assert name not in TOOL_REGISTRY, f"{name} should be folded away"
 
     def test_registry_core_membership_is_order_robust(self):
-        """MEMBERSHIP, not cardinality: other test files import workflow modules
-        that grow the module-global registry, so the count is order-dependent and
-        a count pin here fails on suite order rather than on a real change. The
-        exact roster is pinned once, in test_catalog_surfacing."""
+        """MEMBERSHIP, not cardinality.
+
+        Other files import workflow modules that grow the module-global registry, so a
+        count pin here fails on suite order rather than on a real change."""
         from trid3nt_server.tools import TOOL_REGISTRY
         assert "spatial_query" in TOOL_REGISTRY
         for retired in ("summarize_layer_statistics", "count_features_above_threshold",
@@ -690,10 +662,9 @@ class TestResultMaterialization:
 
 class TestHandleResolution:
     def test_layer_refs_values_resolve_via_registry(self, points_path):
-        """server.py dispatch calls uri_registry.resolve_params(tool, params)
-        before the tool body; layer_refs is in NESTED_REF_PARAMS so every
-        string VALUE resolves handle -> uri. Prove the seam end-to-end with a
-        real SessionUriRegistry + the real tool."""
+        """``layer_refs`` is in ``NESTED_REF_PARAMS``, so every string VALUE resolves handle
+        -> uri before the tool body runs. Proved end to end with a real
+        ``SessionUriRegistry`` and the real tool."""
         from trid3nt_server.emission.uri_registry import SessionUriRegistry
 
         reg = SessionUriRegistry(session_id="test-spatial-query")

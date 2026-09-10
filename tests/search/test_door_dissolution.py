@@ -1,18 +1,9 @@
-"""Door dissolution (ADR 0094): the engine-door concierge tools are DELETED and
-each engine template stands alone in the retrieval pool.
+"""Door dissolution: each engine template stands alone in the retrieval pool.
 
-Two guarantees are pinned here:
-
-1. CALLABILITY -- every engine template is registered (tier=template,
-   source_class=workflow_dispatch) and directly callable; NO tier=door tool
-   survives; the 10 deleted door names are gone with no alias.
-2. RETRIEVAL -- with templates walked into the index, EACH engine template is
-   surfaced in the model-free ``retrieve_visible_tools(query, None, 8)`` top-8
-   by at least one of its natural-language corpus queries (the retrieval-corpus-
-   first rule -- the doors can die only because discovery works without them).
-
-ASCII only.
-"""
+CALLABILITY - every engine template is registered ``tier=template``,
+``source_class=workflow_dispatch`` and directly callable, and no ``tier=door``
+tool or alias survives. RETRIEVAL - each template is surfaced in the model-free
+top-8 by at least one of its natural-language corpus queries. ASCII only."""
 
 from __future__ import annotations
 
