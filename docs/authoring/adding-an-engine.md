@@ -41,7 +41,7 @@ seam list, from the TELEMAC templates:
    rows (every world-read declared, never performed in a step), the binding
    blocks (`Physics`, `Forcing`, the `tool.build_mesh` ask), `plan(ops)`, the
    `ANSWER` tuple, the chart builder, and the `register_workflow(...)` call.
-   Model it on `workflows/telemac/rain_on_grid/rain_on_grid.py`.
+   Model it on `workflows/telemac/templates/rain_on_grid/rain_on_grid.py`.
 
 3. **The process row** -- `workflows/<engine>/workflow.py`: a row in the facade's
    `_PROCESSES` table saying what the declared process means end to end - which

@@ -1,4 +1,4 @@
-"""Unit tests for the shared CIRA/RAMMB SLIDER substrate (tools/_satellite_slider.py).
+"""Unit tests for the shared CIRA/RAMMB SLIDER substrate (tools/fetchers/imagery/_satellite_slider.py).
 
 Pure-helper coverage (no network): URL builders (date YYYY/MM/DD slashes,
 tileY_tileX order, zoom %02d), timestamp round-trip, the time-index reader

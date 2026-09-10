@@ -60,5 +60,10 @@ holds the limits, the routing budget, the exemption ledger and the disallowed
 classes; `test_history_markers.py` sweeps every comment and docstring in every
 product tree; `test_dead_references.py` resolves every named module, script and
 path, in the product trees, the directory maps, the manual, `AGENTS.md` and this
-document - an agent told to obey a law cannot follow a path that is not there. A guard is a grep after a file has been read end to end - it catches a
+document - an agent told to obey a law cannot follow a path that is not there. A
+path is read whole: one starting at a tree resolves as written, and one written
+package-relative (`workflows/...`, `tools/...`, `net/...`) resolves under the
+package roots, but only when it ends in a file suffix - without that the pattern
+reads ordinary prose as a path, and a guard that fires on English is worse than
+the class it catches. A guard is a grep after a file has been read end to end - it catches a
 class coming back, it never stands in for reading.

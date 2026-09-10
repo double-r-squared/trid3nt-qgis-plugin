@@ -10,16 +10,47 @@ from __future__ import annotations
 
 import re
 import subprocess
+from functools import lru_cache
 
 from tests.hygiene import _source as source
 
 TOP_LEVEL = ("trid3nt_server", "trid3nt_contracts", "plugin", "contracts", "scripts", "tests", "docs")
 
-PATH_REF = re.compile(rf"(?<![\w./>-])(?:{'|'.join(TOP_LEVEL)})/[\w./-]*[\w](?![\w<*])")
+PACKAGE_ROOTS = ("", "trid3nt_server/", "contracts/", "plugin/")
+
+
+def _package_dirs() -> tuple[str, ...]:
+    """The packages' own top directories. Prose names a module inside one of
+    them package-relative - ``workflows/...``, ``tools/...``, ``net/...`` - and
+    a wrong path of that shape resolves by basename unless it is read whole."""
+    inner = set()
+    for path in _tracked():
+        for root in PACKAGE_ROOTS[1:]:
+            if path.startswith(root):
+                rest = path[len(root):]
+                if "/" in rest:
+                    inner.add(rest.split("/", 1)[0])
+    return tuple(sorted(inner - set(TOP_LEVEL), key=len, reverse=True))
+
+
+#: A package-relative reference must end in a FILE SUFFIX. Without that the
+#: pattern reads ordinary prose as a path - "a case/separator-insensitive match",
+#: "the gates/caveats/endpoint rung" - and a guard that fires on English is worse
+#: than the class it catches. A tree-prefixed reference needs no suffix: the
+#: prefix is already proof that a path was meant.
+SUFFIXES = ("py", "sh", "md", "html", "yaml", "yml", "json", "toml", "cfg", "ini", "txt")
+
+
+@lru_cache(maxsize=1)
+def _path_ref() -> re.Pattern[str]:
+    trees = "|".join(re.escape(p) for p in TOP_LEVEL)
+    packages = "|".join(re.escape(p) for p in _package_dirs())
+    suffixes = "|".join(SUFFIXES)
+    return re.compile(
+        rf"(?<![\w./>-])(?:(?:{trees})/[\w./-]*[\w](?![\w<*])"
+        rf"|(?:{packages})/[\w./-]*\.(?:{suffixes})\b)")
 SCRIPT_REF = re.compile(r"(?<![\w./*>-])[a-z_][a-z0-9_]{2,}\.(?:py|sh)\b")
 MODULE_REF = re.compile(r"\b(?:trid3nt_server|trid3nt_contracts)(?:\.[a-z_][a-z0-9_]*)+\b")
-
-PACKAGE_ROOTS = ("", "contracts/", "plugin/")
 
 #: Markdown whose sentences are claims about the tree as it is now: the reader's
 #: manual, the generated template pages, and every directory map. A dated record
@@ -90,6 +121,8 @@ def _live_docs() -> list[str]:
     live = ["Makefile", *LAW_DOCS]
     for path in source.markdown_files():
         rel = str(path.relative_to(source.REPO_ROOT))
+        if rel == "docs/decisions/README.md":
+            continue
         if path.name == "README.md" or rel.startswith(LIVE_DOC_ROOTS):
             live.append(rel)
     return live
@@ -106,13 +139,13 @@ def test_named_modules_and_scripts_exist() -> None:
 
 
 def _matches(text: str):
-    for pattern in (PATH_REF, SCRIPT_REF, MODULE_REF):
+    for pattern in (_path_ref(), SCRIPT_REF, MODULE_REF):
         for match in pattern.finditer(text):
             yield text.count("\n", 0, match.start()), match.group(0)
 
 
 def _resolves(ref: str, files, dirs, basenames, base: str = "") -> bool:
-    for candidate in (ref, base + ref):
+    for candidate in (ref, base + ref, *(root + ref for root in PACKAGE_ROOTS)):
         if candidate in files or candidate in dirs or (source.REPO_ROOT / candidate).exists():
             return True
     if "/" not in ref and "." in ref and not ref.startswith(("trid3nt_server.", "trid3nt_contracts.")):

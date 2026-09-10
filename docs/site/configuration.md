@@ -35,7 +35,7 @@ The variables below are the complete shipped file, grouped by concern.
     anonymous reads of PUBLIC AWS open-data buckets (GOES/GLM granules on `noaa-goesNN`, the
     HRRR zarr mirror). Without countermeasures those reads get silently redirected to MinIO and
     fail with misleading "no data upstream" errors. The agent carries
-    `tools/_public_s3.py`, which pins UNSIGNED public-bucket clients to the real
+    `tools/fetchers/_public_s3.py`, which pins UNSIGNED public-bucket clients to the real
     `https://s3.<region>.amazonaws.com` endpoint. Cloud behavior is unchanged (the env var is
     unset there). If you add a new tool that reads a public bucket anonymously, build its client
     via `_public_s3` -- do not use a bare `boto3.client("s3")`. See
