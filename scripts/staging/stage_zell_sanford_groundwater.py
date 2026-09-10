@@ -1,69 +1,9 @@
 #!/usr/bin/env python3
 """Stage the Zell & Sanford (2020) CONUS surficial-groundwater grids as COGs.
 
-Source release: USGS data release doi 10.5066/P91LFFN1 (ScienceBase item
-631405c5d34e36012efa3190), documenting the Water Resources Research paper
-doi 10.1029/2019WR026724. Seventy-five steady-state single-layer MODFLOW-6
-models (250 m, Albers, ``ICELLTYPE=1`` unconfined) of the shallow groundwater
-system, driven by Reitz et al. recharge and PEST-calibrated against long-term
-average water levels.
-
-Three staged products, all on one grid:
-
-  water_table_depth    Published. ``Output_CONUS_trans_dtw.zip`` ->
-                       conus_MF6_SS_Unconfined_250_dtw.tif, depth to the water
-                       table in METRES below land surface. Negative where the
-                       simulated water table stands above land surface
-                       (wetlands, stream corridors) -- a real model state, kept.
-  transmissivity       Published. Same archive ->
-                       conus_MF6_SS_Unconfined_250_trans.tif, effective
-                       surficial transmissivity in M2/DAY. This is the release's
-                       headline calibrated field.
-  saturated_thickness  DERIVED, ``b = T / K``. Not published as a raster, but
-                       recoverable exactly: the models set ``ICELLTYPE 1`` with
-                       ``NLAY 1``, so MODFLOW-6 forms ``T = K * (head - BOTM)``.
-                       K is rebuilt from the release's own calibration output --
-                       the ``hk_<zone>`` values in ``{ID}_opt.par`` looked up
-                       through the ``{ID}_surfgeo_transformedID_huc4.tif``
-                       parameter-zone map -- and reproduces the ``{ID}_1.hk``
-                       array the model ran EXACTLY (see
-                       ``verify_k_reconstruction``). Dividing the published CONUS
-                       transmissivity by that K mosaic returns the model's own
-                       saturated thickness in METRES. No term is invented: both
-                       factors are the release's own files.
-
-  The identity is proved, not assumed. For subdomain
-  0601_0602_0603_0604 the two independent routes -- ``T / K`` and the geometric
-  ``(TOP - BOTM) - dtw`` -- agree to 6.4e-6 m over all 1,695,168 active cells
-  (Pearson r = 1.0000000000). ``validate()`` re-runs the structural half of that
-  identity CONUS-wide: ``b + dtw`` must reproduce the model's prescribed
-  per-zone ``TOP - BOTM``, which takes only a few dozen round values.
-
-Honest limits, verified against the release rather than assumed:
-
-  * ``TOP - BOTM`` is a PRESCRIBED ZONAL CONSTANT, not a mapped aquifer base.
-    In subdomain 0601 it takes 22 distinct values between 20 m and 150 m,
-    pairing with only 31 distinct K values -- the surficial-geology x HUC4
-    parameter zones the paper calibrated. The derived saturated thickness is
-    therefore the thickness of the MODELLED SURFICIAL SYSTEM, bounded above by
-    that prescribed zone thickness. It is not the thickness of a named aquifer
-    and must never be read as one.
-  * Because the model bottom is prescribed, simulated depth to water saturates
-    at it: CONUS dtw maxes at 240.52 m and 8,374 cells sit exactly on a zone's
-    bottom. Real wells in the release's own calibration set read as deep as
-    296.76 m.
-
-Cleaning is one model-grounded rule, not a threshold picked by eye: a cell whose
-published transmissivity is NEGATIVE is impossible under ``T = K * b`` (K > 0,
-b >= 0) and is masked in every product. That rule alone removes 517 cells of
-124,884,786 and takes every junk value out of BOTH rasters -- after it, the most
-negative depth to water is -25.68 m and the series is smooth. No second
-threshold is needed or applied.
-
-Usage:
-    python scripts/staging/stage_zell_sanford_groundwater.py --step all
-    python scripts/staging/stage_zell_sanford_groundwater.py --step kmosaic
-    python scripts/staging/stage_zell_sanford_groundwater.py --step build --no-upload
+Seventy-five steady-state single-layer MODFLOW-6 models of the shallow
+groundwater system. Two staged products are the release's own published rasters;
+the third is DERIVED as ``b = T / K`` from those same files, inventing no term.
 """
 
 from __future__ import annotations
@@ -186,12 +126,10 @@ DATASETS: dict[str, dict[str, Any]] = {
         "quantity": "water_table_depth",
         "derived": False,
     },
-    # ADR 0298 Decision 7 parked this: it is the audited numerator of the
-    # thickness derivation and its west/east contrast proves the pipeline, but
-    # NormalizeSpec.quantity is a single static stamp, so it could not ride
-    # fetch_aquifer_thickness without labelling a m2/day layer as a saturated
-    # thickness. NATE ruled REGISTER: it now has its own spec
-    # (fetch_aquifer_transmissivity) and ships as a real product.
+    # The audited numerator of the thickness derivation, and a product in its own
+    # right. It cannot ride fetch_aquifer_thickness - NormalizeSpec.quantity is a
+    # single static stamp, and a m2/day layer must not be labelled a saturated
+    # thickness - so it carries its own spec, fetch_aquifer_transmissivity.
     "transmissivity": {
         "version": "zellsanford2020-v1",
         "object": "transmissivity_m2_day.tif",
@@ -237,12 +175,8 @@ def _sha256(path: Path) -> str:
 
 def download(url: str, dest: Path) -> None:
     """Fetch ``url`` to ``dest`` unless it is already there (resumable by hand).
-
-    A ``.zip`` destination is checked for the PK magic and deleted if it is
-    missing. ScienceBase answers a stale or migrated file URL with a 200 and an
-    HTML app shell, not an error, and a cached 4 KB "zip" of HTML would then be
-    SKIPPED as already present on every later run.
-    """
+    A ``.zip`` destination is checked for the PK magic and deleted without it:
+    ScienceBase answers a stale file URL with a 200 and an HTML app shell."""
     if dest.exists() and dest.stat().st_size > 0:
         if dest.suffix == ".zip" and dest.open("rb").read(2) != b"PK":
             print(f"  [bad ] {dest.name} is not a zip ({dest.stat().st_size:,} bytes) "
@@ -275,15 +209,12 @@ def download(url: str, dest: Path) -> None:
 
 
 def download_verified(archive: dict[str, Any], dest: Path) -> None:
-    """``download`` plus a sha256 check against the archive's pinned hash.
-
-    Only ``CONUS_ARCHIVE`` used to be pinned. An unpinned ``DATA_SUBDOMAIN``,
-    ``PEST_SUBDOMAIN`` or ``VERIFY_ARCHIVE`` re-issue at the same ScienceBase
-    URL -- a corrected zone map, a re-run PEST calibration -- would silently
-    mis-assign K for some or all of the 74 downstream subdomains the K mosaic
-    was never re-verified against. Every archive this script consumes is
-    pinned; a mismatch fails loud before its bytes are trusted for anything.
-    """
+    """``download`` plus a sha256 check against the archive's pinned hash. Every
+    archive this script consumes is pinned, and a mismatch fails loud before its
+    bytes are trusted for anything."""
+    # A re-issue at the same ScienceBase URL - a corrected zone map, a re-run
+    # PEST calibration - would otherwise silently mis-assign K across the 74
+    # downstream subdomains the K mosaic was never re-verified against.
     download(archive["url"], dest)
     got = _sha256(dest)
     want = archive.get("sha256")
@@ -300,13 +231,11 @@ def download_verified(archive: dict[str, Any], dest: Path) -> None:
 
 
 def conus_grid(work: Path) -> dict[str, Any]:
-    """Geometry of the published CONUS mosaic, read off a raster on that grid.
-
-    Prefers the extracted source; falls back to any already-built Albers
-    product, which is a cell-for-cell copy of the same grid. That lets a later
-    step re-run after the 1.7 GB of extracted source rasters have been cleaned
-    up, instead of demanding a 918 MB re-download to read six numbers.
-    """
+    """Geometry of the published CONUS mosaic, read off a raster on that grid:
+    the extracted source, else any already-built Albers product, which is a
+    cell-for-cell copy of the same grid."""
+    # The fallback lets a later step re-run after the 1.7 GB of extracted source
+    # rasters are cleaned up, instead of a 918 MB re-download to read six numbers.
     import rasterio
 
     src = work / CONUS_ARCHIVE["dtw"]
@@ -340,11 +269,8 @@ def _subdomain_id(member: str) -> str:
 
 def _hk_by_zone(par_text: str) -> dict[int, float]:
     """The calibrated ``hk_<zone>`` values out of a PEST optimized-parameter file.
-
-    The file also carries ``drnc_`` (drain conductance), ``rchm_`` (recharge
-    multiplier), ``rtd_`` (rooting depth) and ``porm_`` (porosity) parameters;
-    only hydraulic conductivity enters the transmissivity the model reports.
-    """
+    The file carries drain-conductance, recharge-multiplier, rooting-depth and
+    porosity parameters too; only K enters the transmissivity the model reports."""
     out: dict[int, float] = {}
     for line in par_text.splitlines()[1:]:
         f = line.split()
@@ -362,18 +288,13 @@ def _zone_rasters(zf: zipfile.ZipFile) -> dict[str, str]:
 
 
 def build_k_mosaic(work: Path, grid: dict[str, Any]) -> dict[str, Any]:
-    """Mosaic the model's own hydraulic conductivity onto the CONUS grid.
-
-    K is reconstructed per subdomain as ``hk_<zone>`` (PEST optimized parameter)
-    looked up through ``{ID}_surfgeo_transformedID_huc4.tif`` (the parameter-zone
-    map). ``verify_k_reconstruction`` proves this reproduces the ``{ID}_1.hk``
-    array the model actually ran, exactly.
-
-    The zone rasters are georeferenced on the same 250 m Albers grid as the
-    published CONUS mosaic, so each one lands at an exact integer offset -- a
-    fractional offset means the raster does not belong to this mosaic and is
-    refused rather than rounded into place.
-    """
+    """Mosaic the model's own hydraulic conductivity onto the CONUS grid: per
+    subdomain, the calibrated ``hk_<zone>`` looked up through that subdomain's
+    parameter-zone map."""
+    # The zone rasters are georeferenced on the same 250 m Albers grid as the
+    # published CONUS mosaic, so each lands at an exact integer offset - a
+    # fractional offset means the raster does not belong to this mosaic and is
+    # refused rather than rounded into place.
     import io as _io
 
     import numpy as np
@@ -460,13 +381,9 @@ def build_k_mosaic(work: Path, grid: dict[str, Any]) -> dict[str, Any]:
 
 
 def verify_k_reconstruction(work: Path) -> dict[str, Any]:
-    """Prove the zone-map route against the array the model actually ran.
-
-    Downloads one HUC group of model inputs and checks the reconstructed K
-    against its shipped ``{ID}_1.hk`` cell by cell. Anything short of an exact
-    match means the zone map, the parameter file, or the pairing is wrong, and
-    the derived saturated thickness cannot be trusted.
-    """
+    """Prove the zone-map route against the array the model actually ran, cell by
+    cell. Anything short of an exact match means the zone map, the parameter
+    file or the pairing is wrong, and the derived thickness cannot be trusted."""
     import io as _io
 
     import numpy as np
@@ -519,14 +436,9 @@ def verify_k_reconstruction(work: Path) -> dict[str, Any]:
 
 
 def compute_cleaning_report(work: Path) -> dict[str, Any]:
-    """Count the cells the one cleaning rule removes, from the source rasters.
-
-    Every product shares one cleaning rule (negative published transmissivity
-    is masked everywhere), so this counts it once against the extracted CONUS
-    ``dtw``/``trans`` rasters and persists it -- the ``cleaning_rule``
-    provenance sentence then states a number this run actually computed, not
-    one pasted in from an earlier run's console output.
-    """
+    """Count the cells the one cleaning rule removes, from the source rasters, and
+    persist the count so the ``cleaning_rule`` provenance sentence states a
+    number THIS run computed rather than one pasted in."""
     import numpy as np
     import rasterio
 
@@ -556,11 +468,21 @@ def compute_cleaning_report(work: Path) -> dict[str, Any]:
 
 def build_albers(work: Path, dataset: str, grid: dict[str, Any]) -> Path:
     """Write the cleaned (and, for thickness, derived) product on the model grid.
-
-    One cleaning rule, applied identically to all three products: a cell whose
-    published transmissivity is negative cannot satisfy ``T = K * b`` with K > 0
-    and b >= 0, so it is masked everywhere. Nodata becomes NaN.
-    """
+    One cleaning rule for all three: a cell whose published transmissivity is
+    negative cannot satisfy ``T = K * b``, so it is masked. Nodata becomes NaN."""
+    # THE DERIVED PRODUCT. The models set ICELLTYPE 1 with NLAY 1, so MODFLOW-6
+    # forms T = K * (head - BOTM); dividing the published transmissivity by the
+    # reconstructed K mosaic returns the model's own saturated thickness in
+    # metres. Both factors are the release's own files. The identity is proved,
+    # not assumed: on one subdomain the two independent routes - T / K and the
+    # geometric (TOP - BOTM) - dtw - agree to 6.4e-6 m over all 1,695,168 active
+    # cells, and validate() re-runs the structural half CONUS-wide.
+    #
+    # HONEST LIMIT: TOP - BOTM is a PRESCRIBED ZONAL CONSTANT, not a mapped
+    # aquifer base, so the derived thickness is the thickness of the MODELLED
+    # SURFICIAL SYSTEM, bounded above by that prescribed zone thickness, and
+    # must never be read as the thickness of a named aquifer. Simulated depth to
+    # water saturates at that bottom for the same reason.
     import numpy as np
     import rasterio
 
@@ -605,12 +527,10 @@ def build_albers(work: Path, dataset: str, grid: dict[str, Any]) -> Path:
 
 def to_cog_4326(src: Path, out: Path) -> None:
     """Reproject an Albers product to an EPSG:4326 COG on the staged posting.
-
-    NEAREST, and the target posting is finer than the source cell, so no source
-    value is interpolated into a new number and no source row is skipped.
-    gdalwarp rather than an in-memory reproject: the CONUS grid is 283 million
-    cells at this posting and gdalwarp streams it block by block.
-    """
+    NEAREST onto a finer posting, so no source value is interpolated into a new
+    number and no source row is skipped."""
+    # gdalwarp rather than an in-memory reproject: the CONUS grid is 283 million
+    # cells at this posting and gdalwarp streams it block by block.
     if out.exists():
         print(f"  [skip] {out.name} already built")
         return
@@ -659,11 +579,9 @@ def _albers_extremes(work: Path, dataset: str) -> tuple[float, float, int]:
 
 
 def _valid_area_km2(src: Any) -> float:
-    """Ground area of the finite pixels in a north-up EPSG:4326 raster.
-
-    Cell area shrinks with latitude, so the count alone is not an area: each
-    row is weighted by ``cos(lat)`` about the WGS84 sphere.
-    """
+    """Ground area of the finite pixels in a north-up EPSG:4326 raster. Cell area
+    shrinks with latitude, so the count alone is not an area: each row is
+    weighted by ``cos(lat)`` about the WGS84 sphere."""
     import numpy as np
 
     dy_km = abs(src.transform.e) * 111.19492664455873
@@ -679,11 +597,8 @@ def _valid_area_km2(src: Any) -> float:
 
 
 def _regional_medians(src: Any, cut_lon: float, stride: int = 8) -> tuple[float, float]:
-    """Median of the finite pixels west and east of ``cut_lon``.
-
-    Reads a decimated overview rather than the full grid: at stride 8 this is
-    still millions of samples per side, far more than a median needs.
-    """
+    """Median of the finite pixels west and east of ``cut_lon``, off a decimated
+    overview: at stride 8 that is still millions of samples per side."""
     import numpy as np
     from rasterio.enums import Resampling
 
@@ -709,12 +624,9 @@ def _sample(src: Any, lon: float, lat: float, half_deg: float = 0.05) -> float:
 
 
 def _calibration_observations(work: Path) -> tuple[Any, Any, Any, Any]:
-    """The publisher's own long-term average water levels, with CONUS coords.
-
-    Returns ``(lon, lat, obs_m, kind)``. ``kind`` splits real NWIS wells
-    (``w_``) from the NHD stream (``nh``) and NWI wetland (``nw``) pseudo-
-    observations, which are all recorded at 0 m by construction.
-    """
+    """The publisher's own long-term average water levels, with CONUS coords, as
+    ``(lon, lat, obs_m, kind)``. ``kind`` splits real wells from the stream and
+    wetland pseudo-observations, which are all at 0 m by construction."""
     import numpy as np
     import rasterio.warp as rwarp
 

@@ -1,35 +1,9 @@
 #!/usr/bin/env python3
 """Stage the published CONUS groundwater-recharge grids as COGs in object storage.
 
-Two independent published sources, staged side by side so the fetcher can serve
-either one and a user can compare them:
-
-  reitz2017   USGS Reitz, Sanford, Senay & Cazenas (2017), "Average annual rates
-              of evapotranspiration, quick-flow runoff, and recharge for the
-              CONUS, 2000-2013", doi 10.5066/F7PN93P0 (paper doi
-              10.1111/1752-1688.12546). File TotalRecharge_0013.zip -> 0013/
-              RC_0013.tif, 30 arc-sec (~800 m), EPSG:4269, METERS per year.
-  wolock2003  USGS Wolock (2003), "Estimated mean annual natural ground-water
-              recharge in the conterminous United States", doi 10.5066/P9FSSVF3.
-              File rech48grd.zip -> an ESRI GRID, 1 km, EPSG:5070, MILLIMETERS
-              per year, base-flow-index x mean-annual-runoff (methodologically
-              independent of the Reitz empirical regressions).
-
-The staged product is one float32 EPSG:4326 COG per source in MILLIMETERS per
-year. The only value transform applied to reitz2017 is the m/yr -> mm/yr factor
-of 1000 (recorded in the provenance sidecar); wolock2003 is already mm/yr and its
-integers pass through unchanged. Reprojection is NEAREST so no source value is
-ever interpolated into a new number.
-
-Validation is not optional: the script re-opens the staged COG and checks it
-against the numbers the publisher printed in the release metadata (grid
-geometry, value domain, whole-grid statistics) plus the paper's stated
-arid-west / humid-east gradient, and refuses to upload when a check fails.
-
-Usage:
-    python scripts/staging/stage_groundwater_recharge.py --dataset all
-    python scripts/staging/stage_groundwater_recharge.py --dataset reitz2017 --no-upload
-    python scripts/staging/stage_groundwater_recharge.py --dataset all --work-dir /tmp/gwr
+Two independent published sources, staged as one float32 EPSG:4326 COG each in
+MILLIMETERS per year, NEAREST-resampled so no source value is interpolated into
+a new one. A staged COG is proved against the publisher's numbers or not uploaded.
 """
 
 from __future__ import annotations
@@ -196,12 +170,9 @@ def extract(archive: Path, work: Path) -> None:
 
 
 def to_cog_4326(src_path: Path, out_path: Path, unit_scale: float) -> dict[str, Any]:
-    """Reproject ``src_path`` to a float32 EPSG:4326 COG in mm/yr.
-
-    NEAREST resampling: every staged value is a source value, so a spot check
-    against the publication compares like with like. The unit scale is applied
-    only to finite pixels; source nodata becomes NaN.
-    """
+    """Reproject ``src_path`` to a float32 EPSG:4326 COG in mm/yr. NEAREST, so
+    every staged value is a source value; the unit scale is applied to finite
+    pixels only and source nodata becomes NaN."""
     import numpy as np
     import rasterio
     from rasterio.warp import Resampling, calculate_default_transform, reproject
