@@ -10,19 +10,19 @@ venvs/agent/bin/python scripts/instruments/code_graph.py
 
 | metric | value |
 |---|---|
-| modules scanned | 1020 |
-| total loc | 297153 |
-| reachable from roots | 437 (138392 loc) |
-| test-only-reachable | 93 |
+| modules scanned | 1037 |
+| total loc | 267553 |
+| reachable from roots | 437 (116638 loc) |
+| test-only-reachable | 97 |
 | script-only-reachable | 1 |
 | orphans (product) | 18 |
-| package markers excluded from orphans | 104 |
-| orphans (scripts/ entry modules) | 23 |
-| test modules | 381 |
-| import edges | 3286 |
-| dynamic (string-resolved) edges | 200 |
-| reference call-site edges | 12711 |
-| unattributed call sites | 64661 |
+| package markers excluded from orphans | 105 |
+| orphans (scripts/ entry modules) | 21 |
+| test modules | 396 |
+| import edges | 3302 |
+| dynamic (string-resolved) edges | 207 |
+| reference call-site edges | 12726 |
+| unattributed call sites | 64620 |
 | dead symbols (conf >= 80) | 7 |
 | unused callables (conf 60 tier) | 39 |
 | vulture findings muted by whitelist | 31 |
@@ -31,8 +31,8 @@ venvs/agent/bin/python scripts/instruments/code_graph.py
 
 - Known-culled modules from this arc still present: **0** (all confirmed gone)
 - grimp modules with no file in the scanned universe: 0
-- Call sites the import table could not attribute: 64661 (builtins, locals, methods on non-imported objects -- counted, not guessed).
-- Out of scope, so its imports anchor nothing: `experiments/`, `third_party/`, `docs/proof/**/*.py`.
+- Call sites the import table could not attribute: 64620 (builtins, locals, methods on non-imported objects -- counted, not guessed).
+- Out of scope, so its imports anchor nothing: `experiments/`, `third_party/`.
 
 ## False-positive classes handled
 
@@ -48,61 +48,61 @@ venvs/agent/bin/python scripts/instruments/code_graph.py
 
 | module | loc | path |
 |---|---|---|
-| `trid3nt_server.tools.fetchers._router.hooks.cds` | 680 | trid3nt_server/tools/fetchers/_router/hooks/cds.py |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.hooks` | 386 | trid3nt_server/tools/fetchers/hydrology/fetch_usgs_nwis_gauges/hooks.py |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast.hooks` | 340 | trid3nt_server/tools/fetchers/hydrology/fetch_nws_river_forecast/hooks.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_raws_weather.hooks` | 292 | trid3nt_server/tools/fetchers/weather/fetch_raws_weather/hooks.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_asos_metar.hooks` | 288 | trid3nt_server/tools/fetchers/weather/fetch_asos_metar/hooks.py |
-| `trid3nt_server.tools.fetchers.hazard.fetch_usgs_earthquakes.hooks` | 257 | trid3nt_server/tools/fetchers/hazard/fetch_usgs_earthquakes/hooks.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.hooks` | 246 | trid3nt_server/tools/fetchers/weather/fetch_openaq_measurements/hooks.py |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels.hooks` | 244 | trid3nt_server/tools/fetchers/hydrology/fetch_usgs_groundwater_levels/hooks.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_nws_alerts_conus.hooks` | 231 | trid3nt_server/tools/fetchers/weather/fetch_nws_alerts_conus/hooks.py |
-| `trid3nt_server.tools.fetchers.hazard.fetch_tsunami_events.hooks` | 221 | trid3nt_server/tools/fetchers/hazard/fetch_tsunami_events/hooks.py |
-| `trid3nt_server.tools.fetchers.soil.fetch_snotel_snow.hooks` | 207 | trid3nt_server/tools/fetchers/soil/fetch_snotel_snow/hooks.py |
-| `trid3nt_server.tools.fetchers.hazard.fetch_usgs_volcano_alerts.hooks` | 205 | trid3nt_server/tools/fetchers/hazard/fetch_usgs_volcano_alerts/hooks.py |
-| `trid3nt_server.tools.fetchers._router.hooks.pfdf_raster` | 196 | trid3nt_server/tools/fetchers/_router/hooks/pfdf_raster.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_airnow_air_quality.hooks` | 173 | trid3nt_server/tools/fetchers/weather/fetch_airnow_air_quality/hooks.py |
-| `trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.hooks` | 146 | trid3nt_server/tools/fetchers/socioeconomic/fetch_usace_nsi/hooks.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_nws_event.hooks` | 135 | trid3nt_server/tools/fetchers/weather/fetch_nws_event/hooks.py |
-| `trid3nt_server.tools.fetchers.ocean.fetch_osm_breakwaters.hooks` | 102 | trid3nt_server/tools/fetchers/ocean/fetch_osm_breakwaters/hooks.py |
-| `trid3nt_server.tools.fetchers.ocean.fetch_osm_coastline.hooks` | 66 | trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/hooks.py |
+| `trid3nt_server.tools.fetchers._router.hooks.cds` | 652 | trid3nt_server/tools/fetchers/_router/hooks/cds.py |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.hooks` | 361 | trid3nt_server/tools/fetchers/hydrology/fetch_usgs_nwis_gauges/hooks.py |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast.hooks` | 334 | trid3nt_server/tools/fetchers/hydrology/fetch_nws_river_forecast/hooks.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_raws_weather.hooks` | 288 | trid3nt_server/tools/fetchers/weather/fetch_raws_weather/hooks.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_asos_metar.hooks` | 280 | trid3nt_server/tools/fetchers/weather/fetch_asos_metar/hooks.py |
+| `trid3nt_server.tools.fetchers.hazard.fetch_usgs_earthquakes.hooks` | 247 | trid3nt_server/tools/fetchers/hazard/fetch_usgs_earthquakes/hooks.py |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels.hooks` | 237 | trid3nt_server/tools/fetchers/hydrology/fetch_usgs_groundwater_levels/hooks.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.hooks` | 236 | trid3nt_server/tools/fetchers/weather/fetch_openaq_measurements/hooks.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_nws_alerts_conus.hooks` | 227 | trid3nt_server/tools/fetchers/weather/fetch_nws_alerts_conus/hooks.py |
+| `trid3nt_server.tools.fetchers.hazard.fetch_tsunami_events.hooks` | 218 | trid3nt_server/tools/fetchers/hazard/fetch_tsunami_events/hooks.py |
+| `trid3nt_server.tools.fetchers.hazard.fetch_usgs_volcano_alerts.hooks` | 202 | trid3nt_server/tools/fetchers/hazard/fetch_usgs_volcano_alerts/hooks.py |
+| `trid3nt_server.tools.fetchers.soil.fetch_snotel_snow.hooks` | 201 | trid3nt_server/tools/fetchers/soil/fetch_snotel_snow/hooks.py |
+| `trid3nt_server.tools.fetchers._router.hooks.pfdf_raster` | 176 | trid3nt_server/tools/fetchers/_router/hooks/pfdf_raster.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_airnow_air_quality.hooks` | 165 | trid3nt_server/tools/fetchers/weather/fetch_airnow_air_quality/hooks.py |
+| `trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.hooks` | 142 | trid3nt_server/tools/fetchers/socioeconomic/fetch_usace_nsi/hooks.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_nws_event.hooks` | 125 | trid3nt_server/tools/fetchers/weather/fetch_nws_event/hooks.py |
+| `trid3nt_server.tools.fetchers.ocean.fetch_osm_breakwaters.hooks` | 98 | trid3nt_server/tools/fetchers/ocean/fetch_osm_breakwaters/hooks.py |
+| `trid3nt_server.tools.fetchers.ocean.fetch_osm_coastline.hooks` | 59 | trid3nt_server/tools/fetchers/ocean/fetch_osm_coastline/hooks.py |
 
 ## Top 20 test-only-reachable by loc
 
 | module | loc | path |
 |---|---|---|
-| `trid3nt_server.tools.fetchers._router.hooks.topobathy` | 1933 | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py |
-| `trid3nt_server.tools.fetchers.imagery._goes_archive_core` | 1324 | trid3nt_server/tools/fetchers/imagery/_goes_archive_core.py |
-| `scripts.packet.assemble_proof_packet` | 1046 | scripts/packet/assemble_proof_packet.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_storm_tracks.hooks` | 991 | trid3nt_server/tools/fetchers/weather/fetch_storm_tracks/hooks.py |
-| `scripts.packet.render_selafin_animation` | 911 | scripts/packet/render_selafin_animation.py |
-| `trid3nt_server.tools.fetchers.imagery._satellite_slider` | 818 | trid3nt_server/tools/fetchers/imagery/_satellite_slider.py |
-| `scripts.instruments.model_check` | 788 | scripts/instruments/model_check.py |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow.hooks` | 692 | trid3nt_server/tools/fetchers/hydrology/fetch_noaa_nwm_streamflow/hooks.py |
-| `trid3nt_server.tools.fetchers.terrain.fetch_dem.hooks` | 565 | trid3nt_server/tools/fetchers/terrain/fetch_dem/hooks.py |
-| `trid3nt_server.testing.live_run` | 522 | trid3nt_server/testing/live_run.py |
-| `trid3nt_server.tools.fetchers.weather.fetch_glm_lightning.hooks` | 472 | trid3nt_server/tools/fetchers/weather/fetch_glm_lightning/hooks.py |
-| `trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.hooks` | 463 | trid3nt_server/tools/fetchers/imagery/fetch_goes_satellite/hooks.py |
-| `trid3nt_server.tools.fetchers.hazard.fetch_openfema_disasters.hooks` | 457 | trid3nt_server/tools/fetchers/hazard/fetch_openfema_disasters/hooks.py |
-| `trid3nt_server.tools.fetchers.ocean.fetch_bluetopo.hooks` | 450 | trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/hooks.py |
-| `trid3nt_server.tools.fetchers._router.hooks.goes_animation` | 377 | trid3nt_server/tools/fetchers/_router/hooks/goes_animation.py |
-| `trid3nt_server.testing.proof_animations` | 372 | trid3nt_server/testing/proof_animations.py |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_lter_records.hooks` | 371 | trid3nt_server/tools/fetchers/hydrology/fetch_lter_records/hooks.py |
-| `trid3nt_server.tools.fetchers._router.hooks.topobathy_class` | 356 | trid3nt_server/tools/fetchers/_router/hooks/topobathy_class.py |
-| `trid3nt_server.tools.fetchers._router.hooks.hrrr` | 346 | trid3nt_server/tools/fetchers/_router/hooks/hrrr.py |
-| `trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks.hooks` | 340 | trid3nt_server/tools/fetchers/hydrology/fetch_high_water_marks/hooks.py |
+| `trid3nt_server.tools.fetchers._router.hooks.topobathy` | 1830 | trid3nt_server/tools/fetchers/_router/hooks/topobathy.py |
+| `trid3nt_server.tools.fetchers.imagery._goes_archive_core` | 1167 | trid3nt_server/tools/fetchers/imagery/_goes_archive_core.py |
+| `scripts.packet.assemble_proof_packet` | 1012 | scripts/packet/assemble_proof_packet.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_storm_tracks.hooks` | 971 | trid3nt_server/tools/fetchers/weather/fetch_storm_tracks/hooks.py |
+| `scripts.packet.render_selafin_animation` | 840 | scripts/packet/render_selafin_animation.py |
+| `trid3nt_server.tools.fetchers.imagery._satellite_slider` | 736 | trid3nt_server/tools/fetchers/imagery/_satellite_slider.py |
+| `scripts.instruments.model_check` | 732 | scripts/instruments/model_check.py |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow.hooks` | 652 | trid3nt_server/tools/fetchers/hydrology/fetch_noaa_nwm_streamflow/hooks.py |
+| `trid3nt_server.tools.fetchers.terrain.fetch_dem.hooks` | 508 | trid3nt_server/tools/fetchers/terrain/fetch_dem/hooks.py |
+| `trid3nt_server.testing.live_run` | 496 | trid3nt_server/testing/live_run.py |
+| `trid3nt_server.tools.fetchers.weather.fetch_glm_lightning.hooks` | 451 | trid3nt_server/tools/fetchers/weather/fetch_glm_lightning/hooks.py |
+| `trid3nt_server.tools.fetchers.hazard.fetch_openfema_disasters.hooks` | 444 | trid3nt_server/tools/fetchers/hazard/fetch_openfema_disasters/hooks.py |
+| `trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.hooks` | 441 | trid3nt_server/tools/fetchers/imagery/fetch_goes_satellite/hooks.py |
+| `trid3nt_server.tools.fetchers.ocean.fetch_bluetopo.hooks` | 425 | trid3nt_server/tools/fetchers/ocean/fetch_bluetopo/hooks.py |
+| `trid3nt_server.tools.fetchers._router.hooks.goes_animation` | 350 | trid3nt_server/tools/fetchers/_router/hooks/goes_animation.py |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_lter_records.hooks` | 345 | trid3nt_server/tools/fetchers/hydrology/fetch_lter_records/hooks.py |
+| `trid3nt_server.testing.proof_animations` | 336 | trid3nt_server/testing/proof_animations.py |
+| `trid3nt_server.tools.fetchers._router.hooks.topobathy_class` | 327 | trid3nt_server/tools/fetchers/_router/hooks/topobathy_class.py |
+| `trid3nt_server.tools.fetchers._router.hooks.hrrr` | 320 | trid3nt_server/tools/fetchers/_router/hooks/hrrr.py |
+| `trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks.hooks` | 319 | trid3nt_server/tools/fetchers/hydrology/fetch_high_water_marks/hooks.py |
 
 ## Top 20 dead symbols by loc
 
 | symbol | kind | file:line | loc |
 |---|---|---|---|
-| `return` | unreachable_code | trid3nt_server/server/protocol/connections.py:92 | 30 |
-| `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:188 | 1 |
-| `unquote` | import | trid3nt_server/emission/uri_registry.py:69 | 1 |
-| `default_seconds` | parameter | trid3nt_server/gates/confirm.py:118 | 1 |
-| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:1173 | 1 |
-| `gs_backend` | parameter | trid3nt_server/workflows/shared/cog_io.py:481 | 1 |
-| `runs_bucket_default` | parameter | trid3nt_server/workflows/shared/cog_io.py:483 | 1 |
+| `return` | unreachable_code | trid3nt_server/server/protocol/connections.py:63 | 30 |
+| `token_envelope` | parameter | trid3nt_server/credentials/auth_handshake.py:136 | 1 |
+| `unquote` | import | trid3nt_server/emission/uri_registry.py:18 | 1 |
+| `default_seconds` | parameter | trid3nt_server/gates/confirm.py:90 | 1 |
+| `raw_user_text` | parameter | trid3nt_server/server/dispatch/emitter.py:950 | 1 |
+| `gs_backend` | parameter | trid3nt_server/workflows/shared/cog_io.py:390 | 1 |
+| `runs_bucket_default` | parameter | trid3nt_server/workflows/shared/cog_io.py:392 | 1 |
 
 ## Package-level edge matrix (cross-package import edges)
 
@@ -110,8 +110,8 @@ venvs/agent/bin/python scripts/instruments/code_graph.py
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | contracts | . | . | . | . | 52 | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | plugin | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
-| scripts | . | 2 | . | . | 3 | 1 | 1 | . | . | . | 5 | . | . | 1 | 1 | . | . | . | . | . | 17 | 15 | 27 | 2 |
-| tests | . | 3 | 6 | . | 265 | 1 | . | 74 | 4 | 9 | 78 | 4 | 37 | 16 | 31 | 1 | 3 | 11 | 101 | 10 | 2 | 565 | 238 | . |
+| scripts | . | 2 | . | . | 3 | 1 | 1 | . | . | . | 5 | . | . | 1 | 2 | . | . | . | . | . | 19 | 17 | 28 | 2 |
+| tests | . | 3 | 11 | . | 262 | 2 | . | 71 | 4 | 9 | 77 | 4 | 36 | 17 | 31 | 1 | 3 | 11 | 100 | 10 | 2 | 564 | 236 | 1 |
 | trid3nt_contracts | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . | . |
 | trid3nt_server.__main__ | . | . | . | . | . | . | . | . | . | . | . | . | . | 1 | . | . | . | . | . | . | . | . | . | . |
