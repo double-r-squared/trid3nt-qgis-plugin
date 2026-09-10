@@ -1,46 +1,9 @@
-"""Tool payload warning envelopes (amendment, sprint-12-mega).
+"""The payload-warning gate: a warning envelope and its confirmation.
 
-The chat payload-warning system gates large tool dispatches behind explicit
-user confirmation. Before invoking a tool whose estimated response payload
-exceeds the warning threshold (default 25 MB), the agent emits a
-``tool-payload-warning`` envelope and pauses dispatch until the client
-returns a ``tool-payload-confirmation`` envelope carrying the user's decision.
-
-This pattern keeps three guarantees:
-
-1. **Determinism boundary (Invariant 1).** The estimator output is a
-   structured numeric field (``estimated_mb``), never narrated free text.
-   The threshold is also a numeric field on the envelope (``threshold_mb``)
-   so the client renders both numbers consistently without re-deriving them
-   from the agent's prose.
-
-2. **No cost theater (Invariant 9).** ``estimated_mb`` is a payload-size
-   estimate, NOT a dollar / latency / quota figure. The recommendation is a
-   short human-readable nudge ("Consider narrowing bbox to <region>"), not a
-   pricing surface. ``alternative_args`` is the agent's tentative narrowed
-   call signature — the user can accept it via ``decision="narrow_scope"``
-   with ``revised_args`` echoed back.
-
-3. **Confirmation before consequence (Invariant 9).** The warning envelope
-   is the gate; the matching confirmation envelope is the consequence-
-   authorizing response. Without a confirmation matching the same
-   ``warning_id`` the agent does not dispatch.
-
-Routing per Wave 1.5 ``AtomicToolMetadata.payload_mb_estimator_name``: the
-agent's dispatcher resolves the named callable in the tool module's
-namespace, calls ``estimate_payload_mb(**args)``, and gates on its return.
-A tool that does not declare an estimator skips the gate.
-
-Hard cap behaviour: when ``estimated_mb`` exceeds a hard threshold
-(default 250 MB, configurable via env), the warning envelope is still
-emitted but ``options`` is constrained — ``proceed`` is removed and the
-user must pick ``cancel`` or ``narrow_scope`` (the agent enforces this
-on receipt).
-
-See memory: ``feedback_large_payload_chat_warning``. See
-``contracts/trid3nt_contracts/tool_registry.py`` for the
-``AtomicToolMetadata.payload_mb_estimator_name`` field. See
-``trid3nt_server/server.py`` for the dispatcher gate.
+A dispatch whose ESTIMATED payload exceeds the warning threshold pauses until a
+confirmation carrying the same ``warning_id`` returns - no confirmation, no
+dispatch. Past the hard cap the warning still goes out but ``proceed`` is
+removed from the options, so the only ways forward are cancel or narrow.
 """
 
 from __future__ import annotations
@@ -66,112 +29,61 @@ __all__ = [
 ]
 
 
-#: Default warning threshold in megabytes. Override per-deployment via the
-#: ``TRID3NT_PAYLOAD_WARNING_MB`` env var read by the agent. Kept as a module
-#: constant (not a contract field) so call sites that don't have the env
-#: have a sensible default.
+#: Default warning threshold in megabytes, env-overridable per deployment. A
+#: module constant rather than a contract field, so a call site with no env
+#: still has a sensible default.
 WARNING_THRESHOLD_MB_DEFAULT: float = 25.0
 
-#: Default hard-cap in megabytes. Override per-deployment via the
-#: ``TRID3NT_PAYLOAD_HARDCAP_MB`` env var read by the agent. Above this size
-#: ``proceed`` is removed from ``options``; the user must pick ``cancel``
-#: or ``narrow_scope``.
+#: Default hard cap in megabytes, env-overridable per deployment. Above it
+#: ``proceed`` is removed from the options entirely.
 HARD_CAP_MB_DEFAULT: float = 250.0
 
 
 #: The three actions a payload-warning gate can return.
 #:
-#: - ``proceed`` — dispatch the tool with the originally-proposed args.
-#:   Removed from ``options`` when the estimate exceeds the hard cap.
-#: - ``cancel`` — abort the dispatch; the agent surfaces a typed failure
-#:   to the chat (no consequence executed).
-#: - ``narrow_scope`` — re-dispatch with revised args (the client returns
-#:   them via ``revised_args`` on the confirmation envelope).
+#: - ``proceed`` - dispatch with the originally proposed args. Removed from
+#:   the options when the estimate exceeds the hard cap.
+#: - ``cancel`` - abort. A typed failure surfaces and no consequence runs.
+#: - ``narrow_scope`` - dispatch with the revised args the confirmation
+#:   carries back.
 PayloadWarningOption = Literal["proceed", "cancel", "narrow_scope"]
 
 
 class GranularitySuggestion(GraceModel):
-    """Pre-run mesh-granularity suggestion attached to a ``tool-payload-warning``
-    (#154 granularity gate, sprint-16).
-
-    The granularity gate makes mesh resolution a USER lever rather than a
-    silent auto-coarsen (memory: ``feedback_user_controlled_granularity``).
-    Before a heavy solver run (SWMM / SFINCS), the autoscaler emits a
-    SUGGESTED resolution alongside the active-cell count, the estimated
-    solve wall-clock, and the chosen compute class so the user can SEE the
-    cost-of-resolution and override the rung before execution. The user's
-    override reuses the existing ``tool-payload-confirmation`` path
-    (``decision="narrow_scope"`` + ``revised_args`` carrying the chosen
-    ``resolution_param`` value) — no new confirmation envelope.
-
-    This model is an OPTIONAL enrichment on ``PayloadWarningEnvelopePayload``;
-    a payload-warning without a granularity suggestion is unchanged.
-
-    Fields:
-
-    - ``engine`` — the run this suggestion is for. Solvers ``"swmm"`` /
-      ``"sfincs"`` OR a FETCHER resolution choice ``"dem"`` / ``"topobathy"``
-      / ``"landcover"`` (#154 gate widened, NATE 2026-06-26; landcover added
-      to support state-scale NLCD auto-coarsening) -- the same ladder UI
-      describes a fetch resolution, not only a solver mesh.
-    - ``resolution_param`` — the args field the user overrides:
-      ``"target_resolution_m"`` (SWMM overland cell size),
-      ``"grid_resolution_m"`` (SFINCS grid), or ``"resolution_m"`` (a
-      DEM/topobathy fetcher's cell size). The client writes the chosen rung
-      back into ``revised_args`` under this exact key.
-    - ``suggested_resolution_m`` — the autoscaler's recommended cell size in
-      metres (> 0). The default-selected rung.
-    - ``resolution_choices`` — the ascending ladder of selectable cell sizes
-      in metres (the rungs the user can pick from). Each rung > 0.
-    - ``estimated_active_cells`` — projected active-cell count at the
-      suggested resolution (>= 0). Drives the "~46k cells" readout.
-    - ``estimated_solve_seconds`` — projected solver wall-clock in seconds
-      at the suggested resolution (>= 0). An inference, surfaced as "est ~70s".
-    - ``vcpus`` — vCPU count of the chosen compute class (> 0).
-    - ``compute_class`` — human/infra label for the compute tier
-      (e.g. a Batch Spot instance type "c7i.2xlarge"). FREE str (not a
-      Literal), so a fetch gate sets ``compute_class="fetch"`` with no
-      contract change (NATE 2026-06-26). A fetch suggestion passes the
-      analogue values ``vcpus=1``, ``estimated_solve_seconds=0.0``,
-      ``coarsened=False``, ``spot_label=None`` — all accepted by the
-      existing bounds (no field made Optional, no Literal added here).
-    - ``cell_cap`` — the element-cap the autoscaler honoured (> 0); the
-      ceiling above which the suggestion coarsens.
-    - ``coarsened`` — True when the suggested resolution is COARSER than the
-      user's originally-requested resolution because the request would have
-      exceeded ``cell_cap``. Surfaces the "we coarsened" honesty signal.
-    - ``reason`` — short human-readable rationale (e.g. "Requested 10 m would
-      exceed the 2M-cell cap; suggesting 30 m").
-    - ``spot_label`` — optional Spot-pricing/instance label for the readout
-      (e.g. "c7i.2xlarge Spot"); None when not on a Spot tier.
-
-    Invariant 1 (Determinism boundary): every number the chat narrates here is
-    a structured field, never inferred from prose.
-    Invariant 9 (No cost theater): cells / seconds / vCPUs / instance label are
-    capacity + capability descriptors, NOT dollar figures. No dollar field.
+    """A pre-run GRANULARITY suggestion, optional on a payload warning.
+    It makes resolution a USER LEVER rather than a silent auto-coarsen: the
+    suggested rung, the ladder, the projected cells and solve time are all
+    shown so the cost of resolution is visible before the run. Every number is
+    a structured field, and none of them is a price.
     """
 
-    # NATE 2026-06-26: widened engine + resolution_param so the #154 gate can
-    # also describe a FETCHER resolution choice (dem / topobathy / landcover
-    # fetch), not just the SWMM/SFINCS solver mesh. compute_class stays a free
-    # str, so a fetch gate sets compute_class="fetch" with no Literal change.
-    # "landcover" added to support state-scale NLCD auto-coarsening.
-    # "telemac" + "mesh_resolution_m" added for the BK-3b approve-mesh gate
-    # (river-dye unstructured mesh: the rung is the gmsh target edge length).
+    # The run this suggestion is for. A FETCH resolution choice uses the same
+    # ladder as a solver mesh, so both are members here.
     engine: Literal["swmm", "sfincs", "dem", "topobathy", "landcover", "telemac"]
+    #: The args key the chosen rung is written back under, VERBATIM.
     resolution_param: Literal[
         "target_resolution_m", "grid_resolution_m", "resolution_m",
         "mesh_resolution_m",
     ]
+    #: The recommended cell size, and the default-selected rung.
     suggested_resolution_m: float = Field(gt=0.0)
+    #: The ascending ladder of selectable cell sizes.
     resolution_choices: list[float] = Field(default_factory=list)
+    #: Projected cells and wall-clock at the SUGGESTED resolution.
     estimated_active_cells: int = Field(ge=0)
     estimated_solve_seconds: float = Field(ge=0.0)
     vcpus: int = Field(gt=0)
+    #: A FREE string, not a Literal, so a fetch gate can label its own tier
+    #: without a contract change.
     compute_class: str = Field(min_length=1)
+    #: The element cap honoured - the ceiling above which a suggestion coarsens.
     cell_cap: int = Field(gt=0)
+    #: True when the suggestion is COARSER than what was asked for, because the
+    #: request would have exceeded the cap. The honesty signal on this card.
     coarsened: bool
     reason: str = Field(max_length=512)
+    #: An optional instance label for the readout. A capability descriptor, not
+    #: a price.
     spot_label: str | None = None
 
     @field_validator("suggested_resolution_m")
@@ -187,8 +99,8 @@ class GranularitySuggestion(GraceModel):
     @field_validator("resolution_choices")
     @classmethod
     def _validate_resolution_choices(cls, value: list[float]) -> list[float]:
-        """Every ladder rung must be a positive cell size (metres). Negative or
-        zero rungs are non-sensical and would render an unselectable option."""
+        """Every rung must be a positive cell size - a zero or negative one
+        renders an option nothing can select."""
         for rung in value:
             if rung <= 0.0:
                 raise ValueError(
@@ -200,7 +112,7 @@ class GranularitySuggestion(GraceModel):
     @field_validator("estimated_active_cells")
     @classmethod
     def _validate_active_cells(cls, value: int) -> int:
-        """A negative cell count is non-sensical."""
+        """A cell count is never negative."""
         if value < 0:
             raise ValueError(
                 f"estimated_active_cells must be >= 0; got {value!r}"
@@ -210,7 +122,7 @@ class GranularitySuggestion(GraceModel):
     @field_validator("estimated_solve_seconds")
     @classmethod
     def _validate_solve_seconds(cls, value: float) -> float:
-        """A negative wall-clock estimate is non-sensical."""
+        """A wall-clock estimate is never negative."""
         if value < 0.0:
             raise ValueError(
                 f"estimated_solve_seconds must be >= 0; got {value!r}"
@@ -235,74 +147,37 @@ class GranularitySuggestion(GraceModel):
 
 
 class TimeScaleSuggestion(GraceModel):
-    """Pre-run TIME-SCALE (animation cadence + window) suggestion attached to a
-    ``tool-payload-warning`` (combined run-settings gate, sprint-16).
-
-    The sibling of :class:`GranularitySuggestion`: where granularity makes the
-    SPATIAL resolution a user lever, this makes the TEMPORAL resolution one. A
-    coastal/wave SFINCS run animates its rising water at a FINE minute-scale
-    stride (so it reads as water rolling in, not a slowly-filling bathtub —
-    memory: the "looks like rain" fix); the pluvial path animates hourly. The
-    cadence (minutes per frame) and the simulation window (duration in hours)
-    together determine the animation FRAME COUNT — too many frames balloons the
-    payload, too few hides the wave motion. This model surfaces the agent's
-    SUGGESTED cadence + window + the resulting frame-count estimate so the user
-    can SEE "~N frames every M min" and override the cadence / window before the
-    solve.
-
-    The override reuses the EXISTING ``tool-payload-confirmation`` path
-    (``decision="narrow_scope"`` + ``revised_args`` carrying the chosen
-    ``cadence_param`` value and/or ``duration_param`` value) — no new envelope.
-    The combined run-settings card sends the resolution override AND the
-    time-scale override in the SAME ``revised_args`` dict (ONE interaction).
-
-    This model is an OPTIONAL enrichment on ``PayloadWarningEnvelopePayload``; a
-    payload-warning without a time-scale suggestion is unchanged. The pluvial
-    flood path emits NO time-scale row (hourly cadence is fixed) so the gate
-    falls back to the granularity-only card.
-
-    Fields:
-
-    - ``cadence_param`` — the solver-args field the user overrides for cadence:
-      ``"output_interval_min"`` (minutes between animation frames). The client
-      writes the chosen value back into ``revised_args`` under this exact key.
-    - ``suggested_interval_min`` — the agent's recommended minutes-per-frame
-      (> 0). The default-prefilled cadence.
-    - ``interval_choices`` — an OPTIONAL ascending ladder of suggested cadences
-      (minutes) for quick-pick chips; the card ALSO exposes a free numeric edit
-      so a value off the ladder is allowed. May be empty (free-edit only).
-    - ``duration_param`` — the solver-args field for the simulation window:
-      ``"duration_hr"``. The client writes the chosen window back under this key.
-    - ``suggested_duration_hr`` — the agent's simulation window in hours (> 0).
-      The default-prefilled, editable duration.
-    - ``estimated_frame_count`` — projected animation frames at the suggested
-      cadence + window (>= 1). Drives the "~N frames" readout; the client
-      LIVE-recomputes it as the user edits (``duration_hr*60 / interval``,
-      clamped to ``[1, max_frames]``).
-    - ``max_frames`` — the postprocess frame cap (> 0); the ceiling the
-      recompute clamps to (so the readout never advertises an unbounded count).
-    - ``min_interval_min`` — physical floor on the cadence (minutes, > 0); the
-      deck re-floors at this, so a finer edit cannot yield more frames than the
-      deck emits. The client floors the editable interval at this value.
-    - ``is_coastal`` — True for a coastal/wave run (fine minute-scale stride),
-      False for pluvial (hourly). Surfaced so the card labels the cadence honestly.
-    - ``reason`` — short human-readable rationale (e.g. "Coastal surge: 5-min
-      frames over a 6 h window animate the wave roll-in").
-
-    Invariant 1 (Determinism boundary): every number the chat narrates here is a
-    structured field, never inferred from prose.
-    Invariant 9 (No cost theater): frames / minutes / hours are capacity +
-    capability descriptors, NOT dollar figures. No dollar field.
+    """A pre-run TIME-SCALE suggestion, optional on a payload warning.
+    The temporal sibling of the granularity row: cadence and window together fix
+    the FRAME COUNT, and too many frames balloon the payload while too few hide
+    the motion. Absent when the cadence is fixed, and the card then shows
+    granularity alone.
     """
 
+    # A card carrying BOTH rows sends both overrides in ONE ``revised_args``,
+    # so reviewing space and time is a single interaction.
+
+    #: The args key a cadence edit is written back under, VERBATIM.
     cadence_param: Literal["output_interval_min"] = "output_interval_min"
+    #: The recommended minutes per frame, and the default-prefilled value.
     suggested_interval_min: float = Field(gt=0.0)
+    #: An OPTIONAL quick-pick ladder. The card also offers a free numeric edit,
+    #: so a value off the ladder is allowed; empty means free-edit only.
     interval_choices: list[float] = Field(default_factory=list)
+    #: The args key a window edit is written back under, VERBATIM.
     duration_param: Literal["duration_hr"] = "duration_hr"
     suggested_duration_hr: float = Field(gt=0.0)
+    #: Projected frames at the suggested cadence and window. A client
+    #: recomputes it live as the user edits, clamped to ``max_frames``.
     estimated_frame_count: int = Field(ge=1)
+    #: The frame cap the recompute clamps to, so a readout never advertises an
+    #: unbounded count.
     max_frames: int = Field(gt=0)
+    #: The PHYSICAL floor on cadence: the deck re-floors here, so a finer edit
+    #: cannot produce more frames than the deck emits.
     min_interval_min: float = Field(default=1.0, gt=0.0)
+    #: Whether the run animates at a fine stride or a coarse one, so the card
+    #: labels its cadence honestly.
     is_coastal: bool = True
     reason: str = Field(default="", max_length=512)
 
@@ -362,53 +237,42 @@ ParamDoor = Literal["user", "question", "derived", "scenario", "constant", "gate
 
 
 class ParamSheetRow(GraceModel):
-    """One row of the resolved param sheet the FORM CARD renders.
-
-    Richer than the :class:`~trid3nt_contracts.common.SyntheticInput` line beside
-    it: provenance narration needs a value and a basis, while an EDIT SURFACE also
-    needs the declaration -- what the value means (``desc``), what it may become
-    (``bounds``), and how loudly to warn that editing it overrides a derivation
-    (``source_badge`` + ``user_lever``).
-
-    Fields:
-
-    - ``name`` -- the declared param name; the key the edit rides back under in
-      ``revised_args``.
-    - ``value`` -- the resolved value. ``None`` means the row resolved to nothing
-      (an optional param, or one waiting on a gate).
-    - ``units`` -- physical units, when applicable.
-    - ``desc`` -- the param's one-line declaration; the row LABEL.
-    - ``door`` -- which door served the value.
-    - ``basis`` -- the provenance class (shared vocabulary with ``SyntheticInput``).
-    - ``source_badge`` -- the short human phrase the card shows beside the value
-      ("read from your prompt" / "derived from water_temp_c" / "labeled default").
-      Rendered, never re-derived by the client from ``basis`` + ``door``.
-    - ``bounds`` -- the declared ``(min, max)``; the card clamps its editor to it
-      and the server re-clamps on submit (the form is an edit surface, not a
-      bypass of the declaration).
-    - ``user_lever`` -- the declaration marks this derived/constant value as one
-      the user is expected to override.
-    - ``editable`` -- whether the card offers an editor. Every row is editable
-      today; editing a derived row is WARNED through ``source_badge``, not locked.
-    - ``advanced`` -- render under the "advanced" fold (constant-door physics that
-      is inspectable but not the question).
-    - ``group`` -- the heading the advanced fold sorts this row under (an engine
-      dictionary's own rubrique). Empty on a sheet that groups nothing.
-    - ``note`` -- the resolution note (a clamp, a derivation, a conflict).
+    """One row of the resolved param sheet a form card renders.
+    Richer than a provenance line beside it: narration needs a value and a
+    basis, while an EDIT SURFACE also needs the declaration - what the value
+    means, what it may become, and how loudly to warn that editing it overrides
+    a derivation.
     """
 
+    #: The declared param name - the key an edit rides back under.
     name: str = Field(min_length=1)
+    #: The resolved value. ``None`` means the row resolved to nothing: an
+    #: optional param, or one still waiting on a gate.
     value: float | int | str | bool | list[Any] | None = None
     units: str | None = None
+    #: The param's one-line declaration; the row LABEL.
     desc: str = Field(default="", max_length=512)
     door: ParamDoor
     basis: InputBasis
+    #: The short phrase shown beside the value. RENDERED, never re-derived by a
+    #: client from the basis and door.
     source_badge: str = Field(default="", max_length=200)
+    #: The declared range. A card clamps its editor to it and the server
+    #: re-clamps on submit: the form is an edit surface, not a way around the
+    #: declaration.
     bounds: tuple[float, float] | None = None
+    #: The declaration marks this derived or constant value as one the user is
+    #: EXPECTED to override.
     user_lever: bool = False
+    #: Whether an editor is offered. Editing a derived row is WARNED through
+    #: the badge, not locked.
     editable: bool = True
+    #: Render under the advanced fold: inspectable, but not the question.
     advanced: bool = False
+    #: The heading the advanced fold sorts this row under. Empty on a sheet
+    #: that groups nothing.
     group: str = Field(default="", max_length=120)
+    #: The resolution note - a clamp, a derivation, a conflict.
     note: str | None = None
 
     @model_validator(mode="after")
@@ -423,13 +287,9 @@ class ParamSheetRow(GraceModel):
 
 class ParamSheet(GraceModel):
     """The resolved sheet a step reviewing its own inputs presents.
-
-    The rows arrive in RENDER order (question-bearing first, ``advanced`` last) --
-    the server owns the ordering because it owns the doors. The user's edits ride
-    back on the existing ``tool-payload-confirmation``
-    (``decision="narrow_scope"`` + ``revised_args`` keyed by ``row.name``), and a
-    submit-with-edits IS the approval: the sheet was fully visible, so there is
-    nothing left to re-present.
+    Rows arrive in RENDER order, the server owning it because it owns the doors.
+    A submit-with-edits IS the approval: the whole sheet was visible, so there
+    is nothing left to re-present.
     """
 
     workflow: str = Field(min_length=1)
@@ -446,108 +306,59 @@ class ParamSheet(GraceModel):
 
 
 class PayloadWarningEnvelopePayload(GraceModel):
-    """``tool-payload-warning`` (amendment).
-
-    Agent emits this when a registered estimator's projected payload
-    exceeds the warning threshold. The client renders an inline chat card
-    showing the tool name, the projected MB, the threshold, the agent's
-    short recommendation, and (optionally) the agent's suggested narrowing
-    args. The user picks one of the actions in ``options``.
-
-    Fields:
-
-    - ``envelope_type`` — discriminator, literal ``"tool-payload-warning"``.
-    - ``warning_id`` — ULID identifying the gate; the response carries it
-      back so the agent can match the confirmation to the right paused
-      coroutine.
-    - ``tool_name`` — atomic-tool function name (Python identifier). The
-      client renders this to the user.
-    - ``tool_args`` — the args the agent intended to dispatch (sanitized,
-      JSON-serializable). The client shows a summary so the user can
-      verify what's about to be fetched.
-    - ``estimated_mb`` — the estimator's projected payload size in
-      megabytes. Float; the estimator may return a fractional value.
-    - ``threshold_mb`` — the threshold the estimate exceeded. The client
-      surfaces both numbers (estimate + threshold) so the user understands
-      WHY the gate fired.
-    - ``recommendation`` — short human-readable suggestion (e.g.
-      "Consider narrowing bbox to a single county" or "Filter to fewer
-      bands"). Capped at 512 chars.
-    - ``alternative_args`` — optional agent-drafted narrowed args. When
-      present, the client can offer a one-click "narrow scope" using these
-      exact args (no second prompt needed). Permissive ``dict`` shape so
-      tool-specific narrowing strategies (smaller bbox / fewer time steps
-      / fewer features) all fit. The agent service round-trips this
-      through the target tool's signature before dispatch.
-    - ``options`` — non-empty subset of {``"proceed"``, ``"cancel"``,
-      ``"narrow_scope"``}. When the estimate exceeds the hard cap, the
-      agent omits ``"proceed"`` here so the client cannot offer it.
-    - ``ttl_seconds`` — gate validity (seconds since envelope ``ts``); on
-      expiry the gate becomes a typed failure (``CONFIRMATION_TIMEOUT``
-      from A.6). Default 300s — payload-warning gates are read-decisions,
-      so they get the same TTL as a confirmation-request.
-    - ``granularity`` — OPTIONAL pre-run mesh-granularity suggestion
-      (#154 granularity gate). When present, the client renders the
-      resolution ladder + estimated cells / solve time / compute class and
-      lets the user override the rung before the heavy solver run. The
-      override rides back on the existing ``tool-payload-confirmation``
-      (``decision="narrow_scope"`` + ``revised_args``). None on ordinary
-      payload-warnings — fully back-compatible.
-    - ``time_scale`` — OPTIONAL pre-run time-scale (animation cadence +
-      window) suggestion (combined run-settings gate). When present ALONGSIDE
-      ``granularity``, the client renders ONE combined "Run settings" card
-      letting the user review + override BOTH the spatial resolution AND the
-      temporal cadence/window before the heavy solver run, sending both
-      overrides in a SINGLE ``revised_args`` dict (ONE interaction). None for
-      the pluvial path (hourly cadence is fixed) — the card falls back to the
-      granularity-only resolution gate. Fully back-compatible.
-
-    Invariant 1 (Determinism boundary): every number the chat narrates
-    here is a structured field, never inferred from prose.
-    Invariant 9 (No cost theater): ``estimated_mb`` is a payload-size
-    estimate, not a dollar / latency / quota figure. No cost field anywhere.
+    """``tool-payload-warning``: the gate a heavy dispatch pauses on.
+    Both numbers travel - the estimate AND the threshold it crossed - so the
+    reason the gate fired is visible rather than narrated. Every number here is
+    a structured field, and none of them is a price.
     """
 
     MESSAGE_TYPE: ClassVar[str] = "tool-payload-warning"
 
     envelope_type: Literal["tool-payload-warning"] = "tool-payload-warning"
+    #: Identifies the gate; the confirmation carries it back so the right
+    #: paused dispatch is resumed.
     warning_id: ULIDStr
     tool_name: str = Field(min_length=1)
+    #: The args intended for dispatch, sanitized, so the user can verify what
+    #: is about to be fetched.
     tool_args: dict[str, Any] = Field(default_factory=dict)
+    #: The projected size and the threshold it crossed. Both travel, so WHY the
+    #: gate fired is visible without re-deriving it.
     estimated_mb: float = Field(ge=0.0)
     threshold_mb: float = Field(ge=0.0)
     recommendation: str = Field(max_length=512)
+    #: Optional drafted narrowing, so a narrow can be one click. Permissive, so
+    #: a smaller extent, fewer steps and fewer features all fit; it is
+    #: round-tripped through the target signature before dispatch.
     alternative_args: dict[str, Any] | None = None
+    #: A non-empty subset of the three actions. Past the hard cap ``proceed``
+    #: is omitted HERE, so a client cannot offer it at all.
     options: list[PayloadWarningOption] = Field(
         default_factory=lambda: ["proceed", "cancel", "narrow_scope"],
         min_length=1,
         max_length=3,
     )
+    #: Gate validity in seconds from the envelope stamp. On expiry the gate
+    #: becomes a typed timeout failure, never a silent proceed.
     ttl_seconds: int = Field(default=300, ge=1)
+    #: OPTIONAL run-settings rows. Present together, they render ONE combined
+    #: card whose overrides ride back in a single ``revised_args``.
     granularity: GranularitySuggestion | None = None
     time_scale: TimeScaleSuggestion | None = None
-    #: OPTIONAL resolved input-provenance table (two-mode INPUT_REQUIRED
-    #: gate). When present the envelope is a USER-GATED input REVIEW card: the
-    #: client renders one row per resolved physical input (param = value [basis,
-    #: source]) so the user reviews what was fetched / interpreted / defaulted
-    #: BEFORE the solver launches, and adjusts a value via ``narrow_scope`` +
-    #: ``revised_args`` (the "provide values" action) or approves via ``proceed``.
-    #: On ``proceed`` the run stamps exactly these entries into its result so
-    #: what-was-approved == what-ran. None on ordinary payload / cost / mesh
-    #: gates -- fully back-compatible.
+    #: OPTIONAL resolved input-provenance table. Present, the envelope is an
+    #: input REVIEW card: one row per resolved physical input, so what was
+    #: fetched, interpreted or defaulted is reviewed BEFORE the run. On a
+    #: proceed the run stamps exactly these entries into its result, so what was
+    #: approved IS what ran.
     synthetic_inputs: list[SyntheticInput] | None = None
-    #: OPTIONAL resolved param SHEET - the self-reviewing step's card. When
-    #: present the client renders an editable property grid -- one row per declared
-    #: param, with its source badge, declared bounds and advanced fold -- instead of
-    #: the plain provenance table. Submit rides back as ``narrow_scope`` +
-    #: ``revised_args`` keyed by row name, and a submit-with-edits is the approval:
-    #: the whole sheet was on screen, so the gate does not re-present it. None on
-    #: every other gate -- fully back-compatible.
+    #: OPTIONAL resolved param SHEET - the self-reviewing step's card. Present,
+    #: it renders an editable grid instead of the plain provenance table, and a
+    #: submit-with-edits is the approval.
     param_sheet: ParamSheet | None = None
 
     @model_validator(mode="after")
     def _validate_options_unique(self) -> "PayloadWarningEnvelopePayload":
-        """Options must be unique — duplicates would render duplicate buttons."""
+        """A duplicated option would render two identical buttons."""
         if len(self.options) != len(set(self.options)):
             raise ValueError(
                 f"options must be unique; got {self.options!r}"
@@ -555,40 +366,16 @@ class PayloadWarningEnvelopePayload(GraceModel):
         return self
 
 
-#: The user's selection from a ``tool-payload-warning`` modal.
-#:
-#: Matches the ``options`` set on the originating warning envelope. The
-#: agent's gate handler enforces that ``proceed`` is rejected when the
-#: original warning did not advertise it (hard-cap path).
+#: The user's selection, from the ``options`` the originating warning
+#: advertised. A ``proceed`` the warning did not advertise is REFUSED on
+#: receipt - the hard cap cannot be talked past by the reply.
 PayloadConfirmationDecision = Literal["proceed", "cancel", "narrow_scope"]
 
 
 class PayloadConfirmationEnvelopePayload(GraceModel):
-    """``tool-payload-confirmation`` (amendment).
-
-    Client returns this in response to a ``tool-payload-warning``. The
-    agent matches ``warning_id`` against the paused dispatch coroutine and
-    either proceeds with the original / revised args or surfaces a
-    cancellation error to the chat.
-
-    Fields:
-
-    - ``envelope_type`` — discriminator, literal ``"tool-payload-confirmation"``.
-    - ``warning_id`` — matches the originating ``tool-payload-warning``.
-    - ``decision`` — one of ``"proceed"`` / ``"cancel"`` / ``"narrow_scope"``.
-    - ``revised_args`` — populated only when ``decision == "narrow_scope"``;
-      carries the args the agent should dispatch with. Permissive ``dict``
-      shape so the client can echo back the warning's
-      ``alternative_args`` OR a user-edited variant. The agent service
-      validates against the target tool signature before dispatch.
-
-    Cross-shape rule (``_validate_decision_consistency``):
-
-    - ``decision == "narrow_scope"`` ⇒ ``revised_args`` must be a non-None
-      dict (may be empty). Otherwise the agent has nothing to dispatch with.
-    - ``decision != "narrow_scope"`` ⇒ ``revised_args`` must be None. A
-      lingering revised_args on a proceed/cancel response is a client bug
-      we want to catch at the contract boundary, not at dispatch time.
+    """``tool-payload-confirmation``: the reply that authorizes a paused gate.
+    ``warning_id`` selects the paused dispatch; the decision then proceeds with
+    the original or the revised args, or surfaces a cancellation.
     """
 
     MESSAGE_TYPE: ClassVar[str] = "tool-payload-confirmation"
@@ -596,11 +383,16 @@ class PayloadConfirmationEnvelopePayload(GraceModel):
     envelope_type: Literal["tool-payload-confirmation"] = "tool-payload-confirmation"
     warning_id: ULIDStr
     decision: PayloadConfirmationDecision
+    #: The args to dispatch with, on a narrow. Permissive, so it can echo the
+    #: warning's own draft or a user-edited variant; it is validated against
+    #: the target signature before dispatch.
     revised_args: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def _validate_decision_consistency(self) -> "PayloadConfirmationEnvelopePayload":
-        """Enforce the decision/revised_args cross-field rule."""
+        """A narrow REQUIRES revised args - otherwise there is nothing to
+        dispatch with - and every other decision FORBIDS them, so a lingering
+        set is caught here rather than at dispatch."""
         if self.decision == "narrow_scope":
             if self.revised_args is None:
                 raise ValueError(
