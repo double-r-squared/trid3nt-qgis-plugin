@@ -1,7 +1,7 @@
 """TRID3NT settings dialog + provider preset table.
 
-Split out of dock.py (2026-07-21 flat->package restructure). Behavior identical.
-"""
+APPLY-ON-SAVE: nothing a field carries takes effect until Save, where every
+field copies into ``settings`` in one place."""
 from __future__ import annotations
 
 from typing import List, Optional
@@ -26,18 +26,16 @@ from ..net.tasks import _ModelListTask, _ProviderConfigTask
 
 
 
-# OpenRouter model-extensibility (design 2026-07-19). Static provider preset
-# table -- label -> the agent-process ENV a given provider needs (base_url +
-# key-env NAME) + a curated TOOL-CAPABLE model shortlist + the num_ctx the
-# agent should set so the context-clip guard does not false-trip. The plugin
-# CANNOT inject the agent's env (base_url/key/num_ctx live in the agent
-# process, set via .env.local + restart); this table is the picker's source
-# of truth AND documents exactly which env vars a provider switch requires,
-# so the "restart to apply" note is honest rather than hand-wavy. ``models``
-# is a curated shortlist only -- the model combo is EDITABLE so the user can
-# paste ANY id the provider serves. The agent is tool-heavy (tool_choice=auto
-# every round); many free models ignore tools and narrate a fake answer, so
-# the shortlist sticks to ids known to honor tool-calling (design "Risks").
+# Static provider preset table: label -> the agent-process ENV that provider
+# needs (base_url and the key-env NAME), a curated model shortlist, and the
+# num_ctx the agent should set so the context-clip guard does not false-trip.
+# The plugin CANNOT inject the agent's env, so naming the env vars here is
+# what makes the "restart to apply" note honest rather than hand-wavy.
+#
+# ``models`` is a shortlist only -- the model combo is EDITABLE, so any id the
+# provider serves is typeable. The agent is tool-heavy and many free models
+# ignore tools and narrate a fake answer instead, so the shortlist sticks to
+# ids known to honor tool-calling.
 PROVIDER_PRESETS: dict = {
     "local-ollama": {
         "base_url": "http://127.0.0.1:11434/v1",
@@ -92,28 +90,9 @@ PROVIDER_PRESETS: dict = {
 
 
 class SettingsDialog(QDialog):
-    """Mode local/remote, URLs, pasted token, AOI toggles, and the
-    auto-basemap toggle.
-
-    Remote-daemon design (tailnet trust model -- NATE-decided): the
-    top "Server" section is deliberately ONE URL field + ONE optional token
-    field, both already-existing settings ("the existing URL+token fields
-    presented as the remote story"). There is NEVER a second data-endpoint
-    field -- pointing the URL at a tailscale peer (``ws://100.x.y.z:8765/ws``
-    instead of the ``ws://127.0.0.1:8765/ws`` default) is the entire
-    remote-daemon story; the agent's :8766 HTTP base and the object store's
-    endpoint are DERIVED (server-advertised endpoints
-    on the handshake, else a WS-host fallback -- see
-    ``trid3nt_client.resolve_http_base`` / ``resolve_data_base`` and
-    ``dock._effective_http_base`` / ``_effective_data_base``), never a
-    manually-configured field. The (no-TLS, tailnet-is-the-boundary) token is
-    OFF by default and optional either way.
-
-    Item 4 (live-feedback 2026-07-09): the AOI checkboxes (canvas / selected
-    polygon) used to live-apply straight from the dock; they now live here
-    ONLY, and nothing applies until Save -- every field, line edits and
-    checkboxes alike, copies into ``settings`` in the ``accept()`` branch.
-    """
+    """The server URL and token, the basemap, and the model controls. Nothing
+    applies until Save: every field, line edits and checkboxes alike, copies
+    into ``settings`` in ``accept()``."""
 
     def __init__(
         self,
@@ -125,14 +104,12 @@ class SettingsDialog(QDialog):
     ):
         super().__init__(parent)
         self._settings = settings
-        # Item B3 (qgis-ux-batch 2026-07-19) + NATE 2026-07-20: the dock's
-        # connect + disconnect paths + the live connection state, so BOTH
-        # actions live here (off the header button row) and each is enabled
-        # only in the state where it applies.
+        # Connect and disconnect both live HERE rather than on the header row,
+        # each enabled only in the state where it applies.
         self._on_disconnect = on_disconnect
         self._on_connect = on_connect
-        # Keep-alive refs for the OpenRouter free-model fetch tasks (design
-        # 2026-07-19) -- initialised BEFORE _reload_model_choices runs below.
+        # Keep-alive refs for the live model-list fetch tasks, initialised
+        # BEFORE _reload_model_choices runs below.
         self._model_list_tasks: List["_ModelListTask"] = []
         self.setWindowTitle("TRID3NT settings")
         form = QFormLayout(self)
@@ -149,21 +126,12 @@ class SettingsDialog(QDialog):
         self.token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.token_edit.setPlaceholderText("optional shared tailnet token")
         form.addRow("Server token (optional)", self.token_edit)
-        # S2 (NATE 2026-07-20): the "Get token help" label row is REMOVED (the
-        # explanation moves to a future Help page -- keep the dialog terse).
 
-        # Remote-daemon design: NO "Local MinIO endpoint" / "Local export API"
-        # fields -- ever. Both are now DERIVED (server-advertised endpoints on
-        # the connect handshake, else a WS-host-derived fallback); see
-        # ``trid3nt_client.resolve_http_base`` / ``resolve_data_base``.
+        # There is NEVER a second data-endpoint field. Pointing this one URL at
+        # a tailnet peer is the whole remote-daemon story: the agent's :8766
+        # base and the object store's endpoint are DERIVED from the handshake,
+        # with a WS-host fallback, never configured by hand.
 
-        # S7 (NATE 2026-07-20): the AOI selector checkboxes (canvas / selected
-        # polygon) are REMOVED -- the canvas-as-AOI path is gone (A2). The AOI is
-        # now the explicit Set-AOI rectangle OR the agent geocodes it.
-
-        # S5 (NATE 2026-07-20): the basemap PRESET picker (half width) sits on
-        # ONE row with the "Add basemap automatically" toggle to its RIGHT --
-        # was two separate rows (auto-basemap row + basemap-combo row).
         from ..render.layers import BASEMAP_PRESETS
         self.basemap_combo = QComboBox()
         for preset_name in BASEMAP_PRESETS:
@@ -178,11 +146,9 @@ class SettingsDialog(QDialog):
         basemap_row.addWidget(self.auto_basemap_checkbox, 1)
         form.addRow("Basemap", basemap_row)
 
-        # OpenRouter model-extensibility (design 2026-07-19): provider + api
-        # key + model picker. Only the MODEL rides the user-message live
-        # (mirrors show_thinking); PROVIDER (base_url) + api-key are agent
-        # process env the plugin cannot inject, so those two persist here and
-        # need an agent restart -- the note below is honest about that.
+        # Only the MODEL rides the user-message live. Provider and api key are
+        # agent-process env the plugin cannot inject, so those two persist here
+        # and take effect when the agent restarts.
         self.provider_combo = QComboBox()
         for preset_label in PROVIDER_PRESETS:
             self.provider_combo.addItem(preset_label)
@@ -190,11 +156,9 @@ class SettingsDialog(QDialog):
         self.provider_combo.setCurrentIndex(p_idx if p_idx >= 0 else 0)
         form.addRow("Provider", self.provider_combo)
 
-        # SECRET: password echo, mirrors token_edit; NEVER logged. This is the
-        # agent's TRID3NT_OPENAI_API_KEY (OPENROUTER_API_KEY / OPENAI_API_KEY /
-        # GROQ_API_KEY per preset) -- persisted here, applied on agent restart;
-        # never sent over the WS (no per-message carrier, and a live key must
-        # not leak onto the wire).
+        # SECRET: password echo, NEVER logged, and never sent over the
+        # websocket -- there is no per-message carrier, and a live key must not
+        # leak onto the wire.
         self.provider_key_edit = QLineEdit(settings.openrouter_api_key)
         self.provider_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.provider_key_edit.setPlaceholderText(
@@ -202,10 +166,9 @@ class SettingsDialog(QDialog):
         )
         form.addRow("Provider API key", self.provider_key_edit)
 
-        # EDITABLE combo pre-filled with the curated tool-capable shortlist for
-        # the selected provider -- editable so the user can paste ANY model id.
-        # Empty text = the agent's env default (TRID3NT_OPENAI_MODEL); a MODEL
-        # switch applies on the NEXT message with no restart.
+        # EDITABLE combo, so any model id is typeable. Empty text means the
+        # agent's own env default, and a model switch applies on the NEXT
+        # message with no restart.
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)
         self._reload_model_choices(settings.provider)
@@ -215,21 +178,13 @@ class SettingsDialog(QDialog):
         self.provider_combo.currentTextChanged.connect(self._reload_model_choices)
         form.addRow("Model id", self.model_combo)
 
-        # S6 (NATE 2026-07-20): "Show model thinking" -> "Show Reasoning",
-        # relocated to sit directly UNDER the "Model id" row (with the model
-        # controls, not up in the generic section). Still bound to
-        # settings.show_thinking on Save.
         self.show_thinking_checkbox = QCheckBox("Show Reasoning")
         self.show_thinking_checkbox.setChecked(settings.show_thinking)
         form.addRow("", self.show_thinking_checkbox)
 
-        # auto/ask modes (Stage 3, 2026-07-22): the small Auto/Ask
-        # tool-selection control -- rides every user-message like
-        # show_thinking (apply-on-Save, the item-4 discipline). "auto" =
-        # autonomous tool selection (picker only on a measured near-tie);
-        # "ask" = every staged selection surfaces as an in-chat picker card.
-        # Consent gates (payload warnings / code-exec / credentials / ...)
-        # are never mode-dependent.
+        # "auto" is autonomous tool selection, with a picker only on a
+        # measured near-tie; "ask" surfaces every staged selection as a picker
+        # card. Consent gates are NEVER mode-dependent.
         self.tool_choice_combo = QComboBox()
         self.tool_choice_combo.addItems(["auto", "ask"])
         self.tool_choice_combo.setCurrentText(settings.tool_choice_mode)
@@ -239,15 +194,10 @@ class SettingsDialog(QDialog):
         )
         form.addRow("Tool selection", self.tool_choice_combo)
 
-        # S3 (NATE 2026-07-20): the long provider_note ("On Save ...") is
-        # REMOVED -- keep the dialog terse (explanation -> future Help page).
-
-        # S4 (NATE 2026-07-20): Connect/Disconnect collapse to ONE toggle
-        # button -- its TEXT + action depend on the connection state at build
-        # time. Connected -> "Disconnect from agent" (runs the disconnect
-        # teardown); disconnected -> "Connect to agent" (runs the connect path).
-        # Both close the dialog WITHOUT saving (an action, not a settings edit,
-        # so it does not also push provider config).
+        # ONE toggle button whose text and action depend on the connection
+        # state at build time. Either way it closes the dialog WITHOUT saving:
+        # this is an action, not a settings edit, so it must not also push
+        # provider config.
         self.conn_toggle_btn = QPushButton()
         if connected:
             self.conn_toggle_btn.setText("Disconnect from agent")
@@ -263,10 +213,6 @@ class SettingsDialog(QDialog):
 
         self._form = form
 
-        # (Plugin self-update removed 2026-07: QGIS Plugin Manager -- the custom
-        # repository / plugins.xml path -- is the update mechanism now, so the
-        # in-dialog Update button / version indicator / repo-path field are gone.)
-
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -275,22 +221,15 @@ class SettingsDialog(QDialog):
     def accept(self) -> None:
         self._settings.local_url = self.local_url_edit.text()
         self._settings.token = self.token_edit.text()
-        # Remote-daemon design: no minio_endpoint / export_api writes here --
-        # those fields are gone from the dialog; both are DERIVED at call
-        # time (server-advertised endpoints, else a WS-host-derived
-        # fallback), never a settings-dialog value.
-        # S7 (NATE 2026-07-20): canvas_aoi / selection_aoi checkboxes removed --
-        # no writes here (the canvas-as-AOI path is gone, A2).
         self._settings.auto_basemap = self.auto_basemap_checkbox.isChecked()
         self._settings.basemap_preset = self.basemap_combo.currentText()
         self._settings.show_thinking = self.show_thinking_checkbox.isChecked()
-        # persist the Auto/Ask tool-selection mode (rides the next
-        # user-message via the dock's send path -- no restart, no push).
+        # The tool-selection mode rides the next user-message; no restart and
+        # no push.
         self._settings.tool_choice_mode = self.tool_choice_combo.currentText()
-        # OpenRouter model-extensibility (design 2026-07-19): persist provider
-        # + key + model, then PUSH the live config to the agent so a
-        # provider/key switch applies on the NEXT message with no restart
-        # (Feature 3). model_id also rides the user-message live.
+        # Provider, key and model persist, then the live config is PUSHED to
+        # the agent, so a provider or key switch applies on the next message
+        # with no restart.
         self._settings.provider = self.provider_combo.currentText()
         self._settings.openrouter_api_key = self.provider_key_edit.text()
         self._settings.model_id = self.model_combo.currentText()
@@ -298,29 +237,23 @@ class SettingsDialog(QDialog):
         super().accept()
 
     def _disconnect_and_close(self) -> None:
-        """Item B3 (qgis-ux-batch 2026-07-19): run the dock's disconnect path
-        then close the dialog without saving (an action, not a settings edit)."""
+        """Run the dock's disconnect path, then close WITHOUT saving: this is
+        an action, not a settings edit."""
         if self._on_disconnect is not None:
             self._on_disconnect()
         self.reject()
 
     def _connect_and_close(self) -> None:
-        """NATE 2026-07-20: run the dock's connect path then close without
-        saving (an action, not a settings edit) -- the Connect twin of the
-        Disconnect button, both off the header row."""
+        """Run the dock's connect path, then close WITHOUT saving: this is an
+        action, not a settings edit."""
         if self._on_connect is not None:
             self._on_connect()
         self.reject()
 
     def _resolve_http_base(self) -> str:
-        """The agent's :8766 base for the provider-config POST + the
-        local-models GET (remote-daemon design). The dock (this dialog's
-        parent in every real usage) owns the derivation seam
-        (``_effective_http_base`` -- server-advertised, else WS-host
-        fallback); a standalone dialog with no dock (a test harness building
-        ``SettingsDialog(settings, None)``) falls back to
-        ``settings.export_api`` unchanged, so that path stays exactly as it
-        was before this design landed."""
+        """The agent's HTTP base for this dialog's two calls. The PARENT dock
+        owns the derivation; a standalone dialog with no dock falls back to the
+        stored ``export_api``."""
         dock = self.parent()
         effective = getattr(dock, "_effective_http_base", None)
         if callable(effective):
@@ -328,14 +261,9 @@ class SettingsDialog(QDialog):
         return self._settings.export_api
 
     def _push_provider_config(self) -> None:
-        """POST the persisted provider config to the agent OFF-THREAD (Feature
-        3, design 2026-07-19) so a dead/asleep agent HTTP listener never freezes
-        this dialog on Save. The base_url + num_ctx come from the provider
-        preset (the plugin's source of truth for what env a provider needs);
-        the api_key is the persisted secret. The honest result lands on the
-        DOCK status (this dialog is closing), routed via the parent dock's
-        handlers. SECURITY: the api_key rides the POST body but is NEVER logged
-        here or in the client helper."""
+        """POST the persisted provider config OFF-THREAD, so a dead agent
+        never freezes Save. SECURITY: the api key rides the body and is NEVER
+        logged."""
         preset = PROVIDER_PRESETS.get(self._settings.provider) or {}
         payload = {
             "base_url": preset.get("base_url", ""),
@@ -345,8 +273,8 @@ class SettingsDialog(QDialog):
         }
         dock = self.parent()
         task = _ProviderConfigTask(self._resolve_http_base(), payload, dock)
-        # Own the task on the DOCK (not this closing dialog) so the daemon
-        # thread + QObject outlive accept() -- mirrors _case_list_tasks.
+        # Own the task on the DOCK, not on this closing dialog, so the daemon
+        # thread and its QObject outlive ``accept()``.
         if dock is not None and hasattr(dock, "_provider_config_tasks"):
             dock._provider_config_tasks.append(task)
             task.finished.connect(dock._on_provider_config_finished)
@@ -354,11 +282,8 @@ class SettingsDialog(QDialog):
         task.start()
 
     def _reload_model_choices(self, provider: str) -> None:
-        """Swap the model combo's dropdown to the curated shortlist for
-        ``provider`` WITHOUT clobbering whatever the user has typed (the combo
-        is editable -- only the item list changes, the edit text is preserved).
-        Bound to the provider combo's ``currentTextChanged`` and called once at
-        construction."""
+        """Swap the model combo's dropdown to ``provider``'s shortlist WITHOUT
+        clobbering whatever the user has typed: only the item list changes."""
         preset = PROVIDER_PRESETS.get(provider) or {}
         current_text = self.model_combo.currentText()
         self.model_combo.blockSignals(True)
@@ -367,10 +292,9 @@ class SettingsDialog(QDialog):
             self.model_combo.addItem(model)
         self.model_combo.setCurrentText(current_text)
         self.model_combo.blockSignals(False)
-        # Feature 2 (design 2026-07-19): for an OpenRouter preset, fetch the
-        # LIVE free + tool-capable model list off the UI thread and swap it in
-        # on success; the static shortlist above stays as the honest fallback
-        # on any error/timeout. Combo stays editable, so any id is typeable.
+        # For an OpenRouter preset, fetch the LIVE model list off the UI
+        # thread and swap it in on success; the static shortlist above is the
+        # honest fallback on any error or timeout.
         preset_base_url = (preset.get("base_url") or "").lower()
         if "openrouter.ai" in preset_base_url:
             task = _ModelListTask(self._resolve_http_base(), provider, self)
@@ -380,10 +304,9 @@ class SettingsDialog(QDialog):
             task.start()
 
     def _on_model_list_finished(self, ids: list, provider: str) -> None:
-        """Repopulate the model combo with the LIVE free-model ids (Feature 2).
-        Stale-guarded: the user may have switched provider again while the
-        fetch was in flight, so only apply for the CURRENT provider. Preserves
-        whatever the user has typed (editable combo -- only items swap)."""
+        """Repopulate the model combo with the LIVE ids. STALE-GUARDED: the
+        user may have switched provider mid-fetch, so this applies only for the
+        provider still selected."""
         try:
             if self.provider_combo.currentText() != provider or not ids:
                 return

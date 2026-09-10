@@ -1,35 +1,8 @@
-"""Payload-warning gate logic -- PURE PYTHON (no PyQGIS / PyQt imports).
+"""Gate logic -- PURE PYTHON (no PyQGIS / PyQt imports).
 
-Milestone 2 item 1: the agent's ``tool-payload-warning`` envelope renders as a
-real Qt card in the dock, and the user's decision returns as a
-``tool-payload-confirmation``. This module holds everything about the gate
-that is NOT a widget, so the contract behaviour is unit-testable without QGIS.
-
-Contract source of truth (mirrored EXACTLY, not paraphrased):
-
-* ``contracts/trid3nt_contracts/payload_warning.py``
-  - warning payload fields: ``warning_id``, ``tool_name``, ``tool_args``,
-    ``estimated_mb``, ``threshold_mb``, ``recommendation``,
-    ``alternative_args``, ``options`` (non-empty subset of
-    {"proceed","cancel","narrow_scope"}; hard-cap warnings OMIT "proceed"),
-    ``ttl_seconds``, optional ``granularity`` (#154 gate) and ``time_scale``.
-  - confirmation payload fields: ``warning_id``, ``decision``,
-    ``revised_args`` (REQUIRED dict for ``narrow_scope``; MUST be None for
-    ``proceed`` / ``cancel`` -- the agent's validator rejects violations).
-
-* ``ResolutionPickerCard.tsx`` (web client, separate repo) decision rules:
-  - chosen rung == suggested  -> decision "proceed",      revised None
-  - chosen rung != suggested  -> decision "narrow_scope", revised
-                                 {granularity.resolution_param: chosen}
-  - changed cadence/duration  -> merged into the SAME revised dict under
-                                 time_scale.cadence_param / .duration_param
-  - Cancel                    -> decision "cancel",       revised None
-  and the client-side live estimates:
-  - cells(chosen) ~= round(estimated_active_cells * (suggested/chosen)^2)
-  - eta(chosen)   ~= estimated_solve_seconds * cells(chosen)/cells(suggested)
-  - frames        ~= clamp(round(duration_hr*60 / max(interval, floor)),
-                           1, max_frames)
-"""
+Everything about the dock's gate cards that is NOT a widget, so each gate's
+behaviour is unit-testable without QGIS. A gate the server PAUSES a turn on
+always has an answer that closes it: unanswerable means a hung turn."""
 
 from __future__ import annotations
 
@@ -160,13 +133,10 @@ def parse_payload_warning(payload: dict) -> Optional[PayloadWarning]:
 # The param SHEET -- the card an input review is rendered as.
 # --------------------------------------------------------------------------- #
 #
-# Contract source of truth (mirrored EXACTLY, not paraphrased):
-# ``contracts/trid3nt_contracts/payload_warning.py`` (``ParamSheet`` /
-# ``ParamSheetRow``), carried on the OPTIONAL ``param_sheet`` field of
-# ``tool-payload-warning``. Its presence is what turns the gate card into an
-# editable property grid; the edits ride back on the SAME
-# ``tool-payload-confirmation`` (``narrow_scope`` + ``revised_args``), and a
-# submit-with-edits is the approval -- the server does not re-present the sheet.
+# The sheet rides an OPTIONAL field of the payload warning, and its presence is
+# what turns the gate card into an editable property grid. Edits ride back on
+# the SAME confirmation envelope, and a submit-with-edits IS the approval: the
+# server does not re-present the sheet.
 
 
 @dataclass
@@ -189,11 +159,9 @@ class ParamRow:
 
     @property
     def is_numeric(self) -> bool:
-        """A bounded row is a MEASUREMENT; its editor parses numbers.
-
-        ``bool`` is excluded on purpose: it is an ``int`` in Python and a flag is
-        not a measurement.
-        """
+        """A bounded row is a MEASUREMENT, so its editor parses numbers.
+        ``bool`` is excluded on purpose: it is an ``int`` in Python, and a flag
+        is not a measurement."""
         return isinstance(self.value, (int, float)) and not isinstance(self.value, bool)
 
     @property
@@ -230,11 +198,9 @@ class ParamSheetRequest:
 
 
 def parse_param_sheet(payload: dict) -> Optional[ParamSheetRequest]:
-    """Parse the ``param_sheet`` off a ``tool-payload-warning``; None when absent.
-
-    A malformed sheet is also None: the gate card then renders its existing
-    provenance text, which is a worse form but never a broken one.
-    """
+    """Parse the ``param_sheet`` off a payload warning; None when absent OR
+    malformed, so the card falls back to its plain provenance text -- a worse
+    form, never a broken one."""
     if not isinstance(payload, dict):
         return None
     sheet = payload.get("param_sheet")
@@ -284,14 +250,9 @@ def _parse_param_row(raw: dict) -> Optional[ParamRow]:
 
 
 def resolve_param_sheet_edits(rows: list, edited: dict) -> dict:
-    """The ``revised_args`` for a submitted sheet: the rows that actually MOVED.
-
-    ``edited`` maps row name -> the editor's text. A numeric row parses back to a
-    number (an unparseable edit is DROPPED rather than sent as a string the
-    server would refuse); a text row travels verbatim. Rows whose text still
-    matches what was rendered are not edits, and sending them would re-stamp
-    ``basis=user`` on values the user never touched.
-    """
+    """The ``revised_args`` for a submitted sheet: only the rows that actually
+    MOVED. An unparseable numeric edit is DROPPED, and an unchanged row is not
+    an edit -- sending it would stamp user authorship on an untouched value."""
     by_name = {r.name: r for r in rows}
     revised = {}
     for name, text in (edited or {}).items():
@@ -319,7 +280,7 @@ def param_sheet_summary(sheet: ParamSheetRequest, revised: dict) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Client-side live estimates (ResolutionPickerCard math, mirrored)
+# Client-side live estimates.
 # --------------------------------------------------------------------------- #
 
 
@@ -384,17 +345,11 @@ def resolve_gate_decision(
     interval_min: Optional[float] = None,
     duration_hr: Optional[float] = None,
 ) -> GateDecision:
-    """Map the card's UI state to the confirmation envelope (web rules).
-
-    - ``cancel=True`` -> ("cancel", None).
-    - Nothing changed from the suggestions -> ("proceed", None); on a
-      hard-cap warning (no "proceed" in options) this is REFUSED with an
-      honest note instead of silently sending a decision the agent rejects.
-    - Any override (rung / cadence / window) -> ("narrow_scope", revised)
-      with the changed values under the EXACT param keys the envelope names
-      (granularity.resolution_param / time_scale.cadence_param /
-      time_scale.duration_param).
-    """
+    """Map the card's UI state to the confirmation envelope. Any override
+    becomes ``narrow_scope`` under the EXACT param keys the envelope named."""
+    # An unchanged sheet is a plain ``proceed``, EXCEPT on a hard-cap warning,
+    # whose options omit proceed: that is refused with an honest note rather
+    # than sent as a decision the agent would reject.
     if cancel:
         return GateDecision("cancel", None)
 
@@ -453,27 +408,14 @@ def resolve_gate_decision(
 
 
 # --------------------------------------------------------------------------- #
-# Code-exec approval gate (live-feedback 2026-07-21: the agent's
-# ``code-exec-request`` confirm gate had ZERO plugin handling, so the agent
-# blocked on its confirmation future forever -- "it just stopped")
+# Code-exec approval gate -- the agent BLOCKS on its confirm future.
 # --------------------------------------------------------------------------- #
 #
-# Contract source of truth (mirrored EXACTLY, not paraphrased):
-#
-# * ``contracts/trid3nt_contracts/sandbox_contracts.py``
-#   (``CodeExecRequestPayload``): fields ``code_exec_id`` (ULID; doubles as
-#   the confirmation correlation key), ``python_code`` (the EXACT code,
-#   verbatim, never a paraphrase), ``layer_refs`` (``{var: uri}`` OR
-#   ``{var: [uri, ...]}`` for an ordered frame set), ``rationale`` (optional
-#   one-line caption).
-# * The decision rides back on the EXISTING ``tool-payload-confirmation``
-#   envelope with ``warning_id == code_exec_id`` (the server's shared
-#   ``pending_payload_warnings`` confirm seam -- ``server.py``
-#   ``_gate_on_code_exec``). ``decision="proceed"`` runs the sandbox; the
-#   server FAIL-CLOSES everything else (``cancel`` AND ``narrow_scope``
-#   alike -- you don't "narrow" a code snippet), so the card only ever
-#   offers Run (proceed) / Deny (cancel), and ``revised_args`` is always
-#   None (contract cross-rule: proceed/cancel forbid revised_args).
+# The decision rides back on the ORDINARY payload-confirmation envelope, with
+# its ``warning_id`` set to the request's ``code_exec_id``. The server
+# fail-closes everything but ``proceed`` -- you do not "narrow" a code snippet
+# -- so the card offers exactly Run and Deny, and ``revised_args`` is always
+# None.
 
 
 @dataclass
@@ -488,10 +430,9 @@ class CodeExecRequest:
 
 
 def parse_code_exec_request(payload: dict) -> Optional[CodeExecRequest]:
-    """Parse a raw ``code-exec-request`` payload dict; None when the envelope
-    is unusable -- no ``code_exec_id`` (nothing to confirm against) or no
-    ``python_code`` (approving unseen code is exactly what this hard confirm
-    gate exists to prevent)."""
+    """Parse a ``code-exec-request`` payload; None when it carries no id to
+    confirm against, or NO CODE -- approving unseen code is exactly what this
+    gate exists to prevent."""
     if not isinstance(payload, dict):
         return None
     code_exec_id = payload.get("code_exec_id")
@@ -512,10 +453,9 @@ def parse_code_exec_request(payload: dict) -> Optional[CodeExecRequest]:
 
 
 def resolve_code_exec_decision(approve: bool) -> GateDecision:
-    """Map the card's Run / Deny click to the confirmation envelope:
-    Run -> ("proceed", None), Deny -> ("cancel", None). ``revised_args`` is
-    ALWAYS None -- the contract cross-rule forbids it on proceed/cancel, and
-    ``narrow_scope`` is never offered (the server fail-closes it)."""
+    """Map the card's Run or Deny click to the confirmation envelope.
+    ``revised_args`` is ALWAYS None: proceed and cancel forbid it, and
+    ``narrow_scope`` is never offered here."""
     return GateDecision("proceed" if approve else "cancel", None)
 
 
@@ -533,30 +473,15 @@ def code_exec_layer_lines(request: CodeExecRequest) -> list:
 
 
 # --------------------------------------------------------------------------- #
-# Credential-request key-entry card (LANE K, NATE directive 2026-07-22)
+# Credential-request key-entry card.
 # --------------------------------------------------------------------------- #
 #
-# Contract source of truth (mirrored EXACTLY, not paraphrased):
-# ``contracts/trid3nt_contracts/secrets.py``:
-#
-# * inbound ``credential-request`` (CredentialRequestEnvelopePayload):
-#   ``request_id`` / ``provider_id`` / ``provider_label`` / ``signup_url``
-#   (None = no self-serve signup; NEVER a fabricated URL) /
-#   ``secret_key_name`` / ``message`` / ``tool_name``.
-# * the reply is TWO envelopes, in order, per the contract's
-#   split (raw key isolated to the secret-add transport):
-#     1. ``secret-add``  {provider, case_id, key_value}  -- the ONLY envelope
-#        that ever carries the raw key; the server vault-writes it (file
-#        vault, 0600) and answers with a refreshed ``secrets-list``.
-#     2. ``credential-provided``  {request_id, secret_id, provided} -- the
-#        retry signal that resolves the agent's paused-tool future. Skip /
-#        decline is ``provided=False`` with NO preceding secret-add (the
-#        server then re-raises the original typed error and the agent
-#        narrates honestly -- data-source fallback norm).
-#   The client sends ``secret_id=None``: the field is Optional in the
-#   contract and the server's resume path re-resolves the vault record
-#   itself (``_resolve_active_secret_ref``); this synchronous client never
-#   blocks the UI thread waiting for the secrets-list to learn the ULID.
+# The reply is TWO envelopes in order, and the split is the point: the raw key
+# rides ``secret-add`` ALONE, and the ``credential-provided`` retry signal that
+# follows carries no key material. A ``signup_url`` is None when there is no
+# self-serve signup, and is never a fabricated URL. Skip is
+# ``provided=False`` with NO preceding secret-add, so the server re-raises the
+# original typed error and the agent narrates it honestly.
 
 
 @dataclass
@@ -581,10 +506,9 @@ class CredentialRequest:
 
 
 def parse_credential_request(payload: dict) -> Optional[CredentialRequest]:
-    """Parse a raw ``credential-request`` payload dict; None when the envelope
-    is unusable -- no ``request_id`` (nothing to correlate the reply against)
-    or no ``provider_id`` (nothing to scope the secret-add under; a key saved
-    to the wrong scope is one the paused tool's retry can never re-resolve)."""
+    """Parse a ``credential-request`` payload; None without a ``request_id``
+    to correlate the reply, or a ``provider_id`` to scope the key under -- a
+    key in the wrong scope is one the paused tool can never re-resolve."""
     if not isinstance(payload, dict):
         return None
     request_id = payload.get("request_id")
@@ -613,9 +537,8 @@ def parse_credential_request(payload: dict) -> Optional[CredentialRequest]:
 
 
 def credential_note_lines(request: CredentialRequest) -> list:
-    """The card's muted metadata lines -- every value is a structured envelope
-    field, never re-derived from prose (Invariant 1). The raw key value never
-    appears here (it does not exist yet; the field is client-side only)."""
+    """The card's muted metadata lines. Every value is a structured envelope
+    field, never re-derived from prose, and the raw key never appears."""
     lines = []
     if request.secret_key_name:
         lines.append(f"Key name: {request.secret_key_name}")
@@ -625,24 +548,15 @@ def credential_note_lines(request: CredentialRequest) -> list:
 
 
 # --------------------------------------------------------------------------- #
-# Tool-selection picker card (auto/ask modes -- Stage 3, 2026-07-22)
+# Tool-selection picker card.
 # --------------------------------------------------------------------------- #
 #
-# Contract source of truth (mirrored EXACTLY, not paraphrased):
-# ``contracts/trid3nt_contracts/ws.py``:
-#
-# * inbound ``tool-candidates`` (ToolCandidatesPayload): ``request_id`` (the
-#   correlation key the reply echoes), ``stage_label`` ("Data step" etc. --
-#   the card title), ``candidates`` (ranked best-first ``{tool_name, summary,
-#   score}`` rows; MAY be empty on retrieval degrade -- the card then offers
-#   only free-text + let-agent-decide), ``reason`` ("ambiguity" = AUTO-mode
-#   measured near-tie / "ask_mode" = the user asked to see every staged
-#   selection), ``timeout_s`` (the SERVER's fail-open window -- unanswered,
-#   the turn proceeds with the agent's own top pick).
-# * the reply is ONE ``tool-choice`` envelope (ToolChoicePayload):
-#   ``request_id`` echo + exactly one of three shapes -- ``tool_name`` set
-#   (verbatim candidate pick), ``free_text`` set (typed guidance), both None
-#   (let the agent decide -- same outcome as the timeout, but instant).
+# Candidates arrive ranked best-first and MAY be empty on a retrieval degrade,
+# in which case the card offers only free text and let-agent-decide. The reply
+# is ONE envelope carrying exactly one of three shapes: a verbatim candidate
+# pick, typed guidance, or neither. Unanswered, the SERVER's own fail-open
+# window proceeds with the agent's top pick, which is what the third shape
+# does instantly.
 
 
 @dataclass
@@ -678,11 +592,9 @@ class ToolCandidatesRequest:
 
 
 def parse_tool_candidates(payload: dict) -> Optional[ToolCandidatesRequest]:
-    """Parse a raw ``tool-candidates`` payload dict; None when the envelope is
-    unusable -- no ``request_id`` (nothing to correlate the reply against).
-    Candidate rows missing a usable ``tool_name`` are SKIPPED, never a crash;
-    an empty surviving list is legal (free-text + let-agent-decide still
-    render)."""
+    """Parse a ``tool-candidates`` payload; None without a ``request_id``. A
+    row with no usable ``tool_name`` is SKIPPED, and an empty surviving list is
+    legal -- free text and let-agent-decide still answer the card."""
     if not isinstance(payload, dict):
         return None
     request_id = payload.get("request_id")
@@ -731,14 +643,9 @@ def parse_tool_candidates(payload: dict) -> Optional[ToolCandidatesRequest]:
 def resolve_tool_choice(
     picked_tool: Optional[str], free_text: Optional[str]
 ) -> tuple:
-    """Normalize the card's UI state to the ``tool-choice`` wire shape
-    ``(tool_name, free_text)`` -- exactly one of the contract's three shapes:
-
-    - a picked candidate wins outright (the explicit pick is the stronger
-      signal; any stray free text is dropped so both are never sent),
-    - else non-whitespace free text rides alone (stripped),
-    - else ``(None, None)`` -- the explicit let-agent-decide reply.
-    """
+    """Normalize the card's state to ``(tool_name, free_text)``, exactly ONE
+    of the three legal shapes. A picked candidate wins outright and any stray
+    free text is dropped, so both are never sent together."""
     if isinstance(picked_tool, str) and picked_tool:
         return (picked_tool, None)
     if isinstance(free_text, str) and free_text.strip():
@@ -747,10 +654,8 @@ def resolve_tool_choice(
 
 
 def tool_choice_summary(tool_name: Optional[str], free_text: Optional[str]) -> str:
-    """The folded chip line for an ANSWERED picker card ("picked
-    spatial_query" / "agent decided" / the free-text variant). The
-    unanswered-timeout fold ("agent proceeded") is a separate card state --
-    see the card's ``mark_superseded``."""
+    """The folded chip line for an ANSWERED picker card. The unanswered
+    timeout fold is a different card state and is not built here."""
     if tool_name:
         return f"picked {tool_name}"
     if free_text:
@@ -764,8 +669,8 @@ def tool_choice_summary(tool_name: Optional[str], free_text: Optional[str]) -> s
 
 
 def summary_lines(warning: PayloadWarning) -> list:
-    """The card's body lines -- every number is a structured envelope field,
-    never re-derived from prose (Invariant 1)."""
+    """The card's body lines. Every number is a structured envelope field,
+    never re-derived from prose."""
     lines = [
         f"Tool: {warning.tool_name}",
         (
@@ -794,11 +699,8 @@ def summary_lines(warning: PayloadWarning) -> list:
             if isinstance(eta, (int, float)):
                 bits.append(f"est ~{eta:g}s")
             if compute:
-                # Local-cloud fingerprint fix (NATE 2026-07-08): this plugin
-                # is the LOCAL product -- the "local" compute lane renders
-                # plain CPU wording ("local run"), never the cloud "vCPU"
-                # label. Any other compute label (e.g. a remote-mode cloud
-                # agent's "standard") keeps the prior wording unchanged.
+                # The "local" compute lane renders plain CPU wording, never a
+                # cloud vCPU label; any other compute label keeps its own.
                 if compute == "local":
                     if isinstance(vcpus, (int, float)) and vcpus > 1:
                         label = f"local run ({int(vcpus)} CPU)"
@@ -832,35 +734,15 @@ def summary_lines(warning: PayloadWarning) -> list:
 
 
 # --------------------------------------------------------------------------- #
-# Region-choice picker (state-bbox-fallback narrowing) -- GATE-WAIT.
+# Region-choice picker -- a GATE-WAIT: the server pauses the turn on it.
 # --------------------------------------------------------------------------- #
 #
-# CRITICAL PAIR (server pauses the turn awaiting the reply; unhandled = a hung
-# turn, the same bug class the code-exec gate was). The server snaps a
-# vague/regional geocode ("south Florida") to the WHOLE state bbox (the honest
-# already-resolved default) and OFFERS a narrower pick.
-#
-# Contract source of truth (mirrored EXACTLY, not paraphrased):
-# ``contracts/trid3nt_contracts/region_choice.py``:
-#
-# * inbound ``region-choice-request`` (RegionChoiceRequestEnvelopePayload):
-#   ``request_id`` (the correlation key the reply echoes) / ``state_name`` /
-#   ``state_code`` / ``state_bbox`` (BBox = ``[min_lon, min_lat, max_lon,
-#   max_lat]``; the whole-state default) / ``candidates`` (RegionCandidate
-#   rows: ``region_id`` / ``name`` / ``bbox`` / ``admin_level``; MAY be empty
-#   on a region-set build failure -- the card then offers only the whole-state
-#   default) / ``default_action`` (always ``"use_whole_state"``) / ``message``
-#   (the honest "snapped to the whole state, offering a narrower pick" prompt).
-# * the reply is ONE ``region-choice-provided``
-#   (RegionChoiceProvidedEnvelopePayload): ``request_id`` echo + ``choice``
-#   (``"region"`` when narrowed / ``"whole_state"`` for the honest default) +
-#   ``selected_region_id`` (the candidate's id when ``choice == "region"``,
-#   else None -- the server re-resolves the bbox by this id, authoritative
-#   over a client-sent bbox) + ``selected_bbox`` (the candidate's bbox echo,
-#   a convenience/fallback; None for whole_state). A ``whole_state`` reply IS
-#   the decline path (Invariant 8: cancellation is first-class -- it keeps the
-#   already-correct default), so the card ALWAYS has an answer that closes the
-#   gate honestly, never a dead-end pause.
+# The server snapped a vague geocode to the WHOLE state bbox, which is the
+# honest already-resolved default, and offers a narrower pick. Candidates MAY
+# be empty on a region-set build failure, and the card then offers only that
+# default. On a region pick the server re-resolves the bbox from the id, which
+# is authoritative over any bbox sent with it. A ``whole_state`` answer IS the
+# decline path, so the card ALWAYS has a move that closes the gate.
 
 
 @dataclass
@@ -908,13 +790,9 @@ def _coerce_bbox4(value) -> Optional[list]:
 
 
 def parse_region_choice(payload: dict) -> Optional[RegionChoiceRequest]:
-    """Parse a raw ``region-choice-request`` payload dict; None when the
-    envelope is unusable -- no ``request_id`` (nothing to correlate the reply
-    against; an unanswerable request would leave the server's turn paused,
-    exactly the hung-turn bug this gate exists to close). Candidate rows
-    missing a usable ``region_id``/``name``/``bbox`` are SKIPPED, never a
-    crash; an empty surviving list is legal (the whole-state default still
-    answers the gate)."""
+    """Parse a ``region-choice-request``; None without a ``request_id``, since
+    an unanswerable one leaves the turn paused. A malformed candidate is
+    SKIPPED and an empty list is legal: the whole-state default still answers."""
     if not isinstance(payload, dict):
         return None
     request_id = payload.get("request_id")
@@ -966,16 +844,9 @@ def parse_region_choice(payload: dict) -> Optional[RegionChoiceRequest]:
 def resolve_region_choice(
     request: RegionChoiceRequest, selected_region_id: Optional[str]
 ) -> dict:
-    """Build the ``region-choice-provided`` wire dict for the card's decision
-    (contract RegionChoiceProvidedEnvelopePayload).
-
-    ``selected_region_id`` set + matching a candidate -> ``choice="region"``
-    with the id + the candidate's echoed bbox (the server re-resolves by id,
-    authoritative). ``None`` (or an unknown id -- the whole-state option) ->
-    ``choice="whole_state"`` with both selection fields None: the honest
-    already-resolved default, which is ALSO the decline path. Both keys are
-    always sent (None-valued when unused) so the wire shape is the full
-    contract surface (the ``credential-provided`` explicit-None convention)."""
+    """Build the ``region-choice-provided`` wire dict. An id matching a
+    candidate narrows; anything else keeps the whole state, which is the honest
+    default AND the decline path, so the gate always closes."""
     if isinstance(selected_region_id, str) and selected_region_id:
         for cand in request.candidates:
             if cand.region_id == selected_region_id:
@@ -1005,30 +876,14 @@ def region_choice_summary(
 
 
 # --------------------------------------------------------------------------- #
-# Spatial-input picker (agent needs a point / bbox / drawn geometry) -- GATE-WAIT.
+# Spatial-input picker -- a GATE-WAIT: the server pauses the turn on it.
 # --------------------------------------------------------------------------- #
 #
-# CRITICAL PAIR (server pauses the turn awaiting the reply; unhandled = a hung
-# turn). The agent asks the user to pick a geometry on the map.
-#
-# Contract source of truth (mirrored EXACTLY, not paraphrased):
-# ``contracts/trid3nt_contracts/ws.py``:
-#
-# * inbound ``spatial-input-request`` (SpatialInputRequestPayload):
-#   ``request_id`` (the correlation key the reply echoes) / ``mode``
-#   (``"point"`` = single click / ``"bbox"`` = drag rectangle / ``"vector_draw"``
-#   = terra-draw FeatureCollection) / ``title`` / ``description`` / ``purpose``
-#   (vector_draw only: ``"aoi"`` | ``"line"``) /
-#   ``suggested_view`` / ``reference_layers`` / ``default_timeout_seconds``.
-# * the reply is ONE ``spatial-input-response`` (SpatialInputResponsePayload):
-#   ``request_id`` echo + ``geometry_type`` (``"point"`` / ``"bbox"`` /
-#   ``"vector_draw"``) + ``coordinates`` (``[lon, lat]`` for point,
-#   ``[minLon, minLat, maxLon, maxLat]`` for bbox) + ``features`` (the drawn
-#   FeatureCollection for vector_draw) + ``cancelled`` (True = the decline path
-#   -- every geometry field None). The QGIS plugin captures POINT (canvas
-#   point-emit tool) and BBOX (canvas extent tool) picks -- the exact
-#   probe/AOI click machinery -- and answers vector_draw through the
-#   vertex-capture tool: a polygon for ``aoi``, a polyline for ``line``.
+# The agent asks the user to pick a geometry: a point, a dragged bbox, or a
+# drawn shape whose purpose is either an area or a line. This plugin answers
+# the first two through the canvas point-emit and extent tools, and the third
+# through the vertex-capture tool -- a polygon for an area, a polyline for a
+# line. ``cancelled`` is the decline path and closes the gate.
 
 
 @dataclass
@@ -1051,10 +906,9 @@ class SpatialInputRequest:
 
 
 def parse_spatial_input_request(payload: dict) -> Optional[SpatialInputRequest]:
-    """Parse a raw ``spatial-input-request`` payload dict; None when the
-    envelope is unusable -- no ``request_id`` (nothing to correlate the reply
-    against, leaving the server's turn hung) or an unknown ``mode`` (the card
-    would not know which affordance to offer)."""
+    """Parse a ``spatial-input-request``; None without a ``request_id``, which
+    would leave the turn hung, or with an unknown ``mode``, which leaves the
+    card no affordance to offer."""
     if not isinstance(payload, dict):
         return None
     request_id = payload.get("request_id")
@@ -1104,15 +958,9 @@ def resolve_spatial_input_bbox(request_id: str, bbox) -> dict:
 
 def resolve_spatial_input_features(request_id: str, draw_kind: str,
                                    vertices: list) -> dict:
-    """Build the ``spatial-input-response`` wire dict for a DRAWN shape.
-
-    ``draw_kind`` is ``"polygon"`` or ``"polyline"``; ``vertices`` is
-    ``[[lon, lat], ...]`` in draw order. A polygon's ring is CLOSED here (the
-    contract validator and every downstream parser read a ring, and a capture
-    tool has no reason to make the user click the first vertex twice). The
-    ``role`` mirrors the request's purpose exactly -- ``aoi`` for a polygon,
-    ``line`` for a polyline.
-    """
+    """Build the response for a DRAWN shape from ``[[lon, lat], ...]`` in draw
+    order. A polygon's ring is CLOSED here, because every downstream reader
+    wants a ring and no user should have to click a vertex twice."""
     pts = [[round(float(v[0]), 6), round(float(v[1]), 6)] for v in vertices]
     if draw_kind == "polygon":
         if len(pts) >= 3 and pts[0] != pts[-1]:
@@ -1141,10 +989,9 @@ def spatial_input_vertices_ready(draw_kind: str, vertices: list) -> bool:
 
 
 def resolve_spatial_input_cancel(request_id: str) -> dict:
-    """Build the ``spatial-input-response`` wire dict for a CANCEL (contract
-    SpatialInputResponsePayload): ``cancelled=True`` with every geometry field
-    None. The decline path: it CLOSES the server's paused gate rather than
-    leaving the turn hung."""
+    """Build the response for a CANCEL: ``cancelled=True`` with every geometry
+    field None. This is the decline path, and it CLOSES the paused gate rather
+    than leaving the turn hung."""
     return {
         "request_id": request_id,
         "geometry_type": None,
@@ -1180,15 +1027,9 @@ def spatial_input_summary(request: SpatialInputRequest, wire: dict) -> str:
 # code-exec-result -- the run outcome that follows an APPROVED code-exec-request.
 # --------------------------------------------------------------------------- #
 #
-# Contract source of truth (mirrored EXACTLY, not paraphrased):
-# ``contracts/trid3nt_contracts/sandbox_contracts.py``
-# (``CodeExecResultPayload``): ``code_exec_id`` (joins the result to the
-# originating ``code-exec-request`` card) / ``status`` (``ok`` / ``error`` /
-# ``timeout`` / ``blocked`` -- the HONEST terminal outcome, never dressed up) /
-# ``stdout_tail`` / ``stderr_tail`` (bounded tails) / ``result`` (the converted
-# ``{"kind": ...}`` descriptor, or None) / ``truncated`` / ``duration_s``.
-# Fire-and-forget by contract (no reply); the plugin updates the approved
-# code-exec card's folded chip with the outcome.
+# ``code_exec_id`` joins the result back to the card that approved it. The
+# status is the HONEST terminal outcome and is never dressed up. Fire-and-
+# forget: no reply is expected or sent.
 
 
 @dataclass
@@ -1275,12 +1116,9 @@ def code_exec_result_lines(result: CodeExecResult) -> list:
 # secrets-list -- the server's per-user/per-Case secret roster (settings state).
 # --------------------------------------------------------------------------- #
 #
-# Contract source of truth: ``contracts/trid3nt_contracts/secrets.py``
-# (``SecretsListEnvelopePayload`` -> list[``SecretRecord``]). Emitted in
-# response to opening the secrets surface OR as the confirmation after a
-# ``secret-add`` / ``secret-revoke``. The raw key value NEVER appears -- only
-# the ``vault_ref``-bearing records. The plugin stores these for the
-# settings/secrets state (minimal honest handling) and never logs a vault_ref.
+# Emitted when the secrets surface opens, and as the confirmation after an
+# add or a revoke. The raw key value NEVER appears here -- only the
+# ``vault_ref``-bearing records -- and a vault_ref is never logged.
 
 
 @dataclass
