@@ -31,21 +31,17 @@ from websockets.asyncio.server import ServerConnection
 logger = logging.getLogger("trid3nt_server.server")
 
 def _ensure_emitter(websocket: ServerConnection, state: SessionState) -> None:
-    """Bind a ``PipelineEmitter`` to this session if one isn't already.
-
-    The emitter's sink is the WebSocket ``send`` -- every transition method
-    writes one envelope on the wire (replace-not-reconcile)."""
+    """Bind a ``PipelineEmitter`` to this session if one is not already bound;
+    its sink is the WebSocket send, one envelope per transition."""
     if state.emitter is not None:
         return
 
     async def _sink(text: str) -> None:
-        # The WS may be mid-close when a terminal pipeline-state frame
-        # (mark_cancelled / mark_failed) is emitted on the cancel path --
-        # ``websocket.send`` then raises ConnectionClosed straight out of the
-        # emitter, swallowing the terminal frame AND letting the exception
-        # escape the cancel chain. Best-effort: swallow send failures so the
-        # card-state transition is always recorded server-side and the
-        # CancelledError propagates cleanly for any clients still attached.
+        # The socket may be mid-close when a terminal pipeline-state frame is
+        # emitted on the cancel path, and the send would then raise straight out
+        # of the emitter, swallowing that frame and escaping the cancel chain.
+        # Swallowing send failures keeps the card-state transition recorded
+        # server-side and lets the cancel propagate cleanly.
         try:
             await websocket.send(text)
         except Exception:  # noqa: BLE001 -- socket may be closing on cancel/fail
@@ -56,18 +52,16 @@ def _ensure_emitter(websocket: ServerConnection, state: SessionState) -> None:
             )
 
     async def _chart_persist(payload: dict) -> None:
-        # task-198: composer-side chart persistence goes through the SAME
-        # _persist_chart_record the tool-result chart path uses, so a
-        # composer-emitted chart replays on Case rehydration exactly like a
-        # generate_chart chart. Best-effort inside _persist_chart_record.
+        # A composer-side chart persists through the SAME record writer the
+        # tool-result chart path uses, so it replays on Case rehydration
+        # identically. Best-effort inside that writer.
         await _persist_chart_record(state, payload)
 
     async def _tool_card_persist(**kwargs: Any) -> None:
-        # A terminal SIM compute card persists through the same
-        # ``_persist_tool_card`` used by on-box atomic tool cards, so it
-        # replays on a WS reconnect / Case reopen. Case is pinned via the
-        # live turn context so a cancel-and-redispatch race cannot re-aim
-        # the write. Best-effort.
+        # A terminal compute card persists through the same writer the atomic
+        # tool cards use, so it replays on a reconnect or Case reopen. The Case
+        # is pinned from the live turn context, so a cancel-and-redispatch race
+        # cannot re-aim the write. Best-effort.
         await _persist_tool_card(state, **kwargs)
 
     state.emitter = PipelineEmitter(
@@ -78,11 +72,10 @@ def _ensure_emitter(websocket: ServerConnection, state: SessionState) -> None:
         tool_card_persist=_tool_card_persist,
     )
 
-# Arg keys whose VALUES are credentials/secrets and must NEVER appear in an
-# emitted envelope. The early input-only tool-io frame snapshots the ORIGINAL
-# call args, which on the dev/test resolution path can carry a raw key (see
-# test_credential_request_envelope_never_carries_raw_key). Mirrors + extends the
-# secret keys the credential pipeline strips at ``_inject_secret_ref`` (~4586).
+# Arg keys whose VALUES are credentials and must NEVER appear in an emitted
+# envelope. The early input-only frame snapshots the ORIGINAL call args, which on
+# the dev resolution path can carry a raw key. Mirrors and extends the keys the
+# credential pipeline strips when it injects a secret reference.
 _SECRET_ARG_KEYS: frozenset[str] = frozenset({
     "secret_ref", "map_key", "api_key", "apikey", "token", "access_token",
     "password", "passwd", "secret", "secret_key", "access_key", "private_key",
@@ -90,12 +83,9 @@ _SECRET_ARG_KEYS: frozenset[str] = frozenset({
 })
 
 def _redact_secret_args(args: Any) -> Any:
-    """Copy ``args`` with any secret-bearing VALUE masked (key kept visible).
-
-    Defense-in-depth for the early input-only tool-io frame: the visible input
-    (bbox, place, …) is preserved so the card shows the real request, but a raw
-    credential value is never echoed into a wire/persisted envelope.
-    """
+    """Copy ``args`` with any secret-bearing VALUE masked and the key left
+    visible, so the card still shows the real request while a raw credential is
+    never echoed into a wire or persisted envelope."""
     if not isinstance(args, dict):
         return args
     return {
@@ -104,22 +94,13 @@ def _redact_secret_args(args: Any) -> Any:
     }
 
 def _running_emitter_step_id(emitter: Any, tool_name: str) -> str | None:
-    """Return the step_id of the emitter's CURRENTLY-running step for ``tool_name``.
-
-    FIX B (early input-only tool-io frame): ``emit_tool_call`` mints the card's
-    step INSIDE itself (``add_step`` + ``mark_running``) and only publishes the
-    id on ``last_tool_step`` at the TERMINAL transition. To emit an early
-    input-only ``tool-io`` frame at dispatch START -- so the client shows the
-    input args immediately + a "Running…" output placeholder before the tool
-    body returns -- we need the in-flight step's id from INSIDE the invoke
-    callable (which runs after ``mark_running``). We derive it the SAME way
-    ``PipelineEmitter.update_current_progress`` does: the most-recently-added
-    step still in ``running`` state. Best-effort + defensive: any missing
-    pipeline internals (or no running step) returns ``None`` so the caller skips
-    the early emit -- it is a UX nicety, never a correctness gate. We also guard
-    on ``tool_name`` so a stale running step from a sibling dispatch never
-    mis-keys the frame.
-    """
+    """Return the step_id of the emitter's currently running step for
+    ``tool_name``, or ``None`` when there is none. Best-effort: the early
+    input-only frame it feeds is a nicety, never a correctness gate."""
+    # The step id is only published at the terminal transition, so the in-flight
+    # id is derived the way the emitter's own progress update does: the
+    # most-recently-added step still running. The tool_name guard keeps a stale
+    # running step from a sibling dispatch from mis-keying the frame.
     if emitter is None:
         return None
     try:
@@ -136,78 +117,47 @@ def _running_emitter_step_id(emitter: Any, tool_name: str) -> str | None:
     return None
 
 # ---------------------------------------------------------------------------
-# #6 STAGED SYNC-TOOL DISPATCH OFF-LOAD (loop-safety, ships DARK)
+# SYNC-TOOL DISPATCH OFF-LOAD
 # ---------------------------------------------------------------------------
-# Every synchronous atomic tool currently runs its WHOLE body on the agent
-# asyncio event loop inside ``_invoke_with_unique_layer_id`` below (the
-# ``out = entry.fn(**params)`` branch). A slow sync tool (boto3 / requests /
-# heavy GDAL/numpy compute) therefore stalls the WS keepalive past the pong
-# deadline -> client reconnect-cycle (layer flicker) or WS death. See
-# feedback_no_sync_blocking_on_asyncio_loop. The fix is to off-load the sync
-# tool body to a worker thread via ``asyncio.to_thread``. This is SAFE because
-# tool bodies are EMIT-FREE: all loop-bound PipelineEmitter use (``emit_*`` /
-# ``add_loaded_layer`` / ``update_progress``) lives in the SURROUNDING
-# ``emit_tool_call`` wrapper + ``_restamp`` + early-input-frame machinery, which
-# stay on the loop; only the pure ``entry.fn(**params)`` call moves to the
-# thread. ``asyncio.to_thread`` propagates the contextvars Context, so a stray
-# emit WOULD still resolve the ContextVar -- hence the armed-only
-# ``_assert_sync_offload_safe`` startup guard below refuses to arm if any
-# candidate sync tool's source even references the emitter API.
+# A synchronous atomic tool runs its whole body on the agent's asyncio loop
+# inside the ``entry.fn(**params)`` branch below, so a slow one (boto3,
+# requests, heavy GDAL or numpy compute) stalls the WS keepalive past the pong
+# deadline and the client reconnect-cycles or the socket dies. Off-loading that
+# call to a worker thread is SAFE because tool bodies are EMIT-FREE: every
+# loop-bound emitter call lives in the surrounding wrapper, which stays on the
+# loop. ``asyncio.to_thread`` propagates the contextvars Context, so a stray
+# emit WOULD still resolve its ContextVar - hence the armed-only
+# ``_assert_sync_offload_safe`` guard refuses to arm when a candidate tool's
+# source so much as references the emitter API.
 #
-# Rolled out in STAGES via the ``TRID3NT_SYNC_TOOL_OFFLOAD`` env var (NO code
-# change between stages):
-#   ""/"off"  (DEFAULT, Stage 0)  -> disabled; sync tools stay on the loop.
-#   "subset"  (Stage 1)           -> off-load only the pure compute_*/clip_*
-#                                    family (smallest provably emit-free set),
-#                                    live-verify, then advance.
-#   "global"/"all"/"on" (Stage 2) -> off-load every sync tool body.
-# Stage 3 (bake "global" as the in-code default) is a later commit once global
-# mode is live-proven.
+# ``TRID3NT_SYNC_TOOL_OFFLOAD`` selects the mode with no code change:
+#   ""/"off"             -> disabled; sync tools stay on the loop.
+#   "subset"             -> off-load only the pure compute_*/clip_* family.
+#   "global"/"all"/"on"  -> off-load every sync tool body.
 _SYNC_OFFLOAD_MODE = os.environ.get("TRID3NT_SYNC_TOOL_OFFLOAD", "off").strip().lower()
 
 _SYNC_OFFLOAD_GLOBAL_VALUES = frozenset({"global", "all", "on", "1", "true", "yes"})
 
-#: Stage-1 subset: the hand-audited pure-compute / pure-clip tool families that
-#: take no emitter and do CPU-bound GDAL/numpy work -- the safest first cohort.
+#: The subset mode's cohort: the pure-compute and pure-clip families, which take
+#: no emitter and do CPU-bound GDAL or numpy work.
 _SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_", "clip_")
 
-#: ALWAYS off-load (regardless of TRID3NT_SYNC_TOOL_OFFLOAD mode). A hand-audited,
-#: TIGHT set of PROVEN-PATHOLOGICAL sync tools whose bodies do multi-second
-#: synchronous work (rasterio.merge / reproject / WarpedVRT / COG materialize, or
-#: large network download + xarray/netCDF compute) ON the asyncio loop, stalling
-#: the 12s WS data-heartbeat past the browser's reconnect deadline (code 1005)
-#: BEFORE any solve dispatches. See feedback_no_sync_blocking_on_asyncio_loop.
-#: Each entry was confirmed EMIT-FREE (its registered fn source does not reference
-#: the loop-bound emitter API per _source_references_emitter) and the startup
-#: guard _assert_sync_offload_safe re-validates that invariant for this set even
-#: when the env mode is "off" (so a future emitting tool can never be silently
-#: added here). This is NOT "off-load everything": ~8 light vector/scalar fetchers
-#: (fetch_buildings, fetch_river_geometry, lookup_precip_return_period,
-#: fetch_landfire_fuels, fetch_usfs_canopy_fuels, fetch_mtbs_burn_severity,
-#: show_nexrad_radar, fetch_field_boundaries) and all non-fetch sync tools
-#: stay on the loop. Justification per tool:
-#:   fetch_topobathy        -> CUDEM+3DEP tile merge + reproject + 189 MB COG (~61 s; ROOT-CAUSE of the 1005 turn-death)
-#:   fetch_dem              -> py3dep 3DEP tile mosaic + COG materialize
-#:   fetch_3dep_extra       -> pfdf TNM DEM tile mosaic + COG materialize
-#:   fetch_landcover        -> NLCD/ESA window clip + COG translate (rasterio + GDAL CLI)
-#:   extract_landcover_class-> windowed read of source COG + tiled LZW GeoTIFF write
-#:   fetch_population       -> WorldPop ~50 MB stream + windowed rasterio read + COG write
-#:   fetch_hrsl_population  -> /vsicurl/ VRT windowed read + COG write
-#:   fetch_gcn250_curve_numbers -> /vsicurl/ ~640 MB COG windowed read + tiled GeoTIFF write
-#:   fetch_statsgo_soils    -> STATSGO COG-tile mosaic + COG materialize
-#:   fetch_era5_reanalysis  -> blocking cdsapi retrieve + xarray open + compute + COG write
-#:   fetch_gridmet          -> OPeNDAP xarray open + time-mean compute + COG write
-#:   fetch_hrrr_forecast    -> xr.open_zarr + merge + rio.reproject + compute + COG write
-#:   fetch_hrrr_smoke       -> xr.open_zarr + merge + rio.reproject + compute + COG write
-#:   fetch_mrms_qpe         -> S3 grib2 download + rasterio GRIB read + warp.reproject + GeoTIFF write
-#:   fetch_goes_satellite   -> ~50 MB netCDF stream + warp.reproject + COG write
-#:   fetch_gtsm_tide_surge  -> blocking CDS ZIP download + xr.open_mfdataset + per-gauge compute
+#: ALWAYS off-loaded whatever the env mode says: a hand-audited, TIGHT set of
+#: sync tools whose bodies do multi-second synchronous work - tile merge,
+#: reproject, WarpedVRT or COG materialize, a large download plus xarray or
+#: netCDF compute, a dense-index build, a staged container run - on the asyncio
+#: loop, stalling the WS data-heartbeat past the client's reconnect deadline.
+#: Every entry was confirmed EMIT-FREE, and ``_assert_sync_offload_safe``
+#: re-validates that for this set even when the env mode is off, so a future
+#: emitting tool can never be added silently. This is NOT "off-load
+#: everything": the light vector and scalar fetchers, and every non-fetch sync
+#: tool, stay on the loop.
 _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
     {
-        # first call builds the ~6.7k-doc dense index synchronously
-        # (sentence-transformers encode) - must never run on the WS loop
+        # dense-index build on first call (sentence-transformers encode)
         "search_living_atlas",
         "fetch_living_atlas_layer",
+        # tile mosaic / windowed warp-read plus COG materialize
         "fetch_topobathy",
         "fetch_dem",
         "fetch_3dep_extra",
@@ -217,80 +167,35 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_hrsl_population",
         "fetch_gcn250_curve_numbers",
         "fetch_statsgo_soils",
+        # blocking retrieve plus xarray open, compute and COG write
         "fetch_era5_reanalysis",
         "fetch_gridmet",
         "fetch_hrrr_forecast",
         "fetch_hrrr_smoke",
         "fetch_mrms_qpe",
         "fetch_goes_satellite",
-        # fire-animation demos S3/J3: the per-frame SLIDER stitch + reproject +
-        # COG-write loop is heavy multi-second sync work (one frame chain per
-        # timestamp); off-load so it never stalls the WS heartbeat. The bodies
-        # are emit-free (the surrounding emit_tool_call wrapper does the emit).
-        # fetch_goes_blend_animation is heavier still (two product fetches + a
-        # per-frame RGB blend per timestamp) -- same off-load rationale.
+        # per-frame stitch, reproject and COG-write loop, one chain per timestamp
         "fetch_goes_animation",
         "fetch_goes_blend_animation",
         "fetch_viirs_day_fire",
-        # satellite-animation loop-block: both of these read the
-        # RAW noaa-goesNN MCMIPC S3 archive and loop over UP TO 144 frames in ONE
-        # sync call, each frame = a ~54 MB netCDF download + rasterio reproject +
-        # COG write (logged as "fetch_goes_satellite: downloaded ~54MB" +
-        # "fetch_goes_archive_animation" cache writes every ~2-3 s, sequentially,
-        # for 78+ frames). When the LLM calls either DIRECTLY (the "historical
-        # fire animation" / "active fire over the past hours" path -- no composer
-        # in between to to_thread it), the whole multi-frame loop ran ON the
-        # asyncio loop and starved the 12 s WS data-heartbeat past the browser
-        # reconnect deadline -> the agent health endpoint timed out + clients hung
-        # in a "connecting..." reconnect loop for the entire build. Off-load so
-        # the per-frame loop runs in a worker thread and the loop/heartbeat stay
-        # live. Bodies are emit-free (the surrounding emit_tool_call wrapper does
-        # the emit). fetch_goes_active_fire reuses the same per-frame archive
-        # download + reproject core (_fetch_archive_frame_cog_bytes).
+        # up to 144 archive frames in ONE sync call, each a ~54 MB netCDF
+        # download plus reproject and COG write
         "fetch_goes_archive_animation",
         "fetch_goes_active_fire",
         "fetch_gtsm_tide_surge",
-        # Planetary-Computer STAC raster readers that do multi-second sync work
-        # (SAS sign + windowed /vsicurl warp-read + COG-write). Bodies are
-        # emit-free (the surrounding emit_tool_call wrapper does the emit), so
-        # off-load so they never stall the WS heartbeat
-        # (feedback_no_sync_blocking_on_asyncio_loop).
+        # STAC raster readers: sign, windowed /vsicurl warp-read, COG write
         "compute_ndvi",
         "fetch_naip",
-        # fetch_glm_lightning (GOES GLM optical-lightning): heavy SYNC fetcher
-        # now LIVE on the box (multi-granule netCDF download + per-granule
-        # in-AOI group filter + raster/COG write). Emit-free body (the
-        # surrounding emit_tool_call wrapper does the emit), so off-load so it
-        # never blocks the asyncio loop / starves the WS heartbeat
-        # (feedback_no_sync_blocking_on_asyncio_loop). Escalated by the
-        # tools-session (tool-retrieval kickoff #6).
+        # multi-granule netCDF download plus in-AOI group filter and raster write
         "fetch_glm_lightning",
-        # Record fetchers: heavy SYNC I/O in the record hook. fetch_aorc_precip
-        # opens a public AORC Zarr year store (anonymous s3fs) and streams the windowed
-        # AOI-mean over multi-second network reads; fetch_lter_records downloads and parses
-        # a multi-MB EDI data entity through the DataONE mirror. Emit-free bodies (the
-        # surrounding emit_tool_call wrapper emits), so off-load so they never stall the WS
-        # heartbeat (feedback_no_sync_blocking_on_asyncio_loop).
+        # record fetchers: a windowed Zarr stream, and a multi-MB entity download
         "fetch_aorc_precip",
         "fetch_lter_records",
-        # code_exec_request stages every layer_ref into the run dir (sync network
-        # reads) and then blocks on a container run -- seconds of sync work either
-        # way. Off-load so it never stalls the WS heartbeat. The body is emit-free
-        # (the confirm card is emitted on the loop by _gate_on_code_exec; server.py
-        # emits the result envelope), so the off-load is safe.
+        # stages every layer_ref into the run dir, then blocks on a container run
         "code_exec_request",
-        # list_run_frames reads the run's outputs.json from S3 (with a legacy
-        # publish_manifest fallback) -- sync network I/O. Emit-free (returns the
-        # listing dict), so off-load it for the same reason.
+        # reads the run's outputs listing over the network
         "list_run_frames",
-        # These heavy raster/vector
-        # fetchers do multi-second sync work (STAC sign + windowed /vsicurl warp
-        # read + COG/FlatGeobuf write), the SAME shape as compute_ndvi/fetch_naip
-        # above. Their bodies are emit-free (the emit_tool_call wrapper emits), so
-        # off-load them so they never stall the WS heartbeat
-        # (feedback_no_sync_blocking_on_asyncio_loop). digitize_water_body was
-        # flagged heavy by its building agent (Sentinel-2 NDWI raster + vectorize).
-        # _assert_sync_offload_safe still gates each at arm time.
+        # STAC sign plus windowed warp-read and COG / FlatGeobuf write
         "digitize_water_body",
         "fetch_sentinel2_truecolor",
         "fetch_sentinel1_sar",
@@ -303,28 +208,17 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_soilgrids",
         "fetch_esri_landcover_10m",
         "fetch_noaa_sst",
-        # compute_change_detection reads TWO
-        # Sentinel-2 scenes (SAS sign + windowed /vsicurl warp-read per band)
-        # + vectorizes + writes an FGB in ONE sync call -- the same shape as
-        # compute_ndvi/digitize_water_body above. Emit-free body (the
-        # emit_tool_call wrapper does the emit), so off-load so it never
-        # stalls the WS heartbeat (feedback_no_sync_blocking_on_asyncio_loop).
+        # two Sentinel-2 scenes read per band, vectorized, written as one FGB
         "compute_change_detection",
-        # compute_flood_depth_damage stages an s3 depth COG + fetches the NSI
-        # inventory + samples + writes an FGB in one sync call -- same off-load
-        # rationale; emit-free body.
+        # stages an s3 COG, fetches an inventory, samples, writes an FGB
         "compute_flood_depth_damage",
-        # compute_model_residuals stages an s3 model COG + (optionally) fetches
-        # USGS groundwater observations over HTTP + bilinear-samples + writes
-        # an FGB in one sync call -- same off-load rationale; emit-free body.
         "compute_model_residuals",
     }
 )
 
-#: Loop-bound emitter API names. A sync tool whose CODE (comments + string /
-#: docstring literals EXCLUDED) references any of these -- or any ``emit_*``
-#: attribute -- is NOT safe to off-load (it would touch the loop from a worker
-#: thread); ``_assert_sync_offload_safe`` refuses to arm in that case.
+#: Loop-bound emitter API names. A sync tool whose CODE - comments and string
+#: literals excluded - references any of these, or any ``emit_*`` attribute, is
+#: NOT safe to off-load, and ``_assert_sync_offload_safe`` refuses to arm.
 _EMITTER_API_NAMES = frozenset(
     {
         "current_emitter",
@@ -336,15 +230,9 @@ _EMITTER_API_NAMES = frozenset(
 )
 
 def _source_references_emitter(src: str) -> bool:
-    """True if ``src`` (a tool's source) contains a real CODE reference to the
-    loop-bound emitter API.
-
-    Comments and string/docstring literals are ignored (tokenize drops them)
-    so a mention in a comment is NOT a false positive -- only an actual
-    identifier in code counts. (fetch_river_geometry only MENTIONS
-    add_loaded_layer in its docstring; its body is emit-free, the
-    surrounding emit_tool_call wrapper does the emit.)
-    """
+    """True if ``src`` contains a real CODE reference to the loop-bound emitter
+    API; comments and string literals are ignored, so a mention in a docstring is
+    not a false positive."""
     import io
     import textwrap
     import tokenize
@@ -376,15 +264,9 @@ def _source_references_emitter(src: str) -> bool:
         return False
 
 def _should_offload_sync_tool(tool_name: str) -> bool:
-    """Return True when ``tool_name``'s sync body should run via
-    ``asyncio.to_thread``.
-
-    The hand-audited, proven-pathological ``_ALWAYS_OFFLOAD_SYNC_TOOLS`` set is
-    off-loaded UNCONDITIONALLY (even when TRID3NT_SYNC_TOOL_OFFLOAD=off) -- these
-    tools do multi-second sync raster/COG/download work that stalls the WS
-    heartbeat (see feedback_no_sync_blocking_on_asyncio_loop). On top of that the
-    env-driven staged mode applies: ``off`` (the dark default) and any unknown
-    value -> False for everything else."""
+    """Return True when ``tool_name``'s sync body should run through
+    ``asyncio.to_thread``: the always-offload set unconditionally, then whatever
+    the env mode selects."""
     if tool_name in _ALWAYS_OFFLOAD_SYNC_TOOLS:
         return True
     mode = _SYNC_OFFLOAD_MODE
@@ -395,19 +277,12 @@ def _should_offload_sync_tool(tool_name: str) -> bool:
     return False
 
 def _assert_sync_offload_safe() -> None:
-    """ARMED-ONLY startup safety gate for the #6 sync-tool off-load.
-
-    Dark default (mode ``off``) WITH an empty always-set returns immediately and
-    pays nothing. When the off-load is ARMED (``subset``/``global``) OR the
-    in-code ``_ALWAYS_OFFLOAD_SYNC_TOOLS`` set is non-empty (which off-loads even
-    in ``off`` mode), scan the SOURCE of every candidate sync tool that
-    ``_should_offload_sync_tool`` would off-load and RAISE if any one references
-    the loop-bound emitter API -- off-loading such a tool would let a worker
-    thread touch the event loop. This enforces the headline #6 invariant ("sync
-    tool bodies are emit-free") at startup, so a future emitting sync tool can
-    never be silently off-loaded (including via the always-set). The cost (an
-    ``inspect.getsource`` sweep) is paid once, only when something will off-load.
-    """
+    """ARMED-ONLY startup gate: refuse to start when a sync tool that would be
+    off-loaded references the loop-bound emitter API, since a worker thread must
+    never touch the event loop."""
+    # The always-offload set runs off-loop even in ``off`` mode, so its emit-free
+    # invariant is validated whenever that set is non-empty; with an empty set and
+    # a disabled mode there is nothing to scan and the source sweep is skipped.
     armed = (
         _SYNC_OFFLOAD_MODE in _SYNC_OFFLOAD_GLOBAL_VALUES
         or _SYNC_OFFLOAD_MODE == "subset"
@@ -468,18 +343,9 @@ async def _invoke_tool_via_emitter(
     tool_name: str,
     params: dict,
 ) -> Any:
-    """Tool-call site: every ``TOOL_REGISTRY[name].fn(...)`` invocation goes
-    through this wrapper so that:
-
-    - the per-session ``PipelineEmitter`` auto-creates a step,
-    - emits ``pipeline-state`` on every state transition (replace-not-reconcile),
-    - re-emits ``session-state`` whenever the tool returns a ``LayerURI``,
-    - propagates ``asyncio.CancelledError`` (Invariant 8) and classifies
-      arbitrary exceptions into the open-set A.6 error-code registry.
-
-    Solver dispatch keeps the same shape, yielding ``progress_percent``
-    updates through ``emitter.update_progress`` between solver chunks.
-    """
+    """The tool-call site: every registry ``fn(...)`` runs through this wrapper,
+    so each transition emits a step, a ``LayerURI`` return re-emits session
+    state, and a cancel propagates while any other exception becomes a wire code."""
     from trid3nt_server.gates.confirm import (
         _gate_on_code_exec,
         _gate_spec_for,
@@ -500,17 +366,12 @@ async def _invoke_tool_via_emitter(
         raise ToolNotFoundError(tool_name, list(TOOL_REGISTRY))
     entry = TOOL_REGISTRY[tool_name]
 
-    # BENCH PRE-DISPATCH BLOCK HOOK. Armed ONLY by the bench harness via
-    # session-config (``state.bench_block_config``); ``None`` (the common
-    # path) is a single is-not-None check with ZERO overhead. When armed,
-    # decides the tool's fate BEFORE any gate/fetch runs:
-    #   * wrong_pick      -- a non-member pick: block outright (no arg work).
-    #   * correct_blocked -- a member pick in the block tier: run the SAME
-    #       arg normalizer a real dispatch would, then block, so the block is
-    #       graded on the canonicalized args, but the fn never runs.
-    # Both raise ``BenchBlockedError`` THROUGH ``emit_tool_call`` so the tool
-    # still surfaces as a (failed) pipeline step while ``entry.fn`` is never
-    # reached -- airtight before any fetch.
+    # BENCH PRE-DISPATCH BLOCK HOOK, armed only by the bench harness. When
+    # armed it decides the tool's fate BEFORE any gate or fetch runs: a
+    # non-member pick is blocked outright, while a member pick in the block tier
+    # runs the same arg normalizer a real dispatch would, so the block is graded
+    # on canonicalized args. Both raise THROUGH the emitter, so the tool still
+    # surfaces as a failed step and ``entry.fn`` is never reached.
     if state.bench_block_config is not None:
         from trid3nt_server.gates.tool_gating import BenchBlockedError, bench_block_decision
 
@@ -532,13 +393,10 @@ async def _invoke_tool_via_emitter(
                 invoke=_bench_blocked_invoke,
             )
 
-    # FIX B (#7 early input-only frame): snapshot the ORIGINAL call args NOW,
-    # before the normalize_args / gating / URI-resolve / secret-inject pipeline
-    # below rewrites ``params`` (normalize_args empties args that don't match the
-    # fn signature; secret-inject/URI-resolve add resolved values we must NOT
-    # surface). The early frame's ``raw_args`` must equal the LIVE completion
-    # frame's ``raw_args=call.args`` (server.py ~2087) so the tool card shows the
-    # SAME input the LLM sent, both live and at completion.
+    # Snapshot the ORIGINAL call args NOW, before normalization, gating,
+    # URI-resolve and secret-inject rewrite ``params``: the early input-only
+    # frame's args must equal the completion frame's, so the card shows the same
+    # input the model sent both live and at completion.
     _original_tool_args = dict(params)
 
     # Bind this dispatch to the turn's Case ONCE, up front. The
@@ -581,13 +439,10 @@ async def _invoke_tool_via_emitter(
     # raises a typed, non-retryable error so the model narrates the decline and
     # does not re-run the same snippet.
     #
-    # Invariant 9: STRIP the model-supplied confirmed/code_exec_id BEFORE
-    # gating -- the gate is server-owned, exactly like the solver gate below,
-    # making the user-confirmation gate MANDATORY on every model-issued
-    # code_exec call; only an explicit user "proceed" inside
-    # _gate_on_code_exec re-injects confirmed + the minted code_exec_id.
-    # (Trusted programmatic callers/tests that must bypass invoke the tool
-    # function directly, not via this server gate.)
+    # STRIP a model-supplied confirmed/code_exec_id BEFORE gating: the gate is
+    # server-owned, so user confirmation is mandatory on every model-issued
+    # code_exec call, and only an explicit approval inside the gate re-injects
+    # them. A trusted programmatic caller invokes the tool function directly.
     if tool_name == "code_exec_request":
         params.pop("confirmed", None)
         params.pop("code_exec_id", None)
@@ -634,30 +489,20 @@ async def _invoke_tool_via_emitter(
         tool_name, params, _turn_case_bbox(state)
     )
 
-    # Pin an expensive SOLVER's bbox to the active Case AOI too: the solve
-    # grid is built directly from this bbox (no padding), so a
-    # follow-up/re-entry solve handed a drifted/wider same-area box would
-    # compute OUTSIDE the displayed AOI. Mirrors the
-    # fetch rule: solve ONLY within the active AOI, honoring an explicit
-    # WIDEN (encloses the pin) or a DIFFERENT place (disjoint). No-op on the
-    # first solve (no AOI pinned yet) and on archetypes/coastal (selected by
-    # forcing flags, never an enclosing-wider bbox). Runs BEFORE the
-    # scenario reuse guard so the reuse comparison sees the snap.
+    # Pin an expensive SOLVER's bbox to the active Case AOI as well: the solve
+    # grid is built directly from this bbox with no padding, so a drifted or
+    # wider same-area box would compute OUTSIDE the displayed AOI. Runs before
+    # the scenario reuse guard so the reuse comparison sees the snap.
     params = _maybe_default_solver_bbox_to_pinned_aoi(
         tool_name, params, _turn_case_bbox(state)
     )
 
-    # DETERMINISTIC expensive-simulation reuse guard: a HARD backstop before
-    # launching an expensive solver composer -- checks the session's
-    # already-produced results (the per-Case loaded_layers + the in-session
-    # scenario index) for a CLEAR match (same scenario family + same AOI +
-    # same key params). On a clear match it SHORT-CIRCUITS, returning the
-    # EXISTING layer instead of launching the solver, and tags a "reusing
-    # existing result (not re-running)" note for the model. CONSERVATIVE by
-    # construction: any ambiguity falls through to RUN (see
-    # scenario_reuse.py). ``force_rerun``/``rerun``/``force`` truthy kwargs
-    # are the explicit-re-run escape hatch, stripped before the real
-    # dispatch.
+    # DETERMINISTIC expensive-simulation reuse guard: a hard backstop before
+    # launching a solver composer. A CLEAR match against the session's
+    # already-produced results returns the EXISTING layer and tags a reuse note
+    # for the model; any ambiguity falls through and RUNS. A truthy
+    # force_rerun/rerun/force kwarg is the explicit re-run escape hatch,
+    # stripped before the real dispatch.
     _reuse_note: str | None = None
     if scenario_type_for_tool(tool_name) is not None:
         _force_rerun = any(
@@ -668,9 +513,8 @@ async def _invoke_tool_via_emitter(
         # the downstream tool body never sees an unexpected kwarg.
         for _k in ("force_rerun", "rerun", "re_run", "force"):
             params.pop(_k, None)
-        # Stage 3: env kill-switch (TRID3NT_SCENARIO_REUSE=0 disables the
-        # short-circuit; the guard-control strip above stays unconditional so
-        # the kwargs never leak to the tool body either way).
+        # ``TRID3NT_SCENARIO_REUSE=0`` disables the short-circuit; the
+        # guard-control strip above stays unconditional either way.
         if not _force_rerun and _env_flag("TRID3NT_SCENARIO_REUSE", True):
             scenario_index = get_scenario_index(state.session_id)
             # Seed the index from this Case's durable loaded_layers so reuse
@@ -712,16 +556,12 @@ async def _invoke_tool_via_emitter(
                 # (emit_tool_call's LayerURI gate) fires with the reused layer.
                 entry = _ReuseEntry(entry.metadata, _reused_layer)
 
-    # Deterministic reuse backstop for FETCHERS (mirrors the scenario reuse
-    # above, which only guards expensive SIMULATIONS): a fit/resize/re-show
-    # follow-up for an already-loaded FETCHED layer would otherwise re-fetch
-    # and mint a SECOND identical layer. When a same-kind loaded layer
-    # already ENCLOSES the requested AOI, short-circuit to it so the agent
-    # fits/narrates from the existing handle instead of re-fetching.
-    # ``find_reusable_fetched_layer`` is pure/conservative: any ambiguity
-    # (different kind, larger/unresolvable AOI) falls through to FETCH.
-    # ``force_refetch``/``refetch``/``force`` truthy kwargs are the explicit
-    # re-fetch escape hatch, stripped before the real dispatch.
+    # Deterministic reuse backstop for FETCHERS: a fit, resize or re-show
+    # follow-up would otherwise re-fetch and mint a SECOND identical layer, so a
+    # same-kind loaded layer that already ENCLOSES the requested AOI
+    # short-circuits to that handle. Any ambiguity falls through to a fetch, and
+    # a truthy force_refetch/refetch/force kwarg is the explicit escape hatch,
+    # stripped before the real dispatch.
     if (
         _reuse_note is None
         and not isinstance(entry, _ReuseEntry)
@@ -732,8 +572,8 @@ async def _invoke_tool_via_emitter(
         )
         for _k in ("force_refetch", "refetch", "force"):
             params.pop(_k, None)
-        # Stage 3: env kill-switch (TRID3NT_FETCH_REUSE=0 disables the fetch
-        # short-circuit; the guard-control strip stays unconditional).
+        # ``TRID3NT_FETCH_REUSE=0`` disables the short-circuit; the guard-control
+        # strip above stays unconditional either way.
         if (
             not _force_refetch
             and state.emitter is not None
@@ -769,24 +609,19 @@ async def _invoke_tool_via_emitter(
                 )
                 entry = _ReuseEntry(entry.metadata, _reused_fetch_layer)
 
-    # bbox-durability: anchor the Case AOI from
-    # THIS bbox-carrying fetch's final (already reuse-guard-consulted /
-    # AOI-defaulted) params. Runs AFTER both reuse guards above so it never
-    # perturbs their read of the PRIOR pin; see _pin_case_aoi_from_tool_bbox
-    # for the full root-cause + latest-wins-but-never-shrinks contract.
+    # Anchor the Case AOI from THIS bbox-carrying fetch's final params, after
+    # both reuse guards, so it never perturbs their read of the prior pin.
     await _pin_case_aoi_from_tool_bbox(
         state, case_id=turn_case_id, tool_name=tool_name, params=params
     )
 
-    # Confirmation-before-consequence, driven by the tool's declared GateSpec
-    # (ADR 0273). Membership is the ``gate_spec`` presence check -- no name set.
-    # The LLM-supplied ``confirmed`` is STRIPPED first for a SOLVER gate -- the
-    # gate is server-owned; only an explicit user "proceed" (the pin provider)
-    # injects it. A FETCH gate does not strip it (fetchers ignore ``confirmed``).
-    # SKIPPED on a reuse short-circuit (``_ReuseEntry``) -- nothing to confirm.
-    # Routed through ``_gate_with_turn_memory`` so a same-tool/same-bbox retry
-    # later in this SAME turn replays the earlier proceed/narrow_scope decision
-    # instead of hanging on an unanswered second gate.
+    # Confirmation-before-consequence, driven by the tool's declared gate spec;
+    # membership IS that spec's presence, never a name set. A model-supplied
+    # ``confirmed`` is STRIPPED for a solver gate, because the gate is
+    # server-owned and only an explicit user proceed injects it; a fetch gate
+    # ignores the flag. A reuse short-circuit has nothing to confirm. The turn
+    # memory replays an earlier decision for a same-tool, same-bbox retry rather
+    # than hanging on a second unanswered gate.
     _gate_spec = _gate_spec_for(tool_name)
     if _gate_spec is not None and not isinstance(entry, _ReuseEntry):
         if _gate_spec.kind == "solver":
@@ -797,71 +632,53 @@ async def _invoke_tool_via_emitter(
         if not should_run:
             raise SolverConfirmationCancelledError(tool_name)
 
-    # Layer-handle indirection: kills the LLM-URI-mangling class (invented
-    # cache paths, WMS-URL-as-hazard, hash-tail hallucination, NSI
-    # layer_id-as-basename, runs/ prefix mangle). Every URI-consuming param
-    # resolves through the session-scoped registry: known handle -> registered
-    # URI; exact known URI -> pass; close mangle -> substitute + WARNING;
-    # unknown managed-bucket path -> typed retryable URI_HANDLE_UNRESOLVED
-    # listing the real handles so the model self-corrects without inventing. See
-    # uri_registry.py.
+    # Layer-handle indirection kills the URI-mangling class: every URI-consuming
+    # param resolves through the session registry - a known handle to its
+    # registered URI, an exact known URI passes, a close mangle is substituted
+    # with a warning, and an unknown managed-bucket path becomes a typed
+    # retryable error listing the real handles, so the model self-corrects
+    # instead of inventing.
     uri_registry = get_uri_registry(state.session_id)
     params = uri_registry.resolve_params(tool_name, params)
 
-    # job VAULT-READ: thread the user's per-Case ``secret_ref`` into a keyed
-    # tool so its ``_resolve_*_key`` reads the VAULT key first (then env). This
-    # mirrors the FIRMS secret_ref convention. No-op for non-keyed tools and
-    # when no active secret exists (the tool falls back to env / typed
-    # auth-error, which the credential-request flow below acts on).
+    # Thread the user's per-Case ``secret_ref`` into a keyed tool so its key
+    # resolution reads the vault first and env second. No-op for a non-keyed
+    # tool and when no active secret exists, in which case the tool falls back to
+    # env or a typed auth error the credential flow below acts on.
     params = await _inject_secret_ref(state, tool_name, params, turn_case_id)
 
     state.current_pipeline_id = state.emitter.start_pipeline()
     state.current_turn_pipeline_id = state.current_pipeline_id
-    # Bind the registry as the ambient observation sink for the
-    # lifetime of the invoke so composer-internal publishes register the
-    # gs:// COG <-> WMS association even though the composer's envelope only
-    # carries the WMS URL.
+    # Bind the registry as the ambient observation sink for the lifetime of the
+    # invoke, so a composer-internal publish registers its object-store URI even
+    # though the composer's envelope carries only the service URL.
     _uri_reg_token = activate_registry(uri_registry)
-    # Tool-card persistence bookkeeping. ``_card_state`` stays None
-    # on cancellation (Invariant 8 -- no replayable outcome); the wall-clock
-    # pair is only the FALLBACK timing -- ``_persist_tool_card`` prefers the
-    # emitter's authoritative ``last_tool_step`` stamps.
+    # Tool-card persistence bookkeeping. ``_card_state`` stays None on
+    # cancellation - there is no replayable outcome - and the wall-clock pair is
+    # only the FALLBACK timing, since the persist prefers the emitter's stamps.
     _card_state: str | None = None
     _card_started_at = now_utc()
     _card_t0 = asyncio.get_running_loop().time()
-    # C1: capture the tool IO for the persisted tool-card row so a Case reopen
-    # rehydrates the expander (the live ``tool-io`` sidecar is wire-only and
-    # was LOST on reopen). ``_card_raw_args`` is the post-resolution params the
-    # tool actually ran with; ``_card_response`` is the raw tool RESULT (the
-    # closest in-wrapper analogue of the live sidecar's ``function_response``
-    # summary -- the summary itself is built downstream in _stream_model_reply,
-    # which we don't reach from here). ``_persist_tool_card`` serializes both
-    # with the SAME ``_json_for_tool_io`` helper + field names the live sidecar
-    # uses, so the persisted shape matches the wire shape.
+    # Capture the tool IO for the persisted tool-card row, since the live
+    # ``tool-io`` sidecar is wire-only and is lost on reopen. ``_card_raw_args``
+    # is the post-resolution params the tool ran with and ``_card_response`` the
+    # raw result, both serialized with the same helper and field names the live
+    # sidecar uses, so the persisted shape matches the wire shape.
     _card_raw_args: Any = None
     _card_response: Any = None
     _card_io_error: bool = False
 
-    # F97: mint a UNIQUE layer_id for every FRESHLY-fetched layer so two
-    # layers from the SAME source (e.g. two `fetch_fema_nfhl_zones`
-    # calls for the same bbox -> identical source-derived `nfhl-<lon>-<lat>`
-    # id) never collide. A collision made Map.tsx (which keys MapLibre
-    # sources by layer_id) skip the second add AND, on delete-by-id, tear
-    # down the shared source so BOTH layers vanished. We replace the tool's
-    # source-derived layer_id with a fresh ULID at the dispatch seam, BEFORE
-    # ``emit_tool_call`` hands the LayerURI to ``add_loaded_layer`` (so the
-    # emitted + persisted layer carries the unique id) and BEFORE the URI
-    # registry / scenario-reuse index record it (they read ``result.layer_id``
-    # AFTER this wrapper, so they pick up the minted id).
+    # Mint a UNIQUE layer_id for every FRESHLY fetched layer: two layers from
+    # the same source would otherwise share a source-derived id, and a client
+    # keying by layer_id skips the second add and tears down the shared source
+    # on delete, so both vanish. The mint happens at the dispatch seam, before
+    # the layer is handed to the loaded-layer set and before the URI registry
+    # and reuse index read it back.
     #
-    # Stability across reconnect/replay: minting happens only on a LIVE fetch.
-    # A Case reopen rehydrates persisted dicts via ``reset_loaded_layers`` --
-    # no tool re-runs, so the SAME instance keeps its minted id (per-Case
-    # durability holds). The scenario-reuse short-circuit (``_ReuseEntry``)
-    # is the deliberate exception: it hands back an ALREADY-loaded layer, so
-    # it must keep that layer's existing id (re-minting would orphan the live
-    # map layer + duplicate it). Hence we skip minting when ``entry`` is a
-    # ``_ReuseEntry``.
+    # Only a LIVE fetch mints: a Case reopen rehydrates persisted dicts without
+    # re-running a tool, so an instance keeps its id. A reuse short-circuit is
+    # the deliberate exception - it hands back an ALREADY-loaded layer, and
+    # re-minting would orphan the live map layer and duplicate it.
     _mint_unique_layer_id = not isinstance(entry, _ReuseEntry)
 
     def _restamp(value: Any) -> Any:
@@ -869,15 +686,11 @@ async def _invoke_tool_via_emitter(
             return value
         if isinstance(value, LayerURI):
             return value.model_copy(update={"layer_id": new_ulid()})
-        # True-color / satellite tools return list[LayerURI] (fetch_goes_
-        # animation, fetch_goes_archive_animation, fetch_goes_active_fire,
-        # fetch_glm_lightning, fetch_viirs_day_fire). add_loaded_layer dedups
-        # by COG-identity (the COG source uri), NOT by layer_id, so two
-        # layers sharing a source-derived id both persist and collide on
-        # delete-by-id. Re-stamp every LayerURI element with a fresh ULID,
-        # passing non-LayerURI elements through, and PRESERVE the sequence
-        # type (list stays list, tuple stays tuple) so downstream
-        # isinstance(result, list) checks are unaffected.
+        # Some tools return a list of layers, and the loaded-layer set dedups by
+        # source identity rather than by layer_id, so two layers sharing a
+        # source-derived id would both persist and then collide on delete. Every
+        # element is re-stamped, non-layer elements pass through, and the
+        # sequence type is preserved so downstream list checks are unaffected.
         if isinstance(value, (list, tuple)):
             restamped = [
                 el.model_copy(update={"layer_id": new_ulid()})
@@ -889,19 +702,13 @@ async def _invoke_tool_via_emitter(
         return value
 
     async def _emit_early_input_frame() -> None:
-        # FIX B (#7 -- input immediately + 'Running…'): the live ``tool-io``
-        # sidecar was emitted ONLY at tool COMPLETION (a single frame carrying
-        # BOTH raw_args AND function_response), so the chat card showed no input
-        # and no output placeholder until the tool returned. Emit an EARLY
-        # input-only frame at dispatch START -- SAME ``ToolIoPayload`` wire shape,
-        # raw_args populated, function_response EMPTY (None -> "null"),
-        # is_error False -- keyed on THIS dispatch's running step so the client
-        # paints the input + a "Running…" output placeholder immediately. The
-        # completion-time emit (server.py ~2090) re-keys the SAME step_id and
-        # fills in function_response, so the two frames are idempotent on one
-        # card (last-write-wins per step_id; merge, not duplicate). We run inside
-        # the invoke callable (after emit_tool_call's mark_running) so the step
-        # exists; best-effort so an emit hiccup never blocks the tool body.
+        # The completion-time ``tool-io`` frame carries both args and response,
+        # so without an early frame the card shows nothing until the tool
+        # returns. This emits the SAME wire shape with only raw_args populated,
+        # keyed on THIS dispatch's running step, so the two frames merge on one
+        # card by step_id rather than duplicating. Runs inside the invoke
+        # callable, after the step is marked running, and is best-effort so an
+        # emit hiccup never blocks the tool body.
         try:
             step_id = _running_emitter_step_id(state.emitter, tool_name)
             if step_id is not None:
@@ -921,19 +728,15 @@ async def _invoke_tool_via_emitter(
             )
 
     async def _invoke_with_unique_layer_id() -> Any:
-        # Emit the input-only frame BEFORE the tool body runs so the input +
-        # 'Running…' placeholder land while the tool is still executing.
+        # Emit the input-only frame BEFORE the tool body runs, so the input and
+        # its running placeholder land while the tool is still executing.
         await _emit_early_input_frame()
-        # #6 (loop-safety, ships dark): when the staged off-load is armed for
-        # this tool (TRID3NT_SYNC_TOOL_OFFLOAD), run the SYNCHRONOUS body in a
-        # worker thread so a slow tool cannot stall the WS keepalive. The emit
-        # machinery stays on the loop (see _should_offload_sync_tool /
-        # _assert_sync_offload_safe). Reuse short-circuits return a trivial
-        # already-produced layer synchronously -- never worth a thread, and they
-        # are not covered by the startup emit-free scan -- so they are excluded.
-        # A tool mis-classified as sync (e.g. an async-callable object that
-        # iscoroutinefunction missed) returns a coroutine from the thread; we
-        # await it back on the loop so semantics are preserved.
+        # When the off-load is armed for this tool, run the SYNCHRONOUS body in
+        # a worker thread so a slow tool cannot stall the WS keepalive; the emit
+        # machinery stays on the loop. A reuse short-circuit returns an
+        # already-produced layer synchronously and is not covered by the startup
+        # emit-free scan, so it is excluded. A tool mis-classified as sync
+        # returns a coroutine from the thread, awaited back on the loop.
         if (
             not isinstance(entry, _ReuseEntry)
             and _should_offload_sync_tool(tool_name)
@@ -949,15 +752,11 @@ async def _invoke_tool_via_emitter(
         return _restamp(out)
 
     try:
-        # Dispatch with a credential-request retry: the first attempt runs
-        # the tool; if it raises a missing/invalid-credential error for a
-        # keyed provider (e.g. FIRMS_AUTH_ERROR) we PAUSE, emit a
-        # ``credential-request`` envelope, and await
-        # ``credential-provided``. On provided=True we re-resolve the
-        # freshly-pushed session-cache key and retry ONCE. One prompt per tool
-        # per turn
-        # (``credential_prompted_tools``) so a still-bad key fails through the
-        # normal typed-error surface instead of re-prompting forever.
+        # Dispatch with a credential-request retry: a missing or invalid
+        # credential for a keyed provider PAUSES the dispatch, emits a
+        # credential request, and retries ONCE with the freshly pushed key. One
+        # prompt per tool per turn, so a still-bad key fails through the normal
+        # typed-error surface instead of re-prompting forever.
         try:
             result = await state.emitter.emit_tool_call(
                 name=entry.metadata.name,
@@ -980,10 +779,9 @@ async def _invoke_tool_via_emitter(
                 invoke=_invoke_with_unique_layer_id,
             )
         _card_state = "complete"
-        # C1: stamp the IO for the persisted tool-card row. ``params`` is the
-        # post-resolution arg dict the tool ran with; ``result`` is the raw
-        # return. A LayerURI / pydantic model is dumped via ``default=str`` in
-        # ``_json_for_tool_io`` so it never breaks serialization.
+        # Stamp the IO for the persisted tool-card row: ``params`` is the
+        # post-resolution arg dict the tool ran with and ``result`` the raw
+        # return, serialized with ``default=str`` so a model never breaks it.
         _card_raw_args = params
         _card_response = result
     except asyncio.CancelledError:
@@ -991,9 +789,8 @@ async def _invoke_tool_via_emitter(
     except BaseException as _exc:
         _card_state = "failed"
         _card_raw_args = params
-        # On failure there is no result; persist the exception text as the
-        # response so the reopened expander shows WHY it failed (mirrors the
-        # live sidecar's is_error path).
+        # On failure there is no result, so the exception text is persisted as
+        # the response and the reopened expander shows WHY it failed.
         _card_response = {"error": str(_exc) or _exc.__class__.__name__}
         _card_io_error = True
         raise
@@ -1001,11 +798,10 @@ async def _invoke_tool_via_emitter(
         deactivate_registry(_uri_reg_token)
         state.emitter.close_pipeline()
         state.current_pipeline_id = None
-        # Persist the replayable tool-card row so a Case reopen re-renders
-        # the inline tool card. Fires for complete AND failed terminal
-        # states, BEFORE the narration row that closes the turn -- the chat
-        # collection's ``created_at`` order IS the replay order. Best-effort,
-        # never raises, never masks the original exception.
+        # Persist the replayable tool-card row so a reopen re-renders the inline
+        # card. Fires for complete AND failed terminal states, before the
+        # narration row that closes the turn, because created_at order IS the
+        # replay order. Best-effort; never masks the original exception.
         if _card_state is not None and turn_case_id:
             await _persist_tool_card(
                 state,
@@ -1017,31 +813,25 @@ async def _invoke_tool_via_emitter(
                     (asyncio.get_running_loop().time() - _card_t0) * 1000.0
                 ),
                 case_id=turn_case_id,
-                # C1: persist the tool IO on the row so a Case reopen rehydrates
-                # the expander (reuses the live ToolIoPayload field names).
+                # Persist the tool IO on the row so a reopen rehydrates the
+                # expander, reusing the live payload's field names.
                 raw_args=_card_raw_args,
                 function_response=_card_response,
                 io_is_error=_card_io_error,
             )
-        # Persist the Case layer accumulator in the FINALLY block:
-        # ``add_loaded_layer`` appends to ``_loaded_layers`` BEFORE it emits,
-        # so persisting here captures the layer even when the post-invoke
-        # ``session-state`` emission raises on a dying WebSocket. Never
-        # raises (and never masks the original exception) -- persistence is
-        # a side-effect, not the happy path.
+        # Persist the Case layer accumulator in the FINALLY block: the layer is
+        # appended to the accumulator BEFORE the emit, so persisting here
+        # captures it even when the post-invoke emission raises on a dying
+        # socket. Never raises and never masks the original exception.
         if turn_case_id and state.emitter is not None:
-            # DURABILITY (layer-publish-survives-disconnect): run the
-            # layer persist UNDER A SHIELD so a cancellation of the (possibly
-            # detached) turn cannot interrupt the persistence write of a fully-
-            # computed layer. A bare ``await`` here is cancel-fragile: a
-            # same-stream re-prompt supersede / stop / any cancel re-raises the
-            # pending CancelledError at the persist's first suspension point and
-            # SKIPS the write -- the exact mechanism by which a solve run once
-            # wrote 100+ COGs to S3 yet the Case persisted 0 layers after a
-            # transient WS drop. ``_run_to_completion_shielded`` keeps the
-            # write running to completion and THEN re-raises the cancel (Invariant
-            # 8 preserved). The persist swallows its own errors (never raises), so
-            # the only interruption this guard absorbs is the parent cancel.
+            # Run the layer persist UNDER A SHIELD so a cancellation of the
+            # (possibly detached) turn cannot interrupt the write of a fully
+            # computed layer: a bare ``await`` here re-raises the pending cancel
+            # at the persist's first suspension point and SKIPS the write, which
+            # is how a solve can write every COG and still persist no layers
+            # after a transient WS drop. The shield keeps the write running and
+            # then re-raises the cancel. The persist swallows its own errors, so
+            # the parent cancel is the only interruption this guard absorbs.
             try:
                 await _run_to_completion_shielded(
                     _persist_case_loaded_layers(state, case_id=turn_case_id)
@@ -1054,32 +844,26 @@ async def _invoke_tool_via_emitter(
                     turn_case_id,
                 )
 
-    # Register every URI the result carries (LayerURI layer_id↔uri
-    # pairs + bare object-store strings) so the NEXT tool call can resolve
-    # handles / detect mangles. Best-effort -- registration never breaks the
-    # dispatch.
+    # Register every URI the result carries - layer id to uri pairs and bare
+    # object-store strings - so the NEXT call can resolve handles and detect
+    # mangles. Best-effort: registration never breaks the dispatch.
     uri_registry.register_tool_result(tool_name, result)
 
-    # Persist the freshly-minted short-handle map (L<n> -> uri) WITH
-    # the Case so a reconnect / Case reopen resolves the SAME handles the LLM
-    # already saw. No-op when nothing new was minted; best-effort (never
-    # breaks the dispatch).
+    # Persist the freshly minted short-handle map with the Case, so a reconnect
+    # or reopen resolves the SAME handles the model already saw. No-op when
+    # nothing new was minted; best-effort.
     await _persist_case_layer_handles(state, case_id=turn_case_id)
 
-    # A composer's LayerURI carries the FINAL floored AOI bbox and
-    # ``emit_tool_call``'s LayerURI gate fires the live zoom-to via
-    # ``add_loaded_layer`` -- but that never lands in
-    # ``current_turn_map_commands`` on its own. Append the floored bbox HERE,
-    # after any earlier geocode snap this turn, so it is the LAST zoom-to and
-    # re-entry (``extractLastZoomTo``, newest-first) snaps to the floored AOI.
-    # GUARDS: only a finite 4-number tuple; dedupe against the last
-    # accumulated zoom-to bbox so a repeat dispatch does not double-append.
+    # A composer's layer carries the FINAL floored AOI bbox, but the live
+    # zoom-to it fires never lands in the turn's map commands on its own.
+    # Appending it here, after any earlier geocode snap, makes it the LAST
+    # zoom-to, so a re-entry that replays the newest one snaps to the floored
+    # AOI. Guarded on a finite extent and deduped against the last accumulated
+    # zoom-to, so a repeat dispatch does not double-append.
     #
-    # For a DOMAIN-producing solver, emit ONLY the pinned domain bbox --
-    # PURGE any earlier zoom-to entries so ``map_command_emissions`` carries
-    # a single authoritative domain extent (otherwise the camera flashes the
-    # geocode box then the domain box). Plain fetches keep the append-only
-    # behavior so unrelated multi-layer flows are unaffected.
+    # For a DOMAIN-producing solver, emit ONLY the pinned domain bbox and purge
+    # earlier zoom-to entries, or the camera flashes the geocode box before the
+    # domain box. Plain fetches keep the append-only behaviour.
     if isinstance(result, LayerURI) and _is_finite_bbox4(result.bbox):
         _floored_bbox = list(result.bbox)
         if not isinstance(entry, _ReuseEntry) and _scenario_produces_domain(
@@ -1098,11 +882,9 @@ async def _invoke_tool_via_emitter(
                 {"command": "zoom-to", "args": {"bbox": _floored_bbox}}
             )
 
-    # Record a FRESHLY-PRODUCED expensive-scenario result into the
-    # session reuse index so a later identical request short-circuits instead of
-    # re-running the solver. Skip when this dispatch WAS the short-circuit (the
-    # _ReuseEntry path) -- the layer is already indexed. Only index a real
-    # success (a LayerURI return), never a failure dict. Best-effort.
+    # Record a FRESHLY produced scenario result in the session reuse index so a
+    # later identical request short-circuits. Skipped when this dispatch WAS the
+    # short-circuit, and only a real success is indexed, never a failure dict.
     if (
         not isinstance(entry, _ReuseEntry)
         and scenario_type_for_tool(tool_name) is not None
@@ -1120,12 +902,11 @@ async def _invoke_tool_via_emitter(
         except Exception:  # noqa: BLE001 -- indexing must never break dispatch
             logger.debug("scenario_reuse record failed", exc_info=True)
 
-    # PIN the solve domain as the Case AOI: a freshly-completed expensive
-    # solver mints a LayerURI whose ``bbox`` IS the authoritative floored
-    # solve domain. Persist it as ``CaseSummary.bbox``
-    # + cache onto ``state.case_bbox`` so every subsequent fetch defaults to
-    # this extent and a Case reopen rehydrates the SAME AOI. Skip on a reuse
-    # short-circuit (already pinned when first produced). Best-effort.
+    # PIN the solve domain as the Case AOI: a freshly completed solver mints a
+    # layer whose bbox IS the authoritative floored domain, so persisting and
+    # caching it makes every later fetch default to that extent and a reopen
+    # rehydrate the same AOI. A reuse short-circuit was pinned when first
+    # produced. Best-effort.
     if (
         not isinstance(entry, _ReuseEntry)
         and _scenario_produces_domain(tool_name)
@@ -1139,13 +920,11 @@ async def _invoke_tool_via_emitter(
         except Exception:  # noqa: BLE001 -- pin is a side-effect, never break
             logger.debug("aoi-pin failed", exc_info=True)
 
-    # When this dispatch was a reuse short-circuit, the emitter has ALREADY
-    # re-loaded the existing layer onto the map. What's left is to give
-    # the model an UNAMBIGUOUS function_response -- "this is the EXISTING
-    # result, not re-run" -- so it narrates honestly and does not retry.
-    # Returns a compact dict carrying the reuse flag/note + the reused
-    # layer's identity, replacing the bare LayerURI return; the map update
-    # already happened, so nothing renderable is lost.
+    # On a reuse short-circuit the emitter has ALREADY re-loaded the existing
+    # layer onto the map, so what remains is an unambiguous function response
+    # saying this is the EXISTING result, letting the model narrate honestly
+    # instead of retrying. The compact dict replaces the bare layer return;
+    # nothing renderable is lost, because the map update already happened.
     if _reuse_note is not None and isinstance(result, LayerURI):
         logger.info("scenario_reuse note=%s", _reuse_note)
         return {
@@ -1159,10 +938,9 @@ async def _invoke_tool_via_emitter(
             "handle": result.layer_id,
         }
 
-    # Per-Case layer persistence now happens in
-    # the ``finally`` block above so it ALSO fires when the tool (or its
-    # post-invoke envelope emission on a dying WebSocket) raised -- the
-    # emitter's accumulator already contains the layer at that point.
+    # Per-Case layer persistence happens in the ``finally`` above, so it also
+    # fires when the tool or its post-invoke emission raised: the accumulator
+    # already holds the layer at that point.
     return result
 
 async def _dispatch_tool_and_persist(
@@ -1172,34 +950,17 @@ async def _dispatch_tool_and_persist(
     params: dict,
     raw_user_text: str,
 ) -> None:
-    """Invoke a tool, then persist the agent's reply (tool result) to the
-    active Case.
-
-    Wraps ``_invoke_tool_via_emitter`` so the Case chat-history append
-    happens after the tool returns. The persisted ``content`` is a
-    user-readable summary of the tool result (the stringified result for
-    primitive returns, or a marker for complex returns).
-
-    NOTHING MAY ESCAPE THIS FRAME. It is the ``/invoke`` directive path, a manual
-    operator-debug surface dispatched via ``asyncio.create_task``, so there is no
-    awaiter to catch a propagated exception: anything that escapes becomes an
-    "asyncio Task exception was never retrieved" log line while the CLIENT
-    receives no error envelope at all and the plugin shows nothing.
-
-    So every failure leaves through ``_send_error`` as a structured ``error``
-    envelope, the same shape the model's multi-turn loop produces via
-    ``summarize_tool_result``. The named catches cover the routing failures
-    (``ToolNotFoundError`` -> ``TOOL_NOT_FOUND`` / ``retryable=False``;
-    ``PayloadWarningCancelledError`` -> the cancellation reason stated rather
-    than disappearing). The broad ``except Exception`` below covers every OTHER
-    typed tool exception (``MeshGenerationError``, ``TelemacRainOnGridError``,
-    ``HydrologyAoiTooLargeError``, ...), routing the tool's OWN ``error_code`` /
-    ``retryable`` and falling back to ``TOOL_EXECUTION_FAILED`` / non-retryable
-    only when the exception is untyped. The exception's real code goes out
-    VERBATIM: an upstream-provider error carries its own code and must never be
-    relabelled as an internal failure.
-    """
-    # Entry-time Case capture -- see _dispatch_model_turn_and_persist.
+    """Invoke a tool, then persist the agent's reply to the active Case; the
+    persisted content is a readable summary of the result. NOTHING MAY ESCAPE
+    THIS FRAME: every failure leaves as a structured error envelope."""
+    # This is the directive path, dispatched as a bare task with no awaiter, so
+    # anything that escapes becomes an unretrieved-task log line while the client
+    # receives nothing at all. The named catches cover the routing failures; the
+    # broad catch routes every other typed tool exception by the tool's OWN code
+    # and retryable flag, falling back to a generic non-retryable failure only
+    # when the exception is untyped. An upstream-provider code goes out VERBATIM
+    # and is never relabelled as an internal failure.
+    # Entry-time Case capture, so a mid-turn switch cannot re-aim the writes.
     turn_case_id = _turn_case_id(state)
     bind_turn_case(turn_case_id)  # envelope tagging
     bind_turn_drawn_geometry(state.drawn_geometry)
@@ -1239,19 +1000,13 @@ async def _dispatch_tool_and_persist(
                 retryable=exc.retryable,
             )
         except Exception as exc:  # noqa: BLE001 -- honesty-floor catch-all
-            # Any OTHER tool exception on this no-awaiter create_task path (see
-            # docstring): surface a structured envelope instead of a silent
-            # no-result. The A.6 ErrorCode Literal is a CLOSED set, so a tool's
-            # own code (e.g. TELEMAC_ROG_POUR_POINT_OFF_DEM) cannot be the wire
-            # ``error_code`` -- constructing ErrorPayload with it raises inside
-            # _send_error and (per the ws.py:CONTEXT_WINDOW bug) skips the send
-            # entirely, the very silence this fix closes. So: pass a typed tool
-            # code through only when it is already a valid ErrorCode, else fall
-            # back to INTERNAL_ERROR with the specific code LEADING the message
-            # as a ``[MARKER]`` (house convention, see
-            # _notify_layer_auto_publish_failed) -- honest + greppable, no enum
-            # widening. Upstream-provider codes that ARE valid (LLM_UNAVAILABLE)
-            # pass through un-internalized.
+            # Any OTHER tool exception on this no-awaiter path must still reach
+            # the client as a structured envelope rather than silence. The wire
+            # ``error_code`` is a CLOSED set, so a tool's own code is passed
+            # through only when it is already valid; otherwise the code LEADS
+            # the message as a ``[MARKER]`` under INTERNAL_ERROR - honest and
+            # greppable, with no enum widening. A valid upstream-provider code
+            # passes through un-internalized.
             tool_code = getattr(exc, "error_code", None) or "TOOL_EXECUTION_FAILED"
             retryable = bool(getattr(exc, "retryable", False))
             if tool_code in _VALID_ERROR_CODES:
@@ -1280,8 +1035,7 @@ async def _dispatch_tool_and_persist(
                 pipeline_id=state.current_turn_pipeline_id,
                 case_id=turn_case_id,
             )
-        # C2: end-of-turn idle signal for the /invoke directive path too -- same
-        # rationale as _dispatch_model_turn_and_persist. Best-effort.
+        # End-of-turn idle signal on the directive path too. Best-effort.
         await _emit_turn_complete(
             websocket, state, pipeline_id=state.current_turn_pipeline_id
         )

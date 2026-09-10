@@ -19,55 +19,42 @@ from websockets.asyncio.server import ServerConnection
 
 logger = logging.getLogger("trid3nt_server.server")
 
-#: The closed A.6 ``ErrorCode`` Literal, as a runtime set -- the honesty-floor
-#: catch-all uses it to tell a tool's OWN typed code (a valid wire code) from an
-#: out-of-enum code that must be surfaced as a ``[MARKER]`` on INTERNAL_ERROR.
+#: The closed ``ErrorCode`` Literal as a runtime set: the honesty-floor
+#: catch-all uses it to tell a tool's OWN typed code from an out-of-enum code
+#: that must be surfaced as a marker on INTERNAL_ERROR.
 _VALID_ERROR_CODES: frozenset[str] = frozenset(get_args(ErrorCode))
 
-#: Per-task narration-list registry. ``_stream_model_reply`` registers its
-#: turn's narration list under the running asyncio task (in the synchronous
-#: prefix, so crash/cancel still leaves the entry) and
-#: ``_dispatch_model_turn_and_persist`` pops it in its finally -- the wrapper then
-#: joins THIS turn's list even when a concurrent turn has re-pointed
-#: ``state.current_turn_narration``. Weak keys: an entry whose task was
-#: never popped (direct stream callers) vanishes with the task, no leak.
+#: Per-task narration-list registry, so a wrapper joins THIS turn's list even
+#: when a concurrent turn has re-pointed the session's narration field. The
+#: entry is registered in the synchronous prefix, so a crash or cancel still
+#: leaves it, and the keys are weak, so an unpopped entry dies with its task.
 _TURN_NARRATION_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, list[str]]" = (
     weakref.WeakKeyDictionary()
 )
 
-#: Per-task OPEN-segment registry. ``_stream_model_reply`` registers the
-#: list backing the currently open narration segment (received text not yet
-#: finalized). On each finalize the in-loop code ``.clear()``s this same
-#: list object (never rebinds it) so the wrapper always reads the live open
-#: buffer. ``_dispatch_model_turn_and_persist`` pops it in its finally and
-#: persists the un-finalized remainder as the tail row, so no narration is
-#: lost and finalized segments are never double-persisted.
+#: Per-task registry of the list backing the currently OPEN narration segment.
+#: Each finalize clears that same list object rather than rebinding it, so the
+#: wrapper always reads the live buffer; its finally persists the un-finalized
+#: remainder as the tail row, so no narration is lost and a finalized segment is
+#: never persisted twice.
 _TURN_OPEN_SEGMENT_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, list[str]]" = (
     weakref.WeakKeyDictionary()
 )
 
-#: Per-task count of narration SEGMENTS finalized+persisted this turn.
-#: ``_finalize_segment`` increments it only when it actually writes a
-#: non-empty ``role="agent"`` row. The wrapper's finally reads it to decide
-#: whether the legacy single marker row (narration-less completed turn)
-#: still needs writing (segments_done == 0) or whether the per-segment rows
-#: already carried the narration (segments_done > 0 -> skip the marker).
+#: Per-task count of narration SEGMENTS finalized and persisted this turn,
+#: incremented only on a non-empty agent row. The wrapper's finally reads it to
+#: decide whether the single marker row for a narration-less turn is still
+#: needed, or whether the per-segment rows already carried the narration.
 _TURN_SEGMENTS_PERSISTED_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, int]" = (
     weakref.WeakKeyDictionary()
 )
 
-#: Per-task flag set True ONLY when a row that snapshotted the turn's
-#: zoom-to/layer accumulator was actually persisted -- i.e. the in-loop
-#: TERMINAL ``_finalize_segment`` wrote a non-empty ``role="agent"`` row
-#: (``is_terminal=True`` -> ``layer_emissions=None`` -> ``_persist_chat_turn``
-#: snapshots ``current_turn_layer_ids`` + ``current_turn_map_commands``).
-#: The wrapper's finally reads it to decide whether a tool-terminal turn
-#: (final round ended in tool calls with no trailing narration -> no
-#: terminal finalize fired -> accumulator orphaned) still needs a closing
-#: accumulator-bearing marker row so the Case-reopen zoom-snap
-#: (``extractLastZoomTo``) + layer attribution survive. Not set when the
-#: terminal segment was empty/whitespace -- that turn's accumulator is
-#: likewise unwritten and the marker is needed.
+#: Per-task flag set True only when a row that snapshotted the turn's zoom-to
+#: and layer accumulator was actually persisted. The wrapper's finally reads it
+#: to decide whether a tool-terminal turn - one whose final round ended in tool
+#: calls with no trailing narration - still needs a closing accumulator-bearing
+#: marker row. An empty terminal segment leaves the accumulator unwritten, so
+#: the marker is needed there too.
 _TURN_TERMINAL_ACC_PERSISTED_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, bool]" = (
     weakref.WeakKeyDictionary()
 )
@@ -81,44 +68,14 @@ async def _finalize_segment(
     is_terminal: bool = False,
     thinking_parts: list[str] | None = None,
 ) -> None:
-    """Close ONE narration bubble + persist it as its own agent row.
-
-    Each contiguous run of agent text between tool-call rounds is a SEGMENT.
-    Closing a segment does two things at the boundary "agent text is about to
-    be interrupted by tool cards (or the turn is ending)":
-
-    (1) Send the terminal ``done=True`` ``agent-message-chunk`` for THIS
-        bubble's ``message_id`` so the live client marks the bubble complete
-        (web ``appendDelta`` sets ``done``). This MUST only fire for an id
-        that already received text -- the caller guarantees that by only
-        calling here when ``current_message_id is not None``.
-    (2) Persist a ``role="agent"`` ``CaseChatMessage`` carrying ONLY this
-        segment's text, so the persisted row order interleaves with the
-        mid-turn tool rows (``_persist_tool_card``) and the replay
-        reconstructs the live interleaved train. An empty segment persists
-        NOTHING (no phantom bubble on replay; no row-count regression).
-
-    ``layer_emissions``: non-terminal segments pass ``[]`` so they do NOT each
-    duplicate the whole-turn ``current_turn_layer_ids`` /
-    ``current_turn_map_commands`` accumulators. The TERMINAL segment
-    (``is_terminal=True`` -- the final narration run of the turn) passes
-    ``None`` so ``_persist_chat_turn`` snapshots the accumulators onto it,
-    keeping layer attribution + zoom-to on the de-facto closing row.
-
-    Best-effort persist (inherits ``_persist_chat_turn``'s swallow); the wire
-    ``done=True`` still fires even if persistence is unbound. Clears the
-    segment buffer and bumps the per-task finalized-count on a non-empty
-    write.
-
-    ``thinking_parts``: the per-segment reasoning-text buffer accumulated
-    while the per-turn ``show_thinking`` toggle was ON. When THIS segment
-    persists a non-empty row, its joined text rides the row's ``thinking``
-    field (same-bubble contract) and the buffer is cleared. A thinking-only
-    segment (no answer text -> no row, the no-phantom-bubble invariant)
-    KEEPS its buffer so the thinking attaches to the turn's next persisted
-    agent row instead of being dropped. Same clear-not-rebind discipline as
-    ``segment_parts``.
-    """
+    """Close ONE narration bubble: send its terminal chunk, then persist the
+    segment's text as its own ``role="agent"`` row so replay interleaves with
+    the tool rows. An empty segment persists nothing."""
+    # Only the TERMINAL segment passes ``layer_emissions=None``, so the turn's
+    # layer and zoom-to accumulators are snapshotted onto the closing row alone
+    # rather than duplicated across every segment. A thinking-only segment keeps
+    # its buffer, so the reasoning attaches to the next persisted agent row
+    # instead of being dropped.
     text = "".join(segment_parts).strip()
     # (1) wire terminal for this bubble -- always fires (id has text).
     await _session_safe_send(websocket, state.session_id,
@@ -153,11 +110,10 @@ async def _finalize_segment(
             _TURN_SEGMENTS_PERSISTED_BY_TASK[_task] = (
                 _TURN_SEGMENTS_PERSISTED_BY_TASK.get(_task, 0) + 1
             )
-            # A TERMINAL non-empty segment row just
-            # snapshotted the turn's zoom-to/layer accumulator
-            # (``layer_emissions=None`` above). Record that so the wrapper's
-            # finally does NOT also write a duplicate closing marker row -- the
-            # marker is ONLY for the tool-terminal shape where this never fires.
+            # A terminal non-empty segment row just snapshotted the turn's
+            # zoom-to and layer accumulator, so the wrapper's finally must not
+            # write a duplicate closing marker; the marker is only for the
+            # tool-terminal shape, where this never fires.
             if is_terminal:
                 _TURN_TERMINAL_ACC_PERSISTED_BY_TASK[_task] = True
     # The open buffer is now closed: clear the SAME list object (do not rebind)
@@ -176,34 +132,14 @@ async def _persist_chat_turn(
     message_id: str | None = None,
     thinking: str | None = None,
 ) -> None:
-    """Append one ``CaseChatMessage`` to Mongo for the active Case.
-
-    Best-effort: a missing Persistence binding OR no active Case context
-    short-circuits (the in-memory chat keeps working). A failed write
-    is logged but not raised -- chat persistence is a side-effect, not the
-    happy path of message delivery.
-
-    The chat-message collection is part of the
-    agent's own session record (it is per-turn replay material, not a
-    solver result), so this write does NOT pause for user approval.
-
-    ``tool_card`` carries the typed ``ToolCardRecord`` for ``role="tool"``
-    rows; ``layer_emissions`` overrides the default per-turn accumulator
-    snapshot (tool rows pass ``[]`` so the turn's layer ids stay attributed
-    to the closing agent row).
-
-    ``case_id`` pins the target Case explicitly (the dispatch wrappers
-    capture it at task entry so even a cancel-and-redispatch race cannot
-    re-aim the write); when omitted it resolves via ``_turn_case_id`` --
-    never the raw write-time ``active_case_id``.
-
-    Durable-card lifecycle: ``message_id``, when supplied, pins the row's
-    stable id and routes the write through ``upsert_chat_message``
-    (insert-or-replace) instead of ``append_chat_message`` -- so a SOLVE
-    card persisted ``running`` at mint can be UPDATED IN PLACE to its
-    terminal state without a duplicate row. Omitted (the default) keeps the
-    append-a-fresh-row behavior every existing caller relies on.
-    """
+    """Append one ``CaseChatMessage`` for the active Case; a missing binding or
+    no active Case short-circuits and a failed write is logged, never raised.
+    ``message_id`` upserts a stable row instead of appending a fresh one."""
+    # ``case_id`` pins the target Case explicitly - the dispatch wrappers
+    # capture it at task entry, so a cancel-and-redispatch race cannot re-aim
+    # the write; omitted, it resolves through the turn's Case rather than the
+    # raw write-time pointer. The upsert path is what lets a solve card
+    # persisted ``running`` walk to its terminal state in the SAME row.
     target_case = case_id if case_id is not None else _turn_case_id(state)
     if not target_case:
         return
@@ -215,10 +151,8 @@ async def _persist_chat_turn(
         case_id=target_case,
         role=role,  # type: ignore[arg-type]
         content=content,
-        # Thinking persistence: reasoning-channel text
-        # for the same bubble; None on every non-agent row and on turns with
-        # show_thinking off. Display replay ONLY -- never rehydrated into
-        # LLM-bound contents (adapter.NEVER_REHYDRATE_FIELDS).
+        # Reasoning text for the same bubble, None on every non-agent row.
+        # Display replay ONLY: it is never rehydrated into model-bound contents.
         thinking=thinking,
         pipeline_id=pipeline_id,
         tool_card=tool_card,
@@ -227,10 +161,8 @@ async def _persist_chat_turn(
             if layer_emissions is None
             else list(layer_emissions)
         ),
-        # Persist the turn's zoom-to emissions (geocode snap) on
-        # rows that snapshot the accumulator (agent/user rows) -- the
-        # Case-reopen snap-to-location replays the LAST one (web).
-        # Tool rows pass layer_emissions=[] and get [] here too.
+        # Zoom-to emissions ride the rows that snapshot the accumulator, so a
+        # Case reopen can replay the last one; tool rows carry none.
         map_command_emissions=(
             list(state.current_turn_map_commands)
             if layer_emissions is None
@@ -280,38 +212,15 @@ async def _persist_tool_card(
     io_is_error: bool = False,
     message_id: str | None = None,
 ) -> None:
-    """Persist one replayable tool-card row for the active Case.
-
-    Written by ``_invoke_tool_via_emitter`` on every terminal tool dispatch
-    (complete OR failed; cancelled dispatches persist nothing -- Invariant
-    8). Storage shape: ``CaseChatMessage(role="tool")`` in the SAME chat
-    collection as user/agent turns, so the rehydration replay interleaves
-    the full stream by ``created_at`` with zero extra queries. The typed
-    payload is ``tool_card`` (``ToolCardRecord``); ``content`` carries the
-    identical record as a JSON string for non-contract consumers.
-
-    Timing source of truth: the emitter's ``last_tool_step`` (the
-    authoritative ``started_at`` / ``duration_ms`` stamps the live card
-    displayed). The wall-clock fallbacks only engage when the emitter stamp
-    is unavailable (e.g. the wire died before the terminal transition).
-
-    Tool-card IO persistence: when ``raw_args`` / ``function_response`` are
-    supplied, the SAME input args + output response the live ``tool-io``
-    sidecar carries (``PipelineEmitter.emit_tool_io``) are serialized with
-    the SAME helper (``_json_for_tool_io`` -- identical truncation/byte
-    semantics) and populated on the TYPED ``ToolCardRecord`` under the EXACT
-    live ``ToolIoPayload`` field names -- ``raw_args`` / ``function_response``
-    / ``args_truncated`` / ``response_truncated`` / ``args_bytes`` /
-    ``response_bytes`` / ``is_error`` (all optional/nullable).
-    ``get_session_state`` replay carries them on ``m.tool_card``; the web
-    renderer rehydrates the tool-card expander on Case reopen by reading
-    them off the TYPED record -- the ``content`` JSON twin carries the
-    identical values for non-contract consumers but is not the integration
-    path.
-
-    Best-effort, never raises: record construction is wrapped here and the
-    underlying ``_persist_chat_turn`` already swallows write failures.
-    """
+    """Persist one replayable tool-card row for the active Case, on a complete
+    or failed dispatch; a cancelled dispatch persists nothing. Best-effort and
+    never raises."""
+    # Storage shape is ``CaseChatMessage(role="tool")`` in the same collection
+    # as user and agent turns, so replay interleaves the stream by created_at
+    # with no extra query; the typed ``tool_card`` is the integration path and
+    # ``content`` is a JSON twin. Timing comes from the emitter's own stamps,
+    # the wall-clock fallbacks only engaging when the wire died before the
+    # terminal transition.
     try:
         started_at = started_at_fallback
         duration_ms: int = max(0, int(duration_ms_fallback))
@@ -323,16 +232,11 @@ async def _persist_tool_card(
                 started_at = emitter_step.started_at
             if emitter_step.duration_ms is not None:
                 duration_ms = emitter_step.duration_ms
-        # The persisted IO must ride the TYPED ``ToolCardRecord`` -- replay
-        # reads it off ``m.tool_card``, NOT the row ``content`` JSON.
-        # Compute the IO ONCE with the SAME ``_json_for_tool_io`` helper +
-        # field names the live ``tool-io`` sidecar uses, populate the typed
-        # record's IO fields, and keep the identical values on the
-        # ``content`` JSON twin for non-contract consumers. Only when at
-        # least one of raw_args/function_response was provided (the
-        # LLM-dispatch path) -- the /invoke directive path passes neither,
-        # so its rows stay IO-less and the typed record's IO fields default
-        # to ``None`` (existing documents validate + replay unchanged).
+        # The persisted IO must ride the TYPED record, which is what replay
+        # reads; the ``content`` JSON twin carries the identical values for
+        # non-contract consumers. Computed only when at least one of raw_args /
+        # function_response was provided, so a directive-path row stays IO-less
+        # and existing documents validate unchanged.
         _io_fields: dict[str, Any] = {}
         if raw_args is not None or function_response is not None:
             args_str, args_trunc, args_bytes = _json_for_tool_io(raw_args)
@@ -346,15 +250,10 @@ async def _persist_tool_card(
                 "response_bytes": resp_bytes,
                 "is_error": bool(io_is_error),
             }
-        # Carry the ordered CHILD substeps captured by the emitter at this
-        # dispatch's terminal transition. The emitter snapshots them onto
-        # ``last_tool_children`` WHILE the children still exist in ``_steps``
-        # -- ``close_pipeline`` (run just before this hook) has already
-        # cleared ``_steps``, so this durable snapshot is the only source.
-        # Reading it onto ``ToolCardRecord.children`` makes the nested
-        # timeline replay READ-ONLY on a Case reopen (additive JSON -- a card
-        # with no children stays ``None``). Guard the tool match so a stale
-        # prior-dispatch snapshot can never attach to this row.
+        # Carry the ordered CHILD substeps the emitter snapshotted at the
+        # terminal transition: the live steps are already cleared by then, so
+        # the snapshot is the only source. The tool match guards against a stale
+        # prior-dispatch snapshot attaching to this row.
         _children: list | None = None
         emitter_children = (
             state.emitter.last_tool_children if state.emitter is not None else None
@@ -372,7 +271,7 @@ async def _persist_tool_card(
             duration_ms=duration_ms,
             label=label,
             children=_children,
-            **_io_fields,  # C1: typed IO on the record == the integration path
+            **_io_fields,  # typed IO on the record is the integration path
         )
         # Content JSON twin: model_dump_json now already carries the IO fields
         # (they live on the typed record), so a single dump matches the wire
@@ -403,28 +302,13 @@ async def _persist_terminal_failure_card(
     message: str,
     case_id: str | None = None,
 ) -> None:
-    """Persist a ``role="tool"`` FAILED tool-card row for a terminal turn
-    failure that did NOT flow through ``_invoke_tool_via_emitter``'s own
-    failed-card persist.
-
-    A terminal solve/tool failure must surface to the user even across a
-    socket cycle -- otherwise a WS reconnect / Case-reopen replays the last
-    tool card stuck in its ``running`` state forever.
-
-    Writes the SAME ``role="tool"`` ``CaseChatMessage`` + ``ToolCardRecord``
-    shape ``_persist_tool_card`` produces, with ``state="failed"``. The
-    ``ToolCardRecord`` contract (case.py) has no error_code/message fields,
-    so the A.6 ``error_code`` + human message ride in the row ``content`` (a
-    JSON twin, exactly like the complete-card content) and the ``label`` so
-    the web replay surfaces the failure reason. Honesty floor: this writes
-    ONLY on a real terminal failure -- it never fabricates a success.
-
-    Prefers the emitter's authoritative ``last_tool_step`` for the failing
-    tool's identity + timing (so the persisted failed card matches the live
-    card the user last saw spinning); falls back to a synthetic
-    ``llm_generation`` card when no tool step is available (a pure
-    model-stream failure with no in-flight tool). Best-effort, never raises.
-    """
+    """Persist a FAILED tool-card row for a terminal turn failure that did not
+    flow through the dispatch path's own failed-card persist, so a reconnect
+    never replays a card stuck ``running``. Best-effort, never raises."""
+    # Honesty floor: this writes ONLY on a real terminal failure. The record
+    # contract carries no error code, so the code and message ride the row
+    # content and the label. Identity and timing prefer the emitter's last tool
+    # step, falling back to a synthetic model-generation card.
     import json
 
     try:
@@ -434,14 +318,11 @@ async def _persist_terminal_failure_card(
         emitter_step = (
             state.emitter.last_tool_step if state.emitter is not None else None
         )
-        # Identify the failing operation: the last live tool step (the solve
-        # / tool the user saw running) when present, else the model-
-        # generation step. ``duration_ms`` / ``started_at`` mirror the live
-        # card so the replayed failed card lands where the running one was.
-        # When the failing operation IS the last live tool step, carry its
-        # captured child substeps so the replayed failed card still nests
-        # its sub-step timeline; the synthetic ``model_generate`` branch (a
-        # pure model-stream failure, no in-flight tool) has no children.
+        # Identify the failing operation: the last live tool step when there is
+        # one, else the model-generation step. Timing mirrors the live card so
+        # the replayed failed card lands where the running one was, and the
+        # captured child substeps ride along when the failing operation IS that
+        # tool step; a pure model-stream failure has no children.
         _children: list | None = None
         if emitter_step is not None and emitter_step.tool_name:
             tool_name = emitter_step.tool_name
@@ -470,9 +351,9 @@ async def _persist_terminal_failure_card(
             label=f"{label} — {error_code}",
             children=_children,
         )
-        # The JSON-twin content carries the typed record PLUS the error_code +
-        # message (the record contract cannot hold them) so non-contract
-        # replay consumers still see the failure reason.
+        # The JSON twin carries the typed record plus the error_code and message
+        # the record contract cannot hold, so a non-contract replay consumer
+        # still sees the failure reason.
         content_payload = json.loads(record.model_dump_json())
         content_payload["error_code"] = error_code
         content_payload["message"] = message
@@ -501,21 +382,9 @@ async def _persist_terminal_failure_card(
         )
 
 async def _persist_chart_record(state: SessionState, payload: dict) -> None:
-    """Append a ``SessionChartRecord`` to the session document.
-
-    Resolves the ``Persistence`` singleton and ``$push``es the record onto the
-    session document's append-only ``charts`` array via the underlying MCP
-    ``update-one`` call (charts go directly on the MCP client like telemetry,
-    keeping the Persistence public API narrow).
-
-    Keyed by the active Case id when one is selected (so charts replay on Case
-    rehydration via the same document the chat history lives on), else by the
-    session id. ``upsert=True`` so the first chart on a fresh session document
-    creates it.
-
-    Never raises -- a persistence failure is logged at WARNING. This is only
-    the write half of the contract; replay is session-resume scope.
-    """
+    """Append a ``SessionChartRecord`` to the session document, keyed by the
+    active Case when one is selected so the charts replay with its chat, else by
+    the session; upsert, best-effort, and never raised."""
     persistence = get_persistence()
     if persistence is None:
         # In-memory / no-persistence path: charts live only in-flight.
