@@ -1,11 +1,8 @@
-"""conftest.py for workers tests.
+"""conftest.py for the workers tests.
 
-Installs qgis.* stub modules into sys.modules before pytest collects any test
-module. Placing this conftest at workers/ ensures it is discovered
-and loaded *before* pytest processes the pyqgis sub-package, which would
-otherwise trigger the top-level ``from qgis.core import ...`` in
-``workers/pyqgis/worker.py`` and fail in pure-Python environments
-(CI, agent venv) without QGIS installed.
+Puts the repo root on ``sys.path`` - the agent venv adds only the agent and
+contracts source paths - and installs ``qgis.*`` stubs before collection, so a
+worker module that imports them loads where QGIS is not installed.
 """
 
 from __future__ import annotations
@@ -14,9 +11,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
-# Ensure the repo root is on sys.path so `workers.pyqgis.*` imports
-# work correctly. This is necessary because the agent venv only adds the
-# agent src and contracts src paths, not the repo root.
+# The agent venv adds the agent and contracts source paths only, so a
+# ``workers.*`` import needs the repo root put on the path here.
 _REPO_ROOT = Path(__file__).parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))

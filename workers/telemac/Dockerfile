@@ -14,9 +14,9 @@
 #   * numpy==1.26.4 is MANDATORY: numpy 2.x breaks TELEMAC's _hermes C ext.
 #   * rasterio<1.4 is the numpy-1 / GDAL ABI-safe line (self-contained manylinux
 #     wheel; no conda GDAL to conflict).
-#   * scipy backs opentelemac's own SELAFIN readers, pyproj the two in-worker
-#     builders' projections. Nothing in the worker or the engine reads geometry,
-#     so no shapely.
+#   * scipy backs opentelemac's own SELAFIN readers; rasterio and pyproj are the
+#     pinned geo stack the image carries. Nothing in the worker or the engine
+#     reads geometry, so no shapely.
 # A version skew here is a deliberate, IaC-visible bump.
 #
 # Build context = THIS worker dir, not the repo root (a .dockerignore trims

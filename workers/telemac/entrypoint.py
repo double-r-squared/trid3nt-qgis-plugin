@@ -1,31 +1,8 @@
 """The TELEMAC worker: one manifest in, one solved run directory out.
 
 The launcher bind-mounts the run directory at ``/data`` with ``manifest.json``
-and every staged input beside it. This entrypoint reads the manifest, runs ONE
-dispatch, and writes ``telemac_metrics.json`` back into the same directory. The
-container does no network and no object-store I/O: everything it reads arrives
-staged, and the supervisor uploads everything it wrote.
-
-A manifest names exactly ONE runnable section, ``case``: the authored run. A
-steering file is a record and the server wrote it, so what reaches the worker is
-which engine, which steering file, and which result files must exist for the run
-to have happened. There is no second section and no builder here - the container
-authors nothing.
-
-A ``case`` solves in a CHILD process. A Fortran STOP kills the process it runs
-in, and the metrics file is the only channel the server has for reading what went
-wrong, so the write has to outlive the solve. What the child runs is telapy,
-except for the couplings telapy cannot run, which run the module's own CLI
-launcher behind the same seam - see ``_LAUNCHER_COUPLINGS``.
-
-The telapy child drives the engine's OWN per-step call in a loop, so a run has a
-point between steps; a case that names ``continue_from`` picks up from a previous
-run's results through the engine's own restart, which the steering file states
-and this
-worker only stages. Neither is available behind the launcher deviation.
-
-Success is a clean child exit AND every declared result file on disk: a solver
-that returns zero without writing its result has not solved anything.
+and every input staged beside it; this reads the manifest, runs ONE dispatch and
+writes ``telemac_metrics.json`` back. No network, no object-store I/O, no authoring.
 """
 
 from __future__ import annotations
@@ -95,6 +72,7 @@ _CASE_FIELDS = frozenset((
 #: and the FINALIZE fails, closing a boundary file the API arm never opened
 #: (HERMES_FILE_NOT_OPENED_ERR), so the results never land. A SCOPED DEVIATION
 #: that dies the day telapy drives them; every other class stays on the API arm.
+#: Neither the per-step point nor a continuation is available behind it.
 _LAUNCHER_COUPLINGS = frozenset(("waqtel", "gaia"))
 
 
@@ -114,12 +92,9 @@ class CaseError(RuntimeError):
 
 def _strict_section(section: str, body: Any, valid: Collection[str], *,
                     drop: tuple[str, ...] = ()) -> dict[str, Any]:
-    """The manifest's only gate: every key is known, or the run refuses.
-
-    A dropped key silently no-ops the knob the caller meant to set, which reads
-    afterwards as a solve that ignored its input rather than as the typo or the
-    stale image it was.
-    """
+    """The manifest's only gate: every key is known, or the run refuses. A
+    dropped key silently no-ops the knob the caller meant to set, and reads
+    afterwards as a solve that ignored its input."""
     clean: dict[str, Any] = {}
     unknown: list[str] = []
     for key, value in dict(body or {}).items():
@@ -156,15 +131,12 @@ def _listing_tail(data_dir: Path) -> dict[str, str]:
 
 
 def _measure_ntimestep(data_dir: Path, result_slf: str) -> dict[str, Any]:
-    """How many records the result the server named actually carries.
-
-    MEASURED off the file this run wrote, never derived from the steering: a count
-    computed from DURATION over the graphic period is an assertion about a file
-    nobody opened, and it is exactly the assertion that stays right while the
-    solve stops short. Unmeasurable is reported as the absence of the key rather
-    than as a zero, because a run with no frames and a run nobody could read are
-    not the same finding.
-    """
+    """How many records the result the server named actually carries, MEASURED off
+    the file this run wrote. Unmeasurable is the ABSENCE of the key, never a
+    zero: no frames and unreadable are not the same finding."""
+    # Never derived from the steering: a count computed from DURATION over the
+    # graphic period is an assertion about a file nobody opened, and it is
+    # exactly the assertion that stays right while the solve stops short.
     if not result_slf:
         return {}
     try:
@@ -181,24 +153,18 @@ def _measure_ntimestep(data_dir: Path, result_slf: str) -> dict[str, Any]:
 
 
 def _on_step(study: Any, step: int, steps: int) -> None:
-    """The ONE point a run can be observed or steered from, once per step.
-
-    A no-op. It exists as STRUCTURE: emitting frames while the loop runs,
-    reporting live progress, steering a boundary mid-solve and coupling a second
-    model all attach here, as declared behaviour on a seam that already exists,
-    rather than as another rewrite of the runner.
-    """
+    """The ONE point a run can be observed or steered from, once per step. A
+    no-op: it exists as STRUCTURE, so emitting frames, reporting progress or
+    steering a boundary mid-solve attaches here rather than rewriting the runner."""
 
 
 def _step_count(study: Any) -> int:
-    """How many steps the study's own steering file says this run takes.
-
-    The count is the model's, read the way the engine reads it: a finite-volume
-    run advances its whole time loop inside one call, so it counts as one step
-    and a module whose steering has no equation keyword counts its steps plainly.
-    A module with no time loop AT ALL - an elliptic steady solve - reports no step
-    count, and one call IS its whole run.
-    """
+    """How many steps the study's own steering file says this run takes, read the
+    way the engine reads it. A module with no time loop at all - an elliptic
+    steady solve - reports NO step count, and one call IS its whole run."""
+    # A finite-volume run advances its whole time loop inside one call, so it
+    # counts as one step; a module whose steering names no equation keyword
+    # counts its steps plainly.
     try:
         steps = int(study.get("MODEL.NTIMESTEPS"))
     except Exception:  # noqa: BLE001 -- no step keyword => a steady solve, one call
@@ -212,20 +178,15 @@ def _step_count(study: Any) -> int:
 
 def _solve_in_process(module: str, steering: str,
                       user_fortran: str | None) -> int:
-    """Drive ONE telapy study to the end of its time loop, in THIS process.
-
-    The loop is the ENGINE'S OWN per-step call, driven one step at a time rather
-    than handed to the engine's own whole-run wrapper. The two are the same
-    computation - the wrapper is this loop - and stepping it here is what gives
-    the run a point between steps at all.
-
-    Every class in :data:`_MODULES` inherits the step call from telapy's own
-    ``ApiModule``. A class that did not would keep the whole-run wrapper, and
-    would run with no per-step point.
-
-    The listing is Fortran unit 6, so it arrives on this process's stdout and the
-    parent tees it to the listing file.
-    """
+    """Drive ONE telapy study to the end of its time loop, in THIS process. The
+    listing is Fortran unit 6, so it arrives on this process's stdout and the
+    parent tees it to the listing file."""
+    # The loop is the ENGINE'S OWN per-step call, driven one step at a time
+    # rather than handed to the whole-run wrapper. The two are the same
+    # computation - the wrapper is this loop - and stepping it here is what gives
+    # the run a point between steps at all. Every class in _MODULES inherits the
+    # step call from telapy's ApiModule; one that did not would keep the wrapper
+    # and run with no per-step point.
     path, name = _MODULES[module]
     study = getattr(importlib.import_module(path), name)(
         steering, user_fortran=user_fortran)
@@ -255,12 +216,9 @@ def _solve_timeout_s() -> float:
 
 def _solve_argv(module: str, steering: str, user_fortran: str | None,
                 coupling: str) -> list[str]:
-    """The command ONE case solves under: the telapy arm, or the CLI launcher.
-
-    The launcher is the module's own script, which the image puts on PATH under
-    the module's own name; it reads the steering file for everything else, the
-    user Fortran keyword included.
-    """
+    """The command ONE case solves under: the telapy arm, or the module's own CLI
+    launcher, which the image puts on PATH under the module's name and which
+    reads the steering file for everything else, user Fortran included."""
     if coupling in _LAUNCHER_COUPLINGS:
         return [f"{module}.py", steering]
     argv = [sys.executable, os.path.abspath(__file__),
@@ -269,15 +227,15 @@ def _solve_argv(module: str, steering: str, user_fortran: str | None,
 
 
 def _run_child(data_dir: Path, argv: list[str]) -> int:
-    """Solve in a child process, teeing its listing; return the child's code.
-
-    The tee is two writes rather than a redirect because both readers are real:
-    the listing file is the run's evidence, and the container's own stdout is
-    where a watching human sees the time loop advance.
-
-    A child that outruns the bound is KILLED and the expiry is raised, because a
-    wedged solver otherwise holds the container open with no report ever written.
-    """
+    """Solve in a child process, teeing its listing; return the child's code. A
+    child that outruns the bound is KILLED and the expiry raised, because a
+    wedged solver otherwise holds the container open with no report written."""
+    # A CHILD because a Fortran STOP kills the process it runs in, and the
+    # metrics file is the only channel the server has for reading what went
+    # wrong: the write has to outlive the solve.
+    # The tee is two writes rather than a redirect because both readers are
+    # real - the listing file is the run's evidence, and the container's own
+    # stdout is where a watching human sees the time loop advance.
     bound = _solve_timeout_s()
     with (data_dir / LISTING_FILENAME).open("w", encoding="utf-8") as listing:
         child = subprocess.Popen(argv, cwd=str(data_dir), text=True, bufsize=1,
@@ -305,14 +263,12 @@ def _run_child(data_dir: Path, argv: list[str]) -> int:
 
 
 def _solve_case(data_dir: Path, body: Any, run_id: str | None) -> dict[str, Any]:
-    """Run what the server authored, and check it produced what it promised.
-
-    ``server_facts`` is copied into the metrics VERBATIM: the utm zone, the
-    extent, the node and element counts and the name of the result file are facts
-    the server already holds, and a fact re-derived in the container is a second
-    answer that can disagree with the first. What the container adds is what only
-    it can know - the frame count of the file the solve just wrote.
-    """
+    """Run what the server authored, and check it produced what it promised:
+    success is a clean child exit AND every declared result file on disk."""
+    # ``server_facts`` is copied into the metrics VERBATIM - a fact re-derived in
+    # the container is a second answer that can disagree with the first. What
+    # the container adds is what only it can know: the frame count of the file
+    # the solve just wrote.
     case = _strict_section("case", body, _CASE_FIELDS)
     module = str(case.get("module") or "")
     if module not in _MODULES:

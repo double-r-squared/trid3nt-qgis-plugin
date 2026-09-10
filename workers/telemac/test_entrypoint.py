@@ -2,8 +2,7 @@
 
 TELEMAC-free by construction: the dispatch, the strict gate and the metrics
 envelope are exercised without telapy, without the solver binaries and without
-the network. The one test that spawns a real child does so to prove the seam the
-crash isolation rests on - the child dies, the parent still writes the metrics.
+the network. One test spawns a real child, to prove the crash isolation.
 """
 
 from __future__ import annotations
@@ -236,11 +235,9 @@ def test_a_launcher_deviation_case_refuses_to_be_continued(tmp_path, coupling):
 
 @pytest.mark.parametrize("section", ["agitation", "stratified"])
 def test_the_legacy_builders_have_no_continuation_to_ask_for(section):
-    """Only the case section learned the word; a builder config never carries it.
-
-    The builders author their own domain in-container and are never extended, so
-    asking one to continue is refused by the same gate that refuses a typo.
-    """
+    """Only the case section carries the word: a config that authors its own
+    domain in-container is never extended, so asking one to continue is refused
+    by the same gate that refuses a typo."""
     assert "continue_from" in E._CASE_FIELDS
     with pytest.raises(E.UnknownManifestFieldError) as exc:
         E._strict_section(section, {"continue_from": "previous.slf"},
@@ -374,13 +371,9 @@ def test_a_clean_child_that_wrote_its_results_is_the_run_succeeding(tmp_path,
 
 def test_an_unreadable_result_leaves_ntimestep_ABSENT_not_zero(tmp_path,
                                                                monkeypatch):
-    """A frame count nobody could read is not a run with no frames.
-
-    The seven bytes below are not a SELAFIN. Reporting ntimestep=0 for them
-    would say the solve wrote an empty time series, which is a different
-    finding from "this file could not be opened" - and the packet assembler
-    settles the GIF requirement on exactly that distinction.
-    """
+    """A frame count nobody could read is not a run with no frames: reporting
+    ntimestep=0 would say the solve wrote an empty time series, and the packet
+    assembler settles the GIF requirement on exactly that distinction."""
     def _child(data_dir, argv):
         (data_dir / "r2d.slf").write_bytes(b"SELAFIN")
         return 0
@@ -455,12 +448,8 @@ def test_a_user_fortran_case_hands_the_child_its_fortran(tmp_path, monkeypatch):
 
 def test_a_child_that_dies_still_leaves_the_metrics_written(tmp_path):
     """A Fortran STOP kills the process it runs in; the metrics write survives.
-
-    The child here dies on telapy being absent rather than on a solver abort, but
-    the seam under test is the same one: whatever the child does, the parent
-    reads its exit code, keeps its output as the listing, and writes the run's
-    only report.
-    """
+    The child here dies on telapy being absent rather than on a solver abort,
+    but the seam is the same: the parent still writes the run's only report."""
     rc = E.main(_write_manifest(tmp_path, _case(tmp_path)))
     assert rc == 1
     metrics = _metrics(tmp_path)
