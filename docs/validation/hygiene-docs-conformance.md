@@ -106,7 +106,7 @@ rather than by rewriting the line.
 
 | ruling | verdict | evidence |
 | --- | --- | --- |
-| every comment or docstring a better name or small extraction would remove becomes a row (file, line, comment, change, risk) | CONFORMS | `docs/READABILITY_LEDGER.md`, 254 rows in five columns |
+| every comment or docstring a better name or small extraction would remove becomes a row (file, line, comment, change, risk) | CONFORMS | `docs/READABILITY_LEDGER.md`, 257 rows in five columns (244 product + 13 tests) |
 | NOTHING is applied by the wave | CONFORMS | no row's change appears in any commit |
 | the row's LINE is usable | **DEVIATED at verify, fixed here** | 74 rows named a line the trims had moved; all 241 original rows were re-resolved by symbol at HEAD and 139 now name a new line |
 | tests/ carries rows of its own | **DEVIATED at verify, fixed here** | zero rows from `tests/` at verify; 13 added, twelve of them one class the product tree does not have (a helper copied verbatim into up to nine files) |
