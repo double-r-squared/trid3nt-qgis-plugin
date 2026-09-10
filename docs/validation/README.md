@@ -36,6 +36,7 @@ order and the open-questions list were superseded by the rulings in
 | `worker-unification-conformance.md` | the worker-unification port |
 | `emission-fold-presets-conformance.md`, `emission-fold-store-conformance.md` | the emission fold's two halves |
 | `fetcher-fold-conformance.md` | the fetcher fold |
+| `hygiene-docs-conformance.md` | the hygiene and docs wave's eleven charter entries, its four deviations and its LOC |
 | `worker-unification-proof-interrogation.md` | the adversarial pre-delivery read of that wave's proofs |
 
 ## Stage records and measurements
