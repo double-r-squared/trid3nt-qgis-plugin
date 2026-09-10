@@ -1464,8 +1464,8 @@ class CredentialCard(QFrame):
         lay.addWidget(title_lbl)
 
         if request.message:
-            # The agent's user-facing explanation, verbatim (Invariant 1 --
-            # never paraphrased client-side).
+            # The agent's user-facing explanation, VERBATIM: never
+            # paraphrased client-side.
             message_lbl = QLabel(request.message)
             message_lbl.setWordWrap(True)
             message_lbl.setTextFormat(Qt.TextFormat.PlainText)
@@ -2086,8 +2086,7 @@ class RegionChoiceCard(QFrame):
         lay.addWidget(title_lbl)
 
         if request.message:
-            # The agent's honest "snapped to the whole state, offering a
-            # narrower pick" prompt, verbatim (Invariant 1).
+            # The agent's own prompt, VERBATIM.
             msg_lbl = QLabel(request.message)
             msg_lbl.setWordWrap(True)
             msg_lbl.setTextFormat(Qt.TextFormat.PlainText)
