@@ -3930,3 +3930,107 @@ tree, so git cannot restore them: `8b-lessons-sweep.log`, `lessons-on-sweep.log`
 `usability-sweep.log`. They are the raw console tails of the same closed
 experiment; they were moved aside rather than destroyed and the folder is empty
 on disk.
+
+## docs/decisions - 106 records and the index, 2026-09-10
+
+Read one at a time against the tree before the folder went, and the verdicts
+were overwhelmingly STATED: the constraint the record carried is live and is
+already said at the line it governs, in `docs/model/`, in `AGENTS.md` or in
+`docs/CONVENTIONS.md`. The rest were GONE (the subject - an engine, a cloud, a
+composer, a coded fetcher - left the tree, so there is no line for the record to
+govern) or HISTORY (a true account of a landing whose outcome IS the tree).
+
+EIGHT constraints had no second home and were moved BEFORE this cut, each into
+something a clone carries:
+
+| constraint | destination |
+|---|---|
+| consequential code runs only on the user's own approval, and a gate never answered EXPIRES into a typed refusal | `ConsequentialCodeIsUserGated`, `docs/model/tool-plane.sysml` |
+| the model is handed a minted HANDLE, never a store path; an unresolvable reference is a typed refusal, never a guessed rewrite | `TheModelIsHandedAHandleNotAUri`, `docs/model/emission-seam.sysml` |
+| one process, one user; a service split is revisited at more than one CONCURRENT user, not at remote access | comment block at `run()`, `trid3nt_server/main.py` |
+| SEARCH is the front door for a large occasionally-touched surface, ENUMERATION only for a small always-needed floor | comment block at `CORE_FLOOR`, `trid3nt_server/tools/search/tool_retrieval.py` |
+| a template DECLARES the artifact it solves on; retrieval never picks a simulation's inputs | comment block at `Producer`, `trid3nt_server/workflows/runtime/data.py` |
+| one published study supplies BOTH the NLCD curve number and the roughness, so a swap is an author decision and never a shim | comment block at `NLCD_CN_MANNING`, `.../rain_on_grid/cn_infiltration.py` |
+| rationale lives in the rulings record or nowhere; a comment may not defer to a decision folder | `docs/CONVENTIONS.md` |
+| a drawing of LIVE STRUCTURE belongs in `docs/model/`, regenerated and suite-checked | `docs/CONVENTIONS.md` |
+
+Four more, whose only statement anywhere was a ruling and so had no home in a
+clone at all, were lifted in the same pass: the source-is-a-declaration rule
+(`tools/fetchers/__init__.py`), the atomic-tool rule (above `register_tool`,
+`tools/__init__.py`), the one-template-one-question rule (above
+`register_workflow`, `workflows/runtime/workflow.py`), and the spec format
+(`docs/CONVENTIONS.md`, "The spec").
+
+Two guard sites died with the folder rather than before it, because each named
+the folder to work: `tests/hygiene/test_dead_references.py` loses the
+`docs/decisions/README.md` carve-out from `_live_docs()` (the index was skipped
+because 106 link rows are not claims about the tree), and
+`tests/hygiene/test_map_readmes.py` loses
+`test_the_decisions_index_is_the_folder`, which held the index and the folder in
+agreement and now has neither.
+
+`README.md` - the folder's index and its own convention, "a record is BINDING or
+it is DELETED" - goes with it. That convention is what the charter replaces.
+
+Deleted, the 106 records:
+
+`0001-standalone-qgis-product.md`, `0002-monolith-until-multiuser.md`,
+`0003-simplicity-over-completeness.md`, `0004-zero-legacy-naming.md`,
+`0006-local-only-cloud-strip.md`, `0008-discovery-vs-fetchers.md`,
+`0009-sim-owned-typed-inputs.md`, `0010-analysis-playground.md`,
+`0011-code-exec-approval-gate.md`, `0012-typo-tolerant-retrieval.md`,
+`0013-prompt-to-code-enforcement.md`, `0014-layer-handles-not-uris.md`,
+`0015-vendored-wheel.md`, `0019-on-demand-capability-search.md`,
+`0020-remote-single-user.md`, `0023-us-only-paper-first-replication.md`,
+`0025-template-library-knob-manifests.md`, `0027-session-durability.md`,
+`0028-dual-socket-session-registries.md`,
+`0030-aoi-pinned-to-solve-domain.md`, `0031-layeruri-emission-integrity.md`,
+`0035-local-solver-io-contract.md`, `0036-fetcher-fold-router-core.md`,
+`0043-processing-wave.md`, `0044-ingest-transport-httpx-opener.md`,
+`0048-processing-decloud.md`, `0051-observability-retention-batch.md`,
+`0056-hook-contract-wave10.md`, `0058-hygiene-batch-case-hydration.md`,
+`0060-open-case-restores-layers.md`, `0062-credentials-qgis-collapse.md`,
+`0063-chained-resolution-mode.md`, `0073-envelope-hook.md`,
+`0074-river-delegate.md`, `0076-record-delegate-resolve.md`,
+`0087-animation-wave1.md`, `0094-door-dissolution.md`, `0095-hygiene-wave.md`,
+`0103-plugin-repo-cull-denoise.md`, `0105-composer-dissolution.md`,
+`0106-structured-provenance.md`, `0107-two-mode-input-gate.md`,
+`0108-pysheds.md`, `0110-provenance-channel-topobathy.md`,
+`0114-run-chat-invocation.md`, `0116-remote-streaming.md`,
+`0117-living-atlas.md`, `0119-charts-window.md`,
+`0158-strict-parsers-and-hermeticity.md`,
+`0159-sfincs-native-mesh-and-draw-supply.md`, `0175-showcase-case-seeding.md`,
+`0177-vocabulary-audit.md`, `0179-plugin-zip-endpoint.md`,
+`0180-layer-emission-audit.md`, `0198-honesty-floor-fixes.md`,
+`0203-aorc-lter-fetchers.md`, `0206-telemac-hyetograph-rain.md`,
+`0223-transparency-fix-batch.md`, `0224-resolution-doctrine.md`,
+`0225-declared-resolutions.md`, `0231-input-layer-parity.md`,
+`0232-resolve-resolution-util.md`, `0233-runs-retention.md`,
+`0244-emit-on-fetch.md`, `0262-server-refactor-wave2-chop.md`,
+`0264-server-refactor-wave4.md`, `0265-server-refactor-finale.md`,
+`0271-provider-neutral-seam.md`, `0273-gate-collapse.md`,
+`0274-flat-layout.md`, `0275-contracts-plugin-flatten.md`,
+`0276-categories-chop.md`, `0277-fragmentation.md`,
+`0278-core-dissolution.md`, `0280-emit-on-solve.md`,
+`0283-telemac-mesh-leg.md`, `0285-law9-consequence-tag.md`,
+`0289-fallback-ladders-f1.md`, `0290-fallback-ladders-f1b.md`,
+`0291-fallback-ladders-f1c.md`, `0292-fallback-ladders-f1d.md`,
+`0293-fallback-ladders-f1e.md`, `0294-publish-manifest-frame-collapse.md`,
+`0297-staged-dataset-fetchers-groundwater-recharge.md`,
+`0298-zell-sanford-water-table-depth-and-derived-saturated-thickness.md`,
+`0299-fallback-ladders-f2.md`, `0300-fallback-ladders-f2b.md`,
+`0301-anthropic-adapter.md`, `0304-form-and-draw-cards.md`,
+`0305-river-dye-migration-and-the-live-run-harness.md`,
+`0309-telemac-discharge-event-time.md`, `0310-temporal-transforms-v1.md`,
+`0311-per-model-context-budget-seam.md`,
+`0312-workflow-skeleton-and-the-two-template-cohort.md`,
+`0313-emission-is-automatic-publish-layer-dies.md`,
+`0315-the-coastal-split-the-resolution-label-and-the-context-slot.md`,
+`0316-the-catchment-shape-and-the-mesh-front-the-rain-on-grid-migration.md`,
+`0317-the-fetch-migration-and-the-engine-room.md`,
+`0318-the-reach-family-migration-and-the-river-that-is-visible.md`,
+`0319-rerun-with-overrides-and-coupled-validity.md`, `0320-spec-format.md`,
+`0322-the-data-class-body-and-first-class-parking.md`,
+`0324-the-code-exec-box.md`,
+`0325-the-catchment-outlet-holds-a-derived-rating-curve.md`,
+`0326-the-preset-family.md`, `0327-one-store-one-scheme.md`.

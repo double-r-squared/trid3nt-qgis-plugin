@@ -120,8 +120,6 @@ def _live_docs() -> list[str]:
     live = ["Makefile", *LAW_DOCS]
     for path in source.markdown_files():
         rel = str(path.relative_to(source.REPO_ROOT))
-        if rel == "docs/decisions/README.md":
-            continue
         if path.name == "README.md" or rel.startswith(LIVE_DOC_ROOTS):
             live.append(rel)
     return live
