@@ -81,7 +81,7 @@ so a record that is not listed here does not exist.
 - [0271 - server-refactor wave 12: provider-neutral model-dispatch seam](0271-provider-neutral-seam.md)
 - [0273 - Confirm-gate collapse: declarative GateSpec, one generic engine](0273-gate-collapse.md)
 - [0274 - flat layout: src/trid3nt_server -> trid3nt_server, services/workers -> workers](0274-flat-layout.md)
-- [0275 - flatten the last two single-child nestings: contracts/src -> contracts, qgis-plugin/trid3nt -> plugin](0275-contracts-plugin-flatten.md)
+- [0275 - flatten the last two single-child nestings, into `contracts/` and `plugin/`](0275-contracts-plugin-flatten.md)
 - [0276 - chop the category routing layer; hardwire retrieval-enforce](0276-categories-chop.md)
 - [0277 - fragmentation: the agent/ namespace dies](0277-fragmentation.md)
 - [0278 - core dissolution: `server/_core.py` goes to zero](0278-core-dissolution.md)

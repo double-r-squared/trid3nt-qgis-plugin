@@ -512,3 +512,15 @@ it is never a move candidate. It joins the `test-server` slice.
 
 Scope delta: `git ls-files tests plugin/tests contracts/tests` gains five files,
 344 pure LOC.
+
+## Added by the docs stage: the proof-coverage guard
+
+Read end to end by the agent that wrote it. Same columns.
+
+| path | pure | hist | fate | note |
+| --- | ---: | ---: | --- | --- |
+| `tests/hygiene/test_proof_coverage.py` | 29 (28) | 0 | KEEP | The fourth guard: a registered template with no `docs/proof/templates/<name>/` directory is a gap, not a silence. The coverage assertion FAILS today and is `xfail(strict=True)` with the three live templates that have never had a packet assembled named in `AWAITING_FIRST_PACKET` and the condition stated. Two companion assertions keep the exemption from rotting: the set may name only templates that register, and a name whose directory appears must leave it - which the strict xfail also catches as an unexpected pass. Module docstring is 3 content lines against the 5-line limit; no function carries one. It joins the `test-server` slice with its siblings. |
+
+Scope delta: one file, 29 pure LOC (28 as `loc_report` prints it - the
+double-subtracted blank inside the module docstring, the same instrument defect
+every lens records).
