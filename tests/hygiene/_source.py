@@ -234,7 +234,12 @@ SPEC_NOTATION = (
 
 ATTRIBUTION = r"\bNATE\b|\bNate\b"
 
-MEMORY_FILENAMES = r"\b(?:feedback|project|reference)_[a-z0-9_]{4,}\.md\b"
+# A memory note is named the same way with or without its extension, and the
+# bare form is the one that reads as prose rather than as a path.
+MEMORY_FILENAMES = (
+    r"\b(?:feedback|project|reference)_[a-z0-9_]{4,}\.md\b"
+    r"|\b(?:feedback|project|reference)(?:_[a-z0-9]+){4,}\b"
+)
 
 EXAMPLES = r"(?m)^[\s#:]*(?:>>>|Examples?:|Usage:)"
 

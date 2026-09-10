@@ -3,7 +3,7 @@
 NATE-shaped design (2026-08-17 discussion), approved as written.
 Replaces hidden substitution everywhere with one declared, visible,
 gated mechanism. Proving case: the SWAN bathymetry rectangle
-(docs/design/fallback-audit.md, the mosaic land-fill exhibit).
+(docs/validation/fallback-audit.md, the mosaic land-fill exhibit).
 
 Waves F1 (ADR 0289), F1b (ADR 0290), F1c (ADR 0291), F1d (ADR 0292), F1e (ADR
 0293) and F2 (ADR 0299) are LANDED - read "As built" at the bottom for the
@@ -249,4 +249,4 @@ guard against naked substitution).
 - A COMPOSER THAT NEEDS A BED DECLARES ITS RUNG. The `coastal_edge` mesher
   joined the four `fetch_topobathy` callers; a coastal mesh
   is the wet domain, so a bed it cannot get honestly is a REFUSAL, not a land
-  DEM. `tests/test_fallback_sweep_guard.py` holds the call-site guard.
+  DEM. `tests/fetchers/test_fallback_sweep_guard.py` holds the call-site guard.

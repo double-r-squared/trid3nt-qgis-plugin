@@ -558,8 +558,8 @@ row from any lens. All six were read end to end for this table.
 | `public_data_source_catalog.yaml` | the vetted public data-source catalog `catalog_search` and `catalog_fetch` read (30 entries), found by `tools/search/catalog_common.py` walking up from its own file | SWEPT. It carried the largest single concentration of disallowed prose left in the tree: a header block of `FR-PHC-4`, four SRS section marks, `job-0046-research-20260607` and `sprint-08 Stage A`; thirty `# LIVE PROBE 2026-06-07:` comment stamps restating each entry's own `last_verified` field; three `DEVIATION FROM KICKOFF` comments; five `job-0` and one `OQ-4` label inside `how_to_use` prose the model reads; and a closing DOMAIN GAPS block citing "kickoff section 5" and deferring twice to `sprint-09`. Every one of them is gone and every constraint they wrapped is kept at its own line. The DATA is untouched: `last_verified` stays (it is the checkable place the stamps were restating) and `curator_job: "job-0046-research-20260607"` stays too - removing a key is a data-shape change, not documentation, and nothing reads it. |
 | `CLAUDE.md` | the session bootstrap that points at `AGENTS.md` | KEEP. Prose about how to start a session, no disallowed class. |
 | `Makefile` | the orchestration and suite targets | KEEP. Its comment block states the six-slice invocation and why the cache bucket is unset; both are constraints. No moved-script or five-slice reference survives in it. |
-| `pyproject.toml` | build + pytest configuration | KEEP. `--import-mode=importlib` and the timeout are stated, nothing else. |
-| `.gitignore`, `.dockerignore` | ignore lists | KEEP. Path lists, no prose. |
+| `pyproject.toml` | build + pytest configuration | ROW CORRECTED IN ROUND 3, and SWEPT. The verdict above read "`--import-mode=importlib` and the timeout are stated, nothing else", which is a claim about the `[tool.pytest.ini_options]` table and not about the file: 246 of its 339 lines are comment, and they carried 48 marker hits - eleven `job-0xxx`, five `sprint-xx`, seven `OQ-nn`, three `ADR 0nnn`, six `Wave n.nn`, two section marks, one `NATE` attribution and a dated vendoring stamp - over a cloud-decommission changelog and three references to files that are not in the tree (`infra/THIRD_PARTY_LICENSES.md`, `mcp.py`, `_router/hooks/hyriver.py` at a path the fetcher fold moved). Every dependency line and every table is byte-identical after the sweep; only comments changed. Each comment now states the constraint its pin carries. REPORTED, not touched: `[tool.setuptools.package-data]` still ships `workflows/sfincs/manning_mapping.csv`, which left the tree with the SFINCS engine - editing package-data is a build surface, not documentation. |
+| `.gitignore`, `.dockerignore` | ignore lists | ROW CORRECTED IN ROUND 3. "Path lists, no prose" is true of `.dockerignore` and false of `.gitignore`, which carries eight comment blocks; one of them labelled the HEC-RAS reference-deck rule `ADR 0199`, a record this wave deleted. The label is gone and the rule it labelled stays. |
 | `ollama/Modelfile.qwen3-8b-24k` | the local-model context override | KEEP. Parameter lines only. |
 
 `wheels/pfdf-3.0.4-py3-none-any.whl` is a binary artifact and carries no prose.
@@ -604,3 +604,58 @@ can follow whatever the page's vintage.
 remain where round 1 left them: landed plans whose lens verdict is REWRITE and
 whose census ruling would delete them outright. That fate is still not a
 critic's to choose.
+
+## Completeness critic, round 3: the surfaces no guard reads
+
+Rounds 1 and 2 both worked the markdown and the Python. Round 3 asked what
+neither reaches: prose that is neither a docstring nor a comment nor a page.
+Three seams carried residue, and one class of dead reference outlived its own
+work queue.
+
+| where | what round 3 found | what landed |
+| --- | --- | --- |
+| `pyproject.toml` | 246 comment lines under a row claiming the file states nothing but the pytest options; 48 marker hits across every banned class | comments swept to the constraint each pin carries; dependency lines byte-identical; the row rewritten above |
+| `.gitignore` | an `ADR 0199` label on the HEC-RAS reference-deck rule, under a row claiming no prose | label gone, rule kept; the row rewritten above |
+| `contracts/trid3nt_contracts/tool_registry.py` | two pydantic `Field(description=...)` strings carry a `Wave 2` label and a bare memory-note name, and pydantic exports both verbatim into `contracts/schemas/atomic_tool_metadata.json` | both descriptions trimmed to the contract; `export_schemas` re-run so the committed schema matches |
+| `trid3nt_server/server/dispatch/emitter.py` | the sync-offload refusal message names a memory note | the refusal keeps its reason and drops the pointer; no test pins the text |
+| `docs/design/emission.md`, `docs/design/fallback-ladders.md` | four paths the wave itself moved or deleted: `tests/test_outputs_seam.py`, `tests/test_fallback_sweep_guard.py`, `docs/design/fallback-audit.md`, and a fork contract pinned in a test the engine purge deleted | the three moved targets repointed; the clause naming the deleted composer and its deleted test reduced to the fork rule itself |
+
+### Why the guards did not see any of it
+
+The three code seams are all STRING LITERALS. `tests/hygiene/_source.py` reads
+docstrings and comment tokens, so a `Field(description=...)`, an error message
+and a system prompt are outside every sweep. The memory-note class had a second
+hole of its own: `MEMORY_FILENAMES` required a `.md` suffix, and a note is cited
+by its bare name at least as often. The pattern now matches both forms and is
+proven on a seeded break; it stays narrow enough (a prefix plus four
+underscore-separated words) that live identifiers like `project_qgs_uri` and
+`reference_layers` do not trip it.
+
+The literal SCOPE is deliberately still out, and this is the round's one
+reported item rather than a fix. Extending the sweep to every string literal
+reds on three populations at once: test data whose case ids contain a job
+number, ISO-8601 format illustrations inside param descriptions, and
+`adapter.py`'s `SYSTEM_PROMPT`, whose own census row already records the
+markers it carries (`Stage 4 anchor A3`, `Wave 4.10`, `job F71`, `F96`, `F97`,
+`NATE 2026-06-17` x3) and rules that "editing it changes model behavior, so it
+is REPORTED, not touched". A guard cannot land over a population the wave has
+ruled it will not clean. The measured remainder outside that prompt is four
+lines: `tools/search/ogc_adapter.py:307` and `workflows/solver/solver.py:1095`
+name a tracker id and a retired milestone plan inside user-visible refusal
+text, `testing/proof_animations.py:285` carries a dated ledger pointer in
+narration, and `scripts/drivers/seed_showcase_cases.py:158` carries an
+attribution in a case description. All four are prose inside a function body,
+which the charter puts outside a documentation-only wave.
+
+### Reported, not fixed: emission.md's engine campaign
+
+`docs/design/emission.md` had its REWRITE verdict withdrawn in round 1 on a
+narrow test (it does describe the four data KINDS and `restyle_layer`). Read
+against the tree, lines 47-301 are a per-engine emit-on-solve campaign record
+naming ten engines, eight of which are gone: SFINCS, GeoClaw, SWAN, SWMM,
+Landlab and SCHISM composers, worker producers and proof runs, none of which a
+reader can open. The seam itself (`outputs_seam.py`, the `outputs.json` schema,
+the TELEMAC L-class mesh path) is live, so the page cannot simply be deleted the
+way `docs/site/engines.md` was rewritten - it needs a rewrite that keeps the
+live mechanism and drops the campaign. That is a fate call on a design page, not
+a critic's correction.

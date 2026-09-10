@@ -211,8 +211,7 @@ class AtomicToolMetadata(GraceModel):
             "True if this tool accepts ``bbox=None`` to mean global/CONUS-wide "
             "query. Default False (safer — tools opt in). When False, calling "
             "with ``bbox=None`` must raise ``ToolInputError(code='BBOX_REQUIRED', "
-            "retryable=False)`` BEFORE issuing any network call. See memory: "
-            "feedback_layer_global_bbox_policy."
+            "retryable=False)`` BEFORE issuing any network call."
         ),
     )
 
@@ -222,10 +221,9 @@ class AtomicToolMetadata(GraceModel):
             "Optional reference (Python identifier) to a callable in the tool "
             "module's ``__init__`` that estimates expected payload MB given "
             "the tool's args. The callable signature is "
-            "``estimate_payload_mb(**args) -> float``. The Wave 2 chat-warning "
-            "system (``tool-payload-warning`` envelope) reads this metadata to "
-            "decide when to gate a large fetch behind explicit user "
-            "confirmation. See memory: feedback_large_payload_chat_warning."
+            "``estimate_payload_mb(**args) -> float``. The chat-warning system "
+            "(``tool-payload-warning`` envelope) reads this metadata to decide "
+            "when to gate a large fetch behind explicit user confirmation."
         ),
     )
 

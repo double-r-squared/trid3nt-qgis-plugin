@@ -318,8 +318,7 @@ def _assert_sync_offload_safe() -> None:
         raise RuntimeError(
             "TRID3NT_SYNC_TOOL_OFFLOAD is armed (mode=%r) but these sync tools "
             "reference the loop-bound emitter API and are UNSAFE to off-load: "
-            "%s. Refusing to start. (See "
-            "feedback_no_sync_blocking_on_asyncio_loop.)"
+            "%s. Refusing to start."
             % (_SYNC_OFFLOAD_MODE, ", ".join(sorted(offenders)))
         )
     if uninspectable:

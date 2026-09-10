@@ -36,13 +36,11 @@ into the layer + pipeline frames the QGIS plugin renders over the WebSocket.
   scalar = log-only. `layer_id` is
   deterministic + idempotent from `(quantity, t-ordinal, run_id)`; the legend is
   STASHED side-band (byte-identical to `register_manifest_layers`). Proven
-  field-for-field byte-equivalent in `tests/test_outputs_seam.py`. Carries the
+  field-for-field byte-equivalent in `tests/emission/test_outputs_seam.py`. Carries the
   parallel `PublishedFrame` replay meta (`t` / `group_id`) for the item-7
-  persistence stamp. WIRED into the flood composer (`flood/flood.py`): a
-  seam-or-legacy fork -- `outputs.json` present -> the seam owns ALL publication,
-  `publish_manifest.json` supplies ONLY the `FloodMetrics` narration scalars
-  (the metrics carrier); absent -> the legacy register/on-box paths run
-  byte-unchanged. Fork contract pinned in `tests/test_flood_seam_fork.py`.
+  persistence stamp. A composer reads it as a seam-or-legacy fork:
+  `outputs.json` present -> the seam owns ALL publication; absent -> the legacy
+  register/on-box paths run byte-unchanged.
 
 ## emit-on-solve (`outputs.json`) -- FROZEN schema, foundation landed
 
