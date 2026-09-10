@@ -60,3 +60,6 @@ docs/validation/code-graph/graph.json
 
 # the rulings record stays local; git holds the code, not the decisions
 docs/IDEAS.md
+
+# the local model build recipe is machine setup, not product
+ollama/
