@@ -39,7 +39,7 @@ copy-pasting file paths.
   `/vsis3/`. There is no export step and nothing is downloaded.
 - **Mesh outputs (MDAL)** -- a solver's native mesh (a TELEMAC `.slf`, a
   SFINCS `sfincs_map.nc`) loads as a first-class `QgsMeshLayer` alongside the
-  exported GeoTIFFs/vectors, with its CRS set automatically and its declared
+  case's rasters and vectors, with its CRS set automatically and its declared
   preset bound to the dataset group that preset names; a quantity none of the
   mesh's groups answers to keeps MDAL's own default and says so in the dock.
   Every dataset group the solver wrote stays selectable from Layer Properties.
