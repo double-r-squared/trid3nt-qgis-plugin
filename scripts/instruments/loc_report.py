@@ -17,11 +17,11 @@ STATEMENT_ENDS = {tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT, tokenize.E
 def classify(path: str) -> tuple[int, int, int, int]:
     text = open(path, "rb").read().decode("utf-8", errors="replace")
     lines = text.splitlines()
-    total, blank = len(lines), sum(1 for ln in lines if not ln.strip())
+    total = len(lines)
     try:
         toks = list(tokenize.generate_tokens(io.StringIO(text).readline))
     except (tokenize.TokenError, SyntaxError):
-        return total, blank, 0, 0
+        return total, sum(1 for ln in lines if not ln.strip()), 0, 0
     comment: set[int] = set()
     doc: set[int] = set()
     for i, t in enumerate(toks):
@@ -36,6 +36,10 @@ def classify(path: str) -> tuple[int, int, int, int]:
                 k += 1
             if (j < 0 or toks[j].type in STATEMENT_ENDS) and (k >= len(toks) or toks[k].type == tokenize.NEWLINE):
                 doc.update(range(t.start[0], t.end[0] + 1))
+    # The four counts partition the file, so a blank line inside a docstring is
+    # docstring and nothing else; counting it as blank as well would subtract it
+    # twice out of pure code.
+    blank = sum(1 for n, ln in enumerate(lines, 1) if not ln.strip() and n not in doc)
     return total, blank, len(comment), len(doc)
 
 
