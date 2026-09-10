@@ -5,6 +5,302 @@ Append-only with dates; promote to an ADR/build item when picked up.
 (NATE 2026-07-26: "keep a rolling list of these ideas because nothing has
 been written yet but I don't want you to forget it.")
 
+## Index
+
+Generated from the headings below - one entry per ruling, in the order
+they were made. Nothing here is content; the rulings are unchanged.
+
+- [2026-08-03 - Loud, user-gated cross-dataset fallbacks (NATE)](#2026-08-03---loud-user-gated-cross-dataset-fallbacks-nate)
+- [2026-08-03 - Charts window: TUFLOW Viewer pattern + template output accounting (NATE)](#2026-08-03---charts-window-tuflow-viewer-pattern-template-output-accounting-nate)
+- [2026-08-03 - USER TOOL BUILDER (NATE, tabbed for later integration)](#2026-08-03---user-tool-builder-nate-tabbed-for-later-integration)
+- [2026-08-05 - Real-lakes ensemble recipe (NATE + orchestrator discussion)](#2026-08-05---real-lakes-ensemble-recipe-nate-orchestrator-discussion)
+- [2026-08-05 - Drawn-geometry supply path for gated spatial knobs (NATE)](#2026-08-05---drawn-geometry-supply-path-for-gated-spatial-knobs-nate)
+- [2026-08-05 - GeoClaw eta (wave anomaly) product layer (NATE, via Clawpack gallery)](#2026-08-05---geoclaw-eta-wave-anomaly-product-layer-nate-via-clawpack-gallery)
+- [2026-08-05 - geoclaw-landspill engine candidate (NATE)](#2026-08-05---geoclaw-landspill-engine-candidate-nate)
+- [2026-08-05 - Strict worker spec parsers (from the ADR 0148 lesson)](#2026-08-05---strict-worker-spec-parsers-from-the-adr-0148-lesson)
+- [2026-08-06 - Offline-suite hermeticity: mock the Atlas-14 lookup](#2026-08-06---offline-suite-hermeticity-mock-the-atlas-14-lookup)
+- [2026-08-06 - Real quadtree run to replace the fixture mesh proof (NATE)](#2026-08-06---real-quadtree-run-to-replace-the-fixture-mesh-proof-nate)
+- [2026-08-06 - Order-dependent SFINCSSetupError reload flake (0162 finding)](#2026-08-06---order-dependent-sfincssetuperror-reload-flake-0162-finding)
+- [2026-08-06 - Layer-emission audit (NATE norm)](#2026-08-06---layer-emission-audit-nate-norm)
+- [2026-08-06 - Wellhead-protection track: REEVAL flag (NATE)](#2026-08-06---wellhead-protection-track-reeval-flag-nate)
+- [2026-08-06 - "Hazard" vocabulary audit (NATE identity correction)](#2026-08-06---hazard-vocabulary-audit-nate-identity-correction)
+- [2026-08-08 - Mesh as optional user-supplied precondition (NATE design)](#2026-08-08---mesh-as-optional-user-supplied-precondition-nate-design)
+- [2026-08-12 - Procedural pipeline LIBRARY (NATE design sketch, no build yet - NOT a DSL: library code like OpenCV, plain well-named functions composed in ordinary Python)](#2026-08-12---procedural-pipeline-library-nate-design-sketch-no-build-yet---not-a-dsl-library-code-like-opencv-plain-well-named-functions-composed-in-ordinary-python)
+- [2026-08-12 - Zero-dependency chart rendering (NATE: why aren't libs included?)](#2026-08-12---zero-dependency-chart-rendering-nate-why-arent-libs-included)
+- [2026-08-12 - Universal target_resolution_m (DISCUSSION OPEN, do not build)](#2026-08-12---universal-target_resolution_m-discussion-open-do-not-build)
+- [2026-08-13 - Speculative-intervention gate (NATE design, DEFERRED until after the real-data proofs)](#2026-08-13---speculative-intervention-gate-nate-design-deferred-until-after-the-real-data-proofs)
+- [2026-08-13 - Fetcher-owned emission + ambient reusable assets (NATE design, DISCUSS-ONLY)](#2026-08-13---fetcher-owned-emission-ambient-reusable-assets-nate-design-discuss-only)
+- [2026-08-13 - Emit-on-fetch SETTLED SEMANTICS (NATE, discussion converged; build awaits go)](#2026-08-13---emit-on-fetch-settled-semantics-nate-discussion-converged-build-awaits-go)
+- [2026-08-16 - BMI coupling + the digital-twin loop (NATE direction)](#2026-08-16---bmi-coupling-the-digital-twin-loop-nate-direction)
+- [2026-08-19 - aquifer thickness goes derivable + two recon fronts](#2026-08-19---aquifer-thickness-goes-derivable-two-recon-fronts)
+- [2026-08-20 - recharge fetcher sources verified (NATE: research + build)](#2026-08-20---recharge-fetcher-sources-verified-nate-research-build)
+- [2026-08-20 addendum - recharge serving-endpoint probe + audit close](#2026-08-20-addendum---recharge-serving-endpoint-probe-audit-close)
+- [2026-08-21 - SWMM ecosystem recon: first concrete input (NATE: folded)](#2026-08-21---swmm-ecosystem-recon-first-concrete-input-nate-folded)
+- [2026-08-21 - F1d verifier side-observation (queued, not ladder work)](#2026-08-21---f1d-verifier-side-observation-queued-not-ladder-work)
+- [2026-08-21 - honesty follow-up batch (from the ADR 0295 verify lens)](#2026-08-21---honesty-follow-up-batch-from-the-adr-0295-verify-lens)
+- [2026-08-21 - aquifer thickness fork (ADR 0297); recharge landed](#2026-08-21---aquifer-thickness-fork-adr-0297-recharge-landed)
+- [2026-08-21 (later) - the thickness fork is CLOSED (ADR 0298)](#2026-08-21-later---the-thickness-fork-is-closed-adr-0298)
+- [2026-08-21 - naming ruling (NATE): thickness keeps its name](#2026-08-21---naming-ruling-nate-thickness-keeps-its-name)
+- [2026-08-21 - F2b verifier observations, queued not fixed](#2026-08-21---f2b-verifier-observations-queued-not-fixed)
+- [2026-08-24 - wave-2 riders (NATE)](#2026-08-24---wave-2-riders-nate)
+- [2026-08-24 - Persist the chart SPEC + physical-answer metrics (do_min etc)](#2026-08-24---persist-the-chart-spec-physical-answer-metrics-do_min-etc)
+- [2026-08-24 - Verification/showcase runs surface as PERSISTENT showcase cases](#2026-08-24---verificationshowcase-runs-surface-as-persistent-showcase-cases)
+- [2026-08-24 - Proof-script rider (NATE 2026-08-24, scope CORRECTED same day)](#2026-08-24---proof-script-rider-nate-2026-08-24-scope-corrected-same-day)
+- [2026-08-24 - Context-budget seam (NATE 2026-08-24)](#2026-08-24---context-budget-seam-nate-2026-08-24)
+- [2026-08-24 - Two-tier testing doctrine (NATE 2026-08-24)](#2026-08-24---two-tier-testing-doctrine-nate-2026-08-24)
+- [2026-08-24 - Three-path testing model FINAL (NATE 2026-08-24)](#2026-08-24---three-path-testing-model-final-nate-2026-08-24)
+- [2026-08-24 - BED BATHYMETRY INPUT LAYER 404s ON THE RIVER FAMILY (queued](#2026-08-24---bed-bathymetry-input-layer-404s-on-the-river-family-queued)
+- [2026-08-24 - dev-tool-invoke flattens raised typed errors to INTERNAL_ERROR](#2026-08-24---dev-tool-invoke-flattens-raised-typed-errors-to-internal_error)
+- [2026-08-25 - TELEMAC family item (NATE spot-check 2026-08-25)](#2026-08-25---telemac-family-item-nate-spot-check-2026-08-25)
+- [2026-08-25 - ESCALATED (NATE spot-check 2026-08-25)](#2026-08-25---escalated-nate-spot-check-2026-08-25)
+- [2026-08-25 - NATE spot-check trio (2026-08-25, TELEMAC family wave items)](#2026-08-25---nate-spot-check-trio-2026-08-25-telemac-family-wave-items)
+- [2026-08-25 - WORKER PURITY PRINCIPLE](#2026-08-25---worker-purity-principle)
+- [2026-08-25 - TEMPORAL DOCTRINE](#2026-08-25---temporal-doctrine)
+- [2026-08-25 - TEMPORAL DOCTRINE EXTENSION](#2026-08-25---temporal-doctrine-extension)
+- [2026-08-25 - TEMPORAL TRANSFORMS v1 BLESSED (NATE 2026-08-25)](#2026-08-25---temporal-transforms-v1-blessed-nate-2026-08-25)
+- [2026-08-25 - SEQUENCING RULED](#2026-08-25---sequencing-ruled)
+- [2026-08-25 - SKELETON REFACTOR DEMOLITION CLAUSE](#2026-08-25---skeleton-refactor-demolition-clause)
+- [2026-08-24 - NO-DOUBLE-MIDDLEWARE LAW](#2026-08-24---no-double-middleware-law)
+- [2026-08-24 - SKELETON NAMING RULING](#2026-08-24---skeleton-naming-ruling)
+- [2026-08-24 - PUBLISH_LAYER TOOL KILLED (NATE 2026-08-24, ruling b)](#2026-08-24---publish_layer-tool-killed-nate-2026-08-24-ruling-b)
+- [2026-08-24 - MESH RULING COMPLETE](#2026-08-24---mesh-ruling-complete)
+- [2026-08-24 - SKELETON HARDENING METHODOLOGY](#2026-08-24---skeleton-hardening-methodology)
+- [2026-08-24 - SKELETON LOC LEDGER](#2026-08-24---skeleton-loc-ledger)
+- [2026-08-24 - TEMPLATE FILE READABILITY PRINCIPLE + COHORT LGTM](#2026-08-24---template-file-readability-principle-cohort-lgtm)
+- [2026-08-24 - CONSTANT-DOOR WIRE ENFORCEMENT](#2026-08-24---constant-door-wire-enforcement)
+- [2026-08-24 - STAGE-SEQUENCE ENFORCEMENT DEFERRED](#2026-08-24---stage-sequence-enforcement-deferred)
+- [2026-08-24 - ACQUIRE_DOMAIN SURFACE (NATE 2026-08-24, ruling a)](#2026-08-24---acquire_domain-surface-nate-2026-08-24-ruling-a)
+- [2026-08-24 - PHYSICS BUNDLE STAYS WHOLE](#2026-08-24---physics-bundle-stays-whole)
+- [2026-08-24 - FLEET MIGRATION ORDER](#2026-08-24---fleet-migration-order)
+- [2026-08-25 - COASTAL RESULTS MESH IS PUBLISHED AT A FALSE ORIGIN](#2026-08-25---coastal-results-mesh-is-published-at-a-false-origin)
+- [2026-08-25 - A `!run` DISPATCH EMITS NO COMPLETION `tool-io` FRAME (queued](#2026-08-25---a-run-dispatch-emits-no-completion-tool-io-frame-queued)
+- [2026-08-25 - TOMAWAC Hs COG WAS AT THE UTM FALSE ORIGIN (FIXED in the family](#2026-08-25---tomawac-hs-cog-was-at-the-utm-false-origin-fixed-in-the-family)
+- [2026-08-25 - THE OPEN-WATER "FIELD" RASTERS ARE DOT LATTICES, not fields](#2026-08-25---the-open-water-field-rasters-are-dot-lattices-not-fields)
+- [2026-08-25 - PER-WORKFLOW DELIVERY NORM](#2026-08-25---per-workflow-delivery-norm)
+- [2026-08-25 - 3D RENDERING CAPABILITY RULING (NATE 2026-08-25)](#2026-08-25---3d-rendering-capability-ruling-nate-2026-08-25)
+- [2026-08-25 - DOT-LATTICE FIX SHAPE RULED](#2026-08-25---dot-lattice-fix-shape-ruled)
+- [2026-08-25 - OPEN-WATER MESH-LAYER PUBLISHING GAP](#2026-08-25---open-water-mesh-layer-publishing-gap)
+- [2026-08-25 - RESOLUTION-SENSITIVITY RULING](#2026-08-25---resolution-sensitivity-ruling)
+- [2026-08-25 - CASE DATA DELETE-ON-WHIM](#2026-08-25---case-data-delete-on-whim)
+- [2026-08-25 - ARTEMIS RESOLUTION BOUND CONTRADICTS ITS OWN DEFAULT](#2026-08-25---artemis-resolution-bound-contradicts-its-own-default)
+- [2026-08-25 - do_sag DECLARES NO OUTPUT-CADENCE LEVER (found 2026-08-25](#2026-08-25---do_sag-declares-no-output-cadence-lever-found-2026-08-25)
+- [2026-08-25 - COASTAL PEAK RASTER PAINTS THE PERMANENT BAY](#2026-08-25---coastal-peak-raster-paints-the-permanent-bay)
+- [2026-08-25 - SETTER SENTIMENT INTO THE SKELETON](#2026-08-25---setter-sentiment-into-the-skeleton)
+- [2026-08-25 - DECISION 1 PLACEMENT AMENDED](#2026-08-25---decision-1-placement-amended)
+- [2026-08-25 - DECISION 1 THIRD CONSUMER](#2026-08-25---decision-1-third-consumer)
+- [2026-08-25 - DECISION 2 RULED](#2026-08-25---decision-2-ruled)
+- [2026-08-25 - RUN JOURNAL RULED](#2026-08-25---run-journal-ruled)
+- [2026-08-25 - USER-INPUT SPECIES RULED](#2026-08-25---user-input-species-ruled)
+- [2026-08-25 - PROOF FOLDER ORGANIZATION RULED](#2026-08-25---proof-folder-organization-ruled)
+- [2026-08-25 - STYLE MODIFIER GRAMMAR RULED](#2026-08-25---style-modifier-grammar-ruled)
+- [2026-08-25 - ANIMATION LEGEND SHIFT BUG](#2026-08-25---animation-legend-shift-bug)
+- [2026-08-25 - STYLE MODIFIER PRECISION](#2026-08-25---style-modifier-precision)
+- [2026-08-25 - DATA-DRIVEN SCALING RULED](#2026-08-25---data-driven-scaling-ruled)
+- [2026-08-25 - SCALE KNOB + RESTYLE TOOL RULED](#2026-08-25---scale-knob-restyle-tool-ruled)
+- [2026-08-25 - TEMPLATE DECLARATIONS SIBLING RULED](#2026-08-25---template-declarations-sibling-ruled)
+- [2026-08-25 - REUSE-SWEEP NORM + CANDIDATES](#2026-08-25---reuse-sweep-norm-candidates)
+- [2026-08-25 - PHYSICS NAME CONFIRMED + SIBLING SHAPE APPROVED](#2026-08-25---physics-name-confirmed-sibling-shape-approved)
+- [2026-08-25 - MESH WAVE CHARTER GROWS](#2026-08-25---mesh-wave-charter-grows)
+- [2026-08-25 - DECISION 6 RULED](#2026-08-25---decision-6-ruled)
+- [2026-08-25 - MESH WAVE ACCEPTANCE CASE RULED](#2026-08-25---mesh-wave-acceptance-case-ruled)
+- [2026-08-25 - CONFORMAL ENFORCEMENT REQUIRED](#2026-08-25---conformal-enforcement-required)
+- [2026-08-25 - EDITABLE MESH LAYERS RULED](#2026-08-25---editable-mesh-layers-ruled)
+- [2026-08-25 - .SUPPLIED() RENAME + THE SLATE PRINCIPLE (NATE 2026-08-25)](#2026-08-25---supplied-rename-the-slate-principle-nate-2026-08-25)
+- [2026-08-25 - ONE FLAGSHIP CANARY RULED](#2026-08-25---one-flagship-canary-ruled)
+- [2026-08-25 - WORKER DOCTRINE + FETCH-MIGRATION-FIRST RULED](#2026-08-25---worker-doctrine-fetch-migration-first-ruled)
+- [2026-08-25 - WORKER DOCTRINE RATIONALE](#2026-08-25---worker-doctrine-rationale)
+- [2026-08-25 - WORKER RATIONALE CORRECTED](#2026-08-25---worker-rationale-corrected)
+- [2026-08-25 - WORKER-PURITY INVENTORY](#2026-08-25---worker-purity-inventory)
+- [2026-08-25 - LOCAL-COORDINATE RESULT MESHES](#2026-08-25---local-coordinate-result-meshes)
+- [2026-08-25 - STEPS AUDIT](#2026-08-25---steps-audit)
+- [2026-08-26 - FLAGSHIP RUNS REFINED](#2026-08-26---flagship-runs-refined)
+- [2026-08-26 - BED-INPUT DOTS = THIRD NODE-DOT INSTANCE (NATE spot-check](#2026-08-26---bed-input-dots-third-node-dot-instance-nate-spot-check)
+- [2026-08-26 - TELEMAC REMAINS OPEN](#2026-08-26---telemac-remains-open)
+- [2026-08-26 - PROOF PACKET = THE DELIVERY MECHANISM (NATE 2026-08-26, "the](#2026-08-26---proof-packet-the-delivery-mechanism-nate-2026-08-26-the)
+- [2026-08-26 - DELETION POSTURE BIFURCATED + THE CAMPAIGN THESIS](#2026-08-26---deletion-posture-bifurcated-the-campaign-thesis)
+- [2026-08-26 - tools/meta/ CHOP CANDIDATE (NATE 2026-08-26)](#2026-08-26---toolsmeta-chop-candidate-nate-2026-08-26)
+- [2026-08-26 - data/ DELETED 2026-08-26 - the category-era fossil is gone](#2026-08-26---data-deleted-2026-08-26---the-category-era-fossil-is-gone)
+- [2026-08-26 - CHOP CANDIDATES VERDICTS](#2026-08-26---chop-candidates-verdicts)
+- [2026-08-26 - DOCUMENTATION STANDARD CARRIED FORWARD](#2026-08-26---documentation-standard-carried-forward)
+- [2026-08-26 - MALPASSET](#2026-08-26---malpasset)
+- [2026-08-26 - ANIMATED FIELD IS DECLARED](#2026-08-26---animated-field-is-declared)
+- [2026-08-26 - DOUBLE DEM FETCH](#2026-08-26---double-dem-fetch)
+- [2026-08-26 - COASTAL t0 WETTING RESOLVED + RUN-VS-CODE STALENESS GAP](#2026-08-26---coastal-t0-wetting-resolved-run-vs-code-staleness-gap)
+- [2026-08-26 - PROOF-LANE STINT 3](#2026-08-26---proof-lane-stint-3)
+- [2026-08-26 - SFINCS RETRIEVAL FLOOR IS FRAGILE](#2026-08-26---sfincs-retrieval-floor-is-fragile)
+- [2026-08-26 - `When` IS PRODUCTION-UNEXERCISED (RECORD-ONLY, same audit](#2026-08-26---when-is-production-unexercised-record-only-same-audit)
+- [2026-08-26 - `Step.kwargs` IS FROZEN SHALLOWLY (RECORD-ONLY, same audit](#2026-08-26---stepkwargs-is-frozen-shallowly-record-only-same-audit)
+- [2026-08-26 - TELEMAC3D SILENTLY FLOORS A LEGAL RESOLUTION ASK](#2026-08-26---telemac3d-silently-floors-a-legal-resolution-ask)
+- [2026-08-26 - THE STYLE CONTRACT CAN MIRROR ITSELF](#2026-08-26---the-style-contract-can-mirror-itself)
+- [2026-08-26 - REACH-FAMILY FETCH MIGRATION - THE MONSTER LEFT UNBROKEN](#2026-08-26---reach-family-fetch-migration---the-monster-left-unbroken)
+- [2026-08-26 - do_sag REFINED CANARY IS NON-DETERMINISTIC (found 2026-08-26](#2026-08-26---do_sag-refined-canary-is-non-deterministic-found-2026-08-26)
+- [2026-08-26 - SAME-SOURCE REUSE RULE - DESIGNED](#2026-08-26---same-source-reuse-rule---designed)
+- [2026-08-26 - COMPUTE-CLASS VOCABULARY RENAME](#2026-08-26---compute-class-vocabulary-rename)
+- [2026-08-26 - RIVER TRUTH RULED](#2026-08-26---river-truth-ruled)
+- [2026-08-26 - SAMPLE PURITY RULED](#2026-08-26---sample-purity-ruled)
+- [2026-08-26 - REACH-FAMILY MIGRATION LANDED](#2026-08-26---reach-family-migration-landed)
+- [2026-08-26 - FAIL-OPEN COSTS REPEATABILITY](#2026-08-26---fail-open-costs-repeatability)
+- [2026-08-26 - THE PROOF RENDERER SPOKE THE WRONG COLORMAP DIALECT](#2026-08-26---the-proof-renderer-spoke-the-wrong-colormap-dialect)
+- [2026-08-26 - STALE PANEL GENERATIONS IN FIVE PROOF FOLDERS](#2026-08-26---stale-panel-generations-in-five-proof-folders)
+- [2026-08-26 - TWO REFINED OPEN-WATER PINS WERE STALE](#2026-08-26---two-refined-open-water-pins-were-stale)
+- [2026-08-26 - REFERENCES ARE BENCHMARKS](#2026-08-26---references-are-benchmarks)
+- [2026-08-26 - RERUN-WITH-OVERRIDES LANDED](#2026-08-26---rerun-with-overrides-landed)
+- [2026-08-26 - CALIBRATION-LOOP GAP](#2026-08-26---calibration-loop-gap)
+- [2026-08-26 - CANARY REPLAY IS A DIRECT CALL NOW](#2026-08-26---canary-replay-is-a-direct-call-now)
+- [2026-08-26 - PARK AFTER CALIBRATION + OFFICIAL-TELEMAC-PYTHON RECON](#2026-08-26---park-after-calibration-official-telemac-python-recon)
+- [2026-08-26 - TELEMAC PARK-WORK LIST](#2026-08-26---telemac-park-work-list)
+- [2026-08-26 - TELAPY RULED IN + THE STEPPABLE-ENGINE BRIDGE](#2026-08-26---telapy-ruled-in-the-steppable-engine-bridge)
+- [2026-08-26 - THE FIVE-CATEGORY INPUT TAXONOMY + VERBS](#2026-08-26---the-five-category-input-taxonomy-verbs)
+- [2026-08-26 - BRIDGE + TEMPLATE FRAME NAMED; MESH = A SUBSTRATE (NATE](#2026-08-26---bridge-template-frame-named-mesh-a-substrate-nate)
+- [2026-08-26 - THE MESH TOOL SHAPE LOCKED](#2026-08-26---the-mesh-tool-shape-locked)
+- [2026-08-26 - VOCABULARY FIXED](#2026-08-26---vocabulary-fixed)
+- [2026-08-27 - SPEC TRIMMED](#2026-08-27---spec-trimmed)
+- [2026-08-27 - SPEC FORMAT FORMALIZED](#2026-08-27---spec-format-formalized)
+- [2026-08-27 - RENAME ops.solver_spec -> ops.solve (NATE 2026-08-27)](#2026-08-27---rename-opssolver_spec---opssolve-nate-2026-08-27)
+- [2026-08-27 - RENAME ops.read_results -> ops.read (NATE 2026-08-27)](#2026-08-27---rename-opsread_results---opsread-nate-2026-08-27)
+- [2026-08-27 - ROADMAP REORDERED](#2026-08-27---roadmap-reordered)
+- [2026-08-27 - MESH SESSION ECONOMICS](#2026-08-27---mesh-session-economics)
+- [2026-08-27 - MESH SPOT-CHECK DRIVER](#2026-08-27---mesh-spot-check-driver)
+- [2026-08-27 - GMSH MESHER RULED](#2026-08-27---gmsh-mesher-ruled)
+- [2026-08-27 - LANDSCAPE VERDICT + WIRING C VALIDATED](#2026-08-27---landscape-verdict-wiring-c-validated)
+- [2026-08-27 - REMESH ECONOMY REVISED + CAPABILITY PARAM RULED](#2026-08-27---remesh-economy-revised-capability-param-ruled)
+- [2026-08-27 - FOR= CONSUMER DECLARATION RULED (NATE 2026-08-27)](#2026-08-27---for-consumer-declaration-ruled-nate-2026-08-27)
+- [2026-08-27 - THREE-AXIS MESH SIGNATURE CONVERGED](#2026-08-27---three-axis-mesh-signature-converged)
+- [2026-08-27 - MESH SIGNATURE CONVERGED FINAL](#2026-08-27---mesh-signature-converged-final)
+- [2026-08-27 - GROUNDING UNIFICATION SCHEDULED + SPEC REWRITTEN CLEAN](#2026-08-27---grounding-unification-scheduled-spec-rewritten-clean)
+- [2026-08-27 - NATE'S GO ON THE DOMAIN/MESH MODEL](#2026-08-27---nates-go-on-the-domainmesh-model)
+- [2026-08-27 - D2-D5 RULED](#2026-08-27---d2-d5-ruled)
+- [2026-08-27 - SPEC-CONFORMANCE GATE](#2026-08-27---spec-conformance-gate)
+- [2026-08-27 - MCP PURGED](#2026-08-27---mcp-purged)
+- [2026-08-27 - GEOMETRY-BY-NAME + CANVAS PICKER](#2026-08-27---geometry-by-name-canvas-picker)
+- [2026-08-27 - TWO-POINT BOUNDARY PICK + UI-REWORK SEQUENCING](#2026-08-27---two-point-boundary-pick-ui-rework-sequencing)
+- [2026-08-27 - BOUNDARY INPUT CORRECTED](#2026-08-27---boundary-input-corrected)
+- [2026-08-27 - TESTING LANE EMPHASIS](#2026-08-27---testing-lane-emphasis)
+- [2026-08-28 - MESH WAVE CLOSED + ALL NINE DEVIATIONS RULED](#2026-08-28---mesh-wave-closed-all-nine-deviations-ruled)
+- [2026-08-28 - MODEL WAVE SURFACE DESIGN-STOPS RULED](#2026-08-28---model-wave-surface-design-stops-ruled)
+- [2026-08-28 - FRESH-START PURGE + TELAPY INTERIOR RULED](#2026-08-28---fresh-start-purge-telapy-interior-ruled)
+- [2026-08-28 - THE LEGO RULING](#2026-08-28---the-lego-ruling)
+- [2026-08-28 - DS RULINGS](#2026-08-28---ds-rulings)
+- [2026-08-28 - SQUARE TWO](#2026-08-28---square-two)
+- [2026-08-28 - SQUARE TWO SPEC PUBLISHED](#2026-08-28---square-two-spec-published)
+- [2026-08-29 - RIBBON RULING](#2026-08-29---ribbon-ruling)
+- [2026-08-29 - APPROXIMATE-REACH RULING](#2026-08-29---approximate-reach-ruling)
+- [2026-08-29 - MRE MINIMALISM](#2026-08-29---mre-minimalism)
+- [2026-08-29 - TOOLS-STAGE STOPS RULED](#2026-08-29---tools-stage-stops-ruled)
+- [2026-08-29 - REMEDY-STAGE STOPS RULED](#2026-08-29---remedy-stage-stops-ruled)
+- [2026-08-29 - DECLARED-INPUT CONTRACTS](#2026-08-29---declared-input-contracts)
+- [2026-08-29 - COMPATIBLE CONTRACT RULED](#2026-08-29---compatible-contract-ruled)
+- [2026-08-29 - ACCEPTS RULED + THREE IMPLEMENTATION STOPS](#2026-08-29---accepts-ruled-three-implementation-stops)
+- [2026-08-30 - P1 ADOPTED + ACCEPTS HOME RATIFIED](#2026-08-30---p1-adopted-accepts-home-ratified)
+- [2026-08-30 - ELEGANCE REVIEW](#2026-08-30---elegance-review)
+- [2026-08-30 - REPOINT STOPS RULED](#2026-08-30---repoint-stops-ruled)
+- [2026-08-30 - AUTO EDGE DIES](#2026-08-30---auto-edge-dies)
+- [2026-08-30 - WORKER-UNIFICATION WAVE PLANNED + APPROVED](#2026-08-30---worker-unification-wave-planned-approved)
+- [2026-08-30 - ELEGANCE REVIEW P2-P7 LANDED](#2026-08-30---elegance-review-p2-p7-landed)
+- [2026-08-30 - BASELINE DESIGN-STOPS RULED](#2026-08-30---baseline-design-stops-ruled)
+- [2026-08-30 - SIZING SURFACE RULED](#2026-08-30---sizing-surface-ruled)
+- [2026-08-30 - DATA IS A CLASS BODY](#2026-08-30---data-is-a-class-body)
+- [2026-08-30 - BANKS COVERAGE IS MEASURED](#2026-08-30---banks-coverage-is-measured)
+- [2026-08-30 - BANKS WINDOW RULED](#2026-08-30---banks-window-ruled)
+- [2026-08-30 - TEST CULL WAVE DIRECTED](#2026-08-30---test-cull-wave-directed)
+- [2026-08-30 - DECLARATIVE EMISSION .emit() - POSTPONED BY NATE (2026-08-30)](#2026-08-30---declarative-emission-emit---postponed-by-nate-2026-08-30)
+- [2026-08-30 - CLOSE-OUT RULINGS](#2026-08-30---close-out-rulings)
+- [2026-08-30 - STAGE-0 STOPS RULED](#2026-08-30---stage-0-stops-ruled)
+- [2026-08-31 - STAGE-1 STOPS RULED](#2026-08-31---stage-1-stops-ruled)
+- [2026-08-31 - RESOLUTION LADDER REJECTED](#2026-08-31---resolution-ladder-rejected)
+- [2026-08-31 - PARAMS CLASS BODY RULED](#2026-08-31---params-class-body-ruled)
+- [2026-08-31 - TEST CULL SCOPE SHARPENED](#2026-08-31---test-cull-scope-sharpened)
+- [2026-08-31 - FLIP STOPS RULED](#2026-08-31---flip-stops-ruled)
+- [2026-08-31 - PROOF STOPS RULED](#2026-08-31---proof-stops-ruled)
+- [2026-08-31 - STEPPABLE RUNS RULED](#2026-08-31---steppable-runs-ruled)
+  - [2026-08-31 - REENTRANT](#2026-08-31---reentrant)
+- [2026-08-31 - PROOF-REMEDY STOPS RESOLVED](#2026-08-31---proof-remedy-stops-resolved)
+- [2026-08-31 - STEPPABLE STOPS RESOLVED](#2026-08-31---steppable-stops-resolved)
+- [2026-08-31 - DIRECTORY MAPS RULED](#2026-08-31---directory-maps-ruled)
+- [2026-08-31 - FINDINGS WALKTHROUGH RULED](#2026-08-31---findings-walkthrough-ruled)
+- [2026-08-31 - MESH-OFFSET DIAGNOSIS CLOSED](#2026-08-31---mesh-offset-diagnosis-closed)
+- [2026-09-01 - SYSTEM PROMPT CAPABILITY SURFACE RULED](#2026-09-01---system-prompt-capability-surface-ruled)
+- [2026-09-01 - RUNG-3 SHAPE RULED THROUGH DISCUSSION](#2026-09-01---rung-3-shape-ruled-through-discussion)
+- [2026-09-01 - RUNG-3 SHAPE SETTLED](#2026-09-01---rung-3-shape-settled)
+- [2026-09-01 - FRAGILITY-STAGE JUDGMENTS RULED](#2026-09-01---fragility-stage-judgments-ruled)
+- [2026-09-01 - MBSE DIRECTION OPENED](#2026-09-01---mbse-direction-opened)
+- [2026-09-02 - RUNG-3 CLOSE RESOLUTIONS](#2026-09-02---rung-3-close-resolutions)
+- [2026-09-02 - MBSE PILOT VERIFY RESOLUTIONS](#2026-09-02---mbse-pilot-verify-resolutions)
+- [2026-09-02 - MBSE PILOT CLEAN](#2026-09-02---mbse-pilot-clean)
+- [2026-09-02 - MODEL ELEMENTS DIE WITH THEIR SUBJECTS](#2026-09-02---model-elements-die-with-their-subjects)
+- [2026-09-02 - READER-INDEPENDENCE EXCEPTION RULED](#2026-09-02---reader-independence-exception-ruled)
+- [2026-09-02 - READER-WAVE VERIFY RESOLUTIONS](#2026-09-02---reader-wave-verify-resolutions)
+- [2026-09-02 - DRY IS A VALID ANSWER + AMC III CANARY](#2026-09-02---dry-is-a-valid-answer-amc-iii-canary)
+  - [2026-09-02 - AMENDED](#2026-09-02---amended)
+- [2026-09-02 - BATHYMETRY METHODOLOGY SIGNED](#2026-09-02---bathymetry-methodology-signed)
+- [2026-09-02 - FULL PROOF PACKETS ON EVERY NEW-MACHINERY RUN](#2026-09-02---full-proof-packets-on-every-new-machinery-run)
+- [2026-09-02 - HAPPY PATH FIRST](#2026-09-02---happy-path-first)
+- [2026-09-02 - THE ONE-FLOW REORG CHARTERED](#2026-09-02---the-one-flow-reorg-chartered)
+  - [2026-09-02 - AMENDED](#2026-09-02---amended-1)
+- [2026-09-03 - F1/F6 INTERIM RULED](#2026-09-03---f1f6-interim-ruled)
+- [2026-09-03 - SANDBOX REWRITE RULED](#2026-09-03---sandbox-rewrite-ruled)
+- [2026-09-03 - OUTLET + RELEASE RULED](#2026-09-03---outlet-release-ruled)
+- [2026-09-03 - EMISSION LEG RULED](#2026-09-03---emission-leg-ruled)
+  - [2026-09-03 - STANDING REMINDER](#2026-09-03---standing-reminder)
+- [2026-09-03 - REANALYZE LEDGER OPENED](#2026-09-03---reanalyze-ledger-opened)
+  - [2026-09-03 - AMENDED](#2026-09-03---amended)
+- [2026-09-04 - EMISSION VERIFY RESOLUTIONS](#2026-09-04---emission-verify-resolutions)
+- [2026-09-04 - MODULE SURFACE RULED](#2026-09-04---module-surface-ruled)
+  - [2026-09-04 - DESIGN STOPS RESOLVED](#2026-09-04---design-stops-resolved)
+  - [2026-09-04 - STAGE 0 RULINGS](#2026-09-04---stage-0-rulings)
+  - [2026-09-04 - STAGE 1 RULINGS](#2026-09-04---stage-1-rulings)
+  - [2026-09-04 - STAGE 2 RULINGS](#2026-09-04---stage-2-rulings)
+  - [2026-09-04 - STAGE 2 RULING, SEDIMENT](#2026-09-04---stage-2-ruling-sediment)
+- [2026-09-05 - MODULE SURFACE](#2026-09-05---module-surface)
+  - [2026-09-05 - STAGE 3 RULINGS](#2026-09-05---stage-3-rulings)
+  - [2026-09-06 - STAGE 3 RULINGS, 3D](#2026-09-06---stage-3-rulings-3d)
+  - [2026-09-06 - STAGE 3 RULINGS, LIVE FINDINGS](#2026-09-06---stage-3-rulings-live-findings)
+  - [2026-09-06 - STAGE 3 RULINGS, ACCEPTANCE FINDINGS](#2026-09-06---stage-3-rulings-acceptance-findings)
+  - [2026-09-06 - BATHYMETRY POSTURE](#2026-09-06---bathymetry-posture)
+  - [2026-09-06 - CONFORMANCE RULINGS](#2026-09-06---conformance-rulings)
+  - [2026-09-06 - REMEDY RULINGS](#2026-09-06---remedy-rulings)
+- [2026-09-07 - MODULE SURFACE WAVE CLOSED](#2026-09-07---module-surface-wave-closed)
+- [2026-09-08 - LEAN SWEEP RULED](#2026-09-08---lean-sweep-ruled)
+  - [2026-09-08 - AMENDED](#2026-09-08---amended)
+  - [2026-09-08 - LEAN SWEEP, DELETES STAGE RESOLUTIONS](#2026-09-08---lean-sweep-deletes-stage-resolutions)
+  - [2026-09-08 - PROCESSING RULED, HELD](#2026-09-08---processing-ruled-held)
+- [2026-09-08 - CALIBRATION SPEC SHAPED](#2026-09-08---calibration-spec-shaped)
+  - [2026-09-08 - LEAN SWEEP, LIBRARY STAGE RESOLUTIONS](#2026-09-08---lean-sweep-library-stage-resolutions)
+  - [2026-09-08 - STAC FOLD](#2026-09-08---stac-fold)
+  - [2026-09-08 - TREE LAW](#2026-09-08---tree-law)
+  - [2026-09-08 - FETCHER FOLD, SECOND HALF](#2026-09-08---fetcher-fold-second-half)
+- [2026-09-08 - SCOPE RULED](#2026-09-08---scope-ruled)
+  - [2026-09-08 - SCOPE CENSUS RULED](#2026-09-08---scope-census-ruled)
+  - [2026-09-08 - RESEQUENCED](#2026-09-08---resequenced)
+- [2026-09-08 - LEAN SWEEP CLOSED](#2026-09-08---lean-sweep-closed)
+- [2026-09-08 - FETCHER FOLD RULED](#2026-09-08---fetcher-fold-ruled)
+  - [2026-09-08 - HYRIVER, THE WIDER MAP](#2026-09-08---hyriver-the-wider-map)
+- [2026-09-08 - SCOPE-ATTIC MOVE CLOSED](#2026-09-08---scope-attic-move-closed)
+  - [2026-09-09 - FOLD STAGE 0 RULINGS](#2026-09-09---fold-stage-0-rulings)
+  - [2026-09-09 - FOLD VECTOR STAGE](#2026-09-09---fold-vector-stage)
+  - [2026-09-08 - RESOLUTIONS](#2026-09-08---resolutions)
+  - [2026-09-09 - FOLD HYDRO STAGE + RULINGS](#2026-09-09---fold-hydro-stage-rulings)
+- [2026-09-09 - FETCHER FOLD CLOSED](#2026-09-09---fetcher-fold-closed)
+- [2026-09-09 - DOCS AND DOCSTRING WAVE SHAPED](#2026-09-09---docs-and-docstring-wave-shaped)
+  - [2026-09-09 - SCRIPTS AND TESTS](#2026-09-09---scripts-and-tests)
+  - [2026-09-09 - HISTORY IN CODE](#2026-09-09---history-in-code)
+  - [2026-09-09 - DOC IMAGES](#2026-09-09---doc-images)
+  - [2026-09-09 - FULL COVERAGE LAW FOR THE HYGIENE AND DOCS WAVE](#2026-09-09---full-coverage-law-for-the-hygiene-and-docs-wave)
+  - [2026-09-09 - TEMPLATE DOCS, THE FLOPY NOTES](#2026-09-09---template-docs-the-flopy-notes)
+  - [2026-09-09 - TEMPLATE DOCS, THE MODFLOW 6 EXAMPLES NOTE](#2026-09-09---template-docs-the-modflow-6-examples-note)
+  - [2026-09-09 - SCRIPTS RULED](#2026-09-09---scripts-ruled)
+  - [2026-09-09 - DOCS CENSUS RULED](#2026-09-09---docs-census-ruled)
+  - [2026-09-09 - THE DOCSTRING LIMIT RULED](#2026-09-09---the-docstring-limit-ruled)
+  - [2026-09-09 - COMMENTS, THE CLEAN CODE CH. 4 DISCUSSION](#2026-09-09---comments-the-clean-code-ch-4-discussion)
+  - [2026-09-09 - TESTS RULED](#2026-09-09---tests-ruled)
+  - [2026-09-09 - TESTS RULED LANDED](#2026-09-09---tests-ruled-landed)
+  - [2026-09-09 - FOLD RESIDUE HYGIENE](#2026-09-09---fold-residue-hygiene)
+  - [2026-09-09 - READABILITY LEDGER](#2026-09-09---readability-ledger)
+  - [2026-09-09 - FOLD RESIDUE HYGIENE CLOSED](#2026-09-09---fold-residue-hygiene-closed)
+  - [2026-09-09 - DATED RECORDS STAY VERBATIM](#2026-09-09---dated-records-stay-verbatim)
+  - [2026-09-09 - THE DOCSTRING COUNT CLARIFIED](#2026-09-09---the-docstring-count-clarified)
+  - [2026-09-09 - CALIBRATION REV 2](#2026-09-09---calibration-rev-2)
+
 - 2026-07-26 DRAW-OVER-DESCRIBE: some spatial edits (local mesh refinement
   zones, breaklines, terrain patches) are easier to DRAW than to describe in
   prose - route them through the QGIS spatial-input card / user drawing, not
@@ -670,14 +966,22 @@ sandbox driver. All confirmed against the code; none touched in F2b.
 - Emit the RELEASE/OUTFALL POINT as a context vector layer (derived seed
   today, the drawn point when the draw card lands) - the source is
   physics + provenance but invisible on the map.
+
+## 2026-08-24 - Persist the chart SPEC + physical-answer metrics (do_min etc)
+
 - Persist the chart SPEC + physical-answer metrics (do_min etc) to the
   run prefix - verification shows the product's own chart, NEVER a
   rederivation (NATE ruling 2026-08-24; the do_sag verification had to
   rederive because the payload was chat-turn-only).
+
+## 2026-08-24 - Verification/showcase runs surface as PERSISTENT showcase cases
+
 - Verification/showcase runs surface as PERSISTENT showcase cases (no
   auto-cleanup - they are showcases, not smoke tests); the do_sag pair
   landed as "showcase: telemac do sag (Eel River near Scotia,
   declarative v1)" by hand - the seed driver should own this shape.
+
+## 2026-08-24 - Proof-script rider (NATE 2026-08-24, scope CORRECTED same day)
 
 - Proof-script rider (NATE 2026-08-24, scope CORRECTED same day): the
   ANIMATION-EXPORT (frames -> GIF, basemap + the product's presets) is
@@ -688,6 +992,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   stays out of the workflow library. First use: river_dye's plume
   frames (wave 3 acceptance).
 
+## 2026-08-24 - Context-budget seam (NATE 2026-08-24)
+
 - Context-budget seam (NATE 2026-08-24): per-model context window
   DISCOVERED at adapter startup (OpenRouter /models context_length;
   Anthropic Models API max_input_tokens), never hardcoded; the turn
@@ -696,6 +1002,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   adapter additionally opts into HOST-SIDE compaction (beta - append
   compaction blocks back). Interim: point TRID3NT_OPENAI_MODEL at a
   larger-context free model. Closes the overload class permanently.
+
+## 2026-08-24 - Two-tier testing doctrine (NATE 2026-08-24)
 
 - Two-tier testing doctrine (NATE 2026-08-24): TIER A = !run with all
   unfilled params supplied - gates SATISFIED not skipped (every row
@@ -707,6 +1015,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   itself diagnostic. Wave 3's design-doc touch states this in the
   Testing section.
 
+## 2026-08-24 - Three-path testing model FINAL (NATE 2026-08-24)
+
 - Three-path testing model FINAL (NATE 2026-08-24) + the mechanism-
   template fork RESOLVED: Path A = all-params-upfront !run; DEMO VALUES
   LIVE IN THE DECLARATION (a demo script IS a saved, banner-labeled
@@ -716,6 +1026,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   supplying them. Path B = gate-by-gate walkthrough (harness). Path C =
   NATE in QGIS - plugin-UI coverage only (A+B own the logic). SWMM
   campaign executes the fork resolution per template.
+
+## 2026-08-24 - BED BATHYMETRY INPUT LAYER 404s ON THE RIVER FAMILY (queued
 
 - 2026-08-24 BED BATHYMETRY INPUT LAYER 404s ON THE RIVER FAMILY (queued
   defect, found by the all-layers contact sheet): the TELEMAC worker writes
@@ -734,10 +1046,14 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   underneath it - `publish_raster_input_cog` returns True for an object that
   is not there, so an unloadable layer reads as a published one.
 
+## 2026-08-24 - dev-tool-invoke flattens raised typed errors to INTERNAL_ERROR
+
 - dev-tool-invoke flattens raised typed errors to INTERNAL_ERROR
   (pre-existing, exposed by 3b's refused drive; the banks gate suffers
   the same) - the envelope should carry the exception's own error_code.
   Small dispatch fix, queue for the next server-touching wave.
+
+## 2026-08-25 - TELEMAC family item (NATE spot-check 2026-08-25)
 
 - TELEMAC family item (NATE spot-check 2026-08-25): the bed-sampling
   Copernicus GLO-30 fetch happens IN-WORKER - outside emit-on-fetch,
@@ -745,6 +1061,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Data producer (the DEM then surfaces as a canvas layer - NATE wants
   to SEE it - and gains ladder/coverage protection), worker consumes
   the staged raster. Also queue: bank polygons as a publishable layer.
+
+## 2026-08-25 - ESCALATED (NATE spot-check 2026-08-25)
 
 - ESCALATED (NATE spot-check 2026-08-25): the in-worker Copernicus fetch
   is one instance of a CLASS - all FIVE telemac worker builders
@@ -761,6 +1079,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   ladders, then a workers-wide external-fetch sweep guard. openquake/
   opengis URL hits look like doc headers - verify in the recon.
 
+## 2026-08-25 - NATE spot-check trio (2026-08-25, TELEMAC family wave items)
+
 - NATE spot-check trio (2026-08-25, TELEMAC family wave items):
   (1) used_in_sim highlight - the NWM station layer marks the ingested
   dominant-reach gauge (distinct styling + discharge label), context
@@ -775,6 +1095,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   replaces largest-in-bbox in discharge_resolve; mesh-economy A/B
   (do_sag coarsening) rides the same wave.
 
+## 2026-08-25 - WORKER PURITY PRINCIPLE
+
 - WORKER PURITY PRINCIPLE (NATE 2026-08-25): "the image holds
   MECHANISMS, never VALUES." All tunable worker-side constants (mesh
   target edge, accept radius, smoothing passes, node budgets, bed
@@ -787,6 +1109,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   targets this end state; per-engine constant inventories ride the
   engine campaigns.
 
+## 2026-08-25 - TEMPORAL DOCTRINE
+
 - TEMPORAL DOCTRINE (NATE 2026-08-25, generalizes event_time): every
   regularly-updated/timestamped source gets (1) a time param, default
   latest, ALWAYS pinned in provenance; (2) declared temporal metadata
@@ -797,6 +1121,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   time. Shared resolution seam (the doors idiom), not per-fetcher
   code. Dataset VINTAGE (NLCD year, DEM release) noted as the adjacent
   cousin - selectable where sources version, same pinning rule.
+
+## 2026-08-25 - TEMPORAL DOCTRINE EXTENSION
 
 - TEMPORAL DOCTRINE EXTENSION (NATE 2026-08-25): cadence MISMATCH
   (6-min tides vs hourly NWM vs solver dt) -> INTERPOLATION/
@@ -809,6 +1135,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   unit/datum normalization = same declared family, zero invention.
   Lands with the temporal-inventory adoption waves.
 
+## 2026-08-25 - TEMPORAL TRANSFORMS v1 BLESSED (NATE 2026-08-25)
+
 - TEMPORAL TRANSFORMS v1 BLESSED (NATE 2026-08-25): the modifier form
   (.resample(to=, method=, max_gap=) / .normalize(units=)) as designed
   - all four dials as proposed: modifier not step-line; per-quantity
@@ -820,6 +1148,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   clock-mismatch site becomes the proving case). Queue: behind
   event_time + the beacon kill.
 
+## 2026-08-25 - SEQUENCING RULED
+
 - SEQUENCING RULED (NATE 2026-08-25): after temporal transforms v1 ->
   THE TELEMAC FAMILY WAVE(S): in-worker fetch migration to declared
   Data via manifest staging, private DEM ladder deleted, worker-purity
@@ -829,6 +1159,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   templates onto shared steps (family net-LOC verdict due). SWMM
   B/C/D after. --network none endorsement still open - pose at the
   TELEMAC kickoff (it is the natural definition-of-done).
+
+## 2026-08-25 - SKELETON REFACTOR DEMOLITION CLAUSE
 
 - SKELETON REFACTOR DEMOLITION CLAUSE (NATE 2026-08-25): this is a
   GENERALIZATION refactor - absorbed functionality is DELETED outright,
@@ -842,6 +1174,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   answer; "no back compat" is about API shape, never about results
   drifting). Ledger rows tell each removal's story.
 
+## 2026-08-24 - NO-DOUBLE-MIDDLEWARE LAW
+
 - NO-DOUBLE-MIDDLEWARE LAW (NATE 2026-08-24, skeleton discussion): fetcher
   tool invocations are treated as DATA; the fetcher router's existing
   middleware (cache, fallback ladders, provenance, staleness, typed
@@ -849,6 +1183,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   or skeleton stage re-implements or re-wraps it at a different level of
   abstraction - the acquire stage INTERPRETS DATA declarations, it never
   fetches.
+
+## 2026-08-24 - SKELETON NAMING RULING
 
 - SKELETON NAMING RULING (NATE 2026-08-24): base class = Workflow (the
   abstract skeleton); engine facades = TelemacWorkflow / SwmmWorkflow /
@@ -859,6 +1195,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   collision is coherence. Analysis-only templates ride the same skeleton
   and simply leave solve-family slots unfilled.
 
+## 2026-08-24 - PUBLISH_LAYER TOOL KILLED (NATE 2026-08-24, ruling b)
+
 - PUBLISH_LAYER TOOL KILLED (NATE 2026-08-24, ruling b): emission becomes
   automatic on ALL three paths - processing-primitive rasters auto-emit
   their outputs (intermediates included: they are useful input checks;
@@ -867,6 +1205,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   moves OUT of the tool file into emission/ as the single home; the
   registered publish_layer tool is then DELETED (NATE: "something I've
   been wanting to do for a while but always somehow survives").
+
+## 2026-08-24 - MESH RULING COMPLETE
 
 - MESH RULING COMPLETE (NATE 2026-08-24): mesh = BYO-optional DATA -
   AUTHORED (user-supplied, e.g. 2dm import; top ladder rung) or GENERATED
@@ -884,6 +1224,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   campaign folds the private corridor mesher into the shared front as a
   generation strategy; private ladder dies (ledger).
 
+## 2026-08-24 - SKELETON HARDENING METHODOLOGY
+
 - SKELETON HARDENING METHODOLOGY (NATE 2026-08-24, mid-launch): INSIDE-OUT,
   SMALL COHORT FIRST. Wave 2 builds Workflow + TelemacWorkflow and migrates
   ONLY do_sag + river_dye; iterate in short loops against NATE's taste
@@ -897,6 +1239,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the skeleton quickly on a few real workflows instead of dragging 30
   templates through every revision.
 
+## 2026-08-24 - SKELETON LOC LEDGER
+
 - SKELETON LOC LEDGER (NATE 2026-08-24): every skeleton-campaign wave
   records LOC before/after in docs/validation/skeleton-loc-ledger.md -
   per surface (lib skeleton / facade+steps / templates / deleted), delta,
@@ -905,6 +1249,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   removed-what-it-superseded check + measures whether the generalization
   is making a real difference. Wave 2 writes row 0 (pre-change baseline)
   + its own rows.
+
+## 2026-08-24 - TEMPLATE FILE READABILITY PRINCIPLE + COHORT LGTM
 
 - TEMPLATE FILE READABILITY PRINCIPLE + COHORT LGTM (NATE 2026-08-24):
   cohort taste review PASSED ("it's in fine form"). Principle going
@@ -915,6 +1261,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   stay colocated in the file (meaning, not plumbing). Apply as the norm
   at fleet migration; no immediate cohort churn required.
 
+## 2026-08-24 - CONSTANT-DOOR WIRE ENFORCEMENT
+
 - CONSTANT-DOOR WIRE ENFORCEMENT (NATE 2026-08-24, ruling b): CONSTANT-door
   params DROP OFF the model-facing wire entirely - the factory excludes
   them from the synthesized tool signature; they remain form-editable
@@ -924,6 +1272,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   sim_duration_s per-template where warranted. Implement in the next
   cohort-hardening batch alongside the remaining redline rulings.
 
+## 2026-08-24 - STAGE-SEQUENCE ENFORCEMENT DEFERRED
+
 - STAGE-SEQUENCE ENFORCEMENT DEFERRED (NATE 2026-08-24, ruling b): stays
   stamped-and-displayed for now; enforcement (validate_plan refuses stage
   regression, facade ops become the stamping authority, gates
@@ -931,12 +1281,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the first feature whose correctness depends on ordering. Contractual
   but unenforced until then, recorded in the amendment.
 
+## 2026-08-24 - ACQUIRE_DOMAIN SURFACE (NATE 2026-08-24, ruling a)
+
 - ACQUIRE_DOMAIN SURFACE (NATE 2026-08-24, ruling a): keep the landed
   explicit **slots call - the template names exactly which params/data
   feed acquisition (read-the-page dataflow). Facade evolution rule: a
   NEW acquisition input arrives as a keyword WITH A DEFAULT, so existing
   templates are untouched (one-runner law holds); only templates wanting
   the new input name it.
+
+## 2026-08-24 - PHYSICS BUNDLE STAYS WHOLE
 
 - PHYSICS BUNDLE STAYS WHOLE (NATE 2026-08-24, ruling a): river_dye's
   Physics stays ONE bundle - no Bed/Dredging split; that would be
@@ -946,6 +1300,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   earns itself only when a real second consumer needs it, never for
   tidiness.
 
+## 2026-08-24 - FLEET MIGRATION ORDER
+
 - FLEET MIGRATION ORDER (NATE 2026-08-24): after the TELEMAC family ->
   MODFLOW workflows next (similar control flow to TELEMAC; the USGS
   modflow6-examples notebooks they were derived from remain the
@@ -953,6 +1309,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   then SWMM. Same per-template regime throughout: parity via existing
   drivers first, spot-check proofs through the scripts/ harness lane,
   readability principle, ledger rows, LOC ledger rolling net.
+
+## 2026-08-25 - COASTAL RESULTS MESH IS PUBLISHED AT A FALSE ORIGIN
 
 - 2026-08-25 COASTAL RESULTS MESH IS PUBLISHED AT A FALSE ORIGIN (queued
   defect, found by the TELEMAC-family wave's own proof sheet): the coastal
@@ -974,6 +1332,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   panel out to nothing. Check the other worker-written meshes for the same
   shape when the wave-module templates migrate.
 
+## 2026-08-25 - A `!run` DISPATCH EMITS NO COMPLETION `tool-io` FRAME (queued
+
 - 2026-08-25 A `!run` DISPATCH EMITS NO COMPLETION `tool-io` FRAME (queued
   defect, found while building the family canaries): the model lane fills in
   `function_response` at completion (`turn/stream.py`), but the
@@ -985,6 +1345,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   `pipeline-state` card instead (which BOTH lanes stamp honestly), so the
   gates are trustworthy; the card's own expander is still empty on a `!run`
   and wants the completion frame emitted from the shared dispatch seam.
+
+## 2026-08-25 - TOMAWAC Hs COG WAS AT THE UTM FALSE ORIGIN (FIXED in the family
 
 - 2026-08-25 TOMAWAC Hs COG WAS AT THE UTM FALSE ORIGIN (FIXED in the family
   wave, recorded because the class is wider): the wave worker builds its grid
@@ -1029,6 +1391,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   SELAFIN, not in what the postprocessor reads, and it is still image-rebuild
   work.
 
+## 2026-08-25 - THE OPEN-WATER "FIELD" RASTERS ARE DOT LATTICES, not fields
+
 - 2026-08-25 THE OPEN-WATER "FIELD" RASTERS ARE DOT LATTICES, not fields (queued
   defect, visible in every proof sheet this wave produced): `postprocess_coastal`
   and `postprocess_tomawac` rasterize the mesh nodes onto a grid sized by a fixed
@@ -1043,11 +1407,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the run actually solved. NOT done in the migration wave: it changes the
   published raster, and this wave's evidence is same-question-same-answer.
 
+## 2026-08-25 - PER-WORKFLOW DELIVERY NORM
+
 - PER-WORKFLOW DELIVERY NORM (NATE 2026-08-25): during fleet migration
   every migrated workflow is shown to NATE INDIVIDUALLY as it lands -
   per-template packet (LOC delta, parity one-liner, full proof render
   set) - never batched at wave end. Applies TELEMAC and onward (MODFLOW,
   SWMM).
+
+## 2026-08-25 - 3D RENDERING CAPABILITY RULING (NATE 2026-08-25)
 
 - 3D RENDERING CAPABILITY RULING (NATE 2026-08-25): 3D results get a
   QGIS-renderable 3D product - res3d_t3d.slf publishing as two stills is
@@ -1061,6 +1429,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   fix as coastal's false-origin mesh layer). Build lands after the
   fleet migration; recon runs now.
 
+## 2026-08-25 - DOT-LATTICE FIX SHAPE RULED
+
 - DOT-LATTICE FIX SHAPE RULED (NATE 2026-08-25, "too hand wavy... can we
   get finer?"): the open-water raster fix is BARYCENTRIC INTERPOLATION
   over the result triangulation onto the fine output grid (30 m or
@@ -1071,6 +1441,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   postprocess_coastal + postprocess_tomawac (+ any node-dot rasterizer).
   Lands in the post-family fix batch w/ before/after proof renders on
   the SAME runs. Mesh fineness itself stays the user granularity lever.
+
+## 2026-08-25 - OPEN-WATER MESH-LAYER PUBLISHING GAP
 
 - 2026-08-25 OPEN-WATER MESH-LAYER PUBLISHING GAP (NATE spot-check, TELEMAC
   family wave - QUEUED, do not build): the four AOI templates disagree with each
@@ -1089,6 +1461,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   wireframe over the field correctly, which is how the artemis barrier cut-outs
   and the coastal tide are proved this wave.
 
+## 2026-08-25 - RESOLUTION-SENSITIVITY RULING
+
 - RESOLUTION-SENSITIVITY RULING (NATE 2026-08-25, ruling b+c): (b) NOW -
   answers in resolution-sensitive classes carry an explicit honesty
   label when solved on a coarse mesh: concentration/magnitude PEAKS,
@@ -1104,6 +1478,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (answer-path labeling), lands with the held fix batch; generalizes
   past TELEMAC (MODFLOW plume peaks next).
 
+## 2026-08-25 - CASE DATA DELETE-ON-WHIM
+
 - CASE DATA DELETE-ON-WHIM (NATE 2026-08-25): Claude-driven
   spot-check/canary/diagnostic cases and run prefixes are disposable at
   Claude's discretion, no per-ask approval. RETAIN: 1-2 most-complex
@@ -1113,6 +1489,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   persisted renders + evidence JSONs are the durable record; the run
   data behind them is recompute-on-demand. Sweeps ride wave close-outs
   keep-list-first; first sweep = cleanup phase 2 (root disk at 93%).
+
+## 2026-08-25 - ARTEMIS RESOLUTION BOUND CONTRADICTS ITS OWN DEFAULT
 
 - ARTEMIS RESOLUTION BOUND CONTRADICTS ITS OWN DEFAULT (found 2026-08-25,
   driving the new idealized canary): `target_resolution_m` declares
@@ -1130,6 +1508,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   canary's lever unsupplied so the labeled default rides. NOT a physics
   change - do not widen the bound without deciding which domain it guards.
 
+## 2026-08-25 - do_sag DECLARES NO OUTPUT-CADENCE LEVER (found 2026-08-25
+
 - do_sag DECLARES NO OUTPUT-CADENCE LEVER (found 2026-08-25, NATE's
   denser-frames ask): `telemac_do_sag` PARAMS has no
   `output_interval_min`, though `write_reach_deck` accepts one and its
@@ -1141,6 +1521,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   `plan`; held because it is workflow code and the directive scoped that
   pass to params only. Cheap, and it closes an inconsistency inside one
   cohort rather than adding a feature.
+
+## 2026-08-25 - COASTAL PEAK RASTER PAINTS THE PERMANENT BAY
 
 - COASTAL PEAK RASTER PAINTS THE PERMANENT BAY (found 2026-08-25, the
   t=0 wet-land diagnosis): `coastal_depth_max.tif` is per-node max WATER
@@ -1154,6 +1536,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   publish depth-above-initial as the primary and keep total depth as a
   companion. This changes what the product MEANS, so it is NATE's call,
   not a silent correction - recorded, not done.
+
+## 2026-08-25 - SETTER SENTIMENT INTO THE SKELETON
 
 - SETTER SENTIMENT INTO THE SKELETON (NATE 2026-08-25, decision 1): the
   set_* family's capability becomes SKELETON machinery - (a)
@@ -1170,6 +1554,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   rows conditioned on the skeleton capability proving the same live
   recalibration, then they die.
 
+## 2026-08-25 - DECISION 1 PLACEMENT AMENDED
+
 - DECISION 1 PLACEMENT AMENDED (NATE 2026-08-25): rerun-with-overrides +
   coupled-validity rules are NOT calibration-land - they are a PRIMITIVE
   behavior of a workflow (skeleton core capability) that UNDERPINS
@@ -1178,11 +1564,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the calibration track; calibration later consumes it as a loop driver.
   Setter-family deletion condition unchanged.
 
+## 2026-08-25 - DECISION 1 THIRD CONSUMER
+
 - DECISION 1 THIRD CONSUMER (NATE 2026-08-25): rerun-with-overrides is
   also a TROUBLESHOOTING helper - a FAILED workflow reruns with adjusted
   params from its own ledger (composes with resume-from-failure /
   restart_clean). Three consumers: failure recovery, manual what-if
   perturbation, calibration loops.
+
+## 2026-08-25 - DECISION 2 RULED
 
 - DECISION 2 RULED (NATE 2026-08-25, ruling b): coastal inundation
   product SPLITS - primary answer layer = depth over INITIALLY-DRY land
@@ -1193,6 +1583,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   = resolution-bound class). Implementation joins the accumulated
   TELEMAC fix batch (w/ the coastal results-mesh X/Y-ORIGIN worker fix
   + the resolution labels).
+
+## 2026-08-25 - RUN JOURNAL RULED
 
 - RUN JOURNAL RULED (NATE 2026-08-25): append-only JSONL database of run
   RECORDS, decoupled from artifacts - one line per completed run written
@@ -1208,6 +1600,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (swept cases honestly gone). Build: skeleton lane, small; joins the
   accumulated batch.
 
+## 2026-08-25 - USER-INPUT SPECIES RULED
+
 - USER-INPUT SPECIES RULED (NATE 2026-08-25): typed user-input
   normalizers (point-from-shapes, polyline, polygon, bbox, BEARING wrap,
   later BYO-object acceptors) become ONE species in workflows/lib
@@ -1221,6 +1615,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   wave (the species = "things the user hands us: clicks, sketches,
   values, objects"). Joins the accumulated batch.
 
+## 2026-08-25 - PROOF FOLDER ORGANIZATION RULED
+
 - PROOF FOLDER ORGANIZATION RULED (NATE 2026-08-25): spot-check GIFs +
   showcase renders live in INHERITED NAMED FOLDERS for quick reference -
   docs/proof/templates/<template_name>/<variant>/ (variant = coarse |
@@ -1230,6 +1626,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   going forward, README documents the scheme. The per-engine showcase
   KEEP-LIST (delete-on-whim carve-out) points at these folders. Joins
   the accumulated batch.
+
+## 2026-08-25 - STYLE MODIFIER GRAMMAR RULED
 
 - STYLE MODIFIER GRAMMAR RULED (NATE 2026-08-25): style override is a
   DECLARATION MODIFIER in the .byo()/.ladder()/.resample() family -
@@ -1241,6 +1639,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   are the plugin's job; workflows describe products). Joins the batch's
   emission chapter (styles->contracts YAML, one resolver, mirror dies).
 
+## 2026-08-25 - ANIMATION LEGEND SHIFT BUG
+
 - ANIMATION LEGEND SHIFT BUG (NATE 2026-08-25, spot-check catch): GIF
   legends' discrete color sections SHIFT between frames - per-frame
   autoscaling makes the same color mean different values per frame
@@ -1250,6 +1650,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   regions byte-identical across the animation. Joins the batch
   (proof-lane).
 
+## 2026-08-25 - STYLE MODIFIER PRECISION
+
 - STYLE MODIFIER PRECISION (NATE 2026-08-25): .render never shipped in
   live templates - it is dormant lib machinery + a design-doc example
   only; the six migrated templates declare zero styles (absence-is-
@@ -1257,6 +1659,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   publishers importing preset CONSTANTS - those retire: publishers
   declare QUANTITIES, the contract owns quantity->preset. .style()
   replaces the dormant .render machinery + the doc example.
+
+## 2026-08-25 - DATA-DRIVEN SCALING RULED
 
 - DATA-DRIVEN SCALING RULED (NATE 2026-08-25): rescale: data is a
   first-class declared policy in the style contract and the DEFAULT for
@@ -1270,6 +1674,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   pairs) compute the range across the compared SET and share it, legend
   stating so. Fixed rescales remain for domain-standard bounded
   quantities. Legends always state which policy + the range.
+
+## 2026-08-25 - SCALE KNOB + RESTYLE TOOL RULED
 
 - SCALE KNOB + RESTYLE TOOL RULED (NATE 2026-08-25): style is
   DISPLAY-STATE not solve-state - rescaling needs zero recompute, so the
@@ -1286,6 +1692,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   modifier, param knob, and tool args. Later stages override earlier;
   every override labeled; data immutable throughout.
 
+## 2026-08-25 - TEMPLATE DECLARATIONS SIBLING RULED
+
 - TEMPLATE DECLARATIONS SIBLING RULED (NATE 2026-08-25, "settle now at 6
   templates - it costs more later"): UNIFORM norm, no threshold - every
   template folder carries declarations.py holding PARAMS + _DOC; the
@@ -1298,6 +1706,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   migrated templates in the accumulated batch; every future migration
   lands in this shape.
 
+## 2026-08-25 - REUSE-SWEEP NORM + CANDIDATES
+
 - REUSE-SWEEP NORM + CANDIDATES (NATE 2026-08-25): utilities promote to
   shared only on a CONFIRMED second consumer, then a deliberate reuse
   sweep - not preemptively. The sweep is each family migration's opening
@@ -1307,12 +1717,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   first name on the MODFLOW sweep). Decision 5 fully CLOSED: all 21
   ambiguous MinIO prefixes KEPT.
 
+## 2026-08-25 - PHYSICS NAME CONFIRMED + SIBLING SHAPE APPROVED
+
 - PHYSICS NAME CONFIRMED + SIBLING SHAPE APPROVED (NATE 2026-08-25):
   after deliberate challenge (Process/Inputs considered), Physics stays -
   no rename churn. The declarations.py separation approved as exemplified
   (PARAMS + _DOC out; QUESTION docstring, DATA, plan, ANSWER, chart,
   spec/metadata, registration stay; plan body unchanged by one
   character). Apply to all six in the batch.
+
+## 2026-08-25 - MESH WAVE CHARTER GROWS
 
 - MESH WAVE CHARTER GROWS (NATE 2026-08-25 discussion): (1) CONTEXT-OBJECT
   SLOTS: producer-less optional Data (.byo geometry-typed, .optional()) -
@@ -1332,6 +1746,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Misrepresented coastal connectivity = quiet physics corruption
   (reflections that should radiate).
 
+## 2026-08-25 - DECISION 6 RULED
+
 - DECISION 6 RULED (NATE 2026-08-25): (1) STATIC-PLAN RULE BLESSED -
   all-P/D, module binding blocks, plan(ops), When-only conditionals,
   deep-freeze + error provenance + validator re-point; p-view read
@@ -1348,6 +1764,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   NOTE: calibration may surface open-boundary needs early - surface to
   NATE if so, do not scope-expand silently.
 
+## 2026-08-25 - MESH WAVE ACCEPTANCE CASE RULED
+
 - MESH WAVE ACCEPTANCE CASE RULED (NATE 2026-08-25): the ARTEMIS BYO
   REMATCH - when the mesh features land, rerun the Marquette harbor
   agitation with a BYO OceanMesh-generated mesh (adaptive sizing: fine
@@ -1359,6 +1777,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   adaptive fidelity sharpen Kd fringes + the sheltering answer. One run
   exercises every mesh-charter pillar end to end.
 
+## 2026-08-25 - CONFORMAL ENFORCEMENT REQUIRED
+
 - CONFORMAL ENFORCEMENT REQUIRED (NATE 2026-08-25, BYO rematch
   refinement): enforcement geometry must be CONFORMING in the generated
   mesh - the obstacle/barrier polyline becomes a CONSTRAINED BOUNDARY:
@@ -1369,6 +1789,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (rides the artemis BYO rematch): measured max distance from the
   barrier polyline to the nearest coincident mesh edge ~ 0 within vertex
   tolerance, plus the zoom-crop showing edges tracking the line exactly.
+
+## 2026-08-25 - EDITABLE MESH LAYERS RULED
 
 - EDITABLE MESH LAYERS RULED (NATE 2026-08-25, observed rasterized
   meshes in the mesh folder): a mesh reaching the CANVAS ships as a
@@ -1382,6 +1804,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   returns through the BYO door as the approved domain. No custom editor
   built (leverage-libraries); joins the mesh wave charter, blocked-by
   the SELAFIN local-coords fix where applicable.
+
+## 2026-08-25 - .SUPPLIED() RENAME + THE SLATE PRINCIPLE (NATE 2026-08-25)
 
 - .SUPPLIED() RENAME + THE SLATE PRINCIPLE (NATE 2026-08-25): .byo() ->
   .supplied() everywhere (matches the user_supplied ladder rung +
@@ -1397,6 +1821,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   artemis BYO rematch is route 1 end to end - it proves the slate
   principle, not just the meshing.
 
+## 2026-08-25 - ONE FLAGSHIP CANARY RULED
+
 - ONE FLAGSHIP CANARY RULED (NATE 2026-08-25): the NATE-facing canary =
   ONE end-to-end flagship run leveraging the full buildup - mesh
   AUTHORED (generate -> conformal enforcement -> boundary tags) -> FED
@@ -1407,6 +1833,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   surge (animated, richest layers, freshest machinery). The six coarse
   per-template runs DEMOTE to silent internal parity pins - never
   rendered, never delivered, no packets; suite-level tripwires only.
+
+## 2026-08-25 - WORKER DOCTRINE + FETCH-MIGRATION-FIRST RULED
 
 - WORKER DOCTRINE + FETCH-MIGRATION-FIRST RULED (NATE 2026-08-25): a
   WORKER is the ENGINE ROOM - the solver binary + minimal glue to run it
@@ -1425,6 +1853,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   -> mesh wave pulls the mesh builders. The worker dissolution completes
   across these waves, not as one.
 
+## 2026-08-25 - WORKER DOCTRINE RATIONALE
+
 - WORKER DOCTRINE RATIONALE: CLOUD-READY BY ENCAPSULATION (NATE
   2026-08-25): the black box is not hygiene, it is deployment strategy -
   compose the sim's complete inputs server-side, ship the staged run
@@ -1442,6 +1872,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   pin. FUTURE DOOR, not built: a declared box-side reduce stage if cloud
   result-transfer costs ever bite (mechanism only, manifest-listed).
 
+## 2026-08-25 - WORKER RATIONALE CORRECTED
+
 - WORKER RATIONALE CORRECTED (NATE 2026-08-25): the cloud lane is NOT a
   consideration - no cloud planning, no reduce-stage future door
   (struck). The doctrine is only this: the worker is a true black box
@@ -1450,6 +1882,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   for. The portability test survives purely as a purity heuristic for
   classifying code out of the box. Nothing else from the cloud framing
   carries.
+
+## 2026-08-25 - WORKER-PURITY INVENTORY
 
 - WORKER-PURITY INVENTORY, TELEMAC (wave B audit 2026-08-25, MIGRATED half in
   ADR 0315, REST QUEUED): the six builders + entrypoint were walked and every
@@ -1483,6 +1917,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   anything - a hardcoded CRS. Two remaining NARR violations: smooth_tries
   (logged, not echoed) and the oil clearance-snap coordinates.
 
+## 2026-08-25 - LOCAL-COORDINATE RESULT MESHES
+
 - LOCAL-COORDINATE RESULT MESHES, the LATENT three (wave B 2026-08-25): coastal
   is FIXED (ADR 0315 - the geometry SELAFIN carries X-ORIGIN/Y-ORIGIN, verified
   on the canary at 691577/3286076 -> lon -85.02..-84.90, lat 29.69..29.80).
@@ -1495,6 +1931,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   parameters). Do it with the decision about whether the AOI templates ship mesh
   layers at all, which is the same canvas-products cluster as res3d and the
   3D-rendering track.
+
+## 2026-08-25 - STEPS AUDIT
 
 - STEPS AUDIT, THE QUEUED ROWS (wave B 2026-08-25; 41 files walked, verdict
   table in the wave report). REMEDIATED this wave: the breakwater-class offender
@@ -1530,6 +1968,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   run moved", learned at different times (deck-time vs metrics-time), so
   unifying them is a design call not a de-duplication.
 
+## 2026-08-26 - FLAGSHIP RUNS REFINED
+
 - FLAGSHIP RUNS REFINED (NATE 2026-08-26, "I saw points again"): the
   delivered flagship canary ALWAYS runs at refined resolution (coastal
   50 m: continuous inundation fringe, 85%+ fill, 41-frame GIF); coarse
@@ -1542,6 +1982,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   QUEUED at the mesh wave's close (interim refined coastal -> the
   artemis BYO rematch w/ authored conformal mesh).
 
+## 2026-08-26 - BED-INPUT DOTS = THIRD NODE-DOT INSTANCE (NATE spot-check
+
 - BED-INPUT DOTS = THIRD NODE-DOT INSTANCE (NATE spot-check 2026-08-26,
   co-reviewed): the worker-written bed_bathymetry.tif is node SAMPLES
   written as isolated pixels - the in-worker fetch path the barycentric
@@ -1552,6 +1994,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   resolution (more honest as an "input": what the run was GIVEN, not a
   scatter of what the solver kept). ACCEPTANCE DELIVERABLE of the
   fetch-migration wave: this exact panel re-rendered continuous.
+
+## 2026-08-26 - TELEMAC REMAINS OPEN
 
 - TELEMAC REMAINS OPEN (NATE 2026-08-26): the family does NOT close until
   (1) VIOLATION 1 - the in-worker DEM/bathymetry fetch - is OUT (the
@@ -1565,6 +2009,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   all pre-fix animations get re-rendered, and the max-vs-colorbar
   question (2.59 m label vs 0.94 bar) gets settled in the same pass
   (if the ramp deliberately clips, the legend must SAY so).
+
+## 2026-08-26 - PROOF PACKET = THE DELIVERY MECHANISM (NATE 2026-08-26, "the
 
 - PROOF PACKET = THE DELIVERY MECHANISM (NATE 2026-08-26, "the checklist as a
   script that cannot forget"). `scripts/assemble_proof_packet.py --template X
@@ -1590,6 +2036,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   been landing at the UTM false origin - the assembler now falls back to the
   canary's declared bbox and refuses when the drawn extent misses the AOI.
 
+## 2026-08-26 - DELETION POSTURE BIFURCATED + THE CAMPAIGN THESIS
+
 - DELETION POSTURE BIFURCATED + THE CAMPAIGN THESIS (NATE 2026-08-26):
   THESIS on record - the whole-repo goal is cohesion: TELEMAC is the
   sculpting SAMPLE refactored n times; then the switch flips and the
@@ -1603,6 +2051,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   web-era sweep, dead-path tests, composer leftovers outside workflows -
   chartered as the STALE SWEEP wave once the current three agents land.
 
+## 2026-08-26 - tools/meta/ CHOP CANDIDATE (NATE 2026-08-26)
+
 - tools/meta/ CHOP CANDIDATE (NATE 2026-08-26): "meta" is a junk-drawer
   category-era label - named target for the STALE SWEEP wave. Expected
   verdict: death by dispersal - code_exec_tool -> its own proper home
@@ -1612,11 +2062,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   staleness check (who invokes it? aggressive posture applies),
   passthroughs -> inspect. The folder dies even where the tenants live.
 
+## 2026-08-26 - data/ DELETED 2026-08-26 - the category-era fossil is gone
+
 - data/ DELETED 2026-08-26 - the category-era fossil is gone. Last six
   tenants (model_debris_flow, postprocess_pelicun, the four
   set_<engine>_parameters setters, the three unregistered MODFLOW engine
   surfaces) relocated to workflows/<engine>/ or tools/processing/; see
   docs/DELETION_LEDGER.md for the per-tenant table.
+
+## 2026-08-26 - CHOP CANDIDATES VERDICTS
 
 - CHOP CANDIDATES VERDICTS (NATE-named, co-verified 2026-08-26):
   runaway_guard.py = KEEP, live safety-critical (turn stream +
@@ -1633,6 +2087,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   US-only, superseded by coastal-surge-vs-CO-OPS as the V&V exemplar,
   ledger row citing supersession.
 
+## 2026-08-26 - DOCUMENTATION STANDARD CARRIED FORWARD
+
 - DOCUMENTATION STANDARD CARRIED FORWARD (NATE 2026-08-26): code
   comments/docstrings state CONSTRAINTS ONLY - no ADR/SRS/job-id
   references, no HISTORY narration, and NO PERSON ATTRIBUTION ("NATE
@@ -1645,6 +2101,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   sweep - mechanical scan: grep for ADR-\d+/SRS/FR-\d+/job-\d+/NATE in
   *.py comments/docstrings, rewrite each as the constraint it protects
   or delete if it protects nothing.
+
+## 2026-08-26 - MALPASSET
 
 - MALPASSET: CHOP, NO HARVEST + US-ONLY RULE REFINED (NATE 2026-08-26):
   the L2 malpasset harness is NOT kept for prior art - the calibration
@@ -1670,6 +2128,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   best observation infrastructure, so it dominates. Cases elsewhere are
   legal when the observations are fetchable through our fetchers.
 
+## 2026-08-26 - ANIMATED FIELD IS DECLARED
+
 - ANIMATED FIELD IS DECLARED, NEVER DEFAULTED (NATE 2026-08-26, caught in the
   first assembled packet). The packet assembler's mechanical re-render painted
   coastal WATER DEPTH because the variable choice lived in hand-typed
@@ -1691,6 +2151,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   than borrow `flood_depth`'s label for a field that is not that quantity. Two
   `quantity_defaults` rows would close it.
 
+## 2026-08-26 - DOUBLE DEM FETCH
+
 - DOUBLE DEM FETCH (NATE spot-check 2026-08-26, rain_on_grid packet):
   design is sound (delineation DEM over the broad pre-catchment box vs
   bed DEM over the catchment through the 3dep->copernicus ladder) BUT
@@ -1703,6 +2165,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   already-fetched raster covering the window, CLIP from the raster in
   hand instead of refetching (the watershed front half-designed this;
   the fallback path does not participate).
+
+## 2026-08-26 - COASTAL t0 WETTING RESOLVED + RUN-VS-CODE STALENESS GAP
 
 - COASTAL t0 WETTING RESOLVED + RUN-VS-CODE STALENESS GAP (2026-08-26):
   the inspected 50 m run PREDATES the datum fix (offset 0.0 vs the
@@ -1717,6 +2181,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   commits touching the engine's paths since that sha ("this run predates
   N relevant fixes" as a named warning). Queue to the assembler/journal
   lane.
+
+## 2026-08-26 - PROOF-LANE STINT 3
 
 - PROOF-LANE STINT 3 (NATE spot-checks, 2026-08-26). Three panel defects and two
   animation defects, all fixed as DECLARATIONS or ADAPTIVE rules, none as a
@@ -1742,6 +2208,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   QGIS-native mesh vector rendering when mesh-layer publishing lands - the dock's
   vector symbology must reproduce streamlines over a magnitude ramp at a declared
   density, or the proof sheet and the product show the same run two ways.
+
+## 2026-08-26 - SFINCS RETRIEVAL FLOOR IS FRAGILE
 
 - 2026-08-26 SFINCS RETRIEVAL FLOOR IS FRAGILE (RECORD-ONLY, ledger audit of
   0f7a6351..02acbfed - finding, no build proposed). `sfincs_flood` is a
@@ -1775,6 +2243,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   literal queries; it survives paraphrase today, which is the comparison that
   shows the flood template's corpus was never under the same pressure.
 
+## 2026-08-26 - `When` IS PRODUCTION-UNEXERCISED (RECORD-ONLY, same audit
+
 - 2026-08-26 `When` IS PRODUCTION-UNEXERCISED (RECORD-ONLY, same audit -
   finding, no build proposed). The declarative library's conditional construct
   (workflows/lib/plan.py:416, decided by the interpreter at
@@ -1795,6 +2265,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   test. The first template that branches will be the first real reader of that
   contract, and ADR 0315 already records one case where the construct was
   reached for and turned out not to fit.
+
+## 2026-08-26 - `Step.kwargs` IS FROZEN SHALLOWLY (RECORD-ONLY, same audit
 
 - 2026-08-26 `Step.kwargs` IS FROZEN SHALLOWLY (RECORD-ONLY, same audit -
   finding, no build proposed). `Step.__post_init__` (workflows/lib/plan.py:342)
@@ -1823,6 +2295,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   not carry rather than a bug anyone is hitting - which is the right time to
   record it, and the reason it will not announce itself when someone does.
 
+## 2026-08-26 - TELEMAC3D SILENTLY FLOORS A LEGAL RESOLUTION ASK
+
 - 2026-08-26 TELEMAC3D SILENTLY FLOORS A LEGAL RESOLUTION ASK (RECORD-ONLY,
   ledger audit of 0f7a6351..02acbfed - finding, no build proposed).
   `stratified_flow/declarations.py:74` declares `target_resolution_m` with
@@ -1845,6 +2319,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   genuinely duplicated against their params' declared bounds. Those are a
   de-duplication chore; this one is a contradiction, and only this one is a
   correctness defect.
+
+## 2026-08-26 - THE STYLE CONTRACT CAN MIRROR ITSELF
 
 - 2026-08-26 THE STYLE CONTRACT CAN MIRROR ITSELF, AND NOTHING WATCHES FOR IT
   (RECORD-ONLY, panel-2 remediation - finding, gate attempted and withdrawn).
@@ -1876,6 +2352,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   composed or dead; if composed, the gate needs the composition sites declared
   rather than guessed at, which is the same lesson as every other mirror here.
 
+## 2026-08-26 - REACH-FAMILY FETCH MIGRATION - THE MONSTER LEFT UNBROKEN
+
 - REACH-FAMILY FETCH MIGRATION - THE MONSTER LEFT UNBROKEN (2026-08-26, the
   fetch-migration wave, ADR 0317). The four open-water families are migrated and
   run `--network none`; `telemac_river_dye_build.py` still holds SIX network
@@ -1896,6 +2374,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   risk. Sequence: measure the fit first (cheap, decides everything), then take
   NATE's producer ruling, then migrate all six together.
 
+## 2026-08-26 - do_sag REFINED CANARY IS NON-DETERMINISTIC (found 2026-08-26
+
 - do_sag REFINED CANARY IS NON-DETERMINISTIC (found 2026-08-26 proving the
   fetch-migration wave; NOT caused by it). Two consecutive runs, no code change:
   one sampled the sag curve every 7.4 m with BOD zero at every station and DO
@@ -1908,6 +2388,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   then a do_sag comparison that disagrees deserves a second run before it is
   called a regression.
 
+## 2026-08-26 - SAME-SOURCE REUSE RULE - DESIGNED
+
 - SAME-SOURCE REUSE RULE - DESIGNED, NOT BUILT (2026-08-26, ADR 0317). "A ladder
   that resolves to the same source AND resolution as a raster already fetched for
   a window COVERING this one clips rather than refetches." Shape: per-process
@@ -1918,6 +2400,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   layout; and the case that motivated it turned out NOT to be one (see the Coweeta
   finding - two DEMs, two datasets, two purposes, nothing to reuse). Wants a real
   motivating case before it earns the risk.
+
+## 2026-08-26 - COMPUTE-CLASS VOCABULARY RENAME
 
 - COMPUTE-CLASS VOCABULARY RENAME (medium -> standard) QUEUED (2026-08-26). The
   schema contract says `small|standard|large|gpu`; the fleet says `medium`.
@@ -1930,6 +2414,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   `Literal` has no `xlarge` while the alias map, `run_solver`'s docstring and
   `telemac/steps/solve.py` all accept one.
 
+## 2026-08-26 - RIVER TRUTH RULED
+
 - RIVER TRUTH RULED (NATE 2026-08-26, ruling a): NLDI EVERYWHERE - the
   NLDI mainstem centerline is promoted to a server-side router spec like
   every other fetch, and it becomes the DISPLAYED river input layer (the
@@ -1938,6 +2424,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   under the plumbing). Unblocks the reach-family migration = the last
   six in-worker fetches = --network none for the whole TELEMAC image =
   the family CLOSES.
+
+## 2026-08-26 - SAMPLE PURITY RULED
 
 - SAMPLE PURITY RULED (NATE 2026-08-26): the TELEMAC sample must always
   be END-STATE-PURE - no interim solutions inside its boundary (interim
@@ -1952,6 +2440,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   primitive instead of discovering a missing one. The other three
   setters are outside the sample - they die at their engines'
   migrations.
+
+## 2026-08-26 - REACH-FAMILY MIGRATION LANDED
 
 - REACH-FAMILY MIGRATION LANDED, AND THE COPERNICUS DEFERRAL CLOSED BY FIXING THE
   SAMPLING (2026-08-26, ADR 0318). All six in-worker fetches are server tier; the
@@ -1968,6 +2458,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   tolerance on a migrated fetch, check whether the difference is the DATA or the
   DESTINATION GRID - the second one is fixable and the first one is not.
 
+## 2026-08-26 - FAIL-OPEN COSTS REPEATABILITY
+
 - FAIL-OPEN COSTS REPEATABILITY, NOT JUST VISIBILITY (2026-08-26, ADR 0318,
   closing the do_sag flake). The reach seed ladder degraded to the raw seed on any
   exception, so a slow query meshed a different river and the record could not say
@@ -1976,6 +2468,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   a fetch failure raises. Plus a checkable determinism artifact - the run records
   a sha256 of the staged centerline bytes, so "the same run twice" is verifiable
   rather than an impression. Worth copying to every other silent-ladder site.
+
+## 2026-08-26 - THE PROOF RENDERER SPOKE THE WRONG COLORMAP DIALECT
 
 - 2026-08-26 THE PROOF RENDERER SPOKE THE WRONG COLORMAP DIALECT (found + fixed,
   ADR 0318). The style contract's colormap names are rio-tiler's (lowercase);
@@ -1987,6 +2481,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the same disease as `medium` vs `standard`. Resolved case-insensitively against
   matplotlib's own registry rather than a second hand-written table.
 
+## 2026-08-26 - STALE PANEL GENERATIONS IN FIVE PROOF FOLDERS
+
 - 2026-08-26 STALE PANEL GENERATIONS IN FIVE PROOF FOLDERS (found by the
   assembler, cleaned). A layer roster that changes renames the panels, so the
   previous generation sits in the folder under names nothing writes any more and
@@ -1995,6 +2491,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   expected panel set, so it could OFFER the superseded list rather than only
   refusing on the count - "these N files are from a previous roster" is a more
   actionable refusal than "found 14, expected 9".
+
+## 2026-08-26 - TWO REFINED OPEN-WATER PINS WERE STALE
 
 - 2026-08-26 TWO REFINED OPEN-WATER PINS WERE STALE, NOT MOVED (ADR 0318). The
   tomawac and telemac3d REFINED baselines were last written at 33e879cf, before
@@ -2005,12 +2503,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   in the canary runner: when one variant's evidence is newer than another's by
   more than a wave, say so.
 
+## 2026-08-26 - REFERENCES ARE BENCHMARKS
+
 - REFERENCES ARE BENCHMARKS, NEVER SHAPE (NATE 2026-08-26): external
   systems/packages/papers (tpilz, JMSE, walkthroughs) serve to JUDGE our
   ergonomics and ground our physics - the architecture's shape derives
   from our own conclusions and rulings, never from imitating a
   reference. Cite them as measuring sticks in reports; never as design
   drivers in ADRs.
+
+## 2026-08-26 - RERUN-WITH-OVERRIDES LANDED
 
 - RERUN-WITH-OVERRIDES LANDED, AND set_telemac_parameters IS GONE (2026-08-26,
   ADR 0319). Decision 1 is built: a run derives from a run, the parent's
@@ -2026,12 +2528,16 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   decision with a visible consequence. QUEUED for whoever next opens the reach
   family's plan shape.
 
+## 2026-08-26 - CALIBRATION-LOOP GAP
+
 - CALIBRATION-LOOP GAP, NAMED (2026-08-26, ADR 0319). The primitive is the
   loop's engine and the three pieces it still needs are: OBSERVATIONS to score
   against, an OBJECTIVE that turns answer-vs-observation into a scalar, and a
   PROPOSER that picks the next override. The hard rule for that wave: the driver
   CONSUMES `rerun_workflow` and never grows its own re-run path - two
   implementations would disagree about what a derived run is.
+
+## 2026-08-26 - CANARY REPLAY IS A DIRECT CALL NOW
 
 - CANARY REPLAY IS A DIRECT CALL NOW (2026-08-26). `scripts/replay_canary_evidence.py`
   re-issues every committed canary from its own evidence file (`tool` + `args`)
@@ -2045,6 +2551,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   fields and describes a run nobody can re-issue. WORTH DOING: re-record that one
   so the family has no unreplayable member.
 
+## 2026-08-26 - PARK AFTER CALIBRATION + OFFICIAL-TELEMAC-PYTHON RECON
+
 - PARK AFTER CALIBRATION + OFFICIAL-TELEMAC-PYTHON RECON (NATE
   2026-08-26): TELEMAC work PARKS after the calibration campaign.
   BEFORE more TELEMAC code: recon gitlab.pam-retd.fr/otm/telemac-mascaret
@@ -2056,6 +2564,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   lib sits beside it). References-are-benchmarks applies to the
   ARCHITECTURE; for ENGINE-NATIVE IO the official implementation is the
   presumptive winner (leverage-libraries rule).
+
+## 2026-08-26 - TELEMAC PARK-WORK LIST
 
 - TELEMAC PARK-WORK LIST (recon verdict 2026-08-26: we did NOT reinvent
   much - workers already wrap official TelemacFile; server clean-room
@@ -2070,6 +2580,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   gaia cases) as V&V template candidates - the modflow6-examples pattern
   for TELEMAC; (5) telapy = the future coupling door, not now. Executes
   at the post-calibration park.
+
+## 2026-08-26 - TELAPY RULED IN + THE STEPPABLE-ENGINE BRIDGE
 
 - TELAPY RULED IN + THE STEPPABLE-ENGINE BRIDGE (NATE 2026-08-26,
   supersedes the recon's not-now on telapy): the post-calibration
@@ -2092,6 +2604,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   v1 runs on the current subprocess path; the bridge lands at the park
   and calibration v2 gains the warm loop.
 
+## 2026-08-26 - THE FIVE-CATEGORY INPUT TAXONOMY + VERBS
+
 - THE FIVE-CATEGORY INPUT TAXONOMY + VERBS (NATE 2026-08-26): adopt the
   classical simulation decomposition as the DECLARED classification of
   every Param/slot member - GEOMETRY (mesh/domain) / BOUNDARY
@@ -2109,6 +2623,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   digital-twin door. Emission unchanged and generalizes across DATA
   TYPES (raster/mesh/vector/series/chart) on the one seam, never new
   seams.
+
+## 2026-08-26 - BRIDGE + TEMPLATE FRAME NAMED; MESH = A SUBSTRATE (NATE
 
 - BRIDGE + TEMPLATE FRAME NAMED; MESH = A SUBSTRATE (NATE 2026-08-26):
   the architecture is BOTH patterns, orthogonal - Template Method
@@ -2131,6 +2647,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   DATA TYPE (raster/mesh/vector/series/chart), never by engine.
   Target-arch UML published: the Bridge Blueprint artifact
   (supersedes the Skeleton Blueprint as the forward picture).
+
+## 2026-08-26 - THE MESH TOOL SHAPE LOCKED
 
 - THE MESH TOOL SHAPE LOCKED (NATE 2026-08-26, clean-slate walkthrough;
   fetch + styles FROZEN as settled subsystems): mesh = a TOOL FAMILY
@@ -2164,6 +2682,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Static plan spine KEPT; boundaries defined in the same gate loop.
   Bridge Blueprint artifact rev 2 = the picture.
 
+## 2026-08-26 - VOCABULARY FIXED
+
 - VOCABULARY FIXED: MESHER, NOT ENGINE (NATE 2026-08-26): "engine" is
   RESERVED for solvers (TELEMAC/MODFLOW/SWMM/HEC-RAS - the thing a box
   runs). The mesh-building libraries behind tool.build_mesh are
@@ -2174,6 +2694,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   charter, kickoff, docstring and sub-agent prompt. Scope note
   ratified: the bigger mesh wave is WORTH IT - "before none of the
   functionality existed in one area."
+
+## 2026-08-27 - SPEC TRIMMED
 
 - SPEC TRIMMED, THREE CORRECTIONS (NATE 2026-08-27): (1) the
   FIVE-CATEGORY INPUT TAXONOMY is DESCRIPTIVE VOCABULARY ONLY - words
@@ -2192,6 +2714,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   display-face placement, over today's unchanged run + emission
   machinery. Workflow Blueprint artifact rev 4 = the trimmed spec.
 
+## 2026-08-27 - SPEC FORMAT FORMALIZED
+
 - SPEC FORMAT FORMALIZED (NATE 2026-08-27): every future spec = one
   self-contained HTML page in docs/specs/, published as an artifact:
   vocabulary table when terms are load-bearing, one section per
@@ -2202,6 +2726,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   ruling: docs/decisions/0320-spec-format.md. First instance:
   docs/specs/workflow-blueprint.html (the mesh-tool spec, rev 4).
 
+## 2026-08-27 - RENAME ops.solver_spec -> ops.solve (NATE 2026-08-27)
+
 - RENAME ops.solver_spec -> ops.solve (NATE 2026-08-27): the plan
   surface names WHAT the step is (the solve), not how it is
   implemented (building a dispatch spec). Pure rename - the physics
@@ -2210,9 +2736,13 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   template rewrites (every plan line is touched then anyway), not as
   a standalone churn wave.
 
+## 2026-08-27 - RENAME ops.read_results -> ops.read (NATE 2026-08-27)
+
 - RENAME ops.read_results -> ops.read (NATE 2026-08-27): full symmetry
   with the verb spine (mesh/author/solve/read). Pure rename, rides the
   mesh wave with ops.solve.
+
+## 2026-08-27 - ROADMAP REORDERED
 
 - ROADMAP REORDERED, CALIBRATION LAST (NATE 2026-08-27): settle the
   SHAPE first, calibrate the settled system once. ORDER: (1) stale
@@ -2231,6 +2761,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (SWAN rejected as the probe: its worker is regular-grid-only;
   consuming om2d meshes would be NEW capability, not a migration.)
 
+## 2026-08-27 - MESH SESSION ECONOMICS
+
 - MESH SESSION ECONOMICS (NATE 2026-08-27, correcting the landed om2d
   edit path): per-edit eager re-realization REJECTED - it re-fetched
   staged inputs (violates the reuse-resources rule) and rebuilt per
@@ -2248,10 +2780,15 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   vs 0.0 m constrained - DistMesh has no local re-mesh); telapy
   adoption path stays pure surgical mutation. Lands as a remediation
   stage after the mesh wave's current leg.
+
+## 2026-08-27 - MESH SPOT-CHECK DRIVER
+
 - MESH SPOT-CHECK DRIVER (NATE 2026-08-27): a standing test workflow
   for basic mesh builds - direct TOOL_REGISTRY invocation of
   build_mesh with coarse defaults, prints probes + emitted layer uri,
   for QGIS spot checks whenever mesh functionality lands.
+
+## 2026-08-27 - GMSH MESHER RULED
 
 - GMSH MESHER RULED IN (NATE 2026-08-27): gmsh joins the registry as a
   third mesher COMPOSING oceanmesh - om2d keeps the sizing
@@ -2268,6 +2805,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   telapy adoption path unchanged. Decision spec:
   docs/specs/gmsh-mesher.html (artifact published).
 
+## 2026-08-27 - LANDSCAPE VERDICT + WIRING C VALIDATED
+
 - LANDSCAPE VERDICT + WIRING C VALIDATED (2026-08-27): NATE's
   patch-edit wiring (om2d builds the base, edits are patch-local and
   in-place) is OM2D'S OWN TRODDEN CONCEPT - MATLAB ships remesh_patch
@@ -2280,6 +2819,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   on Duck NC: seam min-angle, outline offset 0.0, 3-run determinism,
   friction. Report: docs/research/coastal-mesh-edit-landscape.md;
   spec: docs/specs/gmsh-mesher.html rev 4.
+
+## 2026-08-27 - REMESH ECONOMY REVISED + CAPABILITY PARAM RULED
 
 - REMESH ECONOMY REVISED + CAPABILITY PARAM RULED (NATE 2026-08-27,
   after his own research): regeneration-on-edit IS economical for the
@@ -2296,6 +2837,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   functions, generation families, conformality, cost scaling,
   boundary bookkeeping) - specs teach as well as specify.
 
+## 2026-08-27 - FOR= CONSUMER DECLARATION RULED (NATE 2026-08-27)
+
 - FOR= CONSUMER DECLARATION RULED (NATE 2026-08-27): build_mesh gains
   for=<engine(s)> - the upstream consumer declaration binding the
   session to ENGINE_MESH_REQUIREMENTS at BUILD time: declaration-time
@@ -2308,6 +2851,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   list-valued; omitted = today's generic behavior. Orthogonal to and
   composes with the capability param. Wire name "for", python kwarg
   for_. Spec rev 6.
+
+## 2026-08-27 - THREE-AXIS MESH SIGNATURE CONVERGED
 
 - THREE-AXIS MESH SIGNATURE CONVERGED (NATE 2026-08-27, supersedes
   "capability is the param"): domain (coastal|river|catchment|
@@ -2325,6 +2870,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   opens: axis name domain-vs-type (lean domain), mesher visibility
   (lean visible-but-optional).
 
+## 2026-08-27 - MESH SIGNATURE CONVERGED FINAL
+
 - MESH SIGNATURE CONVERGED FINAL, REV 8 (NATE 2026-08-27): DOMAIN
   VOCABULARY DROPPED entirely (label AND named constructors - both
   still implied; and no domain param ever existed in the product: the
@@ -2341,6 +2888,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   visibility, journal); in-tool "fetch:" specs = standalone sugar
   through the SAME router. kind/mesher=auto/for_ survive. Supersedes
   the capability-param and three-axis rulings. Spec rev 8.
+
+## 2026-08-27 - GROUNDING UNIFICATION SCHEDULED + SPEC REWRITTEN CLEAN
 
 - GROUNDING UNIFICATION SCHEDULED + SPEC REWRITTEN CLEAN (NATE
   2026-08-27): NATE's read confirmed - the AOI (bbox) contains the
@@ -2362,6 +2911,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   grounding record -> constituent rules -> auto-routing -> for_ ->
   session polish -> template surface diffs.
 
+## 2026-08-27 - NATE'S GO ON THE DOMAIN/MESH MODEL
+
 - NATE'S GO ON THE DOMAIN/MESH MODEL (2026-08-27, spec rev 18):
   threaded-AOI framing DEAD - aoi is a REQUIRED, DEFAULTED, USER-
   EDITABLE DECLARATION (move/redraw legitimate; containment rule
@@ -2377,6 +2928,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   vs edit chain). D2-D5 (wave verifier findings) remain the open
   rulings before the stopped wave can close.
 
+## 2026-08-27 - D2-D5 RULED
+
 - D2-D5 RULED, WAVE-CLOSE-FIRST (NATE 2026-08-27): all four verifier
   recommendations ADOPTED - D2 accept() implies stageable (hand-edit
   regenerates via telapy or the edit refuses at the gate); D3 numeric
@@ -2388,6 +2941,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   declaration, om2d full wrapper, 7-template migration per spec rev
   18).
 
+## 2026-08-27 - SPEC-CONFORMANCE GATE
+
 - SPEC-CONFORMANCE GATE (NATE 2026-08-27): every wave close-out, after
   tests and before done/push: a FRESH-EYES agent walks the governing
   spec clause by clause producing a conformance table (clause ->
@@ -2398,6 +2953,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   running wave at its completion (against workflow-blueprint + the
   D2-D5 rulings) and is baked into every future wave script as the
   mandatory final stage.
+
+## 2026-08-27 - MCP PURGED
 
 - MCP PURGED (NATE 2026-08-27): mcp_server.py (351 LOC, zero
   consumers) + test + design doc + .mcp.json.example + the mcp dep +
@@ -2411,6 +2968,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   queued for its own attention after the wave. Stale trid3nt-mcp
   script in the venv bin clears on the next natural editable
   reinstall (not forced mid-wave).
+
+## 2026-08-27 - GEOMETRY-BY-NAME + CANVAS PICKER
 
 - GEOMETRY-BY-NAME + CANVAS PICKER (NATE 2026-08-27, ruled direction):
   geometry-valued edit inputs enter the gate card BY REFERENCE - build
@@ -2427,6 +2986,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (rev 18) for the resolution seam + rows; picker is plugin UI
   needing NATE's live pass.
 
+## 2026-08-27 - TWO-POINT BOUNDARY PICK + UI-REWORK SEQUENCING
+
 - TWO-POINT BOUNDARY PICK + UI-REWORK SEQUENCING (NATE 2026-08-27):
   set_boundary's natural card input = TWO PICKED POINTS on the mesh
   exterior (DrawGate-style) - the stretch between them IS the open
@@ -2440,6 +3001,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the server-side name->layer->geometry resolution seam so the UI
   pass finds its substrate ready.
 
+## 2026-08-27 - BOUNDARY INPUT CORRECTED
+
 - BOUNDARY INPUT CORRECTED (NATE 2026-08-27, supersedes the two-point
   pick line above): two points on a closed loop are UNDERDETERMINED
   (two stretches - a guess). The boundary's data structure is a
@@ -2451,6 +3014,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the open boundary) and REPORTS the measured snap distance, never
   asserts the match.
 
+## 2026-08-27 - TESTING LANE EMPHASIS
+
 - TESTING LANE EMPHASIS (NATE 2026-08-27): until the subsystems are
   fleshed out there is NO user/UI testing - the lane is DIRECT
   INVOCATION with all params (!run / drivers) plus SCRIPTED tests,
@@ -2458,6 +3023,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   lane and offline suites; plugin-visible changes stay recorded for
   NATE's eventual live pass but block nothing; the UI rework pass
   stays parked at its slot in the sequence.
+
+## 2026-08-28 - MESH WAVE CLOSED + ALL NINE DEVIATIONS RULED
 
 - MESH WAVE CLOSED + ALL NINE DEVIATIONS RULED (NATE 2026-08-28):
   D-1 ALL MESHES EDITABLE (grids route through the tool - extent is
@@ -2475,6 +3042,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   acceptance, conformance gate final, design-decision stop rule in
   the charter.
 
+## 2026-08-28 - MODEL WAVE SURFACE DESIGN-STOPS RULED
+
 - MODEL WAVE SURFACE DESIGN-STOPS RULED (NATE 2026-08-28): DS-1
   catchment ROUTES THROUGH A SESSION (D-1 consistency; the loud
   refusal was interim); DS-2 corridor extent RENAMES to
@@ -2491,6 +3060,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   amends at the conformance gate. Surface review also fixed
   mechanically: staged coverage no longer collapses onto the last
   crop (second crops + undo work).
+
+## 2026-08-28 - FRESH-START PURGE + TELAPY INTERIOR RULED
 
 - FRESH-START PURGE + TELAPY INTERIOR RULED (NATE 2026-08-28, "let's
   go"): (1) TELAPY IN THE WORKER: YES - the box interior goes
@@ -2512,6 +3083,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   history remains the archive). Anti-bloat doctrine: old iterations
   LEAVE the repo, always.
 
+## 2026-08-28 - THE LEGO RULING
+
 - THE LEGO RULING (NATE 2026-08-28, verbatim intent): "composability
   pureness modularity not bloat and shims" - MESHERS NEVER GROW
   DOMAIN PREPS. Domain narrowing is PLAN-LEVEL CHAINING of processing
@@ -2525,12 +3098,17 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   om.generate_mesh). The reach/catchment templates repoint to the
   chain. LESSON RECORDED: when a capability gap appears, the answer
   is a composable tool in the chain, never a mesher/step growth.
+
+## 2026-08-28 - DS RULINGS
+
 - DS RULINGS (NATE 2026-08-28): write_telemac_pair moves to a NEW
   mesh/shared/ subdir with a better name (shared format writers);
   SCOUT MDAL for format-IO boilerplate reduction where applicable
   (report first). SWMM gate chunk + moved engines' solver diagnostics
   -> attic. persistence/ KEPT (32 live call sites = session/chat
   restart durability); rename stays queued.
+
+## 2026-08-28 - SQUARE TWO
 
 - SQUARE TWO (NATE 2026-08-28, the campaign thesis matured): rebuild
   upward FROM THE VISION with the settled principles - LEGO
@@ -2547,6 +3125,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   new architecture, one at a time, fresh expressions consulted
   against the attic - never ports.
 
+## 2026-08-28 - SQUARE TWO SPEC PUBLISHED
+
 - SQUARE TWO SPEC PUBLISHED (2026-08-28): docs/specs/square-two.html
   - the top-level build-back structure. THE PRINCIPLE: libraries run
   the domain, we write glue (staging/provenance/refusals/plan); new
@@ -2558,6 +3138,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   one generic telapy box -> reader -> frozen emission. Ladder +
   standing acceptance (library-first grep, LEGO law, re-baselined
   zero, honest records, conformance gate).
+
+## 2026-08-29 - RIBBON RULING
 
 - RIBBON RULING, ABSOLUTE (NATE 2026-08-29): the buffered-flowline
   ribbon is COMPLETELY UNACCEPTABLE as a mesh domain - no fallback
@@ -2571,6 +3153,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   every bank_source fallback-ladder shape; bank provenance still
   travels (real vs user-supplied).
 
+## 2026-08-29 - APPROXIMATE-REACH RULING
+
 - APPROXIMATE-REACH RULING (NATE 2026-08-29, extends the ribbon
   ruling): corridor_of was dishonestly named - IF such a thing
   existed it would be "approximate_reach", and its only imaginable
@@ -2583,6 +3167,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   synthetic construct was an apology for not using real geometry -
   mandatory real geometry dissolves them.
 
+## 2026-08-29 - MRE MINIMALISM
+
 - MRE MINIMALISM (NATE 2026-08-29, standing): intentional and minimal
   - every landing is the MINIMUM essential expression needed to work;
   flexibility comes from MODULAR SEAMS, never breadth; LOC = refactor
@@ -2591,6 +3177,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Reviewers ask "what can be removed?" beside "does it work?". Baked
   into every wave prompt's norms from here on.
 
+## 2026-08-29 - TOOLS-STAGE STOPS RULED
+
 - TOOLS-STAGE STOPS RULED (NATE 2026-08-29): om2d's dead gr3 seam
   CHOPPED NOW (silently-failing dead seam worse than absence; SCHISM
   brings its own needs at rung 5); delineate_watershed KEEPS its name
@@ -2598,6 +3186,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   generic section_polygon preset ACCEPTED. Also riding the wave's
   next stages: the buffer-band snap removal per the approximate-reach
   ruling (release validity = real-domain containment).
+
+## 2026-08-29 - REMEDY-STAGE STOPS RULED
 
 - REMEDY-STAGE STOPS RULED (NATE 2026-08-29): release containment is
   SERVER-SIDE PRE-FLIGHT against the section polygon (ground truth,
@@ -2608,6 +3198,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   mesh-compatibility rule registered" is an honest refusal, and the
   richer decline returns WITH schism at rung 5 authored from its
   actual needs; the purge-broken test module fixed in the same pass.
+
+## 2026-08-29 - DECLARED-INPUT CONTRACTS
 
 - DECLARED-INPUT CONTRACTS (NATE 2026-08-29, dissolves the box-edge
   question): workflows declare their valid inputs READABLY, BEFORE
@@ -2625,6 +3217,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   ever guesses (re-spell, never decide); classification coercions get
   the strictest refuse-on-unknown audit at template rebuild.
 
+## 2026-08-29 - COMPATIBLE CONTRACT RULED
+
 - COMPATIBLE CONTRACT RULED (NATE 2026-08-29): the supplied-mesh
   accept-set is ITS OWN standalone declaration, living in
   declarations.py BESIDE PARAMS (the template's whole readable input
@@ -2638,6 +3232,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   membership. river_dye declares (unstructured_tri) - the box mesh
   refuses; agitation declares (structured_grid, unstructured_tri) -
   the artemis BYO rematch stands proven.
+
+## 2026-08-29 - ACCEPTS RULED + THREE IMPLEMENTATION STOPS
 
 - ACCEPTS RULED + THREE IMPLEMENTATION STOPS (NATE 2026-08-29):
   Compatible GENERALIZES to ACCEPTS - the role-keyed supply contract
@@ -2653,6 +3249,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   workflow by tool name (no new seam); the direct declarations-module
   import goes.
 
+## 2026-08-30 - P1 ADOPTED + ACCEPTS HOME RATIFIED
+
 - P1 ADOPTED + ACCEPTS HOME RATIFIED (NATE 2026-08-30): the DATA
   door's loader gains a TOOL-REGISTRY lookup before the dotted-path
   fallback (~6 LOC; a name in BOTH namespaces REFUSES, never picks) -
@@ -2664,6 +3262,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   workflows/lib/accepts.py with the declaration vocabulary (MeshKind
   stays in mesh/kinds.py) - ratified. Elegance review P2-P7 pending
   individual walkthrough.
+
+## 2026-08-30 - ELEGANCE REVIEW
 
 - ELEGANCE REVIEW: ALL SEVEN ADOPTED (NATE 2026-08-30, individual
   walkthrough): P1 one runner namespace (landed in the wave charter);
@@ -2687,6 +3287,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Net: ~1,540 LOC deleted, four parallel machines retired, ~16 LOC
   added.
 
+## 2026-08-30 - REPOINT STOPS RULED
+
 - REPOINT STOPS RULED (NATE 2026-08-30): DS-1 generic COMBINE tool
   (combine(polygon, lines) -> one geometry document; chain: basin ->
   combine(basin, D.rivers) -> extent) - channel sizing survives as
@@ -2706,6 +3308,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   builders (psha/scenario/fire/geoclaw) attic as the ruled class;
   Ref("basin") works as written via the read_geometry unwrap.
 
+## 2026-08-30 - AUTO EDGE DIES
+
 - AUTO EDGE DIES, EDGE IS EXPLICIT (NATE 2026-08-30): the reach
   templates' mode="auto" edge computation died with its mesher and
   nothing replaces it - mesh_resolution_m is REQUIRED (the h0 ruling
@@ -2715,6 +3319,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   granularity judgment. rain_on_grid stays UNREGISTERED (honest
   absence beats a registered template whose mesh step fails) until
   the worker-unification port; re-enabling is one line.
+
+## 2026-08-30 - WORKER-UNIFICATION WAVE PLANNED + APPROVED
 
 - WORKER-UNIFICATION WAVE PLANNED + APPROVED (NATE 2026-08-30, plan
   at ~/.claude/plans/mossy-rolling-fairy.md): telapy child-process
@@ -2733,6 +3339,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   attic. Expect ~-7,500 net LOC beyond the attic moves. Conditional
   fork recorded: telapy failing a user-fortran/coupled class reports
   to NATE, never silently falls back.
+
+## 2026-08-30 - ELEGANCE REVIEW P2-P7 LANDED
 
 - ELEGANCE REVIEW P2-P7 LANDED (2026-08-30): the SECOND MESH FRONT is
   gone - watershed.py (685) + precondition_gate.py (222) + ReachMesh /
@@ -2758,6 +3366,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   mile per DS-4; and .ladder() now has zero declared consumers in-tree -
   which producer declares the first real one is a DESIGN-STOP.
 
+## 2026-08-30 - BASELINE DESIGN-STOPS RULED
+
 - BASELINE DESIGN-STOPS RULED (NATE 2026-08-30): (1) _deref REFUSES
   AT BINDING - a Ref to a field no declaration defines is a typed
   bind-time error, never a silent None downstream. (2) PARKED IS
@@ -2768,6 +3378,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   suite failures). (3) The REACH_BANKS_UNMAPPED check is
   TEMPLATE-OWNED, after the banks fetch, before section - so it fires
   on the real cause instead of SECTION_CUT_EMPTY masking it.
+
+## 2026-08-30 - SIZING SURFACE RULED
 
 - SIZING SURFACE RULED (NATE 2026-08-30): build_mesh(om2d) takes TWO
   verbatim-keyed dicts - edgefx={} composes sizing functions BEFORE
@@ -2790,6 +3402,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   breaks staged-once economics; anonymous = no journal/rerun/override
   address). The named DATA row sits lines above in the same file.
 
+## 2026-08-30 - DATA IS A CLASS BODY
+
 - DATA IS A CLASS BODY, THE ROLE PREFIX DIES (NATE 2026-08-30): the
   Data("name", Fetch.tool(...)) ceremony is replaced by the ORM
   pattern - class DATA: dem = tool("fetch_dem", source="3dep") - the
@@ -2802,6 +3416,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   knows each tool's nature; the review gate labels world-reads from
   the tool's own registration. Loader resolution unchanged (registry
   first, dotted path second, both refuses).
+
+## 2026-08-30 - BANKS COVERAGE IS MEASURED
 
 - BANKS COVERAGE IS MEASURED, GRADED, AND LADDERED (NATE 2026-08-30):
   after the banks fetch the template-owned check measures the
@@ -2826,6 +3442,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   surface, but a different run class (flow across a cut line,
   wet/dry, rain_on_grid family) - held until a case demands.
 
+## 2026-08-30 - BANKS WINDOW RULED
+
 - BANKS WINDOW RULED (NATE 2026-08-30, the last baseline stop): the
   reach templates get the banks fetch bbox from a CHAINED row -
   compute_layer_bounds(layer=centerline, pad_m=3000) - the pad is an
@@ -2843,6 +3461,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   lego wave so the worker wave's template completion is authored in
   the final shape.
 
+## 2026-08-30 - TEST CULL WAVE DIRECTED
+
 - TEST CULL WAVE DIRECTED (NATE 2026-08-30): the suite still carries
   tests pinning the cloud-deployed era and other predated
   architecture - cull them back HARD (aggressive posture per the
@@ -2851,6 +3471,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   and emission simplification. Standing reaffirmation: ALWAYS reach
   for the battle-tested library / the library being wrapped before
   writing our own expression.
+
+## 2026-08-30 - DECLARATIVE EMISSION .emit() - POSTPONED BY NATE (2026-08-30)
 
 - DECLARATIVE EMISSION .emit() - POSTPONED BY NATE (2026-08-30):
   emission/styles should become declarative - a .emit() after the
@@ -2863,6 +3485,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   rather than hand-built product styling. PyQGIS stance under
   discussion: the old opposition was cloud-era (headless slim
   containers, no Qt); mostly vestigial in the QGIS-only product.
+
+## 2026-08-30 - CLOSE-OUT RULINGS
 
 - CLOSE-OUT RULINGS, LEGO WAVE (NATE 2026-08-30): (1) SEQUENCING -
   the worker-unification wave runs NEXT (unblocks coarse status=ok:
@@ -2882,6 +3506,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   commits them with ledger lines; HARD RULE meanwhile: no telemac
   worker image rebuild.
 
+## 2026-08-30 - STAGE-0 STOPS RULED
+
 - STAGE-0 STOPS RULED (NATE 2026-08-30): (1) schism_gr3.py RELOCATES
   BESIDE THE SANDBOX (scripts/sandbox/oceanmesh/) - the sys.path hack
   dies, workers/schism attics with the other seventeen. (2) NO
@@ -2898,6 +3524,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Exact spelling awaiting NATE's confirm; interim: the coarse canary
   declares 12 m with the physics stated (a 2D reach wants ~10
   elements across the channel).
+
+## 2026-08-31 - STAGE-1 STOPS RULED
 
 - STAGE-1 STOPS RULED (NATE 2026-08-31): (1) RAINDEF PATCH BAKES AT
   IMAGE BUILD - the Dockerfile produces the RAINDEF=3 copy of
@@ -2920,6 +3548,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   default - either validated CONTAINED in the river geometry, typed
   refusal outside water. All journaled. channel_width_m stays dead.
 
+## 2026-08-31 - RESOLUTION LADDER REJECTED
+
 - RESOLUTION LADDER REJECTED, COVERAGE IS A HEURISTIC (NATE
   2026-08-31, supersedes the retention-floor/.ladder() proposal): NO
   auto-adjusting resolution machinery - a ladder is a FALLBACK (makes
@@ -2938,6 +3568,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   we abstract the mechanics; the user expresses the change and
   resolves it - we do not solve everyone's problems at runtime.
 
+## 2026-08-31 - PARAMS CLASS BODY RULED
+
 - PARAMS CLASS BODY RULED (NATE 2026-08-31): PARAMS takes the same
   class-body shape as DATA - class PARAMS: spill_fraction =
   Param(door=..., default=..., ...) - name = identifier via
@@ -2951,6 +3583,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   FOLDS AFTER the worker wave, in one mechanical stage alongside the
   mesh-coverage heuristic item.
 
+## 2026-08-31 - TEST CULL SCOPE SHARPENED
+
 - TEST CULL SCOPE SHARPENED (NATE 2026-08-31): beyond the cloud-era
   tests, the cull removes tests whose SUBJECTS are dead - functions
   imported nowhere, code preceded by the new architecture. STANDING
@@ -2959,6 +3593,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   resurrected by a test pinning it. (A surviving test of a dead
   function is not coverage - it is an anchor.) Bake into every wave
   prompt beside clean-as-you-go.
+
+## 2026-08-31 - FLIP STOPS RULED
 
 - FLIP STOPS RULED (NATE 2026-08-31): (1) BOUNDARY ROLES ARE
   DECLARED ON THE MESH BLOCK - boundaries={"inflow": <upstream
@@ -2980,6 +3616,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   npoin/nelem; bank_source/bank_width_mean_m keys and
   E2E_MIN_MEAN_WIDTH_M die.
 
+## 2026-08-31 - PROOF STOPS RULED
+
 - PROOF STOPS RULED (NATE 2026-08-31): (1) WAQTEL LAUNCHER DEVIATION
   - telapy's API arm never allocates WAQTEL's arrays (measured:
   dico fallback crash, then OS BIEF OBJECT TYPE NOT IMPLEMENTED at
@@ -2999,6 +3637,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the 4326 its LayerURI declares (the 5070 leak caused the 104 GiB
   lattice); om2d refuses a non-lon/lat extent typed as the guard.
 
+## 2026-08-31 - STEPPABLE RUNS RULED
+
 - STEPPABLE RUNS RULED IN (NATE 2026-08-31): the telapy child loops
   the engine's OWN per-step call (run_one_time_step lifecycle)
   instead of run_all_time_steps - behaviorally identical, one
@@ -3010,6 +3650,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   declarations, not runner rewrites. NOT steppable and said so:
   WAQTEL launcher-deviation runs (whole-process by the fork ruling,
   same die-date) and artemis/t3d legacy builders (until rung 4).
+
+### 2026-08-31 - REENTRANT
+
   REENTRANT (NATE 2026-08-31, same ruling): re-entry across
   invocations comes from the ENGINE'S OWN restart mechanism, never a
   resident solver process (engine-room doctrine holds): the deck
@@ -3018,6 +3661,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   worker stages it like any input; a continued run is an ordinary
   new box run. Acceptance: a split run (N steps, exit, continue)
   reaches CORRECT END and closes to the straight-through result.
+
+## 2026-08-31 - PROOF-REMEDY STOPS RESOLVED
 
 - PROOF-REMEDY STOPS RESOLVED (orchestrator, under standing law,
   2026-08-31 - NATE may override): (1) ONE CENTERLINE ACQUISITION -
@@ -3040,6 +3685,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   stays); canary drivers pass restart_clean by default. The
   cache-provenance staleness class, closed at the ledger.
 
+## 2026-08-31 - STEPPABLE STOPS RESOLVED
+
 - STEPPABLE STOPS RESOLVED (orchestrator, under standing law,
   2026-08-31 - NATE may override): (1) PERFECT RE-ENTRY VIA THE
   DICO'S OWN ANSWER - decks author RESTART FILE (+ SERAFIND double
@@ -3054,6 +3701,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   different experiment); the author reads the continuation start
   time from the restart file it is continuing.
 
+## 2026-08-31 - DIRECTORY MAPS RULED
+
 - DIRECTORY MAPS RULED (NATE 2026-08-31): every major package dir
   (trid3nt_server/workflows/mesh/, trid3nt_server/tools/,
   trid3nt_server/workflows/, workers/, plugin/ as they are touched)
@@ -3065,6 +3714,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   authoring pass rides the post-wave fold (PARAMS + mesh-coverage)
   once the worker wave stops moving the tree; bake the maintenance
   line into every wave prompt's norms block.
+
+## 2026-08-31 - FINDINGS WALKTHROUGH RULED
 
 - FINDINGS WALKTHROUGH RULED, FULL BATCH (NATE 2026-08-31): (2)
   result_slf rides the ECHO block; ntimestep is worker-MEASURED.
@@ -3097,6 +3748,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   past the storm; pit-fill conditioning consistency + p99 beside
   max; dry-vs-nodata mask semantics; t3d basemap; prose scrubs.
 
+## 2026-08-31 - MESH-OFFSET DIAGNOSIS CLOSED
+
 - MESH-OFFSET DIAGNOSIS CLOSED (measured 2026-08-31, panels
   delivered to NATE): NOT a pipeline bug, NOT data vintage - DATA
   SEMANTICS. The offset is varying and channel-shaped (sign flips
@@ -3114,6 +3767,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   line per run (the honesty-heuristic doctrine); a wetted-channel
   domain remains a supply-path option when a case demands it.
 
+## 2026-09-01 - SYSTEM PROMPT CAPABILITY SURFACE RULED
+
 - SYSTEM PROMPT CAPABILITY SURFACE RULED (NATE 2026-09-01): the
   adapter's system prompt states the LIVE surface - the TELEMAC
   families (tracer/dye, oil, sediment/GAIA, DO-sag/WAQTEL,
@@ -3123,6 +3778,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the prompt stops rotting with the roster; dead engine names
   return one line at a time as engines land through rung 5. The
   reuse rule + rain-on-grid tier text rewrite to live names only.
+
+## 2026-09-01 - RUNG-3 SHAPE RULED THROUGH DISCUSSION
 
 - RUNG-3 SHAPE RULED THROUGH DISCUSSION (NATE 2026-09-01, spec to
   follow): (1) THE RECIPE IS THE ONE MESH-DEFINING OBJECT - present
@@ -3146,6 +3803,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   functions pass through w/ journaled note, library errors surface
   verbatim). (6) SNAPSHOT CACHE = chop candidate (state is the
   recipe; regen is cheap). (7) reg_grid CONFORMS to the same shape.
+
+## 2026-09-01 - RUNG-3 SHAPE SETTLED
 
 - RUNG-3 SHAPE SETTLED, SECOND PASS (NATE 2026-09-01, supersedes the
   pre/post spelling in the first pass): (1) NO pre/post subtypes -
@@ -3177,6 +3836,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   PARKED by NATE: door-word readability (class-per-door candidate)
   + the location/bbox/aoi unification - one later pass, together.
 
+## 2026-09-01 - FRAGILITY-STAGE JUDGMENTS RULED
+
 - FRAGILITY-STAGE JUDGMENTS RULED (NATE 2026-09-01): (1) set_rim_size
   joins om2d's VISIBLE DEFAULT ops list (new undeclared asks get
   honored rims; declared recipes replace wholesale and are
@@ -3191,6 +3852,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   classes); the ETOPO fallback descends the DECLARED ladder (gate
   sees every cross-dataset substitution); bed_fallback_note seam
   completed.
+
+## 2026-09-01 - MBSE DIRECTION OPENED
 
 - MBSE DIRECTION OPENED (NATE 2026-09-01, under design): take a
   Model-Based Systems Engineering approach - SysML - to the system
@@ -3211,6 +3874,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   seam that produced the severed-interface regressions. Tooling
   scout in flight.
 
+## 2026-09-02 - RUNG-3 CLOSE RESOLUTIONS
+
 - RUNG-3 CLOSE RESOLUTIONS (orchestrator under standing law,
   2026-09-02 - NATE may override): (1) THE DECK READS THE MEASURED
   BED AT THE DECLARED BOUNDARY ROLES - the outflow stage derives
@@ -3229,6 +3894,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   close's own library check is the source). (4) The measured
   substitution rung joins the JSONL journal beside the provenance
   (one datum, one name, both records).
+
+## 2026-09-02 - MBSE PILOT VERIFY RESOLUTIONS
 
 - MBSE PILOT VERIFY RESOLUTIONS (orchestrator under the charter's own
   acceptance criterion, 2026-09-02 - NATE may override): (1) EVIDENCE
@@ -3250,6 +3917,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the committed atlas graph.json (which is an instrument product,
   not a live input; its staleness made rule c decorative).
 
+## 2026-09-02 - MBSE PILOT CLEAN
+
 - MBSE PILOT CLEAN (2026-09-02): the solve-seam model + thin checker
   are LIVE in the suite and pushed (be6cf396). ALL SIX seeded breaks
   fire by name (both result_slf severances, single-writer topology,
@@ -3267,6 +3936,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   then fetch substrate, plan interpreter, emission - one seam per
   wave, each with its seeded-break proof.
 
+## 2026-09-02 - MODEL ELEMENTS DIE WITH THEIR SUBJECTS
+
 - MODEL ELEMENTS DIE WITH THEIR SUBJECTS (NATE 2026-09-02): the
   system model must never obstruct guided removals - same law as
   tests-die-with-subject: a removal deletes the component's model
@@ -3275,6 +3946,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   for exactly one commit's worth of attention (that loud moment IS
   the guidance), never as a preservation order. The model shrinks
   with the tree.
+
+## 2026-09-02 - READER-INDEPENDENCE EXCEPTION RULED
 
 - READER-INDEPENDENCE EXCEPTION RULED (orchestrator under the
   adversarial-verification doctrine, 2026-09-02 - NATE may
@@ -3291,6 +3964,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   NoSecondParserOfTheFormat requirement names its scope. Sandbox
   write_selafin (93 lines, mesh builders) noted for the cull/
   emission ledger - a writer, out of this scope.
+
+## 2026-09-02 - READER-WAVE VERIFY RESOLUTIONS
 
 - READER-WAVE VERIFY RESOLUTIONS (orchestrator under standing law,
   2026-09-02 - NATE may override): (1) SUB-RESOLUTION SIZING LINES
@@ -3313,6 +3988,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   pays 2 container spins on the same file (redundant second read -
   memo seam noted for the emission fold, not built now).
 
+## 2026-09-02 - DRY IS A VALID ANSWER + AMC III CANARY
+
 - DRY IS A VALID ANSWER + AMC III CANARY (NATE 2026-09-02): (1) a
   correct-but-dry run is a FINDING, not an error - the run
   completes; products state the measured dryness plainly (max
@@ -3322,6 +3999,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   and declares ANTECEDENT MOISTURE CONDITION III (wetter soil, more
   runoff from the same rain) so the acceptance hydrograph is
   measurably nonzero.
+
+### 2026-09-02 - AMENDED
+
   AMENDED (NATE 2026-09-02, the composition): the canary BASELINE is
   a CITED design storm (NOAA Atlas 14 depth for the catchment,
    e.g. 10-yr/24-h, basis stated) at AMC II; AMC III becomes the
@@ -3329,6 +4009,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   measurably more runoff at III (proves the CN/antecedent machinery
   responds); dry-is-an-answer proven on the old small storm (zero
   hydrograph, no refusal). Three behaviors, one extra run.
+
+## 2026-09-02 - BATHYMETRY METHODOLOGY SIGNED
 
 - BATHYMETRY METHODOLOGY SIGNED (NATE 2026-09-02): the report's
   recommendations stand as the signed methodology
@@ -3348,6 +4030,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   SysML view is the high-level record NATE reads. Thalweg burning
   stays REJECTED as a bed source.
 
+## 2026-09-02 - FULL PROOF PACKETS ON EVERY NEW-MACHINERY RUN
+
 - FULL PROOF PACKETS ON EVERY NEW-MACHINERY RUN (NATE 2026-09-02,
   sharpens the mechanical-packet law): every live acceptance run
   exercising NEWLY BUILT machinery ships the FULL house packet -
@@ -3358,6 +4042,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   proves the picture, and the picture is where the last three waves'
   honesty findings lived. Bake into every wave's verify/acceptance
   prompt beside the suite law.
+
+## 2026-09-02 - HAPPY PATH FIRST
 
 - HAPPY PATH FIRST, SYNTHETIC DEFERRED (NATE 2026-09-02, amends the
   signed bathymetry methodology): NO synthetic bathymetry now - the
@@ -3373,6 +4059,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   shrinks to the NORMAL-DEPTH OUTFLOW alone (derived from real
   measured geometry + friction slope - a computation, not a
   fabrication; still signed).
+
+## 2026-09-02 - THE ONE-FLOW REORG CHARTERED
 
 - THE ONE-FLOW REORG CHARTERED (NATE 2026-09-02 "Charter it";
   proposal view = the One Flow artifact page): the five-word tree
@@ -3395,6 +4083,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   drives per family with FULL PACKETS, seeded break on the new
   bindings, suite zero, push on CLEAN. SEQUENCING: launches when
   the in-flight bathymetry remedy lands (server waves serialize).
+
+### 2026-09-02 - AMENDED
+
   AMENDED (NATE 2026-09-02): the six-system picture (fetcher /
   mesher / assembler / solver / products / runtime) is THE WORKFLOW
   PLANE - a labeled SUBSET view of the system of systems, never
@@ -3408,6 +4099,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   modeled-or-not-yet-modeled (a stated absence, never an omission);
   planes get modeled as their seams are touched, never
   speculatively.
+
+## 2026-09-03 - F1/F6 INTERIM RULED
 
 - F1/F6 INTERIM RULED (NATE 2026-09-03, "just do the fix"): (1) F1 -
   a fresh reach run initializes at the DERIVED OUTLET STAGE
@@ -3480,6 +4173,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   STAGE-DISCHARGE Q(Z) curve this same ruling defers to the
   calibration era. Nothing was invented here.
 
+## 2026-09-03 - SANDBOX REWRITE RULED
+
 - SANDBOX REWRITE RULED (NATE 2026-09-03, "shrink and simplify"):
   the AWS-era sandbox (2,081 LOC, stage-to-bucket/poll/remote-log)
   REWRITES as the local box pattern - staged workdir in, constrained
@@ -3490,6 +4185,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   loop-block protection preserved; target ~150-300 LOC. Afterward it
   models as the TOOL PLANE's first seam (the planes law: modeled
   when touched). MRE hard: shrink, never grow.
+
+## 2026-09-03 - OUTLET + RELEASE RULED
 
 - OUTLET + RELEASE RULED (NATE 2026-09-03): (1) the catchment outlet
   holds a DERIVED STAGE-DISCHARGE CURVE - the normal-depth machinery
@@ -3506,6 +4203,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   gains --evidence PATH (the freeze/packet tooling gap). PARKED: the
   resonance-idealized canary's G1-G3 georef findings ride the
   rung-4 artemis rematch, not now.
+
+## 2026-09-03 - EMISSION LEG RULED
 
 - EMISSION LEG RULED (NATE 2026-09-03, spec to follow for his read):
   (1) PRESENTATION LEAVES THE DECLARATION - no .emit() anywhere;
@@ -3528,15 +4227,23 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   machinery; GIFs remain packet-only. (5) workflows/lib -> runtime/
   rides (the plane vocabulary). STAGE 0 = the proof matrix: raster
   remote, vector remote, mesh remote-or-cached, mesh temporal.
+
+### 2026-09-03 - STANDING REMINDER
+
   STANDING REMINDER (NATE): every wave EXTENDS THE SYSML - the
   emission wave models the display/emission seam and updates the
   planes index; the rendered model stays the full picture.
+
+## 2026-09-03 - REANALYZE LEDGER OPENED
 
 - REANALYZE LEDGER OPENED (NATE 2026-09-03): docs/REANALYZE_LEDGER.md
   - decisions that stand today with a stated revisit trigger; first
   entry: the rain outlet's accepted 0.46% startup transient (pin
   proceeds per NATE, the transient stated on the packet). Distinct
   from IDEAS (rulings/parked work) and DELETION_LEDGER (removals).
+
+### 2026-09-03 - AMENDED
+
   AMENDED (NATE 2026-09-03, spec rev 1 amended in place before
   launch): presets are a UNIFORM MINIMAL FAMILY keyed by DATA KIND
   (~four: continuous raster, classed vector, reference, mesh);
@@ -3547,6 +4254,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   declarations stay presentation-free); sim outputs derive defaults
   from the product contract's kind+quantity. NATE read the spec:
   the emission wave is GO.
+
+## 2026-09-04 - EMISSION VERIFY RESOLUTIONS
 
 - EMISSION VERIFY RESOLUTIONS (orchestrator under standing law,
   2026-09-04 - NATE may override): (F1) ONE resolution seam - the
@@ -3563,6 +4272,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   surviving one-line Python style decisions (postprocess wse/strat
   ramps) migrate into the declared product styling; the dead
   inferno declaration corrects.
+
+## 2026-09-04 - MODULE SURFACE RULED
 
 - MODULE SURFACE RULED (NATE 2026-09-04, spec docs/specs/module-surface.html
   for his read; the wave runs only after): (1) A WORKFLOW IS A WRAPPER
@@ -3602,6 +4313,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   measured caveats handled inside it). Stage 0 proofs first. DESIGN
   STOPS for NATE before launch: form-card default view; TOMAWAC now or
   stated absent; which rerun pieces of the interpreter survive.
+
+### 2026-09-04 - DESIGN STOPS RESOLVED
+
   DESIGN STOPS RESOLVED (NATE 2026-09-04): card view = set slots + open
   mandatory shown, rest under advanced (REANALYZE_LEDGER: side-by-side
   later); TOMAWAC = wrapper only if free from the Stage 3 pattern, else
@@ -3609,6 +4323,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   natural moment; do not let it drop); interpreter = inventory first,
   rerun-needed pieces move under the sheet, plan-step machinery
   deletes, ambiguity DESIGN-STOPs. The wave is GO.
+
+### 2026-09-04 - STAGE 0 RULINGS
+
   STAGE 0 RULINGS (NATE 2026-09-04): (a) APOSTROPHES - the serializer
   hands telapy a str subclass whose __repr__ is the engine's own form
   ('...' with '' inside); telapy's write() stays the writer, only the
@@ -3617,6 +4334,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (b) HELP TEXT - the de-LaTeX widens to the measured token set (line
   breaks, CommentBlock wrappers, \tel*, escaped underscores, the math
   tail rendered as words); the catalog re-extracts and re-commits.
+
+### 2026-09-04 - STAGE 1 RULINGS
+
   STAGE 1 RULINGS (NATE 2026-09-04): (a) LEDGER KEY under fill/run - a
   record is keyed by the SLOT it fills + a hash of the producer's
   RESOLVED INPUTS; rerun walks producers in dependency order and
@@ -3626,6 +4346,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   sheet is state only; the fill/run door renders the returned sheet as
   the card and holds until run; no gate concept survives in the
   interpreter - the card is a view, not a step.
+
+### 2026-09-04 - STAGE 2 RULINGS
+
   STAGE 2 RULINGS (NATE 2026-09-04): (a) COMPOSITION, NOT INHERITANCE
   for shared template bodies - a shared body is a PART a template
   lists (parts = [RIVER, ...]); parts merge in the listed order; a
@@ -3640,6 +4363,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   optional features within one question are composites that state
   nothing when given nothing (decay, dredging, hyetograph vs constant
   rate). The tool surface grows 5 -> 7; routing picks the template.
+
+### 2026-09-04 - STAGE 2 RULING, SEDIMENT
+
   STAGE 2 RULING, SEDIMENT (NATE 2026-09-04): the one-template-per-
   question rule holds at EVERY level - river_sediment splits into
   river_scour (RIVER + SEDIMENT bed: bedload, morphology, gradation as
@@ -3651,6 +4377,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   _PROCESSES/slots.py die at Stage 3 with agitation + stratified_flow
   (DELETION_LEDGER rows with that condition). Engine defaults stay
   UNWRITTEN even where the spec's illustrative snippet showed them.
+
+## 2026-09-05 - MODULE SURFACE
 
 - MODULE SURFACE, STAGE 2 LANDED (2026-09-05, commits 989fbf04 / 7520c99d /
   085b4241 / 444ed0f8): the six 2D questions are TEMPLATES over the module
@@ -3689,6 +4417,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   507 of 907 nodes): GAIA's own listing balance closes at zero to the precision
   it prints over that window. The scalars are the listing's; the map is the
   file's. Naming it rather than papering over it.
+
+### 2026-09-05 - STAGE 3 RULINGS
+
   STAGE 3 RULINGS (NATE 2026-09-05): (a) OPEN-WATER DOMAINS - agitation
   and stratified_flow RE-DECLARE onto om2d over the AOI (real geometry
   from the shoreline, the triangle pair + topology + set_bed the frozen
@@ -3708,6 +4439,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   refuses inside the module); (2) a 600 s screening scour run reports
   zero deposited mass while the bed moved (GAIA's listing balance
   prints zero at its precision over that window).
+
+### 2026-09-06 - STAGE 3 RULINGS, 3D
+
   STAGE 3 RULINGS, 3D (NATE 2026-09-06): (a) stratified_flow = ONE
   template over om2d - wind circulation FOLDS into stratification (the
   baroclinic deck with wind on answers surface-downwind / return-flow-
@@ -3721,6 +4455,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   om2d writes the topology bundle UNCONDITIONALLY - an empty role set
   is a recorded fact ("this basin names no liquid boundary"), the
   reader states it, telemac3d accepts a closed basin; modeled + tested.
+
+### 2026-09-06 - STAGE 3 RULINGS, LIVE FINDINGS
+
   STAGE 3 RULINGS, LIVE FINDINGS (NATE 2026-09-06): (a) 3D TRACER
   NUMERICS - the stratified template ASSERTS the NERD advection scheme
   (label verified against the catalog), a TIME STEP DERIVED from the
@@ -3740,6 +4477,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (reported, not fixed): a cold-start import race - two threads racing
   the first geopandas/shapely import poison sys.modules for the
   process's life; framework import discipline, its own hygiene row.
+
+### 2026-09-06 - STAGE 3 RULINGS, ACCEPTANCE FINDINGS
+
   STAGE 3 RULINGS, ACCEPTANCE FINDINGS (NATE 2026-09-06): (a) HARBOUR
   MESHING - the drawn outline WINS (the constrained-cut guard stays;
   we never move what the user drew); the harbour recipe declares
@@ -3758,6 +4498,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (an emptiness that means a substitution is SEEN); only the dico's
   OBLIG files are REQUIRED at run; anything else the engine demands
   surfaces from its own listing by name - we invent no required set.
+
+### 2026-09-06 - BATHYMETRY POSTURE
+
   BATHYMETRY POSTURE (NATE 2026-09-06, no bed-seam spec now): data is
   assumed TRUE; the bed is VISUALLY PRESENTED to the user, who refines
   it (interpolation, stitching) with their own tools; the source the
@@ -3767,6 +4510,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   sub-subsystem builds a COVERAGE MAP of all recorded bathymetry and
   serves the source an AOI lands inside - "bathymetry is a little more
   tricky", discussion open.
+
+### 2026-09-06 - CONFORMANCE RULINGS
+
   CONFORMANCE RULINGS (NATE 2026-09-06, docs/validation/module-surface-
   conformance.md read; deviations D1-D8): (a) D7 THE TWO-POPULATIONS
   BED GUARD IS DELETED with its test - the stated datum on the source
@@ -3795,6 +4541,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   three stale FormGate comments; the spec's LOC expectation corrected
   to the measured -4,267 (rev 1c). The LOC promise was MISSED and is
   stated as such.
+
+### 2026-09-06 - REMEDY RULINGS
+
   REMEDY RULINGS (NATE 2026-09-06): (a) "ON THE STRUCTURE" RATIFIED as
   landed - one number the user sets (the obstacle half-width) measured
   to the accepted mesh's own placement precision (its edge length, a
@@ -3809,6 +4558,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   data assumed true; no threshold on values; the rim gets its real
   water. The 46 zero-depth rim nodes were the chart datum, not a
   coverage gap (the survey covers 100% of the water).
+
+## 2026-09-07 - MODULE SURFACE WAVE CLOSED
 
 - MODULE SURFACE WAVE CLOSED (2026-09-07, re-verifier VERDICT CLEAN at
   42b9795e/f594a08b): the catalog (six dicos, drift-audited), opinion-
@@ -3844,6 +4595,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   (REANALYZE_LEDGER); TOMAWAC at the rung-4 rematch; pyEMU calibration
   spec (three questions pending).
 
+## 2026-09-08 - LEAN SWEEP RULED
+
 - LEAN SWEEP RULED (NATE 2026-09-08, inventory docs/validation/
   lean-sweep-inventory.md): (a) THE MECHANICAL BATCH IS GO, in order -
   dependency pins first as a standalone commit (httpx, PyYAML,
@@ -3865,6 +4618,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   NATE: "processing is more of a sandbox thing... its usefulness
   dissolves when we use an off-the-shelf MCP"; no fold, no hoist until
   ruled. (d) MOVEMENT ECOLOGY scope: explanation requested; unruled.
+
+### 2026-09-08 - AMENDED
+
   AMENDED (NATE 2026-09-08): A REGISTERED TOOL IS INVOKED AT RUNTIME -
   "no static caller" is NOT staleness for a tool; usage evidence is the
   telemetry log + corpus + workflow rows, and even zero recorded use is
@@ -3876,6 +4632,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   registered tool (compute_model_residuals, folded) is MIRRORED to the
   attic after the wave; movement ecology and the processing tree stay
   untouched pending the processing discussion.
+
+### 2026-09-08 - LEAN SWEEP, DELETES STAGE RESOLUTIONS
+
   LEAN SWEEP, DELETES STAGE RESOLUTIONS (orchestrator under standing
   law 2026-09-08 - NATE may override): (1) D4's map-command sub-clause
   - the seven args models with no producer and no consumer
@@ -3895,6 +4654,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   ledgered as refuted. LESSON for inventories: a dotted-path grep
   misses sys.path imports - check both. (4) The testing/ driver arms
   keyed on deleted wire strings are queued as a hygiene row.
+
+### 2026-09-08 - PROCESSING RULED, HELD
+
   PROCESSING RULED, HELD (NATE 2026-09-08): processing rebuilds THE
   WORKFLOW WAY - one generic process tool over the QGIS Processing
   catalog (the algorithm registry is the dico; qgis_process is the
@@ -3909,6 +4671,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   a read-only probe first (qgis_process on the daemon host, providers,
   help JSON shape, one headless run, the retrieval comparison), then a
   spec in plan mode. 36 processing packages / 23,551 LOC today.
+
+## 2026-09-08 - CALIBRATION SPEC SHAPED
 
 - CALIBRATION SPEC SHAPED (NATE 2026-09-08, spec to follow in plan
   mode): pyEMU + PEST++ as the outer loop on the daemon side; the
@@ -3926,6 +4690,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   fetched gauge series (DATA rows), outputs read at a point, the
   ledger keyed by resolved inputs (a friction change does not
   rebuild the mesh).
+
+### 2026-09-08 - LEAN SWEEP, LIBRARY STAGE RESOLUTIONS
+
   LEAN SWEEP, LIBRARY STAGE RESOLUTIONS (orchestrator under standing
   law 2026-09-08 - NATE may override; each narrows scope, none widens):
   L8 (QgsBlockingNetworkRequest in the plugin) DEFERRED with a ledger
@@ -3962,6 +4729,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the EXTENT observation (pairs with the flood-extent skill tool). The
   three observation kinds: a point over time (gauge), a profile every
   ~21 days (SWOT), an extent on a date (DSWx). Spec rev 1a.
+
+### 2026-09-08 - STAC FOLD
+
   STAC FOLD (NATE 2026-09-08): odc-stac + xarray absorb the raster and
   gridded fetcher machinery - one stac-raster executor (~200 LOC;
   odc.stac.load -> xarray -> rioxarray COG; spec fields collection/
@@ -3975,12 +4745,18 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   rasterio's error channel must meet the Retry-After + verbatim-
   upstream-error norm (a Stage 0 cell), else signed reads only. Two
   new deps: odc-stac, odc-geo. Spec rev 1b.
+
+### 2026-09-08 - TREE LAW
+
   TREE LAW (2026-09-08, after an agent bisected two red plugin tests
   by `git checkout <commit>` in the SHARED checkout, detaching HEAD
   under a running session): NO agent checks out a commit, switches
   branches, stashes or resets in the shared tree - history is read
   with git show / git log / git diff, and a bisect runs in a throwaway
   `git worktree add`. Baked into every wave prompt.
+
+### 2026-09-08 - FETCHER FOLD, SECOND HALF
+
   FETCHER FOLD, SECOND HALF (NATE 2026-09-08): after the calibration
   wave, ONE read-only census over all 108 fetcher specs with TWO
   lenses - rasters/grids: odc-stac + xarray (the STAC FOLD ruling);
@@ -3997,6 +4773,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   error norm needs the same Stage 0 proof as GDAL); NATE rules per
   family; the fold wave follows. Provenance facts (datum, resolution,
   acquisition time) stay on the source row whatever library fetches.
+
+## 2026-09-08 - SCOPE RULED
 
 - SCOPE RULED: HYDRO AND EARTH-SURFACE SYSTEMS (NATE 2026-09-08):
   TRID3NT is MAINLY MODELING - the core is hydro and earth-based
@@ -4027,6 +4805,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   solutions (the processing ruling). TIMING: a read-only scope census
   now, rulings, then the move wave right after the sweep closes and
   BEFORE the calibration wave.
+
+### 2026-09-08 - SCOPE CENSUS RULED
+
   SCOPE CENSUS RULED (NATE 2026-09-08, docs/validation/scope-census.md):
   TO THE SCOPE ATTIC: biodiversity (7 fetchers) + movement ecology (2
   tools) as ruled, PLUS the DEMOGRAPHIC group (cdc_svi, census_acs,
@@ -4051,6 +4832,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   TIMING: the move wave runs right after the lean sweep closes,
   before calibration. Projected: registered tools 174 -> 161; product
   py -3,800; tests -1,800; fetcher yaml -1,500.
+
+### 2026-09-08 - RESEQUENCED
+
   RESEQUENCED (NATE 2026-09-08): the TWO-LENS FETCHER CENSUS and the
   FETCHER FOLD WAVE move AHEAD of calibration. Order now: lean sweep
   (running) -> scope-attic move -> fetcher fold (on the census's
@@ -4059,6 +4843,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the SWOT fetchers) -> processing the workflow way -> rung 4. The
   census is read-only and starts NOW beside the sweep; it excludes the
   13 packages bound for the scope attic. Calibration spec rev 1c.
+
+## 2026-09-08 - LEAN SWEEP CLOSED
 
 - LEAN SWEEP CLOSED (2026-09-08, verifier VERDICT CLEAN at 73463a89):
   pins (httpx, PyYAML, tenacity, aiohttp; then shapely, pyproj, scipy,
@@ -4083,6 +4869,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   row - internally inconsistent until it resolves); the inventory's
   contracts/plugin baselines included tests (product-only 8,832 and
   14,997).
+
+## 2026-09-08 - FETCHER FOLD RULED
 
 - FETCHER FOLD RULED (NATE 2026-09-08, docs/validation/fetcher-fold-
   census.md - the two-lens census by protocol family; 97 specs in
@@ -4122,6 +4910,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   transform (342) travels with the scope attic. The fold wave runs
   after the scope-move wave closes; its charter is the census + these
   rulings; conformance table at close.
+
+### 2026-09-08 - HYRIVER, THE WIDER MAP
+
   HYRIVER, THE WIDER MAP (NATE 2026-09-08, from HEC-Commander's HyRiver
   assistant prompt): beyond the fetchers, the suite holds (a)
   pygeohydro.overland_roughness - NLCD class -> Manning n from a
@@ -4137,6 +4928,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   precipitation source we do not fetch, one spec on HyRiver, added to
   the fold wave's hydro stage; (e) cover_statistics - overlaps two held
   processing tools, noted for the processing pass.
+
+## 2026-09-08 - SCOPE-ATTIC MOVE CLOSED
 
 - SCOPE-ATTIC MOVE CLOSED (2026-09-08, verifier VERDICT CLEAN at
   d90c3dce): hooks co-located per package and tree-walked (160 hook
@@ -4169,6 +4962,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   generated artifact left. CORRECTED NOW: the fetcher-fold census
   said join.py travels to the attic; it STAYED (ledgered QUEUED, the
   demographic MANIFEST requires it) - the census reads so.
+
+### 2026-09-09 - FOLD STAGE 0 RULINGS
+
   FOLD STAGE 0 RULINGS (NATE 2026-09-09, docs/validation/fetcher-fold-
   stage0.md): (a) the eight STAC specs read through GDAL's HTTP path
   - the status is verbatim (404/403/429 proven), retries fire on
@@ -4193,6 +4989,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   corrections to the census: the ESRI driver costs 1.05x, not 26 s;
   HyRiver's default cache expiry is 604800 s; the OSMnx shims measure
   62 LOC, not 40.
+
+### 2026-09-09 - FOLD VECTOR STAGE
+
   FOLD VECTOR STAGE (2026-09-09, 19 rows landed, 21 commits, pushed at
   c0e36a5c): G1 11 of 15 ESRI rows on the ESRIJSON driver, G10 TIGER
   on /vsizip//vsicurl/ (138 s -> 61 s), G3 all six Overpass rows on
@@ -4211,6 +5010,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   before landing (doubled /interpreter; float timeout), one deviation
   refused (unbounded recursive 429 retry - three throttled answers end
   a mirror's turn), ledgered beside the accepted 55 s pause.
+
+### 2026-09-08 - RESOLUTIONS
+
   RESOLUTIONS (orchestrator under standing law - NATE may override):
   (1) fetch_fema_nfhl_zones - the service answers 200-with-error on
   deep pages so the driver silently truncates; the row goes to the
@@ -4222,6 +5024,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   collection exposes a state property". fetch_usace_dams and
   fetch_epa_frs_facilities stay on their hooks (contract extensions
   they would need are stated, not built).
+
+### 2026-09-09 - FOLD HYDRO STAGE + RULINGS
+
   FOLD HYDRO STAGE + RULINGS (NATE 2026-09-09; stage record docs/
   validation/fetcher-fold-hydro-stage.md): landed - the one HyRiver
   shim (hooks/hyriver.py, 160 lines: 58 code + 62 docstring, four
@@ -4250,6 +5055,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   RE-CUT with a live tool sweep as its own step after the fold (75 of
   176 names dead, 60 registered tools unlisted); until then a dated
   coverage caveat on the page.
+
+## 2026-09-09 - FETCHER FOLD CLOSED
 
 - FETCHER FOLD CLOSED (2026-09-09, verifier VERDICT CLEAN at b2daea6e;
   conformance docs/validation/fetcher-fold-conformance.md): 19
@@ -4286,6 +5093,8 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   fetch_copernicus_dem has no corpus. STILL YOURS: the Earthdata
   .netrc (DSWx + NLDAS-2 live), the support-page re-cut step.
 
+## 2026-09-09 - DOCS AND DOCSTRING WAVE SHAPED
+
 - DOCS AND DOCSTRING WAVE SHAPED (NATE 2026-09-09, before calibration):
   (1) LOC = PURE CODE from here on - scripts/loc_report.py is the
   standing measure (no blank, comment or docstring lines; no YAML,
@@ -4311,6 +5120,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the repo README rewritten to the product as it is. A read-only
   census (docstrings by audience and content; every ADR classified;
   the docs tree and READMEs against the tree) precedes the wave.
+
+### 2026-09-09 - SCRIPTS AND TESTS
+
   SCRIPTS AND TESTS (NATE 2026-09-09): scripts/ does not all face the
   public repo - a read-only EVAL first (every script: consumers, runs?,
   last commit; fates TRACKED PRODUCT / LOCAL-ONLY ignored dir / ATTIC
@@ -4323,6 +5135,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   product tree with suite slices by directory replacing the
   alphabetical globs. Both evals run beside the docs census; NATE
   rules on each before anything moves.
+
+### 2026-09-09 - HISTORY IN CODE
+
   HISTORY IN CODE (NATE 2026-09-09): the standing rule holds - NO
   history, dates, job/milestone/ADR labels or person attribution in
   comments and docstrings; constraints only. NATE noticed residue in
@@ -4332,6 +5147,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   and every other tree in the same read-every-comment pass (a regex
   census cannot finish it), with a suite grep-gate on the marker
   classes afterwards so it does not return.
+
+### 2026-09-09 - DOC IMAGES
+
   DOC IMAGES (NATE 2026-09-09): the docs LEVERAGE the packets - one
   page per template under docs/ embeds its composite, animation and
   chart as DOC-SIZED renders (a composite near 300 KB, an animation
@@ -4342,6 +5160,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   memory. Frozen proof packets stay full size in docs/proof. The
   README's template gallery links the pages. Lands in the docs and
   docstring wave.
+
+### 2026-09-09 - FULL COVERAGE LAW FOR THE HYGIENE AND DOCS WAVE
+
   FULL COVERAGE LAW FOR THE HYGIENE AND DOCS WAVE (NATE 2026-09-09):
   "we keep coming back and finding out there were gaps caused by
   grepping and missing things mechanically." The wave carries a
@@ -4358,6 +5179,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   owner) until two rounds come back dry. The three read-only evals in
   flight are the shape; the wave's own inventory replaces their
   samples with full rows before anything changes.
+
+### 2026-09-09 - TEMPLATE DOCS, THE FLOPY NOTES
+
   TEMPLATE DOCS, THE FLOPY NOTES (NATE 2026-09-09): FloPy's docs work
   because nothing is written twice - package pages are GENERATED from
   the definition files the code reads, the example gallery RUNS in CI
@@ -4373,6 +5197,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   size, composites, outputs and a link into the keyword lookup. One
   generator script over the template registry (an instrument), run at
   every acceptance beside the packet renderer. In the docs wave.
+
+### 2026-09-09 - TEMPLATE DOCS, THE MODFLOW 6 EXAMPLES NOTE
+
   TEMPLATE DOCS, THE MODFLOW 6 EXAMPLES NOTE (NATE 2026-09-09):
   REPRODUCTION IS THE DOCUMENT - each MODFLOW 6 example is a script
   that builds, runs and plots; its page is generated from the script
@@ -4383,6 +5210,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   exact fill/run invocation with run id and commit), the figures with
   captions under the freshness rule, and the proving runs double as
   the regression set (the canaries). In the docs wave's generator.
+
+### 2026-09-09 - SCRIPTS RULED
+
   SCRIPTS RULED (NATE 2026-09-09, docs/validation/scripts-eval.md):
   the FIVE-DIRECTORY STRUCTURE is adopted - scripts/ keeps the eight
   user-facing entry points the README and Makefile name; scripts/
@@ -4407,6 +5237,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   tracked files, 7,902 pure LOC; 2,923 pure LOC leave the public
   repo. Executes inside the hygiene and docs wave under the full-
   coverage law.
+
+### 2026-09-09 - DOCS CENSUS RULED
+
   DOCS CENSUS RULED (NATE 2026-09-09, docs/validation/docs-census.md;
   the LIMITS themselves still under discussion): (a) THE FORTY
   LONGEST docstrings are CUT WITH THE SWEEP - NO docs/method/
@@ -4435,6 +5268,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   the coastal split, a proof-coverage assertion (three live templates
   have none), the proof README stating that the four-variant law
   governs renders, not evidence blobs.
+
+### 2026-09-09 - THE DOCSTRING LIMIT RULED
+
   THE DOCSTRING LIMIT RULED (NATE 2026-09-09): defaults 3 physical
   lines for functions and classes, 5 for modules (one line of what
   lives here + one module-wide constraint; never a pointer); the
@@ -4449,6 +5285,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   reader from the caller at the docstring; LLM-facing tool docstrings
   keep the 1,000-char front budget, enforced on the 19 that exceed it
   today; docs/CONVENTIONS.md rewritten to state exactly this.
+
+### 2026-09-09 - COMMENTS, THE CLEAN CODE CH. 4 DISCUSSION
+
   COMMENTS, THE CLEAN CODE CH. 4 DISCUSSION (NATE 2026-09-09): the
   best comment is the one the code makes unnecessary - the declarative
   style does this at the template level (rows named for datasets,
@@ -4462,6 +5301,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   name, a signature or a body. The naming-driven comment elimination
   belongs to whichever wave owns a module for its own reasons, where
   it is reviewed as code.
+
+### 2026-09-09 - TESTS RULED
+
   TESTS RULED (NATE 2026-09-09, docs/validation/tests-eval.md): the
   MIRROR TREE by subsystem (tests/telemac, mesh, fetchers, processing,
   search, emission, runtime, server, gates, adapters, solver, model,
@@ -4480,6 +5322,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   Qt-shim tests that assert only "the harness exited 0" are NAMED AS
   STANDING EXCEPTIONS now and reshaped in their own change. The
   staged-dataset conformance helper is a follow-on.
+
+### 2026-09-09 - TESTS RULED LANDED
+
   TESTS RULED LANDED (2026-09-09): the mirror tree is in place (308
   files, one commit per destination directory), the six Makefile
   targets are the invocation and AGENTS.md law 1 states them, and
@@ -4497,6 +5342,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   dependency: the catalog tools register through the daemon startup
   import, so a registry sweep in an early directory saw two fewer
   tools; test_gemini_schema_compliance.py runs that import itself now.
+
+### 2026-09-09 - FOLD RESIDUE HYGIENE
+
   FOLD RESIDUE HYGIENE (2026-09-09, five commits pushed): the double
   retry collapsed to one authority (11 requests -> 7 on a hard 500,
   and the 500's error envelope now reaches the caller); the land-
@@ -4512,6 +5360,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   law: fetch_copernicus_dem has no corpus BECAUSE it is the one
   tier="internal" seam behind fetch_dem and is out of the retrieval
   index by design - NOT A DEFECT; it stays internal.
+
+### 2026-09-09 - READABILITY LEDGER
+
   READABILITY LEDGER (NATE 2026-09-09): the hygiene wave records what
   it must not touch - every comment or docstring that a better name or
   a small extraction would make unnecessary becomes a row in docs/
@@ -4520,6 +5371,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   restructure); NOTHING is applied by the wave. After the docs wave
   NATE reads the ledger and either takes a batch as its own reviewed
   change per module (where behavior is verified as code) or moves on.
+
+### 2026-09-09 - FOLD RESIDUE HYGIENE CLOSED
+
   FOLD RESIDUE HYGIENE CLOSED (2026-09-09, check VERDICT CLEAN): the
   five fixes re-proven live and by seeded break. Two LIVE REDS outside
   those commits, REPORTED: (a) artemis_harbor_agitation, both variants
@@ -4533,6 +5387,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   under --help rewrote the frozen bench report docs/reports/tool-
   routing-failure-split.md; restored from HEAD - evals must never
   execute a script's module body against frozen evidence.
+
+### 2026-09-09 - DATED RECORDS STAY VERBATIM
+
   DATED RECORDS STAY VERBATIM (orchestrator under standing law
   2026-09-09 - NATE may override): a dated validation or conformance
   record (docs/validation/*-conformance.md and its kin) is the record
@@ -4543,6 +5400,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   method and maps are live. The hygiene wave's prerequisite move
   (the TIN writers into the product tree) therefore leaves mesh-wave-
   conformance.md:97 verbatim with its note.
+
+### 2026-09-09 - THE DOCSTRING COUNT CLARIFIED
+
   THE DOCSTRING COUNT CLARIFIED (orchestrator under standing law
   2026-09-09 - NATE may override): "3 lines" and "5 lines" count
   CONTENT lines - the non-blank lines between the delimiters; the
@@ -4554,6 +5414,9 @@ sandbox driver. All confirmed against the code; none touched in F2b.
   LOC instrument double-subtracted blank lines inside docstrings
   (understating pure code by ~276 lines over one scope) - fixed in the
   guards leg; the baselines are restated from the corrected measure.
+
+### 2026-09-09 - CALIBRATION REV 2
+
   CALIBRATION REV 2 (NATE 2026-09-09): (1) NO calibration recipe in a
   template - that decides for the user which knobs may vary (the
   author-literal pigeonhole again); the VARIATION SURFACE is every
