@@ -190,6 +190,28 @@ make clean     # remove build artifacts
 | --- | --- |
 | ![Chat dock](docs/img/dock-chat.png) | ![Flood map](docs/img/flood-map.png) |
 
+## Layout
+
+| file | what it is |
+| --- | --- |
+| `__init__.py` | The QGIS entry point: `classFactory` returns the plugin object. |
+| `plugin.py` | The plugin object QGIS loads: the toolbar action, the dock, the case's layer group. |
+| `plugin_settings.py` | The persisted settings the Settings dialog reads and writes. |
+| `install_dependencies.py` | The matplotlib gap, closed per OS; the Charts dock shows the same block filled in. |
+| `metadata.txt` | The QGIS plugin manifest - name, version, minimum QGIS. |
+| `icon.svg` | The toolbar trident. |
+| `Makefile` | The local zip / install / test targets described above. |
+| `LICENSE` | MIT. |
+
+| subfolder | what lives there |
+| --- | --- |
+| `net/` | The connection layer: the stdlib-only WebSocket client, the Qt bridge, the background tasks, the auth broker, one run invocation. |
+| `ui/` | The dock and every widget in it: the chat, the cards, the gate, the charts window, the draw tools, the cases and settings dialogs. |
+| `render/` | What arrives from the agent, turned into QGIS: layers, the point probe, message formatting. |
+| `case/` | The case's own canvas seams: the AOI, and pushing one of your layers up. |
+| `docs/` | The screenshots this page embeds. |
+| `tests/` | The plugin's own suite - pure-Python, with the Qt-wiring subset run in a subprocess. |
+
 ## License
 
 MIT -- see [LICENSE](LICENSE).

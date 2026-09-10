@@ -32,17 +32,17 @@ registry and the cache shim are the two seams they all pass through.
 
 | entry | what it is |
 | --- | --- |
-| `_fetch_common.py` | The typed fetch errors and bbox helpers every fetcher shares. |
-| `_public_s3.py` | Anonymous access to public AWS S3 buckets, independent of the caller's credentials. |
-| `us_states.py` | US state and NWS area-code resolution, shared by the alert fetchers. |
-| `_router/router.py` | The router engine: a declared spec plus the ask to a request, a response and a typed layer. |
-| `_router/spec.py` | The source-spec loader - schema validation, co-located corpus pickup, tree walk. |
-| `_router/registration.py` | Promotion: a spec becomes a registered tool with a synthesized signature and schema. |
-| `_router/emit_on_fetch.py` | Surfacing a fetched INPUT as a `role=context` layer through the emission seam. |
-| `_router/errors.py` | The router's typed-error hierarchy over the shared fetch bases. |
-| `_router/shape_classifier.py` | The one classifier for what shape a response came back in. |
-| `_router/executors/` | How a request is actually run: HTTP JSON, raster COG, vector FlatGeobuf, zipped vector, station timeseries, library delegates, animation frames. |
-| `_router/hooks/` | The hook contract (`RequestPlan`, `register_hook`, `resolve_hook`) and the modules SEVERAL specs share; the loader walks both this folder and the co-located `hooks.py` files. |
-| `<group>/<spec>/hooks.py` | One spec's own `build_request` / `parse_response` overrides - what the spec cannot declare, beside the spec, registered by the tree walk. |
-| `_router/transforms/` | Post-fetch shaping: `fan_out`, `join`, `tiled_mosaic`. |
-| `_router/transport/` | The HTTP client, opener, staged and range-read file access, zip-object reads, and their errors. |
+| `fetchers/_fetch_common.py` | The typed fetch errors and bbox helpers every fetcher shares. |
+| `fetchers/_public_s3.py` | Anonymous access to public AWS S3 buckets, independent of the caller's credentials. |
+| `fetchers/us_states.py` | US state and NWS area-code resolution, shared by the alert fetchers. |
+| `fetchers/_router/router.py` | The router engine: a declared spec plus the ask to a request, a response and a typed layer. |
+| `fetchers/_router/spec.py` | The source-spec loader - schema validation, co-located corpus pickup, tree walk. |
+| `fetchers/_router/registration.py` | Promotion: a spec becomes a registered tool with a synthesized signature and schema. |
+| `fetchers/_router/emit_on_fetch.py` | Surfacing a fetched INPUT as a `role=context` layer through the emission seam. |
+| `fetchers/_router/errors.py` | The router's typed-error hierarchy over the shared fetch bases. |
+| `fetchers/_router/shape_classifier.py` | The one classifier for what shape a response came back in. |
+| `fetchers/_router/executors/` | How a request is actually run: HTTP JSON, raster COG, vector FlatGeobuf, zipped vector, station timeseries, library delegates, animation frames. |
+| `fetchers/_router/hooks/` | The hook contract (`RequestPlan`, `register_hook`, `resolve_hook`) and the modules SEVERAL specs share; the loader walks both this folder and the co-located `hooks.py` files. |
+| `fetchers/<group>/<spec>/hooks.py` | One spec's own `build_request` / `parse_response` overrides - what the spec cannot declare, beside the spec, registered by the tree walk. |
+| `fetchers/_router/transforms/` | Post-fetch shaping: `fan_out`, `join`, `tiled_mosaic`. |
+| `fetchers/_router/transport/` | The HTTP client, opener, staged and range-read file access, zip-object reads, and their errors. |

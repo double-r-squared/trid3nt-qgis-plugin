@@ -15,7 +15,7 @@ join the run as the sixth slice.
 | `emission/` | the emitter, the uri registry, publication, charts | 39 | 503 |
 | `fetchers/` | the fetch router, its executors, hooks and fallbacks | 65 | 1563 |
 | `gates/` | the gates, the context budget, the circuit breaker | 21 | 312 |
-| `hygiene/` | the documentation guards: the docstring standard, history markers, dead references | 3 | 9 |
+| `hygiene/` | the documentation guards: the docstring standard, history markers, dead references, proof coverage, the template pages, the package maps | 6 | 66 |
 | `mesh/` | the meshers, the mesh gate, topology and bed | 7 | 226 |
 | `model/` | the SysML model conformance check | 1 | 19 |
 | `plugin/` | the plugin seams the server suite reads offline, by `ast` | 1 | 3 |
@@ -28,6 +28,10 @@ join the run as the sixth slice.
 | `solver/` | the solver seam, the run reads, the engine-room posture | 6 | 59 |
 | `telemac/` | the TELEMAC templates, authoring and postprocesses | 24 | 429 |
 | `tools/` | the registry, the arg normalizer, the tool cache | 14 | 402 |
+
+| file | what it is |
+|---|---|
+| `conftest.py` | The fixtures that cross subsystems, and the two autouse resets. |
 
 A directory carries a `conftest.py` only when a fixture lands in it: the root
 holds what crosses subsystems (`fake_s3`, `fake_llm`, `empty_registry`, and the
