@@ -3609,3 +3609,15 @@ dead-reference guard is unaffected. Three prose references survive by design -
 and 0314 at the lines they were read at; a dated record is not rewritten).
 `docs/specs/shared-workflows-cull-proposal.md` names 0042 and is itself a delete
 in the docs-layout stage.
+
+## The six "STATUS: THINKING" validation notes - 2026-09-09
+
+| Candidate | Scope | Condition to delete | Status | Source |
+|---|---|---|---|---|
+| `docs/validation/research.md` (194), `responsibility-cut.md` (34), `activation-boundary.md` (31), `agentic-loop.md` (40) | `docs/validation/` | DOCS CENSUS RULED: the THINKING notes fold into the calibration methodology or go. What still binds is FOLDED FIRST into `docs/design/calibration-methodology.md` appendix A - the three-tier responsibility cut, the activation boundary's manufactures-a-claim test, the review-context-isolation finding, the metric definitions, the published bands the Moriasi table does not carry, and the three honesty notes (the CIWEM bands unverified, ASTM D5490 withdrawn, no boundary-condition linter exists). What went with the files: the per-engine calibration practice, tooling and diagnostics sections for SFINCS, SWMM and MODFLOW - three engines absent from the tree - and the 24-row NRW review proforma, which is a review checklist rather than this methodology's subject | DELETED (2026-09-09) | `docs/validation/docs-census.md` Q5 |
+| `docs/validation/roadmap-proposal.md` (17), `open-questions.md` (42) | `docs/validation/` | Nothing lifted: the proposed build order A-D is superseded by the campaign rulings in `docs/IDEAS.md`, and the open questions are either answered by the methodology or asked again in its own section 8. No live consumer | DELETED (2026-09-09) | `docs/validation/docs-census.md` Q5 |
+
+The folder README's status line went with them: it declared the whole folder
+"STATUS: THINKING - nothing here is implemented or approved", which was wrong
+for more than thirty of its files. It now says what the folder is - dated
+measurements - and where the design space went.

@@ -1028,3 +1028,108 @@ is ours.
   methodology sign-off before runs; references are benchmarks never shape;
   the US-only rule refined to "wherever gauges and sensors our substrate
   can fetch live"; the malpasset chop with no code inheritance.
+
+---
+
+## Appendix A - the validation background, folded here 2026-09-09
+
+Six "STATUS: THINKING" notes under `docs/validation/` were the design space
+this document grew out of. What they carried that still binds is folded here
+and the notes are gone; what was proposed and then superseded, or written about
+engines that left the tree, went with them.
+
+### A.1 The responsibility cut
+
+The central principle: there is a line between what the system can validate
+about a simulation and what only a human can, and the system must never
+pretend to be on the wrong side of it.
+
+- **Tier 1, MACHINE-ENFORCED** - the honesty floor extended to physics.
+  Deterministic checks run after every solve and their failures ride the
+  result as typed warnings, never as a silent pass: mass balance or continuity
+  (engine-reported, or derived and LABELLED as derived), volume sanity against
+  the supplied forcing, duration sufficiency (a peak at the end of the window
+  is not a peak), trapped-water and missing-downstream-boundary symptoms,
+  parameter-against-data cross-checks, and convergence or dry-cell diagnostics.
+- **Tier 2, MACHINE-ASSISTED, HUMAN-JUDGED** - the system computes and renders,
+  the human judges. Computed-against-observed at gauges with the published
+  bands shown beside the number, a dynamic visual review, residual maps. The
+  number is machine; "good enough for this purpose" is human. A tier-2 verdict
+  is a suggestion with its source, never a gate.
+- **Tier 3, HUMAN-ONLY, SYSTEM-PROMPTED** - local knowledge, flow-path
+  reasonableness, event selection, boundary-condition correctness. The system's
+  whole job here is to ASK, on an explicit unchecked sign-off; a tier-3 item can
+  never be satisfied by the model on the user's behalf.
+
+### A.2 The activation boundary
+
+The loop applies to SIMULATION-class work, not to every ask. The dividing line
+is the irreducible correctness burden: a tool triggers it only if it
+MANUFACTURES A CLAIM ABOUT THE WORLD that can be confidently and invisibly
+wrong. Data that is its own ground truth does not - a fetch, a deterministic
+transform and a SQL query over visible data are all fast-path, and the honesty
+floor suffices for them. The mechanism is a flag on TOOL METADATA rather than a
+turn wrapper, so a future tool that manufactures a fallible claim opts in by
+setting it. The tiers scale to stakes: tier-1 diagnostics are cheap enough to
+run on every flagged solve because they parse a log the engine already wrote;
+what gates the expensive tiers is open.
+
+### A.3 Review does not share the builder's context
+
+Measured on this project's own build and review logs: same-model adversarial
+panels with FRESH context out-caught the builder lanes four times out of four -
+a fresh-clone break, path-walk misses, an overstated fix claim, and embedding
+regressions hidden behind an aggregate win. Self-review inside the builder's
+context inherits the assumptions that produced the mistake. So the loop folds
+into the one turn-loop agent and the REVIEW does not: a deterministic
+diagnostics core at zero token cost, then one isolated call, then the human
+card. No agent framework is needed in the daemon for that.
+
+### A.4 Metric definitions
+
+- **NSE** = 1 - [Sum(Obs-Sim)^2 / Sum(Obs-Mean(Obs))^2]; range -inf to 1, where
+  1 is perfect and 0 is as good as the observed-mean benchmark (Moriasi 2007).
+- **PBIAS** = 100 x Sum(Sim-Obs) / Sum(Obs); positive means overestimation
+  (Moriasi 2007).
+- **RSR** = RMSE / StDev(Obs) (Moriasi 2007).
+- **RMSE** = sqrt[Sum(Sim-Obs)^2 / n]; no universal threshold - it is read
+  against RSR or the observed range.
+- **KGE** = 1 - sqrt[(r-1)^2 + (beta-1)^2 + (gamma-1)^2], with r the Pearson
+  correlation, beta = mean(Sim)/mean(Obs) and gamma = CV(Sim)/CV(Obs)
+  (Knoben et al. 2019).
+- **Flood-extent categorical**, over the 2x2 confusion of model wet/dry against
+  benchmark wet/dry: Hit Rate H = M1B1/(M1B1+M0B1), False Alarm Ratio
+  F = M1B0/(M1B0+M1B1), Critical Success Index C = M1B1/(M1B1+M0B1+M1B0).
+- **Scaled RMSE** (SRMS, groundwater heads) = head-residual RMSE divided by the
+  observed head RANGE, not by its mean.
+
+### A.5 Published acceptance bands the Moriasi table does not carry
+
+Section 3.3 already carries the Moriasi NSE / PBIAS / RSR bands and names
+`compute_skill_metrics` as their home. These are the rest, and each is a
+convention rather than an agency pass mark:
+
+- KGE > -0.41 is the point at which a model beats the observed-mean naive
+  predictor. There is no graded band after Moriasi.
+- Flood-extent CSI around 0.5 to 0.7 reads as good agreement in the research
+  literature; it is not agency-codified.
+- A continuity or mass-balance error is single-digit percent at worst, and the
+  practitioner bar is nearer 3% than the 10% a manual may cite illustratively.
+  A 1D mass error under 1% is acceptable, 1-10% is contextual, and 10% or more
+  is investigated.
+- Scaled RMSE under 10% is the groundwater convention, and it is necessary
+  rather than sufficient: a volumetric budget discrepancy under 1% has been
+  recorded on a model still judged inadequate.
+- Peak flow or stage error around 10-15% is an engineering rule of thumb, not
+  a codified number.
+
+### A.6 Three standing honesty notes from the same read
+
+- The CIWEM UDG Code of Practice is the UK sewer-model verification reference
+  and is known to define good/fair/poor bands, but the numeric bands could not
+  be extracted from the PDF. They are NOT hardcoded until they are confirmed.
+- ASTM D5490, the groundwater model comparison-to-observations standard, was
+  withdrawn in 2023 with no identified successor.
+- No published boundary-condition linter exists in any source reviewed, which
+  is why boundary-condition correctness stays a tier-3 item by design rather
+  than by omission.

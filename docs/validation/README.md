@@ -1,27 +1,19 @@
-# Simulation validation, review, and calibration
+# Validation records
 
-STATUS: THINKING - nothing here is implemented or approved for implementation.
-This folder is the design space for making simulations reliable and accurate:
-review (is the model set up sanely), validation (does it match observations),
-calibration (adjusting parameters until it does). It is a large part of the
-system and gets thought through fully before any action.
+Every file here is a MEASUREMENT: a census, a conformance walk, a ledger or an
+evaluation, dated and taken against the tree as it stood. A file in this folder
+is not design space and not a proposal - when the thing it measured dies, the
+file dies with it, and a later change that falsifies its wording does not
+rewrite the finding.
 
-Files:
-- research.md - primary-source research: per-engine calibration practice,
-  numeric acceptance criteria, review checklists, parseable diagnostics
-- responsibility-cut.md - the central design principle: which checks are
-  machine-enforced, machine-assisted, or human-only
-- roadmap-proposal.md - a PROPOSED build order (A-D). Not approved.
-- activation-boundary.md - WHEN the loop applies (simulation-class only,
-  via a tool metadata flag) vs the fast path for fetch/processing/query
-- agentic-loop.md - the research/plan/execute/review/edit loop mapped to
-  simulations; context isolation as the review principle
-- tool-list.md - the exhaustive V&V primitive list (verify + calibrate),
-  mapped to package functions; the concrete build target
-- open-questions.md - what must be answered before anything is built
+The validation and calibration DESIGN space that used to live here as six
+"STATUS: THINKING" notes is gone: the responsibility cut, the activation
+boundary, the review-context rule and the metric background folded into
+`docs/design/calibration-methodology.md` (appendix A), and the proposed build
+order and the open-questions list were superseded by the campaign rulings in
+`docs/IDEAS.md`.
 
-The fetcher fold wave's measurements also live here, and are records rather than
-design space:
+The fetcher fold wave's measurements:
 - fetcher-fold-census.md - the two-lens census by protocol family, 97 specs
 - fetcher-fold-stage0.md - THE TRADE, per library, measured before any spec moved
 - fetcher-fold-raster-half.md - the STAC stage
