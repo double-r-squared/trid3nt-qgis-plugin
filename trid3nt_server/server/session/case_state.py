@@ -16,18 +16,9 @@ from typing import Any
 logger = logging.getLogger("trid3nt_server.server")
 
 async def _replay_active_case_layers(state: SessionState) -> None:
-    """Seed the reconnect emitter from the active Case's persisted layers.
-
-    The bare-reconnect half of the per-Case layer DURABILITY requirement.
-    Resolves the session's active Case and seeds this connection's emitter
-    from the Case's persisted snapshot so the caller's single
-    emit_session_state re-renders every already-rendered layer WITHOUT a
-    case-open. Reuses the case-open / _sync_case_context rehydration seam.
-
-    No-ops (never crashes) when there is no active Case or Persistence is
-    unbound. Best-effort: a Persistence failure logs and leaves the emitter
-    as-is so the resume still completes.
-    """
+    """Seed this connection's emitter from the active Case's persisted layers,
+    so the caller's single session-state emit re-renders every already-rendered
+    layer with no case-open. Best-effort: the resume completes regardless."""
     if state.emitter is None:  # pragma: no cover -- _ensure_emitter always binds
         return
     case_id = state.active_case_id
@@ -38,13 +29,13 @@ async def _replay_active_case_layers(state: SessionState) -> None:
         return
     try:
         session_state = await p.get_session_state(case_id)
-        # JOB 2: restore the Case AOI anchor on a bare reconnect so a follow-up
-        # turn after a WS blip reuses the original extent (no Case re-open).
+        # Restore the Case AOI anchor on a bare reconnect, so a follow-up turn
+        # after a socket blip reuses the original extent with no re-open.
         _cache_case_bbox_from_session_state(state, session_state)
         state.emitter.reset_loaded_layers(session_state.loaded_layers)
-        # Repopulate the inline-GeoJSON side-table so the replayed
-        # session-state carries renderable vectors (the browser never fetches
-        # object-store uris directly). Mirrors the case-open path.
+        # Repopulate the inline-vector side-table so the replayed session state
+        # carries renderable vectors; a client never fetches object-store uris
+        # itself.
         try:
             await state.emitter.reinline_vector_layers()
         except Exception:  # noqa: BLE001 -- re-inline is best-effort
@@ -53,11 +44,9 @@ async def _replay_active_case_layers(state: SessionState) -> None:
                 state.session_id,
                 case_id,
             )
-        # #147 reconnect-resync: seed the emitter's chat-history mirror from the
-        # SAME persisted CaseSessionState already fetched above (do NOT
-        # re-fetch) so a BARE reconnect re-renders the chat bubbles too, not
-        # just the layers. Persisted CaseChatMessage list is serialized to the
-        # wire dict shape SessionStatePayload.chat_history carries. Best-effort.
+        # Seed the emitter's chat mirror from the SAME state already fetched
+        # above, never a second read, so a bare reconnect re-renders the chat
+        # too and not only the layers. Best-effort.
         try:
             state.emitter.seed_chat_history(
                 [m.model_dump(mode="json") for m in session_state.chat_history]
@@ -68,10 +57,9 @@ async def _replay_active_case_layers(state: SessionState) -> None:
                 state.session_id,
                 case_id,
             )
-        # Seed the URI registry so handle-indirection resolves for layers
-        # produced in a PRIOR session of this Case. REPLACE (not
-        # additive-seed) -- same rationale as the case-switch call sites, so a
-        # bare reconnect never leaves stale/evicted records lingering.
+        # Seed the URI registry so handle indirection resolves for layers
+        # produced in a PRIOR session of this Case. It REPLACES rather than
+        # adds, so a reconnect never leaves stale records lingering.
         await _seed_registry_for_case(
             state, case_id, session_state.loaded_layers
         )
@@ -90,11 +78,7 @@ async def _replay_active_case_layers(state: SessionState) -> None:
         )
 
 def _bind_auth_result(state: SessionState, result: AuthResult) -> None:
-    """Copy the resolved auth identity into the SessionState.
-
-    Separate from ``_handle_auth_token`` so tests can drive the bind
-    directly without parsing an envelope.
-    """
+    """Copy the resolved auth identity into the SessionState."""
     state.authenticated_user_id = result.user.user_id
     state.is_anonymous = result.is_anonymous
     state.auth_handshake_complete = True
@@ -102,17 +86,9 @@ def _bind_auth_result(state: SessionState, result: AuthResult) -> None:
 async def _touch_session_record(
     state: SessionState, *, case_id: str | None = None
 ) -> None:
-    """D.6 session-record heartbeat.
-
-    Upserts the agent's own ``sessions`` document: ``last_active_at`` +
-    ``expires_at`` advance (TTL driver per ``SESSIONS_TTL``), the active
-    Case lands in ``project_ids``. Fired on auth bind, Case open/create,
-    and every persisted chat turn -- none of these touches is a confirmable
-    write (the session-record carveout).
-
-    Best-effort: a persistence hiccup is logged at WARNING and never
-    reaches the caller.
-    """
+    """Heartbeat the session record: the activity stamps advance and the active
+    Case is recorded. Best-effort - a persistence hiccup never reaches the
+    caller - and never a confirmable write."""
     p = get_persistence()
     if p is None:
         return
@@ -130,19 +106,9 @@ async def _touch_session_record(
 async def _persist_session_active_case(
     state: SessionState, case_id: str | None
 ) -> None:
-    """Persist the session's active-Case pointer.
-
-    Writes ``last_active_case_id`` onto the ``sessions`` document so the
-    active pointer survives a process restart that wipes the
-    in-memory ``_SESSION_ACTIVE_CASE`` dict. The client-stamped ``case_id``
-    stays the REAL authority; this is only the cold-start cache. Fired
-    whenever the server re-binds the pointer to the client's Case, so a
-    later restart's fresh SessionState reloads the right Case (see
-    ``_reload_session_active_case``).
-
-    Best-effort: a persistence hiccup is logged at WARNING and never
-    reaches the caller's turn.
-    """
+    """Persist the session's active-Case pointer so it survives a restart that
+    wipes the in-memory registry; the client's stamp stays the authority and
+    this is only the cold-start cache. Best-effort."""
     p = get_persistence()
     if p is None:
         return
@@ -156,20 +122,9 @@ async def _persist_session_active_case(
         )
 
 async def _reload_session_active_case(state: SessionState) -> None:
-    """Reload the persisted active-Case pointer into the in-memory registry.
-
-    When a fresh SessionState is built after a process restart (or a
-    brand-new process), the session-scoped ``_SESSION_ACTIVE_CASE`` dict is
-    empty. This reloads the persisted ``last_active_case_id`` so the
-    server's pointer is warm again BEFORE the first replay/turn. The
-    client-stamped ``case_id`` still wins on any disagreement; this only
-    seeds a sensible default for a bare resume (older client, no stamp).
-
-    Idempotent + guarded: only seeds when the registry has NO entry for
-    this session yet (a value already present is the live truth and is
-    never overwritten). Best-effort: a missing record / persistence hiccup
-    leaves the pointer None.
-    """
+    """Warm the in-memory pointer from the persisted one before the first replay
+    or turn, only when the registry has NO entry for this session yet: a value
+    already there is the live truth. A client stamp still wins on disagreement."""
     if state.session_id in _SESSION_ACTIVE_CASE:
         return
     p = get_persistence()
@@ -196,23 +151,17 @@ async def _reload_session_active_case(state: SessionState) -> None:
 # Case lifecycle handlers
 # --------------------------------------------------------------------------- #
 
-#: OPEN-8: the last-emitted case-list content digest PER SESSION (not
-#: per connection -- SessionState is a fresh per-connection object, and
-#: a session can carry more than one live socket). A session-resume
-#: keepalive ping was re-serializing + re-sending the FULL case list
-#: even when nothing had changed since the last emit. Cleared when the
-#: session's last live connection disconnects so a later reconnect
-#: always gets a fresh unconditional emit.
+#: The last-emitted case-list digest PER SESSION, not per connection, since a
+#: session can carry more than one live socket: without it a keepalive ping
+#: re-serializes and re-sends the whole list unchanged. Cleared when the
+#: session's last connection disconnects, so a later reconnect emits
+#: unconditionally.
 _SESSION_CASE_LIST_HASH: "dict[str, str]" = {}
 
 def _case_list_digest(cases: "list[CaseSummary]") -> str:
-    """Stable content digest of a case list, order-independent.
-
-    Built from the fields a client actually renders/reacts to (id, title,
-    status, timestamps) rather than a raw model dump, so field additions
-    that don't change client-visible state don't force spurious re-emits.
-    Sorted by ``case_id`` so the digest is independent of listing order.
-    """
+    """Stable, order-independent digest of a case list, over the fields a client
+    renders rather than a raw model dump, so a field addition that changes
+    nothing visible does not force a re-emit."""
     parts = sorted(
         f"{c.case_id}|{c.title}|{c.status}|{c.created_at}|{c.updated_at}"
         for c in cases
@@ -220,16 +169,12 @@ def _case_list_digest(cases: "list[CaseSummary]") -> str:
     return hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()
 
 def _clear_case_list_hash(session_id: str) -> None:
-    """Drop the cached case-list digest for ``session_id`` (best-effort).
-
-    Called once the session's last live connection disconnects so a fresh
-    reconnect later always gets an unconditional first emit rather than
-    inheriting a stale digest from a prior connection's cache.
-    """
+    """Drop the cached case-list digest for ``session_id``, so a later reconnect
+    emits unconditionally rather than inheriting a stale digest."""
     _SESSION_CASE_LIST_HASH.pop(session_id, None)
 
-#: Cases already auto-named this process (avoid a get_case read
-#: on every user turn -- only the first turn per Case checks the title).
+#: Cases already auto-named this process, so only the first turn per Case pays
+#: a title read.
 _AUTONAMED_CASES: set[str] = set()
 
 _TITLE_STOPWORDS = frozenset(
@@ -238,11 +183,8 @@ _TITLE_STOPWORDS = frozenset(
 )
 
 def _derive_case_title(prompt: str) -> str | None:
-    """Heuristic 3-6 word Case title from the first user prompt.
-
-    Significant tokens, title-cased, capped at ~48 chars. Returns None for
-    degenerate prompts.
-    """
+    """A heuristic short Case title from the first user prompt: significant
+    tokens, title-cased and capped; ``None`` for a degenerate prompt."""
     words = [
         w.strip(".,!?:;()[]\"'")
         for w in prompt.split()
@@ -256,28 +198,16 @@ def _derive_case_title(prompt: str) -> str | None:
     return title[:48].rstrip() or None
 
 def _turn_case_id(state: SessionState) -> str | None:
-    """The Case the current turn is bound to.
-
-    Prefers the pin set by ``_prepare_user_turn`` at dispatch time; falls
-    back to the live ``active_case_id`` for callers outside a prepared turn
-    (direct tool invocations in tests, legacy paths). Without the pin, every
-    persistence site reading ``active_case_id`` at WRITE time lets a
-    ``case-command(select)`` arriving mid-stream re-aim in-flight writes at
-    the newly selected Case.
-    """
+    """The Case the current turn is bound to: the dispatch-time pin, else the
+    live pointer for a caller outside a prepared turn."""
+    # Reading the live pointer at WRITE time would let a select arriving
+    # mid-stream re-aim in-flight writes at the newly selected Case.
     return state.current_turn_case_id or state.active_case_id
 
 def _turn_case_bbox(state: SessionState) -> Any:
-    """The current turn's Case AOI bbox, or None.
-
-    Used by the expensive-simulation reuse guard AND the fetch reuse guard as
-    the AOI anchor when a request / persistence-seeded layer has no recorded
-    bbox: a bbox-keyed re-run (or a bare follow-up fetch) in a single-result
-    Case whose request bbox equals the Case AOI is a clear match.
-
-    Reads ``state.case_bbox`` -- the durable cache of the active Case's
-    persisted ``CaseSummary.bbox`` (set on case select / sync).
-    """
+    """The current turn's Case AOI bbox, or ``None``: the durable cache of the
+    active Case's persisted bbox, which the reuse guards use as the AOI anchor
+    when a request or seeded layer has no recorded bbox of its own."""
     case_id = _turn_case_id(state)
     if not case_id:
         return None
@@ -286,17 +216,9 @@ def _turn_case_bbox(state: SessionState) -> Any:
 def _cache_case_bbox_from_session_state(
     state: SessionState, session_state: Any
 ) -> None:
-    """Cache the active Case's AOI bbox onto ``state.case_bbox``.
-
-    Reads ``session_state.case.bbox`` -- the persisted ``CaseSummary.bbox``
-    that the layers-present note already consumes -- and stores it so
-    ``_turn_case_bbox`` has a durable active-AOI anchor on every live turn
-    (the reuse short-circuits + the per-turn [Case state] note both read
-    it). Pydantic BBox models serialize to a plain list; coerced to a list
-    so the value is a cheap, JSON-shaped ``[lon_min, lat_min, lon_max,
-    lat_max]`` (or ``None``). Best-effort: a missing / malformed case leaves
-    the cache untouched-to-None.
-    """
+    """Cache the active Case's persisted AOI bbox as a plain list, so every live
+    turn has a durable AOI anchor; a missing or malformed case caches ``None``
+    rather than raising."""
     try:
         case = getattr(session_state, "case", None)
         bbox = getattr(case, "bbox", None) if case is not None else None
@@ -310,16 +232,9 @@ def _cache_case_bbox_from_session_state(
 async def _persist_case_layer_handles(
     state: SessionState, *, case_id: str | None
 ) -> None:
-    """Persist the session registry's short-handle map to the Case.
-
-    Writes the ``{L<n>: uri}`` map as a storage-only ``layer_handles`` field
-    on the cases doc (see ``Persistence.set_case_layer_handles``) so a
-    reconnect / Case reopen (``_seed_registry_for_case``) restores the exact
-    handles the LLM has already been shown. Skips when nothing new was
-    minted since the last write (``shorts_dirty``). Best-effort: any failure
-    is logged and swallowed -- the dispatch is never broken, and the registry
-    stays dirty so the next dispatch retries the write.
-    """
+    """Persist the session registry's short-handle map onto the Case, so a
+    reconnect restores the exact handles the model has already been shown.
+    Skipped when nothing new was minted; a failure leaves the map dirty."""
     if not case_id:
         return
     reg = get_uri_registry(state.session_id)
@@ -339,16 +254,11 @@ async def _persist_case_layer_handles(
 async def _seed_registry_for_case(
     state: SessionState, case_id: str | None, loaded_layers: Any
 ) -> None:
-    """Reset the URI registry to a Case AND restore its handle map.
-
-    The single reseed path for every case-open / case-switch / resume call
-    site: replace-not-merge from the Case's persisted ``loaded_layers`` (the
-    F32 contract), importing the Case's persisted ``{L<n>: uri}`` map FIRST
-    so already-announced short handles keep their numbers and fresh layers
-    mint past the persisted maximum. Best-effort on the persistence read --
-    a hiccup degrades to fresh minting (stale L<n> references then reject
-    typed with the current inventory, which is honest and retryable).
-    """
+    """Reset the URI registry to a Case and restore its handle map: the one
+    reseed path for every open, switch and resume. It REPLACES rather than
+    merges, so announced handles keep their numbers."""
+    # A failed read degrades to fresh minting, and a stale handle then draws a
+    # typed rejection listing the current inventory - honest and retryable.
     reg = get_uri_registry(state.session_id)
     persisted: dict[str, str] | None = None
     p = get_persistence()
@@ -364,14 +274,9 @@ async def _seed_registry_for_case(
     reg.replace_from_layers(loaded_layers, short_handles=persisted)
 
 def _set_active_aoi_from_payload(state: SessionState, raw: Any) -> None:
-    """Bind/clear the session's active canvas AOI.
-
-    Called when a ``user-message`` payload carries the ``aoi_bbox`` key
-    (``[min_lon, min_lat, max_lon, max_lat]`` EPSG:4326, ``None`` when no AOI
-    is drawn). A valid bbox sets the active AOI; an explicit ``None`` clears
-    it; a malformed value is logged and ignored (never blocks the turn, never
-    clobbers a good AOI with garbage).
-    """
+    """Bind or clear the session's active canvas AOI: a valid bbox sets it, an
+    explicit ``None`` clears it, and a malformed value is logged and ignored
+    rather than clobbering a good AOI."""
     if raw is None:
         if state.active_aoi_bbox is not None:
             logger.info(
@@ -397,15 +302,9 @@ def _set_active_aoi_from_payload(state: SessionState, raw: Any) -> None:
     )
 
 def _set_drawn_geometry_from_payload(state: SessionState, raw: Any) -> None:
-    """Bind/clear the turn's user-drawn geometry.
-
-    Called when a ``user-message`` payload carries the ``drawn_geometry`` key
-    (``{"geometry_type": "rectangle", "bbox": [min_lon, min_lat, max_lon,
-    max_lat]}`` EPSG:4326, ``None`` when nothing is drawn). A valid rectangle
-    sets it; an explicit ``None`` clears it; a malformed value is logged and
-    ignored (never blocks the turn). Stored as a plain dict; the turn dispatcher
-    binds it into ``bind_turn_drawn_geometry`` so composer gates consume it.
-    """
+    """Bind or clear the turn's user-drawn geometry: a valid rectangle sets it,
+    an explicit ``None`` clears it, and a malformed value is logged and ignored.
+    Stored as a plain dict for the turn dispatcher to bind."""
     if raw is None:
         state.drawn_geometry = None
         return
@@ -436,22 +335,12 @@ def _set_drawn_geometry_from_payload(state: SessionState, raw: Any) -> None:
 async def _persist_case_loaded_layers(
     state: SessionState, *, case_id: str | None = None
 ) -> None:
-    """Sync the emitter's ``_loaded_layers`` onto the turn's ``CaseSummary``.
-
-    Writes the current ``ProjectLayerSummary[]`` accumulator into
-    ``Case.loaded_layer_summaries`` (full dicts for rehydration) and keeps
-    ``Case.layer_summary`` (the lightweight ``layer_id[]`` projection) in
-    lockstep. Idempotent and dedup-by-uri because the emitter already dedups
-    upstream.
-
-    Best-effort: a Persistence failure is logged but never raised. The Case
-    lookup gates the write -- an archived/deleted Case is silently skipped
-    (no surprise resurrection via this side-channel).
-
-    ``case_id`` pins the target Case explicitly (callers inside a tool
-    dispatch pass their entry-time capture); default resolves via
-    ``_turn_case_id`` so a mid-turn Case switch never re-aims attribution.
-    """
+    """Sync the emitter's layer accumulator onto the turn's Case, keeping the
+    full summaries and their lightweight projection in lockstep. Best-effort,
+    and an archived or deleted Case is skipped rather than resurrected."""
+    # ``case_id`` pins the target Case explicitly - a caller inside a dispatch
+    # passes its entry-time capture - so a mid-turn switch never re-aims the
+    # attribution.
     target_case = case_id if case_id is not None else _turn_case_id(state)
     p = get_persistence()
     if p is None or state.emitter is None or not target_case:
@@ -528,22 +417,11 @@ async def _persist_case_loaded_layers(
 async def _delete_case_loaded_layer(
     state: SessionState, layer_id: str, *, case_id: str | None = None
 ) -> None:
-    """Persist a layer deletion AUTHORITATIVELY (replace, not union).
-
-    Mirrors the in-memory emitter's drop of ``layer_id`` from
-    ``_loaded_layers`` onto the persisted ``CaseSummary`` so it cannot
-    RESURRECT on the next turn or a Case reopen.
-
-    Deliberately bypasses ``_persist_case_loaded_layers`` (that path UNIONs
-    the emitter view with ``case.loaded_layer_summaries``, which would re-add
-    the deleted layer). Here we REMOVE ``layer_id`` from both
-    ``loaded_layer_summaries`` and ``layer_summary`` and write the result.
-
-    Best-effort: a Persistence failure is logged but never raised; a missing
-    / tombstoned Case is silently skipped. ``case_id`` pins the target Case
-    explicitly; default resolves via ``_turn_case_id`` (never the raw live
-    ``active_case_id``).
-    """
+    """Persist a layer deletion AUTHORITATIVELY, removing the layer from both
+    the persisted summaries and their projection, so it cannot resurrect on the
+    next turn or a reopen. Best-effort; a tombstoned Case is skipped."""
+    # It deliberately bypasses the sync path above, which UNIONs the emitter
+    # view with the persisted summaries and would re-add the deleted layer.
     target_case = case_id if case_id is not None else _turn_case_id(state)
     p = get_persistence()
     if p is None or not target_case:

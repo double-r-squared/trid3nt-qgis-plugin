@@ -1,27 +1,8 @@
-"""Per-session state layer -- the ``SessionState`` dataclass and the
-session-scoped registries it is backed by.
+"""Per-session state: the ``SessionState`` dataclass and its registries.
 
-The split NATE named: state is separated from behavior. ``SessionState`` is a
-plain ``@dataclass`` of per-connection fields plus one lifecycle accessor (the
-``active_case_id`` property, backed by the session-scoped ``_SESSION_ACTIVE_CASE``
-registry). All the turn/dispatch BEHAVIOR that reads a session already lives as
-module-level functions taking ``state`` as their first argument -- those stay in
-:mod:`._core` with the turn engine. This module holds only the data and the
-registries that give it session (not connection) scope: the active-Case pointer
-and the anon-identity mirror, both keyed by ``session_id`` so every connection of
-a session -- including post-reconnect replacements -- shares one binding.
-
-``_core`` re-imports every name here so its bare-global references and the
-facade-proxied monkeypatch targets on ``trid3nt_server.server.<name>`` resolve
-exactly as when the whole file was one module; the package facade re-exposes them
-at ``trid3nt_server.server.<name>`` and propagates monkeypatch writes to this
-module (it is in ``_EXTRACTION_MODULES``).
-
-Deliberately NOT here (stays in ``_core`` with the connection loop): the
-``_LiveTurn`` detached-turn registry (``_SESSION_LIVE_TURNS`` +
-register/rebind/find), which the WS handler owns and drives on every connect /
-disconnect / cancel.
-"""
+The dataclass holds per-connection fields; the registries here are keyed by
+``session_id``, so every connection of a session, reconnects included, shares
+one binding."""
 
 from __future__ import annotations
 
@@ -41,13 +22,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger("trid3nt_server.server")
 
 
-# Session-scoped active-Case registry. The client mounts two WebSocket
-# connections per tab (Chat.tsx + App.tsx) sharing one session_id; the
-# server builds a fresh ``SessionState`` per connection, so this registry
-# keys the active Case by ``session_id`` instead, keeping every connection
-# of a session -- including post-reconnect replacements -- on the same Case
-# context. Bounded: oldest entries evicted past the cap (a stale session's
-# next case-command re-establishes context).
+# Session-scoped active-Case registry. A client mounts two connections per
+# session and the server builds a fresh ``SessionState`` per connection, so the
+# active Case is keyed by ``session_id`` instead, keeping every connection of a
+# session on the same Case. Bounded: the oldest entry is evicted past the cap,
+# and a stale session's next case command re-establishes its context.
 _SESSION_ACTIVE_CASE: dict[str, str | None] = {}
 _SESSION_ACTIVE_CASE_CAP = 4096
 
@@ -55,8 +34,8 @@ _SESSION_ACTIVE_CASE_CAP = 4096
 #: because ``None`` is a legitimate "no active Case" binding.
 _CASE_SYNC_NEVER = "__case-context-never-synced__"
 
-#: Stream key for turns dispatched with no active Case (mirrors the
-#: client's ROOT_STREAM_KEY in Chat.tsx).
+#: Stream key for turns dispatched with no active Case; the client uses the
+#: same key.
 _ROOT_STREAM_KEY = "__root__"
 
 
@@ -66,96 +45,64 @@ def _set_session_active_case(session_id: str, case_id: str | None) -> None:
         session_id not in _SESSION_ACTIVE_CASE
         and len(_SESSION_ACTIVE_CASE) >= _SESSION_ACTIVE_CASE_CAP
     ):
-        # Evict oldest (insertion order) -- bounded memory, see note above.
+        # Evict the oldest by insertion order: bounded memory.
         _SESSION_ACTIVE_CASE.pop(next(iter(_SESSION_ACTIVE_CASE)))
     _SESSION_ACTIVE_CASE[session_id] = case_id
 
 
 @dataclass
 class SessionState:
-    """Per-session in-memory state, held in-process for the life of the session.
-
-    Durable restore is a separate path: ``Persistence.get_session_state``
-    rehydrates chat history, loaded layers, and charts on ``case-open`` /
-    ``case-select``. This dataclass is the live in-process mirror, not the
-    durable store.
-
-    Owns the per-session ``PipelineEmitter``, which owns the current
-    ``PipelineSnapshot`` + ``loaded_layers`` accumulator and broadcasts real
-    ``pipeline-state`` / ``session-state`` envelopes (replace-not-reconcile).
-    ``current_pipeline_id`` / ``current_pipeline_steps`` mirror the pipeline for
-    the LLM-streaming reply path (which doesn't go through the emitter -- there
-    are no tool calls there)."""
+    """Per-session in-memory state, the live mirror rather than the durable
+    store: a Case re-open rehydrates chat, layers and charts from persistence,
+    while this dies with the process."""
 
     session_id: str
     chat_history: list[dict] = field(default_factory=list)
     current_pipeline_id: str | None = None
     current_pipeline_steps: list[PipelineStep] = field(default_factory=list)
-    # In-flight turns keyed by STREAM (case_id, or _ROOT_STREAM_KEY for the
-    # Cases root). Only a re-prompt in the SAME stream replaces (cancels)
-    # that stream's turn; turns in other Cases keep running. Their
-    # persistence follows the turn-Case pin and their model context is the
-    # per-turn captured history list (see _stream_model_reply), so a
-    # concurrent turn cannot re-aim either. Known v0.1 limit (display only):
-    # the web routes live streaming envelopes to the last-submitted stream,
-    # so a still-running turn's late envelopes may paint in the newer
-    # stream until envelope case-tagging lands -- the persisted replay is
+    # In-flight turns keyed by STREAM: a case id, or the root key. Only a
+    # re-prompt in the SAME stream cancels that stream's turn; turns in other
+    # Cases keep running. Their persistence follows the turn's Case pin and
+    # their model context is the per-turn captured history, so a concurrent
+    # turn cannot re-aim either. KNOWN LIMIT, display only: a client routes
+    # live envelopes to the last-submitted stream, so a still-running turn's
+    # late envelopes may paint in the newer stream; the persisted replay is
     # always correct.
     inflight_tasks: dict[str, asyncio.Task] = field(default_factory=dict)
     emitter: PipelineEmitter | None = None
-    # Per-session turn counter.  Increments on every
-    # user-message dispatch (model stream or /invoke directive). When
-    # turn_count > MAX_TURNS_PER_SESSION the agent refuses further dispatch
-    # and emits a ``session-state(status="max_turns_reached")`` envelope.
-    # New WebSocket connection -> new SessionState -> fresh counter at 0.
+    # Per-session turn counter, incremented on every user-message dispatch. Past
+    # the cap the agent refuses further dispatch and emits the max-turns
+    # envelope. A new connection builds a fresh state, so the counter restarts.
     turn_count: int = 0
-    # ``active_case_id`` is a PROPERTY backed by the module-level
-    # ``_SESSION_ACTIVE_CASE`` registry (keyed by ``session_id``), not a
-    # per-connection dataclass field, so the Case context is shared across
-    # every connection of the session and survives reconnects. See
-    # ``case_context_synced_to`` + ``_sync_case_context`` for the
-    # per-connection in-memory catch-up (chat_history / emitter seed).
-    #
-    # Per-connection marker of which Case this connection's in-memory
-    # context (chat_history + emitter loaded_layers) was last synced to. A
-    # string sentinel (never a valid case id) means "never synced"; ``None``
-    # is a legitimate value (no active Case).
+    # Per-connection marker of which Case this connection's in-memory context -
+    # chat history and the emitter's loaded layers - was last synced to. The
+    # string sentinel, never a valid case id, means never synced, and ``None``
+    # is the legitimate "no active Case" value.
     case_context_synced_to: str | None = _CASE_SYNC_NEVER
-    # JOB 2 (active-AOI repair): durable cache of the active Case's persisted
-    # AOI bbox (``CaseSummary.bbox`` == ``[lon_min, lat_min, lon_max,
-    # lat_max]``). Set when the active Case is selected / synced (the same
-    # ``session_state.case.bbox`` already read for the layers-present note) and
-    # cleared on deselect. ``_turn_case_bbox`` reads THIS instead of the
-    # non-existent ``state.active_case`` attribute (the pre-fix read always
-    # returned None, so the agent had no active-AOI signal and re-geocoded /
-    # re-fetched, starving the sim/fetch reuse short-circuits of an AOI anchor).
-    # ``None`` is legitimate (no active Case, or a Case with no recorded bbox).
+    # Durable cache of the active Case's persisted AOI bbox, set when that Case
+    # is selected or synced and cleared on deselect. It is the AOI anchor the
+    # reuse short-circuits and the bbox auto-fill read; ``None`` is legitimate,
+    # meaning no active Case or a Case with no recorded bbox.
     case_bbox: Any = None
     # The session's ACTIVE canvas AOI -- structured ``aoi_bbox``
     # ([min_lon, min_lat, max_lon, max_lat], EPSG:4326) set/cleared by
     # ``_set_active_aoi_from_payload``. Read by dispatch-time bbox auto-fill:
     # explicit arg > active AOI > case bbox. ``None`` = no drawn AOI.
     active_aoi_bbox: list[float] | None = None
-    # The turn's user-DRAWN geometry (the QGIS dock 'Draw region'
-    # rubber-band rectangle) as ``{"geometry_type": "rectangle", "bbox": [...] }``
-    # (EPSG:4326). Set/cleared per user-message by ``_set_drawn_geometry_from_payload``
-    # and bound into a per-task ContextVar so composer gates read it as a
-    # ``basis="user"`` spatial knob (e.g. geoclaw amr_regions). ``None`` = nothing
-    # drawn. Distinct from ``active_aoi_bbox`` (the analysis extent): a drawn
-    # region is a sub-region knob, not the AOI.
+    # The turn's user-DRAWN geometry, set or cleared per user-message and bound
+    # into a per-task context var so a gate reads it as a user-basis spatial
+    # knob. Distinct from the active AOI: a drawn region is a sub-region knob,
+    # not the analysis extent. ``None`` means nothing was drawn.
     drawn_geometry: dict | None = None
     # Per-session routing-visibility mode ('auto' | 'ask').
     # Set by the ``session-config`` envelope's ``mode`` field; ``None`` falls
     # back to the TRID3NT_MODE env default (see _session_routing_mode). Governs
     # tool-selection VISIBILITY only -- consent gates are never mode-dependent.
     routing_mode: str | None = None
-    # BENCH pre-dispatch block hook: the armed, session-scoped
-    # ``BenchBlockConfig`` set only by the bench harness via the
-    # ``session-config`` path (``bench_tool_block`` key). ``None`` = normal
-    # operation -- the dispatch guard is a single ``is not None`` check with
-    # zero overhead when unarmed. When armed, the dispatch site blocks a
-    # wrong / block-tier tool pick before the fn runs (see
-    # tool_gating.bench_block_decision + _invoke_tool_via_emitter).
+    # The armed bench block config, set only by the bench harness. ``None`` is
+    # normal operation and the dispatch guard is then a single identity check;
+    # armed, the dispatch site blocks a wrong or block-tier pick before the tool
+    # function runs.
     bench_block_config: Any = None
     # Per-turn layer + map-command emission accumulators. Reset at
     # the start of every dispatch (model stream or /invoke tool). The
@@ -163,62 +110,41 @@ class SessionState:
     # can re-bind layers via the same emission sequence.
     current_turn_layer_ids: list[str] = field(default_factory=list)
     current_turn_pipeline_id: str | None = None
-    # Per-turn zoom-to accumulator -- persisted into the closing
-    # agent row's ``map_command_emissions`` so Case reopen can snap the
-    # camera back (web replays the LAST persisted zoom-to).
+    # Per-turn zoom-to accumulator, persisted onto the closing agent row so a
+    # Case reopen can snap the camera back by replaying the last one.
     current_turn_map_commands: list[dict] = field(default_factory=list)
-    # Per-turn narration accumulator. ``_stream_model_reply`` resets it at
-    # stream start and appends every ``TextDeltaEvent`` delta (across all
-    # loop iterations -- they share one ``message_id`` bubble on the wire).
-    # ``_dispatch_model_turn_and_persist`` joins it at turn close and persists
-    # the agent's narration as a ``CaseChatMessage(role="agent")`` so a Case
-    # reopen replays what the agent actually said.
+    # Per-turn narration accumulator: reset at stream start, appended per text
+    # delta across every loop iteration, and joined at turn close into the
+    # persisted agent row, so a Case reopen replays what the agent said.
     current_turn_narration: list[str] = field(default_factory=list)
-    # BUG 1 (post-OPEN-14 acceptance rerun): set by the ``except
-    # ContextWindowExceededError`` handler in ``_stream_model_reply`` when a
-    # turn aborts on a clipped prompt. ``_dispatch_model_turn_and_persist``'s
-    # finally reads + clears it and appends the text to whichever partial-
-    # narration row it is about to persist, so the reader sees the abort
-    # verdict in the SAME chat row as the (unverified) streamed text, not
-    # only in a transient error envelope a dead/detached socket may drop.
+    # Set when a turn aborts on a clipped prompt. The turn wrapper reads and
+    # clears it, appending the text to whichever partial-narration row it is
+    # about to persist, so the abort verdict lands in the SAME chat row as the
+    # streamed text rather than only in an envelope a dead socket may drop.
     current_turn_context_abort_note: str | None = None
-    # The Case this TURN is bound to. Pinned by ``_prepare_user_turn`` at
-    # dispatch time (after the auto-create-from-root hand-off, before the
-    # first write). Every turn-scoped persistence write -- chat rows, tool
-    # cards, layer attribution, per-Case .qgs routing, charts -- targets THIS
-    # binding via ``_turn_case_id``, never the live ``active_case_id``, which
-    # a mid-stream ``case-command(select)`` can re-point mid-turn.
+    # The Case this TURN is bound to, pinned at dispatch time before the first
+    # write. Every turn-scoped write - chat rows, tool cards, layer attribution,
+    # project routing, charts - targets THIS binding, never the live pointer,
+    # which a mid-stream select can re-point.
     current_turn_case_id: str | None = None
-    # Per-connection authenticated user context.
-    #
-    # Populated by the connect-handshake (``_perform_auth_handshake``) after
-    # the ``auth-token`` envelope verifies (or after the 5-second anonymous
-    # fallback timeout). When set, every subsequent envelope for this
-    # connection is scoped to ``authenticated_user_id`` -- Case lookups
-    # (``Persistence.list_cases_for_user``) filter by it, and Case creation
-    # binds it as ``owner_user_id``. ``None`` only between connect and the
-    # handshake completion; never ``None`` after handshake.
+    # Per-connection authenticated user context, populated by the connect
+    # handshake. Once set, every later envelope on this connection is scoped to
+    # it: Case lookups filter by it and a created Case is owned by it. ``None``
+    # only between connect and handshake completion.
     authenticated_user_id: str | None = None
     is_anonymous: bool = True
     auth_handshake_complete: bool = False
-    # The web's keepalive (ws.ts) sends an empty ``session-resume`` envelope
-    # every 25s on the open socket as a proof-of-life ping -- indistinguishable
-    # from a genuine fresh-socket resume by the envelope alone. This flag is
-    # the gate: a fresh ``SessionState`` is built per WebSocket connection, so
-    # the FIRST ``session-resume`` on THIS connection replays layers, and
-    # every later one is a keepalive ping (skip the layer replay; still emit
-    # the ``session-state`` pong so the client's pong deadline clears). Reset
-    # to False only by a brand-new connection's fresh SessionState.
+    # A client's keepalive sends an empty ``session-resume`` as a proof-of-life
+    # ping, indistinguishable from a genuine fresh-socket resume by the envelope
+    # alone. This flag is the gate: the FIRST resume on THIS connection replays
+    # layers and every later one is a ping, which still gets its session-state
+    # pong so the client's deadline clears.
     did_fresh_resume: bool = False
-    # Per-connection latch for the active-Case REBIND decision - distinct
-    # from ``did_fresh_resume`` (which gates the LAYER REPLAY). A session
-    # mounts two sockets (App.tsx + Chat.tsx), each sending its own 25s
-    # keepalive ``session-resume``. This flag flips True after the FIRST
-    # resume on THIS connection, so the client-stamp rebind in
-    # ``_handle_session_resume`` fires only on a genuine fresh resume, never
-    # a keepalive ping. Explicit ``case-command(select)`` / ``user-message``
-    # still rebind unconditionally (deliberate user intent). Reset to False
-    # only by a brand-new connection's fresh SessionState.
+    # Per-connection latch for the active-Case REBIND decision, distinct from
+    # the flag above, which gates the layer replay. A session mounts two sockets
+    # and each sends its own keepalive, so this flips after the FIRST resume on
+    # THIS connection and the client-stamp rebind fires only on a genuine fresh
+    # resume. Explicit user intent still rebinds unconditionally.
     did_first_resume: bool = False
     # Per-session audit log of payload-warning events. Each entry is a dict
     # carrying ``warning_id``, ``tool_name``, ``estimated_mb``,
@@ -226,54 +152,32 @@ class SessionState:
     # timestamps. Surfaces in tests + post-mortem; persisted to the active
     # Case as part of the chat turn record (best-effort).
     payload_warning_audit_log: list[dict] = field(default_factory=list)
-    # Per-session monotonic visible-tool accumulator for retrieval-enforce: every
-    # tool once made visible this Case (the turn's retrieved set + dispatched +
-    # discovery-expanded + pinned) stays in it, so a once-visible tool never
-    # leaves mid-task. Seeded empty; the enforce path unions the CORE_FLOOR each
-    # turn. Grows monotonically within a session; a new session starts fresh.
+    # Monotonic visible-tool accumulator: every tool once made visible stays in
+    # it, so a once-visible tool never leaves mid-task. It grows within a
+    # session and a new session starts fresh.
     visible_tools: set[str] = field(default_factory=set)
     # Per-session provider-side prompt-cache handle, reported through the
-    # ``cache-status`` envelope. Provider-neutral: the adapter owns whatever
-    # concrete cache mechanism its provider uses. Every live path caches via
-    # its own in-request breakpoints (reported through ``UsageMetadataEvent``),
-    # so no per-session handle is tracked and this stays ``None``.
+    # cache-status envelope. Every live path caches through its own in-request
+    # breakpoints, so no handle is tracked and this stays ``None``.
     model_cache_ref: str | None = None
-    # Per-session circuit breaker. Tracks consecutive failures per tool;
-    # trips after TRID3NT_CIRCUIT_THRESHOLD (default 3) consecutive failures,
-    # enforcing a TRID3NT_CIRCUIT_COOLDOWN_S (default 60s) cooldown.
-    # ``_stream_model_reply`` checks ``is_tripped`` before every
-    # ``_invoke_tool_via_emitter`` dispatch and records success/failure after
-    # each attempt. A tripped breaker raises ``CircuitBreakerError``, which
-    # ``summarize_tool_result`` surfaces as a structured envelope so the
-    # model reads the signal and narrates the outage honestly.
+    # Per-session circuit breaker, tripped by consecutive per-tool failures and
+    # enforcing a cooldown. The stream checks it before every dispatch and
+    # records the outcome after; a tripped breaker raises, and the result
+    # summary surfaces that as a structured envelope the model narrates.
     circuit_breaker: ToolCircuitBreaker = field(default_factory=ToolCircuitBreaker)
-    # Per-TURN set of tools that have already surfaced a credential-request
-    # this turn. The credential pipeline pauses + prompts + retries ONCE per
-    # tool per turn: after the single retry the tool either succeeds (key
-    # now in the session cache) or fails through the normal typed-error
-    # surface. Without
-    # this guard a still-invalid key would re-trip the auth error and
-    # re-prompt forever. Reset at the start of every turn.
+    # Per-TURN set of tools that already surfaced a credential request. The
+    # pipeline prompts and retries ONCE per tool per turn; without this guard a
+    # still-invalid key would re-trip the auth error and re-prompt forever.
     credential_prompted_tools: set[str] = field(default_factory=set)
-    # fix (bbox-gate-retry-loop, 2026-07-09): per-TURN memory of solver-confirm
-    # / fetch-resolution gate ("tool-payload-warning") decisions, keyed by
-    # ``_gate_memory_key(tool_name, params)`` (tool name + bbox rounded to
-    # ~6 decimals, or the full normalized args when there is no bbox). A
-    # model that retries a gated tool with corrected NON-bbox args (e.g.
-    # ``fetch_landcover(dataset='nlcd')`` -> typed error -> retried with
-    # ``dataset='nlcd_'`` -> typed error -> retried with ``dataset=
-    # 'nlcd_2021')``) re-emitted an IDENTICAL confirm gate on the SAME bbox
-    # every retry; the user only answered the FIRST one, and local gates
-    # have no timeout by design, so the second gate hung the turn forever.
-    # Only "proceed" / "narrow_scope" decisions are recorded here (a
-    # "cancel" raises before reaching the write site, so a corrected retry
-    # still re-gates - the user might reconsider). Reset at the start of
-    # every new user-message dispatch (same site as
-    # ``credential_prompted_tools`` above), so it never leaks across turns;
-    # it lives on the per-session ``SessionState`` so it never leaks across
-    # sessions or Cases either. Values are the DELTA the gate applied to the
-    # params (e.g. ``{"resolution_m": 300}``), not the whole approved dict,
-    # so a later retry keeps its own corrected non-bbox args.
+    # Per-TURN memory of gate decisions, keyed by tool name plus the rounded
+    # bbox, or the full normalized args when there is no bbox. A model that
+    # retries a gated tool with corrected NON-bbox args would otherwise re-emit
+    # an identical gate on the same bbox every retry, and since a local gate has
+    # no timeout, the unanswered second gate hangs the turn forever. Only
+    # proceed and narrow-scope decisions are recorded - a cancel raises before
+    # the write, so a corrected retry still re-gates. Values are the DELTA the
+    # gate applied, not the whole approved dict, so a retry keeps its own
+    # corrected args.
     gate_decisions_this_turn: dict[tuple[str, str], dict[str, Any]] = field(
         default_factory=dict
     )
@@ -290,16 +194,9 @@ class SessionState:
 
     @property
     def active_case_id(self) -> str | None:
-        """The active Case for this SESSION (shared across its connections).
-
-        ``None`` for fresh sessions (no Case selected yet -- the M1 stateless
-        demo path remains supported). Updated by ``case-command(create|select)``
-        on ANY connection of the session; cleared on ``delete`` of the active
-        Case. When non-None, the tool-call wrapper
-        (``_invoke_tool_via_emitter``) carries the case context into tools
-        that opt in via ``case_id`` (currently ``publish_layer``); chat +
-        layer persistence route every turn into the Case record.
-        """
+        """The active Case for this SESSION, shared across its connections and
+        ``None`` when none is selected; a create or select on ANY connection
+        updates it, and deleting the active Case clears it."""
         return _SESSION_ACTIVE_CASE.get(self.session_id)
 
     @active_case_id.setter
