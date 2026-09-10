@@ -1,0 +1,550 @@
+{
+  "tool": "telemac3d_stratified_flow",
+  "run_id": "01M1X9RXW4TE1CPBWWN28SAHW8",
+  "commit": "1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1",
+  "recorded_at": "2026-09-07T06:50:45.273951+00:00",
+  "engine": "telemac2d",
+  "wall_seconds": 390.271,
+  "args": {
+    "bbox": [
+      -87.39234,
+      46.52812,
+      -87.36788,
+      46.55021
+    ],
+    "warm_temp_c": 18.0,
+    "cold_temp_c": 6.0,
+    "thermocline_depth_m": 8.0,
+    "wind_speed_mps": 6.0,
+    "wind_direction_deg": 270.0,
+    "levels": 13,
+    "mesh_min_edge_m": 60.0,
+    "output_interval_min": 10.0
+  },
+  "sheet": [
+    {
+      "name": "bbox",
+      "value": [
+        -87.39234,
+        46.52812,
+        -87.36788,
+        46.55021
+      ],
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "warm_temp_c",
+      "value": 18.0,
+      "door": "user",
+      "basis": "user",
+      "units": "C",
+      "consequence": "physics",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "cold_temp_c",
+      "value": 6.0,
+      "door": "user",
+      "basis": "user",
+      "units": "C",
+      "consequence": "physics",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "thermocline_depth_m",
+      "value": 8.0,
+      "door": "user",
+      "basis": "user",
+      "units": "m",
+      "consequence": "physics",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "wind_speed_mps",
+      "value": 6.0,
+      "door": "user",
+      "basis": "user",
+      "units": "m/s",
+      "consequence": "physics",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "wind_direction_deg",
+      "value": 270.0,
+      "door": "user",
+      "basis": "user",
+      "units": "deg",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "levels",
+      "value": 13,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "mesh_min_edge_m",
+      "value": 60.0,
+      "door": "user",
+      "basis": "user",
+      "units": "m",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "output_interval_min",
+      "value": 10.0,
+      "door": "user",
+      "basis": "user",
+      "units": "min",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "sim_duration_hours",
+      "value": 5.0,
+      "door": "constant",
+      "basis": "default_demo",
+      "units": "h",
+      "consequence": "numerical",
+      "note": "declared constant default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "tracer_advection_scheme",
+      "value": 13,
+      "door": "constant",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "numerical",
+      "note": "declared constant default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "max_advection_iterations",
+      "value": 50,
+      "door": "constant",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "numerical",
+      "note": "declared constant default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "compute_class",
+      "value": "medium",
+      "door": "constant",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "numerical",
+      "note": "declared constant default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "location",
+      "value": null,
+      "door": "question",
+      "basis": "prompt_interpreted",
+      "units": null,
+      "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "event_time",
+      "value": null,
+      "door": "question",
+      "basis": "prompt_interpreted",
+      "units": null,
+      "consequence": "scenario",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "time_step_s",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": "s",
+      "consequence": "numerical",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    }
+  ],
+  "provenance": [
+    {
+      "param": "wind_speed_mps",
+      "value": 6.0,
+      "basis": "default_demo",
+      "note": "prescribed steady wind, which mixes the column and drives the surface-downwind / return-flow-at-depth pair reported beside the temperature",
+      "real_source": null
+    },
+    {
+      "param": "thermocline",
+      "value": "18C/6C",
+      "basis": "default_demo",
+      "note": "prescribed warm epilimnion over cold hypolimnion, thermocline at 8 m (no met-forcing fetcher exists). No heat exchange: the column can only REDISTRIBUTE its heat, never lose it",
+      "real_source": null
+    },
+    {
+      "param": "nplan",
+      "value": 13,
+      "basis": "default_demo",
+      "note": "13 sigma planes, near-surface layer 0.74 m over the 8.9 m deep column - the 3D degree of freedom a 2D model has none of",
+      "real_source": null
+    },
+    {
+      "param": "lake_level_m",
+      "value": 0.35,
+      "basis": "fetched",
+      "note": "lake level 0.350 m at 2026-09-07T06:12Z from Marquette C.G. (9099018), 0.7 km from the AOI centre. The gauge reads on each Great Lake's own Low Water Datum (metres, positive up) and fetch_greatlakes_bathymetry states the same datum, so the offset between them is 0.000 m and the free surface opens at the reading.",
+      "real_source": null
+    },
+    {
+      "param": "mesh_bed",
+      "value": "bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M1X9RPQKYAJTNP3C5G176KZ7.tif",
+      "basis": "fetched",
+      "note": "the elevation every node of the basin carries; the solve reads it as the bathymetry the column stands over, on the same datum the level above is counted from",
+      "real_source": null
+    },
+    {
+      "param": "mesh_domain",
+      "value": "basin mesh (826 nodes / 1499 elements)",
+      "basis": "user",
+      "note": "solved on the accepted mesh: this domain names no liquid boundary; its whole boundary is solid wall, so the water in it is conserved. The column is read at the deepest node, 8.88 m down",
+      "real_source": null
+    },
+    {
+      "param": "bbox",
+      "value": "[-87.3923, 46.5281, -87.3679, 46.5502]",
+      "basis": "user",
+      "note": "Explicit AOI (min_lon,min_lat,max_lon,max_lat) EPSG:4326 - the stretch of the water body the column is solved over [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "warm_temp_c",
+      "value": 18.0,
+      "basis": "user",
+      "note": "Epilimnion (warm surface layer) temperature - a PRESCRIBED demo column, since no met-forcing fetcher exists yet [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "cold_temp_c",
+      "value": 6.0,
+      "basis": "user",
+      "note": "Hypolimnion (cold bottom layer) temperature; the initial top-to-bottom difference is what the run either keeps or mixes away [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "thermocline_depth_m",
+      "value": 8.0,
+      "basis": "user",
+      "note": "Depth of the thermocline below the surface. The vertical grid is planned to HOLD it and REFUSES when no admissible sigma stretch over the basin's deepest column can [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "wind_direction_deg",
+      "value": 270.0,
+      "basis": "user",
+      "note": "Compass bearing the wind blows FROM (0=N, 90=E, 270=W) [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "levels",
+      "value": 13,
+      "basis": "user",
+      "note": "Number of vertical sigma levels - the degree of freedom a 2D model does not have, so it is THE resolution lever here; too few for the declared thermocline is a refusal, not a coarser answer [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "mesh_min_edge_m",
+      "value": 60.0,
+      "basis": "user",
+      "note": "Triangle edge the basin interior is meshed at; the 3D node count is this mesh's nodes times the sigma levels [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "output_interval_min",
+      "value": 10.0,
+      "basis": "user",
+      "note": "Result-writing cadence; the profile is read off the last frame, so this decides how much of the column's history is animatable [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "sim_duration_hours",
+      "value": 5.0,
+      "basis": "default_demo",
+      "note": "Simulated duration - long enough for the column to settle or mix [declared constant default]",
+      "real_source": null
+    },
+    {
+      "param": "tracer_advection_scheme",
+      "value": 13,
+      "basis": "default_demo",
+      "note": "SCHEME FOR ADVECTION OF TRACERS - the NERD family (13, 14), which is the distributive scheme the iteration ceiling below governs and the only one that is monotone across a thermocline. 13 is the value the engine's own telemac2d dictionary defaults this same keyword to; the dictionary gives the 3D one no default at all, so unstated it falls back to the VELOCITIES scheme (5, MURD PSI), which is what stopped a baroclinic basin at its first tracer step [declared constant default]",
+      "real_source": null
+    },
+    {
+      "param": "max_advection_iterations",
+      "value": 50,
+      "basis": "default_demo",
+      "note": "MAXIMUM NUMBER OF ITERATIONS FOR ADVECTION SCHEMES - the ceiling the distributive schemes 13 and 14 sub-iterate under. Stated rather than defaulted because it is the number a run that stops on 'ITERATION NO. REACHED' is bounded by, and a reader of the deck cannot see a ceiling the deck does not write [declared constant default]",
+      "real_source": null
+    },
+    {
+      "param": "compute_class",
+      "value": "medium",
+      "basis": "default_demo",
+      "note": "Solve sizing class [declared constant default]",
+      "real_source": null
+    },
+    {
+      "param": "event_time",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the lake level is the most recent reading the gauge has published today",
+      "real_source": null
+    },
+    {
+      "param": "time_step_s",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the step follows the edge the ACCEPTED mesh was BUILT at, through the same CFL producer the river reach's step comes from - a step asserted independently of the mesh is a stability claim about a domain nobody measured",
+      "real_source": null
+    }
+  ],
+  "answer": {
+    "stratification_metric": 0.1516,
+    "stratification_dt": 0.1516,
+    "variable_label": "Surface temperature",
+    "variable_units": "degC",
+    "nplan": 13,
+    "wind_speed_mps": 6.0,
+    "u_surface": 0.01067,
+    "u_bottom": -0.007,
+    "depth_avg_u": -1e-05,
+    "mesh_size_m": 32.9447594688078,
+    "profile_sigma": [
+      0.0,
+      0.0833,
+      0.1667,
+      0.25,
+      0.3333,
+      0.4167,
+      0.5,
+      0.5833,
+      0.6667,
+      0.75,
+      0.8333,
+      0.9167,
+      1.0
+    ],
+    "profile_values": [
+      16.975,
+      17.005,
+      17.026,
+      17.044,
+      17.073,
+      17.085,
+      17.095,
+      17.109,
+      17.117,
+      17.121,
+      17.123,
+      17.125,
+      17.126
+    ],
+    "profile_values_initial": [
+      8.801,
+      11.435,
+      14.308,
+      16.314,
+      17.319,
+      17.74,
+      17.903,
+      17.964,
+      17.987,
+      17.995,
+      17.998,
+      17.999,
+      18.0
+    ],
+    "layer_uri": "s3://trid3nt-runs/01M1X9RXW4TE1CPBWWN28SAHW8/overviews/01M1XA4C6S1SAKQGMRJMM52N1B.tif",
+    "lake_level_m": 0.35,
+    "lake_level_note": "lake level 0.350 m at 2026-09-07T06:12Z from Marquette C.G. (9099018), 0.7 km from the AOI centre. The gauge reads on each Great Lake's own Low Water Datum (metres, positive up) and fetch_greatlakes_bathymetry states the same datum, so the offset between them is 0.000 m and the free surface opens at the reading.",
+    "wind_note": "prescribed steady wind, which mixes the column and drives the surface-downwind / return-flow-at-depth pair reported beside the temperature",
+    "thermocline_depth_m": 8.0,
+    "thermocline_note": "Depth of the thermocline below the surface. The vertical grid is planned to HOLD it and REFUSES when no admissible sigma stretch over the basin's deepest column can [supplied on this invocation]",
+    "levels": 13,
+    "levels_note": "Number of vertical sigma levels - the degree of freedom a 2D model does not have, so it is THE resolution lever here; too few for the declared thermocline is a refusal, not a coarser answer [supplied on this invocation]",
+    "time_step_s": "derived",
+    "time_step_note": "not supplied; the step follows the edge the ACCEPTED mesh was BUILT at, through the same CFL producer the river reach's step comes from - a step asserted independently of the mesh is a stability claim about a domain nobody measured",
+    "tracer_advection_scheme": 13,
+    "tracer_advection_note": "SCHEME FOR ADVECTION OF TRACERS - the NERD family (13, 14), which is the distributive scheme the iteration ceiling below governs and the only one that is monotone across a thermocline. 13 is the value the engine's own telemac2d dictionary defaults this same keyword to; the dictionary gives the 3D one no default at all, so unstated it falls back to the VELOCITIES scheme (5, MURD PSI), which is what stopped a baroclinic basin at its first tracer step [declared constant default]",
+    "max_advection_iterations": 50,
+    "advection_ceiling_note": "MAXIMUM NUMBER OF ITERATIONS FOR ADVECTION SCHEMES - the ceiling the distributive schemes 13 and 14 sub-iterate under. Stated rather than defaulted because it is the number a run that stops on 'ITERATION NO. REACHED' is bounded by, and a reader of the deck cannot see a ceiling the deck does not write [declared constant default]"
+  },
+  "mesh": {
+    "mesh_size_m": 32.9447594688078
+  },
+  "layers": [
+    {
+      "crs_authid": null,
+      "layer_id": "input-nhd_waterbodies-6e824d6509c9",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "kind": "reference",
+        "label": null,
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"fill\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleFill\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"outline_color\" type=\"QString\" value=\"35,35,35,255\"/>\n        <Option name=\"outline_width\" type=\"QString\" value=\"0.26\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": null,
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Input: nhd waterbodies (nhd_waterbodies)",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/nhd_waterbodies/0815b3940f2466f49f92ba384ab71d47.fgb",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 0
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "input-greatlakes_bathymetry-9c4817a11d81",
+      "layer_type": "raster",
+      "legend": {
+        "colormap": "gray",
+        "kind": "continuous",
+        "label": "Elevation",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"-8.254684448\" classificationMax=\"0\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"-8.254684448\" maximumValue=\"0\" labelPrecision=\"4\">\n          <item value=\"-8.254684448\" color=\"#000000\" alpha=\"255\" label=\"-8.25468 m\"/>\n          <item value=\"-6.191013336\" color=\"#404040\" alpha=\"255\" label=\"-6.19101 m\"/>\n          <item value=\"-4.127342224\" color=\"#808080\" alpha=\"255\" label=\"-4.12734 m\"/>\n          <item value=\"-2.063671112\" color=\"#c0c0c0\" alpha=\"255\" label=\"-2.06367 m\"/>\n          <item value=\"0\" color=\"#ffffff\" alpha=\"255\" label=\"0 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "m",
+        "vmax": 0.0,
+        "vmin": -8.254684448242188
+      },
+      "name": "Input: greatlakes bathymetry (greatlakes_bathymetry, NCEI Great Lakes bathymetry is gridded at 3 arc-seconds (~90 m); 1800 px/deg is ~62 m, datum each Great Lake's own Low Water Datum (metres, positive up))",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/greatlakes_bathymetry/overviews/01M1X9RM5JVQ3W4W3BF9GG7N1W.tif",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 1
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "input-greatlakes_water_level-6c1691d9b52c",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "kind": "reference",
+        "label": null,
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"marker\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleMarker\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"outline_color\" type=\"QString\" value=\"35,35,35,255\"/>\n        <Option name=\"outline_width\" type=\"QString\" value=\"0.26\"/>\n        <Option name=\"size\" type=\"QString\" value=\"2.4\"/>\n        <Option name=\"size_unit\" type=\"QString\" value=\"MM\"/>\n        <Option name=\"name\" type=\"QString\" value=\"circle\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": "m (LWD)",
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Input: greatlakes water level (greatlakes_water_level, datum each Great Lake's own Low Water Datum (metres, positive up))",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/dynamic-1h/greatlakes_water_level/010a2f25b6f7441b4c3b4a3ac9e30ab2.fgb",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 2
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "telemac3d-bottom-01M1X9RXW4TE1CPBWWN28SAHW8",
+      "layer_type": "raster",
+      "legend": {
+        "colormap": "viridis",
+        "kind": "continuous",
+        "label": "Surface temperature (degC)",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"16.7673\" classificationMax=\"17.99969\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"16.7673\" maximumValue=\"17.99969\" labelPrecision=\"4\">\n          <item value=\"16.7673\" color=\"#440154\" alpha=\"255\" label=\"16.7673 degC\"/>\n          <item value=\"17.0753975\" color=\"#3b528b\" alpha=\"255\" label=\"17.0754 degC\"/>\n          <item value=\"17.383495\" color=\"#21918c\" alpha=\"255\" label=\"17.3835 degC\"/>\n          <item value=\"17.6915925\" color=\"#5ec962\" alpha=\"255\" label=\"17.6916 degC\"/>\n          <item value=\"17.99969\" color=\"#fde725\" alpha=\"255\" label=\"17.9997 degC\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "degC",
+        "vmax": 17.99969,
+        "vmin": 16.7673
+      },
+      "name": "Bottom temperature (basin_mesh)",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "input",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M1X9RXW4TE1CPBWWN28SAHW8/overviews/01M1XA4BNMQV9VXA4TADQ5ENCR.tif",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 3
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "01M1XA4EP346BF1M1359YE8C0Y",
+      "layer_type": "raster",
+      "legend": {
+        "colormap": "viridis",
+        "kind": "continuous",
+        "label": "Surface temperature (degC)",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"16.7673\" classificationMax=\"17.99969\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"16.7673\" maximumValue=\"17.99969\" labelPrecision=\"4\">\n          <item value=\"16.7673\" color=\"#440154\" alpha=\"255\" label=\"16.7673 degC\"/>\n          <item value=\"17.0753975\" color=\"#3b528b\" alpha=\"255\" label=\"17.0754 degC\"/>\n          <item value=\"17.383495\" color=\"#21918c\" alpha=\"255\" label=\"17.3835 degC\"/>\n          <item value=\"17.6915925\" color=\"#5ec962\" alpha=\"255\" label=\"17.6916 degC\"/>\n          <item value=\"17.99969\" color=\"#fde725\" alpha=\"255\" label=\"17.9997 degC\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "degC",
+        "vmax": 17.99969,
+        "vmin": 16.7673
+      },
+      "name": "Surface temperature (basin_mesh)",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M1X9RXW4TE1CPBWWN28SAHW8/overviews/01M1XA4C6S1SAKQGMRJMM52N1B.tif",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 4
+    }
+  ]
+}

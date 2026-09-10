@@ -1,0 +1,562 @@
+{
+  "tool": "telemac_rain_on_grid",
+  "run_id": "01M23FFN1021M24HT7Q54YST8X",
+  "commit": "1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1",
+  "recorded_at": "2026-09-09T16:22:48.060827+00:00",
+  "engine": "telemac2d",
+  "wall_seconds": 255.247,
+  "args": {
+    "pour_point": [
+      -83.40402,
+      35.05746
+    ],
+    "design_storm_mm_per_hr": 6.53,
+    "storm_duration_hr": 24.0,
+    "sim_duration_hr": 30.0,
+    "antecedent_moisture": "normal",
+    "output_interval_min": 30.0,
+    "compute_class": "medium"
+  },
+  "sheet": [
+    {
+      "name": "pour_point",
+      "value": [
+        -83.40402,
+        35.05746
+      ],
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "design_storm_mm_per_hr",
+      "value": 6.53,
+      "door": "user",
+      "basis": "user",
+      "units": "mm/h",
+      "consequence": "physics",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "storm_duration_hr",
+      "value": 24.0,
+      "door": "user",
+      "basis": "user",
+      "units": "h",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "sim_duration_hr",
+      "value": 30.0,
+      "door": "user",
+      "basis": "user",
+      "units": "h",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "antecedent_moisture",
+      "value": "normal",
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "physics",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "output_interval_min",
+      "value": 30.0,
+      "door": "user",
+      "basis": "user",
+      "units": "min",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "compute_class",
+      "value": "medium",
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "steep_slope_correction",
+      "value": false,
+      "door": "scenario",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "physics",
+      "note": "declared scenario default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "landcover_dataset",
+      "value": "nlcd_2021",
+      "door": "constant",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "physics",
+      "note": "declared constant default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "mesh_min_edge_m",
+      "value": 40.0,
+      "door": "scenario",
+      "basis": "default_demo",
+      "units": "m",
+      "consequence": "numerical",
+      "note": "declared scenario default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "mesh_max_edge_m",
+      "value": 300.0,
+      "door": "scenario",
+      "basis": "default_demo",
+      "units": "m",
+      "consequence": "numerical",
+      "note": "declared scenario default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "mesh_grade",
+      "value": 0.2,
+      "door": "constant",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "numerical",
+      "note": "declared constant default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "bed_dem_resolution_m",
+      "value": 10,
+      "door": "constant",
+      "basis": "default_demo",
+      "units": "m",
+      "consequence": "numerical",
+      "note": "declared constant default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "river_source",
+      "value": "nhdplus_hr",
+      "door": "constant",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "numerical",
+      "note": "declared constant default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "time_step_s",
+      "value": 3.0,
+      "door": "constant",
+      "basis": "default_demo",
+      "units": "s",
+      "consequence": "numerical",
+      "note": "declared constant default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "location",
+      "value": null,
+      "door": "question",
+      "basis": "prompt_interpreted",
+      "units": null,
+      "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "bbox",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "rain_window",
+      "value": null,
+      "door": "question",
+      "basis": "prompt_interpreted",
+      "units": null,
+      "consequence": "scenario",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "curve_number",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "physics",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    }
+  ],
+  "provenance": [
+    {
+      "param": "rain_event",
+      "value": "design_storm",
+      "basis": "default_demo",
+      "note": "a CONSTANT design storm of 6.53 mm/h over 24 h - a hypothetical event, not a record.",
+      "real_source": null
+    },
+    {
+      "param": "sim_duration_hr",
+      "value": 30.0,
+      "basis": "user",
+      "note": "the window you asked for",
+      "real_source": null
+    },
+    {
+      "param": "antecedent_moisture",
+      "value": 2,
+      "basis": "user",
+      "note": "the SCS antecedent-moisture condition the curve numbers are converted under - the dominant infiltration lever",
+      "real_source": null
+    },
+    {
+      "param": "runoff_path",
+      "value": "native",
+      "basis": "derived",
+      "note": "constant design-storm intensity 6.53 mm/h -> native SCS-CN runoff model (RAINFALL-RUNOFF MODEL=1 + FORMATTED DATA FILE 2 CN2).",
+      "real_source": null
+    },
+    {
+      "param": "mesh_domain",
+      "value": "12974 elements over 28.1 km2",
+      "basis": "derived",
+      "note": "the catchment was delineated at the pour point and meshed for this run",
+      "real_source": null
+    },
+    {
+      "param": "mesh_bed",
+      "value": "bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M23FEK389MFTZHD2FPKB6X65.tif (pit-filled: the delineator's own chain)",
+      "basis": "fetched",
+      "note": "the bare-earth bed the mesher painted every node from",
+      "real_source": null
+    },
+    {
+      "param": "mesh_sizing_source",
+      "value": "supplied polygon domain (1 part(s)); polygon_sdf(interior); distance_sizing_from_line_function; enforce_mesh_gradation",
+      "basis": "fetched",
+      "note": "the channel network the mesh refinement was sized by distance to",
+      "real_source": null
+    },
+    {
+      "param": "pour_point",
+      "value": "[-83.404, 35.0575]",
+      "basis": "user",
+      "note": "The catchment OUTLET as (lon, lat) EPSG:4326 - the point the runoff drains to. It decides which basin is modelled at all, so it is asked for (drawn on the canvas or passed explicitly) and NEVER invented [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "design_storm_mm_per_hr",
+      "value": 6.53,
+      "basis": "user",
+      "note": "Constant design-storm intensity, used when no rain_window names a real event. A hypothetical storm, labeled as one [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "storm_duration_hr",
+      "value": 24.0,
+      "basis": "user",
+      "note": "How long the design storm rains for [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "output_interval_min",
+      "value": 30.0,
+      "basis": "user",
+      "note": "Result-writing cadence; a hydrograph resolved in six frames cannot be spot-checked against, so a short window wants a short interval [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "compute_class",
+      "value": "medium",
+      "basis": "user",
+      "note": "Solve sizing class [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "steep_slope_correction",
+      "value": "False",
+      "basis": "default_demo",
+      "note": "Apply the Huang (2006) steep-slope correction to the curve numbers using the mesh's own bed gradients. The engine's native branch is compiled off in the installed 9.0.0 build, so the correction is applied to the CN field before it is written [declared scenario default]",
+      "real_source": null
+    },
+    {
+      "param": "landcover_dataset",
+      "value": "nlcd_2021",
+      "basis": "default_demo",
+      "note": "Land-cover product the per-node curve numbers and Manning n are keyed to [declared constant default]",
+      "real_source": null
+    },
+    {
+      "param": "mesh_min_edge_m",
+      "value": 40.0,
+      "basis": "default_demo",
+      "note": "Finest triangle edge, used where the mesh refines toward the channel network. THE granularity lever: peak depth and flooded extent are resolution-bound classes and a coarse mesh reads both low [declared scenario default]",
+      "real_source": null
+    },
+    {
+      "param": "mesh_max_edge_m",
+      "value": 300.0,
+      "basis": "default_demo",
+      "note": "Coarsest triangle edge, reached far from the channels on the hillslopes [declared scenario default]",
+      "real_source": null
+    },
+    {
+      "param": "mesh_grade",
+      "value": 0.2,
+      "basis": "default_demo",
+      "note": "Mesh gradation: how fast the edge length may grow between the channel band and the hillslopes [declared constant default]",
+      "real_source": null
+    },
+    {
+      "param": "bed_dem_resolution_m",
+      "value": 10,
+      "basis": "default_demo",
+      "note": "Ground resolution the BARE-EARTH bed is sampled at the mesh nodes from; a surface model would put the bed on the forest canopy [declared constant default]",
+      "real_source": null
+    },
+    {
+      "param": "river_source",
+      "value": "nhdplus_hr",
+      "basis": "default_demo",
+      "note": "Channel network the mesh refinement is sized by distance to [declared constant default]",
+      "real_source": null
+    },
+    {
+      "param": "time_step_s",
+      "value": 3.0,
+      "basis": "default_demo",
+      "note": "Solver time step. Overland sheet flow on a fine catchment mesh is CFL-tight, which is why it is seconds rather than tens of seconds [declared constant default]",
+      "real_source": null
+    },
+    {
+      "param": "location",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the run is named for its domain rather than for a place",
+      "real_source": null
+    },
+    {
+      "param": "bbox",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the analysis window is a +-0.14 deg buffer around the outlet",
+      "real_source": null
+    },
+    {
+      "param": "rain_window",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the run is driven by the labeled constant design storm below",
+      "real_source": null
+    },
+    {
+      "param": "curve_number",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; curve numbers are distributed PER NODE from the land-cover raster",
+      "real_source": null
+    }
+  ],
+  "answer": {
+    "catchment_area_km2": 28.1359,
+    "peak_discharge_m3s": 41.40334,
+    "peak_discharge_time_s": 86400.0,
+    "peak_is_window_truncated": false,
+    "rainfall_volume_m3": 4409464.103,
+    "runoff_volume_m3": 1526212.993,
+    "runoff_coefficient": 0.346122,
+    "max_depth_peak_m": 9.9493,
+    "max_depth_p99_m": 1.2596,
+    "continuity_rel_error": -2.405208e-15,
+    "amc_condition": 2,
+    "rain_intensity_mm_per_hr": 6.53,
+    "n_frames": 61,
+    "mesh_size_m": 26.76898646896342,
+    "mesh_node_count": 6615,
+    "mesh_element_count": 12974,
+    "catchment_provenance": "supplied polygon domain (1 part(s))",
+    "domain_bbox": [
+      -83.47785743749148,
+      35.020842655690025,
+      -83.39843388520751,
+      35.07357312220887
+    ],
+    "layer_uri": "s3://trid3nt-runs/01M23FFN1021M24HT7Q54YST8X/overviews/01M23FN88W5AAYYF08F7JHHQF1.tif",
+    "rain_event": "design_storm",
+    "rain_event_note": "a CONSTANT design storm of 6.53 mm/h over 24 h - a hypothetical event, not a record.",
+    "sim_duration_hr": 30.0,
+    "sim_duration_note": "the window you asked for",
+    "runoff_path": "native",
+    "runoff_path_note": "constant design-storm intensity 6.53 mm/h -> native SCS-CN runoff model (RAINFALL-RUNOFF MODEL=1 + FORMATTED DATA FILE 2 CN2).",
+    "mesh_domain": "12974 elements over 28.1 km2",
+    "mesh_domain_note": "the catchment was delineated at the pour point and meshed for this run",
+    "mesh_bed": "bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M23FEK389MFTZHD2FPKB6X65.tif (pit-filled: the delineator's own chain)",
+    "mesh_bed_note": "the bare-earth bed the mesher painted every node from"
+  },
+  "mesh": {
+    "mesh_size_m": 26.76898646896342
+  },
+  "layers": [
+    {
+      "crs_authid": null,
+      "layer_id": "input-dem-de4537bf100b",
+      "layer_type": "raster",
+      "legend": {
+        "colormap": "gray",
+        "kind": "continuous",
+        "label": "Elevation",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"621.4646606\" classificationMax=\"1382.789062\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"621.4646606\" maximumValue=\"1382.789062\" labelPrecision=\"4\">\n          <item value=\"621.4646606\" color=\"#000000\" alpha=\"255\" label=\"621.465 m\"/>\n          <item value=\"811.7957611\" color=\"#404040\" alpha=\"255\" label=\"811.796 m\"/>\n          <item value=\"1002.126862\" color=\"#808080\" alpha=\"255\" label=\"1002.13 m\"/>\n          <item value=\"1192.457962\" color=\"#c0c0c0\" alpha=\"255\" label=\"1192.46 m\"/>\n          <item value=\"1382.789062\" color=\"#ffffff\" alpha=\"255\" label=\"1382.79 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "m",
+        "vmax": 1382.7890625,
+        "vmin": 621.4646606445312
+      },
+      "name": "Input: mesh bed (dem, 3DEP 1-10 m US lidar (default 10 m); Copernicus GLO-30 30 m global via source=copernicus, datum NAVD88 (metres, positive up))",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/dem/ff51a6070c0eb1e70b879175fa8425bd.tif",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 0
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "input-river_geometry-141d4b3c6d4b",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "kind": "reference",
+        "label": null,
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": null,
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Input: river geometry (river_geometry)",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/river_geometry/7ceba95f6c200b95025f39fc23747a8b.fgb",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 1
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "input-landcover-1d636db4f128",
+      "layer_type": "raster",
+      "legend": null,
+      "name": "Input: land cover (landcover)",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/landcover/c0ae94543d133fd61aecf0a444e335f5.tif",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 2
+    },
+    {
+      "crs_authid": "EPSG:32617",
+      "layer_id": "model-results-mesh-01M23FFN1021M24HT7Q54YST8X",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "viridis",
+        "kind": "mesh",
+        "label": "Model results",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"9.9493\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"9.9493\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 m\"/>\n        <item value=\"2.487325\" color=\"#3b528b\" alpha=\"255\" label=\"2.48732 m\"/>\n        <item value=\"4.97465\" color=\"#21918c\" alpha=\"255\" label=\"4.97465 m\"/>\n        <item value=\"7.461975\" color=\"#5ec962\" alpha=\"255\" label=\"7.46197 m\"/>\n        <item value=\"9.9493\" color=\"#fde725\" alpha=\"255\" label=\"9.9493 m\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"WATER DEPTH\"/>\n</qgis>\n",
+        "units": "m",
+        "vmax": 9.9493,
+        "vmin": 0.0
+      },
+      "name": "Model results (time series): watershed mesh",
+      "opacity": null,
+      "quantity": "model_results",
+      "reference_time": "2026-09-09T16:19:43+00:00",
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M23FFN1021M24HT7Q54YST8X/r2d_rog.slf",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 3
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "01M23FNB523PG73EZRA3C6EJ2A",
+      "layer_type": "raster",
+      "legend": {
+        "colormap": "ylgnbu",
+        "kind": "continuous",
+        "label": "Max water depth",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"9.9493\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"9.9493\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#ffffd9\" alpha=\"255\" label=\"0 m\"/>\n          <item value=\"2.487325\" color=\"#c6e9b4\" alpha=\"255\" label=\"2.48732 m\"/>\n          <item value=\"4.97465\" color=\"#40b5c4\" alpha=\"255\" label=\"4.97465 m\"/>\n          <item value=\"7.461975\" color=\"#225da8\" alpha=\"255\" label=\"7.46197 m\"/>\n          <item value=\"9.9493\" color=\"#081d58\" alpha=\"255\" label=\"9.9493 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "m",
+        "vmax": 9.9493,
+        "vmin": 0.0
+      },
+      "name": "Max water depth (watershed mesh)",
+      "opacity": null,
+      "quantity": "water_depth",
+      "reference_time": null,
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M23FFN1021M24HT7Q54YST8X/overviews/01M23FN88W5AAYYF08F7JHHQF1.tif",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 4
+    }
+  ]
+}

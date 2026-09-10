@@ -1,0 +1,703 @@
+{
+  "tool": "telemac_river_dye",
+  "run_id": "01M23RS5BDR0R6JHBV0WKX6RTR",
+  "commit": "1f0ccc3188561e84f5f977f0d0d6c54e08c9adb1",
+  "recorded_at": "2026-09-09T19:02:26.381886+00:00",
+  "engine": "telemac2d",
+  "wall_seconds": 27.744,
+  "args": {
+    "location": "Eel River near Scotia, California",
+    "discharge_m3s": 2.2,
+    "output_interval_min": 0.333,
+    "spill_fraction": 0.25,
+    "spill_duration_s": 120.0,
+    "source_q_m3s": 8.0,
+    "dye_concentration_mgl": 100.0,
+    "reach_length_km": 1.0,
+    "sim_duration_s": 600.0,
+    "mesh_resolution_m": 10.0
+  },
+  "sheet": [
+    {
+      "name": "location",
+      "value": "Eel River near Scotia, California",
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "discharge_m3s",
+      "value": 2.2,
+      "door": "user",
+      "basis": "user",
+      "units": "m^3/s",
+      "consequence": "physics",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "output_interval_min",
+      "value": 0.333,
+      "door": "user",
+      "basis": "user",
+      "units": "min",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "spill_fraction",
+      "value": 0.25,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "spill_duration_s",
+      "value": 120.0,
+      "door": "user",
+      "basis": "user",
+      "units": "s",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "source_q_m3s",
+      "value": 8.0,
+      "door": "user",
+      "basis": "user",
+      "units": "m^3/s",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "dye_concentration_mgl",
+      "value": 100.0,
+      "door": "user",
+      "basis": "user",
+      "units": "mg/L",
+      "consequence": "scenario",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "reach_length_km",
+      "value": 1.0,
+      "door": "user",
+      "basis": "user",
+      "units": "km",
+      "consequence": "aoi",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "sim_duration_s",
+      "value": 600.0,
+      "door": "user",
+      "basis": "user",
+      "units": "s",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "mesh_resolution_m",
+      "value": 10.0,
+      "door": "user",
+      "basis": "user",
+      "units": "m",
+      "consequence": "numerical",
+      "note": "supplied on this invocation",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "compute_class",
+      "value": "medium",
+      "door": "constant",
+      "basis": "default_demo",
+      "units": null,
+      "consequence": "numerical",
+      "note": "declared constant default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "wind_speed_mps",
+      "value": 0.0,
+      "door": "scenario",
+      "basis": "default_demo",
+      "units": "m/s",
+      "consequence": "scenario",
+      "note": "declared scenario default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "wind_direction_deg",
+      "value": 0.0,
+      "door": "scenario",
+      "basis": "default_demo",
+      "units": "deg",
+      "consequence": "scenario",
+      "note": "declared scenario default",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "river_geometry_uri",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "friction_coefficient",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "numerical",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "friction_law",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "numerical",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "bbox",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "event_time",
+      "value": null,
+      "door": "question",
+      "basis": "prompt_interpreted",
+      "units": null,
+      "consequence": "scenario",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "release_coords",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "scenario",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "rainfall_mm_per_day",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": "mm/day",
+      "consequence": "scenario",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "evaporation_mm_per_day",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": "mm/day",
+      "consequence": "scenario",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "rainfall_gridmet_window",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "scenario",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "velocity_diffusivity",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": "m^2/s",
+      "consequence": "numerical",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "tracer_diffusivity",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": "m^2/s",
+      "consequence": "numerical",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "reach_seed_coords",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "aoi",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "decaying_substance",
+      "value": null,
+      "door": "question",
+      "basis": "prompt_interpreted",
+      "units": null,
+      "consequence": "scenario",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "decay_half_life_hours",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": "h",
+      "consequence": "scenario",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "decay_rate_per_day",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": "1/day",
+      "consequence": "scenario",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    },
+    {
+      "name": "continue_from",
+      "value": null,
+      "door": "user",
+      "basis": "user",
+      "units": null,
+      "consequence": "numerical",
+      "note": "not supplied (declared optional)",
+      "clamped_from": null,
+      "real_source": null
+    }
+  ],
+  "provenance": [
+    {
+      "param": "release_point",
+      "value": "spill_fraction 0.25",
+      "basis": "derived",
+      "note": "no release point was supplied; the source sits at spill_fraction along the modeled reach",
+      "real_source": null
+    },
+    {
+      "param": "mesh_bed",
+      "value": "bed raster supplied directly: /home/nate/Documents/trid3nt-local/data/runs/raster-01M23RRXCTTGRENSDN27MM6M6D.tif",
+      "basis": "fetched",
+      "note": "the elevation every node of the reach carries; the solver reads it as the channel's bathymetry",
+      "real_source": null
+    },
+    {
+      "param": "discharge_m3s",
+      "value": 2.2,
+      "basis": "user",
+      "note": "carrier discharge 2.2 m3/s (user-supplied)",
+      "real_source": null
+    },
+    {
+      "param": "bank_geometry",
+      "value": "nhd_area",
+      "basis": "fetched",
+      "note": null,
+      "real_source": null
+    },
+    {
+      "param": "location",
+      "value": "Eel River near Scotia, California",
+      "basis": "user",
+      "note": "Place name on the river, geocoded to the reach [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "output_interval_min",
+      "value": 0.333,
+      "basis": "user",
+      "note": "Result-writing cadence; unset keeps the steering file's own period [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "spill_fraction",
+      "value": 0.25,
+      "basis": "user",
+      "note": "Along-reach release position, 0=upstream..1=downstream; the source must sit strictly INSIDE the reach, never on a boundary [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "spill_duration_s",
+      "value": 120.0,
+      "basis": "user",
+      "note": "Finite pulse injection window [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "source_q_m3s",
+      "value": 8.0,
+      "basis": "user",
+      "note": "Point-source discharge of the release itself, small against the river's carrier flow [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "dye_concentration_mgl",
+      "value": 100.0,
+      "basis": "user",
+      "note": "Source concentration of the released substance [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "reach_length_km",
+      "value": 1.0,
+      "basis": "user",
+      "note": "Modeled reach length downstream of the release; a longer reach is coarsened under the mesh node budget [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "sim_duration_s",
+      "value": 600.0,
+      "basis": "user",
+      "note": "Simulated physical time [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "mesh_resolution_m",
+      "value": 10.0,
+      "basis": "user",
+      "note": "Target element edge length the reach is triangulated at; peak concentration is a resolution-bound class and a coarse mesh reads it low [supplied on this invocation]",
+      "real_source": null
+    },
+    {
+      "param": "compute_class",
+      "value": "medium",
+      "basis": "default_demo",
+      "note": "Solve sizing class [declared constant default]",
+      "real_source": null
+    },
+    {
+      "param": "wind_speed_mps",
+      "value": 0.0,
+      "basis": "default_demo",
+      "note": "Sustained wind driving a surface wind-stress term; 0 = no wind [declared scenario default]",
+      "real_source": null
+    },
+    {
+      "param": "wind_direction_deg",
+      "value": 0.0,
+      "basis": "default_demo",
+      "note": "Compass bearing the wind blows FROM (0=N, 90=E); only read when wind_speed_mps > 0 [declared scenario default]",
+      "real_source": null
+    },
+    {
+      "param": "river_geometry_uri",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the reach flowline is fetched fresh for the AOI",
+      "real_source": null
+    },
+    {
+      "param": "friction_coefficient",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the reach is solved at Strickler 33.0, which is also the roughness its outflow stage is derived as a normal depth at",
+      "real_source": null
+    },
+    {
+      "param": "friction_law",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the coefficient is read as a Strickler one",
+      "real_source": null
+    },
+    {
+      "param": "event_time",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the carrier discharge is read at the MOST RECENT published NWM cycle",
+      "real_source": null
+    },
+    {
+      "param": "release_coords",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the release sits at spill_fraction along the meshed reach; the downstream plume distance is measured from there",
+      "real_source": null
+    },
+    {
+      "param": "reach_seed_coords",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the reach centerline is resolved from the mid-reach point on the largest fetched flowline, else the geocoded centroid",
+      "real_source": null
+    },
+    {
+      "param": "decaying_substance",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the tracer is CONSERVATIVE - it dilutes and advects and nothing removes it",
+      "real_source": null
+    },
+    {
+      "param": "continue_from",
+      "value": "derived",
+      "basis": "derived",
+      "note": "not supplied; the run starts from its own initial conditions - a constant depth at rest - rather than from another run's state",
+      "real_source": null
+    }
+  ],
+  "answer": {
+    "dye_cmax_mgl": 97.43170928955078,
+    "dye_peak_time_s": 118.72799682617188,
+    "plume_reach_m": 56.7,
+    "active_frames": 30,
+    "mesh_size_m": 7.763,
+    "layer_uri": "s3://trid3nt-runs/01M23RS5BDR0R6JHBV0WKX6RTR/overviews/01M23RSJDCRZRJDXFQ5YN9Q1V1.tif",
+    "discharge_m3s": 2.2,
+    "discharge_note": "carrier discharge 2.2 m3/s (user-supplied)",
+    "mesh_resolution_m": 10.0,
+    "mesh_resolution_note": "Target element edge length the reach is triangulated at; peak concentration is a resolution-bound class and a coarse mesh reads it low [supplied on this invocation]"
+  },
+  "mesh": {
+    "mesh_size_m": 7.763
+  },
+  "layers": [
+    {
+      "crs_authid": null,
+      "layer_id": "input-river_geometry-94e6990c51b1",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "kind": "reference",
+        "label": null,
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": null,
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Input: OSM waterways (map context; the modeled river is the NLDI centerline) (river_geometry)",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/river_geometry/9412f6a5eac9c6f84d832bb06a259bca.fgb",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 0
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "input-nhdplus_nldi-5c4eb42bf394",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "kind": "reference",
+        "label": null,
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"line\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleLine\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"line_color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"line_width\" type=\"QString\" value=\"0.66\"/>\n        <Option name=\"line_width_unit\" type=\"QString\" value=\"MM\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": null,
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Input: nhdplus nldi (nhdplus_nldi)",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/nhdplus_nldi/3e294d7e16a1a7d1f7e28c1ad9e94b67.fgb",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 1
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "input-nhd_area_water-bf200d54dada",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "kind": "reference",
+        "label": null,
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"fill\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleFill\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"outline_color\" type=\"QString\" value=\"35,35,35,255\"/>\n        <Option name=\"outline_width\" type=\"QString\" value=\"0.26\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": null,
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Input: nhd area water (nhd_area_water)",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/nhd_area_water/d16260183c08f87793aa0f87c33d1958.fgb",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 2
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "input-copernicus_dem-10fdc3134f39",
+      "layer_type": "raster",
+      "legend": {
+        "colormap": "gray",
+        "kind": "continuous",
+        "label": "Elevation",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"14\" classificationMax=\"423.417981\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"14\" maximumValue=\"423.417981\" labelPrecision=\"4\">\n          <item value=\"14\" color=\"#000000\" alpha=\"255\" label=\"14 m\"/>\n          <item value=\"116.3544952\" color=\"#404040\" alpha=\"255\" label=\"116.354 m\"/>\n          <item value=\"218.7089905\" color=\"#808080\" alpha=\"255\" label=\"218.709 m\"/>\n          <item value=\"321.0634857\" color=\"#c0c0c0\" alpha=\"255\" label=\"321.063 m\"/>\n          <item value=\"423.417981\" color=\"#ffffff\" alpha=\"255\" label=\"423.418 m\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "m",
+        "vmax": 423.41798095703115,
+        "vmin": 14.0
+      },
+      "name": "Input: river bed elevation (copernicus_dem, datum EGM2008 geoid (metres, positive up))",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-cache/cache/static-30d/copernicus_dem/a7f87e92c511538651360b3a7cf4f00a.tif",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 3
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "telemac-release-01M23RRZD5XFNV57T56S5DGP4C",
+      "layer_type": "vector",
+      "legend": {
+        "colormap": null,
+        "kind": "reference",
+        "label": null,
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <renderer-v2 type=\"singleSymbol\" symbollevels=\"0\" forceraster=\"0\" enableorderby=\"0\" referencescale=\"-1\">\n    <symbols>\n      <symbol name=\"0\" type=\"marker\" alpha=\"1\" force_rhr=\"0\" clip_to_extent=\"1\" frame_rate=\"10\" is_animated=\"0\">\n        <layer class=\"SimpleMarker\" enabled=\"1\" locked=\"0\" pass=\"0\">\n          <Option type=\"Map\">\n            <Option name=\"color\" type=\"QString\" value=\"59,125,216,255\"/>\n        <Option name=\"outline_color\" type=\"QString\" value=\"35,35,35,255\"/>\n        <Option name=\"outline_width\" type=\"QString\" value=\"0.26\"/>\n        <Option name=\"size\" type=\"QString\" value=\"2.4\"/>\n        <Option name=\"size_unit\" type=\"QString\" value=\"MM\"/>\n        <Option name=\"name\" type=\"QString\" value=\"circle\"/>\n            <Option name=\"style\" type=\"QString\" value=\"solid\"/>\n          </Option>\n        </layer>\n      </symbol>\n    </symbols>\n  </renderer-v2>\n</qgis>\n",
+        "units": null,
+        "vmax": null,
+        "vmin": null
+      },
+      "name": "Release point (derived) - scotia_humboldt_county_california_95562_united_s",
+      "opacity": null,
+      "quantity": null,
+      "reference_time": null,
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/inputs/01M23RRZCW6G588457H3HY42MP/release_point.geojson",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 4
+    },
+    {
+      "crs_authid": "EPSG:32610",
+      "layer_id": "model-results-mesh-01M23RS5BDR0R6JHBV0WKX6RTR",
+      "layer_type": "mesh",
+      "legend": {
+        "colormap": "viridis",
+        "kind": "mesh",
+        "label": "Model results",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <mesh-renderer-settings>\n    <active-dataset-group scalar=\"0\" vector=\"-1\"/>\n    <scalar-settings group=\"0\" min-val=\"0\" max-val=\"97.431709\" opacity=\"1\" interpolation-method=\"no-resampling\">\n      <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"97.431709\" labelPrecision=\"4\">\n        <item value=\"0\" color=\"#440154\" alpha=\"255\" label=\"0 mg/L\"/>\n        <item value=\"24.35792725\" color=\"#3b528b\" alpha=\"255\" label=\"24.3579 mg/L\"/>\n        <item value=\"48.7158545\" color=\"#21918c\" alpha=\"255\" label=\"48.7159 mg/L\"/>\n        <item value=\"73.07378175\" color=\"#5ec962\" alpha=\"255\" label=\"73.0738 mg/L\"/>\n        <item value=\"97.431709\" color=\"#fde725\" alpha=\"255\" label=\"97.4317 mg/L\"/>\n      </colorrampshader>\n    </scalar-settings>\n  </mesh-renderer-settings>\n  <name-to-global-index global-index=\"0\" name=\"DYE\"/>\n</qgis>\n",
+        "units": "mg/L",
+        "vmax": 97.431709,
+        "vmin": 0.0
+      },
+      "name": "Model results (time series): scotia_humboldt_county_california_95562_united_s",
+      "opacity": null,
+      "quantity": "model_results",
+      "reference_time": "2026-09-09T19:02:12+00:00",
+      "role": "context",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M23RS5BDR0R6JHBV0WKX6RTR/r2d_river.slf",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 5
+    },
+    {
+      "crs_authid": null,
+      "layer_id": "01M23RSMX2E7DSKXN3TBPA4PRK",
+      "layer_type": "raster",
+      "legend": {
+        "colormap": "reds",
+        "kind": "continuous",
+        "label": "Dye concentration (mg/L)",
+        "qml": "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version=\"3.40.6\" styleCategories=\"Symbology\">\n  <pipe>\n    <rasterrenderer type=\"singlebandpseudocolor\" band=\"1\" opacity=\"1\" alphaBand=\"-1\" classificationMin=\"0\" classificationMax=\"97.431709\" nodataColor=\"\">\n      <rastershader>\n        <colorrampshader colorRampType=\"INTERPOLATED\" classificationMode=\"1\" clip=\"0\" minimumValue=\"0\" maximumValue=\"97.431709\" labelPrecision=\"4\">\n          <item value=\"0\" color=\"#fff5f0\" alpha=\"255\" label=\"0 mg/L\"/>\n          <item value=\"24.35792725\" color=\"#fcbba1\" alpha=\"255\" label=\"24.3579 mg/L\"/>\n          <item value=\"48.7158545\" color=\"#fb694a\" alpha=\"255\" label=\"48.7159 mg/L\"/>\n          <item value=\"73.07378175\" color=\"#ca181d\" alpha=\"255\" label=\"73.0738 mg/L\"/>\n          <item value=\"97.431709\" color=\"#67000d\" alpha=\"255\" label=\"97.4317 mg/L\"/>\n        </colorrampshader>\n      </rastershader>\n    </rasterrenderer>\n  </pipe>\n</qgis>\n",
+        "units": "mg/L",
+        "vmax": 97.431709,
+        "vmin": 0.0
+      },
+      "name": "Peak dye concentration (scotia_humboldt_county_california_95562_united_s)",
+      "opacity": null,
+      "quantity": "dye_concentration",
+      "reference_time": null,
+      "role": "primary",
+      "temporal": false,
+      "uri": "s3://trid3nt-runs/01M23RS5BDR0R6JHBV0WKX6RTR/overviews/01M23RSJDCRZRJDXFQ5YN9Q1V1.tif",
+      "valid_from": null,
+      "valid_to": null,
+      "visible": true,
+      "z_index": 6
+    }
+  ]
+}
