@@ -3667,3 +3667,28 @@ deleted spec), `docs/specs/hydrology-tools-analysis.md`,
 are left verbatim: `mesh-recipe-conformance.md`, `scripts-eval.md`, the A/B
 final report, `docs/IDEAS.md` and the ledger rows above all record what was true
 when they were written.
+
+## Frozen evidence: two proof directories with no live template - 2026-09-09
+
+| Candidate | Scope | Condition to delete | Status | Source |
+|---|---|---|---|---|
+| `docs/proof/templates/swan_nested_grid/` (92 KB) and `tomawac_wave_field/` (4.8 MB) | `docs/proof/templates/` | The proof tree is NEVER pruned without an explicit say-so, and this is it. Neither has a live template: SWAN left the tree entirely (`swan` greps to zero in `trid3nt_server` and `workers`), and TOMAWAC has a dico catalog and a `postprocess_tomawac` reader but NO module wrapper and NO registered template - `modules/__init__.WRAPPERS` has five entries and `tomawac` is not one, which `workflows/telemac/README.md` states as a tombstone rather than a gap. Renders of a question nobody can ask are not evidence | DELETED (2026-09-09) | `docs/validation/docs-census.md` Q11.1 |
+| `docs/proof/templates/coastal_tidal_surge/` (42 MB) | `docs/proof/templates/` | KEPT. Its template is gone with the coastal split, but the split's own proofs have not landed, and deleting the only pictures of a question the tree is about to answer again would be a gap rather than a prune. Condition: the coastal split's own packets land | QUEUED | `docs/validation/docs-census.md` Q11.1 |
+
+The proof README's variant law is amended in the same pass. "FOUR variants and
+no more" governs RENDERS - the pictures a reader is handed - and is now stated
+as such. It does NOT govern the evidence blobs beside them: a run's own
+`*_canary_evidence.json` is machine output the packet is assembled FROM, sized
+by the run rather than by any delivery decision, and three of them are past a
+megabyte. That silence is why they grew unnoticed.
+
+`tests/hygiene/test_proof_coverage.py` is the new guard: a registered template
+with no proof directory is a gap, not a silence. It FAILS today - three live
+templates (`telemac_river_oil_spill`, `telemac_river_scour`,
+`telemac_river_sediment_plume`) have never had a packet assembled - so the
+assertion is `xfail(strict=True)` with those three named in
+`AWAITING_FIRST_PACKET` and the condition stated: their first acceptance packet
+lands. Two companion assertions keep the exemption honest - the set may name
+only templates that actually register, and a name whose directory appears must
+leave the set, which the strict xfail also catches by turning into an
+unexpected pass.

@@ -21,7 +21,12 @@ module-coverage board - and they still carry the template prefix, so a file that
 escapes its folder is still identifiable. What moved is only the folder, and the
 folder carries the two facts every reader was parsing out of the name anyway.
 
-FOUR variants, and no more. A fifth would be a category nobody agreed on:
+FOUR variants, and no more. A fifth would be a category nobody agreed on. The
+rule governs RENDERS - the pictures a reader is handed. It does NOT govern the
+evidence blobs beside them: a run's own `*_canary_evidence.json` is machine
+output the packet is assembled FROM, it is sized by the run rather than by any
+delivery decision, and three of them are past a megabyte. They are kept and
+they are not variants; a reader looking for the four is looking at pictures.
 
 | variant | what it is |
 | --- | --- |
