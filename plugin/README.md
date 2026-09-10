@@ -153,7 +153,7 @@ Settings (no restart).
 
 ## Development
 
-The connection layer (`trid3nt/net/trid3nt_client.py`) is a deliberately
+The connection layer (`net/trid3nt_client.py`) is a deliberately
 **stdlib-only** RFC 6455 WebSocket client (handshake, masking, fragmentation,
 ping/pong, TLS via `ssl`). QGIS's bundled Python does not reliably ship a
 WebSocket library across platforms, and vendoring one adds a third-party tree
@@ -171,7 +171,7 @@ make test
 runs the full pure-Python test suite -- no QGIS installation is required for
 most of it. A small subset that exercises real Qt signal wiring runs in a
 subprocess against the system PyQt5 interpreter and skips honestly when one
-isn't available. `trid3nt/net/trid3nt_client.py` is the protocol surface, and
+isn't available. `net/trid3nt_client.py` is the protocol surface, and
 `tests/` holds the coverage details.
 
 Other Makefile targets local to this directory:
