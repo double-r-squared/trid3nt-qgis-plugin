@@ -622,6 +622,29 @@ package EmissionSeam {
         */
     }
 
+    requirement def TheModelIsHandedAHandleNotAUri {
+        doc /*
+        A layer reaches the model as a short minted HANDLE, never as a store
+        path. A path is a long string the model has to echo back exactly, and a
+        plausible-but-wrong echo - a rewritten prefix, an invented hash tail, an
+        id substituted for a basename - is indistinguishable from a correct one
+        until the read fails. A handle carries no structure to get wrong.
+
+        The mint is idempotent per uri and monotonic per case, so the same layer
+        is the same handle for as long as the case is open, and the record binds
+        ONE id to ONE uri: with a single scheme there is nothing to translate
+        between, so a display face cannot drift from the data face.
+
+        Resolution is TOLERANT INWARD and STRICT OUTWARD. A handle is accepted
+        case-insensitively and zero-padded, and a verbatim uri the record already
+        holds is accepted too; anything the record cannot resolve is a TYPED
+        refusal naming what it does hold - never a guessed rewrite, and never a
+        pass-through that reaches a reader as a path to nothing. The rewrite is
+        the LLM-facing surface only: the envelope the canvas reads keeps the real
+        uri, because the plugin opens the store and the model does not.
+        */
+    }
+
     requirement def StyleIsDeclaredOrKindDefault {
         doc /*
         Every emitted layer ships styled - by the row its data declared, or by
@@ -708,6 +731,27 @@ package EmissionSeam {
         "tests/emission/test_restyle_surface.py::test_hiding_a_layer_nobody_published_refuses_rather_than_creating_one";
     verify requirement EmissionIsAutomatic by
         "plugin/tests/test_raster_render.py::test_a_visibility_flip_on_a_row_already_seen_reaches_the_layer_tree";
+
+    satisfy requirement TheModelIsHandedAHandleNotAUri by layerRecord;
+    satisfy requirement TheModelIsHandedAHandleNotAUri by pipelineEmitter;
+    verify requirement TheModelIsHandedAHandleNotAUri by
+        "tests/emission/test_layer_handles.py::test_mint_is_idempotent_per_uri";
+    verify requirement TheModelIsHandedAHandleNotAUri by
+        "tests/emission/test_layer_handles.py::test_mint_is_monotonic_per_registration_order";
+    verify requirement TheModelIsHandedAHandleNotAUri by
+        "tests/emission/test_layer_handles.py::test_exact_uri_values_become_short_handles";
+    verify requirement TheModelIsHandedAHandleNotAUri by
+        "tests/emission/test_layer_handles.py::test_plugin_envelope_keeps_the_real_uri";
+    verify requirement TheModelIsHandedAHandleNotAUri by
+        "tests/emission/test_layer_handles.py::test_verbatim_registered_uri_dual_accepts";
+    verify requirement TheModelIsHandedAHandleNotAUri by
+        "tests/emission/test_layer_handles.py::test_short_handle_case_and_padding_tolerant";
+    verify requirement TheModelIsHandedAHandleNotAUri by
+        "tests/emission/test_layer_handles.py::test_unknown_short_handle_rejects_typed_with_inventory";
+    verify requirement TheModelIsHandedAHandleNotAUri by
+        "tests/emission/test_layer_handles.py::test_unregistered_object_store_uri_rejects_typed";
+    verify requirement TheModelIsHandedAHandleNotAUri by
+        "tests/emission/test_layer_handles.py::test_emit_seam_llm_sees_handle_not_uri";
 
     satisfy requirement StyleIsDeclaredOrKindDefault by styleDeclaration;
     satisfy requirement StyleIsDeclaredOrKindDefault by styleRowSchema;

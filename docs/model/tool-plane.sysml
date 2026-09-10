@@ -276,6 +276,25 @@ package ToolPlane {
         */
     }
 
+    requirement def ConsequentialCodeIsUserGated {
+        doc /*
+        The box runs code nobody reviewed in advance, so the person whose data it
+        touches is the one who lets it run. The tool body REFUSES an unconfirmed
+        call outright, and the confirmation is the SERVER's to grant: a
+        model-supplied approval flag is stripped before the gate is reached, so
+        asking for consent and answering for it cannot be the same act.
+
+        The wait is BOUNDED. A gate nobody answers expires into a typed refusal
+        and drops its pending entry, because a turn held open forever is a turn
+        the user cannot see failing - and the same expiry runs when the waiting
+        task is cancelled, so a dropped connection leaves no entry behind.
+
+        The approval card states the code verbatim and the layers it may touch,
+        which is only an honest account because the staged surface is the whole
+        of what the snippet can reach.
+        */
+    }
+
     requirement def ASurfaceTooLargeToCarryIsReached {
         doc /*
         A tool docstring is truncated at a thousand characters and the engine's
@@ -296,6 +315,23 @@ package ToolPlane {
     // ----------------------------------------------------------------- //
     // Allocations
     // ----------------------------------------------------------------- //
+
+    satisfy requirement ConsequentialCodeIsUserGated by codeExecTool;
+    satisfy requirement ConsequentialCodeIsUserGated by toolDispatch;
+    verify requirement ConsequentialCodeIsUserGated by
+        "tests/sandbox/test_code_exec_tool.py::test_tool_body_refuses_without_confirmation";
+    verify requirement ConsequentialCodeIsUserGated by
+        "tests/sandbox/test_code_exec_tool.py::test_dispatch_strips_llm_supplied_confirmed_for_code_exec";
+    verify requirement ConsequentialCodeIsUserGated by
+        "tests/sandbox/test_code_exec_tool.py::test_server_gate_approve_injects_confirmed";
+    verify requirement ConsequentialCodeIsUserGated by
+        "tests/sandbox/test_code_exec_tool.py::test_server_gate_cancel_blocks_dispatch";
+    verify requirement ConsequentialCodeIsUserGated by
+        "tests/sandbox/test_code_exec_tool.py::test_server_gate_timeout_raises_typed_and_cleans_registry";
+    verify requirement ConsequentialCodeIsUserGated by
+        "tests/sandbox/test_code_exec_tool.py::test_server_gate_cleanup_on_task_cancel";
+    verify requirement ConsequentialCodeIsUserGated by
+        "tests/gates/test_gate_timeout_local.py::test_local_timeout_is_finite";
 
     satisfy requirement ASurfaceTooLargeToCarryIsReached by keywordLookup;
     verify requirement ASurfaceTooLargeToCarryIsReached by
